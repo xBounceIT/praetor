@@ -1718,11 +1718,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         });
       }
 
-      // Fetch attachment metadata BEFORE deleting the quote - the FK cascade will drop the
-      // rows, leaving us no way to learn which files to clean off disk.
-      const attachmentsToCleanup = await supplierQuoteAttachmentsRepo.listForQuote(idResult.value);
-
-      const deleted = await supplierQuotesRepo.deleteById(idResult.value);
+      const deleted = await supplierQuotesRepo.deleteByIdWithAttachmentStoredNames(idResult.value);
       if (!deleted) {
         return replyError(request, reply, {
           statusCode: 404,
@@ -1734,10 +1730,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       await Promise.all(
-        attachmentsToCleanup.map((attachment) =>
-          deleteSupplierQuoteAttachment(attachment.storedName).catch((err) => {
+        deleted.attachmentStoredNames.map((storedName) =>
+          deleteSupplierQuoteAttachment(storedName).catch((err) => {
             attachmentsLogger.warn(
-              { err, storedName: attachment.storedName },
+              { err, storedName },
               'Failed to remove attachment file during quote delete',
             );
           }),

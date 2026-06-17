@@ -122,7 +122,7 @@ describe('<DashboardControls /> — per-row action gating', () => {
     await screen.findByText('Write Shared View');
 
     // Owner avatar (labelled "Shared by …") + write chip render for a non-owned view.
-    expect(screen.getByLabelText('views.sharedBy')).toBeInTheDocument();
+    expect(screen.getByText('views.sharedBy')).toBeInTheDocument();
     expect(screen.getByText('common:views.permissionWrite')).toBeInTheDocument();
 
     expect(screen.getByLabelText('common:views.duplicateView')).toBeInTheDocument();
@@ -136,7 +136,7 @@ describe('<DashboardControls /> — per-row action gating', () => {
     await openViewsMenu();
     await screen.findByText('Read Shared View');
 
-    expect(screen.getByLabelText('views.sharedBy')).toBeInTheDocument();
+    expect(screen.getByText('views.sharedBy')).toBeInTheDocument();
     expect(screen.getByText('common:views.permissionRead')).toBeInTheDocument();
 
     expect(screen.getByLabelText('common:views.duplicateView')).toBeInTheDocument();

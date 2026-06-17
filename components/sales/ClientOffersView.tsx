@@ -269,7 +269,7 @@ const EMPTY_PRICING_TOTALS: PricingTotals = {
 const supplierQuoteItemLabel = (quote: SupplierQuote, item: SupplierQuote['items'][number]) =>
   `${quote.supplierName} · ${item.productName} (${item.unitPrice.toFixed(2)})`;
 
-const ClientOffersView: React.FC<ClientOffersViewProps> = ({
+const useClientOffersController = ({
   offers,
   clients,
   products,
@@ -288,7 +288,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
   canViewInternalListing = true,
   quoteFilterId,
   offerFilterId,
-}) => {
+}: ClientOffersViewProps) => {
   const { t, i18n } = useTranslation(['sales', 'crm', 'common', 'form']);
   const paymentTermsOptions = useMemo(() => getPaymentTermsOptions(t), [t]);
   const STATUS_OPTIONS = useMemo(
@@ -1280,995 +1280,1333 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
     closeModal();
   };
 
+  const formTotals = useMemo(() => {
+    const discountValue = Number.isNaN(formData.discount ?? 0) ? 0 : (formData.discount ?? 0);
+    return {
+      discountValue,
+      ...calculatePricingTotals(
+        formData.items || [],
+        discountValue,
+        'hours',
+        formData.discountType || 'percentage',
+      ),
+    };
+  }, [formData.discount, formData.discountType, formData.items]);
+
+  const handleDelete = async () => {
+    if (!offerToDelete) return;
+    if (isDeleting) return;
+    dispatch({ type: 'setIsDeleting', value: true });
+    try {
+      await onDeleteOffer(offerToDelete.id);
+      dispatch({ type: 'deleteSuccess' });
+    } catch (err) {
+      toastError((err as Error).message || t('sales:clientOffers.failedToDelete'));
+    } finally {
+      dispatch({ type: 'setIsDeleting', value: false });
+    }
+  };
+
+  return {
+    t,
+    i18n,
+    offers,
+    products,
+    onAddOffer,
+    onViewQuote,
+    currency,
+    canViewSupplierQuotes,
+    canViewInternalListing,
+    paymentTermsOptions,
+    clientOptions,
+    productOptions,
+    supplierQuoteSelectOptions,
+    supplierQuoteItemIndex,
+    getSupplierQuoteItemDisplayValue,
+    refreshLineFromSupplier,
+    isLinkedProductMissing,
+    allProductIds,
+    allSupplierQuoteIds,
+    quoteIdBySupplierQuoteItemId,
+    updateProductSelection,
+    handleUnitTypeChange,
+    dispatch,
+    editingOffer,
+    offerToDelete,
+    offerToRevert,
+    revertReason,
+    isModalOpen,
+    isDeleteConfirmOpen,
+    isRevertConfirmOpen,
+    isSubmitting,
+    isDeleting,
+    isReverting,
+    clientOfferCodePreview,
+    errors,
+    formData,
+    setFormData,
+    previewVersion,
+    productRowToDelete,
+    setProductRowToDelete,
+    closeModal,
+    isOfferExpired,
+    baseReadOnly,
+    isReadOnly,
+    isClientLocked,
+    expirationEditableWhileReadOnly,
+    readOnlyReason,
+    supplierLockedReason,
+    statusEditable,
+    clientStatus,
+    readOnlyStatus,
+    statusLabel,
+    tableInitialFilterState,
+    openEditModal,
+    handleVersionPreview,
+    handleClearPreview,
+    handleVersionRestored,
+    getStatusLabel,
+    closeRevertConfirm,
+    handleRevertToDraft,
+    handleDelete,
+    columns,
+    openAddModal,
+    handleClientChange,
+    addItem,
+    removeItem,
+    updateItem,
+    handleDurationValueChange,
+    handleDurationUnitChange,
+    handleSubmit,
+    formTotals,
+  };
+};
+
+type ClientOffersController = ReturnType<typeof useClientOffersController>;
+
+const ClientOffersView: React.FC<ClientOffersViewProps> = (props) => {
+  const controller = useClientOffersController(props);
+  return <ClientOffersLayout controller={controller} />;
+};
+
+const ClientOffersLayout: React.FC<{ controller: ClientOffersController }> = ({ controller }) => (
+  <div className="space-y-6">
+    <ClientOfferFormModal controller={controller} />
+    <ClientOfferRevertModal controller={controller} />
+    <ClientOfferDeleteDialogs controller={controller} />
+    <ClientOffersHeader controller={controller} />
+    <ClientOffersTable controller={controller} />
+  </div>
+);
+
+const ClientOfferFormModal: React.FC<{ controller: ClientOffersController }> = ({ controller }) => {
+  const {
+    isModalOpen,
+    closeModal,
+    handleSubmit,
+    editingOffer,
+    previewVersion,
+    handleVersionPreview,
+    handleClearPreview,
+    handleVersionRestored,
+    baseReadOnly,
+  } = controller;
+
   return (
-    <div className="space-y-6 animate-in fade-in duration-500">
-      <Modal isOpen={isModalOpen} onClose={closeModal}>
-        <div className="flex max-w-[calc(100vw-2rem)] items-start gap-4">
-          <ModalContent size="full" className="max-h-[90vh]">
-            <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
-              <ModalHeader>
-                <ModalTitle className="gap-3">
-                  <span className="flex size-10 items-center justify-center rounded-md bg-muted text-primary">
-                    <i
-                      className={`fa-solid ${editingOffer ? 'fa-pen-to-square' : 'fa-plus'}`}
-                      aria-hidden="true"
-                    ></i>
-                  </span>
-                  {isReadOnly
-                    ? t('sales:clientOffers.viewOffer', { defaultValue: 'View offer' })
-                    : editingOffer
-                      ? t('sales:clientOffers.editOffer', { defaultValue: 'Edit offer' })
-                      : t('sales:clientOffers.newOffer', { defaultValue: 'New offer' })}
-                </ModalTitle>
-                <ModalCloseButton onClick={closeModal} />
-              </ModalHeader>
+    <Modal isOpen={isModalOpen} onClose={closeModal}>
+      <div className="flex max-w-[calc(100vw-2rem)] items-start gap-4">
+        <ModalContent size="full" className="max-h-[90vh]">
+          <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
+            <ClientOfferModalHeader controller={controller} />
+            <ModalBody className="flex-1 space-y-5">
+              <ClientOfferModalAlerts controller={controller} />
+              <ClientOfferClientSection controller={controller} />
+              <ClientOfferItemsSection controller={controller} />
+              <ClientOfferNotesSummarySection controller={controller} />
+            </ModalBody>
+            <ClientOfferModalFooter controller={controller} />
+          </form>
+        </ModalContent>
+        {editingOffer?.id && (
+          <OfferVersionsPanel
+            offerId={editingOffer.id}
+            selectedVersionId={previewVersion?.id ?? null}
+            onPreview={handleVersionPreview}
+            onClearPreview={handleClearPreview}
+            onRestored={handleVersionRestored}
+            disabled={baseReadOnly}
+          />
+        )}
+      </div>
+    </Modal>
+  );
+};
 
-              <ModalBody className="flex-1 space-y-5">
-                {previewVersion && (
-                  <div className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl border border-amber-500/30 bg-amber-500/10">
-                    <span className="text-amber-800 dark:text-amber-300 text-xs font-bold flex items-center gap-2">
-                      <i className="fa-solid fa-clock-rotate-left"></i>
-                      {t('sales:clientOffers.versionHistory.previewBanner', {
-                        date: formatInsertDateTime(previewVersion.createdAt, i18n.language),
-                        defaultValue: 'Previewing version from {{date}}',
-                      })}
-                    </span>
-                    <Button
-                      type="button"
-                      variant="link"
-                      onClick={handleClearPreview}
-                      className="h-auto px-0 text-xs font-semibold text-amber-800 dark:text-amber-300"
-                    >
-                      {t('sales:clientOffers.versionHistory.backToCurrent', {
-                        defaultValue: 'Back to current',
-                      })}
-                    </Button>
-                  </div>
-                )}
-                {editingOffer?.linkedQuoteId && (
-                  <LinkedRecordBanner
-                    label={t('sales:clientOffers.sourceQuote', { defaultValue: 'Source quote' })}
-                    value={editingOffer.linkedQuoteId}
-                    action={
-                      onViewQuote
-                        ? {
-                            label: t('sales:clientOffers.viewQuote', {
-                              defaultValue: 'View quote',
-                            }),
-                            onClick: () => onViewQuote(editingOffer.linkedQuoteId),
-                          }
-                        : undefined
-                    }
-                  />
-                )}
+const ClientOfferModalHeader: React.FC<{ controller: ClientOffersController }> = ({
+  controller,
+}) => {
+  const { t, closeModal, editingOffer, isReadOnly } = controller;
 
-                {isReadOnly && (
-                  <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-amber-500/30 bg-amber-500/10">
-                    <span className="text-amber-700 dark:text-amber-300 text-xs font-bold">
-                      {readOnlyReason}
-                    </span>
-                  </div>
-                )}
+  return (
+    <ModalHeader>
+      <ModalTitle className="gap-3">
+        <span className="flex size-10 items-center justify-center rounded-md bg-muted text-primary">
+          <i
+            className={`fa-solid ${editingOffer ? 'fa-pen-to-square' : 'fa-plus'}`}
+            aria-hidden="true"
+          ></i>
+        </span>
+        {isReadOnly
+          ? t('sales:clientOffers.viewOffer', { defaultValue: 'View offer' })
+          : editingOffer
+            ? t('sales:clientOffers.editOffer', { defaultValue: 'Edit offer' })
+            : t('sales:clientOffers.newOffer', { defaultValue: 'New offer' })}
+      </ModalTitle>
+      <ModalCloseButton onClick={closeModal} />
+    </ModalHeader>
+  );
+};
 
-                {/* Client Information */}
-                <div className="space-y-2">
-                  <h4 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-primary">
-                    <span className="size-1.5 rounded-full bg-primary"></span>
-                    {t('sales:clientOffers.clientInformation', {
-                      defaultValue: 'Client Information',
-                    })}
-                    <FieldTooltip
-                      description={t('sales:fieldInfo.clientInformation', {
-                        defaultValue: 'Client and document details',
-                      })}
-                      status={clientStatus}
-                      statusLabel={statusLabel}
-                    />
-                  </h4>
-                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                    <Field data-invalid={Boolean(errors.clientId)}>
-                      <SelectControl
-                        id="client-offer-client"
-                        options={clientOptions}
-                        value={formData.clientId || ''}
-                        onChange={(value) => handleClientChange(value as string)}
-                        placeholder={t('sales:clientOffers.selectAClient', {
-                          defaultValue: 'Select a client',
-                        })}
-                        searchable={true}
-                        disabled={isReadOnly || isClientLocked}
-                        label={t('sales:clientOffers.client', { defaultValue: 'Client' })}
-                        required
-                        buttonClassName="h-9"
-                        className={errors.clientId ? 'border-red-300' : ''}
-                      />
-                      <FieldError className="text-xs">{errors.clientId}</FieldError>
-                    </Field>
-                    <Field data-invalid={Boolean(errors.id)}>
-                      <FieldLabel htmlFor="client-offer-code" required={Boolean(editingOffer)}>
-                        {t('sales:clientOffers.offerCode', { defaultValue: 'Offer code' })}
-                      </FieldLabel>
-                      <Input
-                        id="client-offer-code"
-                        type="text"
-                        value={formData.id || ''}
-                        disabled={isReadOnly}
-                        onChange={(event) =>
-                          setFormData((prev) => ({ ...prev, id: event.target.value }))
-                        }
-                        placeholder={
-                          clientOfferCodePreview ??
-                          t('sales:clientOffers.autoCodePlaceholder', {
-                            defaultValue: 'Auto-generated',
-                          })
-                        }
-                        className={errors.id ? 'border-red-300 font-medium' : 'font-medium'}
-                        aria-invalid={Boolean(errors.id)}
-                      />
-                      <FieldError className="text-xs">{errors.id}</FieldError>
-                      {!editingOffer && (
-                        <FieldDescription className="text-xs">
-                          {clientOfferCodePreview
-                            ? t('sales:clientOffers.autoCodePreviewDescription', {
-                                preview: clientOfferCodePreview,
-                                defaultValue:
-                                  'Leave blank to generate {{preview}} from the document code template.',
-                              })
-                            : t('sales:clientOffers.autoCodeDescription', {
-                                defaultValue:
-                                  'Leave blank to generate the next code automatically.',
-                              })}
-                        </FieldDescription>
-                      )}
-                    </Field>
-                    <Field>
-                      <SelectControl
-                        id="client-offer-payment-terms"
-                        options={paymentTermsOptions}
-                        value={formData.paymentTerms || 'immediate'}
-                        onChange={(value) =>
-                          setFormData((prev) => ({
-                            ...prev,
-                            paymentTerms: value as ClientOffer['paymentTerms'],
-                          }))
-                        }
-                        searchable={false}
-                        disabled={isReadOnly}
-                        label={t('sales:clientOffers.paymentTerms', {
-                          defaultValue: 'Payment terms',
-                        })}
-                        buttonClassName="h-9"
-                      />
-                    </Field>
-                    <Field>
-                      <FieldLabel htmlFor="client-offer-expiration-date" required>
-                        {t('sales:clientOffers.expirationDate', {
-                          defaultValue: 'Expiration date',
-                        })}
-                      </FieldLabel>
-                      <DateField
-                        id="client-offer-expiration-date"
-                        required
-                        value={formData.expirationDate || ''}
-                        // Editable while sent/expired so the offer's validity can be renewed —
-                        // extending the date is the only exit from `expired` (issue #779).
-                        disabled={isReadOnly && !expirationEditableWhileReadOnly}
-                        onChange={(value) =>
-                          setFormData((prev) => ({ ...prev, expirationDate: value }))
-                        }
-                      />
-                    </Field>
-                  </div>
-                </div>
+const ClientOfferModalAlerts: React.FC<{ controller: ClientOffersController }> = ({
+  controller,
+}) => {
+  const { t, i18n, previewVersion, handleClearPreview, editingOffer, onViewQuote, isReadOnly } =
+    controller;
 
-                {/* Products */}
-                <div className="space-y-4">
-                  <div className="flex justify-between items-center">
-                    <h4 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-primary">
-                      <span className="size-1.5 rounded-full bg-primary"></span>
-                      {t('sales:clientOffers.items', { defaultValue: 'Items' })}
-                      <FieldTooltip
-                        description={t('sales:fieldInfo.items', {
-                          defaultValue: 'Line items for this offer',
-                        })}
-                        status={readOnlyStatus}
-                        statusLabel={statusLabel}
-                      />
-                    </h4>
-                    <Button type="button" size="sm" onClick={addItem} disabled={isReadOnly}>
-                      <i className="fa-solid fa-plus text-[10px]" aria-hidden="true"></i>
-                      {t('sales:clientOffers.addItem', { defaultValue: 'Add item' })}
-                    </Button>
-                  </div>
-                  {errors.items && (
-                    <p className="text-red-500 text-[10px] font-bold ml-1 -mt-2">{errors.items}</p>
-                  )}
+  return (
+    <>
+      {previewVersion && (
+        <div className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl border border-amber-500/30 bg-amber-500/10">
+          <span className="text-amber-800 dark:text-amber-300 text-xs font-bold flex items-center gap-2">
+            <i className="fa-solid fa-clock-rotate-left"></i>
+            {t('sales:clientOffers.versionHistory.previewBanner', {
+              date: formatInsertDateTime(previewVersion.createdAt, i18n.language),
+              defaultValue: 'Previewing version from {{date}}',
+            })}
+          </span>
+          <Button
+            type="button"
+            variant="link"
+            onClick={handleClearPreview}
+            className="h-auto px-0 text-xs font-semibold text-amber-800 dark:text-amber-300"
+          >
+            {t('sales:clientOffers.versionHistory.backToCurrent', {
+              defaultValue: 'Back to current',
+            })}
+          </Button>
+        </div>
+      )}
+      {editingOffer?.linkedQuoteId && (
+        <LinkedRecordBanner
+          label={t('sales:clientOffers.sourceQuote', { defaultValue: 'Source quote' })}
+          value={editingOffer.linkedQuoteId}
+          action={
+            onViewQuote
+              ? {
+                  label: t('sales:clientOffers.viewQuote', { defaultValue: 'View quote' }),
+                  onClick: () => onViewQuote(editingOffer.linkedQuoteId),
+                }
+              : undefined
+          }
+        />
+      )}
+      {isReadOnly && (
+        <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-amber-500/30 bg-amber-500/10">
+          <span className="text-amber-700 dark:text-amber-300 text-xs font-bold">
+            {controller.readOnlyReason}
+          </span>
+        </div>
+      )}
+    </>
+  );
+};
 
-                  {formData.items && formData.items.length > 0 && (
-                    <div className="hidden lg:flex gap-2 px-3 mb-1 items-center">
-                      <div className="flex-1 min-w-0 grid grid-cols-16 gap-2">
-                        <div className="col-span-3 text-[10px] font-black text-zinc-400 uppercase tracking-wider ml-1">
-                          {t('sales:clientQuotes.supplierQuoteColumn')}
-                        </div>
-                        <div className="col-span-3 text-[10px] font-black text-zinc-400 uppercase tracking-wider">
-                          {t('sales:clientOffers.product', { defaultValue: 'Product' })}
-                        </div>
-                        <div className="col-span-2 text-[10px] font-black text-zinc-400 uppercase tracking-wider text-center">
-                          {t('sales:clientOffers.qty', { defaultValue: 'Qty' })}
-                        </div>
-                        <div className="col-span-2 text-[10px] font-black text-zinc-400 uppercase tracking-wider text-center whitespace-nowrap">
-                          {t('sales:clientOffers.durationColumn', { defaultValue: 'Duration' })}
-                        </div>
-                        <div className="col-span-2 text-[10px] font-black text-zinc-400 uppercase tracking-wider text-center">
-                          {t('crm:internalListing.cost')}
-                        </div>
-                        <div className="col-span-1 text-[10px] font-black text-zinc-400 uppercase tracking-wider text-center whitespace-nowrap">
-                          {t('sales:clientQuotes.molLabel', { defaultValue: 'MOL' })}
-                        </div>
-                        <div className="col-span-1 text-[10px] font-black text-zinc-400 uppercase tracking-wider text-center whitespace-nowrap">
-                          {t('sales:clientQuotes.totalCost', { defaultValue: 'Total cost' })}
-                        </div>
-                        <div className="col-span-1 text-[10px] font-black text-zinc-400 uppercase tracking-wider text-center">
-                          {t('sales:clientQuotes.marginLabel')}
-                        </div>
-                        <div className="col-span-1 text-[10px] font-black text-zinc-400 uppercase tracking-wider text-center">
-                          {t('sales:clientQuotes.revenue')}
-                        </div>
-                      </div>
-                      <div className="w-10 shrink-0"></div>
-                    </div>
-                  )}
+const ClientOfferSectionHeading: React.FC<{
+  label: React.ReactNode;
+  description: string;
+  status: string;
+  statusLabel: string;
+}> = ({ label, description, status, statusLabel }) => (
+  <h4 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-primary">
+    <span className="size-1.5 rounded-full bg-primary"></span>
+    {label}
+    <FieldTooltip description={description} status={status} statusLabel={statusLabel} />
+  </h4>
+);
 
-                  {formData.items && formData.items.length > 0 ? (
-                    <div className="space-y-3">
-                      {formData.items.map((item, index) => {
-                        const isSupply =
-                          products.find((p) => p.id === item.productId)?.type === 'supply';
+const ClientOfferClientSection: React.FC<{ controller: ClientOffersController }> = ({
+  controller,
+}) => {
+  const { t, clientStatus, statusLabel } = controller;
 
-                        const {
-                          unitCost: cost,
-                          molPercentage,
-                          lineCost,
-                          quantity,
-                          durationMonths,
-                        } = getItemPricingContext(item);
-                        // Duration is stored as canonical months; show it in the item's unit.
-                        const durationUnit = normalizeDurationUnit(item.durationUnit);
-                        const durationValue = getDurationDisplayValue(item);
-                        const unitSalePrice = Number(item.unitPrice || 0);
-                        const lineSalePrice = unitSalePrice * quantity * durationMonths;
-                        const lineMargin = lineSalePrice - lineCost;
+  return (
+    <div className="space-y-2">
+      <ClientOfferSectionHeading
+        label={t('sales:clientOffers.clientInformation', { defaultValue: 'Client Information' })}
+        description={t('sales:fieldInfo.clientInformation', {
+          defaultValue: 'Client and document details',
+        })}
+        status={clientStatus}
+        statusLabel={statusLabel}
+      />
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <ClientOfferClientField controller={controller} />
+        <ClientOfferCodeField controller={controller} />
+        <ClientOfferPaymentTermsField controller={controller} />
+        <ClientOfferExpirationField controller={controller} />
+      </div>
+    </div>
+  );
+};
 
-                        const isLinkedToSupplierQuote = Boolean(item.supplierQuoteItemId);
-                        const linkedSupplierRef = item.supplierQuoteItemId
-                          ? supplierQuoteItemIndex.get(item.supplierQuoteItemId)
-                          : undefined;
-                        // Fail-safe lock (#779): order-locked/frozen supplier quotes — or an
-                        // unresolvable reference (no list permission, still loading) — freeze
-                        // the sourced quantity/cost; otherwise they are editable and write back.
-                        const supplierLineLocked = isSupplierLineLocked(item, linkedSupplierRef);
-                        const supplierDataStale =
-                          !isReadOnly &&
-                          !supplierLineLocked &&
-                          isSupplierLineStale(item, linkedSupplierRef?.item);
-                        const supplierQuoteHref = buildSupplierQuoteQuickViewHref(
-                          resolveLinkedSupplierQuoteId(item, quoteIdBySupplierQuoteItemId),
-                          allSupplierQuoteIds,
-                        );
-                        const productHref = buildProductQuickViewHref(
-                          item.productId,
-                          allProductIds,
-                        );
-                        const linkedFieldStatus = getLinkedFieldStatus({
-                          isReadOnly,
-                          isLinkedToSupplierQuote,
-                          readOnlyReason,
-                          supplierLockedReason,
-                          statusEditable,
-                        });
+const ClientOfferClientField: React.FC<{ controller: ClientOffersController }> = ({
+  controller,
+}) => {
+  const { t, errors, clientOptions, formData, handleClientChange, isReadOnly, isClientLocked } =
+    controller;
 
-                        const handleCostChange = (value: string) => {
-                          if (isReadOnly) return;
-                          setFormData(makeCostUpdater<Partial<ClientOffer>>(index, value));
-                        };
+  return (
+    <Field data-invalid={Boolean(errors.clientId)}>
+      <SelectControl
+        id="client-offer-client"
+        options={clientOptions}
+        value={formData.clientId || ''}
+        onChange={(value) => handleClientChange(value as string)}
+        placeholder={t('sales:clientOffers.selectAClient', { defaultValue: 'Select a client' })}
+        searchable={true}
+        disabled={isReadOnly || isClientLocked}
+        label={t('sales:clientOffers.client', { defaultValue: 'Client' })}
+        required
+        buttonClassName="h-9"
+        className={errors.clientId ? 'border-red-300' : ''}
+      />
+      <FieldError className="text-xs">{errors.clientId}</FieldError>
+    </Field>
+  );
+};
 
-                        const handleMolChange = (value: string) => {
-                          if (isReadOnly) return;
-                          setFormData(makeMolUpdater<Partial<ClientOffer>>(index, value));
-                        };
+const ClientOfferCodeField: React.FC<{ controller: ClientOffersController }> = ({ controller }) => {
+  const { t, errors, formData, setFormData, editingOffer, isReadOnly, clientOfferCodePreview } =
+    controller;
 
-                        return (
-                          <div
-                            key={item.id}
-                            className="space-y-3 rounded-md border border-border bg-muted/30 p-3"
-                          >
-                            <div className="lg:hidden flex items-start gap-3">
-                              <div className="grid flex-1 min-w-0 grid-cols-1 md:grid-cols-2 gap-3">
-                                <div className="min-w-0">
-                                  <div className="mb-1 text-[10px] font-black text-zinc-400 uppercase tracking-wider flex items-center gap-1">
-                                    {t('sales:clientQuotes.supplierQuoteColumn')}
-                                    <FieldTooltip
-                                      description={t('sales:fieldInfo.supplierQuote', {
-                                        defaultValue:
-                                          'Link this item to a supplier quote for cost tracking',
-                                      })}
-                                      status={readOnlyStatus}
-                                      statusLabel={statusLabel}
-                                    />
-                                    {supplierDataStale && linkedSupplierRef && (
-                                      <StaleSupplierDataButton
-                                        onClick={() =>
-                                          refreshLineFromSupplier(index, linkedSupplierRef.item)
-                                        }
-                                        className="ml-auto"
-                                      />
-                                    )}
-                                  </div>
-                                  <div className="flex items-center gap-1">
-                                    <SelectControl
-                                      options={supplierQuoteSelectOptions}
-                                      value={item.supplierQuoteItemId || 'none'}
-                                      onChange={(val) =>
-                                        updateItem(
-                                          index,
-                                          'supplierQuoteItemId',
-                                          val === 'none' ? '' : (val as string),
-                                        )
-                                      }
-                                      placeholder={t('sales:clientQuotes.selectSupplierQuote')}
-                                      displayValue={getSupplierQuoteItemDisplayValue(
-                                        item.supplierQuoteItemId,
-                                      )}
-                                      displayValueIsPlaceholder={!item.supplierQuoteItemId}
-                                      // Drop the default bold (font-semibold) but keep
-                                      // font-medium so the value reads as a solid field value,
-                                      // not the washed-out gray that font-normal renders at.
-                                      valueClassName="font-medium"
-                                      searchable={true}
-                                      disabled={isReadOnly}
-                                      className="min-w-0 flex-1"
-                                      buttonClassName="w-full px-3 py-2 bg-white border border-zinc-200 rounded-lg text-sm"
-                                    />
-                                    {canViewSupplierQuotes && (
-                                      <QuickViewLinkButton
-                                        href={supplierQuoteHref}
-                                        label={t('sales:clientQuotes.openSupplierQuoteInNewTab')}
-                                        disabledLabel={t(
-                                          'sales:clientQuotes.supplierQuoteShortcutUnavailable',
-                                        )}
-                                      />
-                                    )}
-                                  </div>
-                                </div>
-                                <div className="min-w-0">
-                                  <div className="mb-1 text-[10px] font-black text-zinc-400 uppercase tracking-wider flex items-center gap-1">
-                                    {t('sales:clientOffers.product', { defaultValue: 'Product' })}
-                                    <FieldTooltip
-                                      description={t('sales:fieldInfo.product', {
-                                        defaultValue:
-                                          'Select a product or service for this line item',
-                                      })}
-                                      status={linkedFieldStatus}
-                                      statusLabel={statusLabel}
-                                    />
-                                  </div>
-                                  <div className="flex items-center gap-1">
-                                    <ProductSelectOrFallback
-                                      item={item}
-                                      index={index}
-                                      options={productOptions}
-                                      isProductMissing={isLinkedProductMissing(item)}
-                                      isReadOnly={isReadOnly}
-                                      ariaLabel={t('sales:clientOffers.selectProduct', {
-                                        defaultValue: 'Select product',
-                                      })}
-                                      placeholder={t('sales:clientOffers.selectProduct', {
-                                        defaultValue: 'Select product',
-                                      })}
-                                      onProductChange={updateProductSelection}
-                                      className="min-w-0 flex-1"
-                                      buttonClassName="w-full px-3 py-2 bg-white border border-zinc-200 rounded-lg text-sm"
-                                    />
-                                    {canViewInternalListing && (
-                                      <QuickViewLinkButton
-                                        href={productHref}
-                                        label={t('sales:clientQuotes.openProductInNewTab')}
-                                        disabledLabel={t(
-                                          'sales:clientQuotes.productShortcutUnavailable',
-                                        )}
-                                      />
-                                    )}
-                                  </div>
-                                </div>
-                              </div>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon-sm"
-                                onClick={() => setProductRowToDelete(index)}
-                                disabled={isReadOnly}
-                                className="mt-5 shrink-0 text-muted-foreground hover:text-destructive"
-                              >
-                                <i className="fa-solid fa-trash-can" aria-hidden="true"></i>
-                                <span className="sr-only">{t('common:buttons.delete')}</span>
-                              </Button>
-                            </div>
-                            <div className="grid grid-cols-2 gap-3 md:grid-cols-7 lg:hidden">
-                              <div>
-                                <div className="mb-1 text-[10px] font-black text-zinc-400 uppercase tracking-wider flex items-center gap-1">
-                                  {t('sales:clientOffers.qty', { defaultValue: 'Qty' })}
-                                  <FieldTooltip
-                                    description={t('sales:fieldInfo.qty', {
-                                      defaultValue: 'Quantity of items or hours',
-                                    })}
-                                    status={linkedFieldStatus}
-                                    statusLabel={statusLabel}
-                                  />
-                                </div>
-                                <div className="flex items-center gap-1">
-                                  <ValidatedNumberInput
-                                    step="0.01"
-                                    min="0"
-                                    required
-                                    placeholder={t('sales:clientOffers.qty', {
-                                      defaultValue: 'Qty',
-                                    })}
-                                    value={item.quantity}
-                                    onValueChange={(value) =>
-                                      updateItem(index, 'quantity', parseNumberInputValue(value))
-                                    }
-                                    disabled={isReadOnly || supplierLineLocked}
-                                    className="w-full text-sm px-3 py-2 bg-white border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed flex-1"
-                                  />
-                                  <span className="text-xs font-semibold text-zinc-400 shrink-0">
-                                    /
-                                  </span>
-                                  <UnitTypeSelector
-                                    value={(item.unitType || 'hours') as SupplierUnitType}
-                                    onChange={(val) => handleUnitTypeChange(index, val)}
-                                    isSupply={isSupply}
-                                    quantity={Number(item.quantity) || 0}
-                                    disabled={isReadOnly || isLinkedToSupplierQuote}
-                                  />
-                                </div>
-                              </div>
-                              <div>
-                                <div className="mb-1 text-[10px] font-black text-zinc-400 uppercase tracking-wider flex items-center gap-1">
-                                  {t('sales:clientOffers.durationColumn', {
-                                    defaultValue: 'Duration',
-                                  })}
-                                  <FieldTooltip
-                                    description={t('sales:fieldInfo.duration', {
-                                      defaultValue: 'Number of months the service runs',
-                                    })}
-                                    status={readOnlyStatus}
-                                    statusLabel={statusLabel}
-                                  />
-                                </div>
-                                <div className="flex items-center gap-1">
-                                  <ValidatedNumberInput
-                                    step="1"
-                                    min="1"
-                                    placeholder={t('sales:clientOffers.durationColumn', {
-                                      defaultValue: 'Duration',
-                                    })}
-                                    value={durationValue}
-                                    onValueChange={(value) =>
-                                      handleDurationValueChange(index, value)
-                                    }
-                                    disabled={isReadOnly || durationUnit === 'na'}
-                                    className="w-full text-sm px-3 py-2 bg-white border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed flex-1"
-                                  />
-                                  <span className="text-xs font-semibold text-zinc-400 shrink-0">
-                                    /
-                                  </span>
-                                  <DurationUnitSelector
-                                    value={durationUnit}
-                                    onChange={(val) => handleDurationUnitChange(index, val)}
-                                    count={durationValue}
-                                    disabled={isReadOnly}
-                                  />
-                                </div>
-                              </div>
-                              <div className="rounded-lg border border-zinc-200 bg-white px-3 py-2 space-y-1">
-                                <div className="text-[10px] font-black text-zinc-400 uppercase tracking-wider flex items-center gap-1">
-                                  {t('crm:internalListing.cost')}
-                                  <FieldTooltip
-                                    description={t('sales:fieldInfo.cost', {
-                                      defaultValue: 'Unit cost for this item',
-                                    })}
-                                    status={linkedFieldStatus}
-                                    statusLabel={statusLabel}
-                                  />
-                                </div>
-                                <div className="flex items-center gap-1">
-                                  <ValidatedNumberInput
-                                    value={cost}
-                                    formatDecimals={2}
-                                    onValueChange={handleCostChange}
-                                    disabled={isReadOnly || supplierLineLocked}
-                                    className="w-full text-sm p-2 bg-white border border-zinc-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
-                                  />
-                                  <span className="text-[9px] font-semibold text-zinc-400 shrink-0">
-                                    {currency}
-                                  </span>
-                                  {isLinkedToSupplierQuote && <SupplierQuoteCostHint />}
-                                </div>
-                              </div>
-                              <div className="rounded-lg border border-zinc-200 bg-white px-3 py-2 space-y-1">
-                                <div className="text-[10px] font-black text-zinc-400 uppercase tracking-wider flex items-center gap-1">
-                                  {t('sales:clientQuotes.molLabel', { defaultValue: 'MOL' })} (%)
-                                  <FieldTooltip
-                                    description={t('sales:fieldInfo.mol', {
-                                      defaultValue: 'Margin overhead loading percentage',
-                                    })}
-                                    status={readOnlyStatus}
-                                    statusLabel={statusLabel}
-                                  />
-                                </div>
-                                <div className="flex items-center gap-1">
-                                  <ValidatedNumberInput
-                                    value={molPercentage}
-                                    formatDecimals={MOL_PERCENTAGE_DECIMALS}
-                                    onValueChange={handleMolChange}
-                                    disabled={isReadOnly}
-                                    className="w-full text-sm p-2 bg-white border border-zinc-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
-                                  />
-                                  <span className="text-[9px] font-semibold text-zinc-400 shrink-0">
-                                    %
-                                  </span>
-                                </div>
-                              </div>
-                              <div className="rounded-lg border border-zinc-200 bg-white px-3 py-2 space-y-1">
-                                <div className="text-[10px] font-black text-zinc-400 uppercase tracking-wider">
-                                  {t('sales:clientQuotes.totalCost', {
-                                    defaultValue: 'Total cost',
-                                  })}
-                                </div>
-                                <div className="text-xs font-bold text-zinc-700 whitespace-nowrap">
-                                  {lineCost.toFixed(2)} {currency}
-                                </div>
-                              </div>
-                              <div className="rounded-lg border border-zinc-200 bg-white px-3 py-2 space-y-1">
-                                <div className="text-[10px] font-black text-zinc-400 uppercase tracking-wider">
-                                  {t('sales:clientQuotes.marginLabel')}
-                                </div>
-                                <div className="text-xs font-bold text-emerald-600 whitespace-nowrap">
-                                  {lineMargin.toFixed(2)} {currency}
-                                </div>
-                              </div>
-                              <div className="rounded-lg border border-zinc-200 bg-white px-3 py-2 space-y-1 col-span-2 md:col-span-1">
-                                <div className="text-[10px] font-black text-zinc-400 uppercase tracking-wider">
-                                  {t('sales:clientQuotes.revenue')}
-                                </div>
-                                <div className="text-sm font-semibold whitespace-nowrap text-zinc-800">
-                                  {lineSalePrice.toFixed(2)} {currency}
-                                </div>
-                              </div>
-                            </div>
-                            <div className="hidden lg:flex gap-2 items-center pt-5">
-                              <div className="flex-1 min-w-0 grid grid-cols-16 gap-2 items-center">
-                                <div className="relative col-span-3 min-w-0">
-                                  {supplierDataStale && linkedSupplierRef && (
-                                    <StaleSupplierDataButton
-                                      onClick={() =>
-                                        refreshLineFromSupplier(index, linkedSupplierRef.item)
-                                      }
-                                      // Floats in the same gutter band as the quick-view button,
-                                      // left-aligned (#779 reverse sync affordance).
-                                      className="lg:absolute lg:left-0 lg:-top-1 lg:z-10 lg:-translate-y-full h-6 px-2 text-[10px]"
-                                    />
-                                  )}
-                                  {canViewSupplierQuotes && (
-                                    <QuickViewLinkButton
-                                      href={supplierQuoteHref}
-                                      label={t('sales:clientQuotes.openSupplierQuoteInNewTab')}
-                                      disabledLabel={t(
-                                        'sales:clientQuotes.supplierQuoteShortcutUnavailable',
-                                      )}
-                                      floating
-                                    />
-                                  )}
-                                  <SelectControl
-                                    options={supplierQuoteSelectOptions}
-                                    value={item.supplierQuoteItemId || 'none'}
-                                    onChange={(val) =>
-                                      updateItem(
-                                        index,
-                                        'supplierQuoteItemId',
-                                        val === 'none' ? '' : (val as string),
-                                      )
-                                    }
-                                    placeholder={t('sales:clientQuotes.selectSupplierQuote')}
-                                    displayValue={getSupplierQuoteItemDisplayValue(
-                                      item.supplierQuoteItemId,
-                                    )}
-                                    displayValueIsPlaceholder={!item.supplierQuoteItemId}
-                                    // Drop the default bold (font-semibold) but keep
-                                    // font-medium so the value reads as a solid field value,
-                                    // not the washed-out gray that font-normal renders at.
-                                    valueClassName="font-medium"
-                                    searchable={true}
-                                    disabled={isReadOnly}
-                                    className="w-full min-w-0"
-                                    buttonClassName="w-full px-3 py-2 bg-white border border-zinc-200 rounded-lg text-sm"
-                                  />
-                                </div>
-                                <div className="relative col-span-3 min-w-0">
-                                  {canViewInternalListing && (
-                                    <QuickViewLinkButton
-                                      href={productHref}
-                                      label={t('sales:clientQuotes.openProductInNewTab')}
-                                      disabledLabel={t(
-                                        'sales:clientQuotes.productShortcutUnavailable',
-                                      )}
-                                      floating
-                                    />
-                                  )}
-                                  <ProductSelectOrFallback
-                                    item={item}
-                                    index={index}
-                                    options={productOptions}
-                                    isProductMissing={isLinkedProductMissing(item)}
-                                    isReadOnly={isReadOnly}
-                                    ariaLabel={t('sales:clientOffers.selectProduct', {
-                                      defaultValue: 'Select product',
-                                    })}
-                                    placeholder={t('sales:clientOffers.selectProduct', {
-                                      defaultValue: 'Select product',
-                                    })}
-                                    onProductChange={updateProductSelection}
-                                    className="w-full min-w-0"
-                                    buttonClassName="w-full px-3 py-2 bg-white border border-zinc-200 rounded-lg text-sm"
-                                  />
-                                </div>
-                                <div className="col-span-2">
-                                  <div className="flex items-center justify-center gap-1">
-                                    <ValidatedNumberInput
-                                      step="0.01"
-                                      min="0"
-                                      required
-                                      placeholder={t('sales:clientOffers.qty', {
-                                        defaultValue: 'Qty',
-                                      })}
-                                      value={item.quantity}
-                                      onValueChange={(value) =>
-                                        updateItem(index, 'quantity', parseNumberInputValue(value))
-                                      }
-                                      disabled={isReadOnly || supplierLineLocked}
-                                      className="w-full max-w-[5rem] text-sm p-2 bg-white border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
-                                    />
-                                    <span className="text-xs font-semibold text-zinc-400 shrink-0">
-                                      /
-                                    </span>
-                                    <UnitTypeSelector
-                                      value={(item.unitType || 'hours') as SupplierUnitType}
-                                      onChange={(val) => handleUnitTypeChange(index, val)}
-                                      isSupply={isSupply}
-                                      quantity={Number(item.quantity) || 0}
-                                      disabled={isReadOnly || isLinkedToSupplierQuote}
-                                    />
-                                  </div>
-                                </div>
-                                <div className="col-span-2 flex items-center justify-center gap-1">
-                                  <ValidatedNumberInput
-                                    step="1"
-                                    min="1"
-                                    placeholder={t('sales:clientOffers.durationColumn', {
-                                      defaultValue: 'Duration',
-                                    })}
-                                    value={durationValue}
-                                    onValueChange={(value) =>
-                                      handleDurationValueChange(index, value)
-                                    }
-                                    disabled={isReadOnly || durationUnit === 'na'}
-                                    className="w-full max-w-[5rem] text-sm px-1 py-2 bg-white border border-zinc-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
-                                  />
-                                  <span className="text-[9px] font-semibold text-zinc-400 shrink-0">
-                                    /
-                                  </span>
-                                  <DurationUnitSelector
-                                    value={durationUnit}
-                                    onChange={(val) => handleDurationUnitChange(index, val)}
-                                    count={durationValue}
-                                    disabled={isReadOnly}
-                                  />
-                                </div>
-                                <div className="relative col-span-2 flex flex-col items-center justify-center gap-1">
-                                  {isLinkedToSupplierQuote && (
-                                    <div className="absolute right-0.5 -top-1 z-10 -translate-y-full">
-                                      <SupplierQuoteCostHint />
-                                    </div>
-                                  )}
-                                  <div className="flex items-center gap-1 w-full">
-                                    <ValidatedNumberInput
-                                      value={cost}
-                                      formatDecimals={2}
-                                      onValueChange={handleCostChange}
-                                      disabled={isReadOnly || supplierLineLocked}
-                                      className="w-full text-sm px-1 py-2 bg-white border border-zinc-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
-                                    />
-                                    <span className="text-[9px] font-semibold text-zinc-400 shrink-0">
-                                      {currency}
-                                    </span>
-                                  </div>
-                                </div>
-                                <div className="col-span-1 flex items-center justify-center gap-1">
-                                  <ValidatedNumberInput
-                                    value={molPercentage}
-                                    formatDecimals={MOL_PERCENTAGE_DECIMALS}
-                                    onValueChange={handleMolChange}
-                                    disabled={isReadOnly}
-                                    className="w-full text-sm px-1 py-2 bg-white border border-zinc-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
-                                  />
-                                  <span className="text-[9px] font-semibold text-zinc-400 shrink-0">
-                                    %
-                                  </span>
-                                </div>
-                                <div className="col-span-1 flex items-center justify-center">
-                                  <span className="text-xs font-bold text-zinc-700 whitespace-nowrap">
-                                    {lineCost.toFixed(2)} {currency}
-                                  </span>
-                                </div>
-                                <div className="col-span-1 flex items-center justify-center">
-                                  <span className="text-xs font-bold text-emerald-600 whitespace-nowrap">
-                                    {lineMargin.toFixed(2)} {currency}
-                                  </span>
-                                </div>
-                                <div className="col-span-1 flex items-center justify-center">
-                                  <span className="text-xs font-semibold whitespace-nowrap text-zinc-800">
-                                    {lineSalePrice.toFixed(2)} {currency}
-                                  </span>
-                                </div>
-                              </div>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon-sm"
-                                onClick={() => setProductRowToDelete(index)}
-                                disabled={isReadOnly}
-                                className="shrink-0 text-muted-foreground hover:text-destructive"
-                              >
-                                <i className="fa-solid fa-trash-can" aria-hidden="true"></i>
-                                <span className="sr-only">{t('common:buttons.delete')}</span>
-                              </Button>
-                            </div>
-                            <Input
-                              type="text"
-                              placeholder={t('form:placeholderNotes', {
-                                defaultValue: 'Optional notes...',
-                              })}
-                              value={item.note || ''}
-                              onChange={(event) => updateItem(index, 'note', event.target.value)}
-                              disabled={isReadOnly}
-                            />
-                          </div>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <div className="rounded-md border border-dashed border-border py-8 text-center text-sm text-muted-foreground">
-                      {t('sales:clientOffers.noItemsAdded', { defaultValue: 'No items added yet' })}
-                    </div>
-                  )}
-                </div>
+  return (
+    <Field data-invalid={Boolean(errors.id)}>
+      <FieldLabel htmlFor="client-offer-code" required={Boolean(editingOffer)}>
+        {t('sales:clientOffers.offerCode', { defaultValue: 'Offer code' })}
+      </FieldLabel>
+      <Input
+        id="client-offer-code"
+        type="text"
+        value={formData.id || ''}
+        disabled={isReadOnly}
+        onChange={(event) => setFormData((prev) => ({ ...prev, id: event.target.value }))}
+        placeholder={
+          clientOfferCodePreview ??
+          t('sales:clientOffers.autoCodePlaceholder', { defaultValue: 'Auto-generated' })
+        }
+        className={errors.id ? 'border-red-300 font-medium' : 'font-medium'}
+        aria-invalid={Boolean(errors.id)}
+      />
+      <FieldError className="text-xs">{errors.id}</FieldError>
+      {!editingOffer && (
+        <FieldDescription className="text-xs">
+          {clientOfferCodePreview
+            ? t('sales:clientOffers.autoCodePreviewDescription', {
+                preview: clientOfferCodePreview,
+                defaultValue:
+                  'Leave blank to generate {{preview}} from the document code template.',
+              })
+            : t('sales:clientOffers.autoCodeDescription', {
+                defaultValue: 'Leave blank to generate the next code automatically.',
+              })}
+        </FieldDescription>
+      )}
+    </Field>
+  );
+};
 
-                {(() => {
-                  const discountValue = Number.isNaN(formData.discount ?? 0)
-                    ? 0
-                    : (formData.discount ?? 0);
-                  const { subtotal, discountAmount, total, margin, marginPercentage } =
-                    calculatePricingTotals(
-                      formData.items || [],
-                      discountValue,
-                      'hours',
-                      formData.discountType || 'percentage',
-                    );
-                  return (
-                    <div className="flex flex-col gap-4 border-t border-border pt-4 md:flex-row">
-                      <Field className="md:w-2/3">
-                        <h4 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-primary">
-                          <span className="size-1.5 rounded-full bg-primary"></span>
-                          {t('sales:clientOffers.notes', { defaultValue: 'Notes' })}
-                          <FieldTooltip
-                            description={t('sales:fieldInfo.notes', {
-                              defaultValue: 'Additional notes for the entire document',
-                            })}
-                            status={readOnlyStatus}
-                            statusLabel={statusLabel}
-                          />
-                        </h4>
-                        <FieldLabel htmlFor="client-offer-notes" className="sr-only">
-                          {t('sales:clientOffers.notes', { defaultValue: 'Notes' })}
-                        </FieldLabel>
-                        <Textarea
-                          id="client-offer-notes"
-                          rows={4}
-                          value={formData.notes || ''}
-                          disabled={isReadOnly}
-                          placeholder={t('sales:clientOffers.additionalNotesPlaceholder', {
-                            defaultValue: 'Additional notes...',
-                          })}
-                          onChange={(event) =>
-                            setFormData((prev) => ({ ...prev, notes: event.target.value }))
-                          }
-                          className="min-h-28 resize-none"
-                        />
-                      </Field>
-                      <div className="space-y-2 md:w-1/3">
-                        <h4 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-primary">
-                          <span className="size-1.5 rounded-full bg-primary"></span>
-                          {t('sales:clientOffers.summary', { defaultValue: 'Summary' })}
-                        </h4>
-                        <CostSummaryPanel
-                          currency={currency}
-                          subtotal={subtotal}
-                          total={total}
-                          subtotalLabel={t('sales:clientOffers.subtotal', {
-                            defaultValue: 'Subtotal',
-                          })}
-                          totalLabel={t('sales:clientOffers.total', { defaultValue: 'Total' })}
-                          globalDiscount={{
-                            label: t('sales:clientOffers.globalDiscount', {
-                              defaultValue: 'Global Discount',
-                            }),
-                            value: formData.discount || 0,
-                            type: formData.discountType || 'percentage',
-                            onChange: (value) =>
-                              setFormData((prev) => ({
-                                ...prev,
-                                discount: value === '' ? 0 : Number(value),
-                              })),
-                            onTypeChange: (type) =>
-                              setFormData((prev) => ({ ...prev, discountType: type })),
-                            disabled: isReadOnly,
-                          }}
-                          discountRow={
-                            discountAmount > 0
-                              ? {
-                                  label: t('sales:clientOffers.discountAmount', {
-                                    value: getDiscountPercentageLabelValue(
-                                      discountValue,
-                                      formData.discountType ?? 'percentage',
-                                      subtotal,
-                                      discountAmount,
-                                    ),
-                                  }),
-                                  amount: discountAmount,
-                                }
-                              : undefined
-                          }
-                          margin={{
-                            label: `${t('sales:clientOffers.margin', { defaultValue: 'Margin' })} (${formatMolPercentage(marginPercentage)})`,
-                            amount: margin,
-                          }}
-                        />
-                      </div>
-                    </div>
-                  );
-                })()}
-              </ModalBody>
+const ClientOfferPaymentTermsField: React.FC<{ controller: ClientOffersController }> = ({
+  controller,
+}) => {
+  const { t, formData, setFormData, paymentTermsOptions, isReadOnly } = controller;
 
-              <ModalFooter>
-                <Button type="button" variant="outline" onClick={closeModal}>
-                  {t('common:buttons.cancel')}
-                </Button>
-                {(!isReadOnly || expirationEditableWhileReadOnly) && (
-                  <Button type="submit" disabled={isSubmitting}>
-                    {isSubmitting
-                      ? t('common:buttons.saving')
-                      : editingOffer
-                        ? t('common:buttons.update')
-                        : t('common:buttons.save')}
-                  </Button>
-                )}
-              </ModalFooter>
-            </form>
-          </ModalContent>
-          {editingOffer?.id && (
-            <OfferVersionsPanel
-              offerId={editingOffer.id}
-              selectedVersionId={previewVersion?.id ?? null}
-              onPreview={handleVersionPreview}
-              onClearPreview={handleClearPreview}
-              onRestored={handleVersionRestored}
-              disabled={baseReadOnly}
+  return (
+    <Field>
+      <SelectControl
+        id="client-offer-payment-terms"
+        options={paymentTermsOptions}
+        value={formData.paymentTerms || 'immediate'}
+        onChange={(value) =>
+          setFormData((prev) => ({
+            ...prev,
+            paymentTerms: value as ClientOffer['paymentTerms'],
+          }))
+        }
+        searchable={false}
+        disabled={isReadOnly}
+        label={t('sales:clientOffers.paymentTerms', { defaultValue: 'Payment terms' })}
+        buttonClassName="h-9"
+      />
+    </Field>
+  );
+};
+
+const ClientOfferExpirationField: React.FC<{ controller: ClientOffersController }> = ({
+  controller,
+}) => {
+  const { t, formData, setFormData, isReadOnly, expirationEditableWhileReadOnly } = controller;
+
+  return (
+    <Field>
+      <FieldLabel htmlFor="client-offer-expiration-date" required>
+        {t('sales:clientOffers.expirationDate', { defaultValue: 'Expiration date' })}
+      </FieldLabel>
+      <DateField
+        id="client-offer-expiration-date"
+        required
+        value={formData.expirationDate || ''}
+        disabled={isReadOnly && !expirationEditableWhileReadOnly}
+        onChange={(value) => setFormData((prev) => ({ ...prev, expirationDate: value }))}
+      />
+    </Field>
+  );
+};
+
+const ClientOfferItemsSection: React.FC<{ controller: ClientOffersController }> = ({
+  controller,
+}) => {
+  const { t, errors, formData, readOnlyStatus, statusLabel, addItem, isReadOnly } = controller;
+  const items = formData.items || [];
+
+  return (
+    <div className="space-y-4">
+      <div className="flex justify-between items-center">
+        <ClientOfferSectionHeading
+          label={t('sales:clientOffers.items', { defaultValue: 'Items' })}
+          description={t('sales:fieldInfo.items', { defaultValue: 'Line items for this offer' })}
+          status={readOnlyStatus}
+          statusLabel={statusLabel}
+        />
+        <Button type="button" size="sm" onClick={addItem} disabled={isReadOnly}>
+          <i className="fa-solid fa-plus text-[10px]" aria-hidden="true"></i>
+          {t('sales:clientOffers.addItem', { defaultValue: 'Add item' })}
+        </Button>
+      </div>
+      {errors.items && (
+        <p className="text-red-500 text-[10px] font-bold ml-1 -mt-2">{errors.items}</p>
+      )}
+      {items.length > 0 && <ClientOfferItemsColumnHeader controller={controller} />}
+      {items.length > 0 ? (
+        <div className="space-y-3">
+          {items.map((item, index) => (
+            <ClientOfferItemRow key={item.id} controller={controller} item={item} index={index} />
+          ))}
+        </div>
+      ) : (
+        <div className="rounded-md border border-dashed border-border py-8 text-center text-sm text-muted-foreground">
+          {t('sales:clientOffers.noItemsAdded', { defaultValue: 'No items added yet' })}
+        </div>
+      )}
+    </div>
+  );
+};
+
+const ClientOfferItemsColumnHeader: React.FC<{ controller: ClientOffersController }> = ({
+  controller,
+}) => {
+  const { t } = controller;
+
+  return (
+    <div className="hidden lg:flex gap-2 px-3 mb-1 items-center">
+      <div className="flex-1 min-w-0 grid grid-cols-16 gap-2">
+        <div className="col-span-3 text-[10px] font-black text-zinc-400 uppercase tracking-wider ml-1">
+          {t('sales:clientQuotes.supplierQuoteColumn')}
+        </div>
+        <div className="col-span-3 text-[10px] font-black text-zinc-400 uppercase tracking-wider">
+          {t('sales:clientOffers.product', { defaultValue: 'Product' })}
+        </div>
+        <div className="col-span-2 text-[10px] font-black text-zinc-400 uppercase tracking-wider text-center">
+          {t('sales:clientOffers.qty', { defaultValue: 'Qty' })}
+        </div>
+        <div className="col-span-2 text-[10px] font-black text-zinc-400 uppercase tracking-wider text-center whitespace-nowrap">
+          {t('sales:clientOffers.durationColumn', { defaultValue: 'Duration' })}
+        </div>
+        <div className="col-span-2 text-[10px] font-black text-zinc-400 uppercase tracking-wider text-center">
+          {t('crm:internalListing.cost')}
+        </div>
+        <div className="col-span-1 text-[10px] font-black text-zinc-400 uppercase tracking-wider text-center whitespace-nowrap">
+          {t('sales:clientQuotes.molLabel', { defaultValue: 'MOL' })}
+        </div>
+        <div className="col-span-1 text-[10px] font-black text-zinc-400 uppercase tracking-wider text-center whitespace-nowrap">
+          {t('sales:clientQuotes.totalCost', { defaultValue: 'Total cost' })}
+        </div>
+        <div className="col-span-1 text-[10px] font-black text-zinc-400 uppercase tracking-wider text-center">
+          {t('sales:clientQuotes.marginLabel')}
+        </div>
+        <div className="col-span-1 text-[10px] font-black text-zinc-400 uppercase tracking-wider text-center">
+          {t('sales:clientQuotes.revenue')}
+        </div>
+      </div>
+      <div className="w-10 shrink-0"></div>
+    </div>
+  );
+};
+
+const getClientOfferLineContext = (
+  controller: ClientOffersController,
+  item: ClientOfferItem,
+  index: number,
+) => {
+  const {
+    products,
+    isReadOnly,
+    readOnlyReason,
+    supplierLockedReason,
+    statusEditable,
+    allSupplierQuoteIds,
+    allProductIds,
+    supplierQuoteItemIndex,
+    quoteIdBySupplierQuoteItemId,
+    setFormData,
+  } = controller;
+  const {
+    unitCost: cost,
+    molPercentage,
+    lineCost,
+    quantity,
+    durationMonths,
+  } = getItemPricingContext(item);
+  const durationUnit = normalizeDurationUnit(item.durationUnit);
+  const durationValue = getDurationDisplayValue(item);
+  const product = products.find((p) => p.id === item.productId);
+  const isSupply = product?.type === 'supply';
+  const unitSalePrice = Number(item.unitPrice || 0);
+  const lineSalePrice = unitSalePrice * quantity * durationMonths;
+  const lineMargin = lineSalePrice - lineCost;
+  const isLinkedToSupplierQuote = Boolean(item.supplierQuoteItemId);
+  const linkedSupplierRef = item.supplierQuoteItemId
+    ? supplierQuoteItemIndex.get(item.supplierQuoteItemId)
+    : undefined;
+  const supplierLineLocked = isSupplierLineLocked(item, linkedSupplierRef);
+  const supplierDataStale =
+    !isReadOnly && !supplierLineLocked && isSupplierLineStale(item, linkedSupplierRef?.item);
+  const supplierQuoteHref = buildSupplierQuoteQuickViewHref(
+    resolveLinkedSupplierQuoteId(item, quoteIdBySupplierQuoteItemId),
+    allSupplierQuoteIds,
+  );
+  const productHref = buildProductQuickViewHref(item.productId, allProductIds);
+  const linkedFieldStatus = getLinkedFieldStatus({
+    isReadOnly,
+    isLinkedToSupplierQuote,
+    readOnlyReason,
+    supplierLockedReason,
+    statusEditable,
+  });
+
+  const handleCostChange = (value: string) => {
+    if (isReadOnly) return;
+    setFormData(makeCostUpdater<Partial<ClientOffer>>(index, value));
+  };
+
+  const handleMolChange = (value: string) => {
+    if (isReadOnly) return;
+    setFormData(makeMolUpdater<Partial<ClientOffer>>(index, value));
+  };
+
+  return {
+    cost,
+    molPercentage,
+    lineCost,
+    durationUnit,
+    durationValue,
+    isSupply,
+    lineSalePrice,
+    lineMargin,
+    isLinkedToSupplierQuote,
+    linkedSupplierRef,
+    supplierLineLocked,
+    supplierDataStale,
+    supplierQuoteHref,
+    productHref,
+    linkedFieldStatus,
+    handleCostChange,
+    handleMolChange,
+  };
+};
+
+type ClientOfferLineContext = ReturnType<typeof getClientOfferLineContext>;
+
+const ClientOfferItemRow: React.FC<{
+  controller: ClientOffersController;
+  item: ClientOfferItem;
+  index: number;
+}> = ({ controller, item, index }) => {
+  const line = getClientOfferLineContext(controller, item, index);
+
+  return (
+    <div className="space-y-3 rounded-md border border-border bg-muted/30 p-3">
+      <ClientOfferItemMobileLinks controller={controller} item={item} index={index} line={line} />
+      <ClientOfferItemMobileMetrics controller={controller} item={item} index={index} line={line} />
+      <ClientOfferItemDesktopRow controller={controller} item={item} index={index} line={line} />
+      <ClientOfferItemNote controller={controller} item={item} index={index} />
+    </div>
+  );
+};
+
+const ClientOfferItemMobileLinks: React.FC<{
+  controller: ClientOffersController;
+  item: ClientOfferItem;
+  index: number;
+  line: ClientOfferLineContext;
+}> = ({ controller, item, index, line }) => {
+  const { t, readOnlyStatus, statusLabel } = controller;
+  const linkedSupplierRef = line.linkedSupplierRef;
+
+  return (
+    <div className="lg:hidden flex items-start gap-3">
+      <div className="grid flex-1 min-w-0 grid-cols-1 md:grid-cols-2 gap-3">
+        <div className="min-w-0">
+          <ClientOfferLineLabel
+            label={t('sales:clientQuotes.supplierQuoteColumn')}
+            description={t('sales:fieldInfo.supplierQuote', {
+              defaultValue: 'Link this item to a supplier quote for cost tracking',
+            })}
+            status={readOnlyStatus}
+            statusLabel={statusLabel}
+          >
+            {line.supplierDataStale && linkedSupplierRef && (
+              <StaleSupplierDataButton
+                onClick={() => controller.refreshLineFromSupplier(index, linkedSupplierRef.item)}
+                className="ml-auto"
+              />
+            )}
+          </ClientOfferLineLabel>
+          <div className="flex items-center gap-1">
+            <ClientOfferSupplierPicker
+              controller={controller}
+              item={item}
+              index={index}
+              line={line}
+              className="min-w-0 flex-1"
+              buttonClassName="w-full px-3 py-2 bg-white border border-zinc-200 rounded-lg text-sm"
+            />
+          </div>
+        </div>
+        <div className="min-w-0">
+          <ClientOfferLineLabel
+            label={t('sales:clientOffers.product', { defaultValue: 'Product' })}
+            description={t('sales:fieldInfo.product', {
+              defaultValue: 'Select a product or service for this line item',
+            })}
+            status={line.linkedFieldStatus}
+            statusLabel={statusLabel}
+          />
+          <div className="flex items-center gap-1">
+            <ClientOfferProductPicker
+              controller={controller}
+              item={item}
+              index={index}
+              line={line}
+              className="min-w-0 flex-1"
+              buttonClassName="w-full px-3 py-2 bg-white border border-zinc-200 rounded-lg text-sm"
+            />
+          </div>
+        </div>
+      </div>
+      <ClientOfferDeleteLineButton controller={controller} index={index} className="mt-5" />
+    </div>
+  );
+};
+
+const ClientOfferItemMobileMetrics: React.FC<{
+  controller: ClientOffersController;
+  item: ClientOfferItem;
+  index: number;
+  line: ClientOfferLineContext;
+}> = ({ controller, item, index, line }) => {
+  const { t, currency, readOnlyStatus, statusLabel } = controller;
+
+  return (
+    <div className="grid grid-cols-2 gap-3 md:grid-cols-7 lg:hidden">
+      <div>
+        <ClientOfferLineLabel
+          label={t('sales:clientOffers.qty', { defaultValue: 'Qty' })}
+          description={t('sales:fieldInfo.qty', { defaultValue: 'Quantity of items or hours' })}
+          status={line.linkedFieldStatus}
+          statusLabel={statusLabel}
+        />
+        <ClientOfferQuantityEditor controller={controller} item={item} index={index} line={line} />
+      </div>
+      <div>
+        <ClientOfferLineLabel
+          label={t('sales:clientOffers.durationColumn', { defaultValue: 'Duration' })}
+          description={t('sales:fieldInfo.duration', {
+            defaultValue: 'Number of months the service runs',
+          })}
+          status={readOnlyStatus}
+          statusLabel={statusLabel}
+        />
+        <ClientOfferDurationEditor controller={controller} index={index} line={line} />
+      </div>
+      <ClientOfferInputPanel
+        label={t('crm:internalListing.cost')}
+        description={t('sales:fieldInfo.cost', { defaultValue: 'Unit cost for this item' })}
+        status={line.linkedFieldStatus}
+        statusLabel={statusLabel}
+      >
+        <ClientOfferCostEditor controller={controller} line={line} />
+      </ClientOfferInputPanel>
+      <ClientOfferInputPanel
+        label={`${t('sales:clientQuotes.molLabel', { defaultValue: 'MOL' })} (%)`}
+        description={t('sales:fieldInfo.mol', {
+          defaultValue: 'Margin overhead loading percentage',
+        })}
+        status={readOnlyStatus}
+        statusLabel={statusLabel}
+      >
+        <ClientOfferMolEditor controller={controller} line={line} />
+      </ClientOfferInputPanel>
+      <ClientOfferValuePanel
+        label={t('sales:clientQuotes.totalCost', { defaultValue: 'Total cost' })}
+        value={`${line.lineCost.toFixed(2)} ${currency}`}
+        valueClassName="text-xs font-bold text-zinc-700 whitespace-nowrap"
+      />
+      <ClientOfferValuePanel
+        label={t('sales:clientQuotes.marginLabel')}
+        value={`${line.lineMargin.toFixed(2)} ${currency}`}
+        valueClassName="text-xs font-bold text-emerald-600 whitespace-nowrap"
+      />
+      <ClientOfferValuePanel
+        label={t('sales:clientQuotes.revenue')}
+        value={`${line.lineSalePrice.toFixed(2)} ${currency}`}
+        valueClassName="text-sm font-semibold whitespace-nowrap text-zinc-800"
+        className="col-span-2 md:col-span-1"
+      />
+    </div>
+  );
+};
+
+const ClientOfferItemDesktopRow: React.FC<{
+  controller: ClientOffersController;
+  item: ClientOfferItem;
+  index: number;
+  line: ClientOfferLineContext;
+}> = ({ controller, item, index, line }) => {
+  const { currency } = controller;
+  const linkedSupplierRef = line.linkedSupplierRef;
+
+  return (
+    <div className="hidden lg:flex gap-2 items-center pt-5">
+      <div className="flex-1 min-w-0 grid grid-cols-16 gap-2 items-center">
+        <div className="relative col-span-3 min-w-0">
+          {line.supplierDataStale && linkedSupplierRef && (
+            <StaleSupplierDataButton
+              onClick={() => controller.refreshLineFromSupplier(index, linkedSupplierRef.item)}
+              className="lg:absolute lg:left-0 lg:-top-1 lg:z-10 lg:-translate-y-full h-6 px-2 text-[10px]"
             />
           )}
+          <ClientOfferSupplierPicker
+            controller={controller}
+            item={item}
+            index={index}
+            line={line}
+            floating
+            className="w-full min-w-0"
+            buttonClassName="w-full px-3 py-2 bg-white border border-zinc-200 rounded-lg text-sm"
+          />
         </div>
-      </Modal>
+        <div className="relative col-span-3 min-w-0">
+          <ClientOfferProductPicker
+            controller={controller}
+            item={item}
+            index={index}
+            line={line}
+            floating
+            className="w-full min-w-0"
+            buttonClassName="w-full px-3 py-2 bg-white border border-zinc-200 rounded-lg text-sm"
+          />
+        </div>
+        <div className="col-span-2">
+          <ClientOfferQuantityEditor
+            controller={controller}
+            item={item}
+            index={index}
+            line={line}
+            compact
+          />
+        </div>
+        <div className="col-span-2 flex items-center justify-center gap-1">
+          <ClientOfferDurationEditor controller={controller} index={index} line={line} compact />
+        </div>
+        <div className="relative col-span-2 flex flex-col items-center justify-center gap-1">
+          {line.isLinkedToSupplierQuote && (
+            <div className="absolute right-0.5 -top-1 z-10 -translate-y-full">
+              <SupplierQuoteCostHint />
+            </div>
+          )}
+          <ClientOfferCostEditor controller={controller} line={line} compact />
+        </div>
+        <div className="col-span-1 flex items-center justify-center gap-1">
+          <ClientOfferMolEditor controller={controller} line={line} compact />
+        </div>
+        <ClientOfferDesktopAmount value={`${line.lineCost.toFixed(2)} ${currency}`} />
+        <ClientOfferDesktopAmount
+          value={`${line.lineMargin.toFixed(2)} ${currency}`}
+          className="text-emerald-600"
+        />
+        <ClientOfferDesktopAmount
+          value={`${line.lineSalePrice.toFixed(2)} ${currency}`}
+          className="font-semibold text-zinc-800"
+        />
+      </div>
+      <ClientOfferDeleteLineButton controller={controller} index={index} />
+    </div>
+  );
+};
 
-      <Modal isOpen={isRevertConfirmOpen} onClose={closeRevertConfirm} ariaLabel={null}>
-        {() => (
-          <ModalContent size="sm">
-            <ModalHeader>
-              <ModalTitle>
-                {t('sales:clientOffers.revertToDraftTitle', {
-                  defaultValue: 'Revert offer to Draft?',
-                })}
-              </ModalTitle>
-              <ModalCloseButton onClick={closeRevertConfirm} />
-            </ModalHeader>
-            <ModalBody className="space-y-4">
-              <p className="text-sm text-muted-foreground">
-                {t('sales:clientOffers.revertToDraftDescription', {
-                  defaultValue:
-                    'This moves {{offerId}} from {{status}} back to Draft and records the change in the audit trail.',
-                  offerId: offerToRevert?.id ?? '',
-                  status: offerToRevert ? getStatusLabel(offerToRevert.status) : '',
-                })}
-              </p>
-              <Field>
-                <FieldLabel htmlFor="client-offer-revert-reason">
-                  {t('sales:clientOffers.revertReasonLabel', {
-                    defaultValue: 'Reason',
-                  })}
-                </FieldLabel>
-                <Textarea
-                  id="client-offer-revert-reason"
-                  value={revertReason}
-                  onChange={(event) =>
-                    dispatch({ type: 'setRevertReason', value: event.target.value })
-                  }
-                  disabled={isReverting}
-                  placeholder={t('sales:clientOffers.revertReasonPlaceholder', {
-                    defaultValue: 'Optional note for the audit trail',
-                  })}
-                  className="min-h-24 resize-none"
-                />
-              </Field>
-            </ModalBody>
-            <ModalFooter>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={closeRevertConfirm}
-                disabled={isReverting}
-              >
-                {t('common:buttons.cancel')}
-              </Button>
-              <Button
-                type="button"
-                variant="destructive"
-                onClick={handleRevertToDraft}
-                disabled={isReverting}
-              >
-                {isReverting
-                  ? t('common:buttons.saving')
-                  : t('sales:clientOffers.confirmRevertToDraft', {
-                      defaultValue: 'Revert to Draft',
-                    })}
-              </Button>
-            </ModalFooter>
-          </ModalContent>
-        )}
-      </Modal>
+const ClientOfferLineLabel: React.FC<{
+  label: React.ReactNode;
+  description: string;
+  status: string;
+  statusLabel: string;
+  children?: React.ReactNode;
+}> = ({ label, description, status, statusLabel, children }) => (
+  <div className="mb-1 text-[10px] font-black text-zinc-400 uppercase tracking-wider flex items-center gap-1">
+    {label}
+    <FieldTooltip description={description} status={status} statusLabel={statusLabel} />
+    {children}
+  </div>
+);
 
+const ClientOfferInputPanel: React.FC<{
+  label: React.ReactNode;
+  description: string;
+  status: string;
+  statusLabel: string;
+  children: React.ReactNode;
+}> = ({ label, description, status, statusLabel, children }) => (
+  <div className="rounded-lg border border-zinc-200 bg-white px-3 py-2 space-y-1">
+    <div className="text-[10px] font-black text-zinc-400 uppercase tracking-wider flex items-center gap-1">
+      {label}
+      <FieldTooltip description={description} status={status} statusLabel={statusLabel} />
+    </div>
+    {children}
+  </div>
+);
+
+const ClientOfferValuePanel: React.FC<{
+  label: React.ReactNode;
+  value: string;
+  valueClassName: string;
+  className?: string;
+}> = ({ label, value, valueClassName, className = '' }) => (
+  <div className={`rounded-lg border border-zinc-200 bg-white px-3 py-2 space-y-1 ${className}`}>
+    <div className="text-[10px] font-black text-zinc-400 uppercase tracking-wider">{label}</div>
+    <div className={valueClassName}>{value}</div>
+  </div>
+);
+
+const ClientOfferSupplierPicker: React.FC<{
+  controller: ClientOffersController;
+  item: ClientOfferItem;
+  index: number;
+  line: ClientOfferLineContext;
+  className: string;
+  buttonClassName: string;
+  floating?: boolean;
+}> = ({ controller, item, index, line, className, buttonClassName, floating }) => {
+  const {
+    t,
+    supplierQuoteSelectOptions,
+    isReadOnly,
+    canViewSupplierQuotes,
+    updateItem,
+    getSupplierQuoteItemDisplayValue,
+  } = controller;
+
+  return (
+    <>
+      {canViewSupplierQuotes && (
+        <QuickViewLinkButton
+          href={line.supplierQuoteHref}
+          label={t('sales:clientQuotes.openSupplierQuoteInNewTab')}
+          disabledLabel={t('sales:clientQuotes.supplierQuoteShortcutUnavailable')}
+          floating={floating}
+        />
+      )}
+      <SelectControl
+        options={supplierQuoteSelectOptions}
+        value={item.supplierQuoteItemId || 'none'}
+        onChange={(val) =>
+          updateItem(index, 'supplierQuoteItemId', val === 'none' ? '' : (val as string))
+        }
+        placeholder={t('sales:clientQuotes.selectSupplierQuote')}
+        displayValue={getSupplierQuoteItemDisplayValue(item.supplierQuoteItemId)}
+        displayValueIsPlaceholder={!item.supplierQuoteItemId}
+        valueClassName="font-medium"
+        searchable={true}
+        disabled={isReadOnly}
+        className={className}
+        buttonClassName={buttonClassName}
+      />
+    </>
+  );
+};
+
+const ClientOfferProductPicker: React.FC<{
+  controller: ClientOffersController;
+  item: ClientOfferItem;
+  index: number;
+  line: ClientOfferLineContext;
+  className: string;
+  buttonClassName: string;
+  floating?: boolean;
+}> = ({ controller, item, index, line, className, buttonClassName, floating }) => {
+  const {
+    t,
+    productOptions,
+    canViewInternalListing,
+    isReadOnly,
+    isLinkedProductMissing,
+    updateProductSelection,
+  } = controller;
+
+  return (
+    <>
+      {canViewInternalListing && (
+        <QuickViewLinkButton
+          href={line.productHref}
+          label={t('sales:clientQuotes.openProductInNewTab')}
+          disabledLabel={t('sales:clientQuotes.productShortcutUnavailable')}
+          floating={floating}
+        />
+      )}
+      <ProductSelectOrFallback
+        item={item}
+        index={index}
+        options={productOptions}
+        isProductMissing={isLinkedProductMissing(item)}
+        isReadOnly={isReadOnly}
+        ariaLabel={t('sales:clientOffers.selectProduct', { defaultValue: 'Select product' })}
+        placeholder={t('sales:clientOffers.selectProduct', { defaultValue: 'Select product' })}
+        onProductChange={updateProductSelection}
+        className={className}
+        buttonClassName={buttonClassName}
+      />
+    </>
+  );
+};
+
+const ClientOfferQuantityEditor: React.FC<{
+  controller: ClientOffersController;
+  item: ClientOfferItem;
+  index: number;
+  line: ClientOfferLineContext;
+  compact?: boolean;
+}> = ({ controller, item, index, line, compact }) => {
+  const { t, isReadOnly, updateItem, handleUnitTypeChange } = controller;
+
+  return (
+    <div className="flex items-center justify-center gap-1">
+      <ValidatedNumberInput
+        step="0.01"
+        min="0"
+        required
+        placeholder={t('sales:clientOffers.qty', { defaultValue: 'Qty' })}
+        value={item.quantity}
+        onValueChange={(value) => updateItem(index, 'quantity', parseNumberInputValue(value))}
+        disabled={isReadOnly || line.supplierLineLocked}
+        className={
+          compact
+            ? 'w-full max-w-[5rem] text-sm p-2 bg-white border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed'
+            : 'w-full text-sm px-3 py-2 bg-white border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed flex-1'
+        }
+      />
+      <span className="text-xs font-semibold text-zinc-400 shrink-0">/</span>
+      <UnitTypeSelector
+        value={(item.unitType || 'hours') as SupplierUnitType}
+        onChange={(val) => handleUnitTypeChange(index, val)}
+        isSupply={line.isSupply}
+        quantity={Number(item.quantity) || 0}
+        disabled={isReadOnly || line.isLinkedToSupplierQuote}
+      />
+    </div>
+  );
+};
+
+const ClientOfferDurationEditor: React.FC<{
+  controller: ClientOffersController;
+  index: number;
+  line: ClientOfferLineContext;
+  compact?: boolean;
+}> = ({ controller, index, line, compact }) => {
+  const { t, isReadOnly, handleDurationValueChange, handleDurationUnitChange } = controller;
+
+  return (
+    <div className="flex items-center gap-1">
+      <ValidatedNumberInput
+        step="1"
+        min="1"
+        placeholder={t('sales:clientOffers.durationColumn', { defaultValue: 'Duration' })}
+        value={line.durationValue}
+        onValueChange={(value) => handleDurationValueChange(index, value)}
+        disabled={isReadOnly || line.durationUnit === 'na'}
+        className={
+          compact
+            ? 'w-full max-w-[5rem] text-sm px-1 py-2 bg-white border border-zinc-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed'
+            : 'w-full text-sm px-3 py-2 bg-white border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed flex-1'
+        }
+      />
+      <span
+        className={
+          compact
+            ? 'text-[9px] font-semibold text-zinc-400 shrink-0'
+            : 'text-xs font-semibold text-zinc-400 shrink-0'
+        }
+      >
+        /
+      </span>
+      <DurationUnitSelector
+        value={line.durationUnit}
+        onChange={(val) => handleDurationUnitChange(index, val)}
+        count={line.durationValue}
+        disabled={isReadOnly}
+      />
+    </div>
+  );
+};
+
+const ClientOfferCostEditor: React.FC<{
+  controller: ClientOffersController;
+  line: ClientOfferLineContext;
+  compact?: boolean;
+}> = ({ controller, line, compact }) => {
+  const { currency, isReadOnly } = controller;
+  const isLinkedToSupplierQuote = line.isLinkedToSupplierQuote;
+
+  return (
+    <div className="flex items-center gap-1 w-full">
+      <ValidatedNumberInput
+        value={line.cost}
+        formatDecimals={2}
+        onValueChange={line.handleCostChange}
+        disabled={isReadOnly || line.supplierLineLocked}
+        className={
+          compact
+            ? 'w-full text-sm px-1 py-2 bg-white border border-zinc-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed'
+            : 'w-full text-sm p-2 bg-white border border-zinc-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed'
+        }
+      />
+      <span className="text-[9px] font-semibold text-zinc-400 shrink-0">{currency}</span>
+      {!compact && <>{isLinkedToSupplierQuote && <SupplierQuoteCostHint />}</>}
+    </div>
+  );
+};
+
+const ClientOfferMolEditor: React.FC<{
+  controller: ClientOffersController;
+  line: ClientOfferLineContext;
+  compact?: boolean;
+}> = ({ controller, line, compact }) => {
+  const { isReadOnly } = controller;
+
+  return (
+    <>
+      <ValidatedNumberInput
+        value={line.molPercentage}
+        formatDecimals={MOL_PERCENTAGE_DECIMALS}
+        onValueChange={line.handleMolChange}
+        disabled={isReadOnly}
+        className={
+          compact
+            ? 'w-full text-sm px-1 py-2 bg-white border border-zinc-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed'
+            : 'w-full text-sm p-2 bg-white border border-zinc-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed'
+        }
+      />
+      <span className="text-[9px] font-semibold text-zinc-400 shrink-0">%</span>
+    </>
+  );
+};
+
+const ClientOfferDesktopAmount: React.FC<{ value: string; className?: string }> = ({
+  value,
+  className = 'text-zinc-700',
+}) => (
+  <div className="col-span-1 flex items-center justify-center">
+    <span className={`text-xs font-bold whitespace-nowrap ${className}`}>{value}</span>
+  </div>
+);
+
+const ClientOfferDeleteLineButton: React.FC<{
+  controller: ClientOffersController;
+  index: number;
+  className?: string;
+}> = ({ controller, index, className = '' }) => {
+  const { t, isReadOnly, setProductRowToDelete } = controller;
+
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      size="icon-sm"
+      onClick={() => setProductRowToDelete(index)}
+      disabled={isReadOnly}
+      className={`${className} shrink-0 text-muted-foreground hover:text-destructive`}
+    >
+      <i className="fa-solid fa-trash-can" aria-hidden="true"></i>
+      <span className="sr-only">{t('common:buttons.delete')}</span>
+    </Button>
+  );
+};
+
+const ClientOfferItemNote: React.FC<{
+  controller: ClientOffersController;
+  item: ClientOfferItem;
+  index: number;
+}> = ({ controller, item, index }) => {
+  const { t, isReadOnly, updateItem } = controller;
+
+  return (
+    <Input
+      type="text"
+      placeholder={t('form:placeholderNotes', { defaultValue: 'Optional notes...' })}
+      value={item.note || ''}
+      onChange={(event) => updateItem(index, 'note', event.target.value)}
+      disabled={isReadOnly}
+    />
+  );
+};
+
+const ClientOfferNotesSummarySection: React.FC<{ controller: ClientOffersController }> = ({
+  controller,
+}) => (
+  <div className="flex flex-col gap-4 border-t border-border pt-4 md:flex-row">
+    <ClientOfferNotesField controller={controller} />
+    <ClientOfferSummaryPanel controller={controller} />
+  </div>
+);
+
+const ClientOfferNotesField: React.FC<{ controller: ClientOffersController }> = ({
+  controller,
+}) => {
+  const { t, formData, setFormData, isReadOnly, readOnlyStatus, statusLabel } = controller;
+
+  return (
+    <Field className="md:w-2/3">
+      <ClientOfferSectionHeading
+        label={t('sales:clientOffers.notes', { defaultValue: 'Notes' })}
+        description={t('sales:fieldInfo.notes', {
+          defaultValue: 'Additional notes for the entire document',
+        })}
+        status={readOnlyStatus}
+        statusLabel={statusLabel}
+      />
+      <FieldLabel htmlFor="client-offer-notes" className="sr-only">
+        {t('sales:clientOffers.notes', { defaultValue: 'Notes' })}
+      </FieldLabel>
+      <Textarea
+        id="client-offer-notes"
+        rows={4}
+        value={formData.notes || ''}
+        disabled={isReadOnly}
+        placeholder={t('sales:clientOffers.additionalNotesPlaceholder', {
+          defaultValue: 'Additional notes...',
+        })}
+        onChange={(event) => setFormData((prev) => ({ ...prev, notes: event.target.value }))}
+        className="min-h-28 resize-none"
+      />
+    </Field>
+  );
+};
+
+const ClientOfferSummaryPanel: React.FC<{ controller: ClientOffersController }> = ({
+  controller,
+}) => {
+  const { t, formData, setFormData, formTotals, currency, isReadOnly } = controller;
+  const { discountValue, subtotal, discountAmount, total, margin, marginPercentage } = formTotals;
+
+  return (
+    <div className="space-y-2 md:w-1/3">
+      <h4 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-primary">
+        <span className="size-1.5 rounded-full bg-primary"></span>
+        {t('sales:clientOffers.summary', { defaultValue: 'Summary' })}
+      </h4>
+      <CostSummaryPanel
+        currency={currency}
+        subtotal={subtotal}
+        total={total}
+        subtotalLabel={t('sales:clientOffers.subtotal', { defaultValue: 'Subtotal' })}
+        totalLabel={t('sales:clientOffers.total', { defaultValue: 'Total' })}
+        globalDiscount={{
+          label: t('sales:clientOffers.globalDiscount', { defaultValue: 'Global Discount' }),
+          value: formData.discount || 0,
+          type: formData.discountType || 'percentage',
+          onChange: (value) =>
+            setFormData((prev) => ({
+              ...prev,
+              discount: value === '' ? 0 : Number(value),
+            })),
+          onTypeChange: (type) => setFormData((prev) => ({ ...prev, discountType: type })),
+          disabled: isReadOnly,
+        }}
+        discountRow={
+          discountAmount > 0
+            ? {
+                label: t('sales:clientOffers.discountAmount', {
+                  value: getDiscountPercentageLabelValue(
+                    discountValue,
+                    formData.discountType ?? 'percentage',
+                    subtotal,
+                    discountAmount,
+                  ),
+                }),
+                amount: discountAmount,
+              }
+            : undefined
+        }
+        margin={{
+          label: `${t('sales:clientOffers.margin', { defaultValue: 'Margin' })} (${formatMolPercentage(marginPercentage)})`,
+          amount: margin,
+        }}
+      />
+    </div>
+  );
+};
+
+const ClientOfferModalFooter: React.FC<{ controller: ClientOffersController }> = ({
+  controller,
+}) => {
+  const { t, closeModal, isReadOnly, expirationEditableWhileReadOnly, isSubmitting, editingOffer } =
+    controller;
+
+  return (
+    <ModalFooter>
+      <Button type="button" variant="outline" onClick={closeModal}>
+        {t('common:buttons.cancel')}
+      </Button>
+      {(!isReadOnly || expirationEditableWhileReadOnly) && (
+        <Button type="submit" disabled={isSubmitting}>
+          {isSubmitting
+            ? t('common:buttons.saving')
+            : editingOffer
+              ? t('common:buttons.update')
+              : t('common:buttons.save')}
+        </Button>
+      )}
+    </ModalFooter>
+  );
+};
+
+const ClientOfferRevertModal: React.FC<{ controller: ClientOffersController }> = ({
+  controller,
+}) => {
+  const {
+    t,
+    isRevertConfirmOpen,
+    closeRevertConfirm,
+    offerToRevert,
+    getStatusLabel,
+    revertReason,
+    dispatch,
+    isReverting,
+    handleRevertToDraft,
+  } = controller;
+
+  return (
+    <Modal isOpen={isRevertConfirmOpen} onClose={closeRevertConfirm} ariaLabel={null}>
+      {() => (
+        <ModalContent size="sm">
+          <ModalHeader>
+            <ModalTitle>
+              {t('sales:clientOffers.revertToDraftTitle', {
+                defaultValue: 'Revert offer to Draft?',
+              })}
+            </ModalTitle>
+            <ModalCloseButton onClick={closeRevertConfirm} />
+          </ModalHeader>
+          <ModalBody className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              {t('sales:clientOffers.revertToDraftDescription', {
+                defaultValue:
+                  'This moves {{offerId}} from {{status}} back to Draft and records the change in the audit trail.',
+                offerId: offerToRevert?.id ?? '',
+                status: offerToRevert ? getStatusLabel(offerToRevert.status) : '',
+              })}
+            </p>
+            <Field>
+              <FieldLabel htmlFor="client-offer-revert-reason">
+                {t('sales:clientOffers.revertReasonLabel', { defaultValue: 'Reason' })}
+              </FieldLabel>
+              <Textarea
+                id="client-offer-revert-reason"
+                value={revertReason}
+                onChange={(event) =>
+                  dispatch({ type: 'setRevertReason', value: event.target.value })
+                }
+                disabled={isReverting}
+                placeholder={t('sales:clientOffers.revertReasonPlaceholder', {
+                  defaultValue: 'Optional note for the audit trail',
+                })}
+                className="min-h-24 resize-none"
+              />
+            </Field>
+          </ModalBody>
+          <ModalFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={closeRevertConfirm}
+              disabled={isReverting}
+            >
+              {t('common:buttons.cancel')}
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={handleRevertToDraft}
+              disabled={isReverting}
+            >
+              {isReverting
+                ? t('common:buttons.saving')
+                : t('sales:clientOffers.confirmRevertToDraft', {
+                    defaultValue: 'Revert to Draft',
+                  })}
+            </Button>
+          </ModalFooter>
+        </ModalContent>
+      )}
+    </Modal>
+  );
+};
+
+const ClientOfferDeleteDialogs: React.FC<{ controller: ClientOffersController }> = ({
+  controller,
+}) => {
+  const {
+    t,
+    isDeleteConfirmOpen,
+    isDeleting,
+    dispatch,
+    handleDelete,
+    offerToDelete,
+    productRowToDelete,
+    setProductRowToDelete,
+    removeItem,
+  } = controller;
+
+  return (
+    <>
       <DeleteConfirmModal
         isOpen={isDeleteConfirmOpen}
         onClose={() => {
           if (isDeleting) return;
           dispatch({ type: 'closeDeleteConfirm' });
         }}
-        onConfirm={async () => {
-          if (!offerToDelete) return;
-          if (isDeleting) return;
-          dispatch({ type: 'setIsDeleting', value: true });
-          try {
-            await onDeleteOffer(offerToDelete.id);
-            dispatch({ type: 'deleteSuccess' });
-          } catch (err) {
-            toastError((err as Error).message || t('sales:clientOffers.failedToDelete'));
-          } finally {
-            dispatch({ type: 'setIsDeleting', value: false });
-          }
-        }}
+        onConfirm={handleDelete}
         isDeleting={isDeleting}
         title={t('sales:clientOffers.deleteTitle', { defaultValue: 'Delete offer?' })}
         description={offerToDelete?.id ?? ''}
       />
-
-      {/* Line-item (product) delete confirmation */}
       <DeleteConfirmModal
         isOpen={productRowToDelete !== null}
         onClose={() => setProductRowToDelete(null)}
@@ -2282,44 +2620,54 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = ({
         description={t('sales:clientOffers.removeProductConfirm')}
         zIndex={70}
       />
+    </>
+  );
+};
 
-      <div className="space-y-4">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <div>
-            <h2 className="text-2xl font-semibold text-zinc-800">
-              {t('sales:clientOffers.title', { defaultValue: 'Client Offers' })}
-            </h2>
-            <p className="text-zinc-500 text-sm">
-              {t('sales:clientOffers.subtitle', {
-                defaultValue: 'Offers created from customer quotes.',
-              })}
-            </p>
-          </div>
-          {onAddOffer && (
-            <HeaderAddButton onClick={openAddModal}>
-              {t('sales:clientOffers.addOffer', { defaultValue: 'Add offer' })}
-            </HeaderAddButton>
-          )}
+const ClientOffersHeader: React.FC<{ controller: ClientOffersController }> = ({ controller }) => {
+  const { t, onAddOffer, openAddModal } = controller;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+          <h2 className="text-2xl font-semibold text-zinc-800">
+            {t('sales:clientOffers.title', { defaultValue: 'Client Offers' })}
+          </h2>
+          <p className="text-zinc-500 text-sm">
+            {t('sales:clientOffers.subtitle', {
+              defaultValue: 'Offers created from customer quotes.',
+            })}
+          </p>
         </div>
+        {onAddOffer && (
+          <HeaderAddButton onClick={openAddModal}>
+            {t('sales:clientOffers.addOffer', { defaultValue: 'Add offer' })}
+          </HeaderAddButton>
+        )}
       </div>
-
-      <StandardTable<ClientOffer>
-        title={t('sales:clientOffers.activeOffers', { defaultValue: 'Customer offers' })}
-        viewKey="sales.client_offers"
-        data={offers}
-        columns={columns}
-        defaultRowsPerPage={5}
-        onRowClick={(row) => openEditModal(row)}
-        rowClassName={(row) =>
-          // Mirror the quotes views' expired styling (#779): a light red tint; rows stay
-          // clickable — the modal is where the expiration gets extended.
-          isOfferExpired(row)
-            ? 'hover:bg-zinc-50/50 cursor-pointer bg-red-50/30'
-            : 'cursor-pointer hover:bg-zinc-50/50'
-        }
-        initialFilterState={tableInitialFilterState}
-      />
     </div>
+  );
+};
+
+const ClientOffersTable: React.FC<{ controller: ClientOffersController }> = ({ controller }) => {
+  const { t, offers, columns, openEditModal, isOfferExpired, tableInitialFilterState } = controller;
+
+  return (
+    <StandardTable<ClientOffer>
+      title={t('sales:clientOffers.activeOffers', { defaultValue: 'Customer offers' })}
+      viewKey="sales.client_offers"
+      data={offers}
+      columns={columns}
+      defaultRowsPerPage={5}
+      onRowClick={(row) => openEditModal(row)}
+      rowClassName={(row) =>
+        isOfferExpired(row)
+          ? 'hover:bg-zinc-50/50 cursor-pointer bg-red-50/30'
+          : 'cursor-pointer hover:bg-zinc-50/50'
+      }
+      initialFilterState={tableInitialFilterState}
+    />
   );
 };
 

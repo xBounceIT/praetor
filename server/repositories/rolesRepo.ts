@@ -1,6 +1,7 @@
 import { and, eq, inArray, type SQL, sql } from 'drizzle-orm';
 import { type DbExecutor, db } from '../db/drizzle.ts';
-import { rolePermissions, roles, userRoles } from '../db/schema/roles.ts';
+import { rolePermissions, roles } from '../db/schema/roles.ts';
+import { userRoles } from '../db/schema/userRoles.ts';
 import { users } from '../db/schema/users.ts';
 
 export type Role = {

@@ -1,6 +1,6 @@
 import { Check, FileText, Loader2, RotateCcw, Save, TriangleAlert } from 'lucide-react';
 import type React from 'react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useReducer } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -130,38 +130,122 @@ const updateEditableTemplate = (
   return { ...nextRow, preview: renderPreview(nextRow) };
 };
 
+interface DocumentCodeSettingsState {
+  templates: EditableTemplate[];
+  savedTemplates: EditableTemplate[];
+  isLoading: boolean;
+  isSaving: boolean;
+  isSaved: boolean;
+  loadError: string | null;
+  saveError: string | null;
+}
+
+type DocumentCodeSettingsAction =
+  | { type: 'loadSucceeded'; rows: EditableTemplate[] }
+  | { type: 'loadFailed'; message: string }
+  | {
+      type: 'updateTemplate';
+      moduleId: DocumentCodeModuleId;
+      field: 'prefix' | 'template' | 'sequencePadding';
+      value: string;
+    }
+  | { type: 'resetChanges' }
+  | { type: 'saveStarted' }
+  | { type: 'saveSucceeded'; rows: EditableTemplate[] }
+  | { type: 'saveFailed'; message: string }
+  | { type: 'clearSaved' };
+
+const initialDocumentCodeSettingsState: DocumentCodeSettingsState = {
+  templates: [],
+  savedTemplates: [],
+  isLoading: true,
+  isSaving: false,
+  isSaved: false,
+  loadError: null,
+  saveError: null,
+};
+
+const documentCodeSettingsReducer = (
+  state: DocumentCodeSettingsState,
+  action: DocumentCodeSettingsAction,
+): DocumentCodeSettingsState => {
+  switch (action.type) {
+    case 'loadSucceeded':
+      return {
+        ...state,
+        templates: action.rows,
+        savedTemplates: action.rows,
+        isLoading: false,
+        loadError: null,
+      };
+    case 'loadFailed':
+      return { ...state, isLoading: false, loadError: action.message };
+    case 'updateTemplate': {
+      const nextValue = parseTemplateFieldValue(action.field, action.value);
+      return {
+        ...state,
+        isSaved: false,
+        saveError: null,
+        templates: state.templates.map((row) =>
+          row.moduleId === action.moduleId
+            ? updateEditableTemplate(row, action.field, nextValue)
+            : row,
+        ),
+      };
+    }
+    case 'resetChanges':
+      return { ...state, templates: state.savedTemplates, saveError: null, isSaved: false };
+    case 'saveStarted':
+      return { ...state, isSaving: true, saveError: null };
+    case 'saveSucceeded':
+      return {
+        ...state,
+        templates: action.rows,
+        savedTemplates: action.rows,
+        isSaving: false,
+        isSaved: true,
+      };
+    case 'saveFailed':
+      return { ...state, isSaving: false, saveError: action.message };
+    case 'clearSaved':
+      return { ...state, isSaved: false };
+  }
+};
+
 const DocumentCodeSettings: React.FC<DocumentCodeSettingsProps> = ({ animationClass }) => {
   const { t } = useTranslation('settings');
-  const [templates, setTemplates] = useState<EditableTemplate[]>([]);
-  const [savedTemplates, setSavedTemplates] = useState<EditableTemplate[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isSaving, setIsSaving] = useState(false);
-  const [isSaved, setIsSaved] = useState(false);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [saveError, setSaveError] = useState<string | null>(null);
+  const [
+    { templates, savedTemplates, isLoading, isSaving, isSaved, loadError, saveError },
+    dispatchSettings,
+  ] = useReducer(documentCodeSettingsReducer, initialDocumentCodeSettingsState);
   const translate = useCallback<SettingsT>((key, options) => t(key, options), [t]);
 
   useEffect(() => {
     let cancelled = false;
-    setIsLoading(true);
-    setLoadError(null);
     api.documentCodeTemplates
       .list()
       .then((rows) => {
         if (cancelled) return;
-        setTemplates(rows);
-        setSavedTemplates(rows);
+        dispatchSettings({ type: 'loadSucceeded', rows });
       })
       .catch((error) => {
-        if (!cancelled) setLoadError(error instanceof Error ? error.message : String(error));
-      })
-      .finally(() => {
-        if (!cancelled) setIsLoading(false);
+        if (!cancelled) {
+          dispatchSettings({
+            type: 'loadFailed',
+            message: error instanceof Error ? error.message : String(error),
+          });
+        }
       });
     return () => {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (!isSaved) return;
+    const timeoutId = window.setTimeout(() => dispatchSettings({ type: 'clearSaved' }), 3000);
+    return () => window.clearTimeout(timeoutId);
+  }, [isSaved]);
 
   const errors = useMemo(() => validateTemplates(templates, translate), [templates, translate]);
   const hasErrors = Object.keys(errors).length > 0;
@@ -174,36 +258,24 @@ const DocumentCodeSettings: React.FC<DocumentCodeSettingsProps> = ({ animationCl
     field: 'prefix' | 'template' | 'sequencePadding',
     value: string,
   ) => {
-    setIsSaved(false);
-    setSaveError(null);
-    const nextValue = parseTemplateFieldValue(field, value);
-    setTemplates((prev) =>
-      prev.map((row) =>
-        row.moduleId === moduleId ? updateEditableTemplate(row, field, nextValue) : row,
-      ),
-    );
+    dispatchSettings({ type: 'updateTemplate', moduleId, field, value });
   };
 
   const handleReset = () => {
-    setTemplates(savedTemplates);
-    setSaveError(null);
-    setIsSaved(false);
+    dispatchSettings({ type: 'resetChanges' });
   };
 
   const handleSave = async () => {
     if (hasErrors || isSaving || !hasChanges) return;
-    setIsSaving(true);
-    setSaveError(null);
+    dispatchSettings({ type: 'saveStarted' });
     try {
       const updated = await api.documentCodeTemplates.update(normalizeRowsForSave(templates));
-      setTemplates(updated);
-      setSavedTemplates(updated);
-      setIsSaved(true);
-      setTimeout(() => setIsSaved(false), 3000);
+      dispatchSettings({ type: 'saveSucceeded', rows: updated });
     } catch (error) {
-      setSaveError(error instanceof Error ? error.message : String(error));
-    } finally {
-      setIsSaving(false);
+      dispatchSettings({
+        type: 'saveFailed',
+        message: error instanceof Error ? error.message : String(error),
+      });
     }
   };
 

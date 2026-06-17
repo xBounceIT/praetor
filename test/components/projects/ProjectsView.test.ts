@@ -16,8 +16,8 @@ describe('ProjectsView (create-only dialog after detail-page revamp)', () => {
     expect(source).toContain(
       "const canViewTasks = hasScopedActionPermission(permissions, 'projects.tasks', 'view')",
     );
-    expect(source).toContain('{canViewCommissions && (');
-    expect(source).toContain('{canViewTasks && (');
+    expect(source).toContain('{controller.canViewCommissions && (');
+    expect(source).toContain('{controller.canViewTasks && (');
     expect(source).toContain('value="commissions"');
     expect(source).toContain('value="tasks"');
     expect(source).toContain('<Folder className="size-4" aria-hidden="true" />');
@@ -45,7 +45,7 @@ describe('ProjectsView (create-only dialog after detail-page revamp)', () => {
     ).text();
     // Edit mode lives in ProjectDetailView now — the dialog must never render
     // the "Edit Project" title or branch on `editingProject` anywhere.
-    expect(source).toContain("t('projects:projects.createNewProject')");
+    expect(source).toContain("controller.t('projects:projects.createNewProject')");
     expect(source).not.toMatch(/editProject/);
     expect(source).not.toMatch(/\beditingProject\b/);
   });
@@ -56,9 +56,8 @@ describe('ProjectsView (create-only dialog after detail-page revamp)', () => {
     ).text();
     expect(source).toContain('onNavigateToProject?: (projectId: string) => void');
     // The list's row click should fire navigation, not openEditModal (which no longer exists).
-    expect(source).toContain(
-      'onRowClick={onNavigateToProject ? (row) => onNavigateToProject(row.id) : undefined}',
-    );
+    expect(source).toContain('controller.onNavigateToProject');
+    expect(source).toContain('(row) => controller.onNavigateToProject?.(row.id)');
     expect(source).not.toContain('openEditModal');
   });
 
@@ -102,12 +101,12 @@ describe('ProjectsView create-form validation', () => {
     const source = await Bun.file(
       new URL('../../../components/projects/ProjectsView.tsx', import.meta.url),
     ).text();
-    expect(source).toContain('id="project-start-date"');
-    expect(source).toContain('id="project-end-date"');
+    expect(source).toContain("'project-start-date'");
+    expect(source).toContain("'project-end-date'");
     expect(source).toContain('id="project-order"');
     expect(source).toContain('id="project-offer"');
     expect(source).toContain('id="project-revenue"');
-    expect(source).toContain("label={t('projects:projects.offerOptionalLabel')}");
+    expect(source).toContain("label={controller.t('projects:projects.offerOptionalLabel')}");
   });
 
   test('requires a Tipo (Attivo/Passivo), exposes the selector, and forwards it (issue #784)', async () => {
@@ -118,7 +117,7 @@ describe('ProjectsView create-form validation', () => {
     expect(source).toContain("if (!tipo) newErrors.tipo = t('projects:projects.tipoRequired')");
     // The create dialog renders the required Tipo selector with a placeholder (starts empty).
     expect(source).toContain('id="project-tipo"');
-    expect(source).toContain("placeholder={t('projects:projects.selectTipo')}");
+    expect(source).toContain("placeholder={controller.t('projects:projects.selectTipo')}");
     // The chosen value is forwarded to the create handler.
     expect(source).toContain('tipo: tipo as ProjectTipo,');
     // And the projects list surfaces the value in its own column.
@@ -155,7 +154,7 @@ describe('ProjectsView create-form validation', () => {
     expect(source).toContain('const resolveRevenueSource = (');
     expect(source).toContain("if (activitiesSum > 0) return 'activities';");
     expect(source).not.toContain("return 'order';");
-    expect(source).toContain("readOnly={revenueSource !== 'manual'}");
+    expect(source).toContain("readOnly={controller.revenueSource !== 'manual'}");
     expect(source).toContain(
       "const persistedRevenue = revenueSource === 'manual' && revenue ? parseFloat(revenue) : undefined;",
     );
@@ -173,7 +172,7 @@ describe('ProjectsView create-form validation', () => {
     const removedOrderHint = "order: t('projects:projects.revenueFrom" + "Order')";
     expect(source).not.toContain(removedOrderHint);
     // The hint renders through the shared FieldDescription primitive, only when present.
-    expect(source).toContain('{revenueHintBySource[revenueSource] && (');
+    expect(source).toContain('{controller.revenueHintBySource[controller.revenueSource] && (');
     expect(source).toContain('<FieldDescription className="text-xs">');
   });
 
@@ -197,9 +196,13 @@ describe('ProjectsView create-form validation', () => {
     const source = await Bun.file(
       new URL('../../../components/projects/ProjectsView.tsx', import.meta.url),
     ).text();
-    expect(source).toContain('const nextOrder = orders.find((o) => o.id === nextOrderId);');
-    expect(source).toContain("dispatch({ type: 'setClientId', value: nextOrder.clientId });");
-    expect(source).toContain('disabled={Boolean(selectedOrder)}');
+    expect(source).toContain(
+      'const nextOrder = controller.orders.find((order) => order.id === nextOrderId);',
+    );
+    expect(source).toContain(
+      "controller.dispatch({ type: 'setClientId', value: nextOrder.clientId });",
+    );
+    expect(source).toContain('disabled={Boolean(controller.selectedOrder)}');
   });
 
   test('offer selector filters by client and auto-fills client on select', async () => {
@@ -210,7 +213,9 @@ describe('ProjectsView create-form validation', () => {
       "if (offer.status !== 'sent' && offer.status !== 'accepted') return options;",
     );
     expect(source).toContain('if (clientId && offer.clientId !== clientId) return options;');
-    expect(source).toContain("dispatch({ type: 'setClientId', value: nextOffer.clientId });");
+    expect(source).toContain(
+      "controller.dispatch({ type: 'setClientId', value: nextOffer.clientId });",
+    );
     expect(source).toContain("{ id: '', name: t('projects:projects.noOfferLinked') }");
   });
 

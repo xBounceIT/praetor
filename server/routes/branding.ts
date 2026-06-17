@@ -202,12 +202,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       schema: { tags: ['branding'], summary: 'Remove the company logo' },
     },
     async (request: FastifyRequest, _reply: FastifyReply) => {
-      const existing = await brandingRepo.get();
-      const updated = await brandingRepo.clearLogo();
-      if (existing?.logoStoredName) {
-        await deleteBrandingLogo(existing.logoStoredName).catch(() => {});
-      }
-      await logAudit({ request, action: 'branding.logo.removed', entityType: 'app_branding' });
+      const { branding: updated, previousLogoStoredName } =
+        await brandingRepo.clearLogoWithPrevious();
+      await Promise.all([
+        previousLogoStoredName ? deleteBrandingLogo(previousLogoStoredName).catch(() => {}) : null,
+        logAudit({ request, action: 'branding.logo.removed', entityType: 'app_branding' }),
+      ]);
       return toResponse(updated);
     },
   );

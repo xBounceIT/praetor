@@ -388,15 +388,17 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             tx,
           );
 
-          await userAssignmentsRepo.assignClientToUser(
-            request.user.id,
-            clientIdResult.value,
-            undefined,
-            tx,
-          );
-          await userAssignmentsRepo.assignProjectToUser(request.user.id, id, undefined, tx);
-          await userAssignmentsRepo.assignClientToTopManagers(clientIdResult.value, tx);
-          await userAssignmentsRepo.assignProjectToTopManagers(id, tx);
+          await Promise.all([
+            userAssignmentsRepo.assignClientToUser(
+              request.user.id,
+              clientIdResult.value,
+              undefined,
+              tx,
+            ),
+            userAssignmentsRepo.assignProjectToUser(request.user.id, id, undefined, tx),
+            userAssignmentsRepo.assignClientToTopManagers(clientIdResult.value, tx),
+            userAssignmentsRepo.assignProjectToTopManagers(id, tx),
+          ]);
 
           return project;
         });

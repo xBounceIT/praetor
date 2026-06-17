@@ -231,6 +231,354 @@ const ActionButton: React.FC<ActionButtonProps> = ({ icon, label, onClick, destr
   </Tooltip>
 );
 
+const WebhooksTable: React.FC<{
+  webhooks: Webhook[];
+  showActions: boolean;
+  canUpdate: boolean;
+  canDelete: boolean;
+  onEdit: (webhook: Webhook) => void;
+  onDelete: (webhook: Webhook) => void;
+}> = ({ webhooks, showActions, canUpdate, canDelete, onEdit, onDelete }) => {
+  const { t } = useTranslation(['common', 'administration']);
+
+  return (
+    <div className="overflow-hidden rounded-lg border border-border bg-card">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>{t('administration:webhooks.columns.name')}</TableHead>
+            <TableHead>{t('administration:webhooks.columns.url')}</TableHead>
+            <TableHead>{t('administration:webhooks.columns.method')}</TableHead>
+            <TableHead>{t('administration:webhooks.columns.auth')}</TableHead>
+            <TableHead>{t('administration:webhooks.columns.status')}</TableHead>
+            {showActions && (
+              <TableHead className="text-right">
+                {t('administration:webhooks.columns.actions')}
+              </TableHead>
+            )}
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {webhooks.map((webhook) => (
+            <TableRow key={webhook.id}>
+              <TableCell>
+                <div className="font-medium text-foreground">{webhook.name}</div>
+                {webhook.description && (
+                  <div className="line-clamp-1 text-xs text-muted-foreground">
+                    {webhook.description}
+                  </div>
+                )}
+              </TableCell>
+              <TableCell>
+                <span
+                  className="block max-w-[260px] truncate font-mono text-xs text-muted-foreground"
+                  title={webhook.url}
+                >
+                  {webhook.url}
+                </span>
+              </TableCell>
+              <TableCell>
+                <Badge variant="outline">{webhook.httpMethod}</Badge>
+              </TableCell>
+              <TableCell className="text-sm text-muted-foreground">
+                {t(`administration:webhooks.authTypes.${webhook.authType}`)}
+              </TableCell>
+              <TableCell>
+                <Badge variant={webhook.enabled ? 'default' : 'secondary'}>
+                  {webhook.enabled
+                    ? t('administration:webhooks.status.active')
+                    : t('administration:webhooks.status.disabled')}
+                </Badge>
+              </TableCell>
+              {showActions && (
+                <TableCell className="text-right">
+                  <div className="flex justify-end gap-1">
+                    {canUpdate && (
+                      <ActionButton
+                        icon={<Pen />}
+                        label={t('common:buttons.edit')}
+                        onClick={() => onEdit(webhook)}
+                      />
+                    )}
+                    {canDelete && (
+                      <ActionButton
+                        icon={<Trash2 />}
+                        label={t('common:buttons.delete')}
+                        destructive
+                        onClick={() => onDelete(webhook)}
+                      />
+                    )}
+                  </div>
+                </TableCell>
+              )}
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
+  );
+};
+
+const WebhookFormModal: React.FC<{
+  form: FormState;
+  secretLabel: string;
+  dispatch: React.Dispatch<FormAction>;
+  onClose: () => void;
+  onSubmit: (event: React.FormEvent) => void;
+}> = ({ form, secretLabel, dispatch, onClose, onSubmit }) => {
+  const { t } = useTranslation(['common', 'administration']);
+
+  return (
+    <Modal isOpen={form.isOpen} onClose={onClose} ariaLabel={null}>
+      {() => (
+        <ModalContent size="xl">
+          <form onSubmit={onSubmit} className="flex flex-1 flex-col overflow-hidden">
+            <ModalHeader>
+              <div>
+                <ModalTitle>
+                  {form.editingId
+                    ? t('administration:webhooks.editWebhook')
+                    : t('administration:webhooks.createWebhook')}
+                </ModalTitle>
+                <ModalDescription>{t('administration:webhooks.formSubtitle')}</ModalDescription>
+              </div>
+              <ModalCloseButton onClick={onClose} />
+            </ModalHeader>
+            <ModalBody className="flex-1 space-y-5">
+              <Field>
+                <FieldLabel htmlFor="webhook-name" required>
+                  {t('administration:webhooks.fields.name')}
+                </FieldLabel>
+                <Input
+                  id="webhook-name"
+                  value={form.name}
+                  onChange={(event) =>
+                    dispatch({ type: 'patch', values: { name: event.target.value } })
+                  }
+                  placeholder={t('administration:webhooks.placeholders.name')}
+                />
+                {form.errors.name && <FieldError>{form.errors.name}</FieldError>}
+              </Field>
+
+              <Field>
+                <FieldLabel htmlFor="webhook-description">
+                  {t('administration:webhooks.fields.description')}
+                </FieldLabel>
+                <Textarea
+                  id="webhook-description"
+                  value={form.description}
+                  onChange={(event) =>
+                    dispatch({ type: 'patch', values: { description: event.target.value } })
+                  }
+                  placeholder={t('administration:webhooks.placeholders.description')}
+                  rows={2}
+                />
+              </Field>
+
+              <Field>
+                <FieldLabel htmlFor="webhook-url" required>
+                  {t('administration:webhooks.fields.url')}
+                </FieldLabel>
+                <Input
+                  id="webhook-url"
+                  type="url"
+                  value={form.url}
+                  onChange={(event) =>
+                    dispatch({ type: 'patch', values: { url: event.target.value } })
+                  }
+                  placeholder={t('administration:webhooks.placeholders.url')}
+                />
+                {form.errors.url && <FieldError>{form.errors.url}</FieldError>}
+              </Field>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <SelectControl
+                  id="webhook-method"
+                  label={t('administration:webhooks.fields.method')}
+                  options={WEBHOOK_HTTP_METHODS.map((method) => ({ id: method, name: method }))}
+                  value={form.httpMethod}
+                  onChange={(value) =>
+                    dispatch({
+                      type: 'patch',
+                      values: { httpMethod: asSingleValue(value) as WebhookHttpMethod },
+                    })
+                  }
+                />
+                <SelectControl
+                  id="webhook-auth-type"
+                  label={t('administration:webhooks.fields.authType')}
+                  options={WEBHOOK_AUTH_TYPES.map((authType) => ({
+                    id: authType,
+                    name: t(`administration:webhooks.authTypes.${authType}`),
+                  }))}
+                  value={form.authType}
+                  onChange={(value) =>
+                    dispatch({
+                      type: 'changeAuthType',
+                      authType: asSingleValue(value) as WebhookAuthType,
+                    })
+                  }
+                />
+              </div>
+
+              {form.authType !== 'none' && (
+                <div className="space-y-4 rounded-lg border border-border bg-muted/20 p-4">
+                  {form.authType === 'basic' && (
+                    <Field>
+                      <FieldLabel htmlFor="webhook-username">
+                        {t('administration:webhooks.fields.username')}
+                      </FieldLabel>
+                      <Input
+                        id="webhook-username"
+                        value={form.authUsername}
+                        onChange={(event) =>
+                          dispatch({
+                            type: 'patch',
+                            values: { authUsername: event.target.value },
+                          })
+                        }
+                      />
+                    </Field>
+                  )}
+                  {form.authType === 'api_key' && (
+                    <Field>
+                      <FieldLabel htmlFor="webhook-header-name" required>
+                        {t('administration:webhooks.fields.headerName')}
+                      </FieldLabel>
+                      <Input
+                        id="webhook-header-name"
+                        value={form.authHeaderName}
+                        onChange={(event) =>
+                          dispatch({
+                            type: 'patch',
+                            values: { authHeaderName: event.target.value },
+                          })
+                        }
+                        placeholder={t('administration:webhooks.placeholders.headerName')}
+                      />
+                      {form.errors.authHeaderName && (
+                        <FieldError>{form.errors.authHeaderName}</FieldError>
+                      )}
+                    </Field>
+                  )}
+                  <SecretField
+                    label={secretLabel}
+                    value={form.authSecret}
+                    onChange={(value) => dispatch({ type: 'patch', values: { authSecret: value } })}
+                    isStored={form.secretStored}
+                    isReplacing={form.isReplacingSecret}
+                    onStartReplace={() => dispatch({ type: 'startReplaceSecret' })}
+                    onCancelReplace={() => dispatch({ type: 'cancelReplaceSecret' })}
+                    storedLabel={t('administration:webhooks.secretStored')}
+                    storedHelp={t('administration:webhooks.secretStoredHelp')}
+                  />
+                </div>
+              )}
+
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <FieldLabel>{t('administration:webhooks.fields.customHeaders')}</FieldLabel>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => dispatch({ type: 'addHeader', row: newHeaderRow() })}
+                  >
+                    <Plus className="size-4" />
+                    {t('administration:webhooks.actions.addHeader')}
+                  </Button>
+                </div>
+                {form.customHeaders.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">
+                    {t('administration:webhooks.noHeaders')}
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    {form.customHeaders.map((header) => (
+                      <div key={header.uid} className="flex items-center gap-2">
+                        <Input
+                          aria-label={t('administration:webhooks.fields.headerKey')}
+                          placeholder={t('administration:webhooks.placeholders.headerKey')}
+                          value={header.key}
+                          onChange={(event) =>
+                            dispatch({
+                              type: 'updateHeader',
+                              uid: header.uid,
+                              field: 'key',
+                              value: event.target.value,
+                            })
+                          }
+                        />
+                        <Input
+                          aria-label={t('administration:webhooks.fields.headerValue')}
+                          placeholder={t('administration:webhooks.placeholders.headerValue')}
+                          value={header.value}
+                          onChange={(event) =>
+                            dispatch({
+                              type: 'updateHeader',
+                              uid: header.uid,
+                              field: 'value',
+                              value: event.target.value,
+                            })
+                          }
+                        />
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-sm"
+                          aria-label={t('administration:webhooks.actions.removeHeader')}
+                          onClick={() => dispatch({ type: 'removeHeader', uid: header.uid })}
+                        >
+                          <X className="size-4" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {form.errors.customHeaders && <FieldError>{form.errors.customHeaders}</FieldError>}
+              </div>
+
+              <div className="flex items-center justify-between gap-4 rounded-lg border border-border p-3">
+                <div className="space-y-0.5">
+                  <FieldLabel htmlFor="webhook-enabled">
+                    {t('administration:webhooks.fields.enabled')}
+                  </FieldLabel>
+                  <p className="text-xs text-muted-foreground">
+                    {t('administration:webhooks.fields.enabledHelp')}
+                  </p>
+                </div>
+                <Switch
+                  id="webhook-enabled"
+                  checked={form.enabled}
+                  onCheckedChange={(checked) =>
+                    dispatch({ type: 'patch', values: { enabled: checked } })
+                  }
+                />
+              </div>
+
+              {form.errors.general && (
+                <p className="text-sm font-medium text-destructive">{form.errors.general}</p>
+              )}
+            </ModalBody>
+            <ModalFooter>
+              <Button type="button" variant="ghost" onClick={onClose} disabled={form.isSaving}>
+                {t('common:buttons.cancel')}
+              </Button>
+              <Button type="submit" disabled={form.isSaving}>
+                {form.isSaving
+                  ? t('common:buttons.saving')
+                  : form.editingId
+                    ? t('common:buttons.update')
+                    : t('common:buttons.create')}
+              </Button>
+            </ModalFooter>
+          </form>
+        </ModalContent>
+      )}
+    </Modal>
+  );
+};
+
 const WebhooksView: React.FC<WebhooksViewProps> = ({ permissions }) => {
   const { t } = useTranslation(['common', 'administration']);
   const [webhooks, setWebhooks] = useState<Webhook[]>([]);
@@ -257,17 +605,20 @@ const WebhooksView: React.FC<WebhooksViewProps> = ({ permissions }) => {
   // after the view unmounts is dropped instead of updating a torn-down component.
   const isMountedRef = useRef(true);
 
-  const reload = useCallback(async () => {
-    try {
-      const data = await webhooksApi.list();
-      if (!isMountedRef.current) return;
-      setWebhooks(data);
-      setStatus('ready');
-    } catch (err) {
-      if (!isMountedRef.current) return;
-      console.error('Failed to load webhooks', err);
-      setStatus('error');
-    }
+  const reload = useCallback(() => {
+    if (!isMountedRef.current) return;
+    webhooksApi
+      .list()
+      .then((data) => {
+        if (!isMountedRef.current) return;
+        setWebhooks(data);
+        setStatus('ready');
+      })
+      .catch((err) => {
+        if (!isMountedRef.current) return;
+        console.error('Failed to load webhooks', err);
+        setStatus('error');
+      });
   }, []);
 
   useEffect(() => {
@@ -300,9 +651,14 @@ const WebhooksView: React.FC<WebhooksViewProps> = ({ permissions }) => {
       authType: form.authType,
       authUsername: form.authType === 'basic' ? form.authUsername.trim() : '',
       authHeaderName: form.authType === 'api_key' ? form.authHeaderName.trim() : '',
-      customHeaders: form.customHeaders
-        .map((header) => ({ key: header.key.trim(), value: header.value }))
-        .filter((header) => header.key.length > 0),
+      customHeaders: form.customHeaders.reduce<NonNullable<WebhookPayload['customHeaders']>>(
+        (headers, header) => {
+          const key = header.key.trim();
+          if (key.length > 0) headers.push({ key, value: header.value });
+          return headers;
+        },
+        [],
+      ),
       enabled: form.enabled,
     };
 
@@ -388,7 +744,7 @@ const WebhooksView: React.FC<WebhooksViewProps> = ({ permissions }) => {
         : t('administration:webhooks.fields.token');
 
   return (
-    <div className="space-y-6 animate-in slide-in-from-bottom-2 duration-500">
+    <div className="space-y-6">
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
           <h2 className="text-2xl font-semibold tracking-tight text-foreground">
@@ -444,333 +800,23 @@ const WebhooksView: React.FC<WebhooksViewProps> = ({ permissions }) => {
       )}
 
       {status === 'ready' && webhooks.length > 0 && (
-        <div className="overflow-hidden rounded-lg border border-border bg-card">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>{t('administration:webhooks.columns.name')}</TableHead>
-                <TableHead>{t('administration:webhooks.columns.url')}</TableHead>
-                <TableHead>{t('administration:webhooks.columns.method')}</TableHead>
-                <TableHead>{t('administration:webhooks.columns.auth')}</TableHead>
-                <TableHead>{t('administration:webhooks.columns.status')}</TableHead>
-                {showActions && (
-                  <TableHead className="text-right">
-                    {t('administration:webhooks.columns.actions')}
-                  </TableHead>
-                )}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {webhooks.map((webhook) => (
-                <TableRow key={webhook.id}>
-                  <TableCell>
-                    <div className="font-medium text-foreground">{webhook.name}</div>
-                    {webhook.description && (
-                      <div className="line-clamp-1 text-xs text-muted-foreground">
-                        {webhook.description}
-                      </div>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <span
-                      className="block max-w-[260px] truncate font-mono text-xs text-muted-foreground"
-                      title={webhook.url}
-                    >
-                      {webhook.url}
-                    </span>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="outline">{webhook.httpMethod}</Badge>
-                  </TableCell>
-                  <TableCell className="text-sm text-muted-foreground">
-                    {t(`administration:webhooks.authTypes.${webhook.authType}`)}
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant={webhook.enabled ? 'default' : 'secondary'}>
-                      {webhook.enabled
-                        ? t('administration:webhooks.status.active')
-                        : t('administration:webhooks.status.disabled')}
-                    </Badge>
-                  </TableCell>
-                  {showActions && (
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-1">
-                        {canUpdate && (
-                          <ActionButton
-                            icon={<Pen />}
-                            label={t('common:buttons.edit')}
-                            onClick={() => openEdit(webhook)}
-                          />
-                        )}
-                        {canDelete && (
-                          <ActionButton
-                            icon={<Trash2 />}
-                            label={t('common:buttons.delete')}
-                            destructive
-                            onClick={() => setDeleteTarget(webhook)}
-                          />
-                        )}
-                      </div>
-                    </TableCell>
-                  )}
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
+        <WebhooksTable
+          webhooks={webhooks}
+          showActions={showActions}
+          canUpdate={canUpdate}
+          canDelete={canDelete}
+          onEdit={openEdit}
+          onDelete={setDeleteTarget}
+        />
       )}
 
-      <Modal isOpen={form.isOpen} onClose={closeForm} ariaLabel={null}>
-        {() => (
-          <ModalContent size="xl">
-            <form onSubmit={handleSubmit} className="flex flex-1 flex-col overflow-hidden">
-              <ModalHeader>
-                <div>
-                  <ModalTitle>
-                    {form.editingId
-                      ? t('administration:webhooks.editWebhook')
-                      : t('administration:webhooks.createWebhook')}
-                  </ModalTitle>
-                  <ModalDescription>{t('administration:webhooks.formSubtitle')}</ModalDescription>
-                </div>
-                <ModalCloseButton onClick={closeForm} />
-              </ModalHeader>
-              <ModalBody className="flex-1 space-y-5">
-                <Field>
-                  <FieldLabel htmlFor="webhook-name" required>
-                    {t('administration:webhooks.fields.name')}
-                  </FieldLabel>
-                  <Input
-                    id="webhook-name"
-                    value={form.name}
-                    onChange={(event) =>
-                      dispatch({ type: 'patch', values: { name: event.target.value } })
-                    }
-                    placeholder={t('administration:webhooks.placeholders.name')}
-                  />
-                  {form.errors.name && <FieldError>{form.errors.name}</FieldError>}
-                </Field>
-
-                <Field>
-                  <FieldLabel htmlFor="webhook-description">
-                    {t('administration:webhooks.fields.description')}
-                  </FieldLabel>
-                  <Textarea
-                    id="webhook-description"
-                    value={form.description}
-                    onChange={(event) =>
-                      dispatch({ type: 'patch', values: { description: event.target.value } })
-                    }
-                    placeholder={t('administration:webhooks.placeholders.description')}
-                    rows={2}
-                  />
-                </Field>
-
-                <Field>
-                  <FieldLabel htmlFor="webhook-url" required>
-                    {t('administration:webhooks.fields.url')}
-                  </FieldLabel>
-                  <Input
-                    id="webhook-url"
-                    type="url"
-                    value={form.url}
-                    onChange={(event) =>
-                      dispatch({ type: 'patch', values: { url: event.target.value } })
-                    }
-                    placeholder={t('administration:webhooks.placeholders.url')}
-                  />
-                  {form.errors.url && <FieldError>{form.errors.url}</FieldError>}
-                </Field>
-
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <SelectControl
-                    id="webhook-method"
-                    label={t('administration:webhooks.fields.method')}
-                    options={WEBHOOK_HTTP_METHODS.map((method) => ({ id: method, name: method }))}
-                    value={form.httpMethod}
-                    onChange={(value) =>
-                      dispatch({
-                        type: 'patch',
-                        values: { httpMethod: asSingleValue(value) as WebhookHttpMethod },
-                      })
-                    }
-                  />
-                  <SelectControl
-                    id="webhook-auth-type"
-                    label={t('administration:webhooks.fields.authType')}
-                    options={WEBHOOK_AUTH_TYPES.map((authType) => ({
-                      id: authType,
-                      name: t(`administration:webhooks.authTypes.${authType}`),
-                    }))}
-                    value={form.authType}
-                    onChange={(value) =>
-                      dispatch({
-                        type: 'changeAuthType',
-                        authType: asSingleValue(value) as WebhookAuthType,
-                      })
-                    }
-                  />
-                </div>
-
-                {form.authType !== 'none' && (
-                  <div className="space-y-4 rounded-lg border border-border bg-muted/20 p-4">
-                    {form.authType === 'basic' && (
-                      <Field>
-                        <FieldLabel htmlFor="webhook-username">
-                          {t('administration:webhooks.fields.username')}
-                        </FieldLabel>
-                        <Input
-                          id="webhook-username"
-                          value={form.authUsername}
-                          onChange={(event) =>
-                            dispatch({
-                              type: 'patch',
-                              values: { authUsername: event.target.value },
-                            })
-                          }
-                        />
-                      </Field>
-                    )}
-                    {form.authType === 'api_key' && (
-                      <Field>
-                        <FieldLabel htmlFor="webhook-header-name" required>
-                          {t('administration:webhooks.fields.headerName')}
-                        </FieldLabel>
-                        <Input
-                          id="webhook-header-name"
-                          value={form.authHeaderName}
-                          onChange={(event) =>
-                            dispatch({
-                              type: 'patch',
-                              values: { authHeaderName: event.target.value },
-                            })
-                          }
-                          placeholder={t('administration:webhooks.placeholders.headerName')}
-                        />
-                        {form.errors.authHeaderName && (
-                          <FieldError>{form.errors.authHeaderName}</FieldError>
-                        )}
-                      </Field>
-                    )}
-                    <SecretField
-                      label={secretLabel}
-                      value={form.authSecret}
-                      onChange={(value) =>
-                        dispatch({ type: 'patch', values: { authSecret: value } })
-                      }
-                      isStored={form.secretStored}
-                      isReplacing={form.isReplacingSecret}
-                      onStartReplace={() => dispatch({ type: 'startReplaceSecret' })}
-                      onCancelReplace={() => dispatch({ type: 'cancelReplaceSecret' })}
-                      storedLabel={t('administration:webhooks.secretStored')}
-                      storedHelp={t('administration:webhooks.secretStoredHelp')}
-                    />
-                  </div>
-                )}
-
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <FieldLabel>{t('administration:webhooks.fields.customHeaders')}</FieldLabel>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => dispatch({ type: 'addHeader', row: newHeaderRow() })}
-                    >
-                      <Plus className="size-4" />
-                      {t('administration:webhooks.actions.addHeader')}
-                    </Button>
-                  </div>
-                  {form.customHeaders.length === 0 ? (
-                    <p className="text-xs text-muted-foreground">
-                      {t('administration:webhooks.noHeaders')}
-                    </p>
-                  ) : (
-                    <div className="space-y-2">
-                      {form.customHeaders.map((header) => (
-                        <div key={header.uid} className="flex items-center gap-2">
-                          <Input
-                            aria-label={t('administration:webhooks.fields.headerKey')}
-                            placeholder={t('administration:webhooks.placeholders.headerKey')}
-                            value={header.key}
-                            onChange={(event) =>
-                              dispatch({
-                                type: 'updateHeader',
-                                uid: header.uid,
-                                field: 'key',
-                                value: event.target.value,
-                              })
-                            }
-                          />
-                          <Input
-                            aria-label={t('administration:webhooks.fields.headerValue')}
-                            placeholder={t('administration:webhooks.placeholders.headerValue')}
-                            value={header.value}
-                            onChange={(event) =>
-                              dispatch({
-                                type: 'updateHeader',
-                                uid: header.uid,
-                                field: 'value',
-                                value: event.target.value,
-                              })
-                            }
-                          />
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon-sm"
-                            aria-label={t('administration:webhooks.actions.removeHeader')}
-                            onClick={() => dispatch({ type: 'removeHeader', uid: header.uid })}
-                          >
-                            <X className="size-4" />
-                          </Button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  {form.errors.customHeaders && (
-                    <FieldError>{form.errors.customHeaders}</FieldError>
-                  )}
-                </div>
-
-                <div className="flex items-center justify-between gap-4 rounded-lg border border-border p-3">
-                  <div className="space-y-0.5">
-                    <FieldLabel htmlFor="webhook-enabled">
-                      {t('administration:webhooks.fields.enabled')}
-                    </FieldLabel>
-                    <p className="text-xs text-muted-foreground">
-                      {t('administration:webhooks.fields.enabledHelp')}
-                    </p>
-                  </div>
-                  <Switch
-                    id="webhook-enabled"
-                    checked={form.enabled}
-                    onCheckedChange={(checked) =>
-                      dispatch({ type: 'patch', values: { enabled: checked } })
-                    }
-                  />
-                </div>
-
-                {form.errors.general && (
-                  <p className="text-sm font-medium text-destructive">{form.errors.general}</p>
-                )}
-              </ModalBody>
-              <ModalFooter>
-                <Button type="button" variant="ghost" onClick={closeForm} disabled={form.isSaving}>
-                  {t('common:buttons.cancel')}
-                </Button>
-                <Button type="submit" disabled={form.isSaving}>
-                  {form.isSaving
-                    ? t('common:buttons.saving')
-                    : form.editingId
-                      ? t('common:buttons.update')
-                      : t('common:buttons.create')}
-                </Button>
-              </ModalFooter>
-            </form>
-          </ModalContent>
-        )}
-      </Modal>
+      <WebhookFormModal
+        form={form}
+        secretLabel={secretLabel}
+        dispatch={dispatch}
+        onClose={closeForm}
+        onSubmit={handleSubmit}
+      />
 
       <DeleteConfirmModal
         isOpen={deleteTarget !== null}

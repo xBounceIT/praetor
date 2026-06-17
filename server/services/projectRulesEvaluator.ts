@@ -91,44 +91,50 @@ export const evaluateProjectRulesOnce = async ({
     notified: 0,
   };
 
-  for (const rule of rules) {
-    result.evaluated += 1;
-    try {
-      const metrics = metricsByProjectId.get(rule.projectId);
-      const conditionMet = metrics !== undefined && evaluateRuleConditions(rule, metrics);
+  const outcomes = await Promise.all(
+    rules.map(async (rule): Promise<ProjectRulesEvaluationResult> => {
+      try {
+        const metrics = metricsByProjectId.get(rule.projectId);
+        const conditionMet = metrics !== undefined && evaluateRuleConditions(rule, metrics);
 
-      if (!conditionMet) {
-        if (await projectRulesRepo.markConditionNotMet(rule.id, exec)) {
-          result.reset += 1;
+        if (!conditionMet) {
+          const reset = (await projectRulesRepo.markConditionNotMet(rule.id, exec)) ? 1 : 0;
+          return { evaluated: 1, triggered: 0, reset, notified: 0 };
         }
-        continue;
+
+        if (!metrics) return { evaluated: 1, triggered: 0, reset: 0, notified: 0 };
+
+        return runAtomically(exec, async (tx) => {
+          const acquired = await projectRulesRepo.markTriggeredOnRisingEdge(rule.id, now, tx);
+          if (!acquired) return { evaluated: 1, triggered: 0, reset: 0, notified: 0 };
+
+          const recipientUserIds = await projectRuleRecipientsRepo.resolveRecipientUserIds(
+            rule.projectId,
+            rule.actionConfig,
+            tx,
+          );
+          const notified = await notificationsRepo.createForUsers(
+            recipientUserIds,
+            buildNotification(rule, metrics.projectName),
+            tx,
+          );
+          return { evaluated: 1, triggered: 1, reset: 0, notified };
+        });
+      } catch (err) {
+        logger?.error(
+          { err: serializeError(err), ruleId: rule.id, projectId: rule.projectId },
+          'Project rule evaluation failed',
+        );
+        return { evaluated: 1, triggered: 0, reset: 0, notified: 0 };
       }
+    }),
+  );
 
-      if (!metrics) continue;
-
-      await runAtomically(exec, async (tx) => {
-        const acquired = await projectRulesRepo.markTriggeredOnRisingEdge(rule.id, now, tx);
-        if (!acquired) return;
-
-        const recipientUserIds = await projectRuleRecipientsRepo.resolveRecipientUserIds(
-          rule.projectId,
-          rule.actionConfig,
-          tx,
-        );
-        const notified = await notificationsRepo.createForUsers(
-          recipientUserIds,
-          buildNotification(rule, metrics.projectName),
-          tx,
-        );
-        result.triggered += 1;
-        result.notified += notified;
-      });
-    } catch (err) {
-      logger?.error(
-        { err: serializeError(err), ruleId: rule.id, projectId: rule.projectId },
-        'Project rule evaluation failed',
-      );
-    }
+  for (const outcome of outcomes) {
+    result.evaluated += outcome.evaluated;
+    result.triggered += outcome.triggered;
+    result.reset += outcome.reset;
+    result.notified += outcome.notified;
   }
 
   return result;

@@ -171,11 +171,13 @@ describe('ClientsInvoicesView modal styling', () => {
     const source = await readComponentSource('accounting/ClientsInvoicesView.tsx');
 
     expectSourceContainsAll(source, [
-      "{t('common:labels.price')}</div>",
-      "{t('common:labels.discount')}</div>",
+      "{controller.t('common:labels.price')}</div>",
+      "{controller.t('common:labels.discount')}</div>",
       '/',
-      '{currency}',
+      'suffix={controller.currency}',
       '<span className="shrink-0 text-xs font-medium text-muted-foreground">',
+      'const InvoiceItemNumberField',
+      'suffix="%"',
       '%',
     ]);
     expectSourceOmitsAll(source, [
@@ -189,7 +191,7 @@ describe('ClientsInvoicesView modal styling', () => {
 
     expectSourceContainsAll(source, [
       // The Durata column header + per-row duration input wired through the shared value parser.
-      "{t('sales:clientQuotes.durationColumn', { defaultValue: 'Duration' })}",
+      "{controller.t('sales:clientQuotes.durationColumn', { defaultValue: 'Duration' })}",
       "'durationMonths',",
       'parseDurationValueToMonths(value, unit)',
       // The input shows the display value in the chosen unit, with a months/years selector.

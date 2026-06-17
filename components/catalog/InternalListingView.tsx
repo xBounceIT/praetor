@@ -176,7 +176,7 @@ const listingReducer = (state: ListingState, action: ListingAction): ListingStat
   }
 };
 
-const InternalListingView: React.FC<InternalListingViewProps> = ({
+const useInternalListingController = ({
   products,
   productFilterId,
   onAddProduct,
@@ -192,7 +192,7 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
   onCreateInternalSubcategory,
   onRenameInternalSubcategory,
   onDeleteInternalSubcategory,
-}) => {
+}: InternalListingViewProps) => {
   const { t, i18n } = useTranslation(['crm', 'common']);
 
   // A quick-view deep link arrives as a product id. Resolve it to a *visible*
@@ -916,1039 +916,1250 @@ const InternalListingView: React.FC<InternalListingViewProps> = ({
     ? { cost: Number(formData.costo), mol: Number(formData.molPercentage) }
     : null;
 
-  return (
-    <div className="space-y-8 animate-in fade-in duration-500">
-      {/* Manage Types Modal */}
-      <Modal
-        isOpen={isManageTypesModalOpen}
-        onClose={() => dispatch({ type: 'merge', patch: { isManageTypesModalOpen: false } })}
-        zIndex={70}
-      >
-        <ModalContent size="2xl">
-          <ModalHeader>
-            <ModalTitle className="gap-3">
-              <span className="flex size-8 items-center justify-center rounded-md bg-muted text-primary">
-                <i className="fa-solid fa-tags" aria-hidden="true"></i>
-              </span>
-              {t('crm:internalListing.manageTypes')}
-            </ModalTitle>
-            <ModalCloseButton
-              onClick={() => dispatch({ type: 'merge', patch: { isManageTypesModalOpen: false } })}
-            />
-          </ModalHeader>
+  return {
+    categories,
+    categoryError,
+    categoryOptions,
+    confirmDelete,
+    currency,
+    dispatch,
+    editingCategory,
+    editingProduct,
+    editingSubcategory,
+    editingType,
+    errors,
+    formData,
+    handleCancelCategoryEdit,
+    handleCancelSubcategoryEdit,
+    handleCancelTypeEdit,
+    handleDelete,
+    handleDeleteCategory,
+    handleDeleteSubcategory,
+    handleDeleteType,
+    handleEditCategory,
+    handleEditSubcategory,
+    handleEditType,
+    handleNumericValueChange,
+    handleOpenManageCategories,
+    handleOpenManageSubcategories,
+    handleOpenManageTypes,
+    handleSaveCategory,
+    handleSaveSubcategory,
+    handleSaveType,
+    handleSubmit,
+    handleTypeChange,
+    i18n,
+    isDeleteConfirmOpen,
+    isLoadingCategories,
+    isLoadingSubcategories,
+    isLoadingTypes,
+    isManageCategoriesModalOpen,
+    isManageSubcategoriesModalOpen,
+    isManageTypesModalOpen,
+    isModalOpen,
+    isSavingCategory,
+    isSavingSubcategory,
+    isSavingType,
+    loadSubcategories,
+    newCategoryName,
+    newSubcategoryName,
+    newTypeCostUnit,
+    newTypeName,
+    onUpdateProduct,
+    openAddModal,
+    openEditModal,
+    pricing,
+    productFilterId,
+    productToDelete,
+    productTypes,
+    products,
+    serverError,
+    subcategories,
+    subcategoryError,
+    subcategoryOptions,
+    t,
+    tableInitialFilterState,
+    typeError,
+    typeOptions,
+  };
+};
 
-          <ModalBody className="max-h-[60vh] space-y-4">
-            {/* Add/Edit Type Form */}
-            <div className="space-y-3 rounded-md border border-border bg-muted/30 p-4">
-              <div className="space-y-1.5">
-                <FieldLabel>{t('crm:internalListing.typeName')}</FieldLabel>
-                <div className="flex gap-2">
-                  <Input
-                    type="text"
-                    value={newTypeName}
-                    onChange={(e) =>
-                      dispatch({ type: 'merge', patch: { newTypeName: e.target.value } })
-                    }
-                    placeholder={t('crm:internalListing.typeNamePlaceholder')}
-                    className="flex-1"
-                    onKeyDown={(e) => e.key === 'Enter' && handleSaveType()}
-                  />
-                  <SelectControl
-                    options={[
-                      { id: 'unit', name: t('crm:internalListing.unit') },
-                      { id: 'hours', name: t('crm:internalListing.hour') },
-                    ]}
-                    value={newTypeCostUnit}
-                    onChange={(val) =>
-                      dispatch({
-                        type: 'merge',
-                        patch: { newTypeCostUnit: val as 'unit' | 'hours' },
-                      })
-                    }
-                    searchable={false}
-                    buttonClassName="py-2 text-sm w-28"
-                  />
-                </div>
-              </div>
+type InternalListingController = ReturnType<typeof useInternalListingController>;
 
-              {typeError && <p className="text-red-500 text-xs font-bold">{typeError}</p>}
+const InternalListingView: React.FC<InternalListingViewProps> = (props) => {
+  const controller = useInternalListingController(props);
+  return <InternalListingLayout controller={controller} />;
+};
 
-              <div className="flex justify-end gap-2">
-                {editingType && (
-                  <Button type="button" variant="outline" onClick={handleCancelTypeEdit}>
-                    {t('common:buttons.cancel')}
-                  </Button>
-                )}
-                <Button
-                  type="button"
-                  onClick={handleSaveType}
-                  disabled={isSavingType || !newTypeName.trim()}
-                  className="w-28"
-                >
-                  {isSavingType
-                    ? t('common:buttons.saving')
-                    : editingType
-                      ? t('common:buttons.update')
-                      : t('common:buttons.add')}
-                </Button>
-              </div>
-            </div>
+const InternalListingLayout: React.FC<{ controller: InternalListingController }> = ({
+  controller,
+}) => (
+  <div className="space-y-8">
+    <InternalListingTypesModal controller={controller} />
+    <InternalListingCategoriesModal controller={controller} />
+    <InternalListingSubcategoriesModal controller={controller} />
+    <InternalListingProductModal controller={controller} />
+    <InternalListingDeleteDialog controller={controller} />
+    <InternalListingHeader controller={controller} />
+    <InternalListingProductsTable controller={controller} />
+  </div>
+);
 
-            {/* Types List */}
-            {isLoadingTypes ? (
-              <div className="flex items-center justify-center py-8">
-                <i className="fa-solid fa-circle-notch fa-spin text-praetor text-2xl"></i>
-              </div>
-            ) : (
-              <StandardTable<InternalProductType>
-                title={t('crm:internalListing.manageTypes')}
-                data={productTypes}
-                defaultRowsPerPage={5}
-                containerClassName="shadow-none border-zinc-200 rounded-2xl"
-                tableContainerClassName="max-h-[35vh] overflow-y-auto"
-                emptyState={
-                  <div className="text-center py-6 text-zinc-500">
-                    <p>{t('crm:internalListing.noTypes')}</p>
-                  </div>
-                }
-                columns={[
-                  {
-                    header: t('crm:internalListing.name'),
-                    accessorFn: (row) => row.name.charAt(0).toUpperCase() + row.name.slice(1),
-                    cell: ({ row }) => (
-                      <span className="font-bold text-zinc-700">
-                        {row.name.charAt(0).toUpperCase() + row.name.slice(1)}
-                      </span>
-                    ),
-                    disableFiltering: true,
-                  },
-                  {
-                    header: t('crm:internalListing.measurement'),
-                    accessorFn: (row) =>
-                      row.costUnit === 'hours'
-                        ? t('crm:internalListing.hour')
-                        : t('crm:internalListing.unit'),
-                    disableFiltering: true,
-                  },
-                  {
-                    header: t('crm:internalListing.linkedItems'),
-                    accessorFn: (row) => {
-                      const parts = [`${row.productCount} ${t('crm:internalListing.products')}`];
-                      if (row.categoryCount > 0) {
-                        parts.push(`${row.categoryCount} ${t('crm:internalListing.categories')}`);
-                      }
-                      return parts.join(', ');
-                    },
-                    cell: ({ row }) => (
-                      <span className="text-xs text-zinc-400">
-                        {row.productCount} {t('crm:internalListing.products')}
-                        {row.categoryCount > 0 && (
-                          <>
-                            , {row.categoryCount} {t('crm:internalListing.categories')}
-                          </>
-                        )}
-                      </span>
-                    ),
-                    disableFiltering: true,
-                  },
-                  {
-                    header: t('common:labels.actions'),
-                    id: 'actions',
-                    disableSorting: true,
-                    disableFiltering: true,
-                    cell: ({ row: type }) => {
-                      const isDeleteBlocked = type.productCount > 0 || type.categoryCount > 0;
-                      const deleteBlockedMessage = t('crm:internalListing.typeDeleteBlocked', {
-                        productCount: type.productCount,
-                        categoryCount: type.categoryCount,
-                        name: type.name,
-                      });
+const InternalListingModalTitle: React.FC<{
+  icon: string;
+  children: React.ReactNode;
+}> = ({ icon, children }) => (
+  <ModalTitle className="gap-3">
+    <span className="flex size-8 items-center justify-center rounded-md bg-muted text-primary">
+      <i className={`fa-solid ${icon}`} aria-hidden="true"></i>
+    </span>
+    {children}
+  </ModalTitle>
+);
 
-                      return (
-                        <div className="flex items-center gap-1">
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <span className="inline-flex">
-                                <button
-                                  type="button"
-                                  onClick={() => handleEditType(type)}
-                                  aria-label={t('common:buttons.edit')}
-                                  className="p-1.5 text-zinc-400 hover:text-praetor hover:bg-zinc-100 rounded-lg transition-colors"
-                                >
-                                  <i className="fa-solid fa-pen"></i>
-                                </button>
-                              </span>
-                            </TooltipTrigger>
-                            <TooltipContent>{t('common:buttons.edit')}</TooltipContent>
-                          </Tooltip>
-                          <Tooltip disabled={!isDeleteBlocked}>
-                            <TooltipTrigger asChild>
-                              <span className="inline-flex">
-                                <button
-                                  type="button"
-                                  onClick={() => handleDeleteType(type)}
-                                  disabled={isDeleteBlocked}
-                                  aria-label={t('common:buttons.delete')}
-                                  className={`p-1.5 rounded-lg transition-colors ${
-                                    isDeleteBlocked
-                                      ? 'text-zinc-300 cursor-not-allowed'
-                                      : 'text-red-600 hover:text-red-600 hover:bg-red-50'
-                                  }`}
-                                >
-                                  <i className="fa-solid fa-trash"></i>
-                                </button>
-                              </span>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              {isDeleteBlocked ? deleteBlockedMessage : ''}
-                            </TooltipContent>
-                          </Tooltip>
-                        </div>
-                      );
-                    },
-                  },
-                ]}
-              />
-            )}
-          </ModalBody>
-        </ModalContent>
-      </Modal>
+const InternalListingLoading: React.FC = () => (
+  <div className="flex items-center justify-center py-8">
+    <i className="fa-solid fa-circle-notch fa-spin text-praetor text-2xl"></i>
+  </div>
+);
 
-      {/* Manage Categories Modal */}
-      <Modal
-        isOpen={isManageCategoriesModalOpen}
-        onClose={() => dispatch({ type: 'merge', patch: { isManageCategoriesModalOpen: false } })}
-        zIndex={70}
-      >
-        <ModalContent size="2xl">
-          <ModalHeader>
-            <ModalTitle className="gap-3">
-              <span className="flex size-8 items-center justify-center rounded-md bg-muted text-primary">
-                <i className="fa-solid fa-folder-tree" aria-hidden="true"></i>
-              </span>
-              {t('crm:internalListing.manageCategories')}
-            </ModalTitle>
-            <ModalCloseButton
-              onClick={() =>
-                dispatch({ type: 'merge', patch: { isManageCategoriesModalOpen: false } })
-              }
-            />
-          </ModalHeader>
+const InternalListingTypesModal: React.FC<{ controller: InternalListingController }> = ({
+  controller,
+}) => (
+  <Modal
+    isOpen={controller.isManageTypesModalOpen}
+    onClose={() => controller.dispatch({ type: 'merge', patch: { isManageTypesModalOpen: false } })}
+    zIndex={70}
+  >
+    <ModalContent size="2xl">
+      <ModalHeader>
+        <InternalListingModalTitle icon="fa-tags">
+          {controller.t('crm:internalListing.manageTypes')}
+        </InternalListingModalTitle>
+        <ModalCloseButton
+          onClick={() =>
+            controller.dispatch({ type: 'merge', patch: { isManageTypesModalOpen: false } })
+          }
+        />
+      </ModalHeader>
+      <ModalBody className="max-h-[60vh] space-y-4">
+        <InternalListingTypeForm controller={controller} />
+        {controller.isLoadingTypes ? (
+          <InternalListingLoading />
+        ) : (
+          <InternalListingTypesTable controller={controller} />
+        )}
+      </ModalBody>
+    </ModalContent>
+  </Modal>
+);
 
-          <ModalBody className="max-h-[60vh] space-y-4">
-            {/* Add/Edit Category Form */}
-            <div className="space-y-3 rounded-md border border-border bg-muted/30 p-4">
-              <div className="space-y-1.5">
-                <FieldLabel>{t('crm:internalListing.categoryName')}</FieldLabel>
-                <Input
-                  type="text"
-                  value={newCategoryName}
-                  onChange={(e) =>
-                    dispatch({ type: 'merge', patch: { newCategoryName: e.target.value } })
-                  }
-                  placeholder={t('crm:internalListing.categoryNamePlaceholder')}
-                  onKeyDown={(e) => e.key === 'Enter' && handleSaveCategory()}
-                />
-              </div>
-
-              {categoryError && <p className="text-red-500 text-xs font-bold">{categoryError}</p>}
-
-              <div className="flex justify-end gap-2">
-                {editingCategory && (
-                  <Button type="button" variant="outline" onClick={handleCancelCategoryEdit}>
-                    {t('common:buttons.cancel')}
-                  </Button>
-                )}
-                <Button
-                  type="button"
-                  onClick={handleSaveCategory}
-                  disabled={isSavingCategory || !newCategoryName.trim()}
-                >
-                  {isSavingCategory
-                    ? t('common:buttons.saving')
-                    : editingCategory
-                      ? t('common:buttons.update')
-                      : t('common:buttons.add')}
-                </Button>
-              </div>
-            </div>
-
-            {/* Categories List */}
-            {isLoadingCategories ? (
-              <div className="flex items-center justify-center py-8">
-                <i className="fa-solid fa-circle-notch fa-spin text-praetor text-2xl"></i>
-              </div>
-            ) : (
-              <StandardTable<InternalProductCategory>
-                title={t('crm:internalListing.manageCategories')}
-                data={categories}
-                defaultRowsPerPage={5}
-                containerClassName="shadow-none border-zinc-200 rounded-2xl"
-                tableContainerClassName="max-h-[35vh] overflow-y-auto"
-                emptyState={
-                  <div className="text-center py-6 text-zinc-500">
-                    <p>{t('crm:internalListing.noCategories')}</p>
-                  </div>
-                }
-                columns={[
-                  {
-                    header: t('crm:internalListing.name'),
-                    accessorFn: (row) => row.name,
-                    cell: ({ row }) => <span className="font-bold text-zinc-700">{row.name}</span>,
-                    disableFiltering: true,
-                  },
-                  {
-                    header: t('crm:internalListing.linkedItems'),
-                    accessorFn: (row) => `${row.productCount} ${t('crm:internalListing.products')}`,
-                    cell: ({ row }) => (
-                      <span className="text-xs text-zinc-400">
-                        {row.productCount} {t('crm:internalListing.products')}
-                      </span>
-                    ),
-                    disableFiltering: true,
-                  },
-                  {
-                    header: t('common:labels.actions'),
-                    id: 'actions',
-                    disableSorting: true,
-                    disableFiltering: true,
-                    cell: ({ row: category }) => {
-                      const isDeleteBlocked = category.hasLinkedProducts;
-                      const deleteBlockedMessage = t(
-                        'crm:internalListing.deleteCategoryWithLinkedProducts',
-                        { count: category.productCount, name: category.name },
-                      );
-
-                      return (
-                        <div className="flex items-center gap-1">
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <span className="inline-flex">
-                                <button
-                                  type="button"
-                                  onClick={() => handleEditCategory(category)}
-                                  aria-label={t('common:buttons.edit')}
-                                  className="p-1.5 text-zinc-400 hover:text-praetor hover:bg-zinc-100 rounded-lg transition-colors"
-                                >
-                                  <i className="fa-solid fa-pen"></i>
-                                </button>
-                              </span>
-                            </TooltipTrigger>
-                            <TooltipContent>{t('common:buttons.edit')}</TooltipContent>
-                          </Tooltip>
-                          <Tooltip disabled={!isDeleteBlocked}>
-                            <TooltipTrigger asChild>
-                              <span className="inline-flex">
-                                <button
-                                  type="button"
-                                  onClick={() => handleDeleteCategory(category)}
-                                  disabled={isDeleteBlocked}
-                                  aria-label={t('common:buttons.delete')}
-                                  className={`p-1.5 rounded-lg transition-colors ${
-                                    isDeleteBlocked
-                                      ? 'text-zinc-300 cursor-not-allowed'
-                                      : 'text-red-600 hover:text-red-600 hover:bg-red-50'
-                                  }`}
-                                >
-                                  <i className="fa-solid fa-trash"></i>
-                                </button>
-                              </span>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              {isDeleteBlocked ? deleteBlockedMessage : ''}
-                            </TooltipContent>
-                          </Tooltip>
-                        </div>
-                      );
-                    },
-                  },
-                ]}
-              />
-            )}
-          </ModalBody>
-        </ModalContent>
-      </Modal>
-
-      {/* Manage Subcategories Modal */}
-      <Modal
-        isOpen={isManageSubcategoriesModalOpen}
-        onClose={() =>
-          dispatch({ type: 'merge', patch: { isManageSubcategoriesModalOpen: false } })
-        }
-        zIndex={70}
-      >
-        <ModalContent size="2xl">
-          <ModalHeader>
-            <ModalTitle className="gap-3">
-              <span className="flex size-8 items-center justify-center rounded-md bg-muted text-primary">
-                <i className="fa-solid fa-folder-open" aria-hidden="true"></i>
-              </span>
-              {t('crm:internalListing.manageSubcategories')}
-              <span className="text-sm font-normal text-muted-foreground">
-                ({formData.category})
-              </span>
-            </ModalTitle>
-            <ModalCloseButton
-              onClick={() =>
-                dispatch({ type: 'merge', patch: { isManageSubcategoriesModalOpen: false } })
-              }
-            />
-          </ModalHeader>
-
-          <ModalBody className="max-h-[60vh] space-y-4">
-            {/* Add/Edit Subcategory Form */}
-            <div className="space-y-3 rounded-md border border-border bg-muted/30 p-4">
-              <div className="space-y-1.5">
-                <FieldLabel>{t('crm:internalListing.subcategoryName')}</FieldLabel>
-                <Input
-                  type="text"
-                  value={newSubcategoryName}
-                  onChange={(e) =>
-                    dispatch({ type: 'merge', patch: { newSubcategoryName: e.target.value } })
-                  }
-                  placeholder={t('crm:internalListing.subcategoryNamePlaceholder')}
-                  onKeyDown={(e) => e.key === 'Enter' && handleSaveSubcategory()}
-                />
-              </div>
-
-              {subcategoryError && (
-                <p className="text-red-500 text-xs font-bold">{subcategoryError}</p>
-              )}
-
-              <div className="flex justify-end gap-2">
-                {editingSubcategory && (
-                  <Button type="button" variant="outline" onClick={handleCancelSubcategoryEdit}>
-                    {t('common:buttons.cancel')}
-                  </Button>
-                )}
-                <Button
-                  type="button"
-                  onClick={handleSaveSubcategory}
-                  disabled={isSavingSubcategory || !newSubcategoryName.trim()}
-                >
-                  {isSavingSubcategory
-                    ? t('common:buttons.saving')
-                    : editingSubcategory
-                      ? t('common:buttons.update')
-                      : t('common:buttons.add')}
-                </Button>
-              </div>
-            </div>
-
-            {/* Subcategories List */}
-            {isLoadingSubcategories ? (
-              <div className="flex items-center justify-center py-8">
-                <i className="fa-solid fa-circle-notch fa-spin text-praetor text-2xl"></i>
-              </div>
-            ) : (
-              <StandardTable<InternalProductSubcategory>
-                title={t('crm:internalListing.manageSubcategories')}
-                data={subcategories}
-                defaultRowsPerPage={5}
-                containerClassName="shadow-none border-zinc-200 rounded-2xl"
-                tableContainerClassName="max-h-[35vh] overflow-y-auto"
-                emptyState={
-                  <div className="text-center py-6 text-zinc-500">
-                    <p>{t('crm:internalListing.noSubcategories')}</p>
-                  </div>
-                }
-                columns={[
-                  {
-                    header: t('crm:internalListing.name'),
-                    accessorFn: (row) => row.name,
-                    cell: ({ row }) => <span className="font-bold text-zinc-700">{row.name}</span>,
-                    disableFiltering: true,
-                  },
-                  {
-                    header: t('crm:internalListing.linkedItems'),
-                    accessorFn: (row) => `${row.productCount} ${t('crm:internalListing.products')}`,
-                    cell: ({ row }) => (
-                      <span className="text-xs text-zinc-400">
-                        {row.productCount} {t('crm:internalListing.products')}
-                      </span>
-                    ),
-                    disableFiltering: true,
-                  },
-                  {
-                    header: t('common:labels.actions'),
-                    id: 'actions',
-                    disableSorting: true,
-                    disableFiltering: true,
-                    cell: ({ row: subcategory }) => {
-                      const isDeleteBlocked = subcategory.hasLinkedProducts;
-                      const deleteBlockedMessage = t(
-                        'crm:internalListing.deleteSubcategoryWithLinkedProducts',
-                        { count: subcategory.productCount, name: subcategory.name },
-                      );
-
-                      return (
-                        <div className="flex items-center gap-1">
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <span className="inline-flex">
-                                <button
-                                  type="button"
-                                  onClick={() => handleEditSubcategory(subcategory)}
-                                  aria-label={t('common:buttons.edit')}
-                                  className="p-1.5 text-zinc-400 hover:text-praetor hover:bg-zinc-100 rounded-lg transition-colors"
-                                >
-                                  <i className="fa-solid fa-pen"></i>
-                                </button>
-                              </span>
-                            </TooltipTrigger>
-                            <TooltipContent>{t('common:buttons.edit')}</TooltipContent>
-                          </Tooltip>
-                          <Tooltip disabled={!isDeleteBlocked}>
-                            <TooltipTrigger asChild>
-                              <span className="inline-flex">
-                                <button
-                                  type="button"
-                                  onClick={() => handleDeleteSubcategory(subcategory)}
-                                  disabled={isDeleteBlocked}
-                                  aria-label={t('common:buttons.delete')}
-                                  className={`p-1.5 rounded-lg transition-colors ${
-                                    isDeleteBlocked
-                                      ? 'text-zinc-300 cursor-not-allowed'
-                                      : 'text-red-600 hover:text-red-600 hover:bg-red-50'
-                                  }`}
-                                >
-                                  <i className="fa-solid fa-trash"></i>
-                                </button>
-                              </span>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              {isDeleteBlocked ? deleteBlockedMessage : ''}
-                            </TooltipContent>
-                          </Tooltip>
-                        </div>
-                      );
-                    },
-                  },
-                ]}
-              />
-            )}
-          </ModalBody>
-        </ModalContent>
-      </Modal>
-
-      {/* Add/Edit Product Modal */}
-      <Modal
-        isOpen={isModalOpen}
-        onClose={() => dispatch({ type: 'merge', patch: { isModalOpen: false } })}
-      >
-        <ModalContent size="2xl" className="max-h-[90vh]">
-          <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
-            <ModalHeader>
-              <ModalTitle className="gap-3">
-                <span className="flex size-10 items-center justify-center rounded-md bg-muted text-primary">
-                  <i
-                    className={`fa-solid ${editingProduct ? 'fa-pen-to-square' : 'fa-plus'}`}
-                    aria-hidden="true"
-                  ></i>
-                </span>
-                {editingProduct
-                  ? t('crm:internalListing.editProductTitle')
-                  : t('crm:internalListing.addProductTitle')}
-              </ModalTitle>
-              <ModalCloseButton
-                onClick={() => dispatch({ type: 'merge', patch: { isModalOpen: false } })}
-              />
-            </ModalHeader>
-
-            <ModalBody className="flex-1 space-y-8">
-              {serverError && (
-                <div className="flex items-center gap-3 rounded-md border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm font-bold text-destructive">
-                  <i className="fa-solid fa-triangle-exclamation" aria-hidden="true"></i>
-                  {serverError}
-                </div>
-              )}
-
-              <div className="space-y-4">
-                <h4 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-primary">
-                  <span className="size-1.5 rounded-full bg-primary"></span>
-                  {t('crm:internalListing.productDetails')}
-                </h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-1.5">
-                    <FieldLabel required>{t('crm:internalListing.productName')}</FieldLabel>
-                    <Input
-                      type="text"
-                      value={formData.name}
-                      onChange={(e) => {
-                        dispatch({ type: 'patchForm', patch: { name: e.target.value } });
-                        if (errors.name) dispatch({ type: 'patchErrors', patch: { name: '' } });
-                      }}
-                      placeholder={t('crm:internalListing.productNamePlaceholder')}
-                      className={errors.name ? 'border-destructive' : undefined}
-                    />
-                    {errors.name && (
-                      <p className="text-red-500 text-[10px] font-bold ml-1 mt-1">{errors.name}</p>
-                    )}
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <FieldLabel required>{t('crm:internalListing.productCode')}</FieldLabel>
-                    <Input
-                      type="text"
-                      value={formData.productCode}
-                      onChange={(e) => {
-                        dispatch({ type: 'patchForm', patch: { productCode: e.target.value } });
-                        if (errors.productCode)
-                          dispatch({ type: 'patchErrors', patch: { productCode: '' } });
-                      }}
-                      placeholder={t('common:form.placeholderCode')}
-                      className={errors.productCode ? 'border-destructive' : undefined}
-                    />
-                    {errors.productCode && (
-                      <p className="text-red-500 text-[10px] font-bold ml-1 mt-1">
-                        {errors.productCode}
-                      </p>
-                    )}
-                    <p className="text-[10px] text-zinc-400 ml-1">
-                      {t('crm:internalListing.productCodeHint')}
-                    </p>
-                  </div>
-
-                  <div className="col-span-full space-y-1.5">
-                    <FieldLabel>{t('crm:internalListing.description')}</FieldLabel>
-                    <Textarea
-                      value={formData.description || ''}
-                      onChange={(e) =>
-                        dispatch({ type: 'patchForm', patch: { description: e.target.value } })
-                      }
-                      placeholder={t('crm:internalListing.productDescriptionPlaceholder')}
-                      rows={2}
-                      className="resize-none"
-                    />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <div className="flex min-h-6 items-center justify-between gap-2">
-                      <FieldLabel required>{t('crm:internalListing.type')}</FieldLabel>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="xs"
-                        onClick={handleOpenManageTypes}
-                        className="gap-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"
-                      >
-                        <i className="fa-solid fa-gear" aria-hidden="true"></i>
-                        {t('common:buttons.manage')}
-                      </Button>
-                    </div>
-                    <SelectControl
-                      options={typeOptions}
-                      value={formData.type || (productTypes[0]?.name ?? '')}
-                      onChange={(val) => handleTypeChange(val as string)}
-                      searchable={false}
-                      buttonClassName={
-                        errors.type ? 'py-2.5 text-sm border-destructive' : 'py-2.5 text-sm'
-                      }
-                    />
-                    {errors.type && (
-                      <p className="text-red-500 text-[10px] font-bold ml-1 mt-1">{errors.type}</p>
-                    )}
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <div className="flex min-h-6 items-center justify-between gap-2">
-                      <FieldLabel>{t('crm:internalListing.category')}</FieldLabel>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="xs"
-                        onClick={handleOpenManageCategories}
-                        className="gap-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"
-                      >
-                        <i className="fa-solid fa-gear" aria-hidden="true"></i>
-                        {t('common:buttons.manage')}
-                      </Button>
-                    </div>
-                    <SelectControl
-                      options={categoryOptions}
-                      value={formData.category || ''}
-                      onChange={(val) => {
-                        const categoryName = val as string;
-                        dispatch({
-                          type: 'merge',
-                          patch: {
-                            subcategories: [],
-                            formData: {
-                              ...formData,
-                              category: categoryName,
-                              subcategory: '',
-                            },
-                          },
-                        });
-                        if (formData.type && categoryName) {
-                          void loadSubcategories(formData.type, categoryName);
-                        }
-                      }}
-                      placeholder={t('crm:internalListing.selectOption')}
-                      searchable={true}
-                    />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <div className="flex min-h-6 items-center justify-between gap-2">
-                      <FieldLabel>{t('crm:internalListing.subcategory')}</FieldLabel>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="xs"
-                        onClick={handleOpenManageSubcategories}
-                        disabled={!formData.category}
-                        className="gap-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"
-                      >
-                        <i className="fa-solid fa-gear" aria-hidden="true"></i>
-                        {t('common:buttons.manage')}
-                      </Button>
-                    </div>
-                    <SelectControl
-                      options={subcategoryOptions}
-                      value={formData.subcategory || ''}
-                      onChange={(val) =>
-                        dispatch({ type: 'patchForm', patch: { subcategory: val as string } })
-                      }
-                      placeholder={
-                        !formData.category
-                          ? t('crm:internalListing.selectCategoryFirst')
-                          : t('crm:internalListing.selectOption')
-                      }
-                      searchable={true}
-                      disabled={!formData.category}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-4">
-                <h4 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-primary">
-                  <span className="size-1.5 rounded-full bg-primary"></span>
-                  {t('crm:internalListing.pricingAndUnit')}
-                </h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-1.5">
-                    <FieldLabel>
-                      {t('crm:internalListing.cost')} <RequiredMark />
-                      <span className="text-zinc-400 font-semibold">
-                        /
-                        {formData.costUnit === 'hours'
-                          ? t('crm:internalListing.hour')
-                          : t('crm:internalListing.unit')}
-                      </span>
-                    </FieldLabel>
-                    <div className="flex gap-2">
-                      <ValidatedNumberInput
-                        value={formData.costo ?? ''}
-                        formatDecimals={2}
-                        onValueChange={handleNumericValueChange('costo')}
-                        className="flex-1 min-w-0"
-                        aria-invalid={Boolean(errors.costo)}
-                      />
-                    </div>
-                    {errors.costo && (
-                      <p className="text-red-500 text-[10px] font-bold ml-1 mt-1">{errors.costo}</p>
-                    )}
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <FieldLabel required>{t('crm:internalListing.mol')}</FieldLabel>
-                    <div className="flex gap-2">
-                      <ValidatedNumberInput
-                        value={formData.molPercentage ?? ''}
-                        formatDecimals={MOL_PERCENTAGE_DECIMALS}
-                        onValueChange={handleNumericValueChange('molPercentage')}
-                        className="flex-1 min-w-0"
-                        aria-invalid={Boolean(errors.molPercentage)}
-                      />
-                    </div>
-                    {errors.molPercentage && (
-                      <p className="text-red-500 text-[10px] font-bold ml-1 mt-1">
-                        {errors.molPercentage}
-                      </p>
-                    )}
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <FieldLabel>{t('crm:internalListing.salePriceCalculated')}</FieldLabel>
-                    <div className="w-full rounded-md border border-border bg-muted px-4 py-2.5 text-sm font-semibold text-muted-foreground">
-                      {pricing
-                        ? `${calcProductSalePrice(pricing.cost, pricing.mol).toFixed(2)} ${currency}`
-                        : '--'}
-                    </div>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <FieldLabel>{t('crm:internalListing.marginCalculated')}</FieldLabel>
-                    <div className="w-full rounded-md border border-border bg-muted px-4 py-2.5 text-sm font-semibold text-emerald-600">
-                      {pricing
-                        ? `${calcMargine(pricing.cost, pricing.mol).toFixed(2)} ${currency}`
-                        : '--'}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </ModalBody>
-
-            <ModalFooter>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => dispatch({ type: 'merge', patch: { isModalOpen: false } })}
-              >
-                {t('common:buttons.cancel')}
-              </Button>
-              <Button type="submit">
-                {editingProduct
-                  ? t('crm:internalListing.updateProduct')
-                  : t('crm:internalListing.saveProduct')}
-              </Button>
-            </ModalFooter>
-          </form>
-        </ModalContent>
-      </Modal>
-
-      {/* Delete Confirmation Modal */}
-      <DeleteConfirmModal
-        isOpen={isDeleteConfirmOpen}
-        onClose={() => dispatch({ type: 'merge', patch: { isDeleteConfirmOpen: false } })}
-        onConfirm={handleDelete}
-        title={t('crm:internalListing.deleteProductTitle')}
-        description={t('crm:internalListing.deleteConfirm', {
-          productName: productToDelete?.name,
-        })}
-      />
-
-      <div className="space-y-4">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <div>
-            <h2 className="text-2xl font-semibold text-zinc-800">
-              {t('crm:internalListing.title')}
-            </h2>
-            <p className="text-zinc-500 text-sm">{t('crm:internalListing.subtitle')}</p>
-          </div>
-          <HeaderAddButton onClick={openAddModal}>
-            {t('crm:internalListing.addProduct')}
-          </HeaderAddButton>
-        </div>
+const InternalListingTypeForm: React.FC<{ controller: InternalListingController }> = ({
+  controller,
+}) => (
+  <div className="space-y-3 rounded-md border border-border bg-muted/30 p-4">
+    <div className="space-y-1.5">
+      <FieldLabel>{controller.t('crm:internalListing.typeName')}</FieldLabel>
+      <div className="flex gap-2">
+        <Input
+          type="text"
+          value={controller.newTypeName}
+          onChange={(event) =>
+            controller.dispatch({ type: 'merge', patch: { newTypeName: event.target.value } })
+          }
+          placeholder={controller.t('crm:internalListing.typeNamePlaceholder')}
+          className="flex-1"
+          onKeyDown={(event) => event.key === 'Enter' && controller.handleSaveType()}
+        />
+        <SelectControl
+          options={[
+            { id: 'unit', name: controller.t('crm:internalListing.unit') },
+            { id: 'hours', name: controller.t('crm:internalListing.hour') },
+          ]}
+          value={controller.newTypeCostUnit}
+          onChange={(value) =>
+            controller.dispatch({
+              type: 'merge',
+              patch: { newTypeCostUnit: value as 'unit' | 'hours' },
+            })
+          }
+          searchable={false}
+          buttonClassName="py-2 text-sm w-28"
+        />
       </div>
+    </div>
+    {controller.typeError && (
+      <p className="text-red-500 text-xs font-bold">{controller.typeError}</p>
+    )}
+    <div className="flex justify-end gap-2">
+      {controller.editingType && (
+        <Button type="button" variant="outline" onClick={controller.handleCancelTypeEdit}>
+          {controller.t('common:buttons.cancel')}
+        </Button>
+      )}
+      <Button
+        type="button"
+        onClick={controller.handleSaveType}
+        disabled={controller.isSavingType || !controller.newTypeName.trim()}
+        className="w-28"
+      >
+        {controller.isSavingType
+          ? controller.t('common:buttons.saving')
+          : controller.editingType
+            ? controller.t('common:buttons.update')
+            : controller.t('common:buttons.add')}
+      </Button>
+    </div>
+  </div>
+);
 
-      <StandardTable<Product>
-        title={t('crm:internalListing.title')}
-        defaultRowsPerPage={5}
-        data={products}
-        rowClassName={(p) =>
-          p.isDisabled
-            ? 'bg-zinc-50/50 grayscale opacity-75 hover:bg-zinc-100'
-            : 'hover:bg-zinc-50/50'
-        }
-        onRowClick={openEditModal}
-        initialFilterState={tableInitialFilterState}
-        // The deep-linked product id resolves to a column value only once the
-        // product list loads; force deep-link mode up front so a saved view that
-        // hides the Code/name column can't apply before the filter materializes.
-        suppressSavedView={Boolean(productFilterId)}
-        columns={[
-          {
-            header: t('crm:internalListing.productCode'),
-            accessorKey: 'productCode',
-            cell: ({ row: p }) => (
-              <span className="font-bold text-zinc-700">{p.productCode || '-'}</span>
-            ),
-          },
-          {
-            header: t('crm:internalListing.insertDate'),
-            id: 'createdAt',
-            accessorFn: (row) => row.createdAt ?? 0,
-            cell: ({ value }) => (
-              <span className="text-xs text-slate-500 whitespace-nowrap">
-                {formatInsertDate(value as number | null, i18n.language)}
-              </span>
-            ),
-            filterFormat: (value) => formatInsertDate(value as number | null, i18n.language),
-          },
-          {
-            header: t('common:labels.name'),
-            accessorKey: 'name',
-            className: 'px-6 py-5 font-bold text-zinc-800 min-w-[200px]',
-            cell: ({ row: p }) => <div className="font-bold text-zinc-800">{p.name}</div>,
-          },
-          {
-            header: t('crm:internalListing.category'),
-            accessorKey: 'category',
-            cell: ({ row: p }) => (
-              <span className="text-[11px] font-bold text-zinc-600 uppercase tracking-tight whitespace-nowrap">
-                {p.category || '-'}
-              </span>
-            ),
-          },
-          {
-            header: t('crm:internalListing.subcategory'),
-            accessorKey: 'subcategory',
-            cell: ({ row: p }) => (
-              <span className="text-[11px] font-medium text-zinc-500 whitespace-nowrap">
-                {p.subcategory || '-'}
-              </span>
-            ),
-          },
+const InternalListingTypesTable: React.FC<{ controller: InternalListingController }> = ({
+  controller,
+}) => (
+  <StandardTable<InternalProductType>
+    title={controller.t('crm:internalListing.manageTypes')}
+    data={controller.productTypes}
+    defaultRowsPerPage={5}
+    containerClassName="shadow-none border-zinc-200 rounded-2xl"
+    tableContainerClassName="max-h-[35vh] overflow-y-auto"
+    emptyState={
+      <div className="text-center py-6 text-zinc-500">
+        <p>{controller.t('crm:internalListing.noTypes')}</p>
+      </div>
+    }
+    columns={[
+      {
+        header: controller.t('crm:internalListing.name'),
+        accessorFn: (row) => row.name.charAt(0).toUpperCase() + row.name.slice(1),
+        cell: ({ row }) => (
+          <span className="font-bold text-zinc-700">
+            {row.name.charAt(0).toUpperCase() + row.name.slice(1)}
+          </span>
+        ),
+        disableFiltering: true,
+      },
+      {
+        header: controller.t('crm:internalListing.measurement'),
+        accessorFn: (row) =>
+          row.costUnit === 'hours'
+            ? controller.t('crm:internalListing.hour')
+            : controller.t('crm:internalListing.unit'),
+        disableFiltering: true,
+      },
+      {
+        header: controller.t('crm:internalListing.linkedItems'),
+        accessorFn: (row) => {
+          const parts = [`${row.productCount} ${controller.t('crm:internalListing.products')}`];
+          if (row.categoryCount > 0) {
+            parts.push(`${row.categoryCount} ${controller.t('crm:internalListing.categories')}`);
+          }
+          return parts.join(', ');
+        },
+        cell: ({ row }) => (
+          <span className="text-xs text-zinc-400">
+            {row.productCount} {controller.t('crm:internalListing.products')}
+            {row.categoryCount > 0 && (
+              <>
+                , {row.categoryCount} {controller.t('crm:internalListing.categories')}
+              </>
+            )}
+          </span>
+        ),
+        disableFiltering: true,
+      },
+      {
+        header: controller.t('common:labels.actions'),
+        id: 'actions',
+        disableSorting: true,
+        disableFiltering: true,
+        cell: ({ row: type }) => <InternalListingTypeActions controller={controller} type={type} />,
+      },
+    ]}
+  />
+);
 
-          {
-            header: t('crm:internalListing.type'),
-            accessorKey: 'type',
-            cell: ({ row: p }) => {
-              const _typeData = productTypes.find((t) => t.name === p.type);
-              return <StatusBadge type={p.type as StatusType} label={getDisplayTypeName(p.type)} />;
-            },
-            accessorFn: (row) => getDisplayTypeName(row.type),
-          },
-          {
-            header: t('crm:internalListing.cost'),
-            align: 'right',
-            className: 'px-6 py-5 whitespace-nowrap text-right',
-            accessorFn: (row) => Number(row.costo),
-            filterFormat: (val) => Number(val).toFixed(2),
-            cell: ({ row: p }) => {
-              const typeData = productTypes.find((t) => t.name === p.type);
-              const costUnit = typeData?.costUnit || p.costUnit || 'unit';
-              return (
-                <span className="text-sm font-semibold text-zinc-500">
-                  {Number(p.costo).toFixed(2)} {currency} /{' '}
-                  {costUnit === 'hours'
-                    ? t('crm:internalListing.hour')
-                    : t('crm:internalListing.unit')}
-                </span>
-              );
-            },
-          },
-          {
-            header: t('crm:internalListing.mol'),
-            align: 'right',
-            className: 'px-6 py-5 whitespace-nowrap text-right',
-            accessorKey: 'molPercentage',
-            filterFormat: (val) => Number(val).toFixed(MOL_PERCENTAGE_DECIMALS),
-            cell: ({ row: p }) => (
-              <span className="text-sm font-semibold text-zinc-500">
-                {formatMolPercentage(Number(p.molPercentage))}
-              </span>
-            ),
-          },
-          {
-            header: t('crm:internalListing.salePrice'),
-            align: 'right',
-            className: 'px-6 py-5 whitespace-nowrap text-right',
-            id: 'salePrice',
-            accessorFn: (row) => calcProductSalePrice(Number(row.costo), Number(row.molPercentage)),
-            filterFormat: (val) => Number(val).toFixed(2),
-            cell: ({ row: p, value }) => {
-              const typeData = productTypes.find((t) => t.name === p.type);
-              const costUnit = typeData?.costUnit || p.costUnit || 'unit';
-              return (
-                <span className="text-sm font-semibold text-zinc-700">
-                  {Number(value).toFixed(2)} {currency} /{' '}
-                  {costUnit === 'hours'
-                    ? t('crm:internalListing.hour')
-                    : t('crm:internalListing.unit')}
-                </span>
-              );
-            },
-          },
-          {
-            header: t('crm:internalListing.margin'),
-            align: 'right',
-            className: 'px-6 py-5 whitespace-nowrap text-right',
-            id: 'margin',
-            accessorFn: (row) => calcMargine(Number(row.costo), Number(row.molPercentage)),
-            filterFormat: (val) => Number(val).toFixed(2),
-            cell: ({ value }) => (
-              <span className="text-sm font-semibold text-emerald-600">
-                {Number(value).toFixed(2)} {currency}
-              </span>
-            ),
-          },
-          {
-            header: t('common:labels.status'),
-            accessorKey: 'isDisabled',
-            id: 'status',
-            cell: ({ row: p }) => (
-              <StatusBadge
-                type={p.isDisabled ? 'disabled' : 'active'}
-                label={
-                  p.isDisabled ? t('crm:internalListing.disabled') : t('crm:internalListing.active')
-                }
-              />
-            ),
-            accessorFn: (row) =>
-              row.isDisabled ? t('crm:internalListing.disabled') : t('crm:internalListing.active'),
-          },
-          {
-            header: t('common:labels.actions'),
-            id: 'actions',
-            align: 'right',
-            disableSorting: true,
-            disableFiltering: true,
-            cell: ({ row: p }) => (
-              <div className="flex justify-end gap-2">
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <span className="inline-flex">
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (p.isDisabled) {
-                            onUpdateProduct(p.id, { isDisabled: false });
-                          } else {
-                            onUpdateProduct(p.id, { isDisabled: true });
-                          }
-                        }}
-                        aria-label={
-                          p.isDisabled
-                            ? t('crm:internalListing.enableProduct')
-                            : t('crm:internalListing.disableProduct')
-                        }
-                        className={`p-2 rounded-lg transition-all ${
-                          p.isDisabled
-                            ? 'text-praetor hover:bg-emerald-50'
-                            : 'text-amber-700 hover:text-amber-600 hover:bg-amber-50'
-                        }`}
-                      >
-                        <i className={`fa-solid ${p.isDisabled ? 'fa-rotate-left' : 'fa-ban'}`}></i>
-                      </button>
-                    </span>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    {p.isDisabled
-                      ? t('crm:internalListing.enableProduct')
-                      : t('crm:internalListing.disableProduct')}
-                  </TooltipContent>
-                </Tooltip>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <span className="inline-flex">
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          confirmDelete(p);
-                        }}
-                        aria-label={t('common:buttons.delete')}
-                        className="p-2 text-red-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
-                      >
-                        <i className="fa-solid fa-trash-can"></i>
-                      </button>
-                    </span>
-                  </TooltipTrigger>
-                  <TooltipContent>{t('crm:internalListing.deleteProductTooltip')}</TooltipContent>
-                </Tooltip>
-              </div>
-            ),
-            className: 'px-8 py-5',
-          },
-        ]}
+const InternalListingTypeActions: React.FC<{
+  controller: InternalListingController;
+  type: InternalProductType;
+}> = ({ controller, type }) => {
+  const isDeleteBlocked = type.productCount > 0 || type.categoryCount > 0;
+  const deleteBlockedMessage = controller.t('crm:internalListing.typeDeleteBlocked', {
+    productCount: type.productCount,
+    categoryCount: type.categoryCount,
+    name: type.name,
+  });
+
+  return (
+    <div className="flex items-center gap-1">
+      <InternalListingIconAction
+        icon="fa-pen"
+        label={controller.t('common:buttons.edit')}
+        onClick={() => controller.handleEditType(type)}
+      />
+      <InternalListingIconAction
+        icon="fa-trash"
+        label={controller.t('common:buttons.delete')}
+        onClick={() => controller.handleDeleteType(type)}
+        disabled={isDeleteBlocked}
+        disabledTooltip={deleteBlockedMessage}
+        danger
       />
     </div>
   );
 };
+
+const InternalListingIconAction: React.FC<{
+  danger?: boolean;
+  disabled?: boolean;
+  disabledTooltip?: string;
+  icon: string;
+  label: string;
+  onClick: () => void;
+}> = ({ danger = false, disabled = false, disabledTooltip, icon, label, onClick }) => (
+  <Tooltip disabled={!disabled || !disabledTooltip}>
+    <TooltipTrigger asChild>
+      <span className="inline-flex">
+        <button
+          type="button"
+          onClick={onClick}
+          disabled={disabled}
+          aria-label={label}
+          className={`p-1.5 rounded-lg transition-colors ${
+            disabled
+              ? 'text-zinc-300 cursor-not-allowed'
+              : danger
+                ? 'text-red-600 hover:text-red-600 hover:bg-red-50'
+                : 'text-zinc-400 hover:text-praetor hover:bg-zinc-100'
+          }`}
+        >
+          <i className={`fa-solid ${icon}`}></i>
+        </button>
+      </span>
+    </TooltipTrigger>
+    <TooltipContent>{disabled ? disabledTooltip : label}</TooltipContent>
+  </Tooltip>
+);
+
+const InternalListingCategoriesModal: React.FC<{ controller: InternalListingController }> = ({
+  controller,
+}) => (
+  <Modal
+    isOpen={controller.isManageCategoriesModalOpen}
+    onClose={() =>
+      controller.dispatch({ type: 'merge', patch: { isManageCategoriesModalOpen: false } })
+    }
+    zIndex={70}
+  >
+    <ModalContent size="2xl">
+      <ModalHeader>
+        <InternalListingModalTitle icon="fa-folder-tree">
+          {controller.t('crm:internalListing.manageCategories')}
+        </InternalListingModalTitle>
+        <ModalCloseButton
+          onClick={() =>
+            controller.dispatch({ type: 'merge', patch: { isManageCategoriesModalOpen: false } })
+          }
+        />
+      </ModalHeader>
+      <ModalBody className="max-h-[60vh] space-y-4">
+        <InternalListingCategoryForm controller={controller} />
+        {controller.isLoadingCategories ? (
+          <InternalListingLoading />
+        ) : (
+          <InternalListingCategoriesTable controller={controller} />
+        )}
+      </ModalBody>
+    </ModalContent>
+  </Modal>
+);
+
+const InternalListingCategoryForm: React.FC<{ controller: InternalListingController }> = ({
+  controller,
+}) => (
+  <div className="space-y-3 rounded-md border border-border bg-muted/30 p-4">
+    <div className="space-y-1.5">
+      <FieldLabel>{controller.t('crm:internalListing.categoryName')}</FieldLabel>
+      <Input
+        type="text"
+        value={controller.newCategoryName}
+        onChange={(event) =>
+          controller.dispatch({ type: 'merge', patch: { newCategoryName: event.target.value } })
+        }
+        placeholder={controller.t('crm:internalListing.categoryNamePlaceholder')}
+        onKeyDown={(event) => event.key === 'Enter' && controller.handleSaveCategory()}
+      />
+    </div>
+    {controller.categoryError && (
+      <p className="text-red-500 text-xs font-bold">{controller.categoryError}</p>
+    )}
+    <div className="flex justify-end gap-2">
+      {controller.editingCategory && (
+        <Button type="button" variant="outline" onClick={controller.handleCancelCategoryEdit}>
+          {controller.t('common:buttons.cancel')}
+        </Button>
+      )}
+      <Button
+        type="button"
+        onClick={controller.handleSaveCategory}
+        disabled={controller.isSavingCategory || !controller.newCategoryName.trim()}
+      >
+        {controller.isSavingCategory
+          ? controller.t('common:buttons.saving')
+          : controller.editingCategory
+            ? controller.t('common:buttons.update')
+            : controller.t('common:buttons.add')}
+      </Button>
+    </div>
+  </div>
+);
+
+const InternalListingCategoriesTable: React.FC<{ controller: InternalListingController }> = ({
+  controller,
+}) => (
+  <StandardTable<InternalProductCategory>
+    title={controller.t('crm:internalListing.manageCategories')}
+    data={controller.categories}
+    defaultRowsPerPage={5}
+    containerClassName="shadow-none border-zinc-200 rounded-2xl"
+    tableContainerClassName="max-h-[35vh] overflow-y-auto"
+    emptyState={
+      <div className="text-center py-6 text-zinc-500">
+        <p>{controller.t('crm:internalListing.noCategories')}</p>
+      </div>
+    }
+    columns={[
+      {
+        header: controller.t('crm:internalListing.name'),
+        accessorFn: (row) => row.name,
+        cell: ({ row }) => <span className="font-bold text-zinc-700">{row.name}</span>,
+        disableFiltering: true,
+      },
+      {
+        header: controller.t('crm:internalListing.linkedItems'),
+        accessorFn: (row) => `${row.productCount} ${controller.t('crm:internalListing.products')}`,
+        cell: ({ row }) => (
+          <span className="text-xs text-zinc-400">
+            {row.productCount} {controller.t('crm:internalListing.products')}
+          </span>
+        ),
+        disableFiltering: true,
+      },
+      {
+        header: controller.t('common:labels.actions'),
+        id: 'actions',
+        disableSorting: true,
+        disableFiltering: true,
+        cell: ({ row: category }) => (
+          <InternalListingCategoryActions controller={controller} category={category} />
+        ),
+      },
+    ]}
+  />
+);
+
+const InternalListingCategoryActions: React.FC<{
+  category: InternalProductCategory;
+  controller: InternalListingController;
+}> = ({ category, controller }) => {
+  const deleteBlockedMessage = controller.t(
+    'crm:internalListing.deleteCategoryWithLinkedProducts',
+    { count: category.productCount, name: category.name },
+  );
+
+  return (
+    <div className="flex items-center gap-1">
+      <InternalListingIconAction
+        icon="fa-pen"
+        label={controller.t('common:buttons.edit')}
+        onClick={() => controller.handleEditCategory(category)}
+      />
+      <InternalListingIconAction
+        icon="fa-trash"
+        label={controller.t('common:buttons.delete')}
+        onClick={() => controller.handleDeleteCategory(category)}
+        disabled={category.hasLinkedProducts}
+        disabledTooltip={deleteBlockedMessage}
+        danger
+      />
+    </div>
+  );
+};
+
+const InternalListingSubcategoriesModal: React.FC<{ controller: InternalListingController }> = ({
+  controller,
+}) => (
+  <Modal
+    isOpen={controller.isManageSubcategoriesModalOpen}
+    onClose={() =>
+      controller.dispatch({ type: 'merge', patch: { isManageSubcategoriesModalOpen: false } })
+    }
+    zIndex={70}
+  >
+    <ModalContent size="2xl">
+      <ModalHeader>
+        <InternalListingModalTitle icon="fa-folder-open">
+          {controller.t('crm:internalListing.manageSubcategories')}
+          <span className="text-sm font-normal text-muted-foreground">
+            ({controller.formData.category})
+          </span>
+        </InternalListingModalTitle>
+        <ModalCloseButton
+          onClick={() =>
+            controller.dispatch({
+              type: 'merge',
+              patch: { isManageSubcategoriesModalOpen: false },
+            })
+          }
+        />
+      </ModalHeader>
+      <ModalBody className="max-h-[60vh] space-y-4">
+        <InternalListingSubcategoryForm controller={controller} />
+        {controller.isLoadingSubcategories ? (
+          <InternalListingLoading />
+        ) : (
+          <InternalListingSubcategoriesTable controller={controller} />
+        )}
+      </ModalBody>
+    </ModalContent>
+  </Modal>
+);
+
+const InternalListingSubcategoryForm: React.FC<{ controller: InternalListingController }> = ({
+  controller,
+}) => (
+  <div className="space-y-3 rounded-md border border-border bg-muted/30 p-4">
+    <div className="space-y-1.5">
+      <FieldLabel>{controller.t('crm:internalListing.subcategoryName')}</FieldLabel>
+      <Input
+        type="text"
+        value={controller.newSubcategoryName}
+        onChange={(event) =>
+          controller.dispatch({ type: 'merge', patch: { newSubcategoryName: event.target.value } })
+        }
+        placeholder={controller.t('crm:internalListing.subcategoryNamePlaceholder')}
+        onKeyDown={(event) => event.key === 'Enter' && controller.handleSaveSubcategory()}
+      />
+    </div>
+    {controller.subcategoryError && (
+      <p className="text-red-500 text-xs font-bold">{controller.subcategoryError}</p>
+    )}
+    <div className="flex justify-end gap-2">
+      {controller.editingSubcategory && (
+        <Button type="button" variant="outline" onClick={controller.handleCancelSubcategoryEdit}>
+          {controller.t('common:buttons.cancel')}
+        </Button>
+      )}
+      <Button
+        type="button"
+        onClick={controller.handleSaveSubcategory}
+        disabled={controller.isSavingSubcategory || !controller.newSubcategoryName.trim()}
+      >
+        {controller.isSavingSubcategory
+          ? controller.t('common:buttons.saving')
+          : controller.editingSubcategory
+            ? controller.t('common:buttons.update')
+            : controller.t('common:buttons.add')}
+      </Button>
+    </div>
+  </div>
+);
+
+const InternalListingSubcategoriesTable: React.FC<{ controller: InternalListingController }> = ({
+  controller,
+}) => (
+  <StandardTable<InternalProductSubcategory>
+    title={controller.t('crm:internalListing.manageSubcategories')}
+    data={controller.subcategories}
+    defaultRowsPerPage={5}
+    containerClassName="shadow-none border-zinc-200 rounded-2xl"
+    tableContainerClassName="max-h-[35vh] overflow-y-auto"
+    emptyState={
+      <div className="text-center py-6 text-zinc-500">
+        <p>{controller.t('crm:internalListing.noSubcategories')}</p>
+      </div>
+    }
+    columns={[
+      {
+        header: controller.t('crm:internalListing.name'),
+        accessorFn: (row) => row.name,
+        cell: ({ row }) => <span className="font-bold text-zinc-700">{row.name}</span>,
+        disableFiltering: true,
+      },
+      {
+        header: controller.t('crm:internalListing.linkedItems'),
+        accessorFn: (row) => `${row.productCount} ${controller.t('crm:internalListing.products')}`,
+        cell: ({ row }) => (
+          <span className="text-xs text-zinc-400">
+            {row.productCount} {controller.t('crm:internalListing.products')}
+          </span>
+        ),
+        disableFiltering: true,
+      },
+      {
+        header: controller.t('common:labels.actions'),
+        id: 'actions',
+        disableSorting: true,
+        disableFiltering: true,
+        cell: ({ row: subcategory }) => (
+          <InternalListingSubcategoryActions controller={controller} subcategory={subcategory} />
+        ),
+      },
+    ]}
+  />
+);
+
+const InternalListingSubcategoryActions: React.FC<{
+  controller: InternalListingController;
+  subcategory: InternalProductSubcategory;
+}> = ({ controller, subcategory }) => {
+  const deleteBlockedMessage = controller.t(
+    'crm:internalListing.deleteSubcategoryWithLinkedProducts',
+    { count: subcategory.productCount, name: subcategory.name },
+  );
+
+  return (
+    <div className="flex items-center gap-1">
+      <InternalListingIconAction
+        icon="fa-pen"
+        label={controller.t('common:buttons.edit')}
+        onClick={() => controller.handleEditSubcategory(subcategory)}
+      />
+      <InternalListingIconAction
+        icon="fa-trash"
+        label={controller.t('common:buttons.delete')}
+        onClick={() => controller.handleDeleteSubcategory(subcategory)}
+        disabled={subcategory.hasLinkedProducts}
+        disabledTooltip={deleteBlockedMessage}
+        danger
+      />
+    </div>
+  );
+};
+
+const InternalListingProductModal: React.FC<{ controller: InternalListingController }> = ({
+  controller,
+}) => (
+  <Modal
+    isOpen={controller.isModalOpen}
+    onClose={() => controller.dispatch({ type: 'merge', patch: { isModalOpen: false } })}
+  >
+    <ModalContent size="2xl" className="max-h-[90vh]">
+      <form onSubmit={controller.handleSubmit} className="flex min-h-0 flex-1 flex-col">
+        <ModalHeader>
+          <ModalTitle className="gap-3">
+            <span className="flex size-10 items-center justify-center rounded-md bg-muted text-primary">
+              <i
+                className={`fa-solid ${controller.editingProduct ? 'fa-pen-to-square' : 'fa-plus'}`}
+                aria-hidden="true"
+              ></i>
+            </span>
+            {controller.editingProduct
+              ? controller.t('crm:internalListing.editProductTitle')
+              : controller.t('crm:internalListing.addProductTitle')}
+          </ModalTitle>
+          <ModalCloseButton
+            onClick={() => controller.dispatch({ type: 'merge', patch: { isModalOpen: false } })}
+          />
+        </ModalHeader>
+        <ModalBody className="flex-1 space-y-8">
+          {controller.serverError && (
+            <div className="flex items-center gap-3 rounded-md border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm font-bold text-destructive">
+              <i className="fa-solid fa-triangle-exclamation" aria-hidden="true"></i>
+              {controller.serverError}
+            </div>
+          )}
+          <InternalListingProductDetailsSection controller={controller} />
+          <InternalListingProductPricingSection controller={controller} />
+        </ModalBody>
+        <ModalFooter>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => controller.dispatch({ type: 'merge', patch: { isModalOpen: false } })}
+          >
+            {controller.t('common:buttons.cancel')}
+          </Button>
+          <Button type="submit">
+            {controller.editingProduct
+              ? controller.t('crm:internalListing.updateProduct')
+              : controller.t('crm:internalListing.saveProduct')}
+          </Button>
+        </ModalFooter>
+      </form>
+    </ModalContent>
+  </Modal>
+);
+
+const InternalListingSectionTitle: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+  <h4 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-primary">
+    <span className="size-1.5 rounded-full bg-primary"></span>
+    {children}
+  </h4>
+);
+
+const InternalListingProductDetailsSection: React.FC<{ controller: InternalListingController }> = ({
+  controller,
+}) => (
+  <div className="space-y-4">
+    <InternalListingSectionTitle>
+      {controller.t('crm:internalListing.productDetails')}
+    </InternalListingSectionTitle>
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <InternalListingTextField
+        label={controller.t('crm:internalListing.productName')}
+        value={controller.formData.name || ''}
+        error={controller.errors.name}
+        placeholder={controller.t('crm:internalListing.productNamePlaceholder')}
+        required
+        onChange={(value) => {
+          controller.dispatch({ type: 'patchForm', patch: { name: value } });
+          if (controller.errors.name)
+            controller.dispatch({ type: 'patchErrors', patch: { name: '' } });
+        }}
+      />
+      <InternalListingTextField
+        label={controller.t('crm:internalListing.productCode')}
+        value={controller.formData.productCode || ''}
+        error={controller.errors.productCode}
+        hint={controller.t('crm:internalListing.productCodeHint')}
+        placeholder={controller.t('common:form.placeholderCode')}
+        required
+        onChange={(value) => {
+          controller.dispatch({ type: 'patchForm', patch: { productCode: value } });
+          if (controller.errors.productCode) {
+            controller.dispatch({ type: 'patchErrors', patch: { productCode: '' } });
+          }
+        }}
+      />
+      <div className="col-span-full space-y-1.5">
+        <FieldLabel>{controller.t('crm:internalListing.description')}</FieldLabel>
+        <Textarea
+          value={controller.formData.description || ''}
+          onChange={(event) =>
+            controller.dispatch({ type: 'patchForm', patch: { description: event.target.value } })
+          }
+          placeholder={controller.t('crm:internalListing.productDescriptionPlaceholder')}
+          rows={2}
+          className="resize-none"
+        />
+      </div>
+      <InternalListingTypeSelect controller={controller} />
+      <InternalListingCategorySelect controller={controller} />
+      <InternalListingSubcategorySelect controller={controller} />
+    </div>
+  </div>
+);
+
+const InternalListingTextField: React.FC<{
+  error?: string;
+  hint?: string;
+  label: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+  required?: boolean;
+  value: string;
+}> = ({ error, hint, label, onChange, placeholder, required = false, value }) => (
+  <div className="space-y-1.5">
+    <FieldLabel required={required}>{label}</FieldLabel>
+    <Input
+      type="text"
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+      placeholder={placeholder}
+      className={error ? 'border-destructive' : undefined}
+    />
+    {error && <p className="text-red-500 text-[10px] font-bold ml-1 mt-1">{error}</p>}
+    {hint && <p className="text-[10px] text-zinc-400 ml-1">{hint}</p>}
+  </div>
+);
+
+const InternalListingFieldHeader: React.FC<{
+  children: React.ReactNode;
+  onClick?: () => void;
+  manageDisabled?: boolean;
+}> = ({ children, manageDisabled = false, onClick }) => (
+  <div className="flex min-h-6 items-center justify-between gap-2">
+    <FieldLabel>{children}</FieldLabel>
+    {onClick && (
+      <Button
+        type="button"
+        variant="ghost"
+        size="xs"
+        onClick={onClick}
+        disabled={manageDisabled}
+        className="gap-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"
+      >
+        <i className="fa-solid fa-gear" aria-hidden="true"></i>
+        Manage
+      </Button>
+    )}
+  </div>
+);
+
+const InternalListingTypeSelect: React.FC<{ controller: InternalListingController }> = ({
+  controller,
+}) => {
+  const { handleOpenManageTypes } = controller;
+
+  return (
+    <div className="space-y-1.5">
+      <InternalListingFieldHeader onClick={handleOpenManageTypes}>
+        {controller.t('crm:internalListing.type')} <RequiredMark />
+      </InternalListingFieldHeader>
+      <SelectControl
+        options={controller.typeOptions}
+        value={controller.formData.type || (controller.productTypes[0]?.name ?? '')}
+        onChange={(value) => controller.handleTypeChange(value as string)}
+        searchable={false}
+        buttonClassName={
+          controller.errors.type ? 'py-2.5 text-sm border-destructive' : 'py-2.5 text-sm'
+        }
+      />
+      {controller.errors.type && (
+        <p className="text-red-500 text-[10px] font-bold ml-1 mt-1">{controller.errors.type}</p>
+      )}
+    </div>
+  );
+};
+
+const InternalListingCategorySelect: React.FC<{ controller: InternalListingController }> = ({
+  controller,
+}) => {
+  const { handleOpenManageCategories } = controller;
+
+  return (
+    <div className="space-y-1.5">
+      <InternalListingFieldHeader onClick={handleOpenManageCategories}>
+        {controller.t('crm:internalListing.category')}
+      </InternalListingFieldHeader>
+      <SelectControl
+        options={controller.categoryOptions}
+        value={controller.formData.category || ''}
+        onChange={(value) => {
+          const categoryName = value as string;
+          controller.dispatch({
+            type: 'merge',
+            patch: {
+              subcategories: [],
+              formData: {
+                ...controller.formData,
+                category: categoryName,
+                subcategory: '',
+              },
+            },
+          });
+          if (controller.formData.type && categoryName) {
+            void controller.loadSubcategories(controller.formData.type, categoryName);
+          }
+        }}
+        placeholder={controller.t('crm:internalListing.selectOption')}
+        searchable={true}
+      />
+    </div>
+  );
+};
+
+const InternalListingSubcategorySelect: React.FC<{ controller: InternalListingController }> = ({
+  controller,
+}) => {
+  const { handleOpenManageSubcategories } = controller;
+
+  return (
+    <div className="space-y-1.5">
+      <InternalListingFieldHeader
+        onClick={handleOpenManageSubcategories}
+        manageDisabled={!controller.formData.category}
+      >
+        {controller.t('crm:internalListing.subcategory')}
+      </InternalListingFieldHeader>
+      <SelectControl
+        options={controller.subcategoryOptions}
+        value={controller.formData.subcategory || ''}
+        onChange={(value) =>
+          controller.dispatch({ type: 'patchForm', patch: { subcategory: value as string } })
+        }
+        placeholder={
+          !controller.formData.category
+            ? controller.t('crm:internalListing.selectCategoryFirst')
+            : controller.t('crm:internalListing.selectOption')
+        }
+        searchable={true}
+        disabled={!controller.formData.category}
+      />
+    </div>
+  );
+};
+
+const InternalListingProductPricingSection: React.FC<{ controller: InternalListingController }> = ({
+  controller,
+}) => {
+  const { errors } = controller;
+
+  return (
+    <div className="space-y-4">
+      <InternalListingSectionTitle>
+        {controller.t('crm:internalListing.pricingAndUnit')}
+      </InternalListingSectionTitle>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <InternalListingNumberField
+          label={
+            <>
+              {controller.t('crm:internalListing.cost')} <RequiredMark />
+              <span className="text-zinc-400 font-semibold">
+                /
+                {controller.formData.costUnit === 'hours'
+                  ? controller.t('crm:internalListing.hour')
+                  : controller.t('crm:internalListing.unit')}
+              </span>
+            </>
+          }
+          value={controller.formData.costo ?? ''}
+          error={errors.costo}
+          onValueChange={controller.handleNumericValueChange('costo')}
+          formatDecimals={2}
+          aria-invalid={Boolean(errors.costo)}
+        />
+        <InternalListingNumberField
+          label={controller.t('crm:internalListing.mol')}
+          value={controller.formData.molPercentage ?? ''}
+          error={errors.molPercentage}
+          onValueChange={controller.handleNumericValueChange('molPercentage')}
+          formatDecimals={MOL_PERCENTAGE_DECIMALS}
+          required
+          aria-invalid={Boolean(errors.molPercentage)}
+        />
+        <InternalListingCalculatedValue
+          label={controller.t('crm:internalListing.salePriceCalculated')}
+          value={
+            controller.pricing
+              ? `${calcProductSalePrice(controller.pricing.cost, controller.pricing.mol).toFixed(2)} ${
+                  controller.currency
+                }`
+              : '--'
+          }
+          className="text-muted-foreground"
+        />
+        <InternalListingCalculatedValue
+          label={controller.t('crm:internalListing.marginCalculated')}
+          value={
+            controller.pricing
+              ? `${calcMargine(controller.pricing.cost, controller.pricing.mol).toFixed(2)} ${
+                  controller.currency
+                }`
+              : '--'
+          }
+          className="text-emerald-600"
+        />
+      </div>
+    </div>
+  );
+};
+
+const InternalListingNumberField: React.FC<{
+  'aria-invalid'?: boolean;
+  error?: string;
+  formatDecimals: number;
+  label: React.ReactNode;
+  onValueChange: (value: string) => void;
+  required?: boolean;
+  value: string | number;
+}> = ({
+  'aria-invalid': ariaInvalid,
+  error,
+  formatDecimals,
+  label,
+  onValueChange,
+  required = false,
+  value,
+}) => (
+  <div className="space-y-1.5">
+    <FieldLabel required={required}>{label}</FieldLabel>
+    <ValidatedNumberInput
+      value={value}
+      formatDecimals={formatDecimals}
+      onValueChange={onValueChange}
+      className="flex-1 min-w-0"
+      aria-invalid={ariaInvalid ?? Boolean(error)}
+    />
+    {error && <p className="text-red-500 text-[10px] font-bold ml-1 mt-1">{error}</p>}
+  </div>
+);
+
+const InternalListingCalculatedValue: React.FC<{
+  className?: string;
+  label: string;
+  value: string;
+}> = ({ className, label, value }) => (
+  <div className="space-y-1.5">
+    <FieldLabel>{label}</FieldLabel>
+    <div
+      className={`w-full rounded-md border border-border bg-muted px-4 py-2.5 text-sm font-semibold ${className ?? ''}`}
+    >
+      {value}
+    </div>
+  </div>
+);
+
+const InternalListingDeleteDialog: React.FC<{ controller: InternalListingController }> = ({
+  controller,
+}) => (
+  <DeleteConfirmModal
+    isOpen={controller.isDeleteConfirmOpen}
+    onClose={() => controller.dispatch({ type: 'merge', patch: { isDeleteConfirmOpen: false } })}
+    onConfirm={controller.handleDelete}
+    title={controller.t('crm:internalListing.deleteProductTitle')}
+    description={controller.t('crm:internalListing.deleteConfirm', {
+      productName: controller.productToDelete?.name,
+    })}
+  />
+);
+
+const InternalListingHeader: React.FC<{ controller: InternalListingController }> = ({
+  controller,
+}) => (
+  <div className="space-y-4">
+    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+      <div>
+        <h2 className="text-2xl font-semibold text-zinc-800">
+          {controller.t('crm:internalListing.title')}
+        </h2>
+        <p className="text-zinc-500 text-sm">{controller.t('crm:internalListing.subtitle')}</p>
+      </div>
+      <HeaderAddButton onClick={controller.openAddModal}>
+        {controller.t('crm:internalListing.addProduct')}
+      </HeaderAddButton>
+    </div>
+  </div>
+);
+
+const InternalListingProductsTable: React.FC<{ controller: InternalListingController }> = ({
+  controller,
+}) => (
+  <StandardTable<Product>
+    title={controller.t('crm:internalListing.title')}
+    defaultRowsPerPage={5}
+    data={controller.products}
+    rowClassName={(product) =>
+      product.isDisabled
+        ? 'bg-zinc-50/50 grayscale opacity-75 hover:bg-zinc-100'
+        : 'hover:bg-zinc-50/50'
+    }
+    onRowClick={controller.openEditModal}
+    initialFilterState={controller.tableInitialFilterState}
+    suppressSavedView={Boolean(controller.productFilterId)}
+    columns={getInternalListingProductColumns(controller)}
+  />
+);
+
+const getInternalListingProductColumns = (controller: InternalListingController) => [
+  {
+    header: controller.t('crm:internalListing.productCode'),
+    accessorKey: 'productCode' as const,
+    cell: ({ row: product }: { row: Product }) => (
+      <span className="font-bold text-zinc-700">{product.productCode || '-'}</span>
+    ),
+  },
+  {
+    header: controller.t('crm:internalListing.insertDate'),
+    id: 'createdAt',
+    accessorFn: (row: Product) => row.createdAt ?? 0,
+    cell: ({ value }: { value: unknown }) => (
+      <span className="text-xs text-slate-500 whitespace-nowrap">
+        {formatInsertDate(value as number | null, controller.i18n.language)}
+      </span>
+    ),
+    filterFormat: (value: unknown) =>
+      formatInsertDate(value as number | null, controller.i18n.language),
+  },
+  {
+    header: controller.t('common:labels.name'),
+    accessorKey: 'name' as const,
+    className: 'px-6 py-5 font-bold text-zinc-800 min-w-[200px]',
+    cell: ({ row: product }: { row: Product }) => (
+      <div className="font-bold text-zinc-800">{product.name}</div>
+    ),
+  },
+  {
+    header: controller.t('crm:internalListing.category'),
+    accessorKey: 'category' as const,
+    cell: ({ row: product }: { row: Product }) => (
+      <span className="text-[11px] font-bold text-zinc-600 uppercase tracking-tight whitespace-nowrap">
+        {product.category || '-'}
+      </span>
+    ),
+  },
+  {
+    header: controller.t('crm:internalListing.subcategory'),
+    accessorKey: 'subcategory' as const,
+    cell: ({ row: product }: { row: Product }) => (
+      <span className="text-[11px] font-medium text-zinc-500 whitespace-nowrap">
+        {product.subcategory || '-'}
+      </span>
+    ),
+  },
+  {
+    header: controller.t('crm:internalListing.type'),
+    accessorKey: 'type' as const,
+    cell: ({ row: product }: { row: Product }) => (
+      <StatusBadge type={product.type as StatusType} label={getDisplayTypeName(product.type)} />
+    ),
+    accessorFn: (row: Product) => getDisplayTypeName(row.type),
+  },
+  {
+    header: controller.t('crm:internalListing.cost'),
+    align: 'right' as const,
+    className: 'px-6 py-5 whitespace-nowrap text-right',
+    accessorFn: (row: Product) => Number(row.costo),
+    filterFormat: (value: unknown) => Number(value).toFixed(2),
+    cell: ({ row: product }: { row: Product }) => (
+      <InternalListingCurrencyCell
+        controller={controller}
+        product={product}
+        value={product.costo}
+      />
+    ),
+  },
+  {
+    header: controller.t('crm:internalListing.mol'),
+    align: 'right' as const,
+    className: 'px-6 py-5 whitespace-nowrap text-right',
+    accessorKey: 'molPercentage' as const,
+    filterFormat: (value: unknown) => Number(value).toFixed(MOL_PERCENTAGE_DECIMALS),
+    cell: ({ row: product }: { row: Product }) => (
+      <span className="text-sm font-semibold text-zinc-500">
+        {formatMolPercentage(Number(product.molPercentage))}
+      </span>
+    ),
+  },
+  {
+    header: controller.t('crm:internalListing.salePrice'),
+    align: 'right' as const,
+    className: 'px-6 py-5 whitespace-nowrap text-right',
+    id: 'salePrice',
+    accessorFn: (row: Product) =>
+      calcProductSalePrice(Number(row.costo), Number(row.molPercentage)),
+    filterFormat: (value: unknown) => Number(value).toFixed(2),
+    cell: ({ row: product, value }: { row: Product; value: unknown }) => (
+      <InternalListingCurrencyCell controller={controller} product={product} value={value} />
+    ),
+  },
+  {
+    header: controller.t('crm:internalListing.margin'),
+    align: 'right' as const,
+    className: 'px-6 py-5 whitespace-nowrap text-right',
+    id: 'margin',
+    accessorFn: (row: Product) => calcMargine(Number(row.costo), Number(row.molPercentage)),
+    filterFormat: (value: unknown) => Number(value).toFixed(2),
+    cell: ({ value }: { value: unknown }) => (
+      <span className="text-sm font-semibold text-emerald-600">
+        {Number(value).toFixed(2)} {controller.currency}
+      </span>
+    ),
+  },
+  {
+    header: controller.t('common:labels.status'),
+    accessorKey: 'isDisabled' as const,
+    id: 'status',
+    cell: ({ row: product }: { row: Product }) => (
+      <StatusBadge
+        type={product.isDisabled ? 'disabled' : 'active'}
+        label={
+          product.isDisabled
+            ? controller.t('crm:internalListing.disabled')
+            : controller.t('crm:internalListing.active')
+        }
+      />
+    ),
+    accessorFn: (row: Product) =>
+      row.isDisabled
+        ? controller.t('crm:internalListing.disabled')
+        : controller.t('crm:internalListing.active'),
+  },
+  {
+    header: controller.t('common:labels.actions'),
+    id: 'actions',
+    align: 'right' as const,
+    disableSorting: true,
+    disableFiltering: true,
+    cell: ({ row: product }: { row: Product }) => (
+      <InternalListingProductActions controller={controller} product={product} />
+    ),
+    className: 'px-8 py-5',
+  },
+];
+
+const InternalListingCurrencyCell: React.FC<{
+  controller: InternalListingController;
+  product: Product;
+  value: unknown;
+}> = ({ controller, product, value }) => {
+  const typeData = controller.productTypes.find((type) => type.name === product.type);
+  const costUnit = typeData?.costUnit || product.costUnit || 'unit';
+
+  return (
+    <span className="text-sm font-semibold text-zinc-700">
+      {Number(value).toFixed(2)} {controller.currency} /{' '}
+      {costUnit === 'hours'
+        ? controller.t('crm:internalListing.hour')
+        : controller.t('crm:internalListing.unit')}
+    </span>
+  );
+};
+
+const InternalListingProductActions: React.FC<{
+  controller: InternalListingController;
+  product: Product;
+}> = ({ controller, product }) => (
+  <div className="flex justify-end gap-2">
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span className="inline-flex">
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              controller.onUpdateProduct(product.id, { isDisabled: !product.isDisabled });
+            }}
+            aria-label={
+              product.isDisabled
+                ? controller.t('crm:internalListing.enableProduct')
+                : controller.t('crm:internalListing.disableProduct')
+            }
+            className={`p-2 rounded-lg transition-all ${
+              product.isDisabled
+                ? 'text-praetor hover:bg-emerald-50'
+                : 'text-amber-700 hover:text-amber-600 hover:bg-amber-50'
+            }`}
+          >
+            <i className={`fa-solid ${product.isDisabled ? 'fa-rotate-left' : 'fa-ban'}`}></i>
+          </button>
+        </span>
+      </TooltipTrigger>
+      <TooltipContent>
+        {product.isDisabled
+          ? controller.t('crm:internalListing.enableProduct')
+          : controller.t('crm:internalListing.disableProduct')}
+      </TooltipContent>
+    </Tooltip>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span className="inline-flex">
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              controller.confirmDelete(product);
+            }}
+            aria-label={controller.t('common:buttons.delete')}
+            className="p-2 text-red-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+          >
+            <i className="fa-solid fa-trash-can"></i>
+          </button>
+        </span>
+      </TooltipTrigger>
+      <TooltipContent>{controller.t('crm:internalListing.deleteProductTooltip')}</TooltipContent>
+    </Tooltip>
+  </div>
+);
 
 export default InternalListingView;

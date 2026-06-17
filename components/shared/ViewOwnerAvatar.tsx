@@ -22,8 +22,6 @@ const ViewOwnerAvatar: React.FC<ViewOwnerAvatarProps> = ({ ownerName, className 
     <Tooltip>
       <TooltipTrigger asChild>
         <span
-          role="img"
-          aria-label={label}
           className={cn(
             'inline-flex size-5 shrink-0 items-center justify-center rounded-full bg-muted text-[9px] font-semibold uppercase leading-none text-muted-foreground',
             className,

@@ -146,8 +146,7 @@ const writeExternalRoleIdsTx = async (
   tx: DbExecutor,
   primaryRoleId: string = roleIds[0],
 ): Promise<void> => {
-  await usersRepo.replaceUserRoles(userId, roleIds, tx);
-  await usersRepo.setPrimaryRole(userId, primaryRoleId, tx);
+  await usersRepo.replaceUserRolesAndSetPrimary(userId, roleIds, primaryRoleId, tx);
   await userAssignmentsRepo.syncTopManagerAssignmentsForUser(userId, tx);
 };
 
@@ -164,14 +163,14 @@ const syncExternalProfileTx = async (
   if (!name && !email) return {};
 
   const avatarInitials = name ? computeAvatarInitials(name) : undefined;
-  if (name) {
-    await usersRepo.updateDirectoryProfile(userId, { name, avatarInitials }, tx);
-  }
-  await settingsRepo.upsertForUser(
-    userId,
-    { fullName: name || null, email: email || null, language: null },
-    tx,
-  );
+  await Promise.all([
+    name ? usersRepo.updateDirectoryProfile(userId, { name, avatarInitials }, tx) : null,
+    settingsRepo.upsertForUser(
+      userId,
+      { fullName: name || null, email: email || null, language: null },
+      tx,
+    ),
+  ]);
   return name ? { name, avatarInitials } : {};
 };
 

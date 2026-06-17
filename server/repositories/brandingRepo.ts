@@ -1,5 +1,5 @@
 import { eq, sql } from 'drizzle-orm';
-import { type DbExecutor, db } from '../db/drizzle.ts';
+import { type DbExecutor, db, executeRows } from '../db/drizzle.ts';
 import { appBranding } from '../db/schema/appBranding.ts';
 
 export type AppBrandingRecord = {
@@ -108,4 +108,46 @@ export const clearLogo = async (exec: DbExecutor = db): Promise<AppBrandingRecor
     })
     .returning(BRANDING_PROJECTION);
   return mapRow(result[0]);
+};
+
+export const clearLogoWithPrevious = async (
+  exec: DbExecutor = db,
+): Promise<{ branding: AppBrandingRecord; previousLogoStoredName: string | null }> => {
+  const rows = await executeRows<BrandingRow & { previousLogoStoredName: string | null }>(
+    exec,
+    sql`
+      WITH previous AS (
+        SELECT logo_stored_name
+        FROM app_branding
+        WHERE id = 1
+      ),
+      updated AS (
+        INSERT INTO app_branding (id)
+        VALUES (1)
+        ON CONFLICT (id) DO UPDATE SET
+          logo_stored_name = NULL,
+          logo_mime_type = NULL,
+          logo_file_size = NULL,
+          logo_updated_at = NULL,
+          updated_at = CURRENT_TIMESTAMP
+        RETURNING
+          company_name,
+          logo_stored_name,
+          logo_mime_type,
+          logo_file_size,
+          logo_updated_at
+      )
+      SELECT
+        updated.company_name AS "companyName",
+        updated.logo_stored_name AS "logoStoredName",
+        updated.logo_mime_type AS "logoMimeType",
+        updated.logo_file_size AS "logoFileSize",
+        updated.logo_updated_at AS "logoUpdatedAt",
+        previous.logo_stored_name AS "previousLogoStoredName"
+      FROM updated
+      LEFT JOIN previous ON TRUE
+    `,
+  );
+  const row = rows[0];
+  return { branding: mapRow(row), previousLogoStoredName: row.previousLogoStoredName };
 };

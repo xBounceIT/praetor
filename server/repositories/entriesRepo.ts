@@ -481,33 +481,36 @@ export const createMany = async (
   exec: DbExecutor = db,
 ): Promise<TimeEntry[]> => {
   if (entries.length === 0) return [];
-  const result: TimeEntry[] = [];
+  const chunks: NewEntry[][] = [];
   for (let i = 0; i < entries.length; i += CREATE_MANY_CHUNK_SIZE) {
-    const chunk = entries.slice(i, i + CREATE_MANY_CHUNK_SIZE);
-    const rows = await exec
-      .insert(timeEntries)
-      .values(
-        chunk.map((entry) => ({
-          id: entry.id,
-          userId: entry.userId,
-          date: entry.date,
-          clientId: entry.clientId,
-          clientName: entry.clientName,
-          projectId: entry.projectId,
-          projectName: entry.projectName,
-          task: entry.task,
-          taskId: entry.taskId,
-          notes: entry.notes,
-          duration: numericForDb(entry.duration),
-          hourlyCost: numericForDb(entry.hourlyCost),
-          isPlaceholder: entry.isPlaceholder,
-          location: entry.location,
-        })),
-      )
-      .returning();
-    for (const row of rows) result.push(mapBuilderRow(row));
+    chunks.push(entries.slice(i, i + CREATE_MANY_CHUNK_SIZE));
   }
-  return result;
+  const chunkRows = await Promise.all(
+    chunks.map((chunk) =>
+      exec
+        .insert(timeEntries)
+        .values(
+          chunk.map((entry) => ({
+            id: entry.id,
+            userId: entry.userId,
+            date: entry.date,
+            clientId: entry.clientId,
+            clientName: entry.clientName,
+            projectId: entry.projectId,
+            projectName: entry.projectName,
+            task: entry.task,
+            taskId: entry.taskId,
+            notes: entry.notes,
+            duration: numericForDb(entry.duration),
+            hourlyCost: numericForDb(entry.hourlyCost),
+            isPlaceholder: entry.isPlaceholder,
+            location: entry.location,
+          })),
+        )
+        .returning(),
+    ),
+  );
+  return chunkRows.flatMap((rows) => rows.map(mapBuilderRow));
 };
 
 export type EntryUpdate = {

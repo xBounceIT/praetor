@@ -61,7 +61,7 @@ export type ClientQuoteItem = {
 // mis-correlating. The outer table is always selected unaliased as "quotes" (listAll /
 // findCurrent / lockCurrentById), so the explicit reference is stable. See supplierQuotesRepo for
 // the same trap (it additionally ERRORED on a JOIN subquery). Do NOT replace with ${quotes.id}.
-const outerQuoteId = sql.raw('"quotes"."id"');
+const outerQuoteId = sql`${sql.identifier('quotes')}.${sql.identifier('id')}`;
 
 const linkedOfferIdSubquery = sql<string | null>`(
   SELECT co.id FROM customer_offers co WHERE co.linked_quote_id = ${outerQuoteId} LIMIT 1

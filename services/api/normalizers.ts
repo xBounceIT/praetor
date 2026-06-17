@@ -297,7 +297,7 @@ const normalizeResaleBillingFrequency = (value: unknown): ResaleActivity['billin
   return 'one_time';
 };
 
-export const normalizeResaleActivity = (activity: ResaleActivity): ResaleActivity => ({
+const normalizeResaleActivity = (activity: ResaleActivity): ResaleActivity => ({
   ...activity,
   billingFrequency: normalizeResaleBillingFrequency(activity.billingFrequency),
   cost: Number(activity.cost || 0),

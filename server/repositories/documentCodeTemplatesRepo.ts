@@ -26,11 +26,13 @@ const mapTemplate = (
   sequencePadding: row.sequencePadding,
 });
 
+const DOCUMENT_CODE_MODULE_ID_SET = new Set<string>(DOCUMENT_CODE_MODULE_IDS);
+
 export const list = async (exec: DbExecutor = db): Promise<DocumentCodeTemplateConfig[]> => {
   const rows = await exec.select().from(documentCodeTemplates);
   const byModule = new Map<DocumentCodeModuleId, StoredDocumentCodeTemplate>();
   for (const row of rows) {
-    if ((DOCUMENT_CODE_MODULE_IDS as readonly string[]).includes(row.moduleId)) {
+    if (DOCUMENT_CODE_MODULE_ID_SET.has(row.moduleId)) {
       const mapped = mapTemplate(row);
       byModule.set(mapped.moduleId, mapped);
     }

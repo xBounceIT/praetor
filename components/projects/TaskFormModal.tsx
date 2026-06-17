@@ -179,6 +179,12 @@ const taskFormReducer = (state: TaskFormState, action: TaskFormAction): TaskForm
   }
 };
 
+const parseFormNumber = (value: string, fallback = 0) => {
+  if (value.trim() === '') return fallback;
+  const parsed = Number.parseFloat(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+};
+
 type TaskFormModalSessionProps = Omit<TaskFormModalProps, 'editingTask'> & {
   editingTask: ProjectTask | null;
 };
@@ -290,6 +296,135 @@ const TaskFormFooter: React.FC<{
   );
 };
 
+const TaskBillingFields: React.FC<{
+  formState: TaskFormState;
+  currency: string;
+  dispatch: React.Dispatch<TaskFormAction>;
+}> = ({ formState, currency, dispatch }) => {
+  const { t, i18n } = useTranslation(['projects', 'common']);
+  const translatedBillingTypeOptions = useBillingTypeOptions();
+  const translatedBillingFrequencyOptions = useBillingFrequencyOptions();
+  const { billingType, billingFrequency, monthlyEffort, duration, revenue } = formState;
+  const totalEffort = parseFormNumber(monthlyEffort) * parseFormNumber(duration, 1);
+  const totalRevenue = parseFormNumber(revenue) * parseFormNumber(duration, 1);
+  const formatNumber = (value: number, minimumFractionDigits = 0) =>
+    value.toLocaleString(i18n.language, {
+      minimumFractionDigits,
+      maximumFractionDigits: 2,
+    });
+
+  return (
+    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <SelectControl
+        id="task-billing-type"
+        options={translatedBillingTypeOptions}
+        value={billingType}
+        onChange={(val) => {
+          const nextBillingType = val as StoredBillingType;
+          dispatch({ type: 'setBillingType', billingType: nextBillingType });
+        }}
+        label={t('projects:projects.billingType')}
+        searchable={false}
+        buttonClassName="h-9"
+      />
+      <SelectControl
+        id="task-billing-frequency"
+        options={translatedBillingFrequencyOptions}
+        value={billingFrequency}
+        onChange={(val) =>
+          dispatch({
+            type: 'setBillingFrequency',
+            billingFrequency: val as BillingFrequency,
+          })
+        }
+        label={t('projects:projects.billingFrequency')}
+        searchable={false}
+        buttonClassName="h-9"
+      />
+      <Field>
+        <FieldLabel htmlFor="task-monthly-effort">
+          {t('projects:projects.monthlyEffort')}
+        </FieldLabel>
+        <Input
+          id="task-monthly-effort"
+          type="number"
+          min="0"
+          step="1"
+          value={monthlyEffort}
+          onChange={(e) =>
+            dispatch({
+              type: 'setTextField',
+              field: 'monthlyEffort',
+              value: e.target.value,
+            })
+          }
+          placeholder="0"
+        />
+      </Field>
+      <Field>
+        <FieldLabel htmlFor="task-duration">{t('projects:projects.duration')}</FieldLabel>
+        <Input
+          id="task-duration"
+          type="number"
+          min="0"
+          step="any"
+          value={duration}
+          onKeyDown={(e) => {
+            if (['e', 'E', '+', '-'].includes(e.key)) e.preventDefault();
+          }}
+          onChange={(e) =>
+            dispatch({
+              type: 'setTextField',
+              field: 'duration',
+              value: e.target.value,
+            })
+          }
+          placeholder="1"
+        />
+      </Field>
+      <Field>
+        <FieldLabel htmlFor="task-expected-effort">
+          {t('projects:projects.expectedEffort')}
+        </FieldLabel>
+        <output
+          id="task-expected-effort"
+          className="flex h-9 w-full items-center rounded-md border border-input bg-muted/40 px-3 text-sm text-muted-foreground tabular-nums"
+        >
+          {formatNumber(totalEffort)}h
+        </output>
+      </Field>
+      <Field>
+        <FieldLabel htmlFor="task-revenue">
+          {`${t('projects:projects.taskRevenue')} (${currency})`}
+        </FieldLabel>
+        <Input
+          id="task-revenue"
+          type="number"
+          min="0"
+          step="0.01"
+          value={revenue}
+          onChange={(e) =>
+            dispatch({ type: 'setTextField', field: 'revenue', value: e.target.value })
+          }
+          placeholder="0.00"
+        />
+      </Field>
+      <Field>
+        <FieldLabel htmlFor="task-total-revenue">
+          {`${t('projects:projects.taskTotalRevenue')} (${currency})`}
+        </FieldLabel>
+        <output
+          id="task-total-revenue"
+          className="flex h-9 w-full items-center rounded-md border border-input bg-muted/40 px-3 text-sm text-muted-foreground tabular-nums"
+        >
+          {currency}
+          {formatNumber(totalRevenue, 2)}
+        </output>
+      </Field>
+    </div>
+  );
+};
+
 const TaskFormModalSession: React.FC<TaskFormModalSessionProps> = ({
   isOpen,
   onClose,
@@ -306,7 +441,7 @@ const TaskFormModalSession: React.FC<TaskFormModalSessionProps> = ({
   initialProjectId,
   projectLocked = false,
 }) => {
-  const { t, i18n } = useTranslation(['projects', 'common']);
+  const { t } = useTranslation(['projects', 'common']);
   const [formState, dispatch] = useReducer(taskFormReducer, undefined, () =>
     createTaskFormState(mode, editingTask, initialProjectId, projects),
   );
@@ -324,9 +459,6 @@ const TaskFormModalSession: React.FC<TaskFormModalSessionProps> = ({
     tempIsDisabled,
     isSubmitting,
   } = formState;
-
-  const translatedBillingTypeOptions = useBillingTypeOptions();
-  const translatedBillingFrequencyOptions = useBillingFrequencyOptions();
 
   const projectSelectOptions = useMemo(
     () => projects.map((p) => ({ id: p.id, name: p.name })),
@@ -381,18 +513,6 @@ const TaskFormModalSession: React.FC<TaskFormModalSessionProps> = ({
   const isClientDisabled = client?.isDisabled || false;
   const isInheritedDisabled = isProjectDisabled || isClientDisabled;
   const isCurrentlyDisabled = tempIsDisabled || isInheritedDisabled;
-  const parseFormNumber = (value: string, fallback = 0) => {
-    if (value.trim() === '') return fallback;
-    const parsed = Number.parseFloat(value);
-    return Number.isFinite(parsed) ? parsed : fallback;
-  };
-  const totalEffort = parseFormNumber(monthlyEffort) * parseFormNumber(duration, 1);
-  const totalRevenue = parseFormNumber(revenue) * parseFormNumber(duration, 1);
-  const formatNumber = (value: number, minimumFractionDigits = 0) =>
-    value.toLocaleString(i18n.language, {
-      minimumFractionDigits,
-      maximumFractionDigits: 2,
-    });
 
   return (
     <Modal isOpen={isOpen} onClose={requestClose}>
@@ -474,114 +594,7 @@ const TaskFormModalSession: React.FC<TaskFormModalSessionProps> = ({
                 />
               </Field>
 
-              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                <SelectControl
-                  id="task-billing-type"
-                  options={translatedBillingTypeOptions}
-                  value={billingType}
-                  onChange={(val) => {
-                    const nextBillingType = val as StoredBillingType;
-                    dispatch({ type: 'setBillingType', billingType: nextBillingType });
-                  }}
-                  label={t('projects:projects.billingType')}
-                  searchable={false}
-                  buttonClassName="h-9"
-                />
-                <SelectControl
-                  id="task-billing-frequency"
-                  options={translatedBillingFrequencyOptions}
-                  value={billingFrequency}
-                  onChange={(val) =>
-                    dispatch({
-                      type: 'setBillingFrequency',
-                      billingFrequency: val as BillingFrequency,
-                    })
-                  }
-                  label={t('projects:projects.billingFrequency')}
-                  searchable={false}
-                  buttonClassName="h-9"
-                />
-                <Field>
-                  <FieldLabel htmlFor="task-monthly-effort">
-                    {t('projects:projects.monthlyEffort')}
-                  </FieldLabel>
-                  <Input
-                    id="task-monthly-effort"
-                    type="number"
-                    min="0"
-                    step="1"
-                    value={monthlyEffort}
-                    onChange={(e) =>
-                      dispatch({
-                        type: 'setTextField',
-                        field: 'monthlyEffort',
-                        value: e.target.value,
-                      })
-                    }
-                    placeholder="0"
-                  />
-                </Field>
-                <Field>
-                  <FieldLabel htmlFor="task-duration">{t('projects:projects.duration')}</FieldLabel>
-                  <Input
-                    id="task-duration"
-                    type="number"
-                    min="0"
-                    step="any"
-                    value={duration}
-                    onKeyDown={(e) => {
-                      if (['e', 'E', '+', '-'].includes(e.key)) e.preventDefault();
-                    }}
-                    onChange={(e) =>
-                      dispatch({
-                        type: 'setTextField',
-                        field: 'duration',
-                        value: e.target.value,
-                      })
-                    }
-                    placeholder="1"
-                  />
-                </Field>
-                <Field>
-                  <FieldLabel htmlFor="task-expected-effort">
-                    {t('projects:projects.expectedEffort')}
-                  </FieldLabel>
-                  <output
-                    id="task-expected-effort"
-                    className="flex h-9 w-full items-center rounded-md border border-input bg-muted/40 px-3 text-sm text-muted-foreground tabular-nums"
-                  >
-                    {formatNumber(totalEffort)}h
-                  </output>
-                </Field>
-                <Field>
-                  <FieldLabel htmlFor="task-revenue">
-                    {`${t('projects:projects.taskRevenue')} (${currency})`}
-                  </FieldLabel>
-                  <Input
-                    id="task-revenue"
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={revenue}
-                    onChange={(e) =>
-                      dispatch({ type: 'setTextField', field: 'revenue', value: e.target.value })
-                    }
-                    placeholder="0.00"
-                  />
-                </Field>
-                <Field>
-                  <FieldLabel htmlFor="task-total-revenue">
-                    {`${t('projects:projects.taskTotalRevenue')} (${currency})`}
-                  </FieldLabel>
-                  <output
-                    id="task-total-revenue"
-                    className="flex h-9 w-full items-center rounded-md border border-input bg-muted/40 px-3 text-sm text-muted-foreground tabular-nums"
-                  >
-                    {currency}
-                    {formatNumber(totalRevenue, 2)}
-                  </output>
-                </Field>
-              </div>
+              <TaskBillingFields formState={formState} currency={currency} dispatch={dispatch} />
 
               <Field>
                 <FieldLabel htmlFor="task-notes">{t('projects:projects.taskNotes')}</FieldLabel>

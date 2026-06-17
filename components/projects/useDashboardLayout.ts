@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  type SetStateAction,
+  useCallback,
+  useEffect,
+  useMemo,
+  useReducer,
+  useRef,
+  useState,
+} from 'react';
 import { ApiError } from '../../services/api/client';
 import { type SavedViewDto, viewsApi } from '../../services/api/views';
 import {
@@ -43,6 +51,78 @@ const writeLS = (key: string, value: string | null): void => {
 const cloneLayout = (layout: DashboardLayout): DashboardLayout => layout.map((w) => ({ ...w }));
 
 const isForbidden = (err: unknown): boolean => err instanceof ApiError && err.status === 403;
+
+type DashboardViewLibraryState = {
+  dtos: SavedViewDto[];
+  loading: boolean;
+  error: boolean;
+  saving: boolean;
+};
+
+type DashboardViewLibraryAction =
+  | { type: 'load-start' }
+  | { type: 'load-success'; dtos: SavedViewDto[] }
+  | { type: 'load-empty' }
+  | { type: 'load-error' }
+  | { type: 'saving'; saving: boolean }
+  | { type: 'append'; dto: SavedViewDto }
+  | { type: 'remove'; id: string }
+  | { type: 'replace'; dto: SavedViewDto }
+  | { type: 'restore'; dtos: SavedViewDto[] };
+
+const dashboardViewLibraryReducer = (
+  state: DashboardViewLibraryState,
+  action: DashboardViewLibraryAction,
+): DashboardViewLibraryState => {
+  switch (action.type) {
+    case 'load-start':
+      return { ...state, loading: true, error: false };
+    case 'load-success':
+      return { ...state, dtos: action.dtos, loading: false, error: false };
+    case 'load-empty':
+      return { ...state, dtos: [], loading: false, error: false };
+    case 'load-error':
+      return { ...state, loading: false, error: true };
+    case 'saving':
+      return state.saving === action.saving ? state : { ...state, saving: action.saving };
+    case 'append':
+      return { ...state, dtos: [...state.dtos, action.dto] };
+    case 'remove':
+      return { ...state, dtos: state.dtos.filter((dto) => dto.id !== action.id) };
+    case 'replace':
+      return {
+        ...state,
+        dtos: state.dtos.map((dto) => (dto.id === action.dto.id ? action.dto : dto)),
+      };
+    case 'restore':
+      return { ...state, dtos: action.dtos };
+  }
+};
+
+const resolveStateAction = <Value>(value: SetStateAction<Value>, previous: Value): Value =>
+  typeof value === 'function' ? (value as (prev: Value) => Value)(previous) : value;
+
+type DashboardEditSessionState = { editing: false } | { editing: true; draft: DashboardLayout };
+
+type DashboardEditSessionAction =
+  | { type: 'start'; layout: DashboardLayout }
+  | { type: 'close' }
+  | { type: 'update-draft'; value: SetStateAction<DashboardLayout> };
+
+const dashboardEditSessionReducer = (
+  state: DashboardEditSessionState,
+  action: DashboardEditSessionAction,
+): DashboardEditSessionState => {
+  switch (action.type) {
+    case 'start':
+      return { editing: true, draft: action.layout };
+    case 'close':
+      return { editing: false };
+    case 'update-draft':
+      if (!state.editing) return state;
+      return { editing: true, draft: resolveStateAction(action.value, state.draft) };
+  }
+};
 
 // Map a server DTO (own + shared-with-me, merged server-side) onto the local
 // view shape, normalizing the raw author layout against the live widget set so
@@ -133,18 +213,39 @@ export const useDashboardLayout = (
   const [override, setOverride] = useState<DashboardLayout | null>(() =>
     parseStoredOverride(readLS(overrideKey), widgets),
   );
-  const [views, setViews] = useState<ServerDashboardView[]>([]);
-  const [viewsLoading, setViewsLoading] = useState(true);
-  const [viewsError, setViewsError] = useState(false);
-  const [savingView, setSavingView] = useState(false);
+  const [viewLibraryState, dispatchViewLibrary] = useReducer(dashboardViewLibraryReducer, {
+    dtos: [],
+    loading: true,
+    error: false,
+    saving: false,
+  });
   // The active-view id is per-project UI state and stays local. It is reconciled
   // against the loaded server views below: a dangling id (its view deleted by the
   // owner, or unshared from this user) drops to null so no inactive marker lingers.
-  const [activeViewId, setActiveViewId] = useState<string | null>(() => readLS(activeKey) || null);
-  const [editing, setEditing] = useState(false);
+  const [activeViewId, setActiveViewId] = useReducer(
+    (previous: string | null, value: SetStateAction<string | null>) =>
+      resolveStateAction(value, previous),
+    null,
+    () => readLS(activeKey) || null,
+  );
+  const [editSession, dispatchEditSession] = useReducer(dashboardEditSessionReducer, {
+    editing: false,
+  });
 
-  const effectiveLayout = useMemo(() => override ?? globalLayout, [override, globalLayout]);
-  const [draft, setDraft] = useState<DashboardLayout>(effectiveLayout);
+  const views = useMemo(
+    () => viewLibraryState.dtos.map((dto) => mapServerView(dto, widgets)),
+    [viewLibraryState.dtos, widgets],
+  );
+  const activeViewLayout = useMemo(
+    () => views.find((view) => view.id === activeViewId)?.layout ?? null,
+    [views, activeViewId],
+  );
+  const effectiveLayout = useMemo(
+    () => activeViewLayout ?? override ?? globalLayout,
+    [activeViewLayout, override, globalLayout],
+  );
+  const editing = editSession.editing;
+  const draft = editSession.editing ? editSession.draft : effectiveLayout;
 
   // Per-widget minimum sizes, looked up when committing a resize.
   const minSizes = useMemo(
@@ -163,11 +264,6 @@ export const useDashboardLayout = (
   // fetch dependencies (which would re-load the library on every render).
   const activeViewIdRef = useRef(activeViewId);
   activeViewIdRef.current = activeViewId;
-  const overrideRef = useRef(override);
-  overrideRef.current = override;
-  const editingRef = useRef(editing);
-  editingRef.current = editing;
-
   const persistGlobalLayout = useCallback(
     (next: DashboardLayout) => writeLS(globalLayoutKey, JSON.stringify(next)),
     [globalLayoutKey],
@@ -178,14 +274,11 @@ export const useDashboardLayout = (
   );
   const persistActiveView = useCallback((id: string | null) => writeLS(activeKey, id), [activeKey]);
 
-  // Reconcile the active marker AND its override against a freshly loaded library:
+  // Reconcile the active marker against a freshly loaded library:
   //  - active view gone (deleted / unshared elsewhere) → drop the marker; the override
   //    layout stays put as a now-custom layout.
-  //  - active view still present → re-apply its loaded layout so a re-save by the owner
-  //    or another write recipient propagates to viewers who already had it active. Without
-  //    this, the per-project override cloned at apply-time (and persisted to localStorage)
-  //    keeps showing the stale layout, so "re-save changes it for everyone" wouldn't hold.
-  // Skipped mid-edit so an in-progress draft isn't disturbed (it re-syncs on the next load).
+  //  - active view still present → no state copy is needed; `effectiveLayout`
+  //    resolves the current server layout directly from `views`.
   const reconcileAfterLoad = useCallback(
     (loaded: ServerDashboardView[]) => {
       const activeId = activeViewIdRef.current;
@@ -196,14 +289,8 @@ export const useDashboardLayout = (
         persistActiveView(null);
         return;
       }
-      if (editingRef.current) return;
-      const next = cloneLayout(active.layout);
-      if (!overrideRef.current || !layoutsEqual(overrideRef.current, next)) {
-        setOverride(next);
-        persistOverride(next);
-      }
     },
-    [persistActiveView, persistOverride],
+    [persistActiveView],
   );
 
   // One-time, best-effort migration of legacy localStorage dashboard views (the pre-server
@@ -291,13 +378,10 @@ export const useDashboardLayout = (
   const loadViews = useCallback(async () => {
     const seq = ++loadSeqRef.current;
     if (!currentUserId) {
-      setViews([]);
-      setViewsError(false);
-      setViewsLoading(false);
+      dispatchViewLibrary({ type: 'load-empty' });
       return;
     }
-    setViewsLoading(true);
-    setViewsError(false);
+    dispatchViewLibrary({ type: 'load-start' });
     try {
       let dtos = await viewsApi.list('dashboard', scopeKey);
       if (seq === loadSeqRef.current) {
@@ -313,16 +397,14 @@ export const useDashboardLayout = (
       }
       if (seq === loadSeqRef.current) {
         const mapped = dtos.map((dto) => mapServerView(dto, widgetsRef.current));
-        setViews(mapped);
+        dispatchViewLibrary({ type: 'load-success', dtos });
         reconcileAfterLoad(mapped);
       }
     } catch (err) {
       if (seq === loadSeqRef.current) {
         console.error('Failed to load dashboard views', err);
-        setViewsError(true);
+        dispatchViewLibrary({ type: 'load-error' });
       }
-    } finally {
-      if (seq === loadSeqRef.current) setViewsLoading(false);
     }
   }, [currentUserId, scopeKey, reconcileAfterLoad, migrateLegacyDashboardViews]);
 
@@ -350,17 +432,15 @@ export const useDashboardLayout = (
   );
 
   const startEditing = useCallback(() => {
-    setDraft(effectiveLayout);
-    setEditing(true);
+    dispatchEditSession({ type: 'start', layout: effectiveLayout });
   }, [effectiveLayout]);
 
   const cancelEditing = useCallback(() => {
-    setEditing(false);
-    setDraft(effectiveLayout);
-  }, [effectiveLayout]);
+    dispatchEditSession({ type: 'close' });
+  }, []);
 
   const doneEditing = useCallback(() => {
-    setEditing(false);
+    dispatchEditSession({ type: 'close' });
     // Applying an edited draft makes this project's layout custom (an override).
     // Keep the active view only if the draft still matches it exactly.
     const active = activeViewId ? views.find((v) => v.id === activeViewId) : undefined;
@@ -369,19 +449,28 @@ export const useDashboardLayout = (
   }, [draft, activeViewId, views, applyOverride]);
 
   const moveWidget = useCallback((id: string, x: number, y: number) => {
-    setDraft((prev) => moveWidgetTo(prev, id, x, y));
+    dispatchEditSession({
+      type: 'update-draft',
+      value: (prev) => moveWidgetTo(prev, id, x, y),
+    });
   }, []);
 
   const resizeWidget = useCallback(
     (id: string, w: number, h: number) => {
       const min = minSizes.get(id);
-      setDraft((prev) => resizeWidgetTo(prev, id, w, h, min?.minW ?? 1, min?.minH ?? 1));
+      dispatchEditSession({
+        type: 'update-draft',
+        value: (prev) => resizeWidgetTo(prev, id, w, h, min?.minW ?? 1, min?.minH ?? 1),
+      });
     },
     [minSizes],
   );
 
   const toggleHidden = useCallback((id: string) => {
-    setDraft((prev) => toggleWidgetHidden(prev, id));
+    dispatchEditSession({
+      type: 'update-draft',
+      value: (prev) => toggleWidgetHidden(prev, id),
+    });
   }, []);
 
   // Persist the current (draft or effective) layout as a NEW server view. Async:
@@ -393,7 +482,7 @@ export const useDashboardLayout = (
       const trimmed = name.trim();
       if (!trimmed) return false;
       const snapshot = cloneLayout(editing ? draft : effectiveLayout);
-      setSavingView(true);
+      dispatchViewLibrary({ type: 'saving', saving: true });
       try {
         const dto = await viewsApi.create({
           kind: 'dashboard',
@@ -402,8 +491,8 @@ export const useDashboardLayout = (
           config: { layout: snapshot },
         });
         const view = mapServerView(dto, widgetsRef.current);
-        setViews((prev) => [...prev, view]);
-        setEditing(false);
+        dispatchViewLibrary({ type: 'append', dto });
+        dispatchEditSession({ type: 'close' });
         // Saving a view also pins this project to it (as an override).
         applyOverride(cloneLayout(view.layout), view.id);
         return true;
@@ -411,7 +500,7 @@ export const useDashboardLayout = (
         console.error('Failed to save dashboard view', err);
         return false;
       } finally {
-        setSavingView(false);
+        dispatchViewLibrary({ type: 'saving', saving: false });
       }
     },
     [editing, draft, effectiveLayout, scopeKey, applyOverride],
@@ -424,7 +513,7 @@ export const useDashboardLayout = (
     (viewId: string) => {
       const view = views.find((v) => v.id === viewId);
       if (!view) return;
-      setEditing(false);
+      dispatchEditSession({ type: 'close' });
       applyOverride(parseServerViewConfig({ layout: view.layout }, widgetsRef.current), view.id);
     },
     [views, applyOverride],
@@ -435,10 +524,10 @@ export const useDashboardLayout = (
   // Errors are handled internally (callers fire-and-forget), so this never rejects.
   const deleteView = useCallback(
     async (viewId: string): Promise<void> => {
-      const previous = views;
+      const previous = viewLibraryState.dtos;
       const target = previous.find((v) => v.id === viewId);
       if (!target) return;
-      setViews((prev) => prev.filter((v) => v.id !== viewId));
+      dispatchViewLibrary({ type: 'remove', id: viewId });
       if (activeViewId === viewId) {
         setActiveViewId(null);
         persistActiveView(null);
@@ -451,7 +540,7 @@ export const useDashboardLayout = (
           reloadViews();
         } else {
           // Roll back to the pre-delete library (and restore the active marker).
-          setViews(previous);
+          dispatchViewLibrary({ type: 'restore', dtos: previous });
           if (activeViewId === viewId) {
             setActiveViewId(viewId);
             persistActiveView(viewId);
@@ -459,7 +548,7 @@ export const useDashboardLayout = (
         }
       }
     },
-    [views, activeViewId, persistActiveView, reloadViews],
+    [viewLibraryState.dtos, activeViewId, persistActiveView, reloadViews],
   );
 
   // Owner or write. Optimistic name swap + rollback. 403 → reloadViews.
@@ -467,21 +556,22 @@ export const useDashboardLayout = (
     async (viewId: string, name: string): Promise<boolean> => {
       const trimmed = name.trim();
       if (!trimmed) return false;
-      const previous = views;
+      const previous = viewLibraryState.dtos;
       const target = previous.find((v) => v.id === viewId);
       if (!target) return false;
-      setViews((prev) => prev.map((v) => (v.id === viewId ? { ...v, name: trimmed } : v)));
+      dispatchViewLibrary({ type: 'replace', dto: { ...target, name: trimmed } });
       try {
-        await viewsApi.update(viewId, { name: trimmed });
+        const dto = await viewsApi.update(viewId, { name: trimmed });
+        dispatchViewLibrary({ type: 'replace', dto });
         return true;
       } catch (err) {
         console.error('Failed to rename dashboard view', err);
         if (isForbidden(err)) reloadViews();
-        else setViews(previous);
+        else dispatchViewLibrary({ type: 'restore', dtos: previous });
         return false;
       }
     },
-    [views, reloadViews],
+    [viewLibraryState.dtos, reloadViews],
   );
 
   // Owner or write — overwrite the view's stored layout with the current (draft
@@ -498,13 +588,11 @@ export const useDashboardLayout = (
       const visibleIds = new Set(widgetsRef.current.map((w) => w.id));
       const merged = [...snapshot, ...target.rawLayout.filter((w) => !visibleIds.has(w.id))];
       try {
-        await viewsApi.update(viewId, { config: { layout: merged } });
+        const dto = await viewsApi.update(viewId, { config: { layout: merged } });
         // Commit only after the server confirms, so a failed save never leaves the
         // library, the editing flag, and the override in a half-applied state.
-        setViews((prev) =>
-          prev.map((v) => (v.id === viewId ? { ...v, layout: snapshot, rawLayout: merged } : v)),
-        );
-        setEditing(false);
+        dispatchViewLibrary({ type: 'replace', dto });
+        dispatchEditSession({ type: 'close' });
         applyOverride(cloneLayout(snapshot), viewId);
         return true;
       } catch (err) {
@@ -528,7 +616,7 @@ export const useDashboardLayout = (
       // Copy the author's raw layout (not this viewer's permission-filtered one) so the duplicate
       // is a faithful copy that keeps cards the duplicator can't render.
       const snapshot = cloneLayout(source.rawLayout.length > 0 ? source.rawLayout : source.layout);
-      setSavingView(true);
+      dispatchViewLibrary({ type: 'saving', saving: true });
       try {
         const dto = await viewsApi.create({
           kind: 'dashboard',
@@ -537,15 +625,15 @@ export const useDashboardLayout = (
           config: { layout: snapshot },
         });
         const view = mapServerView(dto, widgetsRef.current);
-        setViews((prev) => [...prev, view]);
-        setEditing(false);
+        dispatchViewLibrary({ type: 'append', dto });
+        dispatchEditSession({ type: 'close' });
         applyOverride(cloneLayout(view.layout), view.id);
         return true;
       } catch (err) {
         console.error('Failed to duplicate dashboard view', err);
         return false;
       } finally {
-        setSavingView(false);
+        dispatchViewLibrary({ type: 'saving', saving: false });
       }
     },
     [views, scopeKey, applyOverride],
@@ -553,27 +641,25 @@ export const useDashboardLayout = (
 
   // Drop this project's override so it follows the shared global default again.
   const followGlobalDefault = useCallback(() => {
-    setEditing(false);
+    dispatchEditSession({ type: 'close' });
     setOverride(null);
     persistOverride(null);
     setActiveViewId(null);
     persistActiveView(null);
-    setDraft(globalLayout);
-  }, [globalLayout, persistOverride, persistActiveView]);
+  }, [persistOverride, persistActiveView]);
 
   // Promote the current layout to the shared global default (affecting every
   // project that has no override of its own), then drop this project's override
   // so it follows that new default.
   const setAsGlobalDefault = useCallback(() => {
     const promoted = cloneLayout(editing ? draft : effectiveLayout);
-    setEditing(false);
+    dispatchEditSession({ type: 'close' });
     setGlobalLayout(promoted);
     persistGlobalLayout(promoted);
     setOverride(null);
     persistOverride(null);
     setActiveViewId(null);
     persistActiveView(null);
-    setDraft(promoted);
   }, [editing, draft, effectiveLayout, persistGlobalLayout, persistOverride, persistActiveView]);
 
   return {
@@ -581,9 +667,9 @@ export const useDashboardLayout = (
     editing,
     views,
     activeViewId,
-    viewsLoading,
-    viewsError,
-    savingView,
+    viewsLoading: viewLibraryState.loading,
+    viewsError: viewLibraryState.error,
+    savingView: viewLibraryState.saving,
     reloadViews,
     followingGlobal: override === null,
     startEditing,

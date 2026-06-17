@@ -241,7 +241,7 @@ export interface SupplierOrdersViewProps {
   orderFilterId?: string | null;
 }
 
-const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
+const useSupplierOrdersController = ({
   orders,
   suppliers,
   products,
@@ -254,7 +254,7 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
   currency,
   quoteFilterId,
   orderFilterId,
-}) => {
+}: SupplierOrdersViewProps) => {
   const { t, i18n } = useTranslation(['accounting', 'sales', 'common', 'crm']);
   const paymentTermsOptions = useMemo(() => getPaymentTermsOptions(t), [t]);
   const activeSuppliers = useMemo(
@@ -286,6 +286,14 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
 
   const baseReadOnly = Boolean(editingOrder && editingOrder.status !== 'draft');
   const isReadOnly = baseReadOnly || previewVersion !== null;
+
+  const patchForm = useCallback((patch: Partial<SupplierSaleOrder>) => {
+    dispatch({ type: 'patchForm', patch });
+  }, []);
+
+  const closeDeleteConfirm = useCallback(() => {
+    dispatch({ type: 'deleteSuccess' });
+  }, []);
 
   const openEditModal = useCallback((order: SupplierSaleOrder) => {
     dispatch({ type: 'openEdit', order });
@@ -663,546 +671,676 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = ({
     ],
   );
 
-  return (
-    <div className="space-y-8 animate-in fade-in duration-500">
-      <Modal isOpen={isModalOpen} onClose={closeEditModal}>
-        <div className="flex max-w-[calc(100vw-2rem)] items-start gap-4">
-          <ModalContent size="full" className="max-h-[90vh]">
-            <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
-              <ModalHeader>
-                <ModalTitle className="gap-3">
-                  <span className="flex size-10 items-center justify-center rounded-md bg-muted text-primary">
-                    <i
-                      className={`fa-solid ${isReadOnly ? 'fa-eye' : 'fa-pen-to-square'}`}
-                      aria-hidden="true"
-                    ></i>
-                  </span>
-                  {t('accounting:supplierOrders.editOrder')}
-                </ModalTitle>
-                <ModalCloseButton onClick={closeEditModal} />
-              </ModalHeader>
+  return {
+    baseReadOnly,
+    closeDeleteConfirm,
+    closeEditModal,
+    columns,
+    currency,
+    editingOrder,
+    filteredOrders,
+    formData,
+    handleClearPreview,
+    handleDelete,
+    handleDurationUnitChange,
+    handleDurationValueChange,
+    handleSubmit,
+    handleVersionPreview,
+    handleVersionRestored,
+    i18n,
+    isDeleteConfirmOpen,
+    isModalOpen,
+    isReadOnly,
+    onViewQuote,
+    openEditModal,
+    orderToDelete,
+    patchForm,
+    paymentTermsOptions,
+    previewVersion,
+    productOptions,
+    removeItem,
+    supplierOptions,
+    suppliers,
+    t,
+    tableInitialFilterState,
+    totals,
+    updateItem,
+  };
+};
 
-              <ModalBody className="flex-1 space-y-5">
-                {previewVersion && (
-                  <div className="flex items-center justify-between gap-3 rounded-md border border-amber-500/30 bg-amber-500/10 px-4 py-3">
-                    <span className="flex items-center gap-2 text-xs font-medium text-amber-700 dark:text-amber-300">
-                      <i className="fa-solid fa-clock-rotate-left" aria-hidden="true"></i>
-                      {t('accounting:supplierOrders.versionHistory.previewBanner', {
-                        date: formatInsertDateTime(previewVersion.createdAt, i18n.language),
-                      })}
-                    </span>
-                    <Button
-                      type="button"
-                      variant="link"
-                      size="sm"
-                      onClick={handleClearPreview}
-                      className="h-auto px-0 text-amber-700 dark:text-amber-300"
-                    >
-                      {t('accounting:supplierOrders.versionHistory.backToCurrent')}
-                    </Button>
-                  </div>
-                )}
-                {baseReadOnly && (
-                  <div className="flex items-center gap-3 rounded-md border border-amber-500/30 bg-amber-500/10 px-4 py-3">
-                    <span className="text-xs font-medium text-amber-700 dark:text-amber-300">
-                      {t('accounting:supplierOrders.readOnlyStatus')}
-                    </span>
-                  </div>
-                )}
+type SupplierOrdersController = ReturnType<typeof useSupplierOrdersController>;
 
-                {/* Linked Quote Info */}
-                {formData.linkedQuoteId && (
-                  <LinkedRecordBanner
-                    label={t('accounting:supplierOrders.linkedQuote')}
-                    value={t('accounting:supplierOrders.linkedQuoteInfo', {
-                      number: formData.linkedQuoteId,
-                    })}
-                    note={t('accounting:supplierOrders.quoteDetailsReadOnly')}
-                    action={
-                      onViewQuote
-                        ? {
-                            label: t('accounting:supplierOrders.viewQuote'),
-                            onClick: () => {
-                              const linkedQuoteId = formData.linkedQuoteId;
-                              if (!linkedQuoteId) return;
-                              onViewQuote(linkedQuoteId);
-                            },
-                          }
-                        : undefined
-                    }
-                  />
-                )}
+const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = (props) => {
+  const controller = useSupplierOrdersController(props);
+  return <SupplierOrdersLayout controller={controller} />;
+};
 
-                <div className="space-y-2">
-                  <h4 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-primary">
-                    <span className="size-1.5 rounded-full bg-primary"></span>
-                    {t('accounting:supplierOrders.orderDetails')}
-                  </h4>
-                  <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
-                    <Field>
-                      <SelectControl
-                        id="supplier-order-supplier"
-                        options={supplierOptions}
-                        value={formData.supplierId || ''}
-                        onChange={(value) => {
-                          const supplier = suppliers.find((item) => item.id === value);
-                          dispatch({
-                            type: 'patchForm',
-                            patch: {
-                              supplierId: value as string,
-                              supplierName: supplier?.name || '',
-                            },
-                          });
-                        }}
-                        searchable={true}
-                        disabled={isReadOnly}
-                        label={t('accounting:supplierOrders.supplier')}
-                        buttonClassName="h-9"
-                      />
-                    </Field>
-                    <Field>
-                      <FieldLabel>{t('accounting:supplierOrders.orderNumber')}</FieldLabel>
-                      <div className="flex h-9 items-center rounded-md border border-border bg-muted/30 px-3 text-sm font-medium text-foreground">
-                        {editingOrder?.id || '-'}
-                      </div>
-                    </Field>
-                    <Field>
-                      <SelectControl
-                        id="supplier-order-payment-terms"
-                        options={paymentTermsOptions}
-                        value={formData.paymentTerms || 'immediate'}
-                        onChange={(value) =>
-                          dispatch({
-                            type: 'patchForm',
-                            patch: { paymentTerms: value as SupplierSaleOrder['paymentTerms'] },
-                          })
-                        }
-                        searchable={false}
-                        disabled={isReadOnly}
-                        label={t('accounting:supplierOrders.paymentTerms')}
-                        buttonClassName="h-9"
-                      />
-                    </Field>
-                  </div>
-                </div>
+const SupplierOrdersLayout: React.FC<{ controller: SupplierOrdersController }> = ({
+  controller,
+}) => (
+  <div className="space-y-8">
+    <SupplierOrderModal controller={controller} />
+    <SupplierOrderDeleteDialog controller={controller} />
+    <SupplierOrdersHeader controller={controller} />
+    <StandardTable<SupplierSaleOrder>
+      title={controller.t('accounting:supplierOrders.title')}
+      data={controller.filteredOrders}
+      columns={controller.columns}
+      initialFilterState={controller.tableInitialFilterState}
+      defaultRowsPerPage={10}
+      containerClassName="overflow-visible"
+      rowClassName={(row: SupplierSaleOrder) =>
+        row.status === 'sent' ? 'bg-muted text-muted-foreground' : 'hover:bg-muted/50'
+      }
+      onRowClick={(row: SupplierSaleOrder) => controller.openEditModal(row)}
+    />
+  </div>
+);
 
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <h4 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-primary">
-                      <span className="size-1.5 rounded-full bg-primary"></span>
-                      {t('accounting:supplierOrders.items')}
-                    </h4>
-                  </div>
-
-                  {(formData.items || []).length > 0 && (
-                    <div className="mb-1 hidden items-center gap-2 px-3 lg:flex">
-                      <div className="grid flex-1 grid-cols-12 gap-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                        <div className="col-span-2 ml-1">{t('crm:quotes.productsServices')}</div>
-                        <div className="col-span-1">{t('common:labels.quantity')}</div>
-                        <div className="col-span-2">
-                          {t('crm:internalListing.salePrice')} ({currency})
-                        </div>
-                        <div className="col-span-1">{t('accounting:supplierOrders.discount')}</div>
-                        <div className="col-span-2">
-                          {t('accounting:supplierOrders.durationColumn', {
-                            defaultValue: 'Duration',
-                          })}
-                        </div>
-                        <div className="col-span-2">{t('accounting:supplierOrders.notes')}</div>
-                        <div className="col-span-2 pr-2 text-right">{t('common:labels.total')}</div>
-                      </div>
-                      <div className="w-8 shrink-0"></div>
-                    </div>
-                  )}
-
-                  {(formData.items || []).length > 0 ? (
-                    <div className="space-y-3">
-                      {formData.items?.map((item, index) => {
-                        // Duration multiplies the line total alongside quantity (issue #776).
-                        const durationMonths = getEffectiveDurationMonths(item);
-                        const durationUnit = normalizeDurationUnit(item.durationUnit);
-                        const durationValue = getDurationDisplayValue(item);
-                        const lineSubtotal =
-                          Number(item.quantity ?? 0) * Number(item.unitPrice ?? 0) * durationMonths;
-                        const lineDiscount = (lineSubtotal * Number(item.discount ?? 0)) / 100;
-                        const lineTotal = lineSubtotal - lineDiscount;
-
-                        return (
-                          <div
-                            key={item.id}
-                            className="space-y-3 rounded-md border border-border bg-muted/30 p-3"
-                          >
-                            <div className="lg:hidden space-y-2">
-                              <SelectControl
-                                options={productOptions}
-                                value={item.productId}
-                                onChange={(value) =>
-                                  updateItem(index, 'productId', value as string)
-                                }
-                                searchable={true}
-                                disabled={isReadOnly}
-                                buttonClassName="h-9"
-                              />
-                              <div className="grid grid-cols-2 gap-2">
-                                <div className="space-y-1">
-                                  <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                                    {t('common:labels.quantity')}
-                                  </FieldLabel>
-                                  <ValidatedNumberInput
-                                    value={item.quantity}
-                                    disabled={isReadOnly}
-                                    onValueChange={(value) =>
-                                      updateItem(
-                                        index,
-                                        'quantity',
-                                        value === '' ? 0 : Number(value),
-                                      )
-                                    }
-                                    className="text-center"
-                                  />
-                                </div>
-                                <div className="space-y-1">
-                                  <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                                    {t('crm:internalListing.salePrice')}
-                                  </FieldLabel>
-                                  <ValidatedNumberInput
-                                    value={item.unitPrice}
-                                    formatDecimals={2}
-                                    disabled={isReadOnly}
-                                    onValueChange={(value) =>
-                                      updateItem(
-                                        index,
-                                        'unitPrice',
-                                        value === '' ? 0 : Number(value),
-                                      )
-                                    }
-                                    className="text-center"
-                                  />
-                                </div>
-                                <div className="space-y-1">
-                                  <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                                    {t('accounting:supplierOrders.discount')}
-                                  </FieldLabel>
-                                  <ValidatedNumberInput
-                                    value={item.discount || 0}
-                                    formatDecimals={2}
-                                    disabled={isReadOnly}
-                                    onValueChange={(value) =>
-                                      updateItem(
-                                        index,
-                                        'discount',
-                                        value === '' ? 0 : Number(value),
-                                      )
-                                    }
-                                    className="text-center"
-                                  />
-                                </div>
-                                <div className="space-y-1">
-                                  <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                                    {t('accounting:supplierOrders.durationColumn', {
-                                      defaultValue: 'Duration',
-                                    })}
-                                  </FieldLabel>
-                                  <div className="flex items-center gap-1">
-                                    <ValidatedNumberInput
-                                      step="1"
-                                      min="1"
-                                      placeholder={t('accounting:supplierOrders.durationColumn', {
-                                        defaultValue: 'Duration',
-                                      })}
-                                      value={durationValue}
-                                      disabled={isReadOnly || durationUnit === 'na'}
-                                      onValueChange={(value) =>
-                                        handleDurationValueChange(index, value)
-                                      }
-                                      className="text-center"
-                                    />
-                                    <span className="shrink-0 text-xs font-semibold text-muted-foreground">
-                                      /
-                                    </span>
-                                    <DurationUnitSelector
-                                      value={durationUnit}
-                                      onChange={(val) => handleDurationUnitChange(index, val)}
-                                      count={durationValue}
-                                      disabled={isReadOnly}
-                                      i18nPrefix="accounting:supplierOrders"
-                                    />
-                                  </div>
-                                </div>
-                                <div className="space-y-1">
-                                  <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                                    {t('common:labels.total')}
-                                  </FieldLabel>
-                                  <div className="flex items-center justify-end whitespace-nowrap px-3 py-2 text-sm font-semibold text-foreground">
-                                    {lineTotal.toFixed(2)} {currency}
-                                  </div>
-                                </div>
-                              </div>
-                              <Input
-                                type="text"
-                                value={item.note || ''}
-                                disabled={isReadOnly}
-                                placeholder={t('accounting:supplierOrders.notes')}
-                                onChange={(event) => updateItem(index, 'note', event.target.value)}
-                              />
-                              <div className="flex justify-end">
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="icon-sm"
-                                  onClick={() => removeItem(index)}
-                                  disabled={isReadOnly}
-                                  className="text-muted-foreground hover:text-destructive"
-                                >
-                                  <i className="fa-solid fa-trash-can" aria-hidden="true"></i>
-                                  <span className="sr-only">{t('common:buttons.delete')}</span>
-                                </Button>
-                              </div>
-                            </div>
-                            <div className="hidden lg:flex items-start gap-2">
-                              <div className="grid flex-1 grid-cols-12 gap-2">
-                                <div className="lg:col-span-2 min-w-0">
-                                  <SelectControl
-                                    options={productOptions}
-                                    value={item.productId}
-                                    onChange={(value) =>
-                                      updateItem(index, 'productId', value as string)
-                                    }
-                                    searchable={true}
-                                    disabled={isReadOnly}
-                                    buttonClassName="h-9"
-                                  />
-                                </div>
-                                <div className="lg:col-span-1">
-                                  <ValidatedNumberInput
-                                    value={item.quantity}
-                                    disabled={isReadOnly}
-                                    onValueChange={(value) =>
-                                      updateItem(
-                                        index,
-                                        'quantity',
-                                        value === '' ? 0 : Number(value),
-                                      )
-                                    }
-                                    className="font-medium"
-                                  />
-                                </div>
-                                <div className="lg:col-span-2">
-                                  <ValidatedNumberInput
-                                    value={item.unitPrice}
-                                    formatDecimals={2}
-                                    disabled={isReadOnly}
-                                    onValueChange={(value) =>
-                                      updateItem(
-                                        index,
-                                        'unitPrice',
-                                        value === '' ? 0 : Number(value),
-                                      )
-                                    }
-                                    className="font-medium"
-                                  />
-                                </div>
-                                <div className="lg:col-span-1">
-                                  <ValidatedNumberInput
-                                    value={item.discount || 0}
-                                    formatDecimals={2}
-                                    disabled={isReadOnly}
-                                    onValueChange={(value) =>
-                                      updateItem(
-                                        index,
-                                        'discount',
-                                        value === '' ? 0 : Number(value),
-                                      )
-                                    }
-                                    className="font-medium"
-                                  />
-                                </div>
-                                <div className="lg:col-span-2 flex items-center gap-1">
-                                  <ValidatedNumberInput
-                                    step="1"
-                                    min="1"
-                                    placeholder={t('accounting:supplierOrders.durationColumn', {
-                                      defaultValue: 'Duration',
-                                    })}
-                                    value={durationValue}
-                                    disabled={isReadOnly || durationUnit === 'na'}
-                                    onValueChange={(value) =>
-                                      handleDurationValueChange(index, value)
-                                    }
-                                    className="font-medium"
-                                  />
-                                  <span className="shrink-0 text-xs font-semibold text-muted-foreground">
-                                    /
-                                  </span>
-                                  <DurationUnitSelector
-                                    value={durationUnit}
-                                    onChange={(val) => handleDurationUnitChange(index, val)}
-                                    count={durationValue}
-                                    disabled={isReadOnly}
-                                    i18nPrefix="accounting:supplierOrders"
-                                  />
-                                </div>
-                                <div className="lg:col-span-2">
-                                  <Input
-                                    type="text"
-                                    value={item.note || ''}
-                                    disabled={isReadOnly}
-                                    onChange={(event) =>
-                                      updateItem(index, 'note', event.target.value)
-                                    }
-                                  />
-                                </div>
-                                <div className="flex items-center justify-end whitespace-nowrap px-3 py-2 text-sm font-semibold text-foreground lg:col-span-2">
-                                  {lineTotal.toFixed(2)} {currency}
-                                </div>
-                              </div>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon-sm"
-                                onClick={() => removeItem(index)}
-                                disabled={isReadOnly}
-                                className="shrink-0 text-muted-foreground hover:text-destructive"
-                              >
-                                <i className="fa-solid fa-trash-can" aria-hidden="true"></i>
-                                <span className="sr-only">{t('common:buttons.delete')}</span>
-                              </Button>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <div className="rounded-md border border-dashed border-border py-8 text-center text-sm text-muted-foreground">
-                      {t('accounting:supplierOrders.noItemsAdded')}
-                    </div>
-                  )}
-                </div>
-
-                <div className="flex flex-col gap-4 border-t border-border pt-4 md:flex-row">
-                  <Field className="md:w-2/3">
-                    <h4 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-primary">
-                      <span className="size-1.5 rounded-full bg-primary"></span>
-                      {t('accounting:supplierOrders.notes')}
-                    </h4>
-                    <FieldLabel htmlFor="supplier-order-notes" className="sr-only">
-                      {t('accounting:supplierOrders.notes')}
-                    </FieldLabel>
-                    <Textarea
-                      id="supplier-order-notes"
-                      rows={4}
-                      value={formData.notes || ''}
-                      disabled={isReadOnly}
-                      onChange={(event) =>
-                        dispatch({ type: 'patchForm', patch: { notes: event.target.value } })
-                      }
-                      className="min-h-28 resize-none"
-                    />
-                  </Field>
-
-                  <div className="space-y-2 md:w-1/3">
-                    <h4 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-primary">
-                      <span className="size-1.5 rounded-full bg-primary"></span>
-                      {t('accounting:supplierOrders.summary', { defaultValue: 'Summary' })}
-                    </h4>
-                    <CostSummaryPanel
-                      currency={currency}
-                      subtotal={totals.subtotal}
-                      total={totals.total}
-                      subtotalLabel={t('accounting:supplierOrders.subtotal')}
-                      totalLabel={t('accounting:supplierOrders.total')}
-                      globalDiscount={{
-                        label: t('accounting:supplierOrders.discount'),
-                        value: formData.discount || 0,
-                        type: formData.discountType || 'percentage',
-                        onChange: (value) =>
-                          dispatch({
-                            type: 'patchForm',
-                            patch: { discount: value === '' ? 0 : Number(value) },
-                          }),
-                        onTypeChange: (type) =>
-                          dispatch({ type: 'patchForm', patch: { discountType: type } }),
-                        disabled: isReadOnly,
-                      }}
-                      discountRow={
-                        totals.discountAmount > 0
-                          ? {
-                              label: t('sales:clientOffers.discountAmount', {
-                                value: formatDiscountValue(
-                                  formData.discount ?? 0,
-                                  formData.discountType ?? 'percentage',
-                                  currency,
-                                ),
-                              }),
-                              amount: totals.discountAmount,
-                            }
-                          : undefined
-                      }
-                    />
-                  </div>
-                </div>
-              </ModalBody>
-
-              <ModalFooter>
-                <Button type="button" variant="outline" onClick={closeEditModal}>
-                  {t('common:buttons.cancel')}
-                </Button>
-                {!isReadOnly && <Button type="submit">{t('common:buttons.update')}</Button>}
-              </ModalFooter>
-            </form>
-          </ModalContent>
-          {editingOrder?.id && (
-            <SupplierOrderVersionsPanel
-              orderId={editingOrder.id}
-              selectedVersionId={previewVersion?.id ?? null}
-              onPreview={handleVersionPreview}
-              onClearPreview={handleClearPreview}
-              onRestored={handleVersionRestored}
-              disabled={baseReadOnly}
-            />
-          )}
-        </div>
-      </Modal>
-
-      <DeleteConfirmModal
-        isOpen={isDeleteConfirmOpen}
-        onClose={() => dispatch({ type: 'deleteSuccess' })}
-        onConfirm={() => {
-          void handleDelete();
-        }}
-        title={t('accounting:supplierOrders.deleteTitle')}
-        description={`${orderToDelete?.supplierName ?? ''} · ${
-          orderToDelete?.linkedQuoteId || orderToDelete?.id || ''
-        }`}
-      />
-
-      <div className="space-y-4">
-        <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
-          <div>
-            <h2 className="text-2xl font-semibold text-foreground">
-              {t('accounting:supplierOrders.title')}
-            </h2>
-            <p className="text-sm text-muted-foreground">
-              {t('accounting:supplierOrders.subtitle')}
-            </p>
-          </div>
-        </div>
+const SupplierOrdersHeader: React.FC<{ controller: SupplierOrdersController }> = ({
+  controller,
+}) => (
+  <div className="space-y-4">
+    <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
+      <div>
+        <h2 className="text-2xl font-semibold text-foreground">
+          {controller.t('accounting:supplierOrders.title')}
+        </h2>
+        <p className="text-sm text-muted-foreground">
+          {controller.t('accounting:supplierOrders.subtitle')}
+        </p>
       </div>
+    </div>
+  </div>
+);
 
-      <StandardTable<SupplierSaleOrder>
-        title={t('accounting:supplierOrders.title')}
-        data={filteredOrders}
-        columns={columns}
-        initialFilterState={tableInitialFilterState}
-        defaultRowsPerPage={10}
-        containerClassName="overflow-visible"
-        rowClassName={(row: SupplierSaleOrder) =>
-          row.status === 'sent' ? 'bg-muted text-muted-foreground' : 'hover:bg-muted/50'
+const SupplierOrderModal: React.FC<{ controller: SupplierOrdersController }> = ({ controller }) => (
+  <Modal isOpen={controller.isModalOpen} onClose={controller.closeEditModal}>
+    <div className="flex max-w-[calc(100vw-2rem)] items-start gap-4">
+      <ModalContent size="full" className="max-h-[90vh]">
+        <form onSubmit={controller.handleSubmit} className="flex min-h-0 flex-1 flex-col">
+          <ModalHeader>
+            <ModalTitle className="gap-3">
+              <span className="flex size-10 items-center justify-center rounded-md bg-muted text-primary">
+                <i
+                  className={`fa-solid ${controller.isReadOnly ? 'fa-eye' : 'fa-pen-to-square'}`}
+                  aria-hidden="true"
+                ></i>
+              </span>
+              {controller.t('accounting:supplierOrders.editOrder')}
+            </ModalTitle>
+            <ModalCloseButton onClick={controller.closeEditModal} />
+          </ModalHeader>
+          <ModalBody className="flex-1 space-y-5">
+            <SupplierOrderModalAlerts controller={controller} />
+            <SupplierOrderDetailsSection controller={controller} />
+            <SupplierOrderItemsSection controller={controller} />
+            <SupplierOrderNotesSummarySection controller={controller} />
+          </ModalBody>
+          <ModalFooter>
+            <Button type="button" variant="outline" onClick={controller.closeEditModal}>
+              {controller.t('common:buttons.cancel')}
+            </Button>
+            {!controller.isReadOnly && (
+              <Button type="submit">{controller.t('common:buttons.update')}</Button>
+            )}
+          </ModalFooter>
+        </form>
+      </ModalContent>
+      {controller.editingOrder?.id && (
+        <SupplierOrderVersionsPanel
+          orderId={controller.editingOrder.id}
+          selectedVersionId={controller.previewVersion?.id ?? null}
+          onPreview={controller.handleVersionPreview}
+          onClearPreview={controller.handleClearPreview}
+          onRestored={controller.handleVersionRestored}
+          disabled={controller.baseReadOnly}
+        />
+      )}
+    </div>
+  </Modal>
+);
+
+const SupplierOrderSectionTitle: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+  <h4 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-primary">
+    <span className="size-1.5 rounded-full bg-primary"></span>
+    {children}
+  </h4>
+);
+
+const SupplierOrderModalAlerts: React.FC<{ controller: SupplierOrdersController }> = ({
+  controller,
+}) => (
+  <>
+    {controller.previewVersion && (
+      <div className="flex items-center justify-between gap-3 rounded-md border border-amber-500/30 bg-amber-500/10 px-4 py-3">
+        <span className="flex items-center gap-2 text-xs font-medium text-amber-700 dark:text-amber-300">
+          <i className="fa-solid fa-clock-rotate-left" aria-hidden="true"></i>
+          {controller.t('accounting:supplierOrders.versionHistory.previewBanner', {
+            date: formatInsertDateTime(
+              controller.previewVersion.createdAt,
+              controller.i18n.language,
+            ),
+          })}
+        </span>
+        <Button
+          type="button"
+          variant="link"
+          size="sm"
+          onClick={controller.handleClearPreview}
+          className="h-auto px-0 text-amber-700 dark:text-amber-300"
+        >
+          {controller.t('accounting:supplierOrders.versionHistory.backToCurrent')}
+        </Button>
+      </div>
+    )}
+    {controller.baseReadOnly && (
+      <div className="flex items-center gap-3 rounded-md border border-amber-500/30 bg-amber-500/10 px-4 py-3">
+        <span className="text-xs font-medium text-amber-700 dark:text-amber-300">
+          {controller.t('accounting:supplierOrders.readOnlyStatus')}
+        </span>
+      </div>
+    )}
+    {controller.formData.linkedQuoteId && (
+      <LinkedRecordBanner
+        label={controller.t('accounting:supplierOrders.linkedQuote')}
+        value={controller.t('accounting:supplierOrders.linkedQuoteInfo', {
+          number: controller.formData.linkedQuoteId,
+        })}
+        note={controller.t('accounting:supplierOrders.quoteDetailsReadOnly')}
+        action={
+          controller.onViewQuote
+            ? {
+                label: controller.t('accounting:supplierOrders.viewQuote'),
+                onClick: () => {
+                  const linkedQuoteId = controller.formData.linkedQuoteId;
+                  if (!linkedQuoteId) return;
+                  controller.onViewQuote?.(linkedQuoteId);
+                },
+              }
+            : undefined
         }
-        onRowClick={(row: SupplierSaleOrder) => openEditModal(row)}
+      />
+    )}
+  </>
+);
+
+const SupplierOrderDetailsSection: React.FC<{ controller: SupplierOrdersController }> = ({
+  controller,
+}) => (
+  <div className="space-y-2">
+    <SupplierOrderSectionTitle>
+      {controller.t('accounting:supplierOrders.orderDetails')}
+    </SupplierOrderSectionTitle>
+    <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+      <Field>
+        <SelectControl
+          id="supplier-order-supplier"
+          options={controller.supplierOptions}
+          value={controller.formData.supplierId || ''}
+          onChange={(value) => {
+            const supplier = controller.suppliers.find((item) => item.id === value);
+            controller.patchForm({
+              supplierId: value as string,
+              supplierName: supplier?.name || '',
+            });
+          }}
+          searchable={true}
+          disabled={controller.isReadOnly}
+          label={controller.t('accounting:supplierOrders.supplier')}
+          buttonClassName="h-9"
+        />
+      </Field>
+      <Field>
+        <FieldLabel>{controller.t('accounting:supplierOrders.orderNumber')}</FieldLabel>
+        <div className="flex h-9 items-center rounded-md border border-border bg-muted/30 px-3 text-sm font-medium text-foreground">
+          {controller.editingOrder?.id || '-'}
+        </div>
+      </Field>
+      <Field>
+        <SelectControl
+          id="supplier-order-payment-terms"
+          options={controller.paymentTermsOptions}
+          value={controller.formData.paymentTerms || 'immediate'}
+          onChange={(value) =>
+            controller.patchForm({ paymentTerms: value as SupplierSaleOrder['paymentTerms'] })
+          }
+          searchable={false}
+          disabled={controller.isReadOnly}
+          label={controller.t('accounting:supplierOrders.paymentTerms')}
+          buttonClassName="h-9"
+        />
+      </Field>
+    </div>
+  </div>
+);
+
+const SupplierOrderItemsSection: React.FC<{ controller: SupplierOrdersController }> = ({
+  controller,
+}) => (
+  <div className="space-y-4">
+    <div className="flex items-center justify-between">
+      <SupplierOrderSectionTitle>
+        {controller.t('accounting:supplierOrders.items')}
+      </SupplierOrderSectionTitle>
+    </div>
+    <SupplierOrderItemsHeader controller={controller} />
+    {(controller.formData.items || []).length > 0 ? (
+      <div className="space-y-3">
+        {controller.formData.items?.map((item, index) => (
+          <SupplierOrderItemRow key={item.id} controller={controller} item={item} index={index} />
+        ))}
+      </div>
+    ) : (
+      <div className="rounded-md border border-dashed border-border py-8 text-center text-sm text-muted-foreground">
+        {controller.t('accounting:supplierOrders.noItemsAdded')}
+      </div>
+    )}
+  </div>
+);
+
+const SupplierOrderItemsHeader: React.FC<{ controller: SupplierOrdersController }> = ({
+  controller,
+}) => {
+  if ((controller.formData.items || []).length === 0) return null;
+  return (
+    <div className="mb-1 hidden items-center gap-2 px-3 lg:flex">
+      <div className="grid flex-1 grid-cols-12 gap-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+        <div className="col-span-2 ml-1">{controller.t('crm:quotes.productsServices')}</div>
+        <div className="col-span-1">{controller.t('common:labels.quantity')}</div>
+        <div className="col-span-2">
+          {controller.t('crm:internalListing.salePrice')} ({controller.currency})
+        </div>
+        <div className="col-span-1">{controller.t('accounting:supplierOrders.discount')}</div>
+        <div className="col-span-2">
+          {controller.t('accounting:supplierOrders.durationColumn', {
+            defaultValue: 'Duration',
+          })}
+        </div>
+        <div className="col-span-2">{controller.t('accounting:supplierOrders.notes')}</div>
+        <div className="col-span-2 pr-2 text-right">{controller.t('common:labels.total')}</div>
+      </div>
+      <div className="w-8 shrink-0"></div>
+    </div>
+  );
+};
+
+const SupplierOrderItemRow: React.FC<{
+  controller: SupplierOrdersController;
+  item: SupplierSaleOrderItem;
+  index: number;
+}> = ({ controller, item, index }) => {
+  const durationUnit = normalizeDurationUnit(item.durationUnit);
+  const durationValue = getDurationDisplayValue(item);
+  const lineSubtotal =
+    Number(item.quantity ?? 0) * Number(item.unitPrice ?? 0) * getEffectiveDurationMonths(item);
+  const lineDiscount = (lineSubtotal * Number(item.discount ?? 0)) / 100;
+  const lineTotal = lineSubtotal - lineDiscount;
+
+  return (
+    <div className="space-y-3 rounded-md border border-border bg-muted/30 p-3">
+      <SupplierOrderItemMobileFields
+        controller={controller}
+        item={item}
+        index={index}
+        durationUnit={durationUnit}
+        durationValue={durationValue}
+        lineTotal={lineTotal}
+      />
+      <SupplierOrderItemDesktopFields
+        controller={controller}
+        item={item}
+        index={index}
+        durationUnit={durationUnit}
+        durationValue={durationValue}
+        lineTotal={lineTotal}
       />
     </div>
   );
 };
+
+const SupplierOrderItemMobileFields: React.FC<{
+  controller: SupplierOrdersController;
+  item: SupplierSaleOrderItem;
+  index: number;
+  durationUnit: DurationUnit;
+  durationValue: number;
+  lineTotal: number;
+}> = ({ controller, item, index, durationUnit, durationValue, lineTotal }) => (
+  <div className="space-y-2 lg:hidden">
+    <SupplierOrderItemProductField controller={controller} item={item} index={index} />
+    <div className="grid grid-cols-2 gap-2">
+      <SupplierOrderItemQuantityField controller={controller} item={item} index={index} />
+      <SupplierOrderItemPriceField controller={controller} item={item} index={index} />
+      <SupplierOrderItemDiscountField controller={controller} item={item} index={index} />
+      <SupplierOrderItemDurationField
+        controller={controller}
+        index={index}
+        durationUnit={durationUnit}
+        durationValue={durationValue}
+      />
+      <SupplierOrderItemTotalField controller={controller} lineTotal={lineTotal} />
+    </div>
+    <SupplierOrderItemNoteField controller={controller} item={item} index={index} />
+    <SupplierOrderItemDeleteButton controller={controller} index={index} align="right" />
+  </div>
+);
+
+const SupplierOrderItemDesktopFields: React.FC<{
+  controller: SupplierOrdersController;
+  item: SupplierSaleOrderItem;
+  index: number;
+  durationUnit: DurationUnit;
+  durationValue: number;
+  lineTotal: number;
+}> = ({ controller, item, index, durationUnit, durationValue, lineTotal }) => (
+  <div className="hidden items-start gap-2 lg:flex">
+    <div className="grid flex-1 grid-cols-12 gap-2">
+      <SupplierOrderItemProductField
+        controller={controller}
+        item={item}
+        index={index}
+        className="min-w-0 lg:col-span-2"
+      />
+      <SupplierOrderItemQuantityField
+        controller={controller}
+        item={item}
+        index={index}
+        className="lg:col-span-1"
+        inputClassName="font-medium"
+      />
+      <SupplierOrderItemPriceField
+        controller={controller}
+        item={item}
+        index={index}
+        className="lg:col-span-2"
+        inputClassName="font-medium"
+      />
+      <SupplierOrderItemDiscountField
+        controller={controller}
+        item={item}
+        index={index}
+        className="lg:col-span-1"
+        inputClassName="font-medium"
+      />
+      <SupplierOrderItemDurationField
+        controller={controller}
+        index={index}
+        durationUnit={durationUnit}
+        durationValue={durationValue}
+        className="flex items-center gap-1 lg:col-span-2"
+        inputClassName="font-medium"
+      />
+      <SupplierOrderItemNoteField
+        controller={controller}
+        item={item}
+        index={index}
+        className="lg:col-span-2"
+      />
+      <SupplierOrderItemTotalField
+        controller={controller}
+        lineTotal={lineTotal}
+        className="flex items-center justify-end whitespace-nowrap px-3 py-2 text-sm font-semibold text-foreground lg:col-span-2"
+      />
+    </div>
+    <SupplierOrderItemDeleteButton controller={controller} index={index} />
+  </div>
+);
+
+const SupplierOrderItemProductField: React.FC<{
+  controller: SupplierOrdersController;
+  item: SupplierSaleOrderItem;
+  index: number;
+  className?: string;
+}> = ({ controller, item, index, className }) => (
+  <div className={className}>
+    <SelectControl
+      options={controller.productOptions}
+      value={item.productId}
+      onChange={(value) => controller.updateItem(index, 'productId', value as string)}
+      searchable={true}
+      disabled={controller.isReadOnly}
+      buttonClassName="h-9"
+    />
+  </div>
+);
+
+const SupplierOrderItemQuantityField: React.FC<{
+  controller: SupplierOrdersController;
+  item: SupplierSaleOrderItem;
+  index: number;
+  className?: string;
+  inputClassName?: string;
+}> = ({ controller, item, index, className = 'space-y-1', inputClassName = 'text-center' }) => (
+  <div className={className}>
+    <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
+      {controller.t('common:labels.quantity')}
+    </FieldLabel>
+    <ValidatedNumberInput
+      value={item.quantity}
+      disabled={controller.isReadOnly}
+      onValueChange={(value) =>
+        controller.updateItem(index, 'quantity', value === '' ? 0 : Number(value))
+      }
+      className={inputClassName}
+    />
+  </div>
+);
+
+const SupplierOrderItemPriceField: React.FC<{
+  controller: SupplierOrdersController;
+  item: SupplierSaleOrderItem;
+  index: number;
+  className?: string;
+  inputClassName?: string;
+}> = ({ controller, item, index, className = 'space-y-1', inputClassName = 'text-center' }) => (
+  <div className={className}>
+    <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
+      {controller.t('crm:internalListing.salePrice')}
+    </FieldLabel>
+    <ValidatedNumberInput
+      value={item.unitPrice}
+      formatDecimals={2}
+      disabled={controller.isReadOnly}
+      onValueChange={(value) =>
+        controller.updateItem(index, 'unitPrice', value === '' ? 0 : Number(value))
+      }
+      className={inputClassName}
+    />
+  </div>
+);
+
+const SupplierOrderItemDiscountField: React.FC<{
+  controller: SupplierOrdersController;
+  item: SupplierSaleOrderItem;
+  index: number;
+  className?: string;
+  inputClassName?: string;
+}> = ({ controller, item, index, className = 'space-y-1', inputClassName = 'text-center' }) => (
+  <div className={className}>
+    <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
+      {controller.t('accounting:supplierOrders.discount')}
+    </FieldLabel>
+    <ValidatedNumberInput
+      value={item.discount || 0}
+      formatDecimals={2}
+      disabled={controller.isReadOnly}
+      onValueChange={(value) =>
+        controller.updateItem(index, 'discount', value === '' ? 0 : Number(value))
+      }
+      className={inputClassName}
+    />
+  </div>
+);
+
+const SupplierOrderItemDurationField: React.FC<{
+  controller: SupplierOrdersController;
+  index: number;
+  durationUnit: DurationUnit;
+  durationValue: number;
+  className?: string;
+  inputClassName?: string;
+}> = ({
+  controller,
+  index,
+  durationUnit,
+  durationValue,
+  className = 'space-y-1',
+  inputClassName = 'text-center',
+}) => (
+  <div className={className}>
+    <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
+      {controller.t('accounting:supplierOrders.durationColumn', {
+        defaultValue: 'Duration',
+      })}
+    </FieldLabel>
+    <div className="flex items-center gap-1">
+      <ValidatedNumberInput
+        step="1"
+        min="1"
+        placeholder={controller.t('accounting:supplierOrders.durationColumn', {
+          defaultValue: 'Duration',
+        })}
+        value={durationValue}
+        disabled={controller.isReadOnly || durationUnit === 'na'}
+        onValueChange={(value) => controller.handleDurationValueChange(index, value)}
+        className={inputClassName}
+      />
+      <span className="shrink-0 text-xs font-semibold text-muted-foreground">/</span>
+      <DurationUnitSelector
+        value={durationUnit}
+        onChange={(value) => controller.handleDurationUnitChange(index, value)}
+        count={durationValue}
+        disabled={controller.isReadOnly}
+        i18nPrefix="accounting:supplierOrders"
+      />
+    </div>
+  </div>
+);
+
+const SupplierOrderItemNoteField: React.FC<{
+  controller: SupplierOrdersController;
+  item: SupplierSaleOrderItem;
+  index: number;
+  className?: string;
+}> = ({ controller, item, index, className }) => (
+  <div className={className}>
+    <Input
+      type="text"
+      value={item.note || ''}
+      disabled={controller.isReadOnly}
+      placeholder={controller.t('accounting:supplierOrders.notes')}
+      onChange={(event) => controller.updateItem(index, 'note', event.target.value)}
+    />
+  </div>
+);
+
+const SupplierOrderItemTotalField: React.FC<{
+  controller: SupplierOrdersController;
+  lineTotal: number;
+  className?: string;
+}> = ({ controller, lineTotal, className = 'space-y-1' }) => (
+  <div className={className}>
+    <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
+      {controller.t('common:labels.total')}
+    </FieldLabel>
+    <div className="flex items-center justify-end whitespace-nowrap px-3 py-2 text-sm font-semibold text-foreground">
+      {lineTotal.toFixed(2)} {controller.currency}
+    </div>
+  </div>
+);
+
+const SupplierOrderItemDeleteButton: React.FC<{
+  controller: SupplierOrdersController;
+  index: number;
+  align?: 'right' | 'inline';
+}> = ({ controller, index, align = 'inline' }) => (
+  <div className={align === 'right' ? 'flex justify-end' : undefined}>
+    <Button
+      type="button"
+      variant="ghost"
+      size="icon-sm"
+      onClick={() => controller.removeItem(index)}
+      disabled={controller.isReadOnly}
+      className="shrink-0 text-muted-foreground hover:text-destructive"
+    >
+      <i className="fa-solid fa-trash-can" aria-hidden="true"></i>
+      <span className="sr-only">{controller.t('common:buttons.delete')}</span>
+    </Button>
+  </div>
+);
+
+const SupplierOrderNotesSummarySection: React.FC<{ controller: SupplierOrdersController }> = ({
+  controller,
+}) => (
+  <div className="flex flex-col gap-4 border-t border-border pt-4 md:flex-row">
+    <Field className="md:w-2/3">
+      <SupplierOrderSectionTitle>
+        {controller.t('accounting:supplierOrders.notes')}
+      </SupplierOrderSectionTitle>
+      <FieldLabel htmlFor="supplier-order-notes" className="sr-only">
+        {controller.t('accounting:supplierOrders.notes')}
+      </FieldLabel>
+      <Textarea
+        id="supplier-order-notes"
+        rows={4}
+        value={controller.formData.notes || ''}
+        disabled={controller.isReadOnly}
+        onChange={(event) => controller.patchForm({ notes: event.target.value })}
+        className="min-h-28 resize-none"
+      />
+    </Field>
+    <div className="space-y-2 md:w-1/3">
+      <SupplierOrderSectionTitle>
+        {controller.t('accounting:supplierOrders.summary', { defaultValue: 'Summary' })}
+      </SupplierOrderSectionTitle>
+      <CostSummaryPanel
+        currency={controller.currency}
+        subtotal={controller.totals.subtotal}
+        total={controller.totals.total}
+        subtotalLabel={controller.t('accounting:supplierOrders.subtotal')}
+        totalLabel={controller.t('accounting:supplierOrders.total')}
+        globalDiscount={{
+          label: controller.t('accounting:supplierOrders.discount'),
+          value: controller.formData.discount || 0,
+          type: controller.formData.discountType || 'percentage',
+          onChange: (value) => controller.patchForm({ discount: value === '' ? 0 : Number(value) }),
+          onTypeChange: (type) => controller.patchForm({ discountType: type }),
+          disabled: controller.isReadOnly,
+        }}
+        discountRow={
+          controller.totals.discountAmount > 0
+            ? {
+                label: controller.t('sales:clientOffers.discountAmount', {
+                  value: formatDiscountValue(
+                    controller.formData.discount ?? 0,
+                    controller.formData.discountType ?? 'percentage',
+                    controller.currency,
+                  ),
+                }),
+                amount: controller.totals.discountAmount,
+              }
+            : undefined
+        }
+      />
+    </div>
+  </div>
+);
+
+const SupplierOrderDeleteDialog: React.FC<{ controller: SupplierOrdersController }> = ({
+  controller,
+}) => (
+  <DeleteConfirmModal
+    isOpen={controller.isDeleteConfirmOpen}
+    onClose={controller.closeDeleteConfirm}
+    onConfirm={() => {
+      void controller.handleDelete();
+    }}
+    title={controller.t('accounting:supplierOrders.deleteTitle')}
+    description={`${controller.orderToDelete?.supplierName ?? ''} · ${
+      controller.orderToDelete?.linkedQuoteId || controller.orderToDelete?.id || ''
+    }`}
+  />
+);
 
 export default SupplierOrdersView;

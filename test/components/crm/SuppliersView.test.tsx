@@ -17,7 +17,8 @@ describe('SuppliersView CRUD failure surfacing', () => {
       "t('crm:suppliers.failedToSave')",
       "t('crm:suppliers.failedToDelete')",
       "t('crm:suppliers.failedToUpdateStatus')",
-      'void handleStatusUpdate(row.id, { isDisabled: !row.isDisabled });',
+      'void onStatusUpdate(row.id,',
+      'isDisabled: !row.isDisabled',
     ]);
   });
 });

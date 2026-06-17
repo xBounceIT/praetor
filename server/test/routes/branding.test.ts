@@ -29,6 +29,7 @@ const getMock = mock();
 const setCompanyNameMock = mock();
 const setLogoMock = mock();
 const clearLogoMock = mock();
+const clearLogoWithPreviousMock = mock();
 const isAllowedBrandingImageMock = mock();
 const saveBrandingLogoMock = mock();
 const openBrandingLogoMock = mock();
@@ -61,6 +62,7 @@ beforeAll(async () => {
     setCompanyName: setCompanyNameMock,
     setLogo: setLogoMock,
     clearLogo: clearLogoMock,
+    clearLogoWithPrevious: clearLogoWithPreviousMock,
   }));
   mock.module('../../utils/fileStorage.ts', () => ({
     ...fileStorageSnap,
@@ -96,6 +98,7 @@ const allMocks = [
   setCompanyNameMock,
   setLogoMock,
   clearLogoMock,
+  clearLogoWithPreviousMock,
   isAllowedBrandingImageMock,
   saveBrandingLogoMock,
   openBrandingLogoMock,
@@ -526,12 +529,15 @@ describe('DELETE /api/branding/logo', () => {
       logoFileSize: 10,
       logoUpdatedAt: new Date(),
     });
-    clearLogoMock.mockResolvedValue({
-      companyName: 'Acme',
-      logoStoredName: null,
-      logoMimeType: null,
-      logoFileSize: null,
-      logoUpdatedAt: null,
+    clearLogoWithPreviousMock.mockResolvedValue({
+      branding: {
+        companyName: 'Acme',
+        logoStoredName: null,
+        logoMimeType: null,
+        logoFileSize: null,
+        logoUpdatedAt: null,
+      },
+      previousLogoStoredName: 'old.png',
     });
     deleteBrandingLogoMock.mockResolvedValue(undefined);
 
@@ -542,7 +548,7 @@ describe('DELETE /api/branding/logo', () => {
     });
 
     expect(res.statusCode).toBe(200);
-    expect(clearLogoMock).toHaveBeenCalled();
+    expect(clearLogoWithPreviousMock).toHaveBeenCalled();
     expect(deleteBrandingLogoMock).toHaveBeenCalledWith('old.png');
     expect(JSON.parse(res.body)).toEqual({
       companyName: 'Acme',

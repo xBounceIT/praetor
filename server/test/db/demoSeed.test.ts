@@ -189,9 +189,31 @@ describe('assertNoDemoDocumentIdConflicts', () => {
     await expect(assertNoDemoDocumentIdConflicts(client, 2027)).resolves.toBeUndefined();
     expect(calls[0]?.params?.[0]).toEqual(buildDemoIds(2027).quotes);
   });
+
+  test('allows compatibility demo clients to be cleaned before reseeding', async () => {
+    const { calls, client } = buildQueryRecorder(0);
+
+    await assertNoDemoDocumentIdConflicts(client, 2027);
+
+    expect(calls[0]?.params?.[5]).toEqual([
+      ...COMPATIBILITY_DEFAULTS.clients,
+      ...buildDemoIds(2027).clients,
+    ]);
+  });
 });
 
 describe('demoSeedManifest assignment coverage', () => {
+  test('seed.sql delegates document collision checks to the app-layer guard', () => {
+    expect(SEED_SQL).toContain(
+      'Document-code collision protection is handled by server/db/demoSeed.ts before cleanup.',
+    );
+    expect(SEED_SQL).not.toContain('demo_document_code_conflicts');
+    expect(SEED_SQL).not.toContain(
+      'Demo seed document code collision with existing non-demo document rows',
+    );
+    expect(SEED_SQL).not.toMatch(/'Demo seed document code collision[^']*'::integer/);
+  });
+
   test('manifest document IDs use the admin default document code templates', () => {
     expect(DEMO_QUOTES.map((row) => row.id)).toEqual(documentCodesFor('client_quote', 14));
     expect(DEMO_CUSTOMER_OFFERS.map((row) => row.id)).toEqual(documentCodesFor('client_offer', 5));

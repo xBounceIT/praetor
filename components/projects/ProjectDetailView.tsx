@@ -1,28 +1,26 @@
 import type React from 'react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { LinkedRecordBanner } from '@/components/shared/LinkedRecordBanner';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Area,
   AreaChart,
   Bar,
   BarChart,
   CartesianGrid,
-  LabelList,
-  ReferenceLine,
-  XAxis,
-  YAxis,
-} from 'recharts';
-import { LinkedRecordBanner } from '@/components/shared/LinkedRecordBanner';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import {
   type ChartConfig,
   ChartContainer,
   ChartLegend,
   ChartLegendContent,
   ChartTooltip,
   ChartTooltipContent,
+  LabelList,
+  ReferenceLine,
+  XAxis,
+  YAxis,
 } from '@/components/ui/chart';
 import {
   Empty,
@@ -184,7 +182,115 @@ export interface ProjectDetailViewProps {
   onViewOrder?: (orderId: string) => void;
 }
 
-const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
+type ProjectDetailFormState = {
+  name: string;
+  clientId: string;
+  description: string;
+  startDate: string;
+  endDate: string;
+  orderId: string;
+  offerId: string;
+  revenue: string;
+  tempIsDisabled: boolean;
+  tipo: ProjectTipo | '';
+  errors: Record<string, string>;
+};
+
+type ProjectDetailFormField = Exclude<keyof ProjectDetailFormState, 'errors'>;
+
+type ProjectDetailFormAction =
+  | {
+      type: 'setField';
+      field: ProjectDetailFormField;
+      value: ProjectDetailFormState[ProjectDetailFormField];
+    }
+  | { type: 'setErrors'; value: React.SetStateAction<Record<string, string>> }
+  | { type: 'reset'; project: Project };
+
+type ProjectDetailUiState = {
+  billingTypeDraft: StoredBillingType | null;
+  billingFrequencyDraft: BillingFrequency | null;
+  entries: TimeEntry[];
+  entriesLoading: boolean;
+  entriesTruncated: boolean;
+  entriesError: 'forbidden' | 'failed' | null;
+  assignedUserIds: string[];
+  assignedLoading: boolean;
+  isDeleteConfirmOpen: boolean;
+  taskToDelete: ProjectTask | null;
+  isTaskDeleteConfirmOpen: boolean;
+  isAssignmentsOpen: boolean;
+};
+
+type ProjectDetailUiAction = {
+  [Key in keyof ProjectDetailUiState]: {
+    type: 'set';
+    key: Key;
+    value: React.SetStateAction<ProjectDetailUiState[Key]>;
+  };
+}[keyof ProjectDetailUiState];
+
+const resolveStateAction = <T,>(value: React.SetStateAction<T>, previous: T): T =>
+  typeof value === 'function' ? (value as (previous: T) => T)(previous) : value;
+
+const getProjectDetailBaselineTipo = (project: Project): ProjectTipo | '' =>
+  project.tipoConfirmed ? (project.tipo ?? '') : '';
+
+const createProjectDetailFormState = (project: Project): ProjectDetailFormState => ({
+  name: project.name,
+  clientId: project.clientId,
+  description: project.description ?? '',
+  startDate: project.startDate ?? '',
+  endDate: project.endDate ?? '',
+  orderId: project.orderId ?? '',
+  offerId: project.offerId ?? '',
+  revenue: project.revenue !== null && project.revenue !== undefined ? String(project.revenue) : '',
+  tempIsDisabled: project.isDisabled ?? false,
+  tipo: getProjectDetailBaselineTipo(project),
+  errors: {},
+});
+
+const projectDetailFormReducer = (
+  state: ProjectDetailFormState,
+  action: ProjectDetailFormAction,
+): ProjectDetailFormState => {
+  switch (action.type) {
+    case 'setField':
+      return { ...state, [action.field]: action.value };
+    case 'setErrors':
+      return { ...state, errors: resolveStateAction(action.value, state.errors) };
+    case 'reset':
+      return createProjectDetailFormState(action.project);
+  }
+};
+
+const createProjectDetailUiState = (): ProjectDetailUiState => ({
+  billingTypeDraft: null,
+  billingFrequencyDraft: null,
+  entries: [],
+  entriesLoading: false,
+  entriesTruncated: false,
+  entriesError: null,
+  assignedUserIds: [],
+  assignedLoading: false,
+  isDeleteConfirmOpen: false,
+  taskToDelete: null,
+  isTaskDeleteConfirmOpen: false,
+  isAssignmentsOpen: false,
+});
+
+const projectDetailUiReducer = (
+  state: ProjectDetailUiState,
+  action: ProjectDetailUiAction,
+): ProjectDetailUiState => {
+  const current = state[action.key];
+  return {
+    ...state,
+    [action.key]: resolveStateAction(action.value as React.SetStateAction<typeof current>, current),
+  };
+};
+
+const useProjectDetailController = ({
   project,
   clients,
   orders,
@@ -201,7 +307,7 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
   onUpdateTask,
   onDeleteTask,
   onViewOrder,
-}) => {
+}: ProjectDetailViewProps) => {
   const { t, i18n } = useTranslation(['projects', 'common', 'form']);
   // Identifies the viewer for the server-backed dashboard view library (ownership
   // is computed server-side; this is threaded for parity with the table surface).
@@ -223,53 +329,140 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
   // `requireScopedPermission('timesheets.tracker', 'view')` gate.
   const canViewEntries = hasScopedActionPermission(permissions, 'timesheets.tracker', 'view');
 
-  // Form state — initialized from project, kept in sync when project prop changes.
-  const [name, setName] = useState(project.name);
-  const [clientId, setClientId] = useState(project.clientId);
-  const [description, setDescription] = useState(project.description ?? '');
-  const [startDate, setStartDate] = useState(project.startDate ?? '');
-  const [endDate, setEndDate] = useState(project.endDate ?? '');
+  const [formState, dispatchForm] = useReducer(
+    projectDetailFormReducer,
+    project,
+    createProjectDetailFormState,
+  );
+  const {
+    name,
+    clientId,
+    description,
+    startDate,
+    endDate,
+    offerId,
+    revenue,
+    tempIsDisabled,
+    tipo,
+    errors,
+  } = formState;
   const [orderId, setOrderId] = useState(project.orderId ?? '');
-  const [offerId, setOfferId] = useState(project.offerId ?? '');
-  const [revenue, setRevenue] = useState(
-    project.revenue !== null && project.revenue !== undefined ? String(project.revenue) : '',
+  const setFormField = <K extends ProjectDetailFormField>(
+    field: K,
+    value: ProjectDetailFormState[K],
+  ) => dispatchForm({ type: 'setField', field, value });
+  const setName = (value: string) => setFormField('name', value);
+  const setClientId = (value: string) => setFormField('clientId', value);
+  const setDescription = (value: string) => setFormField('description', value);
+  const setStartDate = (value: string) => setFormField('startDate', value);
+  const setEndDate = (value: string) => setFormField('endDate', value);
+  const setOfferId = (value: string) => setFormField('offerId', value);
+  const setRevenue = (value: string) => setFormField('revenue', value);
+  const setTempIsDisabled = (value: boolean) => setFormField('tempIsDisabled', value);
+  const setTipo = (value: ProjectTipo | '') => setFormField('tipo', value);
+  const setErrors = (value: React.SetStateAction<Record<string, string>>) =>
+    dispatchForm({ type: 'setErrors', value });
+  const [uiState, dispatchUiState] = useReducer(
+    projectDetailUiReducer,
+    undefined,
+    createProjectDetailUiState,
   );
-  const [tempIsDisabled, setTempIsDisabled] = useState(project.isDisabled ?? false);
-  const [billingType, setBillingType] = useState<StoredBillingType>(
-    toStoredBillingType(project.billingType),
+  const {
+    billingTypeDraft,
+    billingFrequencyDraft,
+    entries,
+    entriesLoading,
+    entriesTruncated,
+    entriesError,
+    assignedUserIds,
+    assignedLoading,
+    isDeleteConfirmOpen,
+    taskToDelete,
+    isTaskDeleteConfirmOpen,
+    isAssignmentsOpen,
+  } = uiState;
+  const setUiState = useCallback(
+    <Key extends keyof ProjectDetailUiState>(
+      key: Key,
+      value: React.SetStateAction<ProjectDetailUiState[Key]>,
+    ) => {
+      dispatchUiState({ type: 'set', key, value } as ProjectDetailUiAction);
+    },
+    [],
   );
-  const [billingFrequency, setBillingFrequency] = useState<BillingFrequency>(
-    project.billingFrequency ?? DEFAULT_BILLING_FREQUENCY,
+  const setBillingTypeDraft = useCallback(
+    (value: React.SetStateAction<ProjectDetailUiState['billingTypeDraft']>) =>
+      setUiState('billingTypeDraft', value),
+    [setUiState],
   );
-  const [projectBillingChanged, setProjectBillingChanged] = useState(false);
+  const setBillingFrequencyDraft = useCallback(
+    (value: React.SetStateAction<ProjectDetailUiState['billingFrequencyDraft']>) =>
+      setUiState('billingFrequencyDraft', value),
+    [setUiState],
+  );
+  const setEntries = useCallback(
+    (value: React.SetStateAction<ProjectDetailUiState['entries']>) => setUiState('entries', value),
+    [setUiState],
+  );
+  const setEntriesLoading = useCallback(
+    (value: React.SetStateAction<ProjectDetailUiState['entriesLoading']>) =>
+      setUiState('entriesLoading', value),
+    [setUiState],
+  );
+  const setEntriesTruncated = useCallback(
+    (value: React.SetStateAction<ProjectDetailUiState['entriesTruncated']>) =>
+      setUiState('entriesTruncated', value),
+    [setUiState],
+  );
+  const setEntriesError = useCallback(
+    (value: React.SetStateAction<ProjectDetailUiState['entriesError']>) =>
+      setUiState('entriesError', value),
+    [setUiState],
+  );
+  const setAssignedUserIds = useCallback(
+    (value: React.SetStateAction<ProjectDetailUiState['assignedUserIds']>) =>
+      setUiState('assignedUserIds', value),
+    [setUiState],
+  );
+  const setAssignedLoading = useCallback(
+    (value: React.SetStateAction<ProjectDetailUiState['assignedLoading']>) =>
+      setUiState('assignedLoading', value),
+    [setUiState],
+  );
+  const setIsDeleteConfirmOpen = useCallback(
+    (value: React.SetStateAction<ProjectDetailUiState['isDeleteConfirmOpen']>) =>
+      setUiState('isDeleteConfirmOpen', value),
+    [setUiState],
+  );
+  const setTaskToDelete = useCallback(
+    (value: React.SetStateAction<ProjectDetailUiState['taskToDelete']>) =>
+      setUiState('taskToDelete', value),
+    [setUiState],
+  );
+  const setIsTaskDeleteConfirmOpen = useCallback(
+    (value: React.SetStateAction<ProjectDetailUiState['isTaskDeleteConfirmOpen']>) =>
+      setUiState('isTaskDeleteConfirmOpen', value),
+    [setUiState],
+  );
+  const setIsAssignmentsOpen = useCallback(
+    (value: React.SetStateAction<ProjectDetailUiState['isAssignmentsOpen']>) =>
+      setUiState('isAssignmentsOpen', value),
+    [setUiState],
+  );
   // `tipo` (issue #784). A rollout-defaulted project (`tipoConfirmed === false`) starts with an
   // EMPTY selector so the user must make a deliberate first choice before saving — we don't
   // pre-fill the silent 'attivo' default. A confirmed project shows its stored value.
   const tipoNeedsConfirmation = !project.tipoConfirmed;
   const baselineTipo: ProjectTipo | '' = project.tipoConfirmed ? (project.tipo ?? '') : '';
-  const [tipo, setTipo] = useState<ProjectTipo | ''>(baselineTipo);
-  const [errors, setErrors] = useState<Record<string, string>>({});
 
   // No prop-sync useEffect: the parent passes `key={project.id}` so this component
-  // remounts on project switch — useState initializers above re-run with the new
-  // project values, and same-id parent updates (background poll / optimistic update)
-  // intentionally do NOT clobber the form so unsaved edits survive.
+  // remounts on project switch. Same-id parent updates (background poll / optimistic update)
+  // intentionally do NOT clobber the reducer draft so unsaved edits survive.
 
-  // Analytics state
-  const [entries, setEntries] = useState<TimeEntry[]>([]);
-  const [entriesLoading, setEntriesLoading] = useState(false);
-  const [entriesTruncated, setEntriesTruncated] = useState(false);
-  const [entriesError, setEntriesError] = useState<'forbidden' | 'failed' | null>(null);
-  const [assignedUserIds, setAssignedUserIds] = useState<string[]>([]);
-  const [assignedLoading, setAssignedLoading] = useState(false);
   const entriesLoadKey = `${project.id}|${canViewEntries ? '1' : '0'}`;
   const assignedLoadKey = `${project.id}|${canManageAssignments ? '1' : '0'}`;
   const loadedEntriesKeyRef = useRef<string | null>(null);
   const loadedAssignedKeyRef = useRef<string | null>(null);
-  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
-  const [taskToDelete, setTaskToDelete] = useState<ProjectTask | null>(null);
-  const [isTaskDeleteConfirmOpen, setIsTaskDeleteConfirmOpen] = useState(false);
-  const [isAssignmentsOpen, setIsAssignmentsOpen] = useState(false);
 
   if (loadedEntriesKeyRef.current !== entriesLoadKey) {
     loadedEntriesKeyRef.current = entriesLoadKey;
@@ -358,7 +551,14 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
     return () => {
       ac.abort();
     };
-  }, [project.id, canViewEntries]);
+  }, [
+    project.id,
+    canViewEntries,
+    setEntries,
+    setEntriesError,
+    setEntriesLoading,
+    setEntriesTruncated,
+  ]);
 
   useEffect(() => {
     // GET /projects/:id/users is server-gated on `projects.assignments.update`. Without
@@ -384,7 +584,7 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
     return () => {
       ac.abort();
     };
-  }, [project.id, canManageAssignments]);
+  }, [project.id, canManageAssignments, setAssignedLoading, setAssignedUserIds]);
 
   // Aggregations
   const totalHours = useMemo(
@@ -652,6 +852,15 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
           { id: 'mixed', name: t('projects:projects.billingTypes.mixed') },
         ]
       : translatedBillingTypeOptions;
+  const storedBillingType = toStoredBillingType(project.billingType);
+  const billingType = billingTypeDraft ?? storedBillingType;
+  const billingFrequency =
+    billingFrequencyDraft ?? project.billingFrequency ?? DEFAULT_BILLING_FREQUENCY;
+  const displayedBillingType = derivedBillingType === 'mixed' ? derivedBillingType : billingType;
+  const projectBillingChanged =
+    billingTypeDraft !== null ||
+    (billingFrequencyDraft !== null &&
+      billingFrequencyDraft !== (project.billingFrequency ?? DEFAULT_BILLING_FREQUENCY));
 
   const linkedOrder = orderId ? orders.find((o) => o.id === orderId) : undefined;
   const client = clients.find((c) => c.id === clientId);
@@ -738,22 +947,10 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
   };
 
   const handleDiscard = () => {
-    setName(project.name);
-    setClientId(project.clientId);
-    setDescription(project.description ?? '');
-    setStartDate(project.startDate ?? '');
-    setEndDate(project.endDate ?? '');
+    dispatchForm({ type: 'reset', project });
     setOrderId(project.orderId ?? '');
-    setOfferId(project.offerId ?? '');
-    setRevenue(
-      project.revenue !== null && project.revenue !== undefined ? String(project.revenue) : '',
-    );
-    setTempIsDisabled(project.isDisabled ?? false);
-    setBillingType(toStoredBillingType(project.billingType));
-    setBillingFrequency(project.billingFrequency ?? DEFAULT_BILLING_FREQUENCY);
-    setProjectBillingChanged(false);
-    setTipo(baselineTipo);
-    setErrors({});
+    setBillingTypeDraft(null);
+    setBillingFrequencyDraft(null);
   };
 
   const handleSave = async () => {
@@ -818,7 +1015,10 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
     // The parent handler catches and toasts errors itself, returning `null` on
     // failure (mirroring `add`), so we branch on the result rather than try/catch.
     const result = await onUpdateProject(project.id, updates);
-    if (result !== null) setProjectBillingChanged(false);
+    if (result !== null) {
+      setBillingTypeDraft(null);
+      setBillingFrequencyDraft(null);
+    }
   };
 
   const handleDelete = () => {
@@ -909,1182 +1109,1580 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
     (u) => !u.hasTopManagerRole && !u.isAdminOnly && !u.isDisabled,
   );
 
+  return {
+    t,
+    i18n,
+    project,
+    orders,
+    roles,
+    permissions,
+    currency,
+    onBack,
+    onUpdateTask,
+    onViewOrder,
+    canUpdateProjects,
+    canDeleteProjects,
+    canCreateTasks,
+    canUpdateTasks,
+    canDeleteTasks,
+    canManageAssignments,
+    canViewCost,
+    name,
+    clientId,
+    description,
+    startDate,
+    endDate,
+    orderId,
+    offerId,
+    revenue,
+    tempIsDisabled,
+    tipo,
+    errors,
+    setName,
+    setClientId,
+    setDescription,
+    setStartDate,
+    setEndDate,
+    setOrderId,
+    setOfferId,
+    setRevenue,
+    setTempIsDisabled,
+    setTipo,
+    setErrors,
+    entries,
+    entriesLoading,
+    entriesTruncated,
+    entriesError,
+    assignedLoading,
+    isDeleteConfirmOpen,
+    setIsDeleteConfirmOpen,
+    taskToDelete,
+    setTaskToDelete,
+    isTaskDeleteConfirmOpen,
+    setIsTaskDeleteConfirmOpen,
+    isAssignmentsOpen,
+    setIsAssignmentsOpen,
+    setAssignedUserIds,
+    isClientDisabled,
+    linkedOrder,
+    orderOptions,
+    clientOptions,
+    isClientLockedByOrder,
+    clearStaleClientLinks,
+    offerOptions,
+    revenueSource,
+    displayedRevenue,
+    revenueHintBySource,
+    translatedTipoOptions,
+    tipoNeedsConfirmation,
+    projectBillingTypeOptions,
+    displayedBillingType,
+    setBillingTypeDraft,
+    derivedBillingType,
+    translatedBillingFrequencyOptions,
+    billingFrequency,
+    setBillingFrequencyDraft,
+    client,
+    isCurrentlyDisabled,
+    projectTasks,
+    handleAddTask,
+    hasChanges,
+    handleDiscard,
+    handleSave,
+    isPartialEntryScope,
+    dashboard,
+    activeWidgetDefs,
+    widgetPermitted,
+    totalHours,
+    totalCost,
+    assignedUsers,
+    teamSize,
+    budgetUsedPct,
+    projectTimeline,
+    hoursByUserTask,
+    userTaskChartConfig,
+    hoursByTask,
+    taskChartConfig,
+    costOverTime,
+    budgetChartConfig,
+    monthlyActivity,
+    activityChartConfig,
+    handleDelete,
+    handleConfirmDeleteTask,
+    assignableUsers,
+  };
+};
+
+type ProjectDetailController = ReturnType<typeof useProjectDetailController>;
+
+const ProjectDetailView: React.FC<ProjectDetailViewProps> = (props) => {
+  const controller = useProjectDetailController(props);
+  return <ProjectDetailLayout controller={controller} />;
+};
+
+const ProjectDetailLayout: React.FC<{ controller: ProjectDetailController }> = ({ controller }) => (
+  <div className="space-y-6">
+    <ProjectDetailHeader controller={controller} />
+    <ProjectDetailTopSection controller={controller} />
+    <ProjectDetailTasksSection controller={controller} />
+    <ProjectDetailSaveBar controller={controller} />
+    <ProjectAnalyticsSection controller={controller} />
+    <ProjectDetailModals controller={controller} />
+  </div>
+);
+
+const ProjectDetailHeader: React.FC<{ controller: ProjectDetailController }> = ({ controller }) => {
+  const {
+    t,
+    i18n,
+    project,
+    onBack,
+    isClientDisabled,
+    canManageAssignments,
+    setIsAssignmentsOpen,
+    canDeleteProjects,
+    setIsDeleteConfirmOpen,
+  } = controller;
+
   return (
-    <div className="space-y-6 animate-in fade-in duration-300">
-      {/* Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="space-y-2">
-          <button
+    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="space-y-2">
+        <button
+          type="button"
+          onClick={onBack}
+          className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <i className="fa-solid fa-chevron-left text-[10px]" aria-hidden="true"></i>
+          {t('projects:detail.actions.back')}
+        </button>
+        <div className="flex flex-wrap items-center gap-3">
+          <h1 className="text-2xl font-semibold text-foreground">{project.name}</h1>
+          {project.isDisabled ? (
+            <StatusBadge type="disabled" label={t('projects:projects.statusDisabled')} />
+          ) : isClientDisabled ? (
+            <StatusBadge type="inherited" label={t('projects:projects.statusInheritedDisable')} />
+          ) : (
+            <StatusBadge type="active" label={t('projects:projects.statusActive')} />
+          )}
+          {project.createdAt && (
+            <span className="text-xs text-muted-foreground">
+              {t('projects:detail.createdOn', {
+                date: formatInsertDate(project.createdAt, i18n.language),
+              })}
+            </span>
+          )}
+        </div>
+      </div>
+      <div className="flex items-center gap-2">
+        {canManageAssignments && (
+          <Button
             type="button"
-            onClick={onBack}
-            className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
+            variant="outline"
+            size="sm"
+            onClick={() => setIsAssignmentsOpen(true)}
           >
-            <i className="fa-solid fa-chevron-left text-[10px]" aria-hidden="true"></i>
-            {t('projects:detail.actions.back')}
-          </button>
-          <div className="flex flex-wrap items-center gap-3">
-            <h1 className="text-2xl font-semibold text-foreground">{project.name}</h1>
-            {project.isDisabled ? (
-              <StatusBadge type="disabled" label={t('projects:projects.statusDisabled')} />
-            ) : isClientDisabled ? (
-              <StatusBadge type="inherited" label={t('projects:projects.statusInheritedDisable')} />
-            ) : (
-              <StatusBadge type="active" label={t('projects:projects.statusActive')} />
-            )}
-            {project.createdAt && (
-              <span className="text-xs text-muted-foreground">
-                {t('projects:detail.createdOn', {
-                  date: formatInsertDate(project.createdAt, i18n.language),
-                })}
-              </span>
-            )}
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          {canManageAssignments && (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setIsAssignmentsOpen(true)}
-            >
-              <i className="fa-solid fa-users text-xs" aria-hidden="true"></i>
-              <span className="ml-2">{t('projects:projects.manageMembers')}</span>
-            </Button>
-          )}
-          {canDeleteProjects && (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setIsDeleteConfirmOpen(true)}
-              className="text-destructive hover:text-destructive"
-            >
-              <i className="fa-solid fa-trash-can text-xs" aria-hidden="true"></i>
-              <span className="ml-2">{t('common:buttons.delete')}</span>
-            </Button>
-          )}
-        </div>
+            <i className="fa-solid fa-users text-xs" aria-hidden="true"></i>
+            <span className="ml-2">{t('projects:projects.manageMembers')}</span>
+          </Button>
+        )}
+        {canDeleteProjects && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setIsDeleteConfirmOpen(true)}
+            className="text-destructive hover:text-destructive"
+          >
+            <i className="fa-solid fa-trash-can text-xs" aria-hidden="true"></i>
+            <span className="ml-2">{t('common:buttons.delete')}</span>
+          </Button>
+        )}
       </div>
+    </div>
+  );
+};
 
-      {/* Top section: details (left, ~40%) + tasks table (right, ~60%) */}
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-5">
-        <div className="xl:col-span-2 self-start space-y-6">
-          <div className="space-y-1.5">
-            <h2 className="text-base font-semibold leading-none">
-              {t('projects:detail.detailsTitle')}
-            </h2>
-            <p className="text-sm text-muted-foreground">
-              {t('projects:detail.detailsDescription')}
-            </p>
-          </div>
-          {linkedOrder && (
-            <LinkedRecordBanner
-              label={t('projects:projects.linkedOrder')}
-              value={formatOrderId(linkedOrder.id) + ' · ' + linkedOrder.clientName}
-              action={
-                onViewOrder
-                  ? {
-                      label: t('projects:projects.viewOrder'),
-                      onClick: () => onViewOrder(linkedOrder.id),
-                    }
-                  : undefined
-              }
-            />
-          )}
+const ProjectDetailTopSection: React.FC<{ controller: ProjectDetailController }> = ({
+  controller,
+}) => (
+  <div className="grid grid-cols-1 gap-6 xl:grid-cols-5">
+    <ProjectDetailForm controller={controller} />
+    <ProjectRules
+      projectId={controller.project.id}
+      permissions={controller.permissions}
+      className="xl:col-span-3"
+    />
+  </div>
+);
 
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-1.5">
-              <SelectControl
-                id="detail-order"
-                options={orderOptions}
-                value={orderId}
-                onChange={(val) => {
-                  const nextOrderId = val as string;
-                  setOrderId(nextOrderId);
-                  if (errors.orderId) setErrors((prev) => ({ ...prev, orderId: '' }));
-                  const nextOrder = orders.find((o) => o.id === nextOrderId);
-                  if (!nextOrder) return;
-                  setClientId(nextOrder.clientId);
-                  if (errors.clientId) setErrors((prev) => ({ ...prev, clientId: '' }));
-                  clearStaleClientLinks(nextOrder.clientId, 'order');
-                }}
-                label={
-                  <>
-                    {t('projects:projects.order')} <RequiredMark />
-                  </>
-                }
-                placeholder={t('projects:projects.selectOrder')}
-                searchable
-                buttonClassName="h-9"
-                disabled={!canUpdateProjects}
-              />
-              <FieldError className="text-xs">{errors.orderId}</FieldError>
-            </div>
-            <div className="space-y-1.5">
-              <SelectControl
-                id="detail-client"
-                options={clientOptions}
-                value={clientId}
-                onChange={(val) => {
-                  const nextClientId = val as string;
-                  setClientId(nextClientId);
-                  if (errors.clientId) setErrors((prev) => ({ ...prev, clientId: '' }));
-                  clearStaleClientLinks(nextClientId, null);
-                }}
-                label={
-                  <>
-                    {t('projects:projects.client')} <RequiredMark />
-                  </>
-                }
-                placeholder={t('projects:projects.selectClient')}
-                searchable
-                buttonClassName="h-9"
-                disabled={!canUpdateProjects || isClientLockedByOrder}
-              />
-              <FieldError className="text-xs">{errors.clientId}</FieldError>
-              {isClientLockedByOrder && linkedOrder && (
-                <div className="mt-1.5 flex items-center gap-2 rounded-md border border-border bg-muted/30 px-3 py-2">
-                  <i
-                    className="fa-solid fa-link text-xs text-muted-foreground"
-                    aria-hidden="true"
-                  ></i>
-                  <span className="text-xs text-muted-foreground">
-                    {t('projects:projects.inheritedClientLabel')}:
-                  </span>
-                  <span className="text-xs font-medium text-foreground">
-                    {linkedOrder.clientName}
-                  </span>
-                </div>
-              )}
-            </div>
-            <Field data-invalid={Boolean(errors.name)}>
-              <FieldLabel htmlFor="detail-name">
-                {t('projects:projects.name')} <RequiredMark />
-              </FieldLabel>
-              <Input
-                id="detail-name"
-                type="text"
-                value={name}
-                aria-invalid={Boolean(errors.name)}
-                disabled={!canUpdateProjects}
-                onChange={(e) => {
-                  setName(e.target.value);
-                  if (errors.name) setErrors((prev) => ({ ...prev, name: '' }));
-                }}
-                placeholder={t('projects:projects.projectNamePlaceholder')}
-              />
-              <FieldError className="text-xs">{errors.name}</FieldError>
-            </Field>
-            <Field className="md:col-span-2">
-              <FieldLabel htmlFor="detail-description">
-                {t('projects:projects.description')}
-              </FieldLabel>
-              <Textarea
-                id="detail-description"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder={t('projects:projects.descriptionPlaceholder')}
-                disabled={!canUpdateProjects}
-                rows={2}
-                className="min-h-16 resize-none"
-              />
-            </Field>
-            <Field data-invalid={Boolean(errors.startDate || errors.dateRange)}>
-              <FieldLabel htmlFor="detail-start-date">
-                {t('projects:projects.startDate')} {project.startDate && <RequiredMark />}
-              </FieldLabel>
-              <DateField
-                id="detail-start-date"
-                value={startDate}
-                disabled={!canUpdateProjects}
-                aria-invalid={Boolean(errors.startDate || errors.dateRange)}
-                onChange={(value) => {
-                  setStartDate(value);
-                  if (errors.startDate || errors.dateRange) {
-                    setErrors((prev) => ({ ...prev, startDate: '', dateRange: '' }));
-                  }
-                }}
-              />
-              <FieldError className="text-xs">{errors.startDate}</FieldError>
-            </Field>
-            <Field data-invalid={Boolean(errors.endDate || errors.dateRange)}>
-              <FieldLabel htmlFor="detail-end-date">
-                {t('projects:projects.endDate')} {project.endDate && <RequiredMark />}
-              </FieldLabel>
-              <DateField
-                id="detail-end-date"
-                value={endDate}
-                disabled={!canUpdateProjects}
-                aria-invalid={Boolean(errors.endDate || errors.dateRange)}
-                onChange={(value) => {
-                  setEndDate(value);
-                  if (errors.endDate || errors.dateRange) {
-                    setErrors((prev) => ({ ...prev, endDate: '', dateRange: '' }));
-                  }
-                }}
-              />
-              <FieldError className="text-xs">{errors.endDate}</FieldError>
-            </Field>
-            {errors.dateRange && (
-              <FieldError className="md:col-span-2 text-xs">{errors.dateRange}</FieldError>
-            )}
-            <div className="space-y-1.5">
-              <SelectControl
-                id="detail-offer"
-                options={offerOptions}
-                value={offerId}
-                onChange={(val) => {
-                  setOfferId(val as string);
-                  if (errors.offerId) setErrors((prev) => ({ ...prev, offerId: '' }));
-                }}
-                label={t('projects:projects.offerOptionalLabel')}
-                placeholder={t('projects:projects.selectOffer')}
-                searchable
-                buttonClassName="h-9"
-                disabled={!canUpdateProjects}
-              />
-              <FieldError className="text-xs">{errors.offerId}</FieldError>
-            </div>
-            <Field>
-              <FieldLabel htmlFor="detail-revenue">
-                {`${t('projects:projects.projectRevenue')} (${currency})`}
-              </FieldLabel>
-              <Input
-                id="detail-revenue"
-                type="number"
-                min="0"
-                step="0.01"
-                placeholder="0.00"
-                disabled={!canUpdateProjects}
-                value={revenueSource === 'manual' ? revenue : displayedRevenue.toFixed(2)}
-                readOnly={revenueSource !== 'manual'}
-                onChange={(e) => setRevenue(e.target.value)}
-              />
-              {revenueHintBySource[revenueSource] && (
-                <p className="text-xs text-muted-foreground">
-                  {revenueHintBySource[revenueSource]}
-                </p>
-              )}
-            </Field>
-            <div className="space-y-1.5">
-              <SelectControl
-                id="detail-tipo"
-                options={translatedTipoOptions}
-                value={tipo}
-                onChange={(val) => {
-                  setTipo(val as ProjectTipo);
-                  if (errors.tipo) setErrors((prev) => ({ ...prev, tipo: '' }));
-                }}
-                label={
-                  <>
-                    {t('projects:projects.tipo')} <RequiredMark />
-                  </>
-                }
-                placeholder={t('projects:projects.selectTipo')}
-                searchable={false}
-                buttonClassName="h-9"
-                disabled={!canUpdateProjects}
-              />
-              {/* Show the explanatory hint until the user acts. Once a blocked save sets the
-                  required error, defer to it (the red error is the actionable message) so the
-                  two near-duplicate "confirm the type" notices don't stack. */}
-              {tipoNeedsConfirmation && !tipo && !errors.tipo && (
-                <p className="flex items-center gap-1 text-[10px] font-medium text-amber-600">
-                  <i className="fa-solid fa-circle-info" aria-hidden="true"></i>
-                  {t('projects:projects.tipoConfirmHint')}
-                </p>
-              )}
-              <FieldError className="text-xs">{errors.tipo}</FieldError>
-            </div>
-            <SelectControl
-              id="detail-billing-type"
-              options={projectBillingTypeOptions}
-              value={derivedBillingType}
-              onChange={(val) => {
-                setProjectBillingChanged(true);
-                setBillingType(val as StoredBillingType);
-              }}
-              label={t('projects:projects.billingType')}
-              disabled={!canUpdateProjects || derivedBillingType === 'mixed'}
-              searchable={false}
-              buttonClassName="h-9"
-            />
-            {/*
-              The billing *type* is disabled when `mixed` (a project whose tasks have differing
-              types has no single type to set). The *frequency*, though, is a single project-level
-              value even for a mixed project - it's the default new quick-added tasks inherit
-              (POST /tasks falls back to the project's billingFrequency), so it stays editable and
-              shows the real stored value rather than a hardcoded default.
-            */}
-            <SelectControl
-              id="detail-billing-frequency"
-              options={translatedBillingFrequencyOptions}
-              value={billingFrequency}
-              onChange={(val) => {
-                setProjectBillingChanged(true);
-                setBillingFrequency(val as BillingFrequency);
-              }}
-              label={t('projects:projects.billingFrequency')}
-              disabled={!canUpdateProjects}
-              searchable={false}
-              buttonClassName="h-9"
-            />
-          </div>
+const ProjectDetailForm: React.FC<{ controller: ProjectDetailController }> = ({ controller }) => (
+  <div className="xl:col-span-2 self-start space-y-6">
+    <ProjectDetailFormIntro controller={controller} />
+    <ProjectDetailLinkedOrderBanner controller={controller} />
+    <ProjectDetailFieldsGrid controller={controller} />
+    <Separator />
+    <ProjectDetailDisabledSection controller={controller} />
+  </div>
+);
 
-          <Separator />
+const ProjectDetailFormIntro: React.FC<{ controller: ProjectDetailController }> = ({
+  controller,
+}) => (
+  <div className="space-y-1.5">
+    <h2 className="text-base font-semibold leading-none">
+      {controller.t('projects:detail.detailsTitle')}
+    </h2>
+    <p className="text-sm text-muted-foreground">
+      {controller.t('projects:detail.detailsDescription')}
+    </p>
+  </div>
+);
 
-          <div className="grid gap-4 md:grid-cols-2">
-            <Field>
-              <FieldLabel>{t('projects:projects.projectDisabled')}</FieldLabel>
-              <div className="flex items-center justify-between rounded-md border border-border bg-muted/30 p-3">
-                <div>
-                  <p
-                    className={`text-sm font-medium ${isClientDisabled ? 'text-muted-foreground' : 'text-foreground'}`}
-                  >
-                    {t('projects:projects.projectDisabled')}
-                  </p>
-                  {isClientDisabled && (
-                    <p className="mt-1 flex items-center gap-1 text-[10px] font-medium text-amber-600">
-                      <i className="fa-solid fa-circle-info" aria-hidden="true"></i>
-                      {t('projects:projects.inheritedFromDisabledClient', {
-                        clientName: client?.name,
-                      })}
-                    </p>
-                  )}
-                </div>
-                <Toggle
-                  checked={isCurrentlyDisabled}
-                  onChange={() => {
-                    if (!isClientDisabled && canUpdateProjects) {
-                      setTempIsDisabled(!tempIsDisabled);
-                    }
-                  }}
-                  disabled={isClientDisabled || !canUpdateProjects}
-                />
-              </div>
-            </Field>
-          </div>
-        </div>
+const ProjectDetailLinkedOrderBanner: React.FC<{ controller: ProjectDetailController }> = ({
+  controller,
+}) => {
+  const { t, linkedOrder, onViewOrder } = controller;
+  if (!linkedOrder) return null;
 
-        <ProjectRules projectId={project.id} permissions={permissions} className="xl:col-span-3" />
-      </div>
+  return (
+    <LinkedRecordBanner
+      label={t('projects:projects.linkedOrder')}
+      value={formatOrderId(linkedOrder.id) + ' · ' + linkedOrder.clientName}
+      action={
+        onViewOrder
+          ? {
+              label: t('projects:projects.viewOrder'),
+              onClick: () => onViewOrder(linkedOrder.id),
+            }
+          : undefined
+      }
+    />
+  );
+};
 
-      {/* Project tasks — full-width row so the table scales with many tasks */}
-      <div className="space-y-3">
-        <div className="space-y-1.5">
-          <h2 className="text-base font-semibold leading-none">
-            {t('projects:projects.projectTasks')}
-          </h2>
-          <p className="text-sm text-muted-foreground">{t('projects:detail.tasksDescription')}</p>
-        </div>
-        <ProjectTasksTable
-          projectId={project.id}
-          tasks={projectTasks}
-          currency={currency}
-          canCreate={canCreateTasks}
-          canUpdate={canUpdateTasks}
-          canDelete={canDeleteTasks}
-          onAddTask={handleAddTask}
-          onUpdateTask={onUpdateTask}
-          onRequestDeleteTask={(task) => {
-            setTaskToDelete(task);
-            setIsTaskDeleteConfirmOpen(true);
-          }}
-        />
-      </div>
+const ProjectDetailFieldsGrid: React.FC<{ controller: ProjectDetailController }> = ({
+  controller,
+}) => (
+  <div className="grid gap-4 md:grid-cols-2">
+    <ProjectDetailOrderField controller={controller} />
+    <ProjectDetailClientField controller={controller} />
+    <ProjectDetailNameField controller={controller} />
+    <ProjectDetailDescriptionField controller={controller} />
+    <ProjectDetailStartDateField controller={controller} />
+    <ProjectDetailEndDateField controller={controller} />
+    <ProjectDetailDateRangeError controller={controller} />
+    <ProjectDetailOfferField controller={controller} />
+    <ProjectDetailRevenueField controller={controller} />
+    <ProjectDetailTipoField controller={controller} />
+    <ProjectDetailBillingTypeField controller={controller} />
+    <ProjectDetailBillingFrequencyField controller={controller} />
+  </div>
+);
 
-      {/* Save bar — shows only when there are unsaved changes */}
-      {hasChanges && canUpdateProjects && (
-        <div className="sticky bottom-4 z-20 mx-auto flex max-w-3xl items-center justify-between gap-4 rounded-lg border border-border bg-card/95 px-4 py-3 shadow-lg backdrop-blur">
-          <span className="text-sm text-muted-foreground">
-            <i className="fa-solid fa-circle-info text-xs mr-2" aria-hidden="true"></i>
-            {t('projects:detail.unsavedChanges')}
+const ProjectDetailOrderField: React.FC<{ controller: ProjectDetailController }> = ({
+  controller,
+}) => {
+  const {
+    t,
+    orderOptions,
+    orderId,
+    setOrderId,
+    errors,
+    setErrors,
+    orders,
+    setClientId,
+    clearStaleClientLinks,
+    canUpdateProjects,
+  } = controller;
+
+  return (
+    <div className="space-y-1.5">
+      <SelectControl
+        id="detail-order"
+        options={orderOptions}
+        value={orderId}
+        onChange={(val) => {
+          const nextOrderId = val as string;
+          setOrderId(nextOrderId);
+          if (errors.orderId) setErrors((prev) => ({ ...prev, orderId: '' }));
+          const nextOrder = orders.find((o) => o.id === nextOrderId);
+          if (!nextOrder) return;
+          setClientId(nextOrder.clientId);
+          if (errors.clientId) setErrors((prev) => ({ ...prev, clientId: '' }));
+          clearStaleClientLinks(nextOrder.clientId, 'order');
+        }}
+        label={
+          <>
+            {t('projects:projects.order')} <RequiredMark />
+          </>
+        }
+        placeholder={t('projects:projects.selectOrder')}
+        searchable
+        buttonClassName="h-9"
+        disabled={!canUpdateProjects}
+      />
+      <FieldError className="text-xs">{errors.orderId}</FieldError>
+    </div>
+  );
+};
+
+const ProjectDetailClientField: React.FC<{ controller: ProjectDetailController }> = ({
+  controller,
+}) => {
+  const {
+    t,
+    clientOptions,
+    clientId,
+    setClientId,
+    errors,
+    setErrors,
+    clearStaleClientLinks,
+    canUpdateProjects,
+    isClientLockedByOrder,
+    linkedOrder,
+  } = controller;
+
+  return (
+    <div className="space-y-1.5">
+      <SelectControl
+        id="detail-client"
+        options={clientOptions}
+        value={clientId}
+        onChange={(val) => {
+          const nextClientId = val as string;
+          setClientId(nextClientId);
+          if (errors.clientId) setErrors((prev) => ({ ...prev, clientId: '' }));
+          clearStaleClientLinks(nextClientId, null);
+        }}
+        label={
+          <>
+            {t('projects:projects.client')} <RequiredMark />
+          </>
+        }
+        placeholder={t('projects:projects.selectClient')}
+        searchable
+        buttonClassName="h-9"
+        disabled={!canUpdateProjects || isClientLockedByOrder}
+      />
+      <FieldError className="text-xs">{errors.clientId}</FieldError>
+      {isClientLockedByOrder && linkedOrder && (
+        <div className="mt-1.5 flex items-center gap-2 rounded-md border border-border bg-muted/30 px-3 py-2">
+          <i className="fa-solid fa-link text-xs text-muted-foreground" aria-hidden="true"></i>
+          <span className="text-xs text-muted-foreground">
+            {t('projects:projects.inheritedClientLabel')}:
           </span>
-          <div className="flex items-center gap-2">
-            <Button type="button" variant="outline" size="sm" onClick={handleDiscard}>
-              {t('common:buttons.cancel')}
-            </Button>
-            <Button type="button" size="sm" onClick={handleSave}>
-              {t('common:buttons.update')}
-            </Button>
-          </div>
+          <span className="text-xs font-medium text-foreground">{linkedOrder.clientName}</span>
         </div>
       )}
+    </div>
+  );
+};
 
-      {/* Analytics section header — scope/error notices appear as a single-line
-          chip beside the header so the section stays compact; the full message
-          lives in a tooltip on hover. Vertical centering keeps the chip aligned
-          with the title even though the description wraps the header to 2 lines. */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="space-y-1.5">
-          <h2 className="text-base font-semibold leading-none">
-            {t('projects:detail.analyticsTitle')}
-          </h2>
-          <p className="text-sm text-muted-foreground">
-            {t('projects:detail.analyticsDescription')}
-          </p>
-        </div>
-        {/* Right side of the header: scope/error chips plus the dashboard
-            Edit / Views controls (resize, hide, reorder, save layouts). */}
-        <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-          {!entriesLoading && entriesError === 'forbidden' && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                {/* <button> is keyboard-focusable by default — Radix Tooltip
-                  opens on focus, so keyboard / SR users get the full
-                  description (aria-label) and the tooltip content without
-                  needing mouse hover. Biome rejects tabIndex on a plain
-                  <div>, and a button is more semantically correct anyway. */}
-                <button
-                  type="button"
-                  aria-label={t('projects:detail.notices.forbiddenDescription')}
-                  className="inline-flex max-w-full cursor-help items-center gap-2 rounded-md border border-amber-300/50 bg-amber-50 px-2.5 py-1.5 text-left text-xs text-amber-800 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 dark:border-amber-700/50 dark:bg-amber-950/30 dark:text-amber-200 sm:max-w-xs"
-                >
-                  <i className="fa-solid fa-lock shrink-0" aria-hidden="true"></i>
-                  <span className="truncate font-medium">
-                    {t('projects:detail.notices.forbiddenTitle')}
-                  </span>
-                </button>
-              </TooltipTrigger>
-              <TooltipContent>{t('projects:detail.notices.forbiddenDescription')}</TooltipContent>
-            </Tooltip>
-          )}
-          {!entriesLoading && entriesError === 'failed' && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  type="button"
-                  aria-label={t('projects:detail.notices.loadFailedDescription')}
-                  className="inline-flex max-w-full cursor-help items-center gap-2 rounded-md border border-destructive/40 bg-destructive/10 px-2.5 py-1.5 text-left text-xs text-destructive outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 sm:max-w-xs"
-                >
-                  <i className="fa-solid fa-triangle-exclamation shrink-0" aria-hidden="true"></i>
-                  <span className="truncate font-medium">
-                    {t('projects:detail.notices.loadFailedTitle')}
-                  </span>
-                </button>
-              </TooltipTrigger>
-              <TooltipContent>{t('projects:detail.notices.loadFailedDescription')}</TooltipContent>
-            </Tooltip>
-          )}
-          {!entriesLoading &&
-            entriesError === null &&
-            (entriesTruncated || isPartialEntryScope) && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  {/* When both notices apply, show both messages joined in the
-                  visible chip text so users without hover affordance still see
-                  every active warning; the tooltip mirrors them for SR/keyboard
-                  parity. */}
-                  <button
-                    type="button"
-                    aria-label={[
-                      entriesTruncated
-                        ? t('projects:detail.notices.truncated', { count: ENTRIES_FETCH_CEILING })
-                        : null,
-                      isPartialEntryScope ? t('projects:detail.notices.partialScope') : null,
-                    ]
-                      .filter(Boolean)
-                      .join(' · ')}
-                    className="inline-flex max-w-full cursor-help items-center gap-2 rounded-md border border-border bg-muted/30 px-2.5 py-1.5 text-left text-xs text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 sm:max-w-md"
-                  >
-                    <i className="fa-solid fa-circle-info shrink-0" aria-hidden="true"></i>
-                    <span className="truncate">
-                      {[
-                        entriesTruncated
-                          ? t('projects:detail.notices.truncated', { count: ENTRIES_FETCH_CEILING })
-                          : null,
-                        isPartialEntryScope ? t('projects:detail.notices.partialScope') : null,
-                      ]
-                        .filter(Boolean)
-                        .join(' · ')}
-                    </span>
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <div className="space-y-1 text-xs">
-                    {entriesTruncated && (
-                      <div>
-                        {t('projects:detail.notices.truncated', { count: ENTRIES_FETCH_CEILING })}
-                      </div>
-                    )}
-                    {isPartialEntryScope && <div>{t('projects:detail.notices.partialScope')}</div>}
-                  </div>
-                </TooltipContent>
-              </Tooltip>
+const ProjectDetailNameField: React.FC<{ controller: ProjectDetailController }> = ({
+  controller,
+}) => {
+  const { t, errors, setErrors, name, setName, canUpdateProjects } = controller;
+
+  return (
+    <Field data-invalid={Boolean(errors.name)}>
+      <FieldLabel htmlFor="detail-name">
+        {t('projects:projects.name')} <RequiredMark />
+      </FieldLabel>
+      <Input
+        id="detail-name"
+        type="text"
+        value={name}
+        aria-invalid={Boolean(errors.name)}
+        disabled={!canUpdateProjects}
+        onChange={(e) => {
+          setName(e.target.value);
+          if (errors.name) setErrors((prev) => ({ ...prev, name: '' }));
+        }}
+        placeholder={t('projects:projects.projectNamePlaceholder')}
+      />
+      <FieldError className="text-xs">{errors.name}</FieldError>
+    </Field>
+  );
+};
+
+const ProjectDetailDescriptionField: React.FC<{ controller: ProjectDetailController }> = ({
+  controller,
+}) => {
+  const { t, description, setDescription, canUpdateProjects } = controller;
+
+  return (
+    <Field className="md:col-span-2">
+      <FieldLabel htmlFor="detail-description">{t('projects:projects.description')}</FieldLabel>
+      <Textarea
+        id="detail-description"
+        value={description}
+        onChange={(e) => setDescription(e.target.value)}
+        placeholder={t('projects:projects.descriptionPlaceholder')}
+        disabled={!canUpdateProjects}
+        rows={2}
+        className="min-h-16 resize-none"
+      />
+    </Field>
+  );
+};
+
+const ProjectDetailStartDateField: React.FC<{ controller: ProjectDetailController }> = ({
+  controller,
+}) => {
+  const { t, project, startDate, setStartDate, canUpdateProjects, errors, setErrors } = controller;
+
+  return (
+    <Field data-invalid={Boolean(errors.startDate || errors.dateRange)}>
+      <FieldLabel htmlFor="detail-start-date">
+        {t('projects:projects.startDate')} {project.startDate && <RequiredMark />}
+      </FieldLabel>
+      <DateField
+        id="detail-start-date"
+        value={startDate}
+        disabled={!canUpdateProjects}
+        aria-invalid={Boolean(errors.startDate || errors.dateRange)}
+        onChange={(value) => {
+          setStartDate(value);
+          if (errors.startDate || errors.dateRange) {
+            setErrors((prev) => ({ ...prev, startDate: '', dateRange: '' }));
+          }
+        }}
+      />
+      <FieldError className="text-xs">{errors.startDate}</FieldError>
+    </Field>
+  );
+};
+
+const ProjectDetailEndDateField: React.FC<{ controller: ProjectDetailController }> = ({
+  controller,
+}) => {
+  const { t, project, endDate, setEndDate, canUpdateProjects, errors, setErrors } = controller;
+
+  return (
+    <Field data-invalid={Boolean(errors.endDate || errors.dateRange)}>
+      <FieldLabel htmlFor="detail-end-date">
+        {t('projects:projects.endDate')} {project.endDate && <RequiredMark />}
+      </FieldLabel>
+      <DateField
+        id="detail-end-date"
+        value={endDate}
+        disabled={!canUpdateProjects}
+        aria-invalid={Boolean(errors.endDate || errors.dateRange)}
+        onChange={(value) => {
+          setEndDate(value);
+          if (errors.endDate || errors.dateRange) {
+            setErrors((prev) => ({ ...prev, endDate: '', dateRange: '' }));
+          }
+        }}
+      />
+      <FieldError className="text-xs">{errors.endDate}</FieldError>
+    </Field>
+  );
+};
+
+const ProjectDetailDateRangeError: React.FC<{ controller: ProjectDetailController }> = ({
+  controller,
+}) =>
+  controller.errors.dateRange ? (
+    <FieldError className="md:col-span-2 text-xs">{controller.errors.dateRange}</FieldError>
+  ) : null;
+
+const ProjectDetailOfferField: React.FC<{ controller: ProjectDetailController }> = ({
+  controller,
+}) => {
+  const { t, offerOptions, offerId, setOfferId, errors, setErrors, canUpdateProjects } = controller;
+
+  return (
+    <div className="space-y-1.5">
+      <SelectControl
+        id="detail-offer"
+        options={offerOptions}
+        value={offerId}
+        onChange={(val) => {
+          setOfferId(val as string);
+          if (errors.offerId) setErrors((prev) => ({ ...prev, offerId: '' }));
+        }}
+        label={t('projects:projects.offerOptionalLabel')}
+        placeholder={t('projects:projects.selectOffer')}
+        searchable
+        buttonClassName="h-9"
+        disabled={!canUpdateProjects}
+      />
+      <FieldError className="text-xs">{errors.offerId}</FieldError>
+    </div>
+  );
+};
+
+const ProjectDetailRevenueField: React.FC<{ controller: ProjectDetailController }> = ({
+  controller,
+}) => {
+  const {
+    t,
+    currency,
+    revenueSource,
+    revenue,
+    displayedRevenue,
+    setRevenue,
+    revenueHintBySource,
+    canUpdateProjects,
+  } = controller;
+
+  return (
+    <Field>
+      <FieldLabel htmlFor="detail-revenue">
+        {`${t('projects:projects.projectRevenue')} (${currency})`}
+      </FieldLabel>
+      <Input
+        id="detail-revenue"
+        type="number"
+        min="0"
+        step="0.01"
+        placeholder="0.00"
+        disabled={!canUpdateProjects}
+        value={revenueSource === 'manual' ? revenue : displayedRevenue.toFixed(2)}
+        readOnly={revenueSource !== 'manual'}
+        onChange={(e) => setRevenue(e.target.value)}
+      />
+      {revenueHintBySource[revenueSource] && (
+        <p className="text-xs text-muted-foreground">{revenueHintBySource[revenueSource]}</p>
+      )}
+    </Field>
+  );
+};
+
+const ProjectDetailTipoField: React.FC<{ controller: ProjectDetailController }> = ({
+  controller,
+}) => {
+  const {
+    t,
+    translatedTipoOptions,
+    tipo,
+    setTipo,
+    errors,
+    setErrors,
+    tipoNeedsConfirmation,
+    canUpdateProjects,
+  } = controller;
+
+  return (
+    <div className="space-y-1.5">
+      <SelectControl
+        id="detail-tipo"
+        options={translatedTipoOptions}
+        value={tipo}
+        onChange={(val) => {
+          setTipo(val as ProjectTipo);
+          if (errors.tipo) setErrors((prev) => ({ ...prev, tipo: '' }));
+        }}
+        label={
+          <>
+            {t('projects:projects.tipo')} <RequiredMark />
+          </>
+        }
+        placeholder={t('projects:projects.selectTipo')}
+        searchable={false}
+        buttonClassName="h-9"
+        disabled={!canUpdateProjects}
+      />
+      {tipoNeedsConfirmation && !tipo && !errors.tipo && (
+        <p className="flex items-center gap-1 text-[10px] font-medium text-amber-600">
+          <i className="fa-solid fa-circle-info" aria-hidden="true"></i>
+          {t('projects:projects.tipoConfirmHint')}
+        </p>
+      )}
+      <FieldError className="text-xs">{errors.tipo}</FieldError>
+    </div>
+  );
+};
+
+const ProjectDetailBillingTypeField: React.FC<{ controller: ProjectDetailController }> = ({
+  controller,
+}) => {
+  const {
+    t,
+    projectBillingTypeOptions,
+    displayedBillingType,
+    setBillingTypeDraft,
+    derivedBillingType,
+    canUpdateProjects,
+  } = controller;
+
+  return (
+    <SelectControl
+      id="detail-billing-type"
+      options={projectBillingTypeOptions}
+      value={displayedBillingType}
+      onChange={(val) => {
+        setBillingTypeDraft(val as StoredBillingType);
+      }}
+      label={t('projects:projects.billingType')}
+      disabled={!canUpdateProjects || derivedBillingType === 'mixed'}
+      searchable={false}
+      buttonClassName="h-9"
+    />
+  );
+};
+
+const ProjectDetailBillingFrequencyField: React.FC<{ controller: ProjectDetailController }> = ({
+  controller,
+}) => {
+  const {
+    t,
+    translatedBillingFrequencyOptions,
+    billingFrequency,
+    setBillingFrequencyDraft,
+    canUpdateProjects,
+  } = controller;
+
+  return (
+    <SelectControl
+      id="detail-billing-frequency"
+      options={translatedBillingFrequencyOptions}
+      value={billingFrequency}
+      onChange={(val) => {
+        setBillingFrequencyDraft(val as BillingFrequency);
+      }}
+      label={t('projects:projects.billingFrequency')}
+      disabled={!canUpdateProjects}
+      searchable={false}
+      buttonClassName="h-9"
+    />
+  );
+};
+
+const ProjectDetailDisabledSection: React.FC<{ controller: ProjectDetailController }> = ({
+  controller,
+}) => {
+  const {
+    t,
+    isClientDisabled,
+    client,
+    isCurrentlyDisabled,
+    canUpdateProjects,
+    tempIsDisabled,
+    setTempIsDisabled,
+  } = controller;
+
+  return (
+    <div className="grid gap-4 md:grid-cols-2">
+      <Field>
+        <FieldLabel>{t('projects:projects.projectDisabled')}</FieldLabel>
+        <div className="flex items-center justify-between rounded-md border border-border bg-muted/30 p-3">
+          <div>
+            <p
+              className={`text-sm font-medium ${
+                isClientDisabled ? 'text-muted-foreground' : 'text-foreground'
+              }`}
+            >
+              {t('projects:projects.projectDisabled')}
+            </p>
+            {isClientDisabled && (
+              <p className="mt-1 flex items-center gap-1 text-[10px] font-medium text-amber-600">
+                <i className="fa-solid fa-circle-info" aria-hidden="true"></i>
+                {t('projects:projects.inheritedFromDisabledClient', {
+                  clientName: client?.name,
+                })}
+              </p>
             )}
-          <DashboardControls controls={dashboard} />
+          </div>
+          <Toggle
+            checked={isCurrentlyDisabled}
+            onChange={() => {
+              if (!isClientDisabled && canUpdateProjects) {
+                setTempIsDisabled(!tempIsDisabled);
+              }
+            }}
+            disabled={isClientDisabled || !canUpdateProjects}
+          />
         </div>
-      </div>
+      </Field>
+    </div>
+  );
+};
 
-      {/* Free-form analytics grid: the KPI stat cards, the project timeline, and
-          the four charts are all draggable / resizable cards on a 12-column grid.
-          Permission-gated KPIs render only when allowed (and are filtered out of
-          the layout def set above), so they never reserve an empty slot. */}
-      <DashboardGrid
-        layout={dashboard.layout}
-        defs={activeWidgetDefs}
-        editing={dashboard.editing}
-        onMove={dashboard.moveWidget}
-        onResize={dashboard.resizeWidget}
-        onToggleHidden={dashboard.toggleHidden}
-      >
-        <DashboardItem id="totalHours" title={t('projects:detail.kpi.totalHours')}>
+const ProjectDetailTasksSection: React.FC<{ controller: ProjectDetailController }> = ({
+  controller,
+}) => {
+  const {
+    t,
+    project,
+    projectTasks,
+    currency,
+    canCreateTasks,
+    canUpdateTasks,
+    canDeleteTasks,
+    handleAddTask,
+    onUpdateTask,
+    setTaskToDelete,
+    setIsTaskDeleteConfirmOpen,
+  } = controller;
+
+  return (
+    <div className="space-y-3">
+      <div className="space-y-1.5">
+        <h2 className="text-base font-semibold leading-none">
+          {t('projects:projects.projectTasks')}
+        </h2>
+        <p className="text-sm text-muted-foreground">{t('projects:detail.tasksDescription')}</p>
+      </div>
+      <ProjectTasksTable
+        projectId={project.id}
+        tasks={projectTasks}
+        currency={currency}
+        canCreate={canCreateTasks}
+        canUpdate={canUpdateTasks}
+        canDelete={canDeleteTasks}
+        onAddTask={handleAddTask}
+        onUpdateTask={onUpdateTask}
+        onRequestDeleteTask={(task) => {
+          setTaskToDelete(task);
+          setIsTaskDeleteConfirmOpen(true);
+        }}
+      />
+    </div>
+  );
+};
+
+const ProjectDetailSaveBar: React.FC<{ controller: ProjectDetailController }> = ({
+  controller,
+}) => {
+  const { t, hasChanges, canUpdateProjects, handleDiscard, handleSave } = controller;
+  const showSaveBar = hasChanges && canUpdateProjects;
+  if (!showSaveBar) return null;
+
+  return (
+    <div className="sticky bottom-4 z-20 mx-auto flex max-w-3xl items-center justify-between gap-4 rounded-lg border border-border bg-card/95 px-4 py-3 shadow-lg backdrop-blur">
+      <span className="text-sm text-muted-foreground">
+        <i className="fa-solid fa-circle-info text-xs mr-2" aria-hidden="true"></i>
+        {t('projects:detail.unsavedChanges')}
+      </span>
+      <div className="flex items-center gap-2">
+        <Button type="button" variant="outline" size="sm" onClick={handleDiscard}>
+          {t('common:buttons.cancel')}
+        </Button>
+        <Button type="button" size="sm" onClick={handleSave}>
+          {t('common:buttons.update')}
+        </Button>
+      </div>
+    </div>
+  );
+};
+
+const ProjectAnalyticsSection: React.FC<{ controller: ProjectDetailController }> = ({
+  controller,
+}) => (
+  <>
+    <ProjectAnalyticsHeader controller={controller} />
+    <ProjectAnalyticsGrid controller={controller} />
+  </>
+);
+
+// Analytics section header
+const ProjectAnalyticsHeader: React.FC<{ controller: ProjectDetailController }> = ({
+  controller,
+}) => {
+  const { t, entriesLoading, entriesError, entriesTruncated, isPartialEntryScope, dashboard } =
+    controller;
+
+  return (
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="space-y-1.5">
+        <h2 className="text-base font-semibold leading-none">
+          {t('projects:detail.analyticsTitle')}
+        </h2>
+        <p className="text-sm text-muted-foreground">{t('projects:detail.analyticsDescription')}</p>
+      </div>
+      <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+        {!entriesLoading && entriesError === 'forbidden' && (
+          <ProjectForbiddenAnalyticsNotice controller={controller} />
+        )}
+        {!entriesLoading && entriesError === 'failed' && (
+          <ProjectLoadFailedAnalyticsNotice controller={controller} />
+        )}
+        {!entriesLoading && entriesError === null && (entriesTruncated || isPartialEntryScope) && (
+          <ProjectScopeNotice controller={controller} />
+        )}
+        <DashboardControls controls={dashboard} />
+      </div>
+    </div>
+  );
+};
+
+const ProjectForbiddenAnalyticsNotice: React.FC<{ controller: ProjectDetailController }> = ({
+  controller,
+}) => {
+  const { t } = controller;
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          aria-label={t('projects:detail.notices.forbiddenDescription')}
+          className="inline-flex max-w-full cursor-help items-center gap-2 rounded-md border border-amber-300/50 bg-amber-50 px-2.5 py-1.5 text-left text-xs text-amber-800 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 dark:border-amber-700/50 dark:bg-amber-950/30 dark:text-amber-200 sm:max-w-xs"
+        >
+          <i className="fa-solid fa-lock shrink-0" aria-hidden="true"></i>
+          <span className="truncate font-medium">
+            {t('projects:detail.notices.forbiddenTitle')}
+          </span>
+        </button>
+      </TooltipTrigger>
+      <TooltipContent>{t('projects:detail.notices.forbiddenDescription')}</TooltipContent>
+    </Tooltip>
+  );
+};
+
+const ProjectLoadFailedAnalyticsNotice: React.FC<{ controller: ProjectDetailController }> = ({
+  controller,
+}) => {
+  const { t } = controller;
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          aria-label={t('projects:detail.notices.loadFailedDescription')}
+          className="inline-flex max-w-full cursor-help items-center gap-2 rounded-md border border-destructive/40 bg-destructive/10 px-2.5 py-1.5 text-left text-xs text-destructive outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 sm:max-w-xs"
+        >
+          <i className="fa-solid fa-triangle-exclamation shrink-0" aria-hidden="true"></i>
+          <span className="truncate font-medium">
+            {t('projects:detail.notices.loadFailedTitle')}
+          </span>
+        </button>
+      </TooltipTrigger>
+      <TooltipContent>{t('projects:detail.notices.loadFailedDescription')}</TooltipContent>
+    </Tooltip>
+  );
+};
+
+const ProjectScopeNotice: React.FC<{ controller: ProjectDetailController }> = ({ controller }) => {
+  const { t, entriesTruncated, isPartialEntryScope } = controller;
+  const messages = [
+    entriesTruncated
+      ? t('projects:detail.notices.truncated', { count: ENTRIES_FETCH_CEILING })
+      : null,
+    isPartialEntryScope ? t('projects:detail.notices.partialScope') : null,
+  ].filter(Boolean);
+  const messageText = messages.filter(Boolean).join(' · ');
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          aria-label={messageText}
+          className="inline-flex max-w-full cursor-help items-center gap-2 rounded-md border border-border bg-muted/30 px-2.5 py-1.5 text-left text-xs text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 sm:max-w-md"
+        >
+          <i className="fa-solid fa-circle-info shrink-0" aria-hidden="true"></i>
+          <span className="truncate">{messageText}</span>
+        </button>
+      </TooltipTrigger>
+      <TooltipContent>
+        <div className="space-y-1 text-xs">
+          {entriesTruncated && (
+            <div>{t('projects:detail.notices.truncated', { count: ENTRIES_FETCH_CEILING })}</div>
+          )}
+          {isPartialEntryScope && <div>{t('projects:detail.notices.partialScope')}</div>}
+        </div>
+      </TooltipContent>
+    </Tooltip>
+  );
+};
+
+// Free-form analytics grid
+const ProjectAnalyticsGrid: React.FC<{ controller: ProjectDetailController }> = ({
+  controller,
+}) => {
+  const { dashboard, activeWidgetDefs } = controller;
+
+  return (
+    <DashboardGrid
+      layout={dashboard.layout}
+      defs={activeWidgetDefs}
+      editing={dashboard.editing}
+      onMove={dashboard.moveWidget}
+      onResize={dashboard.resizeWidget}
+      onToggleHidden={dashboard.toggleHidden}
+    >
+      <ProjectKpiDashboardItems controller={controller} />
+      <ProjectTimelineDashboardItem controller={controller} />
+      <ProjectHoursByUserDashboardItem controller={controller} />
+      <ProjectHoursByTaskDashboardItem controller={controller} />
+      <ProjectCostVsRevenueDashboardItem controller={controller} />
+      <ProjectMonthlyActivityDashboardItem controller={controller} />
+    </DashboardGrid>
+  );
+};
+
+// KPI cards + project timeline
+const ProjectKpiDashboardItems: React.FC<{ controller: ProjectDetailController }> = ({
+  controller,
+}) => {
+  const {
+    t,
+    i18n,
+    currency,
+    widgetPermitted,
+    entriesLoading,
+    entriesError,
+    entries,
+    totalHours,
+    totalCost,
+    assignedLoading,
+    assignedUsers,
+    teamSize,
+    budgetUsedPct,
+    displayedRevenue,
+  } = controller;
+
+  return (
+    <>
+      <DashboardItem id="totalHours" title={t('projects:detail.kpi.totalHours')}>
+        <KpiCard
+          title={t('projects:detail.kpi.totalHours')}
+          icon="fa-clock"
+          accent="blue"
+          loading={entriesLoading}
+          unavailable={entriesError !== null}
+          value={
+            <>
+              {totalHours.toLocaleString(i18n.language, { maximumFractionDigits: 1 })}
+              <span className="ml-1 text-base font-medium text-muted-foreground">h</span>
+            </>
+          }
+          subtitle={
+            entries.length > 0
+              ? t('projects:detail.kpi.totalHoursSubtitle', { count: entries.length })
+              : undefined
+          }
+        />
+      </DashboardItem>
+      {widgetPermitted('totalCost') && (
+        <DashboardItem id="totalCost" title={t('projects:detail.kpi.totalCost')}>
           <KpiCard
-            title={t('projects:detail.kpi.totalHours')}
-            icon="fa-clock"
-            accent="blue"
+            title={t('projects:detail.kpi.totalCost')}
+            icon="fa-coins"
+            accent="emerald"
             loading={entriesLoading}
             unavailable={entriesError !== null}
             value={
               <>
-                {totalHours.toLocaleString(i18n.language, { maximumFractionDigits: 1 })}
-                <span className="ml-1 text-base font-medium text-muted-foreground">h</span>
+                <span className="mr-1 text-base font-medium text-muted-foreground">{currency}</span>
+                {totalCost.toLocaleString(i18n.language, {
+                  maximumFractionDigits: 2,
+                  minimumFractionDigits: 2,
+                })}
               </>
             }
             subtitle={
-              entries.length > 0
-                ? t('projects:detail.kpi.totalHoursSubtitle', { count: entries.length })
+              totalHours > 0
+                ? t('projects:detail.kpi.totalCostSubtitle', {
+                    rate: (totalCost / totalHours).toLocaleString(i18n.language, {
+                      maximumFractionDigits: 2,
+                    }),
+                    currency,
+                  })
                 : undefined
             }
           />
         </DashboardItem>
-        {widgetPermitted('totalCost') && (
-          <DashboardItem id="totalCost" title={t('projects:detail.kpi.totalCost')}>
-            <KpiCard
-              title={t('projects:detail.kpi.totalCost')}
-              icon="fa-coins"
-              accent="emerald"
-              loading={entriesLoading}
-              unavailable={entriesError !== null}
-              value={
-                <>
-                  <span className="mr-1 text-base font-medium text-muted-foreground">
-                    {currency}
-                  </span>
-                  {totalCost.toLocaleString(i18n.language, {
-                    maximumFractionDigits: 2,
-                    minimumFractionDigits: 2,
-                  })}
-                </>
-              }
-              subtitle={
-                totalHours > 0
-                  ? t('projects:detail.kpi.totalCostSubtitle', {
-                      rate: (totalCost / totalHours).toLocaleString(i18n.language, {
-                        maximumFractionDigits: 2,
-                      }),
-                      currency,
-                    })
-                  : undefined
-              }
-            />
-          </DashboardItem>
-        )}
-        {widgetPermitted('teamSize') && (
-          <DashboardItem id="teamSize" title={t('projects:detail.kpi.teamSize')}>
-            <KpiCard
-              title={t('projects:detail.kpi.teamSize')}
-              icon="fa-users"
-              accent="violet"
-              loading={assignedLoading}
-              value={teamSize}
-              subtitle={teamSize > 0 ? t('projects:detail.kpi.teamSizeSubtitle') : undefined}
-              footer={
-                !assignedLoading && assignedUsers.length > 0 ? (
-                  <div className="flex [&>*+*]:-ml-2">
-                    {assignedUsers.slice(0, 6).map((u) => (
-                      <Tooltip key={u.id}>
-                        <TooltipTrigger asChild>
-                          <Avatar
-                            role="img"
-                            aria-label={u.name}
-                            className="size-7 border-2 border-card"
-                          >
-                            <AvatarFallback className="text-[10px]">
-                              {getInitials(u.name)}
-                            </AvatarFallback>
-                          </Avatar>
-                        </TooltipTrigger>
-                        <TooltipContent>{u.name}</TooltipContent>
-                      </Tooltip>
-                    ))}
-                    {assignedUsers.length > 6 && (
-                      <div className="flex size-7 items-center justify-center rounded-full border-2 border-card bg-muted text-[10px] font-medium text-muted-foreground">
-                        +{assignedUsers.length - 6}
-                      </div>
-                    )}
-                  </div>
-                ) : undefined
-              }
-            />
-          </DashboardItem>
-        )}
-        {widgetPermitted('budgetUsed') && (
-          <DashboardItem id="budgetUsed" title={t('projects:detail.kpi.budgetUsed')}>
-            <KpiCard
-              title={t('projects:detail.kpi.budgetUsed')}
-              icon="fa-chart-pie"
-              accent={
-                budgetUsedPct === null
-                  ? 'amber'
-                  : budgetUsedPct > 100
-                    ? 'destructive'
-                    : budgetUsedPct >= 80
-                      ? 'amber'
-                      : 'emerald'
-              }
-              loading={entriesLoading}
-              unavailable={budgetUsedPct === null}
-              value={budgetUsedPct !== null ? `${budgetUsedPct}%` : '—'}
-              subtitle={
-                displayedRevenue > 0
-                  ? t('projects:detail.kpi.budgetUsedSubtitle', {
-                      budget: displayedRevenue.toLocaleString(i18n.language, {
-                        maximumFractionDigits: 0,
-                      }),
-                      currency,
-                    })
-                  : undefined
-              }
-              footer={
-                !entriesLoading && budgetUsedPct !== null ? (
-                  <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
-                    <div
-                      className={`h-full rounded-full transition-all ${
-                        budgetUsedPct > 100
-                          ? 'bg-destructive'
-                          : budgetUsedPct >= 80
-                            ? 'bg-amber-500'
-                            : 'bg-emerald-500'
-                      }`}
-                      style={{ width: `${Math.min(budgetUsedPct, 100)}%` }}
-                    />
-                  </div>
-                ) : undefined
-              }
-            />
-          </DashboardItem>
-        )}
-        <DashboardItem id="timeline" title={t('projects:detail.timeline.title')}>
-          <Card className="h-full">
-            <CardHeader>
-              <div className="flex items-start justify-between gap-3">
-                <div className="space-y-1">
-                  <CardDescription className="text-xs font-medium uppercase tracking-wide">
-                    {t('projects:detail.timeline.title')}
-                  </CardDescription>
-                </div>
-                {projectTimeline && (
-                  <span
-                    className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-medium ${
-                      projectTimeline.phase === 'completed'
-                        ? 'bg-muted text-muted-foreground'
-                        : projectTimeline.phase === 'pending'
-                          ? 'bg-blue-500/15 text-blue-600 dark:text-blue-400'
-                          : 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
-                    }`}
-                  >
-                    <span
-                      className={`size-1.5 rounded-full ${
-                        projectTimeline.phase === 'completed'
-                          ? 'bg-muted-foreground'
-                          : projectTimeline.phase === 'pending'
-                            ? 'bg-blue-500'
-                            : 'bg-emerald-500'
-                      }`}
-                      aria-hidden="true"
-                    />
-                    {t(`projects:detail.timeline.phase.${projectTimeline.phase}`)}
-                  </span>
-                )}
+      )}
+      {widgetPermitted('teamSize') && (
+        <DashboardItem id="teamSize" title={t('projects:detail.kpi.teamSize')}>
+          <KpiCard
+            title={t('projects:detail.kpi.teamSize')}
+            icon="fa-users"
+            accent="violet"
+            loading={assignedLoading}
+            value={teamSize}
+            subtitle={teamSize > 0 ? t('projects:detail.kpi.teamSizeSubtitle') : undefined}
+            footer={<ProjectTeamAvatars assignedUsers={assignedUsers} loading={assignedLoading} />}
+          />
+        </DashboardItem>
+      )}
+      {widgetPermitted('budgetUsed') && (
+        <DashboardItem id="budgetUsed" title={t('projects:detail.kpi.budgetUsed')}>
+          <KpiCard
+            title={t('projects:detail.kpi.budgetUsed')}
+            icon="fa-chart-pie"
+            accent={
+              budgetUsedPct === null
+                ? 'amber'
+                : budgetUsedPct > 100
+                  ? 'destructive'
+                  : budgetUsedPct >= 80
+                    ? 'amber'
+                    : 'emerald'
+            }
+            loading={entriesLoading}
+            unavailable={budgetUsedPct === null}
+            value={budgetUsedPct !== null ? `${budgetUsedPct}%` : '—'}
+            subtitle={
+              displayedRevenue > 0
+                ? t('projects:detail.kpi.budgetUsedSubtitle', {
+                    budget: displayedRevenue.toLocaleString(i18n.language, {
+                      maximumFractionDigits: 0,
+                    }),
+                    currency,
+                  })
+                : undefined
+            }
+            footer={<ProjectBudgetBar loading={entriesLoading} budgetUsedPct={budgetUsedPct} />}
+          />
+        </DashboardItem>
+      )}
+    </>
+  );
+};
+
+const ProjectTeamAvatars: React.FC<{ assignedUsers: User[]; loading: boolean }> = ({
+  assignedUsers,
+  loading,
+}) => {
+  if (loading || assignedUsers.length === 0) return null;
+
+  return (
+    <div className="flex [&>*+*]:-ml-2">
+      {assignedUsers.slice(0, 6).map((u) => (
+        <Tooltip key={u.id}>
+          <TooltipTrigger asChild>
+            <Avatar role="img" aria-label={u.name} className="size-7 border-2 border-card">
+              <AvatarFallback className="text-[10px]">{getInitials(u.name)}</AvatarFallback>
+            </Avatar>
+          </TooltipTrigger>
+          <TooltipContent>{u.name}</TooltipContent>
+        </Tooltip>
+      ))}
+      {assignedUsers.length > 6 && (
+        <div className="flex size-7 items-center justify-center rounded-full border-2 border-card bg-muted text-[10px] font-medium text-muted-foreground">
+          +{assignedUsers.length - 6}
+        </div>
+      )}
+    </div>
+  );
+};
+
+const ProjectBudgetBar: React.FC<{ loading: boolean; budgetUsedPct: number | null }> = ({
+  loading,
+  budgetUsedPct,
+}) => {
+  if (loading || budgetUsedPct === null) return null;
+
+  return (
+    <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+      <div
+        className={`h-full rounded-full transition-all ${
+          budgetUsedPct > 100
+            ? 'bg-destructive'
+            : budgetUsedPct >= 80
+              ? 'bg-amber-500'
+              : 'bg-emerald-500'
+        }`}
+        style={{ width: `${Math.min(budgetUsedPct, 100)}%` }}
+      />
+    </div>
+  );
+};
+
+const ProjectTimelineDashboardItem: React.FC<{ controller: ProjectDetailController }> = ({
+  controller,
+}) => {
+  const { t, i18n, projectTimeline } = controller;
+
+  return (
+    <DashboardItem id="timeline" title={t('projects:detail.timeline.title')}>
+      <Card className="h-full">
+        <CardHeader>
+          <div className="flex items-start justify-between gap-3">
+            <CardDescription className="text-xs font-medium uppercase tracking-wide">
+              {t('projects:detail.timeline.title')}
+            </CardDescription>
+            {projectTimeline && (
+              <span
+                className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                  projectTimeline.phase === 'completed'
+                    ? 'bg-muted text-muted-foreground'
+                    : projectTimeline.phase === 'pending'
+                      ? 'bg-blue-500/15 text-blue-600 dark:text-blue-400'
+                      : 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
+                }`}
+              >
+                <span
+                  className={`size-1.5 rounded-full ${
+                    projectTimeline.phase === 'completed'
+                      ? 'bg-muted-foreground'
+                      : projectTimeline.phase === 'pending'
+                        ? 'bg-blue-500'
+                        : 'bg-emerald-500'
+                  }`}
+                  aria-hidden="true"
+                />
+                {t(`projects:detail.timeline.phase.${projectTimeline.phase}`)}
+              </span>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent>
+          {!projectTimeline ? (
+            <p className="text-sm text-muted-foreground">{t('projects:detail.timeline.noDates')}</p>
+          ) : (
+            <div className="space-y-2">
+              <div className="flex justify-between text-xs text-muted-foreground tabular-nums">
+                <span>{formatInsertDate(projectTimeline.start.getTime(), i18n.language)}</span>
+                <span>{formatInsertDate(projectTimeline.end.getTime(), i18n.language)}</span>
               </div>
-            </CardHeader>
-            <CardContent>
-              {!projectTimeline ? (
-                <p className="text-sm text-muted-foreground">
-                  {t('projects:detail.timeline.noDates')}
-                </p>
-              ) : (
-                <div className="space-y-2">
-                  <div className="flex justify-between text-xs text-muted-foreground tabular-nums">
-                    <span>{formatInsertDate(projectTimeline.start.getTime(), i18n.language)}</span>
-                    <span>{formatInsertDate(projectTimeline.end.getTime(), i18n.language)}</span>
-                  </div>
-                  <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-muted">
-                    <div
-                      className={`h-full transition-all ${
-                        projectTimeline.phase === 'completed'
-                          ? 'bg-muted-foreground'
-                          : 'bg-emerald-500'
-                      }`}
-                      style={{ width: `${projectTimeline.pct}%` }}
-                    />
-                  </div>
-                  <div className="flex justify-between text-xs">
-                    <span className="text-muted-foreground">
-                      <span className="font-semibold text-foreground tabular-nums">
-                        {projectTimeline.elapsedDays}
-                      </span>{' '}
-                      / {projectTimeline.totalDays} {t('projects:detail.timeline.daysElapsed')}
-                    </span>
-                    <span className="text-muted-foreground">
-                      <span className="font-semibold text-foreground tabular-nums">
-                        {projectTimeline.remainingDays}
-                      </span>{' '}
-                      {t('projects:detail.timeline.daysRemaining')}
-                    </span>
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </DashboardItem>
+              <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-muted">
+                <div
+                  className={`h-full transition-all ${
+                    projectTimeline.phase === 'completed' ? 'bg-muted-foreground' : 'bg-emerald-500'
+                  }`}
+                  style={{ width: `${projectTimeline.pct}%` }}
+                />
+              </div>
+              <div className="flex justify-between text-xs">
+                <span className="text-muted-foreground">
+                  <span className="font-semibold text-foreground tabular-nums">
+                    {projectTimeline.elapsedDays}
+                  </span>{' '}
+                  / {projectTimeline.totalDays} {t('projects:detail.timeline.daysElapsed')}
+                </span>
+                <span className="text-muted-foreground">
+                  <span className="font-semibold text-foreground tabular-nums">
+                    {projectTimeline.remainingDays}
+                  </span>{' '}
+                  {t('projects:detail.timeline.daysRemaining')}
+                </span>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </DashboardItem>
+  );
+};
 
-        <DashboardItem id="hoursByUser" title={t('projects:detail.charts.hoursByUser')}>
-          <Card className="h-full">
-            <CardHeader>
-              <CardTitle>{t('projects:detail.charts.hoursByUser')}</CardTitle>
-              <CardDescription>{t('projects:detail.charts.hoursByUserDesc')}</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {entriesLoading ? (
-                <Skeleton className="h-[260px] w-full xl:h-[320px]" />
-              ) : entriesError !== null ? (
-                <ChartLocked variant={entriesError} />
-              ) : hoursByUserTask.rows.length === 0 || hoursByUserTask.series.length === 0 ? (
-                // No users to show, or nobody logged any hours yet (no task series
-                // to plot) — show the explicit empty state rather than a bare axis.
-                <ChartEmpty />
-              ) : (
-                /* Grouped histogram: one X-axis group per user, one bar per task
-                 within each group (users × tasks bars). Tasks are the colored
-                 series via the shared legend. */
-                <ChartContainer
-                  config={userTaskChartConfig}
-                  className="h-[280px] w-full xl:h-[340px]"
-                >
-                  <BarChart
-                    data={hoursByUserTask.rows}
-                    margin={{ left: 8, right: 8, top: 16, bottom: 8 }}
-                  >
-                    <CartesianGrid vertical={false} />
-                    <XAxis
-                      dataKey="userName"
-                      tickLine={false}
-                      axisLine={false}
-                      tickMargin={8}
-                      interval={0}
-                      // Truncate long names so up to TOP_USER_GROUPS groups stay
-                      // legible on the axis; the full name shows in the tooltip.
-                      tickFormatter={(v: string) => (v.length > 16 ? `${v.slice(0, 15)}…` : v)}
+const ProjectHoursByUserDashboardItem: React.FC<{ controller: ProjectDetailController }> = ({
+  controller,
+}) => {
+  const { t, i18n, entriesLoading, entriesError, hoursByUserTask, userTaskChartConfig } =
+    controller;
+
+  return (
+    <DashboardItem id="hoursByUser" title={t('projects:detail.charts.hoursByUser')}>
+      <Card className="h-full">
+        <CardHeader>
+          <CardTitle>{t('projects:detail.charts.hoursByUser')}</CardTitle>
+          <CardDescription>{t('projects:detail.charts.hoursByUserDesc')}</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {entriesLoading ? (
+            <Skeleton className="h-[260px] w-full xl:h-[320px]" />
+          ) : entriesError !== null ? (
+            <ChartLocked variant={entriesError} />
+          ) : hoursByUserTask.rows.length === 0 || hoursByUserTask.series.length === 0 ? (
+            <ChartEmpty />
+          ) : (
+            <ChartContainer config={userTaskChartConfig} className="h-[280px] w-full xl:h-[340px]">
+              <BarChart
+                data={hoursByUserTask.rows}
+                margin={{ left: 8, right: 8, top: 16, bottom: 8 }}
+              >
+                <CartesianGrid vertical={false} />
+                <XAxis
+                  dataKey="userName"
+                  tickLine={false}
+                  axisLine={false}
+                  tickMargin={8}
+                  interval={0}
+                  tickFormatter={(v: string) => (v.length > 16 ? `${v.slice(0, 15)}…` : v)}
+                />
+                <YAxis tickLine={false} axisLine={false} width={36} />
+                <ChartTooltip
+                  isAnimationActive={false}
+                  content={
+                    <UserTaskTooltip
+                      series={hoursByUserTask.series}
+                      language={i18n.language}
+                      t={t}
                     />
-                    <YAxis tickLine={false} axisLine={false} width={36} />
-                    <ChartTooltip
-                      isAnimationActive={false}
-                      // Custom content lists only the tasks this user actually
-                      // logged on (the default would pad every hovered user with a
-                      // row per task, mostly zeros) plus their total.
-                      content={
-                        <UserTaskTooltip
-                          series={hoursByUserTask.series}
-                          language={i18n.language}
-                          t={t}
-                        />
+                  }
+                  cursor={false}
+                  position={{ y: 0 }}
+                />
+                <ChartLegend content={<ChartLegendContent />} />
+                {hoursByUserTask.series.map((s) => (
+                  <Bar
+                    key={s.seriesKey}
+                    dataKey={s.seriesKey}
+                    fill={`var(--color-${s.seriesKey})`}
+                    radius={[4, 4, 0, 0]}
+                  />
+                ))}
+              </BarChart>
+            </ChartContainer>
+          )}
+        </CardContent>
+      </Card>
+    </DashboardItem>
+  );
+};
+
+const ProjectHoursByTaskDashboardItem: React.FC<{ controller: ProjectDetailController }> = ({
+  controller,
+}) => {
+  const { t, i18n, entriesLoading, entriesError, hoursByTask, taskChartConfig } = controller;
+
+  return (
+    <DashboardItem id="hoursByTask" title={t('projects:detail.charts.hoursByTask')}>
+      <Card className="h-full">
+        <CardHeader>
+          <CardTitle>{t('projects:detail.charts.hoursByTask')}</CardTitle>
+          <CardDescription>{t('projects:detail.charts.hoursByTaskDesc')}</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {entriesLoading ? (
+            <Skeleton className="h-[260px] w-full xl:h-[320px]" />
+          ) : entriesError !== null ? (
+            <ChartLocked variant={entriesError} />
+          ) : hoursByTask.length === 0 ? (
+            <ChartEmpty />
+          ) : (
+            <ChartContainer config={taskChartConfig} className="h-[260px] w-full xl:h-[320px]">
+              <BarChart data={hoursByTask} margin={{ left: 8, right: 8, top: 24, bottom: 8 }}>
+                <CartesianGrid vertical={false} />
+                <XAxis
+                  dataKey="task"
+                  tickLine={false}
+                  axisLine={false}
+                  tickMargin={8}
+                  interval={0}
+                />
+                <YAxis tickLine={false} axisLine={false} width={36} />
+                <ChartTooltip
+                  isAnimationActive={false}
+                  content={<TaskEffortTooltip language={i18n.language} t={t} />}
+                  cursor={false}
+                  position={{ y: 0 }}
+                />
+                <ChartLegend content={<ChartLegendContent />} />
+                <Bar dataKey="logged" stackId="effort" fill="var(--color-logged)" />
+                <Bar
+                  dataKey="remaining"
+                  stackId="effort"
+                  fill="var(--color-remaining)"
+                  fillOpacity={0.3}
+                  radius={[4, 4, 0, 0]}
+                />
+                <Bar dataKey="over" stackId="effort" fill="var(--color-over)" radius={[4, 4, 0, 0]}>
+                  <LabelList
+                    dataKey="over"
+                    position="top"
+                    content={(props) => {
+                      const { x, y, width, index } = props as {
+                        x?: number;
+                        y?: number;
+                        width?: number;
+                        index?: number;
+                      };
+                      if (
+                        typeof x !== 'number' ||
+                        typeof y !== 'number' ||
+                        typeof width !== 'number' ||
+                        typeof index !== 'number'
+                      ) {
+                        return null;
                       }
-                      cursor={false}
-                      position={{ y: 0 }}
-                    />
-                    <ChartLegend content={<ChartLegendContent />} />
-                    {hoursByUserTask.series.map((s) => (
-                      <Bar
-                        key={s.seriesKey}
-                        dataKey={s.seriesKey}
-                        fill={`var(--color-${s.seriesKey})`}
-                        radius={[4, 4, 0, 0]}
-                      />
-                    ))}
-                  </BarChart>
-                </ChartContainer>
-              )}
-            </CardContent>
-          </Card>
-        </DashboardItem>
+                      const row = hoursByTask[index];
+                      if (!row || row.hours <= 0) return null;
+                      return (
+                        <text
+                          x={x + width / 2}
+                          y={y - 6}
+                          textAnchor="middle"
+                          className="fill-foreground text-xs"
+                        >
+                          {row.hours.toLocaleString(i18n.language, { maximumFractionDigits: 1 })}
+                        </text>
+                      );
+                    }}
+                  />
+                </Bar>
+              </BarChart>
+            </ChartContainer>
+          )}
+        </CardContent>
+      </Card>
+    </DashboardItem>
+  );
+};
 
-        <DashboardItem id="hoursByTask" title={t('projects:detail.charts.hoursByTask')}>
-          <Card className="h-full">
-            <CardHeader>
-              <CardTitle>{t('projects:detail.charts.hoursByTask')}</CardTitle>
-              <CardDescription>{t('projects:detail.charts.hoursByTaskDesc')}</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {entriesLoading ? (
-                <Skeleton className="h-[260px] w-full xl:h-[320px]" />
-              ) : entriesError !== null ? (
-                <ChartLocked variant={entriesError} />
-              ) : hoursByTask.length === 0 ? (
-                // Only empty when there are neither project tasks nor entries — tasks
-                // with no hours yet are still meaningful (planned/not-yet-worked-on)
-                // and render as 0-height bars below.
-                <ChartEmpty />
-              ) : (
-                <ChartContainer config={taskChartConfig} className="h-[260px] w-full xl:h-[320px]">
-                  <BarChart data={hoursByTask} margin={{ left: 8, right: 8, top: 24, bottom: 8 }}>
-                    <CartesianGrid vertical={false} />
-                    <XAxis
-                      dataKey="task"
-                      tickLine={false}
-                      axisLine={false}
-                      tickMargin={8}
-                      interval={0}
-                    />
-                    <YAxis tickLine={false} axisLine={false} width={36} />
-                    <ChartTooltip
-                      isAnimationActive={false}
-                      // Custom content reads the whole row so it can show logged vs
-                      // total available effort (and overrun) in one place, instead
-                      // of three raw stacked-series numbers.
-                      content={<TaskEffortTooltip language={i18n.language} t={t} />}
-                      cursor={false}
-                      position={{ y: 0 }}
-                    />
-                    <ChartLegend content={<ChartLegendContent />} />
-                    {/* Single utilization bar per task: logged (solid) + remaining
-                      available effort (faint) = total effort, with overrun on top.
-                      Same stackId so the three segments share one column. */}
-                    <Bar dataKey="logged" stackId="effort" fill="var(--color-logged)" />
-                    <Bar
-                      dataKey="remaining"
-                      stackId="effort"
-                      fill="var(--color-remaining)"
-                      fillOpacity={0.3}
-                      radius={[4, 4, 0, 0]}
-                    />
-                    <Bar
-                      dataKey="over"
-                      stackId="effort"
-                      fill="var(--color-over)"
-                      radius={[4, 4, 0, 0]}
-                    >
-                      {/* Actual logged hours labelled at the top of the stack. Attached
-                        to the topmost segment (`over`) so its position tracks the
-                        stack top whether or not the task is over budget; the value
-                        shown is the row's actual hours (logged + over), read by index. */}
-                      <LabelList
-                        dataKey="over"
-                        position="top"
-                        content={(props) => {
-                          const { x, y, width, index } = props as {
-                            x?: number;
-                            y?: number;
-                            width?: number;
-                            index?: number;
-                          };
-                          if (
-                            typeof x !== 'number' ||
-                            typeof y !== 'number' ||
-                            typeof width !== 'number' ||
-                            typeof index !== 'number'
-                          ) {
-                            return null;
-                          }
-                          const row = hoursByTask[index];
-                          if (!row || row.hours <= 0) return null;
-                          return (
-                            <text
-                              x={x + width / 2}
-                              y={y - 6}
-                              textAnchor="middle"
-                              className="fill-foreground text-xs"
-                            >
-                              {row.hours.toLocaleString(i18n.language, {
-                                maximumFractionDigits: 1,
-                              })}
-                            </text>
-                          );
-                        }}
-                      />
-                    </Bar>
-                  </BarChart>
-                </ChartContainer>
-              )}
-            </CardContent>
-          </Card>
-        </DashboardItem>
+const ProjectCostVsRevenueDashboardItem: React.FC<{ controller: ProjectDetailController }> = ({
+  controller,
+}) => {
+  const {
+    t,
+    i18n,
+    project,
+    entriesLoading,
+    entriesError,
+    canViewCost,
+    costOverTime,
+    displayedRevenue,
+    budgetChartConfig,
+    currency,
+  } = controller;
+  const hasEntryTimeline =
+    costOverTime.length > 0 && costOverTime.some((r) => r.cumulativeCost > 0);
+  const canShowCostArea = canViewCost && hasEntryTimeline;
+  const canShowRevenueLine = displayedRevenue > 0;
+  const fallbackTimeline =
+    canShowRevenueLine && project.startDate && project.endDate
+      ? [
+          {
+            month: project.startDate.slice(0, 7),
+            label: formatMonthBucket(project.startDate, i18n.language),
+            monthlyCost: 0,
+            cumulativeCost: 0,
+          },
+          {
+            month: project.endDate.slice(0, 7),
+            label: formatMonthBucket(project.endDate, i18n.language),
+            monthlyCost: 0,
+            cumulativeCost: 0,
+          },
+        ]
+      : [];
+  const chartData = hasEntryTimeline ? costOverTime : fallbackTimeline;
+  const hasChartContent = canShowCostArea || (canShowRevenueLine && chartData.length > 0);
 
-        <DashboardItem id="costVsRevenue" title={t('projects:detail.charts.costVsRevenue')}>
-          {(() => {
-            // Always render the card so users see the chart exists on the page
-            // — even if the project has no entries and no revenue yet. The
-            // empty-state below handles the "nothing to draw" case so the card
-            // doesn't silently vanish from the layout.
-            const hasEntryTimeline =
-              costOverTime.length > 0 && costOverTime.some((r) => r.cumulativeCost > 0);
-            const canShowCostArea = canViewCost && hasEntryTimeline;
-            const canShowRevenueLine = displayedRevenue > 0;
-            // Synthesise two X-axis anchors from the project window when there's
-            // no entry-driven cost data, so the revenue reference line still has
-            // something to draw against. Only worth doing when we actually have
-            // a revenue line to render — otherwise the fallback is just empty
-            // axes.
-            const fallbackTimeline =
-              canShowRevenueLine && project.startDate && project.endDate
-                ? [
-                    {
-                      month: project.startDate.slice(0, 7),
-                      label: formatMonthBucket(project.startDate, i18n.language),
-                      monthlyCost: 0,
-                      cumulativeCost: 0,
-                    },
-                    {
-                      month: project.endDate.slice(0, 7),
-                      label: formatMonthBucket(project.endDate, i18n.language),
-                      monthlyCost: 0,
-                      cumulativeCost: 0,
-                    },
-                  ]
-                : [];
-            const chartData = hasEntryTimeline ? costOverTime : fallbackTimeline;
-            // Chart is meaningless when there's nothing to render — no permitted
-            // cost area AND no revenue reference line (or no X-axis to anchor the
-            // line). In that case fall back to ChartEmpty.
-            const hasChartContent = canShowCostArea || (canShowRevenueLine && chartData.length > 0);
-            return (
-              <Card className="h-full">
-                <CardHeader>
-                  <CardTitle>{t('projects:detail.charts.costVsRevenue')}</CardTitle>
-                  <CardDescription>{t('projects:detail.charts.costVsRevenueDesc')}</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {entriesLoading ? (
-                    <Skeleton className="h-[260px] w-full xl:h-[320px]" />
-                  ) : entriesError !== null ? (
-                    <ChartLocked variant={entriesError} />
-                  ) : !hasChartContent ? (
-                    // Without cost permission the server strips cost to 0, so the
-                    // cost area is always suppressed. When there's no revenue line
-                    // either, the chart is empty *for this user* even though
-                    // entries may exist — the Total Hours KPI above can show real
-                    // hours. Saying "no hours logged yet" here contradicts that, so
-                    // explain the cost-permission gap instead.
-                    !canViewCost ? (
-                      <ChartLocked variant="cost-hidden" />
-                    ) : (
-                      <ChartEmpty />
-                    )
-                  ) : (
-                    <ChartContainer
-                      config={budgetChartConfig}
-                      className="max-h-[260px] w-full xl:max-h-[320px]"
-                    >
-                      <AreaChart
-                        data={chartData}
-                        margin={{ left: 12, right: 12, top: 16, bottom: 8 }}
-                      >
-                        <CartesianGrid vertical={false} />
-                        <XAxis
-                          dataKey="label"
-                          tickLine={false}
-                          axisLine={false}
-                          tickMargin={8}
-                          minTickGap={32}
-                        />
-                        <YAxis
-                          tickLine={false}
-                          axisLine={false}
-                          width={48}
-                          // Extend the domain to include the revenue reference line
-                          // (+8% headroom, rounded up to a clean 100). Without this the
-                          // axis auto-scales to the cost data alone, so a revenue line
-                          // above the highest cost point falls outside the domain and
-                          // Recharts silently discards it.
-                          domain={[
-                            0,
-                            (dataMax: number) =>
-                              Math.ceil(
-                                (Math.max(dataMax, canShowRevenueLine ? displayedRevenue : 0) *
-                                  1.08) /
-                                  100,
-                              ) * 100,
-                          ]}
-                          tickFormatter={(v: number) =>
-                            v.toLocaleString(i18n.language, { maximumFractionDigits: 0 })
-                          }
-                        />
-                        <ChartTooltip
-                          isAnimationActive={false}
-                          content={
-                            <ChartTooltipContent
-                              indicator="line"
-                              // Default content renders a bare `value.toLocaleString()`
-                              // with no currency and crams it against the label in a
-                              // narrow tooltip. Format with the project currency and
-                              // proper spacing.
-                              formatter={(value, name, item) => (
-                                <div className="flex flex-1 items-center justify-between gap-4 leading-none">
-                                  <div className="flex items-center gap-1.5">
-                                    <span
-                                      className="h-2.5 w-1 shrink-0 rounded-[2px]"
-                                      style={{
-                                        backgroundColor:
-                                          item?.color ?? 'var(--color-cumulativeCost)',
-                                      }}
-                                      aria-hidden="true"
-                                    />
-                                    <span className="text-muted-foreground">
-                                      {budgetChartConfig[name as keyof typeof budgetChartConfig]
-                                        ?.label ?? name}
-                                    </span>
-                                  </div>
-                                  <span className="font-mono font-medium tabular-nums text-foreground">
-                                    {typeof value === 'number'
-                                      ? `${value.toLocaleString(i18n.language, { maximumFractionDigits: 0 })} ${currency}`
-                                      : String(value)}
-                                  </span>
-                                </div>
-                              )}
+  return (
+    <DashboardItem id="costVsRevenue" title={t('projects:detail.charts.costVsRevenue')}>
+      <Card className="h-full">
+        <CardHeader>
+          <CardTitle>{t('projects:detail.charts.costVsRevenue')}</CardTitle>
+          <CardDescription>{t('projects:detail.charts.costVsRevenueDesc')}</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {entriesLoading ? (
+            <Skeleton className="h-[260px] w-full xl:h-[320px]" />
+          ) : entriesError !== null ? (
+            <ChartLocked variant={entriesError} />
+          ) : !hasChartContent ? (
+            // Cost-hidden is different from true no-data: the user may have hours
+            // but no permission to see the cost series this chart is built around.
+            !canViewCost ? (
+              <ChartLocked variant="cost-hidden" />
+            ) : (
+              <ChartEmpty />
+            )
+          ) : (
+            <ChartContainer
+              config={budgetChartConfig}
+              className="max-h-[260px] w-full xl:max-h-[320px]"
+            >
+              <AreaChart data={chartData} margin={{ left: 12, right: 12, top: 16, bottom: 8 }}>
+                <CartesianGrid vertical={false} />
+                <XAxis
+                  dataKey="label"
+                  tickLine={false}
+                  axisLine={false}
+                  tickMargin={8}
+                  minTickGap={32}
+                />
+                <YAxis
+                  tickLine={false}
+                  axisLine={false}
+                  width={48}
+                  domain={[
+                    0,
+                    (dataMax: number) =>
+                      Math.ceil(
+                        (Math.max(dataMax, canShowRevenueLine ? displayedRevenue : 0) * 1.08) / 100,
+                      ) * 100,
+                  ]}
+                  tickFormatter={(v: number) =>
+                    v.toLocaleString(i18n.language, { maximumFractionDigits: 0 })
+                  }
+                />
+                <ChartTooltip
+                  isAnimationActive={false}
+                  content={
+                    <ChartTooltipContent
+                      indicator="line"
+                      formatter={(value, name, item) => (
+                        <div className="flex flex-1 items-center justify-between gap-4 leading-none">
+                          <div className="flex items-center gap-1.5">
+                            <span
+                              className="h-2.5 w-1 shrink-0 rounded-[2px]"
+                              style={{
+                                backgroundColor: item?.color ?? 'var(--color-cumulativeCost)',
+                              }}
+                              aria-hidden="true"
                             />
-                          }
-                          cursor={false}
-                          position={{ y: 0 }}
-                        />
-                        <defs>
-                          <linearGradient id="fillCumulativeCost" x1="0" y1="0" x2="0" y2="1">
-                            <stop
-                              offset="5%"
-                              stopColor="var(--color-cumulativeCost)"
-                              stopOpacity={0.4}
-                            />
-                            <stop
-                              offset="95%"
-                              stopColor="var(--color-cumulativeCost)"
-                              stopOpacity={0.05}
-                            />
-                          </linearGradient>
-                        </defs>
-                        {canShowCostArea && (
-                          <Area
-                            type="monotone"
-                            dataKey="cumulativeCost"
-                            stroke="var(--color-cumulativeCost)"
-                            fill="url(#fillCumulativeCost)"
-                            strokeWidth={2}
-                          />
-                        )}
-                        {canShowRevenueLine && (
-                          <ReferenceLine
-                            y={displayedRevenue}
-                            stroke="var(--color-revenue)"
-                            strokeDasharray="4 4"
-                            strokeWidth={1.5}
-                            label={{
-                              value: `${t('projects:detail.charts.revenueLabel')} · ${displayedRevenue.toLocaleString(i18n.language, { maximumFractionDigits: 0 })} ${currency}`,
-                              position: 'insideTopRight',
-                              fill: 'var(--color-revenue)',
-                              fontSize: 11,
-                              fontWeight: 500,
-                            }}
-                          />
-                        )}
-                      </AreaChart>
-                    </ChartContainer>
-                  )}
-                  {/* Only show the note below the chart when the chart is actually
-                    rendering (revenue line present). When the chart is empty for
-                    a no-cost-permission user, the cost-hidden placeholder above
-                    already carries this message — showing it twice (and beside a
-                    misleading empty state) is what confused users. */}
-                  {!canViewCost && !entriesLoading && entriesError === null && hasChartContent && (
-                    <p className="mt-2 text-xs text-muted-foreground">
-                      {t('projects:detail.charts.costHiddenNote')}
-                    </p>
-                  )}
-                </CardContent>
-              </Card>
-            );
-          })()}
-        </DashboardItem>
-
-        <DashboardItem id="monthlyActivity" title={t('projects:detail.charts.monthlyActivity')}>
-          <Card className="h-full">
-            <CardHeader>
-              <CardTitle>{t('projects:detail.charts.monthlyActivity')}</CardTitle>
-              <CardDescription>{t('projects:detail.charts.monthlyActivityDesc')}</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {entriesLoading ? (
-                <Skeleton className="h-[260px] w-full xl:h-[320px]" />
-              ) : entriesError !== null ? (
-                <ChartLocked variant={entriesError} />
-              ) : monthlyActivity.rows.length === 0 ||
-                monthlyActivity.rows.every((r) => r.hours === 0) ? (
-                // All-zero case (only zero-duration entries) reads as no data, so
-                // show the explicit empty state rather than a flat plot.
-                <ChartEmpty />
-              ) : (
-                <ChartContainer
-                  config={activityChartConfig}
-                  className="h-[260px] w-full xl:h-[320px]"
-                >
-                  <BarChart
-                    data={monthlyActivity.rows}
-                    margin={{ left: 8, right: 8, top: 24, bottom: 8 }}
-                  >
-                    <CartesianGrid vertical={false} />
-                    <XAxis
-                      dataKey="label"
-                      tickLine={false}
-                      axisLine={false}
-                      tickMargin={8}
-                      minTickGap={16}
+                            <span className="text-muted-foreground">
+                              {budgetChartConfig[name as keyof typeof budgetChartConfig]?.label ??
+                                name}
+                            </span>
+                          </div>
+                          <span className="font-mono font-medium tabular-nums text-foreground">
+                            {typeof value === 'number'
+                              ? `${value.toLocaleString(i18n.language, { maximumFractionDigits: 0 })} ${currency}`
+                              : String(value)}
+                          </span>
+                        </div>
+                      )}
                     />
-                    <YAxis tickLine={false} axisLine={false} width={36} />
-                    <ChartTooltip
-                      isAnimationActive={false}
-                      content={<ChartTooltipContent />}
-                      cursor={false}
-                      position={{ y: 0 }}
-                    />
-                    <Bar dataKey="hours" fill="var(--color-hours)" radius={[4, 4, 0, 0]}>
-                      <LabelList
-                        dataKey="hours"
-                        position="top"
-                        className="fill-foreground text-xs"
-                        formatter={(value: unknown) => {
-                          const n = typeof value === 'number' ? value : Number(value);
-                          return Number.isFinite(n) && n > 0
-                            ? n.toLocaleString(i18n.language, { maximumFractionDigits: 1 })
-                            : '';
-                        }}
-                      />
-                    </Bar>
-                    {/* "Typical month" baseline so cadence reads at a glance: months
-                      above the line were busier than average, below were quieter.
-                      The mean is always <= the tallest bar, so it never clips. */}
-                    {monthlyActivity.avg > 0 && (
-                      <ReferenceLine
-                        y={monthlyActivity.avg}
-                        stroke="var(--foreground)"
-                        strokeDasharray="6 4"
-                        strokeWidth={2}
-                        strokeOpacity={0.7}
-                        label={{
-                          value: `${t('projects:detail.charts.avgMonthlyLabel')} · ${monthlyActivity.avg.toLocaleString(i18n.language, { maximumFractionDigits: 1 })} h`,
-                          position: 'insideTopRight',
-                          fill: 'var(--foreground)',
-                          fontSize: 11,
-                          fontWeight: 500,
-                        }}
-                      />
-                    )}
-                  </BarChart>
-                </ChartContainer>
-              )}
-            </CardContent>
-          </Card>
-        </DashboardItem>
-      </DashboardGrid>
+                  }
+                  cursor={false}
+                  position={{ y: 0 }}
+                />
+                <defs>
+                  <linearGradient id="fillCumulativeCost" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="var(--color-cumulativeCost)" stopOpacity={0.4} />
+                    <stop offset="95%" stopColor="var(--color-cumulativeCost)" stopOpacity={0.05} />
+                  </linearGradient>
+                </defs>
+                {canShowCostArea && (
+                  <Area
+                    type="monotone"
+                    dataKey="cumulativeCost"
+                    stroke="var(--color-cumulativeCost)"
+                    fill="url(#fillCumulativeCost)"
+                    strokeWidth={2}
+                  />
+                )}
+                {canShowRevenueLine && (
+                  <ReferenceLine
+                    y={displayedRevenue}
+                    stroke="var(--color-revenue)"
+                    strokeDasharray="4 4"
+                    strokeWidth={1.5}
+                    label={{
+                      value: `${t('projects:detail.charts.revenueLabel')} · ${displayedRevenue.toLocaleString(i18n.language, { maximumFractionDigits: 0 })} ${currency}`,
+                      position: 'insideTopRight',
+                      fill: 'var(--color-revenue)',
+                      fontSize: 11,
+                      fontWeight: 500,
+                    }}
+                  />
+                )}
+              </AreaChart>
+            </ChartContainer>
+          )}
+          {!canViewCost && !entriesLoading && entriesError === null && hasChartContent && (
+            <p className="mt-2 text-xs text-muted-foreground">
+              {t('projects:detail.charts.costHiddenNote')}
+            </p>
+          )}
+        </CardContent>
+      </Card>
+    </DashboardItem>
+  );
+};
 
+const ProjectMonthlyActivityDashboardItem: React.FC<{ controller: ProjectDetailController }> = ({
+  controller,
+}) => {
+  const { t, i18n, entriesLoading, entriesError, monthlyActivity, activityChartConfig } =
+    controller;
+
+  return (
+    <DashboardItem id="monthlyActivity" title={t('projects:detail.charts.monthlyActivity')}>
+      <Card className="h-full">
+        <CardHeader>
+          <CardTitle>{t('projects:detail.charts.monthlyActivity')}</CardTitle>
+          <CardDescription>{t('projects:detail.charts.monthlyActivityDesc')}</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {entriesLoading ? (
+            <Skeleton className="h-[260px] w-full xl:h-[320px]" />
+          ) : entriesError !== null ? (
+            <ChartLocked variant={entriesError} />
+          ) : monthlyActivity.rows.length === 0 ||
+            monthlyActivity.rows.every((r) => r.hours === 0) ? (
+            <ChartEmpty />
+          ) : (
+            <ChartContainer config={activityChartConfig} className="h-[260px] w-full xl:h-[320px]">
+              <BarChart
+                data={monthlyActivity.rows}
+                margin={{ left: 8, right: 8, top: 24, bottom: 8 }}
+              >
+                <CartesianGrid vertical={false} />
+                <XAxis
+                  dataKey="label"
+                  tickLine={false}
+                  axisLine={false}
+                  tickMargin={8}
+                  minTickGap={16}
+                />
+                <YAxis tickLine={false} axisLine={false} width={36} />
+                <ChartTooltip
+                  isAnimationActive={false}
+                  content={<ChartTooltipContent />}
+                  cursor={false}
+                  position={{ y: 0 }}
+                />
+                <Bar dataKey="hours" fill="var(--color-hours)" radius={[4, 4, 0, 0]}>
+                  <LabelList
+                    dataKey="hours"
+                    position="top"
+                    className="fill-foreground text-xs"
+                    formatter={(value: unknown) => {
+                      const n = typeof value === 'number' ? value : Number(value);
+                      return Number.isFinite(n) && n > 0
+                        ? n.toLocaleString(i18n.language, { maximumFractionDigits: 1 })
+                        : '';
+                    }}
+                  />
+                </Bar>
+                {monthlyActivity.avg > 0 && (
+                  <ReferenceLine
+                    y={monthlyActivity.avg}
+                    stroke="var(--foreground)"
+                    strokeDasharray="6 4"
+                    strokeWidth={2}
+                    strokeOpacity={0.7}
+                    label={{
+                      value: `${t('projects:detail.charts.avgMonthlyLabel')} · ${monthlyActivity.avg.toLocaleString(i18n.language, { maximumFractionDigits: 1 })} h`,
+                      position: 'insideTopRight',
+                      fill: 'var(--foreground)',
+                      fontSize: 11,
+                      fontWeight: 500,
+                    }}
+                  />
+                )}
+              </BarChart>
+            </ChartContainer>
+          )}
+        </CardContent>
+      </Card>
+    </DashboardItem>
+  );
+};
+
+const ProjectDetailModals: React.FC<{ controller: ProjectDetailController }> = ({ controller }) => {
+  const {
+    t,
+    project,
+    roles,
+    canManageAssignments,
+    isDeleteConfirmOpen,
+    setIsDeleteConfirmOpen,
+    handleDelete,
+    isTaskDeleteConfirmOpen,
+    setIsTaskDeleteConfirmOpen,
+    taskToDelete,
+    setTaskToDelete,
+    handleConfirmDeleteTask,
+    isAssignmentsOpen,
+    setIsAssignmentsOpen,
+    assignableUsers,
+    setAssignedUserIds,
+  } = controller;
+
+  return (
+    <>
       <DeleteConfirmModal
         isOpen={isDeleteConfirmOpen}
         onClose={() => setIsDeleteConfirmOpen(false)}
@@ -2092,7 +2690,6 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
         title={t('projects:projects.deleteProjectTitle', { name: project.name })}
         description={t('projects:projects.deleteConfirm')}
       />
-
       <DeleteConfirmModal
         isOpen={isTaskDeleteConfirmOpen}
         onClose={() => {
@@ -2103,15 +2700,12 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
         title={t('projects:projects.deleteTaskTitle', { name: taskToDelete?.name })}
         description={t('projects:projects.deleteTaskConfirm')}
       />
-
       <UserAssignmentModal
         isOpen={isAssignmentsOpen}
         onClose={() => setIsAssignmentsOpen(false)}
         users={assignableUsers}
         roles={roles}
         loadAssignedUserIds={(signal) => projectsApi.getUsers(project.id, signal)}
-        // Mirror the saved ids back into local state so the team-size KPI and avatar row
-        // refresh immediately — the modal itself doesn't expose an onSaved callback.
         saveAssignedUserIds={async (ids) => {
           await projectsApi.updateUsers(project.id, ids);
           setAssignedUserIds(ids);
@@ -2120,7 +2714,7 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
         entityName={project.name}
         disabled={!canManageAssignments}
       />
-    </div>
+    </>
   );
 };
 

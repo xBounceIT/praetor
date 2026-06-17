@@ -82,20 +82,22 @@ export const logSupplierItemSyncAudits = async (
   request: FastifyRequest,
   audits: SupplierItemSyncAudit[],
 ): Promise<void> => {
-  for (const sync of audits) {
-    await logAudit({
-      request,
-      action: 'supplier_quote.updated',
-      entityType: 'supplier_quote',
-      entityId: sync.supplierQuoteId,
-      details: {
-        targetLabel: sync.supplierQuoteId,
-        secondaryLabel: 'synced_from_client_line',
-        changedFields: ['items'],
-        reason: sync.sourceAction,
-      },
-    });
-  }
+  await Promise.all(
+    audits.map((sync) =>
+      logAudit({
+        request,
+        action: 'supplier_quote.updated',
+        entityType: 'supplier_quote',
+        entityId: sync.supplierQuoteId,
+        details: {
+          targetLabel: sync.supplierQuoteId,
+          secondaryLabel: 'synced_from_client_line',
+          changedFields: ['items'],
+          reason: sync.sourceAction,
+        },
+      }),
+    ),
+  );
 };
 
 // Bidirectional sync, client → supplier direction (issue #779): when an editable client quote or
@@ -217,35 +219,36 @@ export const syncSupplierItemsFromClientLines = async (
     );
   }
 
-  const audits: SupplierItemSyncAudit[] = [];
-  for (const [quoteId, patches] of changedByQuote) {
-    // SELECT ... FOR UPDATE: serializes with the supplier-order creation paths, which lock the
-    // same row before deciding the quote is order-free — a plain read here would let a
-    // concurrent order creation and this sync both commit (order-locked quote whose pricing no
-    // longer matches the order).
-    const lock = await supplierQuotesRepo.lockEffectiveStatusById(quoteId, tx);
-    if (!lock) continue; // quote deleted concurrently — its items are gone with it
-    const linkedOrderId = await supplierQuotesRepo.findLinkedOrderId(quoteId, tx);
-    if (linkedOrderId) {
-      throw new SupplierItemSyncError(
-        409,
-        'order_exists',
-        quoteId,
-        `Supplier quote "${quoteId}" pricing is final (an order exists); sourced line quantities and costs cannot change`,
-      );
-    }
-    const effectiveStatus = effectiveSupplierQuoteStatusFromDate(lock);
-    if (isFrozenEffectiveStatus(effectiveStatus)) {
-      throw new SupplierItemSyncError(
-        409,
-        'supplier_quote_read_only',
-        quoteId,
-        `Supplier quote "${quoteId}" is ${effectiveStatus} and read-only; sourced line quantities and costs cannot change`,
-      );
-    }
-    await snapshotSupplierQuotePreState(quoteId, 'update', request.user?.id ?? null, tx);
-    await supplierQuotesRepo.syncItemPricing(quoteId, patches, tx);
-    audits.push({ supplierQuoteId: quoteId, sourceAction });
-  }
-  return audits;
+  const audits = await Promise.all(
+    Array.from(changedByQuote, async ([quoteId, patches]) => {
+      // SELECT ... FOR UPDATE: serializes with the supplier-order creation paths, which lock the
+      // same row before deciding the quote is order-free — a plain read here would let a
+      // concurrent order creation and this sync both commit (order-locked quote whose pricing no
+      // longer matches the order).
+      const lock = await supplierQuotesRepo.lockEffectiveStatusById(quoteId, tx);
+      if (!lock) return null; // quote deleted concurrently — its items are gone with it
+      const linkedOrderId = await supplierQuotesRepo.findLinkedOrderId(quoteId, tx);
+      if (linkedOrderId) {
+        throw new SupplierItemSyncError(
+          409,
+          'order_exists',
+          quoteId,
+          `Supplier quote "${quoteId}" pricing is final (an order exists); sourced line quantities and costs cannot change`,
+        );
+      }
+      const effectiveStatus = effectiveSupplierQuoteStatusFromDate(lock);
+      if (isFrozenEffectiveStatus(effectiveStatus)) {
+        throw new SupplierItemSyncError(
+          409,
+          'supplier_quote_read_only',
+          quoteId,
+          `Supplier quote "${quoteId}" is ${effectiveStatus} and read-only; sourced line quantities and costs cannot change`,
+        );
+      }
+      await snapshotSupplierQuotePreState(quoteId, 'update', request.user?.id ?? null, tx);
+      await supplierQuotesRepo.syncItemPricing(quoteId, patches, tx);
+      return { supplierQuoteId: quoteId, sourceAction };
+    }),
+  );
+  return audits.filter((audit): audit is SupplierItemSyncAudit => audit !== null);
 };

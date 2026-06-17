@@ -1,4 +1,4 @@
-import { and, eq, type SQL, sql } from 'drizzle-orm';
+import { type SQL, sql } from 'drizzle-orm';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import { type DbExecutor, db, executeRows, runAtomically } from '../db/drizzle.ts';
 import {
@@ -72,19 +72,56 @@ const assignAllTopManagersTo = (
     SET assignment_source = ${mergedSource(tableAssignmentSourceCol(spec))}
   `);
 
-// Auto-assign one user (a newly-promoted top manager) to every existing entity in the
-// owning table. The CASE preserves any existing manual rows.
-const assignAllToUserAsTopManager = (
-  spec: AssignmentSpec,
-  userId: string,
-  exec: DbExecutor,
-): Promise<unknown> =>
+const clearTopManagerAssignmentsForUser = (userId: string, exec: DbExecutor): Promise<unknown> =>
   exec.execute(sql`
-    INSERT INTO ${sql.identifier(spec.table)} (user_id, ${sql.identifier(spec.fkColumn)}, assignment_source)
-    SELECT ${userId}, id, ${TOP_MANAGER_AUTO_ASSIGNMENT_SOURCE}
-    FROM ${sql.identifier(spec.sourceTable)}
-    ON CONFLICT (user_id, ${sql.identifier(spec.fkColumn)}) DO UPDATE
-    SET assignment_source = ${mergedSource(tableAssignmentSourceCol(spec))}
+    WITH deleted_clients AS (
+      DELETE FROM user_clients
+      WHERE user_id = ${userId}
+        AND assignment_source = ${TOP_MANAGER_AUTO_ASSIGNMENT_SOURCE}
+      RETURNING 1
+    ),
+    deleted_projects AS (
+      DELETE FROM user_projects
+      WHERE user_id = ${userId}
+        AND assignment_source = ${TOP_MANAGER_AUTO_ASSIGNMENT_SOURCE}
+      RETURNING 1
+    ),
+    deleted_tasks AS (
+      DELETE FROM user_tasks
+      WHERE user_id = ${userId}
+        AND assignment_source = ${TOP_MANAGER_AUTO_ASSIGNMENT_SOURCE}
+      RETURNING 1
+    )
+    SELECT 1
+  `);
+
+const assignAllScopesToUserAsTopManager = (userId: string, exec: DbExecutor): Promise<unknown> =>
+  exec.execute(sql`
+    WITH client_assignments AS (
+      INSERT INTO user_clients (user_id, client_id, assignment_source)
+      SELECT ${userId}, id, ${TOP_MANAGER_AUTO_ASSIGNMENT_SOURCE}
+      FROM clients
+      ON CONFLICT (user_id, client_id) DO UPDATE
+      SET assignment_source = ${mergedSource(tableAssignmentSourceCol(ASSIGNMENT_SPECS.clients))}
+      RETURNING 1
+    ),
+    project_assignments AS (
+      INSERT INTO user_projects (user_id, project_id, assignment_source)
+      SELECT ${userId}, id, ${TOP_MANAGER_AUTO_ASSIGNMENT_SOURCE}
+      FROM projects
+      ON CONFLICT (user_id, project_id) DO UPDATE
+      SET assignment_source = ${mergedSource(tableAssignmentSourceCol(ASSIGNMENT_SPECS.projects))}
+      RETURNING 1
+    ),
+    task_assignments AS (
+      INSERT INTO user_tasks (user_id, task_id, assignment_source)
+      SELECT ${userId}, id, ${TOP_MANAGER_AUTO_ASSIGNMENT_SOURCE}
+      FROM tasks
+      ON CONFLICT (user_id, task_id) DO UPDATE
+      SET assignment_source = ${mergedSource(tableAssignmentSourceCol(ASSIGNMENT_SPECS.tasks))}
+      RETURNING 1
+    )
+    SELECT 1
   `);
 
 export const userHasTopManagerRole = (userId: string, exec: DbExecutor = db): Promise<boolean> =>
@@ -261,41 +298,14 @@ export const syncTopManagerAssignmentsForUser = async (
   await runAtomically(exec, async (tx) => {
     const isTopManager = await userHasTopManagerRole(userId, tx);
 
-    // Keep transaction statements serialized: Drizzle's transaction executor is
-    // backed by a single pg client, even when the statements are logically independent.
     if (!isTopManager) {
-      await tx
-        .delete(userClients)
-        .where(
-          and(
-            eq(userClients.userId, userId),
-            eq(userClients.assignmentSource, TOP_MANAGER_AUTO_ASSIGNMENT_SOURCE),
-          ),
-        );
-      await tx
-        .delete(userProjects)
-        .where(
-          and(
-            eq(userProjects.userId, userId),
-            eq(userProjects.assignmentSource, TOP_MANAGER_AUTO_ASSIGNMENT_SOURCE),
-          ),
-        );
-      await tx
-        .delete(userTasks)
-        .where(
-          and(
-            eq(userTasks.userId, userId),
-            eq(userTasks.assignmentSource, TOP_MANAGER_AUTO_ASSIGNMENT_SOURCE),
-          ),
-        );
+      await clearTopManagerAssignmentsForUser(userId, tx);
       // Cascade rebuild reads from `user_projects`, which the deletes above just modified.
       await applyProjectCascadeToClients(userId, tx);
       return;
     }
 
-    await assignAllToUserAsTopManager(ASSIGNMENT_SPECS.clients, userId, tx);
-    await assignAllToUserAsTopManager(ASSIGNMENT_SPECS.projects, userId, tx);
-    await assignAllToUserAsTopManager(ASSIGNMENT_SPECS.tasks, userId, tx);
+    await assignAllScopesToUserAsTopManager(userId, tx);
   });
 };
 

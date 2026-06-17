@@ -1,5 +1,5 @@
 import type React from 'react';
-import { useCallback, useMemo, useReducer, useState } from 'react';
+import { useCallback, useMemo, useReducer } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/field';
@@ -92,6 +92,7 @@ type ClientsInvoicesState = {
   editingInvoice: Invoice | null;
   isDeleteConfirmOpen: boolean;
   invoiceToDelete: Invoice | null;
+  productRowToDelete: number | null;
   errors: Record<string, string>;
   formData: Partial<Invoice>;
 };
@@ -104,6 +105,7 @@ type ClientsInvoicesAction =
   | { type: 'closeModal' }
   | { type: 'requestDelete'; invoice: Invoice }
   | { type: 'closeDeleteConfirm' }
+  | { type: 'setProductRowToDelete'; update: StateUpdate<number | null> }
   | { type: 'setFormData'; update: StateUpdate<Partial<Invoice>> }
   | { type: 'setErrors'; update: StateUpdate<Record<string, string>> };
 
@@ -132,11 +134,16 @@ const clientsInvoicesReducer = (
         errors: {},
       };
     case 'closeModal':
-      return { ...state, isModalOpen: false };
+      return { ...state, isModalOpen: false, productRowToDelete: null };
     case 'requestDelete':
       return { ...state, isDeleteConfirmOpen: true, invoiceToDelete: action.invoice };
     case 'closeDeleteConfirm':
       return { ...state, isDeleteConfirmOpen: false, invoiceToDelete: null };
+    case 'setProductRowToDelete':
+      return {
+        ...state,
+        productRowToDelete: resolveStateUpdate(state.productRowToDelete, action.update),
+      };
     case 'setFormData':
       return { ...state, formData: resolveStateUpdate(state.formData, action.update) };
     case 'setErrors':
@@ -144,7 +151,7 @@ const clientsInvoicesReducer = (
   }
 };
 
-const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
+const useClientsInvoicesController = ({
   invoices,
   clients,
   products,
@@ -153,7 +160,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
   onDeleteInvoice,
   currency,
   canViewInternalListing = true,
-}) => {
+}: ClientsInvoicesViewProps) => {
   const { t } = useTranslation(['accounting', 'sales', 'common']);
   const [invoiceState, dispatchInvoiceState] = useReducer(
     clientsInvoicesReducer,
@@ -163,26 +170,35 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
       editingInvoice: null,
       isDeleteConfirmOpen: false,
       invoiceToDelete: null,
+      productRowToDelete: null,
       errors: {},
       formData: buildDefaultInvoice(),
     }),
   );
-  const { isModalOpen, editingInvoice, isDeleteConfirmOpen, invoiceToDelete, errors, formData } =
-    invoiceState;
+  const {
+    isModalOpen,
+    editingInvoice,
+    isDeleteConfirmOpen,
+    invoiceToDelete,
+    productRowToDelete,
+    errors,
+    formData,
+  } = invoiceState;
   const { preview: clientInvoiceCodePreview } = useDocumentCodePreview('client_invoice', {
     date: formData.issueDate,
     enabled: isModalOpen && !editingInvoice,
   });
-  const [productRowToDelete, setProductRowToDelete] = useState<number | null>(null);
   const setFormData = useCallback((update: StateUpdate<Partial<Invoice>>) => {
     dispatchInvoiceState({ type: 'setFormData', update });
   }, []);
   const setErrors = useCallback((update: StateUpdate<Record<string, string>>) => {
     dispatchInvoiceState({ type: 'setErrors', update });
   }, []);
+  const setProductRowToDelete = useCallback((update: StateUpdate<number | null>) => {
+    dispatchInvoiceState({ type: 'setProductRowToDelete', update });
+  }, []);
   const closeModal = useCallback(() => {
     dispatchInvoiceState({ type: 'closeModal' });
-    setProductRowToDelete(null);
   }, []);
   const closeDeleteConfirm = useCallback(() => {
     dispatchInvoiceState({ type: 'closeDeleteConfirm' });
@@ -629,530 +645,640 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = ({
     [currency, statusOptions, t, confirmDelete, openEditModal],
   );
 
-  return (
-    <div className="space-y-8 animate-in fade-in duration-500">
-      <Modal isOpen={isModalOpen} onClose={closeModal}>
-        <ModalContent size="full" className="max-h-[90vh]">
-          <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
-            <ModalHeader>
-              <ModalTitle className="gap-3">
-                <span className="flex size-10 items-center justify-center rounded-md bg-muted text-primary">
-                  <i
-                    className={`fa-solid ${editingInvoice ? 'fa-pen-to-square' : 'fa-plus'}`}
-                    aria-hidden="true"
-                  ></i>
-                </span>
-                {editingInvoice
-                  ? t('accounting:clientsInvoices.editInvoice')
-                  : t('accounting:clientsInvoices.addInvoice')}
-              </ModalTitle>
-              <ModalCloseButton onClick={closeModal} />
-            </ModalHeader>
+  return {
+    activeClients,
+    activeProducts,
+    addItemRow,
+    allProductIds,
+    canViewInternalListing,
+    clientInvoiceCodePreview,
+    closeDeleteConfirm,
+    closeModal,
+    columns,
+    currency,
+    editingInvoice,
+    errors,
+    formData,
+    grossSubtotal,
+    handleClientChange,
+    handleDelete,
+    handleDurationUnitChange,
+    handleDurationValueChange,
+    handleSubmit,
+    invoices,
+    invoiceToDelete,
+    isDeleteConfirmOpen,
+    isModalOpen,
+    openAddModal,
+    openEditModal,
+    productRowToDelete,
+    removeItemRow,
+    setFormData,
+    setProductRowToDelete,
+    statusOptions,
+    t,
+    taxTotal,
+    total,
+    totalDiscount,
+    unitOptions,
+    updateItemRow,
+  };
+};
 
-            <ModalBody className="flex-1 space-y-5">
-              <div className="space-y-2">
-                <h4 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-primary">
-                  <span className="size-1.5 rounded-full bg-primary"></span>
-                  {t('accounting:clientsInvoices.invoiceDetails')}
-                </h4>
-                <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-                  <Field data-invalid={Boolean(errors.clientId)}>
-                    <SelectControl
-                      id="client-invoice-client"
-                      options={activeClients.map((client) => ({
-                        id: client.id,
-                        name: client.name,
-                      }))}
-                      value={formData.clientId || ''}
-                      onChange={(value) => handleClientChange(value as string)}
-                      label={t('accounting:clientsInvoices.client')}
-                      required
-                      placeholder={t('accounting:clientsInvoices.allClients')}
-                      searchable={true}
-                      buttonClassName={errors.clientId ? 'h-9 border-destructive' : 'h-9'}
-                    />
-                    <FieldError className="text-xs">{errors.clientId}</FieldError>
-                  </Field>
-                  <Field data-invalid={Boolean(errors.id)}>
-                    <FieldLabel htmlFor="client-invoice-number" required={Boolean(editingInvoice)}>
-                      {t('accounting:clientsInvoices.invoiceNumber')}
-                    </FieldLabel>
-                    <Input
-                      id="client-invoice-number"
-                      type="text"
-                      value={formData.id || ''}
-                      onChange={(event) =>
-                        setFormData((prev) => ({ ...prev, id: event.target.value }))
-                      }
-                      aria-invalid={Boolean(errors.id)}
-                      className="font-medium"
-                      placeholder={
-                        clientInvoiceCodePreview ??
-                        t('accounting:clientsInvoices.autoCodePlaceholder', {
-                          defaultValue: 'Auto-generated',
-                        })
-                      }
-                    />
-                    <FieldError className="text-xs">{errors.id}</FieldError>
-                    {!editingInvoice && (
-                      <FieldDescription className="text-xs">
-                        {clientInvoiceCodePreview
-                          ? t('accounting:clientsInvoices.autoCodePreviewDescription', {
-                              preview: clientInvoiceCodePreview,
-                              defaultValue:
-                                'Leave blank to generate {{preview}} from the document code template.',
-                            })
-                          : t('accounting:clientsInvoices.autoCodeDescription', {
-                              defaultValue:
-                                'Leave blank to generate the next number automatically.',
-                            })}
-                      </FieldDescription>
-                    )}
-                  </Field>
-                  <Field data-invalid={Boolean(errors.issueDate)}>
-                    <FieldLabel htmlFor="client-invoice-issue-date" required>
-                      {t('accounting:clientsInvoices.issueDate')}
-                    </FieldLabel>
-                    <DateField
-                      id="client-invoice-issue-date"
-                      required
-                      value={formData.issueDate}
-                      onChange={(value) => setFormData((prev) => ({ ...prev, issueDate: value }))}
-                      aria-invalid={Boolean(errors.issueDate)}
-                    />
-                    <FieldError className="text-xs">{errors.issueDate}</FieldError>
-                  </Field>
-                  <Field data-invalid={Boolean(errors.dueDate)}>
-                    <FieldLabel htmlFor="client-invoice-due-date" required>
-                      {t('accounting:clientsInvoices.dueDate')}
-                    </FieldLabel>
-                    <DateField
-                      id="client-invoice-due-date"
-                      required
-                      value={formData.dueDate}
-                      onChange={(value) => setFormData((prev) => ({ ...prev, dueDate: value }))}
-                      aria-invalid={Boolean(errors.dueDate)}
-                    />
-                    <FieldError className="text-xs">{errors.dueDate}</FieldError>
-                  </Field>
-                </div>
-                <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-                  <Field>
-                    <SelectControl
-                      id="client-invoice-status"
-                      options={statusOptions}
-                      value={formData.status || 'draft'}
-                      onChange={(value) =>
-                        setFormData((prev) => ({ ...prev, status: value as Invoice['status'] }))
-                      }
-                      label={t('accounting:clientsInvoices.status')}
-                      searchable={false}
-                      buttonClassName="h-9"
-                    />
-                  </Field>
-                </div>
-              </div>
+type ClientsInvoicesController = ReturnType<typeof useClientsInvoicesController>;
 
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <h4 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-primary">
-                    <span className="size-1.5 rounded-full bg-primary"></span>
-                    {t('accounting:clientsInvoices.items')}
-                  </h4>
-                  <Button type="button" size="sm" onClick={addItemRow}>
-                    <i className="fa-solid fa-plus text-[10px]" aria-hidden="true"></i>
-                    {t('accounting:clientsInvoices.addItem')}
-                  </Button>
-                </div>
-                <FieldError className="-mt-2 text-xs">{errors.items}</FieldError>
+const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = (props) => {
+  const controller = useClientsInvoicesController(props);
+  return <ClientsInvoicesLayout controller={controller} />;
+};
 
-                {formData.items && formData.items.length > 0 && (
-                  <div className="mb-1 hidden items-center gap-2 px-3 lg:flex">
-                    <div className="grid flex-1 grid-cols-14 gap-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                      <div className="col-span-3">{t('common:labels.product')}</div>
-                      <div className="col-span-2">{t('common:labels.quantity')}</div>
-                      <div className="col-span-2 whitespace-nowrap">
-                        {t('sales:clientQuotes.durationColumn', { defaultValue: 'Duration' })}
-                      </div>
-                      <div className="col-span-2">{t('common:labels.price')}</div>
-                      <div className="col-span-1">{t('common:labels.discount')}</div>
-                      <div className="col-span-2">
-                        {t('accounting:clientsInvoices.taxRate', { defaultValue: 'IVA %' })}
-                      </div>
-                      <div className="col-span-2 pr-2 text-right">{t('common:labels.total')}</div>
-                    </div>
-                    <div className="w-8 shrink-0"></div>
-                  </div>
-                )}
+const ClientsInvoicesLayout: React.FC<{ controller: ClientsInvoicesController }> = ({
+  controller,
+}) => (
+  <div className="space-y-8">
+    <ClientsInvoiceModal controller={controller} />
+    <ClientsInvoiceDeleteDialogs controller={controller} />
+    <ClientsInvoicesHeader controller={controller} />
+    <StandardTable<Invoice>
+      title={controller.t('accounting:clientsInvoices.allInvoices')}
+      viewKey="invoices.clients"
+      data={controller.invoices}
+      columns={controller.columns}
+      defaultRowsPerPage={10}
+      containerClassName="overflow-visible"
+      onRowClick={(row: Invoice) => controller.openEditModal(row)}
+    />
+  </div>
+);
 
-                <div className="space-y-3">
-                  {formData.items?.map((item, index) => {
-                    const lineTotal = getLineTotal(item);
-                    const durationUnit = normalizeDurationUnit(item.durationUnit);
-                    const durationValue = getDurationDisplayValue(item);
-                    const productHref = buildProductQuickViewHref(item.productId, allProductIds);
-
-                    return (
-                      <div
-                        key={item.id}
-                        className="space-y-3 rounded-md border border-border bg-muted/30 p-3"
-                      >
-                        <div className="flex items-start gap-2 lg:items-center lg:pt-5">
-                          <div className="grid flex-1 grid-cols-1 gap-2 lg:grid-cols-14">
-                            <div className="space-y-1 lg:col-span-3 min-w-0">
-                              <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
-                                {t('common:labels.product')}
-                              </FieldLabel>
-                              <div className="relative flex items-center gap-1">
-                                <SelectControl
-                                  options={[
-                                    { id: '', name: t('accounting:clientsInvoices.customItem') },
-                                    ...activeProducts.map((product) => ({
-                                      id: product.id,
-                                      name: product.name,
-                                    })),
-                                  ]}
-                                  value={item.productId || ''}
-                                  onChange={(value) =>
-                                    updateItemRow(
-                                      index,
-                                      'productId',
-                                      (value as string) || undefined,
-                                    )
-                                  }
-                                  placeholder={t(
-                                    'accounting:clientsInvoices.selectProductPlaceholder',
-                                  )}
-                                  searchable={true}
-                                  className="min-w-0 flex-1"
-                                  buttonClassName="h-9"
-                                />
-                                {canViewInternalListing && (
-                                  <QuickViewLinkButton
-                                    href={productHref}
-                                    label={t('sales:clientQuotes.openProductInNewTab')}
-                                    disabledLabel={t(
-                                      'sales:clientQuotes.productShortcutUnavailable',
-                                    )}
-                                    floating
-                                  />
-                                )}
-                              </div>
-                            </div>
-                            <div className="space-y-1 lg:col-span-2">
-                              <FieldLabel
-                                className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden"
-                                required
-                              >
-                                {t('common:labels.quantity')}
-                              </FieldLabel>
-                              <div className="flex items-center justify-center gap-1">
-                                <ValidatedNumberInput
-                                  min="0"
-                                  step="0.01"
-                                  required
-                                  value={item.quantity}
-                                  onValueChange={(value) => {
-                                    const parsed = parseFloat(value);
-                                    updateItemRow(
-                                      index,
-                                      'quantity',
-                                      value === '' || Number.isNaN(parsed) ? 0 : parsed,
-                                    );
-                                  }}
-                                  className="min-w-0 max-w-[5rem]"
-                                />
-                                <span className="shrink-0 text-xs font-medium text-muted-foreground">
-                                  /
-                                </span>
-                                <span className="shrink-0 text-xs font-medium text-muted-foreground">
-                                  {unitOptions.find((u) => u.id === (item.unitOfMeasure || 'unit'))
-                                    ?.name || t('accounting:clientsInvoices.unit')}
-                                </span>
-                              </div>
-                            </div>
-                            <div className="space-y-1 lg:col-span-2">
-                              <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
-                                {t('sales:clientQuotes.durationColumn', {
-                                  defaultValue: 'Duration',
-                                })}
-                              </FieldLabel>
-                              <div className="flex items-center justify-center gap-1">
-                                <ValidatedNumberInput
-                                  min="1"
-                                  step="1"
-                                  value={durationValue}
-                                  onValueChange={(value) => handleDurationValueChange(index, value)}
-                                  disabled={durationUnit === 'na'}
-                                  className="min-w-0 max-w-[5rem]"
-                                />
-                                <span className="shrink-0 text-xs font-medium text-muted-foreground">
-                                  /
-                                </span>
-                                <DurationUnitSelector
-                                  value={durationUnit}
-                                  onChange={(val) => handleDurationUnitChange(index, val)}
-                                  count={durationValue}
-                                />
-                              </div>
-                            </div>
-                            <div className="space-y-1 lg:col-span-2">
-                              <FieldLabel
-                                className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden"
-                                required
-                              >
-                                {t('common:labels.price')}
-                              </FieldLabel>
-                              <div className="flex items-center gap-1">
-                                <ValidatedNumberInput
-                                  min="0"
-                                  step="0.01"
-                                  required
-                                  value={item.unitPrice}
-                                  formatDecimals={2}
-                                  onValueChange={(value) => {
-                                    const parsed = parseFloat(value);
-                                    updateItemRow(
-                                      index,
-                                      'unitPrice',
-                                      value === '' || Number.isNaN(parsed) ? 0 : parsed,
-                                    );
-                                  }}
-                                  className="min-w-0 font-medium"
-                                />
-                                <span className="shrink-0 text-xs font-medium text-muted-foreground">
-                                  {currency}
-                                </span>
-                              </div>
-                            </div>
-                            <div className="space-y-1 lg:col-span-1">
-                              <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
-                                {t('common:labels.discount')}
-                              </FieldLabel>
-                              <div className="flex items-center gap-1">
-                                <ValidatedNumberInput
-                                  min="0"
-                                  max="100"
-                                  value={item.discount || 0}
-                                  formatDecimals={2}
-                                  onValueChange={(value) => {
-                                    const parsed = parseFloat(value);
-                                    updateItemRow(
-                                      index,
-                                      'discount',
-                                      value === '' || Number.isNaN(parsed) ? 0 : parsed,
-                                    );
-                                  }}
-                                  className="min-w-0 font-medium"
-                                />
-                                <span className="shrink-0 text-xs font-medium text-muted-foreground">
-                                  %
-                                </span>
-                              </div>
-                            </div>
-                            <div className="space-y-1 lg:col-span-2">
-                              <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
-                                {t('accounting:clientsInvoices.taxRate', {
-                                  defaultValue: 'IVA %',
-                                })}
-                              </FieldLabel>
-                              <div className="flex items-center gap-1">
-                                <ValidatedNumberInput
-                                  min="0"
-                                  max="100"
-                                  value={item.taxRate ?? DEFAULT_TAX_RATE}
-                                  formatDecimals={2}
-                                  onValueChange={(value) => {
-                                    const parsed = parseFloat(value);
-                                    updateItemRow(
-                                      index,
-                                      'taxRate',
-                                      value === '' || Number.isNaN(parsed) ? 0 : parsed,
-                                    );
-                                  }}
-                                  className="min-w-0 font-medium"
-                                />
-                                <span className="shrink-0 text-xs font-medium text-muted-foreground">
-                                  %
-                                </span>
-                              </div>
-                            </div>
-                            <div className="space-y-1 lg:col-span-2">
-                              <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
-                                {t('common:labels.total')}
-                              </FieldLabel>
-                              <div className="flex min-h-[42px] items-center justify-end whitespace-nowrap px-3 py-2 text-sm font-semibold text-foreground">
-                                {lineTotal.toFixed(2)} {currency}
-                              </div>
-                            </div>
-                          </div>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon-sm"
-                            onClick={() => setProductRowToDelete(index)}
-                            className="text-muted-foreground hover:text-destructive"
-                          >
-                            <i className="fa-solid fa-trash-can" aria-hidden="true"></i>
-                            <span className="sr-only">{t('common:buttons.delete')}</span>
-                          </Button>
-                        </div>
-
-                        <Field>
-                          <FieldLabel
-                            htmlFor={`client-invoice-item-description-${index}`}
-                            className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground"
-                            required
-                          >
-                            {t('common:labels.description')}
-                          </FieldLabel>
-                          <Input
-                            id={`client-invoice-item-description-${index}`}
-                            type="text"
-                            required
-                            placeholder={t('accounting:clientsInvoices.descriptionPlaceholder')}
-                            value={item.description}
-                            onChange={(event) =>
-                              updateItemRow(index, 'description', event.target.value)
-                            }
-                          />
-                        </Field>
-                      </div>
-                    );
-                  })}
-
-                  {(!formData.items || formData.items.length === 0) && (
-                    <div className="rounded-md border border-dashed border-border py-8 text-center text-sm text-muted-foreground">
-                      {t('accounting:clientsInvoices.noItems')}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <div className="flex flex-col gap-4 border-t border-border pt-4 md:flex-row">
-                <Field className="md:w-2/3">
-                  <h4 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-primary">
-                    <span className="size-1.5 rounded-full bg-primary"></span>
-                    {t('accounting:clientsInvoices.notes')}
-                  </h4>
-                  <FieldLabel htmlFor="client-invoice-notes" className="sr-only">
-                    {t('accounting:clientsInvoices.notes')}
-                  </FieldLabel>
-                  <Textarea
-                    id="client-invoice-notes"
-                    rows={4}
-                    value={formData.notes || ''}
-                    onChange={(event) =>
-                      setFormData((prev) => ({ ...prev, notes: event.target.value }))
-                    }
-                    className="min-h-28 resize-none"
-                    placeholder={t('accounting:clientsInvoices.notesPlaceholder')}
-                  />
-                </Field>
-
-                <div className="space-y-2 md:w-1/3">
-                  <h4 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-primary">
-                    <span className="size-1.5 rounded-full bg-primary"></span>
-                    {t('accounting:clientsInvoices.summary', { defaultValue: 'Summary' })}
-                  </h4>
-                  <CostSummaryPanel
-                    currency={currency}
-                    subtotal={grossSubtotal}
-                    total={total}
-                    subtotalLabel={t('accounting:clientsInvoices.subtotal')}
-                    totalLabel={t('accounting:clientsInvoices.total')}
-                    discountRow={
-                      totalDiscount > 0
-                        ? {
-                            label: t('accounting:clientsInvoices.totalDiscount'),
-                            amount: totalDiscount,
-                          }
-                        : undefined
-                    }
-                    taxRow={{
-                      label: t('accounting:clientsInvoices.taxTotal'),
-                      amount: taxTotal,
-                    }}
-                    amountPaid={{
-                      label: t('accounting:clientsInvoices.amountPaid'),
-                      value: formData.amountPaid || 0,
-                      onChange: (value) =>
-                        setFormData((prev) => ({
-                          ...prev,
-                          amountPaid: value === '' ? 0 : Number(value),
-                        })),
-                    }}
-                    balanceDue={{
-                      label: t('accounting:clientsInvoices.balanceDue'),
-                      amount: total - Number(formData.amountPaid || 0),
-                    }}
-                  />
-                </div>
-              </div>
-            </ModalBody>
-
-            <ModalFooter>
-              <Button type="button" variant="outline" onClick={closeModal}>
-                {t('common:buttons.cancel')}
-              </Button>
-              <Button type="submit">{t('common:buttons.save')}</Button>
-            </ModalFooter>
-          </form>
-        </ModalContent>
-      </Modal>
-
-      <DeleteConfirmModal
-        isOpen={isDeleteConfirmOpen}
-        onClose={closeDeleteConfirm}
-        onConfirm={handleDelete}
-        title={t('accounting:clientsInvoices.deleteTitle')}
-        description={t('accounting:clientsInvoices.deleteMessage', {
-          invoiceNumber: invoiceToDelete?.id || '',
-        })}
-      />
-
-      {/* Line-item (product) delete confirmation */}
-      <DeleteConfirmModal
-        isOpen={productRowToDelete !== null}
-        onClose={() => setProductRowToDelete(null)}
-        onConfirm={() => {
-          if (productRowToDelete !== null) {
-            removeItemRow(productRowToDelete);
-          }
-          setProductRowToDelete(null);
-        }}
-        title={t('accounting:clientsInvoices.removeProductTitle')}
-        description={t('accounting:clientsInvoices.removeProductConfirm')}
-        zIndex={70}
-      />
-
-      <div className="space-y-4">
-        <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
-          <div>
-            <h2 className="text-2xl font-semibold text-foreground">
-              {t('accounting:clientsInvoices.title')}
-            </h2>
-            <p className="text-sm text-muted-foreground">
-              {t('accounting:clientsInvoices.subtitle')}
-            </p>
-          </div>
-          <HeaderAddButton onClick={openAddModal}>
-            {t('accounting:clientsInvoices.addInvoice')}
-          </HeaderAddButton>
-        </div>
+const ClientsInvoicesHeader: React.FC<{ controller: ClientsInvoicesController }> = ({
+  controller,
+}) => (
+  <div className="space-y-4">
+    <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
+      <div>
+        <h2 className="text-2xl font-semibold text-foreground">
+          {controller.t('accounting:clientsInvoices.title')}
+        </h2>
+        <p className="text-sm text-muted-foreground">
+          {controller.t('accounting:clientsInvoices.subtitle')}
+        </p>
       </div>
+      <HeaderAddButton onClick={controller.openAddModal}>
+        {controller.t('accounting:clientsInvoices.addInvoice')}
+      </HeaderAddButton>
+    </div>
+  </div>
+);
 
-      <StandardTable<Invoice>
-        title={t('accounting:clientsInvoices.allInvoices')}
-        viewKey="invoices.clients"
-        data={invoices}
-        columns={columns}
-        defaultRowsPerPage={10}
-        containerClassName="overflow-visible"
-        onRowClick={(row: Invoice) => openEditModal(row)}
+const ClientsInvoiceModal: React.FC<{ controller: ClientsInvoicesController }> = ({
+  controller,
+}) => (
+  <Modal isOpen={controller.isModalOpen} onClose={controller.closeModal}>
+    <ModalContent size="full" className="max-h-[90vh]">
+      <form onSubmit={controller.handleSubmit} className="flex min-h-0 flex-1 flex-col">
+        <ModalHeader>
+          <ModalTitle className="gap-3">
+            <span className="flex size-10 items-center justify-center rounded-md bg-muted text-primary">
+              <i
+                className={`fa-solid ${controller.editingInvoice ? 'fa-pen-to-square' : 'fa-plus'}`}
+                aria-hidden="true"
+              ></i>
+            </span>
+            {controller.editingInvoice
+              ? controller.t('accounting:clientsInvoices.editInvoice')
+              : controller.t('accounting:clientsInvoices.addInvoice')}
+          </ModalTitle>
+          <ModalCloseButton onClick={controller.closeModal} />
+        </ModalHeader>
+        <ModalBody className="flex-1 space-y-5">
+          <InvoiceDetailsSection controller={controller} />
+          <InvoiceItemsSection controller={controller} />
+          <InvoiceNotesSummarySection controller={controller} />
+        </ModalBody>
+        <ModalFooter>
+          <Button type="button" variant="outline" onClick={controller.closeModal}>
+            {controller.t('common:buttons.cancel')}
+          </Button>
+          <Button type="submit">{controller.t('common:buttons.save')}</Button>
+        </ModalFooter>
+      </form>
+    </ModalContent>
+  </Modal>
+);
+
+const InvoiceDetailsSection: React.FC<{ controller: ClientsInvoicesController }> = ({
+  controller,
+}) => (
+  <div className="space-y-2">
+    <SectionTitle>{controller.t('accounting:clientsInvoices.invoiceDetails')}</SectionTitle>
+    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <Field data-invalid={Boolean(controller.errors.clientId)}>
+        <SelectControl
+          id="client-invoice-client"
+          options={controller.activeClients.map((client) => ({ id: client.id, name: client.name }))}
+          value={controller.formData.clientId || ''}
+          onChange={(value) => controller.handleClientChange(value as string)}
+          label={controller.t('accounting:clientsInvoices.client')}
+          required
+          placeholder={controller.t('accounting:clientsInvoices.allClients')}
+          searchable={true}
+          buttonClassName={controller.errors.clientId ? 'h-9 border-destructive' : 'h-9'}
+        />
+        <FieldError className="text-xs">{controller.errors.clientId}</FieldError>
+      </Field>
+      <InvoiceNumberField controller={controller} />
+      <InvoiceDateField controller={controller} field="issueDate" />
+      <InvoiceDateField controller={controller} field="dueDate" />
+    </div>
+    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <Field>
+        <SelectControl
+          id="client-invoice-status"
+          options={controller.statusOptions}
+          value={controller.formData.status || 'draft'}
+          onChange={(value) =>
+            controller.setFormData((prev) => ({ ...prev, status: value as Invoice['status'] }))
+          }
+          label={controller.t('accounting:clientsInvoices.status')}
+          searchable={false}
+          buttonClassName="h-9"
+        />
+      </Field>
+    </div>
+  </div>
+);
+
+const SectionTitle: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+  <h4 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-primary">
+    <span className="size-1.5 rounded-full bg-primary"></span>
+    {children}
+  </h4>
+);
+
+const InvoiceNumberField: React.FC<{ controller: ClientsInvoicesController }> = ({
+  controller,
+}) => (
+  <Field data-invalid={Boolean(controller.errors.id)}>
+    <FieldLabel htmlFor="client-invoice-number" required={Boolean(controller.editingInvoice)}>
+      {controller.t('accounting:clientsInvoices.invoiceNumber')}
+    </FieldLabel>
+    <Input
+      id="client-invoice-number"
+      type="text"
+      value={controller.formData.id || ''}
+      onChange={(event) => controller.setFormData((prev) => ({ ...prev, id: event.target.value }))}
+      aria-invalid={Boolean(controller.errors.id)}
+      className="font-medium"
+      placeholder={
+        controller.clientInvoiceCodePreview ??
+        controller.t('accounting:clientsInvoices.autoCodePlaceholder', {
+          defaultValue: 'Auto-generated',
+        })
+      }
+    />
+    <FieldError className="text-xs">{controller.errors.id}</FieldError>
+    {!controller.editingInvoice && (
+      <FieldDescription className="text-xs">
+        {controller.clientInvoiceCodePreview
+          ? controller.t('accounting:clientsInvoices.autoCodePreviewDescription', {
+              preview: controller.clientInvoiceCodePreview,
+              defaultValue: 'Leave blank to generate {{preview}} from the document code template.',
+            })
+          : controller.t('accounting:clientsInvoices.autoCodeDescription', {
+              defaultValue: 'Leave blank to generate the next number automatically.',
+            })}
+      </FieldDescription>
+    )}
+  </Field>
+);
+
+const InvoiceDateField: React.FC<{
+  controller: ClientsInvoicesController;
+  field: 'issueDate' | 'dueDate';
+}> = ({ controller, field }) => {
+  const id = field === 'issueDate' ? 'client-invoice-issue-date' : 'client-invoice-due-date';
+  const label =
+    field === 'issueDate'
+      ? controller.t('accounting:clientsInvoices.issueDate')
+      : controller.t('accounting:clientsInvoices.dueDate');
+  return (
+    <Field data-invalid={Boolean(controller.errors[field])}>
+      <FieldLabel htmlFor={id} required>
+        {label}
+      </FieldLabel>
+      <DateField
+        id={id}
+        required
+        value={controller.formData[field]}
+        onChange={(value) => controller.setFormData((prev) => ({ ...prev, [field]: value }))}
+        aria-invalid={Boolean(controller.errors[field])}
       />
+      <FieldError className="text-xs">{controller.errors[field]}</FieldError>
+    </Field>
+  );
+};
+
+const InvoiceItemsSection: React.FC<{ controller: ClientsInvoicesController }> = ({
+  controller,
+}) => (
+  <div className="space-y-4">
+    <div className="flex items-center justify-between">
+      <SectionTitle>{controller.t('accounting:clientsInvoices.items')}</SectionTitle>
+      <Button type="button" size="sm" onClick={controller.addItemRow}>
+        <i className="fa-solid fa-plus text-[10px]" aria-hidden="true"></i>
+        {controller.t('accounting:clientsInvoices.addItem')}
+      </Button>
+    </div>
+    <FieldError className="-mt-2 text-xs">{controller.errors.items}</FieldError>
+    <InvoiceItemsHeader controller={controller} />
+    <div className="space-y-3">
+      {controller.formData.items?.map((item, index) => (
+        <InvoiceItemRow key={item.id} controller={controller} item={item} index={index} />
+      ))}
+      {(!controller.formData.items || controller.formData.items.length === 0) && (
+        <div className="rounded-md border border-dashed border-border py-8 text-center text-sm text-muted-foreground">
+          {controller.t('accounting:clientsInvoices.noItems')}
+        </div>
+      )}
+    </div>
+  </div>
+);
+
+const InvoiceItemsHeader: React.FC<{ controller: ClientsInvoicesController }> = ({
+  controller,
+}) => {
+  if (!controller.formData.items || controller.formData.items.length === 0) return null;
+  return (
+    <div className="mb-1 hidden items-center gap-2 px-3 lg:flex">
+      <div className="grid flex-1 grid-cols-14 gap-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+        <div className="col-span-3">{controller.t('common:labels.product')}</div>
+        <div className="col-span-2">{controller.t('common:labels.quantity')}</div>
+        <div className="col-span-2 whitespace-nowrap">
+          {controller.t('sales:clientQuotes.durationColumn', { defaultValue: 'Duration' })}
+        </div>
+        <div className="col-span-2">{controller.t('common:labels.price')}</div>
+        <div className="col-span-1">{controller.t('common:labels.discount')}</div>
+        <div className="col-span-2">
+          {controller.t('accounting:clientsInvoices.taxRate', { defaultValue: 'IVA %' })}
+        </div>
+        <div className="col-span-2 pr-2 text-right">{controller.t('common:labels.total')}</div>
+      </div>
+      <div className="w-8 shrink-0"></div>
     </div>
   );
 };
+
+const InvoiceItemRow: React.FC<{
+  controller: ClientsInvoicesController;
+  item: InvoiceItem;
+  index: number;
+}> = ({ controller, item, index }) => (
+  <div className="space-y-3 rounded-md border border-border bg-muted/30 p-3">
+    <div className="flex items-start gap-2 lg:items-center lg:pt-5">
+      <div className="grid flex-1 grid-cols-1 gap-2 lg:grid-cols-14">
+        <InvoiceItemProductField controller={controller} item={item} index={index} />
+        <InvoiceItemQuantityField controller={controller} item={item} index={index} />
+        <InvoiceItemDurationField controller={controller} item={item} index={index} />
+        <InvoiceItemPriceField controller={controller} item={item} index={index} />
+        <InvoiceItemDiscountField controller={controller} item={item} index={index} />
+        <InvoiceItemTaxField controller={controller} item={item} index={index} />
+        <InvoiceItemTotalField controller={controller} item={item} />
+      </div>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon-sm"
+        onClick={() => controller.setProductRowToDelete(index)}
+        className="text-muted-foreground hover:text-destructive"
+      >
+        <i className="fa-solid fa-trash-can" aria-hidden="true"></i>
+        <span className="sr-only">{controller.t('common:buttons.delete')}</span>
+      </Button>
+    </div>
+    <Field>
+      <FieldLabel
+        htmlFor={`client-invoice-item-description-${index}`}
+        className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground"
+        required
+      >
+        {controller.t('common:labels.description')}
+      </FieldLabel>
+      <Input
+        id={`client-invoice-item-description-${index}`}
+        type="text"
+        required
+        placeholder={controller.t('accounting:clientsInvoices.descriptionPlaceholder')}
+        value={item.description}
+        onChange={(event) => controller.updateItemRow(index, 'description', event.target.value)}
+      />
+    </Field>
+  </div>
+);
+
+const InvoiceItemProductField: React.FC<{
+  controller: ClientsInvoicesController;
+  item: InvoiceItem;
+  index: number;
+}> = ({ controller, item, index }) => {
+  const productHref = buildProductQuickViewHref(item.productId, controller.allProductIds);
+  return (
+    <div className="space-y-1 lg:col-span-3 min-w-0">
+      <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
+        {controller.t('common:labels.product')}
+      </FieldLabel>
+      <div className="relative flex items-center gap-1">
+        <SelectControl
+          options={[
+            { id: '', name: controller.t('accounting:clientsInvoices.customItem') },
+            ...controller.activeProducts.map((product) => ({ id: product.id, name: product.name })),
+          ]}
+          value={item.productId || ''}
+          onChange={(value) =>
+            controller.updateItemRow(index, 'productId', (value as string) || undefined)
+          }
+          placeholder={controller.t('accounting:clientsInvoices.selectProductPlaceholder')}
+          searchable={true}
+          className="min-w-0 flex-1"
+          buttonClassName="h-9"
+        />
+        {controller.canViewInternalListing && (
+          <QuickViewLinkButton
+            href={productHref}
+            label={controller.t('sales:clientQuotes.openProductInNewTab')}
+            disabledLabel={controller.t('sales:clientQuotes.productShortcutUnavailable')}
+            floating
+          />
+        )}
+      </div>
+    </div>
+  );
+};
+
+const InvoiceItemQuantityField: React.FC<{
+  controller: ClientsInvoicesController;
+  item: InvoiceItem;
+  index: number;
+}> = ({ controller, item, index }) => (
+  <div className="space-y-1 lg:col-span-2">
+    <FieldLabel
+      className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden"
+      required
+    >
+      {controller.t('common:labels.quantity')}
+    </FieldLabel>
+    <div className="flex items-center justify-center gap-1">
+      <ValidatedNumberInput
+        min="0"
+        step="0.01"
+        required
+        value={item.quantity}
+        onValueChange={(value) => {
+          const parsed = parseFloat(value);
+          controller.updateItemRow(
+            index,
+            'quantity',
+            value === '' || Number.isNaN(parsed) ? 0 : parsed,
+          );
+        }}
+        className="min-w-0 max-w-[5rem]"
+      />
+      <span className="shrink-0 text-xs font-medium text-muted-foreground">/</span>
+      <span className="shrink-0 text-xs font-medium text-muted-foreground">
+        {controller.unitOptions.find((unit) => unit.id === (item.unitOfMeasure || 'unit'))?.name ||
+          controller.t('accounting:clientsInvoices.unit')}
+      </span>
+    </div>
+  </div>
+);
+
+const InvoiceItemDurationField: React.FC<{
+  controller: ClientsInvoicesController;
+  item: InvoiceItem;
+  index: number;
+}> = ({ controller, item, index }) => {
+  const durationUnit = normalizeDurationUnit(item.durationUnit);
+  const durationValue = getDurationDisplayValue(item);
+  return (
+    <div className="space-y-1 lg:col-span-2">
+      <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
+        {controller.t('sales:clientQuotes.durationColumn', { defaultValue: 'Duration' })}
+      </FieldLabel>
+      <div className="flex items-center justify-center gap-1">
+        <ValidatedNumberInput
+          min="1"
+          step="1"
+          value={durationValue}
+          onValueChange={(value) => controller.handleDurationValueChange(index, value)}
+          disabled={durationUnit === 'na'}
+          className="min-w-0 max-w-[5rem]"
+        />
+        <span className="shrink-0 text-xs font-medium text-muted-foreground">/</span>
+        <DurationUnitSelector
+          value={durationUnit}
+          onChange={(value) => controller.handleDurationUnitChange(index, value)}
+          count={durationValue}
+        />
+      </div>
+    </div>
+  );
+};
+
+const InvoiceItemPriceField: React.FC<{
+  controller: ClientsInvoicesController;
+  item: InvoiceItem;
+  index: number;
+}> = ({ controller, item, index }) => (
+  <InvoiceItemNumberField
+    label={controller.t('common:labels.price')}
+    suffix={controller.currency}
+    value={item.unitPrice}
+    required
+    className="lg:col-span-2"
+    onValueChange={(value) => {
+      const parsed = parseFloat(value);
+      controller.updateItemRow(
+        index,
+        'unitPrice',
+        value === '' || Number.isNaN(parsed) ? 0 : parsed,
+      );
+    }}
+  />
+);
+
+const InvoiceItemDiscountField: React.FC<{
+  controller: ClientsInvoicesController;
+  item: InvoiceItem;
+  index: number;
+}> = ({ controller, item, index }) => (
+  <InvoiceItemNumberField
+    label={controller.t('common:labels.discount')}
+    suffix="%"
+    value={item.discount || 0}
+    max="100"
+    className="lg:col-span-1"
+    onValueChange={(value) => {
+      const parsed = parseFloat(value);
+      controller.updateItemRow(
+        index,
+        'discount',
+        value === '' || Number.isNaN(parsed) ? 0 : parsed,
+      );
+    }}
+  />
+);
+
+const InvoiceItemTaxField: React.FC<{
+  controller: ClientsInvoicesController;
+  item: InvoiceItem;
+  index: number;
+}> = ({ controller, item, index }) => (
+  <InvoiceItemNumberField
+    label={controller.t('accounting:clientsInvoices.taxRate', { defaultValue: 'IVA %' })}
+    suffix="%"
+    value={item.taxRate ?? DEFAULT_TAX_RATE}
+    max="100"
+    className="lg:col-span-2"
+    onValueChange={(value) => {
+      const parsed = parseFloat(value);
+      controller.updateItemRow(index, 'taxRate', value === '' || Number.isNaN(parsed) ? 0 : parsed);
+    }}
+  />
+);
+
+const InvoiceItemNumberField: React.FC<{
+  label: string;
+  suffix: string;
+  value: number | string;
+  onValueChange: (value: string) => void;
+  className: string;
+  required?: boolean;
+  max?: string;
+}> = ({ label, suffix, value, onValueChange, className, required, max }) => (
+  <div className={`space-y-1 ${className}`}>
+    <FieldLabel
+      className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden"
+      required={required}
+    >
+      {label}
+    </FieldLabel>
+    <div className="flex items-center gap-1">
+      <ValidatedNumberInput
+        min="0"
+        max={max}
+        step="0.01"
+        required={required}
+        value={value}
+        formatDecimals={2}
+        onValueChange={onValueChange}
+        className="min-w-0 font-medium"
+      />
+      <span className="shrink-0 text-xs font-medium text-muted-foreground">{suffix}</span>
+    </div>
+  </div>
+);
+
+const InvoiceItemTotalField: React.FC<{
+  controller: ClientsInvoicesController;
+  item: InvoiceItem;
+}> = ({ controller, item }) => (
+  <div className="space-y-1 lg:col-span-2">
+    <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
+      {controller.t('common:labels.total')}
+    </FieldLabel>
+    <div className="flex min-h-[42px] items-center justify-end whitespace-nowrap px-3 py-2 text-sm font-semibold text-foreground">
+      {getLineTotal(item).toFixed(2)} {controller.currency}
+    </div>
+  </div>
+);
+
+const InvoiceNotesSummarySection: React.FC<{ controller: ClientsInvoicesController }> = ({
+  controller,
+}) => (
+  <div className="flex flex-col gap-4 border-t border-border pt-4 md:flex-row">
+    <Field className="md:w-2/3">
+      <SectionTitle>{controller.t('accounting:clientsInvoices.notes')}</SectionTitle>
+      <FieldLabel htmlFor="client-invoice-notes" className="sr-only">
+        {controller.t('accounting:clientsInvoices.notes')}
+      </FieldLabel>
+      <Textarea
+        id="client-invoice-notes"
+        rows={4}
+        value={controller.formData.notes || ''}
+        onChange={(event) =>
+          controller.setFormData((prev) => ({ ...prev, notes: event.target.value }))
+        }
+        className="min-h-28 resize-none"
+        placeholder={controller.t('accounting:clientsInvoices.notesPlaceholder')}
+      />
+    </Field>
+    <div className="space-y-2 md:w-1/3">
+      <SectionTitle>
+        {controller.t('accounting:clientsInvoices.summary', { defaultValue: 'Summary' })}
+      </SectionTitle>
+      <CostSummaryPanel
+        currency={controller.currency}
+        subtotal={controller.grossSubtotal}
+        total={controller.total}
+        subtotalLabel={controller.t('accounting:clientsInvoices.subtotal')}
+        totalLabel={controller.t('accounting:clientsInvoices.total')}
+        discountRow={
+          controller.totalDiscount > 0
+            ? {
+                label: controller.t('accounting:clientsInvoices.totalDiscount'),
+                amount: controller.totalDiscount,
+              }
+            : undefined
+        }
+        taxRow={{
+          label: controller.t('accounting:clientsInvoices.taxTotal'),
+          amount: controller.taxTotal,
+        }}
+        amountPaid={{
+          label: controller.t('accounting:clientsInvoices.amountPaid'),
+          value: controller.formData.amountPaid || 0,
+          onChange: (value) =>
+            controller.setFormData((prev) => ({
+              ...prev,
+              amountPaid: value === '' ? 0 : Number(value),
+            })),
+        }}
+        balanceDue={{
+          label: controller.t('accounting:clientsInvoices.balanceDue'),
+          amount: controller.total - Number(controller.formData.amountPaid || 0),
+        }}
+      />
+    </div>
+  </div>
+);
+
+const ClientsInvoiceDeleteDialogs: React.FC<{ controller: ClientsInvoicesController }> = ({
+  controller,
+}) => (
+  <>
+    <DeleteConfirmModal
+      isOpen={controller.isDeleteConfirmOpen}
+      onClose={controller.closeDeleteConfirm}
+      onConfirm={controller.handleDelete}
+      title={controller.t('accounting:clientsInvoices.deleteTitle')}
+      description={controller.t('accounting:clientsInvoices.deleteMessage', {
+        invoiceNumber: controller.invoiceToDelete?.id || '',
+      })}
+    />
+    <DeleteConfirmModal
+      isOpen={controller.productRowToDelete !== null}
+      onClose={() => controller.setProductRowToDelete(null)}
+      onConfirm={() => {
+        if (controller.productRowToDelete !== null) {
+          controller.removeItemRow(controller.productRowToDelete);
+        }
+        controller.setProductRowToDelete(null);
+      }}
+      title={controller.t('accounting:clientsInvoices.removeProductTitle')}
+      description={controller.t('accounting:clientsInvoices.removeProductConfirm')}
+      zIndex={70}
+    />
+  </>
+);
 
 export default ClientsInvoicesView;

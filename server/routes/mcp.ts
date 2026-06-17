@@ -215,18 +215,17 @@ const runBulkTimeEntryTool = async <T>(
   items: T[],
   operation: (item: T) => Promise<Record<string, unknown>>,
 ): Promise<CallToolResult> => {
-  const results: Array<Record<string, unknown>> = [];
-  let succeeded = 0;
-
-  for (const [index, item] of items.entries()) {
-    try {
-      results.push({ index, success: true, ...(await operation(item)) });
-      succeeded += 1;
-    } catch (err) {
-      if (!(err instanceof TimeEntryServiceError)) throw err;
-      results.push({ index, success: false, error: err.message });
-    }
-  }
+  const results = await Promise.all(
+    items.map(async (item, index): Promise<Record<string, unknown>> => {
+      try {
+        return { index, success: true, ...(await operation(item)) };
+      } catch (err) {
+        if (!(err instanceof TimeEntryServiceError)) throw err;
+        return { index, success: false, error: err.message };
+      }
+    }),
+  );
+  const succeeded = results.filter((result) => result.success).length;
 
   return jsonResult({
     summary: {

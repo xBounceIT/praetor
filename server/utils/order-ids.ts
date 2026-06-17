@@ -55,10 +55,9 @@ const generateSequentialId = async (
 ): Promise<string> => {
   const year = new Date().getFullYear();
   const sequenceName = SEQUENCE_NAMES[prefix];
-  // Sequence name is a static internal literal; `sql.raw` is safe here.
   const rows = await executeRows<{ nextValue: string | number }>(
     exec,
-    sql`SELECT nextval(${sql.raw(`'${sequenceName}'`)}) AS "nextValue"`,
+    sql`SELECT nextval(${sequenceName}::regclass) AS "nextValue"`,
   );
   if (rows.length === 0 || rows[0]?.nextValue == null) {
     throw new Error(`Sequence ${sequenceName} returned no value — schema migration likely missing`);

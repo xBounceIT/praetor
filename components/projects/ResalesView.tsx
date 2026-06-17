@@ -1,6 +1,6 @@
 import { ArrowLeft, ListChecks, Pencil, Plus, Settings2, ShoppingCart, Trash2 } from 'lucide-react';
 import type React from 'react';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useReducer } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -108,9 +108,104 @@ const initialActivityForm: ActivityFormState = {
 };
 
 type ResalesViewTab = 'archive' | 'activities';
+type StateUpdate<T> = T | ((prev: T) => T);
 
 const isResalesViewTab = (value: string): value is ResalesViewTab =>
   value === 'archive' || value === 'activities';
+
+type ResalesUiState = {
+  activeTab: ResalesViewTab;
+  selectedResaleId: string | null;
+  resaleForm: ResaleFormState;
+  isResaleModalOpen: boolean;
+  activityForm: ActivityFormState;
+  isActivityModalOpen: boolean;
+  isCategoryModalOpen: boolean;
+  categoryName: string;
+  editingCategoryId: string | null;
+  categoryError: string;
+  resaleToDelete: Resale | null;
+  activityToDelete: ResaleActivity | null;
+};
+
+type ResalesUiAction =
+  | { type: 'setActiveTab'; update: StateUpdate<ResalesViewTab> }
+  | { type: 'setSelectedResaleId'; update: StateUpdate<string | null> }
+  | { type: 'setResaleForm'; update: StateUpdate<ResaleFormState> }
+  | { type: 'setIsResaleModalOpen'; update: StateUpdate<boolean> }
+  | { type: 'setActivityForm'; update: StateUpdate<ActivityFormState> }
+  | { type: 'setIsActivityModalOpen'; update: StateUpdate<boolean> }
+  | { type: 'setIsCategoryModalOpen'; update: StateUpdate<boolean> }
+  | { type: 'setCategoryName'; update: StateUpdate<string> }
+  | { type: 'setEditingCategoryId'; update: StateUpdate<string | null> }
+  | { type: 'setCategoryError'; update: StateUpdate<string> }
+  | { type: 'setResaleToDelete'; update: StateUpdate<Resale | null> }
+  | { type: 'setActivityToDelete'; update: StateUpdate<ResaleActivity | null> };
+
+const resolveStateUpdate = <T,>(current: T, update: StateUpdate<T>): T =>
+  typeof update === 'function' ? (update as (prev: T) => T)(current) : update;
+
+const createResalesUiState = (): ResalesUiState => ({
+  activeTab: 'archive',
+  selectedResaleId: null,
+  resaleForm: initialResaleForm,
+  isResaleModalOpen: false,
+  activityForm: initialActivityForm,
+  isActivityModalOpen: false,
+  isCategoryModalOpen: false,
+  categoryName: '',
+  editingCategoryId: null,
+  categoryError: '',
+  resaleToDelete: null,
+  activityToDelete: null,
+});
+
+const resalesUiReducer = (state: ResalesUiState, action: ResalesUiAction): ResalesUiState => {
+  switch (action.type) {
+    case 'setActiveTab':
+      return { ...state, activeTab: resolveStateUpdate(state.activeTab, action.update) };
+    case 'setSelectedResaleId':
+      return {
+        ...state,
+        selectedResaleId: resolveStateUpdate(state.selectedResaleId, action.update),
+      };
+    case 'setResaleForm':
+      return { ...state, resaleForm: resolveStateUpdate(state.resaleForm, action.update) };
+    case 'setIsResaleModalOpen':
+      return {
+        ...state,
+        isResaleModalOpen: resolveStateUpdate(state.isResaleModalOpen, action.update),
+      };
+    case 'setActivityForm':
+      return { ...state, activityForm: resolveStateUpdate(state.activityForm, action.update) };
+    case 'setIsActivityModalOpen':
+      return {
+        ...state,
+        isActivityModalOpen: resolveStateUpdate(state.isActivityModalOpen, action.update),
+      };
+    case 'setIsCategoryModalOpen':
+      return {
+        ...state,
+        isCategoryModalOpen: resolveStateUpdate(state.isCategoryModalOpen, action.update),
+      };
+    case 'setCategoryName':
+      return { ...state, categoryName: resolveStateUpdate(state.categoryName, action.update) };
+    case 'setEditingCategoryId':
+      return {
+        ...state,
+        editingCategoryId: resolveStateUpdate(state.editingCategoryId, action.update),
+      };
+    case 'setCategoryError':
+      return { ...state, categoryError: resolveStateUpdate(state.categoryError, action.update) };
+    case 'setResaleToDelete':
+      return { ...state, resaleToDelete: resolveStateUpdate(state.resaleToDelete, action.update) };
+    case 'setActivityToDelete':
+      return {
+        ...state,
+        activityToDelete: resolveStateUpdate(state.activityToDelete, action.update),
+      };
+  }
+};
 
 export interface ResalesViewProps {
   resales: Resale[];
@@ -138,7 +233,7 @@ const parseDisplayMoney = (value: string) => {
   return Number.isFinite(parsed) ? parsed : 0;
 };
 
-const ResalesView: React.FC<ResalesViewProps> = ({
+const useResalesController = ({
   resales,
   categories,
   orderOptions,
@@ -152,24 +247,79 @@ const ResalesView: React.FC<ResalesViewProps> = ({
   onCreateCategory,
   onUpdateCategory,
   onDeleteCategory,
-}) => {
+}: ResalesViewProps) => {
   const { t, i18n } = useTranslation(['projects', 'common']);
   const canCreate = hasPermission(permissions, buildPermission('projects.resales', 'create'));
   const canUpdate = hasPermission(permissions, buildPermission('projects.resales', 'update'));
   const canDelete = hasPermission(permissions, buildPermission('projects.resales', 'delete'));
 
-  const [activeTab, setActiveTab] = useState<ResalesViewTab>('archive');
-  const [selectedResaleId, setSelectedResaleId] = useState<string | null>(null);
-  const [resaleForm, setResaleForm] = useState<ResaleFormState>(initialResaleForm);
-  const [isResaleModalOpen, setIsResaleModalOpen] = useState(false);
-  const [activityForm, setActivityForm] = useState<ActivityFormState>(initialActivityForm);
-  const [isActivityModalOpen, setIsActivityModalOpen] = useState(false);
-  const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
-  const [categoryName, setCategoryName] = useState('');
-  const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
-  const [categoryError, setCategoryError] = useState('');
-  const [resaleToDelete, setResaleToDelete] = useState<Resale | null>(null);
-  const [activityToDelete, setActivityToDelete] = useState<ResaleActivity | null>(null);
+  const [uiState, dispatchUiState] = useReducer(resalesUiReducer, undefined, createResalesUiState);
+  const {
+    activeTab,
+    selectedResaleId,
+    resaleForm,
+    isResaleModalOpen,
+    activityForm,
+    isActivityModalOpen,
+    isCategoryModalOpen,
+    categoryName,
+    editingCategoryId,
+    categoryError,
+    resaleToDelete,
+    activityToDelete,
+  } = uiState;
+  const setActiveTab = useCallback(
+    (update: StateUpdate<ResalesViewTab>) => dispatchUiState({ type: 'setActiveTab', update }),
+    [],
+  );
+  const setSelectedResaleId = useCallback(
+    (update: StateUpdate<string | null>) =>
+      dispatchUiState({ type: 'setSelectedResaleId', update }),
+    [],
+  );
+  const setResaleForm = useCallback(
+    (update: StateUpdate<ResaleFormState>) => dispatchUiState({ type: 'setResaleForm', update }),
+    [],
+  );
+  const setIsResaleModalOpen = useCallback(
+    (update: StateUpdate<boolean>) => dispatchUiState({ type: 'setIsResaleModalOpen', update }),
+    [],
+  );
+  const setActivityForm = useCallback(
+    (update: StateUpdate<ActivityFormState>) =>
+      dispatchUiState({ type: 'setActivityForm', update }),
+    [],
+  );
+  const setIsActivityModalOpen = useCallback(
+    (update: StateUpdate<boolean>) => dispatchUiState({ type: 'setIsActivityModalOpen', update }),
+    [],
+  );
+  const setIsCategoryModalOpen = useCallback(
+    (update: StateUpdate<boolean>) => dispatchUiState({ type: 'setIsCategoryModalOpen', update }),
+    [],
+  );
+  const setCategoryName = useCallback(
+    (update: StateUpdate<string>) => dispatchUiState({ type: 'setCategoryName', update }),
+    [],
+  );
+  const setEditingCategoryId = useCallback(
+    (update: StateUpdate<string | null>) =>
+      dispatchUiState({ type: 'setEditingCategoryId', update }),
+    [],
+  );
+  const setCategoryError = useCallback(
+    (update: StateUpdate<string>) => dispatchUiState({ type: 'setCategoryError', update }),
+    [],
+  );
+  const setResaleToDelete = useCallback(
+    (update: StateUpdate<Resale | null>) => dispatchUiState({ type: 'setResaleToDelete', update }),
+    [],
+  );
+  const setActivityToDelete = useCallback(
+    (update: StateUpdate<ResaleActivity | null>) =>
+      dispatchUiState({ type: 'setActivityToDelete', update }),
+    [],
+  );
 
   const selectedResale = selectedResaleId
     ? resales.find((resale) => resale.id === selectedResaleId)
@@ -390,7 +540,7 @@ const ResalesView: React.FC<ResalesViewProps> = ({
       });
       setIsActivityModalOpen(true);
     },
-    [canUpdate],
+    [canUpdate, setActivityForm, setIsActivityModalOpen],
   );
 
   const closeActivityModal = () => {
@@ -564,7 +714,7 @@ const ResalesView: React.FC<ResalesViewProps> = ({
           ) : null,
       },
     ],
-    [canDelete, formatMoney, i18n.language, t],
+    [canDelete, formatMoney, i18n.language, setResaleToDelete, t],
   );
 
   const activityColumns = useMemo<Column<ResaleActivity>[]>(
@@ -659,7 +809,7 @@ const ResalesView: React.FC<ResalesViewProps> = ({
         ),
       },
     ],
-    [canDelete, canUpdate, formatMoney, i18n.language, openEditActivity, t],
+    [canDelete, canUpdate, formatMoney, i18n.language, openEditActivity, setActivityToDelete, t],
   );
 
   const categoryColumns = useMemo<Column<ResaleCategory>[]>(
@@ -710,7 +860,15 @@ const ResalesView: React.FC<ResalesViewProps> = ({
         ),
       },
     ],
-    [canDelete, canUpdate, onDeleteCategory, t],
+    [
+      canDelete,
+      canUpdate,
+      onDeleteCategory,
+      setCategoryError,
+      setCategoryName,
+      setEditingCategoryId,
+      t,
+    ],
   );
 
   const draftActivityColumns: Column<DraftResaleActivity>[] = [
@@ -870,575 +1028,685 @@ const ResalesView: React.FC<ResalesViewProps> = ({
     },
   ];
 
-  return (
-    <div className="space-y-6 animate-in fade-in duration-500">
-      <Tabs value={selectedTab} onValueChange={handleTabChange} className="space-y-6">
-        <TabsList variant="line" className="w-full justify-start overflow-x-auto border-b px-0">
-          <TabsTrigger value="archive" className="flex-none rounded-none pb-3">
-            <ShoppingCart className="size-4" aria-hidden="true" />
-            {t('resales.tabs.archive')}
-          </TabsTrigger>
-          <TabsTrigger
-            value="activities"
-            className="flex-none rounded-none pb-3"
-            disabled={!selectedResale}
-          >
-            <ListChecks className="size-4" aria-hidden="true" />
-            {t('resales.tabs.activities')}
-          </TabsTrigger>
-        </TabsList>
+  return {
+    t,
+    activeTab,
+    selectedTab,
+    selectedResale,
+    selectedResaleId,
+    canCreate,
+    canUpdate,
+    canDelete,
+    resales,
+    categories,
+    currency,
+    resaleColumns,
+    activityColumns,
+    categoryColumns,
+    draftActivityColumns,
+    resaleForm,
+    activityForm,
+    isResaleModalOpen,
+    isActivityModalOpen,
+    isCategoryModalOpen,
+    categoryName,
+    editingCategoryId,
+    categoryError,
+    resaleToDelete,
+    activityToDelete,
+    clientOrderOptions,
+    supplierOrderOptions,
+    billingOptions,
+    categoryOptions,
+    draftResaleRevenue,
+    draftResaleCost,
+    handleTabChange,
+    clearSelectedResale,
+    openCategoryModal,
+    openCreateResale,
+    openCreateActivity,
+    closeResaleModal,
+    closeActivityModal,
+    closeCategoryModal,
+    submitResale,
+    submitActivity,
+    submitCategory,
+    addDraftActivity,
+    setActiveTab,
+    setSelectedResaleId,
+    setResaleForm,
+    setActivityForm,
+    setCategoryName,
+    setCategoryError,
+    setEditingCategoryId,
+    setResaleToDelete,
+    setActivityToDelete,
+    formatMoney,
+    onDeleteResale,
+    onDeleteActivity,
+  };
+};
 
-        <TabsContent value="archive" className="mt-0 space-y-6">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h2 className="text-2xl font-semibold text-foreground">{t('resales.title')}</h2>
-              <p className="text-sm text-muted-foreground">{t('resales.subtitle')}</p>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={openCategoryModal}
-                disabled={!canCreate && !canUpdate && !canDelete}
-              >
-                <Settings2 className="size-4" />
-                {t('resales.manageCategories')}
-              </Button>
-              {canCreate && (
-                <HeaderAddButton onClick={openCreateResale}>
-                  {t('resales.addResale')}
-                </HeaderAddButton>
+type ResalesController = ReturnType<typeof useResalesController>;
+
+const ResalesView: React.FC<ResalesViewProps> = (props) => {
+  const controller = useResalesController(props);
+  return <ResalesLayout controller={controller} />;
+};
+
+const ResalesLayout: React.FC<{ controller: ResalesController }> = ({ controller }) => (
+  <div className="space-y-6">
+    <Tabs
+      value={controller.selectedTab}
+      onValueChange={controller.handleTabChange}
+      className="space-y-6"
+    >
+      <TabsList variant="line" className="w-full justify-start overflow-x-auto border-b px-0">
+        <TabsTrigger value="archive" className="flex-none rounded-none pb-3">
+          <ShoppingCart className="size-4" aria-hidden="true" />
+          {controller.t('resales.tabs.archive')}
+        </TabsTrigger>
+        <TabsTrigger
+          value="activities"
+          className="flex-none rounded-none pb-3"
+          disabled={!controller.selectedResale}
+        >
+          <ListChecks className="size-4" aria-hidden="true" />
+          {controller.t('resales.tabs.activities')}
+        </TabsTrigger>
+      </TabsList>
+
+      <ResalesArchiveTab controller={controller} />
+      <ResalesActivitiesTab controller={controller} />
+    </Tabs>
+
+    <ResaleCreateModal controller={controller} />
+    <ResaleActivityModal controller={controller} />
+    <ResaleCategoryModal controller={controller} />
+    <ResaleDeleteDialogs controller={controller} />
+  </div>
+);
+
+const ResalesArchiveTab: React.FC<{ controller: ResalesController }> = ({ controller }) => (
+  <TabsContent value="archive" className="mt-0 space-y-6">
+    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <div>
+        <h2 className="text-2xl font-semibold text-foreground">{controller.t('resales.title')}</h2>
+        <p className="text-sm text-muted-foreground">{controller.t('resales.subtitle')}</p>
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          onClick={controller.openCategoryModal}
+          disabled={!controller.canCreate && !controller.canUpdate && !controller.canDelete}
+        >
+          <Settings2 className="size-4" />
+          {controller.t('resales.manageCategories')}
+        </Button>
+        {controller.canCreate && (
+          <HeaderAddButton onClick={controller.openCreateResale}>
+            {controller.t('resales.addResale')}
+          </HeaderAddButton>
+        )}
+      </div>
+    </div>
+
+    <StandardTable<Resale>
+      title={controller.t('resales.directory')}
+      viewKey="projects.resales"
+      data={controller.resales}
+      columns={controller.resaleColumns}
+      defaultRowsPerPage={5}
+      onRowClick={(row) => {
+        controller.setSelectedResaleId(row.id);
+        controller.setActiveTab('activities');
+      }}
+    />
+  </TabsContent>
+);
+
+const ResalesActivitiesTab: React.FC<{ controller: ResalesController }> = ({ controller }) => (
+  <TabsContent value="activities" className="mt-0">
+    {controller.selectedResale ? (
+      <section className="space-y-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0 space-y-1">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={controller.clearSelectedResale}
+              className="-ml-2"
+            >
+              <ArrowLeft className="size-4" />
+              {controller.t('common:buttons.back')}
+            </Button>
+            <h3 className="text-xl font-semibold text-foreground">
+              {controller.selectedResale.clientOrderId} /{' '}
+              {controller.selectedResale.supplierOrderId}
+            </h3>
+            <p className="text-sm text-muted-foreground">
+              {controller.selectedResale.clientName} · {controller.selectedResale.supplierName}
+            </p>
+          </div>
+        </div>
+
+        <div className="grid gap-3 md:grid-cols-4">
+          <ResaleSummaryCard
+            label={controller.t('resales.columns.revenue')}
+            value={controller.formatMoney(controller.selectedResale.resaleRevenue)}
+          />
+          <ResaleSummaryCard
+            label={controller.t('resales.columns.supplierCost')}
+            value={controller.formatMoney(controller.selectedResale.supplierOrderCost)}
+          />
+          <ResaleSummaryCard
+            label={controller.t('resales.columns.activityCost')}
+            value={controller.formatMoney(controller.selectedResale.activityCostTotal)}
+          />
+          <div className="rounded-lg border border-border bg-background p-4">
+            <p className="text-xs font-medium uppercase text-muted-foreground">
+              {controller.t('resales.columns.variance')}
+            </p>
+            <div className="mt-2">
+              {Math.abs(controller.selectedResale.costVariance) > 0.009 ? (
+                <StatusBadge
+                  type="pending"
+                  label={controller.formatMoney(controller.selectedResale.costVariance)}
+                />
+              ) : (
+                <StatusBadge type="active" label={controller.t('resales.balanced')} />
               )}
             </div>
+            {Math.abs(controller.selectedResale.costVariance) > 0.009 && (
+              <p className="mt-2 text-xs text-muted-foreground">
+                {controller.t('resales.varianceHint')}
+              </p>
+            )}
           </div>
+        </div>
 
-          <StandardTable<Resale>
-            title={t('resales.directory')}
-            viewKey="projects.resales"
-            data={resales}
-            columns={resaleColumns}
-            defaultRowsPerPage={5}
-            onRowClick={(row) => {
-              setSelectedResaleId(row.id);
-              setActiveTab('activities');
-            }}
-          />
-        </TabsContent>
+        <StandardTable<ResaleActivity>
+          title={controller.t('resales.activitiesTitle')}
+          data={controller.selectedResale.activities}
+          columns={controller.activityColumns}
+          defaultRowsPerPage={5}
+          headerAction={
+            controller.canCreate ? (
+              <Button
+                type="button"
+                size="sm"
+                onClick={controller.openCreateActivity}
+                className={TABLE_CONTROL_BUTTON_CLASSNAME}
+              >
+                <Plus className="size-4" />
+                {controller.t('resales.addActivity')}
+              </Button>
+            ) : undefined
+          }
+        />
+      </section>
+    ) : (
+      <div className="rounded-md border border-dashed border-border bg-muted/20 px-4 py-8 text-sm text-muted-foreground">
+        {controller.t('resales.selectResaleForActivities')}
+      </div>
+    )}
+  </TabsContent>
+);
 
-        <TabsContent value="activities" className="mt-0">
-          {selectedResale ? (
-            <section className="space-y-4">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                <div className="min-w-0 space-y-1">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={clearSelectedResale}
-                    className="-ml-2"
-                  >
-                    <ArrowLeft className="size-4" />
-                    {t('common:buttons.back')}
-                  </Button>
-                  <h3 className="text-xl font-semibold text-foreground">
-                    {selectedResale.clientOrderId} / {selectedResale.supplierOrderId}
-                  </h3>
-                  <p className="text-sm text-muted-foreground">
-                    {selectedResale.clientName} · {selectedResale.supplierName}
-                  </p>
+const ResaleSummaryCard: React.FC<{ label: string; value: string }> = ({ label, value }) => (
+  <div className="rounded-lg border border-border bg-background p-4">
+    <p className="text-xs font-medium uppercase text-muted-foreground">{label}</p>
+    <p className="mt-2 font-mono text-xl font-semibold">{value}</p>
+  </div>
+);
+
+const ResaleCreateModal: React.FC<{ controller: ResalesController }> = ({ controller }) => (
+  <Modal isOpen={controller.isResaleModalOpen} onClose={controller.closeResaleModal}>
+    {controller.isResaleModalOpen && (
+      <ModalContent size="2xl">
+        <form onSubmit={controller.submitResale} className="flex min-h-0 flex-col">
+          <ModalHeader>
+            <ModalTitle className="gap-3">
+              <span className="flex size-10 items-center justify-center rounded-md bg-muted text-primary">
+                <i className="fa-solid fa-cart-shopping" aria-hidden="true"></i>
+              </span>
+              {controller.t('resales.createTitle')}
+            </ModalTitle>
+            <ModalCloseButton onClick={controller.closeResaleModal} />
+          </ModalHeader>
+          <ModalBody className="space-y-6">
+            <div className="space-y-4">
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-1.5">
+                  <SelectControl
+                    id="resale-client-order"
+                    options={controller.clientOrderOptions}
+                    value={controller.resaleForm.clientOrderId}
+                    onChange={(value) =>
+                      controller.setResaleForm((prev) => ({
+                        ...prev,
+                        clientOrderId: value as string,
+                        supplierOrderId: '',
+                        errors: { ...prev.errors, clientOrderId: '', supplierOrderId: '' },
+                      }))
+                    }
+                    label={
+                      <>
+                        {controller.t('resales.fields.clientOrder')} <RequiredMark />
+                      </>
+                    }
+                    searchable
+                    placeholder={controller.t('resales.placeholders.clientOrder')}
+                    buttonClassName="h-9"
+                  />
+                  <FieldError className="text-xs">
+                    {controller.resaleForm.errors.clientOrderId}
+                  </FieldError>
                 </div>
+                <div className="space-y-1.5">
+                  <SelectControl
+                    id="resale-supplier-order"
+                    options={controller.supplierOrderOptions}
+                    value={controller.resaleForm.supplierOrderId}
+                    onChange={(value) =>
+                      controller.setResaleForm((prev) => ({
+                        ...prev,
+                        supplierOrderId: value as string,
+                        errors: { ...prev.errors, supplierOrderId: '' },
+                      }))
+                    }
+                    label={
+                      <>
+                        {controller.t('resales.fields.supplierOrder')} <RequiredMark />
+                      </>
+                    }
+                    searchable
+                    disabled={!controller.resaleForm.clientOrderId}
+                    placeholder={controller.t('resales.placeholders.supplierOrder')}
+                    buttonClassName="h-9"
+                  />
+                  <FieldError className="text-xs">
+                    {controller.resaleForm.errors.supplierOrderId}
+                  </FieldError>
+                </div>
+                <Field>
+                  <FieldLabel htmlFor="resale-start-date">
+                    {controller.t('resales.fields.startDate')} <RequiredMark />
+                  </FieldLabel>
+                  <DateField
+                    id="resale-start-date"
+                    value={controller.resaleForm.startDate}
+                    onChange={(value) =>
+                      controller.setResaleForm((prev) => ({
+                        ...prev,
+                        startDate: value,
+                        errors: { ...prev.errors, startDate: '' },
+                      }))
+                    }
+                    required
+                    aria-invalid={Boolean(controller.resaleForm.errors.startDate)}
+                  />
+                  <FieldError className="text-xs">
+                    {controller.resaleForm.errors.startDate}
+                  </FieldError>
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="resale-due-date">
+                    {controller.t('resales.fields.dueDate')} <RequiredMark />
+                  </FieldLabel>
+                  <DateField
+                    id="resale-due-date"
+                    value={controller.resaleForm.dueDate}
+                    onChange={(value) =>
+                      controller.setResaleForm((prev) => ({
+                        ...prev,
+                        dueDate: value,
+                        errors: { ...prev.errors, dueDate: '' },
+                      }))
+                    }
+                    required
+                    aria-invalid={Boolean(controller.resaleForm.errors.dueDate)}
+                  />
+                  <FieldError className="text-xs">
+                    {controller.resaleForm.errors.dueDate}
+                  </FieldError>
+                </Field>
+                <ReadOnlyMoneyField
+                  id="resale-revenue"
+                  label={controller.t('resales.fields.resaleRevenue')}
+                  value={controller.formatMoney(controller.draftResaleRevenue)}
+                />
+                <ReadOnlyMoneyField
+                  id="resale-cost"
+                  label={controller.t('resales.fields.resaleCost')}
+                  value={controller.formatMoney(controller.draftResaleCost)}
+                />
+                <Field className="md:col-span-2">
+                  <FieldLabel htmlFor="resale-notes">
+                    {controller.t('resales.fields.notes')}
+                  </FieldLabel>
+                  <Textarea
+                    id="resale-notes"
+                    value={controller.resaleForm.notes}
+                    onChange={(event) =>
+                      controller.setResaleForm((prev) => ({ ...prev, notes: event.target.value }))
+                    }
+                    rows={3}
+                    className="min-h-20 resize-none"
+                  />
+                </Field>
               </div>
 
-              <div className="grid gap-3 md:grid-cols-4">
-                <div className="rounded-lg border border-border bg-background p-4">
-                  <p className="text-xs font-medium uppercase text-muted-foreground">
-                    {t('resales.columns.revenue')}
-                  </p>
-                  <p className="mt-2 font-mono text-xl font-semibold">
-                    {formatMoney(selectedResale.resaleRevenue)}
-                  </p>
-                </div>
-                <div className="rounded-lg border border-border bg-background p-4">
-                  <p className="text-xs font-medium uppercase text-muted-foreground">
-                    {t('resales.columns.supplierCost')}
-                  </p>
-                  <p className="mt-2 font-mono text-xl font-semibold">
-                    {formatMoney(selectedResale.supplierOrderCost)}
-                  </p>
-                </div>
-                <div className="rounded-lg border border-border bg-background p-4">
-                  <p className="text-xs font-medium uppercase text-muted-foreground">
-                    {t('resales.columns.activityCost')}
-                  </p>
-                  <p className="mt-2 font-mono text-xl font-semibold">
-                    {formatMoney(selectedResale.activityCostTotal)}
-                  </p>
-                </div>
-                <div className="rounded-lg border border-border bg-background p-4">
-                  <p className="text-xs font-medium uppercase text-muted-foreground">
-                    {t('resales.columns.variance')}
-                  </p>
-                  <div className="mt-2">
-                    {Math.abs(selectedResale.costVariance) > 0.009 ? (
-                      <StatusBadge
-                        type="pending"
-                        label={formatMoney(selectedResale.costVariance)}
-                      />
-                    ) : (
-                      <StatusBadge type="active" label={t('resales.balanced')} />
-                    )}
-                  </div>
-                  {Math.abs(selectedResale.costVariance) > 0.009 && (
-                    <p className="mt-2 text-xs text-muted-foreground">
-                      {t('resales.varianceHint')}
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              <StandardTable<ResaleActivity>
-                title={t('resales.activitiesTitle')}
-                data={selectedResale.activities}
-                columns={activityColumns}
-                defaultRowsPerPage={5}
-                headerAction={
-                  canCreate ? (
+              <div className="space-y-2">
+                <StandardTable<DraftResaleActivity>
+                  title={controller.t('resales.initialActivitiesTitle')}
+                  data={controller.resaleForm.activities}
+                  columns={controller.draftActivityColumns}
+                  defaultRowsPerPage={5}
+                  emptyState={
+                    <span className="text-xs italic text-muted-foreground">
+                      {controller.t('resales.noActivitiesAdded')}
+                    </span>
+                  }
+                  headerAction={
                     <Button
                       type="button"
+                      onClick={controller.addDraftActivity}
                       size="sm"
-                      onClick={openCreateActivity}
                       className={TABLE_CONTROL_BUTTON_CLASSNAME}
                     >
                       <Plus className="size-4" />
-                      {t('resales.addActivity')}
+                      {controller.t('resales.addActivity')}
                     </Button>
-                  ) : undefined
-                }
-              />
-            </section>
-          ) : (
-            <div className="rounded-md border border-dashed border-border bg-muted/20 px-4 py-8 text-sm text-muted-foreground">
-              {t('resales.selectResaleForActivities')}
+                  }
+                />
+                <FieldError className="text-xs">
+                  {controller.resaleForm.errors.activities}
+                </FieldError>
+              </div>
             </div>
-          )}
-        </TabsContent>
-      </Tabs>
+          </ModalBody>
+          <ModalFooter className="sm:justify-between">
+            <Button type="button" variant="outline" onClick={controller.closeResaleModal}>
+              {controller.t('common:buttons.cancel')}
+            </Button>
+            <Button type="submit">{controller.t('common:buttons.create')}</Button>
+          </ModalFooter>
+        </form>
+      </ModalContent>
+    )}
+  </Modal>
+);
 
-      <Modal isOpen={isResaleModalOpen} onClose={closeResaleModal}>
-        {isResaleModalOpen && (
-          <ModalContent size="2xl">
-            <form onSubmit={submitResale} className="flex min-h-0 flex-col">
-              <ModalHeader>
-                <ModalTitle className="gap-3">
-                  <span className="flex size-10 items-center justify-center rounded-md bg-muted text-primary">
-                    <i className="fa-solid fa-cart-shopping" aria-hidden="true"></i>
-                  </span>
-                  {t('resales.createTitle')}
-                </ModalTitle>
-                <ModalCloseButton onClick={closeResaleModal} />
-              </ModalHeader>
-              <ModalBody className="space-y-6">
-                <div className="space-y-4">
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <div className="space-y-1.5">
-                      <SelectControl
-                        id="resale-client-order"
-                        options={clientOrderOptions}
-                        value={resaleForm.clientOrderId}
-                        onChange={(value) =>
-                          setResaleForm((prev) => ({
-                            ...prev,
-                            clientOrderId: value as string,
-                            supplierOrderId: '',
-                            errors: { ...prev.errors, clientOrderId: '', supplierOrderId: '' },
-                          }))
-                        }
-                        label={
-                          <>
-                            {t('resales.fields.clientOrder')} <RequiredMark />
-                          </>
-                        }
-                        searchable
-                        placeholder={t('resales.placeholders.clientOrder')}
-                        buttonClassName="h-9"
-                      />
-                      <FieldError className="text-xs">{resaleForm.errors.clientOrderId}</FieldError>
-                    </div>
-                    <div className="space-y-1.5">
-                      <SelectControl
-                        id="resale-supplier-order"
-                        options={supplierOrderOptions}
-                        value={resaleForm.supplierOrderId}
-                        onChange={(value) =>
-                          setResaleForm((prev) => ({
-                            ...prev,
-                            supplierOrderId: value as string,
-                            errors: { ...prev.errors, supplierOrderId: '' },
-                          }))
-                        }
-                        label={
-                          <>
-                            {t('resales.fields.supplierOrder')} <RequiredMark />
-                          </>
-                        }
-                        searchable
-                        disabled={!resaleForm.clientOrderId}
-                        placeholder={t('resales.placeholders.supplierOrder')}
-                        buttonClassName="h-9"
-                      />
-                      <FieldError className="text-xs">
-                        {resaleForm.errors.supplierOrderId}
-                      </FieldError>
-                    </div>
-                    <Field>
-                      <FieldLabel htmlFor="resale-start-date">
-                        {t('resales.fields.startDate')} <RequiredMark />
-                      </FieldLabel>
-                      <DateField
-                        id="resale-start-date"
-                        value={resaleForm.startDate}
-                        onChange={(value) =>
-                          setResaleForm((prev) => ({
-                            ...prev,
-                            startDate: value,
-                            errors: { ...prev.errors, startDate: '' },
-                          }))
-                        }
-                        required
-                        aria-invalid={Boolean(resaleForm.errors.startDate)}
-                      />
-                      <FieldError className="text-xs">{resaleForm.errors.startDate}</FieldError>
-                    </Field>
-                    <Field>
-                      <FieldLabel htmlFor="resale-due-date">
-                        {t('resales.fields.dueDate')} <RequiredMark />
-                      </FieldLabel>
-                      <DateField
-                        id="resale-due-date"
-                        value={resaleForm.dueDate}
-                        onChange={(value) =>
-                          setResaleForm((prev) => ({
-                            ...prev,
-                            dueDate: value,
-                            errors: { ...prev.errors, dueDate: '' },
-                          }))
-                        }
-                        required
-                        aria-invalid={Boolean(resaleForm.errors.dueDate)}
-                      />
-                      <FieldError className="text-xs">{resaleForm.errors.dueDate}</FieldError>
-                    </Field>
-                    <Field>
-                      <FieldLabel htmlFor="resale-revenue">
-                        {t('resales.fields.resaleRevenue')}
-                      </FieldLabel>
-                      <Input
-                        id="resale-revenue"
-                        value={formatMoney(draftResaleRevenue)}
-                        readOnly
-                        aria-readonly="true"
-                      />
-                    </Field>
-                    <Field>
-                      <FieldLabel htmlFor="resale-cost">
-                        {t('resales.fields.resaleCost')}
-                      </FieldLabel>
-                      <Input
-                        id="resale-cost"
-                        value={formatMoney(draftResaleCost)}
-                        readOnly
-                        aria-readonly="true"
-                      />
-                    </Field>
-                    <Field className="md:col-span-2">
-                      <FieldLabel htmlFor="resale-notes">{t('resales.fields.notes')}</FieldLabel>
-                      <Textarea
-                        id="resale-notes"
-                        value={resaleForm.notes}
-                        onChange={(event) =>
-                          setResaleForm((prev) => ({ ...prev, notes: event.target.value }))
-                        }
-                        rows={3}
-                        className="min-h-20 resize-none"
-                      />
-                    </Field>
-                  </div>
+const ReadOnlyMoneyField: React.FC<{ id: string; label: string; value: string }> = ({
+  id,
+  label,
+  value,
+}) => (
+  <Field>
+    <FieldLabel htmlFor={id}>{label}</FieldLabel>
+    <Input id={id} value={value} readOnly aria-readonly="true" />
+  </Field>
+);
 
-                  <div className="space-y-2">
-                    <StandardTable<DraftResaleActivity>
-                      title={t('resales.initialActivitiesTitle')}
-                      data={resaleForm.activities}
-                      columns={draftActivityColumns}
-                      defaultRowsPerPage={5}
-                      emptyState={
-                        <span className="text-xs italic text-muted-foreground">
-                          {t('resales.noActivitiesAdded')}
-                        </span>
-                      }
-                      headerAction={
-                        <Button
-                          type="button"
-                          onClick={addDraftActivity}
-                          size="sm"
-                          className={TABLE_CONTROL_BUTTON_CLASSNAME}
-                        >
-                          <Plus className="size-4" />
-                          {t('resales.addActivity')}
-                        </Button>
-                      }
-                    />
-                    <FieldError className="text-xs">{resaleForm.errors.activities}</FieldError>
-                  </div>
-                </div>
-              </ModalBody>
-              <ModalFooter className="sm:justify-between">
-                <Button type="button" variant="outline" onClick={closeResaleModal}>
-                  {t('common:buttons.cancel')}
+const ResaleActivityModal: React.FC<{ controller: ResalesController }> = ({ controller }) => (
+  <Modal isOpen={controller.isActivityModalOpen} onClose={controller.closeActivityModal}>
+    {controller.isActivityModalOpen && (
+      <ModalContent size="2xl">
+        <form onSubmit={controller.submitActivity}>
+          <ModalHeader>
+            <ModalTitle>
+              {controller.activityForm.id
+                ? controller.t('resales.editActivity')
+                : controller.t('resales.addActivity')}
+            </ModalTitle>
+            <ModalCloseButton onClick={controller.closeActivityModal} />
+          </ModalHeader>
+          <ModalBody>
+            <div className="grid gap-4 md:grid-cols-2">
+              <Field className="md:col-span-2">
+                <FieldLabel htmlFor="resale-activity-name">
+                  {controller.t('resales.columns.activityName')} <RequiredMark />
+                </FieldLabel>
+                <Input
+                  id="resale-activity-name"
+                  value={controller.activityForm.name}
+                  onChange={(event) =>
+                    controller.setActivityForm((prev) => ({ ...prev, name: event.target.value }))
+                  }
+                />
+                <FieldError className="text-xs">{controller.activityForm.errors.name}</FieldError>
+              </Field>
+              <div className="space-y-1.5">
+                <SelectControl
+                  id="resale-activity-billing"
+                  options={controller.billingOptions}
+                  value={controller.activityForm.billingFrequency}
+                  onChange={(value) =>
+                    controller.setActivityForm((prev) => ({
+                      ...prev,
+                      billingFrequency: value as ResaleBillingFrequency,
+                    }))
+                  }
+                  label={controller.t('resales.columns.billing')}
+                  searchable={false}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <SelectControl
+                  id="resale-activity-category"
+                  options={controller.categoryOptions}
+                  value={controller.activityForm.categoryId}
+                  onChange={(value) =>
+                    controller.setActivityForm((prev) => ({
+                      ...prev,
+                      categoryId: value as string,
+                      errors: { ...prev.errors, categoryId: '' },
+                    }))
+                  }
+                  label={
+                    <>
+                      {controller.t('resales.columns.category')} <RequiredMark />
+                    </>
+                  }
+                  searchable
+                />
+                <FieldError className="text-xs">
+                  {controller.activityForm.errors.categoryId}
+                </FieldError>
+              </div>
+              <ActivityMoneyInput controller={controller} field="cost" />
+              <ActivityMoneyInput controller={controller} field="revenue" />
+              <Field>
+                <FieldLabel htmlFor="resale-activity-due-date">
+                  {controller.t('resales.columns.dueDate')}
+                </FieldLabel>
+                <DateField
+                  id="resale-activity-due-date"
+                  value={controller.activityForm.dueDate}
+                  onChange={(value) =>
+                    controller.setActivityForm((prev) => ({ ...prev, dueDate: value }))
+                  }
+                />
+                <FieldDescription className="text-xs">
+                  {controller.t('resales.activityDueDateHint')}
+                </FieldDescription>
+              </Field>
+              <Field className="flex-row items-center gap-2">
+                <Checkbox
+                  id="resale-activity-released"
+                  checked={controller.activityForm.released}
+                  onCheckedChange={(checked) =>
+                    controller.setActivityForm((prev) => ({
+                      ...prev,
+                      released: checked === true,
+                    }))
+                  }
+                />
+                <FieldLabel htmlFor="resale-activity-released" className="font-normal">
+                  {controller.t('resales.columns.released')}
+                </FieldLabel>
+              </Field>
+              <Field className="md:col-span-2">
+                <FieldLabel htmlFor="resale-activity-notes">
+                  {controller.t('resales.columns.notes')}
+                </FieldLabel>
+                <Textarea
+                  id="resale-activity-notes"
+                  value={controller.activityForm.notes}
+                  onChange={(event) =>
+                    controller.setActivityForm((prev) => ({ ...prev, notes: event.target.value }))
+                  }
+                />
+              </Field>
+            </div>
+          </ModalBody>
+          <ModalFooter>
+            <Button type="button" variant="outline" onClick={controller.closeActivityModal}>
+              {controller.t('common:buttons.cancel')}
+            </Button>
+            <Button type="submit">
+              {controller.activityForm.id
+                ? controller.t('common:buttons.save')
+                : controller.t('common:buttons.create')}
+            </Button>
+          </ModalFooter>
+        </form>
+      </ModalContent>
+    )}
+  </Modal>
+);
+
+const ActivityMoneyInput: React.FC<{
+  controller: ResalesController;
+  field: 'cost' | 'revenue';
+}> = ({ controller, field }) => (
+  <Field>
+    <FieldLabel htmlFor={`resale-activity-${field}`}>
+      {controller.t(`resales.columns.${field}`)} ({controller.currency}) <RequiredMark />
+    </FieldLabel>
+    <Input
+      id={`resale-activity-${field}`}
+      type="number"
+      min="0"
+      step="0.01"
+      value={controller.activityForm[field]}
+      onChange={(event) =>
+        controller.setActivityForm((prev) => ({ ...prev, [field]: event.target.value }))
+      }
+    />
+    <FieldError className="text-xs">{controller.activityForm.errors[field]}</FieldError>
+  </Field>
+);
+
+const ResaleCategoryModal: React.FC<{ controller: ResalesController }> = ({ controller }) => (
+  <Modal isOpen={controller.isCategoryModalOpen} onClose={controller.closeCategoryModal}>
+    {controller.isCategoryModalOpen && (
+      <ModalContent size="2xl">
+        <ModalHeader>
+          <ModalTitle className="gap-3">
+            <span className="flex size-8 items-center justify-center rounded-md bg-muted text-primary">
+              <i className="fa-solid fa-folder-tree" aria-hidden="true"></i>
+            </span>
+            {controller.t('resales.manageCategories')}
+          </ModalTitle>
+          <ModalCloseButton onClick={controller.closeCategoryModal} />
+        </ModalHeader>
+        <ModalBody className="max-h-[60vh] space-y-4">
+          <form
+            onSubmit={controller.submitCategory}
+            className="space-y-3 rounded-md border border-border bg-muted/30 p-4"
+          >
+            <div className="flex items-start gap-3">
+              <Field className="flex-1 space-y-1.5">
+                <FieldLabel htmlFor="resale-category-name">
+                  {controller.t('resales.fields.categoryName')}
+                </FieldLabel>
+                <Input
+                  id="resale-category-name"
+                  value={controller.categoryName}
+                  onChange={(event) => {
+                    controller.setCategoryName(event.target.value);
+                    controller.setCategoryError('');
+                  }}
+                />
+                <FieldError className="text-xs">{controller.categoryError}</FieldError>
+              </Field>
+              {controller.editingCategoryId && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    controller.setEditingCategoryId(null);
+                    controller.setCategoryName('');
+                    controller.setCategoryError('');
+                  }}
+                  className="mt-7"
+                >
+                  {controller.t('common:buttons.cancel')}
                 </Button>
-                <Button type="submit">{t('common:buttons.create')}</Button>
-              </ModalFooter>
-            </form>
-          </ModalContent>
-        )}
-      </Modal>
-
-      <Modal isOpen={isActivityModalOpen} onClose={closeActivityModal}>
-        {isActivityModalOpen && (
-          <ModalContent size="2xl">
-            <form onSubmit={submitActivity}>
-              <ModalHeader>
-                <ModalTitle>
-                  {activityForm.id ? t('resales.editActivity') : t('resales.addActivity')}
-                </ModalTitle>
-                <ModalCloseButton onClick={closeActivityModal} />
-              </ModalHeader>
-              <ModalBody>
-                <div className="grid gap-4 md:grid-cols-2">
-                  <Field className="md:col-span-2">
-                    <FieldLabel htmlFor="resale-activity-name">
-                      {t('resales.columns.activityName')} <RequiredMark />
-                    </FieldLabel>
-                    <Input
-                      id="resale-activity-name"
-                      value={activityForm.name}
-                      onChange={(event) =>
-                        setActivityForm((prev) => ({ ...prev, name: event.target.value }))
-                      }
-                    />
-                    <FieldError className="text-xs">{activityForm.errors.name}</FieldError>
-                  </Field>
-                  <div className="space-y-1.5">
-                    <SelectControl
-                      id="resale-activity-billing"
-                      options={billingOptions}
-                      value={activityForm.billingFrequency}
-                      onChange={(value) =>
-                        setActivityForm((prev) => ({
-                          ...prev,
-                          billingFrequency: value as ResaleBillingFrequency,
-                        }))
-                      }
-                      label={t('resales.columns.billing')}
-                      searchable={false}
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <SelectControl
-                      id="resale-activity-category"
-                      options={categoryOptions}
-                      value={activityForm.categoryId}
-                      onChange={(value) =>
-                        setActivityForm((prev) => ({
-                          ...prev,
-                          categoryId: value as string,
-                          errors: { ...prev.errors, categoryId: '' },
-                        }))
-                      }
-                      label={
-                        <>
-                          {t('resales.columns.category')} <RequiredMark />
-                        </>
-                      }
-                      searchable
-                    />
-                    <FieldError className="text-xs">{activityForm.errors.categoryId}</FieldError>
-                  </div>
-                  <Field>
-                    <FieldLabel htmlFor="resale-activity-cost">
-                      {t('resales.columns.cost')} ({currency}) <RequiredMark />
-                    </FieldLabel>
-                    <Input
-                      id="resale-activity-cost"
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={activityForm.cost}
-                      onChange={(event) =>
-                        setActivityForm((prev) => ({ ...prev, cost: event.target.value }))
-                      }
-                    />
-                    <FieldError className="text-xs">{activityForm.errors.cost}</FieldError>
-                  </Field>
-                  <Field>
-                    <FieldLabel htmlFor="resale-activity-revenue">
-                      {t('resales.columns.revenue')} ({currency}) <RequiredMark />
-                    </FieldLabel>
-                    <Input
-                      id="resale-activity-revenue"
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={activityForm.revenue}
-                      onChange={(event) =>
-                        setActivityForm((prev) => ({ ...prev, revenue: event.target.value }))
-                      }
-                    />
-                    <FieldError className="text-xs">{activityForm.errors.revenue}</FieldError>
-                  </Field>
-                  <Field>
-                    <FieldLabel htmlFor="resale-activity-due-date">
-                      {t('resales.columns.dueDate')}
-                    </FieldLabel>
-                    <DateField
-                      id="resale-activity-due-date"
-                      value={activityForm.dueDate}
-                      onChange={(value) => setActivityForm((prev) => ({ ...prev, dueDate: value }))}
-                    />
-                    <FieldDescription className="text-xs">
-                      {t('resales.activityDueDateHint')}
-                    </FieldDescription>
-                  </Field>
-                  <Field className="flex-row items-center gap-2">
-                    <Checkbox
-                      id="resale-activity-released"
-                      checked={activityForm.released}
-                      onCheckedChange={(checked) =>
-                        setActivityForm((prev) => ({ ...prev, released: checked === true }))
-                      }
-                    />
-                    <FieldLabel htmlFor="resale-activity-released" className="font-normal">
-                      {t('resales.columns.released')}
-                    </FieldLabel>
-                  </Field>
-                  <Field className="md:col-span-2">
-                    <FieldLabel htmlFor="resale-activity-notes">
-                      {t('resales.columns.notes')}
-                    </FieldLabel>
-                    <Textarea
-                      id="resale-activity-notes"
-                      value={activityForm.notes}
-                      onChange={(event) =>
-                        setActivityForm((prev) => ({ ...prev, notes: event.target.value }))
-                      }
-                    />
-                  </Field>
-                </div>
-              </ModalBody>
-              <ModalFooter>
-                <Button type="button" variant="outline" onClick={closeActivityModal}>
-                  {t('common:buttons.cancel')}
-                </Button>
-                <Button type="submit">
-                  {activityForm.id ? t('common:buttons.save') : t('common:buttons.create')}
-                </Button>
-              </ModalFooter>
-            </form>
-          </ModalContent>
-        )}
-      </Modal>
-
-      <Modal isOpen={isCategoryModalOpen} onClose={closeCategoryModal}>
-        {isCategoryModalOpen && (
-          <ModalContent size="2xl">
-            <ModalHeader>
-              <ModalTitle className="gap-3">
-                <span className="flex size-8 items-center justify-center rounded-md bg-muted text-primary">
-                  <i className="fa-solid fa-folder-tree" aria-hidden="true"></i>
-                </span>
-                {t('resales.manageCategories')}
-              </ModalTitle>
-              <ModalCloseButton onClick={closeCategoryModal} />
-            </ModalHeader>
-            <ModalBody className="max-h-[60vh] space-y-4">
-              <form
-                onSubmit={submitCategory}
-                className="space-y-3 rounded-md border border-border bg-muted/30 p-4"
+              )}
+              <Button
+                type="submit"
+                disabled={!controller.canCreate && !controller.canUpdate}
+                className="mt-7"
               >
-                <div className="flex items-start gap-3">
-                  <Field className="flex-1 space-y-1.5">
-                    <FieldLabel htmlFor="resale-category-name">
-                      {t('resales.fields.categoryName')}
-                    </FieldLabel>
-                    <Input
-                      id="resale-category-name"
-                      value={categoryName}
-                      onChange={(event) => {
-                        setCategoryName(event.target.value);
-                        setCategoryError('');
-                      }}
-                    />
-                    <FieldError className="text-xs">{categoryError}</FieldError>
-                  </Field>
-                  {editingCategoryId && (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => {
-                        setEditingCategoryId(null);
-                        setCategoryName('');
-                        setCategoryError('');
-                      }}
-                      className="mt-7"
-                    >
-                      {t('common:buttons.cancel')}
-                    </Button>
-                  )}
-                  <Button type="submit" disabled={!canCreate && !canUpdate} className="mt-7">
-                    {editingCategoryId ? t('common:buttons.save') : t('common:buttons.create')}
-                  </Button>
-                </div>
-              </form>
-              <StandardTable<ResaleCategory>
-                title={t('resales.categoriesDirectory')}
-                data={categories}
-                columns={categoryColumns}
-                defaultRowsPerPage={5}
-              />
-            </ModalBody>
-          </ModalContent>
-        )}
-      </Modal>
+                {controller.editingCategoryId
+                  ? controller.t('common:buttons.save')
+                  : controller.t('common:buttons.create')}
+              </Button>
+            </div>
+          </form>
+          <StandardTable<ResaleCategory>
+            title={controller.t('resales.categoriesDirectory')}
+            data={controller.categories}
+            columns={controller.categoryColumns}
+            defaultRowsPerPage={5}
+          />
+        </ModalBody>
+      </ModalContent>
+    )}
+  </Modal>
+);
 
-      <DeleteConfirmModal
-        isOpen={!!resaleToDelete}
-        onClose={() => setResaleToDelete(null)}
-        onConfirm={async () => {
-          if (resaleToDelete) {
-            await onDeleteResale(resaleToDelete.id);
-            if (selectedResaleId === resaleToDelete.id) {
-              clearSelectedResale();
-            }
+const ResaleDeleteDialogs: React.FC<{ controller: ResalesController }> = ({ controller }) => (
+  <>
+    <DeleteConfirmModal
+      isOpen={!!controller.resaleToDelete}
+      onClose={() => controller.setResaleToDelete(null)}
+      onConfirm={async () => {
+        if (controller.resaleToDelete) {
+          await controller.onDeleteResale(controller.resaleToDelete.id);
+          if (controller.selectedResaleId === controller.resaleToDelete.id) {
+            controller.clearSelectedResale();
           }
-          setResaleToDelete(null);
-        }}
-        title={t('resales.deleteTitle')}
-        description={t('resales.deleteDescription', { id: resaleToDelete?.id })}
-      />
+        }
+        controller.setResaleToDelete(null);
+      }}
+      title={controller.t('resales.deleteTitle')}
+      description={controller.t('resales.deleteDescription', { id: controller.resaleToDelete?.id })}
+    />
 
-      <DeleteConfirmModal
-        isOpen={!!activityToDelete}
-        onClose={() => setActivityToDelete(null)}
-        onConfirm={async () => {
-          if (selectedResale && activityToDelete) {
-            await onDeleteActivity(selectedResale.id, activityToDelete.id);
-          }
-          setActivityToDelete(null);
-        }}
-        title={t('resales.deleteActivityTitle')}
-        description={t('resales.deleteActivityDescription', { name: activityToDelete?.name })}
-      />
-    </div>
-  );
-};
+    <DeleteConfirmModal
+      isOpen={!!controller.activityToDelete}
+      onClose={() => controller.setActivityToDelete(null)}
+      onConfirm={async () => {
+        if (controller.selectedResale && controller.activityToDelete) {
+          await controller.onDeleteActivity(
+            controller.selectedResale.id,
+            controller.activityToDelete.id,
+          );
+        }
+        controller.setActivityToDelete(null);
+      }}
+      title={controller.t('resales.deleteActivityTitle')}
+      description={controller.t('resales.deleteActivityDescription', {
+        name: controller.activityToDelete?.name,
+      })}
+    />
+  </>
+);
 
 export default ResalesView;

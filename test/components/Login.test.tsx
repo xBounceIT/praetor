@@ -628,7 +628,7 @@ describe('<Login /> second factor', () => {
   // InputOTP props). Writing the full 6-char value drives the controlled value
   // and fires the component's onComplete, which auto-submits the challenge.
   const typeOtp = (value: string) => {
-    const otpInput = screen.getByLabelText('auth:totpChallenge.codeLabel');
+    const otpInput = screen.getByLabelText('totpChallenge.codeLabel');
     fireEvent.change(otpInput, { target: { value } });
   };
 
@@ -649,8 +649,8 @@ describe('<Login /> second factor', () => {
 
     submitCredentials();
 
-    expect(await screen.findByText('auth:totpChallenge.title')).toBeInTheDocument();
-    expect(screen.getByText('auth:totpChallenge.description')).toBeInTheDocument();
+    expect(await screen.findByText('totpChallenge.title')).toBeInTheDocument();
+    expect(screen.getByText('totpChallenge.description')).toBeInTheDocument();
     // The credentials form is gone — we're on the challenge step now.
     expect(screen.queryByPlaceholderText('auth:login.password')).not.toBeInTheDocument();
     await settleOtpTimers();
@@ -664,7 +664,7 @@ describe('<Login /> second factor', () => {
     render(<Login onLogin={onLogin} />);
 
     submitCredentials();
-    await screen.findByText('auth:totpChallenge.title');
+    await screen.findByText('totpChallenge.title');
 
     typeOtp('123456');
 
@@ -684,7 +684,7 @@ describe('<Login /> second factor', () => {
     render(<Login onLogin={onLogin} />);
 
     submitCredentials();
-    await screen.findByText('auth:totpChallenge.title');
+    await screen.findByText('totpChallenge.title');
 
     typeOtp('000000');
 
@@ -692,7 +692,7 @@ describe('<Login /> second factor', () => {
     expect(apiAuthTotpChallenge).toHaveBeenCalledWith('ct', '000000');
     expect(onLogin).not.toHaveBeenCalled();
     // Still on the challenge step (not bounced back to credentials).
-    expect(screen.getByText('auth:totpChallenge.title')).toBeInTheDocument();
+    expect(screen.getByText('totpChallenge.title')).toBeInTheDocument();
     await settleOtpTimers();
   });
 
@@ -707,7 +707,7 @@ describe('<Login /> second factor', () => {
     render(<Login onLogin={onLogin} />);
 
     submitCredentials();
-    await screen.findByText('auth:totpChallenge.title');
+    await screen.findByText('totpChallenge.title');
 
     typeOtp('123456');
 
@@ -725,20 +725,20 @@ describe('<Login /> second factor', () => {
     render(<Login onLogin={() => {}} />);
 
     submitCredentials();
-    await screen.findByText('auth:totpChallenge.title');
+    await screen.findByText('totpChallenge.title');
 
     // Authenticator mode: the 6-digit OTP field is present.
-    expect(screen.getByLabelText('auth:totpChallenge.codeLabel')).toBeInTheDocument();
+    expect(screen.getByLabelText('totpChallenge.codeLabel')).toBeInTheDocument();
 
     // The link label reads "use a backup code" while in authenticator mode.
-    fireEvent.click(screen.getByRole('button', { name: 'auth:totpChallenge.useBackupCode' }));
+    fireEvent.click(screen.getByRole('button', { name: 'totpChallenge.useBackupCode' }));
 
     // Backup mode: a labelled free-text field replaces the OTP slots, and the
     // toggle now offers switching back to the authenticator.
-    expect(screen.getByLabelText('auth:totpChallenge.useBackupCode')).toBeInTheDocument();
-    expect(screen.queryByLabelText('auth:totpChallenge.codeLabel')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('totpChallenge.useBackupCode')).toBeInTheDocument();
+    expect(screen.queryByLabelText('totpChallenge.codeLabel')).not.toBeInTheDocument();
     expect(
-      screen.getByRole('button', { name: 'auth:totpChallenge.useAuthenticator' }),
+      screen.getByRole('button', { name: 'totpChallenge.useAuthenticator' }),
     ).toBeInTheDocument();
     await settleOtpTimers();
   });
@@ -751,13 +751,13 @@ describe('<Login /> second factor', () => {
     render(<Login onLogin={onLogin} />);
 
     submitCredentials();
-    await screen.findByText('auth:totpChallenge.title');
+    await screen.findByText('totpChallenge.title');
 
-    fireEvent.click(screen.getByRole('button', { name: 'auth:totpChallenge.useBackupCode' }));
-    fireEvent.change(screen.getByLabelText('auth:totpChallenge.useBackupCode'), {
+    fireEvent.click(screen.getByRole('button', { name: 'totpChallenge.useBackupCode' }));
+    fireEvent.change(screen.getByLabelText('totpChallenge.useBackupCode'), {
       target: { value: 'backup-code-1' },
     });
-    fireEvent.click(screen.getByRole('button', { name: /auth:totpChallenge.verify/ }));
+    fireEvent.click(screen.getByRole('button', { name: /totpChallenge.verify/ }));
 
     await waitFor(() => expect(apiAuthTotpChallenge).toHaveBeenCalledWith('ct', 'backup-code-1'));
     await waitFor(() => expect(onLogin).toHaveBeenCalledWith({ id: 'u1', name: 'Test' }, 'tok'));
@@ -773,8 +773,8 @@ describe('<Login /> second factor', () => {
     submitCredentials();
 
     // Login's enroll heading plus the wizard's scan step (settings namespace keys).
-    expect(await screen.findByText('auth:totpEnroll.title')).toBeInTheDocument();
-    expect(screen.getByText('auth:totpEnroll.description')).toBeInTheDocument();
+    expect(await screen.findByText('totpEnroll.title')).toBeInTheDocument();
+    expect(screen.getByText('totpEnroll.description')).toBeInTheDocument();
     expect(await screen.findByText('twoFactor.setupTitle')).toBeInTheDocument();
 
     // The wizard's onSetup is wired to api.auth.totpSetup(enrollToken).

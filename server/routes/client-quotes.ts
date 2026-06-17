@@ -1034,25 +1034,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             },
             tx,
           );
-          const items = await clientQuotesRepo.insertItems(
-            created.id,
-            buildItemsForInsert(resolvedItems),
-            tx,
-          );
+          const [items, audits] = await Promise.all([
+            clientQuotesRepo.insertItems(created.id, buildItemsForInsert(resolvedItems), tx),
+            syncSupplierItemsFromClientLines(request, 'client_quote.create', resolvedItems, [], tx),
+          ]);
           const linkedOfferId =
             initialStatus === 'offer' ? await createDraftOfferFromQuote(created, items, tx) : null;
-          // Bidirectional sync on CREATE too (user report after #812): a sourced line whose
-          // quantity/cost was edited away from its pick-time baseline pushes the edit onto the
-          // supplier item, atomically with the quote write. With no stored previous lines the
-          // baseline is the only diff anchor — lines without one are skipped (see
-          // syncSupplierItemsFromClientLines). Audit entries are logged after commit.
-          const audits = await syncSupplierItemsFromClientLines(
-            request,
-            'client_quote.create',
-            resolvedItems,
-            [],
-            tx,
-          );
           return {
             quote: linkedOfferId ? { ...created, linkedOfferId } : created,
             createdItems: items,
@@ -1060,20 +1047,21 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           };
         });
 
-        await logSupplierItemSyncAudits(request, syncAudits);
-
-        await logAudit({
-          request,
-          action: 'client_quote.created',
-          entityType: 'client_quote',
-          entityId: quote.id,
-          details: {
-            targetLabel: quote.id,
-            secondaryLabel: clientNameResult.value,
-            changedFields: ['communicationChannelId'],
-            toValue: communicationChannel.name,
-          },
-        });
+        await Promise.all([
+          logSupplierItemSyncAudits(request, syncAudits),
+          logAudit({
+            request,
+            action: 'client_quote.created',
+            entityType: 'client_quote',
+            entityId: quote.id,
+            details: {
+              targetLabel: quote.id,
+              secondaryLabel: clientNameResult.value,
+              changedFields: ['communicationChannelId'],
+              toValue: communicationChannel.name,
+            },
+          }),
+        ]);
         return reply.code(201).send(buildQuoteResponse(quote, createdItems, sourcedExpiration));
       } catch (err) {
         // The client→supplier item sync refuses to write frozen/order-locked supplier quotes or
@@ -1836,16 +1824,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             };
           }
 
-          const linkedOfferId = await clientQuotesRepo.findLinkedOfferId(idResult.value, tx);
-          const nonDraftLinkedSale = await clientQuotesRepo.findNonDraftLinkedSale(
-            idResult.value,
-            tx,
-          );
-          const version = await quoteVersionsRepo.findById(
-            idResult.value,
-            versionIdResult.value,
-            tx,
-          );
+          const [linkedOfferId, nonDraftLinkedSale, version] = await Promise.all([
+            clientQuotesRepo.findLinkedOfferId(idResult.value, tx),
+            clientQuotesRepo.findNonDraftLinkedSale(idResult.value, tx),
+            quoteVersionsRepo.findById(idResult.value, versionIdResult.value, tx),
+          ]);
 
           if (nonDraftLinkedSale) {
             return {
@@ -1957,9 +1940,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           // current draft sale's row references, but if the snapshot/update later fails the
           // rollback must take the deletes with it (otherwise users lose draft orders for
           // an unchanged quote).
-          await clientQuotesRepo.deleteDraftSalesForQuote(idResult.value, tx);
           // Snapshot current with reason='restore' so the just-replaced data stays recoverable.
-          await snapshotPreState(idResult.value, 'restore', request, tx);
+          await Promise.all([
+            clientQuotesRepo.deleteDraftSalesForQuote(idResult.value, tx),
+            snapshotPreState(idResult.value, 'restore', request, tx),
+          ]);
 
           const quote = await clientQuotesRepo.restoreSnapshotQuote(
             idResult.value,

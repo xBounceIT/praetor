@@ -146,10 +146,10 @@ describe('userHasTopManagerRole', () => {
 
 describe('syncTopManagerAssignmentsForUser', () => {
   describe('non-top-manager branch', () => {
-    // Role check returns no row → not a top manager → 3 deletes + cascade rebuild.
+    // Role check returns no row -> not a top manager -> batched deletes + cascade rebuild.
     const enqueueNonTopManager = () => {
-      exec.enqueue({ rows: [] }); // userHasTopManagerRole → false
-      exec.enqueueEmptyN(4); // 3 deletes + 1 cascade rebuild
+      exec.enqueue({ rows: [] }); // userHasTopManagerRole -> false
+      exec.enqueueEmptyN(2); // CTE delete batch + 1 cascade rebuild
     };
 
     test('runs the role check first', async () => {
@@ -162,7 +162,7 @@ describe('syncTopManagerAssignmentsForUser', () => {
       enqueueNonTopManager();
       await syncTopManagerAssignmentsForUser('u-1', testDb);
       for (const table of ['user_clients', 'user_projects', 'user_tasks']) {
-        const call = findCall((s) => s.toLowerCase().includes(`delete from "${table}"`));
+        const call = findCall((s) => new RegExp(`delete\\s+from\\s+"?${table}"?`, 'i').test(s));
         expect(call).toBeDefined();
         expect(call?.params).toContain('u-1');
         expect(call?.params).toContain(TOP_MANAGER_AUTO_ASSIGNMENT_SOURCE);
@@ -194,10 +194,10 @@ describe('syncTopManagerAssignmentsForUser', () => {
   });
 
   describe('top-manager branch', () => {
-    // Role check returns a row → top manager → 3 INSERTs (no deletes).
+    // Role check returns a row -> top manager -> one batched INSERT CTE (no deletes).
     const enqueueTopManager = () => {
-      exec.enqueue({ rows: [[1]] }); // userHasTopManagerRole → true
-      exec.enqueueEmptyN(3); // 3 INSERTs
+      exec.enqueue({ rows: [[1]] }); // userHasTopManagerRole -> true
+      exec.enqueueEmptyN(1); // CTE insert batch
     };
 
     test('runs the role check first', async () => {
@@ -215,11 +215,11 @@ describe('syncTopManagerAssignmentsForUser', () => {
       await syncTopManagerAssignmentsForUser('u-1', testDb);
       const call = findCall(
         (s) =>
-          s.toLowerCase().includes(`insert into "${table}"`) &&
-          s.toLowerCase().includes(`from "${sourceTable}"`),
+          new RegExp(`insert\\s+into\\s+"?${table}"?`, 'i').test(s) &&
+          new RegExp(`from\\s+"?${sourceTable}"?`, 'i').test(s),
       );
       expect(call).toBeDefined();
-      expect(call?.sql).toContain(`"${fkColumn}"`);
+      expect(call?.sql).toMatch(new RegExp(`\\b${fkColumn}\\b`));
       expect(call?.sql.toLowerCase()).toContain('on conflict');
       expect(call?.params).toContain('u-1');
       expect(call?.params).toContain(TOP_MANAGER_AUTO_ASSIGNMENT_SOURCE);

@@ -116,6 +116,372 @@ const emailSettingsReducer = (
   }
 };
 
+type EmailSettingsUpdater = (update: StateUpdate<EmailConfig>) => void;
+type EmailSettingsErrorsUpdater = (update: StateUpdate<Record<string, string>>) => void;
+
+const SmtpConfigurationCard: React.FC<{
+  formData: EmailConfig;
+  errors: Record<string, string>;
+  isSaving: boolean;
+  isSaved: boolean;
+  hasChanges: boolean;
+  smtpPasswordReplace: ReturnType<typeof useSecretReplaceState>;
+  fromEmailManuallyEdited: React.MutableRefObject<boolean>;
+  setFormData: EmailSettingsUpdater;
+  setErrors: EmailSettingsErrorsUpdater;
+}> = ({
+  formData,
+  errors,
+  isSaving,
+  isSaved,
+  hasChanges,
+  smtpPasswordReplace,
+  fromEmailManuallyEdited,
+  setFormData,
+  setErrors,
+}) => {
+  const { t } = useTranslation('settings');
+
+  return (
+    <Card className="gap-0 overflow-hidden rounded-lg border-border bg-background py-0">
+      <CardHeader className="border-b border-border bg-muted/40 px-6 py-4 [.border-b]:pb-4">
+        <CardTitle className="flex items-center gap-3 text-base">
+          <Server aria-hidden="true" className="size-4 text-praetor" />
+          {t('email.smtpServer', 'SMTP Server Configuration')}
+        </CardTitle>
+        <CardDescription>
+          {t(
+            'email.smtpServerDescription',
+            'Connect Praetor to your outbound SMTP relay to deliver notification emails.',
+          )}
+        </CardDescription>
+        <CardAction>
+          <Field className="flex-row items-center gap-2">
+            <Switch
+              id="email-enabled"
+              checked={formData.enabled}
+              onCheckedChange={(checked) => setFormData((prev) => ({ ...prev, enabled: checked }))}
+            />
+            <FieldLabel htmlFor="email-enabled">{t('email.enabled', 'Enabled')}</FieldLabel>
+          </Field>
+        </CardAction>
+      </CardHeader>
+      <CardContent
+        className={cn(
+          'space-y-6 p-6 transition-opacity',
+          !formData.enabled && 'pointer-events-none opacity-60',
+        )}
+      >
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-4">
+          <Field className="md:col-span-2">
+            <FieldLabel htmlFor="email-smtp-host" required>
+              {t('email.host', 'SMTP Host')}
+            </FieldLabel>
+            <Input
+              id="email-smtp-host"
+              type="text"
+              value={formData.smtpHost}
+              onChange={(e) => {
+                setFormData((prev) => ({ ...prev, smtpHost: e.target.value }));
+                if (errors.smtpHost) setErrors((prev) => ({ ...prev, smtpHost: '' }));
+              }}
+              placeholder="smtp.example.com"
+              aria-invalid={!!errors.smtpHost}
+              className="font-mono"
+            />
+            {errors.smtpHost && <FieldError errors={[{ message: errors.smtpHost }]} />}
+          </Field>
+
+          <Field>
+            <FieldLabel htmlFor="email-smtp-port" required>
+              {t('email.port', 'Port')}
+            </FieldLabel>
+            <Input
+              id="email-smtp-port"
+              type="number"
+              value={formData.smtpPort}
+              onChange={(e) => {
+                setFormData((prev) => ({
+                  ...prev,
+                  smtpPort: parseInt(e.target.value, 10) || 587,
+                }));
+                if (errors.smtpPort) setErrors((prev) => ({ ...prev, smtpPort: '' }));
+              }}
+              min={1}
+              max={65535}
+              aria-invalid={!!errors.smtpPort}
+              className="font-mono"
+            />
+            {errors.smtpPort && <FieldError errors={[{ message: errors.smtpPort }]} />}
+          </Field>
+
+          <Field>
+            <FieldLabel htmlFor="email-smtp-encryption">
+              {t('email.encryptionLabel', 'Encryption')}
+            </FieldLabel>
+            <Select
+              value={formData.smtpEncryption}
+              onValueChange={(val) =>
+                setFormData((prev) => ({ ...prev, smtpEncryption: val as SmtpEncryption }))
+              }
+            >
+              <SelectTrigger id="email-smtp-encryption" className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {ENCRYPTION_OPTIONS.map((opt) => (
+                  <SelectItem key={opt.id} value={opt.id}>
+                    {t(opt.nameKey)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <FieldDescription>
+              {formData.smtpEncryption === 'ssl' &&
+                t('email.encryptionHint.ssl', 'Implicit SSL, typically port 465')}
+              {formData.smtpEncryption === 'tls' &&
+                t('email.encryptionHint.tls', 'STARTTLS, typically port 587')}
+              {formData.smtpEncryption === 'insecure' &&
+                t('email.encryptionHint.insecure', 'No encryption (for local proxy)')}
+            </FieldDescription>
+          </Field>
+        </div>
+
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+          <Field>
+            <FieldLabel htmlFor="email-smtp-user">{t('email.username', 'Username')}</FieldLabel>
+            <Input
+              id="email-smtp-user"
+              type="text"
+              value={formData.smtpUser}
+              onChange={(e) => {
+                const smtpUser = e.target.value;
+                setFormData((prev) => ({
+                  ...prev,
+                  smtpUser,
+                  ...(fromEmailManuallyEdited.current ? {} : { fromEmail: smtpUser }),
+                }));
+                if (!fromEmailManuallyEdited.current && errors.fromEmail) {
+                  setErrors((prev) => ({ ...prev, fromEmail: '' }));
+                }
+              }}
+              placeholder="user@example.com"
+            />
+          </Field>
+
+          <SecretField
+            {...smtpPasswordReplace}
+            label={t('email.password', 'Password')}
+            value={formData.smtpPassword}
+            onChange={(smtpPassword) => setFormData((prev) => ({ ...prev, smtpPassword }))}
+            storedLabel={t('email.passwordStored', 'Password stored')}
+            storedHelp={t(
+              'email.passwordStoredHelp',
+              'Leave as-is to keep the stored password, or click Replace to overwrite it.',
+            )}
+            testId="smtp-password"
+          />
+        </div>
+
+        <Field className="flex-row items-start gap-3">
+          <Switch
+            id="email-reject-unauthorized"
+            checked={formData.smtpRejectUnauthorized}
+            onCheckedChange={(checked) =>
+              setFormData((prev) => ({ ...prev, smtpRejectUnauthorized: checked }))
+            }
+            className="mt-0.5"
+          />
+          <div className="flex flex-col gap-1">
+            <FieldLabel htmlFor="email-reject-unauthorized">
+              {t('email.rejectUnauthorized', 'Reject unauthorized certificates')}
+            </FieldLabel>
+            <FieldDescription>
+              {t('email.rejectUnauthorizedHint', 'Disable for self-signed certificates')}
+            </FieldDescription>
+          </div>
+        </Field>
+
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+          <Field>
+            <FieldLabel htmlFor="email-from-email" required>
+              {t('email.fromEmail', 'From Email')}
+            </FieldLabel>
+            <Input
+              id="email-from-email"
+              type="email"
+              value={formData.fromEmail}
+              onChange={(e) => {
+                fromEmailManuallyEdited.current = true;
+                setFormData((prev) => ({ ...prev, fromEmail: e.target.value }));
+                if (errors.fromEmail) setErrors((prev) => ({ ...prev, fromEmail: '' }));
+              }}
+              placeholder="noreply@example.com"
+              aria-invalid={!!errors.fromEmail}
+            />
+            {errors.fromEmail && <FieldError errors={[{ message: errors.fromEmail }]} />}
+          </Field>
+
+          <Field>
+            <FieldLabel htmlFor="email-from-name">{t('email.fromName', 'From Name')}</FieldLabel>
+            <Input
+              id="email-from-name"
+              type="text"
+              value={formData.fromName}
+              onChange={(e) => setFormData((prev) => ({ ...prev, fromName: e.target.value }))}
+              placeholder="Praetor"
+            />
+          </Field>
+        </div>
+      </CardContent>
+      <CardFooter className="justify-end border-t border-border px-6 py-4 [.border-t]:pt-4">
+        {(() => {
+          const { Icon, iconClass, label } = isSaving
+            ? {
+                Icon: Loader2,
+                iconClass: 'animate-spin',
+                label: t('general.saving', 'Saving...'),
+              }
+            : isSaved
+              ? { Icon: Check, iconClass: undefined, label: t('general.saved', 'Saved!') }
+              : {
+                  Icon: Save,
+                  iconClass: undefined,
+                  label: t('general.saveConfiguration', 'Save Configuration'),
+                };
+          return (
+            <Button type="submit" disabled={isSaving || !hasChanges}>
+              <Icon aria-hidden="true" className={iconClass} />
+              {label}
+            </Button>
+          );
+        })()}
+      </CardFooter>
+    </Card>
+  );
+};
+
+const EmailTestCard: React.FC<{
+  enabled: boolean;
+  testEmail: string;
+  testResult: EmailTestResult | null;
+  isTestLoading: boolean;
+  testErrors: Record<string, string>;
+  setTestEmail: (value: string) => void;
+  setTestErrors: EmailSettingsErrorsUpdater;
+  onSubmit: (event: React.FormEvent) => void;
+  getTranslatedMessage: (code: string, params?: Record<string, string>) => string;
+}> = ({
+  enabled,
+  testEmail,
+  testResult,
+  isTestLoading,
+  testErrors,
+  setTestEmail,
+  setTestErrors,
+  onSubmit,
+  getTranslatedMessage,
+}) => {
+  const { t } = useTranslation('settings');
+
+  return (
+    <Card
+      className={cn(
+        'gap-0 overflow-hidden rounded-lg border-border bg-background py-0 transition-opacity',
+        !enabled && 'pointer-events-none opacity-60',
+      )}
+    >
+      <CardHeader className="border-b border-border bg-muted/40 px-6 py-4 [.border-b]:pb-4">
+        <CardTitle className="flex items-center gap-3 text-base">
+          <FlaskConical aria-hidden="true" className="size-4 text-praetor" />
+          {t('email.testEmail', 'Test Email')}
+        </CardTitle>
+        <CardDescription>
+          {t(
+            'email.testDescription',
+            'Send a test email to verify your SMTP configuration is working correctly.',
+          )}
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="p-6">
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          <form onSubmit={onSubmit} className="space-y-4">
+            <Field>
+              <FieldLabel htmlFor="email-test-recipient" required>
+                {t('email.recipientEmail', 'Recipient Email')}
+              </FieldLabel>
+              <Input
+                id="email-test-recipient"
+                type="email"
+                value={testEmail}
+                onChange={(e) => {
+                  setTestEmail(e.target.value);
+                  if (testErrors.testEmail) setTestErrors((prev) => ({ ...prev, testEmail: '' }));
+                }}
+                placeholder="test@example.com"
+                aria-invalid={!!testErrors.testEmail}
+              />
+              {testErrors.testEmail && <FieldError errors={[{ message: testErrors.testEmail }]} />}
+              {testErrors.enabled && (
+                <FieldDescription className="text-amber-600 dark:text-amber-400">
+                  {testErrors.enabled}
+                </FieldDescription>
+              )}
+            </Field>
+            <Button type="submit" disabled={isTestLoading || !enabled} className="w-full">
+              {isTestLoading ? (
+                <Loader2 aria-hidden="true" className="animate-spin" />
+              ) : (
+                <Send aria-hidden="true" />
+              )}
+              {t('email.sendTest', 'Send Test Email')}
+            </Button>
+          </form>
+
+          <div className="h-64 overflow-y-auto rounded-md border border-border bg-muted/40 p-4 font-mono text-xs">
+            {isTestLoading ? (
+              <div className="animate-pulse text-muted-foreground">
+                {t('email.sending', 'Sending test email...')}
+              </div>
+            ) : testResult ? (
+              <div className="space-y-2">
+                <div
+                  className={cn(
+                    'font-semibold',
+                    testResult.success
+                      ? 'text-emerald-600 dark:text-emerald-400'
+                      : 'text-destructive',
+                  )}
+                >
+                  [
+                  {testResult.success
+                    ? t('email.testSuccess', 'SUCCESS')
+                    : t('email.testFailure', 'FAILURE')}
+                  ] {getTranslatedMessage(testResult.code, testResult.params)}
+                </div>
+                {testResult.success && (
+                  <div className="mt-2 text-muted-foreground">
+                    {t('email.checkInbox', 'Check your inbox for the test email.')}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="italic text-muted-foreground">
+                {t('email.waitingForTest', 'Waiting for test execution...')}
+                <br />
+                <br />
+                <span className="opacity-70">
+                  {t('email.logOutput', 'Test results will appear here.')}
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+};
+
 const EmailSettings: React.FC<EmailSettingsProps> = ({ config, onSave, onTestEmail }) => {
   const { t } = useTranslation('settings');
   const [state, dispatchState] = useReducer(emailSettingsReducer, undefined, () => ({
@@ -285,7 +651,7 @@ const EmailSettings: React.FC<EmailSettingsProps> = ({ config, onSave, onTestEma
   };
 
   return (
-    <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in duration-500">
+    <div className="max-w-4xl mx-auto space-y-8">
       <div className="flex justify-between items-center">
         <div>
           <h2 className="text-2xl font-semibold text-foreground">
@@ -298,327 +664,30 @@ const EmailSettings: React.FC<EmailSettingsProps> = ({ config, onSave, onTestEma
       </div>
 
       <form onSubmit={handleSave} className="space-y-6">
-        <Card className="gap-0 overflow-hidden rounded-lg border-border bg-background py-0">
-          <CardHeader className="border-b border-border bg-muted/40 px-6 py-4 [.border-b]:pb-4">
-            <CardTitle className="flex items-center gap-3 text-base">
-              <Server aria-hidden="true" className="size-4 text-praetor" />
-              {t('email.smtpServer', 'SMTP Server Configuration')}
-            </CardTitle>
-            <CardDescription>
-              {t(
-                'email.smtpServerDescription',
-                'Connect Praetor to your outbound SMTP relay to deliver notification emails.',
-              )}
-            </CardDescription>
-            <CardAction>
-              <Field className="flex-row items-center gap-2">
-                <Switch
-                  id="email-enabled"
-                  checked={formData.enabled}
-                  onCheckedChange={(checked) =>
-                    setFormData((prev) => ({ ...prev, enabled: checked }))
-                  }
-                />
-                <FieldLabel htmlFor="email-enabled">{t('email.enabled', 'Enabled')}</FieldLabel>
-              </Field>
-            </CardAction>
-          </CardHeader>
-          <CardContent
-            className={cn(
-              'space-y-6 p-6 transition-opacity',
-              !formData.enabled && 'pointer-events-none opacity-60',
-            )}
-          >
-            <div className="grid grid-cols-1 gap-6 md:grid-cols-4">
-              <Field className="md:col-span-2">
-                <FieldLabel htmlFor="email-smtp-host" required>
-                  {t('email.host', 'SMTP Host')}
-                </FieldLabel>
-                <Input
-                  id="email-smtp-host"
-                  type="text"
-                  value={formData.smtpHost}
-                  onChange={(e) => {
-                    setFormData((prev) => ({ ...prev, smtpHost: e.target.value }));
-                    if (errors.smtpHost) setErrors((prev) => ({ ...prev, smtpHost: '' }));
-                  }}
-                  placeholder="smtp.example.com"
-                  aria-invalid={!!errors.smtpHost}
-                  className="font-mono"
-                />
-                {errors.smtpHost && <FieldError errors={[{ message: errors.smtpHost }]} />}
-              </Field>
-
-              <Field>
-                <FieldLabel htmlFor="email-smtp-port" required>
-                  {t('email.port', 'Port')}
-                </FieldLabel>
-                <Input
-                  id="email-smtp-port"
-                  type="number"
-                  value={formData.smtpPort}
-                  onChange={(e) => {
-                    setFormData((prev) => ({
-                      ...prev,
-                      smtpPort: parseInt(e.target.value, 10) || 587,
-                    }));
-                    if (errors.smtpPort) setErrors((prev) => ({ ...prev, smtpPort: '' }));
-                  }}
-                  min={1}
-                  max={65535}
-                  aria-invalid={!!errors.smtpPort}
-                  className="font-mono"
-                />
-                {errors.smtpPort && <FieldError errors={[{ message: errors.smtpPort }]} />}
-              </Field>
-
-              <Field>
-                <FieldLabel htmlFor="email-smtp-encryption">
-                  {t('email.encryptionLabel', 'Encryption')}
-                </FieldLabel>
-                <Select
-                  value={formData.smtpEncryption}
-                  onValueChange={(val) =>
-                    setFormData((prev) => ({ ...prev, smtpEncryption: val as SmtpEncryption }))
-                  }
-                >
-                  <SelectTrigger id="email-smtp-encryption" className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {ENCRYPTION_OPTIONS.map((opt) => (
-                      <SelectItem key={opt.id} value={opt.id}>
-                        {t(opt.nameKey)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <FieldDescription>
-                  {formData.smtpEncryption === 'ssl' &&
-                    t('email.encryptionHint.ssl', 'Implicit SSL, typically port 465')}
-                  {formData.smtpEncryption === 'tls' &&
-                    t('email.encryptionHint.tls', 'STARTTLS, typically port 587')}
-                  {formData.smtpEncryption === 'insecure' &&
-                    t('email.encryptionHint.insecure', 'No encryption (for local proxy)')}
-                </FieldDescription>
-              </Field>
-            </div>
-
-            <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-              <Field>
-                <FieldLabel htmlFor="email-smtp-user">{t('email.username', 'Username')}</FieldLabel>
-                <Input
-                  id="email-smtp-user"
-                  type="text"
-                  value={formData.smtpUser}
-                  onChange={(e) => {
-                    const smtpUser = e.target.value;
-                    setFormData((prev) => ({
-                      ...prev,
-                      smtpUser,
-                      ...(fromEmailManuallyEdited.current ? {} : { fromEmail: smtpUser }),
-                    }));
-                    if (!fromEmailManuallyEdited.current && errors.fromEmail) {
-                      setErrors((prev) => ({ ...prev, fromEmail: '' }));
-                    }
-                  }}
-                  placeholder="user@example.com"
-                />
-              </Field>
-
-              <SecretField
-                {...smtpPasswordReplace}
-                label={t('email.password', 'Password')}
-                value={formData.smtpPassword}
-                onChange={(smtpPassword) => setFormData((prev) => ({ ...prev, smtpPassword }))}
-                storedLabel={t('email.passwordStored', 'Password stored')}
-                storedHelp={t(
-                  'email.passwordStoredHelp',
-                  'Leave as-is to keep the stored password, or click Replace to overwrite it.',
-                )}
-                testId="smtp-password"
-              />
-            </div>
-
-            <Field className="flex-row items-start gap-3">
-              <Switch
-                id="email-reject-unauthorized"
-                checked={formData.smtpRejectUnauthorized}
-                onCheckedChange={(checked) =>
-                  setFormData((prev) => ({ ...prev, smtpRejectUnauthorized: checked }))
-                }
-                className="mt-0.5"
-              />
-              <div className="flex flex-col gap-1">
-                <FieldLabel htmlFor="email-reject-unauthorized">
-                  {t('email.rejectUnauthorized', 'Reject unauthorized certificates')}
-                </FieldLabel>
-                <FieldDescription>
-                  {t('email.rejectUnauthorizedHint', 'Disable for self-signed certificates')}
-                </FieldDescription>
-              </div>
-            </Field>
-
-            <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-              <Field>
-                <FieldLabel htmlFor="email-from-email" required>
-                  {t('email.fromEmail', 'From Email')}
-                </FieldLabel>
-                <Input
-                  id="email-from-email"
-                  type="email"
-                  value={formData.fromEmail}
-                  onChange={(e) => {
-                    fromEmailManuallyEdited.current = true;
-                    setFormData((prev) => ({ ...prev, fromEmail: e.target.value }));
-                    if (errors.fromEmail) setErrors((prev) => ({ ...prev, fromEmail: '' }));
-                  }}
-                  placeholder="noreply@example.com"
-                  aria-invalid={!!errors.fromEmail}
-                />
-                {errors.fromEmail && <FieldError errors={[{ message: errors.fromEmail }]} />}
-              </Field>
-
-              <Field>
-                <FieldLabel htmlFor="email-from-name">
-                  {t('email.fromName', 'From Name')}
-                </FieldLabel>
-                <Input
-                  id="email-from-name"
-                  type="text"
-                  value={formData.fromName}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, fromName: e.target.value }))}
-                  placeholder="Praetor"
-                />
-              </Field>
-            </div>
-          </CardContent>
-          <CardFooter className="justify-end border-t border-border px-6 py-4 [.border-t]:pt-4">
-            {(() => {
-              const { Icon, iconClass, label } = isSaving
-                ? {
-                    Icon: Loader2,
-                    iconClass: 'animate-spin',
-                    label: t('general.saving', 'Saving...'),
-                  }
-                : isSaved
-                  ? { Icon: Check, iconClass: undefined, label: t('general.saved', 'Saved!') }
-                  : {
-                      Icon: Save,
-                      iconClass: undefined,
-                      label: t('general.saveConfiguration', 'Save Configuration'),
-                    };
-              return (
-                <Button type="submit" disabled={isSaving || !hasChanges}>
-                  <Icon aria-hidden="true" className={iconClass} />
-                  {label}
-                </Button>
-              );
-            })()}
-          </CardFooter>
-        </Card>
+        <SmtpConfigurationCard
+          formData={formData}
+          errors={errors}
+          isSaving={isSaving}
+          isSaved={isSaved}
+          hasChanges={hasChanges}
+          smtpPasswordReplace={smtpPasswordReplace}
+          fromEmailManuallyEdited={fromEmailManuallyEdited}
+          setFormData={setFormData}
+          setErrors={setErrors}
+        />
       </form>
 
-      <Card
-        className={cn(
-          'gap-0 overflow-hidden rounded-lg border-border bg-background py-0 transition-opacity',
-          !formData.enabled && 'pointer-events-none opacity-60',
-        )}
-      >
-        <CardHeader className="border-b border-border bg-muted/40 px-6 py-4 [.border-b]:pb-4">
-          <CardTitle className="flex items-center gap-3 text-base">
-            <FlaskConical aria-hidden="true" className="size-4 text-praetor" />
-            {t('email.testEmail', 'Test Email')}
-          </CardTitle>
-          <CardDescription>
-            {t(
-              'email.testDescription',
-              'Send a test email to verify your SMTP configuration is working correctly.',
-            )}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="p-6">
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-            <form onSubmit={handleTest} className="space-y-4">
-              <Field>
-                <FieldLabel htmlFor="email-test-recipient" required>
-                  {t('email.recipientEmail', 'Recipient Email')}
-                </FieldLabel>
-                <Input
-                  id="email-test-recipient"
-                  type="email"
-                  value={testEmail}
-                  onChange={(e) => {
-                    setTestEmail(e.target.value);
-                    if (testErrors.testEmail) setTestErrors((prev) => ({ ...prev, testEmail: '' }));
-                  }}
-                  placeholder="test@example.com"
-                  aria-invalid={!!testErrors.testEmail}
-                />
-                {testErrors.testEmail && (
-                  <FieldError errors={[{ message: testErrors.testEmail }]} />
-                )}
-                {testErrors.enabled && (
-                  <FieldDescription className="text-amber-600 dark:text-amber-400">
-                    {testErrors.enabled}
-                  </FieldDescription>
-                )}
-              </Field>
-              <Button
-                type="submit"
-                disabled={isTestLoading || !formData.enabled}
-                className="w-full"
-              >
-                {isTestLoading ? (
-                  <Loader2 aria-hidden="true" className="animate-spin" />
-                ) : (
-                  <Send aria-hidden="true" />
-                )}
-                {t('email.sendTest', 'Send Test Email')}
-              </Button>
-            </form>
-
-            <div className="h-64 overflow-y-auto rounded-md border border-border bg-muted/40 p-4 font-mono text-xs">
-              {isTestLoading ? (
-                <div className="animate-pulse text-muted-foreground">
-                  {t('email.sending', 'Sending test email...')}
-                </div>
-              ) : testResult ? (
-                <div className="space-y-2">
-                  <div
-                    className={cn(
-                      'font-semibold',
-                      testResult.success
-                        ? 'text-emerald-600 dark:text-emerald-400'
-                        : 'text-destructive',
-                    )}
-                  >
-                    [
-                    {testResult.success
-                      ? t('email.testSuccess', 'SUCCESS')
-                      : t('email.testFailure', 'FAILURE')}
-                    ] {getTranslatedMessage(testResult.code, testResult.params)}
-                  </div>
-                  {testResult.success && (
-                    <div className="mt-2 text-muted-foreground">
-                      {t('email.checkInbox', 'Check your inbox for the test email.')}
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div className="italic text-muted-foreground">
-                  {t('email.waitingForTest', 'Waiting for test execution...')}
-                  <br />
-                  <br />
-                  <span className="opacity-70">
-                    {t('email.logOutput', 'Test results will appear here.')}
-                  </span>
-                </div>
-              )}
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      <EmailTestCard
+        enabled={formData.enabled}
+        testEmail={testEmail}
+        testResult={testResult}
+        isTestLoading={isTestLoading}
+        testErrors={testErrors}
+        setTestEmail={setTestEmail}
+        setTestErrors={setTestErrors}
+        onSubmit={handleTest}
+        getTranslatedMessage={getTranslatedMessage}
+      />
     </div>
   );
 };

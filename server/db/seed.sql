@@ -101,52 +101,8 @@ AS $$
       AND codes.sequence = _sequence
 $$;
 
-CREATE TEMP TABLE demo_document_code_conflicts (
-    table_name text NOT NULL,
-    id text NOT NULL
-) ON COMMIT DROP;
-
-INSERT INTO demo_document_code_conflicts (table_name, id)
-SELECT 'quotes', q.id
-FROM quotes q
-JOIN pg_temp.demo_document_codes codes
-  ON codes.module_id = 'client_quote'
- AND codes.code = q.id
-WHERE q.client_id NOT IN ('dm_cli_01', 'dm_cli_02', 'dm_cli_03', 'dm_cli_04', 'dm_cli_05')
-UNION ALL
-SELECT 'customer_offers', o.id
-FROM customer_offers o
-JOIN pg_temp.demo_document_codes codes
-  ON codes.module_id = 'client_offer'
- AND codes.code = o.id
-WHERE o.client_id NOT IN ('dm_cli_01', 'dm_cli_02', 'dm_cli_03', 'dm_cli_04', 'dm_cli_05')
-UNION ALL
-SELECT 'sales', s.id
-FROM sales s
-JOIN pg_temp.demo_document_codes codes
-  ON codes.module_id = 'client_order'
- AND codes.code = s.id
-WHERE s.client_id NOT IN ('dm_cli_01', 'dm_cli_02', 'dm_cli_03', 'dm_cli_04', 'dm_cli_05')
-UNION ALL
-SELECT 'supplier_quotes', sq.id
-FROM supplier_quotes sq
-JOIN pg_temp.demo_document_codes codes
-  ON codes.module_id = 'supplier_quote'
- AND codes.code = sq.id
-WHERE sq.supplier_id NOT IN ('dm_sup_01', 'dm_sup_02', 'dm_sup_03', 'dm_sup_04', 'dm_sup_05')
-UNION ALL
-SELECT 'supplier_sales', ss.id
-FROM supplier_sales ss
-JOIN pg_temp.demo_document_codes codes
-  ON codes.module_id = 'supplier_order'
- AND codes.code = ss.id
-WHERE ss.supplier_id NOT IN ('dm_sup_01', 'dm_sup_02', 'dm_sup_03', 'dm_sup_04', 'dm_sup_05');
-
-SELECT CASE
-    WHEN EXISTS (SELECT 1 FROM pg_temp.demo_document_code_conflicts)
-        THEN 'Demo seed document code collision with existing non-demo document rows'::integer
-    ELSE 0
-END;
+-- Document-code collision protection is handled by server/db/demoSeed.ts before cleanup.
+-- Keeping the guard in one place avoids drift between the cleanup owner allow-list and this SQL.
 
 INSERT INTO document_code_counters (module_id, year, next_sequence, updated_at)
 VALUES

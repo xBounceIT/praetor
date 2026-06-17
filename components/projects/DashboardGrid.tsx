@@ -5,6 +5,7 @@ import {
   type ReactNode,
   useCallback,
   useEffect,
+  useEffectEvent,
   useMemo,
   useRef,
   useState,
@@ -205,79 +206,81 @@ const DashboardGrid: React.FC<DashboardGridProps> = ({
     });
   };
 
+  const onPointerMove = useEffectEvent((e: PointerEvent) => {
+    const d = dragRef.current;
+    if (!d || e.pointerId !== d.pointerId) return;
+    const { layout: curLayout, unitX: ux, unitY: uy, defsById: curDefs } = gridRef.current;
+    const dxPx = e.clientX - d.startClientX;
+    const dyPx = e.clientY - d.startClientY;
+    const dCols = ux > 0 ? Math.round(dxPx / ux) : 0;
+    const dRows = uy > 0 ? Math.round(dyPx / uy) : 0;
+    // Within the same snapped cell the layout doesn't change, so skip the
+    // compaction pass. A move still needs the pixel offset for the dragged
+    // card's cursor-follow; a resize has no translate, so it needs nothing.
+    if (dCols === d.snapCols && dRows === d.snapRows) {
+      if (d.mode === 'move') {
+        setDrag((prev) =>
+          prev && (prev.dxPx !== dxPx || prev.dyPx !== dyPx) ? { ...prev, dxPx, dyPx } : prev,
+        );
+      }
+      return;
+    }
+    let preview: DashboardLayout;
+    if (d.mode === 'move') {
+      preview = moveWidgetTo(curLayout, d.id, d.origin.x + dCols, d.origin.y + dRows);
+    } else {
+      const def = curDefs.get(d.id);
+      const dw = d.mode === 'resize-s' ? 0 : dCols;
+      const dh = d.mode === 'resize-e' ? 0 : dRows;
+      preview = resizeWidgetTo(
+        curLayout,
+        d.id,
+        d.origin.w + dw,
+        d.origin.h + dh,
+        def?.minW ?? 1,
+        def?.minH ?? 1,
+      );
+    }
+    setDrag((prev) =>
+      prev ? { ...prev, preview, dxPx, dyPx, snapCols: dCols, snapRows: dRows } : prev,
+    );
+  });
+
+  const finishDrag = useEffectEvent((e: PointerEvent) => {
+    const d = dragRef.current;
+    if (!d || e.pointerId !== d.pointerId) return;
+    try {
+      // The captured element may have been swapped (e.g. crossing the
+      // single-column breakpoint mid-drag); releasing on the wrong node throws.
+      containerRef.current?.releasePointerCapture?.(e.pointerId);
+    } catch {
+      // Already released (or never captured here) — the gesture still commits.
+    }
+    const { onMove: commitMove, onResize: commitResize } = gridRef.current;
+    const item = d.preview.find((w) => w.id === d.id);
+    if (item) {
+      if (d.mode === 'move') {
+        if (item.x !== d.origin.x || item.y !== d.origin.y) commitMove(d.id, item.x, item.y);
+      } else if (item.w !== d.origin.w || item.h !== d.origin.h) {
+        commitResize(d.id, item.w, item.h);
+      }
+    }
+    setDrag(null);
+  });
+
   // Subscribe to the window once per gesture (not per pointer move). The
   // handlers read live state from refs, so the committed geometry is always the
   // latest preview even though this effect doesn't re-run on every move.
   const dragging = activeDrag !== null;
   useEffect(() => {
     if (!dragging) return;
-    const onPointerMove = (e: PointerEvent) => {
-      const d = dragRef.current;
-      if (!d || e.pointerId !== d.pointerId) return;
-      const { layout: curLayout, unitX: ux, unitY: uy, defsById: curDefs } = gridRef.current;
-      const dxPx = e.clientX - d.startClientX;
-      const dyPx = e.clientY - d.startClientY;
-      const dCols = ux > 0 ? Math.round(dxPx / ux) : 0;
-      const dRows = uy > 0 ? Math.round(dyPx / uy) : 0;
-      // Within the same snapped cell the layout doesn't change, so skip the
-      // compaction pass. A move still needs the pixel offset for the dragged
-      // card's cursor-follow; a resize has no translate, so it needs nothing.
-      if (dCols === d.snapCols && dRows === d.snapRows) {
-        if (d.mode === 'move') {
-          setDrag((prev) =>
-            prev && (prev.dxPx !== dxPx || prev.dyPx !== dyPx) ? { ...prev, dxPx, dyPx } : prev,
-          );
-        }
-        return;
-      }
-      let preview: DashboardLayout;
-      if (d.mode === 'move') {
-        preview = moveWidgetTo(curLayout, d.id, d.origin.x + dCols, d.origin.y + dRows);
-      } else {
-        const def = curDefs.get(d.id);
-        const dw = d.mode === 'resize-s' ? 0 : dCols;
-        const dh = d.mode === 'resize-e' ? 0 : dRows;
-        preview = resizeWidgetTo(
-          curLayout,
-          d.id,
-          d.origin.w + dw,
-          d.origin.h + dh,
-          def?.minW ?? 1,
-          def?.minH ?? 1,
-        );
-      }
-      setDrag((prev) =>
-        prev ? { ...prev, preview, dxPx, dyPx, snapCols: dCols, snapRows: dRows } : prev,
-      );
-    };
-    const finish = (e: PointerEvent) => {
-      const d = dragRef.current;
-      if (!d || e.pointerId !== d.pointerId) return;
-      try {
-        // The captured element may have been swapped (e.g. crossing the
-        // single-column breakpoint mid-drag); releasing on the wrong node throws.
-        containerRef.current?.releasePointerCapture?.(e.pointerId);
-      } catch {
-        // Already released (or never captured here) — the gesture still commits.
-      }
-      const { onMove: commitMove, onResize: commitResize } = gridRef.current;
-      const item = d.preview.find((w) => w.id === d.id);
-      if (item) {
-        if (d.mode === 'move') {
-          if (item.x !== d.origin.x || item.y !== d.origin.y) commitMove(d.id, item.x, item.y);
-        } else if (item.w !== d.origin.w || item.h !== d.origin.h) {
-          commitResize(d.id, item.w, item.h);
-        }
-      }
-      setDrag(null);
-    };
     window.addEventListener('pointermove', onPointerMove);
-    window.addEventListener('pointerup', finish);
-    window.addEventListener('pointercancel', finish);
+    window.addEventListener('pointerup', finishDrag);
+    window.addEventListener('pointercancel', finishDrag);
     return () => {
       window.removeEventListener('pointermove', onPointerMove);
-      window.removeEventListener('pointerup', finish);
-      window.removeEventListener('pointercancel', finish);
+      window.removeEventListener('pointerup', finishDrag);
+      window.removeEventListener('pointercancel', finishDrag);
     };
   }, [dragging]);
 
@@ -313,46 +316,15 @@ const DashboardGrid: React.FC<DashboardGridProps> = ({
   // ---- single-column fallback ------------------------------------------------
 
   if (singleColumn) {
-    const stacked = sortByRowCol(editing ? layout : visibleLayout(layout));
     return (
-      <div ref={setContainerEl} className="w-full space-y-4">
-        {editing && (
-          <p className="text-xs text-muted-foreground">
-            {t('projects:detail.dashboard.editOnLargerScreen')}
-          </p>
-        )}
-        {stacked.map((state) => {
-          const item = itemsById.get(state.id);
-          if (!item) return null;
-          if (!editing && state.hidden) return null;
-          return (
-            <div key={state.id}>
-              {editing && (
-                <div className="mb-1 flex items-center gap-2 rounded-lg border border-dashed border-primary/40 bg-muted/40 px-2 py-1.5">
-                  <span className="mr-auto truncate text-xs font-medium" title={item.title}>
-                    {item.title}
-                  </span>
-                  <HideButton
-                    hidden={state.hidden}
-                    title={item.title}
-                    onToggle={() => onToggleHidden(state.id)}
-                    t={t}
-                  />
-                </div>
-              )}
-              {state.hidden ? (
-                <HiddenPlaceholder
-                  title={item.title}
-                  onUnhide={() => onToggleHidden(state.id)}
-                  t={t}
-                />
-              ) : (
-                <div className="overflow-hidden">{item.node}</div>
-              )}
-            </div>
-          );
-        })}
-      </div>
+      <SingleColumnDashboardGrid
+        ref={setContainerEl}
+        editing={editing}
+        layout={layout}
+        itemsById={itemsById}
+        onToggleHidden={onToggleHidden}
+        t={t}
+      />
     );
   }
 
@@ -367,127 +339,86 @@ const DashboardGrid: React.FC<DashboardGridProps> = ({
         minHeight: width > 0 ? undefined : 240,
       }}
     >
-      {/* Snap target while moving a card. */}
-      {activeDrag?.mode === 'move' &&
-        (() => {
-          const target = activeDrag.preview.find((w) => w.id === activeDrag.id);
-          if (!target) return null;
-          return (
-            <div
-              aria-hidden="true"
-              className="pointer-events-none absolute z-0 rounded-xl border-2 border-dashed border-primary/50 bg-primary/5 transition-all"
-              style={rectStyle(target)}
-            />
-          );
-        })()}
+      <DashboardSnapTarget activeDrag={activeDrag} rectStyle={rectStyle} />
 
       {items.map((item) => {
         const state = placedById.get(item.id);
         if (!state) return null;
-
-        const isActive = activeDrag?.id === item.id;
-        const isMoving = isActive && activeDrag?.mode === 'move';
-        // A moving card follows the cursor pixel-for-pixel (no transition); every
-        // other card — including a card being *resized* — animates to its snapped
-        // slot/size so resizing eases between grid steps instead of jumping.
-        const style: React.CSSProperties = isMoving
-          ? {
-              ...rectStyle(activeDrag.origin),
-              transform: `translate(${activeDrag.dxPx}px, ${activeDrag.dyPx}px)`,
-              zIndex: 30,
-            }
-          : { ...rectStyle(state), zIndex: isActive ? 20 : undefined };
-
-        if (!editing) {
-          return (
-            <div key={item.id} className="overflow-hidden" style={style}>
-              <div className="h-full overflow-hidden">{item.node}</div>
-            </div>
-          );
-        }
-
         return (
-          <div
+          <DashboardGridPlacedItem
             key={item.id}
-            className={cn('flex flex-col', !isMoving && 'transition-all')}
-            style={style}
-          >
-            <div
-              className={cn(
-                'flex h-full flex-col overflow-hidden rounded-xl ring-2',
-                isActive ? 'ring-primary' : 'ring-primary/30',
-              )}
-            >
-              {/* Header bar: a wide drag handle plus the hide control. They are
-                  sibling buttons (a button can't legally nest another). */}
-              <div className="flex shrink-0 items-center gap-1 border-b border-dashed border-primary/40 bg-muted/50 px-1.5 py-1">
-                <button
-                  type="button"
-                  aria-label={t('projects:detail.dashboard.dragHandle', { name: item.title })}
-                  onPointerDown={(e) => beginDrag(e, item.id, 'move')}
-                  onKeyDown={(e) => onItemKeyDown(e, item.id)}
-                  className="flex min-w-0 flex-1 cursor-move touch-none items-center gap-2 text-left"
-                >
-                  <i
-                    className="fa-solid fa-up-down-left-right text-xs text-muted-foreground"
-                    aria-hidden="true"
-                  ></i>
-                  <span className="truncate text-xs font-medium text-foreground" title={item.title}>
-                    {item.title}
-                  </span>
-                </button>
+            item={item}
+            state={state}
+            editing={editing}
+            activeDrag={activeDrag}
+            rectStyle={rectStyle}
+            beginDrag={beginDrag}
+            onItemKeyDown={onItemKeyDown}
+            onToggleHidden={onToggleHidden}
+            t={t}
+          />
+        );
+      })}
+    </div>
+  );
+};
+
+type BeginDragHandler = (e: React.PointerEvent, id: string, mode: DragMode) => void;
+type ItemKeyDownHandler = (e: React.KeyboardEvent, id: string) => void;
+
+interface SingleColumnDashboardGridProps {
+  ref: React.Ref<HTMLDivElement>;
+  editing: boolean;
+  layout: DashboardLayout;
+  itemsById: Map<string, ResolvedItem>;
+  onToggleHidden: (id: string) => void;
+  t: TFn;
+}
+
+const SingleColumnDashboardGrid: React.FC<SingleColumnDashboardGridProps> = ({
+  ref,
+  editing,
+  layout,
+  itemsById,
+  onToggleHidden,
+  t,
+}) => {
+  const stacked = sortByRowCol(editing ? layout : visibleLayout(layout));
+
+  return (
+    <div ref={ref} className="w-full space-y-4">
+      {editing && (
+        <p className="text-xs text-muted-foreground">
+          {t('projects:detail.dashboard.editOnLargerScreen')}
+        </p>
+      )}
+      {stacked.map((state) => {
+        const item = itemsById.get(state.id);
+        if (!item) return null;
+        if (!editing && state.hidden) return null;
+        return (
+          <div key={state.id}>
+            {editing && (
+              <div className="mb-1 flex items-center gap-2 rounded-lg border border-dashed border-primary/40 bg-muted/40 px-2 py-1.5">
+                <span className="mr-auto truncate text-xs font-medium" title={item.title}>
+                  {item.title}
+                </span>
                 <HideButton
                   hidden={state.hidden}
                   title={item.title}
-                  onToggle={() => onToggleHidden(item.id)}
+                  onToggle={() => onToggleHidden(state.id)}
                   t={t}
                 />
               </div>
-
-              {state.hidden ? (
-                <HiddenPlaceholder
-                  title={item.title}
-                  onUnhide={() => onToggleHidden(item.id)}
-                  t={t}
-                />
-              ) : (
-                <div className="pointer-events-none relative flex-1 select-none overflow-hidden">
-                  {item.node}
-                </div>
-              )}
-            </div>
-
-            {/* Resize handles — pointer-only (keyboard resize is Shift+arrows on
-                the header), so they're kept out of the tab order. */}
-            {!state.hidden && (
-              <>
-                <button
-                  type="button"
-                  tabIndex={-1}
-                  aria-label={t('projects:detail.dashboard.resizeWidth', { name: item.title })}
-                  onPointerDown={(e) => beginDrag(e, item.id, 'resize-e')}
-                  className="absolute top-9 bottom-4 right-0 w-1.5 cursor-ew-resize touch-none rounded-full hover:bg-primary/40"
-                />
-                <button
-                  type="button"
-                  tabIndex={-1}
-                  aria-label={t('projects:detail.dashboard.resizeHeight', { name: item.title })}
-                  onPointerDown={(e) => beginDrag(e, item.id, 'resize-s')}
-                  className="absolute bottom-0 left-4 right-4 h-1.5 cursor-ns-resize touch-none rounded-full hover:bg-primary/40"
-                />
-                <button
-                  type="button"
-                  tabIndex={-1}
-                  aria-label={t('projects:detail.dashboard.resize', { name: item.title })}
-                  onPointerDown={(e) => beginDrag(e, item.id, 'resize-se')}
-                  className="absolute right-0.5 bottom-0.5 flex size-4 cursor-nwse-resize touch-none items-center justify-center rounded text-muted-foreground hover:text-foreground"
-                >
-                  <i
-                    className="fa-solid fa-up-right-and-down-left-from-center text-[9px]"
-                    aria-hidden="true"
-                  ></i>
-                </button>
-              </>
+            )}
+            {state.hidden ? (
+              <HiddenPlaceholder
+                title={item.title}
+                onUnhide={() => onToggleHidden(state.id)}
+                t={t}
+              />
+            ) : (
+              <div className="overflow-hidden">{item.node}</div>
             )}
           </div>
         );
@@ -495,6 +426,160 @@ const DashboardGrid: React.FC<DashboardGridProps> = ({
     </div>
   );
 };
+
+const DashboardSnapTarget: React.FC<{
+  activeDrag: DragState | null;
+  rectStyle: (state: DashboardWidgetState) => React.CSSProperties;
+}> = ({ activeDrag, rectStyle }) => {
+  if (activeDrag?.mode !== 'move') return null;
+  const target = activeDrag.preview.find((w) => w.id === activeDrag.id);
+  if (!target) return null;
+  return (
+    <div
+      aria-hidden="true"
+      className="pointer-events-none absolute z-0 rounded-xl border-2 border-dashed border-primary/50 bg-primary/5 transition-all"
+      style={rectStyle(target)}
+    />
+  );
+};
+
+interface DashboardGridPlacedItemProps {
+  item: ResolvedItem;
+  state: DashboardWidgetState;
+  editing: boolean;
+  activeDrag: DragState | null;
+  rectStyle: (state: DashboardWidgetState) => React.CSSProperties;
+  beginDrag: BeginDragHandler;
+  onItemKeyDown: ItemKeyDownHandler;
+  onToggleHidden: (id: string) => void;
+  t: TFn;
+}
+
+const DashboardGridPlacedItem: React.FC<DashboardGridPlacedItemProps> = ({
+  item,
+  state,
+  editing,
+  activeDrag,
+  rectStyle,
+  beginDrag,
+  onItemKeyDown,
+  onToggleHidden,
+  t,
+}) => {
+  const isActive = activeDrag?.id === item.id;
+  const isMoving = isActive && activeDrag?.mode === 'move';
+  const style: React.CSSProperties = isMoving
+    ? {
+        ...rectStyle(activeDrag.origin),
+        transform: `translate(${activeDrag.dxPx}px, ${activeDrag.dyPx}px)`,
+        zIndex: 30,
+      }
+    : { ...rectStyle(state), zIndex: isActive ? 20 : undefined };
+
+  if (!editing) {
+    return (
+      <div className="overflow-hidden" style={style}>
+        <div className="h-full overflow-hidden">{item.node}</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className={cn('flex flex-col', !isMoving && 'transition-all')} style={style}>
+      <div
+        className={cn(
+          'flex h-full flex-col overflow-hidden rounded-xl ring-2',
+          isActive ? 'ring-primary' : 'ring-primary/30',
+        )}
+      >
+        <DashboardGridItemHeader
+          item={item}
+          state={state}
+          beginDrag={beginDrag}
+          onItemKeyDown={onItemKeyDown}
+          onToggleHidden={onToggleHidden}
+          t={t}
+        />
+        {state.hidden ? (
+          <HiddenPlaceholder title={item.title} onUnhide={() => onToggleHidden(item.id)} t={t} />
+        ) : (
+          <div className="pointer-events-none relative flex-1 select-none overflow-hidden">
+            {item.node}
+          </div>
+        )}
+      </div>
+      {!state.hidden && <DashboardResizeHandles item={item} beginDrag={beginDrag} t={t} />}
+    </div>
+  );
+};
+
+const DashboardGridItemHeader: React.FC<{
+  item: ResolvedItem;
+  state: DashboardWidgetState;
+  beginDrag: BeginDragHandler;
+  onItemKeyDown: ItemKeyDownHandler;
+  onToggleHidden: (id: string) => void;
+  t: TFn;
+}> = ({ item, state, beginDrag, onItemKeyDown, onToggleHidden, t }) => (
+  <div className="flex shrink-0 items-center gap-1 border-b border-dashed border-primary/40 bg-muted/50 px-1.5 py-1">
+    <button
+      type="button"
+      aria-label={t('projects:detail.dashboard.dragHandle', { name: item.title })}
+      onPointerDown={(e) => beginDrag(e, item.id, 'move')}
+      onKeyDown={(e) => onItemKeyDown(e, item.id)}
+      className="flex min-w-0 flex-1 cursor-move touch-none items-center gap-2 text-left"
+    >
+      <i
+        className="fa-solid fa-up-down-left-right text-xs text-muted-foreground"
+        aria-hidden="true"
+      ></i>
+      <span className="truncate text-xs font-medium text-foreground" title={item.title}>
+        {item.title}
+      </span>
+    </button>
+    <HideButton
+      hidden={state.hidden}
+      title={item.title}
+      onToggle={() => onToggleHidden(item.id)}
+      t={t}
+    />
+  </div>
+);
+
+const DashboardResizeHandles: React.FC<{
+  item: ResolvedItem;
+  beginDrag: BeginDragHandler;
+  t: TFn;
+}> = ({ item, beginDrag, t }) => (
+  <>
+    <button
+      type="button"
+      tabIndex={-1}
+      aria-label={t('projects:detail.dashboard.resizeWidth', { name: item.title })}
+      onPointerDown={(e) => beginDrag(e, item.id, 'resize-e')}
+      className="absolute top-9 bottom-4 right-0 w-1.5 cursor-ew-resize touch-none rounded-full hover:bg-primary/40"
+    />
+    <button
+      type="button"
+      tabIndex={-1}
+      aria-label={t('projects:detail.dashboard.resizeHeight', { name: item.title })}
+      onPointerDown={(e) => beginDrag(e, item.id, 'resize-s')}
+      className="absolute bottom-0 left-4 right-4 h-1.5 cursor-ns-resize touch-none rounded-full hover:bg-primary/40"
+    />
+    <button
+      type="button"
+      tabIndex={-1}
+      aria-label={t('projects:detail.dashboard.resize', { name: item.title })}
+      onPointerDown={(e) => beginDrag(e, item.id, 'resize-se')}
+      className="absolute right-0.5 bottom-0.5 flex size-4 cursor-nwse-resize touch-none items-center justify-center rounded text-muted-foreground hover:text-foreground"
+    >
+      <i
+        className="fa-solid fa-up-right-and-down-left-from-center text-[9px]"
+        aria-hidden="true"
+      ></i>
+    </button>
+  </>
+);
 
 type TFn = (key: string, opts?: Record<string, unknown>) => string;
 

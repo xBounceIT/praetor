@@ -152,8 +152,10 @@ const Modal: React.FC<ModalProps> = ({
     }
   };
 
+  if (!isOpen) return null;
+
   return (
-    <Dialog open={isOpen} onOpenChange={handleOpenChange}>
+    <Dialog open onOpenChange={handleOpenChange}>
       <DialogContent
         ref={contentRef}
         showCloseButton={false}

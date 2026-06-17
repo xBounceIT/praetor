@@ -61,6 +61,27 @@ describe('<Modal />', () => {
     expect(document.body.style.overflow).toBe('hidden');
   });
 
+  test('removes the portal immediately when a controlled modal closes', () => {
+    const { rerender } = render(
+      <Modal isOpen={true} onClose={() => {}}>
+        <div data-testid="modal-content">Hi</div>
+      </Modal>,
+    );
+
+    expect(document.body.querySelector('[data-slot="dialog-overlay"]')).not.toBeNull();
+
+    rerender(
+      <Modal isOpen={false} onClose={() => {}}>
+        <div data-testid="modal-content">Hi</div>
+      </Modal>,
+    );
+
+    expect(screen.queryByTestId('modal-content')).toBeNull();
+    expect(document.body.querySelector('[data-slot="dialog-overlay"]')).toBeNull();
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(document.body.style.overflow).toBe('');
+  });
+
   test('focuses the first focusable child when opened', async () => {
     render(
       <Modal isOpen={true} onClose={() => {}}>

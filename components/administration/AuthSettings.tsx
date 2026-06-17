@@ -16,7 +16,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import type React from 'react';
-import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useReducer, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { siOpenid } from 'simple-icons';
 import { cn } from '@/lib/utils';
@@ -55,6 +55,11 @@ const PEM_BEGIN_MARKER = '-----BEGIN CERTIFICATE-----';
 const PEM_END_MARKER = '-----END CERTIFICATE-----';
 
 type SsoSecretFieldKey = 'clientSecret' | 'privateKey' | 'metadataXml' | 'idpCert';
+type AcsUrlState =
+  | { status: 'loading' }
+  | { status: 'ready'; template: string }
+  | { status: 'error'; message: string };
+type RoleOption = { id: string; name: string };
 
 export interface AuthSettingsProps {
   config: LdapConfig;
@@ -186,7 +191,119 @@ const LDAP_ROLE_RESOLUTION_HELP_KEYS: Partial<Record<LdapRoleResolution, string>
   rejected: 'admin.ldap.test.rejectedRoleHelp',
 };
 
-const AuthSettings: React.FC<AuthSettingsProps> = ({
+type AuthSettingsTab = 'ldap' | 'mfa' | SsoProtocol;
+type StateUpdate<T> = T | ((prev: T) => T);
+
+type AuthSettingsState = {
+  activeTab: AuthSettingsTab;
+  ldapForm: LdapConfig;
+  providerDrafts: Record<SsoProtocol, Partial<SsoProvider>>;
+  replacingSecrets: Record<SsoProtocol, Partial<Record<SsoSecretFieldKey, boolean>>>;
+  errors: Record<string, string>;
+  testUsername: string;
+  testPassword: string;
+  testErrors: Record<string, string>;
+  testResult: LdapTestResponse | null;
+  isTestingLdap: boolean;
+  isSaved: boolean;
+  isSavingLdap: boolean;
+  savingProvider: SsoProtocol | null;
+  providerSaveErrors: Partial<Record<SsoProtocol, string>>;
+  acsUrlState: AcsUrlState;
+};
+
+type AuthSettingsAction =
+  | { type: 'setActiveTab'; update: StateUpdate<AuthSettingsState['activeTab']> }
+  | { type: 'setLdapForm'; update: StateUpdate<AuthSettingsState['ldapForm']> }
+  | { type: 'setProviderDrafts'; update: StateUpdate<AuthSettingsState['providerDrafts']> }
+  | { type: 'setReplacingSecrets'; update: StateUpdate<AuthSettingsState['replacingSecrets']> }
+  | { type: 'setErrors'; update: StateUpdate<AuthSettingsState['errors']> }
+  | { type: 'setTestUsername'; update: StateUpdate<AuthSettingsState['testUsername']> }
+  | { type: 'setTestPassword'; update: StateUpdate<AuthSettingsState['testPassword']> }
+  | { type: 'setTestErrors'; update: StateUpdate<AuthSettingsState['testErrors']> }
+  | { type: 'setTestResult'; update: StateUpdate<AuthSettingsState['testResult']> }
+  | { type: 'setIsTestingLdap'; update: StateUpdate<AuthSettingsState['isTestingLdap']> }
+  | { type: 'setIsSaved'; update: StateUpdate<AuthSettingsState['isSaved']> }
+  | { type: 'setIsSavingLdap'; update: StateUpdate<AuthSettingsState['isSavingLdap']> }
+  | { type: 'setSavingProvider'; update: StateUpdate<AuthSettingsState['savingProvider']> }
+  | {
+      type: 'setProviderSaveErrors';
+      update: StateUpdate<AuthSettingsState['providerSaveErrors']>;
+    }
+  | { type: 'setAcsUrlState'; update: StateUpdate<AuthSettingsState['acsUrlState']> };
+
+const resolveStateUpdate = <T,>(current: T, update: StateUpdate<T>): T =>
+  typeof update === 'function' ? (update as (prev: T) => T)(current) : update;
+
+const createAuthSettingsState = (): AuthSettingsState => ({
+  activeTab: 'ldap',
+  ldapForm: DEFAULT_LDAP_CONFIG,
+  providerDrafts: {
+    oidc: buildDefaultProvider('oidc'),
+    saml: buildDefaultProvider('saml'),
+  },
+  replacingSecrets: { oidc: {}, saml: {} },
+  errors: {},
+  testUsername: '',
+  testPassword: '',
+  testErrors: {},
+  testResult: null,
+  isTestingLdap: false,
+  isSaved: false,
+  isSavingLdap: false,
+  savingProvider: null,
+  providerSaveErrors: {},
+  acsUrlState: { status: 'loading' },
+});
+
+const authSettingsReducer = (
+  state: AuthSettingsState,
+  action: AuthSettingsAction,
+): AuthSettingsState => {
+  switch (action.type) {
+    case 'setActiveTab':
+      return { ...state, activeTab: resolveStateUpdate(state.activeTab, action.update) };
+    case 'setLdapForm':
+      return { ...state, ldapForm: resolveStateUpdate(state.ldapForm, action.update) };
+    case 'setProviderDrafts':
+      return {
+        ...state,
+        providerDrafts: resolveStateUpdate(state.providerDrafts, action.update),
+      };
+    case 'setReplacingSecrets':
+      return {
+        ...state,
+        replacingSecrets: resolveStateUpdate(state.replacingSecrets, action.update),
+      };
+    case 'setErrors':
+      return { ...state, errors: resolveStateUpdate(state.errors, action.update) };
+    case 'setTestUsername':
+      return { ...state, testUsername: resolveStateUpdate(state.testUsername, action.update) };
+    case 'setTestPassword':
+      return { ...state, testPassword: resolveStateUpdate(state.testPassword, action.update) };
+    case 'setTestErrors':
+      return { ...state, testErrors: resolveStateUpdate(state.testErrors, action.update) };
+    case 'setTestResult':
+      return { ...state, testResult: resolveStateUpdate(state.testResult, action.update) };
+    case 'setIsTestingLdap':
+      return { ...state, isTestingLdap: resolveStateUpdate(state.isTestingLdap, action.update) };
+    case 'setIsSaved':
+      return { ...state, isSaved: resolveStateUpdate(state.isSaved, action.update) };
+    case 'setIsSavingLdap':
+      return { ...state, isSavingLdap: resolveStateUpdate(state.isSavingLdap, action.update) };
+    case 'setSavingProvider':
+      return { ...state, savingProvider: resolveStateUpdate(state.savingProvider, action.update) };
+    case 'setProviderSaveErrors':
+      return {
+        ...state,
+        providerSaveErrors: resolveStateUpdate(state.providerSaveErrors, action.update),
+      };
+    case 'setAcsUrlState':
+      return { ...state, acsUrlState: resolveStateUpdate(state.acsUrlState, action.update) };
+  }
+};
+
+const useAuthSettingsController = ({
   config,
   onSave,
   roles,
@@ -202,10 +319,105 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
   exemptRoleIds,
   onSetExemptRoleIds,
   canManageMfa,
-}) => {
+}: AuthSettingsProps) => {
   const { t } = useTranslation('auth');
-  const [activeTab, setActiveTab] = useState<'ldap' | 'mfa' | SsoProtocol>('ldap');
-  const [ldapForm, setLdapForm] = useState<LdapConfig>(DEFAULT_LDAP_CONFIG);
+  const [authState, dispatchAuthState] = useReducer(
+    authSettingsReducer,
+    undefined,
+    createAuthSettingsState,
+  );
+  const {
+    activeTab,
+    ldapForm,
+    providerDrafts,
+    replacingSecrets,
+    errors,
+    testUsername,
+    testPassword,
+    testErrors,
+    testResult,
+    isTestingLdap,
+    isSaved,
+    isSavingLdap,
+    savingProvider,
+    providerSaveErrors,
+    acsUrlState,
+  } = authState;
+  const setActiveTab = useCallback(
+    (update: StateUpdate<AuthSettingsState['activeTab']>) =>
+      dispatchAuthState({ type: 'setActiveTab', update }),
+    [],
+  );
+  const setLdapForm = useCallback(
+    (update: StateUpdate<AuthSettingsState['ldapForm']>) =>
+      dispatchAuthState({ type: 'setLdapForm', update }),
+    [],
+  );
+  const setProviderDrafts = useCallback(
+    (update: StateUpdate<AuthSettingsState['providerDrafts']>) =>
+      dispatchAuthState({ type: 'setProviderDrafts', update }),
+    [],
+  );
+  const setReplacingSecrets = useCallback(
+    (update: StateUpdate<AuthSettingsState['replacingSecrets']>) =>
+      dispatchAuthState({ type: 'setReplacingSecrets', update }),
+    [],
+  );
+  const setErrors = useCallback(
+    (update: StateUpdate<AuthSettingsState['errors']>) =>
+      dispatchAuthState({ type: 'setErrors', update }),
+    [],
+  );
+  const setTestUsername = useCallback(
+    (update: StateUpdate<AuthSettingsState['testUsername']>) =>
+      dispatchAuthState({ type: 'setTestUsername', update }),
+    [],
+  );
+  const setTestPassword = useCallback(
+    (update: StateUpdate<AuthSettingsState['testPassword']>) =>
+      dispatchAuthState({ type: 'setTestPassword', update }),
+    [],
+  );
+  const setTestErrors = useCallback(
+    (update: StateUpdate<AuthSettingsState['testErrors']>) =>
+      dispatchAuthState({ type: 'setTestErrors', update }),
+    [],
+  );
+  const setTestResult = useCallback(
+    (update: StateUpdate<AuthSettingsState['testResult']>) =>
+      dispatchAuthState({ type: 'setTestResult', update }),
+    [],
+  );
+  const setIsTestingLdap = useCallback(
+    (update: StateUpdate<AuthSettingsState['isTestingLdap']>) =>
+      dispatchAuthState({ type: 'setIsTestingLdap', update }),
+    [],
+  );
+  const setIsSaved = useCallback(
+    (update: StateUpdate<AuthSettingsState['isSaved']>) =>
+      dispatchAuthState({ type: 'setIsSaved', update }),
+    [],
+  );
+  const setIsSavingLdap = useCallback(
+    (update: StateUpdate<AuthSettingsState['isSavingLdap']>) =>
+      dispatchAuthState({ type: 'setIsSavingLdap', update }),
+    [],
+  );
+  const setSavingProvider = useCallback(
+    (update: StateUpdate<AuthSettingsState['savingProvider']>) =>
+      dispatchAuthState({ type: 'setSavingProvider', update }),
+    [],
+  );
+  const setProviderSaveErrors = useCallback(
+    (update: StateUpdate<AuthSettingsState['providerSaveErrors']>) =>
+      dispatchAuthState({ type: 'setProviderSaveErrors', update }),
+    [],
+  );
+  const setAcsUrlState = useCallback(
+    (update: StateUpdate<AuthSettingsState['acsUrlState']>) =>
+      dispatchAuthState({ type: 'setAcsUrlState', update }),
+    [],
+  );
   const loadedLdapConfigRef = useRef<LdapConfig | null | undefined>(null);
   const hasLoadedLdapConfigRef = useRef(false);
   const bindPasswordReplace = useSecretReplaceState(
@@ -213,30 +425,6 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
     (bindPassword) => setLdapForm((prev) => ({ ...prev, bindPassword })),
     config,
   );
-  const [providerDrafts, setProviderDrafts] = useState<Record<SsoProtocol, Partial<SsoProvider>>>({
-    oidc: buildDefaultProvider('oidc'),
-    saml: buildDefaultProvider('saml'),
-  });
-  const [replacingSecrets, setReplacingSecrets] = useState<
-    Record<SsoProtocol, Partial<Record<SsoSecretFieldKey, boolean>>>
-  >({ oidc: {}, saml: {} });
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  const [testUsername, setTestUsername] = useState('');
-  const [testPassword, setTestPassword] = useState('');
-  const [testErrors, setTestErrors] = useState<Record<string, string>>({});
-  const [testResult, setTestResult] = useState<LdapTestResponse | null>(null);
-  const [isTestingLdap, setIsTestingLdap] = useState(false);
-  const [isSaved, setIsSaved] = useState(false);
-  const [isSavingLdap, setIsSavingLdap] = useState(false);
-  const [savingProvider, setSavingProvider] = useState<SsoProtocol | null>(null);
-  const [providerSaveErrors, setProviderSaveErrors] = useState<
-    Partial<Record<SsoProtocol, string>>
-  >({});
-  type AcsUrlState =
-    | { status: 'loading' }
-    | { status: 'ready'; template: string }
-    | { status: 'error'; message: string };
-  const [acsUrlState, setAcsUrlState] = useState<AcsUrlState>({ status: 'loading' });
   const tlsCaFileInputRef = useRef<HTMLInputElement>(null);
 
   if (!hasLoadedLdapConfigRef.current || loadedLdapConfigRef.current !== config) {
@@ -278,7 +466,7 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [activeTab, acsUrlState.status]);
+  }, [activeTab, acsUrlState.status, setAcsUrlState]);
 
   const handleTlsCaFileImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -594,7 +782,802 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
     }
   };
 
-  const renderProviderList = (protocol: SsoProtocol) => (
+  return {
+    acsUrlState,
+    activeTab,
+    bindPasswordReplace,
+    canManageMfa,
+    enableTotp,
+    enforceTotp,
+    enforcedRoleIds,
+    errors,
+    exemptRoleIds,
+    handleActiveTabSelect,
+    handleSaveLdap,
+    handleSaveProvider,
+    handleTestLdap,
+    handleTlsCaFileImport,
+    isLdapDirty,
+    isSaved,
+    isSavingLdap,
+    isTestingLdap,
+    ldapForm,
+    loadProviderDraft,
+    onDeleteSsoProvider,
+    onSetEnableTotp,
+    onSetEnforceTotp,
+    onSetEnforcedRoleIds,
+    onSetExemptRoleIds,
+    providerDrafts,
+    providerSaveErrors,
+    providersByProtocol,
+    replacingSecrets,
+    roleOptions,
+    savingProvider,
+    setErrors,
+    setLdapForm,
+    setTestErrors,
+    setTestPassword,
+    setTestUsername,
+    startReplaceSecret,
+    cancelReplaceSecret,
+    t,
+    testErrors,
+    testPassword,
+    testResult,
+    testUsername,
+    tlsCaFileInputRef,
+    updateLdapMapping,
+    updateProviderDraft,
+    updateProviderMapping,
+  };
+};
+
+type AuthSettingsController = ReturnType<typeof useAuthSettingsController>;
+
+const AuthSettings: React.FC<AuthSettingsProps> = (props) => {
+  const controller = useAuthSettingsController(props);
+  return <AuthSettingsLayout controller={controller} />;
+};
+
+const AuthSettingsLayout: React.FC<{ controller: AuthSettingsController }> = ({ controller }) => (
+  <div className="max-w-5xl mx-auto space-y-8">
+    <AuthSettingsHeader controller={controller} />
+    <AuthSettingsTabs controller={controller} />
+    <AuthSettingsPanel controller={controller} />
+  </div>
+);
+
+const AuthSettingsHeader: React.FC<{ controller: AuthSettingsController }> = ({ controller }) => (
+  <div className="flex justify-between items-center">
+    <div>
+      <h2 className="text-2xl font-semibold text-foreground">{controller.t('admin.title')}</h2>
+      <p className="text-sm text-muted-foreground mt-1">{controller.t('admin.subtitle')}</p>
+    </div>
+    {controller.isSaved && (
+      <div className="bg-emerald-500 text-white px-4 py-2 rounded-lg shadow-md animate-in fade-in slide-in-from-right-4 flex items-center gap-2">
+        <Check aria-hidden="true" className="size-4" />{' '}
+        {controller.t('admin.ldap.changesSaved', 'Changes Saved')}
+      </div>
+    )}
+  </div>
+);
+
+const AuthSettingsTabs: React.FC<{ controller: AuthSettingsController }> = ({ controller }) => (
+  <div className="flex border-b border-border gap-8">
+    <AuthTabButton
+      tab="ldap"
+      activeTab={controller.activeTab}
+      icon={<FolderTree aria-hidden="true" className="size-4" />}
+      label={controller.t('admin.tabs.ldap', 'LDAP / Active Directory')}
+      onSelect={controller.handleActiveTabSelect}
+    />
+    <AuthTabButton
+      tab="oidc"
+      activeTab={controller.activeTab}
+      icon={<OpenIdIcon className="size-4" />}
+      label={controller.t('admin.tabs.oidc', 'OpenID Connect')}
+      onSelect={controller.handleActiveTabSelect}
+    />
+    <AuthTabButton
+      tab="saml"
+      activeTab={controller.activeTab}
+      icon={<Building2 aria-hidden="true" className="size-4" />}
+      label={controller.t('admin.tabs.saml', 'SAML')}
+      onSelect={controller.handleActiveTabSelect}
+    />
+    {controller.canManageMfa && (
+      <AuthTabButton
+        tab="mfa"
+        activeTab={controller.activeTab}
+        icon={<ShieldCheck aria-hidden="true" className="size-4" />}
+        label={controller.t('admin.tabs.mfa', 'Multi-Factor Auth')}
+        onSelect={controller.handleActiveTabSelect}
+      />
+    )}
+  </div>
+);
+
+const AuthSettingsPanel: React.FC<{ controller: AuthSettingsController }> = ({ controller }) => {
+  if (controller.activeTab === 'mfa' && controller.canManageMfa) {
+    return <MfaPolicyPanel controller={controller} />;
+  }
+  if (controller.activeTab === 'ldap') return <LdapSettingsPanel controller={controller} />;
+  if (controller.activeTab === 'oidc' || controller.activeTab === 'saml') {
+    return <SsoSettingsPanel controller={controller} protocol={controller.activeTab} />;
+  }
+  return null;
+};
+
+const MfaPolicyPanel: React.FC<{ controller: AuthSettingsController }> = ({ controller }) => (
+  <div className="space-y-8">
+    <Card className="gap-0 overflow-hidden rounded-lg border-border bg-background py-0">
+      <CardHeader className="border-b border-border bg-muted/40 px-6 py-4 [.border-b]:pb-4">
+        <CardTitle className="flex items-center gap-3 text-base">
+          <ShieldCheck aria-hidden="true" className="size-4 text-praetor" />
+          {controller.t('mfa.enable.label', 'Enable two-factor authentication')}
+        </CardTitle>
+        <CardDescription>
+          {controller.t(
+            'mfa.enable.description',
+            'Allow users with local or LDAP credentials to secure their account with an authenticator app. When off, 2FA is unavailable org-wide and no one is challenged at sign-in.',
+          )}
+        </CardDescription>
+        <CardAction>
+          <Switch
+            id="enable-totp"
+            checked={controller.enableTotp}
+            onCheckedChange={controller.onSetEnableTotp}
+            aria-label={controller.t('mfa.enable.label', 'Enable two-factor authentication')}
+          />
+        </CardAction>
+      </CardHeader>
+      <CardContent className="p-6">
+        <p className="text-xs text-muted-foreground">
+          {controller.t(
+            'mfa.ssoNote',
+            'Users signing in through SSO (OIDC or SAML) are governed by their identity provider and are never subject to Praetor 2FA.',
+          )}
+        </p>
+      </CardContent>
+    </Card>
+    <MfaEnforcementCard controller={controller} />
+  </div>
+);
+
+const MfaEnforcementCard: React.FC<{ controller: AuthSettingsController }> = ({ controller }) => (
+  <Card className="gap-0 overflow-hidden rounded-lg border-border bg-background py-0">
+    <CardHeader className="border-b border-border bg-muted/40 px-6 py-4 [.border-b]:pb-4">
+      <CardTitle className="flex items-center gap-3 text-base">
+        <ShieldCheck aria-hidden="true" className="size-4 text-praetor" />
+        {controller.t('mfa.enforce.label', 'Enforce two-factor authentication')}
+      </CardTitle>
+      <CardDescription>
+        {controller.t(
+          'mfa.enforce.description',
+          'Require enrolled 2FA for the selected roles. Affected users without 2FA are guided through setup at their next sign-in.',
+        )}
+      </CardDescription>
+      <CardAction>
+        <Switch
+          id="enforce-totp"
+          checked={controller.enforceTotp}
+          disabled={!controller.enableTotp}
+          onCheckedChange={controller.onSetEnforceTotp}
+          aria-label={controller.t('mfa.enforce.label', 'Enforce two-factor authentication')}
+        />
+      </CardAction>
+    </CardHeader>
+    <CardContent className="space-y-6 p-6">
+      <MfaRoleSelect
+        controller={controller}
+        id="totp-enforced-roles"
+        label={controller.t('mfa.enforcedRoles.label', 'Enforce 2FA for these roles')}
+        description={controller.t(
+          'mfa.enforcedRoles.description',
+          'Users holding any selected role must use 2FA. Leave empty to require it for everyone (local/LDAP).',
+        )}
+        value={controller.enforcedRoleIds}
+        placeholder={controller.t('mfa.enforcedRoles.placeholder', 'Everyone (local/LDAP)')}
+        onChange={controller.onSetEnforcedRoleIds}
+      />
+      <MfaRoleSelect
+        controller={controller}
+        id="totp-exempt-roles"
+        label={controller.t('mfa.exemptRoles.label', 'Exempt these roles from 2FA')}
+        description={controller.t(
+          'mfa.exemptRoles.description',
+          'Users holding any selected role are never required to use 2FA, even if another of their roles is enforced.',
+        )}
+        value={controller.exemptRoleIds}
+        placeholder={controller.t('mfa.exemptRoles.placeholder', 'No exemptions')}
+        onChange={controller.onSetExemptRoleIds}
+      />
+    </CardContent>
+  </Card>
+);
+
+const MfaRoleSelect: React.FC<{
+  controller: AuthSettingsController;
+  id: string;
+  label: string;
+  description: string;
+  value: string[];
+  placeholder: string;
+  onChange: (value: string[]) => void | Promise<void>;
+}> = ({ controller, id, label, description, value, placeholder, onChange }) => (
+  <UIField>
+    <FieldLabel htmlFor={id}>{label}</FieldLabel>
+    <FieldDescription>{description}</FieldDescription>
+    <SelectControl
+      id={id}
+      isMulti
+      searchable
+      disabled={!controller.enableTotp || !controller.enforceTotp}
+      options={controller.roleOptions}
+      value={value}
+      onChange={(nextValue) => onChange(Array.isArray(nextValue) ? nextValue : [nextValue])}
+      placeholder={placeholder}
+    />
+  </UIField>
+);
+
+const LdapSettingsPanel: React.FC<{ controller: AuthSettingsController }> = ({ controller }) => (
+  <div className="space-y-8">
+    <form onSubmit={controller.handleSaveLdap} className="space-y-8">
+      <LdapServerCard controller={controller} />
+      <LdapTlsCard controller={controller} />
+      {controller.errors.general && (
+        <div
+          role="alert"
+          className="rounded-md border border-destructive/20 bg-destructive/10 p-4 text-sm font-medium text-destructive"
+        >
+          {controller.errors.general}
+        </div>
+      )}
+      <div className="flex justify-end">
+        <Button
+          type="submit"
+          size="lg"
+          disabled={controller.isSavingLdap || !controller.isLdapDirty}
+        >
+          <Save aria-hidden="true" />
+          {controller.t('admin.ldap.saveConfiguration', 'Save Configuration')}
+        </Button>
+      </div>
+    </form>
+    <LdapTesterCard controller={controller} />
+  </div>
+);
+
+const LdapServerCard: React.FC<{ controller: AuthSettingsController }> = ({ controller }) => (
+  <Card className="gap-0 overflow-hidden rounded-lg border-border bg-background py-0">
+    <CardHeader className="border-b border-border bg-muted/40 px-6 py-4 [.border-b]:pb-4">
+      <CardTitle className="flex items-center gap-3 text-base">
+        <Server aria-hidden="true" className="size-4 text-praetor" />
+        {controller.t('admin.ldap.serverConfig')}
+      </CardTitle>
+      <CardDescription>
+        {controller.t(
+          'admin.ldap.serverConfigDescription',
+          'Connect Praetor to your LDAP or Active Directory to authenticate users.',
+        )}
+      </CardDescription>
+      <CardAction>
+        <UIField className="flex-row items-center gap-2">
+          <Switch
+            id="ldap-enabled"
+            checked={controller.ldapForm.enabled}
+            onCheckedChange={(enabled) => controller.setLdapForm((prev) => ({ ...prev, enabled }))}
+          />
+          <FieldLabel htmlFor="ldap-enabled">{controller.t('admin.ldap.enabled')}</FieldLabel>
+        </UIField>
+      </CardAction>
+    </CardHeader>
+    <LdapConnectionFields controller={controller} />
+    <LdapAttributeMapping controller={controller} />
+    <LdapProvisioningSettings controller={controller} />
+    <LdapRoleMappings controller={controller} />
+  </Card>
+);
+
+const LdapConnectionFields: React.FC<{ controller: AuthSettingsController }> = ({ controller }) => (
+  <CardContent className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+    <Field
+      label={controller.t('admin.ldap.serverUrlLabel')}
+      value={controller.ldapForm.serverUrl}
+      error={controller.errors.serverUrl}
+      monospace
+      required={controller.ldapForm.enabled}
+      onChange={(serverUrl) => controller.setLdapForm((prev) => ({ ...prev, serverUrl }))}
+    />
+    <Field
+      label={controller.t('admin.ldap.baseDnLabel')}
+      value={controller.ldapForm.baseDn}
+      error={controller.errors.baseDn}
+      monospace
+      required={controller.ldapForm.enabled}
+      onChange={(baseDn) => controller.setLdapForm((prev) => ({ ...prev, baseDn }))}
+    />
+    <Field
+      label={controller.t('admin.ldap.userSearchFilter')}
+      value={controller.ldapForm.userFilter}
+      error={controller.errors.userFilter}
+      monospace
+      required={controller.ldapForm.enabled}
+      onChange={(userFilter) => controller.setLdapForm((prev) => ({ ...prev, userFilter }))}
+    />
+    <Field
+      label={controller.t('admin.ldap.bindDnLabel')}
+      value={controller.ldapForm.bindDn}
+      error={controller.errors.bindCredentials}
+      monospace
+      onChange={(bindDn) => controller.setLdapForm((prev) => ({ ...prev, bindDn }))}
+    />
+    <SecretField
+      {...controller.bindPasswordReplace}
+      label={controller.t('admin.ldap.bindPasswordLabel')}
+      value={controller.ldapForm.bindPassword}
+      monospace
+      onChange={(bindPassword) => controller.setLdapForm((prev) => ({ ...prev, bindPassword }))}
+      storedLabel={controller.t('admin.ldap.bindPasswordStored', 'Bind password stored')}
+      storedHelp={controller.t(
+        'admin.ldap.bindPasswordStoredHelp',
+        'Leave as-is to keep the stored password, or click Replace to overwrite it.',
+      )}
+      error={controller.errors.bindCredentials}
+      testId="ldap-bind-password"
+    />
+    <Field
+      label={controller.t('admin.ldap.groupSearchBase')}
+      value={controller.ldapForm.groupBaseDn}
+      error={controller.errors.groupBaseDn}
+      monospace
+      required={controller.ldapForm.enabled}
+      onChange={(groupBaseDn) => controller.setLdapForm((prev) => ({ ...prev, groupBaseDn }))}
+    />
+    <Field
+      label={controller.t('admin.ldap.groupMemberFilter')}
+      value={controller.ldapForm.groupFilter}
+      error={controller.errors.groupFilter}
+      monospace
+      required={controller.ldapForm.enabled}
+      onChange={(groupFilter) => controller.setLdapForm((prev) => ({ ...prev, groupFilter }))}
+    />
+  </CardContent>
+);
+
+const LdapAttributeMapping: React.FC<{ controller: AuthSettingsController }> = ({ controller }) => (
+  <fieldset className="border-t border-border p-6 space-y-4">
+    <legend className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-3">
+      {controller.t('admin.ldap.attributeMapping.heading', 'Attribute Mapping')}
+    </legend>
+    <FieldDescription>
+      {controller.t(
+        'admin.ldap.attributeMapping.description',
+        'Directory attributes used to populate each user’s name and email. Leave blank to use the defaults (givenName, sn, mail).',
+      )}
+    </FieldDescription>
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <Field
+        label={controller.t('admin.ldap.attributeMapping.firstNameLabel', 'First Name Attribute')}
+        value={controller.ldapForm.firstNameAttribute}
+        monospace
+        onChange={(firstNameAttribute) =>
+          controller.setLdapForm((prev) => ({ ...prev, firstNameAttribute }))
+        }
+      />
+      <Field
+        label={controller.t('admin.ldap.attributeMapping.lastNameLabel', 'Surname Attribute')}
+        value={controller.ldapForm.lastNameAttribute}
+        monospace
+        onChange={(lastNameAttribute) =>
+          controller.setLdapForm((prev) => ({ ...prev, lastNameAttribute }))
+        }
+      />
+      <Field
+        label={controller.t('admin.ldap.attributeMapping.emailLabel', 'Email Attribute')}
+        value={controller.ldapForm.emailAttribute}
+        monospace
+        onChange={(emailAttribute) =>
+          controller.setLdapForm((prev) => ({ ...prev, emailAttribute }))
+        }
+      />
+    </div>
+  </fieldset>
+);
+
+const LdapProvisioningSettings: React.FC<{ controller: AuthSettingsController }> = ({
+  controller,
+}) => (
+  <fieldset className="border-t border-border p-6 space-y-4">
+    <legend className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-3">
+      {controller.t('admin.ldap.provisioning.heading', 'User Provisioning')}
+    </legend>
+    <LdapProvisioningSwitch
+      controller={controller}
+      id="ldap-provision-on-login"
+      checked={controller.ldapForm.provisionOnLogin}
+      onChange={(provisionOnLogin) =>
+        controller.setLdapForm((prev) => ({ ...prev, provisionOnLogin }))
+      }
+      label={controller.t('admin.ldap.provisioning.onLoginLabel', 'Provision on first login')}
+      description={controller.t(
+        'admin.ldap.provisioning.onLoginHelp',
+        'When on, any LDAP user that authenticates successfully gets a local account created on first sign-in. Turn off to restrict logins to users that already have a local account (created manually or via sync).',
+      )}
+    />
+    <LdapProvisioningSwitch
+      controller={controller}
+      id="ldap-auto-provision-all"
+      checked={controller.ldapForm.autoProvisionAll}
+      onChange={(autoProvisionAll) =>
+        controller.setLdapForm((prev) => ({ ...prev, autoProvisionAll }))
+      }
+      label={controller.t('admin.ldap.provisioning.autoAllLabel', 'Bulk-provision during sync')}
+      description={controller.t(
+        'admin.ldap.provisioning.autoAllHelp',
+        'When on, the periodic sync creates a local account for every LDAP entry that matches the user filter, applying group role mappings at creation. When off, sync only refreshes display names of users that already exist. Either way, role mappings are never re-applied to users that already exist in Praetor.',
+      )}
+    />
+  </fieldset>
+);
+
+const LdapProvisioningSwitch: React.FC<{
+  controller: AuthSettingsController;
+  id: string;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  label: string;
+  description: string;
+}> = ({ id, checked, onChange, label, description }) => (
+  <div className="flex items-start gap-3">
+    <Switch id={id} checked={checked} onCheckedChange={onChange} />
+    <div className="flex flex-1 flex-col gap-1.5">
+      <FieldLabel htmlFor={id} className="cursor-pointer">
+        {label}
+      </FieldLabel>
+      <FieldDescription>{description}</FieldDescription>
+    </div>
+  </div>
+);
+
+const LdapRoleMappings: React.FC<{ controller: AuthSettingsController }> = ({ controller }) => (
+  <div className="border-t border-border p-6">
+    <RoleMappings
+      mappings={controller.ldapForm.roleMappings.map((mapping) => ({
+        externalGroup: mapping.ldapGroup,
+        role: mapping.role,
+      }))}
+      roleOptions={controller.roleOptions}
+      errors={controller.errors}
+      errorPrefix="ldapRoleMapping_"
+      heading={controller.t('admin.ldap.roleMappings')}
+      addLabel={controller.t('admin.ldap.addMapping')}
+      noMappingsLabel={controller.t('admin.ldap.noMappingsConfigured')}
+      externalPlaceholder={controller.t('admin.ldap.ldapGroupPlaceholder', 'LDAP Group CN')}
+      onAdd={() =>
+        controller.setLdapForm((prev) => ({
+          ...prev,
+          roleMappings: [
+            ...controller.ldapForm.roleMappings,
+            { ldapGroup: '', role: controller.roleOptions[0]?.id || 'user' },
+          ],
+        }))
+      }
+      onRemove={(index) =>
+        controller.setLdapForm((prev) => ({
+          ...prev,
+          roleMappings: controller.ldapForm.roleMappings.filter((_, idx) => idx !== index),
+        }))
+      }
+      onChange={(index, field, value) =>
+        controller.updateLdapMapping(index, field === 'externalGroup' ? 'ldapGroup' : 'role', value)
+      }
+    />
+  </div>
+);
+
+const LdapTlsCard: React.FC<{ controller: AuthSettingsController }> = ({ controller }) => (
+  <Card className="gap-0 overflow-hidden rounded-lg border-border bg-background py-0">
+    <CardHeader className="border-b border-border bg-muted/40 px-6 py-4 [.border-b]:pb-4">
+      <CardTitle className="flex items-center gap-3 text-base">
+        <Lock aria-hidden="true" className="size-4 text-praetor" />
+        {controller.t('admin.ldap.tls.title', 'TLS / Certificates')}
+      </CardTitle>
+      <CardDescription>
+        {controller.t(
+          'admin.ldap.tls.description',
+          "Verify the LDAP server's certificate when connecting over ldaps://.",
+        )}
+      </CardDescription>
+    </CardHeader>
+    <CardContent className="p-6">
+      <UIField>
+        <FieldLabel htmlFor="ldap-tls-ca-textarea">
+          {controller.t('admin.ldap.tls.caCertificateLabel', 'Custom CA Certificate (Optional)')}
+        </FieldLabel>
+        <FieldDescription>
+          {controller.t(
+            'admin.ldap.tls.caCertificateHelp',
+            'Paste a PEM-encoded CA certificate or chain used to verify the LDAP server when using ldaps://. Required only if the server uses a certificate not signed by a publicly trusted CA.',
+          )}
+        </FieldDescription>
+        <LdapTlsTextarea controller={controller} />
+      </UIField>
+    </CardContent>
+  </Card>
+);
+
+const LdapTlsTextarea: React.FC<{ controller: AuthSettingsController }> = ({ controller }) => (
+  <>
+    <Textarea
+      id="ldap-tls-ca-textarea"
+      rows={8}
+      value={controller.ldapForm.tlsCaCertificate}
+      onChange={(event) => {
+        controller.setLdapForm((prev) => ({ ...prev, tlsCaCertificate: event.target.value }));
+        if (controller.errors.tlsCaCertificate) {
+          controller.setErrors((prev) => ({ ...prev, tlsCaCertificate: '' }));
+        }
+      }}
+      placeholder={`${PEM_BEGIN_MARKER}\nMIIDdzCCAl+gAwIBAgI...\n${PEM_END_MARKER}`}
+      aria-label={controller.t(
+        'admin.ldap.tls.caCertificateLabel',
+        'Custom CA Certificate (Optional)',
+      )}
+      aria-invalid={!!controller.errors.tlsCaCertificate}
+      className="font-mono text-xs leading-relaxed"
+      spellCheck={false}
+    />
+    {controller.errors.tlsCaCertificate && (
+      <FieldError errors={[{ message: controller.errors.tlsCaCertificate }]} />
+    )}
+    <div className="flex items-center gap-3 flex-wrap">
+      <Button
+        type="button"
+        variant="secondary"
+        size="sm"
+        onClick={() => controller.tlsCaFileInputRef.current?.click()}
+        className="text-xs font-bold"
+      >
+        <FileUp aria-hidden="true" />
+        {controller.t('admin.ldap.tls.importPemFile', 'Import .pem file')}
+      </Button>
+      {controller.ldapForm.tlsCaCertificate.trim() !== '' && (
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={() => {
+            controller.setLdapForm((prev) => ({ ...prev, tlsCaCertificate: '' }));
+            if (controller.errors.tlsCaCertificate) {
+              controller.setErrors((prev) => ({ ...prev, tlsCaCertificate: '' }));
+            }
+          }}
+          className="text-xs font-bold text-muted-foreground hover:text-destructive"
+        >
+          <Trash2 aria-hidden="true" />
+          {controller.t('admin.ldap.tls.clear', 'Clear')}
+        </Button>
+      )}
+      <span className="text-[10px] text-muted-foreground italic">
+        {controller.t(
+          'admin.ldap.tls.caClearedHint',
+          'Leave blank to use the system trust store (or LDAP_TLS_CA_FILE env var if set).',
+        )}
+      </span>
+    </div>
+    <input
+      ref={controller.tlsCaFileInputRef}
+      type="file"
+      accept=".pem,.crt,.cer,.cert"
+      onChange={controller.handleTlsCaFileImport}
+      aria-label={controller.t('admin.ldap.tls.importPemFile', 'Import .pem file')}
+      className="hidden"
+    />
+  </>
+);
+
+const LdapTesterCard: React.FC<{ controller: AuthSettingsController }> = ({ controller }) => (
+  <Card className="gap-0 overflow-hidden rounded-lg border-border bg-background py-0">
+    <CardHeader className="border-b border-border bg-muted/40 px-6 py-4 [.border-b]:pb-4">
+      <CardTitle className="flex items-center gap-3 text-base">
+        <FlaskConical aria-hidden="true" className="size-4 text-praetor" />
+        {controller.t('admin.ldap.connectionTester')}
+      </CardTitle>
+      <CardDescription>
+        {controller.t(
+          'admin.ldap.testDescription',
+          'Enter credentials to test authentication and group retrieval against the saved configuration.',
+        )}
+      </CardDescription>
+    </CardHeader>
+    <CardContent className="p-6 grid grid-cols-1 lg:grid-cols-[minmax(0,360px)_minmax(0,1fr)] gap-8">
+      <LdapTesterForm controller={controller} />
+      <LdapTesterOutput controller={controller} />
+    </CardContent>
+  </Card>
+);
+
+const LdapTesterForm: React.FC<{ controller: AuthSettingsController }> = ({ controller }) => (
+  <form onSubmit={controller.handleTestLdap} className="space-y-4">
+    {controller.isLdapDirty && (
+      <p className="text-[10px] font-bold text-amber-600 dark:text-amber-400">
+        {controller.t(
+          'admin.ldap.test.unsavedChanges',
+          'Save the LDAP configuration before testing recent changes.',
+        )}
+      </p>
+    )}
+    <Field
+      label={controller.t('admin.ldap.testUsername')}
+      value={controller.testUsername}
+      error={controller.testErrors.testUsername}
+      required
+      onChange={(value) => {
+        controller.setTestUsername(value);
+        if (controller.testErrors.testUsername) {
+          controller.setTestErrors((prev) => ({ ...prev, testUsername: '' }));
+        }
+      }}
+    />
+    <Field
+      label={controller.t('admin.ldap.testPassword')}
+      value={controller.testPassword}
+      type="password"
+      error={controller.testErrors.testPassword}
+      required
+      onChange={(value) => {
+        controller.setTestPassword(value);
+        if (controller.testErrors.testPassword) {
+          controller.setTestErrors((prev) => ({ ...prev, testPassword: '' }));
+        }
+      }}
+    />
+    <Button type="submit" size="lg" className="w-full" disabled={controller.isTestingLdap}>
+      {controller.isTestingLdap ? (
+        <Loader2 aria-hidden="true" className="animate-spin" />
+      ) : (
+        controller.t('admin.ldap.testAuthentication')
+      )}
+    </Button>
+  </form>
+);
+
+const LdapTesterOutput: React.FC<{ controller: AuthSettingsController }> = ({ controller }) => (
+  <div className="min-h-64 overflow-y-auto rounded-md border border-border bg-muted/40 p-4 font-mono text-xs">
+    {controller.isTestingLdap ? (
+      <div className="text-muted-foreground animate-pulse">
+        {controller.t('admin.ldap.test.connecting', 'Connecting to LDAP server...')}
+      </div>
+    ) : controller.testResult ? (
+      <LdapTestResult controller={controller} result={controller.testResult} />
+    ) : (
+      <div className="text-muted-foreground italic">
+        {controller.t('admin.ldap.test.waiting', 'Waiting for test execution...')}
+        <br />
+        <br />
+        <span className="opacity-70">
+          {controller.t('admin.ldap.test.logOutput', 'Log output will appear here after testing.')}
+        </span>
+      </div>
+    )}
+  </div>
+);
+
+const LdapTestResult: React.FC<{
+  controller: AuthSettingsController;
+  result: LdapTestResponse;
+}> = ({ controller, result }) => (
+  <div className="space-y-3">
+    <div
+      className={cn(
+        'font-bold',
+        result.authenticated ? 'text-emerald-600 dark:text-emerald-400' : 'text-destructive',
+      )}
+    >
+      [
+      {result.authenticated
+        ? controller.t('admin.ldap.test.success', 'SUCCESS')
+        : controller.t('admin.ldap.test.failure', 'FAILURE')}
+      ] {result.message}
+    </div>
+    {result.authenticated && <LdapAuthenticatedResult controller={controller} result={result} />}
+    <div className="border-t border-border pt-3">
+      <div className="text-muted-foreground mb-2">
+        {controller.t('admin.ldap.test.serverResponse', 'Server Response')}
+      </div>
+      <pre className="text-foreground/80 whitespace-pre-wrap break-words">
+        {JSON.stringify(result, null, 2)}
+      </pre>
+    </div>
+  </div>
+);
+
+const LdapAuthenticatedResult: React.FC<{
+  controller: AuthSettingsController;
+  result: LdapTestResponse;
+}> = ({ controller, result }) => {
+  const helpKey = LDAP_ROLE_RESOLUTION_HELP_KEYS[result.roleResolution];
+  return (
+    <div className="grid grid-cols-[96px_minmax(0,1fr)] gap-x-3 gap-y-2 text-muted-foreground">
+      <span>{controller.t('admin.ldap.test.userDn', 'User DN')}</span>
+      <span className="text-foreground break-all">{result.userDn || '-'}</span>
+      <span>{controller.t('admin.ldap.test.resolvedName', 'Name')}</span>
+      <span className="text-foreground break-all">
+        {[result.firstName, result.lastName].filter(Boolean).join(' ') || '-'}
+      </span>
+      <span>{controller.t('admin.ldap.test.resolvedEmail', 'Email')}</span>
+      <span className="text-foreground break-all">{result.email || '-'}</span>
+      <span>{controller.t(LDAP_ROLE_RESOLUTION_LABEL_KEYS[result.roleResolution])}</span>
+      <span className="text-foreground">
+        {result.roleIds.length ? result.roleIds.join(', ') : '-'}
+      </span>
+      {helpKey && (
+        <span
+          className="col-span-2 text-xs text-muted-foreground"
+          data-testid="ldap-test-role-resolution-help"
+        >
+          {controller.t(helpKey)}
+        </span>
+      )}
+      <span>{controller.t('admin.ldap.test.groupsFound', 'Groups Found:')}</span>
+      <span className="text-foreground">
+        {result.groups.length ? result.groups.join(', ') : '-'}
+      </span>
+    </div>
+  );
+};
+
+const SsoSettingsPanel: React.FC<{
+  controller: AuthSettingsController;
+  protocol: SsoProtocol;
+}> = ({ controller, protocol }) => (
+  <div className="space-y-8">
+    <SsoProviderList
+      protocol={protocol}
+      providers={controller.providersByProtocol[protocol]}
+      onEdit={(provider) => controller.loadProviderDraft(protocol, provider)}
+      onDelete={controller.onDeleteSsoProvider}
+    />
+    <SsoProviderForm
+      protocol={protocol}
+      draft={controller.providerDrafts[protocol]}
+      errors={controller.errors}
+      roleOptions={controller.roleOptions}
+      replacingSecrets={controller.replacingSecrets[protocol]}
+      saveError={controller.providerSaveErrors[protocol]}
+      saving={controller.savingProvider === protocol}
+      acsUrlState={controller.acsUrlState}
+      onSubmit={(event) => controller.handleSaveProvider(protocol, event)}
+      onDraftChange={(updates) => controller.updateProviderDraft(protocol, updates)}
+      onStartReplace={(field) => controller.startReplaceSecret(protocol, field)}
+      onCancelReplace={(field) => controller.cancelReplaceSecret(protocol, field)}
+      onMappingChange={(index, field, value) =>
+        controller.updateProviderMapping(protocol, index, field, value)
+      }
+      onClear={() => controller.loadProviderDraft(protocol, buildDefaultProvider(protocol))}
+    />
+  </div>
+);
+
+interface SsoProviderListProps {
+  protocol: SsoProtocol;
+  providers: SsoProvider[];
+  onEdit: (provider: SsoProvider) => void;
+  onDelete: (id: string) => void | Promise<void>;
+}
+
+const SsoProviderList: React.FC<SsoProviderListProps> = ({
+  protocol,
+  providers,
+  onEdit,
+  onDelete,
+}) => {
+  const { t } = useTranslation('auth');
+
+  return (
     <Card className="gap-0 overflow-hidden rounded-lg border-border bg-background py-0">
       <CardHeader className="border-b border-border bg-muted/40 px-6 py-4 [.border-b]:pb-4">
         <CardTitle className="flex items-center gap-3 text-base">
@@ -617,12 +1600,12 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
       </CardHeader>
       <CardContent className="p-0">
         <div className="divide-y divide-border">
-          {providersByProtocol[protocol].length === 0 ? (
+          {providers.length === 0 ? (
             <p className="p-6 text-sm text-muted-foreground">
               {t('admin.sso.noProviders', 'No providers configured.')}
             </p>
           ) : (
-            providersByProtocol[protocol].map((provider) => (
+            providers.map((provider) => (
               <div key={provider.id} className="p-4 flex items-center justify-between gap-4">
                 <div>
                   <div className="flex items-center gap-2">
@@ -647,7 +1630,7 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
                     type="button"
                     variant="ghost"
                     size="icon-sm"
-                    onClick={() => loadProviderDraft(protocol, provider)}
+                    onClick={() => onEdit(provider)}
                     className="text-muted-foreground hover:text-primary"
                     title={t('admin.sso.editProvider', 'Edit provider')}
                   >
@@ -657,7 +1640,7 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
                     type="button"
                     variant="ghost"
                     size="icon-sm"
-                    onClick={() => onDeleteSsoProvider(provider.id)}
+                    onClick={() => onDelete(provider.id)}
                     className="text-muted-foreground hover:text-destructive"
                     title={t('admin.sso.deleteProvider', 'Delete provider')}
                   >
@@ -671,953 +1654,421 @@ const AuthSettings: React.FC<AuthSettingsProps> = ({
       </CardContent>
     </Card>
   );
+};
 
-  const renderProviderForm = (protocol: SsoProtocol) => {
-    const draft = providerDrafts[protocol];
-    const prefix = `${protocol}_`;
-    return (
-      <form onSubmit={(event) => handleSaveProvider(protocol, event)}>
-        <Card className="gap-0 overflow-hidden rounded-lg border-border bg-background py-0">
-          <CardHeader className="border-b border-border bg-muted/40 px-6 py-4 [.border-b]:pb-4">
-            <CardTitle className="flex items-center gap-3 text-base">
-              {draft.id ? (
-                <Pencil aria-hidden="true" className="size-4 text-praetor" />
-              ) : (
-                <Plus aria-hidden="true" className="size-4 text-praetor" />
-              )}
-              {draft.id
-                ? t('admin.sso.editProvider', 'Edit provider')
-                : t('admin.sso.newProvider', 'New provider')}
-            </CardTitle>
-            <CardDescription>
-              {t(
-                'admin.sso.providerFormDescription',
-                'Configure the connection details and attribute mappings for this identity provider.',
-              )}
-            </CardDescription>
-            <CardAction>
-              <UIField className="flex-row items-center gap-2">
-                <Switch
-                  id={`provider-enabled-${protocol}`}
-                  checked={!!draft.enabled}
-                  onCheckedChange={(enabled) => updateProviderDraft(protocol, { enabled })}
-                />
-                <FieldLabel htmlFor={`provider-enabled-${protocol}`}>
-                  {t('admin.sso.enabled', 'Enabled')}
-                </FieldLabel>
-              </UIField>
-            </CardAction>
-          </CardHeader>
+interface SsoProviderFormProps {
+  protocol: SsoProtocol;
+  draft: Partial<SsoProvider>;
+  errors: Record<string, string>;
+  roleOptions: RoleOption[];
+  replacingSecrets: Partial<Record<SsoSecretFieldKey, boolean>>;
+  saveError?: string;
+  saving: boolean;
+  acsUrlState: AcsUrlState;
+  onSubmit: (event: React.FormEvent) => void;
+  onDraftChange: (updates: Partial<SsoProvider>) => void;
+  onStartReplace: (field: SsoSecretFieldKey) => void;
+  onCancelReplace: (field: SsoSecretFieldKey) => void;
+  onMappingChange: (
+    index: number,
+    field: keyof Pick<SsoRoleMapping, 'externalGroup' | 'role'>,
+    value: string,
+  ) => void;
+  onClear: () => void;
+}
 
-          <CardContent className="p-6 space-y-6">
-            {providerSaveErrors[protocol] && (
-              <Alert variant="destructive" className="border-destructive/30">
-                <CircleAlert />
-                <AlertTitle>
-                  {t('admin.sso.errors.saveFailedTitle', 'Provider could not be saved')}
-                </AlertTitle>
-                <AlertDescription>{providerSaveErrors[protocol]}</AlertDescription>
-              </Alert>
-            )}
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <Field
-                label={t('admin.sso.name', 'Name')}
-                value={draft.name || ''}
-                error={errors[`${prefix}name`]}
-                required
-                onChange={(name) => updateProviderDraft(protocol, { name })}
-              />
-              <Field
-                label={t('admin.sso.slug', 'Slug')}
-                value={draft.slug || ''}
-                error={errors[`${prefix}slug`]}
-                monospace
-                required
-                onChange={(slug) => updateProviderDraft(protocol, { slug: slug.toLowerCase() })}
-              />
-            </div>
-
-            {protocol === 'oidc' ? (
-              <>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <Field
-                    label={t('admin.sso.issuerUrl', 'Issuer URL')}
-                    value={draft.issuerUrl || ''}
-                    error={errors[`${prefix}issuerUrl`]}
-                    monospace
-                    required={!!draft.enabled}
-                    onChange={(issuerUrl) => updateProviderDraft(protocol, { issuerUrl })}
-                  />
-                  <Field
-                    label={t('admin.sso.clientId', 'Client ID')}
-                    value={draft.clientId || ''}
-                    error={errors[`${prefix}clientId`]}
-                    monospace
-                    required={!!draft.enabled}
-                    onChange={(clientId) => updateProviderDraft(protocol, { clientId })}
-                  />
-                  <SecretField
-                    label={t('admin.sso.clientSecret', 'Client Secret')}
-                    value={draft.clientSecret || ''}
-                    monospace
-                    isStored={isStoredSecret(draft.clientSecret)}
-                    isReplacing={!!replacingSecrets[protocol].clientSecret}
-                    onStartReplace={() => startReplaceSecret(protocol, 'clientSecret')}
-                    onCancelReplace={() => cancelReplaceSecret(protocol, 'clientSecret')}
-                    onChange={(clientSecret) => updateProviderDraft(protocol, { clientSecret })}
-                    storedLabel={t('admin.sso.secretStored', 'Secret stored')}
-                    storedHelp={t(
-                      'admin.sso.secretStoredHelp',
-                      'Leave as-is to keep the stored secret, or click Replace to overwrite it.',
-                    )}
-                  />
-                  <Field
-                    label={t('admin.sso.scopes', 'Scopes')}
-                    value={draft.scopes || 'openid profile email'}
-                    monospace
-                    onChange={(scopes) => updateProviderDraft(protocol, { scopes })}
-                  />
-                </div>
-                <UIField className="flex-row items-start gap-3 rounded-lg border border-border bg-muted p-4">
-                  <Switch
-                    id={`provider-end-session-${protocol}`}
-                    checked={!!draft.endSessionEnabled}
-                    onCheckedChange={(endSessionEnabled) =>
-                      updateProviderDraft(protocol, { endSessionEnabled })
-                    }
-                    className="mt-0.5"
-                  />
-                  <div className="flex flex-col gap-1">
-                    <FieldLabel htmlFor={`provider-end-session-${protocol}`}>
-                      {t('admin.sso.endSessionEnabled', 'Call IdP end-session endpoint on logout')}
-                    </FieldLabel>
-                    <FieldDescription>
-                      {t(
-                        'admin.sso.endSessionHint',
-                        "When enabled, logging out of Praetor also terminates the user's session at the IdP (OIDC RP-Initiated Logout). Requires the IdP's discovery document to advertise an end_session_endpoint and the post-logout redirect URI to be registered with the IdP.",
-                      )}
-                    </FieldDescription>
-                  </div>
-                </UIField>
-              </>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <Field
-                  label={t('admin.sso.metadataUrl', 'Metadata URL')}
-                  value={draft.metadataUrl || ''}
-                  monospace
-                  onChange={(metadataUrl) => updateProviderDraft(protocol, { metadataUrl })}
-                />
-                <Field
-                  label={t('admin.sso.entryPoint', 'Entry Point')}
-                  value={draft.entryPoint || ''}
-                  monospace
-                  onChange={(entryPoint) => updateProviderDraft(protocol, { entryPoint })}
-                />
-                <Field
-                  label={t('admin.sso.idpIssuer', 'IdP Issuer')}
-                  value={draft.idpIssuer || ''}
-                  monospace
-                  error={errors[`${prefix}idpIssuer`]}
-                  onChange={(idpIssuer) => updateProviderDraft(protocol, { idpIssuer })}
-                />
-                <Field
-                  label={t('admin.sso.spIssuer', 'SP Issuer')}
-                  value={draft.spIssuer || ''}
-                  monospace
-                  onChange={(spIssuer) => updateProviderDraft(protocol, { spIssuer })}
-                />
-                <SecretField
-                  multiline
-                  monospace
-                  label={t('admin.sso.metadataXml', 'Metadata XML')}
-                  value={draft.metadataXml || ''}
-                  isStored={isStoredSecret(draft.metadataXml)}
-                  isReplacing={!!replacingSecrets[protocol].metadataXml}
-                  onStartReplace={() => startReplaceSecret(protocol, 'metadataXml')}
-                  onCancelReplace={() => cancelReplaceSecret(protocol, 'metadataXml')}
-                  onChange={(metadataXml) => updateProviderDraft(protocol, { metadataXml })}
-                  storedLabel={t('admin.sso.metadataXmlStored', 'Metadata XML stored')}
-                  storedHelp={t(
-                    'admin.sso.metadataXmlStoredHelp',
-                    'Leave as-is to keep the stored metadata, or click Replace to overwrite it.',
-                  )}
-                />
-                <SecretField
-                  multiline
-                  monospace
-                  label={t('admin.sso.idpCert', 'IdP Certificate')}
-                  value={draft.idpCert || ''}
-                  isStored={isStoredSecret(draft.idpCert)}
-                  isReplacing={!!replacingSecrets[protocol].idpCert}
-                  onStartReplace={() => startReplaceSecret(protocol, 'idpCert')}
-                  onCancelReplace={() => cancelReplaceSecret(protocol, 'idpCert')}
-                  onChange={(idpCert) => updateProviderDraft(protocol, { idpCert })}
-                  storedLabel={t('admin.sso.idpCertStored', 'Certificate stored')}
-                  storedHelp={t(
-                    'admin.sso.idpCertStoredHelp',
-                    'Leave as-is to keep the stored certificate, or click Replace to overwrite it.',
-                  )}
-                />
-                <SecretField
-                  multiline
-                  monospace
-                  label={t('admin.sso.privateKey', 'Signing Private Key')}
-                  value={draft.privateKey || ''}
-                  isStored={isStoredSecret(draft.privateKey)}
-                  isReplacing={!!replacingSecrets[protocol].privateKey}
-                  onStartReplace={() => startReplaceSecret(protocol, 'privateKey')}
-                  onCancelReplace={() => cancelReplaceSecret(protocol, 'privateKey')}
-                  onChange={(privateKey) => updateProviderDraft(protocol, { privateKey })}
-                  storedLabel={t('admin.sso.privateKeyStored', 'Private key stored')}
-                  storedHelp={t(
-                    'admin.sso.privateKeyStoredHelp',
-                    'Leave as-is to keep the stored key, or click Replace to overwrite it.',
-                  )}
-                />
-                <TextArea
-                  label={t('admin.sso.publicCert', 'Signing Public Certificate')}
-                  value={draft.publicCert || ''}
-                  onChange={(publicCert) => updateProviderDraft(protocol, { publicCert })}
-                />
-                {!!draft.slug?.trim() && acsUrlState.status !== 'loading' && (
-                  <div className="md:col-span-2">
-                    {acsUrlState.status === 'ready' ? (
-                      <ReadOnlyField
-                        label={t('admin.sso.acsUrl', 'ACS URL')}
-                        value={fillSlugTemplate(
-                          acsUrlState.template,
-                          draft.slug.trim().toLowerCase(),
-                        )}
-                        monospace
-                      />
-                    ) : (
-                      <UIField>
-                        <FieldLabel>{t('admin.sso.acsUrl', 'ACS URL')}</FieldLabel>
-                        <FieldError>
-                          {acsUrlState.message ||
-                            t(
-                              'admin.sso.errors.acsUrlUnavailable',
-                              'ACS URL unavailable: configure SSO_CALLBACK_BASE_URL on the backend.',
-                            )}
-                        </FieldError>
-                      </UIField>
-                    )}
-                  </div>
-                )}
-                {errors[`${prefix}samlConfig`] && (
-                  <FieldError className="md:col-span-2">{errors[`${prefix}samlConfig`]}</FieldError>
-                )}
-              </div>
-            )}
-
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <Field
-                label={
-                  protocol === 'oidc'
-                    ? t('admin.sso.usernameClaim', 'Username Claim')
-                    : t('admin.sso.usernameAttribute', 'Username Attribute')
-                }
-                value={draft.usernameAttribute || ''}
-                error={errors[`${prefix}usernameAttribute`]}
-                monospace
-                required={protocol === 'oidc' && !!draft.enabled}
-                onChange={(usernameAttribute) =>
-                  updateProviderDraft(protocol, { usernameAttribute })
-                }
-              />
-              <Field
-                label={t('admin.sso.nameAttribute', 'Name Attribute')}
-                value={draft.nameAttribute || ''}
-                monospace
-                onChange={(nameAttribute) => updateProviderDraft(protocol, { nameAttribute })}
-              />
-              <Field
-                label={t('admin.sso.emailAttribute', 'Email Attribute')}
-                value={draft.emailAttribute || ''}
-                monospace
-                onChange={(emailAttribute) => updateProviderDraft(protocol, { emailAttribute })}
-              />
-              <Field
-                label={t('admin.sso.groupsAttribute', 'Groups Attribute')}
-                value={draft.groupsAttribute || ''}
-                monospace
-                onChange={(groupsAttribute) => updateProviderDraft(protocol, { groupsAttribute })}
-              />
-            </div>
-
-            <RoleMappings
-              mappings={draft.roleMappings || []}
-              roleOptions={roleOptions}
-              errors={errors}
-              errorPrefix={`${prefix}mapping_`}
-              heading={t('admin.sso.roleMappings', 'Role Mappings')}
-              addLabel={t('admin.sso.addMapping', 'Add Mapping')}
-              noMappingsLabel={t('admin.sso.noMappingsConfigured', 'No mappings configured.')}
-              externalPlaceholder={t('admin.sso.externalGroupPlaceholder', 'External group')}
-              onAdd={() =>
-                updateProviderDraft(protocol, {
-                  roleMappings: [
-                    ...(draft.roleMappings || []),
-                    { externalGroup: '', role: roleOptions[0]?.id || 'user' },
-                  ],
-                })
-              }
-              onRemove={(index) =>
-                updateProviderDraft(protocol, {
-                  roleMappings: (draft.roleMappings || []).filter((_, idx) => idx !== index),
-                })
-              }
-              onChange={(index, field, value) =>
-                updateProviderMapping(protocol, index, field, value)
-              }
-            />
-          </CardContent>
-
-          <CardFooter className="justify-between border-t border-border px-6 py-4 [.border-t]:pt-4">
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={() => loadProviderDraft(protocol, buildDefaultProvider(protocol))}
-              className="font-bold text-muted-foreground hover:text-foreground"
-            >
-              {t('admin.sso.clearForm', 'Clear')}
-            </Button>
-            <Button type="submit" size="lg" disabled={savingProvider === protocol}>
-              {savingProvider === protocol ? (
-                <Loader2 aria-hidden="true" className="animate-spin" />
-              ) : (
-                t('admin.sso.saveProvider', 'Save Provider')
-              )}
-            </Button>
-          </CardFooter>
-        </Card>
-      </form>
-    );
-  };
+const SsoProviderForm: React.FC<SsoProviderFormProps> = ({
+  protocol,
+  draft,
+  errors,
+  roleOptions,
+  replacingSecrets,
+  saveError,
+  saving,
+  acsUrlState,
+  onSubmit,
+  onDraftChange,
+  onStartReplace,
+  onCancelReplace,
+  onMappingChange,
+  onClear,
+}) => {
+  const { t } = useTranslation('auth');
+  const prefix = `${protocol}_`;
 
   return (
-    <div className="max-w-5xl mx-auto space-y-8 animate-in fade-in duration-500">
-      <div className="flex justify-between items-center">
-        <div>
-          <h2 className="text-2xl font-semibold text-foreground">{t('admin.title')}</h2>
-          <p className="text-sm text-muted-foreground mt-1">{t('admin.subtitle')}</p>
-        </div>
-        {isSaved && (
-          <div className="bg-emerald-500 text-white px-4 py-2 rounded-lg shadow-md animate-in fade-in slide-in-from-right-4 flex items-center gap-2">
-            <Check aria-hidden="true" className="size-4" />{' '}
-            {t('admin.ldap.changesSaved', 'Changes Saved')}
-          </div>
-        )}
-      </div>
-
-      <div className="flex border-b border-border gap-8">
-        <AuthTabButton
-          tab="ldap"
-          activeTab={activeTab}
-          icon={<FolderTree aria-hidden="true" className="size-4" />}
-          label={t('admin.tabs.ldap', 'LDAP / Active Directory')}
-          onSelect={handleActiveTabSelect}
-        />
-        <AuthTabButton
-          tab="oidc"
-          activeTab={activeTab}
-          icon={<OpenIdIcon className="size-4" />}
-          label={t('admin.tabs.oidc', 'OpenID Connect')}
-          onSelect={handleActiveTabSelect}
-        />
-        <AuthTabButton
-          tab="saml"
-          activeTab={activeTab}
-          icon={<Building2 aria-hidden="true" className="size-4" />}
-          label={t('admin.tabs.saml', 'SAML')}
-          onSelect={handleActiveTabSelect}
-        />
-        {canManageMfa && (
-          <AuthTabButton
-            tab="mfa"
-            activeTab={activeTab}
-            icon={<ShieldCheck aria-hidden="true" className="size-4" />}
-            label={t('admin.tabs.mfa', 'Multi-Factor Auth')}
-            onSelect={handleActiveTabSelect}
-          />
-        )}
-      </div>
-
-      {activeTab === 'mfa' && canManageMfa && (
-        <div className="space-y-8">
-          <Card className="gap-0 overflow-hidden rounded-lg border-border bg-background py-0">
-            <CardHeader className="border-b border-border bg-muted/40 px-6 py-4 [.border-b]:pb-4">
-              <CardTitle className="flex items-center gap-3 text-base">
-                <ShieldCheck aria-hidden="true" className="size-4 text-praetor" />
-                {t('mfa.enable.label', 'Enable two-factor authentication')}
-              </CardTitle>
-              <CardDescription>
-                {t(
-                  'mfa.enable.description',
-                  'Allow users with local or LDAP credentials to secure their account with an authenticator app. When off, 2FA is unavailable org-wide and no one is challenged at sign-in.',
-                )}
-              </CardDescription>
-              <CardAction>
-                <Switch
-                  id="enable-totp"
-                  checked={enableTotp}
-                  onCheckedChange={onSetEnableTotp}
-                  aria-label={t('mfa.enable.label', 'Enable two-factor authentication')}
-                />
-              </CardAction>
-            </CardHeader>
-            <CardContent className="p-6">
-              <p className="text-xs text-muted-foreground">
-                {t(
-                  'mfa.ssoNote',
-                  'Users signing in through SSO (OIDC or SAML) are governed by their identity provider and are never subject to Praetor 2FA.',
-                )}
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card className="gap-0 overflow-hidden rounded-lg border-border bg-background py-0">
-            <CardHeader className="border-b border-border bg-muted/40 px-6 py-4 [.border-b]:pb-4">
-              <CardTitle className="flex items-center gap-3 text-base">
-                <ShieldCheck aria-hidden="true" className="size-4 text-praetor" />
-                {t('mfa.enforce.label', 'Enforce two-factor authentication')}
-              </CardTitle>
-              <CardDescription>
-                {t(
-                  'mfa.enforce.description',
-                  'Require enrolled 2FA for the selected roles. Affected users without 2FA are guided through setup at their next sign-in.',
-                )}
-              </CardDescription>
-              <CardAction>
-                <Switch
-                  id="enforce-totp"
-                  checked={enforceTotp}
-                  disabled={!enableTotp}
-                  onCheckedChange={onSetEnforceTotp}
-                  aria-label={t('mfa.enforce.label', 'Enforce two-factor authentication')}
-                />
-              </CardAction>
-            </CardHeader>
-            <CardContent className="space-y-6 p-6">
-              <UIField>
-                <FieldLabel htmlFor="totp-enforced-roles">
-                  {t('mfa.enforcedRoles.label', 'Enforce 2FA for these roles')}
-                </FieldLabel>
-                <FieldDescription>
-                  {t(
-                    'mfa.enforcedRoles.description',
-                    'Users holding any selected role must use 2FA. Leave empty to require it for everyone (local/LDAP).',
-                  )}
-                </FieldDescription>
-                <SelectControl
-                  id="totp-enforced-roles"
-                  isMulti
-                  searchable
-                  disabled={!enableTotp || !enforceTotp}
-                  options={roleOptions}
-                  value={enforcedRoleIds}
-                  onChange={(value) => onSetEnforcedRoleIds(Array.isArray(value) ? value : [value])}
-                  placeholder={t('mfa.enforcedRoles.placeholder', 'Everyone (local/LDAP)')}
-                />
-              </UIField>
-
-              <UIField>
-                <FieldLabel htmlFor="totp-exempt-roles">
-                  {t('mfa.exemptRoles.label', 'Exempt these roles from 2FA')}
-                </FieldLabel>
-                <FieldDescription>
-                  {t(
-                    'mfa.exemptRoles.description',
-                    'Users holding any selected role are never required to use 2FA, even if another of their roles is enforced.',
-                  )}
-                </FieldDescription>
-                <SelectControl
-                  id="totp-exempt-roles"
-                  isMulti
-                  searchable
-                  disabled={!enableTotp || !enforceTotp}
-                  options={roleOptions}
-                  value={exemptRoleIds}
-                  onChange={(value) => onSetExemptRoleIds(Array.isArray(value) ? value : [value])}
-                  placeholder={t('mfa.exemptRoles.placeholder', 'No exemptions')}
-                />
-              </UIField>
-            </CardContent>
-          </Card>
-        </div>
-      )}
-
-      {activeTab === 'ldap' && (
-        <div className="space-y-8">
-          <form onSubmit={handleSaveLdap} className="space-y-8">
-            <Card className="gap-0 overflow-hidden rounded-lg border-border bg-background py-0">
-              <CardHeader className="border-b border-border bg-muted/40 px-6 py-4 [.border-b]:pb-4">
-                <CardTitle className="flex items-center gap-3 text-base">
-                  <Server aria-hidden="true" className="size-4 text-praetor" />
-                  {t('admin.ldap.serverConfig')}
-                </CardTitle>
-                <CardDescription>
-                  {t(
-                    'admin.ldap.serverConfigDescription',
-                    'Connect Praetor to your LDAP or Active Directory to authenticate users.',
-                  )}
-                </CardDescription>
-                <CardAction>
-                  <UIField className="flex-row items-center gap-2">
-                    <Switch
-                      id="ldap-enabled"
-                      checked={ldapForm.enabled}
-                      onCheckedChange={(enabled) => setLdapForm((prev) => ({ ...prev, enabled }))}
-                    />
-                    <FieldLabel htmlFor="ldap-enabled">{t('admin.ldap.enabled')}</FieldLabel>
-                  </UIField>
-                </CardAction>
-              </CardHeader>
-
-              <CardContent className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
-                <Field
-                  label={t('admin.ldap.serverUrlLabel')}
-                  value={ldapForm.serverUrl}
-                  error={errors.serverUrl}
-                  monospace
-                  required={ldapForm.enabled}
-                  onChange={(serverUrl) => setLdapForm((prev) => ({ ...prev, serverUrl }))}
-                />
-                <Field
-                  label={t('admin.ldap.baseDnLabel')}
-                  value={ldapForm.baseDn}
-                  error={errors.baseDn}
-                  monospace
-                  required={ldapForm.enabled}
-                  onChange={(baseDn) => setLdapForm((prev) => ({ ...prev, baseDn }))}
-                />
-                <Field
-                  label={t('admin.ldap.userSearchFilter')}
-                  value={ldapForm.userFilter}
-                  error={errors.userFilter}
-                  monospace
-                  required={ldapForm.enabled}
-                  onChange={(userFilter) => setLdapForm((prev) => ({ ...prev, userFilter }))}
-                />
-                <Field
-                  label={t('admin.ldap.bindDnLabel')}
-                  value={ldapForm.bindDn}
-                  error={errors.bindCredentials}
-                  monospace
-                  onChange={(bindDn) => setLdapForm((prev) => ({ ...prev, bindDn }))}
-                />
-                <SecretField
-                  {...bindPasswordReplace}
-                  label={t('admin.ldap.bindPasswordLabel')}
-                  value={ldapForm.bindPassword}
-                  monospace
-                  onChange={(bindPassword) => setLdapForm((prev) => ({ ...prev, bindPassword }))}
-                  storedLabel={t('admin.ldap.bindPasswordStored', 'Bind password stored')}
-                  storedHelp={t(
-                    'admin.ldap.bindPasswordStoredHelp',
-                    'Leave as-is to keep the stored password, or click Replace to overwrite it.',
-                  )}
-                  error={errors.bindCredentials}
-                  testId="ldap-bind-password"
-                />
-                <Field
-                  label={t('admin.ldap.groupSearchBase')}
-                  value={ldapForm.groupBaseDn}
-                  error={errors.groupBaseDn}
-                  monospace
-                  required={ldapForm.enabled}
-                  onChange={(groupBaseDn) => setLdapForm((prev) => ({ ...prev, groupBaseDn }))}
-                />
-                <Field
-                  label={t('admin.ldap.groupMemberFilter')}
-                  value={ldapForm.groupFilter}
-                  error={errors.groupFilter}
-                  monospace
-                  required={ldapForm.enabled}
-                  onChange={(groupFilter) => setLdapForm((prev) => ({ ...prev, groupFilter }))}
-                />
-              </CardContent>
-
-              <fieldset className="border-t border-border p-6 space-y-4">
-                <legend className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-3">
-                  {t('admin.ldap.attributeMapping.heading', 'Attribute Mapping')}
-                </legend>
-                <FieldDescription>
-                  {t(
-                    'admin.ldap.attributeMapping.description',
-                    'Directory attributes used to populate each user’s name and email. Leave blank to use the defaults (givenName, sn, mail).',
-                  )}
-                </FieldDescription>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  <Field
-                    label={t('admin.ldap.attributeMapping.firstNameLabel', 'First Name Attribute')}
-                    value={ldapForm.firstNameAttribute}
-                    monospace
-                    onChange={(firstNameAttribute) =>
-                      setLdapForm((prev) => ({ ...prev, firstNameAttribute }))
-                    }
-                  />
-                  <Field
-                    label={t('admin.ldap.attributeMapping.lastNameLabel', 'Surname Attribute')}
-                    value={ldapForm.lastNameAttribute}
-                    monospace
-                    onChange={(lastNameAttribute) =>
-                      setLdapForm((prev) => ({ ...prev, lastNameAttribute }))
-                    }
-                  />
-                  <Field
-                    label={t('admin.ldap.attributeMapping.emailLabel', 'Email Attribute')}
-                    value={ldapForm.emailAttribute}
-                    monospace
-                    onChange={(emailAttribute) =>
-                      setLdapForm((prev) => ({ ...prev, emailAttribute }))
-                    }
-                  />
-                </div>
-              </fieldset>
-
-              <fieldset className="border-t border-border p-6 space-y-4">
-                <legend className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-3">
-                  {t('admin.ldap.provisioning.heading', 'User Provisioning')}
-                </legend>
-                <div className="flex items-start gap-3">
-                  <Switch
-                    id="ldap-provision-on-login"
-                    checked={ldapForm.provisionOnLogin}
-                    onCheckedChange={(provisionOnLogin) =>
-                      setLdapForm((prev) => ({ ...prev, provisionOnLogin }))
-                    }
-                  />
-                  <div className="flex flex-1 flex-col gap-1.5">
-                    <FieldLabel htmlFor="ldap-provision-on-login" className="cursor-pointer">
-                      {t('admin.ldap.provisioning.onLoginLabel', 'Provision on first login')}
-                    </FieldLabel>
-                    <FieldDescription>
-                      {t(
-                        'admin.ldap.provisioning.onLoginHelp',
-                        'When on, any LDAP user that authenticates successfully gets a local account created on first sign-in. Turn off to restrict logins to users that already have a local account (created manually or via sync).',
-                      )}
-                    </FieldDescription>
-                  </div>
-                </div>
-                <div className="flex items-start gap-3">
-                  <Switch
-                    id="ldap-auto-provision-all"
-                    checked={ldapForm.autoProvisionAll}
-                    onCheckedChange={(autoProvisionAll) =>
-                      setLdapForm((prev) => ({ ...prev, autoProvisionAll }))
-                    }
-                  />
-                  <div className="flex flex-1 flex-col gap-1.5">
-                    <FieldLabel htmlFor="ldap-auto-provision-all" className="cursor-pointer">
-                      {t('admin.ldap.provisioning.autoAllLabel', 'Bulk-provision during sync')}
-                    </FieldLabel>
-                    <FieldDescription>
-                      {t(
-                        'admin.ldap.provisioning.autoAllHelp',
-                        'When on, the periodic sync creates a local account for every LDAP entry that matches the user filter, applying group role mappings at creation. When off, sync only refreshes display names of users that already exist. Either way, role mappings are never re-applied to users that already exist in Praetor.',
-                      )}
-                    </FieldDescription>
-                  </div>
-                </div>
-              </fieldset>
-
-              <div className="border-t border-border p-6">
-                <RoleMappings
-                  mappings={ldapForm.roleMappings.map((mapping) => ({
-                    externalGroup: mapping.ldapGroup,
-                    role: mapping.role,
-                  }))}
-                  roleOptions={roleOptions}
-                  errors={errors}
-                  errorPrefix="ldapRoleMapping_"
-                  heading={t('admin.ldap.roleMappings')}
-                  addLabel={t('admin.ldap.addMapping')}
-                  noMappingsLabel={t('admin.ldap.noMappingsConfigured')}
-                  externalPlaceholder={t('admin.ldap.ldapGroupPlaceholder', 'LDAP Group CN')}
-                  onAdd={() =>
-                    setLdapForm((prev) => ({
-                      ...prev,
-                      roleMappings: [
-                        ...ldapForm.roleMappings,
-                        { ldapGroup: '', role: roleOptions[0]?.id || 'user' },
-                      ],
-                    }))
-                  }
-                  onRemove={(index) =>
-                    setLdapForm((prev) => ({
-                      ...prev,
-                      roleMappings: ldapForm.roleMappings.filter((_, idx) => idx !== index),
-                    }))
-                  }
-                  onChange={(index, field, value) =>
-                    updateLdapMapping(
-                      index,
-                      field === 'externalGroup' ? 'ldapGroup' : 'role',
-                      value,
-                    )
-                  }
-                />
-              </div>
-            </Card>
-
-            <Card className="gap-0 overflow-hidden rounded-lg border-border bg-background py-0">
-              <CardHeader className="border-b border-border bg-muted/40 px-6 py-4 [.border-b]:pb-4">
-                <CardTitle className="flex items-center gap-3 text-base">
-                  <Lock aria-hidden="true" className="size-4 text-praetor" />
-                  {t('admin.ldap.tls.title', 'TLS / Certificates')}
-                </CardTitle>
-                <CardDescription>
-                  {t(
-                    'admin.ldap.tls.description',
-                    "Verify the LDAP server's certificate when connecting over ldaps://.",
-                  )}
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="p-6">
-                <UIField>
-                  <FieldLabel htmlFor="ldap-tls-ca-textarea">
-                    {t('admin.ldap.tls.caCertificateLabel', 'Custom CA Certificate (Optional)')}
-                  </FieldLabel>
-                  <FieldDescription>
-                    {t(
-                      'admin.ldap.tls.caCertificateHelp',
-                      'Paste a PEM-encoded CA certificate or chain used to verify the LDAP server when using ldaps://. Required only if the server uses a certificate not signed by a publicly trusted CA.',
-                    )}
-                  </FieldDescription>
-                  <Textarea
-                    id="ldap-tls-ca-textarea"
-                    rows={8}
-                    value={ldapForm.tlsCaCertificate}
-                    onChange={(event) => {
-                      setLdapForm((prev) => ({ ...prev, tlsCaCertificate: event.target.value }));
-                      if (errors.tlsCaCertificate)
-                        setErrors((prev) => ({ ...prev, tlsCaCertificate: '' }));
-                    }}
-                    placeholder={`${PEM_BEGIN_MARKER}\nMIIDdzCCAl+gAwIBAgI...\n${PEM_END_MARKER}`}
-                    aria-label={t(
-                      'admin.ldap.tls.caCertificateLabel',
-                      'Custom CA Certificate (Optional)',
-                    )}
-                    aria-invalid={!!errors.tlsCaCertificate}
-                    className="font-mono text-xs leading-relaxed"
-                    spellCheck={false}
-                  />
-                  {errors.tlsCaCertificate && (
-                    <FieldError errors={[{ message: errors.tlsCaCertificate }]} />
-                  )}
-                  <div className="flex items-center gap-3 flex-wrap">
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => tlsCaFileInputRef.current?.click()}
-                      className="text-xs font-bold"
-                    >
-                      <FileUp aria-hidden="true" />
-                      {t('admin.ldap.tls.importPemFile', 'Import .pem file')}
-                    </Button>
-                    {ldapForm.tlsCaCertificate.trim() !== '' && (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => {
-                          setLdapForm((prev) => ({ ...prev, tlsCaCertificate: '' }));
-                          if (errors.tlsCaCertificate)
-                            setErrors((prev) => ({ ...prev, tlsCaCertificate: '' }));
-                        }}
-                        className="text-xs font-bold text-muted-foreground hover:text-destructive"
-                      >
-                        <Trash2 aria-hidden="true" />
-                        {t('admin.ldap.tls.clear', 'Clear')}
-                      </Button>
-                    )}
-                    <span className="text-[10px] text-muted-foreground italic">
-                      {t(
-                        'admin.ldap.tls.caClearedHint',
-                        'Leave blank to use the system trust store (or LDAP_TLS_CA_FILE env var if set).',
-                      )}
-                    </span>
-                  </div>
-                  <input
-                    ref={tlsCaFileInputRef}
-                    type="file"
-                    accept=".pem,.crt,.cer,.cert"
-                    onChange={handleTlsCaFileImport}
-                    aria-label={t('admin.ldap.tls.importPemFile', 'Import .pem file')}
-                    className="hidden"
-                  />
-                </UIField>
-              </CardContent>
-            </Card>
-
-            {errors.general && (
-              <div
-                role="alert"
-                className="rounded-md border border-destructive/20 bg-destructive/10 p-4 text-sm font-medium text-destructive"
-              >
-                {errors.general}
-              </div>
+    <form onSubmit={onSubmit}>
+      <Card className="gap-0 overflow-hidden rounded-lg border-border bg-background py-0">
+        <CardHeader className="border-b border-border bg-muted/40 px-6 py-4 [.border-b]:pb-4">
+          <CardTitle className="flex items-center gap-3 text-base">
+            {draft.id ? (
+              <Pencil aria-hidden="true" className="size-4 text-praetor" />
+            ) : (
+              <Plus aria-hidden="true" className="size-4 text-praetor" />
             )}
+            {draft.id
+              ? t('admin.sso.editProvider', 'Edit provider')
+              : t('admin.sso.newProvider', 'New provider')}
+          </CardTitle>
+          <CardDescription>
+            {t(
+              'admin.sso.providerFormDescription',
+              'Configure the connection details and attribute mappings for this identity provider.',
+            )}
+          </CardDescription>
+          <CardAction>
+            <UIField className="flex-row items-center gap-2">
+              <Switch
+                id={`provider-enabled-${protocol}`}
+                checked={!!draft.enabled}
+                onCheckedChange={(enabled) => onDraftChange({ enabled })}
+              />
+              <FieldLabel htmlFor={`provider-enabled-${protocol}`}>
+                {t('admin.sso.enabled', 'Enabled')}
+              </FieldLabel>
+            </UIField>
+          </CardAction>
+        </CardHeader>
 
-            <div className="flex justify-end">
-              <Button type="submit" size="lg" disabled={isSavingLdap || !isLdapDirty}>
-                <Save aria-hidden="true" />
-                {t('admin.ldap.saveConfiguration', 'Save Configuration')}
-              </Button>
-            </div>
-          </form>
+        <CardContent className="p-6 space-y-6">
+          {saveError && (
+            <Alert variant="destructive" className="border-destructive/30">
+              <CircleAlert />
+              <AlertTitle>
+                {t('admin.sso.errors.saveFailedTitle', 'Provider could not be saved')}
+              </AlertTitle>
+              <AlertDescription>{saveError}</AlertDescription>
+            </Alert>
+          )}
 
-          <Card className="gap-0 overflow-hidden rounded-lg border-border bg-background py-0">
-            <CardHeader className="border-b border-border bg-muted/40 px-6 py-4 [.border-b]:pb-4">
-              <CardTitle className="flex items-center gap-3 text-base">
-                <FlaskConical aria-hidden="true" className="size-4 text-praetor" />
-                {t('admin.ldap.connectionTester')}
-              </CardTitle>
-              <CardDescription>
-                {t(
-                  'admin.ldap.testDescription',
-                  'Enter credentials to test authentication and group retrieval against the saved configuration.',
-                )}
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="p-6 grid grid-cols-1 lg:grid-cols-[minmax(0,360px)_minmax(0,1fr)] gap-8">
-              <form onSubmit={handleTestLdap} className="space-y-4">
-                {isLdapDirty && (
-                  <p className="text-[10px] font-bold text-amber-600 dark:text-amber-400">
-                    {t(
-                      'admin.ldap.test.unsavedChanges',
-                      'Save the LDAP configuration before testing recent changes.',
-                    )}
-                  </p>
-                )}
-                <Field
-                  label={t('admin.ldap.testUsername')}
-                  value={testUsername}
-                  error={testErrors.testUsername}
-                  required
-                  onChange={(value) => {
-                    setTestUsername(value);
-                    if (testErrors.testUsername)
-                      setTestErrors((prev) => ({ ...prev, testUsername: '' }));
-                  }}
-                />
-                <Field
-                  label={t('admin.ldap.testPassword')}
-                  value={testPassword}
-                  type="password"
-                  error={testErrors.testPassword}
-                  required
-                  onChange={(value) => {
-                    setTestPassword(value);
-                    if (testErrors.testPassword)
-                      setTestErrors((prev) => ({ ...prev, testPassword: '' }));
-                  }}
-                />
-                <Button type="submit" size="lg" className="w-full" disabled={isTestingLdap}>
-                  {isTestingLdap ? (
-                    <Loader2 aria-hidden="true" className="animate-spin" />
-                  ) : (
-                    t('admin.ldap.testAuthentication')
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <Field
+              label={t('admin.sso.name', 'Name')}
+              value={draft.name || ''}
+              error={errors[`${prefix}name`]}
+              required
+              onChange={(name) => onDraftChange({ name })}
+            />
+            <Field
+              label={t('admin.sso.slug', 'Slug')}
+              value={draft.slug || ''}
+              error={errors[`${prefix}slug`]}
+              monospace
+              required
+              onChange={(slug) => onDraftChange({ slug: slug.toLowerCase() })}
+            />
+          </div>
+
+          {protocol === 'oidc' ? (
+            <OidcProviderFields
+              draft={draft}
+              errors={errors}
+              errorPrefix={prefix}
+              replacingSecrets={replacingSecrets}
+              onDraftChange={onDraftChange}
+              onStartReplace={onStartReplace}
+              onCancelReplace={onCancelReplace}
+            />
+          ) : (
+            <SamlProviderFields
+              draft={draft}
+              errors={errors}
+              errorPrefix={prefix}
+              replacingSecrets={replacingSecrets}
+              acsUrlState={acsUrlState}
+              onDraftChange={onDraftChange}
+              onStartReplace={onStartReplace}
+              onCancelReplace={onCancelReplace}
+            />
+          )}
+
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <Field
+              label={
+                protocol === 'oidc'
+                  ? t('admin.sso.usernameClaim', 'Username Claim')
+                  : t('admin.sso.usernameAttribute', 'Username Attribute')
+              }
+              value={draft.usernameAttribute || ''}
+              error={errors[`${prefix}usernameAttribute`]}
+              monospace
+              required={protocol === 'oidc' && !!draft.enabled}
+              onChange={(usernameAttribute) => onDraftChange({ usernameAttribute })}
+            />
+            <Field
+              label={t('admin.sso.nameAttribute', 'Name Attribute')}
+              value={draft.nameAttribute || ''}
+              monospace
+              onChange={(nameAttribute) => onDraftChange({ nameAttribute })}
+            />
+            <Field
+              label={t('admin.sso.emailAttribute', 'Email Attribute')}
+              value={draft.emailAttribute || ''}
+              monospace
+              onChange={(emailAttribute) => onDraftChange({ emailAttribute })}
+            />
+            <Field
+              label={t('admin.sso.groupsAttribute', 'Groups Attribute')}
+              value={draft.groupsAttribute || ''}
+              monospace
+              onChange={(groupsAttribute) => onDraftChange({ groupsAttribute })}
+            />
+          </div>
+
+          <RoleMappings
+            mappings={draft.roleMappings || []}
+            roleOptions={roleOptions}
+            errors={errors}
+            errorPrefix={`${prefix}mapping_`}
+            heading={t('admin.sso.roleMappings', 'Role Mappings')}
+            addLabel={t('admin.sso.addMapping', 'Add Mapping')}
+            noMappingsLabel={t('admin.sso.noMappingsConfigured', 'No mappings configured.')}
+            externalPlaceholder={t('admin.sso.externalGroupPlaceholder', 'External group')}
+            onAdd={() =>
+              onDraftChange({
+                roleMappings: [
+                  ...(draft.roleMappings || []),
+                  { externalGroup: '', role: roleOptions[0]?.id || 'user' },
+                ],
+              })
+            }
+            onRemove={(index) =>
+              onDraftChange({
+                roleMappings: (draft.roleMappings || []).filter((_, idx) => idx !== index),
+              })
+            }
+            onChange={onMappingChange}
+          />
+        </CardContent>
+
+        <CardFooter className="justify-between border-t border-border px-6 py-4 [.border-t]:pt-4">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={onClear}
+            className="font-bold text-muted-foreground hover:text-foreground"
+          >
+            {t('admin.sso.clearForm', 'Clear')}
+          </Button>
+          <Button type="submit" size="lg" disabled={saving}>
+            {saving ? (
+              <Loader2 aria-hidden="true" className="animate-spin" />
+            ) : (
+              t('admin.sso.saveProvider', 'Save Provider')
+            )}
+          </Button>
+        </CardFooter>
+      </Card>
+    </form>
+  );
+};
+
+interface ProviderProtocolFieldsProps {
+  draft: Partial<SsoProvider>;
+  errors: Record<string, string>;
+  errorPrefix: string;
+  replacingSecrets: Partial<Record<SsoSecretFieldKey, boolean>>;
+  onDraftChange: (updates: Partial<SsoProvider>) => void;
+  onStartReplace: (field: SsoSecretFieldKey) => void;
+  onCancelReplace: (field: SsoSecretFieldKey) => void;
+}
+
+const OidcProviderFields: React.FC<ProviderProtocolFieldsProps> = ({
+  draft,
+  errors,
+  errorPrefix,
+  replacingSecrets,
+  onDraftChange,
+  onStartReplace,
+  onCancelReplace,
+}) => {
+  const { t } = useTranslation('auth');
+
+  return (
+    <>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <Field
+          label={t('admin.sso.issuerUrl', 'Issuer URL')}
+          value={draft.issuerUrl || ''}
+          error={errors[`${errorPrefix}issuerUrl`]}
+          monospace
+          required={!!draft.enabled}
+          onChange={(issuerUrl) => onDraftChange({ issuerUrl })}
+        />
+        <Field
+          label={t('admin.sso.clientId', 'Client ID')}
+          value={draft.clientId || ''}
+          error={errors[`${errorPrefix}clientId`]}
+          monospace
+          required={!!draft.enabled}
+          onChange={(clientId) => onDraftChange({ clientId })}
+        />
+        <SecretField
+          label={t('admin.sso.clientSecret', 'Client Secret')}
+          value={draft.clientSecret || ''}
+          monospace
+          isStored={isStoredSecret(draft.clientSecret)}
+          isReplacing={!!replacingSecrets.clientSecret}
+          onStartReplace={() => onStartReplace('clientSecret')}
+          onCancelReplace={() => onCancelReplace('clientSecret')}
+          onChange={(clientSecret) => onDraftChange({ clientSecret })}
+          storedLabel={t('admin.sso.secretStored', 'Secret stored')}
+          storedHelp={t(
+            'admin.sso.secretStoredHelp',
+            'Leave as-is to keep the stored secret, or click Replace to overwrite it.',
+          )}
+        />
+        <Field
+          label={t('admin.sso.scopes', 'Scopes')}
+          value={draft.scopes || 'openid profile email'}
+          monospace
+          onChange={(scopes) => onDraftChange({ scopes })}
+        />
+      </div>
+      <UIField className="flex-row items-start gap-3 rounded-lg border border-border bg-muted p-4">
+        <Switch
+          id="provider-end-session-oidc"
+          checked={!!draft.endSessionEnabled}
+          onCheckedChange={(endSessionEnabled) => onDraftChange({ endSessionEnabled })}
+          className="mt-0.5"
+        />
+        <div className="flex flex-col gap-1">
+          <FieldLabel htmlFor="provider-end-session-oidc">
+            {t('admin.sso.endSessionEnabled', 'Call IdP end-session endpoint on logout')}
+          </FieldLabel>
+          <FieldDescription>
+            {t(
+              'admin.sso.endSessionHint',
+              "When enabled, logging out of Praetor also terminates the user's session at the IdP (OIDC RP-Initiated Logout). Requires the IdP's discovery document to advertise an end_session_endpoint and the post-logout redirect URI to be registered with the IdP.",
+            )}
+          </FieldDescription>
+        </div>
+      </UIField>
+    </>
+  );
+};
+
+interface SamlProviderFieldsProps extends ProviderProtocolFieldsProps {
+  acsUrlState: AcsUrlState;
+}
+
+const SamlProviderFields: React.FC<SamlProviderFieldsProps> = ({
+  draft,
+  errors,
+  errorPrefix,
+  replacingSecrets,
+  acsUrlState,
+  onDraftChange,
+  onStartReplace,
+  onCancelReplace,
+}) => {
+  const { t } = useTranslation('auth');
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <Field
+        label={t('admin.sso.metadataUrl', 'Metadata URL')}
+        value={draft.metadataUrl || ''}
+        monospace
+        onChange={(metadataUrl) => onDraftChange({ metadataUrl })}
+      />
+      <Field
+        label={t('admin.sso.entryPoint', 'Entry Point')}
+        value={draft.entryPoint || ''}
+        monospace
+        onChange={(entryPoint) => onDraftChange({ entryPoint })}
+      />
+      <Field
+        label={t('admin.sso.idpIssuer', 'IdP Issuer')}
+        value={draft.idpIssuer || ''}
+        monospace
+        error={errors[`${errorPrefix}idpIssuer`]}
+        onChange={(idpIssuer) => onDraftChange({ idpIssuer })}
+      />
+      <Field
+        label={t('admin.sso.spIssuer', 'SP Issuer')}
+        value={draft.spIssuer || ''}
+        monospace
+        onChange={(spIssuer) => onDraftChange({ spIssuer })}
+      />
+      <SecretField
+        multiline
+        monospace
+        label={t('admin.sso.metadataXml', 'Metadata XML')}
+        value={draft.metadataXml || ''}
+        isStored={isStoredSecret(draft.metadataXml)}
+        isReplacing={!!replacingSecrets.metadataXml}
+        onStartReplace={() => onStartReplace('metadataXml')}
+        onCancelReplace={() => onCancelReplace('metadataXml')}
+        onChange={(metadataXml) => onDraftChange({ metadataXml })}
+        storedLabel={t('admin.sso.metadataXmlStored', 'Metadata XML stored')}
+        storedHelp={t(
+          'admin.sso.metadataXmlStoredHelp',
+          'Leave as-is to keep the stored metadata, or click Replace to overwrite it.',
+        )}
+      />
+      <SecretField
+        multiline
+        monospace
+        label={t('admin.sso.idpCert', 'IdP Certificate')}
+        value={draft.idpCert || ''}
+        isStored={isStoredSecret(draft.idpCert)}
+        isReplacing={!!replacingSecrets.idpCert}
+        onStartReplace={() => onStartReplace('idpCert')}
+        onCancelReplace={() => onCancelReplace('idpCert')}
+        onChange={(idpCert) => onDraftChange({ idpCert })}
+        storedLabel={t('admin.sso.idpCertStored', 'Certificate stored')}
+        storedHelp={t(
+          'admin.sso.idpCertStoredHelp',
+          'Leave as-is to keep the stored certificate, or click Replace to overwrite it.',
+        )}
+      />
+      <SecretField
+        multiline
+        monospace
+        label={t('admin.sso.privateKey', 'Signing Private Key')}
+        value={draft.privateKey || ''}
+        isStored={isStoredSecret(draft.privateKey)}
+        isReplacing={!!replacingSecrets.privateKey}
+        onStartReplace={() => onStartReplace('privateKey')}
+        onCancelReplace={() => onCancelReplace('privateKey')}
+        onChange={(privateKey) => onDraftChange({ privateKey })}
+        storedLabel={t('admin.sso.privateKeyStored', 'Private key stored')}
+        storedHelp={t(
+          'admin.sso.privateKeyStoredHelp',
+          'Leave as-is to keep the stored key, or click Replace to overwrite it.',
+        )}
+      />
+      <TextArea
+        label={t('admin.sso.publicCert', 'Signing Public Certificate')}
+        value={draft.publicCert || ''}
+        onChange={(publicCert) => onDraftChange({ publicCert })}
+      />
+      {!!draft.slug?.trim() && acsUrlState.status !== 'loading' && (
+        <div className="md:col-span-2">
+          {acsUrlState.status === 'ready' ? (
+            <ReadOnlyField
+              label={t('admin.sso.acsUrl', 'ACS URL')}
+              value={fillSlugTemplate(acsUrlState.template, draft.slug.trim().toLowerCase())}
+              monospace
+            />
+          ) : (
+            <UIField>
+              <FieldLabel>{t('admin.sso.acsUrl', 'ACS URL')}</FieldLabel>
+              <FieldError>
+                {acsUrlState.message ||
+                  t(
+                    'admin.sso.errors.acsUrlUnavailable',
+                    'ACS URL unavailable: configure SSO_CALLBACK_BASE_URL on the backend.',
                   )}
-                </Button>
-              </form>
-
-              <div className="min-h-64 overflow-y-auto rounded-md border border-border bg-muted/40 p-4 font-mono text-xs">
-                {isTestingLdap ? (
-                  <div className="text-muted-foreground animate-pulse">
-                    {t('admin.ldap.test.connecting', 'Connecting to LDAP server...')}
-                  </div>
-                ) : testResult ? (
-                  <div className="space-y-3">
-                    <div
-                      className={cn(
-                        'font-bold',
-                        testResult.authenticated
-                          ? 'text-emerald-600 dark:text-emerald-400'
-                          : 'text-destructive',
-                      )}
-                    >
-                      [
-                      {testResult.authenticated
-                        ? t('admin.ldap.test.success', 'SUCCESS')
-                        : t('admin.ldap.test.failure', 'FAILURE')}
-                      ] {testResult.message}
-                    </div>
-                    {testResult.authenticated &&
-                      (() => {
-                        const helpKey = LDAP_ROLE_RESOLUTION_HELP_KEYS[testResult.roleResolution];
-                        return (
-                          <div className="grid grid-cols-[96px_minmax(0,1fr)] gap-x-3 gap-y-2 text-muted-foreground">
-                            <span>{t('admin.ldap.test.userDn', 'User DN')}</span>
-                            <span className="text-foreground break-all">
-                              {testResult.userDn || '-'}
-                            </span>
-                            <span>{t('admin.ldap.test.resolvedName', 'Name')}</span>
-                            <span className="text-foreground break-all">
-                              {[testResult.firstName, testResult.lastName]
-                                .filter(Boolean)
-                                .join(' ') || '-'}
-                            </span>
-                            <span>{t('admin.ldap.test.resolvedEmail', 'Email')}</span>
-                            <span className="text-foreground break-all">
-                              {testResult.email || '-'}
-                            </span>
-                            <span>
-                              {t(LDAP_ROLE_RESOLUTION_LABEL_KEYS[testResult.roleResolution])}
-                            </span>
-                            <span className="text-foreground">
-                              {testResult.roleIds.length ? testResult.roleIds.join(', ') : '-'}
-                            </span>
-                            {helpKey && (
-                              <span
-                                className="col-span-2 text-xs text-muted-foreground"
-                                data-testid="ldap-test-role-resolution-help"
-                              >
-                                {t(helpKey)}
-                              </span>
-                            )}
-                            <span>{t('admin.ldap.test.groupsFound', 'Groups Found:')}</span>
-                            <span className="text-foreground">
-                              {testResult.groups.length ? testResult.groups.join(', ') : '-'}
-                            </span>
-                          </div>
-                        );
-                      })()}
-                    <div className="border-t border-border pt-3">
-                      <div className="text-muted-foreground mb-2">
-                        {t('admin.ldap.test.serverResponse', 'Server Response')}
-                      </div>
-                      <pre className="text-foreground/80 whitespace-pre-wrap break-words">
-                        {JSON.stringify(testResult, null, 2)}
-                      </pre>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="text-muted-foreground italic">
-                    {t('admin.ldap.test.waiting', 'Waiting for test execution...')}
-                    <br />
-                    <br />
-                    <span className="opacity-70">
-                      {t('admin.ldap.test.logOutput', 'Log output will appear here after testing.')}
-                    </span>
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
+              </FieldError>
+            </UIField>
+          )}
         </div>
       )}
-
-      {(activeTab === 'oidc' || activeTab === 'saml') && (
-        <div className="space-y-8">
-          {renderProviderList(activeTab)}
-          {renderProviderForm(activeTab)}
-        </div>
+      {errors[`${errorPrefix}samlConfig`] && (
+        <FieldError className="md:col-span-2">{errors[`${errorPrefix}samlConfig`]}</FieldError>
       )}
     </div>
   );

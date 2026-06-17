@@ -563,17 +563,19 @@ const assertSafeOidcServerMetadata = async (
   const fields = options.includeEndSessionEndpoint
     ? [...OIDC_REMOTE_ENDPOINT_FIELDS, 'end_session_endpoint']
     : OIDC_REMOTE_ENDPOINT_FIELDS;
-  for (const field of fields) {
-    const value = metadata[field];
-    if (typeof value !== 'string' || !value.trim()) continue;
-    let endpoint: URL;
-    try {
-      endpoint = new URL(value);
-    } catch {
-      throw new Error(`OIDC discovery ${field} is not a valid URL`);
-    }
-    await assertSafeRemoteUrl(endpoint);
-  }
+  await Promise.all(
+    fields.flatMap((field) => {
+      const value = metadata[field];
+      if (typeof value !== 'string' || !value.trim()) return [];
+      let endpoint: URL;
+      try {
+        endpoint = new URL(value);
+      } catch {
+        throw new Error(`OIDC discovery ${field} is not a valid URL`);
+      }
+      return [assertSafeRemoteUrl(endpoint)];
+    }),
+  );
 };
 
 /**
@@ -581,25 +583,7 @@ const assertSafeOidcServerMetadata = async (
  * against a hostile IdP that returns a huge metadata document hoping to OOM the backend.
  */
 const readBoundedText = async (response: Response): Promise<string> => {
-  const declared = Number(response.headers.get('content-length'));
-  if (Number.isFinite(declared) && declared > REMOTE_FETCH_MAX_BYTES) {
-    throw new Error(`Remote response too large (${declared} bytes)`);
-  }
-  if (!response.body) return '';
-  const reader = response.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let total = 0;
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    total += value.byteLength;
-    if (total > REMOTE_FETCH_MAX_BYTES) {
-      await reader.cancel();
-      throw new Error(`Remote response exceeded ${REMOTE_FETCH_MAX_BYTES} bytes`);
-    }
-    chunks.push(value);
-  }
-  return Buffer.concat(chunks, total).toString('utf-8');
+  return responseWithBoundedBody(response, 'GET').text();
 };
 
 const responseWithBoundedBody = (response: Response, method: string): Response => {
@@ -619,17 +603,25 @@ const responseWithBoundedBody = (response: Response, method: string): Response =
   if (!response.body) return new Response(null, init);
 
   let total = 0;
-  const boundedBody = response.body.pipeThrough(
-    new TransformStream<Uint8Array, Uint8Array>({
-      transform(chunk, controller) {
-        total += chunk.byteLength;
-        if (total > REMOTE_FETCH_MAX_BYTES) {
-          throw new Error(`Remote response exceeded ${REMOTE_FETCH_MAX_BYTES} bytes`);
-        }
-        controller.enqueue(chunk);
-      },
-    }),
-  );
+  const reader = response.body.getReader();
+  const boundedBody = new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      const { done, value } = await reader.read();
+      if (done) {
+        controller.close();
+        return;
+      }
+      total += value.byteLength;
+      if (total > REMOTE_FETCH_MAX_BYTES) {
+        await reader.cancel().catch(() => undefined);
+        throw new Error(`Remote response exceeded ${REMOTE_FETCH_MAX_BYTES} bytes`);
+      }
+      controller.enqueue(value);
+    },
+    cancel(reason) {
+      return reader.cancel(reason);
+    },
+  });
   return new Response(boundedBody, init);
 };
 
@@ -796,20 +788,15 @@ const createOidcConfig = async (provider: ssoProvidersRepo.SsoProvider) => {
       );
     }
     // Keep every openid-client HTTP request on the same SSRF/timeout policy as the SAML
-    // metadata fetch. The issuer pre-flight catches obvious bad input before discovery;
-    // customFetch then covers discovery, JWKS, token, UserInfo, and future OIDC calls.
+    // metadata fetch. customFetch covers discovery, JWKS, token, UserInfo, and future OIDC calls.
     const issuerUrl = new URL(provider.issuerUrl);
-    await assertSafeRemoteUrl(issuerUrl);
-    const config = await oidc.discovery(
-      issuerUrl,
-      provider.clientId,
-      clientSecret || undefined,
-      undefined,
-      {
+    const [config] = await Promise.all([
+      oidc.discovery(issuerUrl, provider.clientId, clientSecret || undefined, undefined, {
         [oidc.customFetch]: safeOidcFetch,
         timeout: OIDC_REMOTE_FETCH_TIMEOUT_SECONDS,
-      },
-    );
+      }),
+      assertSafeRemoteUrl(issuerUrl),
+    ]);
     await assertSafeOidcServerMetadata(config, {
       includeEndSessionEndpoint: provider.endSessionEnabled,
     });

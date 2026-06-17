@@ -359,6 +359,7 @@ const insertDemoUsersAndSettings = async (client: PoolClient, counts: Record<str
 
 export const assertNoDemoDocumentIdConflicts = async (client: PoolClient, seedYear: number) => {
   const demoIds = buildDemoIds(seedYear);
+  const demoClientOwnerIds = [...COMPATIBILITY_DEFAULTS.clients, ...demoIds.clients];
   const result = await client.query<{ table_name: string; id: string }>(
     `WITH conflicts AS (
        SELECT 'quotes' AS table_name, id
@@ -393,7 +394,7 @@ export const assertNoDemoDocumentIdConflicts = async (client: PoolClient, seedYe
       demoIds.sales,
       demoIds.supplierQuotes,
       demoIds.supplierSales,
-      demoIds.clients,
+      demoClientOwnerIds,
       demoIds.suppliers,
     ],
   );
