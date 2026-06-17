@@ -2282,6 +2282,7 @@ const ClientOfferCostEditor: React.FC<{
   compact?: boolean;
 }> = ({ controller, line, compact }) => {
   const { currency, isReadOnly } = controller;
+  const isLinkedToSupplierQuote = line.isLinkedToSupplierQuote;
 
   return (
     <div className="flex items-center gap-1 w-full">
@@ -2297,7 +2298,7 @@ const ClientOfferCostEditor: React.FC<{
         }
       />
       <span className="text-[9px] font-semibold text-zinc-400 shrink-0">{currency}</span>
-      {!compact && line.isLinkedToSupplierQuote && <SupplierQuoteCostHint />}
+      {!compact && <>{isLinkedToSupplierQuote && <SupplierQuoteCostHint />}</>}
     </div>
   );
 };

@@ -1932,54 +1932,60 @@ const SupplierQuoteAttachmentsArea: React.FC<{ controller: SupplierQuotesControl
 
 const SupplierQuoteNotesSummarySection: React.FC<{ controller: SupplierQuotesController }> = ({
   controller,
-}) => (
-  <div className="flex flex-col gap-4 border-t border-border pt-4 md:flex-row">
-    <Field className="w-full md:w-2/3">
-      <SupplierQuoteSectionTitle
-        description={controller.t('sales:fieldInfo.notes', {
-          defaultValue: 'Additional notes for the entire document',
-        })}
-        status={controller.readOnlyStatus}
-        statusLabel={controller.statusLabel}
-      >
-        {controller.t('sales:supplierQuotes.notes', { defaultValue: 'Notes' })}
-      </SupplierQuoteSectionTitle>
-      <FieldLabel htmlFor="supplier-quote-notes" className="sr-only">
-        {controller.t('sales:supplierQuotes.notes', { defaultValue: 'Notes' })}
-      </FieldLabel>
-      <Textarea
-        id="supplier-quote-notes"
-        rows={4}
-        value={controller.formData.notes || ''}
-        disabled={controller.isReadOnly}
-        placeholder={controller.t('form:placeholderNotes', { defaultValue: 'Optional notes...' })}
-        onChange={(event) =>
-          controller.dispatch({ type: 'patchFormData', value: { notes: event.target.value } })
-        }
-        className="min-h-28 resize-none"
-      />
-    </Field>
+}) => {
+  const { t } = controller;
 
-    <div className="w-full space-y-2 md:w-1/3">
-      <SupplierQuoteSectionTitle>
-        {controller.t('sales:supplierQuotes.summary', { defaultValue: 'Summary' })}
-      </SupplierQuoteSectionTitle>
-      <CostSummaryPanel
-        currency={controller.currency}
-        subtotal={controller.totalsBreakdown.subtotal}
-        total={controller.totalsBreakdown.total}
-        subtotalLabel={controller.t('sales:supplierQuotes.subtotal', { defaultValue: 'Subtotal' })}
-        discountRow={{
-          label: controller.t('sales:supplierQuotes.discountAmount', {
-            defaultValue: 'Discount',
-          }),
-          amount: controller.totalsBreakdown.discountAmount,
-        }}
-        totalLabel={controller.t('sales:supplierQuotes.total', { defaultValue: 'Total' })}
-      />
+  return (
+    <div className="flex flex-col gap-4 border-t border-border pt-4 md:flex-row">
+      <Field className="w-full md:w-2/3">
+        <SupplierQuoteSectionTitle
+          description={t('sales:fieldInfo.notes', {
+            defaultValue: 'Additional notes for the entire document',
+          })}
+          status={controller.readOnlyStatus}
+          statusLabel={controller.statusLabel}
+        >
+          {t('sales:supplierQuotes.notes', { defaultValue: 'Notes' })}
+        </SupplierQuoteSectionTitle>
+        <FieldLabel htmlFor="supplier-quote-notes" className="sr-only">
+          {t('sales:supplierQuotes.notes', { defaultValue: 'Notes' })}
+        </FieldLabel>
+        <Textarea
+          id="supplier-quote-notes"
+          rows={4}
+          value={controller.formData.notes || ''}
+          disabled={controller.isReadOnly}
+          placeholder={controller.t('form:placeholderNotes', { defaultValue: 'Optional notes...' })}
+          onChange={(event) =>
+            controller.dispatch({ type: 'patchFormData', value: { notes: event.target.value } })
+          }
+          className="min-h-28 resize-none"
+        />
+      </Field>
+
+      <div className="w-full space-y-2 md:w-1/3">
+        <SupplierQuoteSectionTitle>
+          {controller.t('sales:supplierQuotes.summary', { defaultValue: 'Summary' })}
+        </SupplierQuoteSectionTitle>
+        <CostSummaryPanel
+          currency={controller.currency}
+          subtotal={controller.totalsBreakdown.subtotal}
+          total={controller.totalsBreakdown.total}
+          subtotalLabel={controller.t('sales:supplierQuotes.subtotal', {
+            defaultValue: 'Subtotal',
+          })}
+          discountRow={{
+            label: controller.t('sales:supplierQuotes.discountAmount', {
+              defaultValue: 'Discount',
+            }),
+            amount: controller.totalsBreakdown.discountAmount,
+          }}
+          totalLabel={controller.t('sales:supplierQuotes.total', { defaultValue: 'Total' })}
+        />
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 const SupplierQuoteModalFooter: React.FC<{ controller: SupplierQuotesController }> = ({
   controller,

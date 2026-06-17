@@ -1138,7 +1138,10 @@ const useStandardTableController = <T extends object>({
         uploaded = true;
         // Keep the user's active preset applied after upgrade: re-point the persisted active
         // marker (an old local id) at the new server id so the post-relist guard matches it.
-        if (result.view.id === activeId && !signal.aborted) updateActiveViewId(result.dto.id);
+        if (result.view.id === activeId && !signal.aborted) {
+          activeViewIdRef.current = result.dto.id;
+          updateActiveViewId(result.dto.id);
+        }
       }
 
       try {
@@ -2659,7 +2662,6 @@ const StandardTableViewRow = <T extends object>({
       </button>
       <StandardTableViewActions
         t={t}
-        view={view}
         owned={owned}
         editable={editable}
         isCopied={isCopied}
@@ -2701,7 +2703,7 @@ const StandardTableViewDragHandle = ({
   <button
     type="button"
     title={t('table.reorderViewHandle')}
-    aria-label={t('table.reorderViewHandle')}
+    aria-label={`${t('table.reorderViewHandle')}: ${viewName}`}
     onClick={(e) => e.stopPropagation()}
     onKeyDown={(e) => {
       if (e.key === 'ArrowUp') {
@@ -2717,13 +2719,11 @@ const StandardTableViewDragHandle = ({
     className="flex size-6 shrink-0 cursor-move items-center justify-center rounded-sm text-muted-foreground outline-none hover:bg-background focus-visible:ring-[3px] focus-visible:ring-ring/50"
   >
     <i className="fa-solid fa-grip-vertical text-[10px]" aria-hidden="true"></i>
-    <span className="sr-only">{viewName}</span>
   </button>
 );
 
 const StandardTableViewActions = ({
   t,
-  view,
   owned,
   editable,
   isCopied,
@@ -2736,7 +2736,6 @@ const StandardTableViewActions = ({
   onDelete,
 }: {
   t: (key: string) => string;
-  view: CustomView;
   owned: boolean;
   editable: boolean;
   isCopied: boolean;
@@ -2821,7 +2820,6 @@ const StandardTableViewActions = ({
         <i className="fa-solid fa-trash text-[10px]" aria-hidden="true"></i>
       </DropdownMenuItem>
     )}
-    <span className="sr-only">{view.name}</span>
   </div>
 );
 
@@ -3229,9 +3227,17 @@ const StandardTableDataRow = <T extends object>({
 
   return rowActionMenuItems ? (
     <ContextMenu onOpenChange={(open) => setOpenContextMenuRowId(open ? tableRow.id : null)}>
-      <ContextMenuTrigger asChild>{rowElement}</ContextMenuTrigger>
+      <ContextMenuTrigger
+        asChild
+        onContextMenu={() => {
+          setOpenContextMenuRowId(tableRow.id);
+        }}
+      >
+        {rowElement}
+      </ContextMenuTrigger>
       {isContextMenuOpen && (
         <ContextMenuContent
+          forceMount
           data-standard-table-action-menu="true"
           className={ACTION_MENU_CONTENT_CLASSNAME}
           onClick={(event) => event.stopPropagation()}
@@ -3253,6 +3259,7 @@ const StandardTableDataRowElement = <T extends object>({
   rowActionContent,
   rowActionMenuItems,
   isActionMenuOpen,
+  ...rowProps
 }: {
   controller: StandardTableController<T>;
   tableRow: StandardTableRowInstance<T>;
@@ -3260,15 +3267,34 @@ const StandardTableDataRowElement = <T extends object>({
   rowActionContent: ReactNode;
   rowActionMenuItems: ReactNode;
   isActionMenuOpen: boolean;
-}) => {
-  const { disabledRow, onRowClick, fontSizeClass, rowClassName, hasTrailingSpacer } = controller;
+} & React.ComponentProps<typeof TableRow>) => {
+  const {
+    disabledRow,
+    onRowClick,
+    fontSizeClass,
+    rowClassName,
+    hasTrailingSpacer,
+    setOpenContextMenuRowId,
+  } = controller;
   const row = tableRow.original;
   const visibleCells = tableRow.getVisibleCells();
 
   return (
     <TableRow
-      onClick={() => !disabledRow?.(row) && onRowClick?.(row)}
-      className={`group border-border transition-colors ${fontSizeClass} ${
+      {...rowProps}
+      onClick={(event) => {
+        rowProps.onClick?.(event);
+        if (!event.defaultPrevented && !disabledRow?.(row)) onRowClick?.(row);
+      }}
+      onContextMenuCapture={(event) => {
+        rowProps.onContextMenuCapture?.(event);
+        if (rowActionMenuItems) setOpenContextMenuRowId(tableRow.id);
+      }}
+      onContextMenu={(event) => {
+        rowProps.onContextMenu?.(event);
+        if (rowActionMenuItems) setOpenContextMenuRowId(tableRow.id);
+      }}
+      className={`${rowProps.className ?? ''} group border-border transition-colors ${fontSizeClass} ${
         disabledRow?.(row)
           ? 'bg-muted text-muted-foreground opacity-70'
           : `${onRowClick ? 'cursor-pointer' : ''} ${rowClassName ? rowClassName(row) : 'hover:bg-muted/50'}`

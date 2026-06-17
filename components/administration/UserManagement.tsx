@@ -1863,54 +1863,94 @@ const UserEditTextField: React.FC<{
   field: 'email' | 'firstName' | 'surname';
 }> = ({ controller, field }) => {
   const { state } = controller;
-  const fieldConfig = {
-    email: {
-      errorKey: 'email',
-      label: controller.t('common:labels.email'),
-      type: 'email',
-      value: state.editEmail,
-      values: (value: string): Partial<UserManagementState> => ({ editEmail: value }),
-    },
-    firstName: {
-      errorKey: 'firstName',
-      label: controller.t('hr:workforce.name'),
-      type: 'text',
-      value: state.editFirstName,
-      values: (value: string): Partial<UserManagementState> => ({ editFirstName: value }),
-    },
-    surname: {
-      errorKey: 'surname',
-      label: controller.t('hr:workforce.surname'),
-      type: 'text',
-      value: state.editSurname,
-      values: (value: string): Partial<UserManagementState> => ({ editSurname: value }),
-    },
-  }[field];
-  const error = state.editFormErrors[fieldConfig.errorKey];
+  const { editEmail, editFirstName, editFormErrors, editSurname } = state;
 
+  if (field === 'email') {
+    const label = controller.t('common:labels.email');
+    const error = editFormErrors.email;
+
+    return (
+      <div>
+        <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1">
+          {label}
+        </label>
+        <Input
+          type="email"
+          value={editEmail}
+          onChange={(event) => {
+            controller.dispatch({ type: 'set', values: { editEmail: event.target.value } });
+            if (error) {
+              controller.dispatch({
+                type: 'patchEditFormErrors',
+                value: { email: '' },
+              });
+            }
+          }}
+          placeholder="e.g. alice.smith@example.com"
+          aria-label={label}
+          readOnly={controller.editIdentityReadOnly}
+          disabled={controller.editIdentityReadOnly}
+          aria-invalid={Boolean(editFormErrors.email)}
+        />
+        {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
+      </div>
+    );
+  }
+
+  if (field === 'firstName') {
+    const label = controller.t('hr:workforce.name');
+    const error = editFormErrors.firstName;
+
+    return (
+      <div>
+        <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1">
+          {label} {!controller.editIdentityReadOnly && <RequiredMark />}
+        </label>
+        <Input
+          type="text"
+          value={editFirstName}
+          onChange={(event) => {
+            controller.dispatch({ type: 'set', values: { editFirstName: event.target.value } });
+            if (error) {
+              controller.dispatch({
+                type: 'patchEditFormErrors',
+                value: { firstName: '' },
+              });
+            }
+          }}
+          aria-label={label}
+          readOnly={controller.editIdentityReadOnly}
+          disabled={controller.editIdentityReadOnly}
+          aria-invalid={Boolean(editFormErrors.firstName)}
+        />
+        {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
+      </div>
+    );
+  }
+
+  const label = controller.t('hr:workforce.surname');
+  const error = editFormErrors.surname;
   return (
     <div>
       <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1">
-        {fieldConfig.label}{' '}
-        {field === 'firstName' && !controller.editIdentityReadOnly && <RequiredMark />}
+        {label}
       </label>
       <Input
-        type={fieldConfig.type}
-        value={fieldConfig.value}
+        type="text"
+        value={editSurname}
         onChange={(event) => {
-          controller.dispatch({ type: 'set', values: fieldConfig.values(event.target.value) });
+          controller.dispatch({ type: 'set', values: { editSurname: event.target.value } });
           if (error) {
             controller.dispatch({
               type: 'patchEditFormErrors',
-              value: { [fieldConfig.errorKey]: '' },
+              value: { surname: '' },
             });
           }
         }}
-        placeholder={field === 'email' ? 'e.g. alice.smith@example.com' : undefined}
-        aria-label={fieldConfig.label}
+        aria-label={label}
         readOnly={controller.editIdentityReadOnly}
         disabled={controller.editIdentityReadOnly}
-        aria-invalid={Boolean(error)}
+        aria-invalid={Boolean(editFormErrors.surname)}
       />
       {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
     </div>

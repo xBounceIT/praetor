@@ -1,5 +1,5 @@
 import type React from 'react';
-import { useCallback, useEffect, useMemo, useReducer, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { LinkedRecordBanner } from '@/components/shared/LinkedRecordBanner';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -340,13 +340,13 @@ const useProjectDetailController = ({
     description,
     startDate,
     endDate,
-    orderId,
     offerId,
     revenue,
     tempIsDisabled,
     tipo,
     errors,
   } = formState;
+  const [orderId, setOrderId] = useState(project.orderId ?? '');
   const setFormField = <K extends ProjectDetailFormField>(
     field: K,
     value: ProjectDetailFormState[K],
@@ -356,7 +356,6 @@ const useProjectDetailController = ({
   const setDescription = (value: string) => setFormField('description', value);
   const setStartDate = (value: string) => setFormField('startDate', value);
   const setEndDate = (value: string) => setFormField('endDate', value);
-  const setOrderId = (value: string) => setFormField('orderId', value);
   const setOfferId = (value: string) => setFormField('offerId', value);
   const setRevenue = (value: string) => setFormField('revenue', value);
   const setTempIsDisabled = (value: boolean) => setFormField('tempIsDisabled', value);
@@ -454,7 +453,7 @@ const useProjectDetailController = ({
   // EMPTY selector so the user must make a deliberate first choice before saving — we don't
   // pre-fill the silent 'attivo' default. A confirmed project shows its stored value.
   const tipoNeedsConfirmation = !project.tipoConfirmed;
-  const baselineTipo = getProjectDetailBaselineTipo(project);
+  const baselineTipo: ProjectTipo | '' = project.tipoConfirmed ? (project.tipo ?? '') : '';
 
   // No prop-sync useEffect: the parent passes `key={project.id}` so this component
   // remounts on project switch. Same-id parent updates (background poll / optimistic update)
@@ -949,6 +948,7 @@ const useProjectDetailController = ({
 
   const handleDiscard = () => {
     dispatchForm({ type: 'reset', project });
+    setOrderId(project.orderId ?? '');
     setBillingTypeDraft(null);
     setBillingFrequencyDraft(null);
   };
@@ -1847,7 +1847,8 @@ const ProjectDetailSaveBar: React.FC<{ controller: ProjectDetailController }> = 
   controller,
 }) => {
   const { t, hasChanges, canUpdateProjects, handleDiscard, handleSave } = controller;
-  if (!hasChanges || !canUpdateProjects) return null;
+  const showSaveBar = hasChanges && canUpdateProjects;
+  if (!showSaveBar) return null;
 
   return (
     <div className="sticky bottom-4 z-20 mx-auto flex max-w-3xl items-center justify-between gap-4 rounded-lg border border-border bg-card/95 px-4 py-3 shadow-lg backdrop-blur">
@@ -1876,6 +1877,7 @@ const ProjectAnalyticsSection: React.FC<{ controller: ProjectDetailController }>
   </>
 );
 
+// Analytics section header
 const ProjectAnalyticsHeader: React.FC<{ controller: ProjectDetailController }> = ({
   controller,
 }) => {
@@ -1892,20 +1894,10 @@ const ProjectAnalyticsHeader: React.FC<{ controller: ProjectDetailController }> 
       </div>
       <div className="flex flex-wrap items-center gap-2 sm:justify-end">
         {!entriesLoading && entriesError === 'forbidden' && (
-          <ProjectAnalyticsNotice
-            title={t('projects:detail.notices.forbiddenTitle')}
-            description={t('projects:detail.notices.forbiddenDescription')}
-            icon="fa-lock"
-            className="border-amber-300/50 bg-amber-50 text-amber-800 dark:border-amber-700/50 dark:bg-amber-950/30 dark:text-amber-200 sm:max-w-xs"
-          />
+          <ProjectForbiddenAnalyticsNotice controller={controller} />
         )}
         {!entriesLoading && entriesError === 'failed' && (
-          <ProjectAnalyticsNotice
-            title={t('projects:detail.notices.loadFailedTitle')}
-            description={t('projects:detail.notices.loadFailedDescription')}
-            icon="fa-triangle-exclamation"
-            className="border-destructive/40 bg-destructive/10 text-destructive sm:max-w-xs"
-          />
+          <ProjectLoadFailedAnalyticsNotice controller={controller} />
         )}
         {!entriesLoading && entriesError === null && (entriesTruncated || isPartialEntryScope) && (
           <ProjectScopeNotice controller={controller} />
@@ -1916,26 +1908,53 @@ const ProjectAnalyticsHeader: React.FC<{ controller: ProjectDetailController }> 
   );
 };
 
-const ProjectAnalyticsNotice: React.FC<{
-  title: string;
-  description: string;
-  icon: string;
-  className: string;
-}> = ({ title, description, icon, className }) => (
-  <Tooltip>
-    <TooltipTrigger asChild>
-      <button
-        type="button"
-        aria-label={description}
-        className={`inline-flex max-w-full cursor-help items-center gap-2 rounded-md border px-2.5 py-1.5 text-left text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 ${className}`}
-      >
-        <i className={`fa-solid ${icon} shrink-0`} aria-hidden="true"></i>
-        <span className="truncate font-medium">{title}</span>
-      </button>
-    </TooltipTrigger>
-    <TooltipContent>{description}</TooltipContent>
-  </Tooltip>
-);
+const ProjectForbiddenAnalyticsNotice: React.FC<{ controller: ProjectDetailController }> = ({
+  controller,
+}) => {
+  const { t } = controller;
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          aria-label={t('projects:detail.notices.forbiddenDescription')}
+          className="inline-flex max-w-full cursor-help items-center gap-2 rounded-md border border-amber-300/50 bg-amber-50 px-2.5 py-1.5 text-left text-xs text-amber-800 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 dark:border-amber-700/50 dark:bg-amber-950/30 dark:text-amber-200 sm:max-w-xs"
+        >
+          <i className="fa-solid fa-lock shrink-0" aria-hidden="true"></i>
+          <span className="truncate font-medium">
+            {t('projects:detail.notices.forbiddenTitle')}
+          </span>
+        </button>
+      </TooltipTrigger>
+      <TooltipContent>{t('projects:detail.notices.forbiddenDescription')}</TooltipContent>
+    </Tooltip>
+  );
+};
+
+const ProjectLoadFailedAnalyticsNotice: React.FC<{ controller: ProjectDetailController }> = ({
+  controller,
+}) => {
+  const { t } = controller;
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          aria-label={t('projects:detail.notices.loadFailedDescription')}
+          className="inline-flex max-w-full cursor-help items-center gap-2 rounded-md border border-destructive/40 bg-destructive/10 px-2.5 py-1.5 text-left text-xs text-destructive outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 sm:max-w-xs"
+        >
+          <i className="fa-solid fa-triangle-exclamation shrink-0" aria-hidden="true"></i>
+          <span className="truncate font-medium">
+            {t('projects:detail.notices.loadFailedTitle')}
+          </span>
+        </button>
+      </TooltipTrigger>
+      <TooltipContent>{t('projects:detail.notices.loadFailedDescription')}</TooltipContent>
+    </Tooltip>
+  );
+};
 
 const ProjectScopeNotice: React.FC<{ controller: ProjectDetailController }> = ({ controller }) => {
   const { t, entriesTruncated, isPartialEntryScope } = controller;
@@ -1945,30 +1964,33 @@ const ProjectScopeNotice: React.FC<{ controller: ProjectDetailController }> = ({
       : null,
     isPartialEntryScope ? t('projects:detail.notices.partialScope') : null,
   ].filter(Boolean);
+  const messageText = messages.filter(Boolean).join(' · ');
 
   return (
     <Tooltip>
       <TooltipTrigger asChild>
         <button
           type="button"
-          aria-label={messages.join(' · ')}
+          aria-label={messageText}
           className="inline-flex max-w-full cursor-help items-center gap-2 rounded-md border border-border bg-muted/30 px-2.5 py-1.5 text-left text-xs text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 sm:max-w-md"
         >
           <i className="fa-solid fa-circle-info shrink-0" aria-hidden="true"></i>
-          <span className="truncate">{messages.join(' · ')}</span>
+          <span className="truncate">{messageText}</span>
         </button>
       </TooltipTrigger>
       <TooltipContent>
         <div className="space-y-1 text-xs">
-          {messages.map((message) => (
-            <div key={message}>{message}</div>
-          ))}
+          {entriesTruncated && (
+            <div>{t('projects:detail.notices.truncated', { count: ENTRIES_FETCH_CEILING })}</div>
+          )}
+          {isPartialEntryScope && <div>{t('projects:detail.notices.partialScope')}</div>}
         </div>
       </TooltipContent>
     </Tooltip>
   );
 };
 
+// Free-form analytics grid
 const ProjectAnalyticsGrid: React.FC<{ controller: ProjectDetailController }> = ({
   controller,
 }) => {
@@ -1993,6 +2015,7 @@ const ProjectAnalyticsGrid: React.FC<{ controller: ProjectDetailController }> = 
   );
 };
 
+// KPI cards + project timeline
 const ProjectKpiDashboardItems: React.FC<{ controller: ProjectDetailController }> = ({
   controller,
 }) => {
@@ -2446,6 +2469,8 @@ const ProjectCostVsRevenueDashboardItem: React.FC<{ controller: ProjectDetailCon
           ) : entriesError !== null ? (
             <ChartLocked variant={entriesError} />
           ) : !hasChartContent ? (
+            // Cost-hidden is different from true no-data: the user may have hours
+            // but no permission to see the cost series this chart is built around.
             !canViewCost ? (
               <ChartLocked variant="cost-hidden" />
             ) : (

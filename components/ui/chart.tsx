@@ -1,6 +1,9 @@
 import * as React from 'react';
-import type { TooltipValueType } from 'recharts';
-import * as RechartsPrimitive from 'recharts';
+import type {
+  DefaultLegendContentProps,
+  DefaultTooltipContentProps,
+  TooltipValueType,
+} from 'recharts';
 
 import { cn } from '@/lib/utils';
 
@@ -8,18 +11,76 @@ import { cn } from '@/lib/utils';
 const THEMES = { light: '', dark: '.dark' } as const;
 
 const INITIAL_DIMENSION = { width: 320, height: 200 } as const;
+type RechartsModule = typeof import('recharts');
+type RechartsComponentProps<K extends keyof RechartsModule> =
+  RechartsModule[K] extends React.ComponentType<infer Props> ? Props : never;
 type TooltipNameType = number | string;
-type ChartTooltipContentProps = React.ComponentProps<typeof RechartsPrimitive.Tooltip> &
+type ChartTooltipContentProps = RechartsComponentProps<'Tooltip'> &
   React.ComponentProps<'div'> & {
     hideLabel?: boolean;
     hideIndicator?: boolean;
     indicator?: 'line' | 'dot' | 'dashed';
     nameKey?: string;
     labelKey?: string;
-  } & Omit<
-    RechartsPrimitive.DefaultTooltipContentProps<TooltipValueType, TooltipNameType>,
-    'accessibilityLayer'
-  >;
+  } & Omit<DefaultTooltipContentProps<TooltipValueType, TooltipNameType>, 'accessibilityLayer'>;
+
+const lazyRechartsComponent = <K extends keyof RechartsModule>(componentName: K) =>
+  React.lazy(async () => {
+    const recharts = await import('recharts');
+
+    return {
+      default: recharts[componentName] as React.ComponentType<RechartsComponentProps<K>>,
+    };
+  });
+
+const LazyArea = lazyRechartsComponent('Area');
+const LazyAreaChart = lazyRechartsComponent('AreaChart');
+const LazyBar = lazyRechartsComponent('Bar');
+const LazyBarChart = lazyRechartsComponent('BarChart');
+const LazyCartesianGrid = lazyRechartsComponent('CartesianGrid');
+const LazyLabelList = lazyRechartsComponent('LabelList');
+const LazyLegend = lazyRechartsComponent('Legend');
+const LazyReferenceLine = lazyRechartsComponent('ReferenceLine');
+const LazyResponsiveContainer = lazyRechartsComponent('ResponsiveContainer');
+const LazyTooltip = lazyRechartsComponent('Tooltip');
+const LazyXAxis = lazyRechartsComponent('XAxis');
+const LazyYAxis = lazyRechartsComponent('YAxis');
+
+function Area(props: RechartsComponentProps<'Area'>) {
+  return <LazyArea {...props} />;
+}
+
+function AreaChart(props: RechartsComponentProps<'AreaChart'>) {
+  return <LazyAreaChart {...props} />;
+}
+
+function Bar(props: RechartsComponentProps<'Bar'>) {
+  return <LazyBar {...props} />;
+}
+
+function BarChart(props: RechartsComponentProps<'BarChart'>) {
+  return <LazyBarChart {...props} />;
+}
+
+function CartesianGrid(props: RechartsComponentProps<'CartesianGrid'>) {
+  return <LazyCartesianGrid {...props} />;
+}
+
+function LabelList(props: RechartsComponentProps<'LabelList'>) {
+  return <LazyLabelList {...props} />;
+}
+
+function ReferenceLine(props: RechartsComponentProps<'ReferenceLine'>) {
+  return <LazyReferenceLine {...props} />;
+}
+
+function XAxis(props: RechartsComponentProps<'XAxis'>) {
+  return <LazyXAxis {...props} />;
+}
+
+function YAxis(props: RechartsComponentProps<'YAxis'>) {
+  return <LazyYAxis {...props} />;
+}
 
 export type ChartConfig = Record<
   string,
@@ -57,7 +118,7 @@ function ChartContainer({
   ...props
 }: React.ComponentProps<'div'> & {
   config: ChartConfig;
-  children: React.ComponentProps<typeof RechartsPrimitive.ResponsiveContainer>['children'];
+  children: RechartsComponentProps<'ResponsiveContainer'>['children'];
   initialDimension?: {
     width: number;
     height: number;
@@ -79,9 +140,11 @@ function ChartContainer({
         {...props}
       >
         <ChartStyle id={chartId} config={config} />
-        <RechartsPrimitive.ResponsiveContainer initialDimension={initialDimension}>
-          {children}
-        </RechartsPrimitive.ResponsiveContainer>
+        <React.Suspense fallback={null}>
+          <LazyResponsiveContainer initialDimension={initialDimension}>
+            {children}
+          </LazyResponsiveContainer>
+        </React.Suspense>
       </div>
     </ChartContext.Provider>
   );
@@ -111,8 +174,8 @@ ${colorConfig
   return <style>{css}</style>;
 };
 
-function ChartTooltip(props: React.ComponentProps<typeof RechartsPrimitive.Tooltip>) {
-  return <RechartsPrimitive.Tooltip {...props} />;
+function ChartTooltip(props: RechartsComponentProps<'Tooltip'>) {
+  return <LazyTooltip {...props} />;
 }
 
 function ChartTooltipContent({ active, payload, ...props }: ChartTooltipContentProps) {
@@ -251,8 +314,8 @@ const ChartTooltipContentBody = React.memo(function ChartTooltipContentBody({
   );
 });
 
-function ChartLegend(props: React.ComponentProps<typeof RechartsPrimitive.Legend>) {
-  return <RechartsPrimitive.Legend {...props} />;
+function ChartLegend(props: RechartsComponentProps<'Legend'>) {
+  return <LazyLegend {...props} />;
 }
 
 function ChartLegendContent({
@@ -264,7 +327,7 @@ function ChartLegendContent({
 }: React.ComponentProps<'div'> & {
   hideIcon?: boolean;
   nameKey?: string;
-} & RechartsPrimitive.DefaultLegendContentProps) {
+} & DefaultLegendContentProps) {
   const { config } = useChart();
 
   if (!payload?.length) {
@@ -337,10 +400,19 @@ function getPayloadConfigFromPayload(config: ChartConfig, payload: unknown, key:
 }
 
 export {
+  Area,
+  AreaChart,
+  Bar,
+  BarChart,
+  CartesianGrid,
   ChartContainer,
   ChartLegend,
   ChartLegendContent,
   ChartStyle,
   ChartTooltip,
   ChartTooltipContent,
+  LabelList,
+  ReferenceLine,
+  XAxis,
+  YAxis,
 };

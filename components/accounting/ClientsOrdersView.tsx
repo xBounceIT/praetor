@@ -1579,22 +1579,30 @@ const OrderItemAmountField: React.FC<{
   className,
   valueClassName = 'text-foreground',
   align = 'center',
-}) => (
-  <div className={`space-y-1 ${className} lg:space-y-0`}>
-    <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
-      {label}
-    </FieldLabel>
-    <div
-      className={`flex h-9 items-center whitespace-nowrap px-3 ${
-        align === 'right' ? 'justify-end' : 'justify-center'
-      }`}
-    >
-      <span className={`text-xs font-bold ${valueClassName}`}>
-        {value.toFixed(2)} {currency}
-      </span>
+}) => {
+  const valueLabel = (
+    <span className={`text-xs font-bold ${valueClassName}`}>
+      {value.toFixed(2)} {currency}
+    </span>
+  );
+
+  return (
+    <div className={`space-y-1 ${className} lg:space-y-0`}>
+      <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
+        {label}
+      </FieldLabel>
+      {align === 'right' ? (
+        <div className="flex h-9 items-center justify-end whitespace-nowrap px-3 text-sm font-bold text-foreground">
+          {valueLabel}
+        </div>
+      ) : (
+        <div className="flex h-9 items-center justify-center whitespace-nowrap px-3">
+          {valueLabel}
+        </div>
+      )}
     </div>
-  </div>
-);
+  );
+};
 
 const OrderNotesSummarySection: React.FC<{ controller: ClientsOrdersController }> = ({
   controller,

@@ -1675,17 +1675,17 @@ const InternalListingTextField: React.FC<{
 
 const InternalListingFieldHeader: React.FC<{
   children: React.ReactNode;
-  onManage?: () => void;
+  onClick?: () => void;
   manageDisabled?: boolean;
-}> = ({ children, manageDisabled = false, onManage }) => (
+}> = ({ children, manageDisabled = false, onClick }) => (
   <div className="flex min-h-6 items-center justify-between gap-2">
     <FieldLabel>{children}</FieldLabel>
-    {onManage && (
+    {onClick && (
       <Button
         type="button"
         variant="ghost"
         size="xs"
-        onClick={onManage}
+        onClick={onClick}
         disabled={manageDisabled}
         className="gap-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"
       >
@@ -1698,153 +1698,180 @@ const InternalListingFieldHeader: React.FC<{
 
 const InternalListingTypeSelect: React.FC<{ controller: InternalListingController }> = ({
   controller,
-}) => (
-  <div className="space-y-1.5">
-    <InternalListingFieldHeader onManage={controller.handleOpenManageTypes}>
-      {controller.t('crm:internalListing.type')} <RequiredMark />
-    </InternalListingFieldHeader>
-    <SelectControl
-      options={controller.typeOptions}
-      value={controller.formData.type || (controller.productTypes[0]?.name ?? '')}
-      onChange={(value) => controller.handleTypeChange(value as string)}
-      searchable={false}
-      buttonClassName={
-        controller.errors.type ? 'py-2.5 text-sm border-destructive' : 'py-2.5 text-sm'
-      }
-    />
-    {controller.errors.type && (
-      <p className="text-red-500 text-[10px] font-bold ml-1 mt-1">{controller.errors.type}</p>
-    )}
-  </div>
-);
+}) => {
+  const { handleOpenManageTypes } = controller;
+
+  return (
+    <div className="space-y-1.5">
+      <InternalListingFieldHeader onClick={handleOpenManageTypes}>
+        {controller.t('crm:internalListing.type')} <RequiredMark />
+      </InternalListingFieldHeader>
+      <SelectControl
+        options={controller.typeOptions}
+        value={controller.formData.type || (controller.productTypes[0]?.name ?? '')}
+        onChange={(value) => controller.handleTypeChange(value as string)}
+        searchable={false}
+        buttonClassName={
+          controller.errors.type ? 'py-2.5 text-sm border-destructive' : 'py-2.5 text-sm'
+        }
+      />
+      {controller.errors.type && (
+        <p className="text-red-500 text-[10px] font-bold ml-1 mt-1">{controller.errors.type}</p>
+      )}
+    </div>
+  );
+};
 
 const InternalListingCategorySelect: React.FC<{ controller: InternalListingController }> = ({
   controller,
-}) => (
-  <div className="space-y-1.5">
-    <InternalListingFieldHeader onManage={controller.handleOpenManageCategories}>
-      {controller.t('crm:internalListing.category')}
-    </InternalListingFieldHeader>
-    <SelectControl
-      options={controller.categoryOptions}
-      value={controller.formData.category || ''}
-      onChange={(value) => {
-        const categoryName = value as string;
-        controller.dispatch({
-          type: 'merge',
-          patch: {
-            subcategories: [],
-            formData: {
-              ...controller.formData,
-              category: categoryName,
-              subcategory: '',
+}) => {
+  const { handleOpenManageCategories } = controller;
+
+  return (
+    <div className="space-y-1.5">
+      <InternalListingFieldHeader onClick={handleOpenManageCategories}>
+        {controller.t('crm:internalListing.category')}
+      </InternalListingFieldHeader>
+      <SelectControl
+        options={controller.categoryOptions}
+        value={controller.formData.category || ''}
+        onChange={(value) => {
+          const categoryName = value as string;
+          controller.dispatch({
+            type: 'merge',
+            patch: {
+              subcategories: [],
+              formData: {
+                ...controller.formData,
+                category: categoryName,
+                subcategory: '',
+              },
             },
-          },
-        });
-        if (controller.formData.type && categoryName) {
-          void controller.loadSubcategories(controller.formData.type, categoryName);
-        }
-      }}
-      placeholder={controller.t('crm:internalListing.selectOption')}
-      searchable={true}
-    />
-  </div>
-);
+          });
+          if (controller.formData.type && categoryName) {
+            void controller.loadSubcategories(controller.formData.type, categoryName);
+          }
+        }}
+        placeholder={controller.t('crm:internalListing.selectOption')}
+        searchable={true}
+      />
+    </div>
+  );
+};
 
 const InternalListingSubcategorySelect: React.FC<{ controller: InternalListingController }> = ({
   controller,
-}) => (
-  <div className="space-y-1.5">
-    <InternalListingFieldHeader
-      onManage={controller.handleOpenManageSubcategories}
-      manageDisabled={!controller.formData.category}
-    >
-      {controller.t('crm:internalListing.subcategory')}
-    </InternalListingFieldHeader>
-    <SelectControl
-      options={controller.subcategoryOptions}
-      value={controller.formData.subcategory || ''}
-      onChange={(value) =>
-        controller.dispatch({ type: 'patchForm', patch: { subcategory: value as string } })
-      }
-      placeholder={
-        !controller.formData.category
-          ? controller.t('crm:internalListing.selectCategoryFirst')
-          : controller.t('crm:internalListing.selectOption')
-      }
-      searchable={true}
-      disabled={!controller.formData.category}
-    />
-  </div>
-);
+}) => {
+  const { handleOpenManageSubcategories } = controller;
+
+  return (
+    <div className="space-y-1.5">
+      <InternalListingFieldHeader
+        onClick={handleOpenManageSubcategories}
+        manageDisabled={!controller.formData.category}
+      >
+        {controller.t('crm:internalListing.subcategory')}
+      </InternalListingFieldHeader>
+      <SelectControl
+        options={controller.subcategoryOptions}
+        value={controller.formData.subcategory || ''}
+        onChange={(value) =>
+          controller.dispatch({ type: 'patchForm', patch: { subcategory: value as string } })
+        }
+        placeholder={
+          !controller.formData.category
+            ? controller.t('crm:internalListing.selectCategoryFirst')
+            : controller.t('crm:internalListing.selectOption')
+        }
+        searchable={true}
+        disabled={!controller.formData.category}
+      />
+    </div>
+  );
+};
 
 const InternalListingProductPricingSection: React.FC<{ controller: InternalListingController }> = ({
   controller,
-}) => (
-  <div className="space-y-4">
-    <InternalListingSectionTitle>
-      {controller.t('crm:internalListing.pricingAndUnit')}
-    </InternalListingSectionTitle>
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-      <InternalListingNumberField
-        label={
-          <>
-            {controller.t('crm:internalListing.cost')} <RequiredMark />
-            <span className="text-zinc-400 font-semibold">
-              /
-              {controller.formData.costUnit === 'hours'
-                ? controller.t('crm:internalListing.hour')
-                : controller.t('crm:internalListing.unit')}
-            </span>
-          </>
-        }
-        value={controller.formData.costo ?? ''}
-        error={controller.errors.costo}
-        onValueChange={controller.handleNumericValueChange('costo')}
-        formatDecimals={2}
-      />
-      <InternalListingNumberField
-        label={controller.t('crm:internalListing.mol')}
-        value={controller.formData.molPercentage ?? ''}
-        error={controller.errors.molPercentage}
-        onValueChange={controller.handleNumericValueChange('molPercentage')}
-        formatDecimals={MOL_PERCENTAGE_DECIMALS}
-        required
-      />
-      <InternalListingCalculatedValue
-        label={controller.t('crm:internalListing.salePriceCalculated')}
-        value={
-          controller.pricing
-            ? `${calcProductSalePrice(controller.pricing.cost, controller.pricing.mol).toFixed(2)} ${
-                controller.currency
-              }`
-            : '--'
-        }
-        className="text-muted-foreground"
-      />
-      <InternalListingCalculatedValue
-        label={controller.t('crm:internalListing.marginCalculated')}
-        value={
-          controller.pricing
-            ? `${calcMargine(controller.pricing.cost, controller.pricing.mol).toFixed(2)} ${
-                controller.currency
-              }`
-            : '--'
-        }
-        className="text-emerald-600"
-      />
+}) => {
+  const { errors } = controller;
+
+  return (
+    <div className="space-y-4">
+      <InternalListingSectionTitle>
+        {controller.t('crm:internalListing.pricingAndUnit')}
+      </InternalListingSectionTitle>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <InternalListingNumberField
+          label={
+            <>
+              {controller.t('crm:internalListing.cost')} <RequiredMark />
+              <span className="text-zinc-400 font-semibold">
+                /
+                {controller.formData.costUnit === 'hours'
+                  ? controller.t('crm:internalListing.hour')
+                  : controller.t('crm:internalListing.unit')}
+              </span>
+            </>
+          }
+          value={controller.formData.costo ?? ''}
+          error={errors.costo}
+          onValueChange={controller.handleNumericValueChange('costo')}
+          formatDecimals={2}
+          aria-invalid={Boolean(errors.costo)}
+        />
+        <InternalListingNumberField
+          label={controller.t('crm:internalListing.mol')}
+          value={controller.formData.molPercentage ?? ''}
+          error={errors.molPercentage}
+          onValueChange={controller.handleNumericValueChange('molPercentage')}
+          formatDecimals={MOL_PERCENTAGE_DECIMALS}
+          required
+          aria-invalid={Boolean(errors.molPercentage)}
+        />
+        <InternalListingCalculatedValue
+          label={controller.t('crm:internalListing.salePriceCalculated')}
+          value={
+            controller.pricing
+              ? `${calcProductSalePrice(controller.pricing.cost, controller.pricing.mol).toFixed(2)} ${
+                  controller.currency
+                }`
+              : '--'
+          }
+          className="text-muted-foreground"
+        />
+        <InternalListingCalculatedValue
+          label={controller.t('crm:internalListing.marginCalculated')}
+          value={
+            controller.pricing
+              ? `${calcMargine(controller.pricing.cost, controller.pricing.mol).toFixed(2)} ${
+                  controller.currency
+                }`
+              : '--'
+          }
+          className="text-emerald-600"
+        />
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 const InternalListingNumberField: React.FC<{
+  'aria-invalid'?: boolean;
   error?: string;
   formatDecimals: number;
   label: React.ReactNode;
   onValueChange: (value: string) => void;
   required?: boolean;
   value: string | number;
-}> = ({ error, formatDecimals, label, onValueChange, required = false, value }) => (
+}> = ({
+  'aria-invalid': ariaInvalid,
+  error,
+  formatDecimals,
+  label,
+  onValueChange,
+  required = false,
+  value,
+}) => (
   <div className="space-y-1.5">
     <FieldLabel required={required}>{label}</FieldLabel>
     <ValidatedNumberInput
@@ -1852,7 +1879,7 @@ const InternalListingNumberField: React.FC<{
       formatDecimals={formatDecimals}
       onValueChange={onValueChange}
       className="flex-1 min-w-0"
-      aria-invalid={Boolean(error)}
+      aria-invalid={ariaInvalid ?? Boolean(error)}
     />
     {error && <p className="text-red-500 text-[10px] font-bold ml-1 mt-1">{error}</p>}
   </div>

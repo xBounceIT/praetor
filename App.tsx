@@ -1392,6 +1392,9 @@ const useAppContentController = () => {
           ? (next as (prev: View | '404') => View | '404')(activeViewRef.current)
           : next;
       dispatchNavigation({ type: 'set-active-view', activeView: resolved });
+      if (resolved !== 'projects/detail') {
+        setSelectedProjectId(null);
+      }
       const currentUser = currentUserRef.current;
       if (
         currentUser &&
@@ -1402,7 +1405,7 @@ const useAppContentController = () => {
         React.startTransition(() => setViewingUserId(currentUser.id));
       }
     },
-    [setViewingUserId],
+    [setSelectedProjectId, setViewingUserId],
   );
   const setProjectsViewTab = useCallback(
     (tab: ProjectsViewTab) => setActiveView(tab === 'tasks' ? 'projects/tasks' : 'projects/manage'),
@@ -1439,6 +1442,27 @@ const useAppContentController = () => {
     moduleLoadTokenRef.current++;
     entriesStreamTokenRef.current++;
     resetModuleLoader();
+    const setModuleState = <Key extends keyof AppModuleState>(
+      key: Key,
+      value: React.SetStateAction<AppModuleState[Key]>,
+    ) => {
+      dispatchModuleState({ type: 'set', key, value } as AppModuleStateSetAction);
+    };
+    const setLocalState = <Key extends keyof AppLocalState>(
+      key: Key,
+      value: React.SetStateAction<AppLocalState[Key]>,
+    ) => {
+      dispatchLocalState({ type: 'set', key, value } as AppLocalStateAction);
+    };
+    const setGeneralSettings = (value: React.SetStateAction<GeneralSettingsState>) => {
+      setLocalState('generalSettings', value);
+    };
+    const setLdapConfig = (value: React.SetStateAction<LdapConfig>) => {
+      setLocalState('ldapConfig', value);
+    };
+    const setEmailConfig = (value: React.SetStateAction<EmailConfig>) => {
+      setLocalState('emailConfig', value);
+    };
     clearAuthScopedState({
       hasLoadedGeneralSettings: () => {
         hasLoadedGeneralSettingsRef.current = false;
@@ -1455,66 +1479,39 @@ const useAppContentController = () => {
       hasLoadedSsoProviders: () => {
         hasLoadedSsoProvidersRef.current = false;
       },
-      ssoProviders: () => setSsoProviders([]),
+      ssoProviders: () => setLocalState('ssoProviders', []),
       hasLoadedRoles: () => {
         hasLoadedRolesRef.current = false;
       },
-      roles: () => setRoles([]),
-      users: () => setUsers([]),
-      clients: () => setClients([]),
-      projects: () => setProjects([]),
-      projectTasks: () => setProjectTasks([]),
-      resales: () => setResales([]),
-      resaleCategories: () => setResaleCategories([]),
-      resaleOrderOptions: () => setResaleOrderOptions([]),
-      products: () => setProducts([]),
-      quotes: () => setQuotes([]),
-      quoteCommunicationChannels: () => setQuoteCommunicationChannels([]),
-      clientOffers: () => setClientOffers([]),
-      clientsOrders: () => setClientsOrders([]),
-      invoices: () => setInvoices([]),
-      suppliers: () => setSuppliers([]),
-      supplierQuotes: () => setSupplierQuotes([]),
-      supplierOrders: () => setSupplierOrders([]),
-      supplierInvoices: () => setSupplierInvoices([]),
-      entries: () => setEntries([]),
-      workUnits: () => setWorkUnits([]),
+      roles: () => setLocalState('roles', []),
+      users: () => setModuleState('users', []),
+      clients: () => setModuleState('clients', []),
+      projects: () => setModuleState('projects', []),
+      projectTasks: () => setModuleState('projectTasks', []),
+      resales: () => setModuleState('resales', []),
+      resaleCategories: () => setModuleState('resaleCategories', []),
+      resaleOrderOptions: () => setModuleState('resaleOrderOptions', []),
+      products: () => setModuleState('products', []),
+      quotes: () => setModuleState('quotes', []),
+      quoteCommunicationChannels: () => setModuleState('quoteCommunicationChannels', []),
+      clientOffers: () => setModuleState('clientOffers', []),
+      clientsOrders: () => setModuleState('clientsOrders', []),
+      invoices: () => setModuleState('invoices', []),
+      suppliers: () => setModuleState('suppliers', []),
+      supplierQuotes: () => setModuleState('supplierQuotes', []),
+      supplierOrders: () => setModuleState('supplierOrders', []),
+      supplierInvoices: () => setModuleState('supplierInvoices', []),
+      entries: () => setModuleState('entries', []),
+      workUnits: () => setModuleState('workUnits', []),
       viewingUserAssignmentState: () =>
-        setViewingUserAssignmentState({
+        setLocalState('viewingUserAssignmentState', {
           userId: '',
           assignments: null,
           catalogs: null,
           isLoading: false,
         }),
     });
-  }, [
-    resetModuleLoader,
-    setUsers,
-    setClients,
-    setProjects,
-    setProjectTasks,
-    setResales,
-    setResaleCategories,
-    setResaleOrderOptions,
-    setProducts,
-    setQuotes,
-    setQuoteCommunicationChannels,
-    setClientOffers,
-    setClientsOrders,
-    setInvoices,
-    setSuppliers,
-    setSupplierQuotes,
-    setSupplierOrders,
-    setSupplierInvoices,
-    setEntries,
-    setWorkUnits,
-    setGeneralSettings,
-    setLdapConfig,
-    setEmailConfig,
-    setSsoProviders,
-    setRoles,
-    setViewingUserAssignmentState,
-  ]);
+  }, [resetModuleLoader]);
 
   const {
     currentUser,
