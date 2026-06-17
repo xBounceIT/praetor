@@ -203,17 +203,15 @@ describe('assertNoDemoDocumentIdConflicts', () => {
 });
 
 describe('demoSeedManifest assignment coverage', () => {
-  test('seed.sql document collision guard allows compatibility demo clients', () => {
-    const guardStart = SEED_SQL.indexOf('INSERT INTO demo_document_code_conflicts');
-    const guardEnd = SEED_SQL.indexOf('SELECT CASE', guardStart);
-
-    expect(guardStart).toBeGreaterThan(-1);
-    expect(guardEnd).toBeGreaterThan(guardStart);
-    const guard = SEED_SQL.slice(guardStart, guardEnd);
-
-    expect(guard).toContain("q.client_id NOT IN ('c1', 'c2')");
-    expect(guard).toContain("o.client_id NOT IN ('c1', 'c2')");
-    expect(guard).toContain("s.client_id NOT IN ('c1', 'c2')");
+  test('seed.sql delegates document collision checks to the app-layer guard', () => {
+    expect(SEED_SQL).toContain(
+      'Document-code collision protection is handled by server/db/demoSeed.ts before cleanup.',
+    );
+    expect(SEED_SQL).not.toContain('demo_document_code_conflicts');
+    expect(SEED_SQL).not.toContain(
+      'Demo seed document code collision with existing non-demo document rows',
+    );
+    expect(SEED_SQL).not.toMatch(/'Demo seed document code collision[^']*'::integer/);
   });
 
   test('manifest document IDs use the admin default document code templates', () => {
