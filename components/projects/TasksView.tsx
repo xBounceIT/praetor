@@ -686,7 +686,7 @@ const TasksView: React.FC<TasksViewProps> = ({
   );
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500">
+    <div className="space-y-8">
       <DeleteConfirmModal
         isOpen={isDeleteConfirmOpen}
         onClose={cancelDelete}

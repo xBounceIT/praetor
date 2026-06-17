@@ -181,7 +181,7 @@ const RecurringManager: React.FC<RecurringManagerProps> = ({
   );
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500">
+    <div className="space-y-6">
       <StandardTable<ProjectTask>
         title={t('recurring.recurringTaskSchedule')}
         totalLabel={t('recurring.active').toLowerCase()}

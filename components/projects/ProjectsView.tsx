@@ -1173,7 +1173,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = (props) => {
 };
 
 const ProjectsLayout: React.FC<{ controller: ProjectsController }> = ({ controller }) => (
-  <div className="space-y-8 animate-in fade-in duration-500">
+  <div className="space-y-8">
     <CreateProjectModal controller={controller} />
     <ProjectDeleteDialog controller={controller} />
     <ProjectAssignmentDialog controller={controller} />

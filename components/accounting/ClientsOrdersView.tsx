@@ -966,7 +966,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = (props) => {
 };
 
 const ClientsOrdersLayout: React.FC<{ controller: ClientsOrdersController }> = ({ controller }) => (
-  <div className="space-y-8 animate-in fade-in duration-500">
+  <div className="space-y-8">
     <ClientsOrderModal controller={controller} />
     <ClientsOrdersDeleteDialogs controller={controller} />
     <ClientsOrdersHeader controller={controller} />

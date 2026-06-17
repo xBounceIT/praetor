@@ -1390,7 +1390,7 @@ const ClientOffersView: React.FC<ClientOffersViewProps> = (props) => {
 };
 
 const ClientOffersLayout: React.FC<{ controller: ClientOffersController }> = ({ controller }) => (
-  <div className="space-y-6 animate-in fade-in duration-500">
+  <div className="space-y-6">
     <ClientOfferFormModal controller={controller} />
     <ClientOfferRevertModal controller={controller} />
     <ClientOfferDeleteDialogs controller={controller} />

@@ -517,7 +517,7 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = (props) => {
 const SupplierInvoicesLayout: React.FC<{ controller: SupplierInvoicesController }> = ({
   controller,
 }) => (
-  <div className="space-y-8 animate-in fade-in duration-500">
+  <div className="space-y-8">
     <SupplierInvoiceModal controller={controller} />
     <SupplierInvoiceDeleteDialog controller={controller} />
     <SupplierInvoicesHeader controller={controller} />

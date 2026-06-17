@@ -994,7 +994,7 @@ const InternalListingView: React.FC<InternalListingViewProps> = (props) => {
 const InternalListingLayout: React.FC<{ controller: InternalListingController }> = ({
   controller,
 }) => (
-  <div className="space-y-8 animate-in fade-in duration-500">
+  <div className="space-y-8">
     <InternalListingTypesModal controller={controller} />
     <InternalListingCategoriesModal controller={controller} />
     <InternalListingSubcategoriesModal controller={controller} />

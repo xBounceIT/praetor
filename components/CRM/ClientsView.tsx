@@ -1203,7 +1203,7 @@ const ClientsView: React.FC<ClientsViewProps> = (props) => {
 };
 
 const ClientsLayout: React.FC<{ controller: ClientsController }> = ({ controller }) => (
-  <div className="space-y-8 animate-in fade-in duration-500">
+  <div className="space-y-8">
     <ClientProfileOptionsModal controller={controller} />
     <ClientFormModal controller={controller} />
     <ClientDeleteDialog controller={controller} />

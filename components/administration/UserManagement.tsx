@@ -1342,7 +1342,7 @@ const UserManagement: React.FC<UserManagementProps> = (props) => {
 const UserManagementLayout: React.FC<{ controller: UserManagementController }> = ({
   controller,
 }) => (
-  <div className="space-y-6 animate-in slide-in-from-bottom-2 duration-500">
+  <div className="space-y-6">
     <UserDeleteDialog controller={controller} />
     <UserAuthMethodDialog controller={controller} />
     <UserTotpResetDialog controller={controller} />

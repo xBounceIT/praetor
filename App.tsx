@@ -989,7 +989,7 @@ const TrackerView: React.FC<{
   };
 
   return (
-    <div className="flex flex-col gap-6 animate-in fade-in duration-500">
+    <div className="flex flex-col gap-6">
       <TrackerModeToggle mode={trackerMode} onModeChange={setTrackerMode} />
       <TrackerUserSelector
         availableUsers={availableUsers}

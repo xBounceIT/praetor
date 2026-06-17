@@ -1744,7 +1744,7 @@ const ClientQuotesView: React.FC<ClientQuotesViewProps> = (props) => {
 };
 
 const ClientQuotesLayout: React.FC<{ controller: ClientQuotesController }> = ({ controller }) => (
-  <div className="space-y-8 animate-in fade-in duration-500">
+  <div className="space-y-8">
     <ClientQuoteFormModal controller={controller} />
     <ClientQuoteClientChangeModal controller={controller} />
     <ClientQuoteDeleteDialogs controller={controller} />

@@ -934,7 +934,7 @@ const RolesView: React.FC<RolesViewProps> = ({
   };
 
   return (
-    <div className="space-y-6 animate-in slide-in-from-bottom-2 duration-500">
+    <div className="space-y-6">
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
           <h2 className="text-2xl font-semibold tracking-tight text-foreground">

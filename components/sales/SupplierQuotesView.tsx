@@ -1100,7 +1100,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = (props) => {
 const SupplierQuotesLayout: React.FC<{ controller: SupplierQuotesController }> = ({
   controller,
 }) => (
-  <div className="space-y-8 animate-in fade-in duration-500">
+  <div className="space-y-8">
     <SupplierQuoteModal controller={controller} />
     <SupplierQuotesDeleteDialog controller={controller} />
     <SupplierQuotesHeader controller={controller} />

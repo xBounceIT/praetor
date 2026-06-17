@@ -211,7 +211,6 @@ interface GeneralSettingsState {
   openrouterModelId: string;
   modelCheck: { state: ModelCheckState; message?: string };
   activeTab: TabId;
-  tabDirection: 'left' | 'right';
   isSaving: boolean;
   isSaved: boolean;
 }
@@ -237,7 +236,6 @@ const INITIAL_GENERAL_SETTINGS_STATE: GeneralSettingsState = {
   openrouterModelId: '',
   modelCheck: { state: 'idle' },
   activeTab: 'localization',
-  tabDirection: 'right',
   isSaving: false,
   isSaved: false,
 };
@@ -968,7 +966,6 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({
     openrouterModelId,
     modelCheck,
     activeTab,
-    tabDirection,
     isSaving,
     isSaved,
   } = state;
@@ -976,18 +973,11 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({
 
   const handleTabChange = (id: TabId) => {
     if (id === activeTab) return;
-    const nextIndex = TABS.findIndex((tab) => tab.id === id);
-    const currentIndex = TABS.findIndex((tab) => tab.id === activeTab);
     dispatch({
       type: 'merge',
-      patch: { tabDirection: nextIndex > currentIndex ? 'right' : 'left', activeTab: id },
+      patch: { activeTab: id },
     });
   };
-
-  const sectionAnimationClass =
-    tabDirection === 'right'
-      ? 'animate-in fade-in slide-in-from-right-4 duration-300'
-      : 'animate-in fade-in slide-in-from-left-4 duration-300';
 
   if (loadedSettingsRef.current !== settings) {
     loadedSettingsRef.current = settings;
@@ -1128,7 +1118,7 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({
   };
 
   return (
-    <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in duration-500">
+    <div className="max-w-4xl mx-auto space-y-8">
       <div className="flex justify-between items-center">
         <div>
           <h2 className="text-2xl font-semibold text-foreground">{t('general.pageTitle')}</h2>
@@ -1140,16 +1130,12 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({
 
       <form onSubmit={handleSave} className="space-y-8">
         {activeTab === 'localization' && (
-          <LocalizationSettingsPanel
-            animationClass={sectionAnimationClass}
-            currency={currency}
-            dispatch={dispatch}
-          />
+          <LocalizationSettingsPanel animationClass="" currency={currency} dispatch={dispatch} />
         )}
 
         {activeTab === 'tracking' && (
           <TrackingSettingsPanel
-            animationClass={sectionAnimationClass}
+            animationClass=""
             state={{
               dailyLimit,
               startOfWeek,
@@ -1175,7 +1161,7 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({
 
         {activeTab === 'ai' && (
           <AiSettingsPanel
-            animationClass={sectionAnimationClass}
+            animationClass=""
             aiProviderOptions={AI_PROVIDER_OPTIONS}
             currentApiKey={currentApiKey}
             currentModelId={currentModelId}
@@ -1198,16 +1184,10 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({
         )}
       </form>
 
-      {activeTab === 'documentCodes' && (
-        <DocumentCodeSettings animationClass={sectionAnimationClass} />
-      )}
+      {activeTab === 'documentCodes' && <DocumentCodeSettings animationClass="" />}
 
       {activeTab === 'branding' && (
-        <BrandingSettings
-          branding={branding}
-          onChange={onBrandingChange}
-          animationClass={sectionAnimationClass}
-        />
+        <BrandingSettings branding={branding} onChange={onBrandingChange} animationClass="" />
       )}
     </div>
   );

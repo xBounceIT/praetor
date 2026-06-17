@@ -1156,7 +1156,7 @@ const UserSettingsLayout: React.FC<{ controller: UserSettingsController }> = ({ 
   }
 
   return (
-    <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in duration-500">
+    <div className="max-w-4xl mx-auto space-y-8">
       <UserSettingsHeader controller={controller} />
       <UserSettingsTabs controller={controller} />
       <UserSettingsActivePanel controller={controller} />
@@ -1257,7 +1257,7 @@ const UserSettingsActivePanel: React.FC<{ controller: UserSettingsController }> 
 };
 
 const ProfileSettingsPanel: React.FC<{ controller: UserSettingsController }> = ({ controller }) => (
-  <Card className="gap-0 overflow-hidden rounded-lg border-border bg-background py-0 animate-in fade-in slide-in-from-left-4 duration-300">
+  <Card className="gap-0 overflow-hidden rounded-lg border-border bg-background py-0">
     <CardHeader className="border-b border-border bg-muted/40 px-6 py-4 [.border-b]:pb-4">
       <CardTitle className="flex items-center gap-3 text-base">
         <User aria-hidden="true" className="size-4 text-praetor" />
@@ -1472,7 +1472,7 @@ const LanguageOptionCard: React.FC<{
 const SecuritySettingsPanel: React.FC<{ controller: UserSettingsController }> = ({
   controller,
 }) => (
-  <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+  <div className="space-y-6">
     <PasswordSettingsCard controller={controller} />
     <TwoFactorSettingsCard controller={controller} />
     <PersonalAccessTokenCard controller={controller} />
@@ -2147,7 +2147,7 @@ const PersonalAccessTokenMetadata: React.FC<{ controller: UserSettingsController
 };
 
 const McpSettingsPanel: React.FC<{ controller: UserSettingsController }> = ({ controller }) => (
-  <section className="overflow-hidden rounded-lg border border-border bg-background shadow-sm animate-in fade-in slide-in-from-right-4 duration-300">
+  <section className="overflow-hidden rounded-lg border border-border bg-background shadow-sm">
     <div className="border-b border-border bg-muted/40 px-6 py-4">
       <div className="flex items-center gap-3">
         <McpIcon className="size-4 text-praetor" />
@@ -2371,7 +2371,7 @@ const McpTokenRow: React.FC<{ controller: UserSettingsController; token: McpToke
 };
 
 const RilSettingsPanel: React.FC<{ controller: UserSettingsController }> = ({ controller }) => (
-  <Card className="gap-0 overflow-hidden rounded-lg bg-background py-0 animate-in fade-in slide-in-from-right-4 duration-300">
+  <Card className="gap-0 overflow-hidden rounded-lg bg-background py-0">
     <CardHeader className="border-b bg-muted/40 px-6 py-4 [.border-b]:pb-4">
       <CardTitle className="flex items-center gap-3 text-base">
         <CalendarDays aria-hidden="true" className="size-4 text-praetor" />

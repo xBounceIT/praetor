@@ -695,7 +695,7 @@ const ClientsInvoicesView: React.FC<ClientsInvoicesViewProps> = (props) => {
 const ClientsInvoicesLayout: React.FC<{ controller: ClientsInvoicesController }> = ({
   controller,
 }) => (
-  <div className="space-y-8 animate-in fade-in duration-500">
+  <div className="space-y-8">
     <ClientsInvoiceModal controller={controller} />
     <ClientsInvoiceDeleteDialogs controller={controller} />
     <ClientsInvoicesHeader controller={controller} />

@@ -1095,7 +1095,7 @@ const ResalesView: React.FC<ResalesViewProps> = (props) => {
 };
 
 const ResalesLayout: React.FC<{ controller: ResalesController }> = ({ controller }) => (
-  <div className="space-y-6 animate-in fade-in duration-500">
+  <div className="space-y-6">
     <Tabs
       value={controller.selectedTab}
       onValueChange={controller.handleTabChange}

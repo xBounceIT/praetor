@@ -429,7 +429,7 @@ const ExternalEmployeesView: React.FC<ExternalEmployeesViewProps> = ({
   };
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500">
+    <div className="space-y-8">
       {/* Add/Edit Modal */}
       <Modal isOpen={isModalOpen} onClose={closeEmployeeModal}>
         <ModalContent size="2xl">

@@ -718,7 +718,7 @@ const SupplierOrdersView: React.FC<SupplierOrdersViewProps> = (props) => {
 const SupplierOrdersLayout: React.FC<{ controller: SupplierOrdersController }> = ({
   controller,
 }) => (
-  <div className="space-y-8 animate-in fade-in duration-500">
+  <div className="space-y-8">
     <SupplierOrderModal controller={controller} />
     <SupplierOrderDeleteDialog controller={controller} />
     <SupplierOrdersHeader controller={controller} />

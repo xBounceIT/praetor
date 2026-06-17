@@ -707,7 +707,7 @@ const SuppliersView: React.FC<SuppliersViewProps> = ({
   const canSubmit = editingSupplier ? canUpdateSuppliers : canCreateSuppliers;
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500">
+    <div className="space-y-8">
       <SupplierFormModal
         modalState={{ isModalOpen, editingSupplier, errors, formData }}
         canSubmit={canSubmit}

@@ -442,7 +442,7 @@ const LogsView: React.FC<LogsViewProps> = ({
   );
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-300">
+    <div className="space-y-6">
       <div>
         <h2 className="text-2xl font-semibold text-zinc-800">{t('logs.title')}</h2>
         <p className="text-zinc-500 mt-1">{t('logs.subtitle')}</p>
