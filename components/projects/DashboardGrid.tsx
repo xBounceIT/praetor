@@ -412,7 +412,11 @@ const SingleColumnDashboardGrid: React.FC<SingleColumnDashboardGridProps> = ({
               </div>
             )}
             {state.hidden ? (
-              <HiddenPlaceholder title={item.title} onUnhide={() => onToggleHidden(state.id)} t={t} />
+              <HiddenPlaceholder
+                title={item.title}
+                onUnhide={() => onToggleHidden(state.id)}
+                t={t}
+              />
             ) : (
               <div className="overflow-hidden">{item.node}</div>
             )}
@@ -504,9 +508,7 @@ const DashboardGridPlacedItem: React.FC<DashboardGridPlacedItemProps> = ({
           </div>
         )}
       </div>
-      {!state.hidden && (
-        <DashboardResizeHandles item={item} beginDrag={beginDrag} t={t} />
-      )}
+      {!state.hidden && <DashboardResizeHandles item={item} beginDrag={beginDrag} t={t} />}
     </div>
   );
 };
@@ -527,12 +529,20 @@ const DashboardGridItemHeader: React.FC<{
       onKeyDown={(e) => onItemKeyDown(e, item.id)}
       className="flex min-w-0 flex-1 cursor-move touch-none items-center gap-2 text-left"
     >
-      <i className="fa-solid fa-up-down-left-right text-xs text-muted-foreground" aria-hidden="true"></i>
+      <i
+        className="fa-solid fa-up-down-left-right text-xs text-muted-foreground"
+        aria-hidden="true"
+      ></i>
       <span className="truncate text-xs font-medium text-foreground" title={item.title}>
         {item.title}
       </span>
     </button>
-    <HideButton hidden={state.hidden} title={item.title} onToggle={() => onToggleHidden(item.id)} t={t} />
+    <HideButton
+      hidden={state.hidden}
+      title={item.title}
+      onToggle={() => onToggleHidden(item.id)}
+      t={t}
+    />
   </div>
 );
 

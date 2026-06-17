@@ -543,7 +543,7 @@ const TasksView: React.FC<TasksViewProps> = ({
   onDeleteTask,
   onViewOrder,
 }) => {
-  const { t, i18n } = useTranslation(['projects', 'common']);
+  const { t } = useTranslation(['projects', 'common']);
   const canCreateTasks = hasScopedActionPermission(permissions, 'projects.tasks', 'create');
   const canUpdateTasks = hasScopedActionPermission(permissions, 'projects.tasks', 'update');
   const canDeleteTasks = hasScopedActionPermission(permissions, 'projects.tasks', 'delete');

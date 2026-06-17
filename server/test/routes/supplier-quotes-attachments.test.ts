@@ -40,6 +40,7 @@ const sqExistsByIdMock = mock();
 const sqFindLinkedOrderIdMock = mock();
 const sqIsSourcedByClientDocumentsMock = mock();
 const sqDeleteByIdMock = mock();
+const sqDeleteByIdWithAttachmentStoredNamesMock = mock();
 
 const sqaListForQuoteMock = mock();
 const sqaFindByIdMock = mock();
@@ -78,6 +79,7 @@ beforeAll(async () => {
     findLinkedOrderId: sqFindLinkedOrderIdMock,
     isSourcedByClientDocuments: sqIsSourcedByClientDocumentsMock,
     deleteById: sqDeleteByIdMock,
+    deleteByIdWithAttachmentStoredNames: sqDeleteByIdWithAttachmentStoredNamesMock,
   }));
   mock.module(
     '../../repositories/supplierQuoteVersionsRepo.ts',
@@ -180,6 +182,7 @@ const allMocks = [
   sqExistsByIdMock,
   sqFindLinkedOrderIdMock,
   sqDeleteByIdMock,
+  sqDeleteByIdWithAttachmentStoredNamesMock,
   sqaListForQuoteMock,
   sqaFindByIdMock,
   sqaInsertMock,
@@ -670,11 +673,10 @@ describe('DELETE /api/sales/supplier-quotes/:id/attachments/:attachmentId', () =
 describe('DELETE /api/sales/supplier-quotes/:id cleans up attachment files', () => {
   test('removes files for each attachment after the quote is deleted', async () => {
     sqFindLinkedOrderIdMock.mockResolvedValue(null);
-    sqaListForQuoteMock.mockResolvedValue([
-      SAMPLE_ATTACHMENT,
-      { ...SAMPLE_ATTACHMENT, id: 'sqa-2', storedName: 'def-456.pdf' },
-    ]);
-    sqDeleteByIdMock.mockResolvedValue({ supplierName: 'Acme' });
+    sqDeleteByIdWithAttachmentStoredNamesMock.mockResolvedValue({
+      supplierName: 'Acme',
+      attachmentStoredNames: ['abc-123.xlsx', 'def-456.pdf'],
+    });
 
     const res = await testApp.inject({
       method: 'DELETE',
@@ -701,6 +703,7 @@ describe('DELETE /api/sales/supplier-quotes/:id cleans up attachment files', () 
     expect(res.statusCode).toBe(409);
     expect(JSON.parse(res.body).error).toContain('used by client quotes, offers or orders');
     expect(sqDeleteByIdMock).not.toHaveBeenCalled();
+    expect(sqDeleteByIdWithAttachmentStoredNamesMock).not.toHaveBeenCalled();
     expect(deleteAttachmentMock).not.toHaveBeenCalled();
   });
 });

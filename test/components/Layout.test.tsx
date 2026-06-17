@@ -174,7 +174,7 @@ describe('<Layout />', () => {
     const brandButton = screen.getByText('PRAETOR').closest('[data-sidebar="menu-button"]');
     const brandLogoImage = brandButton?.querySelector('img');
     const brandLogo = brandLogoImage?.parentElement;
-    const brandSubtitle = screen.getByText('roles.manager workspace');
+    const brandSubtitle = screen.getByText('hr:roles.manager workspace');
     const avatarFallback = screen.getByText('TU');
 
     expect(sidebarContainer?.className).toContain('border-sidebar-border');
@@ -203,7 +203,7 @@ describe('<Layout />', () => {
     const user = userEvent.setup();
     const { container } = renderLayout();
 
-    const trigger = screen.getByRole('button', { name: 'TU Test User roles.manager' });
+    const trigger = screen.getByRole('button', { name: 'TU Test User hr:roles.manager' });
     await user.click(trigger);
     await screen.findByRole('menu');
 
@@ -226,7 +226,7 @@ describe('<Layout />', () => {
     const user = userEvent.setup();
     renderLayout();
 
-    const trigger = screen.getByRole('button', { name: 'TU Test User roles.manager' });
+    const trigger = screen.getByRole('button', { name: 'TU Test User hr:roles.manager' });
     await user.click(trigger);
     await screen.findByRole('menu');
 
@@ -477,7 +477,7 @@ describe('<Layout />', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Toggle Sidebar' }));
     expect(screen.getByRole('dialog')).toBeDefined();
 
-    await user.click(screen.getByRole('button', { name: 'TU Test User roles.manager' }));
+    await user.click(screen.getByRole('button', { name: 'TU Test User hr:roles.manager' }));
     await user.click(await screen.findByRole('menuitem', { name: 'menu.settings' }));
 
     expect(onViewChange).toHaveBeenCalledWith('settings');
@@ -489,7 +489,7 @@ describe('<Layout />', () => {
     const user = userEvent.setup();
     renderLayout({ onViewChange });
 
-    await user.click(screen.getByRole('button', { name: 'TU Test User roles.manager' }));
+    await user.click(screen.getByRole('button', { name: 'TU Test User hr:roles.manager' }));
     await user.click(await screen.findByRole('menuitem', { name: 'menu.documentation' }));
 
     expect(onViewChange).toHaveBeenCalledWith('docs');

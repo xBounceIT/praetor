@@ -28,6 +28,7 @@ const insertUserMock = mock();
 const updateDirectoryProfileMock = mock();
 const replaceUserRolesMock = mock();
 const setPrimaryRoleMock = mock();
+const replaceUserRolesAndSetPrimaryMock = mock();
 
 let resolveExternalIdentity: typeof import('../../services/external-auth.ts').resolveExternalIdentity;
 
@@ -62,6 +63,7 @@ beforeAll(async () => {
     updateDirectoryProfile: updateDirectoryProfileMock,
     replaceUserRoles: replaceUserRolesMock,
     setPrimaryRole: setPrimaryRoleMock,
+    replaceUserRolesAndSetPrimary: replaceUserRolesAndSetPrimaryMock,
   }));
 
   ({ resolveExternalIdentity } = await import('../../services/external-auth.ts'));
@@ -91,6 +93,7 @@ beforeEach(() => {
     updateDirectoryProfileMock,
     replaceUserRolesMock,
     setPrimaryRoleMock,
+    replaceUserRolesAndSetPrimaryMock,
   ]) {
     m.mockReset();
   }
@@ -99,6 +102,7 @@ beforeEach(() => {
   syncTopManagerAssignmentsForUserMock.mockResolvedValue(undefined);
   replaceUserRolesMock.mockResolvedValue(undefined);
   setPrimaryRoleMock.mockResolvedValue(undefined);
+  replaceUserRolesAndSetPrimaryMock.mockResolvedValue(undefined);
   hasOtherSubjectForUserAndProviderMock.mockResolvedValue(false);
 });
 
@@ -505,8 +509,12 @@ describe('resolveExternalIdentity role mapping — regression #596', () => {
       expect.objectContaining({ role: 'user' }),
       expect.anything(),
     );
-    expect(replaceUserRolesMock).toHaveBeenCalledWith(createdUserId, ['user'], expect.anything());
-    expect(setPrimaryRoleMock).toHaveBeenCalledWith(createdUserId, 'user', expect.anything());
+    expect(replaceUserRolesAndSetPrimaryMock).toHaveBeenCalledWith(
+      createdUserId,
+      ['user'],
+      'user',
+      expect.anything(),
+    );
   });
 });
 
@@ -578,10 +586,10 @@ describe('resolveExternalIdentity bootstrap-only role mapping (existing users un
       expect.objectContaining({ role: 'manager' }),
       expect.anything(),
     );
-    expect(setPrimaryRoleMock).toHaveBeenCalledWith(createdUserId, 'manager', expect.anything());
-    expect(replaceUserRolesMock).toHaveBeenCalledWith(
+    expect(replaceUserRolesAndSetPrimaryMock).toHaveBeenCalledWith(
       createdUserId,
       ['manager', 'admin'],
+      'manager',
       expect.anything(),
     );
   });

@@ -116,9 +116,7 @@ const areRilTransferOptionsEqual = (left: string[], right: unknown): boolean =>
   JSON.stringify(normalizeRilTransferOptions(left)) ===
   JSON.stringify(normalizeRilTransferOptions(right));
 
-const createGeneralSettingsPatch = (
-  settings: IGeneralSettings,
-): Partial<GeneralSettingsState> => ({
+const createGeneralSettingsPatch = (settings: IGeneralSettings): Partial<GeneralSettingsState> => ({
   currency: settings.currency,
   dailyLimit: settings.dailyLimit,
   startOfWeek: settings.startOfWeek,
@@ -177,7 +175,10 @@ const hasGeneralSettingsChanges = (
   state.rilDefaultStartTime !== (settings.rilDefaultStartTime || DEFAULT_RIL_START_TIME) ||
   state.rilDefaultExitTime !== (settings.rilDefaultExitTime || DEFAULT_RIL_EXIT_TIME) ||
   state.rilLunchBreakMinutes !== (settings.rilLunchBreakMinutes ?? 60) ||
-  !areRilNoteOptionsEqual(toPersistedRilNoteOptions(state.rilNoteOptions), settings.rilNoteOptions) ||
+  !areRilNoteOptionsEqual(
+    toPersistedRilNoteOptions(state.rilNoteOptions),
+    settings.rilNoteOptions,
+  ) ||
   !areRilTransferOptionsEqual(
     toPersistedRilTransferOptions(state.rilTransferOptions),
     settings.rilTransferOptions,
@@ -332,7 +333,12 @@ const LocalizationSettingsPanel: React.FC<{
   const { t } = useTranslation('settings');
 
   return (
-    <Card className={cn('gap-0 overflow-hidden rounded-lg border-border bg-background py-0', animationClass)}>
+    <Card
+      className={cn(
+        'gap-0 overflow-hidden rounded-lg border-border bg-background py-0',
+        animationClass,
+      )}
+    >
       <CardHeader className="border-b border-border bg-muted/40 px-6 py-4 [.border-b]:pb-4">
         <CardTitle className="flex items-center gap-3 text-base">
           <Globe aria-hidden="true" className="size-4 text-praetor" />
@@ -510,7 +516,12 @@ const TrackingSettingsPanel: React.FC<{
   const { t } = useTranslation('settings');
 
   return (
-    <Card className={cn('gap-0 overflow-hidden rounded-lg border-border bg-background py-0', animationClass)}>
+    <Card
+      className={cn(
+        'gap-0 overflow-hidden rounded-lg border-border bg-background py-0',
+        animationClass,
+      )}
+    >
       <CardHeader className="border-b border-border bg-muted/40 px-6 py-4 [.border-b]:pb-4">
         <CardTitle className="flex items-center gap-3 text-base">
           <Clock aria-hidden="true" className="size-4 text-praetor" />
@@ -717,7 +728,12 @@ const AiSettingsPanel: React.FC<{
   const { t } = useTranslation('settings');
 
   return (
-    <Card className={cn('gap-0 overflow-hidden rounded-lg border-border bg-background py-0', animationClass)}>
+    <Card
+      className={cn(
+        'gap-0 overflow-hidden rounded-lg border-border bg-background py-0',
+        animationClass,
+      )}
+    >
       <CardHeader className="border-b border-border bg-muted/40 px-6 py-4 [.border-b]:pb-4">
         <CardTitle className="flex items-center gap-3 text-base">
           <Sparkles aria-hidden="true" className="size-4 text-praetor" />
@@ -730,9 +746,7 @@ const AiSettingsPanel: React.FC<{
           label={t('general.enableAiReportingLabel')}
           description={t('general.enableAiReportingDescription')}
           checked={state.enableAiReporting}
-          onChange={(checked) =>
-            dispatch({ type: 'merge', patch: { enableAiReporting: checked } })
-          }
+          onChange={(checked) => dispatch({ type: 'merge', patch: { enableAiReporting: checked } })}
           contentClassName="max-w-md"
         />
 
@@ -863,9 +877,7 @@ const AiSettingsPanel: React.FC<{
                 </p>
               )}
               {state.modelCheck.state === 'not_found' && (
-                <p className="text-xs font-medium text-destructive">
-                  {t('general.modelNotFound')}
-                </p>
+                <p className="text-xs font-medium text-destructive">{t('general.modelNotFound')}</p>
               )}
               {state.modelCheck.state === 'error' && (
                 <p className="inline-flex items-center gap-1 text-xs font-medium text-amber-600">

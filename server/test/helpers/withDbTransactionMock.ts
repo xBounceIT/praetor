@@ -8,7 +8,7 @@ import { TX_SENTINEL } from './txSentinel.ts';
 // can then distinguish the two by asserting on the last positional arg — previously both
 // paths produced `undefined`, so transaction-boundary contracts were invisible.
 //
-// We pick `TX_SENTINEL` (a unique symbol) rather than a real Drizzle instance to keep
+// We pick `TX_SENTINEL` (a tiny executor object) rather than a real Drizzle instance to keep
 // Bun's matcher diffs small; passing a full executor with its schema tree triggers an
 // expensive serializer when an assertion mismatches, exhausting memory on Windows runs.
 //

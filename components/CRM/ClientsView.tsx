@@ -1220,14 +1220,10 @@ const ClientsLayout: React.FC<{ controller: ClientsController }> = ({ controller
   </div>
 );
 
-const ClientProfileOptionsModal: React.FC<{ controller: ClientsController }> = ({
-  controller,
-}) => (
+const ClientProfileOptionsModal: React.FC<{ controller: ClientsController }> = ({ controller }) => (
   <Modal
     isOpen={controller.isManageProfileOptionModalOpen}
-    onClose={() =>
-      controller.dispatch({ type: 'setIsManageProfileOptionModalOpen', value: false })
-    }
+    onClose={() => controller.dispatch({ type: 'setIsManageProfileOptionModalOpen', value: false })}
     zIndex={70}
   >
     <ModalContent size="2xl">
@@ -1254,9 +1250,7 @@ const ClientProfileOptionsModal: React.FC<{ controller: ClientsController }> = (
   </Modal>
 );
 
-const ClientProfileOptionEditor: React.FC<{ controller: ClientsController }> = ({
-  controller,
-}) => (
+const ClientProfileOptionEditor: React.FC<{ controller: ClientsController }> = ({ controller }) => (
   <div className="space-y-3 rounded-md border border-border bg-muted/30 p-4">
     <Field>
       <FieldLabel htmlFor="client-profile-option-value">
@@ -1270,9 +1264,7 @@ const ClientProfileOptionEditor: React.FC<{ controller: ClientsController }> = (
           controller.dispatch({ type: 'setNewProfileOptionValue', value: event.target.value })
         }
         placeholder={controller.t('crm:clients.valuePlaceholder')}
-        onKeyDown={(event) =>
-          event.key === 'Enter' && void controller.handleSaveProfileOption()
-        }
+        onKeyDown={(event) => event.key === 'Enter' && void controller.handleSaveProfileOption()}
       />
     </Field>
     {controller.profileOptionError && (
@@ -1299,9 +1291,7 @@ const ClientProfileOptionEditor: React.FC<{ controller: ClientsController }> = (
   </div>
 );
 
-const ClientProfileOptionsTable: React.FC<{ controller: ClientsController }> = ({
-  controller,
-}) => {
+const ClientProfileOptionsTable: React.FC<{ controller: ClientsController }> = ({ controller }) => {
   const columns = useMemo<Column<ClientProfileOption>[]>(
     () => [
       {
@@ -1494,9 +1484,7 @@ const ClientTextField: React.FC<{
   );
 };
 
-const ClientIdentifyingSection: React.FC<{ controller: ClientsController }> = ({
-  controller,
-}) => (
+const ClientIdentifyingSection: React.FC<{ controller: ClientsController }> = ({ controller }) => (
   <div className="space-y-4">
     <ClientSectionTitle>{controller.t('crm:clients.identifyingData')}</ClientSectionTitle>
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1611,7 +1599,13 @@ const ClientContactsList: React.FC<{ controller: ClientsController }> = ({ contr
         ></i>
         {controller.t('crm:clients.contactsList')} ({controller.contactTableRows.length})
       </Button>
-      <Button type="button" variant="secondary" size="sm" onClick={controller.addContact} className="gap-2">
+      <Button
+        type="button"
+        variant="secondary"
+        size="sm"
+        onClick={controller.addContact}
+        className="gap-2"
+      >
         <i className="fa-solid fa-plus"></i>
         {controller.t('crm:clients.addContact')}
       </Button>

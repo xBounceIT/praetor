@@ -253,11 +253,7 @@ const useResalesController = ({
   const canUpdate = hasPermission(permissions, buildPermission('projects.resales', 'update'));
   const canDelete = hasPermission(permissions, buildPermission('projects.resales', 'delete'));
 
-  const [uiState, dispatchUiState] = useReducer(
-    resalesUiReducer,
-    undefined,
-    createResalesUiState,
-  );
+  const [uiState, dispatchUiState] = useReducer(resalesUiReducer, undefined, createResalesUiState);
   const {
     activeTab,
     selectedResaleId,
@@ -273,8 +269,7 @@ const useResalesController = ({
     activityToDelete,
   } = uiState;
   const setActiveTab = useCallback(
-    (update: StateUpdate<ResalesViewTab>) =>
-      dispatchUiState({ type: 'setActiveTab', update }),
+    (update: StateUpdate<ResalesViewTab>) => dispatchUiState({ type: 'setActiveTab', update }),
     [],
   );
   const setSelectedResaleId = useCallback(
@@ -283,13 +278,11 @@ const useResalesController = ({
     [],
   );
   const setResaleForm = useCallback(
-    (update: StateUpdate<ResaleFormState>) =>
-      dispatchUiState({ type: 'setResaleForm', update }),
+    (update: StateUpdate<ResaleFormState>) => dispatchUiState({ type: 'setResaleForm', update }),
     [],
   );
   const setIsResaleModalOpen = useCallback(
-    (update: StateUpdate<boolean>) =>
-      dispatchUiState({ type: 'setIsResaleModalOpen', update }),
+    (update: StateUpdate<boolean>) => dispatchUiState({ type: 'setIsResaleModalOpen', update }),
     [],
   );
   const setActivityForm = useCallback(
@@ -298,13 +291,11 @@ const useResalesController = ({
     [],
   );
   const setIsActivityModalOpen = useCallback(
-    (update: StateUpdate<boolean>) =>
-      dispatchUiState({ type: 'setIsActivityModalOpen', update }),
+    (update: StateUpdate<boolean>) => dispatchUiState({ type: 'setIsActivityModalOpen', update }),
     [],
   );
   const setIsCategoryModalOpen = useCallback(
-    (update: StateUpdate<boolean>) =>
-      dispatchUiState({ type: 'setIsCategoryModalOpen', update }),
+    (update: StateUpdate<boolean>) => dispatchUiState({ type: 'setIsCategoryModalOpen', update }),
     [],
   );
   const setCategoryName = useCallback(
@@ -321,8 +312,7 @@ const useResalesController = ({
     [],
   );
   const setResaleToDelete = useCallback(
-    (update: StateUpdate<Resale | null>) =>
-      dispatchUiState({ type: 'setResaleToDelete', update }),
+    (update: StateUpdate<Resale | null>) => dispatchUiState({ type: 'setResaleToDelete', update }),
     [],
   );
   const setActivityToDelete = useCallback(
@@ -1193,7 +1183,8 @@ const ResalesActivitiesTab: React.FC<{ controller: ResalesController }> = ({ con
               {controller.t('common:buttons.back')}
             </Button>
             <h3 className="text-xl font-semibold text-foreground">
-              {controller.selectedResale.clientOrderId} / {controller.selectedResale.supplierOrderId}
+              {controller.selectedResale.clientOrderId} /{' '}
+              {controller.selectedResale.supplierOrderId}
             </h3>
             <p className="text-sm text-muted-foreground">
               {controller.selectedResale.clientName} · {controller.selectedResale.supplierName}
@@ -1378,7 +1369,9 @@ const ResaleCreateModal: React.FC<{ controller: ResalesController }> = ({ contro
                     required
                     aria-invalid={Boolean(controller.resaleForm.errors.dueDate)}
                   />
-                  <FieldError className="text-xs">{controller.resaleForm.errors.dueDate}</FieldError>
+                  <FieldError className="text-xs">
+                    {controller.resaleForm.errors.dueDate}
+                  </FieldError>
                 </Field>
                 <ReadOnlyMoneyField
                   id="resale-revenue"

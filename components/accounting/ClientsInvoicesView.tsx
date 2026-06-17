@@ -905,7 +905,9 @@ const InvoiceItemsSection: React.FC<{ controller: ClientsInvoicesController }> =
   </div>
 );
 
-const InvoiceItemsHeader: React.FC<{ controller: ClientsInvoicesController }> = ({ controller }) => {
+const InvoiceItemsHeader: React.FC<{ controller: ClientsInvoicesController }> = ({
+  controller,
+}) => {
   if (!controller.formData.items || controller.formData.items.length === 0) return null;
   return (
     <div className="mb-1 hidden items-center gap-2 px-3 lg:flex">
@@ -1019,7 +1021,10 @@ const InvoiceItemQuantityField: React.FC<{
   index: number;
 }> = ({ controller, item, index }) => (
   <div className="space-y-1 lg:col-span-2">
-    <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden" required>
+    <FieldLabel
+      className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden"
+      required
+    >
       {controller.t('common:labels.quantity')}
     </FieldLabel>
     <div className="flex items-center justify-center gap-1">
@@ -1030,7 +1035,11 @@ const InvoiceItemQuantityField: React.FC<{
         value={item.quantity}
         onValueChange={(value) => {
           const parsed = parseFloat(value);
-          controller.updateItemRow(index, 'quantity', value === '' || Number.isNaN(parsed) ? 0 : parsed);
+          controller.updateItemRow(
+            index,
+            'quantity',
+            value === '' || Number.isNaN(parsed) ? 0 : parsed,
+          );
         }}
         className="min-w-0 max-w-[5rem]"
       />
@@ -1088,7 +1097,11 @@ const InvoiceItemPriceField: React.FC<{
     className="lg:col-span-2"
     onValueChange={(value) => {
       const parsed = parseFloat(value);
-      controller.updateItemRow(index, 'unitPrice', value === '' || Number.isNaN(parsed) ? 0 : parsed);
+      controller.updateItemRow(
+        index,
+        'unitPrice',
+        value === '' || Number.isNaN(parsed) ? 0 : parsed,
+      );
     }}
   />
 );
@@ -1106,7 +1119,11 @@ const InvoiceItemDiscountField: React.FC<{
     className="lg:col-span-1"
     onValueChange={(value) => {
       const parsed = parseFloat(value);
-      controller.updateItemRow(index, 'discount', value === '' || Number.isNaN(parsed) ? 0 : parsed);
+      controller.updateItemRow(
+        index,
+        'discount',
+        value === '' || Number.isNaN(parsed) ? 0 : parsed,
+      );
     }}
   />
 );
@@ -1139,7 +1156,10 @@ const InvoiceItemNumberField: React.FC<{
   max?: string;
 }> = ({ label, suffix, value, onValueChange, className, required, max }) => (
   <div className={`space-y-1 ${className}`}>
-    <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden" required={required}>
+    <FieldLabel
+      className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden"
+      required={required}
+    >
       {label}
     </FieldLabel>
     <div className="flex items-center gap-1">

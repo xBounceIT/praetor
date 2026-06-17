@@ -70,6 +70,7 @@ const updateAuthMethodMock = mock();
 const addUserRoleMock = mock();
 const replaceUserRolesMock = mock();
 const setPrimaryRoleMock = mock();
+const replaceUserRolesAndSetPrimaryMock = mock();
 const getUserRoleIdsMock = mock();
 const canManageUserMock = mock();
 const getAssignmentsMock = mock();
@@ -149,6 +150,7 @@ beforeAll(async () => {
     addUserRole: addUserRoleMock,
     replaceUserRoles: replaceUserRolesMock,
     setPrimaryRole: setPrimaryRoleMock,
+    replaceUserRolesAndSetPrimary: replaceUserRolesAndSetPrimaryMock,
     getUserRoleIds: getUserRoleIdsMock,
     canManageUser: canManageUserMock,
     getAssignments: getAssignmentsMock,
@@ -368,6 +370,7 @@ const allMocks = [
   addUserRoleMock,
   replaceUserRolesMock,
   setPrimaryRoleMock,
+  replaceUserRolesAndSetPrimaryMock,
   getUserRoleIdsMock,
   canManageUserMock,
   getAssignmentsMock,
@@ -418,6 +421,7 @@ beforeEach(async () => {
   logAuditMock.mockImplementation(async () => undefined);
   getTotpStateMock.mockResolvedValue(null);
   generalSettingsGetMock.mockResolvedValue(null);
+  replaceUserRolesAndSetPrimaryMock.mockResolvedValue(undefined);
   // No extra assignable roles by default — enforcement is driven by the user's primary role.
   rolesListAvailableRolesForUserMock.mockResolvedValue([]);
   filterAssignedClientIdsMock.mockResolvedValue(new Set(['c1']));
@@ -3060,8 +3064,12 @@ describe('PUT /api/users/:id/roles', () => {
     });
 
     expect(res.statusCode).toBe(200);
-    expect(replaceUserRolesMock).toHaveBeenCalledWith('u-target', ['user', 'manager'], TX_SENTINEL);
-    expect(setPrimaryRoleMock).toHaveBeenCalledWith('u-target', 'manager', TX_SENTINEL);
+    expect(replaceUserRolesAndSetPrimaryMock).toHaveBeenCalledWith(
+      'u-target',
+      ['user', 'manager'],
+      'manager',
+      TX_SENTINEL,
+    );
     expect(syncTopManagerAssignmentsForUserMock).toHaveBeenCalled();
     expect(logAuditMock).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'user.roles_updated' }),
@@ -3092,7 +3100,12 @@ describe('PUT /api/users/:id/roles', () => {
     });
 
     expect(res.statusCode).toBe(200);
-    expect(replaceUserRolesMock).toHaveBeenCalledWith('u-target', ['user', 'admin'], TX_SENTINEL);
+    expect(replaceUserRolesAndSetPrimaryMock).toHaveBeenCalledWith(
+      'u-target',
+      ['user', 'admin'],
+      'admin',
+      TX_SENTINEL,
+    );
     // Primary role is now admin, the mandate is on, and they have no TOTP → revoke their
     // credentials. This runs inside the same transaction as the role replacement (shared TX
     // sentinel) so the grant and revocation commit or roll back together.
@@ -3198,20 +3211,17 @@ describe('PUT /api/users/:id/roles', () => {
     expect(res.statusCode).toBe(403);
   });
 
-  // Regression: replaceUserRoles + setPrimaryRole + syncTopManagerAssignmentsForUser
+  // Regression: replaceUserRolesAndSetPrimary + syncTopManagerAssignmentsForUser
   // must run inside a single `withDbTransaction`. Without it, an INSERT failure in
   // replaceUserRoles (or in any following step) leaves the user with their roles
   // already deleted.
-  test('wraps replaceUserRoles + setPrimaryRole + syncTopManager in a single withDbTransaction', async () => {
+  test('wraps role replacement + syncTopManager in a single withDbTransaction', async () => {
     findCoreByIdMock.mockResolvedValue(SAMPLE_USER_CORE);
     rolesFindExistingIdsMock.mockResolvedValue(new Set(['user', 'manager']));
 
     const callOrder: string[] = [];
-    replaceUserRolesMock.mockImplementation(async () => {
-      callOrder.push('replaceUserRoles');
-    });
-    setPrimaryRoleMock.mockImplementation(async () => {
-      callOrder.push('setPrimaryRole');
+    replaceUserRolesAndSetPrimaryMock.mockImplementation(async () => {
+      callOrder.push('replaceUserRolesAndSetPrimary');
     });
     syncTopManagerAssignmentsForUserMock.mockImplementation(async () => {
       callOrder.push('syncTopManager');
@@ -3234,15 +3244,13 @@ describe('PUT /api/users/:id/roles', () => {
     expect(withDbTransactionMock).toHaveBeenCalledTimes(1);
     expect(callOrder).toEqual([
       'tx:open',
-      'replaceUserRoles',
-      'setPrimaryRole',
+      'replaceUserRolesAndSetPrimary',
       'syncTopManager',
       'tx:close',
     ]);
     // Each write step must run on the tx the wrapper handed us (not `db`), otherwise
     // a failure in a later step won't roll the earlier ones back.
-    expect(replaceUserRolesMock.mock.calls[0]?.at(-1)).toBe(TX_SENTINEL);
-    expect(setPrimaryRoleMock.mock.calls[0]?.at(-1)).toBe(TX_SENTINEL);
+    expect(replaceUserRolesAndSetPrimaryMock.mock.calls[0]?.at(-1)).toBe(TX_SENTINEL);
     expect(syncTopManagerAssignmentsForUserMock.mock.calls[0]?.at(-1)).toBe(TX_SENTINEL);
   });
 
@@ -3250,8 +3258,8 @@ describe('PUT /api/users/:id/roles', () => {
     findCoreByIdMock.mockResolvedValue(SAMPLE_USER_CORE);
     rolesFindExistingIdsMock.mockResolvedValue(new Set(['user', 'manager']));
 
-    replaceUserRolesMock.mockResolvedValue(undefined);
-    setPrimaryRoleMock.mockRejectedValue(new Error('primary role update failed'));
+    replaceUserRolesAndSetPrimaryMock.mockResolvedValue(undefined);
+    syncTopManagerAssignmentsForUserMock.mockRejectedValue(new Error('top-manager sync failed'));
     resetWithDbTransactionMock();
 
     const res = await testApp.inject({
@@ -3262,9 +3270,8 @@ describe('PUT /api/users/:id/roles', () => {
     });
 
     expect(res.statusCode).toBe(500);
-    expect(replaceUserRolesMock).toHaveBeenCalled();
-    expect(setPrimaryRoleMock).toHaveBeenCalled();
-    expect(syncTopManagerAssignmentsForUserMock).not.toHaveBeenCalled();
+    expect(replaceUserRolesAndSetPrimaryMock).toHaveBeenCalled();
+    expect(syncTopManagerAssignmentsForUserMock).toHaveBeenCalled();
     expect(logAuditMock).not.toHaveBeenCalled();
   });
 });

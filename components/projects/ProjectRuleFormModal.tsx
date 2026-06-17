@@ -271,8 +271,7 @@ const ProjectRuleConditionsEditor: React.FC<{
           <span>{t('projects:detail.rules.form.operator')}</span>
           <span>{t('projects:detail.rules.form.compareAgainst')}</span>
           <span>
-            {t('projects:detail.rules.form.value')} /{' '}
-            {t('projects:detail.rules.form.targetField')}
+            {t('projects:detail.rules.form.value')} / {t('projects:detail.rules.form.targetField')}
           </span>
           <span className="sr-only">{t('projects:detail.rules.actions.removeCondition')}</span>
         </div>
@@ -299,14 +298,23 @@ const ProjectRuleConditionsEditor: React.FC<{
               name: t(`projects:detail.rules.fields.${definition.id}`),
             }));
             const valueTypeChoices: readonly ProjectRuleConditionValueType[] =
-              valueFieldOptions.length > 0 ? (['literal', 'field'] as const) : (['literal'] as const);
+              valueFieldOptions.length > 0
+                ? (['literal', 'field'] as const)
+                : (['literal'] as const);
             const fieldError = errors[`field-${index}`];
             const operatorError = errors[`operator-${index}`];
             const valueError = errors[`value-${index}`];
             return (
-              <div key={`${condition.field}-${index}`} className={`${CONDITION_GRID_CLASSNAME} p-3`}>
+              <div
+                key={`${condition.field}-${index}`}
+                className={`${CONDITION_GRID_CLASSNAME} p-3`}
+              >
                 <Field data-invalid={!!fieldError}>
-                  <FieldLabel className="md:sr-only" htmlFor={`project-rule-field-${index}`} required>
+                  <FieldLabel
+                    className="md:sr-only"
+                    htmlFor={`project-rule-field-${index}`}
+                    required
+                  >
                     {t('projects:detail.rules.form.field')}
                   </FieldLabel>
                   <Select
@@ -394,7 +402,11 @@ const ProjectRuleConditionsEditor: React.FC<{
                 </Field>
 
                 <Field data-invalid={!!valueError}>
-                  <FieldLabel className="md:sr-only" htmlFor={`project-rule-value-${index}`} required>
+                  <FieldLabel
+                    className="md:sr-only"
+                    htmlFor={`project-rule-value-${index}`}
+                    required
+                  >
                     {t(
                       valueType === 'field'
                         ? 'projects:detail.rules.form.targetField'
@@ -453,9 +465,7 @@ const ProjectRuleConditionsEditor: React.FC<{
                       type="number"
                       step="any"
                       value={condition.value}
-                      onChange={(event) =>
-                        onUpdateCondition(index, { value: event.target.value })
-                      }
+                      onChange={(event) => onUpdateCondition(index, { value: event.target.value })}
                       disabled={submitting}
                       aria-invalid={!!valueError}
                       placeholder={t('projects:detail.rules.form.valuePlaceholder')}

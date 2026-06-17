@@ -69,7 +69,13 @@ const channelManagerReducer = (
 ): ChannelManagerState => {
   switch (action.type) {
     case 'openManage':
-      return { ...state, isManageOpen: true, editingChannel: null, channelName: '', managerError: null };
+      return {
+        ...state,
+        isManageOpen: true,
+        editingChannel: null,
+        channelName: '',
+        managerError: null,
+      };
     case 'closeManage':
       return { ...state, isManageOpen: false };
     case 'editChannel':
@@ -95,7 +101,9 @@ const channelManagerReducer = (
       return {
         ...state,
         deletingId: null,
-        ...(state.editingChannel?.id === action.id ? { editingChannel: null, channelName: '' } : {}),
+        ...(state.editingChannel?.id === action.id
+          ? { editingChannel: null, channelName: '' }
+          : {}),
       };
     case 'deleteFailed':
       return { ...state, deletingId: null, managerError: action.message };
@@ -223,7 +231,11 @@ const QuoteCommunicationChannelField: React.FC<QuoteCommunicationChannelFieldPro
         {error && <FieldError className="text-xs">{error}</FieldError>}
       </div>
 
-      <Modal isOpen={isManageOpen} onClose={() => dispatchManager({ type: 'closeManage' })} zIndex={90}>
+      <Modal
+        isOpen={isManageOpen}
+        onClose={() => dispatchManager({ type: 'closeManage' })}
+        zIndex={90}
+      >
         <ModalContent className="max-w-3xl">
           <ModalHeader>
             <ModalTitle>{t('sales:communicationChannels.manageTitle')}</ModalTitle>

@@ -26,6 +26,6 @@ describe('<ViewOwnerAvatar />', () => {
     // The i18n mock is an identity translator, so the label is the raw key — the
     // owner is interpolated into the real string at runtime.
     render(<ViewOwnerAvatar ownerName="Top Manager" />);
-    expect(screen.getByLabelText('views.sharedBy')).toBeInTheDocument();
+    expect(screen.getByText('views.sharedBy')).toBeInTheDocument();
   });
 });

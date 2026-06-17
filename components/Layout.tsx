@@ -159,12 +159,12 @@ const LayoutHeader: React.FC<LayoutHeaderProps> = ({
 );
 
 const useRoleLabel = (currentUser: PraetorUser, roles: Role[]) => {
-  const { t } = useTranslation('hr');
+  const { t } = useTranslation(['layout', 'hr']);
   return useMemo(() => {
     const fromAvailable = currentUser.availableRoles?.find((r) => r.id === currentUser.role);
     if (fromAvailable?.name) return fromAvailable.name;
     const role = roles.find((item) => item.id === currentUser.role);
-    return role?.name || t(`roles.${currentUser.role}`, { defaultValue: currentUser.role });
+    return role?.name || t(`hr:roles.${currentUser.role}`, { defaultValue: currentUser.role });
   }, [currentUser.availableRoles, currentUser.role, roles, t]);
 };
 

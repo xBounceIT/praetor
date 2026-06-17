@@ -1068,9 +1068,7 @@ const LdapServerCard: React.FC<{ controller: AuthSettingsController }> = ({ cont
           <Switch
             id="ldap-enabled"
             checked={controller.ldapForm.enabled}
-            onCheckedChange={(enabled) =>
-              controller.setLdapForm((prev) => ({ ...prev, enabled }))
-            }
+            onCheckedChange={(enabled) => controller.setLdapForm((prev) => ({ ...prev, enabled }))}
           />
           <FieldLabel htmlFor="ldap-enabled">{controller.t('admin.ldap.enabled')}</FieldLabel>
         </UIField>
@@ -1479,7 +1477,11 @@ const LdapTestResult: React.FC<{
         result.authenticated ? 'text-emerald-600 dark:text-emerald-400' : 'text-destructive',
       )}
     >
-      [{result.authenticated ? controller.t('admin.ldap.test.success', 'SUCCESS') : controller.t('admin.ldap.test.failure', 'FAILURE')}] {result.message}
+      [
+      {result.authenticated
+        ? controller.t('admin.ldap.test.success', 'SUCCESS')
+        : controller.t('admin.ldap.test.failure', 'FAILURE')}
+      ] {result.message}
     </div>
     {result.authenticated && <LdapAuthenticatedResult controller={controller} result={result} />}
     <div className="border-t border-border pt-3">
@@ -1513,12 +1515,17 @@ const LdapAuthenticatedResult: React.FC<{
         {result.roleIds.length ? result.roleIds.join(', ') : '-'}
       </span>
       {helpKey && (
-        <span className="col-span-2 text-xs text-muted-foreground" data-testid="ldap-test-role-resolution-help">
+        <span
+          className="col-span-2 text-xs text-muted-foreground"
+          data-testid="ldap-test-role-resolution-help"
+        >
           {controller.t(helpKey)}
         </span>
       )}
       <span>{controller.t('admin.ldap.test.groupsFound', 'Groups Found:')}</span>
-      <span className="text-foreground">{result.groups.length ? result.groups.join(', ') : '-'}</span>
+      <span className="text-foreground">
+        {result.groups.length ? result.groups.join(', ') : '-'}
+      </span>
     </div>
   );
 };

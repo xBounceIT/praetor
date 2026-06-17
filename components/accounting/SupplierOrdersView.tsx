@@ -754,9 +754,7 @@ const SupplierOrdersHeader: React.FC<{ controller: SupplierOrdersController }> =
   </div>
 );
 
-const SupplierOrderModal: React.FC<{ controller: SupplierOrdersController }> = ({
-  controller,
-}) => (
+const SupplierOrderModal: React.FC<{ controller: SupplierOrdersController }> = ({ controller }) => (
   <Modal isOpen={controller.isModalOpen} onClose={controller.closeEditModal}>
     <div className="flex max-w-[calc(100vw-2rem)] items-start gap-4">
       <ModalContent size="full" className="max-h-[90vh]">
@@ -1306,8 +1304,7 @@ const SupplierOrderNotesSummarySection: React.FC<{ controller: SupplierOrdersCon
           label: controller.t('accounting:supplierOrders.discount'),
           value: controller.formData.discount || 0,
           type: controller.formData.discountType || 'percentage',
-          onChange: (value) =>
-            controller.patchForm({ discount: value === '' ? 0 : Number(value) }),
+          onChange: (value) => controller.patchForm({ discount: value === '' ? 0 : Number(value) }),
           onTypeChange: (type) => controller.patchForm({ discountType: type }),
           disabled: controller.isReadOnly,
         }}

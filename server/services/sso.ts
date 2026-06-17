@@ -603,17 +603,25 @@ const responseWithBoundedBody = (response: Response, method: string): Response =
   if (!response.body) return new Response(null, init);
 
   let total = 0;
-  const boundedBody = response.body.pipeThrough(
-    new TransformStream<Uint8Array, Uint8Array>({
-      transform(chunk, controller) {
-        total += chunk.byteLength;
-        if (total > REMOTE_FETCH_MAX_BYTES) {
-          throw new Error(`Remote response exceeded ${REMOTE_FETCH_MAX_BYTES} bytes`);
-        }
-        controller.enqueue(chunk);
-      },
-    }),
-  );
+  const reader = response.body.getReader();
+  const boundedBody = new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      const { done, value } = await reader.read();
+      if (done) {
+        controller.close();
+        return;
+      }
+      total += value.byteLength;
+      if (total > REMOTE_FETCH_MAX_BYTES) {
+        await reader.cancel().catch(() => undefined);
+        throw new Error(`Remote response exceeded ${REMOTE_FETCH_MAX_BYTES} bytes`);
+      }
+      controller.enqueue(value);
+    },
+    cancel(reason) {
+      return reader.cancel(reason);
+    },
+  });
   return new Response(boundedBody, init);
 };
 
@@ -782,16 +790,13 @@ const createOidcConfig = async (provider: ssoProvidersRepo.SsoProvider) => {
     // Keep every openid-client HTTP request on the same SSRF/timeout policy as the SAML
     // metadata fetch. customFetch covers discovery, JWKS, token, UserInfo, and future OIDC calls.
     const issuerUrl = new URL(provider.issuerUrl);
-    const config = await oidc.discovery(
-      issuerUrl,
-      provider.clientId,
-      clientSecret || undefined,
-      undefined,
-      {
+    const [config] = await Promise.all([
+      oidc.discovery(issuerUrl, provider.clientId, clientSecret || undefined, undefined, {
         [oidc.customFetch]: safeOidcFetch,
         timeout: OIDC_REMOTE_FETCH_TIMEOUT_SECONDS,
-      },
-    );
+      }),
+      assertSafeRemoteUrl(issuerUrl),
+    ]);
     await assertSafeOidcServerMetadata(config, {
       includeEndSessionEndpoint: provider.endSessionEnabled,
     });

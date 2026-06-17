@@ -653,9 +653,9 @@ const WebhooksView: React.FC<WebhooksViewProps> = ({ permissions }) => {
       authHeaderName: form.authType === 'api_key' ? form.authHeaderName.trim() : '',
       customHeaders: form.customHeaders.reduce<NonNullable<WebhookPayload['customHeaders']>>(
         (headers, header) => {
-        const key = header.key.trim();
-        if (key.length > 0) headers.push({ key, value: header.value });
-        return headers;
+          const key = header.key.trim();
+          if (key.length > 0) headers.push({ key, value: header.value });
+          return headers;
         },
         [],
       ),

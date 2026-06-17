@@ -1,4 +1,4 @@
-import { and, eq, type SQL, sql } from 'drizzle-orm';
+import { type SQL, sql } from 'drizzle-orm';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import { type DbExecutor, db, executeRows, runAtomically } from '../db/drizzle.ts';
 import {
@@ -72,21 +72,6 @@ const assignAllTopManagersTo = (
     SET assignment_source = ${mergedSource(tableAssignmentSourceCol(spec))}
   `);
 
-// Auto-assign one user (a newly-promoted top manager) to every existing entity in the
-// owning table. The CASE preserves any existing manual rows.
-const assignAllToUserAsTopManager = (
-  spec: AssignmentSpec,
-  userId: string,
-  exec: DbExecutor,
-): Promise<unknown> =>
-  exec.execute(sql`
-    INSERT INTO ${sql.identifier(spec.table)} (user_id, ${sql.identifier(spec.fkColumn)}, assignment_source)
-    SELECT ${userId}, id, ${TOP_MANAGER_AUTO_ASSIGNMENT_SOURCE}
-    FROM ${sql.identifier(spec.sourceTable)}
-    ON CONFLICT (user_id, ${sql.identifier(spec.fkColumn)}) DO UPDATE
-    SET assignment_source = ${mergedSource(tableAssignmentSourceCol(spec))}
-  `);
-
 const clearTopManagerAssignmentsForUser = (userId: string, exec: DbExecutor): Promise<unknown> =>
   exec.execute(sql`
     WITH deleted_clients AS (
@@ -110,10 +95,7 @@ const clearTopManagerAssignmentsForUser = (userId: string, exec: DbExecutor): Pr
     SELECT 1
   `);
 
-const assignAllScopesToUserAsTopManager = (
-  userId: string,
-  exec: DbExecutor,
-): Promise<unknown> =>
+const assignAllScopesToUserAsTopManager = (userId: string, exec: DbExecutor): Promise<unknown> =>
   exec.execute(sql`
     WITH client_assignments AS (
       INSERT INTO user_clients (user_id, client_id, assignment_source)

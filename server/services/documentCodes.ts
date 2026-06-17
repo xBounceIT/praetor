@@ -70,7 +70,9 @@ export const previewDocumentCode = async (
     return { moduleId, code, year, sequence };
   });
   const existing = await Promise.all(
-    candidates.map((candidate) => documentCodeTemplatesRepo.existsForModule(moduleId, candidate.code, exec)),
+    candidates.map((candidate) =>
+      documentCodeTemplatesRepo.existsForModule(moduleId, candidate.code, exec),
+    ),
   );
   const availableIndex = existing.findIndex((exists) => !exists);
   if (availableIndex >= 0) {

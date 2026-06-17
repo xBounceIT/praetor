@@ -366,7 +366,7 @@ describe('<StandardTable /> server-backed sharing', () => {
     await screen.findByText('Bob Shared View');
 
     // The owner avatar (labelled "Shared by …") and the read chip render for a non-owned view.
-    expect(screen.getByLabelText('views.sharedBy')).toBeInTheDocument();
+    expect(screen.getByText('views.sharedBy')).toBeInTheDocument();
     expect(screen.getByText('views.permissionRead')).toBeInTheDocument();
 
     // Duplicate is available to everyone; edit/delete/share are owner/write-gated.

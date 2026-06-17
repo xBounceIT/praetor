@@ -1036,13 +1036,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           );
           const [items, audits] = await Promise.all([
             clientQuotesRepo.insertItems(created.id, buildItemsForInsert(resolvedItems), tx),
-            syncSupplierItemsFromClientLines(
-              request,
-              'client_quote.create',
-              resolvedItems,
-              [],
-              tx,
-            ),
+            syncSupplierItemsFromClientLines(request, 'client_quote.create', resolvedItems, [], tx),
           ]);
           const linkedOfferId =
             initialStatus === 'offer' ? await createDraftOfferFromQuote(created, items, tx) : null;

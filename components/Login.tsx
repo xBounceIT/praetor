@@ -392,65 +392,65 @@ const Login: React.FC<LoginProps> = ({
 
   return (
     <LoginShell browserTheme={browserTheme} isDark={isDark}>
-          <LoginLogo
-            src={resolvedLogoUrl}
-            alt={companyName ? `${companyName} logo` : 'Praetor Logo'}
-            isDark={isDark}
-            usingCustomLogo={usingCustomLogo}
-            onError={() => {
-              if (logoUrl) dispatchLoginUi({ type: 'logoFailed', url: logoUrl });
-            }}
-          />
-          <p className="mt-2 text-sm text-muted-foreground">{t('auth:login.title')}</p>
+      <LoginLogo
+        src={resolvedLogoUrl}
+        alt={companyName ? `${companyName} logo` : 'Praetor Logo'}
+        isDark={isDark}
+        usingCustomLogo={usingCustomLogo}
+        onError={() => {
+          if (logoUrl) dispatchLoginUi({ type: 'logoFailed', url: logoUrl });
+        }}
+      />
+      <p className="mt-2 text-sm text-muted-foreground">{t('auth:login.title')}</p>
 
-          <LoginStatusAlerts
-            logoutReason={logoutReason}
-            onClearLogoutReason={onClearLogoutReason}
-            serverUnreachable={serverUnreachable}
-            onDismissServerUnreachable={onDismissServerUnreachable}
-          />
+      <LoginStatusAlerts
+        logoutReason={logoutReason}
+        onClearLogoutReason={onClearLogoutReason}
+        serverUnreachable={serverUnreachable}
+        onDismissServerUnreachable={onDismissServerUnreachable}
+      />
 
-          {phase === 'credentials' && (
-            <CredentialsLoginPanel
-              form={form}
-              ssoProviders={ssoProviders}
-              busy={busy}
-              showPassword={showPassword}
-              error={error}
-              onSubmit={onSubmit}
-              onSsoLogin={handleSsoLogin}
-              onTogglePassword={() => dispatchLoginUi({ type: 'togglePassword' })}
-            />
-          )}
+      {phase === 'credentials' && (
+        <CredentialsLoginPanel
+          form={form}
+          ssoProviders={ssoProviders}
+          busy={busy}
+          showPassword={showPassword}
+          error={error}
+          onSubmit={onSubmit}
+          onSsoLogin={handleSsoLogin}
+          onTogglePassword={() => dispatchLoginUi({ type: 'togglePassword' })}
+        />
+      )}
 
-          {phase === 'totp' && (
-            <TotpChallengePanel
-              totpCode={totpCode}
-              useBackupCode={useBackupCode}
-              totpError={totpError}
-              verifyingTotp={verifyingTotp}
-              onSubmit={onTotpSubmit}
-              onCodeChange={(code) =>
-                dispatchLoginUi({
-                  type: 'setTotpCode',
-                  code,
-                  clearError: Boolean(totpError),
-                })
-              }
-              onComplete={(code) => void submitTotpChallenge(code)}
-              onToggleBackupCode={toggleBackupCode}
-              onBack={() => resetToCredentials()}
-            />
-          )}
+      {phase === 'totp' && (
+        <TotpChallengePanel
+          totpCode={totpCode}
+          useBackupCode={useBackupCode}
+          totpError={totpError}
+          verifyingTotp={verifyingTotp}
+          onSubmit={onTotpSubmit}
+          onCodeChange={(code) =>
+            dispatchLoginUi({
+              type: 'setTotpCode',
+              code,
+              clearError: Boolean(totpError),
+            })
+          }
+          onComplete={(code) => void submitTotpChallenge(code)}
+          onToggleBackupCode={toggleBackupCode}
+          onBack={() => resetToCredentials()}
+        />
+      )}
 
-          {phase === 'enroll' && (
-            <TotpEnrollmentPanel
-              onSetup={() => api.auth.totpSetup(enrollTokenRef.current)}
-              onConfirm={handleEnrollConfirm}
-              onFinished={handleEnrollFinished}
-              onCancel={() => resetToCredentials()}
-            />
-          )}
+      {phase === 'enroll' && (
+        <TotpEnrollmentPanel
+          onSetup={() => api.auth.totpSetup(enrollTokenRef.current)}
+          onConfirm={handleEnrollConfirm}
+          onFinished={handleEnrollFinished}
+          onCancel={() => resetToCredentials()}
+        />
+      )}
     </LoginShell>
   );
 };
@@ -486,13 +486,7 @@ interface LoginLogoProps {
   onError: () => void;
 }
 
-const LoginLogo: React.FC<LoginLogoProps> = ({
-  src,
-  alt,
-  isDark,
-  usingCustomLogo,
-  onError,
-}) => (
+const LoginLogo: React.FC<LoginLogoProps> = ({ src, alt, isDark, usingCustomLogo, onError }) => (
   <img
     src={src}
     alt={alt}
@@ -738,9 +732,7 @@ const TotpChallengePanel: React.FC<TotpChallengePanelProps> = ({
   return (
     <div className="mt-8 w-full space-y-5">
       <div className="space-y-1 text-center">
-        <h2 className="text-lg font-semibold text-foreground">
-          {t('totpChallenge.title')}
-        </h2>
+        <h2 className="text-lg font-semibold text-foreground">{t('totpChallenge.title')}</h2>
         <p className="text-sm text-muted-foreground">{t('totpChallenge.description')}</p>
       </div>
 
@@ -825,9 +817,7 @@ const TotpChallengePanel: React.FC<TotpChallengePanelProps> = ({
           onClick={onToggleBackupCode}
           disabled={verifyingTotp}
         >
-          {t(
-            useBackupCode ? 'totpChallenge.useAuthenticator' : 'totpChallenge.useBackupCode',
-          )}
+          {t(useBackupCode ? 'totpChallenge.useAuthenticator' : 'totpChallenge.useBackupCode')}
         </Button>
         <Button
           type="button"

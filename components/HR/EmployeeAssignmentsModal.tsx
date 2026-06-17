@@ -271,7 +271,9 @@ const AssignmentColumn: React.FC<{
           <label
             key={item.id}
             className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
-              selected ? 'bg-accent border-border shadow-sm' : 'bg-card border-border hover:border-input'
+              selected
+                ? 'bg-accent border-border shadow-sm'
+                : 'bg-card border-border hover:border-input'
             }`}
           >
             <div className="relative flex items-center justify-center shrink-0">

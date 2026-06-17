@@ -78,12 +78,15 @@ describe('supplier accounting modal styling', () => {
     const source = await readComponentSource('accounting/SupplierInvoicesView.tsx');
 
     expectSourceContainsAll(source, [
-      "{t('crm:internalListing.salePrice')}</div>",
-      '<span>/</span>',
-      "{t('accounting:clientsInvoices.unit')}",
-      '{currency}',
-      '%',
+      "{controller.t('crm:internalListing.salePrice')}",
+      '<span className="shrink-0 text-xs font-medium text-muted-foreground">/</span>',
+      "{controller.t('accounting:clientsInvoices.unit')}",
+      '{controller.currency}',
+      '<span className="shrink-0 text-xs font-medium text-muted-foreground">%</span>',
     ]);
-    expectSourceOmitsAll(source, ["{t('crm:internalListing.salePrice')} ({currency})"]);
+    expectSourceOmitsAll(source, [
+      "{t('crm:internalListing.salePrice')} ({currency})",
+      "{controller.t('crm:internalListing.salePrice')} ({controller.currency})",
+    ]);
   });
 });

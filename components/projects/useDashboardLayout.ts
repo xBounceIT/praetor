@@ -99,12 +99,10 @@ const dashboardViewLibraryReducer = (
   }
 };
 
-const resolveStateAction = <Value,>(value: SetStateAction<Value>, previous: Value): Value =>
+const resolveStateAction = <Value>(value: SetStateAction<Value>, previous: Value): Value =>
   typeof value === 'function' ? (value as (prev: Value) => Value)(previous) : value;
 
-type DashboardEditSessionState =
-  | { editing: false }
-  | { editing: true; draft: DashboardLayout };
+type DashboardEditSessionState = { editing: false } | { editing: true; draft: DashboardLayout };
 
 type DashboardEditSessionAction =
   | { type: 'start'; layout: DashboardLayout }

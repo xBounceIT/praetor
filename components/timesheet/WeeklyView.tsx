@@ -836,7 +836,10 @@ const WeeklyGridToolbar: React.FC<{ controller: WeeklyController }> = ({ control
         value={`${controller.weekTotal.toFixed(2)} h`}
         isOverGoal={controller.weekTotal > controller.weeklyGoal}
       />
-      <WeeklyTotalMetric label={controller.t('weekly.monthTotal')} value={`${controller.monthTotal.toFixed(2)} h`} />
+      <WeeklyTotalMetric
+        label={controller.t('weekly.monthTotal')}
+        value={`${controller.monthTotal.toFixed(2)} h`}
+      />
     </div>
     <WeeklyGridActions controller={controller} />
   </div>
@@ -848,7 +851,9 @@ const WeeklyTotalMetric: React.FC<{ label: string; value: string; isOverGoal?: b
   isOverGoal,
 }) => (
   <div className="flex items-baseline gap-2">
-    <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">{label}</span>
+    <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+      {label}
+    </span>
     <span
       className={cn(
         'text-lg font-black transition-colors',

@@ -317,17 +317,13 @@ const useAiReportingController = ({
     editingDraft,
   } = reportingState;
   const setReportingState = useCallback(
-    <Key extends keyof AiReportingState>(
-      key: Key,
-      update: StateUpdate<AiReportingState[Key]>,
-    ) => {
+    <Key extends keyof AiReportingState>(key: Key, update: StateUpdate<AiReportingState[Key]>) => {
       dispatchReportingState({ type: 'set', key, update } as AiReportingStateAction);
     },
     [],
   );
   const setSessions = useCallback(
-    (update: StateUpdate<AiReportingState['sessions']>) =>
-      setReportingState('sessions', update),
+    (update: StateUpdate<AiReportingState['sessions']>) => setReportingState('sessions', update),
     [setReportingState],
   );
   const setActiveSessionId = useCallback(
@@ -336,13 +332,11 @@ const useAiReportingController = ({
     [setReportingState],
   );
   const setIsNewChat = useCallback(
-    (update: StateUpdate<AiReportingState['isNewChat']>) =>
-      setReportingState('isNewChat', update),
+    (update: StateUpdate<AiReportingState['isNewChat']>) => setReportingState('isNewChat', update),
     [setReportingState],
   );
   const setMessages = useCallback(
-    (update: StateUpdate<AiReportingState['messages']>) =>
-      setReportingState('messages', update),
+    (update: StateUpdate<AiReportingState['messages']>) => setReportingState('messages', update),
     [setReportingState],
   );
   const setDraft = useCallback(
@@ -375,8 +369,7 @@ const useAiReportingController = ({
     [setReportingState],
   );
   const setIsSending = useCallback(
-    (update: StateUpdate<AiReportingState['isSending']>) =>
-      setReportingState('isSending', update),
+    (update: StateUpdate<AiReportingState['isSending']>) => setReportingState('isSending', update),
     [setReportingState],
   );
   const setError = useCallback(
@@ -2011,7 +2004,10 @@ const AiReportingMessageGroup: React.FC<AiReportingMessageGroupProps> = ({
 }) => {
   const userMessage = group.userMessage;
   const attemptCount = group.assistantAttempts.length;
-  const safeSelectedIndex = Math.max(0, Math.min(selectedAttemptIndex, Math.max(0, attemptCount - 1)));
+  const safeSelectedIndex = Math.max(
+    0,
+    Math.min(selectedAttemptIndex, Math.max(0, attemptCount - 1)),
+  );
   const assistantMessage = attemptCount > 0 ? group.assistantAttempts[safeSelectedIndex] : null;
   const isThoughtExpanded = assistantMessage
     ? expandedThoughtMessageIds.includes(assistantMessage.id)
@@ -2020,7 +2016,10 @@ const AiReportingMessageGroup: React.FC<AiReportingMessageGroupProps> = ({
     ? interactions.getRetryMessageContent(assistantMessage.id)
     : '';
   const canRetryAssistantMessage =
-    Boolean(assistantMessage) && Boolean(retryContent) && interactions.canSend && !interactions.isSending;
+    Boolean(assistantMessage) &&
+    Boolean(retryContent) &&
+    interactions.canSend &&
+    !interactions.isSending;
 
   return (
     <div className="space-y-4">
@@ -2060,7 +2059,8 @@ const AiReportingUserMessage: React.FC<AiReportingUserMessageProps> = ({
     handleEditSend,
   } = interactions;
   const isEditing = editingMessageId === message.id;
-  const editDisabled = isSending || !canSend || editingMessageId !== '' || message.id.startsWith('tmp-');
+  const editDisabled =
+    isSending || !canSend || editingMessageId !== '' || message.id.startsWith('tmp-');
 
   return (
     <div className="group w-full flex justify-end">
@@ -2257,7 +2257,9 @@ const AiReportingThoughtPanel: React.FC<AiReportingThoughtPanelProps> = ({
       type="button"
       onClick={() =>
         setExpandedThoughtMessageIds((prev) =>
-          prev.includes(message.id) ? prev.filter((id) => id !== message.id) : [...prev, message.id],
+          prev.includes(message.id)
+            ? prev.filter((id) => id !== message.id)
+            : [...prev, message.id],
         )
       }
       className="w-full flex items-center justify-between px-3 py-2.5 text-left text-xs font-semibold text-zinc-600 hover:text-zinc-800 transition-colors"
@@ -2406,9 +2408,7 @@ const AiMarkdownMessage: React.FC<{
           if (inline === false) {
             return (
               <code
-                className={`font-mono text-[12px] leading-relaxed text-zinc-100 ${
-                  className ?? ''
-                }`}
+                className={`font-mono text-[12px] leading-relaxed text-zinc-100 ${className ?? ''}`}
               >
                 {children}
               </code>

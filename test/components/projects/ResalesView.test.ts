@@ -105,13 +105,15 @@ describe('ResalesView wiring', () => {
     expect(source).toContain('ShoppingCart');
     expect(source).toContain('ListChecks');
     expect(source).toContain("type ResalesViewTab = 'archive' | 'activities'");
-    expect(source).toContain('const [activeTab, setActiveTab] = useState<ResalesViewTab>');
+    expect(source).toContain('activeTab: ResalesViewTab;');
+    expect(source).toContain('const [uiState, dispatchUiState] = useReducer(');
+    expect(source).toContain('const setActiveTab = useCallback(');
     expect(source).toContain('const handleTabChange = (value: string) => {');
     expect(source).toContain('value="archive"');
     expect(source).toContain('value="activities"');
     expect(source).toContain('<TabsContent value="archive" className="mt-0 space-y-6">');
-    expect(source).toContain("t('resales." + "title')");
-    expect(source).toContain('disabled={!selectedResale}');
+    expect(source).toContain("controller.t('resales." + "title')");
+    expect(source).toContain('disabled={!controller.selectedResale}');
     expect(source).toContain("setActiveTab('activities');");
     expect(source).toContain('resales.selectResaleForActivities');
   });
@@ -166,7 +168,7 @@ describe('ResalesView wiring', () => {
     const source = await readSource();
     expect(source).toContain('Settings2');
     expect(source).toContain('resales.manageCategories');
-    expect(source).toContain('onClick={openCategoryModal}');
+    expect(source).toContain('onClick={controller.openCategoryModal}');
     expect(source).toContain('rounded-md border border-border bg-muted/30 p-4');
     expect(source).toContain('flex items-start gap-3');
     expect(source).toContain('className="mt-7"');
@@ -207,8 +209,8 @@ describe('ResalesView wiring', () => {
 
   test('shows supplier cost variance without blocking save', async () => {
     const source = await readSource();
-    expect(source).toContain('selectedResale.costVariance');
+    expect(source).toContain('controller.selectedResale.costVariance');
     expect(source).toContain('resales.' + 'varianceHint');
-    expect(source).toContain('Math.abs(selectedResale.costVariance) > 0.009');
+    expect(source).toContain('Math.abs(controller.selectedResale.costVariance) > 0.009');
   });
 });

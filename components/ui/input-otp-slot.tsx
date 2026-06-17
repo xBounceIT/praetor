@@ -1,5 +1,5 @@
 import { OTPInputContext } from 'input-otp';
-import { use, type ComponentProps } from 'react';
+import { type ComponentProps, use } from 'react';
 
 import { cn } from '@/lib/utils';
 

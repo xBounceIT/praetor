@@ -650,9 +650,7 @@ const SupplierInvoiceDetailsSection: React.FC<{ controller: SupplierInvoicesCont
           id="supplier-invoice-status"
           options={controller.statusOptions}
           value={controller.formData.status || 'draft'}
-          onChange={(value) =>
-            controller.patchForm({ status: value as SupplierInvoice['status'] })
-          }
+          onChange={(value) => controller.patchForm({ status: value as SupplierInvoice['status'] })}
           label={controller.t('accounting:supplierInvoices.status')}
           searchable={false}
           buttonClassName="h-9"
@@ -666,8 +664,7 @@ const SupplierInvoiceDateField: React.FC<{
   controller: SupplierInvoicesController;
   field: 'issueDate' | 'dueDate';
 }> = ({ controller, field }) => {
-  const id =
-    field === 'issueDate' ? 'supplier-invoice-issue-date' : 'supplier-invoice-due-date';
+  const id = field === 'issueDate' ? 'supplier-invoice-issue-date' : 'supplier-invoice-due-date';
   const label =
     field === 'issueDate'
       ? controller.t('accounting:supplierInvoices.issueDate')
@@ -930,7 +927,13 @@ const SupplierInvoiceItemPriceField: React.FC<{
   index: number;
   className?: string;
   inputClassName?: string;
-}> = ({ controller, item, index, className = 'space-y-1', inputClassName = 'min-w-0 text-center' }) => (
+}> = ({
+  controller,
+  item,
+  index,
+  className = 'space-y-1',
+  inputClassName = 'min-w-0 text-center',
+}) => (
   <div className={className}>
     <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
       {controller.t('crm:internalListing.salePrice')}

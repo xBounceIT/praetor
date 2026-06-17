@@ -1212,9 +1212,7 @@ const CreateProjectModal: React.FC<{ controller: ProjectsController }> = ({ cont
   </Modal>
 );
 
-const CreateProjectFormFields: React.FC<{ controller: ProjectsController }> = ({
-  controller,
-}) => (
+const CreateProjectFormFields: React.FC<{ controller: ProjectsController }> = ({ controller }) => (
   <div className="space-y-4">
     <ProjectClientOrderFields controller={controller} />
     <ProjectDescriptionField controller={controller} />
@@ -1226,9 +1224,7 @@ const CreateProjectFormFields: React.FC<{ controller: ProjectsController }> = ({
   </div>
 );
 
-const ProjectClientOrderFields: React.FC<{ controller: ProjectsController }> = ({
-  controller,
-}) => (
+const ProjectClientOrderFields: React.FC<{ controller: ProjectsController }> = ({ controller }) => (
   <div className="grid gap-4 md:grid-cols-2">
     <div className="space-y-1.5">
       <SelectControl
@@ -1312,9 +1308,7 @@ const ProjectClientOrderFields: React.FC<{ controller: ProjectsController }> = (
   </div>
 );
 
-const ProjectDescriptionField: React.FC<{ controller: ProjectsController }> = ({
-  controller,
-}) => (
+const ProjectDescriptionField: React.FC<{ controller: ProjectsController }> = ({ controller }) => (
   <Field>
     <FieldLabel htmlFor="project-description">
       {controller.t('projects:projects.description')}
@@ -1428,9 +1422,7 @@ const ProjectOfferRevenueFields: React.FC<{ controller: ProjectsController }> = 
             : controller.displayedRevenue.toFixed(2)
         }
         readOnly={controller.revenueSource !== 'manual'}
-        onChange={(event) =>
-          controller.dispatch({ type: 'setRevenue', value: event.target.value })
-        }
+        onChange={(event) => controller.dispatch({ type: 'setRevenue', value: event.target.value })}
       />
       {controller.revenueHintBySource[controller.revenueSource] && (
         <FieldDescription className="text-xs">
@@ -1534,16 +1526,18 @@ const ProjectDeleteDialog: React.FC<{ controller: ProjectsController }> = ({ con
   />
 );
 
-const ProjectAssignmentDialog: React.FC<{ controller: ProjectsController }> = ({
-  controller,
-}) => (
+const ProjectAssignmentDialog: React.FC<{ controller: ProjectsController }> = ({ controller }) => (
   <UserAssignmentModal
     isOpen={!!controller.managingProjectId}
     onClose={controller.closeAssignments}
     users={controller.assignableUsers}
     roles={controller.roles}
-    loadAssignedUserIds={(signal) => projectsApi.getUsers(controller.managingProjectId as string, signal)}
-    saveAssignedUserIds={(ids) => projectsApi.updateUsers(controller.managingProjectId as string, ids)}
+    loadAssignedUserIds={(signal) =>
+      projectsApi.getUsers(controller.managingProjectId as string, signal)
+    }
+    saveAssignedUserIds={(ids) =>
+      projectsApi.updateUsers(controller.managingProjectId as string, ids)
+    }
     entityLabel={controller.t('projects:projects.entityLabel')}
     entityName={controller.managingProject?.name || ''}
     disabled={!controller.canManageAssignments}
@@ -1551,7 +1545,11 @@ const ProjectAssignmentDialog: React.FC<{ controller: ProjectsController }> = ({
 );
 
 const ProjectsTabs: React.FC<{ controller: ProjectsController }> = ({ controller }) => (
-  <Tabs value={controller.selectedTab} onValueChange={controller.handleTabChange} className="space-y-6">
+  <Tabs
+    value={controller.selectedTab}
+    onValueChange={controller.handleTabChange}
+    className="space-y-6"
+  >
     <TabsList variant="line" className="w-full justify-start overflow-x-auto border-b px-0">
       {controller.canViewCommissions && (
         <TabsTrigger value="commissions" className="flex-none rounded-none pb-3">
@@ -1571,9 +1569,7 @@ const ProjectsTabs: React.FC<{ controller: ProjectsController }> = ({ controller
   </Tabs>
 );
 
-const ProjectsCommissionsTab: React.FC<{ controller: ProjectsController }> = ({
-  controller,
-}) => (
+const ProjectsCommissionsTab: React.FC<{ controller: ProjectsController }> = ({ controller }) => (
   <TabsContent value="commissions" className="mt-0 space-y-8">
     <div className="space-y-4">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">

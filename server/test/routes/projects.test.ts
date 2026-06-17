@@ -53,6 +53,8 @@ const clearNonTopManagerAssignmentsMock = mock();
 const addManualAssignmentsMock = mock();
 const ensureClientCascadeAssignmentsMock = mock();
 const removeClientCascadeForUsersIfUnusedMock = mock();
+const deleteByIdAndRemoveUnusedClientCascadeMock = mock();
+const replaceNonTopManagerAssignmentsMock = mock();
 
 // clientsOrdersRepo mocks
 const findOrderClientIdByIdMock = mock();
@@ -116,6 +118,8 @@ beforeAll(async () => {
     addManualAssignments: addManualAssignmentsMock,
     ensureClientCascadeAssignments: ensureClientCascadeAssignmentsMock,
     removeClientCascadeForUsersIfUnused: removeClientCascadeForUsersIfUnusedMock,
+    deleteByIdAndRemoveUnusedClientCascade: deleteByIdAndRemoveUnusedClientCascadeMock,
+    replaceNonTopManagerAssignments: replaceNonTopManagerAssignmentsMock,
   }));
   mock.module('../../repositories/clientsOrdersRepo.ts', () => ({
     ...clientsOrdersRepoSnap,
@@ -237,6 +241,8 @@ const allMocks = [
   addManualAssignmentsMock,
   ensureClientCascadeAssignmentsMock,
   removeClientCascadeForUsersIfUnusedMock,
+  deleteByIdAndRemoveUnusedClientCascadeMock,
+  replaceNonTopManagerAssignmentsMock,
   findOrderClientIdByIdMock,
   findOrderStatusByIdMock,
   findOrderProjectLinkByIdMock,
@@ -267,6 +273,8 @@ beforeEach(async () => {
   assignProjectToUserMock.mockImplementation(async () => undefined);
   assignClientToTopManagersMock.mockImplementation(async () => undefined);
   assignProjectToTopManagersMock.mockImplementation(async () => undefined);
+  deleteByIdAndRemoveUnusedClientCascadeMock.mockImplementation(async () => undefined);
+  replaceNonTopManagerAssignmentsMock.mockImplementation(async () => undefined);
   isClientAssignedToUserMock.mockResolvedValue(true);
   isProjectAssignedToUserMock.mockResolvedValue(true);
   isUserManagedByMock.mockResolvedValue(true);
@@ -1042,9 +1050,6 @@ describe('POST /api/projects', () => {
 describe('DELETE /api/projects/:id', () => {
   test('200: happy delete with audit', async () => {
     lockNameAndClientByIdMock.mockResolvedValue({ name: 'Website', clientId: 'c-1' });
-    findNonTopManagerUserIdsMock.mockResolvedValue(['u2']);
-    deleteByIdMock.mockResolvedValue(undefined);
-    removeClientCascadeForUsersIfUnusedMock.mockResolvedValue(undefined);
 
     const res = await testApp.inject({
       method: 'DELETE',
@@ -1054,7 +1059,11 @@ describe('DELETE /api/projects/:id', () => {
 
     expect(res.statusCode).toBe(204);
     expect(res.body).toBe('');
-    expect(deleteByIdMock).toHaveBeenCalledWith('p-1', TX_SENTINEL);
+    expect(deleteByIdAndRemoveUnusedClientCascadeMock).toHaveBeenCalledWith(
+      'p-1',
+      'c-1',
+      TX_SENTINEL,
+    );
     expect(logAuditMock).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'project.deleted', entityId: 'p-1' }),
     );
@@ -1103,6 +1112,7 @@ describe('DELETE /api/projects/:id', () => {
     expect(res.statusCode).toBe(403);
     expect(lockNameAndClientByIdMock).not.toHaveBeenCalled();
     expect(deleteByIdMock).not.toHaveBeenCalled();
+    expect(deleteByIdAndRemoveUnusedClientCascadeMock).not.toHaveBeenCalled();
   });
 });
 
@@ -1767,16 +1777,9 @@ describe('POST /api/projects/:id/users', () => {
 
     expect(res.statusCode).toBe(200);
     expect(JSON.parse(res.body)).toEqual({ message: 'Project assignments updated' });
-    expect(clearNonTopManagerAssignmentsMock).toHaveBeenCalledWith('p-1', TX_SENTINEL);
-    expect(addManualAssignmentsMock).toHaveBeenCalledWith('p-1', ['u2', 'u4'], TX_SENTINEL);
-    expect(ensureClientCascadeAssignmentsMock).toHaveBeenCalledWith(
+    expect(replaceNonTopManagerAssignmentsMock).toHaveBeenCalledWith(
+      'p-1',
       ['u2', 'u4'],
-      'c-1',
-      TX_SENTINEL,
-    );
-    // u3 is removed (was previously assigned but not in new list)
-    expect(removeClientCascadeForUsersIfUnusedMock).toHaveBeenCalledWith(
-      ['u3'],
       'c-1',
       TX_SENTINEL,
     );
@@ -1824,7 +1827,12 @@ describe('POST /api/projects/:id/users', () => {
     });
 
     expect(res.statusCode).toBe(200);
-    expect(clearNonTopManagerAssignmentsMock).toHaveBeenCalledWith('p-1', TX_SENTINEL);
+    expect(replaceNonTopManagerAssignmentsMock).toHaveBeenCalledWith(
+      'p-1',
+      ['u2'],
+      'c-1',
+      TX_SENTINEL,
+    );
   });
 
   test('404: project not found', async () => {

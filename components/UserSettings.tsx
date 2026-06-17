@@ -376,7 +376,7 @@ const userSettingsReducer = (
         ...state,
         [action.field]: resolveStateUpdate(
           state[action.field],
-          action.update as StateUpdate<typeof state[typeof action.field]>,
+          action.update as StateUpdate<(typeof state)[typeof action.field]>,
         ),
       };
     case 'patch':
@@ -1196,7 +1196,11 @@ const UserSettingsTabs: React.FC<{ controller: UserSettingsController }> = ({ co
     <UserSettingsTabButton controller={controller} tab="security" iconClass="fa-solid fa-lock">
       {controller.t('security.title')}
     </UserSettingsTabButton>
-    <UserSettingsTabButton controller={controller} tab="mcp" icon={<McpIcon className="inline size-4 mr-2 align-[-2px]" />}>
+    <UserSettingsTabButton
+      controller={controller}
+      tab="mcp"
+      icon={<McpIcon className="inline size-4 mr-2 align-[-2px]" />}
+    >
       {controller.t('mcp.title')}
     </UserSettingsTabButton>
     {controller.showRilPreferences && (
@@ -1583,9 +1587,9 @@ const TwoFactorSettingsCard: React.FC<{ controller: UserSettingsController }> = 
 }) => {
   const twoFactorView: TwoFactorViewState = {
     isIdpManagedTotp:
-    controller.authMethod === 'oidc' ||
-    controller.authMethod === 'saml' ||
-    controller.totpStatus?.applicable === false,
+      controller.authMethod === 'oidc' ||
+      controller.authMethod === 'saml' ||
+      controller.totpStatus?.applicable === false,
     isTotpEnabled: controller.totpStatus?.enabled === true,
     isFeatureDisabled: controller.totpStatus?.featureEnabled === false,
     isTotpRequired: controller.totpStatus?.required === true,
@@ -1602,14 +1606,14 @@ const TwoFactorSettingsCard: React.FC<{ controller: UserSettingsController }> = 
         {controller.totpStatus &&
           !twoFactorView.isIdpManagedTotp &&
           !twoFactorView.isFeatureDisabled && (
-          <CardAction>
-            <Badge variant={twoFactorView.isTotpEnabled ? 'default' : 'secondary'}>
-              {twoFactorView.isTotpEnabled
-                ? controller.t('twoFactor.statusEnabled')
-                : controller.t('twoFactor.statusDisabled')}
-            </Badge>
-          </CardAction>
-        )}
+            <CardAction>
+              <Badge variant={twoFactorView.isTotpEnabled ? 'default' : 'secondary'}>
+                {twoFactorView.isTotpEnabled
+                  ? controller.t('twoFactor.statusEnabled')
+                  : controller.t('twoFactor.statusDisabled')}
+              </Badge>
+            </CardAction>
+          )}
       </CardHeader>
       <CardContent className="space-y-4 p-6">
         <TwoFactorCardContent controller={controller} view={twoFactorView} />
@@ -1666,9 +1670,7 @@ const TwoFactorInfo: React.FC<{ controller: UserSettingsController; kind: 'idp' 
   </output>
 );
 
-const TwoFactorStatusError: React.FC<{ controller: UserSettingsController }> = ({
-  controller,
-}) => (
+const TwoFactorStatusError: React.FC<{ controller: UserSettingsController }> = ({ controller }) => (
   <div className="space-y-3">
     <div className="rounded-md border border-destructive/20 bg-destructive/10 px-4 py-3 text-sm font-medium text-destructive">
       {controller.totpStatusError}
@@ -1869,7 +1871,11 @@ const RegeneratedBackupCodes: React.FC<{ controller: UserSettingsController }> =
           label={controller.t('twoFactor.copyCodes')}
           copiedLabel={controller.t('twoFactor.copyCodes')}
         />
-        <Button type="button" variant="outline" onClick={() => controller.downloadBackupCodes(codes)}>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => controller.downloadBackupCodes(codes)}
+        >
           {controller.t('twoFactor.downloadCodes')}
         </Button>
         <DialogClose asChild>
@@ -2130,7 +2136,9 @@ const PersonalAccessTokenMetadata: React.FC<{ controller: UserSettingsController
             {controller.t(`security.personalAccessToken.${field}`)}
           </dt>
           <dd className="mt-1 text-foreground">
-            {controller.formatPersonalAccessTokenDate(controller.personalAccessToken?.[field] ?? null)}
+            {controller.formatPersonalAccessTokenDate(
+              controller.personalAccessToken?.[field] ?? null,
+            )}
           </dd>
         </div>
       ))}
@@ -2179,9 +2187,7 @@ const McpEndpointField: React.FC<{ controller: UserSettingsController }> = ({ co
   </Field>
 );
 
-const McpSetupPromptField: React.FC<{ controller: UserSettingsController }> = ({
-  controller,
-}) => (
+const McpSetupPromptField: React.FC<{ controller: UserSettingsController }> = ({ controller }) => (
   <Field>
     <FieldLabel htmlFor="mcp-setup-prompt">{controller.t('mcp.promptLabel')}</FieldLabel>
     <Textarea
@@ -2261,7 +2267,9 @@ const McpRawTokenNotice: React.FC<{ controller: UserSettingsController }> = ({ c
     <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-4">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="text-sm font-semibold text-foreground">{controller.t('mcp.rawTokenTitle')}</p>
+          <p className="text-sm font-semibold text-foreground">
+            {controller.t('mcp.rawTokenTitle')}
+          </p>
           <p className="mt-1 text-xs text-muted-foreground">
             {controller.t('mcp.rawTokenDescription')}
           </p>

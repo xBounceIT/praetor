@@ -873,7 +873,12 @@ const RilHeaderControls: React.FC<{ controller: RilController }> = ({ controller
         </SelectContent>
       </Select>
     </Field>
-    <Button type="button" variant="outline" onClick={controller.handleReset} disabled={controller.isLoading}>
+    <Button
+      type="button"
+      variant="outline"
+      onClick={controller.handleReset}
+      disabled={controller.isLoading}
+    >
       <RotateCcw aria-hidden="true" />
       {controller.t('ril.reset')}
     </Button>
@@ -882,7 +887,11 @@ const RilHeaderControls: React.FC<{ controller: RilController }> = ({ controller
       onClick={controller.handleExport}
       disabled={controller.isLoading || controller.isExporting}
     >
-      {controller.isExporting ? <Loader2 aria-hidden="true" className="animate-spin" /> : <Download />}
+      {controller.isExporting ? (
+        <Loader2 aria-hidden="true" className="animate-spin" />
+      ) : (
+        <Download />
+      )}
       {controller.t('ril.exportExcel')}
     </Button>
   </div>

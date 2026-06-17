@@ -37,27 +37,21 @@ const cloneTables = (): Record<TableKey, Row[]> => {
   return snap;
 };
 
-// Match the leading INSERT/DELETE target so a `FROM user_projects up` in the body
-// of an `INSERT INTO user_clients ... SELECT ... FROM user_projects` doesn't shadow
-// the outer target. Both quoted (`"user_clients"`, from `sql.identifier(...)`) and
-// unquoted (`user_clients`, from raw SQL literals) forms appear in the repo.
-const detectTable = (sqlText: string): TableKey | null => {
-  const head = sqlText.trimStart().toUpperCase();
-  for (const t of TABLE_KEYS) {
-    const upper = t.toUpperCase();
-    if (head.startsWith(`INSERT INTO "${upper}"`)) return t;
-    if (head.startsWith(`INSERT INTO ${upper}`)) return t;
-    if (head.startsWith(`DELETE FROM "${upper}"`)) return t;
-    if (head.startsWith(`DELETE FROM ${upper}`)) return t;
-  }
-  return null;
-};
+type StatementTarget = { op: 'INSERT' | 'DELETE'; table: TableKey };
 
-const detectOp = (sqlText: string): 'INSERT' | 'DELETE' | 'OTHER' => {
-  const trimmed = sqlText.trimStart().toUpperCase();
-  if (trimmed.startsWith('INSERT')) return 'INSERT';
-  if (trimmed.startsWith('DELETE')) return 'DELETE';
-  return 'OTHER';
+// Match every INSERT/DELETE target in statement order. The sync-top-manager paths use CTEs
+// that contain several DML statements in one round trip; replacements use a single DML.
+const detectStatementTargets = (sqlText: string): StatementTarget[] => {
+  const targets: StatementTarget[] = [];
+  const pattern =
+    /\b(INSERT\s+INTO|DELETE\s+FROM)\s+"?(user_clients|user_projects|user_tasks)"?\b/gi;
+  for (const match of sqlText.matchAll(pattern)) {
+    targets.push({
+      op: match[1].toUpperCase().startsWith('INSERT') ? 'INSERT' : 'DELETE',
+      table: match[2].toLowerCase() as TableKey,
+    });
+  }
+  return targets;
 };
 
 const fakeDb = {
@@ -76,21 +70,24 @@ const fakeDb = {
   },
   async execute(sqlObj: unknown) {
     const { sql: text } = dialect.sqlToQuery(sqlObj as SQL);
-    const op = detectOp(text);
-    const table = detectTable(text);
-    if (!table) throw new Error(`userAssignments test: unrecognized SQL (no known table): ${text}`);
-
-    if (forcedFailure?.op === op && forcedFailure.table === table) {
-      // Self-clear so a single forced failure doesn't keep firing inside the same tx.
-      forcedFailure = null;
-      throw new Error(`forced ${op} failure on ${table}`);
+    const targets = detectStatementTargets(text);
+    if (targets.length === 0) {
+      throw new Error(`userAssignments test: unrecognized SQL (no known table): ${text}`);
     }
 
-    if (op === 'DELETE') {
-      live()[table].length = 0;
-    } else if (op === 'INSERT') {
-      // Sentinel row: the rollback property under test doesn't depend on what got inserted.
-      live()[table].push({ userId: 'inserted', refId: 'inserted', source: 'inserted' });
+    for (const { op, table } of targets) {
+      if (forcedFailure?.op === op && forcedFailure.table === table) {
+        // Self-clear so a single forced failure doesn't keep firing inside the same tx.
+        forcedFailure = null;
+        throw new Error(`forced ${op} failure on ${table}`);
+      }
+
+      if (op === 'DELETE') {
+        live()[table].length = 0;
+      } else {
+        // Sentinel row: the rollback property under test doesn't depend on what got inserted.
+        live()[table].push({ userId: 'inserted', refId: 'inserted', source: 'inserted' });
+      }
     }
     return { rows: [] };
   },
