@@ -313,7 +313,7 @@ const supplierQuotesViewReducer = (
   }
 };
 
-const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
+const useSupplierQuotesController = ({
   quotes,
   suppliers,
   clients,
@@ -331,7 +331,7 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
   quoteFilterId,
   onViewOrders,
   currency,
-}) => {
+}: SupplierQuotesViewProps) => {
   const { t, i18n } = useTranslation(['sales', 'common', 'crm', 'form']);
   const paymentTermsOptions = useMemo(() => getPaymentTermsOptions(t), [t]);
   const statusOptions = useMemo(
@@ -1031,835 +1031,1051 @@ const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = ({
     closeModal();
   };
 
+  return {
+    activeSuppliers,
+    addItem,
+    baseReadOnly,
+    canManageCommunicationChannels,
+    canOpenQuoteModal,
+    clientOptions,
+    closeModal,
+    columns,
+    communicationChannels,
+    currency,
+    dispatch,
+    editingQuote,
+    errors,
+    expirationEditableWhileReadOnly,
+    formData,
+    handleClearPreview,
+    handleClientChange,
+    handleDurationUnitChange,
+    handleDurationValueChange,
+    handleSubmit,
+    handleSupplierChange,
+    handleUnitTypeChange,
+    handleVersionPreview,
+    handleVersionRestored,
+    i18n,
+    isDeleteConfirmOpen,
+    isDeleting,
+    isHistoryRow,
+    isModalOpen,
+    isReadOnly,
+    isSubmitting,
+    itemInputClassName,
+    onCreateCommunicationChannel,
+    onDeleteCommunicationChannel,
+    onDeleteQuote,
+    onUpdateCommunicationChannel,
+    onUpdateQuote,
+    onViewOrders,
+    openAddModal,
+    openEditModal,
+    paymentTermsOptions,
+    previewVersion,
+    products,
+    quoteToDelete,
+    quotes,
+    readOnlyReason,
+    readOnlyStatus,
+    removeItem,
+    stagedAttachments,
+    statusLabel,
+    supplierQuoteCodePreview,
+    t,
+    tableInitialFilterState,
+    totalsBreakdown,
+    updateItem,
+  };
+};
+
+type SupplierQuotesController = ReturnType<typeof useSupplierQuotesController>;
+
+const SupplierQuotesView: React.FC<SupplierQuotesViewProps> = (props) => {
+  const controller = useSupplierQuotesController(props);
+  return <SupplierQuotesLayout controller={controller} />;
+};
+
+const SupplierQuotesLayout: React.FC<{ controller: SupplierQuotesController }> = ({
+  controller,
+}) => (
+  <div className="space-y-8 animate-in fade-in duration-500">
+    <SupplierQuoteModal controller={controller} />
+    <SupplierQuotesDeleteDialog controller={controller} />
+    <SupplierQuotesHeader controller={controller} />
+    <SupplierQuotesTable controller={controller} />
+  </div>
+);
+
+const SupplierQuoteModal: React.FC<{ controller: SupplierQuotesController }> = ({ controller }) => (
+  <Modal isOpen={controller.isModalOpen} onClose={controller.closeModal}>
+    <div className="flex max-w-[calc(100vw-2rem)] items-start gap-4">
+      <ModalContent size="full" className="max-h-[90vh]">
+        <form onSubmit={controller.handleSubmit} className="flex min-h-0 flex-1 flex-col">
+          <SupplierQuoteModalHeader controller={controller} />
+          <ModalBody className="flex-1 space-y-5">
+            <SupplierQuoteModalAlerts controller={controller} />
+            <SupplierQuoteDetailsSection controller={controller} />
+            <SupplierQuoteItemsSection controller={controller} />
+            <SupplierQuoteAttachmentsArea controller={controller} />
+            <SupplierQuoteNotesSummarySection controller={controller} />
+          </ModalBody>
+          <SupplierQuoteModalFooter controller={controller} />
+        </form>
+      </ModalContent>
+      {controller.editingQuote?.id && (
+        <SupplierQuoteVersionsPanel
+          quoteId={controller.editingQuote.id}
+          selectedVersionId={controller.previewVersion?.id ?? null}
+          onPreview={controller.handleVersionPreview}
+          onClearPreview={controller.handleClearPreview}
+          onRestored={controller.handleVersionRestored}
+          disabled={controller.baseReadOnly}
+        />
+      )}
+    </div>
+  </Modal>
+);
+
+const SupplierQuoteModalHeader: React.FC<{ controller: SupplierQuotesController }> = ({
+  controller,
+}) => (
+  <ModalHeader>
+    <ModalTitle className="gap-3">
+      <span className="flex size-10 items-center justify-center rounded-md bg-muted text-primary">
+        <i
+          className={`fa-solid ${
+            controller.isReadOnly
+              ? 'fa-eye'
+              : controller.editingQuote
+                ? 'fa-pen-to-square'
+                : 'fa-plus'
+          }`}
+          aria-hidden="true"
+        ></i>
+      </span>
+      {controller.isReadOnly
+        ? controller.t('sales:supplierQuotes.viewQuote', { defaultValue: 'View quote' })
+        : controller.editingQuote
+          ? controller.t('sales:supplierQuotes.editQuote', { defaultValue: 'Edit quote' })
+          : controller.t('sales:supplierQuotes.newQuote', { defaultValue: 'New quote' })}
+    </ModalTitle>
+    <ModalCloseButton onClick={controller.closeModal} />
+  </ModalHeader>
+);
+
+const SupplierQuoteModalAlerts: React.FC<{ controller: SupplierQuotesController }> = ({
+  controller,
+}) => {
+  const editingQuote = controller.editingQuote;
+
   return (
-    <div className="space-y-8 animate-in fade-in duration-500">
-      <Modal isOpen={isModalOpen} onClose={closeModal}>
-        <div className="flex max-w-[calc(100vw-2rem)] items-start gap-4">
-          <ModalContent size="full" className="max-h-[90vh]">
-            <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
-              <ModalHeader>
-                <ModalTitle className="gap-3">
-                  <span className="flex size-10 items-center justify-center rounded-md bg-muted text-primary">
-                    <i
-                      className={`fa-solid ${
-                        isReadOnly ? 'fa-eye' : editingQuote ? 'fa-pen-to-square' : 'fa-plus'
-                      }`}
-                      aria-hidden="true"
-                    ></i>
-                  </span>
-                  {isReadOnly
-                    ? t('sales:supplierQuotes.viewQuote', { defaultValue: 'View quote' })
-                    : editingQuote
-                      ? t('sales:supplierQuotes.editQuote', { defaultValue: 'Edit quote' })
-                      : t('sales:supplierQuotes.newQuote', { defaultValue: 'New quote' })}
-                </ModalTitle>
-                <ModalCloseButton onClick={closeModal} />
-              </ModalHeader>
-
-              <ModalBody className="flex-1 space-y-5">
-                {previewVersion && (
-                  <div className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl border border-amber-500/30 bg-amber-500/10">
-                    <span className="text-amber-800 dark:text-amber-300 text-xs font-bold flex items-center gap-2">
-                      <i className="fa-solid fa-clock-rotate-left"></i>
-                      {t('sales:supplierQuotes.versionHistory.previewBanner', {
-                        date: formatInsertDateTime(previewVersion.createdAt, i18n.language),
-                        defaultValue: 'Previewing version from {{date}}',
-                      })}
-                    </span>
-                    <Button
-                      type="button"
-                      variant="link"
-                      onClick={handleClearPreview}
-                      className="h-auto px-0 text-xs font-semibold text-amber-800 dark:text-amber-300"
-                    >
-                      {t('sales:supplierQuotes.versionHistory.backToCurrent', {
-                        defaultValue: 'Back to current',
-                      })}
-                    </Button>
-                  </div>
-                )}
-                {baseReadOnly && (
-                  <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-amber-500/30 bg-amber-500/10">
-                    <span className="text-amber-700 dark:text-amber-300 text-xs font-bold">
-                      {readOnlyReason}
-                    </span>
-                  </div>
-                )}
-                {editingQuote?.linkedOrderId && (
-                  <LinkedRecordBanner
-                    label={t('sales:supplierQuotes.linkedOrderTitle', {
-                      defaultValue: 'Linked Order',
-                    })}
-                    value={t('sales:supplierQuotes.linkedOrderInfo', {
-                      number: editingQuote.linkedOrderId,
-                      defaultValue: 'Order #{{number}}',
-                    })}
-                    note={t('sales:supplierQuotes.orderDetailsReadOnly', {
-                      defaultValue: '(Quote details are read-only)',
-                    })}
-                    action={
-                      onViewOrders
-                        ? {
-                            label: t('sales:supplierQuotes.viewOrder', {
-                              defaultValue: 'View Order',
-                            }),
-                            onClick: () => onViewOrders(editingQuote.id),
-                          }
-                        : undefined
-                    }
-                  />
-                )}
-
-                <div className="space-y-2">
-                  <h4 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-primary">
-                    <span className="size-1.5 rounded-full bg-primary"></span>
-                    {t('sales:supplierQuotes.supplierInformation', {
-                      defaultValue: 'Supplier Information',
-                    })}
-                    <FieldTooltip
-                      description={t('sales:fieldInfo.supplierInformation', {
-                        defaultValue: 'Supplier and document details',
-                      })}
-                      status={readOnlyStatus}
-                      statusLabel={statusLabel}
-                    />
-                  </h4>
-                  <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
-                    <Field data-invalid={Boolean(errors.supplierId)}>
-                      <SelectControl
-                        id="supplier-quote-supplier"
-                        options={activeSuppliers.map((supplier) => ({
-                          id: supplier.id,
-                          name: supplier.name,
-                        }))}
-                        value={formData.supplierId || ''}
-                        onChange={(value) => handleSupplierChange(value as string)}
-                        placeholder={t('sales:supplierQuotes.selectSupplier', {
-                          defaultValue: 'Select a supplier',
-                        })}
-                        searchable={true}
-                        disabled={isReadOnly}
-                        label={t('sales:supplierQuotes.supplier', { defaultValue: 'Supplier' })}
-                        required
-                        buttonClassName="h-9"
-                        className={errors.supplierId ? 'border-red-300' : ''}
-                      />
-                      <FieldError className="text-xs">{errors.supplierId}</FieldError>
-                    </Field>
-                    <Field data-invalid={Boolean(errors.clientId)}>
-                      <SelectControl
-                        id="supplier-quote-client"
-                        options={clientOptions}
-                        value={formData.clientId || ''}
-                        onChange={(value) => handleClientChange(value as string)}
-                        placeholder={t('sales:supplierQuotes.selectClient', {
-                          defaultValue: 'Select a customer',
-                        })}
-                        searchable={true}
-                        disabled={isReadOnly}
-                        label={t('sales:supplierQuotes.client', { defaultValue: 'Customer' })}
-                        required
-                        buttonClassName="h-9"
-                        className={errors.clientId ? 'border-red-300' : ''}
-                      />
-                      <FieldError className="text-xs">{errors.clientId}</FieldError>
-                    </Field>
-                    <Field data-invalid={Boolean(errors.id)}>
-                      <FieldLabel htmlFor="supplier-quote-code" required={Boolean(editingQuote)}>
-                        {t('sales:supplierQuotes.quoteCode', { defaultValue: 'Quote Code' })}
-                      </FieldLabel>
-                      <Input
-                        id="supplier-quote-code"
-                        type="text"
-                        value={formData.id || ''}
-                        disabled={isReadOnly}
-                        onChange={(event) => {
-                          dispatch({ type: 'patchFormData', value: { id: event.target.value } });
-                          if (errors.id) {
-                            dispatch({ type: 'clearError', key: 'id' });
-                          }
-                        }}
-                        placeholder={
-                          supplierQuoteCodePreview ??
-                          t('sales:supplierQuotes.autoCodePlaceholder', {
-                            defaultValue: 'Auto-generated',
-                          })
-                        }
-                        className={errors.id ? 'border-red-300' : ''}
-                        aria-invalid={Boolean(errors.id)}
-                      />
-                      <FieldError className="text-xs">{errors.id}</FieldError>
-                      {!editingQuote && (
-                        <FieldDescription className="text-xs">
-                          {supplierQuoteCodePreview
-                            ? t('sales:supplierQuotes.autoCodePreviewDescription', {
-                                preview: supplierQuoteCodePreview,
-                                defaultValue:
-                                  'Leave blank to generate {{preview}} from the document code template.',
-                              })
-                            : t('sales:supplierQuotes.autoCodeDescription', {
-                                defaultValue:
-                                  'Leave blank to generate the next code automatically.',
-                              })}
-                        </FieldDescription>
-                      )}
-                    </Field>
-                    <Field>
-                      <SelectControl
-                        id="supplier-quote-payment-terms"
-                        options={paymentTermsOptions}
-                        value={formData.paymentTerms || 'immediate'}
-                        onChange={(value) =>
-                          dispatch({
-                            type: 'patchFormData',
-                            value: { paymentTerms: value as SupplierQuote['paymentTerms'] },
-                          })
-                        }
-                        searchable={false}
-                        disabled={isReadOnly}
-                        label={t('sales:supplierQuotes.paymentTerms', {
-                          defaultValue: 'Payment Terms',
-                        })}
-                        buttonClassName="h-9"
-                      />
-                    </Field>
-                    <Field data-invalid={Boolean(errors.communicationChannelId)}>
-                      <QuoteCommunicationChannelField
-                        id="supplier-quote-communication-channel"
-                        channels={communicationChannels}
-                        value={formData.communicationChannelId || ''}
-                        error={errors.communicationChannelId}
-                        disabled={isReadOnly}
-                        canManage={canManageCommunicationChannels}
-                        onChange={(value) => {
-                          const selected = communicationChannels.find(
-                            (channel) => channel.id === value,
-                          );
-                          dispatch({
-                            type: 'patchFormData',
-                            value: {
-                              communicationChannelId: value,
-                              communicationChannelName: selected?.name ?? '',
-                            },
-                          });
-                          if (errors.communicationChannelId) {
-                            dispatch({ type: 'clearError', key: 'communicationChannelId' });
-                          }
-                        }}
-                        onCreate={onCreateCommunicationChannel}
-                        onUpdate={onUpdateCommunicationChannel}
-                        onDelete={onDeleteCommunicationChannel}
-                      />
-                    </Field>
-                    <Field>
-                      <FieldLabel htmlFor="supplier-quote-expiration-date">
-                        {t('sales:supplierQuotes.expirationDate', {
-                          defaultValue: 'Expiration Date',
-                        })}
-                      </FieldLabel>
-                      <DateField
-                        id="supplier-quote-expiration-date"
-                        value={formData.expirationDate || ''}
-                        // Editable while synced/expired so the supplier quote can be revalidated
-                        // (and the linked client quote unblocked) — issue #779.
-                        disabled={isReadOnly && !expirationEditableWhileReadOnly}
-                        onChange={(value) => {
-                          dispatch({ type: 'patchFormData', value: { expirationDate: value } });
-                          // When the form is read-only except the expiration (synced/expired/
-                          // non-draft, #779), the quote has no submit button — so picking a date
-                          // saves immediately as an "extend validity" action that re-syncs the
-                          // linked client quote and clears its expired-supplier block.
-                          if (expirationEditableWhileReadOnly && editingQuote) {
-                            // Revalidation needs a date from today onward; a cleared or past date
-                            // would leave the quote expired — say so instead of silently saving.
-                            if (!value || isDateOnlyBeforeToday(value)) {
-                              toastError(
-                                t('sales:supplierQuotes.errors.expirationExtendInvalid', {
-                                  defaultValue:
-                                    'Set an expiration date of today or later to revalidate the supplier quote',
-                                }),
-                              );
-                              return;
-                            }
-                            // onUpdateQuote may return void or a promise; normalize so a rejection
-                            // is surfaced rather than swallowed.
-                            Promise.resolve(
-                              onUpdateQuote(editingQuote.id, { expirationDate: value }),
-                            ).catch((err: unknown) => {
-                              // Surface the failure and resync the field — the optimistic patch
-                              // above already painted the new date into the form.
-                              toastError(
-                                (err as Error).message ||
-                                  t('sales:supplierQuotes.failedToSave', {
-                                    defaultValue:
-                                      'Failed to save the supplier quote. Please retry.',
-                                  }),
-                              );
-                              dispatch({
-                                type: 'patchFormData',
-                                value: { expirationDate: editingQuote.expirationDate || '' },
-                              });
-                            });
-                          }
-                        }}
-                      />
-                    </Field>
-                  </div>
-                </div>
-
-                <div className="space-y-4">
-                  <div className="flex justify-between items-center">
-                    <h4 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-primary">
-                      <span className="size-1.5 rounded-full bg-primary"></span>
-                      {t('sales:supplierQuotes.items', { defaultValue: 'Items' })}
-                      <FieldTooltip
-                        description={t('sales:fieldInfo.supplierItems', {
-                          defaultValue: 'Line items for this quote',
-                        })}
-                        status={readOnlyStatus}
-                        statusLabel={statusLabel}
-                      />
-                    </h4>
-                    {!isReadOnly && (
-                      <Button type="button" size="sm" onClick={addItem}>
-                        <i className="fa-solid fa-plus text-[10px]" aria-hidden="true"></i>
-                        {t('sales:supplierQuotes.addItem', { defaultValue: 'Add item' })}
-                      </Button>
-                    )}
-                  </div>
-                  {errors.items && (
-                    <p className="text-red-500 text-[10px] font-bold ml-1 -mt-2">{errors.items}</p>
-                  )}
-
-                  {formData.items && formData.items.length > 0 && (
-                    <div className="hidden lg:flex gap-2 px-3 mb-1 items-center">
-                      <div className="flex-1 min-w-0 grid grid-cols-16 gap-2">
-                        <div className="col-span-6 text-[10px] font-black text-zinc-400 uppercase tracking-wider ml-1">
-                          {t('sales:supplierQuotes.product', { defaultValue: 'Product' })}
-                        </div>
-                        <div className="col-span-2 text-[10px] font-black text-zinc-400 uppercase tracking-wider ml-1">
-                          {t('sales:supplierQuotes.listPrice', { defaultValue: 'List Price' })}
-                        </div>
-                        <div className="col-span-2 text-[10px] font-black text-zinc-400 uppercase tracking-wider text-center">
-                          {t('sales:supplierQuotes.discountToUs', {
-                            defaultValue: 'Discount to Us (%)',
-                          })}
-                        </div>
-                        <div className="col-span-2 text-[10px] font-black text-zinc-400 uppercase tracking-wider text-center">
-                          {t('sales:supplierQuotes.unitCost', { defaultValue: 'Unit Cost' })}
-                        </div>
-                        <div className="col-span-2 text-[10px] font-black text-zinc-400 uppercase tracking-wider text-center">
-                          {t('sales:supplierQuotes.qty', { defaultValue: 'Qty' })}
-                        </div>
-                        <div className="col-span-2 text-[10px] font-black text-zinc-400 uppercase tracking-wider text-center">
-                          {t('sales:supplierQuotes.durationColumn', { defaultValue: 'Duration' })}
-                        </div>
-                      </div>
-                      <div className="w-24 shrink-0 text-[10px] font-black text-zinc-400 uppercase tracking-wider text-right">
-                        {t('sales:supplierQuotes.total', { defaultValue: 'Total' })}
-                      </div>
-                      <div className="w-10 shrink-0" />
-                    </div>
-                  )}
-
-                  {formData.items && formData.items.length > 0 ? (
-                    <div className="space-y-3">
-                      {formData.items.map((item, index) => {
-                        // Display with legacy fallbacks: rows/snapshots that predate list price use
-                        // the stored net unit price as the list price (with no discount).
-                        const itemListPrice = item.listPrice ?? item.unitPrice ?? 0;
-                        const itemDiscountPercent = item.discountPercent ?? 0;
-                        const itemUnitCost = item.unitPrice ?? 0;
-                        // Duration multiplies the line total alongside quantity (issue #776).
-                        const durationMonths = getEffectiveDurationMonths(item);
-                        const lineTotal = item.quantity * itemUnitCost * durationMonths;
-                        // Duration is stored as canonical months; show it in the item's unit.
-                        const durationUnit = normalizeDurationUnit(item.durationUnit);
-                        const durationValue = getDurationDisplayValue(item);
-                        const itemProduct = item.productId
-                          ? products.find((p) => p.id === item.productId)
-                          : undefined;
-                        const isSupply = itemProduct?.type === 'supply';
-                        return (
-                          <div
-                            key={item.id}
-                            className="space-y-3 rounded-md border border-border bg-muted/30 p-3"
-                          >
-                            <div className="lg:hidden flex items-start gap-3">
-                              <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-3">
-                                <div>
-                                  <div className="mb-1 text-[10px] font-black text-zinc-400 uppercase tracking-wider">
-                                    {t('sales:supplierQuotes.product', { defaultValue: 'Product' })}
-                                  </div>
-                                  <Input
-                                    type="text"
-                                    value={item.productName || ''}
-                                    disabled={isReadOnly}
-                                    onChange={(event) =>
-                                      updateItem(index, 'productName', event.target.value)
-                                    }
-                                    placeholder={t('sales:supplierQuotes.product', {
-                                      defaultValue: 'Product',
-                                    })}
-                                  />
-                                </div>
-                                <div>
-                                  <div className="mb-1 text-[10px] font-black text-zinc-400 uppercase tracking-wider">
-                                    {t('sales:supplierQuotes.qty', { defaultValue: 'Qty' })}
-                                  </div>
-                                  <div className="flex items-center gap-1">
-                                    <ValidatedNumberInput
-                                      value={item.quantity}
-                                      onValueChange={(value) =>
-                                        updateItem(index, 'quantity', parseNumberInputValue(value))
-                                      }
-                                      disabled={isReadOnly}
-                                      className={`${itemInputClassName} text-center flex-1`}
-                                    />
-                                    <span className="text-xs font-semibold text-zinc-400 shrink-0">
-                                      /
-                                    </span>
-                                    <UnitTypeSelector
-                                      value={item.unitType || 'unit'}
-                                      onChange={(val) => handleUnitTypeChange(index, val)}
-                                      isSupply={isSupply}
-                                      quantity={Number(item.quantity) || 0}
-                                      disabled={isReadOnly}
-                                      i18nPrefix="sales:supplierQuotes"
-                                    />
-                                  </div>
-                                </div>
-                                <div>
-                                  <div className="mb-1 text-[10px] font-black text-zinc-400 uppercase tracking-wider flex items-center gap-1">
-                                    {t('sales:supplierQuotes.durationColumn', {
-                                      defaultValue: 'Duration',
-                                    })}
-                                    <FieldTooltip
-                                      description={t('sales:fieldInfo.duration', {
-                                        defaultValue: 'Number of months the service runs',
-                                      })}
-                                      status={readOnlyStatus}
-                                      statusLabel={statusLabel}
-                                    />
-                                  </div>
-                                  <div className="flex items-center gap-1">
-                                    <ValidatedNumberInput
-                                      step="1"
-                                      min="1"
-                                      placeholder={t('sales:supplierQuotes.durationColumn', {
-                                        defaultValue: 'Duration',
-                                      })}
-                                      value={durationValue}
-                                      onValueChange={(value) =>
-                                        handleDurationValueChange(index, value)
-                                      }
-                                      disabled={isReadOnly || durationUnit === 'na'}
-                                      className="w-full text-sm px-3 py-2 bg-white border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed flex-1"
-                                    />
-                                    <span className="text-xs font-semibold text-zinc-400 shrink-0">
-                                      /
-                                    </span>
-                                    <DurationUnitSelector
-                                      value={durationUnit}
-                                      onChange={(val) => handleDurationUnitChange(index, val)}
-                                      count={durationValue}
-                                      disabled={isReadOnly}
-                                      i18nPrefix="sales:supplierQuotes"
-                                    />
-                                  </div>
-                                </div>
-                              </div>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon-sm"
-                                onClick={() => removeItem(index)}
-                                disabled={isReadOnly}
-                                className="mt-5 shrink-0 text-muted-foreground hover:text-destructive"
-                              >
-                                <i className="fa-solid fa-trash-can" aria-hidden="true"></i>
-                                <span className="sr-only">{t('common:buttons.delete')}</span>
-                              </Button>
-                            </div>
-                            <div className="grid grid-cols-2 gap-3 lg:hidden">
-                              <div className="rounded-lg border border-zinc-200 bg-white px-3 py-2 space-y-1">
-                                <div className="text-[10px] font-black text-zinc-400 uppercase tracking-wider">
-                                  {t('sales:supplierQuotes.listPrice', {
-                                    defaultValue: 'List Price',
-                                  })}
-                                </div>
-                                <div className="flex items-center gap-1">
-                                  <ValidatedNumberInput
-                                    value={itemListPrice}
-                                    formatDecimals={2}
-                                    onValueChange={(value) =>
-                                      updateItem(index, 'listPrice', parseNumberInputValue(value))
-                                    }
-                                    disabled={isReadOnly}
-                                    className="w-full text-sm p-2 bg-white border border-zinc-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
-                                  />
-                                  <span className="text-[9px] font-semibold text-zinc-400 shrink-0">
-                                    {currency}
-                                  </span>
-                                </div>
-                              </div>
-                              <div className="rounded-lg border border-zinc-200 bg-white px-3 py-2 space-y-1">
-                                <div className="text-[10px] font-black text-zinc-400 uppercase tracking-wider">
-                                  {t('sales:supplierQuotes.discountToUs', {
-                                    defaultValue: 'Discount to Us (%)',
-                                  })}
-                                </div>
-                                <div className="flex items-center gap-1">
-                                  <ValidatedNumberInput
-                                    value={itemDiscountPercent}
-                                    min={0}
-                                    max={100}
-                                    onValueChange={(value) =>
-                                      updateItem(
-                                        index,
-                                        'discountPercent',
-                                        parseNumberInputValue(value),
-                                      )
-                                    }
-                                    disabled={isReadOnly}
-                                    className="w-full text-sm p-2 bg-white border border-zinc-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
-                                  />
-                                  <span className="text-[9px] font-semibold text-zinc-400 shrink-0">
-                                    %
-                                  </span>
-                                </div>
-                              </div>
-                              <div className="rounded-lg border border-zinc-200 bg-white px-3 py-2 space-y-1">
-                                <div className="text-[10px] font-black text-zinc-400 uppercase tracking-wider">
-                                  {t('sales:supplierQuotes.unitCost', {
-                                    defaultValue: 'Unit Cost',
-                                  })}
-                                </div>
-                                <div className="text-xs font-bold text-zinc-700 whitespace-nowrap">
-                                  {itemUnitCost.toFixed(2)} {currency}
-                                </div>
-                              </div>
-                              <div className="rounded-lg border border-zinc-200 bg-white px-3 py-2 space-y-1">
-                                <div className="text-[10px] font-black text-zinc-400 uppercase tracking-wider">
-                                  {t('sales:supplierQuotes.total', { defaultValue: 'Total' })}
-                                </div>
-                                <div className="text-xs font-bold text-zinc-700 whitespace-nowrap">
-                                  {lineTotal.toFixed(2)} {currency}
-                                </div>
-                              </div>
-                            </div>
-                            <div className="hidden lg:flex gap-2 items-center">
-                              <div className="flex-1 min-w-0 grid grid-cols-16 gap-2 items-center">
-                                <div className="col-span-6">
-                                  <Input
-                                    type="text"
-                                    value={item.productName || ''}
-                                    disabled={isReadOnly}
-                                    onChange={(event) =>
-                                      updateItem(index, 'productName', event.target.value)
-                                    }
-                                    placeholder={t('sales:supplierQuotes.product', {
-                                      defaultValue: 'Product',
-                                    })}
-                                  />
-                                </div>
-                                <div className="col-span-2 flex items-center gap-1.5">
-                                  <ValidatedNumberInput
-                                    value={itemListPrice}
-                                    formatDecimals={2}
-                                    onValueChange={(value) =>
-                                      updateItem(index, 'listPrice', parseNumberInputValue(value))
-                                    }
-                                    disabled={isReadOnly}
-                                    className={`${itemInputClassName} flex-1 text-right`}
-                                  />
-                                  <span className="text-xs font-semibold text-zinc-400 shrink-0 whitespace-nowrap">
-                                    {currency}
-                                  </span>
-                                </div>
-                                <div className="col-span-2 flex items-center justify-center gap-1">
-                                  <ValidatedNumberInput
-                                    value={itemDiscountPercent}
-                                    min={0}
-                                    max={100}
-                                    onValueChange={(value) =>
-                                      updateItem(
-                                        index,
-                                        'discountPercent',
-                                        parseNumberInputValue(value),
-                                      )
-                                    }
-                                    disabled={isReadOnly}
-                                    className={`${itemInputClassName} text-center max-w-[5rem]`}
-                                  />
-                                  <span className="text-xs font-semibold text-zinc-400 shrink-0">
-                                    %
-                                  </span>
-                                </div>
-                                <div className="col-span-2 flex items-center justify-center gap-1.5">
-                                  <span className="text-sm font-semibold text-zinc-700 whitespace-nowrap tabular-nums">
-                                    {itemUnitCost.toFixed(2)}
-                                  </span>
-                                  <span className="text-xs font-semibold text-zinc-400 shrink-0 whitespace-nowrap">
-                                    {currency}
-                                  </span>
-                                </div>
-                                <div className="col-span-2 flex items-center justify-center gap-1">
-                                  <ValidatedNumberInput
-                                    value={item.quantity}
-                                    onValueChange={(value) =>
-                                      updateItem(index, 'quantity', parseNumberInputValue(value))
-                                    }
-                                    disabled={isReadOnly}
-                                    className={`${itemInputClassName} text-center max-w-[5rem]`}
-                                  />
-                                  <span className="text-xs font-semibold text-zinc-400 shrink-0">
-                                    /
-                                  </span>
-                                  <UnitTypeSelector
-                                    value={item.unitType || 'unit'}
-                                    onChange={(val) => handleUnitTypeChange(index, val)}
-                                    isSupply={isSupply}
-                                    quantity={Number(item.quantity) || 0}
-                                    disabled={isReadOnly}
-                                    i18nPrefix="sales:supplierQuotes"
-                                  />
-                                </div>
-                                <div className="col-span-2 flex items-center justify-center gap-1">
-                                  <ValidatedNumberInput
-                                    step="1"
-                                    min="1"
-                                    placeholder={t('sales:supplierQuotes.durationColumn', {
-                                      defaultValue: 'Duration',
-                                    })}
-                                    value={durationValue}
-                                    onValueChange={(value) =>
-                                      handleDurationValueChange(index, value)
-                                    }
-                                    disabled={isReadOnly || durationUnit === 'na'}
-                                    className="w-full max-w-[5rem] text-sm px-1 py-2 bg-white border border-zinc-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
-                                  />
-                                  <span className="text-[9px] font-semibold text-zinc-400 shrink-0">
-                                    /
-                                  </span>
-                                  <DurationUnitSelector
-                                    value={durationUnit}
-                                    onChange={(val) => handleDurationUnitChange(index, val)}
-                                    count={durationValue}
-                                    disabled={isReadOnly}
-                                    i18nPrefix="sales:supplierQuotes"
-                                  />
-                                </div>
-                              </div>
-                              <div className="w-24 shrink-0 flex items-center justify-end">
-                                <span className="text-sm font-bold text-zinc-800 whitespace-nowrap">
-                                  {lineTotal.toFixed(2)} {currency}
-                                </span>
-                              </div>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon-sm"
-                                onClick={() => removeItem(index)}
-                                disabled={isReadOnly}
-                                className="shrink-0 text-muted-foreground hover:text-destructive"
-                              >
-                                <i className="fa-solid fa-trash-can" aria-hidden="true"></i>
-                                <span className="sr-only">{t('common:buttons.delete')}</span>
-                              </Button>
-                            </div>
-                            <div>
-                              <Input
-                                type="text"
-                                value={item.note || ''}
-                                disabled={isReadOnly}
-                                onChange={(event) => updateItem(index, 'note', event.target.value)}
-                                placeholder={t('form:placeholderNotes', {
-                                  defaultValue: 'Notes',
-                                })}
-                              />
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <div className="rounded-md border border-dashed border-border py-8 text-center text-sm text-muted-foreground">
-                      {t('sales:supplierQuotes.noItemsAdded', {
-                        defaultValue: 'No items added yet',
-                      })}
-                    </div>
-                  )}
-                </div>
-
-                {editingQuote?.id && previewVersion === null ? (
-                  <SupplierQuoteAttachmentsSection
-                    quoteId={editingQuote.id}
-                    isReadOnly={baseReadOnly}
-                    readOnlyStatus={readOnlyStatus}
-                    statusLabel={statusLabel}
-                  />
-                ) : (
-                  !editingQuote && (
-                    <SupplierQuoteAttachmentsStaging
-                      files={stagedAttachments}
-                      onAdd={(file) => dispatch({ type: 'addStagedAttachment', file })}
-                      onRemove={(index) => dispatch({ type: 'removeStagedAttachment', index })}
-                      disabled={isSubmitting}
-                      readOnlyStatus={readOnlyStatus}
-                      statusLabel={statusLabel}
-                    />
-                  )
-                )}
-
-                <div className="flex flex-col gap-4 border-t border-border pt-4 md:flex-row">
-                  <Field className="w-full md:w-2/3">
-                    <h4 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-primary">
-                      <span className="size-1.5 rounded-full bg-primary"></span>
-                      {t('sales:supplierQuotes.notes', { defaultValue: 'Notes' })}
-                      <FieldTooltip
-                        description={t('sales:fieldInfo.notes', {
-                          defaultValue: 'Additional notes for the entire document',
-                        })}
-                        status={readOnlyStatus}
-                        statusLabel={statusLabel}
-                      />
-                    </h4>
-                    <FieldLabel htmlFor="supplier-quote-notes" className="sr-only">
-                      {t('sales:supplierQuotes.notes', { defaultValue: 'Notes' })}
-                    </FieldLabel>
-                    <Textarea
-                      id="supplier-quote-notes"
-                      rows={4}
-                      value={formData.notes || ''}
-                      disabled={isReadOnly}
-                      placeholder={t('form:placeholderNotes', {
-                        defaultValue: 'Optional notes...',
-                      })}
-                      onChange={(event) =>
-                        dispatch({ type: 'patchFormData', value: { notes: event.target.value } })
-                      }
-                      className="min-h-28 resize-none"
-                    />
-                  </Field>
-
-                  <div className="w-full space-y-2 md:w-1/3">
-                    <h4 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-primary">
-                      <span className="size-1.5 rounded-full bg-primary"></span>
-                      {t('sales:supplierQuotes.summary', { defaultValue: 'Summary' })}
-                    </h4>
-                    <CostSummaryPanel
-                      currency={currency}
-                      subtotal={totalsBreakdown.subtotal}
-                      total={totalsBreakdown.total}
-                      subtotalLabel={t('sales:supplierQuotes.subtotal', {
-                        defaultValue: 'Subtotal',
-                      })}
-                      discountRow={{
-                        label: t('sales:supplierQuotes.discountAmount', {
-                          defaultValue: 'Discount',
-                        }),
-                        amount: totalsBreakdown.discountAmount,
-                      }}
-                      totalLabel={t('sales:supplierQuotes.total', { defaultValue: 'Total' })}
-                    />
-                  </div>
-                </div>
-              </ModalBody>
-
-              <ModalFooter>
-                <Button type="button" variant="outline" onClick={closeModal}>
-                  {t('common:buttons.cancel', { defaultValue: 'Cancel' })}
-                </Button>
-                {!isReadOnly && (
-                  <Button type="submit" disabled={isSubmitting}>
-                    {isSubmitting
-                      ? t('common:buttons.saving')
-                      : editingQuote
-                        ? t('common:buttons.update', { defaultValue: 'Update' })
-                        : t('common:buttons.save', { defaultValue: 'Save' })}
-                  </Button>
-                )}
-              </ModalFooter>
-            </form>
-          </ModalContent>
-          {editingQuote?.id && (
-            <SupplierQuoteVersionsPanel
-              quoteId={editingQuote.id}
-              selectedVersionId={previewVersion?.id ?? null}
-              onPreview={handleVersionPreview}
-              onClearPreview={handleClearPreview}
-              onRestored={handleVersionRestored}
-              disabled={baseReadOnly}
-            />
-          )}
+    <>
+      {controller.previewVersion && (
+        <div className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl border border-amber-500/30 bg-amber-500/10">
+          <span className="text-amber-800 dark:text-amber-300 text-xs font-bold flex items-center gap-2">
+            <i className="fa-solid fa-clock-rotate-left"></i>
+            {controller.t('sales:supplierQuotes.versionHistory.previewBanner', {
+              date: formatInsertDateTime(
+                controller.previewVersion.createdAt,
+                controller.i18n.language,
+              ),
+              defaultValue: 'Previewing version from {{date}}',
+            })}
+          </span>
+          <Button
+            type="button"
+            variant="link"
+            onClick={controller.handleClearPreview}
+            className="h-auto px-0 text-xs font-semibold text-amber-800 dark:text-amber-300"
+          >
+            {controller.t('sales:supplierQuotes.versionHistory.backToCurrent', {
+              defaultValue: 'Back to current',
+            })}
+          </Button>
         </div>
-      </Modal>
-
-      <DeleteConfirmModal
-        isOpen={isDeleteConfirmOpen}
-        onClose={() => {
-          if (isDeleting) return;
-          dispatch({ type: 'setIsDeleteConfirmOpen', value: false });
-        }}
-        onConfirm={async () => {
-          if (!quoteToDelete) return;
-          if (isDeleting) return;
-          dispatch({ type: 'setIsDeleting', value: true });
-          try {
-            await onDeleteQuote(quoteToDelete.id);
-            dispatch({ type: 'setIsDeleteConfirmOpen', value: false });
-            dispatch({ type: 'setQuoteToDelete', value: null });
-          } catch (err) {
-            toastError((err as Error).message || t('sales:supplierQuotes.failedToDelete'));
-          } finally {
-            dispatch({ type: 'setIsDeleting', value: false });
+      )}
+      {controller.baseReadOnly && (
+        <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-amber-500/30 bg-amber-500/10">
+          <span className="text-amber-700 dark:text-amber-300 text-xs font-bold">
+            {controller.readOnlyReason}
+          </span>
+        </div>
+      )}
+      {editingQuote?.linkedOrderId && (
+        <LinkedRecordBanner
+          label={controller.t('sales:supplierQuotes.linkedOrderTitle', {
+            defaultValue: 'Linked Order',
+          })}
+          value={controller.t('sales:supplierQuotes.linkedOrderInfo', {
+            number: editingQuote.linkedOrderId,
+            defaultValue: 'Order #{{number}}',
+          })}
+          note={controller.t('sales:supplierQuotes.orderDetailsReadOnly', {
+            defaultValue: '(Quote details are read-only)',
+          })}
+          action={
+            controller.onViewOrders
+              ? {
+                  label: controller.t('sales:supplierQuotes.viewOrder', {
+                    defaultValue: 'View Order',
+                  }),
+                  onClick: () => controller.onViewOrders?.(editingQuote.id),
+                }
+              : undefined
           }
-        }}
-        isDeleting={isDeleting}
-        title={t('sales:supplierQuotes.deleteTitle', { defaultValue: 'Delete supplier quote?' })}
-        description={quoteToDelete?.id ?? ''}
-      />
+        />
+      )}
+    </>
+  );
+};
 
-      <div className="space-y-4">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <div>
-            <h2 className="text-2xl font-semibold text-zinc-800">
-              {t('sales:supplierQuotes.title', { defaultValue: 'Supplier Quotes' })}
-            </h2>
-            <p className="text-zinc-500 text-sm">
-              {t('sales:supplierQuotes.subtitle', {
-                defaultValue: 'Quotes that can be converted into supplier orders.',
-              })}
-            </p>
-          </div>
-          <HeaderAddButton onClick={openAddModal}>
-            {t('sales:supplierQuotes.addQuote', { defaultValue: 'Add quote' })}
-          </HeaderAddButton>
+const SupplierQuoteSectionTitle: React.FC<{
+  children: React.ReactNode;
+  description?: string;
+  status?: string;
+  statusLabel?: string;
+}> = ({ children, description, status, statusLabel }) => (
+  <h4 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-primary">
+    <span className="size-1.5 rounded-full bg-primary"></span>
+    {children}
+    {description && status && statusLabel && (
+      <FieldTooltip description={description} status={status} statusLabel={statusLabel} />
+    )}
+  </h4>
+);
+
+const SupplierQuoteDetailsSection: React.FC<{ controller: SupplierQuotesController }> = ({
+  controller,
+}) => (
+  <div className="space-y-2">
+    <SupplierQuoteSectionTitle
+      description={controller.t('sales:fieldInfo.supplierInformation', {
+        defaultValue: 'Supplier and document details',
+      })}
+      status={controller.readOnlyStatus}
+      statusLabel={controller.statusLabel}
+    >
+      {controller.t('sales:supplierQuotes.supplierInformation', {
+        defaultValue: 'Supplier Information',
+      })}
+    </SupplierQuoteSectionTitle>
+    <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+      <SupplierQuoteSupplierField controller={controller} />
+      <SupplierQuoteClientField controller={controller} />
+      <SupplierQuoteCodeField controller={controller} />
+      <SupplierQuotePaymentTermsField controller={controller} />
+      <SupplierQuoteCommunicationField controller={controller} />
+      <SupplierQuoteExpirationField controller={controller} />
+    </div>
+  </div>
+);
+
+const SupplierQuoteSupplierField: React.FC<{ controller: SupplierQuotesController }> = ({
+  controller,
+}) => (
+  <Field data-invalid={Boolean(controller.errors.supplierId)}>
+    <SelectControl
+      id="supplier-quote-supplier"
+      options={controller.activeSuppliers.map((supplier) => ({
+        id: supplier.id,
+        name: supplier.name,
+      }))}
+      value={controller.formData.supplierId || ''}
+      onChange={(value) => controller.handleSupplierChange(value as string)}
+      placeholder={controller.t('sales:supplierQuotes.selectSupplier', {
+        defaultValue: 'Select a supplier',
+      })}
+      searchable={true}
+      disabled={controller.isReadOnly}
+      label={controller.t('sales:supplierQuotes.supplier', { defaultValue: 'Supplier' })}
+      required
+      buttonClassName="h-9"
+      className={controller.errors.supplierId ? 'border-red-300' : ''}
+    />
+    <FieldError className="text-xs">{controller.errors.supplierId}</FieldError>
+  </Field>
+);
+
+const SupplierQuoteClientField: React.FC<{ controller: SupplierQuotesController }> = ({
+  controller,
+}) => (
+  <Field data-invalid={Boolean(controller.errors.clientId)}>
+    <SelectControl
+      id="supplier-quote-client"
+      options={controller.clientOptions}
+      value={controller.formData.clientId || ''}
+      onChange={(value) => controller.handleClientChange(value as string)}
+      placeholder={controller.t('sales:supplierQuotes.selectClient', {
+        defaultValue: 'Select a customer',
+      })}
+      searchable={true}
+      disabled={controller.isReadOnly}
+      label={controller.t('sales:supplierQuotes.client', { defaultValue: 'Customer' })}
+      required
+      buttonClassName="h-9"
+      className={controller.errors.clientId ? 'border-red-300' : ''}
+    />
+    <FieldError className="text-xs">{controller.errors.clientId}</FieldError>
+  </Field>
+);
+
+const SupplierQuoteCodeField: React.FC<{ controller: SupplierQuotesController }> = ({
+  controller,
+}) => (
+  <Field data-invalid={Boolean(controller.errors.id)}>
+    <FieldLabel htmlFor="supplier-quote-code" required={Boolean(controller.editingQuote)}>
+      {controller.t('sales:supplierQuotes.quoteCode', { defaultValue: 'Quote Code' })}
+    </FieldLabel>
+    <Input
+      id="supplier-quote-code"
+      type="text"
+      value={controller.formData.id || ''}
+      disabled={controller.isReadOnly}
+      onChange={(event) => {
+        controller.dispatch({ type: 'patchFormData', value: { id: event.target.value } });
+        if (controller.errors.id) {
+          controller.dispatch({ type: 'clearError', key: 'id' });
+        }
+      }}
+      placeholder={
+        controller.supplierQuoteCodePreview ??
+        controller.t('sales:supplierQuotes.autoCodePlaceholder', {
+          defaultValue: 'Auto-generated',
+        })
+      }
+      className={controller.errors.id ? 'border-red-300' : ''}
+      aria-invalid={Boolean(controller.errors.id)}
+    />
+    <FieldError className="text-xs">{controller.errors.id}</FieldError>
+    {!controller.editingQuote && (
+      <FieldDescription className="text-xs">
+        {controller.supplierQuoteCodePreview
+          ? controller.t('sales:supplierQuotes.autoCodePreviewDescription', {
+              preview: controller.supplierQuoteCodePreview,
+              defaultValue: 'Leave blank to generate {{preview}} from the document code template.',
+            })
+          : controller.t('sales:supplierQuotes.autoCodeDescription', {
+              defaultValue: 'Leave blank to generate the next code automatically.',
+            })}
+      </FieldDescription>
+    )}
+  </Field>
+);
+
+const SupplierQuotePaymentTermsField: React.FC<{ controller: SupplierQuotesController }> = ({
+  controller,
+}) => (
+  <Field>
+    <SelectControl
+      id="supplier-quote-payment-terms"
+      options={controller.paymentTermsOptions}
+      value={controller.formData.paymentTerms || 'immediate'}
+      onChange={(value) =>
+        controller.dispatch({
+          type: 'patchFormData',
+          value: { paymentTerms: value as SupplierQuote['paymentTerms'] },
+        })
+      }
+      searchable={false}
+      disabled={controller.isReadOnly}
+      label={controller.t('sales:supplierQuotes.paymentTerms', {
+        defaultValue: 'Payment Terms',
+      })}
+      buttonClassName="h-9"
+    />
+  </Field>
+);
+
+const SupplierQuoteCommunicationField: React.FC<{ controller: SupplierQuotesController }> = ({
+  controller,
+}) => (
+  <Field data-invalid={Boolean(controller.errors.communicationChannelId)}>
+    <QuoteCommunicationChannelField
+      id="supplier-quote-communication-channel"
+      channels={controller.communicationChannels}
+      value={controller.formData.communicationChannelId || ''}
+      error={controller.errors.communicationChannelId}
+      disabled={controller.isReadOnly}
+      canManage={controller.canManageCommunicationChannels}
+      onChange={(value) => {
+        const selected = controller.communicationChannels.find((channel) => channel.id === value);
+        controller.dispatch({
+          type: 'patchFormData',
+          value: {
+            communicationChannelId: value,
+            communicationChannelName: selected?.name ?? '',
+          },
+        });
+        if (controller.errors.communicationChannelId) {
+          controller.dispatch({ type: 'clearError', key: 'communicationChannelId' });
+        }
+      }}
+      onCreate={controller.onCreateCommunicationChannel}
+      onUpdate={controller.onUpdateCommunicationChannel}
+      onDelete={controller.onDeleteCommunicationChannel}
+    />
+  </Field>
+);
+
+const SupplierQuoteExpirationField: React.FC<{ controller: SupplierQuotesController }> = ({
+  controller,
+}) => (
+  <Field>
+    <FieldLabel htmlFor="supplier-quote-expiration-date">
+      {controller.t('sales:supplierQuotes.expirationDate', { defaultValue: 'Expiration Date' })}
+    </FieldLabel>
+    <DateField
+      id="supplier-quote-expiration-date"
+      value={controller.formData.expirationDate || ''}
+      disabled={controller.isReadOnly && !controller.expirationEditableWhileReadOnly}
+      onChange={(value) => handleSupplierQuoteExpirationChange(controller, value)}
+    />
+  </Field>
+);
+
+const handleSupplierQuoteExpirationChange = (
+  controller: SupplierQuotesController,
+  value: string,
+): void => {
+  controller.dispatch({ type: 'patchFormData', value: { expirationDate: value } });
+  if (!(controller.expirationEditableWhileReadOnly && controller.editingQuote)) return;
+
+  if (!value || isDateOnlyBeforeToday(value)) {
+    toastError(
+      controller.t('sales:supplierQuotes.errors.expirationExtendInvalid', {
+        defaultValue: 'Set an expiration date of today or later to revalidate the supplier quote',
+      }),
+    );
+    return;
+  }
+
+  Promise.resolve(
+    controller.onUpdateQuote(controller.editingQuote.id, { expirationDate: value }),
+  ).catch((err: unknown) => {
+    toastError(
+      (err as Error).message ||
+        controller.t('sales:supplierQuotes.failedToSave', {
+          defaultValue: 'Failed to save the supplier quote. Please retry.',
+        }),
+    );
+    controller.dispatch({
+      type: 'patchFormData',
+      value: { expirationDate: controller.editingQuote?.expirationDate || '' },
+    });
+  });
+};
+
+const SupplierQuoteItemsSection: React.FC<{ controller: SupplierQuotesController }> = ({
+  controller,
+}) => (
+  <div className="space-y-4">
+    <div className="flex justify-between items-center">
+      <SupplierQuoteSectionTitle
+        description={controller.t('sales:fieldInfo.supplierItems', {
+          defaultValue: 'Line items for this quote',
+        })}
+        status={controller.readOnlyStatus}
+        statusLabel={controller.statusLabel}
+      >
+        {controller.t('sales:supplierQuotes.items', { defaultValue: 'Items' })}
+      </SupplierQuoteSectionTitle>
+      {!controller.isReadOnly && (
+        <Button type="button" size="sm" onClick={controller.addItem}>
+          <i className="fa-solid fa-plus text-[10px]" aria-hidden="true"></i>
+          {controller.t('sales:supplierQuotes.addItem', { defaultValue: 'Add item' })}
+        </Button>
+      )}
+    </div>
+    {controller.errors.items && (
+      <p className="text-red-500 text-[10px] font-bold ml-1 -mt-2">{controller.errors.items}</p>
+    )}
+    <SupplierQuoteItemsHeader controller={controller} />
+    {(controller.formData.items || []).length > 0 ? (
+      <div className="space-y-3">
+        {controller.formData.items?.map((item, index) => (
+          <SupplierQuoteItemRow key={item.id} controller={controller} item={item} index={index} />
+        ))}
+      </div>
+    ) : (
+      <div className="rounded-md border border-dashed border-border py-8 text-center text-sm text-muted-foreground">
+        {controller.t('sales:supplierQuotes.noItemsAdded', { defaultValue: 'No items added yet' })}
+      </div>
+    )}
+  </div>
+);
+
+const SupplierQuoteItemsHeader: React.FC<{ controller: SupplierQuotesController }> = ({
+  controller,
+}) => {
+  if ((controller.formData.items || []).length === 0) return null;
+
+  return (
+    <div className="hidden lg:flex gap-2 px-3 mb-1 items-center">
+      <div className="flex-1 min-w-0 grid grid-cols-16 gap-2">
+        <div className="col-span-6 text-[10px] font-black text-zinc-400 uppercase tracking-wider ml-1">
+          {controller.t('sales:supplierQuotes.product', { defaultValue: 'Product' })}
+        </div>
+        <div className="col-span-2 text-[10px] font-black text-zinc-400 uppercase tracking-wider ml-1">
+          {controller.t('sales:supplierQuotes.listPrice', { defaultValue: 'List Price' })}
+        </div>
+        <div className="col-span-2 text-[10px] font-black text-zinc-400 uppercase tracking-wider text-center">
+          {controller.t('sales:supplierQuotes.discountToUs', {
+            defaultValue: 'Discount to Us (%)',
+          })}
+        </div>
+        <div className="col-span-2 text-[10px] font-black text-zinc-400 uppercase tracking-wider text-center">
+          {controller.t('sales:supplierQuotes.unitCost', { defaultValue: 'Unit Cost' })}
+        </div>
+        <div className="col-span-2 text-[10px] font-black text-zinc-400 uppercase tracking-wider text-center">
+          {controller.t('sales:supplierQuotes.qty', { defaultValue: 'Qty' })}
+        </div>
+        <div className="col-span-2 text-[10px] font-black text-zinc-400 uppercase tracking-wider text-center">
+          {controller.t('sales:supplierQuotes.durationColumn', { defaultValue: 'Duration' })}
         </div>
       </div>
-
-      <StandardTable<SupplierQuote>
-        title={t('sales:supplierQuotes.activeQuotes', { defaultValue: 'Active Quotes' })}
-        data={quotes}
-        columns={columns}
-        defaultRowsPerPage={5}
-        onRowClick={(row) => {
-          if (canOpenQuoteModal(row)) {
-            openEditModal(row);
-          }
-        }}
-        rowClassName={(row) => {
-          const history = isHistoryRow(row);
-          const cursorClass = canOpenQuoteModal(row) ? 'cursor-pointer' : 'cursor-not-allowed';
-          return history
-            ? `bg-zinc-50 text-zinc-400 hover:bg-zinc-100 ${cursorClass}`
-            : `hover:bg-zinc-50/50 ${cursorClass}`;
-        }}
-        initialFilterState={tableInitialFilterState}
-      />
+      <div className="w-24 shrink-0 text-[10px] font-black text-zinc-400 uppercase tracking-wider text-right">
+        {controller.t('sales:supplierQuotes.total', { defaultValue: 'Total' })}
+      </div>
+      <div className="w-10 shrink-0" />
     </div>
   );
 };
+
+interface SupplierQuoteItemRowProps {
+  controller: SupplierQuotesController;
+  item: SupplierQuoteItem;
+  index: number;
+}
+
+interface SupplierQuoteItemContext extends SupplierQuoteItemRowProps {
+  durationUnit: DurationUnit;
+  durationValue: number;
+  isSupply: boolean;
+  itemDiscountPercent: number;
+  itemListPrice: number;
+  itemUnitCost: number;
+  lineTotal: number;
+}
+
+const SupplierQuoteItemRow: React.FC<SupplierQuoteItemRowProps> = ({ controller, item, index }) => {
+  const itemListPrice = item.listPrice ?? item.unitPrice ?? 0;
+  const itemDiscountPercent = item.discountPercent ?? 0;
+  const itemUnitCost = item.unitPrice ?? 0;
+  const durationUnit = normalizeDurationUnit(item.durationUnit);
+  const durationValue = getDurationDisplayValue(item);
+  const lineTotal = item.quantity * itemUnitCost * getEffectiveDurationMonths(item);
+  const itemProduct = item.productId
+    ? controller.products.find((product) => product.id === item.productId)
+    : undefined;
+  const context = {
+    controller,
+    durationUnit,
+    durationValue,
+    index,
+    isSupply: itemProduct?.type === 'supply',
+    item,
+    itemDiscountPercent,
+    itemListPrice,
+    itemUnitCost,
+    lineTotal,
+  };
+
+  return (
+    <div className="space-y-3 rounded-md border border-border bg-muted/30 p-3">
+      <SupplierQuoteItemMobileFields context={context} />
+      <SupplierQuoteItemMobileTotals context={context} />
+      <SupplierQuoteItemDesktopFields context={context} />
+      <SupplierQuoteItemNoteField context={context} />
+    </div>
+  );
+};
+
+const SupplierQuoteItemMobileFields: React.FC<{ context: SupplierQuoteItemContext }> = ({
+  context,
+}) => (
+  <div className="lg:hidden flex items-start gap-3">
+    <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-3">
+      <SupplierQuoteProductInput
+        context={context}
+        label={context.controller.t('sales:supplierQuotes.product', { defaultValue: 'Product' })}
+      />
+      <SupplierQuoteQuantityInput
+        context={context}
+        label={context.controller.t('sales:supplierQuotes.qty', { defaultValue: 'Qty' })}
+        className="flex items-center gap-1"
+        inputClassName={`${context.controller.itemInputClassName} text-center flex-1`}
+      />
+      <SupplierQuoteDurationInput
+        context={context}
+        label={context.controller.t('sales:supplierQuotes.durationColumn', {
+          defaultValue: 'Duration',
+        })}
+        inputClassName="w-full text-sm px-3 py-2 bg-white border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed flex-1"
+      />
+    </div>
+    <SupplierQuoteItemDeleteButton context={context} className="mt-5 shrink-0" />
+  </div>
+);
+
+const SupplierQuoteItemMobileTotals: React.FC<{ context: SupplierQuoteItemContext }> = ({
+  context,
+}) => (
+  <div className="grid grid-cols-2 gap-3 lg:hidden">
+    <SupplierQuoteListPriceInput
+      context={context}
+      label={context.controller.t('sales:supplierQuotes.listPrice', { defaultValue: 'List Price' })}
+      className="rounded-lg border border-zinc-200 bg-white px-3 py-2 space-y-1"
+      inputClassName="w-full text-sm p-2 bg-white border border-zinc-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
+    />
+    <SupplierQuoteDiscountInput
+      context={context}
+      label={context.controller.t('sales:supplierQuotes.discountToUs', {
+        defaultValue: 'Discount to Us (%)',
+      })}
+      className="rounded-lg border border-zinc-200 bg-white px-3 py-2 space-y-1"
+      inputClassName="w-full text-sm p-2 bg-white border border-zinc-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
+    />
+    <SupplierQuoteUnitCostValue
+      context={context}
+      label={context.controller.t('sales:supplierQuotes.unitCost', { defaultValue: 'Unit Cost' })}
+      className="rounded-lg border border-zinc-200 bg-white px-3 py-2 space-y-1"
+    />
+    <SupplierQuoteLineTotalValue
+      context={context}
+      label={context.controller.t('sales:supplierQuotes.total', { defaultValue: 'Total' })}
+      className="rounded-lg border border-zinc-200 bg-white px-3 py-2 space-y-1"
+    />
+  </div>
+);
+
+const SupplierQuoteItemDesktopFields: React.FC<{ context: SupplierQuoteItemContext }> = ({
+  context,
+}) => (
+  <div className="hidden lg:flex gap-2 items-center">
+    <div className="flex-1 min-w-0 grid grid-cols-16 gap-2 items-center">
+      <SupplierQuoteProductInput context={context} className="col-span-6" />
+      <SupplierQuoteListPriceInput
+        context={context}
+        className="col-span-2 flex items-center gap-1.5"
+        inputClassName={`${context.controller.itemInputClassName} flex-1 text-right`}
+      />
+      <SupplierQuoteDiscountInput
+        context={context}
+        className="col-span-2 flex items-center justify-center gap-1"
+        inputClassName={`${context.controller.itemInputClassName} text-center max-w-[5rem]`}
+      />
+      <SupplierQuoteUnitCostValue
+        context={context}
+        className="col-span-2 flex items-center justify-center gap-1.5"
+      />
+      <SupplierQuoteQuantityInput
+        context={context}
+        className="col-span-2 flex items-center justify-center gap-1"
+        inputClassName={`${context.controller.itemInputClassName} text-center max-w-[5rem]`}
+      />
+      <SupplierQuoteDurationInput
+        context={context}
+        className="col-span-2 flex items-center justify-center gap-1"
+        inputClassName="w-full max-w-[5rem] text-sm px-1 py-2 bg-white border border-zinc-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
+      />
+    </div>
+    <SupplierQuoteLineTotalValue
+      context={context}
+      className="w-24 shrink-0 flex items-center justify-end"
+    />
+    <SupplierQuoteItemDeleteButton context={context} className="shrink-0" />
+  </div>
+);
+
+const SupplierQuoteFieldLabel: React.FC<{ children?: React.ReactNode }> = ({ children }) =>
+  children ? (
+    <div className="mb-1 text-[10px] font-black text-zinc-400 uppercase tracking-wider">
+      {children}
+    </div>
+  ) : null;
+
+const SupplierQuoteProductInput: React.FC<{
+  context: SupplierQuoteItemContext;
+  className?: string;
+  label?: React.ReactNode;
+}> = ({ context, className, label }) => (
+  <div className={className}>
+    <SupplierQuoteFieldLabel>{label}</SupplierQuoteFieldLabel>
+    <Input
+      type="text"
+      value={context.item.productName || ''}
+      disabled={context.controller.isReadOnly}
+      onChange={(event) =>
+        context.controller.updateItem(context.index, 'productName', event.target.value)
+      }
+      placeholder={context.controller.t('sales:supplierQuotes.product', {
+        defaultValue: 'Product',
+      })}
+    />
+  </div>
+);
+
+const SupplierQuoteQuantityInput: React.FC<{
+  context: SupplierQuoteItemContext;
+  className?: string;
+  inputClassName?: string;
+  label?: React.ReactNode;
+}> = ({ context, className, inputClassName, label }) => (
+  <div>
+    <SupplierQuoteFieldLabel>{label}</SupplierQuoteFieldLabel>
+    <div className={className}>
+      <ValidatedNumberInput
+        value={context.item.quantity}
+        onValueChange={(value) =>
+          context.controller.updateItem(context.index, 'quantity', parseNumberInputValue(value))
+        }
+        disabled={context.controller.isReadOnly}
+        className={inputClassName}
+      />
+      <span className="text-xs font-semibold text-zinc-400 shrink-0">/</span>
+      <UnitTypeSelector
+        value={context.item.unitType || 'unit'}
+        onChange={(value) => context.controller.handleUnitTypeChange(context.index, value)}
+        isSupply={context.isSupply}
+        quantity={Number(context.item.quantity) || 0}
+        disabled={context.controller.isReadOnly}
+        i18nPrefix="sales:supplierQuotes"
+      />
+    </div>
+  </div>
+);
+
+const SupplierQuoteDurationInput: React.FC<{
+  context: SupplierQuoteItemContext;
+  className?: string;
+  inputClassName?: string;
+  label?: React.ReactNode;
+}> = ({ context, className, inputClassName, label }) => (
+  <div>
+    {label && (
+      <div className="mb-1 text-[10px] font-black text-zinc-400 uppercase tracking-wider flex items-center gap-1">
+        {label}
+        <FieldTooltip
+          description={context.controller.t('sales:fieldInfo.duration', {
+            defaultValue: 'Number of months the service runs',
+          })}
+          status={context.controller.readOnlyStatus}
+          statusLabel={context.controller.statusLabel}
+        />
+      </div>
+    )}
+    <div className={className ?? 'flex items-center gap-1'}>
+      <ValidatedNumberInput
+        step="1"
+        min="1"
+        placeholder={context.controller.t('sales:supplierQuotes.durationColumn', {
+          defaultValue: 'Duration',
+        })}
+        value={context.durationValue}
+        onValueChange={(value) =>
+          context.controller.handleDurationValueChange(context.index, value)
+        }
+        disabled={context.controller.isReadOnly || context.durationUnit === 'na'}
+        className={inputClassName}
+      />
+      <span className="text-[9px] font-semibold text-zinc-400 shrink-0">/</span>
+      <DurationUnitSelector
+        value={context.durationUnit}
+        onChange={(value) => context.controller.handleDurationUnitChange(context.index, value)}
+        count={context.durationValue}
+        disabled={context.controller.isReadOnly}
+        i18nPrefix="sales:supplierQuotes"
+      />
+    </div>
+  </div>
+);
+
+const SupplierQuoteListPriceInput: React.FC<{
+  context: SupplierQuoteItemContext;
+  className?: string;
+  inputClassName?: string;
+  label?: React.ReactNode;
+}> = ({ context, className, inputClassName, label }) => (
+  <div className={className}>
+    <SupplierQuoteFieldLabel>{label}</SupplierQuoteFieldLabel>
+    <div className="flex items-center gap-1">
+      <ValidatedNumberInput
+        value={context.itemListPrice}
+        formatDecimals={2}
+        onValueChange={(value) =>
+          context.controller.updateItem(context.index, 'listPrice', parseNumberInputValue(value))
+        }
+        disabled={context.controller.isReadOnly}
+        className={inputClassName}
+      />
+      <span className="text-xs font-semibold text-zinc-400 shrink-0 whitespace-nowrap">
+        {context.controller.currency}
+      </span>
+    </div>
+  </div>
+);
+
+const SupplierQuoteDiscountInput: React.FC<{
+  context: SupplierQuoteItemContext;
+  className?: string;
+  inputClassName?: string;
+  label?: React.ReactNode;
+}> = ({ context, className, inputClassName, label }) => (
+  <div className={className}>
+    <SupplierQuoteFieldLabel>{label}</SupplierQuoteFieldLabel>
+    <div className="flex items-center gap-1">
+      <ValidatedNumberInput
+        value={context.itemDiscountPercent}
+        min={0}
+        max={100}
+        onValueChange={(value) =>
+          context.controller.updateItem(
+            context.index,
+            'discountPercent',
+            parseNumberInputValue(value),
+          )
+        }
+        disabled={context.controller.isReadOnly}
+        className={inputClassName}
+      />
+      <span className="text-xs font-semibold text-zinc-400 shrink-0">%</span>
+    </div>
+  </div>
+);
+
+const SupplierQuoteUnitCostValue: React.FC<{
+  context: SupplierQuoteItemContext;
+  className?: string;
+  label?: React.ReactNode;
+}> = ({ context, className, label }) => (
+  <div className={className}>
+    <SupplierQuoteFieldLabel>{label}</SupplierQuoteFieldLabel>
+    <div className="text-xs font-bold text-zinc-700 whitespace-nowrap">
+      {context.itemUnitCost.toFixed(2)} {context.controller.currency}
+    </div>
+  </div>
+);
+
+const SupplierQuoteLineTotalValue: React.FC<{
+  context: SupplierQuoteItemContext;
+  className?: string;
+  label?: React.ReactNode;
+}> = ({ context, className, label }) => (
+  <div className={className}>
+    <SupplierQuoteFieldLabel>{label}</SupplierQuoteFieldLabel>
+    <span className="text-sm font-bold text-zinc-800 whitespace-nowrap">
+      {context.lineTotal.toFixed(2)} {context.controller.currency}
+    </span>
+  </div>
+);
+
+const SupplierQuoteItemDeleteButton: React.FC<{
+  context: SupplierQuoteItemContext;
+  className?: string;
+}> = ({ context, className }) => (
+  <Button
+    type="button"
+    variant="ghost"
+    size="icon-sm"
+    onClick={() => context.controller.removeItem(context.index)}
+    disabled={context.controller.isReadOnly}
+    className={`${className ?? ''} text-muted-foreground hover:text-destructive`}
+  >
+    <i className="fa-solid fa-trash-can" aria-hidden="true"></i>
+    <span className="sr-only">{context.controller.t('common:buttons.delete')}</span>
+  </Button>
+);
+
+const SupplierQuoteItemNoteField: React.FC<{ context: SupplierQuoteItemContext }> = ({
+  context,
+}) => (
+  <div>
+    <Input
+      type="text"
+      value={context.item.note || ''}
+      disabled={context.controller.isReadOnly}
+      onChange={(event) => context.controller.updateItem(context.index, 'note', event.target.value)}
+      placeholder={context.controller.t('form:placeholderNotes', { defaultValue: 'Notes' })}
+    />
+  </div>
+);
+
+const SupplierQuoteAttachmentsArea: React.FC<{ controller: SupplierQuotesController }> = ({
+  controller,
+}) => {
+  if (controller.editingQuote?.id && controller.previewVersion === null) {
+    return (
+      <SupplierQuoteAttachmentsSection
+        quoteId={controller.editingQuote.id}
+        isReadOnly={controller.baseReadOnly}
+        readOnlyStatus={controller.readOnlyStatus}
+        statusLabel={controller.statusLabel}
+      />
+    );
+  }
+
+  if (controller.editingQuote) return null;
+
+  return (
+    <SupplierQuoteAttachmentsStaging
+      files={controller.stagedAttachments}
+      onAdd={(file) => controller.dispatch({ type: 'addStagedAttachment', file })}
+      onRemove={(index) => controller.dispatch({ type: 'removeStagedAttachment', index })}
+      disabled={controller.isSubmitting}
+      readOnlyStatus={controller.readOnlyStatus}
+      statusLabel={controller.statusLabel}
+    />
+  );
+};
+
+const SupplierQuoteNotesSummarySection: React.FC<{ controller: SupplierQuotesController }> = ({
+  controller,
+}) => (
+  <div className="flex flex-col gap-4 border-t border-border pt-4 md:flex-row">
+    <Field className="w-full md:w-2/3">
+      <SupplierQuoteSectionTitle
+        description={controller.t('sales:fieldInfo.notes', {
+          defaultValue: 'Additional notes for the entire document',
+        })}
+        status={controller.readOnlyStatus}
+        statusLabel={controller.statusLabel}
+      >
+        {controller.t('sales:supplierQuotes.notes', { defaultValue: 'Notes' })}
+      </SupplierQuoteSectionTitle>
+      <FieldLabel htmlFor="supplier-quote-notes" className="sr-only">
+        {controller.t('sales:supplierQuotes.notes', { defaultValue: 'Notes' })}
+      </FieldLabel>
+      <Textarea
+        id="supplier-quote-notes"
+        rows={4}
+        value={controller.formData.notes || ''}
+        disabled={controller.isReadOnly}
+        placeholder={controller.t('form:placeholderNotes', { defaultValue: 'Optional notes...' })}
+        onChange={(event) =>
+          controller.dispatch({ type: 'patchFormData', value: { notes: event.target.value } })
+        }
+        className="min-h-28 resize-none"
+      />
+    </Field>
+
+    <div className="w-full space-y-2 md:w-1/3">
+      <SupplierQuoteSectionTitle>
+        {controller.t('sales:supplierQuotes.summary', { defaultValue: 'Summary' })}
+      </SupplierQuoteSectionTitle>
+      <CostSummaryPanel
+        currency={controller.currency}
+        subtotal={controller.totalsBreakdown.subtotal}
+        total={controller.totalsBreakdown.total}
+        subtotalLabel={controller.t('sales:supplierQuotes.subtotal', { defaultValue: 'Subtotal' })}
+        discountRow={{
+          label: controller.t('sales:supplierQuotes.discountAmount', {
+            defaultValue: 'Discount',
+          }),
+          amount: controller.totalsBreakdown.discountAmount,
+        }}
+        totalLabel={controller.t('sales:supplierQuotes.total', { defaultValue: 'Total' })}
+      />
+    </div>
+  </div>
+);
+
+const SupplierQuoteModalFooter: React.FC<{ controller: SupplierQuotesController }> = ({
+  controller,
+}) => (
+  <ModalFooter>
+    <Button type="button" variant="outline" onClick={controller.closeModal}>
+      {controller.t('common:buttons.cancel', { defaultValue: 'Cancel' })}
+    </Button>
+    {!controller.isReadOnly && (
+      <Button type="submit" disabled={controller.isSubmitting}>
+        {controller.isSubmitting
+          ? controller.t('common:buttons.saving')
+          : controller.editingQuote
+            ? controller.t('common:buttons.update', { defaultValue: 'Update' })
+            : controller.t('common:buttons.save', { defaultValue: 'Save' })}
+      </Button>
+    )}
+  </ModalFooter>
+);
+
+const SupplierQuotesDeleteDialog: React.FC<{ controller: SupplierQuotesController }> = ({
+  controller,
+}) => (
+  <DeleteConfirmModal
+    isOpen={controller.isDeleteConfirmOpen}
+    onClose={() => {
+      if (controller.isDeleting) return;
+      controller.dispatch({ type: 'setIsDeleteConfirmOpen', value: false });
+    }}
+    onConfirm={async () => {
+      if (!controller.quoteToDelete || controller.isDeleting) return;
+      controller.dispatch({ type: 'setIsDeleting', value: true });
+      try {
+        await controller.onDeleteQuote(controller.quoteToDelete.id);
+        controller.dispatch({ type: 'setIsDeleteConfirmOpen', value: false });
+        controller.dispatch({ type: 'setQuoteToDelete', value: null });
+      } catch (err) {
+        toastError((err as Error).message || controller.t('sales:supplierQuotes.failedToDelete'));
+      } finally {
+        controller.dispatch({ type: 'setIsDeleting', value: false });
+      }
+    }}
+    isDeleting={controller.isDeleting}
+    title={controller.t('sales:supplierQuotes.deleteTitle', {
+      defaultValue: 'Delete supplier quote?',
+    })}
+    description={controller.quoteToDelete?.id ?? ''}
+  />
+);
+
+const SupplierQuotesHeader: React.FC<{ controller: SupplierQuotesController }> = ({
+  controller,
+}) => (
+  <div className="space-y-4">
+    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+      <div>
+        <h2 className="text-2xl font-semibold text-zinc-800">
+          {controller.t('sales:supplierQuotes.title', { defaultValue: 'Supplier Quotes' })}
+        </h2>
+        <p className="text-zinc-500 text-sm">
+          {controller.t('sales:supplierQuotes.subtitle', {
+            defaultValue: 'Quotes that can be converted into supplier orders.',
+          })}
+        </p>
+      </div>
+      <HeaderAddButton onClick={controller.openAddModal}>
+        {controller.t('sales:supplierQuotes.addQuote', { defaultValue: 'Add quote' })}
+      </HeaderAddButton>
+    </div>
+  </div>
+);
+
+const SupplierQuotesTable: React.FC<{ controller: SupplierQuotesController }> = ({
+  controller,
+}) => (
+  <StandardTable<SupplierQuote>
+    title={controller.t('sales:supplierQuotes.activeQuotes', { defaultValue: 'Active Quotes' })}
+    data={controller.quotes}
+    columns={controller.columns}
+    defaultRowsPerPage={5}
+    onRowClick={(row) => {
+      if (controller.canOpenQuoteModal(row)) {
+        controller.openEditModal(row);
+      }
+    }}
+    rowClassName={(row) => {
+      const history = controller.isHistoryRow(row);
+      const cursorClass = controller.canOpenQuoteModal(row)
+        ? 'cursor-pointer'
+        : 'cursor-not-allowed';
+      return history
+        ? `bg-zinc-50 text-zinc-400 hover:bg-zinc-100 ${cursorClass}`
+        : `hover:bg-zinc-50/50 ${cursorClass}`;
+    }}
+    initialFilterState={controller.tableInitialFilterState}
+  />
+);
 
 export default SupplierQuotesView;

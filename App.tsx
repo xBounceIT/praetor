@@ -6,6 +6,7 @@ import React, {
   useEffectEvent,
   useLayoutEffect,
   useMemo,
+  useReducer,
   useRef,
   useState,
 } from 'react';
@@ -129,8 +130,9 @@ import {
   resolveHashChange,
 } from './utils/hashCanonicalization';
 import {
-  clearStaleModuleScopedState,
+  getStaleModuleScopedKeys,
   getStaleModulesAfterNavigation,
+  type ModuleScopedStateKey,
 } from './utils/moduleScopedState';
 import { normalizeCurrency } from './utils/normalizeCurrency';
 import {
@@ -164,6 +166,287 @@ import {
   type TrackerAssignmentState,
   type TrackerAssignments,
 } from './utils/trackerCatalogs';
+
+type AppModuleState = {
+  users: User[];
+  clients: Client[];
+  projects: Project[];
+  projectTasks: ProjectTask[];
+  resales: Resale[];
+  resaleCategories: ResaleCategory[];
+  resaleOrderOptions: ResaleOrderOption[];
+  products: Product[];
+  quotes: Quote[];
+  quoteCommunicationChannels: QuoteCommunicationChannel[];
+  clientOffers: ClientOffer[];
+  clientsOrders: ClientsOrder[];
+  invoices: Invoice[];
+  suppliers: Supplier[];
+  supplierQuotes: SupplierQuote[];
+  supplierOrders: SupplierSaleOrder[];
+  supplierInvoices: SupplierInvoice[];
+  entries: TimeEntry[];
+  workUnits: WorkUnit[];
+};
+
+const INITIAL_APP_MODULE_STATE: AppModuleState = {
+  users: [],
+  clients: [],
+  projects: [],
+  projectTasks: [],
+  resales: [],
+  resaleCategories: [],
+  resaleOrderOptions: [],
+  products: [],
+  quotes: [],
+  quoteCommunicationChannels: [],
+  clientOffers: [],
+  clientsOrders: [],
+  invoices: [],
+  suppliers: [],
+  supplierQuotes: [],
+  supplierOrders: [],
+  supplierInvoices: [],
+  entries: [],
+  workUnits: [],
+};
+
+type AppModuleStateSetAction = {
+  [Key in keyof AppModuleState]: {
+    type: 'set';
+    key: Key;
+    value: React.SetStateAction<AppModuleState[Key]>;
+  };
+}[keyof AppModuleState];
+
+type AppModuleStateAction =
+  | AppModuleStateSetAction
+  | { type: 'clear-keys'; keys: readonly ModuleScopedStateKey[] };
+
+const resolveAppModuleStateAction = <Value,>(
+  value: React.SetStateAction<Value>,
+  previous: Value,
+): Value => (typeof value === 'function' ? (value as (prev: Value) => Value)(previous) : value);
+
+const appModuleStateReducer = (
+  state: AppModuleState,
+  action: AppModuleStateAction,
+): AppModuleState => {
+  switch (action.type) {
+    case 'set': {
+      const previous = state[action.key] as AppModuleState[keyof AppModuleState];
+      const nextValue = resolveAppModuleStateAction(
+        action.value as React.SetStateAction<AppModuleState[keyof AppModuleState]>,
+        previous,
+      );
+      if (Object.is(nextValue, previous)) return state;
+      return { ...state, [action.key]: nextValue };
+    }
+    case 'clear-keys': {
+      let next: AppModuleState | null = null;
+      for (const key of action.keys) {
+        if (state[key].length === 0) continue;
+        next ??= { ...state };
+        next[key] = INITIAL_APP_MODULE_STATE[key] as never;
+      }
+      return next ?? state;
+    }
+  }
+};
+
+type AppNavigationState = {
+  activeView: View | '404';
+  clientQuoteFilterId: string | null;
+  clientOfferFilterId: string | null;
+  supplierQuoteFilterId: string | null;
+  supplierOrderFilterId: string | null;
+  clientsOrderFilterId: string | null;
+  productFilterId: string | null;
+  selectedProjectId: string | null;
+  viewingUserId: string;
+};
+
+type AppNavigationStringKey = 'viewingUserId';
+type AppNavigationNullableKey = Exclude<keyof AppNavigationState, 'activeView' | 'viewingUserId'>;
+
+type AppNavigationAction =
+  | { type: 'set-active-view'; activeView: View | '404' }
+  | {
+      type: 'set-nullable';
+      key: AppNavigationNullableKey;
+      value: React.SetStateAction<string | null>;
+    }
+  | {
+      type: 'set-string';
+      key: AppNavigationStringKey;
+      value: React.SetStateAction<string>;
+    };
+
+const VALID_INITIAL_VIEWS: readonly View[] = [
+  'timesheets/tracker',
+  'timesheets/ril',
+  'timesheets/recurring',
+  'administration/user-management',
+  'administration/roles',
+  'administration/authentication',
+  'administration/general',
+  'administration/email',
+  'administration/logs',
+  'administration/webhooks',
+  'crm/clients',
+  'crm/suppliers',
+  'sales/client-quotes',
+  'sales/client-offers',
+  'sales/supplier-quotes',
+  'accounting/clients-orders',
+  'accounting/clients-invoices',
+  'accounting/supplier-orders',
+  'accounting/supplier-invoices',
+  'catalog/internal-listing',
+  'projects/manage',
+  'projects/detail',
+  'projects/resales',
+  'projects/tasks',
+  'hr/internal',
+  'hr/external',
+  'hr/work-units',
+  'reports/ai-reporting',
+  'settings',
+  'docs',
+  'docs/api',
+  'docs/frontend',
+];
+
+const resolveInitialActiveView = (initialViewHash: ParsedViewHash): View | '404' => {
+  const technicalDocsView = getTechnicalDocsViewFromPathname(window.location.pathname);
+  if (technicalDocsView) return technicalDocsView;
+
+  const canonicalHash = initialViewHash.path;
+  const hash = canonicalHash as View;
+  return VALID_INITIAL_VIEWS.includes(hash)
+    ? hash
+    : canonicalHash === '' || canonicalHash === 'login'
+      ? 'timesheets/tracker'
+      : '404';
+};
+
+const createInitialNavigationState = (initialViewHash: ParsedViewHash): AppNavigationState => ({
+  activeView: resolveInitialActiveView(initialViewHash),
+  clientQuoteFilterId: null,
+  clientOfferFilterId: null,
+  supplierQuoteFilterId:
+    initialViewHash.path === 'sales/supplier-quotes' ? initialViewHash.filterId : null,
+  supplierOrderFilterId:
+    initialViewHash.path === 'accounting/supplier-orders' ? initialViewHash.filterId : null,
+  clientsOrderFilterId: null,
+  productFilterId:
+    initialViewHash.path === 'catalog/internal-listing' ? initialViewHash.filterId : null,
+  selectedProjectId: null,
+  viewingUserId: '',
+});
+
+const appNavigationReducer = (
+  state: AppNavigationState,
+  action: AppNavigationAction,
+): AppNavigationState => {
+  switch (action.type) {
+    case 'set-active-view': {
+      const next: AppNavigationState = { ...state, activeView: action.activeView };
+      if (
+        action.activeView !== 'sales/client-quotes' &&
+        action.activeView !== 'sales/client-offers'
+      ) {
+        next.clientQuoteFilterId = null;
+      }
+      if (
+        action.activeView !== 'sales/client-offers' &&
+        action.activeView !== 'accounting/clients-orders'
+      ) {
+        next.clientOfferFilterId = null;
+      }
+      if (
+        action.activeView !== 'sales/supplier-quotes' &&
+        action.activeView !== 'accounting/supplier-orders'
+      ) {
+        next.supplierQuoteFilterId = null;
+      }
+      if (action.activeView !== 'accounting/supplier-orders') {
+        next.supplierOrderFilterId = null;
+      }
+      if (action.activeView !== 'accounting/clients-orders') {
+        next.clientsOrderFilterId = null;
+      }
+      if (action.activeView !== 'catalog/internal-listing') {
+        next.productFilterId = null;
+      }
+      if (action.activeView !== 'projects/detail') {
+        next.selectedProjectId = null;
+      }
+      return next;
+    }
+    case 'set-nullable': {
+      const nextValue = resolveAppModuleStateAction(action.value, state[action.key]);
+      return Object.is(nextValue, state[action.key])
+        ? state
+        : { ...state, [action.key]: nextValue };
+    }
+    case 'set-string': {
+      const nextValue = resolveAppModuleStateAction(action.value, state[action.key]);
+      return Object.is(nextValue, state[action.key])
+        ? state
+        : { ...state, [action.key]: nextValue };
+    }
+  }
+};
+
+type NotificationsState = {
+  items: Notification[];
+  unreadCount: number;
+};
+
+type AppLocalState = {
+  ldapConfig: LdapConfig;
+  generalSettings: GeneralSettingsState;
+  branding: AppBranding;
+  ssoProviders: SsoProvider[];
+  emailConfig: EmailConfig;
+  roles: Role[];
+  notificationsState: NotificationsState;
+  viewingUserAssignmentState: TrackerAssignmentState;
+};
+
+const INITIAL_APP_LOCAL_STATE: AppLocalState = {
+  ldapConfig: INITIAL_LDAP_CONFIG,
+  generalSettings: INITIAL_GENERAL_SETTINGS,
+  branding: { companyName: null, logoUrl: null },
+  ssoProviders: [],
+  emailConfig: INITIAL_EMAIL_CONFIG,
+  roles: [],
+  notificationsState: { items: [], unreadCount: 0 },
+  viewingUserAssignmentState: {
+    userId: '',
+    assignments: null,
+    catalogs: null,
+    isLoading: false,
+  },
+};
+
+type AppLocalStateAction = {
+  [Key in keyof AppLocalState]: {
+    type: 'set';
+    key: Key;
+    value: React.SetStateAction<AppLocalState[Key]>;
+  };
+}[keyof AppLocalState];
+
+const appLocalStateReducer = (state: AppLocalState, action: AppLocalStateAction): AppLocalState => {
+  const previous = state[action.key] as AppLocalState[keyof AppLocalState];
+  const nextValue = resolveAppModuleStateAction(
+    action.value as React.SetStateAction<AppLocalState[keyof AppLocalState]>,
+    previous,
+  );
+  return Object.is(nextValue, previous) ? state : { ...state, [action.key]: nextValue };
+};
 
 const getCurrencySymbol = (currency: string) => {
   switch (currency) {
@@ -236,90 +519,113 @@ type TimeEntryDraft = Omit<
   'id' | 'createdAt' | 'version' | 'userId' | 'hourlyCost' | 'cost'
 >;
 
-const TrackerView: React.FC<{
-  entries: TimeEntry[];
-  clients: Client[];
-  projects: Project[];
-  projectTasks: ProjectTask[];
-  onAddEntry: (entry: TimeEntryDraft) => void;
-  onDeleteEntry: (id: string) => void;
-  onUpdateEntry: (
-    id: string,
-    updates: Partial<Omit<TimeEntry, 'version'>> & Pick<TimeEntry, 'version'>,
-  ) => void;
-  startOfWeek: 'Monday' | 'Sunday';
-  treatSaturdayAsHoliday: boolean;
-  allowWeekendSelection: boolean;
-  onMakeRecurring: (
-    taskId: string,
-    pattern: 'daily' | 'weekly' | 'monthly' | string,
-    startDate?: string,
-    endDate?: string,
-    duration?: number,
-  ) => void | Promise<void>;
-  permissions: string[];
-  viewingUserId: string;
-  onViewUserChange: (id: string) => void;
+const TrackerModeToggle: React.FC<{
+  mode: 'daily' | 'weekly';
+  onModeChange: (mode: 'daily' | 'weekly') => void;
+}> = ({ mode, onModeChange }) => {
+  const { t } = useTranslation('timesheets');
+
+  return (
+    <div className="flex justify-center">
+      <div className="relative grid grid-cols-2 bg-background border border-border shadow-sm p-1 rounded-full w-full max-w-60">
+        <div
+          className={`absolute top-1 bottom-1 w-[calc(50%-4px)] bg-muted rounded-full shadow-sm transition-all duration-300 ease-[cubic-bezier(0.23,1,0.32,1)] ${
+            mode === 'daily' ? 'translate-x-0 left-1' : 'translate-x-full left-1'
+          }`}
+        ></div>
+        <button
+          type="button"
+          onClick={() => onModeChange('daily')}
+          className={`relative z-10 w-full py-2 text-xs font-bold transition-colors duration-300 ${mode === 'daily' ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+        >
+          {t('tracker.mode.daily')}
+        </button>
+        <button
+          type="button"
+          onClick={() => onModeChange('weekly')}
+          className={`relative z-10 w-full py-2 text-xs font-bold transition-colors duration-300 ${mode === 'weekly' ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+        >
+          {t('tracker.mode.weekly')}
+        </button>
+      </div>
+    </div>
+  );
+};
+
+const TrackerUserSelector: React.FC<{
   availableUsers: User[];
   currentUser: User;
-  dailyGoal: number;
-  onAddBulkEntries: (entries: TimeEntryDraft[]) => Promise<void>;
-  onRecurringAction: (taskId: string, action: 'stop' | 'delete_future' | 'delete_all') => void;
-  defaultLocation?: TimeEntryLocation;
-  onAddCustomTask: (
-    name: string,
-    projectId: string,
-    recurringConfig?: { isRecurring: boolean; pattern: 'daily' | 'weekly' | 'monthly' },
-    description?: string,
-    details?: Pick<
-      ProjectTask,
-      'monthlyEffort' | 'duration' | 'revenue' | 'notes' | 'billingType' | 'billingFrequency'
-    >,
-  ) => Promise<ProjectTask>;
-  currency: string;
-}> = ({
-  entries,
-  clients,
-  projects,
-  projectTasks,
-  onAddEntry,
-  onDeleteEntry,
-  onUpdateEntry,
-  startOfWeek,
-  treatSaturdayAsHoliday,
-  allowWeekendSelection,
-  onMakeRecurring,
-  permissions,
-  viewingUserId,
-  onViewUserChange,
-  availableUsers,
-  currentUser,
-  dailyGoal,
-  onAddBulkEntries,
-  onRecurringAction,
-  defaultLocation = 'remote',
-  onAddCustomTask,
-  currency,
-}) => {
+  viewingUserId: string;
+  onViewUserChange: (id: string) => void;
+}> = ({ availableUsers, currentUser, viewingUserId, onViewUserChange }) => {
   const { t } = useTranslation('timesheets');
-  const [selectedDate, setSelectedDate] = useState<string>(() => getLocalDateString());
-  const [trackerMode, setTrackerMode] = useState<'daily' | 'weekly'>(() => {
-    const saved = localStorage.getItem('trackerMode');
-    return saved === 'daily' || saved === 'weekly' ? saved : 'daily';
-  });
+  const viewingUser = availableUsers.find((u) => u.id === viewingUserId);
+  const isViewingSelf = viewingUserId === currentUser.id;
+  const userOptions = useMemo(
+    () =>
+      availableUsers.map((u) => ({
+        id: u.id,
+        name: u.name,
+        badge: u.id === currentUser.id ? t('tracker.you') : undefined,
+      })),
+    [availableUsers, currentUser.id, t],
+  );
 
-  useEffect(() => {
-    localStorage.setItem('trackerMode', trackerMode);
-  }, [trackerMode]);
+  if (availableUsers.length <= 1) return null;
 
-  const filteredEntries = useMemo(() => {
-    if (!selectedDate) return entries;
-    return entries.filter((e) => e.date === selectedDate);
-  }, [entries, selectedDate]);
+  return (
+    <div className="max-w-xl mx-auto">
+      <div className="rounded-lg border border-border bg-background shadow-sm p-3.5 sm:p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div className="flex items-center gap-3 min-w-0">
+          <div
+            className={`size-9 rounded-full flex items-center justify-center font-bold text-xs shadow-sm shrink-0 ${isViewingSelf ? 'bg-praetor/10 text-praetor' : 'bg-amber-500/10 text-amber-600'}`}
+          >
+            {viewingUser?.avatarInitials}
+          </div>
+          <div className="min-w-0">
+            <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
+              {isViewingSelf ? t('tracker.myTimesheet') : t('tracker.managingUser')}
+            </p>
+            <p className="text-sm font-bold text-foreground truncate">{viewingUser?.name}</p>
+          </div>
+        </div>
+        <div className="w-full sm:w-56 space-y-1.5 shrink-0">
+          <div className="flex min-h-6 items-center justify-between gap-2">
+            <FieldLabel>{t('tracker.switchUserView')}</FieldLabel>
+            {!isViewingSelf && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="xs"
+                onClick={() => onViewUserChange(currentUser.id)}
+                className="gap-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"
+              >
+                <i className="fa-solid fa-arrow-left" aria-hidden="true"></i>
+                {t('tracker.backToMe')}
+              </Button>
+            )}
+          </div>
+          <SelectControl
+            options={userOptions}
+            value={viewingUserId}
+            onChange={(val) => onViewUserChange(val as string)}
+            searchable={true}
+          />
+        </div>
+      </div>
+    </div>
+  );
+};
 
-  const dailyTotal = useMemo(() => {
-    return filteredEntries.reduce((sum, e) => sum + e.duration, 0);
-  }, [filteredEntries]);
+const TrackerActivityTable: React.FC<{
+  selectedDate: string;
+  entries: TimeEntry[];
+  dailyTotal: number;
+  dailyGoal: number;
+  onEditEntry: (entry: TimeEntry) => void;
+  onDeleteEntryClick: (entry: TimeEntry) => void;
+}> = ({ selectedDate, entries, dailyTotal, dailyGoal, onEditEntry, onDeleteEntryClick }) => {
+  const { t } = useTranslation('timesheets');
   const activityHeaderExtras = useMemo(
     () =>
       selectedDate ? (
@@ -336,58 +642,9 @@ const TrackerView: React.FC<{
       ) : undefined,
     [dailyGoal, dailyTotal, selectedDate, t],
   );
-
-  const [pendingDeleteEntry, setPendingDeleteEntry] = useState<TimeEntry | null>(null);
-  const [editingEntry, setEditingEntry] = useState<TimeEntry | null>(null);
-
-  const handleDeleteClick = useCallback(
-    (entry: TimeEntry) => {
-      const task = projectTasks.find(
-        (t) => t.name === entry.task && t.projectId === entry.projectId,
-      );
-      if (entry.isPlaceholder || task?.isRecurring) {
-        // Show modal for recurring entries
-        setPendingDeleteEntry(entry);
-      } else {
-        // Direct delete for normal entries
-        onDeleteEntry(entry.id);
-      }
-    },
-    [projectTasks, onDeleteEntry],
-  );
-
-  const handleRecurringDelete = (action: 'stop' | 'delete_future' | 'delete_all') => {
-    if (!pendingDeleteEntry) return;
-    const task = projectTasks.find(
-      (t) => t.name === pendingDeleteEntry.task && t.projectId === pendingDeleteEntry.projectId,
-    );
-    if (task) {
-      onRecurringAction(task.id, action);
-    }
-    setPendingDeleteEntry(null);
-  };
-
-  const viewingUser = availableUsers.find((u) => u.id === viewingUserId);
-  const isViewingSelf = viewingUserId === currentUser.id;
-
-  const userOptions = useMemo(
-    () =>
-      availableUsers.map((u) => ({
-        id: u.id,
-        name: u.name,
-        badge: u.id === currentUser.id ? t('tracker.you') : undefined,
-      })),
-    [availableUsers, currentUser.id, t],
-  );
-
   const activityColumns = useMemo<Column<TimeEntry>[]>(
     () => [
-      {
-        id: 'date',
-        header: t('entry.date'),
-        accessorKey: 'date',
-        hidden: !!selectedDate,
-      },
+      { id: 'date', header: t('entry.date'), accessorKey: 'date', hidden: !!selectedDate },
       {
         id: 'client',
         header: t('entry.client'),
@@ -475,7 +732,7 @@ const TrackerView: React.FC<{
                     size="icon-xs"
                     onClick={(e) => {
                       e.stopPropagation();
-                      setEditingEntry(row);
+                      onEditEntry(row);
                     }}
                     className="text-muted-foreground hover:text-praetor"
                   >
@@ -494,7 +751,7 @@ const TrackerView: React.FC<{
                     size="icon-xs"
                     onClick={(e) => {
                       e.stopPropagation();
-                      handleDeleteClick(row);
+                      onDeleteEntryClick(row);
                     }}
                     className="text-muted-foreground hover:text-destructive"
                   >
@@ -508,79 +765,238 @@ const TrackerView: React.FC<{
         ),
       },
     ],
-    [selectedDate, t, handleDeleteClick],
+    [selectedDate, t, onEditEntry, onDeleteEntryClick],
   );
 
   return (
-    <div className="flex flex-col gap-6 animate-in fade-in duration-500">
-      {/* Top Middle Toggle */}
-      <div className="flex justify-center">
-        <div className="relative grid grid-cols-2 bg-background border border-border shadow-sm p-1 rounded-full w-full max-w-60">
-          <div
-            className={`absolute top-1 bottom-1 w-[calc(50%-4px)] bg-muted rounded-full shadow-sm transition-all duration-300 ease-[cubic-bezier(0.23,1,0.32,1)] ${
-              trackerMode === 'daily' ? 'translate-x-0 left-1' : 'translate-x-full left-1'
-            }`}
-          ></div>
+    <StandardTable<TimeEntry>
+      title={
+        selectedDate
+          ? t('tracker.activityFor', {
+              date: formatDateOnlyForLocale(selectedDate, undefined, {
+                month: 'long',
+                day: 'numeric',
+              }),
+            })
+          : t('entry.recentActivity')
+      }
+      headerExtras={activityHeaderExtras}
+      data={entries}
+      columns={activityColumns}
+      defaultRowsPerPage={10}
+      rowClassName={(row) => (row.isPlaceholder ? 'bg-praetor/5 italic' : '')}
+      emptyState={
+        <div className="px-6 py-20 text-center">
+          <i className="fa-solid fa-calendar-day text-4xl text-zinc-100 mb-4 block" />
+          <p className="text-zinc-400 font-medium text-sm">{t('tracker.noEntries')}</p>
+        </div>
+      }
+    />
+  );
+};
+
+const RecurringEntryDeleteModal: React.FC<{
+  entry: TimeEntry;
+  onAction: (action: 'stop' | 'delete_future' | 'delete_all') => void;
+  onCancel: () => void;
+}> = ({ entry, onAction, onCancel }) => {
+  const { t } = useTranslation('timesheets');
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-900/50 backdrop-blur-sm animate-in fade-in duration-200">
+      <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden animate-in zoom-in-95 duration-200">
+        <div className="p-6 border-b border-zinc-100">
+          <h3 className="text-lg font-semibold text-zinc-800 flex items-center gap-2">
+            <i className="fa-solid fa-triangle-exclamation text-amber-500"></i>
+            {t('entry.stopRecurringTask')}
+          </h3>
+          <p className="text-sm text-zinc-500 mt-1">
+            {t('entry.howHandleEntries')} <strong className="text-zinc-800">{entry.task}</strong>?
+          </p>
+        </div>
+
+        <div className="p-4 space-y-3">
           <button
             type="button"
-            onClick={() => setTrackerMode('daily')}
-            className={`relative z-10 w-full py-2 text-xs font-bold transition-colors duration-300 ${trackerMode === 'daily' ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+            onClick={() => onAction('stop')}
+            className="w-full text-left p-4 rounded-xl border border-zinc-200 hover:border-praetor/30 hover:bg-praetor/5 transition-all group"
           >
-            {t('tracker.mode.daily')}
+            <div className="flex items-center justify-between mb-1">
+              <span className="font-bold text-zinc-800 group-hover:text-praetor">
+                {t('recurring.stopOnly')}
+              </span>
+              <i className="fa-solid fa-pause text-zinc-300 group-hover:text-praetor"></i>
+            </div>
+            <p className="text-xs text-zinc-500 leading-relaxed">{t('recurring.stopOnlyDesc')}</p>
           </button>
+
           <button
             type="button"
-            onClick={() => setTrackerMode('weekly')}
-            className={`relative z-10 w-full py-2 text-xs font-bold transition-colors duration-300 ${trackerMode === 'weekly' ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+            onClick={() => onAction('delete_future')}
+            className="w-full text-left p-4 rounded-xl border border-zinc-200 hover:border-red-300 hover:bg-red-50 transition-all group"
           >
-            {t('tracker.mode.weekly')}
+            <div className="flex items-center justify-between mb-1">
+              <span className="font-bold text-zinc-800 group-hover:text-red-700">
+                {t('recurring.deleteFuture')}
+              </span>
+              <i className="fa-solid fa-forward text-zinc-300 group-hover:text-red-500"></i>
+            </div>
+            <p className="text-xs text-zinc-500 leading-relaxed">
+              {t('recurring.deleteFutureDesc')}
+            </p>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => onAction('delete_all')}
+            className="w-full text-left p-4 rounded-xl border border-red-100 bg-red-50/50 hover:bg-red-100 hover:border-red-300 transition-all group"
+          >
+            <div className="flex items-center justify-between mb-1">
+              <span className="font-bold text-red-700">{t('recurring.deleteAll')}</span>
+              <i className="fa-solid fa-dumpster-fire text-red-400 group-hover:text-red-600"></i>
+            </div>
+            <p className="text-xs text-red-600/70 leading-relaxed">
+              {t('recurring.deleteAllDesc')}
+            </p>
+          </button>
+        </div>
+
+        <div className="p-4 bg-zinc-50 border-t border-zinc-100 text-right">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="px-4 py-2 text-sm font-bold text-zinc-500 hover:text-zinc-800 transition-colors"
+          >
+            {t('entry.cancel')}
           </button>
         </div>
       </div>
+    </div>
+  );
+};
 
-      {/* Manager Selection Header — shared across daily and weekly modes. */}
-      {availableUsers.length > 1 && (
-        <div className="max-w-xl mx-auto">
-          <div className="rounded-lg border border-border bg-background shadow-sm p-3.5 sm:p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-            <div className="flex items-center gap-3 min-w-0">
-              <div
-                className={`size-9 rounded-full flex items-center justify-center font-bold text-xs shadow-sm shrink-0 ${isViewingSelf ? 'bg-praetor/10 text-praetor' : 'bg-amber-500/10 text-amber-600'}`}
-              >
-                {viewingUser?.avatarInitials}
-              </div>
-              <div className="min-w-0">
-                <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
-                  {isViewingSelf ? t('tracker.myTimesheet') : t('tracker.managingUser')}
-                </p>
-                <p className="text-sm font-bold text-foreground truncate">{viewingUser?.name}</p>
-              </div>
-            </div>
-            <div className="w-full sm:w-56 space-y-1.5 shrink-0">
-              <div className="flex min-h-6 items-center justify-between gap-2">
-                <FieldLabel>{t('tracker.switchUserView')}</FieldLabel>
-                {!isViewingSelf && (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="xs"
-                    onClick={() => onViewUserChange(currentUser.id)}
-                    className="gap-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"
-                  >
-                    <i className="fa-solid fa-arrow-left" aria-hidden="true"></i>
-                    {t('tracker.backToMe')}
-                  </Button>
-                )}
-              </div>
-              <SelectControl
-                options={userOptions}
-                value={viewingUserId}
-                onChange={(val) => onViewUserChange(val as string)}
-                searchable={true}
-              />
-            </div>
-          </div>
-        </div>
-      )}
+const TrackerView: React.FC<{
+  entries: TimeEntry[];
+  clients: Client[];
+  projects: Project[];
+  projectTasks: ProjectTask[];
+  onAddEntry: (entry: TimeEntryDraft) => void;
+  onDeleteEntry: (id: string) => void;
+  onUpdateEntry: (
+    id: string,
+    updates: Partial<Omit<TimeEntry, 'version'>> & Pick<TimeEntry, 'version'>,
+  ) => void;
+  startOfWeek: 'Monday' | 'Sunday';
+  treatSaturdayAsHoliday: boolean;
+  allowWeekendSelection: boolean;
+  onMakeRecurring: (
+    taskId: string,
+    pattern: 'daily' | 'weekly' | 'monthly' | string,
+    startDate?: string,
+    endDate?: string,
+    duration?: number,
+  ) => void | Promise<void>;
+  permissions: string[];
+  viewingUserId: string;
+  onViewUserChange: (id: string) => void;
+  availableUsers: User[];
+  currentUser: User;
+  dailyGoal: number;
+  onAddBulkEntries: (entries: TimeEntryDraft[]) => Promise<void>;
+  onRecurringAction: (taskId: string, action: 'stop' | 'delete_future' | 'delete_all') => void;
+  defaultLocation?: TimeEntryLocation;
+  onAddCustomTask: (
+    name: string,
+    projectId: string,
+    recurringConfig?: { isRecurring: boolean; pattern: 'daily' | 'weekly' | 'monthly' },
+    description?: string,
+    details?: Pick<
+      ProjectTask,
+      'monthlyEffort' | 'duration' | 'revenue' | 'notes' | 'billingType' | 'billingFrequency'
+    >,
+  ) => Promise<ProjectTask>;
+  currency: string;
+}> = ({
+  entries,
+  clients,
+  projects,
+  projectTasks,
+  onAddEntry,
+  onDeleteEntry,
+  onUpdateEntry,
+  startOfWeek,
+  treatSaturdayAsHoliday,
+  allowWeekendSelection,
+  onMakeRecurring,
+  permissions,
+  viewingUserId,
+  onViewUserChange,
+  availableUsers,
+  currentUser,
+  dailyGoal,
+  onAddBulkEntries,
+  onRecurringAction,
+  defaultLocation = 'remote',
+  onAddCustomTask,
+  currency,
+}) => {
+  const [selectedDate, setSelectedDate] = useState<string>(() => getLocalDateString());
+  const [trackerMode, setTrackerMode] = useState<'daily' | 'weekly'>(() => {
+    const saved = localStorage.getItem('trackerMode');
+    return saved === 'daily' || saved === 'weekly' ? saved : 'daily';
+  });
+
+  useEffect(() => {
+    localStorage.setItem('trackerMode', trackerMode);
+  }, [trackerMode]);
+
+  const filteredEntries = useMemo(() => {
+    if (!selectedDate) return entries;
+    return entries.filter((e) => e.date === selectedDate);
+  }, [entries, selectedDate]);
+
+  const dailyTotal = useMemo(() => {
+    return filteredEntries.reduce((sum, e) => sum + e.duration, 0);
+  }, [filteredEntries]);
+  const [pendingDeleteEntry, setPendingDeleteEntry] = useState<TimeEntry | null>(null);
+  const [editingEntry, setEditingEntry] = useState<TimeEntry | null>(null);
+
+  const handleDeleteClick = useCallback(
+    (entry: TimeEntry) => {
+      const task = projectTasks.find(
+        (t) => t.name === entry.task && t.projectId === entry.projectId,
+      );
+      if (entry.isPlaceholder || task?.isRecurring) {
+        // Show modal for recurring entries
+        setPendingDeleteEntry(entry);
+      } else {
+        // Direct delete for normal entries
+        onDeleteEntry(entry.id);
+      }
+    },
+    [projectTasks, onDeleteEntry],
+  );
+
+  const handleRecurringDelete = (action: 'stop' | 'delete_future' | 'delete_all') => {
+    if (!pendingDeleteEntry) return;
+    const task = projectTasks.find(
+      (t) => t.name === pendingDeleteEntry.task && t.projectId === pendingDeleteEntry.projectId,
+    );
+    if (task) {
+      onRecurringAction(task.id, action);
+    }
+    setPendingDeleteEntry(null);
+  };
+
+  return (
+    <div className="flex flex-col gap-6 animate-in fade-in duration-500">
+      <TrackerModeToggle mode={trackerMode} onModeChange={setTrackerMode} />
+      <TrackerUserSelector
+        availableUsers={availableUsers}
+        currentUser={currentUser}
+        viewingUserId={viewingUserId}
+        onViewUserChange={onViewUserChange}
+      />
 
       {trackerMode === 'weekly' ? (
         <WeeklyView
@@ -636,28 +1052,13 @@ const TrackerView: React.FC<{
               </div>
             </div>
 
-            <StandardTable<TimeEntry>
-              title={
-                selectedDate
-                  ? t('tracker.activityFor', {
-                      date: formatDateOnlyForLocale(selectedDate, undefined, {
-                        month: 'long',
-                        day: 'numeric',
-                      }),
-                    })
-                  : t('entry.recentActivity')
-              }
-              headerExtras={activityHeaderExtras}
-              data={filteredEntries}
-              columns={activityColumns}
-              defaultRowsPerPage={10}
-              rowClassName={(row) => (row.isPlaceholder ? 'bg-praetor/5 italic' : '')}
-              emptyState={
-                <div className="px-6 py-20 text-center">
-                  <i className="fa-solid fa-calendar-day text-4xl text-zinc-100 mb-4 block" />
-                  <p className="text-zinc-400 font-medium text-sm">{t('tracker.noEntries')}</p>
-                </div>
-              }
+            <TrackerActivityTable
+              selectedDate={selectedDate}
+              entries={filteredEntries}
+              dailyTotal={dailyTotal}
+              dailyGoal={dailyGoal}
+              onEditEntry={setEditingEntry}
+              onDeleteEntryClick={handleDeleteClick}
             />
           </div>
         </div>
@@ -675,108 +1076,119 @@ const TrackerView: React.FC<{
         onAddCustomTask={onAddCustomTask}
       />
 
-      {/* Recurring Delete Modal */}
       {pendingDeleteEntry && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-900/50 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden animate-in zoom-in-95 duration-200">
-            <div className="p-6 border-b border-zinc-100">
-              <h3 className="text-lg font-semibold text-zinc-800 flex items-center gap-2">
-                <i className="fa-solid fa-triangle-exclamation text-amber-500"></i>
-                {t('entry.stopRecurringTask')}
-              </h3>
-              <p className="text-sm text-zinc-500 mt-1">
-                {t('entry.howHandleEntries')}{' '}
-                <strong className="text-zinc-800">{pendingDeleteEntry.task}</strong>?
-              </p>
-            </div>
-
-            <div className="p-4 space-y-3">
-              <button
-                type="button"
-                onClick={() => handleRecurringDelete('stop')}
-                className="w-full text-left p-4 rounded-xl border border-zinc-200 hover:border-praetor/30 hover:bg-praetor/5 transition-all group"
-              >
-                <div className="flex items-center justify-between mb-1">
-                  <span className="font-bold text-zinc-800 group-hover:text-praetor">
-                    {t('recurring.stopOnly')}
-                  </span>
-                  <i className="fa-solid fa-pause text-zinc-300 group-hover:text-praetor"></i>
-                </div>
-                <p className="text-xs text-zinc-500 leading-relaxed">
-                  {t('recurring.stopOnlyDesc')}
-                </p>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleRecurringDelete('delete_future')}
-                className="w-full text-left p-4 rounded-xl border border-zinc-200 hover:border-red-300 hover:bg-red-50 transition-all group"
-              >
-                <div className="flex items-center justify-between mb-1">
-                  <span className="font-bold text-zinc-800 group-hover:text-red-700">
-                    {t('recurring.deleteFuture')}
-                  </span>
-                  <i className="fa-solid fa-forward text-zinc-300 group-hover:text-red-500"></i>
-                </div>
-                <p className="text-xs text-zinc-500 leading-relaxed">
-                  {t('recurring.deleteFutureDesc')}
-                </p>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleRecurringDelete('delete_all')}
-                className="w-full text-left p-4 rounded-xl border border-red-100 bg-red-50/50 hover:bg-red-100 hover:border-red-300 transition-all group"
-              >
-                <div className="flex items-center justify-between mb-1">
-                  <span className="font-bold text-red-700">{t('recurring.deleteAll')}</span>
-                  <i className="fa-solid fa-dumpster-fire text-red-400 group-hover:text-red-600"></i>
-                </div>
-                <p className="text-xs text-red-600/70 leading-relaxed">
-                  {t('recurring.deleteAllDesc')}
-                </p>
-              </button>
-            </div>
-
-            <div className="p-4 bg-zinc-50 border-t border-zinc-100 text-right">
-              <button
-                type="button"
-                onClick={() => setPendingDeleteEntry(null)}
-                className="px-4 py-2 text-sm font-bold text-zinc-500 hover:text-zinc-800 transition-colors"
-              >
-                {t('entry.cancel')}
-              </button>
-            </div>
-          </div>
-        </div>
+        <RecurringEntryDeleteModal
+          entry={pendingDeleteEntry}
+          onAction={handleRecurringDelete}
+          onCancel={() => setPendingDeleteEntry(null)}
+        />
       )}
     </div>
   );
 };
 
-const AppContent: React.FC = () => {
+const useAppContentController = () => {
   const { t: tApp } = useTranslation(['common', 'reports', 'sales', 'accounting']);
 
-  const [users, setUsers] = useState<User[]>([]);
-  const [clients, setClients] = useState<Client[]>([]);
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [projectTasks, setProjectTasks] = useState<ProjectTask[]>([]);
-  const [resales, setResales] = useState<Resale[]>([]);
-  const [resaleCategories, setResaleCategories] = useState<ResaleCategory[]>([]);
-  const [resaleOrderOptions, setResaleOrderOptions] = useState<ResaleOrderOption[]>([]);
-  const [products, setProducts] = useState<Product[]>([]);
-  const [quotes, setQuotes] = useState<Quote[]>([]);
-  const [quoteCommunicationChannels, setQuoteCommunicationChannels] = useState<
-    QuoteCommunicationChannel[]
-  >([]);
-  const [clientOffers, setClientOffers] = useState<ClientOffer[]>([]);
-  const [clientsOrders, setClientsOrders] = useState<ClientsOrder[]>([]);
-  const [invoices, setInvoices] = useState<Invoice[]>([]);
-  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
-  const [supplierQuotes, setSupplierQuotes] = useState<SupplierQuote[]>([]);
-  const [supplierOrders, setSupplierOrders] = useState<SupplierSaleOrder[]>([]);
-  const [supplierInvoices, setSupplierInvoices] = useState<SupplierInvoice[]>([]);
-  const [entries, setEntries] = useState<TimeEntry[]>([]);
+  const [moduleState, dispatchModuleState] = useReducer(
+    appModuleStateReducer,
+    INITIAL_APP_MODULE_STATE,
+  );
+  const {
+    users,
+    clients,
+    projects,
+    projectTasks,
+    resales,
+    resaleCategories,
+    resaleOrderOptions,
+    products,
+    quotes,
+    quoteCommunicationChannels,
+    clientOffers,
+    clientsOrders,
+    invoices,
+    suppliers,
+    supplierQuotes,
+    supplierOrders,
+    supplierInvoices,
+    entries,
+    workUnits,
+  } = moduleState;
+  const setUsers = useCallback<React.Dispatch<React.SetStateAction<User[]>>>(
+    (value) => dispatchModuleState({ type: 'set', key: 'users', value }),
+    [],
+  );
+  const setClients = useCallback<React.Dispatch<React.SetStateAction<Client[]>>>(
+    (value) => dispatchModuleState({ type: 'set', key: 'clients', value }),
+    [],
+  );
+  const setProjects = useCallback<React.Dispatch<React.SetStateAction<Project[]>>>(
+    (value) => dispatchModuleState({ type: 'set', key: 'projects', value }),
+    [],
+  );
+  const setProjectTasks = useCallback<React.Dispatch<React.SetStateAction<ProjectTask[]>>>(
+    (value) => dispatchModuleState({ type: 'set', key: 'projectTasks', value }),
+    [],
+  );
+  const setResales = useCallback<React.Dispatch<React.SetStateAction<Resale[]>>>(
+    (value) => dispatchModuleState({ type: 'set', key: 'resales', value }),
+    [],
+  );
+  const setResaleCategories = useCallback<React.Dispatch<React.SetStateAction<ResaleCategory[]>>>(
+    (value) => dispatchModuleState({ type: 'set', key: 'resaleCategories', value }),
+    [],
+  );
+  const setResaleOrderOptions = useCallback<
+    React.Dispatch<React.SetStateAction<ResaleOrderOption[]>>
+  >((value) => dispatchModuleState({ type: 'set', key: 'resaleOrderOptions', value }), []);
+  const setProducts = useCallback<React.Dispatch<React.SetStateAction<Product[]>>>(
+    (value) => dispatchModuleState({ type: 'set', key: 'products', value }),
+    [],
+  );
+  const setQuotes = useCallback<React.Dispatch<React.SetStateAction<Quote[]>>>(
+    (value) => dispatchModuleState({ type: 'set', key: 'quotes', value }),
+    [],
+  );
+  const setQuoteCommunicationChannels = useCallback<
+    React.Dispatch<React.SetStateAction<QuoteCommunicationChannel[]>>
+  >((value) => dispatchModuleState({ type: 'set', key: 'quoteCommunicationChannels', value }), []);
+  const setClientOffers = useCallback<React.Dispatch<React.SetStateAction<ClientOffer[]>>>(
+    (value) => dispatchModuleState({ type: 'set', key: 'clientOffers', value }),
+    [],
+  );
+  const setClientsOrders = useCallback<React.Dispatch<React.SetStateAction<ClientsOrder[]>>>(
+    (value) => dispatchModuleState({ type: 'set', key: 'clientsOrders', value }),
+    [],
+  );
+  const setInvoices = useCallback<React.Dispatch<React.SetStateAction<Invoice[]>>>(
+    (value) => dispatchModuleState({ type: 'set', key: 'invoices', value }),
+    [],
+  );
+  const setSuppliers = useCallback<React.Dispatch<React.SetStateAction<Supplier[]>>>(
+    (value) => dispatchModuleState({ type: 'set', key: 'suppliers', value }),
+    [],
+  );
+  const setSupplierQuotes = useCallback<React.Dispatch<React.SetStateAction<SupplierQuote[]>>>(
+    (value) => dispatchModuleState({ type: 'set', key: 'supplierQuotes', value }),
+    [],
+  );
+  const setSupplierOrders = useCallback<React.Dispatch<React.SetStateAction<SupplierSaleOrder[]>>>(
+    (value) => dispatchModuleState({ type: 'set', key: 'supplierOrders', value }),
+    [],
+  );
+  const setSupplierInvoices = useCallback<React.Dispatch<React.SetStateAction<SupplierInvoice[]>>>(
+    (value) => dispatchModuleState({ type: 'set', key: 'supplierInvoices', value }),
+    [],
+  );
+  const setEntries = useCallback<React.Dispatch<React.SetStateAction<TimeEntry[]>>>(
+    (value) => dispatchModuleState({ type: 'set', key: 'entries', value }),
+    [],
+  );
+  const setWorkUnits = useCallback<React.Dispatch<React.SetStateAction<WorkUnit[]>>>(
+    (value) => dispatchModuleState({ type: 'set', key: 'workUnits', value }),
+    [],
+  );
   const taskUpdateQueueStateRef = useRef<TaskUpdateQueueState | null>(null);
   if (taskUpdateQueueStateRef.current === null) {
     taskUpdateQueueStateRef.current = createTaskUpdateQueueState();
@@ -786,12 +1198,51 @@ const AppContent: React.FC = () => {
   const entriesStreamTokenRef = useRef(0);
   // Bumped on navigation/auth reset so stale module-load completions cannot commit state.
   const moduleLoadTokenRef = useRef(0);
-  const [ldapConfig, setLdapConfig] = useState<LdapConfig>(INITIAL_LDAP_CONFIG);
-  const [generalSettings, setGeneralSettings] =
-    useState<GeneralSettingsState>(INITIAL_GENERAL_SETTINGS);
-  // Not auth-scoped: branding is public and must persist across login/logout so the login
-  // screen and sidebar stay consistent. Hence it lives outside clearAuthScopedAppState.
-  const [branding, setBranding] = useState<AppBranding>({ companyName: null, logoUrl: null });
+  const [localState, dispatchLocalState] = useReducer(
+    appLocalStateReducer,
+    INITIAL_APP_LOCAL_STATE,
+  );
+  const {
+    ldapConfig,
+    generalSettings,
+    branding,
+    ssoProviders,
+    emailConfig,
+    roles,
+    notificationsState,
+    viewingUserAssignmentState,
+  } = localState;
+  const setLdapConfig = useCallback<React.Dispatch<React.SetStateAction<LdapConfig>>>(
+    (value) => dispatchLocalState({ type: 'set', key: 'ldapConfig', value }),
+    [],
+  );
+  const setGeneralSettings = useCallback<
+    React.Dispatch<React.SetStateAction<GeneralSettingsState>>
+  >((value) => dispatchLocalState({ type: 'set', key: 'generalSettings', value }), []);
+  const setBranding = useCallback<React.Dispatch<React.SetStateAction<AppBranding>>>(
+    (value) => dispatchLocalState({ type: 'set', key: 'branding', value }),
+    [],
+  );
+  const setSsoProviders = useCallback<React.Dispatch<React.SetStateAction<SsoProvider[]>>>(
+    (value) => dispatchLocalState({ type: 'set', key: 'ssoProviders', value }),
+    [],
+  );
+  const setEmailConfig = useCallback<React.Dispatch<React.SetStateAction<EmailConfig>>>(
+    (value) => dispatchLocalState({ type: 'set', key: 'emailConfig', value }),
+    [],
+  );
+  const setRoles = useCallback<React.Dispatch<React.SetStateAction<Role[]>>>(
+    (value) => dispatchLocalState({ type: 'set', key: 'roles', value }),
+    [],
+  );
+  const setNotificationsState = useCallback<
+    React.Dispatch<React.SetStateAction<NotificationsState>>
+  >((value) => dispatchLocalState({ type: 'set', key: 'notificationsState', value }), []);
+  const setViewingUserAssignmentState = useCallback<
+    React.Dispatch<React.SetStateAction<TrackerAssignmentState>>
+  >((value) => dispatchLocalState({ type: 'set', key: 'viewingUserAssignmentState', value }), []);
+  // Branding is public and must persist across login/logout so the login screen
+  // and sidebar stay consistent. clearAuthScopedAppState intentionally leaves it alone.
   const {
     loadedModules,
     moduleLoadErrors,
@@ -807,33 +1258,16 @@ const AppContent: React.FC = () => {
   const hasLoadedGeneralSettingsRef = useRef(false);
   const hasLoadedLdapConfigRef = useRef(false);
   const hasLoadedSsoProvidersRef = useRef(false);
-  const [ssoProviders, setSsoProviders] = useState<SsoProvider[]>([]);
   const hasLoadedEmailConfigRef = useRef(false);
-  const [emailConfig, setEmailConfig] = useState<EmailConfig>(INITIAL_EMAIL_CONFIG);
   const hasLoadedGeneralSettings = hasLoadedGeneralSettingsRef.current;
 
-  const [workUnits, setWorkUnits] = useState<WorkUnit[]>([]);
-  const [roles, setRoles] = useState<Role[]>([]);
   const hasLoadedRolesRef = useRef(false);
 
   // Items and unread count share one state so handlers can derive both from
   // `prev` in a single updater — splitting them races the 60s polling refresh
   // (issue #513).
-  const [notificationsState, setNotificationsState] = useState<{
-    items: Notification[];
-    unreadCount: number;
-  }>({ items: [], unreadCount: 0 });
   const notifications = notificationsState.items;
   const unreadNotificationCount = notificationsState.unreadCount;
-
-  const [viewingUserId, setViewingUserId] = useState<string>('');
-  const [viewingUserAssignmentState, setViewingUserAssignmentState] =
-    useState<TrackerAssignmentState>({
-      userId: '',
-      assignments: null,
-      catalogs: null,
-      isLoading: false,
-    });
   const VALID_VIEWS: View[] = useMemo(
     () => [
       'timesheets/tracker',
@@ -886,70 +1320,50 @@ const AppContent: React.FC = () => {
   }
   const initialViewHash = initialViewHashRef.current;
 
-  const [activeView, setActiveViewState] = useState<View | '404'>(() => {
-    const technicalDocsView = getTechnicalDocsViewFromPathname(window.location.pathname);
-    if (technicalDocsView) return technicalDocsView;
-    // We can't use the memoized VALID_VIEWS here because this runs before the initial render
-    // So we define the list once for initialization
-    const validViews: View[] = [
-      'timesheets/tracker',
-      'timesheets/ril',
-      'timesheets/recurring',
-      'administration/user-management',
-      'administration/roles',
-      'administration/authentication',
-      'administration/general',
-      'administration/email',
-      'administration/logs',
-      'administration/webhooks',
-      'crm/clients',
-      'crm/suppliers',
-      // Sales module
-      'sales/client-quotes',
-      'sales/client-offers',
-      'sales/supplier-quotes',
-      // Accounting module
-      'accounting/clients-orders',
-      'accounting/clients-invoices',
-      'accounting/supplier-orders',
-      'accounting/supplier-invoices',
-      // Catalog module
-      'catalog/internal-listing',
-      'projects/manage',
-      'projects/detail',
-      'projects/resales',
-      'projects/tasks',
-      'hr/internal',
-      'hr/external',
-      'hr/work-units',
-      // Reports module
-      'reports/ai-reporting',
-      'settings',
-      'docs',
-      'docs/api',
-      'docs/frontend',
-    ];
-    const canonicalHash = initialViewHash.path;
-    const hash = canonicalHash as View;
-    return validViews.includes(hash)
-      ? hash
-      : canonicalHash === '' || canonicalHash === 'login'
-        ? 'timesheets/tracker'
-        : '404';
-  });
-  const [clientQuoteFilterId, setClientQuoteFilterId] = useState<string | null>(null);
-  const [clientOfferFilterId, setClientOfferFilterId] = useState<string | null>(null);
-  const [supplierQuoteFilterId, setSupplierQuoteFilterId] = useState<string | null>(() =>
-    initialViewHash.path === 'sales/supplier-quotes' ? initialViewHash.filterId : null,
+  const [navigationState, dispatchNavigation] = useReducer(
+    appNavigationReducer,
+    initialViewHash,
+    createInitialNavigationState,
   );
-  const [supplierOrderFilterId, setSupplierOrderFilterId] = useState<string | null>(() =>
-    initialViewHash.path === 'accounting/supplier-orders' ? initialViewHash.filterId : null,
+  const {
+    activeView,
+    clientQuoteFilterId,
+    clientOfferFilterId,
+    supplierQuoteFilterId,
+    supplierOrderFilterId,
+    clientsOrderFilterId,
+    productFilterId,
+    selectedProjectId,
+    viewingUserId,
+  } = navigationState;
+  const setClientQuoteFilterId = useCallback<React.Dispatch<React.SetStateAction<string | null>>>(
+    (value) => dispatchNavigation({ type: 'set-nullable', key: 'clientQuoteFilterId', value }),
+    [],
   );
-  const [clientsOrderFilterId, setClientsOrderFilterId] = useState<string | null>(null);
-  const [productFilterId, setProductFilterId] = useState<string | null>(() =>
-    initialViewHash.path === 'catalog/internal-listing' ? initialViewHash.filterId : null,
+  const setClientOfferFilterId = useCallback<React.Dispatch<React.SetStateAction<string | null>>>(
+    (value) => dispatchNavigation({ type: 'set-nullable', key: 'clientOfferFilterId', value }),
+    [],
   );
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+  const setSupplierQuoteFilterId = useCallback<React.Dispatch<React.SetStateAction<string | null>>>(
+    (value) => dispatchNavigation({ type: 'set-nullable', key: 'supplierQuoteFilterId', value }),
+    [],
+  );
+  const setSupplierOrderFilterId = useCallback<React.Dispatch<React.SetStateAction<string | null>>>(
+    (value) => dispatchNavigation({ type: 'set-nullable', key: 'supplierOrderFilterId', value }),
+    [],
+  );
+  const setClientsOrderFilterId = useCallback<React.Dispatch<React.SetStateAction<string | null>>>(
+    (value) => dispatchNavigation({ type: 'set-nullable', key: 'clientsOrderFilterId', value }),
+    [],
+  );
+  const setSelectedProjectId = useCallback<React.Dispatch<React.SetStateAction<string | null>>>(
+    (value) => dispatchNavigation({ type: 'set-nullable', key: 'selectedProjectId', value }),
+    [],
+  );
+  const setViewingUserId = useCallback<React.Dispatch<React.SetStateAction<string>>>(
+    (value) => dispatchNavigation({ type: 'set-string', key: 'viewingUserId', value }),
+    [],
+  );
 
   // Navigation-aware setter: clears any *FilterId state that isn't valid for
   // the destination view, batched in the SAME commit as the view change.
@@ -971,43 +1385,25 @@ const AppContent: React.FC = () => {
     programmaticHashTrackerRef.current = createProgrammaticHashTracker();
   }
   const programmaticHashTracker = programmaticHashTrackerRef.current;
-  const setActiveView = useCallback<React.Dispatch<React.SetStateAction<View | '404'>>>((next) => {
-    const resolved =
-      typeof next === 'function'
-        ? (next as (prev: View | '404') => View | '404')(activeViewRef.current)
-        : next;
-    setActiveViewState(resolved);
-    if (resolved !== 'sales/client-quotes' && resolved !== 'sales/client-offers') {
-      setClientQuoteFilterId(null);
-    }
-    if (resolved !== 'sales/client-offers' && resolved !== 'accounting/clients-orders') {
-      setClientOfferFilterId(null);
-    }
-    if (resolved !== 'sales/supplier-quotes' && resolved !== 'accounting/supplier-orders') {
-      setSupplierQuoteFilterId(null);
-    }
-    if (resolved !== 'accounting/supplier-orders') {
-      setSupplierOrderFilterId(null);
-    }
-    if (resolved !== 'accounting/clients-orders') {
-      setClientsOrderFilterId(null);
-    }
-    if (resolved !== 'catalog/internal-listing') {
-      setProductFilterId(null);
-    }
-    if (resolved !== 'projects/detail') {
-      setSelectedProjectId(null);
-    }
-    const currentUser = currentUserRef.current;
-    if (
-      currentUser &&
-      !isUserScopedTimesheetView(resolved) &&
-      viewingUserIdRef.current !== currentUser.id
-    ) {
-      viewingUserIdRef.current = currentUser.id;
-      React.startTransition(() => setViewingUserId(currentUser.id));
-    }
-  }, []);
+  const setActiveView = useCallback<React.Dispatch<React.SetStateAction<View | '404'>>>(
+    (next) => {
+      const resolved =
+        typeof next === 'function'
+          ? (next as (prev: View | '404') => View | '404')(activeViewRef.current)
+          : next;
+      dispatchNavigation({ type: 'set-active-view', activeView: resolved });
+      const currentUser = currentUserRef.current;
+      if (
+        currentUser &&
+        !isUserScopedTimesheetView(resolved) &&
+        viewingUserIdRef.current !== currentUser.id
+      ) {
+        viewingUserIdRef.current = currentUser.id;
+        React.startTransition(() => setViewingUserId(currentUser.id));
+      }
+    },
+    [setViewingUserId],
+  );
   const setProjectsViewTab = useCallback(
     (tab: ProjectsViewTab) => setActiveView(tab === 'tasks' ? 'projects/tasks' : 'projects/manage'),
     [setActiveView],
@@ -1091,7 +1487,34 @@ const AppContent: React.FC = () => {
           isLoading: false,
         }),
     });
-  }, [resetModuleLoader]);
+  }, [
+    resetModuleLoader,
+    setUsers,
+    setClients,
+    setProjects,
+    setProjectTasks,
+    setResales,
+    setResaleCategories,
+    setResaleOrderOptions,
+    setProducts,
+    setQuotes,
+    setQuoteCommunicationChannels,
+    setClientOffers,
+    setClientsOrders,
+    setInvoices,
+    setSuppliers,
+    setSupplierQuotes,
+    setSupplierOrders,
+    setSupplierInvoices,
+    setEntries,
+    setWorkUnits,
+    setGeneralSettings,
+    setLdapConfig,
+    setEmailConfig,
+    setSsoProviders,
+    setRoles,
+    setViewingUserAssignmentState,
+  ]);
 
   const {
     currentUser,
@@ -1161,7 +1584,7 @@ const AppContent: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [setBranding]);
 
   const handleLogin = login;
   const handleLogout = logout;
@@ -1191,7 +1614,7 @@ const AppContent: React.FC = () => {
         },
       });
     },
-    [setActiveView, tApp],
+    [setActiveView, setClientQuoteFilterId, setClientOfferFilterId, tApp],
   );
 
   const notifyClientOrderCreated = useCallback(
@@ -1207,7 +1630,7 @@ const AppContent: React.FC = () => {
         },
       });
     },
-    [setActiveView, tApp],
+    [setActiveView, setClientsOrderFilterId, tApp],
   );
 
   const notifySupplierOrderCreated = useCallback(
@@ -1223,7 +1646,7 @@ const AppContent: React.FC = () => {
         },
       });
     },
-    [setActiveView, tApp],
+    [setActiveView, setSupplierOrderFilterId, tApp],
   );
 
   const supplierQuoteHandlers = useMemo(
@@ -1238,7 +1661,13 @@ const AppContent: React.FC = () => {
         setSupplierQuoteFilterId,
         setActiveView,
       }),
-    [setActiveView],
+    [
+      setActiveView,
+      setSupplierQuotes,
+      setSupplierOrders,
+      setSupplierInvoices,
+      setSupplierQuoteFilterId,
+    ],
   );
 
   const quoteHandlers = useMemo(
@@ -1265,6 +1694,12 @@ const AppContent: React.FC = () => {
     [
       supplierQuoteHandlers.refreshSupplierQuoteFlow,
       setActiveView,
+      setQuotes,
+      setClientOffers,
+      setClientsOrders,
+      setInvoices,
+      setClientQuoteFilterId,
+      setClientOfferFilterId,
       notifyClientOfferCreated,
       notifyClientOrderCreated,
       notifySupplierOrderCreated,
@@ -1281,10 +1716,10 @@ const AppContent: React.FC = () => {
         setProjects,
         setProjectTasks,
       }),
-    [],
+    [setClients, setProjects, setProjectTasks],
   );
 
-  const productHandlers = useMemo(() => makeProductHandlers({ setProducts }), []);
+  const productHandlers = useMemo(() => makeProductHandlers({ setProducts }), [setProducts]);
 
   const projectHandlers = useMemo(
     () =>
@@ -1293,7 +1728,7 @@ const AppContent: React.FC = () => {
         setProjectTasks,
         setEntries,
       }),
-    [],
+    [setProjects, setProjectTasks, setEntries],
   );
 
   const resaleHandlers = useMemo(
@@ -1302,7 +1737,7 @@ const AppContent: React.FC = () => {
         setResales,
         setResaleCategories,
       }),
-    [],
+    [setResales, setResaleCategories],
   );
 
   const entryHandlers = useMemo(
@@ -1312,14 +1747,14 @@ const AppContent: React.FC = () => {
         viewingUserId,
         setEntries,
       }),
-    [currentUser, viewingUserId],
+    [currentUser, viewingUserId, setEntries],
   );
 
-  const invoiceHandlers = useMemo(() => makeInvoiceHandlers({ setInvoices }), []);
+  const invoiceHandlers = useMemo(() => makeInvoiceHandlers({ setInvoices }), [setInvoices]);
 
-  const ldapHandlers = useMemo(() => makeLdapHandlers({ setLdapConfig }), []);
+  const ldapHandlers = useMemo(() => makeLdapHandlers({ setLdapConfig }), [setLdapConfig]);
 
-  const supplierHandlers = useMemo(() => makeSupplierHandlers({ setSuppliers }), []);
+  const supplierHandlers = useMemo(() => makeSupplierHandlers({ setSuppliers }), [setSuppliers]);
 
   const supplierInvoiceHandlers = useMemo(
     () =>
@@ -1327,7 +1762,7 @@ const AppContent: React.FC = () => {
         setSupplierInvoices,
         setActiveView,
       }),
-    [setActiveView],
+    [setActiveView, setSupplierInvoices],
   );
 
   const userHandlers = useMemo(
@@ -1340,7 +1775,7 @@ const AppContent: React.FC = () => {
         setWorkUnits,
         setViewingUserId,
       }),
-    [currentUser, viewingUserId],
+    [currentUser, viewingUserId, setUsers, setRoles, setWorkUnits, setViewingUserId],
   );
 
   const quoteIdsWithOffers = useMemo(() => {
@@ -1484,7 +1919,7 @@ const AppContent: React.FC = () => {
     } catch (err) {
       console.error('Failed to generate recurring entries:', err);
     }
-  }, [currentUser]);
+  }, [currentUser, setEntries]);
 
   useEffect(() => {
     if (!currentUser) return;
@@ -1505,30 +1940,11 @@ const AppContent: React.FC = () => {
     // so leftover data from a previously-visited module doesn't leak into the
     // new UI before the module's own datasets load. Runs for settings too —
     // settings has no datasets but still represents a module-scope transition.
-    clearStaleModuleScopedState(module, {
-      clients: () => setClients([]),
-      suppliers: () => setSuppliers([]),
-      projects: () => setProjects([]),
-      projectTasks: () => setProjectTasks([]),
-      resales: () => setResales([]),
-      resaleCategories: () => setResaleCategories([]),
-      resaleOrderOptions: () => setResaleOrderOptions([]),
-      products: () => setProducts([]),
-      quotes: () => setQuotes([]),
-      quoteCommunicationChannels: () => setQuoteCommunicationChannels([]),
-      clientOffers: () => setClientOffers([]),
-      clientsOrders: () => setClientsOrders([]),
-      invoices: () => setInvoices([]),
-      supplierQuotes: () => setSupplierQuotes([]),
-      supplierOrders: () => setSupplierOrders([]),
-      supplierInvoices: () => setSupplierInvoices([]),
-      entries: () => {
-        entriesStreamTokenRef.current++;
-        setEntries([]);
-      },
-      workUnits: () => setWorkUnits([]),
-      users: () => setUsers([]),
-    });
+    const staleKeys = getStaleModuleScopedKeys(module);
+    if (staleKeys.includes('entries')) {
+      entriesStreamTokenRef.current++;
+    }
+    dispatchModuleState({ type: 'clear-keys', keys: staleKeys });
 
     // Drop the previously-visited modules from the loaded set so that revisiting
     // them refetches instead of showing the empty arrays we just cleared.
@@ -2272,6 +2688,30 @@ const AppContent: React.FC = () => {
     recordFailures,
     appendFailure,
     generateRecurringEntries,
+    setEntries,
+    setClients,
+    setProjects,
+    setProjectTasks,
+    setUsers,
+    setWorkUnits,
+    setSuppliers,
+    setQuotes,
+    setQuoteCommunicationChannels,
+    setClientOffers,
+    setSupplierQuotes,
+    setProducts,
+    setClientsOrders,
+    setInvoices,
+    setSupplierOrders,
+    setSupplierInvoices,
+    setResales,
+    setResaleCategories,
+    setResaleOrderOptions,
+    setGeneralSettings,
+    setLdapConfig,
+    setSsoProviders,
+    setEmailConfig,
+    setRoles,
   ]);
 
   // Load target user assignments when the timesheet user switcher changes.
@@ -2350,14 +2790,14 @@ const AppContent: React.FC = () => {
     return () => {
       isCancelled = true;
     };
-  }, [currentUser, viewingUserId]);
+  }, [currentUser, viewingUserId, setViewingUserAssignmentState]);
 
   // Update viewingUserId when currentUser changes
   useEffect(() => {
     if (currentUser) {
       React.startTransition(() => setViewingUserId(currentUser.id));
     }
-  }, [currentUser]);
+  }, [currentUser, setViewingUserId]);
 
   // Load notifications for permitted users
   useEffect(() => {
@@ -2389,24 +2829,27 @@ const AppContent: React.FC = () => {
       isCancelled = true;
       clearInterval(interval);
     };
-  }, [currentUser]);
+  }, [currentUser, setNotificationsState]);
 
   // Notification handlers
-  const handleMarkNotificationAsRead = useCallback(async (id: string) => {
-    try {
-      await api.notifications.markAsRead(id);
-      setNotificationsState((prev) => {
-        const target = prev.items.find((n) => n.id === id);
-        const wasUnread = !!target && !target.isRead;
-        return {
-          items: prev.items.map((n) => (n.id === id ? { ...n, isRead: true } : n)),
-          unreadCount: wasUnread ? Math.max(0, prev.unreadCount - 1) : prev.unreadCount,
-        };
-      });
-    } catch (err) {
-      console.error('Failed to mark notification as read:', err);
-    }
-  }, []);
+  const handleMarkNotificationAsRead = useCallback(
+    async (id: string) => {
+      try {
+        await api.notifications.markAsRead(id);
+        setNotificationsState((prev) => {
+          const target = prev.items.find((n) => n.id === id);
+          const wasUnread = !!target && !target.isRead;
+          return {
+            items: prev.items.map((n) => (n.id === id ? { ...n, isRead: true } : n)),
+            unreadCount: wasUnread ? Math.max(0, prev.unreadCount - 1) : prev.unreadCount,
+          };
+        });
+      } catch (err) {
+        console.error('Failed to mark notification as read:', err);
+      }
+    },
+    [setNotificationsState],
+  );
 
   const handleMarkAllNotificationsAsRead = useCallback(async () => {
     try {
@@ -2418,23 +2861,26 @@ const AppContent: React.FC = () => {
     } catch (err) {
       console.error('Failed to mark all notifications as read:', err);
     }
-  }, []);
+  }, [setNotificationsState]);
 
-  const handleDeleteNotification = useCallback(async (id: string) => {
-    try {
-      await api.notifications.delete(id);
-      setNotificationsState((prev) => {
-        const target = prev.items.find((n) => n.id === id);
-        const wasUnread = !!target && !target.isRead;
-        return {
-          items: prev.items.filter((n) => n.id !== id),
-          unreadCount: wasUnread ? Math.max(0, prev.unreadCount - 1) : prev.unreadCount,
-        };
-      });
-    } catch (err) {
-      console.error('Failed to delete notification:', err);
-    }
-  }, []);
+  const handleDeleteNotification = useCallback(
+    async (id: string) => {
+      try {
+        await api.notifications.delete(id);
+        setNotificationsState((prev) => {
+          const target = prev.items.find((n) => n.id === id);
+          const wasUnread = !!target && !target.isRead;
+          return {
+            items: prev.items.filter((n) => n.id !== id),
+            unreadCount: wasUnread ? Math.max(0, prev.unreadCount - 1) : prev.unreadCount,
+          };
+        });
+      } catch (err) {
+        console.error('Failed to delete notification:', err);
+      }
+    },
+    [setNotificationsState],
+  );
 
   // `users` comes from GET /api/users, which is already scoped server-side to
   // what the caller is allowed to see (self, managed work-unit members,
@@ -2473,7 +2919,7 @@ const AppContent: React.FC = () => {
         generateRecurringEntries,
         taskUpdateQueueState,
       }),
-    [projectTasks, generateRecurringEntries, taskUpdateQueueState],
+    [projectTasks, setProjectTasks, setEntries, generateRecurringEntries, taskUpdateQueueState],
   );
 
   const handleAddEntry = entryHandlers.add;
@@ -2484,23 +2930,29 @@ const AppContent: React.FC = () => {
   const handleUpdateTask = taskHandlers.update;
   const handleMakeRecurring = taskHandlers.makeRecurring;
   const handleRecurringAction = taskHandlers.recurringAction;
-  const handleDeleteProjectTask = useCallback(async (id: string) => {
-    try {
-      await api.tasks.delete(id);
-      setProjectTasks((prev) => prev.filter((task) => task.id !== id));
-    } catch (err) {
-      console.error('Failed to delete task:', err);
-    }
-  }, []);
-  const handleDeleteProjectTaskWithToast = useCallback(async (id: string) => {
-    try {
-      await api.tasks.delete(id);
-      setProjectTasks((prev) => prev.filter((task) => task.id !== id));
-    } catch (err) {
-      console.error('Failed to delete task:', err);
-      toastError('Failed to delete task');
-    }
-  }, []);
+  const handleDeleteProjectTask = useCallback(
+    async (id: string) => {
+      try {
+        await api.tasks.delete(id);
+        setProjectTasks((prev) => prev.filter((task) => task.id !== id));
+      } catch (err) {
+        console.error('Failed to delete task:', err);
+      }
+    },
+    [setProjectTasks],
+  );
+  const handleDeleteProjectTaskWithToast = useCallback(
+    async (id: string) => {
+      try {
+        await api.tasks.delete(id);
+        setProjectTasks((prev) => prev.filter((task) => task.id !== id));
+      } catch (err) {
+        console.error('Failed to delete task:', err);
+        toastError('Failed to delete task');
+      }
+    },
+    [setProjectTasks],
+  );
 
   const addClient = clientHandlers.add;
   const handleUpdateClient = clientHandlers.update;
@@ -2526,7 +2978,7 @@ const AppContent: React.FC = () => {
     const channels = await api.quoteCommunicationChannels.list();
     setQuoteCommunicationChannels(channels);
     return channels;
-  }, []);
+  }, [setQuoteCommunicationChannels]);
 
   const handleCreateQuoteCommunicationChannel = useCallback(
     async (data: { name: string }) => {
@@ -2743,47 +3195,274 @@ const AppContent: React.FC = () => {
     ) ||
     (activeView === 'reports/ai-reporting' && !hasLoadedGeneralSettings && !reportsSettingsFailed);
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-zinc-100 flex items-center justify-center">
-        <div className="text-center">
-          <i className="fa-solid fa-circle-notch fa-spin text-4xl text-praetor mb-4"></i>
-          <p className="text-zinc-600 font-medium">Loading…</p>
-        </div>
-      </div>
-    );
-  }
+  return {
+    tApp,
+    users,
+    clients,
+    projects,
+    projectTasks,
+    resales,
+    resaleCategories,
+    resaleOrderOptions,
+    products,
+    quotes,
+    quoteCommunicationChannels,
+    clientOffers,
+    clientsOrders,
+    invoices,
+    suppliers,
+    supplierQuotes,
+    supplierOrders,
+    supplierInvoices,
+    entries,
+    workUnits,
+    setQuotes,
+    setClientOffers,
+    setClientsOrders,
+    setSupplierQuotes,
+    ldapConfig,
+    generalSettings,
+    branding,
+    ssoProviders,
+    emailConfig,
+    roles,
+    hasLoadedGeneralSettings,
+    notifications,
+    unreadNotificationCount,
+    activeView,
+    clientQuoteFilterId,
+    clientOfferFilterId,
+    supplierQuoteFilterId,
+    supplierOrderFilterId,
+    clientsOrderFilterId,
+    productFilterId,
+    selectedProjectId,
+    viewingUserId,
+    setClientQuoteFilterId,
+    setClientOfferFilterId,
+    setSupplierQuoteFilterId,
+    setClientsOrderFilterId,
+    setSelectedProjectId,
+    setViewingUserId,
+    setActiveView,
+    setProjectsViewTab,
+    currentUser,
+    isLoading,
+    logoutReason,
+    clearLogoutReason,
+    userSettings,
+    serverUnreachable,
+    dismissServerUnreachable,
+    handleLogin,
+    handleLogout,
+    handleSwitchRole,
+    supplierQuoteHandlers,
+    quoteIdsWithOffers,
+    quoteOfferStatuses,
+    offerIdsWithOrders,
+    orderIdsWithInvoices,
+    isRouteAccessible,
+    handleMarkNotificationAsRead,
+    handleMarkAllNotificationsAsRead,
+    handleDeleteNotification,
+    availableUsers,
+    trackerCatalogs,
+    handleAddEntry,
+    handleAddBulkEntries,
+    handleDeleteEntry,
+    handleUpdateEntry,
+    handleUpdateTask,
+    handleMakeRecurring,
+    handleRecurringAction,
+    handleDeleteProjectTask,
+    handleDeleteProjectTaskWithToast,
+    addClient,
+    handleUpdateClient,
+    handleDeleteClient,
+    handleCreateClientProfileOption,
+    handleUpdateClientProfileOption,
+    handleDeleteClientProfileOption,
+    addProduct,
+    handleUpdateProduct,
+    handleDeleteProduct,
+    handleCreateInternalCategory,
+    handleUpdateInternalCategory,
+    handleDeleteInternalCategory,
+    handleCreateInternalSubcategory,
+    handleRenameInternalSubcategory,
+    handleDeleteInternalSubcategory,
+    handleCreateProductType,
+    handleUpdateProductType,
+    handleDeleteProductType,
+    handleCreateQuoteCommunicationChannel,
+    handleUpdateQuoteCommunicationChannel,
+    handleDeleteQuoteCommunicationChannel,
+    canManageQuoteCommunicationChannels,
+    addQuote,
+    handleUpdateQuote,
+    handleDeleteQuote,
+    handleUpdateClientOffer,
+    handleRevertClientOfferToDraft,
+    handleDeleteClientOffer,
+    handleCreateClientOfferFromQuote,
+    handleUpdateClientsOrder,
+    handleDeleteClientsOrder,
+    handleCreateClientsOrderFromOffer,
+    addInvoice,
+    handleUpdateInvoice,
+    handleDeleteInvoice,
+    addSupplier,
+    handleUpdateSupplier,
+    handleDeleteSupplier,
+    addSupplierQuote,
+    handleUpdateSupplierQuote,
+    handleDeleteSupplierQuote,
+    handleUpdateSupplierOrder,
+    handleDeleteSupplierOrder,
+    handleCreateSupplierOrderFromQuote,
+    refreshSupplierOrderFlow,
+    handleUpdateSupplierInvoice,
+    handleDeleteSupplierInvoice,
+    handleCreateSupplierInvoiceFromOrder,
+    addInternalEmployee,
+    addExternalEmployee,
+    handleUpdateEmployee,
+    handleDeleteEmployee,
+    addProject,
+    addProjectTask,
+    handleUpdateProject,
+    handleDeleteProject,
+    addResale,
+    handleDeleteResale,
+    handleAddResaleActivity,
+    handleUpdateResaleActivity,
+    handleDeleteResaleActivity,
+    handleCreateResaleCategory,
+    handleUpdateResaleCategory,
+    handleDeleteResaleCategory,
+    handleUpdateUser,
+    handleUpdateUserRoles,
+    handleUpdateUserAuthMethod,
+    handleBrandingChange,
+    handleUpdateGeneralSettings,
+    handleUpdateUserSettings,
+    handleUpdateUserPassword,
+    handleListMcpTokens,
+    handleCreateMcpToken,
+    handleRevokeMcpToken,
+    handleGetPersonalAccessToken,
+    handleRenewPersonalAccessToken,
+    handleNotFoundReturn,
+    handleSaveLdapConfig,
+    handleSaveSsoProvider,
+    handleDeleteSsoProvider,
+    handleSaveEmailConfig,
+    handleTestEmail,
+    handleAddUser,
+    handleDeleteUser,
+    addWorkUnit,
+    updateWorkUnit,
+    deleteWorkUnit,
+    fetchWorkUnits,
+    handleCreateRole,
+    handleRenameRole,
+    handleUpdateRolePermissions,
+    handleDeleteRole,
+    activeModuleLoadFailures,
+    reportsSettingsFailed,
+    isActiveModulePending,
+  };
+};
 
-  if (activeView === 'docs/api') {
-    return (
-      <>
-        {currentUser && <SessionTimeoutHandler onLogout={() => handleLogout('inactivity')} />}
-        <ApiDocsView />
-      </>
-    );
-  }
+type AppContentController = ReturnType<typeof useAppContentController>;
+type AuthenticatedAppContentController = AppContentController & { currentUser: User };
 
+const isAuthenticatedAppContentController = (
+  controller: AppContentController,
+): controller is AuthenticatedAppContentController => Boolean(controller.currentUser);
+
+const AppContent: React.FC = () => {
+  const controller = useAppContentController();
+  return <AppContentView controller={controller} />;
+};
+
+const AppContentView: React.FC<{ controller: AppContentController }> = ({ controller }) => {
+  const { activeView, currentUser, isLoading } = controller;
+
+  if (isLoading) return <AppLoadingScreen />;
+  if (activeView === 'docs/api') return <TechnicalDocsRoute controller={controller} view="api" />;
   if (activeView === 'docs/frontend') {
-    return (
-      <>
-        {currentUser && <SessionTimeoutHandler onLogout={() => handleLogout('inactivity')} />}
-        <FrontendDocsView />
-      </>
-    );
+    return <TechnicalDocsRoute controller={controller} view="frontend" />;
   }
+  if (!currentUser) return <LoginRoute controller={controller} />;
 
-  if (!currentUser)
-    return (
-      <Login
-        onLogin={handleLogin}
-        logoutReason={logoutReason}
-        onClearLogoutReason={clearLogoutReason}
-        serverUnreachable={serverUnreachable}
-        onDismissServerUnreachable={dismissServerUnreachable}
-        companyName={branding.companyName}
-        logoUrl={branding.logoUrl}
-      />
-    );
+  return <AuthenticatedAppShell controller={controller} />;
+};
+
+const AppLoadingScreen: React.FC = () => (
+  <div className="min-h-screen bg-zinc-100 flex items-center justify-center">
+    <div className="text-center">
+      <i className="fa-solid fa-circle-notch fa-spin text-4xl text-praetor mb-4"></i>
+      <p className="text-zinc-600 font-medium">Loading…</p>
+    </div>
+  </div>
+);
+
+const TechnicalDocsRoute: React.FC<{
+  controller: AppContentController;
+  view: 'api' | 'frontend';
+}> = ({ controller, view }) => (
+  <>
+    {controller.currentUser && (
+      <SessionTimeoutHandler onLogout={() => controller.handleLogout('inactivity')} />
+    )}
+    {view === 'api' ? <ApiDocsView /> : <FrontendDocsView />}
+  </>
+);
+
+const LoginRoute: React.FC<{ controller: AppContentController }> = ({ controller }) => {
+  const {
+    branding,
+    clearLogoutReason,
+    dismissServerUnreachable,
+    handleLogin,
+    logoutReason,
+    serverUnreachable,
+  } = controller;
+
+  return (
+    <Login
+      onLogin={handleLogin}
+      logoutReason={logoutReason}
+      onClearLogoutReason={clearLogoutReason}
+      serverUnreachable={serverUnreachable}
+      onDismissServerUnreachable={dismissServerUnreachable}
+      companyName={branding.companyName}
+      logoUrl={branding.logoUrl}
+    />
+  );
+};
+
+const AuthenticatedAppShell: React.FC<{ controller: AppContentController }> = ({ controller }) => {
+  if (!isAuthenticatedAppContentController(controller)) return null;
+
+  const {
+    activeView,
+    branding,
+    currentUser,
+    generalSettings,
+    handleDeleteNotification,
+    handleLogout,
+    handleMarkAllNotificationsAsRead,
+    handleMarkNotificationAsRead,
+    handleSwitchRole,
+    hasLoadedGeneralSettings,
+    isRouteAccessible,
+    notifications,
+    roles,
+    setActiveView,
+    unreadNotificationCount,
+  } = controller;
 
   return (
     <CurrentUserIdProvider userId={currentUser.id}>
@@ -2805,675 +3484,1003 @@ const AppContent: React.FC = () => {
         onMarkAllNotificationsAsRead={handleMarkAllNotificationsAsRead}
         onDeleteNotification={handleDeleteNotification}
       >
-        {!isRouteAccessible ? (
-          <NotFound onReturn={handleNotFoundReturn} />
-        ) : isActiveModulePending ? (
-          <div className="flex h-[calc(100vh-180px)] min-h-[420px] items-center justify-center rounded-lg border border-border bg-card text-card-foreground shadow-sm">
-            <div className="text-center">
-              <i className="fa-solid fa-circle-notch fa-spin text-3xl text-primary mb-3" />
-              <p className="text-sm font-medium text-muted-foreground">Loading…</p>
-            </div>
-          </div>
-        ) : (
-          <>
-            {activeModuleLoadFailures.length > 0 && (
-              <div className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 shadow-sm">
-                <div className="flex items-start gap-3">
-                  <i className="fa-solid fa-triangle-exclamation mt-0.5 text-amber-500" />
-                  <p className="font-medium">
-                    Failed to load: {activeModuleLoadFailures.join(', ')}.
-                  </p>
-                </div>
-              </div>
-            )}
-            {activeView === 'docs' && <DocsHubView />}
-            {activeView === 'timesheets/tracker' && (
-              <TrackerView
-                entries={entries.filter((e) => e.userId === viewingUserId)}
-                clients={trackerCatalogs.clients}
-                projects={trackerCatalogs.projects}
-                projectTasks={trackerCatalogs.projectTasks}
-                onAddEntry={handleAddEntry}
-                onDeleteEntry={handleDeleteEntry}
-                onUpdateEntry={handleUpdateEntry}
-                startOfWeek={generalSettings.startOfWeek}
-                treatSaturdayAsHoliday={generalSettings.treatSaturdayAsHoliday}
-                allowWeekendSelection={true}
-                onMakeRecurring={handleMakeRecurring}
-                permissions={currentUser.permissions || []}
-                viewingUserId={viewingUserId}
-                onViewUserChange={setViewingUserId}
-                availableUsers={availableUsers}
-                currentUser={currentUser}
-                dailyGoal={generalSettings.dailyLimit}
-                onAddBulkEntries={handleAddBulkEntries}
-                onRecurringAction={handleRecurringAction}
-                defaultLocation={generalSettings.defaultLocation}
-                onAddCustomTask={addProjectTask}
-                currency={generalSettings.currency}
-              />
-            )}
-            {activeView === 'timesheets/ril' && (
-              <RilView
-                currentUser={currentUser}
-                availableUsers={availableUsers}
-                viewingUserId={viewingUserId}
-                onViewUserChange={setViewingUserId}
-                projects={projects}
-                settings={generalSettings}
-                weekdayTransferDefaults={userSettings.rilWeekdayTransferDefaults}
-              />
-            )}
-            {hasViewAccess(currentUser.permissions, 'crm/clients') &&
-              activeView === 'crm/clients' && (
-                <ClientsView
-                  clients={clients}
-                  onAddClient={addClient}
-                  onUpdateClient={handleUpdateClient}
-                  onDeleteClient={handleDeleteClient}
-                  onCreateClientProfileOption={handleCreateClientProfileOption}
-                  onUpdateClientProfileOption={handleUpdateClientProfileOption}
-                  onDeleteClientProfileOption={handleDeleteClientProfileOption}
-                  permissions={currentUser.permissions || []}
-                />
-              )}
-
-            {hasPermission(
-              currentUser.permissions,
-              VIEW_PERMISSION_MAP['catalog/internal-listing'],
-            ) &&
-              activeView === 'catalog/internal-listing' && (
-                <InternalListingView
-                  products={products}
-                  productFilterId={productFilterId}
-                  onAddProduct={addProduct}
-                  onUpdateProduct={handleUpdateProduct}
-                  onDeleteProduct={handleDeleteProduct}
-                  currency={generalSettings.currency}
-                  onCreateInternalCategory={handleCreateInternalCategory}
-                  onUpdateInternalCategory={handleUpdateInternalCategory}
-                  onDeleteInternalCategory={handleDeleteInternalCategory}
-                  onCreateInternalSubcategory={handleCreateInternalSubcategory}
-                  onRenameInternalSubcategory={handleRenameInternalSubcategory}
-                  onDeleteInternalSubcategory={handleDeleteInternalSubcategory}
-                  onCreateProductType={handleCreateProductType}
-                  onUpdateProductType={handleUpdateProductType}
-                  onDeleteProductType={handleDeleteProductType}
-                />
-              )}
-
-            {hasPermission(currentUser.permissions, VIEW_PERMISSION_MAP['sales/client-quotes']) &&
-              activeView === 'sales/client-quotes' && (
-                <ClientQuotesView
-                  quotes={quotes}
-                  clients={clients}
-                  products={products}
-                  supplierQuotes={supplierQuotes}
-                  communicationChannels={quoteCommunicationChannels}
-                  canManageCommunicationChannels={canManageQuoteCommunicationChannels}
-                  onCreateCommunicationChannel={handleCreateQuoteCommunicationChannel}
-                  onUpdateCommunicationChannel={handleUpdateQuoteCommunicationChannel}
-                  onDeleteCommunicationChannel={handleDeleteQuoteCommunicationChannel}
-                  onAddQuote={addQuote}
-                  onUpdateQuote={handleUpdateQuote}
-                  onQuoteRestored={async (restored) => {
-                    // Captured before the patch: a restore that REMOVES the last sourced line drops
-                    // the now-unsourced supplier quote back to draft server-side, so the pre-restore
-                    // sourcing also matters — not just the restored snapshot's lines (#779 follow-up).
-                    const wasSourcing = sourcesSupplierQuote(
-                      quotes.find((q) => q.id === restored.id),
-                    );
-                    // Patch the restored quote eagerly so the modal reflects it instantly,
-                    // then refetch the whole flow because restore can also delete draft
-                    // linked sales server-side.
-                    setQuotes((prev) => prev.map((q) => (q.id === restored.id ? restored : q)));
-                    const [quotesData, offersData, ordersData] = await Promise.all([
-                      api.quotes.list(),
-                      api.clientOffers.list(),
-                      api.clientsOrders.list(),
-                    ]);
-                    setQuotes(quotesData);
-                    setClientOffers(offersData);
-                    setClientsOrders(ordersData);
-                    // A restore rewrites the snapshot's lines/status, so a supplier quote those
-                    // lines source (or USED to source) has a mirrored derived status that can change
-                    // too (#779 follow-up: linkage is line-sourced). Best-effort: a refresh failure
-                    // must not fail the completed restore.
-                    if (wasSourcing || sourcesSupplierQuote(restored)) {
-                      try {
-                        await supplierQuoteHandlers.refreshSupplierQuoteFlow();
-                      } catch (refreshErr) {
-                        console.error('Failed to refresh supplier data:', refreshErr);
-                      }
-                    }
-                  }}
-                  onDeleteQuote={handleDeleteQuote}
-                  onCreateOffer={handleCreateClientOfferFromQuote}
-                  offers={clientOffers}
-                  onViewOffer={(offerId) => {
-                    setClientQuoteFilterId(null);
-                    setClientOfferFilterId(offerId);
-                    setActiveView('sales/client-offers');
-                  }}
-                  quoteFilterId={clientQuoteFilterId}
-                  quoteIdsWithOffers={quoteIdsWithOffers}
-                  quoteOfferStatuses={quoteOfferStatuses}
-                  currency={generalSettings.currency}
-                  canViewSupplierQuotes={hasViewAccess(
-                    currentUser.permissions,
-                    'sales/supplier-quotes',
-                  )}
-                  canViewInternalListing={hasViewAccess(
-                    currentUser.permissions,
-                    'catalog/internal-listing',
-                  )}
-                  onViewOffers={(quoteId) => {
-                    setClientOfferFilterId(null);
-                    setClientQuoteFilterId(quoteId);
-                    setActiveView('sales/client-offers');
-                  }}
-                />
-              )}
-
-            {hasPermission(currentUser.permissions, VIEW_PERMISSION_MAP['sales/client-offers']) &&
-              activeView === 'sales/client-offers' && (
-                <ClientOffersView
-                  offers={clientOffers}
-                  clients={clients}
-                  products={products}
-                  supplierQuotes={supplierQuotes}
-                  offerIdsWithOrders={offerIdsWithOrders}
-                  onUpdateOffer={handleUpdateClientOffer}
-                  onRevertOfferToDraft={handleRevertClientOfferToDraft}
-                  canRevertTerminalStatus={
-                    currentUser.role === TOP_MANAGER_ROLE_ID || currentUser.role === ADMIN_ROLE_ID
-                  }
-                  onOfferRestored={async () => {
-                    setClientOffers(await api.clientOffers.list());
-                  }}
-                  onDeleteOffer={handleDeleteClientOffer}
-                  onCreateClientsOrder={handleCreateClientsOrderFromOffer}
-                  onViewQuote={(quoteId) => {
-                    setClientOfferFilterId(null);
-                    setClientQuoteFilterId(quoteId);
-                    setActiveView('sales/client-quotes');
-                  }}
-                  currency={generalSettings.currency}
-                  canViewSupplierQuotes={hasViewAccess(
-                    currentUser.permissions,
-                    'sales/supplier-quotes',
-                  )}
-                  canViewInternalListing={hasViewAccess(
-                    currentUser.permissions,
-                    'catalog/internal-listing',
-                  )}
-                  quoteFilterId={clientQuoteFilterId}
-                  offerFilterId={clientOfferFilterId}
-                />
-              )}
-
-            {hasPermission(currentUser.permissions, VIEW_PERMISSION_MAP['sales/supplier-quotes']) &&
-              activeView === 'sales/supplier-quotes' && (
-                <SupplierQuotesView
-                  quotes={supplierQuotes}
-                  suppliers={suppliers}
-                  clients={clients}
-                  products={products}
-                  communicationChannels={quoteCommunicationChannels}
-                  canManageCommunicationChannels={canManageQuoteCommunicationChannels}
-                  onCreateCommunicationChannel={handleCreateQuoteCommunicationChannel}
-                  onUpdateCommunicationChannel={handleUpdateQuoteCommunicationChannel}
-                  onDeleteCommunicationChannel={handleDeleteQuoteCommunicationChannel}
-                  onAddQuote={addSupplierQuote}
-                  onUpdateQuote={handleUpdateSupplierQuote}
-                  onQuoteRestored={(restored) => {
-                    // Patch the restored quote eagerly so the modal reflects it instantly.
-                    // No linked-order refetch needed: restore is rejected when an order exists.
-                    setSupplierQuotes((prev) =>
-                      prev.map((q) => (q.id === restored.id ? restored : q)),
-                    );
-                  }}
-                  onDeleteQuote={handleDeleteSupplierQuote}
-                  onCreateOrder={handleCreateSupplierOrderFromQuote}
-                  quoteFilterId={supplierQuoteFilterId}
-                  currency={generalSettings.currency}
-                  onViewOrders={(quoteId) => {
-                    setSupplierQuoteFilterId(quoteId);
-                    setActiveView('accounting/supplier-orders');
-                  }}
-                />
-              )}
-
-            {hasPermission(
-              currentUser.permissions,
-              VIEW_PERMISSION_MAP['accounting/clients-orders'],
-            ) &&
-              activeView === 'accounting/clients-orders' && (
-                <ClientsOrdersView
-                  orders={clientsOrders}
-                  clients={clients}
-                  products={products}
-                  supplierOrders={supplierOrders}
-                  onUpdateClientsOrder={handleUpdateClientsOrder}
-                  onDeleteClientsOrder={handleDeleteClientsOrder}
-                  onOrderRestored={(restored) => {
-                    setClientsOrders((prev) =>
-                      prev.map((o) => (o.id === restored.id ? restored : o)),
-                    );
-                  }}
-                  currency={generalSettings.currency}
-                  canViewInternalListing={hasViewAccess(
-                    currentUser.permissions,
-                    'catalog/internal-listing',
-                  )}
-                  canViewSupplierOrders={hasViewAccess(
-                    currentUser.permissions,
-                    'accounting/supplier-orders',
-                  )}
-                  onViewOffer={(offerId) => {
-                    setClientQuoteFilterId(null);
-                    setClientOfferFilterId(offerId);
-                    setActiveView('sales/client-offers');
-                  }}
-                  offerFilterId={clientOfferFilterId}
-                  orderFilterId={clientsOrderFilterId}
-                />
-              )}
-
-            {hasPermission(
-              currentUser.permissions,
-              VIEW_PERMISSION_MAP['accounting/clients-invoices'],
-            ) &&
-              activeView === 'accounting/clients-invoices' && (
-                <ClientsInvoicesView
-                  invoices={invoices}
-                  clients={clients}
-                  products={products}
-                  onAddInvoice={addInvoice}
-                  onUpdateInvoice={handleUpdateInvoice}
-                  onDeleteInvoice={handleDeleteInvoice}
-                  currency={generalSettings.currency}
-                  canViewInternalListing={hasViewAccess(
-                    currentUser.permissions,
-                    'catalog/internal-listing',
-                  )}
-                />
-              )}
-
-            {hasPermission(
-              currentUser.permissions,
-              VIEW_PERMISSION_MAP['accounting/supplier-orders'],
-            ) &&
-              activeView === 'accounting/supplier-orders' && (
-                <SupplierOrdersView
-                  orders={supplierOrders}
-                  suppliers={suppliers}
-                  products={products}
-                  orderIdsWithInvoices={orderIdsWithInvoices}
-                  onUpdateOrder={handleUpdateSupplierOrder}
-                  onDeleteOrder={handleDeleteSupplierOrder}
-                  onCreateInvoice={handleCreateSupplierInvoiceFromOrder}
-                  onViewQuote={(quoteId) => {
-                    setSupplierQuoteFilterId(quoteId);
-                    setActiveView('sales/supplier-quotes');
-                  }}
-                  onOrderRestored={refreshSupplierOrderFlow}
-                  currency={generalSettings.currency}
-                  quoteFilterId={supplierQuoteFilterId}
-                  orderFilterId={supplierOrderFilterId}
-                />
-              )}
-
-            {hasPermission(
-              currentUser.permissions,
-              VIEW_PERMISSION_MAP['accounting/supplier-invoices'],
-            ) &&
-              activeView === 'accounting/supplier-invoices' && (
-                <SupplierInvoicesView
-                  invoices={supplierInvoices}
-                  suppliers={suppliers}
-                  products={products}
-                  onUpdateInvoice={handleUpdateSupplierInvoice}
-                  onDeleteInvoice={handleDeleteSupplierInvoice}
-                  currency={generalSettings.currency}
-                />
-              )}
-
-            {hasViewAccess(currentUser.permissions, 'crm/suppliers') &&
-              activeView === 'crm/suppliers' && (
-                <SuppliersView
-                  suppliers={suppliers}
-                  supplierOrders={supplierOrders}
-                  currency={generalSettings.currency}
-                  onAddSupplier={addSupplier}
-                  onUpdateSupplier={handleUpdateSupplier}
-                  onDeleteSupplier={handleDeleteSupplier}
-                  permissions={currentUser.permissions || []}
-                />
-              )}
-
-            {hasPermission(currentUser.permissions, VIEW_PERMISSION_MAP['hr/internal']) &&
-              activeView === 'hr/internal' && (
-                <InternalEmployeesView
-                  users={users}
-                  clients={clients}
-                  projects={projects}
-                  tasks={projectTasks}
-                  onAddEmployee={addInternalEmployee}
-                  onUpdateEmployee={handleUpdateEmployee}
-                  onDeleteEmployee={handleDeleteEmployee}
-                  currency={generalSettings.currency}
-                  permissions={currentUser.permissions || []}
-                />
-              )}
-
-            {hasPermission(currentUser.permissions, VIEW_PERMISSION_MAP['hr/external']) &&
-              activeView === 'hr/external' && (
-                <ExternalEmployeesView
-                  users={users}
-                  clients={clients}
-                  projects={projects}
-                  tasks={projectTasks}
-                  onAddEmployee={addExternalEmployee}
-                  onUpdateEmployee={handleUpdateEmployee}
-                  onDeleteEmployee={handleDeleteEmployee}
-                  currency={generalSettings.currency}
-                  permissions={currentUser.permissions || []}
-                />
-              )}
-
-            {(activeView === 'projects/manage' || activeView === 'projects/tasks') &&
-              hasViewAccess(currentUser.permissions, activeView) && (
-                <ProjectsView
-                  projects={projects}
-                  clients={clients}
-                  orders={clientsOrders}
-                  offers={clientOffers}
-                  currency={generalSettings.currency}
-                  permissions={currentUser.permissions || []}
-                  users={availableUsers}
-                  roles={roles}
-                  tasks={projectTasks}
-                  onAddProject={addProject}
-                  onUpdateProject={handleUpdateProject}
-                  onDeleteProject={handleDeleteProject}
-                  onAddTask={addProjectTask}
-                  onUpdateTask={handleUpdateTask}
-                  onDeleteTask={handleDeleteProjectTaskWithToast}
-                  activeTab={activeView === 'projects/tasks' ? 'tasks' : 'commissions'}
-                  onTabChange={setProjectsViewTab}
-                  onViewOrder={(orderId) => {
-                    setClientsOrderFilterId(orderId);
-                    setActiveView('accounting/clients-orders');
-                  }}
-                  onNavigateToProject={(projectId) => {
-                    setSelectedProjectId(projectId);
-                    setActiveView('projects/detail');
-                  }}
-                />
-              )}
-
-            {hasViewAccess(currentUser.permissions, 'projects/detail') &&
-              activeView === 'projects/detail' &&
-              (() => {
-                const selectedProject = selectedProjectId
-                  ? projects.find((p) => p.id === selectedProjectId)
-                  : undefined;
-                if (!selectedProject) {
-                  // Project unavailable (e.g. just deleted, or refresh) — fall back to list.
-                  return (
-                    <ProjectsView
-                      projects={projects}
-                      clients={clients}
-                      orders={clientsOrders}
-                      offers={clientOffers}
-                      currency={generalSettings.currency}
-                      permissions={currentUser.permissions || EMPTY_PERMISSIONS}
-                      users={availableUsers}
-                      roles={roles}
-                      tasks={projectTasks}
-                      onAddProject={addProject}
-                      onUpdateProject={handleUpdateProject}
-                      onDeleteProject={handleDeleteProject}
-                      onAddTask={addProjectTask}
-                      onUpdateTask={handleUpdateTask}
-                      onDeleteTask={handleDeleteProjectTaskWithToast}
-                      activeTab="commissions"
-                      onTabChange={setProjectsViewTab}
-                      onViewOrder={(orderId) => {
-                        setClientsOrderFilterId(orderId);
-                        setActiveView('accounting/clients-orders');
-                      }}
-                      onNavigateToProject={(projectId) => {
-                        setSelectedProjectId(projectId);
-                        setActiveView('projects/detail');
-                      }}
-                    />
-                  );
-                }
-                return (
-                  // key={selectedProject.id} remounts the component on project switch
-                  // so all local state (form fields, entries fetch, assignments) resets
-                  // cleanly without an in-component prop-sync useEffect.
-                  // Suspense fallback covers the lazy() chunk fetch the first time the
-                  // user enters the detail page.
-                  <Suspense fallback={null}>
-                    <ProjectDetailView
-                      key={selectedProject.id}
-                      project={selectedProject}
-                      clients={clients}
-                      orders={clientsOrders}
-                      offers={clientOffers}
-                      users={availableUsers}
-                      roles={roles}
-                      permissions={currentUser.permissions || EMPTY_PERMISSIONS}
-                      currency={generalSettings.currency}
-                      tasks={projectTasks}
-                      onBack={() => setActiveView('projects/manage')}
-                      onUpdateProject={handleUpdateProject}
-                      onDeleteProject={handleDeleteProject}
-                      onAddTask={addProjectTask}
-                      onUpdateTask={handleUpdateTask}
-                      onDeleteTask={handleDeleteProjectTask}
-                      onViewOrder={(orderId) => {
-                        setClientsOrderFilterId(orderId);
-                        setActiveView('accounting/clients-orders');
-                      }}
-                    />
-                  </Suspense>
-                );
-              })()}
-
-            {hasViewAccess(currentUser.permissions, 'projects/resales') &&
-              activeView === 'projects/resales' && (
-                <ResalesView
-                  resales={resales}
-                  categories={resaleCategories}
-                  orderOptions={resaleOrderOptions}
-                  permissions={currentUser.permissions || EMPTY_PERMISSIONS}
-                  currency={generalSettings.currency}
-                  onAddResale={addResale}
-                  onDeleteResale={handleDeleteResale}
-                  onAddActivity={handleAddResaleActivity}
-                  onUpdateActivity={handleUpdateResaleActivity}
-                  onDeleteActivity={handleDeleteResaleActivity}
-                  onCreateCategory={handleCreateResaleCategory}
-                  onUpdateCategory={handleUpdateResaleCategory}
-                  onDeleteCategory={handleDeleteResaleCategory}
-                />
-              )}
-
-            {hasViewAccess(currentUser.permissions, 'administration/user-management') &&
-              activeView === 'administration/user-management' && (
-                <UserManagement
-                  clients={clients}
-                  projects={projects}
-                  tasks={projectTasks}
-                  users={users}
-                  onAddUser={handleAddUser}
-                  onDeleteUser={handleDeleteUser}
-                  onUpdateUser={handleUpdateUser}
-                  onUpdateUserRoles={handleUpdateUserRoles}
-                  onUpdateUserAuthMethod={handleUpdateUserAuthMethod}
-                  onResetUserTotp={(userId) => api.users.resetTotp(userId).then(() => undefined)}
-                  currentUserId={currentUser.id}
-                  permissions={currentUser.permissions || []}
-                  roles={roles}
-                  ssoProviders={ssoProviders}
-                  currency={getCurrencySymbol(generalSettings.currency)}
-                />
-              )}
-
-            {hasViewAccess(currentUser.permissions, 'hr/work-units') &&
-              activeView === 'hr/work-units' && (
-                <WorkUnitsView
-                  workUnits={workUnits}
-                  users={users}
-                  permissions={currentUser.permissions || []}
-                  onAddWorkUnit={addWorkUnit}
-                  onUpdateWorkUnit={updateWorkUnit}
-                  onDeleteWorkUnit={deleteWorkUnit}
-                  refreshWorkUnits={fetchWorkUnits}
-                />
-              )}
-
-            {hasPermission(
-              currentUser.permissions,
-              VIEW_PERMISSION_MAP['administration/general'],
-            ) &&
-              activeView === 'administration/general' && (
-                <GeneralSettings
-                  settings={generalSettings}
-                  onUpdate={handleUpdateGeneralSettings}
-                  branding={branding}
-                  onBrandingChange={handleBrandingChange}
-                />
-              )}
-
-            {hasPermission(
-              currentUser.permissions,
-              VIEW_PERMISSION_MAP['administration/authentication'],
-            ) &&
-              activeView === 'administration/authentication' && (
-                <AuthSettings
-                  config={ldapConfig}
-                  onSave={handleSaveLdapConfig}
-                  roles={roles}
-                  ssoProviders={ssoProviders}
-                  onSaveSsoProvider={handleSaveSsoProvider}
-                  onDeleteSsoProvider={handleDeleteSsoProvider}
-                  enableTotp={generalSettings.enableTotp}
-                  onSetEnableTotp={(value) => handleUpdateGeneralSettings({ enableTotp: value })}
-                  enforceTotp={generalSettings.enforceTotp}
-                  onSetEnforceTotp={(value) => handleUpdateGeneralSettings({ enforceTotp: value })}
-                  enforcedRoleIds={generalSettings.totpEnforcedRoleIds}
-                  onSetEnforcedRoleIds={(value) =>
-                    handleUpdateGeneralSettings({ totpEnforcedRoleIds: value })
-                  }
-                  exemptRoleIds={generalSettings.totpExemptRoleIds}
-                  onSetExemptRoleIds={(value) =>
-                    handleUpdateGeneralSettings({ totpExemptRoleIds: value })
-                  }
-                  canManageMfa={hasPermission(
-                    currentUser.permissions,
-                    'administration.general.update',
-                  )}
-                />
-              )}
-
-            {hasPermission(currentUser.permissions, VIEW_PERMISSION_MAP['administration/roles']) &&
-              activeView === 'administration/roles' && (
-                <RolesView
-                  roles={roles}
-                  permissions={currentUser.permissions || []}
-                  onCreateRole={handleCreateRole}
-                  onRenameRole={handleRenameRole}
-                  onUpdateRolePermissions={handleUpdateRolePermissions}
-                  onDeleteRole={handleDeleteRole}
-                />
-              )}
-
-            {hasPermission(
-              currentUser.permissions,
-              VIEW_PERMISSION_MAP['administration/webhooks'],
-            ) &&
-              activeView === 'administration/webhooks' && (
-                <WebhooksView permissions={currentUser.permissions || []} />
-              )}
-
-            {hasPermission(currentUser.permissions, VIEW_PERMISSION_MAP['administration/logs']) &&
-              activeView === 'administration/logs' && (
-                <LogsView
-                  startOfWeek={generalSettings.startOfWeek}
-                  treatSaturdayAsHoliday={generalSettings.treatSaturdayAsHoliday}
-                />
-              )}
-
-            {hasPermission(currentUser.permissions, VIEW_PERMISSION_MAP['administration/email']) &&
-              activeView === 'administration/email' && (
-                <EmailSettings
-                  config={emailConfig}
-                  onSave={handleSaveEmailConfig}
-                  onTestEmail={handleTestEmail}
-                />
-              )}
-
-            {activeView === 'timesheets/recurring' && (
-              <RecurringManager
-                tasks={projectTasks}
-                projects={projects}
-                clients={clients}
-                onAction={handleRecurringAction}
-                onUpdate={handleMakeRecurring}
-              />
-            )}
-            {activeView === 'settings' && (
-              <UserSettings
-                settings={userSettings}
-                authMethod={currentUser.authMethod ?? 'local'}
-                authProviderName={currentUser.authProviderName ?? null}
-                rilTransferOptions={
-                  hasViewAccess(currentUser.permissions, 'timesheets/ril')
-                    ? generalSettings.rilTransferOptions
-                    : []
-                }
-                onUpdate={handleUpdateUserSettings}
-                onUpdatePassword={handleUpdateUserPassword}
-                onTotpSetup={(password: string) => api.auth.totpSetup(undefined, password)}
-                onTotpConfirm={(code) => api.auth.totpConfirm(code).then(() => undefined)}
-                onTotpDisable={(payload) => api.auth.totpDisable(payload).then(() => undefined)}
-                onRegenerateTotpBackupCodes={(code) => api.auth.regenerateTotpBackupCodes(code)}
-                onGetTotpStatus={() => api.auth.getTotpStatus()}
-                onListMcpTokens={handleListMcpTokens}
-                onCreateMcpToken={handleCreateMcpToken}
-                onRevokeMcpToken={handleRevokeMcpToken}
-                onGetPersonalAccessToken={handleGetPersonalAccessToken}
-                onRenewPersonalAccessToken={handleRenewPersonalAccessToken}
-              />
-            )}
-            {activeView === 'reports/ai-reporting' &&
-              (reportsSettingsFailed ? (
-                <div className="flex h-[calc(100vh-180px)] min-h-[560px] items-center justify-center">
-                  <div className="text-center">
-                    <i className="fa-solid fa-triangle-exclamation text-3xl text-amber-500 mb-3" />
-                    <p className="text-zinc-700 font-medium">
-                      {tApp('reports:aiReporting.settingsFailedToLoad')}
-                    </p>
-                  </div>
-                </div>
-              ) : (
-                <AiReportingView
-                  currentUserId={currentUser.id}
-                  permissions={currentUser.permissions || []}
-                  enableAiReporting={generalSettings.enableAiReporting}
-                />
-              ))}
-          </>
-        )}
+        <AuthenticatedRouteContent controller={controller} />
       </Layout>
     </CurrentUserIdProvider>
   );
 };
+
+const AuthenticatedRouteContent: React.FC<{
+  controller: AuthenticatedAppContentController;
+}> = ({ controller }) => {
+  const {
+    activeModuleLoadFailures,
+    activeView,
+    handleNotFoundReturn,
+    isActiveModulePending,
+    isRouteAccessible,
+  } = controller;
+
+  if (!isRouteAccessible) return <NotFound onReturn={handleNotFoundReturn} />;
+  if (isActiveModulePending) return <ModulePendingScreen />;
+
+  return (
+    <>
+      <ModuleFailureBanner failures={activeModuleLoadFailures} />
+      {activeView === 'docs' && <DocsHubView />}
+      <TimesheetRoutes controller={controller} />
+      <CustomerAndCatalogRoutes controller={controller} />
+      <SalesRoutes controller={controller} />
+      <AccountingRoutes controller={controller} />
+      <HrRoutes controller={controller} />
+      <ProjectRoutes controller={controller} />
+      <AdministrationRoutes controller={controller} />
+      <SettingsAndReportsRoutes controller={controller} />
+    </>
+  );
+};
+
+const ModulePendingScreen: React.FC = () => (
+  <div className="flex h-[calc(100vh-180px)] min-h-[420px] items-center justify-center rounded-lg border border-border bg-card text-card-foreground shadow-sm">
+    <div className="text-center">
+      <i className="fa-solid fa-circle-notch fa-spin text-3xl text-primary mb-3" />
+      <p className="text-sm font-medium text-muted-foreground">Loading…</p>
+    </div>
+  </div>
+);
+
+const ModuleFailureBanner: React.FC<{ failures: string[] }> = ({ failures }) => {
+  if (failures.length === 0) return null;
+
+  return (
+    <div className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 shadow-sm">
+      <div className="flex items-start gap-3">
+        <i className="fa-solid fa-triangle-exclamation mt-0.5 text-amber-500" />
+        <p className="font-medium">Failed to load: {failures.join(', ')}.</p>
+      </div>
+    </div>
+  );
+};
+
+const TimesheetRoutes: React.FC<{ controller: AuthenticatedAppContentController }> = ({
+  controller,
+}) => {
+  const {
+    activeView,
+    addProjectTask,
+    availableUsers,
+    clients,
+    currentUser,
+    entries,
+    generalSettings,
+    handleAddBulkEntries,
+    handleAddEntry,
+    handleDeleteEntry,
+    handleMakeRecurring,
+    handleRecurringAction,
+    handleUpdateEntry,
+    projects,
+    projectTasks,
+    setViewingUserId,
+    trackerCatalogs,
+    userSettings,
+    viewingUserId,
+  } = controller;
+
+  return (
+    <>
+      {activeView === 'timesheets/tracker' && (
+        <TrackerView
+          entries={entries.filter((e) => e.userId === viewingUserId)}
+          clients={trackerCatalogs.clients}
+          projects={trackerCatalogs.projects}
+          projectTasks={trackerCatalogs.projectTasks}
+          onAddEntry={handleAddEntry}
+          onDeleteEntry={handleDeleteEntry}
+          onUpdateEntry={handleUpdateEntry}
+          startOfWeek={generalSettings.startOfWeek}
+          treatSaturdayAsHoliday={generalSettings.treatSaturdayAsHoliday}
+          allowWeekendSelection={true}
+          onMakeRecurring={handleMakeRecurring}
+          permissions={currentUser.permissions || []}
+          viewingUserId={viewingUserId}
+          onViewUserChange={setViewingUserId}
+          availableUsers={availableUsers}
+          currentUser={currentUser}
+          dailyGoal={generalSettings.dailyLimit}
+          onAddBulkEntries={handleAddBulkEntries}
+          onRecurringAction={handleRecurringAction}
+          defaultLocation={generalSettings.defaultLocation}
+          onAddCustomTask={addProjectTask}
+          currency={generalSettings.currency}
+        />
+      )}
+      {activeView === 'timesheets/ril' && (
+        <RilView
+          currentUser={currentUser}
+          availableUsers={availableUsers}
+          viewingUserId={viewingUserId}
+          onViewUserChange={setViewingUserId}
+          projects={projects}
+          settings={generalSettings}
+          weekdayTransferDefaults={userSettings.rilWeekdayTransferDefaults}
+        />
+      )}
+      {activeView === 'timesheets/recurring' && (
+        <RecurringManager
+          tasks={projectTasks}
+          projects={projects}
+          clients={clients}
+          onAction={handleRecurringAction}
+          onUpdate={handleMakeRecurring}
+        />
+      )}
+    </>
+  );
+};
+
+const CustomerAndCatalogRoutes: React.FC<{
+  controller: AuthenticatedAppContentController;
+}> = ({ controller }) => {
+  const {
+    activeView,
+    addClient,
+    addProduct,
+    addSupplier,
+    clients,
+    currentUser,
+    generalSettings,
+    handleCreateClientProfileOption,
+    handleCreateInternalCategory,
+    handleCreateInternalSubcategory,
+    handleCreateProductType,
+    handleDeleteClient,
+    handleDeleteClientProfileOption,
+    handleDeleteInternalCategory,
+    handleDeleteInternalSubcategory,
+    handleDeleteProduct,
+    handleDeleteProductType,
+    handleDeleteSupplier,
+    handleRenameInternalSubcategory,
+    handleUpdateClient,
+    handleUpdateClientProfileOption,
+    handleUpdateInternalCategory,
+    handleUpdateProduct,
+    handleUpdateProductType,
+    handleUpdateSupplier,
+    productFilterId,
+    products,
+    supplierOrders,
+    suppliers,
+  } = controller;
+
+  return (
+    <>
+      {hasViewAccess(currentUser.permissions, 'crm/clients') && activeView === 'crm/clients' && (
+        <ClientsView
+          clients={clients}
+          onAddClient={addClient}
+          onUpdateClient={handleUpdateClient}
+          onDeleteClient={handleDeleteClient}
+          onCreateClientProfileOption={handleCreateClientProfileOption}
+          onUpdateClientProfileOption={handleUpdateClientProfileOption}
+          onDeleteClientProfileOption={handleDeleteClientProfileOption}
+          permissions={currentUser.permissions || []}
+        />
+      )}
+      {hasPermission(currentUser.permissions, VIEW_PERMISSION_MAP['catalog/internal-listing']) &&
+        activeView === 'catalog/internal-listing' && (
+          <InternalListingView
+            products={products}
+            productFilterId={productFilterId}
+            onAddProduct={addProduct}
+            onUpdateProduct={handleUpdateProduct}
+            onDeleteProduct={handleDeleteProduct}
+            currency={generalSettings.currency}
+            onCreateInternalCategory={handleCreateInternalCategory}
+            onUpdateInternalCategory={handleUpdateInternalCategory}
+            onDeleteInternalCategory={handleDeleteInternalCategory}
+            onCreateInternalSubcategory={handleCreateInternalSubcategory}
+            onRenameInternalSubcategory={handleRenameInternalSubcategory}
+            onDeleteInternalSubcategory={handleDeleteInternalSubcategory}
+            onCreateProductType={handleCreateProductType}
+            onUpdateProductType={handleUpdateProductType}
+            onDeleteProductType={handleDeleteProductType}
+          />
+        )}
+      {hasViewAccess(currentUser.permissions, 'crm/suppliers') &&
+        activeView === 'crm/suppliers' && (
+          <SuppliersView
+            suppliers={suppliers}
+            supplierOrders={supplierOrders}
+            currency={generalSettings.currency}
+            onAddSupplier={addSupplier}
+            onUpdateSupplier={handleUpdateSupplier}
+            onDeleteSupplier={handleDeleteSupplier}
+            permissions={currentUser.permissions || []}
+          />
+        )}
+    </>
+  );
+};
+
+const SalesRoutes: React.FC<{ controller: AuthenticatedAppContentController }> = ({
+  controller,
+}) => {
+  const {
+    activeView,
+    addQuote,
+    addSupplierQuote,
+    canManageQuoteCommunicationChannels,
+    clientOfferFilterId,
+    clientOffers,
+    clientQuoteFilterId,
+    clients,
+    currentUser,
+    generalSettings,
+    handleCreateClientOfferFromQuote,
+    handleCreateClientsOrderFromOffer,
+    handleCreateQuoteCommunicationChannel,
+    handleCreateSupplierOrderFromQuote,
+    handleDeleteClientOffer,
+    handleDeleteQuote,
+    handleDeleteQuoteCommunicationChannel,
+    handleDeleteSupplierQuote,
+    handleRevertClientOfferToDraft,
+    handleUpdateClientOffer,
+    handleUpdateQuote,
+    handleUpdateQuoteCommunicationChannel,
+    handleUpdateSupplierQuote,
+    offerIdsWithOrders,
+    products,
+    quoteCommunicationChannels,
+    quoteIdsWithOffers,
+    quoteOfferStatuses,
+    quotes,
+    setActiveView,
+    setClientOfferFilterId,
+    setClientQuoteFilterId,
+    setClientOffers,
+    setClientsOrders,
+    setQuotes,
+    setSupplierQuoteFilterId,
+    setSupplierQuotes,
+    supplierQuoteFilterId,
+    supplierQuoteHandlers,
+    supplierQuotes,
+    suppliers,
+  } = controller;
+
+  return (
+    <>
+      {hasPermission(currentUser.permissions, VIEW_PERMISSION_MAP['sales/client-quotes']) &&
+        activeView === 'sales/client-quotes' && (
+          <ClientQuotesView
+            quotes={quotes}
+            clients={clients}
+            products={products}
+            supplierQuotes={supplierQuotes}
+            communicationChannels={quoteCommunicationChannels}
+            canManageCommunicationChannels={canManageQuoteCommunicationChannels}
+            onCreateCommunicationChannel={handleCreateQuoteCommunicationChannel}
+            onUpdateCommunicationChannel={handleUpdateQuoteCommunicationChannel}
+            onDeleteCommunicationChannel={handleDeleteQuoteCommunicationChannel}
+            onAddQuote={addQuote}
+            onUpdateQuote={handleUpdateQuote}
+            onQuoteRestored={async (restored) => {
+              // Captured before the patch: a restore that REMOVES the last sourced line drops
+              // the now-unsourced supplier quote back to draft server-side, so the pre-restore
+              // sourcing also matters — not just the restored snapshot's lines (#779 follow-up).
+              const wasSourcing = sourcesSupplierQuote(quotes.find((q) => q.id === restored.id));
+              // Patch the restored quote eagerly so the modal reflects it instantly,
+              // then refetch the whole flow because restore can also delete draft
+              // linked sales server-side.
+              setQuotes((prev) => prev.map((q) => (q.id === restored.id ? restored : q)));
+              const [quotesData, offersData, ordersData] = await Promise.all([
+                api.quotes.list(),
+                api.clientOffers.list(),
+                api.clientsOrders.list(),
+              ]);
+              setQuotes(quotesData);
+              setClientOffers(offersData);
+              setClientsOrders(ordersData);
+              // A restore rewrites the snapshot's lines/status, so a supplier quote those
+              // lines source (or USED to source) has a mirrored derived status that can change
+              // too (#779 follow-up: linkage is line-sourced). Best-effort: a refresh failure
+              // must not fail the completed restore.
+              if (wasSourcing || sourcesSupplierQuote(restored)) {
+                try {
+                  await supplierQuoteHandlers.refreshSupplierQuoteFlow();
+                } catch (refreshErr) {
+                  console.error('Failed to refresh supplier data:', refreshErr);
+                }
+              }
+            }}
+            onDeleteQuote={handleDeleteQuote}
+            onCreateOffer={handleCreateClientOfferFromQuote}
+            offers={clientOffers}
+            onViewOffer={(offerId) => {
+              setClientQuoteFilterId(null);
+              setClientOfferFilterId(offerId);
+              setActiveView('sales/client-offers');
+            }}
+            quoteFilterId={clientQuoteFilterId}
+            quoteIdsWithOffers={quoteIdsWithOffers}
+            quoteOfferStatuses={quoteOfferStatuses}
+            currency={generalSettings.currency}
+            canViewSupplierQuotes={hasViewAccess(currentUser.permissions, 'sales/supplier-quotes')}
+            canViewInternalListing={hasViewAccess(
+              currentUser.permissions,
+              'catalog/internal-listing',
+            )}
+            onViewOffers={(quoteId) => {
+              setClientOfferFilterId(null);
+              setClientQuoteFilterId(quoteId);
+              setActiveView('sales/client-offers');
+            }}
+          />
+        )}
+      {hasPermission(currentUser.permissions, VIEW_PERMISSION_MAP['sales/client-offers']) &&
+        activeView === 'sales/client-offers' && (
+          <ClientOffersView
+            offers={clientOffers}
+            clients={clients}
+            products={products}
+            supplierQuotes={supplierQuotes}
+            offerIdsWithOrders={offerIdsWithOrders}
+            onUpdateOffer={handleUpdateClientOffer}
+            onRevertOfferToDraft={handleRevertClientOfferToDraft}
+            canRevertTerminalStatus={
+              currentUser.role === TOP_MANAGER_ROLE_ID || currentUser.role === ADMIN_ROLE_ID
+            }
+            onOfferRestored={async () => {
+              setClientOffers(await api.clientOffers.list());
+            }}
+            onDeleteOffer={handleDeleteClientOffer}
+            onCreateClientsOrder={handleCreateClientsOrderFromOffer}
+            onViewQuote={(quoteId) => {
+              setClientOfferFilterId(null);
+              setClientQuoteFilterId(quoteId);
+              setActiveView('sales/client-quotes');
+            }}
+            currency={generalSettings.currency}
+            canViewSupplierQuotes={hasViewAccess(currentUser.permissions, 'sales/supplier-quotes')}
+            canViewInternalListing={hasViewAccess(
+              currentUser.permissions,
+              'catalog/internal-listing',
+            )}
+            quoteFilterId={clientQuoteFilterId}
+            offerFilterId={clientOfferFilterId}
+          />
+        )}
+      {hasPermission(currentUser.permissions, VIEW_PERMISSION_MAP['sales/supplier-quotes']) &&
+        activeView === 'sales/supplier-quotes' && (
+          <SupplierQuotesView
+            quotes={supplierQuotes}
+            suppliers={suppliers}
+            clients={clients}
+            products={products}
+            communicationChannels={quoteCommunicationChannels}
+            canManageCommunicationChannels={canManageQuoteCommunicationChannels}
+            onCreateCommunicationChannel={handleCreateQuoteCommunicationChannel}
+            onUpdateCommunicationChannel={handleUpdateQuoteCommunicationChannel}
+            onDeleteCommunicationChannel={handleDeleteQuoteCommunicationChannel}
+            onAddQuote={addSupplierQuote}
+            onUpdateQuote={handleUpdateSupplierQuote}
+            onQuoteRestored={(restored) => {
+              // Patch the restored quote eagerly so the modal reflects it instantly.
+              // No linked-order refetch needed: restore is rejected when an order exists.
+              setSupplierQuotes((prev) => prev.map((q) => (q.id === restored.id ? restored : q)));
+            }}
+            onDeleteQuote={handleDeleteSupplierQuote}
+            onCreateOrder={handleCreateSupplierOrderFromQuote}
+            quoteFilterId={supplierQuoteFilterId}
+            currency={generalSettings.currency}
+            onViewOrders={(quoteId) => {
+              setSupplierQuoteFilterId(quoteId);
+              setActiveView('accounting/supplier-orders');
+            }}
+          />
+        )}
+    </>
+  );
+};
+
+const AccountingRoutes: React.FC<{ controller: AuthenticatedAppContentController }> = ({
+  controller,
+}) => {
+  const {
+    activeView,
+    addInvoice,
+    clientOfferFilterId,
+    clients,
+    clientsOrderFilterId,
+    clientsOrders,
+    currentUser,
+    generalSettings,
+    handleCreateSupplierInvoiceFromOrder,
+    handleDeleteClientsOrder,
+    handleDeleteInvoice,
+    handleDeleteSupplierInvoice,
+    handleDeleteSupplierOrder,
+    handleUpdateClientsOrder,
+    handleUpdateInvoice,
+    handleUpdateSupplierInvoice,
+    handleUpdateSupplierOrder,
+    invoices,
+    orderIdsWithInvoices,
+    products,
+    refreshSupplierOrderFlow,
+    setActiveView,
+    setClientOfferFilterId,
+    setClientQuoteFilterId,
+    setClientsOrders,
+    setSupplierQuoteFilterId,
+    supplierInvoices,
+    supplierOrderFilterId,
+    supplierOrders,
+    supplierQuoteFilterId,
+    suppliers,
+  } = controller;
+
+  return (
+    <>
+      {hasPermission(currentUser.permissions, VIEW_PERMISSION_MAP['accounting/clients-orders']) &&
+        activeView === 'accounting/clients-orders' && (
+          <ClientsOrdersView
+            orders={clientsOrders}
+            clients={clients}
+            products={products}
+            supplierOrders={supplierOrders}
+            onUpdateClientsOrder={handleUpdateClientsOrder}
+            onDeleteClientsOrder={handleDeleteClientsOrder}
+            onOrderRestored={(restored) => {
+              setClientsOrders((prev) => prev.map((o) => (o.id === restored.id ? restored : o)));
+            }}
+            currency={generalSettings.currency}
+            canViewInternalListing={hasViewAccess(
+              currentUser.permissions,
+              'catalog/internal-listing',
+            )}
+            canViewSupplierOrders={hasViewAccess(
+              currentUser.permissions,
+              'accounting/supplier-orders',
+            )}
+            onViewOffer={(offerId) => {
+              setClientQuoteFilterId(null);
+              setClientOfferFilterId(offerId);
+              setActiveView('sales/client-offers');
+            }}
+            offerFilterId={clientOfferFilterId}
+            orderFilterId={clientsOrderFilterId}
+          />
+        )}
+      {hasPermission(currentUser.permissions, VIEW_PERMISSION_MAP['accounting/clients-invoices']) &&
+        activeView === 'accounting/clients-invoices' && (
+          <ClientsInvoicesView
+            invoices={invoices}
+            clients={clients}
+            products={products}
+            onAddInvoice={addInvoice}
+            onUpdateInvoice={handleUpdateInvoice}
+            onDeleteInvoice={handleDeleteInvoice}
+            currency={generalSettings.currency}
+            canViewInternalListing={hasViewAccess(
+              currentUser.permissions,
+              'catalog/internal-listing',
+            )}
+          />
+        )}
+      {hasPermission(currentUser.permissions, VIEW_PERMISSION_MAP['accounting/supplier-orders']) &&
+        activeView === 'accounting/supplier-orders' && (
+          <SupplierOrdersView
+            orders={supplierOrders}
+            suppliers={suppliers}
+            products={products}
+            orderIdsWithInvoices={orderIdsWithInvoices}
+            onUpdateOrder={handleUpdateSupplierOrder}
+            onDeleteOrder={handleDeleteSupplierOrder}
+            onCreateInvoice={handleCreateSupplierInvoiceFromOrder}
+            onViewQuote={(quoteId) => {
+              setSupplierQuoteFilterId(quoteId);
+              setActiveView('sales/supplier-quotes');
+            }}
+            onOrderRestored={refreshSupplierOrderFlow}
+            currency={generalSettings.currency}
+            quoteFilterId={supplierQuoteFilterId}
+            orderFilterId={supplierOrderFilterId}
+          />
+        )}
+      {hasPermission(
+        currentUser.permissions,
+        VIEW_PERMISSION_MAP['accounting/supplier-invoices'],
+      ) &&
+        activeView === 'accounting/supplier-invoices' && (
+          <SupplierInvoicesView
+            invoices={supplierInvoices}
+            suppliers={suppliers}
+            products={products}
+            onUpdateInvoice={handleUpdateSupplierInvoice}
+            onDeleteInvoice={handleDeleteSupplierInvoice}
+            currency={generalSettings.currency}
+          />
+        )}
+    </>
+  );
+};
+
+const HrRoutes: React.FC<{ controller: AuthenticatedAppContentController }> = ({ controller }) => {
+  const {
+    activeView,
+    addExternalEmployee,
+    addInternalEmployee,
+    addWorkUnit,
+    clients,
+    currentUser,
+    deleteWorkUnit,
+    fetchWorkUnits,
+    generalSettings,
+    handleDeleteEmployee,
+    handleUpdateEmployee,
+    projectTasks,
+    projects,
+    updateWorkUnit,
+    users,
+    workUnits,
+  } = controller;
+
+  return (
+    <>
+      {hasPermission(currentUser.permissions, VIEW_PERMISSION_MAP['hr/internal']) &&
+        activeView === 'hr/internal' && (
+          <InternalEmployeesView
+            users={users}
+            clients={clients}
+            projects={projects}
+            tasks={projectTasks}
+            onAddEmployee={addInternalEmployee}
+            onUpdateEmployee={handleUpdateEmployee}
+            onDeleteEmployee={handleDeleteEmployee}
+            currency={generalSettings.currency}
+            permissions={currentUser.permissions || []}
+          />
+        )}
+      {hasPermission(currentUser.permissions, VIEW_PERMISSION_MAP['hr/external']) &&
+        activeView === 'hr/external' && (
+          <ExternalEmployeesView
+            users={users}
+            clients={clients}
+            projects={projects}
+            tasks={projectTasks}
+            onAddEmployee={addExternalEmployee}
+            onUpdateEmployee={handleUpdateEmployee}
+            onDeleteEmployee={handleDeleteEmployee}
+            currency={generalSettings.currency}
+            permissions={currentUser.permissions || []}
+          />
+        )}
+      {hasViewAccess(currentUser.permissions, 'hr/work-units') &&
+        activeView === 'hr/work-units' && (
+          <WorkUnitsView
+            workUnits={workUnits}
+            users={users}
+            permissions={currentUser.permissions || []}
+            onAddWorkUnit={addWorkUnit}
+            onUpdateWorkUnit={updateWorkUnit}
+            onDeleteWorkUnit={deleteWorkUnit}
+            refreshWorkUnits={fetchWorkUnits}
+          />
+        )}
+    </>
+  );
+};
+
+const ProjectRoutes: React.FC<{ controller: AuthenticatedAppContentController }> = ({
+  controller,
+}) => {
+  const { activeView, currentUser } = controller;
+
+  return (
+    <>
+      {(activeView === 'projects/manage' || activeView === 'projects/tasks') &&
+        hasViewAccess(currentUser.permissions, activeView) && (
+          <ProjectsListRoute
+            controller={controller}
+            activeTab={activeView === 'projects/tasks' ? 'tasks' : 'commissions'}
+          />
+        )}
+      {hasViewAccess(currentUser.permissions, 'projects/detail') &&
+        activeView === 'projects/detail' && <ProjectDetailRoute controller={controller} />}
+      {hasViewAccess(currentUser.permissions, 'projects/resales') &&
+        activeView === 'projects/resales' && <ProjectResalesRoute controller={controller} />}
+    </>
+  );
+};
+
+const ProjectsListRoute: React.FC<{
+  controller: AuthenticatedAppContentController;
+  activeTab: ProjectsViewTab;
+}> = ({ activeTab, controller }) => {
+  const {
+    addProject,
+    addProjectTask,
+    availableUsers,
+    clientOffers,
+    clients,
+    clientsOrders,
+    currentUser,
+    generalSettings,
+    handleDeleteProject,
+    handleDeleteProjectTaskWithToast,
+    handleUpdateProject,
+    handleUpdateTask,
+    projectTasks,
+    projects,
+    roles,
+    setActiveView,
+    setClientsOrderFilterId,
+    setSelectedProjectId,
+    setProjectsViewTab,
+  } = controller;
+
+  return (
+    <ProjectsView
+      projects={projects}
+      clients={clients}
+      orders={clientsOrders}
+      offers={clientOffers}
+      currency={generalSettings.currency}
+      permissions={currentUser.permissions || []}
+      users={availableUsers}
+      roles={roles}
+      tasks={projectTasks}
+      onAddProject={addProject}
+      onUpdateProject={handleUpdateProject}
+      onDeleteProject={handleDeleteProject}
+      onAddTask={addProjectTask}
+      onUpdateTask={handleUpdateTask}
+      onDeleteTask={handleDeleteProjectTaskWithToast}
+      activeTab={activeTab}
+      onTabChange={setProjectsViewTab}
+      onViewOrder={(orderId) => {
+        setClientsOrderFilterId(orderId);
+        setActiveView('accounting/clients-orders');
+      }}
+      onNavigateToProject={(projectId) => {
+        setSelectedProjectId(projectId);
+        setActiveView('projects/detail');
+      }}
+    />
+  );
+};
+
+const ProjectDetailRoute: React.FC<{ controller: AuthenticatedAppContentController }> = ({
+  controller,
+}) => {
+  const {
+    addProject,
+    addProjectTask,
+    availableUsers,
+    clientOffers,
+    clients,
+    clientsOrders,
+    currentUser,
+    generalSettings,
+    handleDeleteProject,
+    handleDeleteProjectTask,
+    handleDeleteProjectTaskWithToast,
+    handleUpdateProject,
+    handleUpdateTask,
+    projectTasks,
+    projects,
+    roles,
+    selectedProjectId,
+    setActiveView,
+    setClientsOrderFilterId,
+    setSelectedProjectId,
+    setProjectsViewTab,
+  } = controller;
+  const selectedProject = selectedProjectId
+    ? projects.find((p) => p.id === selectedProjectId)
+    : undefined;
+
+  if (!selectedProject) {
+    // Project unavailable (e.g. just deleted, or refresh) — fall back to list.
+    return (
+      <ProjectsView
+        projects={projects}
+        clients={clients}
+        orders={clientsOrders}
+        offers={clientOffers}
+        currency={generalSettings.currency}
+        permissions={currentUser.permissions || EMPTY_PERMISSIONS}
+        users={availableUsers}
+        roles={roles}
+        tasks={projectTasks}
+        onAddProject={addProject}
+        onUpdateProject={handleUpdateProject}
+        onDeleteProject={handleDeleteProject}
+        onAddTask={addProjectTask}
+        onUpdateTask={handleUpdateTask}
+        onDeleteTask={handleDeleteProjectTaskWithToast}
+        activeTab="commissions"
+        onTabChange={setProjectsViewTab}
+        onViewOrder={(orderId) => {
+          setClientsOrderFilterId(orderId);
+          setActiveView('accounting/clients-orders');
+        }}
+        onNavigateToProject={(projectId) => {
+          setSelectedProjectId(projectId);
+          setActiveView('projects/detail');
+        }}
+      />
+    );
+  }
+
+  return (
+    // key={selectedProject.id} remounts the component on project switch
+    // so all local state (form fields, entries fetch, assignments) resets
+    // cleanly without an in-component prop-sync useEffect.
+    // Suspense fallback covers the lazy() chunk fetch the first time the
+    // user enters the detail page.
+    <Suspense fallback={null}>
+      <ProjectDetailView
+        key={selectedProject.id}
+        project={selectedProject}
+        clients={clients}
+        orders={clientsOrders}
+        offers={clientOffers}
+        users={availableUsers}
+        roles={roles}
+        permissions={currentUser.permissions || EMPTY_PERMISSIONS}
+        currency={generalSettings.currency}
+        tasks={projectTasks}
+        onBack={() => setActiveView('projects/manage')}
+        onUpdateProject={handleUpdateProject}
+        onDeleteProject={handleDeleteProject}
+        onAddTask={addProjectTask}
+        onUpdateTask={handleUpdateTask}
+        onDeleteTask={handleDeleteProjectTask}
+        onViewOrder={(orderId) => {
+          setClientsOrderFilterId(orderId);
+          setActiveView('accounting/clients-orders');
+        }}
+      />
+    </Suspense>
+  );
+};
+
+const ProjectResalesRoute: React.FC<{ controller: AuthenticatedAppContentController }> = ({
+  controller,
+}) => {
+  const {
+    addResale,
+    currentUser,
+    generalSettings,
+    handleAddResaleActivity,
+    handleCreateResaleCategory,
+    handleDeleteResale,
+    handleDeleteResaleActivity,
+    handleDeleteResaleCategory,
+    handleUpdateResaleActivity,
+    handleUpdateResaleCategory,
+    resaleCategories,
+    resaleOrderOptions,
+    resales,
+  } = controller;
+
+  return (
+    <ResalesView
+      resales={resales}
+      categories={resaleCategories}
+      orderOptions={resaleOrderOptions}
+      permissions={currentUser.permissions || EMPTY_PERMISSIONS}
+      currency={generalSettings.currency}
+      onAddResale={addResale}
+      onDeleteResale={handleDeleteResale}
+      onAddActivity={handleAddResaleActivity}
+      onUpdateActivity={handleUpdateResaleActivity}
+      onDeleteActivity={handleDeleteResaleActivity}
+      onCreateCategory={handleCreateResaleCategory}
+      onUpdateCategory={handleUpdateResaleCategory}
+      onDeleteCategory={handleDeleteResaleCategory}
+    />
+  );
+};
+
+const AdministrationRoutes: React.FC<{ controller: AuthenticatedAppContentController }> = ({
+  controller,
+}) => {
+  const {
+    activeView,
+    branding,
+    clients,
+    currentUser,
+    emailConfig,
+    generalSettings,
+    handleAddUser,
+    handleBrandingChange,
+    handleCreateRole,
+    handleDeleteRole,
+    handleDeleteSsoProvider,
+    handleDeleteUser,
+    handleRenameRole,
+    handleSaveEmailConfig,
+    handleSaveLdapConfig,
+    handleSaveSsoProvider,
+    handleTestEmail,
+    handleUpdateGeneralSettings,
+    handleUpdateRolePermissions,
+    handleUpdateUser,
+    handleUpdateUserAuthMethod,
+    handleUpdateUserRoles,
+    ldapConfig,
+    projectTasks,
+    projects,
+    roles,
+    ssoProviders,
+    users,
+  } = controller;
+
+  return (
+    <>
+      {hasViewAccess(currentUser.permissions, 'administration/user-management') &&
+        activeView === 'administration/user-management' && (
+          <UserManagement
+            clients={clients}
+            projects={projects}
+            tasks={projectTasks}
+            users={users}
+            onAddUser={handleAddUser}
+            onDeleteUser={handleDeleteUser}
+            onUpdateUser={handleUpdateUser}
+            onUpdateUserRoles={handleUpdateUserRoles}
+            onUpdateUserAuthMethod={handleUpdateUserAuthMethod}
+            onResetUserTotp={(userId) => api.users.resetTotp(userId).then(() => undefined)}
+            currentUserId={currentUser.id}
+            permissions={currentUser.permissions || []}
+            roles={roles}
+            ssoProviders={ssoProviders}
+            currency={getCurrencySymbol(generalSettings.currency)}
+          />
+        )}
+      {hasPermission(currentUser.permissions, VIEW_PERMISSION_MAP['administration/general']) &&
+        activeView === 'administration/general' && (
+          <GeneralSettings
+            settings={generalSettings}
+            onUpdate={handleUpdateGeneralSettings}
+            branding={branding}
+            onBrandingChange={handleBrandingChange}
+          />
+        )}
+      {hasPermission(
+        currentUser.permissions,
+        VIEW_PERMISSION_MAP['administration/authentication'],
+      ) &&
+        activeView === 'administration/authentication' && (
+          <AuthSettings
+            config={ldapConfig}
+            onSave={handleSaveLdapConfig}
+            roles={roles}
+            ssoProviders={ssoProviders}
+            onSaveSsoProvider={handleSaveSsoProvider}
+            onDeleteSsoProvider={handleDeleteSsoProvider}
+            enableTotp={generalSettings.enableTotp}
+            onSetEnableTotp={(value) => handleUpdateGeneralSettings({ enableTotp: value })}
+            enforceTotp={generalSettings.enforceTotp}
+            onSetEnforceTotp={(value) => handleUpdateGeneralSettings({ enforceTotp: value })}
+            enforcedRoleIds={generalSettings.totpEnforcedRoleIds}
+            onSetEnforcedRoleIds={(value) =>
+              handleUpdateGeneralSettings({ totpEnforcedRoleIds: value })
+            }
+            exemptRoleIds={generalSettings.totpExemptRoleIds}
+            onSetExemptRoleIds={(value) =>
+              handleUpdateGeneralSettings({ totpExemptRoleIds: value })
+            }
+            canManageMfa={hasPermission(currentUser.permissions, 'administration.general.update')}
+          />
+        )}
+      {hasPermission(currentUser.permissions, VIEW_PERMISSION_MAP['administration/roles']) &&
+        activeView === 'administration/roles' && (
+          <RolesView
+            roles={roles}
+            permissions={currentUser.permissions || []}
+            onCreateRole={handleCreateRole}
+            onRenameRole={handleRenameRole}
+            onUpdateRolePermissions={handleUpdateRolePermissions}
+            onDeleteRole={handleDeleteRole}
+          />
+        )}
+      {hasPermission(currentUser.permissions, VIEW_PERMISSION_MAP['administration/webhooks']) &&
+        activeView === 'administration/webhooks' && (
+          <WebhooksView permissions={currentUser.permissions || []} />
+        )}
+      {hasPermission(currentUser.permissions, VIEW_PERMISSION_MAP['administration/logs']) &&
+        activeView === 'administration/logs' && (
+          <LogsView
+            startOfWeek={generalSettings.startOfWeek}
+            treatSaturdayAsHoliday={generalSettings.treatSaturdayAsHoliday}
+          />
+        )}
+      {hasPermission(currentUser.permissions, VIEW_PERMISSION_MAP['administration/email']) &&
+        activeView === 'administration/email' && (
+          <EmailSettings
+            config={emailConfig}
+            onSave={handleSaveEmailConfig}
+            onTestEmail={handleTestEmail}
+          />
+        )}
+    </>
+  );
+};
+
+const SettingsAndReportsRoutes: React.FC<{
+  controller: AuthenticatedAppContentController;
+}> = ({ controller }) => {
+  const {
+    activeView,
+    currentUser,
+    generalSettings,
+    handleCreateMcpToken,
+    handleGetPersonalAccessToken,
+    handleListMcpTokens,
+    handleRenewPersonalAccessToken,
+    handleRevokeMcpToken,
+    handleUpdateUserPassword,
+    handleUpdateUserSettings,
+    reportsSettingsFailed,
+    tApp,
+    userSettings,
+  } = controller;
+
+  return (
+    <>
+      {activeView === 'settings' && (
+        <UserSettings
+          settings={userSettings}
+          authMethod={currentUser.authMethod ?? 'local'}
+          authProviderName={currentUser.authProviderName ?? null}
+          rilTransferOptions={
+            hasViewAccess(currentUser.permissions, 'timesheets/ril')
+              ? generalSettings.rilTransferOptions
+              : []
+          }
+          onUpdate={handleUpdateUserSettings}
+          onUpdatePassword={handleUpdateUserPassword}
+          onTotpSetup={(password: string) => api.auth.totpSetup(undefined, password)}
+          onTotpConfirm={(code) => api.auth.totpConfirm(code).then(() => undefined)}
+          onTotpDisable={(payload) => api.auth.totpDisable(payload).then(() => undefined)}
+          onRegenerateTotpBackupCodes={(code) => api.auth.regenerateTotpBackupCodes(code)}
+          onGetTotpStatus={() => api.auth.getTotpStatus()}
+          onListMcpTokens={handleListMcpTokens}
+          onCreateMcpToken={handleCreateMcpToken}
+          onRevokeMcpToken={handleRevokeMcpToken}
+          onGetPersonalAccessToken={handleGetPersonalAccessToken}
+          onRenewPersonalAccessToken={handleRenewPersonalAccessToken}
+        />
+      )}
+      {activeView === 'reports/ai-reporting' &&
+        (reportsSettingsFailed ? (
+          <ReportsSettingsError message={tApp('reports:aiReporting.settingsFailedToLoad')} />
+        ) : (
+          <AiReportingView
+            currentUserId={currentUser.id}
+            permissions={currentUser.permissions || []}
+            enableAiReporting={generalSettings.enableAiReporting}
+          />
+        ))}
+    </>
+  );
+};
+
+const ReportsSettingsError: React.FC<{ message: string }> = ({ message }) => (
+  <div className="flex h-[calc(100vh-180px)] min-h-[560px] items-center justify-center">
+    <div className="text-center">
+      <i className="fa-solid fa-triangle-exclamation text-3xl text-amber-500 mb-3" />
+      <p className="text-zinc-700 font-medium">{message}</p>
+    </div>
+  </div>
+);
 
 const App: React.FC = () => (
   <>

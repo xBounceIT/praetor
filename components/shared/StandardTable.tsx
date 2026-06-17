@@ -27,7 +27,6 @@ import {
   useMemo,
   useReducer,
   useRef,
-  useState,
 } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -479,6 +478,7 @@ const ACTION_MENU_ITEMS_CLASSNAME = 'flex flex-col gap-0.5';
 const ACTION_MENU_BUTTON_CLASSNAME =
   'flex h-7 w-full items-center justify-start gap-2 rounded-sm px-2 text-xs font-medium whitespace-nowrap text-popover-foreground outline-hidden transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50';
 type ViewModalState = { kind: 'create' } | { kind: 'edit'; view: CustomView } | null;
+type StateUpdate<T> = T | ((prev: T) => T);
 type TableViewApplication = ReturnType<typeof computeViewApplication>;
 type TableViewState = {
   sortState: SortState;
@@ -564,6 +564,195 @@ export type Column<T> = {
   onCellDoubleClick?: (row: T) => void; // Cell-level double click handler
 };
 
+const getColumnId = <T,>(col: Column<T>) =>
+  col.id || (col.accessorKey ? String(col.accessorKey) : undefined) || col.header;
+
+const isTableActionColumn = <T,>(col: Column<T>) =>
+  getColumnId(col) === 'actions' ||
+  (col.sticky === 'right' && col.accessorKey == null && col.accessorFn == null);
+
+const getViewApplicationForColumns = <T,>(view: CustomView, columns: Column<T>[] | undefined) => {
+  const gearIds = new Set<string>();
+  const allIds = new Set<string>();
+  for (const column of columns ?? []) {
+    const columnId = getColumnId(column);
+    allIds.add(columnId);
+    if (!column.hidden && !isTableActionColumn(column)) gearIds.add(columnId);
+  }
+  return computeViewApplication(view, gearIds, allIds);
+};
+
+const readStoredActiveViewId = (title: string, skipSavedView: boolean) => {
+  if (typeof window === 'undefined' || skipSavedView) return null;
+  return localStorage.getItem(getStorageKey(title, STORAGE_SUFFIX.activeView));
+};
+
+const readInitialCustomViews = (title: string, isServerBacked: boolean) => {
+  if (typeof window === 'undefined' || isServerBacked) return [];
+  return parseStoredViews(localStorage.getItem(getStorageKey(title, STORAGE_SUFFIX.customViews)));
+};
+
+const readInitialRowsPerPage = (title: string, defaultRowsPerPage: number) => {
+  if (typeof window === 'undefined') return defaultRowsPerPage;
+  const saved = localStorage.getItem(getStorageKey(title, STORAGE_SUFFIX.rows));
+  if (saved) {
+    const value = Number(saved);
+    if ([5, 10, 20, 50].includes(value)) return value;
+  }
+  return defaultRowsPerPage;
+};
+
+const readInitialFontSize = (title: string): FontSize => {
+  if (typeof window === 'undefined') return 'sm';
+  const saved = localStorage.getItem(getStorageKey(title, STORAGE_SUFFIX.fontSize));
+  if (saved && (FONT_SIZES as readonly string[]).includes(saved)) return saved as FontSize;
+  return 'sm';
+};
+
+const readInitialColumnSizing = (title: string): ColumnSizingState => {
+  if (typeof window === 'undefined') return {};
+  const saved = localStorage.getItem(getStorageKey(title, STORAGE_SUFFIX.colWidths));
+  if (saved) {
+    try {
+      return sanitizeColumnWidths(JSON.parse(saved));
+    } catch {}
+  }
+  return {};
+};
+
+type StandardTableUiState = {
+  currentPage: number;
+  gearOpen: boolean;
+  openActionMenuRowId: string | null;
+  openContextMenuRowId: string | null;
+  rowsPerPage: number;
+  fontSize: FontSize;
+  columnSizing: ColumnSizingState;
+  customViews: CustomView[];
+  serverViewMeta: Map<string, ServerViewMeta>;
+  viewsLoading: boolean;
+  viewsLoadFailed: boolean;
+  viewBusy: boolean;
+  shareModalView: CustomView | null;
+  viewsSubmenuOpen: boolean;
+  modalState: ViewModalState;
+  draggingViewId: string | null;
+  dragOverViewId: string | null;
+  copiedViewId: string | null;
+  viewError: string | null;
+  pasteModalOpen: boolean;
+  pasteText: string;
+  pasteError: string | null;
+  filterSearchByColumnId: Record<string, string>;
+};
+
+type StandardTableUiValue = StandardTableUiState[keyof StandardTableUiState];
+type StandardTableUiUpdate = StateUpdate<StandardTableUiValue>;
+
+type StandardTableUiAction =
+  | { type: 'setField'; field: keyof StandardTableUiState; update: StandardTableUiUpdate }
+  | { type: 'patch'; values: Partial<StandardTableUiState> };
+
+const resolveStateUpdate = <T,>(current: T, update: StateUpdate<T>): T =>
+  typeof update === 'function' ? (update as (prev: T) => T)(current) : update;
+
+const createInitialStandardTableUiState = ({
+  title,
+  defaultRowsPerPage,
+  isServerBacked,
+  viewKey,
+}: {
+  title: string;
+  defaultRowsPerPage: number;
+  isServerBacked: boolean;
+  viewKey: string | undefined;
+}): StandardTableUiState => ({
+  currentPage: 1,
+  gearOpen: false,
+  openActionMenuRowId: null,
+  openContextMenuRowId: null,
+  rowsPerPage: readInitialRowsPerPage(title, defaultRowsPerPage),
+  fontSize: readInitialFontSize(title),
+  columnSizing: readInitialColumnSizing(title),
+  customViews: readInitialCustomViews(title, isServerBacked),
+  serverViewMeta: new Map(),
+  viewsLoading: Boolean(isServerBacked && viewKey),
+  viewsLoadFailed: false,
+  viewBusy: false,
+  shareModalView: null,
+  viewsSubmenuOpen: false,
+  modalState: null,
+  draggingViewId: null,
+  dragOverViewId: null,
+  copiedViewId: null,
+  viewError: null,
+  pasteModalOpen: false,
+  pasteText: '',
+  pasteError: null,
+  filterSearchByColumnId: {},
+});
+
+const standardTableUiReducer = (
+  state: StandardTableUiState,
+  action: StandardTableUiAction,
+): StandardTableUiState => {
+  switch (action.type) {
+    case 'setField':
+      return {
+        ...state,
+        [action.field]: resolveStateUpdate(
+          state[action.field],
+          action.update as StateUpdate<(typeof state)[typeof action.field]>,
+        ),
+      };
+    case 'patch':
+      return { ...state, ...action.values };
+  }
+};
+
+const createInitialTableViewState = <T,>({
+  title,
+  columns,
+  initialFilterState,
+  skipSavedView,
+  isServerBacked,
+}: {
+  title: string;
+  columns: Column<T>[] | undefined;
+  initialFilterState: Record<string, string[]> | undefined;
+  skipSavedView: boolean;
+  isServerBacked: boolean;
+}): TableViewState => {
+  const activeViewId = readStoredActiveViewId(title, skipSavedView);
+  const baseState: TableViewState = {
+    sortState: null,
+    filterState: initialFilterState ?? {},
+    hiddenColIds: new Set<string>(),
+    activeViewId,
+  };
+  if (!activeViewId || isServerBacked) return baseState;
+
+  const view = readInitialCustomViews(title, false).find(
+    (candidate) => candidate.id === activeViewId,
+  );
+  if (!view) {
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.removeItem(getStorageKey(title, STORAGE_SUFFIX.activeView));
+      } catch {}
+    }
+    return { ...baseState, activeViewId: null };
+  }
+
+  const application = getViewApplicationForColumns(view, columns);
+  return {
+    ...baseState,
+    hiddenColIds: application.hiddenColIds,
+    sortState: application.sortState,
+    filterState: application.filterState,
+  };
+};
+
 export type StandardTableProps<T extends object = object> = {
   title: string;
   totalCount?: number;
@@ -608,7 +797,7 @@ export type StandardTableProps<T extends object = object> = {
   viewKey?: string;
 };
 
-const StandardTable = <T extends object>({
+const useStandardTableController = <T extends object>({
   title,
   totalCount: externalTotalCount,
   totalLabel,
@@ -646,101 +835,180 @@ const StandardTable = <T extends object>({
   // (`suppressSavedView`) because its filter value resolves asynchronously.
   const skipSavedView =
     suppressSavedView || (initialFilterState != null && Object.keys(initialFilterState).length > 0);
-  const [tableViewState, dispatchTableView] = useReducer(
-    tableViewReducer,
-    null,
-    (): TableViewState => ({
-      sortState: null,
-      filterState: initialFilterState ?? {},
-      hiddenColIds: new Set<string>(),
-      activeViewId:
-        typeof window === 'undefined' || skipSavedView
-          ? null
-          : localStorage.getItem(getStorageKey(title, STORAGE_SUFFIX.activeView)),
+  const [tableViewState, dispatchTableView] = useReducer(tableViewReducer, null, () =>
+    createInitialTableViewState({
+      title,
+      columns,
+      initialFilterState,
+      skipSavedView,
+      isServerBacked,
     }),
   );
   const { sortState, filterState, hiddenColIds, activeViewId } = tableViewState;
   const filterStateRef = useRef(filterState);
   filterStateRef.current = filterState;
 
-  const [currentPage, setCurrentPage] = useState(1);
-  const [gearOpen, setGearOpen] = useState(false);
-  const [openActionMenuRowId, setOpenActionMenuRowId] = useState<string | null>(null);
-  const [openContextMenuRowId, setOpenContextMenuRowId] = useState<string | null>(null);
-
-  const [rowsPerPage, setRowsPerPage] = useState(() => {
-    if (typeof window === 'undefined') return defaultRowsPerPage;
-    const key = getStorageKey(title, STORAGE_SUFFIX.rows);
-    const saved = localStorage.getItem(key);
-    if (saved) {
-      const val = Number(saved);
-      if ([5, 10, 20, 50].includes(val)) {
-        return val;
-      }
-    }
-    return defaultRowsPerPage;
-  });
-
-  const [fontSize, setFontSize] = useState<FontSize>(() => {
-    if (typeof window === 'undefined') return 'sm';
-    const saved = localStorage.getItem(getStorageKey(title, STORAGE_SUFFIX.fontSize));
-    if (saved && (FONT_SIZES as readonly string[]).includes(saved)) return saved as FontSize;
-    return 'sm';
-  });
-
-  const [columnSizing, setColumnSizing] = useState<ColumnSizingState>(() => {
-    if (typeof window === 'undefined') return {};
-    const saved = localStorage.getItem(getStorageKey(title, STORAGE_SUFFIX.colWidths));
-    if (saved) {
-      try {
-        return sanitizeColumnWidths(JSON.parse(saved));
-      } catch {}
-    }
-    return {};
-  });
-
-  // Server-backed mode loads views async (starts empty); legacy mode hydrates from localStorage.
-  const [customViews, setCustomViews] = useState<CustomView[]>(() => {
-    if (typeof window === 'undefined' || isServerBacked) return [];
-    return parseStoredViews(localStorage.getItem(getStorageKey(title, STORAGE_SUFFIX.customViews)));
-  });
-  // Per-view ownership/permission metadata, keyed by view id. Server-backed only.
-  const [serverViewMeta, setServerViewMeta] = useState<Map<string, ServerViewMeta>>(new Map());
-  const [viewsLoading, setViewsLoading] = useState(Boolean(isServerBacked && viewKey));
-  const [viewsLoadFailed, setViewsLoadFailed] = useState(false);
-  const [viewBusy, setViewBusy] = useState(false);
-  const [shareModalView, setShareModalView] = useState<CustomView | null>(null);
+  const [tableUiState, dispatchTableUi] = useReducer(
+    standardTableUiReducer,
+    { title, defaultRowsPerPage, isServerBacked, viewKey },
+    createInitialStandardTableUiState,
+  );
+  const setTableUiField = useCallback(
+    <K extends keyof StandardTableUiState>(
+      field: K,
+      update: StateUpdate<StandardTableUiState[K]>,
+    ) => {
+      dispatchTableUi({ type: 'setField', field, update: update as StandardTableUiUpdate });
+    },
+    [],
+  );
+  const {
+    currentPage,
+    gearOpen,
+    openActionMenuRowId,
+    openContextMenuRowId,
+    rowsPerPage,
+    fontSize,
+    columnSizing,
+    customViews,
+    serverViewMeta,
+    viewsLoading,
+    viewsLoadFailed,
+    viewBusy,
+    shareModalView,
+    viewsSubmenuOpen,
+    modalState,
+    draggingViewId,
+    dragOverViewId,
+    copiedViewId,
+    viewError,
+    pasteModalOpen,
+    pasteText,
+    pasteError,
+    filterSearchByColumnId,
+  } = tableUiState;
+  const setCurrentPage = useCallback(
+    (update: StateUpdate<number>) => setTableUiField('currentPage', update),
+    [setTableUiField],
+  );
+  const setGearOpen = useCallback(
+    (update: StateUpdate<boolean>) => setTableUiField('gearOpen', update),
+    [setTableUiField],
+  );
+  const setOpenActionMenuRowId = useCallback(
+    (update: StateUpdate<string | null>) => setTableUiField('openActionMenuRowId', update),
+    [setTableUiField],
+  );
+  const setOpenContextMenuRowId = useCallback(
+    (update: StateUpdate<string | null>) => setTableUiField('openContextMenuRowId', update),
+    [setTableUiField],
+  );
+  const setRowsPerPage = useCallback(
+    (update: StateUpdate<number>) => setTableUiField('rowsPerPage', update),
+    [setTableUiField],
+  );
+  const setFontSize = useCallback(
+    (update: StateUpdate<FontSize>) => setTableUiField('fontSize', update),
+    [setTableUiField],
+  );
+  const setColumnSizing = useCallback(
+    (update: StateUpdate<ColumnSizingState>) => setTableUiField('columnSizing', update),
+    [setTableUiField],
+  );
+  const setCustomViews = useCallback(
+    (update: StateUpdate<CustomView[]>) => setTableUiField('customViews', update),
+    [setTableUiField],
+  );
+  const setServerViewMeta = useCallback(
+    (update: StateUpdate<Map<string, ServerViewMeta>>) => setTableUiField('serverViewMeta', update),
+    [setTableUiField],
+  );
+  const setViewsLoading = useCallback(
+    (update: StateUpdate<boolean>) => setTableUiField('viewsLoading', update),
+    [setTableUiField],
+  );
+  const setViewsLoadFailed = useCallback(
+    (update: StateUpdate<boolean>) => setTableUiField('viewsLoadFailed', update),
+    [setTableUiField],
+  );
+  const setViewBusy = useCallback(
+    (update: StateUpdate<boolean>) => setTableUiField('viewBusy', update),
+    [setTableUiField],
+  );
+  const setShareModalView = useCallback(
+    (update: StateUpdate<CustomView | null>) => setTableUiField('shareModalView', update),
+    [setTableUiField],
+  );
+  const setViewsSubmenuOpen = useCallback(
+    (update: StateUpdate<boolean>) => setTableUiField('viewsSubmenuOpen', update),
+    [setTableUiField],
+  );
+  const setModalState = useCallback(
+    (update: StateUpdate<ViewModalState>) => setTableUiField('modalState', update),
+    [setTableUiField],
+  );
+  const setDraggingViewId = useCallback(
+    (update: StateUpdate<string | null>) => setTableUiField('draggingViewId', update),
+    [setTableUiField],
+  );
+  const setDragOverViewId = useCallback(
+    (update: StateUpdate<string | null>) => setTableUiField('dragOverViewId', update),
+    [setTableUiField],
+  );
+  const setCopiedViewId = useCallback(
+    (update: StateUpdate<string | null>) => setTableUiField('copiedViewId', update),
+    [setTableUiField],
+  );
+  const setViewError = useCallback(
+    (update: StateUpdate<string | null>) => setTableUiField('viewError', update),
+    [setTableUiField],
+  );
+  const setPasteModalOpen = useCallback(
+    (update: StateUpdate<boolean>) => setTableUiField('pasteModalOpen', update),
+    [setTableUiField],
+  );
+  const setPasteText = useCallback(
+    (update: StateUpdate<string>) => setTableUiField('pasteText', update),
+    [setTableUiField],
+  );
+  const setPasteError = useCallback(
+    (update: StateUpdate<string | null>) => setTableUiField('pasteError', update),
+    [setTableUiField],
+  );
+  const setFilterSearchByColumnId = useCallback(
+    (update: StateUpdate<Record<string, string>>) =>
+      setTableUiField('filterSearchByColumnId', update),
+    [setTableUiField],
+  );
 
   // Upsert a view's ownership/permission metadata from a server response (server-backed only).
-  const rememberServerViewMeta = useCallback((dto: SavedViewDto) => {
-    setServerViewMeta((prev) => {
-      const next = new Map(prev);
-      next.set(dto.id, { access: dto.access, ownerId: dto.ownerId, ownerName: dto.ownerName });
-      return next;
-    });
-  }, []);
+  const rememberServerViewMeta = useCallback(
+    (dto: SavedViewDto) => {
+      setServerViewMeta((prev) => {
+        const next = new Map(prev);
+        next.set(dto.id, { access: dto.access, ownerId: dto.ownerId, ownerName: dto.ownerName });
+        return next;
+      });
+    },
+    [setServerViewMeta],
+  );
   // Read by the legacy-view migration so it can re-point a persisted active-view id (an old local
   // UUID) at the new server id after upload, without becoming a load-effect dependency.
   const activeViewIdRef = useRef(activeViewId);
   activeViewIdRef.current = activeViewId;
-  const [viewsSubmenuOpen, setViewsSubmenuOpen] = useState(false);
-  const [modalState, setModalState] = useState<ViewModalState>(null);
-  const [draggingViewId, setDraggingViewId] = useState<string | null>(null);
-  const [dragOverViewId, setDragOverViewId] = useState<string | null>(null);
-  const [copiedViewId, setCopiedViewId] = useState<string | null>(null);
-  const [viewError, setViewError] = useState<string | null>(null);
-  const [pasteModalOpen, setPasteModalOpen] = useState(false);
-  const [pasteText, setPasteText] = useState('');
-  const [pasteError, setPasteError] = useState<string | null>(null);
-  const [filterSearchByColumnId, setFilterSearchByColumnId] = useState<Record<string, string>>({});
+  const columnsRef = useRef(columns);
+  columnsRef.current = columns;
   const copiedTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const viewErrorTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const viewsAppliedOnceRef = useRef(false);
+  const viewsAppliedOnceRef = useRef(!isServerBacked);
 
-  const handleGearOpenChange = useCallback((open: boolean) => {
-    if (!open) setViewsSubmenuOpen(false);
-    setGearOpen(open);
-  }, []);
+  const handleGearOpenChange = useCallback(
+    (open: boolean) => {
+      if (!open) setViewsSubmenuOpen(false);
+      setGearOpen(open);
+    },
+    [setGearOpen, setViewsSubmenuOpen],
+  );
 
   const storageKey = useMemo(() => getStorageKey(title, STORAGE_SUFFIX.rows), [title]);
 
@@ -767,7 +1035,7 @@ const StandardTable = <T extends object>({
         return next;
       });
     },
-    [title, isServerBacked, viewKey],
+    [title, isServerBacked, setCustomViews, viewKey],
   );
 
   const updateActiveViewId = useCallback(
@@ -794,6 +1062,7 @@ const StandardTable = <T extends object>({
 
   if (loadedViewsKeyRef.current !== viewsLoadKey) {
     loadedViewsKeyRef.current = viewsLoadKey;
+    viewsAppliedOnceRef.current = !isServerBacked;
     setViewsLoading(Boolean(isServerBacked && viewKey));
     setViewsLoadFailed(false);
   }
@@ -924,9 +1193,17 @@ const StandardTable = <T extends object>({
           );
           setCustomViews(views);
           setViewsLoading(false);
-          // Re-run the dangling-active-view guard: drop a persisted activeViewId that no
-          // longer resolves (deleted server-side or no longer shared with this user).
-          viewsAppliedOnceRef.current = false;
+          const activeId = activeViewIdRef.current;
+          if (activeId) {
+            const activeView = views.find((view) => view.id === activeId);
+            if (activeView) {
+              const application = getViewApplicationForColumns(activeView, columnsRef.current);
+              dispatchTableView({ type: 'apply-view', application });
+            } else {
+              updateActiveViewId(null);
+            }
+          }
+          viewsAppliedOnceRef.current = true;
         }
       } catch (err) {
         if (!controller.signal.aborted && !(err instanceof Error && err.name === 'AbortError')) {
@@ -937,7 +1214,17 @@ const StandardTable = <T extends object>({
       }
     })();
     return () => controller.abort();
-  }, [isServerBacked, viewKey, viewsReloadToken, migrateLegacyViews]);
+  }, [
+    isServerBacked,
+    migrateLegacyViews,
+    setCustomViews,
+    setServerViewMeta,
+    setViewsLoadFailed,
+    setViewsLoading,
+    updateActiveViewId,
+    viewKey,
+    viewsReloadToken,
+  ]);
 
   useEffect(
     () => () => {
@@ -963,18 +1250,9 @@ const StandardTable = <T extends object>({
     }
   }, [initialFilterState, title]);
 
-  const getColId = useCallback(
-    (col: Column<T>) =>
-      col.id || (col.accessorKey ? String(col.accessorKey) : undefined) || col.header,
-    [],
-  );
+  const getColId = useCallback(getColumnId, []);
 
-  const isRowActionColumn = useCallback(
-    (col: Column<T>) =>
-      getColId(col) === 'actions' ||
-      (col.sticky === 'right' && col.accessorKey == null && col.accessorFn == null),
-    [getColId],
-  );
+  const isRowActionColumn = useCallback(isTableActionColumn, []);
 
   const visibleColumns = useMemo(
     () =>
@@ -1075,9 +1353,7 @@ const StandardTable = <T extends object>({
 
   const applyViewState = useCallback(
     (view: CustomView, nextActiveViewId?: string | null) => {
-      const gearIds = new Set(gearColumns.map((c) => getColId(c)));
-      const allIds = new Set((columns ?? []).map((c) => getColId(c)));
-      const result = computeViewApplication(view, gearIds, allIds);
+      const result = getViewApplicationForColumns(view, columns);
       dispatchTableView({
         type: 'apply-view',
         application: result,
@@ -1091,35 +1367,8 @@ const StandardTable = <T extends object>({
         } catch {}
       }
     },
-    [columns, gearColumns, getColId, title],
+    [columns, title],
   );
-
-  useEffect(() => {
-    if (viewsAppliedOnceRef.current) return;
-    if (!gearColumns.length) return;
-    // Server-backed mode: wait for the async list to resolve before resolving the persisted
-    // activeViewId, otherwise the still-empty list would clear a valid id. Also wait while the load
-    // FAILED — resolving against an empty failed list would drop a valid selection that a later
-    // retry could still satisfy.
-    if (isServerBacked && (viewsLoading || viewsLoadFailed)) return;
-    viewsAppliedOnceRef.current = true;
-    if (!activeViewId) return;
-    const view = customViews.find((v) => v.id === activeViewId);
-    if (!view) {
-      updateActiveViewId(null);
-      return;
-    }
-    applyViewState(view);
-  }, [
-    gearColumns,
-    activeViewId,
-    customViews,
-    applyViewState,
-    updateActiveViewId,
-    isServerBacked,
-    viewsLoading,
-    viewsLoadFailed,
-  ]);
 
   useEffect(
     () => () => {
@@ -1301,7 +1550,7 @@ const StandardTable = <T extends object>({
         } catch {}
       }
     },
-    [columnFilters, title],
+    [columnFilters, setCurrentPage, title],
   );
 
   const onPaginationChange = useCallback(
@@ -1315,7 +1564,7 @@ const StandardTable = <T extends object>({
         }
       }
     },
-    [pagination, rowsPerPage, storageKey],
+    [pagination, rowsPerPage, setCurrentPage, setRowsPerPage, storageKey],
   );
 
   const onColumnVisibilityChange = useCallback(
@@ -1347,7 +1596,7 @@ const StandardTable = <T extends object>({
         return clampColumnSizing(next);
       });
     },
-    [clampColumnSizing],
+    [clampColumnSizing, setColumnSizing],
   );
 
   const table = useReactTable({
@@ -1916,894 +2165,1410 @@ const StandardTable = <T extends object>({
     );
   };
 
+  return {
+    t,
+    title,
+    totalLabel,
+    headerExtras,
+    headerAction,
+    containerClassName,
+    tableContainerClassName,
+    externalFooter,
+    footerClassName,
+    children,
+    emptyState,
+    loadingState,
+    data,
+    columns,
+    rowClassName,
+    disabledRow,
+    onRowClick,
+    tableContainerRef,
+    totalItems,
+    shouldRenderTable,
+    processedRows,
+    handleExportToCsv,
+    stepFontSize,
+    fontSize,
+    gearOpen,
+    handleGearOpenChange,
+    activeView,
+    table,
+    colsById,
+    resetColumnVisibility,
+    viewsSubmenuOpen,
+    setViewsSubmenuOpen,
+    customViews,
+    isServerBacked,
+    viewsLoading,
+    viewsLoadFailed,
+    reloadServerViews,
+    copiedViewId,
+    dragOverViewId,
+    draggingViewId,
+    setDraggingViewId,
+    setDragOverViewId,
+    reorderViews,
+    moveViewByDelta,
+    applyView,
+    setGearOpen,
+    getViewAccess,
+    serverViewMeta,
+    viewBusy,
+    setModalState,
+    duplicateView,
+    exportView,
+    setShareModalView,
+    deleteView,
+    importView,
+    viewError,
+    fixedTableWidth,
+    tableStretches,
+    shouldAnchorTrailingActionColumn,
+    hasTrailingSpacer,
+    isRowActionColumn,
+    getColumnMinWidth,
+    getColId,
+    getFilterOptions,
+    filterSearchByColumnId,
+    updateFilterSearch,
+    clearFilterSearch,
+    resetFilterPage,
+    paginatedRows,
+    openActionMenuRowId,
+    setOpenActionMenuRowId,
+    openContextMenuRowId,
+    setOpenContextMenuRowId,
+    fontSizeClass,
+    renderActionMenuItems,
+    paddingRowCount,
+    bodyColSpan,
+    emptyStateMinHeightPx,
+    renderInternalFooter,
+    modalState,
+    saveView,
+    modalColumns,
+    hiddenColIds,
+    shareModalView,
+    pasteModalOpen,
+    closePasteModal,
+    pasteError,
+    pasteText,
+    setPasteText,
+    setPasteError,
+    submitPasteImport,
+    activeViewId,
+  };
+};
+
+type StandardTableController<T extends object> = ReturnType<typeof useStandardTableController<T>>;
+type StandardTableHeaderInstance<T extends object> = ReturnType<
+  StandardTableController<T>['table']['getHeaderGroups']
+>[number]['headers'][number];
+type StandardTableRowInstance<T extends object> =
+  StandardTableController<T>['paginatedRows'][number];
+
+const StandardTable = <T extends object>(props: StandardTableProps<T>) => {
+  const controller = useStandardTableController(props);
+  return <StandardTableLayout controller={controller} />;
+};
+
+const StandardTableLayout = <T extends object>({
+  controller,
+}: {
+  controller: StandardTableController<T>;
+}) => (
+  <div className={`w-full space-y-3 ${controller.containerClassName ?? ''}`.trim()}>
+    <StandardTableHeader controller={controller} />
+    <StandardTableShell controller={controller} />
+    <StandardTableFooter controller={controller} />
+    <StandardTableModals controller={controller} />
+  </div>
+);
+
+const StandardTableHeader = <T extends object>({
+  controller,
+}: {
+  controller: StandardTableController<T>;
+}) => {
+  const { t, title, totalItems, totalLabel, headerExtras, headerAction, data, columns } =
+    controller;
+
   return (
-    <div className={`w-full space-y-3 ${containerClassName ?? ''}`.trim()}>
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <h4 className="text-sm font-medium text-muted-foreground">{title}</h4>
-          {typeof totalItems === 'number' && (
-            <span className="inline-flex items-center rounded-md border border-border bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
-              {totalItems} {totalLabel || t('table.total')}
-            </span>
-          )}
-        </div>
-        <div className="flex flex-wrap items-center justify-end gap-2">
-          {headerExtras}
-          {headerAction}
-          {data != null && columns != null && (
-            <>
-              <StandardTableToolbarButton
-                label={t('table.exportToCsv')}
-                iconClass="fa-file-export"
-                onClick={handleExportToCsv}
-                disabled={processedRows.length === 0}
-                text={t('table.export')}
-              />
-              <StandardTableToolbarButton
-                label={t('table.decreaseFont')}
-                icon={<ZoomOut className="size-3.5" aria-hidden="true" />}
-                onClick={() => stepFontSize(-1)}
-                disabled={fontSize === 'xs'}
-              />
-              <StandardTableToolbarButton
-                label={t('table.increaseFont')}
-                icon={<ZoomIn className="size-3.5" aria-hidden="true" />}
-                onClick={() => stepFontSize(1)}
-                disabled={fontSize === 'base'}
-              />
-              <DropdownMenu open={gearOpen} onOpenChange={handleGearOpenChange}>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    type="button"
-                    aria-label={t('table.columnSettings')}
-                    variant="outline"
-                    size="sm"
-                    className={`${TABLE_CONTROL_BUTTON_CLASSNAME} data-[state=open]:border-border data-[state=open]:bg-accent data-[state=open]:text-accent-foreground focus-visible:ring-0`}
-                  >
-                    {t('table.columns')}
-                    <i className="fa-solid fa-chevron-down text-xs" aria-hidden="true"></i>
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-64">
-                  <DropdownMenuLabel
-                    className="truncate text-xs"
-                    title={activeView ? activeView.name : undefined}
-                  >
-                    {activeView ? `${t('table.columns')} · ${activeView.name}` : t('table.columns')}
-                  </DropdownMenuLabel>
-                  <DropdownMenuSeparator />
-                  <div className="max-h-64 overflow-y-auto">
-                    {(() => {
-                      const hideableColumns = table
-                        .getAllColumns()
-                        .filter((column) => column.getCanHide() && colsById.has(column.id));
-                      const visibleHideableColumnCount = table
-                        .getVisibleLeafColumns()
-                        .filter((visibleColumn) => visibleColumn.getCanHide()).length;
-                      return hideableColumns.map((column) => {
-                        const sourceColumn = colsById.get(column.id);
-                        const isVisible = column.getIsVisible();
-                        const isLastVisible = visibleHideableColumnCount === 1 && isVisible;
-                        return (
-                          <DropdownMenuCheckboxItem
-                            key={column.id}
-                            checked={isVisible}
-                            disabled={isLastVisible}
-                            onSelect={(event) => {
-                              event.preventDefault();
-                              if (!isLastVisible) column.toggleVisibility(!isVisible);
-                            }}
-                            className="text-xs"
-                          >
-                            <span className="truncate">{sourceColumn?.header ?? column.id}</span>
-                          </DropdownMenuCheckboxItem>
-                        );
-                      });
-                    })()}
-                  </div>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    onSelect={(e) => {
-                      e.preventDefault();
-                      resetColumnVisibility();
-                    }}
-                    className="text-xs"
-                  >
-                    <i className="fa-solid fa-rotate-left text-[10px]" aria-hidden="true"></i>
-                    <span>{t('table.resetColumns')}</span>
-                  </DropdownMenuItem>
-                  <DropdownMenuSub open={viewsSubmenuOpen} onOpenChange={setViewsSubmenuOpen}>
-                    <DropdownMenuSubTrigger className="text-xs">
-                      <i className="fa-solid fa-layer-group text-[10px]" aria-hidden="true"></i>
-                      <span>{t('table.customViews')}</span>
-                      {customViews.length > 0 && (
-                        <span className="ml-auto text-xs text-muted-foreground">
-                          {customViews.length}
-                        </span>
-                      )}
-                    </DropdownMenuSubTrigger>
-                    <DropdownMenuSubContent className="w-72">
-                      <DropdownMenuLabel className="text-xs">
-                        {t('table.customViews')}
-                      </DropdownMenuLabel>
-                      <DropdownMenuSeparator />
-                      {isServerBacked && viewsLoading && (
-                        <output className="flex items-center justify-center gap-2 px-2 py-3 text-xs text-muted-foreground">
-                          <i
-                            className="fa-solid fa-circle-notch fa-spin text-[10px]"
-                            aria-hidden="true"
-                          ></i>
-                          <span>{t('views.loadingViews')}</span>
-                        </output>
-                      )}
-                      {isServerBacked && viewsLoadFailed && !viewsLoading && (
-                        <div className="flex flex-col items-center gap-2 px-2 py-3 text-center">
-                          <span role="alert" className="text-xs text-destructive">
-                            {t('views.loadViewsFailed')}
-                          </span>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="xs"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              reloadServerViews();
-                            }}
-                          >
-                            <i
-                              className="fa-solid fa-rotate-right text-[10px]"
-                              aria-hidden="true"
-                            ></i>
-                            {t('views.retry')}
-                          </Button>
-                        </div>
-                      )}
-                      {!(isServerBacked && (viewsLoading || viewsLoadFailed)) &&
-                        customViews.length > 0 && (
-                          <div className="max-h-64 overflow-y-auto p-1">
-                            {customViews.map((view) => {
-                              const isActive = view.id === activeViewId;
-                              const isCopied = copiedViewId === view.id;
-                              const isDragOver =
-                                dragOverViewId === view.id && draggingViewId !== view.id;
-                              const access = getViewAccess(view.id);
-                              const owned = access === 'owner';
-                              const editable = access === 'owner' || access === 'write';
-                              const ownerName = serverViewMeta.get(view.id)?.ownerName;
-                              return (
-                                <div
-                                  key={view.id}
-                                  draggable
-                                  onDragStart={(e) => {
-                                    e.stopPropagation();
-                                    e.dataTransfer.effectAllowed = 'move';
-                                    // Firefox aborts the drag unless setData is called.
-                                    e.dataTransfer.setData('text/plain', view.name);
-                                    setDraggingViewId(view.id);
-                                  }}
-                                  onDragOver={(e) => {
-                                    e.preventDefault();
-                                    e.stopPropagation();
-                                    e.dataTransfer.dropEffect = 'move';
-                                    if (
-                                      draggingViewId &&
-                                      draggingViewId !== view.id &&
-                                      dragOverViewId !== view.id
-                                    ) {
-                                      setDragOverViewId(view.id);
-                                    }
-                                  }}
-                                  onDragLeave={(e) => {
-                                    e.stopPropagation();
-                                    if (dragOverViewId === view.id) setDragOverViewId(null);
-                                  }}
-                                  onDrop={(e) => {
-                                    e.preventDefault();
-                                    e.stopPropagation();
-                                    if (draggingViewId) {
-                                      reorderViews(draggingViewId, view.id);
-                                    }
-                                    setDraggingViewId(null);
-                                    setDragOverViewId(null);
-                                  }}
-                                  onDragEnd={() => {
-                                    setDraggingViewId(null);
-                                    setDragOverViewId(null);
-                                  }}
-                                  className={`group flex items-center gap-1 rounded-sm border-t-2 px-1 py-1 text-sm outline-hidden transition-colors ${
-                                    isActive
-                                      ? 'bg-accent text-accent-foreground'
-                                      : 'hover:bg-accent hover:text-accent-foreground'
-                                  } ${isDragOver ? 'border-primary' : 'border-transparent'} ${
-                                    draggingViewId === view.id ? 'opacity-40' : ''
-                                  }`}
-                                >
-                                  <button
-                                    type="button"
-                                    title={t('table.reorderViewHandle')}
-                                    aria-label={t('table.reorderViewHandle')}
-                                    onClick={(e) => e.stopPropagation()}
-                                    onKeyDown={(e) => {
-                                      if (e.key === 'ArrowUp') {
-                                        e.preventDefault();
-                                        e.stopPropagation();
-                                        moveViewByDelta(view.id, -1);
-                                      } else if (e.key === 'ArrowDown') {
-                                        e.preventDefault();
-                                        e.stopPropagation();
-                                        moveViewByDelta(view.id, 1);
-                                      }
-                                    }}
-                                    className="flex size-6 shrink-0 cursor-move items-center justify-center rounded-sm text-muted-foreground outline-none hover:bg-background focus-visible:ring-[3px] focus-visible:ring-ring/50"
-                                  >
-                                    <i
-                                      className="fa-solid fa-grip-vertical text-[10px]"
-                                      aria-hidden="true"
-                                    ></i>
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      applyView(view);
-                                      setGearOpen(false);
-                                    }}
-                                    className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
-                                    title={view.name}
-                                  >
-                                    {isActive && (
-                                      <i
-                                        className="fa-solid fa-check shrink-0 text-[10px]"
-                                        aria-hidden="true"
-                                      ></i>
-                                    )}
-                                    <span className="flex min-w-0 flex-col">
-                                      <span className="truncate text-xs font-medium">
-                                        {view.name}
-                                      </span>
-                                      {isServerBacked && !owned && (
-                                        <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
-                                          <ViewOwnerAvatar ownerName={ownerName ?? ''} />
-                                          <span className="shrink-0 rounded-sm border border-border bg-muted px-1 leading-tight font-medium uppercase">
-                                            {access === 'write'
-                                              ? t('views.permissionWrite')
-                                              : t('views.permissionRead')}
-                                          </span>
-                                        </span>
-                                      )}
-                                    </span>
-                                  </button>
-                                  <div className="flex shrink-0 items-center gap-0.5 opacity-70 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
-                                    {editable && (
-                                      <DropdownMenuItem
-                                        aria-label={t('table.renameView')}
-                                        disabled={viewBusy}
-                                        onSelect={(e) => {
-                                          e.preventDefault();
-                                          setModalState({ kind: 'edit', view });
-                                          setGearOpen(false);
-                                        }}
-                                        className="size-7 justify-center p-0"
-                                      >
-                                        <i
-                                          className="fa-solid fa-pen text-[10px]"
-                                          aria-hidden="true"
-                                        ></i>
-                                      </DropdownMenuItem>
-                                    )}
-                                    {isServerBacked ? (
-                                      <Tooltip>
-                                        <TooltipTrigger asChild>
-                                          <DropdownMenuItem
-                                            aria-label={t('views.duplicateView')}
-                                            disabled={viewBusy}
-                                            onSelect={(e) => {
-                                              e.preventDefault();
-                                              void duplicateView(view);
-                                            }}
-                                            className="size-7 justify-center p-0"
-                                          >
-                                            <i
-                                              className="fa-solid fa-clone text-[10px]"
-                                              aria-hidden="true"
-                                            ></i>
-                                          </DropdownMenuItem>
-                                        </TooltipTrigger>
-                                        <TooltipContent side="bottom">
-                                          {t('views.duplicateView')}
-                                        </TooltipContent>
-                                      </Tooltip>
-                                    ) : (
-                                      <DropdownMenuItem
-                                        aria-label={
-                                          isCopied ? t('table.viewCopied') : t('table.exportView')
-                                        }
-                                        onSelect={(e) => {
-                                          e.preventDefault();
-                                          void exportView(view);
-                                        }}
-                                        className="size-7 justify-center p-0"
-                                      >
-                                        <i
-                                          className={`fa-solid ${isCopied ? 'fa-check' : 'fa-copy'} text-[10px]`}
-                                          aria-hidden="true"
-                                        ></i>
-                                      </DropdownMenuItem>
-                                    )}
-                                    {isServerBacked && owned && (
-                                      <DropdownMenuItem
-                                        aria-label={t('views.shareView')}
-                                        disabled={viewBusy}
-                                        onSelect={(e) => {
-                                          e.preventDefault();
-                                          setShareModalView(view);
-                                          setGearOpen(false);
-                                        }}
-                                        className="size-7 justify-center p-0"
-                                      >
-                                        <i
-                                          className="fa-solid fa-share-nodes text-[10px]"
-                                          aria-hidden="true"
-                                        ></i>
-                                      </DropdownMenuItem>
-                                    )}
-                                    {owned && (
-                                      <DropdownMenuItem
-                                        aria-label={t('table.deleteView')}
-                                        variant="destructive"
-                                        disabled={viewBusy}
-                                        onSelect={(e) => {
-                                          e.preventDefault();
-                                          void deleteView(view.id);
-                                        }}
-                                        className="size-7 justify-center p-0"
-                                      >
-                                        <i
-                                          className="fa-solid fa-trash text-[10px]"
-                                          aria-hidden="true"
-                                        ></i>
-                                      </DropdownMenuItem>
-                                    )}
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
-                      <DropdownMenuSeparator />
-                      <div className="flex gap-1 p-1">
-                        <DropdownMenuItem
-                          disabled={isServerBacked && (viewsLoading || viewBusy)}
-                          onSelect={(e) => {
-                            e.preventDefault();
-                            setModalState({ kind: 'create' });
-                            setGearOpen(false);
-                          }}
-                          className="flex-1 justify-center text-xs"
-                        >
-                          <i className="fa-solid fa-plus text-[10px]" aria-hidden="true"></i>
-                          <span>{t('buttons.add')}</span>
-                        </DropdownMenuItem>
-                        {/* Clipboard import is a localStorage-era escape hatch; server mode
-                            uses Duplicate instead, so the button is legacy-only. */}
-                        {!isServerBacked && (
-                          <DropdownMenuItem
-                            onSelect={(e) => {
-                              e.preventDefault();
-                              void importView();
-                            }}
-                            className="flex-1 justify-center text-xs"
-                          >
-                            <i
-                              className="fa-solid fa-file-import text-[10px]"
-                              aria-hidden="true"
-                            ></i>
-                            <span>{t('buttons.import')}</span>
-                          </DropdownMenuItem>
-                        )}
-                      </div>
-                      {viewError && (
-                        <div
-                          role="alert"
-                          className="px-2 pb-2 text-center text-xs text-destructive"
-                        >
-                          {viewError}
-                        </div>
-                      )}
-                    </DropdownMenuSubContent>
-                  </DropdownMenuSub>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </>
-          )}
-        </div>
-      </div>
-
-      <div
-        ref={tableContainerRef}
-        className={`rounded-lg border border-border bg-background shadow-sm ${tableContainerClassName ?? 'overflow-x-auto'}`}
-      >
-        {shouldRenderTable ? (
-          <Table
-            className="table-fixed text-left"
-            style={
-              fixedTableWidth
-                ? {
-                    width: tableStretches ? '100%' : `${fixedTableWidth}px`,
-                    minWidth: tableStretches ? `${fixedTableWidth}px` : undefined,
-                  }
-                : undefined
-            }
-          >
-            <colgroup>
-              {table.getVisibleLeafColumns().map((column) => {
-                const col = colsById.get(column.id);
-                const colWidth = column.getSize();
-                const needsActionSpacer =
-                  shouldAnchorTrailingActionColumn && col && isRowActionColumn(col);
-                return (
-                  <Fragment key={column.id}>
-                    {needsActionSpacer && <col data-action-spacer style={{ width: 'auto' }} />}
-                    <col style={{ width: colWidth }} />
-                  </Fragment>
-                );
-              })}
-              {hasTrailingSpacer && <col data-trailing-spacer style={{ width: 'auto' }} />}
-            </colgroup>
-            <TableHeader>
-              {table.getHeaderGroups().map((headerGroup) => (
-                <TableRow key={headerGroup.id} className="border-border hover:bg-transparent">
-                  {headerGroup.headers.map((header, colIdx) => {
-                    const col = colsById.get(header.column.id);
-                    if (!col) return null;
-                    const colId = getColId(col);
-                    const isActionColumn = isRowActionColumn(col);
-                    const isStickyRightColumn = col.sticky === 'right' || isActionColumn;
-                    const isFirstColumn = colIdx === 0;
-                    const isLastColumn = colIdx === headerGroup.headers.length - 1;
-                    const isBeforeActionSpacer =
-                      shouldAnchorTrailingActionColumn &&
-                      !isActionColumn &&
-                      colIdx === headerGroup.headers.length - 2;
-                    const isBeforeTrailingSpacer =
-                      hasTrailingSpacer && colIdx === headerGroup.headers.length - 1;
-                    const shouldStickRightColumn = isStickyRightColumn;
-                    // Prefer explicit col.align; fall back to first-left / last-right defaults.
-                    const effectiveAlign =
-                      col.align ?? (isFirstColumn ? 'left' : isLastColumn ? 'right' : undefined);
-                    const minColumnWidth = getColumnMinWidth(col);
-                    const colWidth = Math.max(header.getSize(), minColumnWidth);
-                    const sorted = header.column.getIsSorted();
-                    const isResizing = header.column.getIsResizing();
-                    const stickyBorderClass =
-                      shouldStickRightColumn && !isActionColumn ? 'border-l border-border' : '';
-                    const resizeHandler = header.getResizeHandler();
-
-                    return (
-                      <Fragment key={header.id}>
-                        {shouldAnchorTrailingActionColumn && isActionColumn && (
-                          <TableHead
-                            aria-hidden="true"
-                            style={{ width: 'auto', minWidth: 0 }}
-                            className="h-10 border-border p-0"
-                          />
-                        )}
-                        <TableHead
-                          style={{ width: colWidth, minWidth: minColumnWidth }}
-                          aria-label={isActionColumn ? col.header : undefined}
-                          className={`relative group h-10 border-border ${isLastColumn ? 'pl-3 pr-2' : 'px-3'} whitespace-nowrap ${effectiveAlign === 'right' ? 'text-right' : effectiveAlign === 'center' ? 'text-center' : ''} ${shouldStickRightColumn ? `sticky right-0 z-20 bg-background ${stickyBorderClass}` : ''} ${col.headerClassName || ''}`}
-                        >
-                          {isActionColumn ? (
-                            <div
-                              data-column-header-content={colId}
-                              className="inline-flex w-max items-center gap-1"
-                            >
-                              <span
-                                className="whitespace-nowrap text-sm font-semibold text-foreground"
-                                data-column-header-label={colId}
-                              >
-                                {header.isPlaceholder
-                                  ? null
-                                  : flexRender(header.column.columnDef.header, header.getContext())}
-                              </span>
-                            </div>
-                          ) : (
-                            <div
-                              data-column-header-content={colId}
-                              className="inline-flex w-max items-center gap-1"
-                            >
-                              <button
-                                type="button"
-                                disabled={!header.column.getCanSort()}
-                                onClick={header.column.getToggleSortingHandler()}
-                                className="inline-flex shrink-0 items-center gap-1 rounded-lg px-2 py-1 -ml-2 text-sm font-semibold text-foreground outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-100"
-                              >
-                                <span
-                                  className="whitespace-nowrap"
-                                  data-column-header-label={colId}
-                                >
-                                  {header.isPlaceholder
-                                    ? null
-                                    : flexRender(
-                                        header.column.columnDef.header,
-                                        header.getContext(),
-                                      )}
-                                </span>
-                                {sorted === 'asc' ? (
-                                  <ArrowUp
-                                    className="size-3 shrink-0 transition-colors"
-                                    aria-hidden="true"
-                                  />
-                                ) : sorted === 'desc' ? (
-                                  <ArrowDown
-                                    className="size-3 shrink-0 transition-colors"
-                                    aria-hidden="true"
-                                  />
-                                ) : (
-                                  <ArrowUpDown
-                                    className="size-3 shrink-0 transition-colors"
-                                    aria-hidden="true"
-                                  />
-                                )}
-                              </button>
-                              <HeaderFilter
-                                column={header.column}
-                                sourceColumn={col}
-                                options={getFilterOptions(header.column.id)}
-                                filterSearch={filterSearchByColumnId[header.column.id] ?? ''}
-                                t={t}
-                                onFilterSearchChange={updateFilterSearch}
-                                onFilterSearchClose={clearFilterSearch}
-                                onResetPage={resetFilterPage}
-                              />
-                            </div>
-                          )}
-
-                          {header.column.getCanResize() && (
-                            <button
-                              type="button"
-                              aria-label="Resize column"
-                              className="absolute top-0 right-0 z-10 flex h-full w-2 cursor-col-resize touch-none select-none items-center justify-end border-0 bg-transparent p-0"
-                              data-column-resize-handle={colId}
-                              onMouseDown={(event) => {
-                                event.stopPropagation();
-                                resizeHandler(event);
-                              }}
-                              onTouchStart={(event) => {
-                                event.stopPropagation();
-                                resizeHandler(event);
-                              }}
-                              onClick={(event) => event.stopPropagation()}
-                              onDoubleClick={(event) => event.stopPropagation()}
-                            >
-                              <span
-                                data-column-resize-line={colId}
-                                className={`h-5 w-px rounded-full transition-colors ${
-                                  isBeforeActionSpacer || isBeforeTrailingSpacer
-                                    ? 'bg-transparent'
-                                    : isResizing
-                                      ? 'bg-primary'
-                                      : 'bg-border group-hover:bg-primary/40'
-                                }`}
-                              />
-                            </button>
-                          )}
-                        </TableHead>
-                      </Fragment>
-                    );
-                  })}
-                  {hasTrailingSpacer && (
-                    <TableHead
-                      aria-hidden="true"
-                      style={{ width: 'auto', minWidth: 0 }}
-                      className="h-10 border-border p-0"
-                    />
-                  )}
-                </TableRow>
-              ))}
-            </TableHeader>
-            <TableBody>
-              {paginatedRows.length > 0 ? (
-                <>
-                  {paginatedRows.map((tableRow) => {
-                    const row = tableRow.original;
-                    const visibleCells = tableRow.getVisibleCells();
-                    const rowActionCell = visibleCells.find((cell) => {
-                      const col = colsById.get(cell.column.id);
-                      return col ? isRowActionColumn(col) : false;
-                    });
-                    const rowActionColumn = rowActionCell
-                      ? colsById.get(rowActionCell.column.id)
-                      : undefined;
-                    const rowActionValue = rowActionCell?.getValue() as
-                      | T[keyof T]
-                      | string
-                      | number
-                      | boolean
-                      | null
-                      | undefined;
-                    const rowActionContent = rowActionCell
-                      ? rowActionColumn?.cell
-                        ? rowActionColumn.cell({
-                            getValue: () => rowActionValue,
-                            row,
-                            value: rowActionValue,
-                          })
-                        : flexRender(
-                            rowActionCell.column.columnDef.cell,
-                            rowActionCell.getContext(),
-                          )
-                      : null;
-                    const rowActionMenuItems = hasActionMenuItems(rowActionContent)
-                      ? renderActionMenuItems(rowActionContent)
-                      : null;
-                    const isActionMenuOpen = openActionMenuRowId === tableRow.id;
-                    const isContextMenuOpen = openContextMenuRowId === tableRow.id;
-                    const rowElement = (
-                      <TableRow
-                        key={tableRow.id}
-                        onClick={() => !disabledRow?.(row) && onRowClick?.(row)}
-                        className={`group border-border transition-colors ${fontSizeClass} ${disabledRow?.(row) ? 'bg-muted text-muted-foreground opacity-70' : `${onRowClick ? 'cursor-pointer' : ''} ${rowClassName ? rowClassName(row) : 'hover:bg-muted/50'}`}`}
-                      >
-                        {visibleCells.map((cell, colIdx) => {
-                          const colId = cell.column.id;
-                          const col = colsById.get(colId);
-                          if (!col) return null;
-                          const isActionColumn = isRowActionColumn(col);
-                          const isStickyRightColumn = col.sticky === 'right' || isActionColumn;
-                          const isFirstColumn = colIdx === 0;
-                          const isLastColumn = colIdx === visibleCells.length - 1;
-                          const shouldStickRightColumn = isStickyRightColumn;
-                          // Prefer explicit col.align; fall back to first-left / last-right defaults.
-                          const effectiveAlign =
-                            col.align ??
-                            (isFirstColumn ? 'left' : isLastColumn ? 'right' : undefined);
-                          const minColumnWidth = getColumnMinWidth(col);
-                          const colWidth = Math.max(cell.column.getSize(), minColumnWidth);
-                          const stickyBorderClass =
-                            shouldStickRightColumn && !isActionColumn
-                              ? 'border-l border-border'
-                              : '';
-                          const stickyHoverClass =
-                            shouldStickRightColumn && !isActionColumn
-                              ? 'group-hover:bg-muted/50'
-                              : '';
-                          const rawValue = cell.getValue() as
-                            | T[keyof T]
-                            | string
-                            | number
-                            | boolean
-                            | null
-                            | undefined;
-                          const cellContent =
-                            isActionColumn && cell.id === rowActionCell?.id
-                              ? rowActionContent
-                              : col.cell
-                                ? col.cell({ getValue: () => rawValue, row, value: rawValue })
-                                : flexRender(cell.column.columnDef.cell, cell.getContext());
-                          const actionMenuItems = isActionColumn ? rowActionMenuItems : null;
-                          return (
-                            <Fragment key={cell.id}>
-                              {shouldAnchorTrailingActionColumn && isActionColumn && (
-                                <TableCell
-                                  aria-hidden="true"
-                                  style={{ width: 'auto', minWidth: 0 }}
-                                  className="border-border p-0"
-                                />
-                              )}
-                              <TableCell
-                                onDoubleClick={(e) => {
-                                  e.stopPropagation();
-                                  col.onCellDoubleClick?.(row);
-                                }}
-                                style={{ width: colWidth, minWidth: minColumnWidth }}
-                                className={`${isLastColumn ? 'pl-3 pr-2' : 'px-3'} py-2 whitespace-nowrap ${!isActionColumn ? 'standard-table-value-cell max-w-0 overflow-hidden text-ellipsis font-normal' : ''} ${shouldStickRightColumn ? 'w-auto text-right' : `align-middle ${effectiveAlign === 'right' ? 'text-right' : effectiveAlign === 'center' ? 'text-center' : ''}`} ${shouldStickRightColumn ? `sticky right-0 z-20 bg-background transition-colors ${stickyBorderClass} ${stickyHoverClass}` : ''} ${col.className || ''}`}
-                              >
-                                {isActionColumn ? (
-                                  actionMenuItems ? (
-                                    <DropdownMenu
-                                      open={isActionMenuOpen}
-                                      onOpenChange={(open) =>
-                                        setOpenActionMenuRowId(open ? tableRow.id : null)
-                                      }
-                                    >
-                                      <DropdownMenuTrigger asChild>
-                                        <Button
-                                          type="button"
-                                          variant="ghost"
-                                          size="icon-xs"
-                                          aria-label={t('table.rowActions')}
-                                          onClick={(event) => event.stopPropagation()}
-                                          className="rounded-lg"
-                                        >
-                                          <i
-                                            className="fa-solid fa-ellipsis text-[10px]"
-                                            aria-hidden="true"
-                                          ></i>
-                                        </Button>
-                                      </DropdownMenuTrigger>
-                                      {isActionMenuOpen && (
-                                        <DropdownMenuContent
-                                          align="end"
-                                          data-standard-table-action-menu="true"
-                                          className={ACTION_MENU_CONTENT_CLASSNAME}
-                                          onClick={(event) => event.stopPropagation()}
-                                          onDoubleClick={(event) => event.stopPropagation()}
-                                        >
-                                          <div className={ACTION_MENU_ITEMS_CLASSNAME}>
-                                            {actionMenuItems}
-                                          </div>
-                                        </DropdownMenuContent>
-                                      )}
-                                    </DropdownMenu>
-                                  ) : null
-                                ) : (
-                                  cellContent
-                                )}
-                              </TableCell>
-                            </Fragment>
-                          );
-                        })}
-                        {hasTrailingSpacer && (
-                          <TableCell
-                            aria-hidden="true"
-                            style={{ width: 'auto', minWidth: 0 }}
-                            className="border-border p-0"
-                          />
-                        )}
-                      </TableRow>
-                    );
-
-                    return rowActionMenuItems ? (
-                      <ContextMenu
-                        key={tableRow.id}
-                        onOpenChange={(open) => setOpenContextMenuRowId(open ? tableRow.id : null)}
-                      >
-                        <ContextMenuTrigger asChild>{rowElement}</ContextMenuTrigger>
-                        {isContextMenuOpen && (
-                          <ContextMenuContent
-                            data-standard-table-action-menu="true"
-                            className={ACTION_MENU_CONTENT_CLASSNAME}
-                            onClick={(event) => event.stopPropagation()}
-                            onDoubleClick={(event) => event.stopPropagation()}
-                          >
-                            <div className={ACTION_MENU_ITEMS_CLASSNAME}>{rowActionMenuItems}</div>
-                          </ContextMenuContent>
-                        )}
-                      </ContextMenu>
-                    ) : (
-                      rowElement
-                    );
-                  })}
-                  {Array.from({ length: paddingRowCount }).map((_, idx) => (
-                    <TableRow
-                      key={`__padding-${idx}`}
-                      aria-hidden="true"
-                      className="pointer-events-none hover:bg-transparent"
-                    >
-                      <TableCell colSpan={bodyColSpan} className="h-11 p-0" />
-                    </TableRow>
-                  ))}
-                </>
-              ) : (
-                <TableRow className="hover:bg-transparent">
-                  <TableCell colSpan={bodyColSpan} className="p-0">
-                    {emptyState ? (
-                      <div
-                        className="flex w-full items-center justify-center"
-                        style={{ minHeight: emptyStateMinHeightPx }}
-                      >
-                        {emptyState}
-                      </div>
-                    ) : (
-                      <Empty style={{ minHeight: emptyStateMinHeightPx }}>
-                        <EmptyHeader>
-                          <EmptyTitle className="text-sm font-medium text-muted-foreground">
-                            {t('table.noResults')}
-                          </EmptyTitle>
-                        </EmptyHeader>
-                      </Empty>
-                    )}
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        ) : (
-          (loadingState ?? children)
+    <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex items-center gap-3">
+        <h4 className="text-sm font-medium text-muted-foreground">{title}</h4>
+        {typeof totalItems === 'number' && (
+          <span className="inline-flex items-center rounded-md border border-border bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+            {totalItems} {totalLabel || t('table.total')}
+          </span>
         )}
       </div>
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        {headerExtras}
+        {headerAction}
+        {data != null && columns != null && <StandardTableToolbar controller={controller} />}
+      </div>
+    </div>
+  );
+};
 
-      {(externalFooter || (data && columns)) && (
-        <div
-          className={`py-1 ${
-            footerClassName ?? 'flex justify-between items-center flex-wrap gap-4'
-          }`}
+const StandardTableToolbar = <T extends object>({
+  controller,
+}: {
+  controller: StandardTableController<T>;
+}) => {
+  const { t, handleExportToCsv, processedRows, stepFontSize, fontSize } = controller;
+
+  return (
+    <>
+      <StandardTableToolbarButton
+        label={t('table.exportToCsv')}
+        iconClass="fa-file-export"
+        onClick={handleExportToCsv}
+        disabled={processedRows.length === 0}
+        text={t('table.export')}
+      />
+      <StandardTableToolbarButton
+        label={t('table.decreaseFont')}
+        icon={<ZoomOut className="size-3.5" aria-hidden="true" />}
+        onClick={() => stepFontSize(-1)}
+        disabled={fontSize === 'xs'}
+      />
+      <StandardTableToolbarButton
+        label={t('table.increaseFont')}
+        icon={<ZoomIn className="size-3.5" aria-hidden="true" />}
+        onClick={() => stepFontSize(1)}
+        disabled={fontSize === 'base'}
+      />
+      <StandardTableColumnSettingsMenu controller={controller} />
+    </>
+  );
+};
+
+const StandardTableColumnSettingsMenu = <T extends object>({
+  controller,
+}: {
+  controller: StandardTableController<T>;
+}) => {
+  const { t, gearOpen, handleGearOpenChange, activeView, table, colsById, resetColumnVisibility } =
+    controller;
+
+  return (
+    <DropdownMenu open={gearOpen} onOpenChange={handleGearOpenChange}>
+      <DropdownMenuTrigger asChild>
+        <Button
+          type="button"
+          aria-label={t('table.columnSettings')}
+          variant="outline"
+          size="sm"
+          className={`${TABLE_CONTROL_BUTTON_CLASSNAME} data-[state=open]:border-border data-[state=open]:bg-accent data-[state=open]:text-accent-foreground focus-visible:ring-0`}
         >
-          {data && columns ? renderInternalFooter() : externalFooter}
-        </div>
-      )}
-
-      {data && columns && (
-        <CustomViewModal
-          key={
-            modalState?.kind === 'edit'
-              ? `edit-${modalState.view.id}`
-              : modalState?.kind === 'create'
-                ? 'create'
-                : 'closed'
-          }
-          isOpen={modalState !== null}
-          onClose={() => setModalState(null)}
-          onSave={(view) => {
-            void saveView(view);
+          {t('table.columns')}
+          <i className="fa-solid fa-chevron-down text-xs" aria-hidden="true"></i>
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-64">
+        <DropdownMenuLabel
+          className="truncate text-xs"
+          title={activeView ? activeView.name : undefined}
+        >
+          {activeView ? `${t('table.columns')} · ${activeView.name}` : t('table.columns')}
+        </DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        <StandardTableColumnVisibilityItems table={table} colsById={colsById} />
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          onSelect={(e) => {
+            e.preventDefault();
+            resetColumnVisibility();
           }}
-          columns={modalColumns}
-          initialHiddenColIds={hiddenColIds}
-          editingView={modalState?.kind === 'edit' ? modalState.view : undefined}
-        />
-      )}
+          className="text-xs"
+        >
+          <i className="fa-solid fa-rotate-left text-[10px]" aria-hidden="true"></i>
+          <span>{t('table.resetColumns')}</span>
+        </DropdownMenuItem>
+        <StandardTableViewsSubmenu controller={controller} />
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+};
 
-      {isServerBacked && (
-        <ShareViewModal
-          isOpen={shareModalView !== null}
-          onClose={() => setShareModalView(null)}
-          viewId={shareModalView?.id ?? ''}
-          viewName={shareModalView?.name ?? ''}
-        />
-      )}
+const StandardTableColumnVisibilityItems = <T extends object>({
+  table,
+  colsById,
+}: {
+  table: StandardTableController<T>['table'];
+  colsById: StandardTableController<T>['colsById'];
+}) => {
+  const hideableColumns = table
+    .getAllColumns()
+    .filter((column) => column.getCanHide() && colsById.has(column.id));
+  const visibleHideableColumnCount = table
+    .getVisibleLeafColumns()
+    .filter((visibleColumn) => visibleColumn.getCanHide()).length;
 
-      {data && columns && pasteModalOpen && (
-        <Modal isOpen={pasteModalOpen} onClose={closePasteModal} ariaLabel={null}>
-          <ModalContent size="md">
-            <ModalHeader>
-              <ModalTitle>
-                <i className="fa-solid fa-file-import text-primary"></i>
-                {t('table.pasteViewTitle')}
-              </ModalTitle>
-              <ModalCloseButton onClick={closePasteModal} />
-            </ModalHeader>
-            <ModalBody className="space-y-3">
-              <ModalDescription>{t('table.pasteViewDescription')}</ModalDescription>
-              <Field data-invalid={Boolean(pasteError)}>
-                <FieldLabel htmlFor="custom-view-import-payload" className="sr-only">
-                  {t('table.pasteViewTitle')}
-                </FieldLabel>
-                <Textarea
-                  id="custom-view-import-payload"
-                  value={pasteText}
-                  onChange={(e) => {
-                    setPasteText(e.target.value);
-                    if (pasteError) setPasteError(null);
-                  }}
-                  placeholder={t('table.pasteViewPlaceholder')}
-                  rows={6}
-                  aria-invalid={Boolean(pasteError)}
-                  className="resize-y font-mono text-xs"
-                />
-                {pasteError && (
-                  <FieldError role="alert" className="text-xs">
-                    {pasteError}
-                  </FieldError>
-                )}
-              </Field>
-            </ModalBody>
-            <ModalFooter>
-              <Button type="button" variant="outline" onClick={closePasteModal}>
-                {t('table.cancel')}
-              </Button>
-              <Button
-                type="button"
-                onClick={submitPasteImport}
-                disabled={pasteText.trim().length === 0}
-              >
-                {t('table.importView')}
-              </Button>
-            </ModalFooter>
-          </ModalContent>
-        </Modal>
+  return (
+    <div className="max-h-64 overflow-y-auto">
+      {hideableColumns.map((column) => {
+        const sourceColumn = colsById.get(column.id);
+        const isVisible = column.getIsVisible();
+        const isLastVisible = visibleHideableColumnCount === 1 && isVisible;
+        return (
+          <DropdownMenuCheckboxItem
+            key={column.id}
+            checked={isVisible}
+            disabled={isLastVisible}
+            onSelect={(event) => {
+              event.preventDefault();
+              if (!isLastVisible) column.toggleVisibility(!isVisible);
+            }}
+            className="text-xs"
+          >
+            <span className="truncate">{sourceColumn?.header ?? column.id}</span>
+          </DropdownMenuCheckboxItem>
+        );
+      })}
+    </div>
+  );
+};
+
+const StandardTableViewsSubmenu = <T extends object>({
+  controller,
+}: {
+  controller: StandardTableController<T>;
+}) => {
+  const {
+    t,
+    viewsSubmenuOpen,
+    setViewsSubmenuOpen,
+    customViews,
+    isServerBacked,
+    viewsLoading,
+    viewsLoadFailed,
+    reloadServerViews,
+    viewBusy,
+    setModalState,
+    setGearOpen,
+    importView,
+    viewError,
+  } = controller;
+
+  return (
+    <DropdownMenuSub open={viewsSubmenuOpen} onOpenChange={setViewsSubmenuOpen}>
+      <DropdownMenuSubTrigger className="text-xs">
+        <i className="fa-solid fa-layer-group text-[10px]" aria-hidden="true"></i>
+        <span>{t('table.customViews')}</span>
+        {customViews.length > 0 && (
+          <span className="ml-auto text-xs text-muted-foreground">{customViews.length}</span>
+        )}
+      </DropdownMenuSubTrigger>
+      <DropdownMenuSubContent className="w-72">
+        <DropdownMenuLabel className="text-xs">{t('table.customViews')}</DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        {isServerBacked && viewsLoading && <StandardTableViewsLoading controller={controller} />}
+        {isServerBacked && viewsLoadFailed && !viewsLoading && (
+          <StandardTableViewsLoadFailed t={t} onRetry={reloadServerViews} />
+        )}
+        {!(isServerBacked && (viewsLoading || viewsLoadFailed)) && customViews.length > 0 && (
+          <div className="max-h-64 overflow-y-auto p-1">
+            {customViews.map((view) => (
+              <StandardTableViewRow key={view.id} controller={controller} view={view} />
+            ))}
+          </div>
+        )}
+        <DropdownMenuSeparator />
+        <div className="flex gap-1 p-1">
+          <DropdownMenuItem
+            disabled={isServerBacked && (viewsLoading || viewBusy)}
+            onSelect={(e) => {
+              e.preventDefault();
+              setModalState({ kind: 'create' });
+              setGearOpen(false);
+            }}
+            className="flex-1 justify-center text-xs"
+          >
+            <i className="fa-solid fa-plus text-[10px]" aria-hidden="true"></i>
+            <span>{t('buttons.add')}</span>
+          </DropdownMenuItem>
+          {!isServerBacked && (
+            <DropdownMenuItem
+              onSelect={(e) => {
+                e.preventDefault();
+                void importView();
+              }}
+              className="flex-1 justify-center text-xs"
+            >
+              <i className="fa-solid fa-file-import text-[10px]" aria-hidden="true"></i>
+              <span>{t('buttons.import')}</span>
+            </DropdownMenuItem>
+          )}
+        </div>
+        {viewError && (
+          <div role="alert" className="px-2 pb-2 text-center text-xs text-destructive">
+            {viewError}
+          </div>
+        )}
+      </DropdownMenuSubContent>
+    </DropdownMenuSub>
+  );
+};
+
+const StandardTableViewsLoading = <T extends object>({
+  controller,
+}: {
+  controller: StandardTableController<T>;
+}) => (
+  <output className="flex items-center justify-center gap-2 px-2 py-3 text-xs text-muted-foreground">
+    <i className="fa-solid fa-circle-notch fa-spin text-[10px]" aria-hidden="true"></i>
+    <span>{controller.t('views.loadingViews')}</span>
+  </output>
+);
+
+const StandardTableViewsLoadFailed = ({
+  t,
+  onRetry,
+}: {
+  t: (key: string) => string;
+  onRetry: () => void;
+}) => (
+  <div className="flex flex-col items-center gap-2 px-2 py-3 text-center">
+    <span role="alert" className="text-xs text-destructive">
+      {t('views.loadViewsFailed')}
+    </span>
+    <Button
+      type="button"
+      variant="outline"
+      size="xs"
+      onClick={(e) => {
+        e.stopPropagation();
+        onRetry();
+      }}
+    >
+      <i className="fa-solid fa-rotate-right text-[10px]" aria-hidden="true"></i>
+      {t('views.retry')}
+    </Button>
+  </div>
+);
+
+const StandardTableViewRow = <T extends object>({
+  controller,
+  view,
+}: {
+  controller: StandardTableController<T>;
+  view: CustomView;
+}) => {
+  const {
+    t,
+    activeViewId,
+    copiedViewId,
+    dragOverViewId,
+    draggingViewId,
+    setDraggingViewId,
+    setDragOverViewId,
+    reorderViews,
+    moveViewByDelta,
+    applyView,
+    setGearOpen,
+    isServerBacked,
+    getViewAccess,
+    serverViewMeta,
+    viewBusy,
+    setModalState,
+    duplicateView,
+    exportView,
+    setShareModalView,
+    deleteView,
+  } = controller;
+  const isActive = view.id === activeViewId;
+  const isCopied = copiedViewId === view.id;
+  const isDragOver = dragOverViewId === view.id && draggingViewId !== view.id;
+  const access = getViewAccess(view.id);
+  const owned = access === 'owner';
+  const editable = access === 'owner' || access === 'write';
+  const ownerName = serverViewMeta.get(view.id)?.ownerName;
+
+  return (
+    <div
+      draggable
+      onDragStart={(e) => {
+        e.stopPropagation();
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', view.name);
+        setDraggingViewId(view.id);
+      }}
+      onDragOver={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        e.dataTransfer.dropEffect = 'move';
+        if (draggingViewId && draggingViewId !== view.id && dragOverViewId !== view.id) {
+          setDragOverViewId(view.id);
+        }
+      }}
+      onDragLeave={(e) => {
+        e.stopPropagation();
+        if (dragOverViewId === view.id) setDragOverViewId(null);
+      }}
+      onDrop={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (draggingViewId) reorderViews(draggingViewId, view.id);
+        setDraggingViewId(null);
+        setDragOverViewId(null);
+      }}
+      onDragEnd={() => {
+        setDraggingViewId(null);
+        setDragOverViewId(null);
+      }}
+      className={`group flex items-center gap-1 rounded-sm border-t-2 px-1 py-1 text-sm outline-hidden transition-colors ${
+        isActive
+          ? 'bg-accent text-accent-foreground'
+          : 'hover:bg-accent hover:text-accent-foreground'
+      } ${isDragOver ? 'border-primary' : 'border-transparent'} ${
+        draggingViewId === view.id ? 'opacity-40' : ''
+      }`}
+    >
+      <StandardTableViewDragHandle
+        t={t}
+        viewId={view.id}
+        viewName={view.name}
+        onMove={moveViewByDelta}
+      />
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          applyView(view);
+          setGearOpen(false);
+        }}
+        className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
+        title={view.name}
+      >
+        {isActive && <i className="fa-solid fa-check shrink-0 text-[10px]" aria-hidden="true"></i>}
+        <span className="flex min-w-0 flex-col">
+          <span className="truncate text-xs font-medium">{view.name}</span>
+          {isServerBacked && !owned && (
+            <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
+              <ViewOwnerAvatar ownerName={ownerName ?? ''} />
+              <span className="shrink-0 rounded-sm border border-border bg-muted px-1 leading-tight font-medium uppercase">
+                {access === 'write' ? t('views.permissionWrite') : t('views.permissionRead')}
+              </span>
+            </span>
+          )}
+        </span>
+      </button>
+      <StandardTableViewActions
+        t={t}
+        view={view}
+        owned={owned}
+        editable={editable}
+        isCopied={isCopied}
+        isServerBacked={isServerBacked}
+        viewBusy={viewBusy}
+        onEdit={() => {
+          setModalState({ kind: 'edit', view });
+          setGearOpen(false);
+        }}
+        onDuplicate={() => {
+          void duplicateView(view);
+        }}
+        onExport={() => {
+          void exportView(view);
+        }}
+        onShare={() => {
+          setShareModalView(view);
+          setGearOpen(false);
+        }}
+        onDelete={() => {
+          void deleteView(view.id);
+        }}
+      />
+    </div>
+  );
+};
+
+const StandardTableViewDragHandle = ({
+  t,
+  viewId,
+  viewName,
+  onMove,
+}: {
+  t: (key: string) => string;
+  viewId: string;
+  viewName: string;
+  onMove: (id: string, delta: number) => void;
+}) => (
+  <button
+    type="button"
+    title={t('table.reorderViewHandle')}
+    aria-label={t('table.reorderViewHandle')}
+    onClick={(e) => e.stopPropagation()}
+    onKeyDown={(e) => {
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        e.stopPropagation();
+        onMove(viewId, -1);
+      } else if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        e.stopPropagation();
+        onMove(viewId, 1);
+      }
+    }}
+    className="flex size-6 shrink-0 cursor-move items-center justify-center rounded-sm text-muted-foreground outline-none hover:bg-background focus-visible:ring-[3px] focus-visible:ring-ring/50"
+  >
+    <i className="fa-solid fa-grip-vertical text-[10px]" aria-hidden="true"></i>
+    <span className="sr-only">{viewName}</span>
+  </button>
+);
+
+const StandardTableViewActions = ({
+  t,
+  view,
+  owned,
+  editable,
+  isCopied,
+  isServerBacked,
+  viewBusy,
+  onEdit,
+  onDuplicate,
+  onExport,
+  onShare,
+  onDelete,
+}: {
+  t: (key: string) => string;
+  view: CustomView;
+  owned: boolean;
+  editable: boolean;
+  isCopied: boolean;
+  isServerBacked: boolean;
+  viewBusy: boolean;
+  onEdit: () => void;
+  onDuplicate: () => void;
+  onExport: () => void;
+  onShare: () => void;
+  onDelete: () => void;
+}) => (
+  <div className="flex shrink-0 items-center gap-0.5 opacity-70 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+    {editable && (
+      <DropdownMenuItem
+        aria-label={t('table.renameView')}
+        disabled={viewBusy}
+        onSelect={(e) => {
+          e.preventDefault();
+          onEdit();
+        }}
+        className="size-7 justify-center p-0"
+      >
+        <i className="fa-solid fa-pen text-[10px]" aria-hidden="true"></i>
+      </DropdownMenuItem>
+    )}
+    {isServerBacked ? (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <DropdownMenuItem
+            aria-label={t('views.duplicateView')}
+            disabled={viewBusy}
+            onSelect={(e) => {
+              e.preventDefault();
+              onDuplicate();
+            }}
+            className="size-7 justify-center p-0"
+          >
+            <i className="fa-solid fa-clone text-[10px]" aria-hidden="true"></i>
+          </DropdownMenuItem>
+        </TooltipTrigger>
+        <TooltipContent side="bottom">{t('views.duplicateView')}</TooltipContent>
+      </Tooltip>
+    ) : (
+      <DropdownMenuItem
+        aria-label={isCopied ? t('table.viewCopied') : t('table.exportView')}
+        onSelect={(e) => {
+          e.preventDefault();
+          onExport();
+        }}
+        className="size-7 justify-center p-0"
+      >
+        <i
+          className={`fa-solid ${isCopied ? 'fa-check' : 'fa-copy'} text-[10px]`}
+          aria-hidden="true"
+        ></i>
+      </DropdownMenuItem>
+    )}
+    {isServerBacked && owned && (
+      <DropdownMenuItem
+        aria-label={t('views.shareView')}
+        disabled={viewBusy}
+        onSelect={(e) => {
+          e.preventDefault();
+          onShare();
+        }}
+        className="size-7 justify-center p-0"
+      >
+        <i className="fa-solid fa-share-nodes text-[10px]" aria-hidden="true"></i>
+      </DropdownMenuItem>
+    )}
+    {owned && (
+      <DropdownMenuItem
+        aria-label={t('table.deleteView')}
+        variant="destructive"
+        disabled={viewBusy}
+        onSelect={(e) => {
+          e.preventDefault();
+          onDelete();
+        }}
+        className="size-7 justify-center p-0"
+      >
+        <i className="fa-solid fa-trash text-[10px]" aria-hidden="true"></i>
+      </DropdownMenuItem>
+    )}
+    <span className="sr-only">{view.name}</span>
+  </div>
+);
+
+const StandardTableShell = <T extends object>({
+  controller,
+}: {
+  controller: StandardTableController<T>;
+}) => {
+  const { tableContainerRef, tableContainerClassName, shouldRenderTable, loadingState, children } =
+    controller;
+
+  return (
+    <div
+      ref={tableContainerRef}
+      className={`rounded-lg border border-border bg-background shadow-sm ${
+        tableContainerClassName ?? 'overflow-x-auto'
+      }`}
+    >
+      {shouldRenderTable ? (
+        <StandardTableGrid controller={controller} />
+      ) : (
+        (loadingState ?? children)
       )}
     </div>
+  );
+};
+
+const StandardTableGrid = <T extends object>({
+  controller,
+}: {
+  controller: StandardTableController<T>;
+}) => {
+  const { fixedTableWidth, tableStretches } = controller;
+
+  return (
+    <Table
+      className="table-fixed text-left"
+      style={
+        fixedTableWidth
+          ? {
+              width: tableStretches ? '100%' : `${fixedTableWidth}px`,
+              minWidth: tableStretches ? `${fixedTableWidth}px` : undefined,
+            }
+          : undefined
+      }
+    >
+      <StandardTableColGroup controller={controller} />
+      <StandardTableHeaderRows controller={controller} />
+      <StandardTableBodyRows controller={controller} />
+    </Table>
+  );
+};
+
+const StandardTableColGroup = <T extends object>({
+  controller,
+}: {
+  controller: StandardTableController<T>;
+}) => {
+  const {
+    table,
+    colsById,
+    shouldAnchorTrailingActionColumn,
+    hasTrailingSpacer,
+    isRowActionColumn,
+  } = controller;
+
+  return (
+    <colgroup>
+      {table.getVisibleLeafColumns().map((column) => {
+        const col = colsById.get(column.id);
+        const colWidth = column.getSize();
+        const needsActionSpacer = shouldAnchorTrailingActionColumn && col && isRowActionColumn(col);
+        return (
+          <Fragment key={column.id}>
+            {needsActionSpacer && <col data-action-spacer style={{ width: 'auto' }} />}
+            <col style={{ width: colWidth }} />
+          </Fragment>
+        );
+      })}
+      {hasTrailingSpacer && <col data-trailing-spacer style={{ width: 'auto' }} />}
+    </colgroup>
+  );
+};
+
+const StandardTableHeaderRows = <T extends object>({
+  controller,
+}: {
+  controller: StandardTableController<T>;
+}) => (
+  <TableHeader>
+    {controller.table.getHeaderGroups().map((headerGroup) => (
+      <TableRow key={headerGroup.id} className="border-border hover:bg-transparent">
+        {headerGroup.headers.map((header, colIdx) => (
+          <StandardTableHeaderCell
+            key={header.id}
+            controller={controller}
+            header={header}
+            colIdx={colIdx}
+            headerCount={headerGroup.headers.length}
+          />
+        ))}
+        {controller.hasTrailingSpacer && (
+          <TableHead
+            aria-hidden="true"
+            style={{ width: 'auto', minWidth: 0 }}
+            className="h-10 border-border p-0"
+          />
+        )}
+      </TableRow>
+    ))}
+  </TableHeader>
+);
+
+const StandardTableHeaderCell = <T extends object>({
+  controller,
+  header,
+  colIdx,
+  headerCount,
+}: {
+  controller: StandardTableController<T>;
+  header: StandardTableHeaderInstance<T>;
+  colIdx: number;
+  headerCount: number;
+}) => {
+  const {
+    colsById,
+    getColId,
+    isRowActionColumn,
+    shouldAnchorTrailingActionColumn,
+    hasTrailingSpacer,
+    getColumnMinWidth,
+    getFilterOptions,
+    filterSearchByColumnId,
+    updateFilterSearch,
+    clearFilterSearch,
+    resetFilterPage,
+  } = controller;
+  const col = colsById.get(header.column.id);
+  if (!col) return null;
+  const colId = getColId(col);
+  const isActionColumn = isRowActionColumn(col);
+  const isStickyRightColumn = col.sticky === 'right' || isActionColumn;
+  const isFirstColumn = colIdx === 0;
+  const isLastColumn = colIdx === headerCount - 1;
+  const isBeforeActionSpacer =
+    shouldAnchorTrailingActionColumn && !isActionColumn && colIdx === headerCount - 2;
+  const isBeforeTrailingSpacer = hasTrailingSpacer && colIdx === headerCount - 1;
+  const effectiveAlign = col.align ?? (isFirstColumn ? 'left' : isLastColumn ? 'right' : undefined);
+  const minColumnWidth = getColumnMinWidth(col);
+  const colWidth = Math.max(header.getSize(), minColumnWidth);
+  const sorted = header.column.getIsSorted();
+  const isResizing = header.column.getIsResizing();
+  const stickyBorderClass = isStickyRightColumn && !isActionColumn ? 'border-l border-border' : '';
+  const resizeHandler = header.getResizeHandler();
+
+  return (
+    <Fragment>
+      {shouldAnchorTrailingActionColumn && isActionColumn && (
+        <TableHead
+          aria-hidden="true"
+          style={{ width: 'auto', minWidth: 0 }}
+          className="h-10 border-border p-0"
+        />
+      )}
+      <TableHead
+        style={{ width: colWidth, minWidth: minColumnWidth }}
+        aria-label={isActionColumn ? col.header : undefined}
+        className={`relative group h-10 border-border ${
+          isLastColumn ? 'pl-3 pr-2' : 'px-3'
+        } whitespace-nowrap ${
+          effectiveAlign === 'right'
+            ? 'text-right'
+            : effectiveAlign === 'center'
+              ? 'text-center'
+              : ''
+        } ${
+          isStickyRightColumn ? `sticky right-0 z-20 bg-background ${stickyBorderClass}` : ''
+        } ${col.headerClassName || ''}`}
+      >
+        {isActionColumn ? (
+          <StandardTableActionHeader header={header} colId={colId} />
+        ) : (
+          <StandardTableSortableHeader
+            controller={controller}
+            header={header}
+            col={col}
+            colId={colId}
+            sorted={sorted}
+            filterSearch={filterSearchByColumnId[header.column.id] ?? ''}
+            filterOptions={getFilterOptions(header.column.id)}
+            onFilterSearchChange={updateFilterSearch}
+            onFilterSearchClose={clearFilterSearch}
+            onResetPage={resetFilterPage}
+          />
+        )}
+        {header.column.getCanResize() && (
+          <button
+            type="button"
+            aria-label="Resize column"
+            className="absolute top-0 right-0 z-10 flex h-full w-2 cursor-col-resize touch-none select-none items-center justify-end border-0 bg-transparent p-0"
+            data-column-resize-handle={colId}
+            onMouseDown={(event) => {
+              event.stopPropagation();
+              resizeHandler(event);
+            }}
+            onTouchStart={(event) => {
+              event.stopPropagation();
+              resizeHandler(event);
+            }}
+            onClick={(event) => event.stopPropagation()}
+            onDoubleClick={(event) => event.stopPropagation()}
+          >
+            <span
+              data-column-resize-line={colId}
+              className={`h-5 w-px rounded-full transition-colors ${
+                isBeforeActionSpacer || isBeforeTrailingSpacer
+                  ? 'bg-transparent'
+                  : isResizing
+                    ? 'bg-primary'
+                    : 'bg-border group-hover:bg-primary/40'
+              }`}
+            />
+          </button>
+        )}
+      </TableHead>
+    </Fragment>
+  );
+};
+
+const StandardTableActionHeader = <T extends object>({
+  header,
+  colId,
+}: {
+  header: StandardTableHeaderInstance<T>;
+  colId: string;
+}) => (
+  <div data-column-header-content={colId} className="inline-flex w-max items-center gap-1">
+    <span
+      className="whitespace-nowrap text-sm font-semibold text-foreground"
+      data-column-header-label={colId}
+    >
+      {header.isPlaceholder
+        ? null
+        : flexRender(header.column.columnDef.header, header.getContext())}
+    </span>
+  </div>
+);
+
+const StandardTableSortableHeader = <T extends object>({
+  controller,
+  header,
+  col,
+  colId,
+  sorted,
+  filterSearch,
+  filterOptions,
+  onFilterSearchChange,
+  onFilterSearchClose,
+  onResetPage,
+}: {
+  controller: StandardTableController<T>;
+  header: StandardTableHeaderInstance<T>;
+  col: Column<T>;
+  colId: string;
+  sorted: false | 'asc' | 'desc';
+  filterSearch: string;
+  filterOptions: string[];
+  onFilterSearchChange: (columnId: string, value: string) => void;
+  onFilterSearchClose: (columnId: string) => void;
+  onResetPage: () => void;
+}) => (
+  <div data-column-header-content={colId} className="inline-flex w-max items-center gap-1">
+    <button
+      type="button"
+      disabled={!header.column.getCanSort()}
+      onClick={header.column.getToggleSortingHandler()}
+      className="inline-flex shrink-0 items-center gap-1 rounded-lg px-2 py-1 -ml-2 text-sm font-semibold text-foreground outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-100"
+    >
+      <span className="whitespace-nowrap" data-column-header-label={colId}>
+        {header.isPlaceholder
+          ? null
+          : flexRender(header.column.columnDef.header, header.getContext())}
+      </span>
+      {sorted === 'asc' ? (
+        <ArrowUp className="size-3 shrink-0 transition-colors" aria-hidden="true" />
+      ) : sorted === 'desc' ? (
+        <ArrowDown className="size-3 shrink-0 transition-colors" aria-hidden="true" />
+      ) : (
+        <ArrowUpDown className="size-3 shrink-0 transition-colors" aria-hidden="true" />
+      )}
+    </button>
+    <HeaderFilter
+      column={header.column}
+      sourceColumn={col}
+      options={filterOptions}
+      filterSearch={filterSearch}
+      t={controller.t}
+      onFilterSearchChange={onFilterSearchChange}
+      onFilterSearchClose={onFilterSearchClose}
+      onResetPage={onResetPage}
+    />
+  </div>
+);
+
+const StandardTableBodyRows = <T extends object>({
+  controller,
+}: {
+  controller: StandardTableController<T>;
+}) => {
+  const { paginatedRows, paddingRowCount, bodyColSpan, emptyState, emptyStateMinHeightPx, t } =
+    controller;
+
+  return (
+    <TableBody>
+      {paginatedRows.length > 0 ? (
+        <>
+          {paginatedRows.map((tableRow) => (
+            <StandardTableDataRow key={tableRow.id} controller={controller} tableRow={tableRow} />
+          ))}
+          {Array.from({ length: paddingRowCount }).map((_, idx) => (
+            <TableRow
+              key={`__padding-${idx}`}
+              aria-hidden="true"
+              className="pointer-events-none hover:bg-transparent"
+            >
+              <TableCell colSpan={bodyColSpan} className="h-11 p-0" />
+            </TableRow>
+          ))}
+        </>
+      ) : (
+        <TableRow className="hover:bg-transparent">
+          <TableCell colSpan={bodyColSpan} className="p-0">
+            {emptyState ? (
+              <div
+                className="flex w-full items-center justify-center"
+                style={{ minHeight: emptyStateMinHeightPx }}
+              >
+                {emptyState}
+              </div>
+            ) : (
+              <Empty style={{ minHeight: emptyStateMinHeightPx }}>
+                <EmptyHeader>
+                  <EmptyTitle className="text-sm font-medium text-muted-foreground">
+                    {t('table.noResults')}
+                  </EmptyTitle>
+                </EmptyHeader>
+              </Empty>
+            )}
+          </TableCell>
+        </TableRow>
+      )}
+    </TableBody>
+  );
+};
+
+const StandardTableDataRow = <T extends object>({
+  controller,
+  tableRow,
+}: {
+  controller: StandardTableController<T>;
+  tableRow: StandardTableRowInstance<T>;
+}) => {
+  const {
+    colsById,
+    isRowActionColumn,
+    renderActionMenuItems,
+    openActionMenuRowId,
+    openContextMenuRowId,
+    setOpenContextMenuRowId,
+  } = controller;
+  const row = tableRow.original;
+  const visibleCells = tableRow.getVisibleCells();
+  const rowActionCell = visibleCells.find((cell) => {
+    const col = colsById.get(cell.column.id);
+    return col ? isRowActionColumn(col) : false;
+  });
+  const rowActionColumn = rowActionCell ? colsById.get(rowActionCell.column.id) : undefined;
+  const rowActionValue = rowActionCell?.getValue() as
+    | T[keyof T]
+    | string
+    | number
+    | boolean
+    | null
+    | undefined;
+  const rowActionContent = rowActionCell
+    ? rowActionColumn?.cell
+      ? rowActionColumn.cell({ getValue: () => rowActionValue, row, value: rowActionValue })
+      : flexRender(rowActionCell.column.columnDef.cell, rowActionCell.getContext())
+    : null;
+  const rowActionMenuItems = hasActionMenuItems(rowActionContent)
+    ? renderActionMenuItems(rowActionContent)
+    : null;
+  const isActionMenuOpen = openActionMenuRowId === tableRow.id;
+  const isContextMenuOpen = openContextMenuRowId === tableRow.id;
+  const rowElement = (
+    <StandardTableDataRowElement
+      controller={controller}
+      tableRow={tableRow}
+      rowActionCellId={rowActionCell?.id}
+      rowActionContent={rowActionContent}
+      rowActionMenuItems={rowActionMenuItems}
+      isActionMenuOpen={isActionMenuOpen}
+    />
+  );
+
+  return rowActionMenuItems ? (
+    <ContextMenu onOpenChange={(open) => setOpenContextMenuRowId(open ? tableRow.id : null)}>
+      <ContextMenuTrigger asChild>{rowElement}</ContextMenuTrigger>
+      {isContextMenuOpen && (
+        <ContextMenuContent
+          data-standard-table-action-menu="true"
+          className={ACTION_MENU_CONTENT_CLASSNAME}
+          onClick={(event) => event.stopPropagation()}
+          onDoubleClick={(event) => event.stopPropagation()}
+        >
+          <div className={ACTION_MENU_ITEMS_CLASSNAME}>{rowActionMenuItems}</div>
+        </ContextMenuContent>
+      )}
+    </ContextMenu>
+  ) : (
+    rowElement
+  );
+};
+
+const StandardTableDataRowElement = <T extends object>({
+  controller,
+  tableRow,
+  rowActionCellId,
+  rowActionContent,
+  rowActionMenuItems,
+  isActionMenuOpen,
+}: {
+  controller: StandardTableController<T>;
+  tableRow: StandardTableRowInstance<T>;
+  rowActionCellId: string | undefined;
+  rowActionContent: ReactNode;
+  rowActionMenuItems: ReactNode;
+  isActionMenuOpen: boolean;
+}) => {
+  const { disabledRow, onRowClick, fontSizeClass, rowClassName, hasTrailingSpacer } = controller;
+  const row = tableRow.original;
+  const visibleCells = tableRow.getVisibleCells();
+
+  return (
+    <TableRow
+      onClick={() => !disabledRow?.(row) && onRowClick?.(row)}
+      className={`group border-border transition-colors ${fontSizeClass} ${
+        disabledRow?.(row)
+          ? 'bg-muted text-muted-foreground opacity-70'
+          : `${onRowClick ? 'cursor-pointer' : ''} ${rowClassName ? rowClassName(row) : 'hover:bg-muted/50'}`
+      }`}
+    >
+      {visibleCells.map((cell, colIdx) => (
+        <StandardTableDataCell
+          key={cell.id}
+          controller={controller}
+          cell={cell}
+          colIdx={colIdx}
+          visibleCellCount={visibleCells.length}
+          row={row}
+          rowActionCellId={rowActionCellId}
+          rowActionContent={rowActionContent}
+          rowActionMenuItems={rowActionMenuItems}
+          isActionMenuOpen={isActionMenuOpen}
+          tableRowId={tableRow.id}
+        />
+      ))}
+      {hasTrailingSpacer && (
+        <TableCell
+          aria-hidden="true"
+          style={{ width: 'auto', minWidth: 0 }}
+          className="border-border p-0"
+        />
+      )}
+    </TableRow>
+  );
+};
+
+const StandardTableDataCell = <T extends object>({
+  controller,
+  cell,
+  colIdx,
+  visibleCellCount,
+  row,
+  rowActionCellId,
+  rowActionContent,
+  rowActionMenuItems,
+  isActionMenuOpen,
+  tableRowId,
+}: {
+  controller: StandardTableController<T>;
+  cell: ReturnType<StandardTableRowInstance<T>['getVisibleCells']>[number];
+  colIdx: number;
+  visibleCellCount: number;
+  row: T;
+  rowActionCellId: string | undefined;
+  rowActionContent: ReactNode;
+  rowActionMenuItems: ReactNode;
+  isActionMenuOpen: boolean;
+  tableRowId: string;
+}) => {
+  const {
+    t,
+    colsById,
+    isRowActionColumn,
+    shouldAnchorTrailingActionColumn,
+    getColumnMinWidth,
+    setOpenActionMenuRowId,
+  } = controller;
+  const colId = cell.column.id;
+  const col = colsById.get(colId);
+  if (!col) return null;
+  const isActionColumn = isRowActionColumn(col);
+  const isStickyRightColumn = col.sticky === 'right' || isActionColumn;
+  const isFirstColumn = colIdx === 0;
+  const isLastColumn = colIdx === visibleCellCount - 1;
+  const effectiveAlign = col.align ?? (isFirstColumn ? 'left' : isLastColumn ? 'right' : undefined);
+  const minColumnWidth = getColumnMinWidth(col);
+  const colWidth = Math.max(cell.column.getSize(), minColumnWidth);
+  const stickyBorderClass = isStickyRightColumn && !isActionColumn ? 'border-l border-border' : '';
+  const stickyHoverClass = isStickyRightColumn && !isActionColumn ? 'group-hover:bg-muted/50' : '';
+  const rawValue = cell.getValue() as T[keyof T] | string | number | boolean | null | undefined;
+  const cellContent =
+    isActionColumn && cell.id === rowActionCellId
+      ? rowActionContent
+      : col.cell
+        ? col.cell({ getValue: () => rawValue, row, value: rawValue })
+        : flexRender(cell.column.columnDef.cell, cell.getContext());
+  const actionMenuItems = isActionColumn ? rowActionMenuItems : null;
+
+  return (
+    <Fragment>
+      {shouldAnchorTrailingActionColumn && isActionColumn && (
+        <TableCell
+          aria-hidden="true"
+          style={{ width: 'auto', minWidth: 0 }}
+          className="border-border p-0"
+        />
+      )}
+      <TableCell
+        onDoubleClick={(e) => {
+          e.stopPropagation();
+          col.onCellDoubleClick?.(row);
+        }}
+        style={{ width: colWidth, minWidth: minColumnWidth }}
+        className={`${isLastColumn ? 'pl-3 pr-2' : 'px-3'} py-2 whitespace-nowrap ${
+          !isActionColumn
+            ? 'standard-table-value-cell max-w-0 overflow-hidden text-ellipsis font-normal'
+            : ''
+        } ${
+          isStickyRightColumn
+            ? 'w-auto text-right'
+            : `align-middle ${
+                effectiveAlign === 'right'
+                  ? 'text-right'
+                  : effectiveAlign === 'center'
+                    ? 'text-center'
+                    : ''
+              }`
+        } ${
+          isStickyRightColumn
+            ? `sticky right-0 z-20 bg-background transition-colors ${stickyBorderClass} ${stickyHoverClass}`
+            : ''
+        } ${col.className || ''}`}
+      >
+        {isActionColumn ? (
+          actionMenuItems ? (
+            <DropdownMenu
+              open={isActionMenuOpen}
+              onOpenChange={(open) => setOpenActionMenuRowId(open ? tableRowId : null)}
+            >
+              <DropdownMenuTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-xs"
+                  aria-label={t('table.rowActions')}
+                  onClick={(event) => event.stopPropagation()}
+                  className="rounded-lg"
+                >
+                  <i className="fa-solid fa-ellipsis text-[10px]" aria-hidden="true"></i>
+                </Button>
+              </DropdownMenuTrigger>
+              {isActionMenuOpen && (
+                <DropdownMenuContent
+                  align="end"
+                  data-standard-table-action-menu="true"
+                  className={ACTION_MENU_CONTENT_CLASSNAME}
+                  onClick={(event) => event.stopPropagation()}
+                  onDoubleClick={(event) => event.stopPropagation()}
+                >
+                  <div className={ACTION_MENU_ITEMS_CLASSNAME}>{actionMenuItems}</div>
+                </DropdownMenuContent>
+              )}
+            </DropdownMenu>
+          ) : null
+        ) : (
+          cellContent
+        )}
+      </TableCell>
+    </Fragment>
+  );
+};
+
+const StandardTableFooter = <T extends object>({
+  controller,
+}: {
+  controller: StandardTableController<T>;
+}) => {
+  const { externalFooter, data, columns, footerClassName, renderInternalFooter } = controller;
+  if (!(externalFooter || (data && columns))) return null;
+
+  return (
+    <div
+      className={`py-1 ${footerClassName ?? 'flex justify-between items-center flex-wrap gap-4'}`}
+    >
+      {data && columns ? renderInternalFooter() : externalFooter}
+    </div>
+  );
+};
+
+const StandardTableModals = <T extends object>({
+  controller,
+}: {
+  controller: StandardTableController<T>;
+}) => {
+  const { data, columns, isServerBacked, pasteModalOpen } = controller;
+
+  return (
+    <>
+      {data && columns && <StandardTableCustomViewModal controller={controller} />}
+      {isServerBacked && <StandardTableShareViewModal controller={controller} />}
+      {data && columns && pasteModalOpen && <StandardTablePasteViewModal controller={controller} />}
+    </>
+  );
+};
+
+const StandardTableCustomViewModal = <T extends object>({
+  controller,
+}: {
+  controller: StandardTableController<T>;
+}) => {
+  const { modalState, setModalState, saveView, modalColumns, hiddenColIds } = controller;
+
+  return (
+    <CustomViewModal
+      key={
+        modalState?.kind === 'edit'
+          ? `edit-${modalState.view.id}`
+          : modalState?.kind === 'create'
+            ? 'create'
+            : 'closed'
+      }
+      isOpen={modalState !== null}
+      onClose={() => setModalState(null)}
+      onSave={(view) => {
+        void saveView(view);
+      }}
+      columns={modalColumns}
+      initialHiddenColIds={hiddenColIds}
+      editingView={modalState?.kind === 'edit' ? modalState.view : undefined}
+    />
+  );
+};
+
+const StandardTableShareViewModal = <T extends object>({
+  controller,
+}: {
+  controller: StandardTableController<T>;
+}) => {
+  const { shareModalView, setShareModalView } = controller;
+
+  return (
+    <ShareViewModal
+      isOpen={shareModalView !== null}
+      onClose={() => setShareModalView(null)}
+      viewId={shareModalView?.id ?? ''}
+      viewName={shareModalView?.name ?? ''}
+    />
+  );
+};
+
+const StandardTablePasteViewModal = <T extends object>({
+  controller,
+}: {
+  controller: StandardTableController<T>;
+}) => {
+  const {
+    t,
+    pasteModalOpen,
+    closePasteModal,
+    pasteError,
+    pasteText,
+    setPasteText,
+    setPasteError,
+    submitPasteImport,
+  } = controller;
+
+  return (
+    <Modal isOpen={pasteModalOpen} onClose={closePasteModal} ariaLabel={null}>
+      <ModalContent size="md">
+        <ModalHeader>
+          <ModalTitle>
+            <i className="fa-solid fa-file-import text-primary"></i>
+            {t('table.pasteViewTitle')}
+          </ModalTitle>
+          <ModalCloseButton onClick={closePasteModal} />
+        </ModalHeader>
+        <ModalBody className="space-y-3">
+          <ModalDescription>{t('table.pasteViewDescription')}</ModalDescription>
+          <Field data-invalid={Boolean(pasteError)}>
+            <FieldLabel htmlFor="custom-view-import-payload" className="sr-only">
+              {t('table.pasteViewTitle')}
+            </FieldLabel>
+            <Textarea
+              id="custom-view-import-payload"
+              value={pasteText}
+              onChange={(e) => {
+                setPasteText(e.target.value);
+                if (pasteError) setPasteError(null);
+              }}
+              placeholder={t('table.pasteViewPlaceholder')}
+              rows={6}
+              aria-invalid={Boolean(pasteError)}
+              className="resize-y font-mono text-xs"
+            />
+            {pasteError && (
+              <FieldError role="alert" className="text-xs">
+                {pasteError}
+              </FieldError>
+            )}
+          </Field>
+        </ModalBody>
+        <ModalFooter>
+          <Button type="button" variant="outline" onClick={closePasteModal}>
+            {t('table.cancel')}
+          </Button>
+          <Button
+            type="button"
+            onClick={submitPasteImport}
+            disabled={pasteText.trim().length === 0}
+          >
+            {t('table.importView')}
+          </Button>
+        </ModalFooter>
+      </ModalContent>
+    </Modal>
   );
 };
 

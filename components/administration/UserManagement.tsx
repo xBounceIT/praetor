@@ -277,7 +277,7 @@ const userManagementReducer = (
   }
 };
 
-const UserManagement: React.FC<UserManagementProps> = ({
+const useUserManagementController = ({
   users,
   clients,
   projects,
@@ -293,7 +293,7 @@ const UserManagement: React.FC<UserManagementProps> = ({
   roles,
   ssoProviders,
   currency,
-}) => {
+}: UserManagementProps) => {
   const { t } = useTranslation(['hr', 'common']);
 
   const roleOptions = React.useMemo(
@@ -324,19 +324,13 @@ const UserManagement: React.FC<UserManagementProps> = ({
     newUsername,
     newPassword,
     newRole,
-    formErrors,
-    showNewPassword,
-    isCreateModalOpen,
     managingUserId,
     assignments,
-    initialAssignments,
     clientSearch,
     projectSearch,
     taskSearch,
     filterClientId,
     filterProjectId,
-    isLoadingAssignments,
-    isDeleteConfirmOpen,
     userToDelete,
     editingUser,
     editFirstName,
@@ -347,18 +341,13 @@ const UserManagement: React.FC<UserManagementProps> = ({
     editPrimaryRoleId,
     initialEditAssignedRoleIds,
     initialEditPrimaryRoleId,
-    isLoadingEditRoles,
-    editRolesError,
-    editFormErrors,
     editCostPerHour,
     editIsDisabled,
     authMethodUser,
     authMethodDraft,
     authProviderDraft,
-    authMethodError,
     isSavingAuthMethod,
     totpResetUser,
-    totpResetError,
     isResettingTotp,
   } = state;
 
@@ -1293,916 +1282,976 @@ const UserManagement: React.FC<UserManagementProps> = ({
     },
   ];
 
-  return (
-    <div className="space-y-6 animate-in slide-in-from-bottom-2 duration-500">
-      <Dialog
-        open={isDeleteConfirmOpen}
-        onOpenChange={(open) => {
-          if (!open) {
-            cancelDelete();
-          }
-        }}
-      >
-        <DialogContent className="sm:max-w-md" showCloseButton={false}>
-          <DialogHeader className="items-center text-center sm:text-center">
-            <div className="mb-1 flex size-12 items-center justify-center rounded-full bg-destructive/10 text-destructive">
-              <TriangleAlert aria-hidden="true" />
-            </div>
-            <DialogTitle>{t('hr:workforce.deleteUser')}</DialogTitle>
-            <DialogDescription className="leading-relaxed">
-              {t('hr:workforce.deleteConfirmMessage', { name: userToDelete?.name })}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="sm:justify-center">
-            <Button type="button" variant="outline" onClick={cancelDelete}>
-              {t('common:buttons.cancel')}
-            </Button>
-            <Button type="button" variant="destructive" onClick={handleDelete}>
-              <Trash2 data-icon="inline-start" aria-hidden="true" />
-              {t('hr:workforce.yesDelete')}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+  return {
+    authMethodOptions,
+    canCreateUsers,
+    canEditAssignedRoles,
+    canEditCostFor,
+    canManageAssignments,
+    canUpdateUsers,
+    canViewCosts,
+    cancelDelete,
+    clientFilterOptions,
+    clients,
+    closeAssignments,
+    closeAuthMethodDialog,
+    closeCreateModal,
+    closeEditModal,
+    closeTotpResetDialog,
+    confirmTotpReset,
+    currency,
+    currentUserId,
+    dispatch,
+    editIdentityReadOnly,
+    getAuthMethodLabel,
+    handleDelete,
+    handleEdit,
+    handleSubmit,
+    hasEditChanges,
+    isEditingSelf,
+    isSsoAuthMethodDraft,
+    managingUser,
+    noUsersFoundLabel,
+    projectFilterOptions,
+    projects,
+    providerOptions,
+    roleOptions,
+    roles,
+    saveAssignments,
+    saveAuthMethod,
+    saveEdit,
+    sortedUsers,
+    state,
+    t,
+    toggleAssignment,
+    userColumns,
+    usernameManuallyEdited,
+    visibleClients,
+    visibleProjects,
+    visibleTasks,
+  };
+};
 
-      <Dialog
-        open={!!authMethodUser}
-        onOpenChange={(open) => {
-          if (!open) {
-            closeAuthMethodDialog();
-          }
-        }}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{t('hr:workforce.authMethod.changeAction')}</DialogTitle>
-            <DialogDescription>
-              {t('hr:workforce.authMethod.description', { name: authMethodUser?.name })}
-            </DialogDescription>
-          </DialogHeader>
+type UserManagementController = ReturnType<typeof useUserManagementController>;
 
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-foreground">
-                {t('hr:workforce.authMethod.methodLabel')}
-              </label>
-              <Select
-                value={authMethodDraft}
-                onValueChange={(value) => {
-                  const next = value as UserAuthMethod;
-                  dispatch({
-                    type: 'set',
-                    values: {
-                      authMethodDraft: next,
-                      authProviderDraft: '',
-                      authMethodError: '',
-                    },
-                  });
-                }}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent position="popper" sideOffset={4}>
-                  <SelectGroup>
-                    {authMethodOptions.map((option) => (
-                      <SelectItem key={option.id} value={option.id}>
-                        {option.name}
-                      </SelectItem>
-                    ))}
-                  </SelectGroup>
-                </SelectContent>
-              </Select>
-            </div>
+const UserManagement: React.FC<UserManagementProps> = (props) => {
+  const controller = useUserManagementController(props);
+  return <UserManagementLayout controller={controller} />;
+};
 
-            {isSsoAuthMethodDraft && (
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-foreground">
-                  {t('hr:workforce.authMethod.providerLabel')}
-                </label>
-                <Select
-                  value={authProviderDraft || undefined}
-                  onValueChange={(value) => {
-                    dispatch({
-                      type: 'set',
-                      values: { authProviderDraft: value, authMethodError: '' },
-                    });
-                  }}
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder={t('hr:workforce.authMethod.providerPlaceholder')} />
-                  </SelectTrigger>
-                  <SelectContent position="popper" sideOffset={4}>
-                    <SelectGroup>
-                      {providerOptions.map((provider) => (
-                        <SelectItem key={provider.id} value={provider.id}>
-                          {provider.name}
-                        </SelectItem>
-                      ))}
-                    </SelectGroup>
-                  </SelectContent>
-                </Select>
-                {providerOptions.length === 0 && (
-                  <p className="text-xs text-muted-foreground">
-                    {t('hr:workforce.authMethod.noProviders')}
-                  </p>
-                )}
-              </div>
-            )}
+const UserManagementLayout: React.FC<{ controller: UserManagementController }> = ({
+  controller,
+}) => (
+  <div className="space-y-6 animate-in slide-in-from-bottom-2 duration-500">
+    <UserDeleteDialog controller={controller} />
+    <UserAuthMethodDialog controller={controller} />
+    <UserTotpResetDialog controller={controller} />
+    <UserEditModal controller={controller} />
+    <UserCreateDialog controller={controller} />
+    <UserCreateButton controller={controller} />
+    <UserManagementTable controller={controller} />
+    <UserAssignmentsModal controller={controller} />
+  </div>
+);
 
-            {authMethodError && <p className="text-sm text-destructive">{authMethodError}</p>}
-          </div>
-
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={closeAuthMethodDialog}>
-              {t('common:buttons.cancel')}
-            </Button>
-            <Button type="button" onClick={saveAuthMethod} disabled={isSavingAuthMethod}>
-              {isSavingAuthMethod ? t('common:buttons.saving') : t('common:buttons.save')}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog
-        open={!!totpResetUser}
-        onOpenChange={(open) => {
-          if (!open) {
-            closeTotpResetDialog();
-          }
-        }}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{t('hr:totpReset.confirmTitle')}</DialogTitle>
-            <DialogDescription>
-              {t('hr:totpReset.confirmDescription', { name: totpResetUser?.name })}
-            </DialogDescription>
-          </DialogHeader>
-
-          {totpResetError && <p className="text-sm text-destructive">{totpResetError}</p>}
-
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={closeTotpResetDialog}>
-              {t('common:buttons.cancel')}
-            </Button>
-            <Button type="button" onClick={confirmTotpReset} disabled={isResettingTotp}>
-              {isResettingTotp ? t('common:buttons.saving') : t('hr:totpReset.confirm')}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Edit User Modal */}
-      <Modal isOpen={!!editingUser} onClose={closeEditModal}>
-        <div className="bg-card rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in duration-200">
-          <div className="p-6 space-y-4">
-            <div className="flex items-center gap-3 mb-2">
-              <div className="size-10 bg-muted rounded-full flex items-center justify-center">
-                <i className="fa-solid fa-user-pen text-praetor"></i>
-              </div>
-              <h3 className="text-lg font-semibold text-foreground">
-                {t('hr:workforce.editUser')}
-              </h3>
-            </div>
-
-            <div className="space-y-4">
-              {editIdentityReadOnly && editingUser && (
-                <p className="text-xs text-muted-foreground">
-                  {t('hr:workforce.identityManagedByProvider', {
-                    provider: getAuthMethodLabel(editingUser),
-                  })}
-                </p>
-              )}
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1">
-                    {t('hr:workforce.name')} {!editIdentityReadOnly && <RequiredMark />}
-                  </label>
-                  <Input
-                    type="text"
-                    value={editFirstName}
-                    onChange={(e) => {
-                      dispatch({ type: 'set', values: { editFirstName: e.target.value } });
-                      if (editFormErrors.firstName) {
-                        dispatch({ type: 'patchEditFormErrors', value: { firstName: '' } });
-                      }
-                    }}
-                    aria-label={t('hr:workforce.name')}
-                    readOnly={editIdentityReadOnly}
-                    disabled={editIdentityReadOnly}
-                    aria-invalid={Boolean(editFormErrors.firstName)}
-                  />
-                  {editFormErrors.firstName && (
-                    <p className="text-xs text-red-500 mt-1">{editFormErrors.firstName}</p>
-                  )}
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1">
-                    {t('hr:workforce.surname')}
-                  </label>
-                  <Input
-                    type="text"
-                    value={editSurname}
-                    onChange={(e) => {
-                      dispatch({ type: 'set', values: { editSurname: e.target.value } });
-                      if (editFormErrors.surname) {
-                        dispatch({ type: 'patchEditFormErrors', value: { surname: '' } });
-                      }
-                    }}
-                    aria-label={t('hr:workforce.surname')}
-                    readOnly={editIdentityReadOnly}
-                    disabled={editIdentityReadOnly}
-                    aria-invalid={Boolean(editFormErrors.surname)}
-                  />
-                  {editFormErrors.surname && (
-                    <p className="text-xs text-red-500 mt-1">{editFormErrors.surname}</p>
-                  )}
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1">
-                  {t('common:labels.email')}
-                </label>
-                <Input
-                  type="email"
-                  value={editEmail}
-                  onChange={(e) => {
-                    dispatch({ type: 'set', values: { editEmail: e.target.value } });
-                    if (editFormErrors.email) {
-                      dispatch({ type: 'patchEditFormErrors', value: { email: '' } });
-                    }
-                  }}
-                  placeholder="e.g. alice.smith@example.com"
-                  aria-label={t('common:labels.email')}
-                  readOnly={editIdentityReadOnly}
-                  disabled={editIdentityReadOnly}
-                  aria-invalid={Boolean(editFormErrors.email)}
-                />
-                {editFormErrors.email && (
-                  <p className="text-xs text-red-500 mt-1">{editFormErrors.email}</p>
-                )}
-              </div>
-
-              {canUpdateUsers && (
-                <div>
-                  {canEditAssignedRoles ? (
-                    <div className="space-y-3">
-                      <div>
-                        <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1">
-                          {t('hr:workforce.assignedRoles')}
-                        </label>
-                        <div className="max-h-36 overflow-y-auto bg-muted/50 border border-border rounded-xl p-2 space-y-1">
-                          {roles
-                            .slice()
-                            .sort((a, b) => a.name.localeCompare(b.name))
-                            .map((r) => {
-                              const checked = editAssignedRoleIds.includes(r.id);
-                              const isPrimary = r.id === editPrimaryRoleId;
-                              return (
-                                <label
-                                  key={r.id}
-                                  className={`flex items-center justify-between gap-3 px-3 py-2 rounded-lg cursor-pointer transition-colors ${
-                                    checked ? 'bg-background shadow-sm' : 'hover:bg-accent'
-                                  }`}
-                                >
-                                  <div className="flex items-center gap-3 min-w-0">
-                                    <Checkbox
-                                      checked={checked}
-                                      disabled={isPrimary && checked}
-                                      onChange={() => {
-                                        if (isPrimary && checked) return;
-                                        dispatch({ type: 'toggleEditAssignedRole', roleId: r.id });
-                                      }}
-                                    />
-                                    <span className="text-sm font-semibold text-foreground truncate">
-                                      {r.name}
-                                    </span>
-                                  </div>
-                                  {isPrimary && (
-                                    <span className="text-[10px] font-black uppercase tracking-wider bg-muted text-muted-foreground px-2 py-0.5 rounded">
-                                      {t('hr:workforce.primary')}
-                                    </span>
-                                  )}
-                                </label>
-                              );
-                            })}
-                        </div>
-                        <p className="text-[10px] text-muted-foreground mt-1">
-                          {t('hr:workforce.primaryRoleHelp')}
-                        </p>
-                      </div>
-
-                      <SelectControl
-                        label={t('hr:workforce.primaryRole')}
-                        options={editAssignedRoleIds.flatMap((id) => {
-                          const role = roles.find((r) => r.id === id);
-                          return role ? [{ id: role.id, name: role.name }] : [];
-                        })}
-                        value={editPrimaryRoleId}
-                        onChange={(val) =>
-                          dispatch({ type: 'set', values: { editPrimaryRoleId: val as string } })
-                        }
-                        buttonClassName="py-2 text-sm"
-                        disabled={isLoadingEditRoles || editAssignedRoleIds.length < 1}
-                      />
-
-                      {isLoadingEditRoles && (
-                        <p className="text-[10px] text-muted-foreground font-bold">
-                          {t('hr:workforce.loadingRoles')}
-                        </p>
-                      )}
-                      {editRolesError && (
-                        <p className="text-[10px] text-red-500 font-bold">{editRolesError}</p>
-                      )}
-                    </div>
-                  ) : (
-                    <>
-                      <SelectControl
-                        label={t('hr:workforce.role')}
-                        options={roleOptions}
-                        value={editRole}
-                        onChange={(val) =>
-                          dispatch({ type: 'set', values: { editRole: val as string } })
-                        }
-                        buttonClassName="py-2 text-sm"
-                        disabled={isEditingSelf}
-                      />
-                      {isEditingSelf && (
-                        <p className="text-[10px] text-muted-foreground mt-1">
-                          {t('hr:workforce.cannotChangeOwnRole')}
-                        </p>
-                      )}
-                    </>
-                  )}
-                </div>
-              )}
-
-              {canViewCosts && editingUser && canEditCostFor(editingUser.id) && (
-                <div>
-                  <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1">
-                    {t('hr:workforce.costPerHour')}
-                  </label>
-                  <div className="flex items-center border border-input bg-transparent dark:bg-input/30 rounded-lg focus-within:ring-2 focus-within:ring-praetor transition-all overflow-hidden">
-                    <div className="w-16 flex items-center justify-center text-muted-foreground text-sm font-bold border-r border-input py-2 bg-muted/50">
-                      {currency}
-                    </div>
-                    <ValidatedNumberInput
-                      value={editCostPerHour}
-                      onValueChange={(value) =>
-                        dispatch({ type: 'set', values: { editCostPerHour: value } })
-                      }
-                      className="flex-1 px-4 py-2 bg-transparent outline-none text-sm font-semibold"
-                      placeholder="0.00"
-                    />
-                  </div>
-                </div>
-              )}
-
-              {editingUser?.id !== currentUserId && (
-                <div className="flex items-center justify-between p-3 bg-muted/50 rounded-xl border border-border">
-                  <div>
-                    <p className="text-sm font-bold text-foreground">
-                      {t('hr:workforce.disabled')}
-                    </p>
-                  </div>
-                  <Toggle
-                    checked={editIsDisabled}
-                    onChange={(checked) =>
-                      dispatch({ type: 'set', values: { editIsDisabled: checked } })
-                    }
-                  />
-                </div>
-              )}
-            </div>
-
-            <div className="flex gap-3 pt-2">
-              <button
-                type="button"
-                onClick={closeEditModal}
-                className="flex-1 py-3 text-sm font-bold text-muted-foreground hover:bg-muted rounded-xl transition-colors"
-              >
-                {t('common:buttons.cancel')}
-              </button>
-              <button
-                type="button"
-                onClick={saveEdit}
-                disabled={!hasEditChanges}
-                className={`flex-1 py-3 text-sm font-bold rounded-xl shadow-lg transition-all active:scale-95 text-white ${!hasEditChanges ? 'bg-zinc-300 shadow-none cursor-not-allowed' : 'bg-praetor shadow-zinc-200 hover:bg-zinc-800'}`}
-              >
-                {t('hr:workforce.saveChanges')}
-              </button>
-            </div>
-          </div>
+const UserDeleteDialog: React.FC<{ controller: UserManagementController }> = ({ controller }) => (
+  <Dialog
+    open={controller.state.isDeleteConfirmOpen}
+    onOpenChange={(open) => {
+      if (!open) controller.cancelDelete();
+    }}
+  >
+    <DialogContent className="sm:max-w-md" showCloseButton={false}>
+      <DialogHeader className="items-center text-center sm:text-center">
+        <div className="mb-1 flex size-12 items-center justify-center rounded-full bg-destructive/10 text-destructive">
+          <TriangleAlert aria-hidden="true" />
         </div>
-      </Modal>
-      {/* Create User Dialog */}
-      {canCreateUsers && (
-        <Dialog
-          open={isCreateModalOpen}
-          onOpenChange={(open) => {
-            if (!open) closeCreateModal();
-          }}
-        >
-          <DialogContent className="sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <UserPlus className="size-5" aria-hidden="true" />
-                {t('hr:workforce.createNewUser')}
-              </DialogTitle>
-              <DialogDescription>{t('hr:workforce.createNewUserDescription')}</DialogDescription>
-            </DialogHeader>
-            <form onSubmit={handleSubmit} className="space-y-4" noValidate>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-2">
-                  <Label htmlFor="create-user-first-name">
-                    {t('hr:workforce.name')}
-                    <span className="text-destructive" aria-hidden="true">
-                      *
-                    </span>
-                  </Label>
-                  <Input
-                    id="create-user-first-name"
-                    type="text"
-                    value={newFirstName}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      const values: Partial<UserManagementState> = { newFirstName: val };
-                      if (!usernameManuallyEdited.current) {
-                        const surname = sanitizeUsernamePart(newSurname);
-                        const first = sanitizeUsernamePart(val);
-                        values.newUsername =
-                          first && surname ? `${first}.${surname}` : first || surname;
-                      }
-                      dispatch({ type: 'set', values });
-                      if (formErrors.firstName || formErrors.general) {
-                        dispatch({
-                          type: 'patchFormErrors',
-                          value: { firstName: '', general: '' },
-                        });
-                      }
-                    }}
-                    placeholder="e.g. Alice"
-                    aria-invalid={!!formErrors.firstName}
-                    required
-                  />
-                  {formErrors.firstName && (
-                    <p className="text-xs text-destructive">{formErrors.firstName}</p>
-                  )}
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="create-user-surname">
-                    {t('hr:workforce.surname')}
-                    <span className="text-destructive" aria-hidden="true">
-                      *
-                    </span>
-                  </Label>
-                  <Input
-                    id="create-user-surname"
-                    type="text"
-                    value={newSurname}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      const values: Partial<UserManagementState> = { newSurname: val };
-                      if (!usernameManuallyEdited.current) {
-                        const first = sanitizeUsernamePart(newFirstName);
-                        const surname = sanitizeUsernamePart(val);
-                        values.newUsername =
-                          first && surname ? `${first}.${surname}` : first || surname;
-                      }
-                      dispatch({ type: 'set', values });
-                      if (formErrors.surname || formErrors.general) {
-                        dispatch({ type: 'patchFormErrors', value: { surname: '', general: '' } });
-                      }
-                    }}
-                    placeholder="e.g. Smith"
-                    aria-invalid={!!formErrors.surname}
-                    required
-                  />
-                  {formErrors.surname && (
-                    <p className="text-xs text-destructive">{formErrors.surname}</p>
-                  )}
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="create-user-email">{t('common:labels.email')}</Label>
-                <Input
-                  id="create-user-email"
-                  type="email"
-                  value={newEmail}
-                  onChange={(e) => {
-                    dispatch({ type: 'set', values: { newEmail: e.target.value } });
-                    if (formErrors.email || formErrors.general) {
-                      dispatch({ type: 'patchFormErrors', value: { email: '', general: '' } });
-                    }
-                  }}
-                  placeholder="e.g. alice.smith@example.com"
-                  aria-invalid={!!formErrors.email}
-                />
-                {formErrors.email && <p className="text-xs text-destructive">{formErrors.email}</p>}
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="create-user-username">
-                  {t('hr:workforce.username')}
-                  <span className="text-destructive" aria-hidden="true">
-                    *
-                  </span>
-                </Label>
-                <Input
-                  id="create-user-username"
-                  type="text"
-                  value={newUsername}
-                  onChange={(e) => {
-                    usernameManuallyEdited.current = true;
-                    dispatch({ type: 'set', values: { newUsername: e.target.value } });
-                    if (formErrors.username || formErrors.general) {
-                      dispatch({ type: 'patchFormErrors', value: { username: '', general: '' } });
-                    }
-                  }}
-                  placeholder="e.g. alice.smith"
-                  aria-invalid={!!formErrors.username}
-                  required
-                />
-                {formErrors.username && (
-                  <p className="text-xs text-destructive">{formErrors.username}</p>
-                )}
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="create-user-password">
-                  {t('hr:workforce.password')}
-                  <span className="text-destructive" aria-hidden="true">
-                    *
-                  </span>
-                </Label>
-                <div className="relative">
-                  <Input
-                    id="create-user-password"
-                    type={showNewPassword ? 'text' : 'password'}
-                    value={newPassword}
-                    onChange={(e) => {
-                      dispatch({ type: 'set', values: { newPassword: e.target.value } });
-                      if (formErrors.password || formErrors.general) {
-                        dispatch({ type: 'patchFormErrors', value: { password: '', general: '' } });
-                      }
-                    }}
-                    placeholder={t('hr:workforce.password')}
-                    aria-invalid={!!formErrors.password}
-                    autoComplete="new-password"
-                    required
-                    className="pr-9"
-                  />
-                  <button
-                    type="button"
-                    onClick={() =>
-                      dispatch({ type: 'set', values: { showNewPassword: !showNewPassword } })
-                    }
-                    aria-label={
-                      showNewPassword
-                        ? t('common:labels.hidePassword')
-                        : t('common:labels.showPassword')
-                    }
-                    aria-pressed={showNewPassword}
-                    className="absolute inset-y-0 right-0 flex items-center justify-center px-2 text-muted-foreground hover:text-foreground rounded-md outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
-                  >
-                    {showNewPassword ? (
-                      <EyeOff className="size-4" aria-hidden="true" />
-                    ) : (
-                      <Eye className="size-4" aria-hidden="true" />
-                    )}
-                  </button>
-                </div>
-                {formErrors.password && (
-                  <p className="text-xs text-destructive">{formErrors.password}</p>
-                )}
-              </div>
-              <SelectControl
-                id="create-user-role"
-                label={t('hr:workforce.role')}
-                options={roleOptions}
-                value={newRole}
-                onChange={(val) => dispatch({ type: 'set', values: { newRole: val as string } })}
-              />
+        <DialogTitle>{controller.t('hr:workforce.deleteUser')}</DialogTitle>
+        <DialogDescription className="leading-relaxed">
+          {controller.t('hr:workforce.deleteConfirmMessage', {
+            name: controller.state.userToDelete?.name,
+          })}
+        </DialogDescription>
+      </DialogHeader>
+      <DialogFooter className="sm:justify-center">
+        <Button type="button" variant="outline" onClick={controller.cancelDelete}>
+          {controller.t('common:buttons.cancel')}
+        </Button>
+        <Button type="button" variant="destructive" onClick={controller.handleDelete}>
+          <Trash2 data-icon="inline-start" aria-hidden="true" />
+          {controller.t('hr:workforce.yesDelete')}
+        </Button>
+      </DialogFooter>
+    </DialogContent>
+  </Dialog>
+);
 
-              {formErrors.general && (
-                <p className="text-sm font-medium text-destructive">{formErrors.general}</p>
-              )}
-              <DialogFooter>
-                <Button type="button" variant="outline" onClick={closeCreateModal}>
-                  {t('common:buttons.cancel')}
-                </Button>
-                <Button type="submit">{t('common:buttons.add')}</Button>
-              </DialogFooter>
-            </form>
-          </DialogContent>
-        </Dialog>
-      )}
+const UserAuthMethodDialog: React.FC<{ controller: UserManagementController }> = ({
+  controller,
+}) => (
+  <Dialog
+    open={Boolean(controller.state.authMethodUser)}
+    onOpenChange={(open) => {
+      if (!open) controller.closeAuthMethodDialog();
+    }}
+  >
+    <DialogContent>
+      <DialogHeader>
+        <DialogTitle>{controller.t('hr:workforce.authMethod.changeAction')}</DialogTitle>
+        <DialogDescription>
+          {controller.t('hr:workforce.authMethod.description', {
+            name: controller.state.authMethodUser?.name,
+          })}
+        </DialogDescription>
+      </DialogHeader>
 
-      {canCreateUsers && (
-        <div className="flex justify-end">
-          <HeaderAddButton
-            onClick={() => dispatch({ type: 'set', values: { isCreateModalOpen: true } })}
+      <div className="space-y-4">
+        <div className="space-y-2">
+          <label className="text-sm font-medium text-foreground">
+            {controller.t('hr:workforce.authMethod.methodLabel')}
+          </label>
+          <Select
+            value={controller.state.authMethodDraft}
+            onValueChange={(value) => {
+              controller.dispatch({
+                type: 'set',
+                values: {
+                  authMethodDraft: value as UserAuthMethod,
+                  authProviderDraft: '',
+                  authMethodError: '',
+                },
+              });
+            }}
           >
-            {t('hr:workforce.addUser')}
-          </HeaderAddButton>
+            <SelectTrigger className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent position="popper" sideOffset={4}>
+              <SelectGroup>
+                {controller.authMethodOptions.map((option) => (
+                  <SelectItem key={option.id} value={option.id}>
+                    {option.name}
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+            </SelectContent>
+          </Select>
         </div>
-      )}
 
-      <StandardTable<User>
-        title={t('hr:workforce.title')}
-        viewKey="admin.users"
-        data={sortedUsers}
-        columns={userColumns}
-        defaultRowsPerPage={5}
-        emptyState={noUsersFoundLabel}
-        rowClassName={(user) =>
-          user.isDisabled
-            ? 'opacity-60 grayscale hover:opacity-100 hover:grayscale-0 hover:bg-zinc-50'
-            : 'hover:bg-zinc-50'
-        }
-        onRowClick={canUpdateUsers ? handleEdit : undefined}
-      />
-
-      {/* Assignment Modal */}
-      <Modal
-        isOpen={!!managingUserId}
-        onClose={closeAssignments}
-        zIndex={50}
-        backdropClass="bg-zinc-900/50 backdrop-blur-sm"
-      >
-        <div className="bg-card rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-          <div className="px-6 py-4 border-b border-border flex items-center justify-between bg-muted/50">
-            <h3 className="font-semibold text-lg text-foreground">
-              {t('hr:workforce.manageAccess', { name: managingUser?.name })}
-            </h3>
-            <button
-              type="button"
-              onClick={closeAssignments}
-              aria-label={t('common:buttons.close')}
-              className="text-muted-foreground hover:text-foreground transition-colors"
+        {controller.isSsoAuthMethodDraft && (
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-foreground">
+              {controller.t('hr:workforce.authMethod.providerLabel')}
+            </label>
+            <Select
+              value={controller.state.authProviderDraft || undefined}
+              onValueChange={(value) => {
+                controller.dispatch({
+                  type: 'set',
+                  values: { authProviderDraft: value, authMethodError: '' },
+                });
+              }}
             >
-              <i className="fa-solid fa-xmark text-xl"></i>
-            </button>
-          </div>
-
-          <div className="p-6 overflow-y-auto flex-1">
-            {isLoadingAssignments ? (
-              <div className="flex items-center justify-center py-12">
-                <i className="fa-solid fa-circle-notch fa-spin text-3xl text-praetor"></i>
-              </div>
-            ) : (
-              <>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                  <SelectControl
-                    options={clientFilterOptions}
-                    value={filterClientId}
-                    onChange={(val) =>
-                      dispatch({ type: 'set', values: { filterClientId: val as string } })
-                    }
-                    placeholder={t('hr:workforce.filterByClient')}
-                    searchable={true}
-                    buttonClassName="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm font-semibold text-foreground shadow-sm"
-                  />
-                  <SelectControl
-                    options={projectFilterOptions}
-                    value={filterProjectId}
-                    onChange={(val) =>
-                      dispatch({ type: 'set', values: { filterProjectId: val as string } })
-                    }
-                    placeholder={t('hr:workforce.filterByProject')}
-                    searchable={true}
-                    buttonClassName="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm font-semibold text-foreground shadow-sm"
-                    disabled={projectFilterOptions.length === 1}
-                  />
-                </div>
-
-                <div
-                  className={`grid grid-cols-1 ${canManageAssignments ? 'md:grid-cols-3' : 'md:grid-cols-2'} gap-6`}
-                >
-                  {/* Clients Column */}
-                  <div className="space-y-3">
-                    <div className="sticky top-0 bg-card z-10 pb-2 border-b border-border mb-2">
-                      <div className="flex items-center justify-between py-2">
-                        <h4 className="font-semibold text-foreground text-sm uppercase tracking-wider">
-                          {t('hr:workforce.clients')}
-                        </h4>
-                        <span className="text-xs font-bold bg-muted text-muted-foreground px-2 py-0.5 rounded-full">
-                          {assignments.clientIds.length}
-                        </span>
-                      </div>
-                      <input
-                        type="text"
-                        placeholder={t('hr:workforce.searchClients')}
-                        aria-label={t('hr:workforce.searchClients')}
-                        value={clientSearch}
-                        onChange={(e) =>
-                          dispatch({ type: 'set', values: { clientSearch: e.target.value } })
-                        }
-                        className="w-full px-3 py-1.5 text-sm border border-border bg-background text-foreground rounded-lg focus:ring-2 focus:ring-praetor outline-none placeholder:text-muted-foreground"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      {visibleClients.map((client) => (
-                        <label
-                          key={client.id}
-                          className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
-                            assignments.clientIds.includes(client.id)
-                              ? 'bg-accent border-border shadow-sm'
-                              : 'bg-card border-border hover:border-input'
-                          }`}
-                        >
-                          <div className="relative flex items-center justify-center shrink-0">
-                            <input
-                              type="checkbox"
-                              checked={assignments.clientIds.includes(client.id)}
-                              onChange={() => toggleAssignment('client', client.id)}
-                              aria-label={client.name}
-                              className="sr-only peer"
-                            />
-                            <div className="size-5 rounded-full border-2 border-border relative transition-all peer-checked:bg-praetor peer-checked:border-praetor bg-background shadow-sm flex items-center justify-center">
-                              <div
-                                className={`size-2 rounded-full transition-all duration-200 ${assignments.clientIds.includes(client.id) ? 'bg-white scale-100 opacity-100' : 'bg-zinc-200 scale-0 opacity-0'}`}
-                              ></div>
-                            </div>
-                          </div>
-                          <span
-                            className={`text-sm font-semibold ${assignments.clientIds.includes(client.id) ? 'text-foreground' : 'text-muted-foreground'}`}
-                          >
-                            {client.name}
-                          </span>
-                        </label>
-                      ))}
-                      {clients.length === 0 && (
-                        <p className="text-xs text-muted-foreground italic">
-                          {t('hr:workforce.noClientsFound')}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Projects Column */}
-                  <div className="space-y-3">
-                    <div className="sticky top-0 bg-card z-10 pb-2 border-b border-border mb-2">
-                      <div className="flex items-center justify-between py-2">
-                        <h4 className="font-semibold text-foreground text-sm uppercase tracking-wider">
-                          Projects
-                        </h4>
-                        <span className="text-xs font-bold bg-muted text-muted-foreground px-2 py-0.5 rounded-full">
-                          {assignments.projectIds.length}
-                        </span>
-                      </div>
-                      <input
-                        type="text"
-                        placeholder={t('hr:workforce.searchProjects')}
-                        aria-label={t('hr:workforce.searchProjects')}
-                        value={projectSearch}
-                        onChange={(e) =>
-                          dispatch({ type: 'set', values: { projectSearch: e.target.value } })
-                        }
-                        className="w-full px-3 py-1.5 text-sm border border-border bg-background text-foreground rounded-lg focus:ring-2 focus:ring-praetor outline-none placeholder:text-muted-foreground"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      {visibleProjects.map((project) => (
-                        <label
-                          key={project.id}
-                          className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
-                            assignments.projectIds.includes(project.id)
-                              ? 'bg-accent border-border shadow-sm'
-                              : 'bg-card border-border hover:border-input'
-                          }`}
-                        >
-                          <div className="relative flex items-center justify-center shrink-0">
-                            <input
-                              type="checkbox"
-                              checked={assignments.projectIds.includes(project.id)}
-                              onChange={() => toggleAssignment('project', project.id)}
-                              aria-label={project.name}
-                              className="sr-only peer"
-                            />
-                            <div className="size-5 rounded-full border-2 border-border relative transition-all peer-checked:bg-praetor peer-checked:border-praetor bg-background shadow-sm flex items-center justify-center">
-                              <div
-                                className={`size-2 rounded-full transition-all duration-200 ${assignments.projectIds.includes(project.id) ? 'bg-white scale-100 opacity-100' : 'bg-zinc-200 scale-0 opacity-0'}`}
-                              ></div>
-                            </div>
-                          </div>
-                          <div className="flex flex-col">
-                            <span
-                              className={`text-sm font-semibold ${assignments.projectIds.includes(project.id) ? 'text-foreground' : 'text-muted-foreground'}`}
-                            >
-                              {project.name}
-                            </span>
-                            <span className="text-[10px] text-muted-foreground">
-                              {clients.find((c) => c.id === project.clientId)?.name ||
-                                t('hr:workforce.unknownClient')}
-                            </span>
-                          </div>
-                        </label>
-                      ))}
-                      {projects.length === 0 && (
-                        <p className="text-xs text-muted-foreground italic">
-                          {t('hr:workforce.noProjectsFound')}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-
-                  {canManageAssignments && (
-                    <div className="space-y-3">
-                      <div className="sticky top-0 bg-card z-10 pb-2 border-b border-border mb-2">
-                        <div className="flex items-center justify-between py-2">
-                          <h4 className="font-semibold text-foreground text-sm uppercase tracking-wider">
-                            Tasks
-                          </h4>
-                          <span className="text-xs font-bold bg-muted text-muted-foreground px-2 py-0.5 rounded-full">
-                            {assignments.taskIds.length}
-                          </span>
-                        </div>
-                        <input
-                          type="text"
-                          placeholder={t('hr:workforce.searchTasks')}
-                          aria-label={t('hr:workforce.searchTasks')}
-                          value={taskSearch}
-                          onChange={(e) =>
-                            dispatch({ type: 'set', values: { taskSearch: e.target.value } })
-                          }
-                          className="w-full px-3 py-1.5 text-sm border border-border bg-background text-foreground rounded-lg focus:ring-2 focus:ring-praetor outline-none placeholder:text-muted-foreground"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        {visibleTasks.map((task) => {
-                          const project = projects.find((p) => p.id === task.projectId);
-                          return (
-                            <label
-                              key={task.id}
-                              className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
-                                assignments.taskIds.includes(task.id)
-                                  ? 'bg-accent border-border shadow-sm'
-                                  : 'bg-card border-border hover:border-input'
-                              }`}
-                            >
-                              <div className="relative flex items-center justify-center shrink-0">
-                                <input
-                                  type="checkbox"
-                                  checked={assignments.taskIds.includes(task.id)}
-                                  onChange={() => toggleAssignment('task', task.id)}
-                                  aria-label={task.name}
-                                  className="sr-only peer"
-                                />
-                                <div className="size-5 rounded-full border-2 border-border relative transition-all peer-checked:bg-praetor peer-checked:border-praetor bg-background shadow-sm flex items-center justify-center">
-                                  <div
-                                    className={`size-2 rounded-full transition-all duration-200 ${assignments.taskIds.includes(task.id) ? 'bg-white scale-100 opacity-100' : 'bg-zinc-200 scale-0 opacity-0'}`}
-                                  ></div>
-                                </div>
-                              </div>
-                              <div className="flex flex-col">
-                                <span
-                                  className={`text-sm font-semibold ${assignments.taskIds.includes(task.id) ? 'text-foreground' : 'text-muted-foreground'}`}
-                                >
-                                  {task.name}
-                                </span>
-                                <span className="text-[10px] text-muted-foreground">
-                                  {project?.name || t('hr:workforce.unknownProject')}
-                                </span>
-                              </div>
-                            </label>
-                          );
-                        })}
-                        {tasks.length === 0 && (
-                          <p className="text-xs text-muted-foreground italic">
-                            {t('hr:workforce.noTasksFound')}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </>
+              <SelectTrigger className="w-full">
+                <SelectValue
+                  placeholder={controller.t('hr:workforce.authMethod.providerPlaceholder')}
+                />
+              </SelectTrigger>
+              <SelectContent position="popper" sideOffset={4}>
+                <SelectGroup>
+                  {controller.providerOptions.map((provider) => (
+                    <SelectItem key={provider.id} value={provider.id}>
+                      {provider.name}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+            {controller.providerOptions.length === 0 && (
+              <p className="text-xs text-muted-foreground">
+                {controller.t('hr:workforce.authMethod.noProviders')}
+              </p>
             )}
           </div>
+        )}
 
-          <div className="p-6 border-t border-border bg-muted/50 flex justify-end gap-3">
-            <button
-              type="button"
-              onClick={closeAssignments}
-              className="px-4 py-2 text-muted-foreground font-bold hover:bg-muted rounded-lg transition-colors text-sm"
-            >
-              {t('common:buttons.cancel')}
-            </button>
-            <button
-              type="button"
-              onClick={saveAssignments}
-              disabled={JSON.stringify(assignments) === JSON.stringify(initialAssignments)}
-              className={`px-6 py-2 font-bold rounded-lg transition-all shadow-sm active:scale-95 text-sm ${JSON.stringify(assignments) === JSON.stringify(initialAssignments) ? 'bg-muted text-muted-foreground cursor-not-allowed border border-border' : 'bg-praetor text-white hover:bg-praetor/90'}`}
-            >
-              {t('hr:workforce.saveAssignments')}
-            </button>
+        {controller.state.authMethodError && (
+          <p className="text-sm text-destructive">{controller.state.authMethodError}</p>
+        )}
+      </div>
+
+      <DialogFooter>
+        <Button type="button" variant="outline" onClick={controller.closeAuthMethodDialog}>
+          {controller.t('common:buttons.cancel')}
+        </Button>
+        <Button
+          type="button"
+          onClick={controller.saveAuthMethod}
+          disabled={controller.state.isSavingAuthMethod}
+        >
+          {controller.state.isSavingAuthMethod
+            ? controller.t('common:buttons.saving')
+            : controller.t('common:buttons.save')}
+        </Button>
+      </DialogFooter>
+    </DialogContent>
+  </Dialog>
+);
+
+const UserTotpResetDialog: React.FC<{ controller: UserManagementController }> = ({
+  controller,
+}) => (
+  <Dialog
+    open={Boolean(controller.state.totpResetUser)}
+    onOpenChange={(open) => {
+      if (!open) controller.closeTotpResetDialog();
+    }}
+  >
+    <DialogContent>
+      <DialogHeader>
+        <DialogTitle>{controller.t('hr:totpReset.confirmTitle')}</DialogTitle>
+        <DialogDescription>
+          {controller.t('hr:totpReset.confirmDescription', {
+            name: controller.state.totpResetUser?.name,
+          })}
+        </DialogDescription>
+      </DialogHeader>
+      {controller.state.totpResetError && (
+        <p className="text-sm text-destructive">{controller.state.totpResetError}</p>
+      )}
+      <DialogFooter>
+        <Button type="button" variant="outline" onClick={controller.closeTotpResetDialog}>
+          {controller.t('common:buttons.cancel')}
+        </Button>
+        <Button
+          type="button"
+          onClick={controller.confirmTotpReset}
+          disabled={controller.state.isResettingTotp}
+        >
+          {controller.state.isResettingTotp
+            ? controller.t('common:buttons.saving')
+            : controller.t('hr:totpReset.confirm')}
+        </Button>
+      </DialogFooter>
+    </DialogContent>
+  </Dialog>
+);
+
+const UserCreateDialog: React.FC<{ controller: UserManagementController }> = ({ controller }) => {
+  const { state } = controller;
+  if (!controller.canCreateUsers) return null;
+
+  return (
+    <Dialog
+      open={state.isCreateModalOpen}
+      onOpenChange={(open) => {
+        if (!open) controller.closeCreateModal();
+      }}
+    >
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <UserPlus className="size-5" aria-hidden="true" />
+            {controller.t('hr:workforce.createNewUser')}
+          </DialogTitle>
+          <DialogDescription>
+            {controller.t('hr:workforce.createNewUserDescription')}
+          </DialogDescription>
+        </DialogHeader>
+        <form onSubmit={controller.handleSubmit} className="space-y-4" noValidate>
+          <div className="grid grid-cols-2 gap-3">
+            <UserCreateNameField controller={controller} field="firstName" />
+            <UserCreateNameField controller={controller} field="surname" />
           </div>
-        </div>
-      </Modal>
+          <UserCreateEmailField controller={controller} />
+          <UserCreateUsernameField controller={controller} />
+          <UserCreatePasswordField controller={controller} />
+          <SelectControl
+            id="create-user-role"
+            label={controller.t('hr:workforce.role')}
+            options={controller.roleOptions}
+            value={state.newRole}
+            onChange={(value) =>
+              controller.dispatch({ type: 'set', values: { newRole: value as string } })
+            }
+          />
+          {state.formErrors.general && (
+            <p className="text-sm font-medium text-destructive">{state.formErrors.general}</p>
+          )}
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={controller.closeCreateModal}>
+              {controller.t('common:buttons.cancel')}
+            </Button>
+            <Button type="submit">{controller.t('common:buttons.add')}</Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
+const UserCreateNameField: React.FC<{
+  controller: UserManagementController;
+  field: 'firstName' | 'surname';
+}> = ({ controller, field }) => {
+  const isFirstName = field === 'firstName';
+  const value = isFirstName ? controller.state.newFirstName : controller.state.newSurname;
+  const otherValue = isFirstName ? controller.state.newSurname : controller.state.newFirstName;
+  const errorKey = isFirstName ? 'firstName' : 'surname';
+
+  return (
+    <div className="space-y-2">
+      <Label htmlFor={`create-user-${field}`}>
+        {controller.t(isFirstName ? 'hr:workforce.name' : 'hr:workforce.surname')}
+        <span className="text-destructive" aria-hidden="true">
+          *
+        </span>
+      </Label>
+      <Input
+        id={`create-user-${field}`}
+        type="text"
+        value={value}
+        onChange={(event) => {
+          const nextValue = event.target.value;
+          const values: Partial<UserManagementState> = isFirstName
+            ? { newFirstName: nextValue }
+            : { newSurname: nextValue };
+          if (!controller.usernameManuallyEdited.current) {
+            const first = sanitizeUsernamePart(isFirstName ? nextValue : otherValue);
+            const surname = sanitizeUsernamePart(isFirstName ? otherValue : nextValue);
+            values.newUsername = first && surname ? `${first}.${surname}` : first || surname;
+          }
+          controller.dispatch({ type: 'set', values });
+          if (controller.state.formErrors[errorKey] || controller.state.formErrors.general) {
+            controller.dispatch({
+              type: 'patchFormErrors',
+              value: { [errorKey]: '', general: '' },
+            });
+          }
+        }}
+        placeholder={isFirstName ? 'e.g. Alice' : 'e.g. Smith'}
+        aria-invalid={Boolean(controller.state.formErrors[errorKey])}
+        required
+      />
+      {controller.state.formErrors[errorKey] && (
+        <p className="text-xs text-destructive">{controller.state.formErrors[errorKey]}</p>
+      )}
     </div>
   );
 };
+
+const UserCreateEmailField: React.FC<{ controller: UserManagementController }> = ({
+  controller,
+}) => (
+  <div className="space-y-2">
+    <Label htmlFor="create-user-email">{controller.t('common:labels.email')}</Label>
+    <Input
+      id="create-user-email"
+      type="email"
+      value={controller.state.newEmail}
+      onChange={(event) => {
+        controller.dispatch({ type: 'set', values: { newEmail: event.target.value } });
+        if (controller.state.formErrors.email || controller.state.formErrors.general) {
+          controller.dispatch({ type: 'patchFormErrors', value: { email: '', general: '' } });
+        }
+      }}
+      placeholder="e.g. alice.smith@example.com"
+      aria-invalid={Boolean(controller.state.formErrors.email)}
+    />
+    {controller.state.formErrors.email && (
+      <p className="text-xs text-destructive">{controller.state.formErrors.email}</p>
+    )}
+  </div>
+);
+
+const UserCreateUsernameField: React.FC<{ controller: UserManagementController }> = ({
+  controller,
+}) => (
+  <div className="space-y-2">
+    <Label htmlFor="create-user-username">
+      {controller.t('hr:workforce.username')}
+      <span className="text-destructive" aria-hidden="true">
+        *
+      </span>
+    </Label>
+    <Input
+      id="create-user-username"
+      type="text"
+      value={controller.state.newUsername}
+      onChange={(event) => {
+        controller.usernameManuallyEdited.current = true;
+        controller.dispatch({ type: 'set', values: { newUsername: event.target.value } });
+        if (controller.state.formErrors.username || controller.state.formErrors.general) {
+          controller.dispatch({ type: 'patchFormErrors', value: { username: '', general: '' } });
+        }
+      }}
+      placeholder="e.g. alice.smith"
+      aria-invalid={Boolean(controller.state.formErrors.username)}
+      required
+    />
+    {controller.state.formErrors.username && (
+      <p className="text-xs text-destructive">{controller.state.formErrors.username}</p>
+    )}
+  </div>
+);
+
+const UserCreatePasswordField: React.FC<{ controller: UserManagementController }> = ({
+  controller,
+}) => (
+  <div className="space-y-2">
+    <Label htmlFor="create-user-password">
+      {controller.t('hr:workforce.password')}
+      <span className="text-destructive" aria-hidden="true">
+        *
+      </span>
+    </Label>
+    <div className="relative">
+      <Input
+        id="create-user-password"
+        type={controller.state.showNewPassword ? 'text' : 'password'}
+        value={controller.state.newPassword}
+        onChange={(event) => {
+          controller.dispatch({ type: 'set', values: { newPassword: event.target.value } });
+          if (controller.state.formErrors.password || controller.state.formErrors.general) {
+            controller.dispatch({ type: 'patchFormErrors', value: { password: '', general: '' } });
+          }
+        }}
+        placeholder={controller.t('hr:workforce.password')}
+        aria-invalid={Boolean(controller.state.formErrors.password)}
+        autoComplete="new-password"
+        required
+        className="pr-9"
+      />
+      <button
+        type="button"
+        onClick={() =>
+          controller.dispatch({
+            type: 'set',
+            values: { showNewPassword: !controller.state.showNewPassword },
+          })
+        }
+        aria-label={
+          controller.state.showNewPassword
+            ? controller.t('common:labels.hidePassword')
+            : controller.t('common:labels.showPassword')
+        }
+        aria-pressed={controller.state.showNewPassword}
+        className="absolute inset-y-0 right-0 flex items-center justify-center px-2 text-muted-foreground hover:text-foreground rounded-md outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+      >
+        {controller.state.showNewPassword ? (
+          <EyeOff className="size-4" aria-hidden="true" />
+        ) : (
+          <Eye className="size-4" aria-hidden="true" />
+        )}
+      </button>
+    </div>
+    {controller.state.formErrors.password && (
+      <p className="text-xs text-destructive">{controller.state.formErrors.password}</p>
+    )}
+  </div>
+);
+
+const UserCreateButton: React.FC<{ controller: UserManagementController }> = ({ controller }) =>
+  controller.canCreateUsers ? (
+    <div className="flex justify-end">
+      <HeaderAddButton
+        onClick={() => controller.dispatch({ type: 'set', values: { isCreateModalOpen: true } })}
+      >
+        {controller.t('hr:workforce.addUser')}
+      </HeaderAddButton>
+    </div>
+  ) : null;
+
+const UserManagementTable: React.FC<{ controller: UserManagementController }> = ({
+  controller,
+}) => (
+  <StandardTable<User>
+    title={controller.t('hr:workforce.title')}
+    viewKey="admin.users"
+    data={controller.sortedUsers}
+    columns={controller.userColumns}
+    defaultRowsPerPage={5}
+    emptyState={controller.noUsersFoundLabel}
+    rowClassName={(user) =>
+      user.isDisabled
+        ? 'opacity-60 grayscale hover:opacity-100 hover:grayscale-0 hover:bg-zinc-50'
+        : 'hover:bg-zinc-50'
+    }
+    onRowClick={controller.canUpdateUsers ? controller.handleEdit : undefined}
+  />
+);
+
+const UserEditModal: React.FC<{ controller: UserManagementController }> = ({ controller }) => {
+  const { state } = controller;
+
+  return (
+    <Modal isOpen={Boolean(state.editingUser)} onClose={controller.closeEditModal}>
+      <div className="bg-card rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in duration-200">
+        <div className="p-6 space-y-4">
+          <div className="flex items-center gap-3 mb-2">
+            <div className="size-10 bg-muted rounded-full flex items-center justify-center">
+              <i className="fa-solid fa-user-pen text-praetor"></i>
+            </div>
+            <h3 className="text-lg font-semibold text-foreground">
+              {controller.t('hr:workforce.editUser')}
+            </h3>
+          </div>
+          <div className="space-y-4">
+            {controller.editIdentityReadOnly && state.editingUser && (
+              <p className="text-xs text-muted-foreground">
+                {controller.t('hr:workforce.identityManagedByProvider', {
+                  provider: controller.getAuthMethodLabel(state.editingUser),
+                })}
+              </p>
+            )}
+            <div className="grid grid-cols-2 gap-3">
+              <UserEditTextField controller={controller} field="firstName" />
+              <UserEditTextField controller={controller} field="surname" />
+            </div>
+            <UserEditTextField controller={controller} field="email" />
+            {controller.canUpdateUsers && <UserEditRolesField controller={controller} />}
+            {controller.canViewCosts &&
+              state.editingUser &&
+              controller.canEditCostFor(state.editingUser.id) && (
+                <UserEditCostField controller={controller} />
+              )}
+            {state.editingUser?.id !== controller.currentUserId && (
+              <div className="flex items-center justify-between p-3 bg-muted/50 rounded-xl border border-border">
+                <div>
+                  <p className="text-sm font-bold text-foreground">
+                    {controller.t('hr:workforce.disabled')}
+                  </p>
+                </div>
+                <Toggle
+                  checked={state.editIsDisabled}
+                  onChange={(checked) =>
+                    controller.dispatch({ type: 'set', values: { editIsDisabled: checked } })
+                  }
+                />
+              </div>
+            )}
+          </div>
+          <div className="flex gap-3 pt-2">
+            <button
+              type="button"
+              onClick={controller.closeEditModal}
+              className="flex-1 py-3 text-sm font-bold text-muted-foreground hover:bg-muted rounded-xl transition-colors"
+            >
+              {controller.t('common:buttons.cancel')}
+            </button>
+            <button
+              type="button"
+              onClick={controller.saveEdit}
+              disabled={!controller.hasEditChanges}
+              className={`flex-1 py-3 text-sm font-bold rounded-xl shadow-lg transition-all active:scale-95 text-white ${
+                !controller.hasEditChanges
+                  ? 'bg-zinc-300 shadow-none cursor-not-allowed'
+                  : 'bg-praetor shadow-zinc-200 hover:bg-zinc-800'
+              }`}
+            >
+              {controller.t('hr:workforce.saveChanges')}
+            </button>
+          </div>
+        </div>
+      </div>
+    </Modal>
+  );
+};
+
+const UserEditTextField: React.FC<{
+  controller: UserManagementController;
+  field: 'email' | 'firstName' | 'surname';
+}> = ({ controller, field }) => {
+  const { state } = controller;
+  const fieldConfig = {
+    email: {
+      errorKey: 'email',
+      label: controller.t('common:labels.email'),
+      type: 'email',
+      value: state.editEmail,
+      values: (value: string): Partial<UserManagementState> => ({ editEmail: value }),
+    },
+    firstName: {
+      errorKey: 'firstName',
+      label: controller.t('hr:workforce.name'),
+      type: 'text',
+      value: state.editFirstName,
+      values: (value: string): Partial<UserManagementState> => ({ editFirstName: value }),
+    },
+    surname: {
+      errorKey: 'surname',
+      label: controller.t('hr:workforce.surname'),
+      type: 'text',
+      value: state.editSurname,
+      values: (value: string): Partial<UserManagementState> => ({ editSurname: value }),
+    },
+  }[field];
+  const error = state.editFormErrors[fieldConfig.errorKey];
+
+  return (
+    <div>
+      <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1">
+        {fieldConfig.label}{' '}
+        {field === 'firstName' && !controller.editIdentityReadOnly && <RequiredMark />}
+      </label>
+      <Input
+        type={fieldConfig.type}
+        value={fieldConfig.value}
+        onChange={(event) => {
+          controller.dispatch({ type: 'set', values: fieldConfig.values(event.target.value) });
+          if (error) {
+            controller.dispatch({
+              type: 'patchEditFormErrors',
+              value: { [fieldConfig.errorKey]: '' },
+            });
+          }
+        }}
+        placeholder={field === 'email' ? 'e.g. alice.smith@example.com' : undefined}
+        aria-label={fieldConfig.label}
+        readOnly={controller.editIdentityReadOnly}
+        disabled={controller.editIdentityReadOnly}
+        aria-invalid={Boolean(error)}
+      />
+      {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
+    </div>
+  );
+};
+
+const UserEditRolesField: React.FC<{ controller: UserManagementController }> = ({ controller }) =>
+  controller.canEditAssignedRoles ? (
+    <div className="space-y-3">
+      <div>
+        <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1">
+          {controller.t('hr:workforce.assignedRoles')}
+        </label>
+        <div className="max-h-36 overflow-y-auto bg-muted/50 border border-border rounded-xl p-2 space-y-1">
+          {controller.roles
+            .slice()
+            .sort((a, b) => a.name.localeCompare(b.name))
+            .map((role) => (
+              <UserEditRoleOption key={role.id} controller={controller} role={role} />
+            ))}
+        </div>
+        <p className="text-[10px] text-muted-foreground mt-1">
+          {controller.t('hr:workforce.primaryRoleHelp')}
+        </p>
+      </div>
+      <SelectControl
+        label={controller.t('hr:workforce.primaryRole')}
+        options={controller.state.editAssignedRoleIds.flatMap((id) => {
+          const role = controller.roles.find((item) => item.id === id);
+          return role ? [{ id: role.id, name: role.name }] : [];
+        })}
+        value={controller.state.editPrimaryRoleId}
+        onChange={(value) =>
+          controller.dispatch({ type: 'set', values: { editPrimaryRoleId: value as string } })
+        }
+        buttonClassName="py-2 text-sm"
+        disabled={
+          controller.state.isLoadingEditRoles || controller.state.editAssignedRoleIds.length < 1
+        }
+      />
+      {controller.state.isLoadingEditRoles && (
+        <p className="text-[10px] text-muted-foreground font-bold">
+          {controller.t('hr:workforce.loadingRoles')}
+        </p>
+      )}
+      {controller.state.editRolesError && (
+        <p className="text-[10px] text-red-500 font-bold">{controller.state.editRolesError}</p>
+      )}
+    </div>
+  ) : (
+    <>
+      <SelectControl
+        label={controller.t('hr:workforce.role')}
+        options={controller.roleOptions}
+        value={controller.state.editRole}
+        onChange={(value) =>
+          controller.dispatch({ type: 'set', values: { editRole: value as string } })
+        }
+        buttonClassName="py-2 text-sm"
+        disabled={controller.isEditingSelf}
+      />
+      {controller.isEditingSelf && (
+        <p className="text-[10px] text-muted-foreground mt-1">
+          {controller.t('hr:workforce.cannotChangeOwnRole')}
+        </p>
+      )}
+    </>
+  );
+
+const UserEditRoleOption: React.FC<{
+  controller: UserManagementController;
+  role: Role;
+}> = ({ controller, role }) => {
+  const checked = controller.state.editAssignedRoleIds.includes(role.id);
+  const isPrimary = role.id === controller.state.editPrimaryRoleId;
+
+  return (
+    <label
+      className={`flex items-center justify-between gap-3 px-3 py-2 rounded-lg cursor-pointer transition-colors ${
+        checked ? 'bg-background shadow-sm' : 'hover:bg-accent'
+      }`}
+    >
+      <div className="flex items-center gap-3 min-w-0">
+        <Checkbox
+          checked={checked}
+          disabled={isPrimary && checked}
+          onChange={() => {
+            if (isPrimary && checked) return;
+            controller.dispatch({ type: 'toggleEditAssignedRole', roleId: role.id });
+          }}
+        />
+        <span className="text-sm font-semibold text-foreground truncate">{role.name}</span>
+      </div>
+      {isPrimary && (
+        <span className="text-[10px] font-black uppercase tracking-wider bg-muted text-muted-foreground px-2 py-0.5 rounded">
+          {controller.t('hr:workforce.primary')}
+        </span>
+      )}
+    </label>
+  );
+};
+
+const UserEditCostField: React.FC<{ controller: UserManagementController }> = ({ controller }) => (
+  <div>
+    <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1">
+      {controller.t('hr:workforce.costPerHour')}
+    </label>
+    <div className="flex items-center border border-input bg-transparent dark:bg-input/30 rounded-lg focus-within:ring-2 focus-within:ring-praetor transition-all overflow-hidden">
+      <div className="w-16 flex items-center justify-center text-muted-foreground text-sm font-bold border-r border-input py-2 bg-muted/50">
+        {controller.currency}
+      </div>
+      <ValidatedNumberInput
+        value={controller.state.editCostPerHour}
+        onValueChange={(value) =>
+          controller.dispatch({ type: 'set', values: { editCostPerHour: value } })
+        }
+        className="flex-1 px-4 py-2 bg-transparent outline-none text-sm font-semibold"
+        placeholder="0.00"
+      />
+    </div>
+  </div>
+);
+
+const UserAssignmentsModal: React.FC<{ controller: UserManagementController }> = ({
+  controller,
+}) => (
+  <Modal
+    isOpen={Boolean(controller.state.managingUserId)}
+    onClose={controller.closeAssignments}
+    zIndex={50}
+    backdropClass="bg-zinc-900/50 backdrop-blur-sm"
+  >
+    <div className="bg-card rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+      <div className="px-6 py-4 border-b border-border flex items-center justify-between bg-muted/50">
+        <h3 className="font-semibold text-lg text-foreground">
+          {controller.t('hr:workforce.manageAccess', { name: controller.managingUser?.name })}
+        </h3>
+        <button
+          type="button"
+          onClick={controller.closeAssignments}
+          aria-label={controller.t('common:buttons.close')}
+          className="text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <i className="fa-solid fa-xmark text-xl"></i>
+        </button>
+      </div>
+      <div className="p-6 overflow-y-auto flex-1">
+        {controller.state.isLoadingAssignments ? (
+          <div className="flex items-center justify-center py-12">
+            <i className="fa-solid fa-circle-notch fa-spin text-3xl text-praetor"></i>
+          </div>
+        ) : (
+          <UserAssignmentsBody controller={controller} />
+        )}
+      </div>
+      <div className="p-6 border-t border-border bg-muted/50 flex justify-end gap-3">
+        <button
+          type="button"
+          onClick={controller.closeAssignments}
+          className="px-4 py-2 text-muted-foreground font-bold hover:bg-muted rounded-lg transition-colors text-sm"
+        >
+          {controller.t('common:buttons.cancel')}
+        </button>
+        <button
+          type="button"
+          onClick={controller.saveAssignments}
+          disabled={
+            JSON.stringify(controller.state.assignments) ===
+            JSON.stringify(controller.state.initialAssignments)
+          }
+          className={`px-6 py-2 font-bold rounded-lg transition-all shadow-sm active:scale-95 text-sm ${
+            JSON.stringify(controller.state.assignments) ===
+            JSON.stringify(controller.state.initialAssignments)
+              ? 'bg-muted text-muted-foreground cursor-not-allowed border border-border'
+              : 'bg-praetor text-white hover:bg-praetor/90'
+          }`}
+        >
+          {controller.t('hr:workforce.saveAssignments')}
+        </button>
+      </div>
+    </div>
+  </Modal>
+);
+
+const UserAssignmentsBody: React.FC<{ controller: UserManagementController }> = ({
+  controller,
+}) => (
+  <>
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+      <SelectControl
+        options={controller.clientFilterOptions}
+        value={controller.state.filterClientId}
+        onChange={(value) =>
+          controller.dispatch({ type: 'set', values: { filterClientId: value as string } })
+        }
+        placeholder={controller.t('hr:workforce.filterByClient')}
+        searchable={true}
+        buttonClassName="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm font-semibold text-foreground shadow-sm"
+      />
+      <SelectControl
+        options={controller.projectFilterOptions}
+        value={controller.state.filterProjectId}
+        onChange={(value) =>
+          controller.dispatch({ type: 'set', values: { filterProjectId: value as string } })
+        }
+        placeholder={controller.t('hr:workforce.filterByProject')}
+        searchable={true}
+        buttonClassName="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm font-semibold text-foreground shadow-sm"
+        disabled={controller.projectFilterOptions.length === 1}
+      />
+    </div>
+    <div
+      className={`grid grid-cols-1 ${
+        controller.canManageAssignments ? 'md:grid-cols-3' : 'md:grid-cols-2'
+      } gap-6`}
+    >
+      <UserAssignmentColumn
+        count={controller.state.assignments.clientIds.length}
+        empty={controller.t('hr:workforce.noClientsFound')}
+        items={controller.visibleClients.map((client) => ({
+          id: client.id,
+          name: client.name,
+          selected: controller.state.assignments.clientIds.includes(client.id),
+        }))}
+        onSearch={(value) => controller.dispatch({ type: 'set', values: { clientSearch: value } })}
+        onToggle={(id) => controller.toggleAssignment('client', id)}
+        placeholder={controller.t('hr:workforce.searchClients')}
+        searchValue={controller.state.clientSearch}
+        title={controller.t('hr:workforce.clients')}
+      />
+      <UserAssignmentColumn
+        count={controller.state.assignments.projectIds.length}
+        empty={controller.t('hr:workforce.noProjectsFound')}
+        items={controller.visibleProjects.map((project) => ({
+          id: project.id,
+          name: project.name,
+          selected: controller.state.assignments.projectIds.includes(project.id),
+          subtitle:
+            controller.clients.find((client) => client.id === project.clientId)?.name ||
+            controller.t('hr:workforce.unknownClient'),
+        }))}
+        onSearch={(value) => controller.dispatch({ type: 'set', values: { projectSearch: value } })}
+        onToggle={(id) => controller.toggleAssignment('project', id)}
+        placeholder={controller.t('hr:workforce.searchProjects')}
+        searchValue={controller.state.projectSearch}
+        title="Projects"
+      />
+      {controller.canManageAssignments && (
+        <UserAssignmentColumn
+          count={controller.state.assignments.taskIds.length}
+          empty={controller.t('hr:workforce.noTasksFound')}
+          items={controller.visibleTasks.map((task) => {
+            const project = controller.projects.find((item) => item.id === task.projectId);
+            return {
+              id: task.id,
+              name: task.name,
+              selected: controller.state.assignments.taskIds.includes(task.id),
+              subtitle: project?.name || controller.t('hr:workforce.unknownProject'),
+            };
+          })}
+          onSearch={(value) => controller.dispatch({ type: 'set', values: { taskSearch: value } })}
+          onToggle={(id) => controller.toggleAssignment('task', id)}
+          placeholder={controller.t('hr:workforce.searchTasks')}
+          searchValue={controller.state.taskSearch}
+          title="Tasks"
+        />
+      )}
+    </div>
+  </>
+);
+
+const UserAssignmentColumn: React.FC<{
+  count: number;
+  empty: string;
+  items: Array<{ id: string; name: string; selected: boolean; subtitle?: string }>;
+  onSearch: (value: string) => void;
+  onToggle: (id: string) => void;
+  placeholder: string;
+  searchValue: string;
+  title: string;
+}> = ({ count, empty, items, onSearch, onToggle, placeholder, searchValue, title }) => (
+  <div className="space-y-3">
+    <div className="sticky top-0 bg-card z-10 pb-2 border-b border-border mb-2">
+      <div className="flex items-center justify-between py-2">
+        <h4 className="font-semibold text-foreground text-sm uppercase tracking-wider">{title}</h4>
+        <span className="text-xs font-bold bg-muted text-muted-foreground px-2 py-0.5 rounded-full">
+          {count}
+        </span>
+      </div>
+      <input
+        type="text"
+        placeholder={placeholder}
+        aria-label={placeholder}
+        value={searchValue}
+        onChange={(event) => onSearch(event.target.value)}
+        className="w-full px-3 py-1.5 text-sm border border-border bg-background text-foreground rounded-lg focus:ring-2 focus:ring-praetor outline-none placeholder:text-muted-foreground"
+      />
+    </div>
+    <div className="space-y-2">
+      {items.map((item) => (
+        <label
+          key={item.id}
+          className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
+            item.selected
+              ? 'bg-accent border-border shadow-sm'
+              : 'bg-card border-border hover:border-input'
+          }`}
+        >
+          <div className="relative flex items-center justify-center shrink-0">
+            <input
+              type="checkbox"
+              checked={item.selected}
+              onChange={() => onToggle(item.id)}
+              aria-label={item.name}
+              className="sr-only peer"
+            />
+            <div className="size-5 rounded-full border-2 border-border relative transition-all peer-checked:bg-praetor peer-checked:border-praetor bg-background shadow-sm flex items-center justify-center">
+              <div
+                className={`size-2 rounded-full transition-all duration-200 ${
+                  item.selected ? 'bg-white scale-100 opacity-100' : 'bg-zinc-200 scale-0 opacity-0'
+                }`}
+              ></div>
+            </div>
+          </div>
+          <div className="flex flex-col">
+            <span
+              className={`text-sm font-semibold ${
+                item.selected ? 'text-foreground' : 'text-muted-foreground'
+              }`}
+            >
+              {item.name}
+            </span>
+            {item.subtitle && (
+              <span className="text-[10px] text-muted-foreground">{item.subtitle}</span>
+            )}
+          </div>
+        </label>
+      ))}
+      {items.length === 0 && <p className="text-xs text-muted-foreground italic">{empty}</p>}
+    </div>
+  </div>
+);
 
 export default UserManagement;

@@ -1,6 +1,6 @@
 import type { TFunction } from 'i18next';
 import type React from 'react';
-import { useCallback, useMemo, useReducer, useState } from 'react';
+import { useCallback, useMemo, useReducer } from 'react';
 import { useTranslation } from 'react-i18next';
 import { LinkedRecordBanner } from '@/components/shared/LinkedRecordBanner';
 import { Button } from '@/components/ui/button';
@@ -89,6 +89,7 @@ export interface ClientsOrdersViewProps {
 const DEFAULT_UNIT_TYPE: SupplierUnitType = 'hours';
 
 const compactInputClass = 'h-9 text-center font-medium';
+const EMPTY_SUPPLIER_ORDERS: SupplierSaleOrder[] = [];
 
 const convertHourlyToUnit = (hourlyPrice: number, unitType: SupplierUnitType | undefined) =>
   convertUnitPrice(hourlyPrice, 'hours', unitType || DEFAULT_UNIT_TYPE);
@@ -107,6 +108,7 @@ type ClientsOrdersViewState = {
   editingOrder: ClientsOrder | null;
   isDeleteConfirmOpen: boolean;
   orderToDelete: ClientsOrder | null;
+  productRowToDelete: number | null;
   errors: Record<string, string>;
   previewVersion: OrderVersion | null;
   formData: Partial<ClientsOrder>;
@@ -117,6 +119,7 @@ type ClientsOrdersViewAction =
   | { type: 'setEditingOrder'; value: React.SetStateAction<ClientsOrder | null> }
   | { type: 'setIsDeleteConfirmOpen'; value: React.SetStateAction<boolean> }
   | { type: 'setOrderToDelete'; value: React.SetStateAction<ClientsOrder | null> }
+  | { type: 'setProductRowToDelete'; value: React.SetStateAction<number | null> }
   | { type: 'setErrors'; value: React.SetStateAction<Record<string, string>> }
   | { type: 'setPreviewVersion'; value: React.SetStateAction<OrderVersion | null> }
   | { type: 'setFormData'; value: React.SetStateAction<Partial<ClientsOrder>> };
@@ -129,6 +132,7 @@ const createClientsOrdersInitialState = (): ClientsOrdersViewState => ({
   editingOrder: null,
   isDeleteConfirmOpen: false,
   orderToDelete: null,
+  productRowToDelete: null,
   errors: {},
   previewVersion: null,
   formData: {
@@ -159,6 +163,11 @@ const clientsOrdersViewReducer = (
       };
     case 'setOrderToDelete':
       return { ...state, orderToDelete: resolveStateAction(action.value, state.orderToDelete) };
+    case 'setProductRowToDelete':
+      return {
+        ...state,
+        productRowToDelete: resolveStateAction(action.value, state.productRowToDelete),
+      };
     case 'setErrors':
       return { ...state, errors: resolveStateAction(action.value, state.errors) };
     case 'setPreviewVersion':
@@ -213,11 +222,11 @@ const computeDueDate = (
   return formatDateOnlyForLocale(addDaysToDateOnly(baseDate, days));
 };
 
-const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
+const useClientsOrdersController = ({
   orders,
   clients,
   products,
-  supplierOrders = [],
+  supplierOrders = EMPTY_SUPPLIER_ORDERS,
   onUpdateClientsOrder,
   onDeleteClientsOrder,
   onOrderRestored,
@@ -227,7 +236,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
   canViewSupplierOrders = true,
   offerFilterId,
   orderFilterId,
-}) => {
+}: ClientsOrdersViewProps) => {
   const { t, i18n } = useTranslation(['accounting', 'crm', 'common', 'sales']);
   const [viewState, dispatchViewState] = useReducer(
     clientsOrdersViewReducer,
@@ -239,11 +248,11 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
     editingOrder,
     isDeleteConfirmOpen,
     orderToDelete,
+    productRowToDelete,
     errors,
     previewVersion,
     formData,
   } = viewState;
-  const [productRowToDelete, setProductRowToDelete] = useState<number | null>(null);
 
   const setIsModalOpen = useCallback((value: React.SetStateAction<boolean>) => {
     dispatchViewState({ type: 'setIsModalOpen', value });
@@ -256,6 +265,9 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
   }, []);
   const setOrderToDelete = useCallback((value: React.SetStateAction<ClientsOrder | null>) => {
     dispatchViewState({ type: 'setOrderToDelete', value });
+  }, []);
+  const setProductRowToDelete = useCallback((value: React.SetStateAction<number | null>) => {
+    dispatchViewState({ type: 'setProductRowToDelete', value });
   }, []);
   const setErrors = useCallback((value: React.SetStateAction<Record<string, string>>) => {
     dispatchViewState({ type: 'setErrors', value });
@@ -298,7 +310,7 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
     setIsModalOpen(false);
     setPreviewVersion(null);
     setProductRowToDelete(null);
-  }, [setIsModalOpen, setPreviewVersion]);
+  }, [setIsModalOpen, setPreviewVersion, setProductRowToDelete]);
 
   const handleVersionPreview = useCallback(
     (version: OrderVersion) => {
@@ -899,646 +911,799 @@ const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = ({
     ],
   );
 
-  return (
-    <div className="space-y-8 animate-in fade-in duration-500">
-      {/* Edit Modal */}
-      <Modal isOpen={isModalOpen} onClose={closeEditModal}>
-        <div className="flex max-w-[calc(100vw-2rem)] items-start gap-4">
-          <ModalContent size="full" className="max-h-[90vh]">
-            <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
-              <ModalHeader>
-                <ModalTitle className="gap-3">
-                  <span className="flex size-10 items-center justify-center rounded-md bg-muted text-primary">
-                    <i
-                      className={`fa-solid ${isReadOnly ? 'fa-eye' : 'fa-pen-to-square'}`}
-                      aria-hidden="true"
-                    ></i>
-                  </span>
-                  {isReadOnly ? t('common:buttons.view') : t('accounting:clientsOrders.editOrder')}
-                </ModalTitle>
-                <ModalCloseButton onClick={closeEditModal} />
-              </ModalHeader>
+  return {
+    activeClients,
+    addProductRow,
+    allProductIds,
+    allSupplierOrderIds,
+    baseReadOnly,
+    canViewInternalListing,
+    canViewSupplierOrders,
+    closeEditModal,
+    columns,
+    currency,
+    editingOrder,
+    errors,
+    filteredOrders,
+    formData,
+    handleClearPreview,
+    handleClientChange,
+    handleDelete,
+    handleDurationUnitChange,
+    handleDurationValueChange,
+    handleSubmit,
+    handleUnitTypeChange,
+    handleVersionPreview,
+    handleVersionRestored,
+    i18n,
+    isDeleteConfirmOpen,
+    isLinkedProductMissing,
+    isModalOpen,
+    isReadOnly,
+    onViewOffer,
+    openEditModal,
+    orderToDelete,
+    paymentTermsOptions,
+    previewVersion,
+    productOptions,
+    productRowToDelete,
+    products,
+    removeProductRow,
+    setFormData,
+    setIsDeleteConfirmOpen,
+    setProductRowToDelete,
+    t,
+    tableInitialFilterState,
+    updateProductRow,
+  };
+};
 
-              <ModalBody className="flex-1 space-y-5">
-                {previewVersion && (
-                  <div className="flex items-center justify-between gap-3 rounded-md border border-amber-500/30 bg-amber-500/10 px-4 py-3">
-                    <span className="flex items-center gap-2 text-xs font-medium text-amber-700 dark:text-amber-300">
-                      <i className="fa-solid fa-clock-rotate-left" aria-hidden="true"></i>
-                      {t('accounting:clientsOrders.versionHistory.previewBanner', {
-                        date: formatInsertDateTime(previewVersion.createdAt, i18n.language),
-                        defaultValue: 'Previewing version from {{date}}',
-                      })}
-                    </span>
-                    <Button
-                      type="button"
-                      variant="link"
-                      size="sm"
-                      onClick={handleClearPreview}
-                      className="h-auto px-0 text-amber-700 dark:text-amber-300"
-                    >
-                      {t('accounting:clientsOrders.versionHistory.backToCurrent', {
-                        defaultValue: 'Back to current',
-                      })}
-                    </Button>
-                  </div>
-                )}
-                {editingOrder && editingOrder.status !== 'draft' && (
-                  <div className="flex items-center gap-3 rounded-md border border-amber-500/30 bg-amber-500/10 px-4 py-3">
-                    <span className="text-xs font-medium text-amber-700 dark:text-amber-300">
-                      {t('accounting:clientsOrders.readOnlyStatus', {
-                        status: getOrderStatusLabel(editingOrder.status, t),
-                      })}
-                    </span>
-                  </div>
-                )}
-                {/* Linked Offer Info */}
-                {formData.linkedOfferId && (
-                  <LinkedRecordBanner
-                    label={t('accounting:clientsOrders.linkedOffer', {
-                      defaultValue: 'Linked Offer',
-                    })}
-                    value={t('accounting:clientsOrders.linkedOfferInfo', {
-                      number: formData.linkedOfferId,
-                      defaultValue: 'Offer #{{number}}',
-                    })}
-                    note={
-                      isReadOnly
-                        ? t('accounting:clientsOrders.offerDetailsReadOnly', {
-                            defaultValue: '(Order details are read-only)',
-                          })
-                        : t('accounting:clientsOrders.offerDetailsEditable', {
-                            defaultValue: '(Order details are editable)',
-                          })
-                    }
-                    action={
-                      onViewOffer && formData.linkedOfferId
-                        ? {
-                            label: t('sales:clientOffers.viewOffer', {
-                              defaultValue: 'View offer',
-                            }),
-                            onClick: () => onViewOffer(formData.linkedOfferId as string),
-                          }
-                        : undefined
-                    }
-                  />
-                )}
+type ClientsOrdersController = ReturnType<typeof useClientsOrdersController>;
 
-                {/* Order Details */}
-                <div className="space-y-2">
-                  <h4 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-primary">
-                    <span className="size-1.5 rounded-full bg-primary"></span>
-                    {t('accounting:clientsOrders.orderDetails')}
-                  </h4>
-                  <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-                    <Field data-invalid={Boolean(errors.clientId)}>
-                      <SelectControl
-                        id="client-order-client"
-                        options={activeClients.map((c) => ({ id: c.id, name: c.name }))}
-                        value={formData.clientId || ''}
-                        onChange={(val) => handleClientChange(val as string)}
-                        label={t('accounting:clientsOrders.client')}
-                        required
-                        placeholder={t('sales:clientQuotes.selectAClient')}
-                        searchable={true}
-                        disabled={isReadOnly}
-                        buttonClassName={errors.clientId ? 'h-9 border-destructive' : 'h-9'}
-                      />
-                      <FieldError className="text-xs">{errors.clientId}</FieldError>
-                    </Field>
-                    <Field>
-                      <FieldLabel>
-                        {t('accounting:clientsOrders.orderNumber', {
-                          defaultValue: 'Order Number',
-                        })}
-                      </FieldLabel>
-                      <div className="flex h-9 items-center rounded-md border border-border bg-muted/30 px-3 text-sm font-medium text-foreground">
-                        {editingOrder?.id || '-'}
-                      </div>
-                    </Field>
-                    <Field>
-                      <SelectControl
-                        id="client-order-payment-terms"
-                        options={paymentTermsOptions}
-                        value={formData.paymentTerms || 'immediate'}
-                        onChange={(val) =>
-                          setFormData((prev) => ({
-                            ...prev,
-                            paymentTerms: val as ClientsOrder['paymentTerms'],
-                          }))
-                        }
-                        label={t('accounting:clientsOrders.paymentTerms')}
-                        searchable={false}
-                        disabled={isReadOnly}
-                        buttonClassName="h-9"
-                      />
-                    </Field>
-                    <Field>
-                      <FieldLabel>
-                        {t('accounting:clientsOrders.paymentDueDate', {
-                          defaultValue: 'Payment due date',
-                        })}
-                      </FieldLabel>
-                      <div className="flex h-9 items-center rounded-md border border-border bg-muted/30 px-3 text-sm font-medium text-foreground">
-                        {computeDueDate(editingOrder?.createdAt, formData.paymentTerms, t)}
-                      </div>
-                    </Field>
-                  </div>
-                </div>
+const ClientsOrdersView: React.FC<ClientsOrdersViewProps> = (props) => {
+  const controller = useClientsOrdersController(props);
+  return <ClientsOrdersLayout controller={controller} />;
+};
 
-                {/* Products */}
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <h4 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-primary">
-                      <span className="size-1.5 rounded-full bg-primary"></span>
-                      {t('sales:clientQuotes.productsServices')}
-                    </h4>
-                    <Button type="button" size="sm" onClick={addProductRow} disabled={isReadOnly}>
-                      <i className="fa-solid fa-plus text-[10px]" aria-hidden="true"></i>
-                      {t('sales:clientQuotes.addProduct')}
-                    </Button>
-                  </div>
-                  <FieldError className="-mt-2 text-xs">{errors.items}</FieldError>
+const ClientsOrdersLayout: React.FC<{ controller: ClientsOrdersController }> = ({ controller }) => (
+  <div className="space-y-8 animate-in fade-in duration-500">
+    <ClientsOrderModal controller={controller} />
+    <ClientsOrdersDeleteDialogs controller={controller} />
+    <ClientsOrdersHeader controller={controller} />
+    <StandardTable<ClientsOrder>
+      title={controller.t('accounting:clientsOrders.title')}
+      data={controller.filteredOrders}
+      columns={controller.columns}
+      defaultRowsPerPage={10}
+      initialFilterState={controller.tableInitialFilterState}
+      containerClassName="overflow-visible"
+      rowClassName={(row: ClientsOrder) =>
+        isHistoryRow(row.status) ? 'bg-muted text-muted-foreground' : 'hover:bg-muted/50'
+      }
+      onRowClick={(row: ClientsOrder) => controller.openEditModal(row)}
+    />
+  </div>
+);
 
-                  {formData.items && formData.items.length > 0 && (
-                    <div className="hidden lg:flex gap-2 px-3 mb-1 items-center">
-                      <div className="grid flex-1 grid-cols-14 gap-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                        <div className="col-span-2">
-                          {t('accounting:clientsOrders.supplierOrderColumn', {
-                            defaultValue: 'Supplier Order',
-                          })}
-                        </div>
-                        <div className="col-span-2">{t('sales:clientQuotes.productsServices')}</div>
-                        <div className="col-span-2 text-center">{t('sales:clientQuotes.qty')}</div>
-                        <div className="col-span-2 text-center whitespace-nowrap">
-                          {t('sales:clientQuotes.durationColumn', { defaultValue: 'Duration' })}
-                        </div>
-                        <div className="col-span-1 text-center">
-                          {t('crm:internalListing.cost')}
-                        </div>
-                        <div className="col-span-1 text-center">
-                          {t('sales:clientQuotes.molLabel', { defaultValue: 'MOL' })}
-                        </div>
-                        <div className="col-span-1 text-center whitespace-nowrap">
-                          {t('sales:clientQuotes.totalCost', { defaultValue: 'Total cost' })}
-                        </div>
-                        <div className="col-span-1 text-center">
-                          {t('sales:clientQuotes.marginLabel')}
-                        </div>
-                        <div className="col-span-2 pr-2 text-right">
-                          {t('crm:internalListing.salePrice')}
-                        </div>
-                      </div>
-                      <div className="w-8 shrink-0"></div>
-                    </div>
-                  )}
+const ClientsOrdersHeader: React.FC<{ controller: ClientsOrdersController }> = ({ controller }) => (
+  <div className="space-y-4">
+    <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
+      <div>
+        <h2 className="text-2xl font-semibold text-foreground">
+          {controller.t('accounting:clientsOrders.title')}
+        </h2>
+        <p className="text-sm text-muted-foreground">
+          {controller.t('accounting:clientsOrders.subtitle')}
+        </p>
+      </div>
+    </div>
+  </div>
+);
 
-                  {formData.items && formData.items.length > 0 ? (
-                    <div className="space-y-3">
-                      {formData.items.map((item, index) => {
-                        const product = products.find((p) => p.id === item.productId);
-                        const { unitCost, molPercentage, lineCost, quantity, durationMonths } =
-                          getItemPricingContext(item, DEFAULT_UNIT_TYPE);
-                        const durationUnit = normalizeDurationUnit(item.durationUnit);
-                        const durationValue = getDurationDisplayValue(item);
-                        const salePrice = Number(item.unitPrice || 0);
-                        const lineSalePrice = salePrice * quantity * durationMonths;
-                        const margin = lineSalePrice - lineCost;
-                        const isSupply = product?.type === 'supply';
-                        const productHref = buildProductQuickViewHref(
-                          item.productId,
-                          allProductIds,
-                        );
-                        const supplierOrderHref = buildSupplierOrderQuickViewHref(
-                          item.supplierSaleId,
-                          allSupplierOrderIds,
-                        );
+const ClientsOrderModal: React.FC<{ controller: ClientsOrdersController }> = ({ controller }) => (
+  <Modal isOpen={controller.isModalOpen} onClose={controller.closeEditModal}>
+    <div className="flex max-w-[calc(100vw-2rem)] items-start gap-4">
+      <ModalContent size="full" className="max-h-[90vh]">
+        <form onSubmit={controller.handleSubmit} className="flex min-h-0 flex-1 flex-col">
+          <ModalHeader>
+            <ModalTitle className="gap-3">
+              <span className="flex size-10 items-center justify-center rounded-md bg-muted text-primary">
+                <i
+                  className={`fa-solid ${controller.isReadOnly ? 'fa-eye' : 'fa-pen-to-square'}`}
+                  aria-hidden="true"
+                ></i>
+              </span>
+              {controller.isReadOnly
+                ? controller.t('common:buttons.view')
+                : controller.t('accounting:clientsOrders.editOrder')}
+            </ModalTitle>
+            <ModalCloseButton onClick={controller.closeEditModal} />
+          </ModalHeader>
+          <ModalBody className="flex-1 space-y-5">
+            <ClientsOrderModalAlerts controller={controller} />
+            <OrderDetailsSection controller={controller} />
+            <OrderItemsSection controller={controller} />
+            <OrderNotesSummarySection controller={controller} />
+          </ModalBody>
+          <ModalFooter>
+            <Button type="button" variant="outline" onClick={controller.closeEditModal}>
+              {controller.t('common:buttons.cancel')}
+            </Button>
+            {!controller.previewVersion && (
+              <Button type="submit" disabled={controller.isReadOnly}>
+                {controller.t('accounting:clientsOrders.updateOrder')}
+              </Button>
+            )}
+          </ModalFooter>
+        </form>
+      </ModalContent>
+      {controller.editingOrder?.id && (
+        <OrderVersionsPanel
+          orderId={controller.editingOrder.id}
+          selectedVersionId={controller.previewVersion?.id ?? null}
+          onPreview={controller.handleVersionPreview}
+          onClearPreview={controller.handleClearPreview}
+          onRestored={controller.handleVersionRestored}
+          disabled={controller.baseReadOnly}
+        />
+      )}
+    </div>
+  </Modal>
+);
 
-                        const handleCostChange = (value: string) => {
-                          if (isReadOnly) return;
-                          setFormData(
-                            makeCostUpdater<Partial<ClientsOrder>>(index, value, DEFAULT_UNIT_TYPE),
-                          );
-                        };
+const ClientsOrderModalAlerts: React.FC<{ controller: ClientsOrdersController }> = ({
+  controller,
+}) => (
+  <>
+    {controller.previewVersion && (
+      <div className="flex items-center justify-between gap-3 rounded-md border border-amber-500/30 bg-amber-500/10 px-4 py-3">
+        <span className="flex items-center gap-2 text-xs font-medium text-amber-700 dark:text-amber-300">
+          <i className="fa-solid fa-clock-rotate-left" aria-hidden="true"></i>
+          {controller.t('accounting:clientsOrders.versionHistory.previewBanner', {
+            date: formatInsertDateTime(
+              controller.previewVersion.createdAt,
+              controller.i18n.language,
+            ),
+            defaultValue: 'Previewing version from {{date}}',
+          })}
+        </span>
+        <Button
+          type="button"
+          variant="link"
+          size="sm"
+          onClick={controller.handleClearPreview}
+          className="h-auto px-0 text-amber-700 dark:text-amber-300"
+        >
+          {controller.t('accounting:clientsOrders.versionHistory.backToCurrent', {
+            defaultValue: 'Back to current',
+          })}
+        </Button>
+      </div>
+    )}
+    {controller.editingOrder && controller.editingOrder.status !== 'draft' && (
+      <div className="flex items-center gap-3 rounded-md border border-amber-500/30 bg-amber-500/10 px-4 py-3">
+        <span className="text-xs font-medium text-amber-700 dark:text-amber-300">
+          {controller.t('accounting:clientsOrders.readOnlyStatus', {
+            status: getOrderStatusLabel(controller.editingOrder.status, controller.t),
+          })}
+        </span>
+      </div>
+    )}
+    {controller.formData.linkedOfferId && (
+      <LinkedRecordBanner
+        label={controller.t('accounting:clientsOrders.linkedOffer', {
+          defaultValue: 'Linked Offer',
+        })}
+        value={controller.t('accounting:clientsOrders.linkedOfferInfo', {
+          number: controller.formData.linkedOfferId,
+          defaultValue: 'Offer #{{number}}',
+        })}
+        note={
+          controller.isReadOnly
+            ? controller.t('accounting:clientsOrders.offerDetailsReadOnly', {
+                defaultValue: '(Order details are read-only)',
+              })
+            : controller.t('accounting:clientsOrders.offerDetailsEditable', {
+                defaultValue: '(Order details are editable)',
+              })
+        }
+        action={
+          controller.onViewOffer && controller.formData.linkedOfferId
+            ? {
+                label: controller.t('sales:clientOffers.viewOffer', {
+                  defaultValue: 'View offer',
+                }),
+                onClick: () =>
+                  controller.onViewOffer?.(controller.formData.linkedOfferId as string),
+              }
+            : undefined
+        }
+      />
+    )}
+  </>
+);
 
-                        const handleMolChange = (value: string) => {
-                          if (isReadOnly) return;
-                          setFormData(
-                            makeMolUpdater<Partial<ClientsOrder>>(index, value, DEFAULT_UNIT_TYPE),
-                          );
-                        };
+const OrderSectionTitle: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+  <h4 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-primary">
+    <span className="size-1.5 rounded-full bg-primary"></span>
+    {children}
+  </h4>
+);
 
-                        return (
-                          <div
-                            key={item.id}
-                            className="space-y-3 rounded-md border border-border bg-muted/30 p-3"
-                          >
-                            <div className="flex items-start gap-2 lg:items-center lg:pt-5">
-                              <div className="grid flex-1 grid-cols-1 gap-2 lg:grid-cols-14 lg:items-center">
-                                <div className="relative min-w-0 space-y-1 lg:col-span-2 lg:space-y-0">
-                                  <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
-                                    {t('accounting:clientsOrders.supplierOrderColumn', {
-                                      defaultValue: 'Supplier Order',
-                                    })}
-                                  </FieldLabel>
-                                  <div className="flex h-9 items-center rounded-md border border-border bg-background px-3">
-                                    {item.supplierSaleId ? (
-                                      <span className="min-w-0 flex-1 truncate text-xs font-medium text-foreground">
-                                        {item.supplierSaleSupplierName ?? '-'} ·{' '}
-                                        {item.supplierSaleId}
-                                      </span>
-                                    ) : (
-                                      <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
-                                        {t('accounting:clientsOrders.noSupplierOrder', {
-                                          defaultValue: 'No supplier order',
-                                        })}
-                                      </span>
-                                    )}
-                                    {/* Always rendered (disabled with a tooltip when nothing is
-                                        linked), matching the product / supplier-quote shortcuts. */}
-                                    {canViewSupplierOrders && (
-                                      <QuickViewLinkButton
-                                        href={supplierOrderHref}
-                                        label={t(
-                                          'accounting:clientsOrders.openSupplierOrderInNewTab',
-                                          { defaultValue: 'Open supplier order in a new tab' },
-                                        )}
-                                        disabledLabel={t(
-                                          'accounting:clientsOrders.supplierOrderShortcutUnavailable',
-                                          { defaultValue: 'No linked supplier order to open' },
-                                        )}
-                                        floating
-                                      />
-                                    )}
-                                  </div>
-                                </div>
-                                <div className="min-w-0 space-y-1 lg:col-span-2 lg:space-y-0">
-                                  <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
-                                    {t('sales:clientQuotes.productsServices')}
-                                  </FieldLabel>
-                                  <div className="relative flex items-center gap-1">
-                                    <ProductSelectOrFallback
-                                      item={item}
-                                      index={index}
-                                      options={productOptions}
-                                      // A product-less supplier line (issue #783) shows its name
-                                      // read-only instead of an empty dropdown.
-                                      isProductMissing={isLinkedProductMissing(item)}
-                                      isReadOnly={isReadOnly}
-                                      ariaLabel={t('sales:clientQuotes.selectProduct')}
-                                      placeholder={t('sales:clientQuotes.selectProduct')}
-                                      // Supplier-quote-backed lines have a fixed product (the backend
-                                      // rejects product/quantity changes on supplier-order-backed
-                                      // rows), so the component locks the selector when
-                                      // supplierQuoteItemId is set, just like the quantity control.
-                                      onProductChange={(idx, productId) =>
-                                        updateProductRow(idx, 'productId', productId)
-                                      }
-                                      className="min-w-0 flex-1"
-                                      buttonClassName="h-9"
-                                    />
-                                    {canViewInternalListing && (
-                                      <QuickViewLinkButton
-                                        href={productHref}
-                                        label={t('sales:clientQuotes.openProductInNewTab')}
-                                        disabledLabel={t(
-                                          'sales:clientQuotes.productShortcutUnavailable',
-                                        )}
-                                        floating
-                                      />
-                                    )}
-                                  </div>
-                                </div>
-                                <div className="space-y-1 lg:col-span-2 lg:space-y-0">
-                                  <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
-                                    {t('sales:clientQuotes.qty')}
-                                  </FieldLabel>
-                                  <div className="flex h-9 items-center justify-center gap-1">
-                                    <ValidatedNumberInput
-                                      step="0.01"
-                                      min="0"
-                                      required
-                                      placeholder="Qty"
-                                      value={item.quantity}
-                                      onValueChange={(value) => {
-                                        const parsed = parseFloat(value);
-                                        updateProductRow(
-                                          index,
-                                          'quantity',
-                                          value === '' || Number.isNaN(parsed) ? 0 : parsed,
-                                        );
-                                      }}
-                                      disabled={isReadOnly || Boolean(item.supplierQuoteItemId)}
-                                      className="flex-1 max-w-[5rem] text-center"
-                                    />
-                                    <span className="shrink-0 text-xs font-medium text-muted-foreground">
-                                      /
-                                    </span>
-                                    <UnitTypeSelector
-                                      value={
-                                        (item.unitType || DEFAULT_UNIT_TYPE) as SupplierUnitType
-                                      }
-                                      onChange={(val) => handleUnitTypeChange(index, val)}
-                                      isSupply={isSupply}
-                                      quantity={Number(item.quantity) || 0}
-                                      disabled={isReadOnly || Boolean(item.supplierQuoteItemId)}
-                                      i18nPrefix="sales:clientQuotes"
-                                    />
-                                  </div>
-                                </div>
-                                <div className="space-y-1 lg:col-span-2 lg:space-y-0">
-                                  <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
-                                    {t('sales:clientQuotes.durationColumn', {
-                                      defaultValue: 'Duration',
-                                    })}
-                                  </FieldLabel>
-                                  <div className="flex h-9 items-center justify-center gap-1">
-                                    <ValidatedNumberInput
-                                      step="1"
-                                      min="1"
-                                      placeholder={t('sales:clientQuotes.durationColumn', {
-                                        defaultValue: 'Duration',
-                                      })}
-                                      value={durationValue}
-                                      onValueChange={(value) =>
-                                        handleDurationValueChange(index, value)
-                                      }
-                                      disabled={isReadOnly || durationUnit === 'na'}
-                                      className={`${compactInputClass} max-w-[5rem]`}
-                                    />
-                                    <span className="shrink-0 text-[9px] font-medium text-muted-foreground">
-                                      /
-                                    </span>
-                                    <DurationUnitSelector
-                                      value={durationUnit}
-                                      onChange={(val) => handleDurationUnitChange(index, val)}
-                                      count={durationValue}
-                                      disabled={isReadOnly}
-                                    />
-                                  </div>
-                                </div>
-                                <div className="space-y-1 lg:col-span-1 lg:space-y-0">
-                                  <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
-                                    {t('crm:internalListing.cost')}
-                                  </FieldLabel>
-                                  <div className="flex h-9 items-center justify-center gap-1">
-                                    <ValidatedNumberInput
-                                      value={unitCost}
-                                      formatDecimals={2}
-                                      onValueChange={handleCostChange}
-                                      disabled={isReadOnly}
-                                      className={compactInputClass}
-                                    />
-                                    <span className="shrink-0 text-[9px] font-medium text-muted-foreground">
-                                      {currency}
-                                    </span>
-                                    {/* Orders have no #779 forward sync — neutral copy, not the
-                                        "edits update the supplier quote too" promise. */}
-                                    {item.supplierQuoteItemId && (
-                                      <SupplierQuoteCostHint descriptionKey="clientsOrders.supplierQuoteCostTooltip" />
-                                    )}
-                                  </div>
-                                </div>
-                                <div className="space-y-1 lg:col-span-1 lg:space-y-0">
-                                  <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
-                                    {t('sales:clientQuotes.molLabel', { defaultValue: 'MOL' })}
-                                  </FieldLabel>
-                                  <div className="flex h-9 items-center justify-center gap-1">
-                                    <ValidatedNumberInput
-                                      value={molPercentage}
-                                      formatDecimals={MOL_PERCENTAGE_DECIMALS}
-                                      onValueChange={handleMolChange}
-                                      disabled={isReadOnly}
-                                      className={compactInputClass}
-                                    />
-                                    <span className="shrink-0 text-[9px] font-medium text-muted-foreground">
-                                      %
-                                    </span>
-                                  </div>
-                                </div>
-                                <div className="space-y-1 lg:col-span-1 lg:space-y-0">
-                                  <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
-                                    {t('sales:clientQuotes.totalCost', {
-                                      defaultValue: 'Total cost',
-                                    })}
-                                  </FieldLabel>
-                                  <div className="flex h-9 items-center justify-center">
-                                    <span className="whitespace-nowrap text-xs font-semibold text-foreground">
-                                      {lineCost.toFixed(2)} {currency}
-                                    </span>
-                                  </div>
-                                </div>
-                                <div className="space-y-1 lg:col-span-1 lg:space-y-0">
-                                  <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
-                                    {t('sales:clientQuotes.marginLabel')}
-                                  </FieldLabel>
-                                  <div className="flex h-9 items-center justify-center">
-                                    <span className="text-xs font-bold text-emerald-600">
-                                      {margin.toFixed(2)} {currency}
-                                    </span>
-                                  </div>
-                                </div>
-                                <div className="space-y-1 lg:col-span-2 lg:space-y-0">
-                                  <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
-                                    {t('crm:internalListing.salePrice')}
-                                  </FieldLabel>
-                                  <div className="flex h-9 items-center justify-end whitespace-nowrap px-3 text-sm font-bold text-foreground">
-                                    <span className="text-sm font-semibold text-foreground">
-                                      {lineSalePrice.toFixed(2)} {currency}
-                                    </span>
-                                  </div>
-                                </div>
-                              </div>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon-sm"
-                                onClick={() => setProductRowToDelete(index)}
-                                disabled={isReadOnly || Boolean(item.supplierSaleId)}
-                                title={
-                                  item.supplierSaleId
-                                    ? t('accounting:clientsOrders.supplierOrderLineLocked', {
-                                        defaultValue:
-                                          'This line is linked to a supplier order and cannot be removed here.',
-                                      })
-                                    : undefined
-                                }
-                                className="text-muted-foreground hover:text-destructive"
-                              >
-                                <i className="fa-solid fa-trash-can" aria-hidden="true"></i>
-                                <span className="sr-only">{t('common:buttons.delete')}</span>
-                              </Button>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <div className="rounded-md border border-dashed border-border py-8 text-center text-sm text-muted-foreground">
-                      {t('sales:clientQuotes.noProductsAdded')}
-                    </div>
-                  )}
-                </div>
-
-                {/* Notes & Cost Summary */}
-                <div className="flex flex-col gap-4 border-t border-border pt-4 md:flex-row">
-                  <Field className="md:w-2/3">
-                    <h4 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-primary">
-                      <span className="size-1.5 rounded-full bg-primary"></span>
-                      {t('accounting:clientsOrders.notes')}
-                    </h4>
-                    <FieldLabel htmlFor="client-order-notes" className="sr-only">
-                      {t('accounting:clientsOrders.notes')}
-                    </FieldLabel>
-                    <Textarea
-                      id="client-order-notes"
-                      rows={4}
-                      value={formData.notes}
-                      onChange={(e) => setFormData((prev) => ({ ...prev, notes: e.target.value }))}
-                      placeholder={t('sales:clientQuotes.additionalNotesPlaceholder')}
-                      disabled={isReadOnly}
-                      className="min-h-28 resize-none"
-                    />
-                  </Field>
-
-                  <div className="space-y-2 md:w-1/3">
-                    <h4 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-primary">
-                      <span className="size-1.5 rounded-full bg-primary"></span>
-                      {t('accounting:clientsOrders.summary', { defaultValue: 'Summary' })}
-                    </h4>
-                    {(() => {
-                      const { subtotal, discountAmount, total, margin, marginPercentage } =
-                        calculatePricingTotals(
-                          formData.items || [],
-                          formData.discount || 0,
-                          DEFAULT_UNIT_TYPE,
-                          formData.discountType || 'percentage',
-                        );
-                      return (
-                        <CostSummaryPanel
-                          currency={currency}
-                          subtotal={subtotal}
-                          total={total}
-                          subtotalLabel={t('sales:clientQuotes.subtotal', {
-                            defaultValue: 'Subtotal',
-                          })}
-                          totalLabel={t('sales:clientQuotes.totalLabel')}
-                          globalDiscount={{
-                            label: t('sales:clientQuotes.globalDiscount', {
-                              defaultValue: 'Global Discount',
-                            }),
-                            value: formData.discount || 0,
-                            type: formData.discountType || 'percentage',
-                            onChange: (value) => {
-                              const parsed = parseNumberInputValue(value);
-                              setFormData((prev) => ({ ...prev, discount: parsed }));
-                            },
-                            onTypeChange: (type) =>
-                              setFormData((prev) => ({ ...prev, discountType: type })),
-                            disabled: isReadOnly,
-                          }}
-                          discountRow={
-                            discountAmount > 0
-                              ? {
-                                  label: t('sales:clientOffers.discountAmount', {
-                                    value: formatDiscountValue(
-                                      formData.discount ?? 0,
-                                      formData.discountType ?? 'percentage',
-                                      currency,
-                                    ),
-                                  }),
-                                  amount: discountAmount,
-                                }
-                              : undefined
-                          }
-                          margin={{
-                            label: `${t('sales:clientQuotes.marginLabel')} (${formatMolPercentage(marginPercentage)})`,
-                            amount: margin,
-                          }}
-                        />
-                      );
-                    })()}
-                  </div>
-                </div>
-              </ModalBody>
-
-              <ModalFooter>
-                <Button type="button" variant="outline" onClick={closeEditModal}>
-                  {t('common:buttons.cancel')}
-                </Button>
-                {!previewVersion && (
-                  <Button type="submit" disabled={isReadOnly}>
-                    {t('accounting:clientsOrders.updateOrder')}
-                  </Button>
-                )}
-              </ModalFooter>
-            </form>
-          </ModalContent>
-          {editingOrder?.id && (
-            <OrderVersionsPanel
-              orderId={editingOrder.id}
-              selectedVersionId={previewVersion?.id ?? null}
-              onPreview={handleVersionPreview}
-              onClearPreview={handleClearPreview}
-              onRestored={handleVersionRestored}
-              disabled={baseReadOnly}
-            />
+const OrderDetailsSection: React.FC<{ controller: ClientsOrdersController }> = ({ controller }) => (
+  <div className="space-y-2">
+    <OrderSectionTitle>{controller.t('accounting:clientsOrders.orderDetails')}</OrderSectionTitle>
+    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <Field data-invalid={Boolean(controller.errors.clientId)}>
+        <SelectControl
+          id="client-order-client"
+          options={controller.activeClients.map((client) => ({ id: client.id, name: client.name }))}
+          value={controller.formData.clientId || ''}
+          onChange={(value) => controller.handleClientChange(value as string)}
+          label={controller.t('accounting:clientsOrders.client')}
+          required
+          placeholder={controller.t('sales:clientQuotes.selectAClient')}
+          searchable={true}
+          disabled={controller.isReadOnly}
+          buttonClassName={controller.errors.clientId ? 'h-9 border-destructive' : 'h-9'}
+        />
+        <FieldError className="text-xs">{controller.errors.clientId}</FieldError>
+      </Field>
+      <Field>
+        <FieldLabel>
+          {controller.t('accounting:clientsOrders.orderNumber', {
+            defaultValue: 'Order Number',
+          })}
+        </FieldLabel>
+        <div className="flex h-9 items-center rounded-md border border-border bg-muted/30 px-3 text-sm font-medium text-foreground">
+          {controller.editingOrder?.id || '-'}
+        </div>
+      </Field>
+      <Field>
+        <SelectControl
+          id="client-order-payment-terms"
+          options={controller.paymentTermsOptions}
+          value={controller.formData.paymentTerms || 'immediate'}
+          onChange={(value) =>
+            controller.setFormData((prev) => ({
+              ...prev,
+              paymentTerms: value as ClientsOrder['paymentTerms'],
+            }))
+          }
+          label={controller.t('accounting:clientsOrders.paymentTerms')}
+          searchable={false}
+          disabled={controller.isReadOnly}
+          buttonClassName="h-9"
+        />
+      </Field>
+      <Field>
+        <FieldLabel>
+          {controller.t('accounting:clientsOrders.paymentDueDate', {
+            defaultValue: 'Payment due date',
+          })}
+        </FieldLabel>
+        <div className="flex h-9 items-center rounded-md border border-border bg-muted/30 px-3 text-sm font-medium text-foreground">
+          {computeDueDate(
+            controller.editingOrder?.createdAt,
+            controller.formData.paymentTerms,
+            controller.t,
           )}
         </div>
-      </Modal>
+      </Field>
+    </div>
+  </div>
+);
 
-      <DeleteConfirmModal
-        isOpen={isDeleteConfirmOpen}
-        onClose={() => setIsDeleteConfirmOpen(false)}
-        onConfirm={handleDelete}
-        title={t('accounting:clientsOrders.deleteOrderTitle')}
-        description={t('accounting:clientsOrders.deleteOrderConfirm', {
-          clientName: orderToDelete?.clientName,
-        })}
-      />
+const OrderItemsSection: React.FC<{ controller: ClientsOrdersController }> = ({ controller }) => (
+  <div className="space-y-4">
+    <div className="flex items-center justify-between">
+      <OrderSectionTitle>{controller.t('sales:clientQuotes.productsServices')}</OrderSectionTitle>
+      <Button
+        type="button"
+        size="sm"
+        onClick={controller.addProductRow}
+        disabled={controller.isReadOnly}
+      >
+        <i className="fa-solid fa-plus text-[10px]" aria-hidden="true"></i>
+        {controller.t('sales:clientQuotes.addProduct')}
+      </Button>
+    </div>
+    <FieldError className="-mt-2 text-xs">{controller.errors.items}</FieldError>
+    <OrderItemsHeader controller={controller} />
+    {controller.formData.items && controller.formData.items.length > 0 ? (
+      <div className="space-y-3">
+        {controller.formData.items.map((item, index) => (
+          <OrderItemRow key={item.id} controller={controller} item={item} index={index} />
+        ))}
+      </div>
+    ) : (
+      <div className="rounded-md border border-dashed border-border py-8 text-center text-sm text-muted-foreground">
+        {controller.t('sales:clientQuotes.noProductsAdded')}
+      </div>
+    )}
+  </div>
+);
 
-      {/* Line-item (product) delete confirmation */}
-      <DeleteConfirmModal
-        isOpen={productRowToDelete !== null}
-        onClose={() => setProductRowToDelete(null)}
-        onConfirm={() => {
-          if (productRowToDelete !== null) {
-            removeProductRow(productRowToDelete);
-          }
-          setProductRowToDelete(null);
-        }}
-        title={t('accounting:clientsOrders.removeProductTitle')}
-        description={t('accounting:clientsOrders.removeProductConfirm')}
-        zIndex={70}
-      />
-
-      <div className="space-y-4">
-        <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
-          <div>
-            <h2 className="text-2xl font-semibold text-foreground">
-              {t('accounting:clientsOrders.title')}
-            </h2>
-            <p className="text-sm text-muted-foreground">
-              {t('accounting:clientsOrders.subtitle')}
-            </p>
-          </div>
+const OrderItemsHeader: React.FC<{ controller: ClientsOrdersController }> = ({ controller }) => {
+  if (!controller.formData.items || controller.formData.items.length === 0) return null;
+  return (
+    <div className="mb-1 hidden items-center gap-2 px-3 lg:flex">
+      <div className="grid flex-1 grid-cols-14 gap-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+        <div className="col-span-2">
+          {controller.t('accounting:clientsOrders.supplierOrderColumn', {
+            defaultValue: 'Supplier Order',
+          })}
+        </div>
+        <div className="col-span-2">{controller.t('sales:clientQuotes.productsServices')}</div>
+        <div className="col-span-2 text-center">{controller.t('sales:clientQuotes.qty')}</div>
+        <div className="col-span-2 whitespace-nowrap text-center">
+          {controller.t('sales:clientQuotes.durationColumn', { defaultValue: 'Duration' })}
+        </div>
+        <div className="col-span-1 text-center">{controller.t('crm:internalListing.cost')}</div>
+        <div className="col-span-1 text-center">
+          {controller.t('sales:clientQuotes.molLabel', { defaultValue: 'MOL' })}
+        </div>
+        <div className="col-span-1 whitespace-nowrap text-center">
+          {controller.t('sales:clientQuotes.totalCost', { defaultValue: 'Total cost' })}
+        </div>
+        <div className="col-span-1 text-center">
+          {controller.t('sales:clientQuotes.marginLabel')}
+        </div>
+        <div className="col-span-2 pr-2 text-right">
+          {controller.t('crm:internalListing.salePrice')}
         </div>
       </div>
-
-      {/* Main Table with all orders and TableFilter */}
-      <StandardTable<ClientsOrder>
-        title={t('accounting:clientsOrders.title')}
-        data={filteredOrders}
-        columns={columns}
-        defaultRowsPerPage={10}
-        initialFilterState={tableInitialFilterState}
-        containerClassName="overflow-visible"
-        rowClassName={(row: ClientsOrder) =>
-          isHistoryRow(row.status) ? 'bg-muted text-muted-foreground' : 'hover:bg-muted/50'
-        }
-        onRowClick={(row: ClientsOrder) => openEditModal(row)}
-      />
+      <div className="w-8 shrink-0"></div>
     </div>
   );
 };
+
+const OrderItemRow: React.FC<{
+  controller: ClientsOrdersController;
+  item: ClientsOrderItem;
+  index: number;
+}> = ({ controller, item, index }) => {
+  const product = controller.products.find((candidate) => candidate.id === item.productId);
+  const { unitCost, molPercentage, lineCost, quantity, durationMonths } = getItemPricingContext(
+    item,
+    DEFAULT_UNIT_TYPE,
+  );
+  const durationUnit = normalizeDurationUnit(item.durationUnit);
+  const durationValue = getDurationDisplayValue(item);
+  const lineSalePrice = Number(item.unitPrice || 0) * quantity * durationMonths;
+  const margin = lineSalePrice - lineCost;
+
+  return (
+    <div className="space-y-3 rounded-md border border-border bg-muted/30 p-3">
+      <div className="flex items-start gap-2 lg:items-center lg:pt-5">
+        <div className="grid flex-1 grid-cols-1 gap-2 lg:grid-cols-14 lg:items-center">
+          <OrderItemSupplierField controller={controller} item={item} />
+          <OrderItemProductField controller={controller} item={item} index={index} />
+          <OrderItemQuantityField
+            controller={controller}
+            item={item}
+            index={index}
+            isSupply={product?.type === 'supply'}
+          />
+          <OrderItemDurationField
+            controller={controller}
+            index={index}
+            durationUnit={durationUnit}
+            durationValue={durationValue}
+          />
+          <OrderItemCostField
+            controller={controller}
+            item={item}
+            index={index}
+            unitCost={unitCost}
+          />
+          <OrderItemMolField controller={controller} index={index} molPercentage={molPercentage} />
+          <OrderItemAmountField
+            label={controller.t('sales:clientQuotes.totalCost', { defaultValue: 'Total cost' })}
+            value={lineCost}
+            currency={controller.currency}
+            className="lg:col-span-1"
+          />
+          <OrderItemAmountField
+            label={controller.t('sales:clientQuotes.marginLabel')}
+            value={margin}
+            currency={controller.currency}
+            className="lg:col-span-1"
+            valueClassName="text-emerald-600"
+          />
+          <OrderItemAmountField
+            label={controller.t('crm:internalListing.salePrice')}
+            value={lineSalePrice}
+            currency={controller.currency}
+            className="lg:col-span-2"
+            align="right"
+          />
+        </div>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          onClick={() => controller.setProductRowToDelete(index)}
+          disabled={controller.isReadOnly || Boolean(item.supplierSaleId)}
+          title={
+            item.supplierSaleId
+              ? controller.t('accounting:clientsOrders.supplierOrderLineLocked', {
+                  defaultValue:
+                    'This line is linked to a supplier order and cannot be removed here.',
+                })
+              : undefined
+          }
+          className="text-muted-foreground hover:text-destructive"
+        >
+          <i className="fa-solid fa-trash-can" aria-hidden="true"></i>
+          <span className="sr-only">{controller.t('common:buttons.delete')}</span>
+        </Button>
+      </div>
+    </div>
+  );
+};
+
+const OrderItemSupplierField: React.FC<{
+  controller: ClientsOrdersController;
+  item: ClientsOrderItem;
+}> = ({ controller, item }) => {
+  const supplierOrderHref = buildSupplierOrderQuickViewHref(
+    item.supplierSaleId,
+    controller.allSupplierOrderIds,
+  );
+
+  return (
+    <div className="relative min-w-0 space-y-1 lg:col-span-2 lg:space-y-0">
+      <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
+        {controller.t('accounting:clientsOrders.supplierOrderColumn', {
+          defaultValue: 'Supplier Order',
+        })}
+      </FieldLabel>
+      <div className="flex h-9 items-center rounded-md border border-border bg-background px-3">
+        {item.supplierSaleId ? (
+          <span className="min-w-0 flex-1 truncate text-xs font-medium text-foreground">
+            {item.supplierSaleSupplierName ?? '-'} · {item.supplierSaleId}
+          </span>
+        ) : (
+          <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+            {controller.t('accounting:clientsOrders.noSupplierOrder', {
+              defaultValue: 'No supplier order',
+            })}
+          </span>
+        )}
+        {controller.canViewSupplierOrders && (
+          <QuickViewLinkButton
+            href={supplierOrderHref}
+            label={controller.t('accounting:clientsOrders.openSupplierOrderInNewTab', {
+              defaultValue: 'Open supplier order in a new tab',
+            })}
+            disabledLabel={controller.t(
+              'accounting:clientsOrders.supplierOrderShortcutUnavailable',
+              { defaultValue: 'No linked supplier order to open' },
+            )}
+            floating
+          />
+        )}
+      </div>
+    </div>
+  );
+};
+
+const OrderItemProductField: React.FC<{
+  controller: ClientsOrdersController;
+  item: ClientsOrderItem;
+  index: number;
+}> = ({ controller, item, index }) => {
+  const productHref = buildProductQuickViewHref(item.productId, controller.allProductIds);
+
+  return (
+    <div className="min-w-0 space-y-1 lg:col-span-2 lg:space-y-0">
+      <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
+        {controller.t('sales:clientQuotes.productsServices')}
+      </FieldLabel>
+      <div className="relative flex items-center gap-1">
+        <ProductSelectOrFallback
+          item={item}
+          index={index}
+          options={controller.productOptions}
+          isProductMissing={controller.isLinkedProductMissing(item)}
+          isReadOnly={controller.isReadOnly}
+          ariaLabel={controller.t('sales:clientQuotes.selectProduct')}
+          placeholder={controller.t('sales:clientQuotes.selectProduct')}
+          onProductChange={(idx, productId) =>
+            controller.updateProductRow(idx, 'productId', productId)
+          }
+          className="min-w-0 flex-1"
+          buttonClassName="h-9"
+        />
+        {controller.canViewInternalListing && (
+          <QuickViewLinkButton
+            href={productHref}
+            label={controller.t('sales:clientQuotes.openProductInNewTab')}
+            disabledLabel={controller.t('sales:clientQuotes.productShortcutUnavailable')}
+            floating
+          />
+        )}
+      </div>
+    </div>
+  );
+};
+
+const OrderItemQuantityField: React.FC<{
+  controller: ClientsOrdersController;
+  item: ClientsOrderItem;
+  index: number;
+  isSupply: boolean;
+}> = ({ controller, item, index, isSupply }) => (
+  <div className="space-y-1 lg:col-span-2 lg:space-y-0">
+    <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
+      {controller.t('sales:clientQuotes.qty')}
+    </FieldLabel>
+    <div className="flex h-9 items-center justify-center gap-1">
+      <ValidatedNumberInput
+        step="0.01"
+        min="0"
+        required
+        placeholder="Qty"
+        value={item.quantity}
+        onValueChange={(value) => {
+          const parsed = parseFloat(value);
+          controller.updateProductRow(
+            index,
+            'quantity',
+            value === '' || Number.isNaN(parsed) ? 0 : parsed,
+          );
+        }}
+        disabled={controller.isReadOnly || Boolean(item.supplierQuoteItemId)}
+        className="max-w-[5rem] flex-1 text-center"
+      />
+      <span className="shrink-0 text-xs font-medium text-muted-foreground">/</span>
+      <UnitTypeSelector
+        value={(item.unitType || DEFAULT_UNIT_TYPE) as SupplierUnitType}
+        onChange={(value) => controller.handleUnitTypeChange(index, value)}
+        isSupply={isSupply}
+        quantity={Number(item.quantity) || 0}
+        disabled={controller.isReadOnly || Boolean(item.supplierQuoteItemId)}
+        i18nPrefix="sales:clientQuotes"
+      />
+    </div>
+  </div>
+);
+
+const OrderItemDurationField: React.FC<{
+  controller: ClientsOrdersController;
+  index: number;
+  durationUnit: DurationUnit;
+  durationValue: number;
+}> = ({ controller, index, durationUnit, durationValue }) => (
+  <div className="space-y-1 lg:col-span-2 lg:space-y-0">
+    <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
+      {controller.t('sales:clientQuotes.durationColumn', { defaultValue: 'Duration' })}
+    </FieldLabel>
+    <div className="flex h-9 items-center justify-center gap-1">
+      <ValidatedNumberInput
+        step="1"
+        min="1"
+        placeholder={controller.t('sales:clientQuotes.durationColumn', {
+          defaultValue: 'Duration',
+        })}
+        value={durationValue}
+        onValueChange={(value) => controller.handleDurationValueChange(index, value)}
+        disabled={controller.isReadOnly || durationUnit === 'na'}
+        className={`${compactInputClass} max-w-[5rem]`}
+      />
+      <span className="shrink-0 text-[9px] font-medium text-muted-foreground">/</span>
+      <DurationUnitSelector
+        value={durationUnit}
+        onChange={(value) => controller.handleDurationUnitChange(index, value)}
+        count={durationValue}
+        disabled={controller.isReadOnly}
+      />
+    </div>
+  </div>
+);
+
+const OrderItemCostField: React.FC<{
+  controller: ClientsOrdersController;
+  item: ClientsOrderItem;
+  index: number;
+  unitCost: number;
+}> = ({ controller, item, index, unitCost }) => (
+  <div className="space-y-1 lg:col-span-1 lg:space-y-0">
+    <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
+      {controller.t('crm:internalListing.cost')}
+    </FieldLabel>
+    <div className="flex h-9 items-center justify-center gap-1">
+      <ValidatedNumberInput
+        value={unitCost}
+        formatDecimals={2}
+        onValueChange={(value) => {
+          if (!controller.isReadOnly) {
+            controller.setFormData(
+              makeCostUpdater<Partial<ClientsOrder>>(index, value, DEFAULT_UNIT_TYPE),
+            );
+          }
+        }}
+        disabled={controller.isReadOnly}
+        className={compactInputClass}
+      />
+      <span className="shrink-0 text-[9px] font-medium text-muted-foreground">
+        {controller.currency}
+      </span>
+      {item.supplierQuoteItemId && (
+        <SupplierQuoteCostHint descriptionKey="clientsOrders.supplierQuoteCostTooltip" />
+      )}
+    </div>
+  </div>
+);
+
+const OrderItemMolField: React.FC<{
+  controller: ClientsOrdersController;
+  index: number;
+  molPercentage: number;
+}> = ({ controller, index, molPercentage }) => (
+  <div className="space-y-1 lg:col-span-1 lg:space-y-0">
+    <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
+      {controller.t('sales:clientQuotes.molLabel', { defaultValue: 'MOL' })}
+    </FieldLabel>
+    <div className="flex h-9 items-center justify-center gap-1">
+      <ValidatedNumberInput
+        value={molPercentage}
+        formatDecimals={MOL_PERCENTAGE_DECIMALS}
+        onValueChange={(value) => {
+          if (!controller.isReadOnly) {
+            controller.setFormData(
+              makeMolUpdater<Partial<ClientsOrder>>(index, value, DEFAULT_UNIT_TYPE),
+            );
+          }
+        }}
+        disabled={controller.isReadOnly}
+        className={compactInputClass}
+      />
+      <span className="shrink-0 text-[9px] font-medium text-muted-foreground">%</span>
+    </div>
+  </div>
+);
+
+const OrderItemAmountField: React.FC<{
+  label: string;
+  value: number;
+  currency: string;
+  className: string;
+  valueClassName?: string;
+  align?: 'center' | 'right';
+}> = ({
+  label,
+  value,
+  currency,
+  className,
+  valueClassName = 'text-foreground',
+  align = 'center',
+}) => (
+  <div className={`space-y-1 ${className} lg:space-y-0`}>
+    <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
+      {label}
+    </FieldLabel>
+    <div
+      className={`flex h-9 items-center whitespace-nowrap px-3 ${
+        align === 'right' ? 'justify-end' : 'justify-center'
+      }`}
+    >
+      <span className={`text-xs font-bold ${valueClassName}`}>
+        {value.toFixed(2)} {currency}
+      </span>
+    </div>
+  </div>
+);
+
+const OrderNotesSummarySection: React.FC<{ controller: ClientsOrdersController }> = ({
+  controller,
+}) => {
+  const { subtotal, discountAmount, total, margin, marginPercentage } = calculatePricingTotals(
+    controller.formData.items || [],
+    controller.formData.discount || 0,
+    DEFAULT_UNIT_TYPE,
+    controller.formData.discountType || 'percentage',
+  );
+
+  return (
+    <div className="flex flex-col gap-4 border-t border-border pt-4 md:flex-row">
+      <Field className="md:w-2/3">
+        <OrderSectionTitle>{controller.t('accounting:clientsOrders.notes')}</OrderSectionTitle>
+        <FieldLabel htmlFor="client-order-notes" className="sr-only">
+          {controller.t('accounting:clientsOrders.notes')}
+        </FieldLabel>
+        <Textarea
+          id="client-order-notes"
+          rows={4}
+          value={controller.formData.notes}
+          onChange={(event) =>
+            controller.setFormData((prev) => ({ ...prev, notes: event.target.value }))
+          }
+          placeholder={controller.t('sales:clientQuotes.additionalNotesPlaceholder')}
+          disabled={controller.isReadOnly}
+          className="min-h-28 resize-none"
+        />
+      </Field>
+      <div className="space-y-2 md:w-1/3">
+        <OrderSectionTitle>
+          {controller.t('accounting:clientsOrders.summary', { defaultValue: 'Summary' })}
+        </OrderSectionTitle>
+        <CostSummaryPanel
+          currency={controller.currency}
+          subtotal={subtotal}
+          total={total}
+          subtotalLabel={controller.t('sales:clientQuotes.subtotal', {
+            defaultValue: 'Subtotal',
+          })}
+          totalLabel={controller.t('sales:clientQuotes.totalLabel')}
+          globalDiscount={{
+            label: controller.t('sales:clientQuotes.globalDiscount', {
+              defaultValue: 'Global Discount',
+            }),
+            value: controller.formData.discount || 0,
+            type: controller.formData.discountType || 'percentage',
+            onChange: (value) => {
+              controller.setFormData((prev) => ({
+                ...prev,
+                discount: parseNumberInputValue(value),
+              }));
+            },
+            onTypeChange: (type) =>
+              controller.setFormData((prev) => ({ ...prev, discountType: type })),
+            disabled: controller.isReadOnly,
+          }}
+          discountRow={
+            discountAmount > 0
+              ? {
+                  label: controller.t('sales:clientOffers.discountAmount', {
+                    value: formatDiscountValue(
+                      controller.formData.discount ?? 0,
+                      controller.formData.discountType ?? 'percentage',
+                      controller.currency,
+                    ),
+                  }),
+                  amount: discountAmount,
+                }
+              : undefined
+          }
+          margin={{
+            label: `${controller.t('sales:clientQuotes.marginLabel')} (${formatMolPercentage(marginPercentage)})`,
+            amount: margin,
+          }}
+        />
+      </div>
+    </div>
+  );
+};
+
+const ClientsOrdersDeleteDialogs: React.FC<{ controller: ClientsOrdersController }> = ({
+  controller,
+}) => (
+  <>
+    <DeleteConfirmModal
+      isOpen={controller.isDeleteConfirmOpen}
+      onClose={() => controller.setIsDeleteConfirmOpen(false)}
+      onConfirm={controller.handleDelete}
+      title={controller.t('accounting:clientsOrders.deleteOrderTitle')}
+      description={controller.t('accounting:clientsOrders.deleteOrderConfirm', {
+        clientName: controller.orderToDelete?.clientName,
+      })}
+    />
+    <DeleteConfirmModal
+      isOpen={controller.productRowToDelete !== null}
+      onClose={() => controller.setProductRowToDelete(null)}
+      onConfirm={() => {
+        if (controller.productRowToDelete !== null) {
+          controller.removeProductRow(controller.productRowToDelete);
+        }
+        controller.setProductRowToDelete(null);
+      }}
+      title={controller.t('accounting:clientsOrders.removeProductTitle')}
+      description={controller.t('accounting:clientsOrders.removeProductConfirm')}
+      zIndex={70}
+    />
+  </>
+);
 
 export default ClientsOrdersView;
