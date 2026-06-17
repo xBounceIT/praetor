@@ -69,6 +69,7 @@ const clientOrderCreateSupplierOrderMock = mock();
 const clientOrderBulkInsertSupplierOrderItemsMock = mock();
 const clientOrderLinkSaleItemsToSupplierOrderMock = mock();
 const clientOrderMapSaleItemsToSupplierItemsMock = mock();
+const clientOrderLinkSaleItemsToSupplierOrderAndItemsMock = mock();
 const generateClientOrderIdMock = mock();
 const generateSupplierOrderIdMock = mock();
 const allocateDocumentCodeMock = mock();
@@ -144,6 +145,7 @@ beforeAll(async () => {
     bulkInsertSupplierOrderItems: clientOrderBulkInsertSupplierOrderItemsMock,
     linkSaleItemsToSupplierOrder: clientOrderLinkSaleItemsToSupplierOrderMock,
     mapSaleItemsToSupplierItems: clientOrderMapSaleItemsToSupplierItemsMock,
+    linkSaleItemsToSupplierOrderAndItems: clientOrderLinkSaleItemsToSupplierOrderAndItemsMock,
   }));
   mock.module('../../repositories/supplierQuotesRepo.ts', () => ({
     ...supplierQuotesRepoSnap,
@@ -300,6 +302,7 @@ const allMocks = [
   clientOrderBulkInsertSupplierOrderItemsMock,
   clientOrderLinkSaleItemsToSupplierOrderMock,
   clientOrderMapSaleItemsToSupplierItemsMock,
+  clientOrderLinkSaleItemsToSupplierOrderAndItemsMock,
   generateClientOrderIdMock,
   generateSupplierOrderIdMock,
   allocateDocumentCodeMock,
@@ -389,6 +392,7 @@ beforeEach(async () => {
   clientOrderBulkInsertSupplierOrderItemsMock.mockResolvedValue(undefined);
   clientOrderLinkSaleItemsToSupplierOrderMock.mockResolvedValue(undefined);
   clientOrderMapSaleItemsToSupplierItemsMock.mockResolvedValue(undefined);
+  clientOrderLinkSaleItemsToSupplierOrderAndItemsMock.mockResolvedValue(undefined);
   generateClientOrderIdMock.mockResolvedValue('ORD-2999-0001');
   generateSupplierOrderIdMock.mockResolvedValue('SORD-2999-0001');
   allocateDocumentCodeMock.mockImplementation(async (moduleId: string) => {
@@ -606,11 +610,12 @@ describe('PUT /api/sales/client-offers/:id expired rules (issue #779)', () => {
       }),
       expect.anything(),
     );
-    expect(clientOrderLinkSaleItemsToSupplierOrderMock).toHaveBeenCalledWith(
+    expect(clientOrderLinkSaleItemsToSupplierOrderAndItemsMock).toHaveBeenCalledWith(
       expect.objectContaining({
         orderId: 'ORD-2999-0001',
         supplierQuoteId: 'sq-1',
         supplierOrderId: 'SORD-2999-0001',
+        supplierName: 'Supplier Co',
       }),
       expect.anything(),
     );

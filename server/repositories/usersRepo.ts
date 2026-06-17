@@ -1048,6 +1048,42 @@ export const setPrimaryRole = async (
   await exec.update(users).set({ role: roleId }).where(eq(users.id, userId));
 };
 
+export const replaceUserRolesAndSetPrimary = async (
+  userId: string,
+  roleIds: string[],
+  primaryRoleId: string,
+  exec: DbExecutor = db,
+): Promise<void> => {
+  await executeRows(
+    exec,
+    sql`WITH incoming_roles AS (
+          SELECT unnest(${sql.param(roleIds)}::text[]) AS role_id
+        ),
+        deleted_roles AS (
+          DELETE FROM user_roles ur
+          WHERE ur.user_id = ${userId}
+            AND NOT EXISTS (
+              SELECT 1 FROM incoming_roles incoming WHERE incoming.role_id = ur.role_id
+            )
+          RETURNING 1
+        ),
+        inserted_roles AS (
+          INSERT INTO user_roles (user_id, role_id)
+          SELECT ${userId}, role_id
+          FROM incoming_roles
+          ON CONFLICT DO NOTHING
+          RETURNING 1
+        ),
+        updated_user AS (
+          UPDATE users
+          SET role = ${primaryRoleId}
+          WHERE id = ${userId}
+          RETURNING 1
+        )
+        SELECT 1`,
+  );
+};
+
 export const getUserRoleIds = async (userId: string, exec: DbExecutor = db): Promise<string[]> => {
   const rows = await executeRows<{ roleId: string }>(
     exec,

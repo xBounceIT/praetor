@@ -17,16 +17,19 @@ export const redeemBackupCode = async (
   const codes = state?.totpBackupCodes;
   if (!codes || codes.length === 0) return false;
 
-  for (let i = 0; i < codes.length; i++) {
-    const entry = codes[i];
-    if (entry.usedAt !== null) continue;
-    if (await verifyBackupCode(submitted, entry.hash)) {
-      const updated = codes.map((c, idx) =>
-        idx === i ? { ...c, usedAt: new Date().toISOString() } : c,
-      );
-      await usersRepo.markBackupCodeUsed(userId, updated, exec);
-      return true;
-    }
-  }
-  return false;
+  const unusedCodes = codes
+    .map((entry, index) => ({ entry, index }))
+    .filter(({ entry }) => entry.usedAt === null);
+  const verificationResults = await Promise.all(
+    unusedCodes.map(({ entry }) => verifyBackupCode(submitted, entry.hash)),
+  );
+  const matchIndex = verificationResults.findIndex(Boolean);
+  if (matchIndex < 0) return false;
+
+  const usedCodeIndex = unusedCodes[matchIndex].index;
+  const updated = codes.map((c, idx) =>
+    idx === usedCodeIndex ? { ...c, usedAt: new Date().toISOString() } : c,
+  );
+  await usersRepo.markBackupCodeUsed(userId, updated, exec);
+  return true;
 };

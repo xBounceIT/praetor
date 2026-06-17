@@ -187,21 +187,25 @@ const iterateSseEvents = async function* (responseBody: unknown): AsyncGenerator
   const decoder = new TextDecoder();
   let buffer = '';
 
-  try {
-    while (true) {
-      const { done, value } = (await reader.read()) as { done: boolean; value?: Uint8Array };
-      if (done) break;
+  const readNextChunk = async function* (): AsyncGenerator<ParsedSseEvent> {
+    const { done, value } = (await reader.read()) as { done: boolean; value?: Uint8Array };
+    if (done) return;
 
-      buffer += decoder.decode(value || new Uint8Array(), { stream: true });
-      let boundary = findSseBoundary(buffer);
-      while (boundary !== -1) {
-        const rawBlock = buffer.slice(0, boundary);
-        buffer = buffer.slice(boundary + 2);
-        const parsed = parseSseEventBlock(rawBlock);
-        if (parsed) yield parsed;
-        boundary = findSseBoundary(buffer);
-      }
+    buffer += decoder.decode(value || new Uint8Array(), { stream: true });
+    let boundary = findSseBoundary(buffer);
+    while (boundary !== -1) {
+      const rawBlock = buffer.slice(0, boundary);
+      buffer = buffer.slice(boundary + 2);
+      const parsed = parseSseEventBlock(rawBlock);
+      if (parsed) yield parsed;
+      boundary = findSseBoundary(buffer);
     }
+
+    yield* readNextChunk();
+  };
+
+  try {
+    yield* readNextChunk();
 
     buffer += decoder.decode();
     const tail = buffer.trim();

@@ -174,32 +174,33 @@ export const notifyRilManualOvertimeForRows = async (
   input: NotifyRilManualOvertimeInput,
   exec: DbExecutor = db,
 ): Promise<{ checked: number; created: number; notified: number }> => {
-  let checked = 0;
-  let created = 0;
-  let notified = 0;
   const uniqueChangedDays = Array.from(new Set(input.changedDays)).filter((day) =>
     Number.isInteger(day),
   );
-
-  for (const day of uniqueChangedDays) {
+  const checks = uniqueChangedDays.flatMap((day) => {
     const date = dateForMonthDay(input.monthKey, day);
     const row = input.rows[String(day)];
-    if (!date || !row) continue;
-    checked += 1;
+    if (!date || !row) return [];
     const hours = calculateRilWorkedHoursFromTimes(row.entrance, row.exit, input.lunchBreakMinutes);
-    const result = await notifyOvertimeIfNeeded(
-      {
-        userId: input.userId,
-        date,
-        hours,
-        source: 'ril_manual',
-        createdBy: input.createdBy,
-      },
-      exec,
-    );
-    if (result.created) created += 1;
-    notified += result.notified;
-  }
+    return [{ date, hours }];
+  });
 
-  return { checked, created, notified };
+  const results = await Promise.all(
+    checks.map(({ date, hours }) =>
+      notifyOvertimeIfNeeded(
+        {
+          userId: input.userId,
+          date,
+          hours,
+          source: 'ril_manual',
+          createdBy: input.createdBy,
+        },
+        exec,
+      ),
+    ),
+  );
+  const created = results.filter((result) => result.created).length;
+  const notified = results.reduce((total, result) => total + result.notified, 0);
+
+  return { checked: checks.length, created, notified };
 };

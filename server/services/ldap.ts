@@ -954,12 +954,14 @@ class LDAPService {
             authMethod: 'ldap',
             authProviderId: null,
           });
-          await settingsRepo.upsertForUser(id, {
-            fullName: name,
-            email: email?.trim() || '',
-            language: null,
-          });
-          await applyExternalRolesForUser(id, groups, roleMappings);
+          await Promise.all([
+            settingsRepo.upsertForUser(id, {
+              fullName: name,
+              email: email?.trim() || '',
+              language: null,
+            }),
+            applyExternalRolesForUser(id, groups, roleMappings),
+          ]);
           createdCount++;
         }
       }

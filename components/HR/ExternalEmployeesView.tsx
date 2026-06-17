@@ -78,6 +78,232 @@ const OptionalText: React.FC<{
   return <span className={text ? className : 'text-muted-foreground'}>{text || fallback}</span>;
 };
 
+interface ExternalEmployeesTableProps {
+  employees: User[];
+  currency: string;
+  permissions: {
+    canViewCosts: boolean;
+    canManageEmployeeAssignments: boolean;
+    canUpdateEmployees: boolean;
+    canDeleteEmployees: boolean;
+  };
+  onManageEmployee: (employee: User) => void;
+  onEditEmployee: (employee: User) => void;
+  onDeleteEmployee: (employee: User) => void;
+}
+
+const ExternalEmployeesTable: React.FC<ExternalEmployeesTableProps> = ({
+  employees,
+  currency,
+  permissions,
+  onManageEmployee,
+  onEditEmployee,
+  onDeleteEmployee,
+}) => {
+  const { t } = useTranslation(['hr', 'common']);
+  const notSetLabel = t('employeeProfile.notSet');
+  const { canViewCosts, canManageEmployeeAssignments, canUpdateEmployees, canDeleteEmployees } =
+    permissions;
+  const columns = useMemo<Column<User>[]>(
+    () => [
+      {
+        header: t('externalEmployees.name'),
+        accessorKey: 'name',
+        cell: ({ row }) => (
+          <div className="flex items-center gap-3">
+            <div className="size-9 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center font-bold text-xs">
+              {row.avatarInitials}
+            </div>
+            <span className="font-semibold text-foreground">{row.name}</span>
+          </div>
+        ),
+      },
+      {
+        header: t('employeeProfile.employeeCode'),
+        accessorKey: 'employeeCode',
+        cell: ({ value }) => (
+          <OptionalText
+            value={value}
+            fallback={notSetLabel}
+            className="font-medium text-muted-foreground"
+          />
+        ),
+      },
+      {
+        header: t('employeeProfile.contact'),
+        id: 'contact',
+        accessorFn: (row) => [row.email, row.phone].filter(Boolean).join(' '),
+        cell: ({ row }) => {
+          const email = row.email?.trim();
+          const phone = row.phone?.trim();
+          return (
+            <div className="flex min-w-40 flex-col gap-0.5 text-sm">
+              {email && <span className="text-foreground">{email}</span>}
+              {phone && <span className="text-muted-foreground">{phone}</span>}
+              {!email && !phone && <span className="text-muted-foreground">{notSetLabel}</span>}
+            </div>
+          );
+        },
+      },
+      {
+        header: t('employeeProfile.jobTitle'),
+        id: 'roleTitle',
+        accessorFn: (row) => row.jobTitle || '',
+        cell: ({ row }) => (
+          <div className="flex min-w-36 flex-col gap-0.5 text-sm">
+            <OptionalText
+              value={row.jobTitle}
+              fallback={notSetLabel}
+              className="font-medium text-foreground"
+            />
+            {row.contractType && (
+              <span className="text-xs text-muted-foreground">
+                {t(`employeeProfile.contractTypes.${row.contractType}`)}
+              </span>
+            )}
+          </div>
+        ),
+      },
+      {
+        header: t('employeeProfile.department'),
+        accessorKey: 'department',
+        cell: ({ value }) => <OptionalText value={value} fallback={notSetLabel} />,
+      },
+      {
+        header: t('externalEmployees.type'),
+        id: 'employeeTypeLabel',
+        accessorFn: () => 'external',
+        cell: () => <StatusBadge type="external" label={t('externalEmployees.externalBadge')} />,
+        disableSorting: true,
+      },
+      ...(canViewCosts
+        ? [
+            {
+              header: t('externalEmployees.costPerHour'),
+              accessorKey: 'costPerHour' as keyof User,
+              align: 'right' as const,
+              cell: ({ value }: { value: unknown }) => (
+                <span className="font-medium text-muted-foreground">
+                  {currency}
+                  {Number(value ?? 0).toFixed(2)}
+                </span>
+              ),
+            },
+          ]
+        : []),
+      {
+        header: t('employeeProfile.hrStatus'),
+        id: 'hrStatus',
+        accessorFn: (row) => row.employmentStatus || '',
+        filterFormat: (value) =>
+          value ? t(`employeeProfile.employmentStatuses.${String(value)}`) : notSetLabel,
+        cell: ({ row }) => {
+          const status = row.employmentStatus;
+          if (!status) {
+            return <span className="text-muted-foreground">{notSetLabel}</span>;
+          }
+          return (
+            <StatusBadge
+              type={getEmployeeHrStatusBadgeType(status)}
+              label={t(`employeeProfile.employmentStatuses.${status}`)}
+            />
+          );
+        },
+      },
+      {
+        header: t('externalEmployees.actions'),
+        id: 'actions',
+        cell: ({ row }) => (
+          <div className="flex items-center gap-2">
+            {canManageEmployeeAssignments &&
+              !row.hasTopManagerRole &&
+              row.role !== TOP_MANAGER_ROLE_ID && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="inline-flex">
+                      <button
+                        type="button"
+                        onClick={() => onManageEmployee(row)}
+                        aria-label={t('workforce.manageAssignments')}
+                        className="p-2 text-muted-foreground hover:text-primary hover:bg-primary/5 rounded-lg transition-colors"
+                      >
+                        <i className="fa-solid fa-link"></i>
+                      </button>
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent>{t('workforce.manageAssignments')}</TooltipContent>
+                </Tooltip>
+              )}
+            {canUpdateEmployees && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="inline-flex">
+                    <button
+                      type="button"
+                      onClick={() => onEditEmployee(row)}
+                      aria-label={t('externalEmployees.editEmployee')}
+                      className="p-2 text-muted-foreground hover:text-primary hover:bg-primary/5 rounded-lg transition-colors"
+                    >
+                      <i className="fa-solid fa-pen-to-square"></i>
+                    </button>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>{t('externalEmployees.editEmployee')}</TooltipContent>
+              </Tooltip>
+            )}
+            {canDeleteEmployees && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="inline-flex">
+                    <button
+                      type="button"
+                      onClick={() => onDeleteEmployee(row)}
+                      aria-label={t('common:buttons.delete')}
+                      className="p-2 text-red-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                    >
+                      <i className="fa-solid fa-trash"></i>
+                    </button>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>{t('common:buttons.delete')}</TooltipContent>
+              </Tooltip>
+            )}
+          </div>
+        ),
+        disableSorting: true,
+        disableFiltering: true,
+      },
+    ],
+    [
+      canDeleteEmployees,
+      canManageEmployeeAssignments,
+      canUpdateEmployees,
+      canViewCosts,
+      currency,
+      notSetLabel,
+      onDeleteEmployee,
+      onEditEmployee,
+      onManageEmployee,
+      t,
+    ],
+  );
+
+  return (
+    <StandardTable<User>
+      title={t('externalEmployees.title')}
+      data={employees}
+      columns={columns}
+      onRowClick={canUpdateEmployees ? onEditEmployee : undefined}
+      emptyState={
+        <EmptyState
+          title={t('externalEmployees.noEmployees')}
+          description={t('externalEmployees.createFirst')}
+        />
+      }
+    />
+  );
+};
+
 const ExternalEmployeesView: React.FC<ExternalEmployeesViewProps> = ({
   users,
   clients,
@@ -99,7 +325,6 @@ const ExternalEmployeesView: React.FC<ExternalEmployeesViewProps> = ({
     permissions,
     buildPermission('hr.employee_assignments', 'update'),
   );
-  const notSetLabel = t('employeeProfile.notSet');
   const {
     state,
     setFormData,
@@ -203,179 +428,6 @@ const ExternalEmployeesView: React.FC<ExternalEmployeesViewProps> = ({
     }
   };
 
-  // Define columns for StandardTable
-  const columns: Column<User>[] = [
-    {
-      header: t('externalEmployees.name'),
-      accessorKey: 'name',
-      cell: ({ row }) => (
-        <div className="flex items-center gap-3">
-          <div className="size-9 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center font-bold text-xs">
-            {row.avatarInitials}
-          </div>
-          <span className="font-semibold text-foreground">{row.name}</span>
-        </div>
-      ),
-    },
-    {
-      header: t('employeeProfile.employeeCode'),
-      accessorKey: 'employeeCode',
-      cell: ({ value }: { value: unknown }) => (
-        <OptionalText
-          value={value}
-          fallback={notSetLabel}
-          className="font-medium text-muted-foreground"
-        />
-      ),
-    },
-    {
-      header: t('employeeProfile.contact'),
-      id: 'contact',
-      accessorFn: (row) => [row.email, row.phone].filter(Boolean).join(' '),
-      cell: ({ row }) => {
-        const email = row.email?.trim();
-        const phone = row.phone?.trim();
-        return (
-          <div className="flex min-w-40 flex-col gap-0.5 text-sm">
-            {email && <span className="text-foreground">{email}</span>}
-            {phone && <span className="text-muted-foreground">{phone}</span>}
-            {!email && !phone && <span className="text-muted-foreground">{notSetLabel}</span>}
-          </div>
-        );
-      },
-    },
-    {
-      header: t('employeeProfile.jobTitle'),
-      id: 'roleTitle',
-      accessorFn: (row) => row.jobTitle || '',
-      cell: ({ row }) => (
-        <div className="flex min-w-36 flex-col gap-0.5 text-sm">
-          <OptionalText
-            value={row.jobTitle}
-            fallback={notSetLabel}
-            className="font-medium text-foreground"
-          />
-          {row.contractType && (
-            <span className="text-xs text-muted-foreground">
-              {t(`employeeProfile.contractTypes.${row.contractType}`)}
-            </span>
-          )}
-        </div>
-      ),
-    },
-    {
-      header: t('employeeProfile.department'),
-      accessorKey: 'department',
-      cell: ({ value }: { value: unknown }) => (
-        <OptionalText value={value} fallback={notSetLabel} />
-      ),
-    },
-    {
-      header: t('externalEmployees.type'),
-      id: 'employeeTypeLabel',
-      accessorFn: () => 'external',
-      cell: () => <StatusBadge type="external" label={t('externalEmployees.externalBadge')} />,
-      disableSorting: true,
-    },
-    ...(canViewCosts
-      ? [
-          {
-            header: t('externalEmployees.costPerHour'),
-            accessorKey: 'costPerHour' as keyof User,
-            align: 'right' as const,
-            cell: ({ value }: { value: unknown }) => (
-              <span className="font-medium text-muted-foreground">
-                {currency}
-                {Number(value ?? 0).toFixed(2)}
-              </span>
-            ),
-          },
-        ]
-      : []),
-    {
-      header: t('employeeProfile.hrStatus'),
-      id: 'hrStatus',
-      accessorFn: (row) => row.employmentStatus || '',
-      filterFormat: (value) =>
-        value ? t(`employeeProfile.employmentStatuses.${String(value)}`) : notSetLabel,
-      cell: ({ row }) => {
-        const status = row.employmentStatus;
-        if (!status) {
-          return <span className="text-muted-foreground">{notSetLabel}</span>;
-        }
-        return (
-          <StatusBadge
-            type={getEmployeeHrStatusBadgeType(status)}
-            label={t(`employeeProfile.employmentStatuses.${status}`)}
-          />
-        );
-      },
-    },
-    {
-      header: t('externalEmployees.actions'),
-      id: 'actions',
-      cell: ({ row }) => (
-        <div className="flex items-center gap-2">
-          {canManageEmployeeAssignments &&
-            !row.hasTopManagerRole &&
-            row.role !== TOP_MANAGER_ROLE_ID && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span className="inline-flex">
-                    <button
-                      type="button"
-                      onClick={() => setManagingEmployee(row)}
-                      aria-label={t('workforce.manageAssignments')}
-                      className="p-2 text-muted-foreground hover:text-primary hover:bg-primary/5 rounded-lg transition-colors"
-                    >
-                      <i className="fa-solid fa-link"></i>
-                    </button>
-                  </span>
-                </TooltipTrigger>
-                <TooltipContent>{t('workforce.manageAssignments')}</TooltipContent>
-              </Tooltip>
-            )}
-          {canUpdateEmployees && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span className="inline-flex">
-                  <button
-                    type="button"
-                    onClick={() => openEditModal(row)}
-                    aria-label={t('externalEmployees.editEmployee')}
-                    className="p-2 text-muted-foreground hover:text-primary hover:bg-primary/5 rounded-lg transition-colors"
-                  >
-                    <i className="fa-solid fa-pen-to-square"></i>
-                  </button>
-                </span>
-              </TooltipTrigger>
-              <TooltipContent>{t('externalEmployees.editEmployee')}</TooltipContent>
-            </Tooltip>
-          )}
-          {canDeleteEmployees && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span className="inline-flex">
-                  <button
-                    type="button"
-                    onClick={() => confirmDelete(row)}
-                    aria-label={t('common:buttons.delete')}
-                    className="p-2 text-red-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                  >
-                    <i className="fa-solid fa-trash"></i>
-                  </button>
-                </span>
-              </TooltipTrigger>
-              <TooltipContent>{t('common:buttons.delete')}</TooltipContent>
-            </Tooltip>
-          )}
-        </div>
-      ),
-      disableSorting: true,
-      disableFiltering: true,
-    },
-  ];
-
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
       {/* Add/Edit Modal */}
@@ -457,18 +509,18 @@ const ExternalEmployeesView: React.FC<ExternalEmployeesViewProps> = ({
         )}
       </div>
 
-      {/* External Employees Table */}
-      <StandardTable<User>
-        title={t('externalEmployees.title')}
-        data={externalEmployees}
-        columns={columns}
-        onRowClick={canUpdateEmployees ? openEditModal : undefined}
-        emptyState={
-          <EmptyState
-            title={t('externalEmployees.noEmployees')}
-            description={t('externalEmployees.createFirst')}
-          />
-        }
+      <ExternalEmployeesTable
+        employees={externalEmployees}
+        currency={currency}
+        permissions={{
+          canViewCosts,
+          canManageEmployeeAssignments,
+          canUpdateEmployees,
+          canDeleteEmployees,
+        }}
+        onManageEmployee={setManagingEmployee}
+        onEditEmployee={openEditModal}
+        onDeleteEmployee={confirmDelete}
       />
 
       <EmployeeAssignmentsModal

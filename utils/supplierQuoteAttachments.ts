@@ -4,8 +4,8 @@
 // quote is saved) import these, so the allowed types, size cap, and display formatting stay in
 // lockstep with each other and with the server-side guard in server/routes/supplier-quotes.ts.
 
-export const ALLOWED_ATTACHMENT_EXTENSIONS = new Set(['xlsx', 'pdf', 'docx']);
-export const ATTACHMENT_MAX_FILE_SIZE = 10 * 1024 * 1024;
+const ALLOWED_ATTACHMENT_EXTENSIONS = new Set(['xlsx', 'pdf', 'docx']);
+const ATTACHMENT_MAX_FILE_SIZE = 10 * 1024 * 1024;
 export const ATTACHMENT_ACCEPT_ATTR = '.xlsx,.pdf,.docx';
 
 /** Stable validation-outcome codes; callers map them to localized messages where `t` lives. */

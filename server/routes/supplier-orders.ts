@@ -935,12 +935,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           };
         }
 
-        const linkedInvoiceId = await supplierOrdersRepo.findLinkedInvoiceId(idResult.value, tx);
-        const version = await supplierOrderVersionsRepo.findById(
-          idResult.value,
-          versionIdResult.value,
-          tx,
-        );
+        const [linkedInvoiceId, version] = await Promise.all([
+          supplierOrdersRepo.findLinkedInvoiceId(idResult.value, tx),
+          supplierOrderVersionsRepo.findById(idResult.value, versionIdResult.value, tx),
+        ]);
 
         if (linkedInvoiceId) {
           return {

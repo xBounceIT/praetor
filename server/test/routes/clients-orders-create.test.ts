@@ -36,6 +36,7 @@ const coCreateSupplierOrderMock = mock();
 const coBulkInsertSupplierOrderItemsMock = mock();
 const coLinkSaleItemsToSupplierOrderMock = mock();
 const coMapSaleItemsToSupplierItemsMock = mock();
+const coLinkSaleItemsToSupplierOrderAndItemsMock = mock();
 const sqFindByIdMock = mock();
 const sqFindLinkedOrderIdMock = mock();
 const sqLockEffectiveStatusByIdMock = mock();
@@ -72,6 +73,7 @@ beforeAll(async () => {
     bulkInsertSupplierOrderItems: coBulkInsertSupplierOrderItemsMock,
     linkSaleItemsToSupplierOrder: coLinkSaleItemsToSupplierOrderMock,
     mapSaleItemsToSupplierItems: coMapSaleItemsToSupplierItemsMock,
+    linkSaleItemsToSupplierOrderAndItems: coLinkSaleItemsToSupplierOrderAndItemsMock,
   }));
   mock.module('../../repositories/supplierQuotesRepo.ts', () => ({
     ...supplierQuotesRepoSnap,
@@ -172,6 +174,7 @@ const allMocks = [
   coBulkInsertSupplierOrderItemsMock,
   coLinkSaleItemsToSupplierOrderMock,
   coMapSaleItemsToSupplierItemsMock,
+  coLinkSaleItemsToSupplierOrderAndItemsMock,
   sqFindByIdMock,
   sqFindLinkedOrderIdMock,
   sqLockEffectiveStatusByIdMock,
@@ -198,6 +201,7 @@ beforeEach(async () => {
   coBulkInsertSupplierOrderItemsMock.mockResolvedValue(undefined);
   coLinkSaleItemsToSupplierOrderMock.mockResolvedValue(undefined);
   coMapSaleItemsToSupplierItemsMock.mockResolvedValue(undefined);
+  coLinkSaleItemsToSupplierOrderAndItemsMock.mockResolvedValue(undefined);
   // Default: no supplier quote resolves, so the auto-create-supplier-order branch fast-fails.
   sqFindByIdMock.mockResolvedValue(null);
   sqFindLinkedOrderIdMock.mockResolvedValue(null);

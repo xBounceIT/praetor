@@ -190,14 +190,14 @@ export interface SupplierInvoicesViewProps {
   currency: string;
 }
 
-const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
+const useSupplierInvoicesController = ({
   invoices,
   suppliers,
   products,
   onUpdateInvoice,
   onDeleteInvoice,
   currency,
-}) => {
+}: SupplierInvoicesViewProps) => {
   const { t } = useTranslation(['accounting', 'sales', 'common', 'crm']);
   const statusOptions = useMemo(() => getStatusOptions(t), [t]);
   const activeSuppliers = useMemo(
@@ -223,6 +223,18 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
     createSupplierInvoicesState,
   );
   const { editingInvoice, invoiceToDelete, isModalOpen, isDeleteConfirmOpen, formData } = state;
+
+  const closeModal = useCallback(() => {
+    dispatch({ type: 'closeModal' });
+  }, []);
+
+  const closeDeleteConfirm = useCallback(() => {
+    dispatch({ type: 'deleteSuccess' });
+  }, []);
+
+  const patchForm = useCallback((patch: Partial<SupplierInvoice>) => {
+    dispatch({ type: 'patchForm', patch });
+  }, []);
 
   const openEditModal = useCallback((invoice: SupplierInvoice) => {
     dispatch({ type: 'openEdit', invoice });
@@ -464,538 +476,658 @@ const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = ({
     [confirmDelete, currency, openEditModal, t],
   );
 
-  return (
-    <div className="space-y-8 animate-in fade-in duration-500">
-      <Modal isOpen={isModalOpen} onClose={() => dispatch({ type: 'closeModal' })}>
-        <ModalContent size="full" className="max-h-[90vh]">
-          <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
-            <ModalHeader>
-              <ModalTitle className="gap-3">
-                <span className="flex size-10 items-center justify-center rounded-md bg-muted text-primary">
-                  <i
-                    className={`fa-solid ${editingInvoice ? 'fa-pen-to-square' : 'fa-plus'}`}
-                    aria-hidden="true"
-                  ></i>
-                </span>
-                {editingInvoice
-                  ? t('accounting:supplierInvoices.editInvoice')
-                  : t('accounting:supplierInvoices.addInvoice')}
-              </ModalTitle>
-              <ModalCloseButton onClick={() => dispatch({ type: 'closeModal' })} />
-            </ModalHeader>
+  return {
+    balanceDue,
+    closeDeleteConfirm,
+    closeModal,
+    columns,
+    currency,
+    editingInvoice,
+    formData,
+    grossSubtotal,
+    handleDelete,
+    handleDurationUnitChange,
+    handleDurationValueChange,
+    handleSubmit,
+    invoices,
+    invoiceToDelete,
+    isDeleteConfirmOpen,
+    isModalOpen,
+    openEditModal,
+    patchForm,
+    productOptions,
+    removeItem,
+    statusOptions,
+    supplierOptions,
+    suppliers,
+    t,
+    totalDiscount,
+    totals,
+    updateItem,
+  };
+};
 
-            <ModalBody className="flex-1 space-y-5">
-              <div className="space-y-2">
-                <h4 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-primary">
-                  <span className="size-1.5 rounded-full bg-primary"></span>
-                  {t('accounting:supplierInvoices.invoiceDetails')}
-                </h4>
-                <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-                  <Field>
-                    <SelectControl
-                      id="supplier-invoice-supplier"
-                      options={supplierOptions}
-                      value={formData.supplierId || ''}
-                      onChange={(value) => {
-                        const supplier = suppliers.find((item) => item.id === value);
-                        dispatch({
-                          type: 'patchForm',
-                          patch: {
-                            supplierId: value as string,
-                            supplierName: supplier?.name || '',
-                          },
-                        });
-                      }}
-                      searchable={true}
-                      label={t('accounting:supplierInvoices.supplier')}
-                      placeholder={t('accounting:supplierInvoices.selectSupplier')}
-                      buttonClassName="h-9"
-                    />
-                  </Field>
-                  <Field>
-                    <FieldLabel htmlFor="supplier-invoice-number" required>
-                      {t('accounting:supplierInvoices.invoiceNumber')}
-                    </FieldLabel>
-                    <Input
-                      id="supplier-invoice-number"
-                      type="text"
-                      required
-                      value={formData.id || ''}
-                      onChange={(event) =>
-                        dispatch({ type: 'patchForm', patch: { id: event.target.value } })
-                      }
-                      className="font-medium"
-                      placeholder="INV-XXXX"
-                    />
-                  </Field>
-                  <Field>
-                    <FieldLabel htmlFor="supplier-invoice-issue-date" required>
-                      {t('accounting:supplierInvoices.issueDate')}
-                    </FieldLabel>
-                    <DateField
-                      id="supplier-invoice-issue-date"
-                      required
-                      value={formData.issueDate || ''}
-                      onChange={(value) =>
-                        dispatch({ type: 'patchForm', patch: { issueDate: value } })
-                      }
-                    />
-                  </Field>
-                  <Field>
-                    <FieldLabel htmlFor="supplier-invoice-due-date" required>
-                      {t('accounting:supplierInvoices.dueDate')}
-                    </FieldLabel>
-                    <DateField
-                      id="supplier-invoice-due-date"
-                      required
-                      value={formData.dueDate || ''}
-                      onChange={(value) =>
-                        dispatch({ type: 'patchForm', patch: { dueDate: value } })
-                      }
-                    />
-                  </Field>
-                </div>
-                <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-                  <Field>
-                    <SelectControl
-                      id="supplier-invoice-status"
-                      options={statusOptions}
-                      value={formData.status || 'draft'}
-                      onChange={(value) =>
-                        dispatch({
-                          type: 'patchForm',
-                          patch: { status: value as SupplierInvoice['status'] },
-                        })
-                      }
-                      label={t('accounting:supplierInvoices.status')}
-                      searchable={false}
-                      buttonClassName="h-9"
-                    />
-                  </Field>
-                </div>
-              </div>
+type SupplierInvoicesController = ReturnType<typeof useSupplierInvoicesController>;
 
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <h4 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-primary">
-                    <span className="size-1.5 rounded-full bg-primary"></span>
-                    {t('accounting:supplierInvoices.items')}
-                  </h4>
-                </div>
+const SupplierInvoicesView: React.FC<SupplierInvoicesViewProps> = (props) => {
+  const controller = useSupplierInvoicesController(props);
+  return <SupplierInvoicesLayout controller={controller} />;
+};
 
-                {(formData.items || []).length > 0 && (
-                  <div className="mb-1 hidden items-center gap-2 px-3 lg:flex">
-                    <div className="grid flex-1 grid-cols-12 gap-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                      <div className="col-span-2 ml-1">{t('crm:quotes.productsServices')}</div>
-                      <div className="col-span-2">
-                        {t('accounting:supplierInvoices.descriptionPlaceholder')}
-                      </div>
-                      <div className="col-span-1">{t('common:labels.quantity')}</div>
-                      <div className="col-span-2">{t('crm:internalListing.salePrice')}</div>
-                      <div className="col-span-1">{t('accounting:supplierOrders.discount')}</div>
-                      <div className="col-span-2">
-                        {t('accounting:supplierInvoices.durationColumn', {
-                          defaultValue: 'Duration',
-                        })}
-                      </div>
-                      <div className="col-span-2 pr-2 text-right">{t('common:labels.total')}</div>
-                    </div>
-                    <div className="w-8 shrink-0"></div>
-                  </div>
-                )}
+const SupplierInvoicesLayout: React.FC<{ controller: SupplierInvoicesController }> = ({
+  controller,
+}) => (
+  <div className="space-y-8 animate-in fade-in duration-500">
+    <SupplierInvoiceModal controller={controller} />
+    <SupplierInvoiceDeleteDialog controller={controller} />
+    <SupplierInvoicesHeader controller={controller} />
+    <StandardTable<SupplierInvoice>
+      title={controller.t('accounting:supplierInvoices.title')}
+      data={controller.invoices}
+      columns={controller.columns}
+      defaultRowsPerPage={10}
+      containerClassName="overflow-visible"
+      rowClassName={(row: SupplierInvoice) =>
+        row.status === 'paid' || row.status === 'cancelled'
+          ? 'bg-muted text-muted-foreground'
+          : 'hover:bg-muted/50'
+      }
+      onRowClick={(row: SupplierInvoice) => controller.openEditModal(row)}
+    />
+  </div>
+);
 
-                {(formData.items || []).length > 0 ? (
-                  <div className="space-y-3">
-                    {formData.items?.map((item, index) => {
-                      // Duration multiplies the line total alongside quantity (issue #776); 'na'
-                      // lines never multiply (getEffectiveDurationMonths returns 1).
-                      const durationUnit = normalizeDurationUnit(item.durationUnit);
-                      const durationValue = getDurationDisplayValue(item);
-                      const lineSubtotal =
-                        Number(item.quantity ?? 0) *
-                        Number(item.unitPrice ?? 0) *
-                        getEffectiveDurationMonths(item);
-                      const lineDiscount = (lineSubtotal * Number(item.discount ?? 0)) / 100;
-                      const lineTotal = lineSubtotal - lineDiscount;
-
-                      return (
-                        <div
-                          key={item.id}
-                          className="space-y-3 rounded-md border border-border bg-muted/30 p-3"
-                        >
-                          <div className="lg:hidden space-y-2">
-                            <SelectControl
-                              options={productOptions}
-                              value={item.productId || ''}
-                              onChange={(value) => updateItem(index, 'productId', value as string)}
-                              searchable={true}
-                              buttonClassName="h-9"
-                            />
-                            <Input
-                              type="text"
-                              value={item.description}
-                              placeholder={t('accounting:supplierInvoices.descriptionPlaceholder')}
-                              onChange={(event) =>
-                                updateItem(index, 'description', event.target.value)
-                              }
-                            />
-                            <div className="grid grid-cols-2 gap-2">
-                              <div className="space-y-1">
-                                <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                                  {t('common:labels.quantity')}
-                                </FieldLabel>
-                                <ValidatedNumberInput
-                                  value={item.quantity}
-                                  onValueChange={(value) =>
-                                    updateItem(index, 'quantity', value === '' ? 0 : Number(value))
-                                  }
-                                  className="text-center"
-                                />
-                                <div className="mt-1 flex items-center justify-center gap-1 text-xs font-medium text-muted-foreground">
-                                  <span>/</span>
-                                  <span>{t('accounting:clientsInvoices.unit')}</span>
-                                </div>
-                              </div>
-                              <div className="space-y-1">
-                                <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                                  {t('crm:internalListing.salePrice')}
-                                </FieldLabel>
-                                <div className="flex items-center gap-1">
-                                  <ValidatedNumberInput
-                                    value={item.unitPrice}
-                                    formatDecimals={2}
-                                    onValueChange={(value) =>
-                                      updateItem(
-                                        index,
-                                        'unitPrice',
-                                        value === '' ? 0 : Number(value),
-                                      )
-                                    }
-                                    className="min-w-0 text-center"
-                                  />
-                                  <span className="shrink-0 text-xs font-medium text-muted-foreground">
-                                    {currency}
-                                  </span>
-                                </div>
-                              </div>
-                              <div className="space-y-1">
-                                <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                                  {t('accounting:supplierOrders.discount')}
-                                </FieldLabel>
-                                <div className="flex items-center gap-1">
-                                  <ValidatedNumberInput
-                                    value={item.discount || 0}
-                                    formatDecimals={2}
-                                    onValueChange={(value) =>
-                                      updateItem(
-                                        index,
-                                        'discount',
-                                        value === '' ? 0 : Number(value),
-                                      )
-                                    }
-                                    className="min-w-0 text-center"
-                                  />
-                                  <span className="shrink-0 text-xs font-medium text-muted-foreground">
-                                    %
-                                  </span>
-                                </div>
-                              </div>
-                              <div className="space-y-1">
-                                <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                                  {t('accounting:supplierInvoices.durationColumn', {
-                                    defaultValue: 'Duration',
-                                  })}
-                                </FieldLabel>
-                                <div className="flex items-center gap-1">
-                                  <ValidatedNumberInput
-                                    step="1"
-                                    min="1"
-                                    value={durationValue}
-                                    disabled={durationUnit === 'na'}
-                                    onValueChange={(value) =>
-                                      handleDurationValueChange(index, value)
-                                    }
-                                    className="min-w-0 text-center"
-                                  />
-                                  <span className="shrink-0 text-xs font-medium text-muted-foreground">
-                                    /
-                                  </span>
-                                  <DurationUnitSelector
-                                    value={durationUnit}
-                                    onChange={(val) => handleDurationUnitChange(index, val)}
-                                    count={durationValue}
-                                    i18nPrefix="accounting:supplierInvoices"
-                                  />
-                                </div>
-                              </div>
-                              <div className="space-y-1">
-                                <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                                  {t('common:labels.total')}
-                                </FieldLabel>
-                                <div className="flex items-center justify-end whitespace-nowrap px-3 py-2 text-sm font-semibold text-foreground">
-                                  {lineTotal.toFixed(2)} {currency}
-                                </div>
-                              </div>
-                            </div>
-                            <div className="flex justify-end">
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon-sm"
-                                onClick={() => removeItem(index)}
-                                className="text-muted-foreground hover:text-destructive"
-                              >
-                                <i className="fa-solid fa-trash-can" aria-hidden="true"></i>
-                                <span className="sr-only">{t('common:buttons.delete')}</span>
-                              </Button>
-                            </div>
-                          </div>
-                          <div className="hidden lg:flex items-start gap-2">
-                            <div className="grid flex-1 grid-cols-12 gap-2">
-                              <div className="lg:col-span-2 min-w-0">
-                                <SelectControl
-                                  options={productOptions}
-                                  value={item.productId || ''}
-                                  onChange={(value) =>
-                                    updateItem(index, 'productId', value as string)
-                                  }
-                                  searchable={true}
-                                  buttonClassName="h-9"
-                                />
-                              </div>
-                              <div className="lg:col-span-2">
-                                <Input
-                                  type="text"
-                                  value={item.description}
-                                  onChange={(event) =>
-                                    updateItem(index, 'description', event.target.value)
-                                  }
-                                />
-                              </div>
-                              <div className="lg:col-span-1">
-                                <div className="flex items-center gap-1">
-                                  <ValidatedNumberInput
-                                    value={item.quantity}
-                                    onValueChange={(value) =>
-                                      updateItem(
-                                        index,
-                                        'quantity',
-                                        value === '' ? 0 : Number(value),
-                                      )
-                                    }
-                                    className="min-w-0 font-medium"
-                                  />
-                                  <span className="shrink-0 text-xs font-medium text-muted-foreground">
-                                    /
-                                  </span>
-                                  <span className="shrink-0 text-xs font-medium text-muted-foreground">
-                                    {t('accounting:clientsInvoices.unit')}
-                                  </span>
-                                </div>
-                              </div>
-                              <div className="lg:col-span-2">
-                                <div className="flex items-center gap-1">
-                                  <ValidatedNumberInput
-                                    value={item.unitPrice}
-                                    formatDecimals={2}
-                                    onValueChange={(value) =>
-                                      updateItem(
-                                        index,
-                                        'unitPrice',
-                                        value === '' ? 0 : Number(value),
-                                      )
-                                    }
-                                    className="min-w-0 font-medium"
-                                  />
-                                  <span className="shrink-0 text-xs font-medium text-muted-foreground">
-                                    {currency}
-                                  </span>
-                                </div>
-                              </div>
-                              <div className="lg:col-span-1">
-                                <div className="flex items-center gap-1">
-                                  <ValidatedNumberInput
-                                    value={item.discount || 0}
-                                    formatDecimals={2}
-                                    onValueChange={(value) =>
-                                      updateItem(
-                                        index,
-                                        'discount',
-                                        value === '' ? 0 : Number(value),
-                                      )
-                                    }
-                                    className="min-w-0 font-medium"
-                                  />
-                                  <span className="shrink-0 text-xs font-medium text-muted-foreground">
-                                    %
-                                  </span>
-                                </div>
-                              </div>
-                              <div className="lg:col-span-2">
-                                <div className="flex items-center gap-1">
-                                  <ValidatedNumberInput
-                                    step="1"
-                                    min="1"
-                                    placeholder={t('accounting:supplierInvoices.durationColumn', {
-                                      defaultValue: 'Duration',
-                                    })}
-                                    value={durationValue}
-                                    disabled={durationUnit === 'na'}
-                                    onValueChange={(value) =>
-                                      handleDurationValueChange(index, value)
-                                    }
-                                    className="min-w-0 font-medium"
-                                  />
-                                  <span className="shrink-0 text-xs font-medium text-muted-foreground">
-                                    /
-                                  </span>
-                                  <DurationUnitSelector
-                                    value={durationUnit}
-                                    onChange={(val) => handleDurationUnitChange(index, val)}
-                                    count={durationValue}
-                                    i18nPrefix="accounting:supplierInvoices"
-                                  />
-                                </div>
-                              </div>
-                              <div className="flex items-center justify-end whitespace-nowrap px-3 py-2 text-sm font-semibold text-foreground lg:col-span-2">
-                                {lineTotal.toFixed(2)} {currency}
-                              </div>
-                            </div>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon-sm"
-                              onClick={() => removeItem(index)}
-                              className="shrink-0 text-muted-foreground hover:text-destructive"
-                            >
-                              <i className="fa-solid fa-trash-can" aria-hidden="true"></i>
-                              <span className="sr-only">{t('common:buttons.delete')}</span>
-                            </Button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <div className="rounded-md border border-dashed border-border py-8 text-center text-sm text-muted-foreground">
-                    {t('accounting:supplierInvoices.noItems')}
-                  </div>
-                )}
-              </div>
-
-              <div className="flex flex-col gap-4 border-t border-border pt-4 md:flex-row">
-                <Field className="md:w-2/3">
-                  <h4 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-primary">
-                    <span className="size-1.5 rounded-full bg-primary"></span>
-                    {t('accounting:supplierInvoices.notes')}
-                  </h4>
-                  <FieldLabel htmlFor="supplier-invoice-notes" className="sr-only">
-                    {t('accounting:supplierInvoices.notes')}
-                  </FieldLabel>
-                  <Textarea
-                    id="supplier-invoice-notes"
-                    rows={4}
-                    value={formData.notes || ''}
-                    onChange={(event) =>
-                      dispatch({ type: 'patchForm', patch: { notes: event.target.value } })
-                    }
-                    className="min-h-28 resize-none"
-                    placeholder={t('accounting:supplierInvoices.notesPlaceholder')}
-                  />
-                </Field>
-
-                <div className="space-y-2 md:w-1/3">
-                  <h4 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-primary">
-                    <span className="size-1.5 rounded-full bg-primary"></span>
-                    {t('accounting:supplierInvoices.summary', { defaultValue: 'Summary' })}
-                  </h4>
-                  <CostSummaryPanel
-                    currency={currency}
-                    subtotal={grossSubtotal}
-                    total={totals.total}
-                    subtotalLabel={t('accounting:supplierInvoices.subtotal')}
-                    totalLabel={t('accounting:supplierInvoices.total')}
-                    discountRow={
-                      totalDiscount > 0
-                        ? {
-                            label: t('accounting:supplierInvoices.totalDiscount'),
-                            amount: totalDiscount,
-                          }
-                        : undefined
-                    }
-                    amountPaid={{
-                      label: t('accounting:supplierInvoices.amountPaid'),
-                      value: formData.amountPaid || 0,
-                      onChange: (value) =>
-                        dispatch({
-                          type: 'patchForm',
-                          patch: { amountPaid: value === '' ? 0 : Number(value) },
-                        }),
-                    }}
-                    balanceDue={{
-                      label: t('accounting:supplierInvoices.balanceDue'),
-                      amount: balanceDue,
-                      colorClass: balanceDue > 0 ? 'text-red-500' : 'text-emerald-600',
-                    }}
-                  />
-                </div>
-              </div>
-            </ModalBody>
-
-            <ModalFooter>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => dispatch({ type: 'closeModal' })}
-              >
-                {t('common:buttons.cancel')}
-              </Button>
-              <Button type="submit">
-                {editingInvoice ? t('common:buttons.update') : t('common:buttons.save')}
-              </Button>
-            </ModalFooter>
-          </form>
-        </ModalContent>
-      </Modal>
-
-      <DeleteConfirmModal
-        isOpen={isDeleteConfirmOpen}
-        onClose={() => dispatch({ type: 'deleteSuccess' })}
-        onConfirm={() => {
-          void handleDelete();
-        }}
-        title={t('accounting:supplierInvoices.deleteTitle')}
-        description={`${invoiceToDelete?.supplierName ?? ''} · ${invoiceToDelete?.id ?? ''}`}
-      />
-
-      <div className="space-y-4">
-        <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
-          <div>
-            <h2 className="text-2xl font-semibold text-foreground">
-              {t('accounting:supplierInvoices.title')}
-            </h2>
-            <p className="text-sm text-muted-foreground">
-              {t('accounting:supplierInvoices.subtitle')}
-            </p>
-          </div>
-        </div>
+const SupplierInvoicesHeader: React.FC<{ controller: SupplierInvoicesController }> = ({
+  controller,
+}) => (
+  <div className="space-y-4">
+    <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
+      <div>
+        <h2 className="text-2xl font-semibold text-foreground">
+          {controller.t('accounting:supplierInvoices.title')}
+        </h2>
+        <p className="text-sm text-muted-foreground">
+          {controller.t('accounting:supplierInvoices.subtitle')}
+        </p>
       </div>
+    </div>
+  </div>
+);
 
-      <StandardTable<SupplierInvoice>
-        title={t('accounting:supplierInvoices.title')}
-        data={invoices}
-        columns={columns}
-        defaultRowsPerPage={10}
-        containerClassName="overflow-visible"
-        rowClassName={(row: SupplierInvoice) =>
-          row.status === 'paid' || row.status === 'cancelled'
-            ? 'bg-muted text-muted-foreground'
-            : 'hover:bg-muted/50'
-        }
-        onRowClick={(row: SupplierInvoice) => openEditModal(row)}
+const SupplierInvoiceModal: React.FC<{ controller: SupplierInvoicesController }> = ({
+  controller,
+}) => (
+  <Modal isOpen={controller.isModalOpen} onClose={controller.closeModal}>
+    <ModalContent size="full" className="max-h-[90vh]">
+      <form onSubmit={controller.handleSubmit} className="flex min-h-0 flex-1 flex-col">
+        <ModalHeader>
+          <ModalTitle className="gap-3">
+            <span className="flex size-10 items-center justify-center rounded-md bg-muted text-primary">
+              <i
+                className={`fa-solid ${controller.editingInvoice ? 'fa-pen-to-square' : 'fa-plus'}`}
+                aria-hidden="true"
+              ></i>
+            </span>
+            {controller.editingInvoice
+              ? controller.t('accounting:supplierInvoices.editInvoice')
+              : controller.t('accounting:supplierInvoices.addInvoice')}
+          </ModalTitle>
+          <ModalCloseButton onClick={controller.closeModal} />
+        </ModalHeader>
+        <ModalBody className="flex-1 space-y-5">
+          <SupplierInvoiceDetailsSection controller={controller} />
+          <SupplierInvoiceItemsSection controller={controller} />
+          <SupplierInvoiceNotesSummarySection controller={controller} />
+        </ModalBody>
+        <ModalFooter>
+          <Button type="button" variant="outline" onClick={controller.closeModal}>
+            {controller.t('common:buttons.cancel')}
+          </Button>
+          <Button type="submit">
+            {controller.editingInvoice
+              ? controller.t('common:buttons.update')
+              : controller.t('common:buttons.save')}
+          </Button>
+        </ModalFooter>
+      </form>
+    </ModalContent>
+  </Modal>
+);
+
+const SupplierInvoiceSectionTitle: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+  <h4 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-primary">
+    <span className="size-1.5 rounded-full bg-primary"></span>
+    {children}
+  </h4>
+);
+
+const SupplierInvoiceDetailsSection: React.FC<{ controller: SupplierInvoicesController }> = ({
+  controller,
+}) => (
+  <div className="space-y-2">
+    <SupplierInvoiceSectionTitle>
+      {controller.t('accounting:supplierInvoices.invoiceDetails')}
+    </SupplierInvoiceSectionTitle>
+    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <Field>
+        <SelectControl
+          id="supplier-invoice-supplier"
+          options={controller.supplierOptions}
+          value={controller.formData.supplierId || ''}
+          onChange={(value) => {
+            const supplier = controller.suppliers.find((item) => item.id === value);
+            controller.patchForm({
+              supplierId: value as string,
+              supplierName: supplier?.name || '',
+            });
+          }}
+          searchable={true}
+          label={controller.t('accounting:supplierInvoices.supplier')}
+          placeholder={controller.t('accounting:supplierInvoices.selectSupplier')}
+          buttonClassName="h-9"
+        />
+      </Field>
+      <Field>
+        <FieldLabel htmlFor="supplier-invoice-number" required>
+          {controller.t('accounting:supplierInvoices.invoiceNumber')}
+        </FieldLabel>
+        <Input
+          id="supplier-invoice-number"
+          type="text"
+          required
+          value={controller.formData.id || ''}
+          onChange={(event) => controller.patchForm({ id: event.target.value })}
+          className="font-medium"
+          placeholder="INV-XXXX"
+        />
+      </Field>
+      <SupplierInvoiceDateField controller={controller} field="issueDate" />
+      <SupplierInvoiceDateField controller={controller} field="dueDate" />
+    </div>
+    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <Field>
+        <SelectControl
+          id="supplier-invoice-status"
+          options={controller.statusOptions}
+          value={controller.formData.status || 'draft'}
+          onChange={(value) =>
+            controller.patchForm({ status: value as SupplierInvoice['status'] })
+          }
+          label={controller.t('accounting:supplierInvoices.status')}
+          searchable={false}
+          buttonClassName="h-9"
+        />
+      </Field>
+    </div>
+  </div>
+);
+
+const SupplierInvoiceDateField: React.FC<{
+  controller: SupplierInvoicesController;
+  field: 'issueDate' | 'dueDate';
+}> = ({ controller, field }) => {
+  const id =
+    field === 'issueDate' ? 'supplier-invoice-issue-date' : 'supplier-invoice-due-date';
+  const label =
+    field === 'issueDate'
+      ? controller.t('accounting:supplierInvoices.issueDate')
+      : controller.t('accounting:supplierInvoices.dueDate');
+
+  return (
+    <Field>
+      <FieldLabel htmlFor={id} required>
+        {label}
+      </FieldLabel>
+      <DateField
+        id={id}
+        required
+        value={controller.formData[field] || ''}
+        onChange={(value) => controller.patchForm({ [field]: value })}
+      />
+    </Field>
+  );
+};
+
+const SupplierInvoiceItemsSection: React.FC<{ controller: SupplierInvoicesController }> = ({
+  controller,
+}) => (
+  <div className="space-y-4">
+    <div className="flex items-center justify-between">
+      <SupplierInvoiceSectionTitle>
+        {controller.t('accounting:supplierInvoices.items')}
+      </SupplierInvoiceSectionTitle>
+    </div>
+    <SupplierInvoiceItemsHeader controller={controller} />
+    {(controller.formData.items || []).length > 0 ? (
+      <div className="space-y-3">
+        {controller.formData.items?.map((item, index) => (
+          <SupplierInvoiceItemRow key={item.id} controller={controller} item={item} index={index} />
+        ))}
+      </div>
+    ) : (
+      <div className="rounded-md border border-dashed border-border py-8 text-center text-sm text-muted-foreground">
+        {controller.t('accounting:supplierInvoices.noItems')}
+      </div>
+    )}
+  </div>
+);
+
+const SupplierInvoiceItemsHeader: React.FC<{ controller: SupplierInvoicesController }> = ({
+  controller,
+}) => {
+  if ((controller.formData.items || []).length === 0) return null;
+  return (
+    <div className="mb-1 hidden items-center gap-2 px-3 lg:flex">
+      <div className="grid flex-1 grid-cols-12 gap-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+        <div className="col-span-2 ml-1">{controller.t('crm:quotes.productsServices')}</div>
+        <div className="col-span-2">
+          {controller.t('accounting:supplierInvoices.descriptionPlaceholder')}
+        </div>
+        <div className="col-span-1">{controller.t('common:labels.quantity')}</div>
+        <div className="col-span-2">{controller.t('crm:internalListing.salePrice')}</div>
+        <div className="col-span-1">{controller.t('accounting:supplierOrders.discount')}</div>
+        <div className="col-span-2">
+          {controller.t('accounting:supplierInvoices.durationColumn', {
+            defaultValue: 'Duration',
+          })}
+        </div>
+        <div className="col-span-2 pr-2 text-right">{controller.t('common:labels.total')}</div>
+      </div>
+      <div className="w-8 shrink-0"></div>
+    </div>
+  );
+};
+
+const SupplierInvoiceItemRow: React.FC<{
+  controller: SupplierInvoicesController;
+  item: SupplierInvoiceItem;
+  index: number;
+}> = ({ controller, item, index }) => {
+  const durationUnit = normalizeDurationUnit(item.durationUnit);
+  const durationValue = getDurationDisplayValue(item);
+  const lineSubtotal =
+    Number(item.quantity ?? 0) * Number(item.unitPrice ?? 0) * getEffectiveDurationMonths(item);
+  const lineDiscount = (lineSubtotal * Number(item.discount ?? 0)) / 100;
+  const lineTotal = lineSubtotal - lineDiscount;
+
+  return (
+    <div className="space-y-3 rounded-md border border-border bg-muted/30 p-3">
+      <SupplierInvoiceItemMobileFields
+        controller={controller}
+        item={item}
+        index={index}
+        durationUnit={durationUnit}
+        durationValue={durationValue}
+        lineTotal={lineTotal}
+      />
+      <SupplierInvoiceItemDesktopFields
+        controller={controller}
+        item={item}
+        index={index}
+        durationUnit={durationUnit}
+        durationValue={durationValue}
+        lineTotal={lineTotal}
       />
     </div>
   );
 };
+
+const SupplierInvoiceItemMobileFields: React.FC<{
+  controller: SupplierInvoicesController;
+  item: SupplierInvoiceItem;
+  index: number;
+  durationUnit: DurationUnit;
+  durationValue: number;
+  lineTotal: number;
+}> = ({ controller, item, index, durationUnit, durationValue, lineTotal }) => (
+  <div className="space-y-2 lg:hidden">
+    <SupplierInvoiceItemProductField controller={controller} item={item} index={index} />
+    <SupplierInvoiceItemDescriptionField controller={controller} item={item} index={index} />
+    <div className="grid grid-cols-2 gap-2">
+      <SupplierInvoiceItemQuantityField controller={controller} item={item} index={index} />
+      <SupplierInvoiceItemPriceField controller={controller} item={item} index={index} />
+      <SupplierInvoiceItemDiscountField controller={controller} item={item} index={index} />
+      <SupplierInvoiceItemDurationField
+        controller={controller}
+        index={index}
+        durationUnit={durationUnit}
+        durationValue={durationValue}
+      />
+      <SupplierInvoiceItemTotalField
+        controller={controller}
+        lineTotal={lineTotal}
+        className="space-y-1"
+      />
+    </div>
+    <SupplierInvoiceItemDeleteButton controller={controller} index={index} align="right" />
+  </div>
+);
+
+const SupplierInvoiceItemDesktopFields: React.FC<{
+  controller: SupplierInvoicesController;
+  item: SupplierInvoiceItem;
+  index: number;
+  durationUnit: DurationUnit;
+  durationValue: number;
+  lineTotal: number;
+}> = ({ controller, item, index, durationUnit, durationValue, lineTotal }) => (
+  <div className="hidden items-start gap-2 lg:flex">
+    <div className="grid flex-1 grid-cols-12 gap-2">
+      <SupplierInvoiceItemProductField
+        controller={controller}
+        item={item}
+        index={index}
+        className="min-w-0 lg:col-span-2"
+      />
+      <SupplierInvoiceItemDescriptionField
+        controller={controller}
+        item={item}
+        index={index}
+        className="lg:col-span-2"
+      />
+      <SupplierInvoiceItemQuantityField
+        controller={controller}
+        item={item}
+        index={index}
+        className="lg:col-span-1"
+        inputClassName="min-w-0 font-medium"
+      />
+      <SupplierInvoiceItemPriceField
+        controller={controller}
+        item={item}
+        index={index}
+        className="lg:col-span-2"
+        inputClassName="min-w-0 font-medium"
+      />
+      <SupplierInvoiceItemDiscountField
+        controller={controller}
+        item={item}
+        index={index}
+        className="lg:col-span-1"
+        inputClassName="min-w-0 font-medium"
+      />
+      <SupplierInvoiceItemDurationField
+        controller={controller}
+        index={index}
+        durationUnit={durationUnit}
+        durationValue={durationValue}
+        className="lg:col-span-2"
+        inputClassName="min-w-0 font-medium"
+      />
+      <SupplierInvoiceItemTotalField
+        controller={controller}
+        lineTotal={lineTotal}
+        className="flex items-center justify-end whitespace-nowrap px-3 py-2 text-sm font-semibold text-foreground lg:col-span-2"
+      />
+    </div>
+    <SupplierInvoiceItemDeleteButton controller={controller} index={index} />
+  </div>
+);
+
+const SupplierInvoiceItemProductField: React.FC<{
+  controller: SupplierInvoicesController;
+  item: SupplierInvoiceItem;
+  index: number;
+  className?: string;
+}> = ({ controller, item, index, className }) => (
+  <div className={className}>
+    <SelectControl
+      options={controller.productOptions}
+      value={item.productId || ''}
+      onChange={(value) => controller.updateItem(index, 'productId', value as string)}
+      searchable={true}
+      buttonClassName="h-9"
+    />
+  </div>
+);
+
+const SupplierInvoiceItemDescriptionField: React.FC<{
+  controller: SupplierInvoicesController;
+  item: SupplierInvoiceItem;
+  index: number;
+  className?: string;
+}> = ({ controller, item, index, className }) => (
+  <div className={className}>
+    <Input
+      type="text"
+      value={item.description}
+      placeholder={controller.t('accounting:supplierInvoices.descriptionPlaceholder')}
+      onChange={(event) => controller.updateItem(index, 'description', event.target.value)}
+    />
+  </div>
+);
+
+const SupplierInvoiceItemQuantityField: React.FC<{
+  controller: SupplierInvoicesController;
+  item: SupplierInvoiceItem;
+  index: number;
+  className?: string;
+  inputClassName?: string;
+}> = ({ controller, item, index, className = 'space-y-1', inputClassName = 'text-center' }) => (
+  <div className={className}>
+    <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
+      {controller.t('common:labels.quantity')}
+    </FieldLabel>
+    <div className="flex items-center gap-1">
+      <ValidatedNumberInput
+        value={item.quantity}
+        onValueChange={(value) =>
+          controller.updateItem(index, 'quantity', value === '' ? 0 : Number(value))
+        }
+        className={inputClassName}
+      />
+      <span className="shrink-0 text-xs font-medium text-muted-foreground">/</span>
+      <span className="shrink-0 text-xs font-medium text-muted-foreground">
+        {controller.t('accounting:clientsInvoices.unit')}
+      </span>
+    </div>
+  </div>
+);
+
+const SupplierInvoiceItemPriceField: React.FC<{
+  controller: SupplierInvoicesController;
+  item: SupplierInvoiceItem;
+  index: number;
+  className?: string;
+  inputClassName?: string;
+}> = ({ controller, item, index, className = 'space-y-1', inputClassName = 'min-w-0 text-center' }) => (
+  <div className={className}>
+    <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
+      {controller.t('crm:internalListing.salePrice')}
+    </FieldLabel>
+    <div className="flex items-center gap-1">
+      <ValidatedNumberInput
+        value={item.unitPrice}
+        formatDecimals={2}
+        onValueChange={(value) =>
+          controller.updateItem(index, 'unitPrice', value === '' ? 0 : Number(value))
+        }
+        className={inputClassName}
+      />
+      <span className="shrink-0 text-xs font-medium text-muted-foreground">
+        {controller.currency}
+      </span>
+    </div>
+  </div>
+);
+
+const SupplierInvoiceItemDiscountField: React.FC<{
+  controller: SupplierInvoicesController;
+  item: SupplierInvoiceItem;
+  index: number;
+  className?: string;
+  inputClassName?: string;
+}> = ({
+  controller,
+  item,
+  index,
+  className = 'space-y-1',
+  inputClassName = 'min-w-0 text-center',
+}) => (
+  <div className={className}>
+    <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
+      {controller.t('accounting:supplierOrders.discount')}
+    </FieldLabel>
+    <div className="flex items-center gap-1">
+      <ValidatedNumberInput
+        value={item.discount || 0}
+        formatDecimals={2}
+        onValueChange={(value) =>
+          controller.updateItem(index, 'discount', value === '' ? 0 : Number(value))
+        }
+        className={inputClassName}
+      />
+      <span className="shrink-0 text-xs font-medium text-muted-foreground">%</span>
+    </div>
+  </div>
+);
+
+const SupplierInvoiceItemDurationField: React.FC<{
+  controller: SupplierInvoicesController;
+  index: number;
+  durationUnit: DurationUnit;
+  durationValue: number;
+  className?: string;
+  inputClassName?: string;
+}> = ({
+  controller,
+  index,
+  durationUnit,
+  durationValue,
+  className = 'space-y-1',
+  inputClassName = 'min-w-0 text-center',
+}) => (
+  <div className={className}>
+    <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
+      {controller.t('accounting:supplierInvoices.durationColumn', {
+        defaultValue: 'Duration',
+      })}
+    </FieldLabel>
+    <div className="flex items-center gap-1">
+      <ValidatedNumberInput
+        step="1"
+        min="1"
+        placeholder={controller.t('accounting:supplierInvoices.durationColumn', {
+          defaultValue: 'Duration',
+        })}
+        value={durationValue}
+        disabled={durationUnit === 'na'}
+        onValueChange={(value) => controller.handleDurationValueChange(index, value)}
+        className={inputClassName}
+      />
+      <span className="shrink-0 text-xs font-medium text-muted-foreground">/</span>
+      <DurationUnitSelector
+        value={durationUnit}
+        onChange={(value) => controller.handleDurationUnitChange(index, value)}
+        count={durationValue}
+        i18nPrefix="accounting:supplierInvoices"
+      />
+    </div>
+  </div>
+);
+
+const SupplierInvoiceItemTotalField: React.FC<{
+  controller: SupplierInvoicesController;
+  lineTotal: number;
+  className: string;
+}> = ({ controller, lineTotal, className }) => (
+  <div className={className}>
+    <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
+      {controller.t('common:labels.total')}
+    </FieldLabel>
+    <div className="flex items-center justify-end whitespace-nowrap px-3 py-2 text-sm font-semibold text-foreground">
+      {lineTotal.toFixed(2)} {controller.currency}
+    </div>
+  </div>
+);
+
+const SupplierInvoiceItemDeleteButton: React.FC<{
+  controller: SupplierInvoicesController;
+  index: number;
+  align?: 'right' | 'inline';
+}> = ({ controller, index, align = 'inline' }) => (
+  <div className={align === 'right' ? 'flex justify-end' : undefined}>
+    <Button
+      type="button"
+      variant="ghost"
+      size="icon-sm"
+      onClick={() => controller.removeItem(index)}
+      className="shrink-0 text-muted-foreground hover:text-destructive"
+    >
+      <i className="fa-solid fa-trash-can" aria-hidden="true"></i>
+      <span className="sr-only">{controller.t('common:buttons.delete')}</span>
+    </Button>
+  </div>
+);
+
+const SupplierInvoiceNotesSummarySection: React.FC<{
+  controller: SupplierInvoicesController;
+}> = ({ controller }) => (
+  <div className="flex flex-col gap-4 border-t border-border pt-4 md:flex-row">
+    <Field className="md:w-2/3">
+      <SupplierInvoiceSectionTitle>
+        {controller.t('accounting:supplierInvoices.notes')}
+      </SupplierInvoiceSectionTitle>
+      <FieldLabel htmlFor="supplier-invoice-notes" className="sr-only">
+        {controller.t('accounting:supplierInvoices.notes')}
+      </FieldLabel>
+      <Textarea
+        id="supplier-invoice-notes"
+        rows={4}
+        value={controller.formData.notes || ''}
+        onChange={(event) => controller.patchForm({ notes: event.target.value })}
+        className="min-h-28 resize-none"
+        placeholder={controller.t('accounting:supplierInvoices.notesPlaceholder')}
+      />
+    </Field>
+    <div className="space-y-2 md:w-1/3">
+      <SupplierInvoiceSectionTitle>
+        {controller.t('accounting:supplierInvoices.summary', { defaultValue: 'Summary' })}
+      </SupplierInvoiceSectionTitle>
+      <CostSummaryPanel
+        currency={controller.currency}
+        subtotal={controller.grossSubtotal}
+        total={controller.totals.total}
+        subtotalLabel={controller.t('accounting:supplierInvoices.subtotal')}
+        totalLabel={controller.t('accounting:supplierInvoices.total')}
+        discountRow={
+          controller.totalDiscount > 0
+            ? {
+                label: controller.t('accounting:supplierInvoices.totalDiscount'),
+                amount: controller.totalDiscount,
+              }
+            : undefined
+        }
+        amountPaid={{
+          label: controller.t('accounting:supplierInvoices.amountPaid'),
+          value: controller.formData.amountPaid || 0,
+          onChange: (value) =>
+            controller.patchForm({ amountPaid: value === '' ? 0 : Number(value) }),
+        }}
+        balanceDue={{
+          label: controller.t('accounting:supplierInvoices.balanceDue'),
+          amount: controller.balanceDue,
+          colorClass: controller.balanceDue > 0 ? 'text-red-500' : 'text-emerald-600',
+        }}
+      />
+    </div>
+  </div>
+);
+
+const SupplierInvoiceDeleteDialog: React.FC<{ controller: SupplierInvoicesController }> = ({
+  controller,
+}) => (
+  <DeleteConfirmModal
+    isOpen={controller.isDeleteConfirmOpen}
+    onClose={controller.closeDeleteConfirm}
+    onConfirm={() => {
+      void controller.handleDelete();
+    }}
+    title={controller.t('accounting:supplierInvoices.deleteTitle')}
+    description={`${controller.invoiceToDelete?.supplierName ?? ''} · ${
+      controller.invoiceToDelete?.id ?? ''
+    }`}
+  />
+);
 
 export default SupplierInvoicesView;

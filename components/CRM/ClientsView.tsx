@@ -370,7 +370,7 @@ const clientsViewReducer = (
   }
 };
 
-const ClientsView: React.FC<ClientsViewProps> = ({
+const useClientsController = ({
   clients,
   onAddClient,
   onUpdateClient,
@@ -379,7 +379,7 @@ const ClientsView: React.FC<ClientsViewProps> = ({
   onUpdateClientProfileOption,
   onDeleteClientProfileOption,
   permissions,
-}) => {
+}: ClientsViewProps) => {
   const { t, i18n } = useTranslation(['crm', 'common']);
   const canCreateClients = hasScopedActionPermission(permissions, 'crm.clients', 'create');
   const canUpdateClients = hasScopedActionPermission(permissions, 'crm.clients', 'update');
@@ -1144,717 +1144,720 @@ const ClientsView: React.FC<ClientsViewProps> = ({
     officeCountRange: t('crm:clients.officeCountRange'),
   };
 
-  return (
-    <div className="space-y-8 animate-in fade-in duration-500">
-      <Modal
-        isOpen={isManageProfileOptionModalOpen}
-        onClose={() => dispatch({ type: 'setIsManageProfileOptionModalOpen', value: false })}
-        zIndex={70}
+  return {
+    canCreateClients,
+    canSubmit,
+    canUpdateClients,
+    clientToDelete,
+    clients,
+    columns,
+    contactColumns,
+    contactDraft,
+    contactDraftError,
+    contactTableRows,
+    contactsExpanded,
+    dispatch,
+    editingClient,
+    editingContactIndex,
+    editingProfileOption,
+    errors,
+    formData,
+    handleCancelProfileOptionEdit,
+    handleDelete,
+    handleDeleteProfileOption,
+    handleEditProfileOption,
+    handleModalClose,
+    handleSaveProfileOption,
+    handleSubmit,
+    isDeleteConfirmOpen,
+    isLoadingProfileOptions,
+    isManageProfileOptionModalOpen,
+    isModalOpen,
+    isSavingProfileOption,
+    manageCategory,
+    manageCategoryLabels,
+    newProfileOptionValue,
+    numberOfEmployeesOptions,
+    officeCountRangeOptions,
+    openAddModal,
+    openEditModal,
+    openManageProfileOptions,
+    profileOptionError,
+    profileOptions,
+    revenueOptions,
+    sectorOptions,
+    t,
+    typeOptions,
+    addContact,
+    cancelContactDraft,
+    saveContactDraft,
+    updateContactDraft,
+  };
+};
+
+type ClientsController = ReturnType<typeof useClientsController>;
+
+const ClientsView: React.FC<ClientsViewProps> = (props) => {
+  const controller = useClientsController(props);
+  return <ClientsLayout controller={controller} />;
+};
+
+const ClientsLayout: React.FC<{ controller: ClientsController }> = ({ controller }) => (
+  <div className="space-y-8 animate-in fade-in duration-500">
+    <ClientProfileOptionsModal controller={controller} />
+    <ClientFormModal controller={controller} />
+    <ClientDeleteDialog controller={controller} />
+    <ClientsHeader controller={controller} />
+    <StandardTable<Client>
+      title={controller.t('crm:clients.clientsDirectory')}
+      viewKey="clients.directory"
+      data={controller.clients}
+      columns={controller.columns}
+      defaultRowsPerPage={10}
+      onRowClick={controller.canUpdateClients ? controller.openEditModal : undefined}
+      rowClassName={(row) => (row.isDisabled ? 'opacity-70 grayscale hover:grayscale-0' : '')}
+    />
+  </div>
+);
+
+const ClientProfileOptionsModal: React.FC<{ controller: ClientsController }> = ({
+  controller,
+}) => (
+  <Modal
+    isOpen={controller.isManageProfileOptionModalOpen}
+    onClose={() =>
+      controller.dispatch({ type: 'setIsManageProfileOptionModalOpen', value: false })
+    }
+    zIndex={70}
+  >
+    <ModalContent size="2xl">
+      <ModalHeader>
+        <ModalTitle className="gap-3">
+          <span className="flex size-8 items-center justify-center rounded-md bg-muted text-primary">
+            <i className="fa-solid fa-gear" aria-hidden="true"></i>
+          </span>
+          {controller.t('crm:clients.manageValuesTitle', {
+            field: controller.manageCategoryLabels[controller.manageCategory],
+          })}
+        </ModalTitle>
+        <ModalCloseButton
+          onClick={() =>
+            controller.dispatch({ type: 'setIsManageProfileOptionModalOpen', value: false })
+          }
+        />
+      </ModalHeader>
+      <ModalBody className="max-h-[60vh] space-y-4">
+        <ClientProfileOptionEditor controller={controller} />
+        <ClientProfileOptionsTable controller={controller} />
+      </ModalBody>
+    </ModalContent>
+  </Modal>
+);
+
+const ClientProfileOptionEditor: React.FC<{ controller: ClientsController }> = ({
+  controller,
+}) => (
+  <div className="space-y-3 rounded-md border border-border bg-muted/30 p-4">
+    <Field>
+      <FieldLabel htmlFor="client-profile-option-value">
+        {controller.t('crm:clients.value')}
+      </FieldLabel>
+      <Input
+        id="client-profile-option-value"
+        type="text"
+        value={controller.newProfileOptionValue}
+        onChange={(event) =>
+          controller.dispatch({ type: 'setNewProfileOptionValue', value: event.target.value })
+        }
+        placeholder={controller.t('crm:clients.valuePlaceholder')}
+        onKeyDown={(event) =>
+          event.key === 'Enter' && void controller.handleSaveProfileOption()
+        }
+      />
+    </Field>
+    {controller.profileOptionError && (
+      <FieldError className="text-xs">{controller.profileOptionError}</FieldError>
+    )}
+    <div className="flex justify-end gap-2">
+      {controller.editingProfileOption && (
+        <Button type="button" variant="outline" onClick={controller.handleCancelProfileOptionEdit}>
+          {controller.t('common:buttons.cancel')}
+        </Button>
+      )}
+      <Button
+        type="button"
+        onClick={() => void controller.handleSaveProfileOption()}
+        disabled={controller.isSavingProfileOption || !controller.newProfileOptionValue.trim()}
       >
-        <ModalContent size="2xl">
-          <ModalHeader>
-            <ModalTitle className="gap-3">
-              <span className="flex size-8 items-center justify-center rounded-md bg-muted text-primary">
-                <i className="fa-solid fa-gear" aria-hidden="true"></i>
-              </span>
-              {t('crm:clients.manageValuesTitle', { field: manageCategoryLabels[manageCategory] })}
-            </ModalTitle>
-            <ModalCloseButton
-              onClick={() => dispatch({ type: 'setIsManageProfileOptionModalOpen', value: false })}
-            />
-          </ModalHeader>
+        {controller.isSavingProfileOption
+          ? controller.t('common:buttons.saving')
+          : controller.editingProfileOption
+            ? controller.t('common:buttons.update')
+            : controller.t('common:buttons.add')}
+      </Button>
+    </div>
+  </div>
+);
 
-          <ModalBody className="max-h-[60vh] space-y-4">
-            <div className="space-y-3 rounded-md border border-border bg-muted/30 p-4">
-              <Field>
-                <FieldLabel htmlFor="client-profile-option-value">
-                  {t('crm:clients.value')}
-                </FieldLabel>
-                <Input
-                  id="client-profile-option-value"
-                  type="text"
-                  value={newProfileOptionValue}
-                  onChange={(e) =>
-                    dispatch({ type: 'setNewProfileOptionValue', value: e.target.value })
-                  }
-                  placeholder={t('crm:clients.valuePlaceholder')}
-                  onKeyDown={(e) => e.key === 'Enter' && void handleSaveProfileOption()}
-                />
-              </Field>
+const ClientProfileOptionsTable: React.FC<{ controller: ClientsController }> = ({
+  controller,
+}) => {
+  const columns = useMemo<Column<ClientProfileOption>[]>(
+    () => [
+      {
+        header: controller.t('crm:clients.value'),
+        accessorKey: 'value',
+        disableFiltering: true,
+        cell: ({ row }) => <span className="font-bold text-zinc-700">{row.value}</span>,
+      },
+      {
+        header: controller.t('crm:clients.usedByClients'),
+        id: 'usageCount',
+        accessorFn: (row) => row.usageCount,
+        disableFiltering: true,
+        cell: ({ row }) => <span className="text-xs text-zinc-400">{row.usageCount}</span>,
+      },
+      {
+        header: controller.t('common:labels.actions'),
+        id: 'actions',
+        disableSorting: true,
+        disableFiltering: true,
+        cell: ({ row: option }) => (
+          <ClientProfileOptionActions controller={controller} option={option} />
+        ),
+      },
+    ],
+    [controller],
+  );
 
-              {profileOptionError && (
-                <FieldError className="text-xs">{profileOptionError}</FieldError>
-              )}
-
-              <div className="flex justify-end gap-2">
-                {editingProfileOption && (
-                  <Button type="button" variant="outline" onClick={handleCancelProfileOptionEdit}>
-                    {t('common:buttons.cancel')}
-                  </Button>
-                )}
-                <Button
-                  type="button"
-                  onClick={() => void handleSaveProfileOption()}
-                  disabled={isSavingProfileOption || !newProfileOptionValue.trim()}
-                >
-                  {isSavingProfileOption
-                    ? t('common:buttons.saving')
-                    : editingProfileOption
-                      ? t('common:buttons.update')
-                      : t('common:buttons.add')}
-                </Button>
-              </div>
-            </div>
-
-            {isLoadingProfileOptions ? (
-              <div className="flex items-center justify-center py-8">
-                <i className="fa-solid fa-circle-notch fa-spin text-praetor text-2xl"></i>
-              </div>
-            ) : (
-              <StandardTable<ClientProfileOption>
-                title={t('crm:clients.manageValues')}
-                data={profileOptions[manageCategory]}
-                defaultRowsPerPage={5}
-                containerClassName="shadow-none border-border rounded-2xl"
-                tableContainerClassName="max-h-[35vh] overflow-y-auto"
-                emptyState={
-                  <div className="text-center py-6 text-muted-foreground">
-                    <p>{t('crm:clients.noValues')}</p>
-                  </div>
-                }
-                columns={[
-                  {
-                    header: t('crm:clients.value'),
-                    accessorKey: 'value',
-                    disableFiltering: true,
-                    cell: ({ row }) => <span className="font-bold text-zinc-700">{row.value}</span>,
-                  },
-                  {
-                    header: t('crm:clients.usedByClients'),
-                    id: 'usageCount',
-                    accessorFn: (row) => row.usageCount,
-                    disableFiltering: true,
-                    cell: ({ row }) => (
-                      <span className="text-xs text-zinc-400">{row.usageCount}</span>
-                    ),
-                  },
-                  {
-                    header: t('common:labels.actions'),
-                    id: 'actions',
-                    disableSorting: true,
-                    disableFiltering: true,
-                    cell: ({ row: option }) => {
-                      const isDeleteBlocked = option.usageCount > 0;
-                      return (
-                        <div className="flex items-center gap-1">
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <span className="inline-flex">
-                                <button
-                                  type="button"
-                                  onClick={() => handleEditProfileOption(option)}
-                                  aria-label={t('common:buttons.edit')}
-                                  className="p-1.5 text-zinc-400 hover:text-praetor hover:bg-zinc-100 rounded-lg transition-colors"
-                                >
-                                  <i className="fa-solid fa-pen"></i>
-                                </button>
-                              </span>
-                            </TooltipTrigger>
-                            <TooltipContent>{t('common:buttons.edit')}</TooltipContent>
-                          </Tooltip>
-                          <Tooltip disabled={!isDeleteBlocked}>
-                            <TooltipTrigger asChild>
-                              <span className="inline-flex">
-                                <button
-                                  type="button"
-                                  onClick={() => void handleDeleteProfileOption(option)}
-                                  disabled={isDeleteBlocked}
-                                  aria-label={t('common:buttons.delete')}
-                                  className={`p-1.5 rounded-lg transition-colors ${
-                                    isDeleteBlocked
-                                      ? 'text-zinc-300 cursor-not-allowed'
-                                      : 'text-red-600 hover:text-red-600 hover:bg-red-50'
-                                  }`}
-                                >
-                                  <i className="fa-solid fa-trash"></i>
-                                </button>
-                              </span>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              {isDeleteBlocked
-                                ? t('crm:clients.deleteProfileOptionBlocked', {
-                                    count: option.usageCount,
-                                  })
-                                : ''}
-                            </TooltipContent>
-                          </Tooltip>
-                        </div>
-                      );
-                    },
-                  },
-                ]}
-              />
-            )}
-          </ModalBody>
-        </ModalContent>
-      </Modal>
-
-      <Modal isOpen={isModalOpen} onClose={handleModalClose}>
-        <ModalContent size="6xl" className="max-h-[90vh]">
-          <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col" noValidate>
-            <ModalHeader>
-              <ModalTitle className="gap-3">
-                <span className="flex size-10 items-center justify-center rounded-md bg-muted text-primary">
-                  <i
-                    className={`fa-solid ${editingClient ? 'fa-pen-to-square' : 'fa-plus'}`}
-                    aria-hidden="true"
-                  ></i>
-                </span>
-                {editingClient ? t('crm:clients.editClient') : t('crm:clients.addClient')}
-              </ModalTitle>
-              <ModalCloseButton onClick={handleModalClose} />
-            </ModalHeader>
-
-            <ModalBody className="flex-1 space-y-8">
-              <div className="space-y-4">
-                <h4 className="text-xs font-semibold text-praetor uppercase tracking-widest flex items-center gap-2">
-                  <span className="size-1.5 rounded-full bg-praetor"></span>
-                  {t('crm:clients.identifyingData')}
-                </h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-muted-foreground ml-1">
-                      {t('crm:clients.clientCode')} <RequiredMark />
-                    </label>
-                    <Input
-                      type="text"
-                      value={formData.clientCode}
-                      onChange={(e) => {
-                        dispatch({ type: 'patchFormData', value: { clientCode: e.target.value } });
-                        if (errors.clientCode)
-                          dispatch({ type: 'patchErrors', value: { clientCode: '' } });
-                      }}
-                      placeholder={t('crm:clients.clientCodePlaceholder')}
-                      aria-invalid={Boolean(errors.clientCode)}
-                    />
-                    {errors.clientCode && (
-                      <p className="text-red-500 text-[10px] font-bold ml-1">{errors.clientCode}</p>
-                    )}
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-muted-foreground ml-1">
-                      {t('crm:clients.name')} <RequiredMark />
-                    </label>
-                    <Input
-                      type="text"
-                      value={formData.name}
-                      onChange={(e) => {
-                        dispatch({ type: 'patchFormData', value: { name: e.target.value } });
-                        if (errors.name) dispatch({ type: 'patchErrors', value: { name: '' } });
-                      }}
-                      placeholder={t('crm:clients.namePlaceholder')}
-                      aria-invalid={Boolean(errors.name)}
-                    />
-                    {errors.name && (
-                      <p className="text-red-500 text-[10px] font-bold ml-1">{errors.name}</p>
-                    )}
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-muted-foreground ml-1">
-                      {t('crm:clients.clientType')}
-                    </label>
-                    <SelectControl
-                      options={typeOptions}
-                      value={formData.type || 'company'}
-                      onChange={(val) =>
-                        dispatch({
-                          type: 'patchFormData',
-                          value: { type: (val as Client['type']) || 'company' },
-                        })
-                      }
-                      searchable={false}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-4">
-                <h4 className="text-xs font-semibold text-praetor uppercase tracking-widest flex items-center gap-2">
-                  <span className="size-1.5 rounded-full bg-praetor"></span>
-                  {t('crm:clients.contacts')}
-                </h4>
-
-                {errors.contacts && (
-                  <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-red-600 dark:text-red-300 text-xs font-bold">
-                    {errors.contacts}
-                  </div>
-                )}
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-muted-foreground ml-1">
-                      {t('crm:clients.website')}
-                    </label>
-                    <Input
-                      type="text"
-                      value={formData.website ?? ''}
-                      onChange={(e) =>
-                        dispatch({ type: 'patchFormData', value: { website: e.target.value } })
-                      }
-                      placeholder={t('crm:clients.websitePlaceholder')}
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-muted-foreground ml-1">
-                      {t('crm:clients.country')}
-                    </label>
-                    <Input
-                      type="text"
-                      value={formData.addressCountry}
-                      onChange={(e) =>
-                        dispatch({
-                          type: 'patchFormData',
-                          value: { addressCountry: e.target.value },
-                        })
-                      }
-                      placeholder={t('crm:clients.countryPlaceholder')}
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-muted-foreground ml-1">
-                      {t('crm:clients.state')}
-                    </label>
-                    <Input
-                      type="text"
-                      value={formData.addressState}
-                      onChange={(e) =>
-                        dispatch({ type: 'patchFormData', value: { addressState: e.target.value } })
-                      }
-                      placeholder={t('crm:clients.statePlaceholder')}
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-muted-foreground ml-1">
-                      {t('crm:clients.cap')}
-                    </label>
-                    <Input
-                      type="text"
-                      value={formData.addressCap}
-                      onChange={(e) =>
-                        dispatch({ type: 'patchFormData', value: { addressCap: e.target.value } })
-                      }
-                      placeholder={t('crm:clients.capPlaceholder')}
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-muted-foreground ml-1">
-                      {t('crm:clients.province')}
-                    </label>
-                    <Input
-                      type="text"
-                      value={formData.addressProvince}
-                      onChange={(e) =>
-                        dispatch({
-                          type: 'patchFormData',
-                          value: { addressProvince: e.target.value },
-                        })
-                      }
-                      placeholder={t('crm:clients.provincePlaceholder')}
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-muted-foreground ml-1">
-                      {t('crm:clients.civicNumber')}
-                    </label>
-                    <Input
-                      type="text"
-                      value={formData.addressCivicNumber}
-                      onChange={(e) =>
-                        dispatch({
-                          type: 'patchFormData',
-                          value: { addressCivicNumber: e.target.value },
-                        })
-                      }
-                      placeholder={t('crm:clients.civicNumberPlaceholder')}
-                    />
-                  </div>
-                  <div className="col-span-full space-y-1.5">
-                    <label className="text-xs font-bold text-muted-foreground ml-1">
-                      {t('crm:clients.address')}
-                    </label>
-                    <Input
-                      type="text"
-                      value={formData.addressLine}
-                      onChange={(e) =>
-                        dispatch({ type: 'patchFormData', value: { addressLine: e.target.value } })
-                      }
-                      placeholder={t('crm:clients.addressPlaceholder')}
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-3 pt-2">
-                  <div className="flex justify-between items-center">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => dispatch({ type: 'toggleContactsExpanded' })}
-                      className="gap-2 text-xs font-semibold uppercase tracking-wide"
-                    >
-                      <i
-                        className={`fa-solid fa-chevron-${contactsExpanded ? 'up' : 'down'} text-[10px]`}
-                      ></i>
-                      {t('crm:clients.contactsList')} ({contactTableRows.length})
-                    </Button>
-
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      size="sm"
-                      onClick={addContact}
-                      className="gap-2"
-                    >
-                      <i className="fa-solid fa-plus"></i>
-                      {t('crm:clients.addContact')}
-                    </Button>
-                  </div>
-
-                  {contactsExpanded && (
-                    <div className="space-y-4">
-                      {contactDraft && (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-muted/50 rounded-xl border border-border">
-                          <div className="space-y-1.5">
-                            <label className="text-xs font-bold text-muted-foreground ml-1">
-                              {t('crm:clients.fullName')} <RequiredMark />
-                            </label>
-                            <Input
-                              type="text"
-                              value={contactDraft.fullName}
-                              onChange={(e) => updateContactDraft('fullName', e.target.value)}
-                              placeholder={t('crm:clients.fullNamePlaceholder')}
-                              aria-invalid={Boolean(contactDraftError)}
-                            />
-                          </div>
-                          <div className="space-y-1.5">
-                            <label className="text-xs font-bold text-muted-foreground ml-1">
-                              {t('crm:clients.role')}
-                            </label>
-                            <Input
-                              type="text"
-                              value={contactDraft.role || ''}
-                              onChange={(e) => updateContactDraft('role', e.target.value)}
-                              placeholder={t('crm:clients.rolePlaceholder')}
-                            />
-                          </div>
-                          <div className="space-y-1.5">
-                            <label className="text-xs font-bold text-muted-foreground ml-1">
-                              {t('crm:clients.email')}
-                            </label>
-                            <Input
-                              type="email"
-                              value={contactDraft.email || ''}
-                              onChange={(e) => updateContactDraft('email', e.target.value)}
-                              placeholder={t('crm:clients.email')}
-                            />
-                          </div>
-                          <div className="space-y-1.5">
-                            <label className="text-xs font-bold text-muted-foreground ml-1">
-                              {t('crm:clients.phone')}
-                            </label>
-                            <Input
-                              type="text"
-                              value={contactDraft.phone || ''}
-                              onChange={(e) => updateContactDraft('phone', e.target.value)}
-                              placeholder={t('crm:clients.phone')}
-                            />
-                          </div>
-
-                          <div className="col-span-full flex items-center justify-between">
-                            <div>
-                              {contactDraftError && (
-                                <p className="text-red-500 text-[10px] font-bold ml-1">
-                                  {contactDraftError}
-                                </p>
-                              )}
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                onClick={cancelContactDraft}
-                              >
-                                {t('common:buttons.cancel')}
-                              </Button>
-                              <Button type="button" size="sm" onClick={saveContactDraft}>
-                                {editingContactIndex !== null
-                                  ? t('common:buttons.update')
-                                  : t('common:buttons.save')}
-                              </Button>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-
-                      <StandardTable<ContactTableRow>
-                        title={t('crm:clients.contactsList')}
-                        data={contactTableRows}
-                        columns={contactColumns}
-                        defaultRowsPerPage={5}
-                        containerClassName="shadow-none border-border rounded-2xl"
-                        tableContainerClassName="max-h-[35vh] overflow-y-auto"
-                      />
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <div className="space-y-4">
-                <h4 className="text-xs font-semibold text-praetor uppercase tracking-widest flex items-center gap-2">
-                  <span className="size-1.5 rounded-full bg-praetor"></span>
-                  {t('crm:clients.adminFiscal')}
-                </h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-muted-foreground ml-1">
-                      {t('crm:clients.fiscalCode')} <RequiredMark />
-                    </label>
-                    <Input
-                      type="text"
-                      value={formData.fiscalCode}
-                      onChange={(e) => {
-                        dispatch({ type: 'patchFormData', value: { fiscalCode: e.target.value } });
-                        if (errors.fiscalCode)
-                          dispatch({ type: 'patchErrors', value: { fiscalCode: '' } });
-                      }}
-                      placeholder={t('crm:clients.fiscalCodePlaceholder')}
-                      aria-invalid={Boolean(errors.fiscalCode)}
-                    />
-                    {errors.fiscalCode && (
-                      <p className="text-red-500 text-[10px] font-bold ml-1">{errors.fiscalCode}</p>
-                    )}
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-muted-foreground ml-1">
-                      {t('crm:clients.atecoCode')}
-                    </label>
-                    <Input
-                      type="text"
-                      value={formData.atecoCode ?? ''}
-                      onChange={(e) =>
-                        dispatch({ type: 'patchFormData', value: { atecoCode: e.target.value } })
-                      }
-                      placeholder={t('crm:clients.atecoCodePlaceholder')}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-4">
-                <h4 className="text-xs font-semibold text-praetor uppercase tracking-widest flex items-center gap-2">
-                  <span className="size-1.5 rounded-full bg-praetor"></span>
-                  {t('crm:clients.companyProfile')}
-                </h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-1.5">
-                    <div className="flex items-end justify-between ml-1 min-h-5">
-                      <label className="text-xs font-bold text-muted-foreground">
-                        {t('crm:clients.sector')}
-                      </label>
-                      {canUpdateClients && (
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="xs"
-                          onClick={() => openManageProfileOptions('sector')}
-                          className="gap-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"
-                        >
-                          <i className="fa-solid fa-gear"></i> {t('common:buttons.manage')}
-                        </Button>
-                      )}
-                    </div>
-                    <SelectControl
-                      options={sectorOptions}
-                      value={formData.sector || ''}
-                      onChange={(val) =>
-                        dispatch({
-                          type: 'patchFormData',
-                          value: { sector: (val as Client['sector']) || null },
-                        })
-                      }
-                      placeholder={t('common:form.selectOption')}
-                      searchable={false}
-                    />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <div className="flex items-end justify-between ml-1 min-h-5">
-                      <label className="text-xs font-bold text-muted-foreground">
-                        {t('crm:clients.numberOfEmployees')}
-                      </label>
-                      {canUpdateClients && (
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="xs"
-                          onClick={() => openManageProfileOptions('numberOfEmployees')}
-                          className="gap-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"
-                        >
-                          <i className="fa-solid fa-gear"></i> {t('common:buttons.manage')}
-                        </Button>
-                      )}
-                    </div>
-                    <SelectControl
-                      options={numberOfEmployeesOptions}
-                      value={formData.numberOfEmployees || ''}
-                      onChange={(val) =>
-                        dispatch({
-                          type: 'patchFormData',
-                          value: {
-                            numberOfEmployees: (val as Client['numberOfEmployees']) || null,
-                          },
-                        })
-                      }
-                      placeholder={t('common:form.selectOption')}
-                      searchable={false}
-                    />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <div className="flex items-end justify-between ml-1 min-h-5">
-                      <label className="text-xs font-bold text-muted-foreground">
-                        {t('crm:clients.revenue')}
-                      </label>
-                      {canUpdateClients && (
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="xs"
-                          onClick={() => openManageProfileOptions('revenue')}
-                          className="gap-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"
-                        >
-                          <i className="fa-solid fa-gear"></i> {t('common:buttons.manage')}
-                        </Button>
-                      )}
-                    </div>
-                    <SelectControl
-                      options={revenueOptions}
-                      value={formData.revenue || ''}
-                      onChange={(val) =>
-                        dispatch({
-                          type: 'patchFormData',
-                          value: { revenue: (val as Client['revenue']) || null },
-                        })
-                      }
-                      placeholder={t('common:form.selectOption')}
-                      searchable={false}
-                    />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <div className="flex items-end justify-between ml-1 min-h-5">
-                      <label className="text-xs font-bold text-muted-foreground">
-                        {t('crm:clients.officeCountRange')}
-                      </label>
-                      {canUpdateClients && (
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="xs"
-                          onClick={() => openManageProfileOptions('officeCountRange')}
-                          className="gap-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"
-                        >
-                          <i className="fa-solid fa-gear"></i> {t('common:buttons.manage')}
-                        </Button>
-                      )}
-                    </div>
-                    <SelectControl
-                      options={officeCountRangeOptions}
-                      value={formData.officeCountRange || ''}
-                      onChange={(val) =>
-                        dispatch({
-                          type: 'patchFormData',
-                          value: { officeCountRange: (val as Client['officeCountRange']) || null },
-                        })
-                      }
-                      placeholder={t('common:form.selectOption')}
-                      searchable={false}
-                    />
-                  </div>
-
-                  <div className="col-span-full space-y-1.5">
-                    <label className="text-xs font-bold text-muted-foreground ml-1">
-                      {t('crm:clients.description')}
-                    </label>
-                    <Textarea
-                      rows={3}
-                      value={formData.description ?? ''}
-                      onChange={(e) =>
-                        dispatch({ type: 'patchFormData', value: { description: e.target.value } })
-                      }
-                      placeholder={t('crm:clients.description')}
-                      className="resize-none"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {errors.general && (
-                <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-xl flex items-center gap-3 text-red-600 dark:text-red-300">
-                  <i className="fa-solid fa-circle-exclamation text-lg"></i>
-                  <p className="text-sm font-bold">{errors.general}</p>
-                </div>
-              )}
-            </ModalBody>
-
-            <ModalFooter>
-              <Button type="button" variant="outline" onClick={handleModalClose}>
-                {t('common:buttons.cancel')}
-              </Button>
-              <Button type="submit" disabled={!canSubmit}>
-                {editingClient ? t('common:buttons.update') : t('common:buttons.save')}
-              </Button>
-            </ModalFooter>
-          </form>
-        </ModalContent>
-      </Modal>
-
-      <DeleteConfirmModal
-        isOpen={isDeleteConfirmOpen}
-        onClose={() => dispatch({ type: 'setIsDeleteConfirmOpen', value: false })}
-        onConfirm={() => {
-          void handleDelete();
-        }}
-        title={t('crm:clients.deleteClient')}
-        description={`${t('common:messages.deleteConfirmNamed', {
-          name: clientToDelete?.name,
-        })}${t('crm:clients.deleteConfirm')}`}
-      />
-
-      <div className="space-y-4">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <div>
-            <h2 className="text-2xl font-semibold text-foreground">{t('crm:clients.title')}</h2>
-            <p className="text-muted-foreground text-sm">{t('crm:clients.subtitle')}</p>
-          </div>
-          {canCreateClients && (
-            <HeaderAddButton onClick={openAddModal}>{t('crm:clients.addClient')}</HeaderAddButton>
-          )}
-        </div>
+  if (controller.isLoadingProfileOptions) {
+    return (
+      <div className="flex items-center justify-center py-8">
+        <i className="fa-solid fa-circle-notch fa-spin text-praetor text-2xl"></i>
       </div>
+    );
+  }
 
-      <StandardTable<Client>
-        title={t('crm:clients.clientsDirectory')}
-        viewKey="clients.directory"
-        data={clients}
-        columns={columns}
-        defaultRowsPerPage={10}
-        onRowClick={canUpdateClients ? openEditModal : undefined}
-        rowClassName={(row) => (row.isDisabled ? 'opacity-70 grayscale hover:grayscale-0' : '')}
-      />
+  return (
+    <StandardTable<ClientProfileOption>
+      title={controller.t('crm:clients.manageValues')}
+      data={controller.profileOptions[controller.manageCategory]}
+      defaultRowsPerPage={5}
+      containerClassName="shadow-none border-border rounded-2xl"
+      tableContainerClassName="max-h-[35vh] overflow-y-auto"
+      emptyState={
+        <div className="text-center py-6 text-muted-foreground">
+          <p>{controller.t('crm:clients.noValues')}</p>
+        </div>
+      }
+      columns={columns}
+    />
+  );
+};
+
+const ClientProfileOptionActions: React.FC<{
+  controller: ClientsController;
+  option: ClientProfileOption;
+}> = ({ controller, option }) => {
+  const isDeleteBlocked = option.usageCount > 0;
+  return (
+    <div className="flex items-center gap-1">
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className="inline-flex">
+            <button
+              type="button"
+              onClick={() => controller.handleEditProfileOption(option)}
+              aria-label={controller.t('common:buttons.edit')}
+              className="p-1.5 text-zinc-400 hover:text-praetor hover:bg-zinc-100 rounded-lg transition-colors"
+            >
+              <i className="fa-solid fa-pen"></i>
+            </button>
+          </span>
+        </TooltipTrigger>
+        <TooltipContent>{controller.t('common:buttons.edit')}</TooltipContent>
+      </Tooltip>
+      <Tooltip disabled={!isDeleteBlocked}>
+        <TooltipTrigger asChild>
+          <span className="inline-flex">
+            <button
+              type="button"
+              onClick={() => void controller.handleDeleteProfileOption(option)}
+              disabled={isDeleteBlocked}
+              aria-label={controller.t('common:buttons.delete')}
+              className={`p-1.5 rounded-lg transition-colors ${
+                isDeleteBlocked
+                  ? 'text-zinc-300 cursor-not-allowed'
+                  : 'text-red-600 hover:text-red-600 hover:bg-red-50'
+              }`}
+            >
+              <i className="fa-solid fa-trash"></i>
+            </button>
+          </span>
+        </TooltipTrigger>
+        <TooltipContent>
+          {isDeleteBlocked
+            ? controller.t('crm:clients.deleteProfileOptionBlocked', {
+                count: option.usageCount,
+              })
+            : ''}
+        </TooltipContent>
+      </Tooltip>
     </div>
   );
 };
+
+const ClientFormModal: React.FC<{ controller: ClientsController }> = ({ controller }) => (
+  <Modal isOpen={controller.isModalOpen} onClose={controller.handleModalClose}>
+    <ModalContent size="6xl" className="max-h-[90vh]">
+      <form onSubmit={controller.handleSubmit} className="flex min-h-0 flex-1 flex-col" noValidate>
+        <ModalHeader>
+          <ModalTitle className="gap-3">
+            <span className="flex size-10 items-center justify-center rounded-md bg-muted text-primary">
+              <i
+                className={`fa-solid ${controller.editingClient ? 'fa-pen-to-square' : 'fa-plus'}`}
+                aria-hidden="true"
+              ></i>
+            </span>
+            {controller.editingClient
+              ? controller.t('crm:clients.editClient')
+              : controller.t('crm:clients.addClient')}
+          </ModalTitle>
+          <ModalCloseButton onClick={controller.handleModalClose} />
+        </ModalHeader>
+        <ModalBody className="flex-1 space-y-8">
+          <ClientIdentifyingSection controller={controller} />
+          <ClientContactsSection controller={controller} />
+          <ClientFiscalSection controller={controller} />
+          <ClientCompanyProfileSection controller={controller} />
+          <ClientGeneralError controller={controller} />
+        </ModalBody>
+        <ModalFooter>
+          <Button type="button" variant="outline" onClick={controller.handleModalClose}>
+            {controller.t('common:buttons.cancel')}
+          </Button>
+          <Button type="submit" disabled={!controller.canSubmit}>
+            {controller.editingClient
+              ? controller.t('common:buttons.update')
+              : controller.t('common:buttons.save')}
+          </Button>
+        </ModalFooter>
+      </form>
+    </ModalContent>
+  </Modal>
+);
+
+const ClientSectionTitle: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+  <h4 className="text-xs font-semibold text-praetor uppercase tracking-widest flex items-center gap-2">
+    <span className="size-1.5 rounded-full bg-praetor"></span>
+    {children}
+  </h4>
+);
+
+const ClientTextField: React.FC<{
+  controller: ClientsController;
+  field: keyof Client;
+  label: string;
+  placeholder?: string;
+  required?: boolean;
+  errorKey?: string;
+  type?: string;
+  value?: string;
+}> = ({
+  controller,
+  field,
+  label,
+  placeholder,
+  required,
+  errorKey = String(field),
+  type = 'text',
+  value,
+}) => {
+  const error = controller.errors[errorKey];
+  return (
+    <div className="space-y-1.5">
+      <label className="text-xs font-bold text-muted-foreground ml-1">
+        {label} {required && <RequiredMark />}
+      </label>
+      <Input
+        type={type}
+        value={value ?? String(controller.formData[field] ?? '')}
+        onChange={(event) => {
+          controller.dispatch({ type: 'patchFormData', value: { [field]: event.target.value } });
+          if (error) controller.dispatch({ type: 'patchErrors', value: { [errorKey]: '' } });
+        }}
+        placeholder={placeholder}
+        aria-invalid={Boolean(error)}
+      />
+      {error && <p className="text-red-500 text-[10px] font-bold ml-1">{error}</p>}
+    </div>
+  );
+};
+
+const ClientIdentifyingSection: React.FC<{ controller: ClientsController }> = ({
+  controller,
+}) => (
+  <div className="space-y-4">
+    <ClientSectionTitle>{controller.t('crm:clients.identifyingData')}</ClientSectionTitle>
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <ClientTextField
+        controller={controller}
+        field="clientCode"
+        label={controller.t('crm:clients.clientCode')}
+        placeholder={controller.t('crm:clients.clientCodePlaceholder')}
+        required
+      />
+      <ClientTextField
+        controller={controller}
+        field="name"
+        label={controller.t('crm:clients.name')}
+        placeholder={controller.t('crm:clients.namePlaceholder')}
+        required
+      />
+      <div className="space-y-1.5">
+        <label className="text-xs font-bold text-muted-foreground ml-1">
+          {controller.t('crm:clients.clientType')}
+        </label>
+        <SelectControl
+          options={controller.typeOptions}
+          value={controller.formData.type || 'company'}
+          onChange={(value) =>
+            controller.dispatch({
+              type: 'patchFormData',
+              value: { type: (value as Client['type']) || 'company' },
+            })
+          }
+          searchable={false}
+        />
+      </div>
+    </div>
+  </div>
+);
+
+const ClientContactsSection: React.FC<{ controller: ClientsController }> = ({ controller }) => (
+  <div className="space-y-4">
+    <ClientSectionTitle>{controller.t('crm:clients.contacts')}</ClientSectionTitle>
+    {controller.errors.contacts && (
+      <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-red-600 dark:text-red-300 text-xs font-bold">
+        {controller.errors.contacts}
+      </div>
+    )}
+    <ClientAddressFields controller={controller} />
+    <ClientContactsList controller={controller} />
+  </div>
+);
+
+const ClientAddressFields: React.FC<{ controller: ClientsController }> = ({ controller }) => (
+  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <ClientTextField
+      controller={controller}
+      field="website"
+      label={controller.t('crm:clients.website')}
+      placeholder={controller.t('crm:clients.websitePlaceholder')}
+    />
+    <ClientTextField
+      controller={controller}
+      field="addressCountry"
+      label={controller.t('crm:clients.country')}
+      placeholder={controller.t('crm:clients.countryPlaceholder')}
+    />
+    <ClientTextField
+      controller={controller}
+      field="addressState"
+      label={controller.t('crm:clients.state')}
+      placeholder={controller.t('crm:clients.statePlaceholder')}
+    />
+    <ClientTextField
+      controller={controller}
+      field="addressCap"
+      label={controller.t('crm:clients.cap')}
+      placeholder={controller.t('crm:clients.capPlaceholder')}
+    />
+    <ClientTextField
+      controller={controller}
+      field="addressProvince"
+      label={controller.t('crm:clients.province')}
+      placeholder={controller.t('crm:clients.provincePlaceholder')}
+    />
+    <ClientTextField
+      controller={controller}
+      field="addressCivicNumber"
+      label={controller.t('crm:clients.civicNumber')}
+      placeholder={controller.t('crm:clients.civicNumberPlaceholder')}
+    />
+    <div className="col-span-full">
+      <ClientTextField
+        controller={controller}
+        field="addressLine"
+        label={controller.t('crm:clients.address')}
+        placeholder={controller.t('crm:clients.addressPlaceholder')}
+      />
+    </div>
+  </div>
+);
+
+const ClientContactsList: React.FC<{ controller: ClientsController }> = ({ controller }) => (
+  <div className="space-y-3 pt-2">
+    <div className="flex justify-between items-center">
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        onClick={() => controller.dispatch({ type: 'toggleContactsExpanded' })}
+        className="gap-2 text-xs font-semibold uppercase tracking-wide"
+      >
+        <i
+          className={`fa-solid fa-chevron-${controller.contactsExpanded ? 'up' : 'down'} text-[10px]`}
+        ></i>
+        {controller.t('crm:clients.contactsList')} ({controller.contactTableRows.length})
+      </Button>
+      <Button type="button" variant="secondary" size="sm" onClick={controller.addContact} className="gap-2">
+        <i className="fa-solid fa-plus"></i>
+        {controller.t('crm:clients.addContact')}
+      </Button>
+    </div>
+    {controller.contactsExpanded && (
+      <div className="space-y-4">
+        {controller.contactDraft && <ClientContactDraftForm controller={controller} />}
+        <StandardTable<ContactTableRow>
+          title={controller.t('crm:clients.contactsList')}
+          data={controller.contactTableRows}
+          columns={controller.contactColumns}
+          defaultRowsPerPage={5}
+          containerClassName="shadow-none border-border rounded-2xl"
+          tableContainerClassName="max-h-[35vh] overflow-y-auto"
+        />
+      </div>
+    )}
+  </div>
+);
+
+const ClientContactDraftForm: React.FC<{ controller: ClientsController }> = ({ controller }) => {
+  const draft = controller.contactDraft;
+  if (!draft) return null;
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-muted/50 rounded-xl border border-border">
+      <ClientContactDraftField
+        label={controller.t('crm:clients.fullName')}
+        value={draft.fullName}
+        placeholder={controller.t('crm:clients.fullNamePlaceholder')}
+        required
+        error={controller.contactDraftError}
+        onChange={(value) => controller.updateContactDraft('fullName', value)}
+      />
+      <ClientContactDraftField
+        label={controller.t('crm:clients.role')}
+        value={draft.role || ''}
+        placeholder={controller.t('crm:clients.rolePlaceholder')}
+        onChange={(value) => controller.updateContactDraft('role', value)}
+      />
+      <ClientContactDraftField
+        label={controller.t('crm:clients.email')}
+        value={draft.email || ''}
+        placeholder={controller.t('crm:clients.email')}
+        type="email"
+        onChange={(value) => controller.updateContactDraft('email', value)}
+      />
+      <ClientContactDraftField
+        label={controller.t('crm:clients.phone')}
+        value={draft.phone || ''}
+        placeholder={controller.t('crm:clients.phone')}
+        onChange={(value) => controller.updateContactDraft('phone', value)}
+      />
+      <div className="col-span-full flex items-center justify-between">
+        <div>
+          {controller.contactDraftError && (
+            <p className="text-red-500 text-[10px] font-bold ml-1">
+              {controller.contactDraftError}
+            </p>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          <Button type="button" variant="ghost" size="sm" onClick={controller.cancelContactDraft}>
+            {controller.t('common:buttons.cancel')}
+          </Button>
+          <Button type="button" size="sm" onClick={controller.saveContactDraft}>
+            {controller.editingContactIndex !== null
+              ? controller.t('common:buttons.update')
+              : controller.t('common:buttons.save')}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const ClientContactDraftField: React.FC<{
+  label: string;
+  value: string;
+  placeholder: string;
+  onChange: (value: string) => void;
+  required?: boolean;
+  error?: string | null;
+  type?: string;
+}> = ({ label, value, placeholder, onChange, required, error, type = 'text' }) => (
+  <div className="space-y-1.5">
+    <label className="text-xs font-bold text-muted-foreground ml-1">
+      {label} {required && <RequiredMark />}
+    </label>
+    <Input
+      type={type}
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+      placeholder={placeholder}
+      aria-invalid={Boolean(error)}
+    />
+  </div>
+);
+
+const ClientFiscalSection: React.FC<{ controller: ClientsController }> = ({ controller }) => (
+  <div className="space-y-4">
+    <ClientSectionTitle>{controller.t('crm:clients.adminFiscal')}</ClientSectionTitle>
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <ClientTextField
+        controller={controller}
+        field="fiscalCode"
+        label={controller.t('crm:clients.fiscalCode')}
+        placeholder={controller.t('crm:clients.fiscalCodePlaceholder')}
+        required
+      />
+      <ClientTextField
+        controller={controller}
+        field="atecoCode"
+        label={controller.t('crm:clients.atecoCode')}
+        placeholder={controller.t('crm:clients.atecoCodePlaceholder')}
+      />
+    </div>
+  </div>
+);
+
+const ClientCompanyProfileSection: React.FC<{ controller: ClientsController }> = ({
+  controller,
+}) => (
+  <div className="space-y-4">
+    <ClientSectionTitle>{controller.t('crm:clients.companyProfile')}</ClientSectionTitle>
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <ClientProfileSelectField
+        controller={controller}
+        field="sector"
+        label={controller.t('crm:clients.sector')}
+        options={controller.sectorOptions}
+      />
+      <ClientProfileSelectField
+        controller={controller}
+        field="numberOfEmployees"
+        label={controller.t('crm:clients.numberOfEmployees')}
+        options={controller.numberOfEmployeesOptions}
+      />
+      <ClientProfileSelectField
+        controller={controller}
+        field="revenue"
+        label={controller.t('crm:clients.revenue')}
+        options={controller.revenueOptions}
+      />
+      <ClientProfileSelectField
+        controller={controller}
+        field="officeCountRange"
+        label={controller.t('crm:clients.officeCountRange')}
+        options={controller.officeCountRangeOptions}
+      />
+      <div className="col-span-full space-y-1.5">
+        <label className="text-xs font-bold text-muted-foreground ml-1">
+          {controller.t('crm:clients.description')}
+        </label>
+        <Textarea
+          rows={3}
+          value={controller.formData.description ?? ''}
+          onChange={(event) =>
+            controller.dispatch({
+              type: 'patchFormData',
+              value: { description: event.target.value },
+            })
+          }
+          placeholder={controller.t('crm:clients.description')}
+          className="resize-none"
+        />
+      </div>
+    </div>
+  </div>
+);
+
+const ClientProfileSelectField: React.FC<{
+  controller: ClientsController;
+  field: ClientProfileOptionCategory;
+  label: string;
+  options: Array<{ id: string; name: string }>;
+}> = ({ controller, field, label, options }) => (
+  <div className="space-y-1.5">
+    <div className="flex items-end justify-between ml-1 min-h-5">
+      <label className="text-xs font-bold text-muted-foreground">{label}</label>
+      {controller.canUpdateClients && (
+        <Button
+          type="button"
+          variant="ghost"
+          size="xs"
+          onClick={() => controller.openManageProfileOptions(field)}
+          className="gap-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"
+        >
+          <i className="fa-solid fa-gear"></i> {controller.t('common:buttons.manage')}
+        </Button>
+      )}
+    </div>
+    <SelectControl
+      options={options}
+      value={(controller.formData[field] as string | undefined) || ''}
+      onChange={(value) =>
+        controller.dispatch({
+          type: 'patchFormData',
+          value: { [field]: (value as string) || null },
+        })
+      }
+      placeholder={controller.t('common:form.selectOption')}
+      searchable={false}
+    />
+  </div>
+);
+
+const ClientGeneralError: React.FC<{ controller: ClientsController }> = ({ controller }) => {
+  if (!controller.errors.general) return null;
+  return (
+    <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-xl flex items-center gap-3 text-red-600 dark:text-red-300">
+      <i className="fa-solid fa-circle-exclamation text-lg"></i>
+      <p className="text-sm font-bold">{controller.errors.general}</p>
+    </div>
+  );
+};
+
+const ClientDeleteDialog: React.FC<{ controller: ClientsController }> = ({ controller }) => (
+  <DeleteConfirmModal
+    isOpen={controller.isDeleteConfirmOpen}
+    onClose={() => controller.dispatch({ type: 'setIsDeleteConfirmOpen', value: false })}
+    onConfirm={() => {
+      void controller.handleDelete();
+    }}
+    title={controller.t('crm:clients.deleteClient')}
+    description={`${controller.t('common:messages.deleteConfirmNamed', {
+      name: controller.clientToDelete?.name,
+    })}${controller.t('crm:clients.deleteConfirm')}`}
+  />
+);
+
+const ClientsHeader: React.FC<{ controller: ClientsController }> = ({ controller }) => (
+  <div className="space-y-4">
+    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+      <div>
+        <h2 className="text-2xl font-semibold text-foreground">
+          {controller.t('crm:clients.title')}
+        </h2>
+        <p className="text-muted-foreground text-sm">{controller.t('crm:clients.subtitle')}</p>
+      </div>
+      {controller.canCreateClients && (
+        <HeaderAddButton onClick={controller.openAddModal}>
+          {controller.t('crm:clients.addClient')}
+        </HeaderAddButton>
+      )}
+    </div>
+  </div>
+);
 
 export default ClientsView;

@@ -105,6 +105,12 @@ const resolveRevenueSource = (activitiesSum: number): RevenueSource => {
   return 'manual';
 };
 
+const parseDraftNumber = (value: string, fallback = 0) => {
+  if (value.trim() === '') return fallback;
+  const parsed = Number.parseFloat(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+};
+
 export type AddProjectFormInput = {
   name: string;
   clientId: string;
@@ -285,7 +291,7 @@ const projectsViewReducer = (
   }
 };
 
-const ProjectsView: React.FC<ProjectsViewProps> = ({
+const useProjectsController = ({
   projects,
   clients,
   orders,
@@ -305,7 +311,7 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
   onNavigateToProject,
   activeTab,
   onTabChange,
-}) => {
+}: ProjectsViewProps) => {
   const { t, i18n } = useTranslation(['projects', 'common', 'form']);
   const canViewCommissions = hasScopedActionPermission(permissions, 'projects.manage', 'view');
   const canViewTasks = hasScopedActionPermission(permissions, 'projects.tasks', 'view');
@@ -651,11 +657,6 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
   const displayedRevenue = revenueBySource[revenueSource];
   const persistedRevenue = revenueSource === 'manual' && revenue ? parseFloat(revenue) : undefined;
 
-  const parseDraftNumber = (value: string, fallback = 0) => {
-    if (value.trim() === '') return fallback;
-    const parsed = Number.parseFloat(value);
-    return Number.isFinite(parsed) ? parsed : fallback;
-  };
   const formatDraftNumber = (value: number, minimumFractionDigits = 0) =>
     value.toLocaleString(i18n.language, {
       minimumFractionDigits,
@@ -1099,397 +1100,530 @@ const ProjectsView: React.FC<ProjectsViewProps> = ({
     },
   ];
 
-  return (
-    <div className="space-y-8 animate-in fade-in duration-500">
-      {/* Create Project Modal */}
-      <Modal isOpen={isModalOpen} onClose={closeModal}>
-        {() => (
-          <ModalContent size="2xl">
-            <form onSubmit={handleSubmit} className="flex min-h-0 flex-col">
-              <ModalHeader>
-                <ModalTitle className="gap-3">
-                  <span className="flex size-10 items-center justify-center rounded-md bg-muted text-primary">
-                    <i className="fa-solid fa-briefcase" aria-hidden="true"></i>
-                  </span>
-                  {t('projects:projects.createNewProject')}
-                </ModalTitle>
-                <ModalCloseButton onClick={closeModal} />
-              </ModalHeader>
+  return {
+    addDraftTask,
+    applyClientChange,
+    assignableUsers,
+    billingFrequency,
+    billingType,
+    canCreateProjects,
+    canManageAssignments,
+    canViewCommissions,
+    canViewTasks,
+    clearStaleClientLinks,
+    clientId,
+    clientOptions,
+    clients,
+    closeAssignments,
+    closeModal,
+    currency,
+    description,
+    dispatch,
+    displayedRevenue,
+    draftTaskColumns,
+    draftTasks,
+    endDate,
+    errors,
+    handleDelete,
+    handleSubmit,
+    handleTabChange,
+    isDeleteConfirmOpen,
+    isModalOpen,
+    managingProject,
+    managingProjectId,
+    name,
+    offerId,
+    offerOptions,
+    offers,
+    onAddTask,
+    onDeleteTask,
+    onNavigateToProject,
+    onUpdateTask,
+    onViewOrder,
+    openAddModal,
+    orderId,
+    orderOptions,
+    orders,
+    permissions,
+    projectColumns,
+    projectToDelete,
+    projects,
+    revenue,
+    revenueHintBySource,
+    revenueSource,
+    roles,
+    selectedOrder,
+    selectedTab,
+    startDate,
+    t,
+    tasks,
+    tipo,
+    translatedBillingFrequencyOptions,
+    translatedBillingTypeOptions,
+    translatedTipoOptions,
+    users,
+  };
+};
 
-              <ModalBody className="space-y-6">
-                <div className="space-y-4">
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <div className="space-y-1.5">
-                      <SelectControl
-                        id="project-order"
-                        options={orderOptions}
-                        value={orderId}
-                        onChange={(val) => {
-                          const nextOrderId = val as string;
-                          dispatch({ type: 'setOrderId', value: nextOrderId });
-                          if (errors.orderId)
-                            dispatch({ type: 'patchErrors', value: { orderId: '' } });
-                          const nextOrder = orders.find((o) => o.id === nextOrderId);
-                          if (!nextOrder) return;
-                          dispatch({ type: 'setClientId', value: nextOrder.clientId });
-                          if (errors.clientId)
-                            dispatch({ type: 'patchErrors', value: { clientId: '' } });
-                          clearStaleClientLinks(nextOrder.clientId, 'order');
-                        }}
-                        label={
-                          <>
-                            {t('projects:projects.order')} <RequiredMark />
-                          </>
-                        }
-                        placeholder={t('projects:projects.selectOrder')}
-                        searchable={true}
-                        buttonClassName="h-9"
-                      />
-                      <FieldError className="text-xs">{errors.orderId}</FieldError>
-                    </div>
-                    <div className="space-y-1.5">
-                      <SelectControl
-                        id="project-client"
-                        options={clientOptions}
-                        value={clientId}
-                        onChange={(val) => {
-                          applyClientChange(val as string);
-                        }}
-                        label={
-                          <>
-                            {t('projects:projects.client')} <RequiredMark />
-                          </>
-                        }
-                        placeholder={t('projects:projects.selectClient')}
-                        searchable={true}
-                        disabled={Boolean(selectedOrder)}
-                        buttonClassName="h-9"
-                      />
-                      <FieldError className="text-xs">{errors.clientId}</FieldError>
-                      {selectedOrder && (
-                        <div className="mt-1.5 flex items-center gap-2 rounded-md border border-border bg-muted/30 px-3 py-2">
-                          <i
-                            className="fa-solid fa-link text-xs text-muted-foreground"
-                            aria-hidden="true"
-                          ></i>
-                          <span className="text-xs text-muted-foreground">
-                            {t('projects:projects.inheritedClientLabel')}:
-                          </span>
-                          <span className="text-xs font-medium text-foreground">
-                            {selectedOrder.clientName}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                    <Field data-invalid={Boolean(errors.name)} className="md:col-span-2">
-                      <FieldLabel htmlFor="project-name">
-                        {t('projects:projects.name')} <RequiredMark />
-                      </FieldLabel>
-                      <Input
-                        id="project-name"
-                        type="text"
-                        required
-                        value={name}
-                        aria-invalid={Boolean(errors.name)}
-                        onChange={(e) => {
-                          dispatch({ type: 'setName', value: e.target.value });
-                          if (errors.name) dispatch({ type: 'patchErrors', value: { name: '' } });
-                        }}
-                        placeholder={t('projects:projects.projectNamePlaceholder')}
-                      />
-                      <FieldError className="text-xs">{errors.name}</FieldError>
-                    </Field>
-                  </div>
+type ProjectsController = ReturnType<typeof useProjectsController>;
 
-                  <Field>
-                    <FieldLabel htmlFor="project-description">
-                      {t('projects:projects.description')}
-                    </FieldLabel>
-                    <Textarea
-                      id="project-description"
-                      value={description}
-                      onChange={(e) => dispatch({ type: 'setDescription', value: e.target.value })}
-                      placeholder={t('projects:projects.descriptionPlaceholder')}
-                      rows={3}
-                      className="min-h-20 resize-none"
-                    />
-                  </Field>
+const ProjectsView: React.FC<ProjectsViewProps> = (props) => {
+  const controller = useProjectsController(props);
+  return <ProjectsLayout controller={controller} />;
+};
 
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <Field data-invalid={Boolean(errors.startDate || errors.dateRange)}>
-                      <FieldLabel htmlFor="project-start-date">
-                        {t('projects:projects.startDate')} <RequiredMark />
-                      </FieldLabel>
-                      <DateField
-                        id="project-start-date"
-                        required
-                        value={startDate}
-                        aria-invalid={Boolean(errors.startDate || errors.dateRange)}
-                        onChange={(value) => {
-                          dispatch({ type: 'setStartDate', value });
-                          if (errors.startDate || errors.dateRange) {
-                            dispatch({
-                              type: 'patchErrors',
-                              value: { startDate: '', dateRange: '' },
-                            });
-                          }
-                        }}
-                      />
-                      <FieldError className="text-xs">{errors.startDate}</FieldError>
-                    </Field>
-                    <Field data-invalid={Boolean(errors.endDate || errors.dateRange)}>
-                      <FieldLabel htmlFor="project-end-date">
-                        {t('projects:projects.endDate')} <RequiredMark />
-                      </FieldLabel>
-                      <DateField
-                        id="project-end-date"
-                        required
-                        value={endDate}
-                        aria-invalid={Boolean(errors.endDate || errors.dateRange)}
-                        onChange={(value) => {
-                          dispatch({ type: 'setEndDate', value });
-                          if (errors.endDate || errors.dateRange) {
-                            dispatch({
-                              type: 'patchErrors',
-                              value: { endDate: '', dateRange: '' },
-                            });
-                          }
-                        }}
-                      />
-                      <FieldError className="text-xs">{errors.endDate}</FieldError>
-                    </Field>
-                  </div>
-                  {errors.dateRange && (
-                    <FieldError className="text-xs">{errors.dateRange}</FieldError>
-                  )}
+const ProjectsLayout: React.FC<{ controller: ProjectsController }> = ({ controller }) => (
+  <div className="space-y-8 animate-in fade-in duration-500">
+    <CreateProjectModal controller={controller} />
+    <ProjectDeleteDialog controller={controller} />
+    <ProjectAssignmentDialog controller={controller} />
+    <ProjectsTabs controller={controller} />
+  </div>
+);
 
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <div className="space-y-1.5">
-                      <SelectControl
-                        id="project-offer"
-                        options={offerOptions}
-                        value={offerId}
-                        onChange={(val) => {
-                          const nextOfferId = val as string;
-                          dispatch({ type: 'setOfferId', value: nextOfferId });
-                          if (errors.offerId)
-                            dispatch({ type: 'patchErrors', value: { offerId: '' } });
-                          const nextOffer = offers.find((o) => o.id === nextOfferId);
-                          if (!nextOffer) return;
-                          if (nextOffer.clientId !== clientId) {
-                            dispatch({ type: 'setClientId', value: nextOffer.clientId });
-                            if (errors.clientId)
-                              dispatch({ type: 'patchErrors', value: { clientId: '' } });
-                          }
-                          clearStaleClientLinks(nextOffer.clientId, 'offer');
-                        }}
-                        label={t('projects:projects.offerOptionalLabel')}
-                        placeholder={t('projects:projects.selectOffer')}
-                        searchable={true}
-                        buttonClassName="h-9"
-                      />
-                      <FieldError className="text-xs">{errors.offerId}</FieldError>
-                    </div>
-                    <Field>
-                      <FieldLabel htmlFor="project-revenue">
-                        {`${t('projects:projects.projectRevenue')} (${currency})`}
-                      </FieldLabel>
-                      <Input
-                        id="project-revenue"
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        placeholder="0.00"
-                        value={revenueSource === 'manual' ? revenue : displayedRevenue.toFixed(2)}
-                        readOnly={revenueSource !== 'manual'}
-                        onChange={(e) => dispatch({ type: 'setRevenue', value: e.target.value })}
-                      />
-                      {revenueHintBySource[revenueSource] && (
-                        <FieldDescription className="text-xs">
-                          {revenueHintBySource[revenueSource]}
-                        </FieldDescription>
-                      )}
-                    </Field>
-                  </div>
+const CreateProjectModal: React.FC<{ controller: ProjectsController }> = ({ controller }) => (
+  <Modal isOpen={controller.isModalOpen} onClose={controller.closeModal}>
+    {() => (
+      <ModalContent size="2xl">
+        <form onSubmit={controller.handleSubmit} className="flex min-h-0 flex-col">
+          <ModalHeader>
+            <ModalTitle className="gap-3">
+              <span className="flex size-10 items-center justify-center rounded-md bg-muted text-primary">
+                <i className="fa-solid fa-briefcase" aria-hidden="true"></i>
+              </span>
+              {controller.t('projects:projects.createNewProject')}
+            </ModalTitle>
+            <ModalCloseButton onClick={controller.closeModal} />
+          </ModalHeader>
+          <ModalBody className="space-y-6">
+            <CreateProjectFormFields controller={controller} />
+          </ModalBody>
+          <ModalFooter className="sm:justify-between">
+            <Button type="button" variant="outline" onClick={controller.closeModal}>
+              {controller.t('common:buttons.cancel')}
+            </Button>
+            <Button type="submit" disabled={!controller.canCreateProjects}>
+              {controller.t('projects:projects.addProject')}
+            </Button>
+          </ModalFooter>
+        </form>
+      </ModalContent>
+    )}
+  </Modal>
+);
 
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <div className="space-y-1.5">
-                      <SelectControl
-                        id="project-tipo"
-                        options={translatedTipoOptions}
-                        value={tipo}
-                        onChange={(val) => {
-                          dispatch({ type: 'setTipo', value: val as ProjectTipo });
-                          if (errors.tipo) dispatch({ type: 'patchErrors', value: { tipo: '' } });
-                        }}
-                        label={
-                          <>
-                            {t('projects:projects.tipo')} <RequiredMark />
-                          </>
-                        }
-                        placeholder={t('projects:projects.selectTipo')}
-                        searchable={false}
-                        buttonClassName="h-9"
-                      />
-                      <FieldError className="text-xs">{errors.tipo}</FieldError>
-                    </div>
-                  </div>
+const CreateProjectFormFields: React.FC<{ controller: ProjectsController }> = ({
+  controller,
+}) => (
+  <div className="space-y-4">
+    <ProjectClientOrderFields controller={controller} />
+    <ProjectDescriptionField controller={controller} />
+    <ProjectDateFields controller={controller} />
+    <ProjectOfferRevenueFields controller={controller} />
+    <ProjectTipoField controller={controller} />
+    <ProjectBillingFields controller={controller} />
+    <ProjectDraftTasksTable controller={controller} />
+  </div>
+);
 
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <SelectControl
-                      id="project-billing-type"
-                      options={translatedBillingTypeOptions}
-                      value={billingType}
-                      onChange={(val) =>
-                        dispatch({ type: 'setBillingType', value: val as StoredBillingType })
-                      }
-                      label={t('projects:projects.billingType')}
-                      searchable={false}
-                      buttonClassName="h-9"
-                    />
-                    <SelectControl
-                      id="project-billing-frequency"
-                      options={translatedBillingFrequencyOptions}
-                      value={billingFrequency}
-                      onChange={(val) =>
-                        dispatch({ type: 'setBillingFrequency', value: val as BillingFrequency })
-                      }
-                      label={t('projects:projects.billingFrequency')}
-                      searchable={false}
-                      buttonClassName="h-9"
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <StandardTable<DraftTask>
-                      title={t('projects:projects.projectTasks')}
-                      data={draftTasks}
-                      columns={draftTaskColumns}
-                      defaultRowsPerPage={5}
-                      emptyState={
-                        <span className="text-xs italic text-muted-foreground">
-                          {t('projects:projects.noTasksAdded')}
-                        </span>
-                      }
-                      headerAction={
-                        <Button
-                          type="button"
-                          onClick={addDraftTask}
-                          size="sm"
-                          className={TABLE_CONTROL_BUTTON_CLASSNAME}
-                        >
-                          <i className="fa-solid fa-plus text-[10px]" aria-hidden="true"></i>
-                          {t('projects:projects.addTaskRow')}
-                        </Button>
-                      }
-                    />
-                  </div>
-                </div>
-              </ModalBody>
-
-              <ModalFooter className="sm:justify-between">
-                <Button type="button" variant="outline" onClick={closeModal}>
-                  {t('common:buttons.cancel')}
-                </Button>
-                <Button type="submit" disabled={!canCreateProjects}>
-                  {t('projects:projects.addProject')}
-                </Button>
-              </ModalFooter>
-            </form>
-          </ModalContent>
-        )}
-      </Modal>
-
-      <DeleteConfirmModal
-        isOpen={isDeleteConfirmOpen}
-        onClose={closeModal}
-        onConfirm={handleDelete}
-        title={t('projects:projects.deleteProjectTitle', { name: projectToDelete?.name })}
-        description={t('projects:projects.deleteConfirm')}
+const ProjectClientOrderFields: React.FC<{ controller: ProjectsController }> = ({
+  controller,
+}) => (
+  <div className="grid gap-4 md:grid-cols-2">
+    <div className="space-y-1.5">
+      <SelectControl
+        id="project-order"
+        options={controller.orderOptions}
+        value={controller.orderId}
+        onChange={(value) => {
+          const nextOrderId = value as string;
+          controller.dispatch({ type: 'setOrderId', value: nextOrderId });
+          if (controller.errors.orderId) {
+            controller.dispatch({ type: 'patchErrors', value: { orderId: '' } });
+          }
+          const nextOrder = controller.orders.find((order) => order.id === nextOrderId);
+          if (!nextOrder) return;
+          controller.dispatch({ type: 'setClientId', value: nextOrder.clientId });
+          if (controller.errors.clientId) {
+            controller.dispatch({ type: 'patchErrors', value: { clientId: '' } });
+          }
+          controller.clearStaleClientLinks(nextOrder.clientId, 'order');
+        }}
+        label={
+          <>
+            {controller.t('projects:projects.order')} <RequiredMark />
+          </>
+        }
+        placeholder={controller.t('projects:projects.selectOrder')}
+        searchable={true}
+        buttonClassName="h-9"
       />
-
-      <UserAssignmentModal
-        isOpen={!!managingProjectId}
-        onClose={closeAssignments}
-        users={assignableUsers}
-        roles={roles}
-        loadAssignedUserIds={(signal) => projectsApi.getUsers(managingProjectId as string, signal)}
-        saveAssignedUserIds={(ids) => projectsApi.updateUsers(managingProjectId as string, ids)}
-        entityLabel={t('projects:projects.entityLabel')}
-        entityName={managingProject?.name || ''}
-        disabled={!canManageAssignments}
-      />
-
-      <Tabs value={selectedTab} onValueChange={handleTabChange} className="space-y-6">
-        <TabsList variant="line" className="w-full justify-start overflow-x-auto border-b px-0">
-          {canViewCommissions && (
-            <TabsTrigger value="commissions" className="flex-none rounded-none pb-3">
-              <Folder className="size-4" aria-hidden="true" />
-              {t('projects:tabs.commissions')}
-            </TabsTrigger>
-          )}
-          {canViewTasks && (
-            <TabsTrigger value="tasks" className="flex-none rounded-none pb-3">
-              <ListChecks className="size-4" aria-hidden="true" />
-              {t('projects:tabs.tasks')}
-            </TabsTrigger>
-          )}
-        </TabsList>
-
-        {canViewCommissions && (
-          <TabsContent value="commissions" className="mt-0 space-y-8">
-            <div className="space-y-4">
-              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                <div>
-                  <h2 className="text-2xl font-semibold text-zinc-800">
-                    {t('projects:projects.title')}
-                  </h2>
-                  <p className="text-zinc-500 text-sm">{t('projects:projects.subtitle')}</p>
-                </div>
-                <div className="flex items-center gap-3">
-                  {canCreateProjects && (
-                    <HeaderAddButton onClick={openAddModal}>
-                      {t('projects:projects.addProject')}
-                    </HeaderAddButton>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            <StandardTable<Project>
-              title={t('projects:projects.projectsDirectory')}
-              viewKey="projects.directory"
-              defaultRowsPerPage={5}
-              data={projects}
-              onRowClick={onNavigateToProject ? (row) => onNavigateToProject(row.id) : undefined}
-              rowClassName={(row) =>
-                row.isDisabled ? 'opacity-70 grayscale hover:grayscale-0' : ''
-              }
-              columns={projectColumns}
-            />
-          </TabsContent>
-        )}
-
-        {canViewTasks && (
-          <TabsContent value="tasks" className="mt-0">
-            <TasksView
-              tasks={tasks}
-              projects={projects}
-              clients={clients}
-              permissions={permissions}
-              users={users}
-              roles={roles}
-              currency={currency}
-              onAddTask={onAddTask}
-              onUpdateTask={onUpdateTask}
-              onDeleteTask={onDeleteTask}
-              onViewOrder={onViewOrder}
-            />
-          </TabsContent>
-        )}
-      </Tabs>
+      <FieldError className="text-xs">{controller.errors.orderId}</FieldError>
     </div>
+    <div className="space-y-1.5">
+      <SelectControl
+        id="project-client"
+        options={controller.clientOptions}
+        value={controller.clientId}
+        onChange={(value) => controller.applyClientChange(value as string)}
+        label={
+          <>
+            {controller.t('projects:projects.client')} <RequiredMark />
+          </>
+        }
+        placeholder={controller.t('projects:projects.selectClient')}
+        searchable={true}
+        disabled={Boolean(controller.selectedOrder)}
+        buttonClassName="h-9"
+      />
+      <FieldError className="text-xs">{controller.errors.clientId}</FieldError>
+      {controller.selectedOrder && (
+        <div className="mt-1.5 flex items-center gap-2 rounded-md border border-border bg-muted/30 px-3 py-2">
+          <i className="fa-solid fa-link text-xs text-muted-foreground" aria-hidden="true"></i>
+          <span className="text-xs text-muted-foreground">
+            {controller.t('projects:projects.inheritedClientLabel')}:
+          </span>
+          <span className="text-xs font-medium text-foreground">
+            {controller.selectedOrder.clientName}
+          </span>
+        </div>
+      )}
+    </div>
+    <Field data-invalid={Boolean(controller.errors.name)} className="md:col-span-2">
+      <FieldLabel htmlFor="project-name">
+        {controller.t('projects:projects.name')} <RequiredMark />
+      </FieldLabel>
+      <Input
+        id="project-name"
+        type="text"
+        required
+        value={controller.name}
+        aria-invalid={Boolean(controller.errors.name)}
+        onChange={(event) => {
+          controller.dispatch({ type: 'setName', value: event.target.value });
+          if (controller.errors.name) {
+            controller.dispatch({ type: 'patchErrors', value: { name: '' } });
+          }
+        }}
+        placeholder={controller.t('projects:projects.projectNamePlaceholder')}
+      />
+      <FieldError className="text-xs">{controller.errors.name}</FieldError>
+    </Field>
+  </div>
+);
+
+const ProjectDescriptionField: React.FC<{ controller: ProjectsController }> = ({
+  controller,
+}) => (
+  <Field>
+    <FieldLabel htmlFor="project-description">
+      {controller.t('projects:projects.description')}
+    </FieldLabel>
+    <Textarea
+      id="project-description"
+      value={controller.description}
+      onChange={(event) =>
+        controller.dispatch({ type: 'setDescription', value: event.target.value })
+      }
+      placeholder={controller.t('projects:projects.descriptionPlaceholder')}
+      rows={3}
+      className="min-h-20 resize-none"
+    />
+  </Field>
+);
+
+const ProjectDateFields: React.FC<{ controller: ProjectsController }> = ({ controller }) => (
+  <>
+    <div className="grid gap-4 md:grid-cols-2">
+      <ProjectDateField controller={controller} field="startDate" />
+      <ProjectDateField controller={controller} field="endDate" />
+    </div>
+    {controller.errors.dateRange && (
+      <FieldError className="text-xs">{controller.errors.dateRange}</FieldError>
+    )}
+  </>
+);
+
+const ProjectDateField: React.FC<{
+  controller: ProjectsController;
+  field: 'startDate' | 'endDate';
+}> = ({ controller, field }) => {
+  const isStart = field === 'startDate';
+  const id = isStart ? 'project-start-date' : 'project-end-date';
+  const label = controller.t(isStart ? 'projects:projects.startDate' : 'projects:projects.endDate');
+  const value = isStart ? controller.startDate : controller.endDate;
+  const errorKey = isStart ? 'startDate' : 'endDate';
+  const actionType = isStart ? 'setStartDate' : 'setEndDate';
+
+  return (
+    <Field data-invalid={Boolean(controller.errors[errorKey] || controller.errors.dateRange)}>
+      <FieldLabel htmlFor={id}>
+        {label} <RequiredMark />
+      </FieldLabel>
+      <DateField
+        id={id}
+        required
+        value={value}
+        aria-invalid={Boolean(controller.errors[errorKey] || controller.errors.dateRange)}
+        onChange={(nextValue) => {
+          controller.dispatch({ type: actionType, value: nextValue } as ProjectsViewAction);
+          if (controller.errors[errorKey] || controller.errors.dateRange) {
+            controller.dispatch({
+              type: 'patchErrors',
+              value: { [errorKey]: '', dateRange: '' },
+            });
+          }
+        }}
+      />
+      <FieldError className="text-xs">{controller.errors[errorKey]}</FieldError>
+    </Field>
   );
 };
+
+const ProjectOfferRevenueFields: React.FC<{ controller: ProjectsController }> = ({
+  controller,
+}) => (
+  <div className="grid gap-4 md:grid-cols-2">
+    <div className="space-y-1.5">
+      <SelectControl
+        id="project-offer"
+        options={controller.offerOptions}
+        value={controller.offerId}
+        onChange={(value) => {
+          const nextOfferId = value as string;
+          controller.dispatch({ type: 'setOfferId', value: nextOfferId });
+          if (controller.errors.offerId) {
+            controller.dispatch({ type: 'patchErrors', value: { offerId: '' } });
+          }
+          const nextOffer = controller.offers.find((offer) => offer.id === nextOfferId);
+          if (!nextOffer) return;
+          if (nextOffer.clientId !== controller.clientId) {
+            controller.dispatch({ type: 'setClientId', value: nextOffer.clientId });
+            if (controller.errors.clientId) {
+              controller.dispatch({ type: 'patchErrors', value: { clientId: '' } });
+            }
+          }
+          controller.clearStaleClientLinks(nextOffer.clientId, 'offer');
+        }}
+        label={controller.t('projects:projects.offerOptionalLabel')}
+        placeholder={controller.t('projects:projects.selectOffer')}
+        searchable={true}
+        buttonClassName="h-9"
+      />
+      <FieldError className="text-xs">{controller.errors.offerId}</FieldError>
+    </div>
+    <Field>
+      <FieldLabel htmlFor="project-revenue">
+        {`${controller.t('projects:projects.projectRevenue')} (${controller.currency})`}
+      </FieldLabel>
+      <Input
+        id="project-revenue"
+        type="number"
+        min="0"
+        step="0.01"
+        placeholder="0.00"
+        value={
+          controller.revenueSource === 'manual'
+            ? controller.revenue
+            : controller.displayedRevenue.toFixed(2)
+        }
+        readOnly={controller.revenueSource !== 'manual'}
+        onChange={(event) =>
+          controller.dispatch({ type: 'setRevenue', value: event.target.value })
+        }
+      />
+      {controller.revenueHintBySource[controller.revenueSource] && (
+        <FieldDescription className="text-xs">
+          {controller.revenueHintBySource[controller.revenueSource]}
+        </FieldDescription>
+      )}
+    </Field>
+  </div>
+);
+
+const ProjectTipoField: React.FC<{ controller: ProjectsController }> = ({ controller }) => (
+  <div className="grid gap-4 md:grid-cols-2">
+    <div className="space-y-1.5">
+      <SelectControl
+        id="project-tipo"
+        options={controller.translatedTipoOptions}
+        value={controller.tipo}
+        onChange={(value) => {
+          controller.dispatch({ type: 'setTipo', value: value as ProjectTipo });
+          if (controller.errors.tipo) {
+            controller.dispatch({ type: 'patchErrors', value: { tipo: '' } });
+          }
+        }}
+        label={
+          <>
+            {controller.t('projects:projects.tipo')} <RequiredMark />
+          </>
+        }
+        placeholder={controller.t('projects:projects.selectTipo')}
+        searchable={false}
+        buttonClassName="h-9"
+      />
+      <FieldError className="text-xs">{controller.errors.tipo}</FieldError>
+    </div>
+  </div>
+);
+
+const ProjectBillingFields: React.FC<{ controller: ProjectsController }> = ({ controller }) => (
+  <div className="grid gap-4 md:grid-cols-2">
+    <SelectControl
+      id="project-billing-type"
+      options={controller.translatedBillingTypeOptions}
+      value={controller.billingType}
+      onChange={(value) =>
+        controller.dispatch({ type: 'setBillingType', value: value as StoredBillingType })
+      }
+      label={controller.t('projects:projects.billingType')}
+      searchable={false}
+      buttonClassName="h-9"
+    />
+    <SelectControl
+      id="project-billing-frequency"
+      options={controller.translatedBillingFrequencyOptions}
+      value={controller.billingFrequency}
+      onChange={(value) =>
+        controller.dispatch({ type: 'setBillingFrequency', value: value as BillingFrequency })
+      }
+      label={controller.t('projects:projects.billingFrequency')}
+      searchable={false}
+      buttonClassName="h-9"
+    />
+  </div>
+);
+
+const ProjectDraftTasksTable: React.FC<{ controller: ProjectsController }> = ({ controller }) => (
+  <div className="space-y-2">
+    <StandardTable<DraftTask>
+      title={controller.t('projects:projects.projectTasks')}
+      data={controller.draftTasks}
+      columns={controller.draftTaskColumns}
+      defaultRowsPerPage={5}
+      emptyState={
+        <span className="text-xs italic text-muted-foreground">
+          {controller.t('projects:projects.noTasksAdded')}
+        </span>
+      }
+      headerAction={
+        <Button
+          type="button"
+          onClick={controller.addDraftTask}
+          size="sm"
+          className={TABLE_CONTROL_BUTTON_CLASSNAME}
+        >
+          <i className="fa-solid fa-plus text-[10px]" aria-hidden="true"></i>
+          {controller.t('projects:projects.addTaskRow')}
+        </Button>
+      }
+    />
+  </div>
+);
+
+const ProjectDeleteDialog: React.FC<{ controller: ProjectsController }> = ({ controller }) => (
+  <DeleteConfirmModal
+    isOpen={controller.isDeleteConfirmOpen}
+    onClose={controller.closeModal}
+    onConfirm={controller.handleDelete}
+    title={controller.t('projects:projects.deleteProjectTitle', {
+      name: controller.projectToDelete?.name,
+    })}
+    description={controller.t('projects:projects.deleteConfirm')}
+  />
+);
+
+const ProjectAssignmentDialog: React.FC<{ controller: ProjectsController }> = ({
+  controller,
+}) => (
+  <UserAssignmentModal
+    isOpen={!!controller.managingProjectId}
+    onClose={controller.closeAssignments}
+    users={controller.assignableUsers}
+    roles={controller.roles}
+    loadAssignedUserIds={(signal) => projectsApi.getUsers(controller.managingProjectId as string, signal)}
+    saveAssignedUserIds={(ids) => projectsApi.updateUsers(controller.managingProjectId as string, ids)}
+    entityLabel={controller.t('projects:projects.entityLabel')}
+    entityName={controller.managingProject?.name || ''}
+    disabled={!controller.canManageAssignments}
+  />
+);
+
+const ProjectsTabs: React.FC<{ controller: ProjectsController }> = ({ controller }) => (
+  <Tabs value={controller.selectedTab} onValueChange={controller.handleTabChange} className="space-y-6">
+    <TabsList variant="line" className="w-full justify-start overflow-x-auto border-b px-0">
+      {controller.canViewCommissions && (
+        <TabsTrigger value="commissions" className="flex-none rounded-none pb-3">
+          <Folder className="size-4" aria-hidden="true" />
+          {controller.t('projects:tabs.commissions')}
+        </TabsTrigger>
+      )}
+      {controller.canViewTasks && (
+        <TabsTrigger value="tasks" className="flex-none rounded-none pb-3">
+          <ListChecks className="size-4" aria-hidden="true" />
+          {controller.t('projects:tabs.tasks')}
+        </TabsTrigger>
+      )}
+    </TabsList>
+    {controller.canViewCommissions && <ProjectsCommissionsTab controller={controller} />}
+    {controller.canViewTasks && <ProjectsTasksTab controller={controller} />}
+  </Tabs>
+);
+
+const ProjectsCommissionsTab: React.FC<{ controller: ProjectsController }> = ({
+  controller,
+}) => (
+  <TabsContent value="commissions" className="mt-0 space-y-8">
+    <div className="space-y-4">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+          <h2 className="text-2xl font-semibold text-zinc-800">
+            {controller.t('projects:projects.title')}
+          </h2>
+          <p className="text-zinc-500 text-sm">{controller.t('projects:projects.subtitle')}</p>
+        </div>
+        <div className="flex items-center gap-3">
+          {controller.canCreateProjects && (
+            <HeaderAddButton onClick={controller.openAddModal}>
+              {controller.t('projects:projects.addProject')}
+            </HeaderAddButton>
+          )}
+        </div>
+      </div>
+    </div>
+    <StandardTable<Project>
+      title={controller.t('projects:projects.projectsDirectory')}
+      viewKey="projects.directory"
+      defaultRowsPerPage={5}
+      data={controller.projects}
+      onRowClick={
+        controller.onNavigateToProject
+          ? (row) => controller.onNavigateToProject?.(row.id)
+          : undefined
+      }
+      rowClassName={(row) => (row.isDisabled ? 'opacity-70 grayscale hover:grayscale-0' : '')}
+      columns={controller.projectColumns}
+    />
+  </TabsContent>
+);
+
+const ProjectsTasksTab: React.FC<{ controller: ProjectsController }> = ({ controller }) => (
+  <TabsContent value="tasks" className="mt-0">
+    <TasksView
+      tasks={controller.tasks}
+      projects={controller.projects}
+      clients={controller.clients}
+      permissions={controller.permissions}
+      users={controller.users}
+      roles={controller.roles}
+      currency={controller.currency}
+      onAddTask={controller.onAddTask}
+      onUpdateTask={controller.onUpdateTask}
+      onDeleteTask={controller.onDeleteTask}
+      onViewOrder={controller.onViewOrder}
+    />
+  </TabsContent>
+);
 
 export default ProjectsView;

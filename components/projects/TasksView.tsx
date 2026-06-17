@@ -117,80 +117,38 @@ export interface TasksViewProps {
   onViewOrder?: (orderId: string) => void;
 }
 
-const TasksView: React.FC<TasksViewProps> = ({
-  tasks,
+type TaskColumnsInput = {
+  projects: Project[];
+  clients: Client[];
+  canUpdateTasks: boolean;
+  canDeleteTasks: boolean;
+  currency: string;
+  taskHours: Record<string, Record<string, number>> | null;
+  hoursLoadState: TaskHoursLoadState;
+  onUpdateTask: (id: string, updates: Partial<ProjectTask>) => void | Promise<void>;
+  onOpenAssignments: (taskId: string) => void;
+  onOpenEdit: (task: ProjectTask) => void;
+  onConfirmDelete: (task?: ProjectTask) => void;
+  formatBillingType: (value: ProjectTask['billingType']) => string;
+  formatBillingFrequency: (value: BillingFrequency | undefined) => string;
+};
+
+const useTaskColumns = ({
   projects,
   clients,
-  permissions,
-  users,
-  roles,
+  canUpdateTasks,
+  canDeleteTasks,
   currency,
-  onAddTask,
+  taskHours,
+  hoursLoadState,
   onUpdateTask,
-  onDeleteTask,
-  onViewOrder,
-}) => {
+  onOpenAssignments,
+  onOpenEdit,
+  onConfirmDelete,
+  formatBillingType,
+  formatBillingFrequency,
+}: TaskColumnsInput): Column<ProjectTask>[] => {
   const { t, i18n } = useTranslation(['projects', 'common']);
-  const canCreateTasks = hasScopedActionPermission(permissions, 'projects.tasks', 'create');
-  const canUpdateTasks = hasScopedActionPermission(permissions, 'projects.tasks', 'update');
-  const canDeleteTasks = hasScopedActionPermission(permissions, 'projects.tasks', 'delete');
-  const [state, dispatch] = useReducer(tasksViewReducer, undefined, createTasksViewState);
-  const {
-    editingTask,
-    isModalOpen,
-    isDeleteConfirmOpen,
-    isDeleting,
-    managingTaskId,
-    taskHours,
-    hoursLoadState,
-  } = state;
-  const fetchHoursGenRef = useRef(0);
-
-  const projectIds = useMemo(() => projects.map((p) => p.id), [projects]);
-  const projectIdsKey = useMemo(() => projectIds.join('\u0000'), [projectIds]);
-  const loadedProjectIdsKeyRef = useRef(projectIdsKey);
-  if (loadedProjectIdsKeyRef.current !== projectIdsKey) {
-    loadedProjectIdsKeyRef.current = projectIdsKey;
-    dispatch({ type: 'resetHours', hasProjects: projectIds.length > 0 });
-  }
-  const translatedBillingTypeOptions = useBillingTypeOptions();
-  const translatedBillingFrequencyOptions = useBillingFrequencyOptions();
-  const formatBillingType = useCallback(
-    (value: ProjectTask['billingType']) =>
-      translatedBillingTypeOptions.find((option) => option.id === value)?.name ?? '-',
-    [translatedBillingTypeOptions],
-  );
-  const formatBillingFrequency = useCallback(
-    (value: BillingFrequency | undefined) =>
-      translatedBillingFrequencyOptions.find((option) => option.id === value)?.name ?? '-',
-    [translatedBillingFrequencyOptions],
-  );
-
-  useEffect(() => {
-    if (!projectIdsKey) return;
-    const requestProjectIds = projectIdsKey.split('\u0000');
-    const gen = ++fetchHoursGenRef.current;
-    const abortController = new AbortController();
-    (async () => {
-      try {
-        const map = await tasksApi.getHoursForProjects(requestProjectIds, abortController.signal);
-        if (fetchHoursGenRef.current === gen) {
-          dispatch({ type: 'hoursSuccess', taskHours: map });
-        }
-      } catch (e) {
-        if (!abortController.signal.aborted) {
-          console.error('Failed to load task hours', e);
-          if (fetchHoursGenRef.current === gen) {
-            dispatch({ type: 'hoursError' });
-          }
-        }
-      }
-    })();
-    return () => {
-      abortController.abort();
-    };
-  }, [projectIdsKey]);
-
   const checkInheritedDisabled = useCallback(
     (task: ProjectTask) => {
       const project = projects.find((p) => p.id === task.projectId);
@@ -200,37 +158,7 @@ const TasksView: React.FC<TasksViewProps> = ({
     [projects, clients],
   );
 
-  const openAddModal = useCallback(() => {
-    if (!canCreateTasks) return;
-    dispatch({ type: 'openAdd' });
-  }, [canCreateTasks]);
-
-  const openEditModal = useCallback(
-    (task: ProjectTask) => {
-      if (!canUpdateTasks) return;
-      dispatch({ type: 'openEdit', task });
-    },
-    [canUpdateTasks],
-  );
-
-  const confirmDelete = useCallback(
-    (task?: ProjectTask) => {
-      if (!canDeleteTasks) return;
-      dispatch({ type: 'confirmDelete', task });
-    },
-    [canDeleteTasks],
-  );
-
-  const openAssignments = useCallback(
-    (taskId: string) => {
-      if (!canUpdateTasks) return;
-      dispatch({ type: 'manageTask', taskId });
-    },
-    [canUpdateTasks],
-  );
-
-  // Column definitions for StandardTable
-  const columns: Column<ProjectTask>[] = useMemo(
+  return useMemo(
     () => [
       {
         header: t('common:labels.client'),
@@ -495,7 +423,7 @@ const TasksView: React.FC<TasksViewProps> = ({
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
-                            openAssignments(row.id);
+                            onOpenAssignments(row.id);
                           }}
                           aria-label={t('tasks.manageMembers')}
                           className="p-2 text-zinc-400 hover:text-praetor hover:bg-zinc-100 rounded-lg transition-all"
@@ -513,7 +441,7 @@ const TasksView: React.FC<TasksViewProps> = ({
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
-                            openEditModal(row);
+                            onOpenEdit(row);
                           }}
                           aria-label={t('tasks.editTask')}
                           className="p-2 text-zinc-400 hover:text-praetor hover:bg-zinc-100 rounded-lg transition-all"
@@ -564,7 +492,7 @@ const TasksView: React.FC<TasksViewProps> = ({
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
-                          confirmDelete(row);
+                          onConfirmDelete(row);
                         }}
                         aria-label={t('common:buttons.delete')}
                         className="p-2 text-red-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
@@ -589,9 +517,9 @@ const TasksView: React.FC<TasksViewProps> = ({
       canDeleteTasks,
       onUpdateTask,
       checkInheritedDisabled,
-      confirmDelete,
-      openAssignments,
-      openEditModal,
+      onConfirmDelete,
+      onOpenAssignments,
+      onOpenEdit,
       currency,
       taskHours,
       hoursLoadState,
@@ -600,6 +528,126 @@ const TasksView: React.FC<TasksViewProps> = ({
       formatBillingFrequency,
     ],
   );
+};
+
+const TasksView: React.FC<TasksViewProps> = ({
+  tasks,
+  projects,
+  clients,
+  permissions,
+  users,
+  roles,
+  currency,
+  onAddTask,
+  onUpdateTask,
+  onDeleteTask,
+  onViewOrder,
+}) => {
+  const { t, i18n } = useTranslation(['projects', 'common']);
+  const canCreateTasks = hasScopedActionPermission(permissions, 'projects.tasks', 'create');
+  const canUpdateTasks = hasScopedActionPermission(permissions, 'projects.tasks', 'update');
+  const canDeleteTasks = hasScopedActionPermission(permissions, 'projects.tasks', 'delete');
+  const [state, dispatch] = useReducer(tasksViewReducer, undefined, createTasksViewState);
+  const {
+    editingTask,
+    isModalOpen,
+    isDeleteConfirmOpen,
+    isDeleting,
+    managingTaskId,
+    taskHours,
+    hoursLoadState,
+  } = state;
+  const fetchHoursGenRef = useRef(0);
+
+  const projectIds = useMemo(() => projects.map((p) => p.id), [projects]);
+  const projectIdsKey = useMemo(() => projectIds.join('\u0000'), [projectIds]);
+  const loadedProjectIdsKeyRef = useRef(projectIdsKey);
+  if (loadedProjectIdsKeyRef.current !== projectIdsKey) {
+    loadedProjectIdsKeyRef.current = projectIdsKey;
+    dispatch({ type: 'resetHours', hasProjects: projectIds.length > 0 });
+  }
+  const translatedBillingTypeOptions = useBillingTypeOptions();
+  const translatedBillingFrequencyOptions = useBillingFrequencyOptions();
+  const formatBillingType = useCallback(
+    (value: ProjectTask['billingType']) =>
+      translatedBillingTypeOptions.find((option) => option.id === value)?.name ?? '-',
+    [translatedBillingTypeOptions],
+  );
+  const formatBillingFrequency = useCallback(
+    (value: BillingFrequency | undefined) =>
+      translatedBillingFrequencyOptions.find((option) => option.id === value)?.name ?? '-',
+    [translatedBillingFrequencyOptions],
+  );
+
+  useEffect(() => {
+    if (!projectIdsKey) return;
+    const requestProjectIds = projectIdsKey.split('\u0000');
+    const gen = ++fetchHoursGenRef.current;
+    const abortController = new AbortController();
+    (async () => {
+      try {
+        const map = await tasksApi.getHoursForProjects(requestProjectIds, abortController.signal);
+        if (fetchHoursGenRef.current === gen) {
+          dispatch({ type: 'hoursSuccess', taskHours: map });
+        }
+      } catch (e) {
+        if (!abortController.signal.aborted) {
+          console.error('Failed to load task hours', e);
+          if (fetchHoursGenRef.current === gen) {
+            dispatch({ type: 'hoursError' });
+          }
+        }
+      }
+    })();
+    return () => {
+      abortController.abort();
+    };
+  }, [projectIdsKey]);
+
+  const openAddModal = useCallback(() => {
+    if (!canCreateTasks) return;
+    dispatch({ type: 'openAdd' });
+  }, [canCreateTasks]);
+
+  const openEditModal = useCallback(
+    (task: ProjectTask) => {
+      if (!canUpdateTasks) return;
+      dispatch({ type: 'openEdit', task });
+    },
+    [canUpdateTasks],
+  );
+
+  const confirmDelete = useCallback(
+    (task?: ProjectTask) => {
+      if (!canDeleteTasks) return;
+      dispatch({ type: 'confirmDelete', task });
+    },
+    [canDeleteTasks],
+  );
+
+  const openAssignments = useCallback(
+    (taskId: string) => {
+      if (!canUpdateTasks) return;
+      dispatch({ type: 'manageTask', taskId });
+    },
+    [canUpdateTasks],
+  );
+
+  const columns = useTaskColumns({
+    projects,
+    clients,
+    canUpdateTasks,
+    canDeleteTasks,
+    currency,
+    taskHours,
+    hoursLoadState,
+    onUpdateTask,
+    onOpenAssignments: openAssignments,
+    onOpenEdit: openEditModal,
+    onConfirmDelete: confirmDelete,
+    formatBillingType,
+    formatBillingFrequency,
+  });
 
   const closeModal = () => {
     dispatch({ type: 'closeAll' });

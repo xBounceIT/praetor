@@ -218,7 +218,7 @@ const classifyEdit = (base: DayCell | undefined, edit: DayCell): EditClassificat
   return newDuration > 0 ? 'add' : 'noop';
 };
 
-const WeeklyView: React.FC<WeeklyViewProps> = ({
+const useWeeklyController = ({
   entries,
   clients,
   projects,
@@ -237,7 +237,7 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
   allowWeekendSelection = false,
   defaultLocation = 'remote',
   dailyGoal,
-}) => {
+}: WeeklyViewProps) => {
   const { t } = useTranslation('timesheets');
 
   const currentWeekStart = useMemo(
@@ -730,280 +730,391 @@ const WeeklyView: React.FC<WeeklyViewProps> = ({
     downloadCsv(rows, `weekly_timesheet_${getLocalDateString(currentWeekStart)}.csv`);
   };
 
-  return (
-    <div className="w-full xl:w-[calc(45%+300px+1.5rem)] xl:mx-auto space-y-6">
-      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_300px] gap-6 items-start xl:items-stretch">
-        <WeeklyEntryForm
-          selectedDate={selectedDate}
-          selection={selection}
-          weekNote={weekNote}
-          errors={errors}
-          onWeekNoteChange={setWeekNote}
-          onClearError={clearError}
-          clients={selectableCatalogs.clients}
-          projects={selectableCatalogs.projects}
-          permissions={permissions}
-          currency={currency}
-          onAddCustomTask={onAddCustomTask}
-          defaultLocation={defaultLocation}
-          onSubmit={handleSubmit}
-          isSubmitting={isLoading}
-          showSubmitSuccess={showSuccess}
-          canSubmit={hasPendingEdits}
-        />
-
-        <div className="w-full xl:max-w-[300px] xl:h-full">
-          <Calendar
-            selectedDate={selectedDate}
-            onDateSelect={onSelectedDateChange}
-            entries={userEntries}
-            startOfWeek={startOfWeek}
-            treatSaturdayAsHoliday={treatSaturdayAsHoliday}
-            dailyGoal={dailyGoal}
-            allowWeekendSelection={allowWeekendSelection}
-            size="compact"
-          />
-        </div>
-      </div>
-
-      <div className="rounded-lg border border-border bg-background shadow-sm p-5">
-        <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 mb-4">
-          <div className="flex flex-wrap items-baseline gap-x-6 gap-y-1">
-            <div className="flex items-baseline gap-2">
-              <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
-                {t('weekly.weekTotal')}
-              </span>
-              <span
-                className={cn(
-                  'text-lg font-black transition-colors',
-                  weekTotal > weeklyGoal ? 'text-destructive' : 'text-praetor',
-                )}
-              >
-                {weekTotal.toFixed(2)} h
-              </span>
-            </div>
-            <div className="flex items-baseline gap-2">
-              <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
-                {t('weekly.monthTotal')}
-              </span>
-              <span className="text-lg font-black text-foreground">{monthTotal.toFixed(2)} h</span>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span className="inline-flex">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    aria-label={t('common:table.exportToCsv')}
-                    onClick={handleExportToCsv}
-                    className={TABLE_CONTROL_BUTTON_CLASSNAME}
-                  >
-                    <i className="fa-solid fa-file-export text-xs" aria-hidden="true"></i>
-                    <span>{t('common:table.export')}</span>
-                  </Button>
-                </span>
-              </TooltipTrigger>
-              <TooltipContent side="bottom">{t('common:table.exportToCsv')}</TooltipContent>
-            </Tooltip>
-
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span className="inline-flex">
-                  <Button
-                    type="button"
-                    variant={hideWeekend ? 'secondary' : 'outline'}
-                    size="sm"
-                    aria-label={t('weekly.hideWeekend')}
-                    aria-pressed={hideWeekend}
-                    onClick={() => setHideWeekend((v) => !v)}
-                    className={TABLE_CONTROL_BUTTON_CLASSNAME}
-                  >
-                    {hideWeekend ? (
-                      <EyeOff className="size-3.5" aria-hidden="true" />
-                    ) : (
-                      <Eye className="size-3.5" aria-hidden="true" />
-                    )}
-                  </Button>
-                </span>
-              </TooltipTrigger>
-              <TooltipContent side="bottom">{t('weekly.hideWeekend')}</TooltipContent>
-            </Tooltip>
-          </div>
-        </div>
-
-        <div className="-mx-5 -mb-5 overflow-x-auto">
-          <Table className="border-collapse">
-            <TableHeader className="bg-muted/40">
-              <TableRow className="border-b border-border">
-                <TableHead className="px-4 py-3 min-w-56" />
-
-                {visibleWeekDays.map((day) => (
-                  <TableHead
-                    key={day.dateStr}
-                    className={cn(
-                      'min-w-28 px-2 py-2 text-center relative align-middle',
-                      day.isToday && 'bg-accent',
-                      day.isWeekendOrHoliday && 'bg-destructive/5',
-                    )}
-                  >
-                    <div
-                      className={cn(
-                        'flex items-center justify-center gap-1 text-[10px] font-black uppercase',
-                        day.isToday
-                          ? 'text-praetor'
-                          : day.isWeekendOrHoliday
-                            ? 'text-destructive'
-                            : 'text-muted-foreground',
-                      )}
-                    >
-                      {t(`weekly.days.${day.dayKey}`)}
-                      {day.holidayName && (
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <span className="inline-flex">
-                              <span className="size-1.5 bg-destructive rounded-full animate-pulse block"></span>
-                            </span>
-                          </TooltipTrigger>
-                          <TooltipContent>{day.holidayName}</TooltipContent>
-                        </Tooltip>
-                      )}
-                    </div>
-                    <p
-                      className={cn(
-                        'text-sm font-black leading-none mt-0.5',
-                        day.isToday
-                          ? 'text-praetor'
-                          : day.isWeekendOrHoliday
-                            ? 'text-destructive'
-                            : 'text-foreground',
-                      )}
-                    >
-                      {day.dayNum}
-                    </p>
-                  </TableHead>
-                ))}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              <TableRow className="bg-praetor/5 hover:bg-praetor/10">
-                <TableCell className="px-4 py-3 align-top whitespace-normal">
-                  <p className="text-[10px] font-bold text-praetor uppercase tracking-wider mb-2">
-                    {t('weekly.newEntry')}
-                  </p>
-                  <WeeklyRowLabel
-                    clientName={formSelectionLabels.clientName}
-                    projectName={formSelectionLabels.projectName}
-                    taskName={formSelectionLabels.taskName}
-                  />
-                </TableCell>
-                {visibleWeekDays.map((day) => {
-                  const cell = getCellValue(FORM_ROW_KEY, day.dateStr, EMPTY_DAY_MAP);
-                  return (
-                    <TableCell
-                      key={day.dateStr}
-                      className={cn(
-                        'min-w-28 px-2 py-3 align-top',
-                        day.isToday && 'bg-accent/60',
-                        day.isWeekendOrHoliday && 'bg-destructive/5',
-                      )}
-                    >
-                      <WeeklyDayCellInputs
-                        rowKey={FORM_ROW_KEY}
-                        day={day}
-                        cell={cell}
-                        notePlaceholder={t('weekly.note')}
-                        onUpdate={updateCell}
-                      />
-                    </TableCell>
-                  );
-                })}
-              </TableRow>
-              <TableRow className="hover:bg-transparent border-b-0">
-                <TableCell colSpan={1 + visibleWeekDays.length} className="h-6 p-0" />
-              </TableRow>
-            </TableBody>
-            <TableBody className="divide-y divide-border border-t-[3px] border-t-border">
-              {entryRows.length === 0 ? (
-                <TableRow>
-                  <TableCell
-                    colSpan={1 + visibleWeekDays.length}
-                    className="px-4 py-6 text-center text-xs text-muted-foreground"
-                  >
-                    {t('weekly.noRecentTasks')}
-                  </TableCell>
-                </TableRow>
-              ) : (
-                entryRows.map((row) => (
-                  <TableRow key={row.key} className="hover:bg-muted/30">
-                    <TableCell className="px-4 py-3 align-middle whitespace-normal">
-                      <WeeklyRowLabel
-                        clientName={row.clientName}
-                        projectName={row.projectName}
-                        taskName={row.taskName}
-                      />
-                    </TableCell>
-                    {visibleWeekDays.map((day) => {
-                      const cell = getCellValue(row.key, day.dateStr, row.baseDays);
-                      return (
-                        <TableCell
-                          key={day.dateStr}
-                          className={cn(
-                            'min-w-28 px-2 py-3 align-top',
-                            day.isToday && 'bg-accent/60',
-                            day.isWeekendOrHoliday && 'bg-destructive/5',
-                            showSuccess && parseDuration(cell.duration) > 0 && 'bg-emerald-500/10',
-                          )}
-                        >
-                          <WeeklyDayCellInputs
-                            rowKey={row.key}
-                            day={day}
-                            cell={cell}
-                            baseCell={row.baseDays[day.dateStr]}
-                            notePlaceholder={t('weekly.note')}
-                            onUpdate={updateCell}
-                          />
-                        </TableCell>
-                      );
-                    })}
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-            <TableFooter className="bg-muted/30">
-              <TableRow className="border-t border-border">
-                <TableCell className="px-4 py-3 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
-                  {t('weekly.total')}
-                </TableCell>
-                {visibleWeekDays.map((day) => (
-                  <TableCell
-                    key={day.dateStr}
-                    className={cn(
-                      'min-w-28 px-2 py-3 text-center',
-                      day.isToday && 'bg-accent',
-                      day.isWeekendOrHoliday && 'bg-destructive/5',
-                    )}
-                  >
-                    <p
-                      className={cn(
-                        'text-sm font-black',
-                        dayTotals[day.dateStr] > dailyGoal ? 'text-destructive' : 'text-praetor',
-                      )}
-                    >
-                      {dayTotals[day.dateStr].toFixed(1)}
-                    </p>
-                  </TableCell>
-                ))}
-              </TableRow>
-            </TableFooter>
-          </Table>
-        </div>
-      </div>
-    </div>
-  );
+  return {
+    allowWeekendSelection,
+    clearError,
+    currency,
+    dailyGoal,
+    dayTotals,
+    defaultLocation,
+    entryRows,
+    errors,
+    formSelectionLabels,
+    getCellValue,
+    handleExportToCsv,
+    handleSubmit,
+    hasPendingEdits,
+    hideWeekend,
+    isLoading,
+    monthTotal,
+    onAddCustomTask,
+    onSelectedDateChange,
+    permissions,
+    selectableCatalogs,
+    selectedDate,
+    selection,
+    setHideWeekend,
+    setWeekNote,
+    showSuccess,
+    startOfWeek,
+    t,
+    treatSaturdayAsHoliday,
+    updateCell,
+    userEntries,
+    visibleWeekDays,
+    weekNote,
+    weeklyGoal,
+    weekTotal,
+  };
 };
+
+type WeeklyController = ReturnType<typeof useWeeklyController>;
+
+const WeeklyView: React.FC<WeeklyViewProps> = (props) => {
+  const controller = useWeeklyController(props);
+  return <WeeklyViewLayout controller={controller} />;
+};
+
+const WeeklyViewLayout: React.FC<{ controller: WeeklyController }> = ({ controller }) => (
+  <div className="w-full space-y-6 xl:mx-auto xl:w-[calc(45%+300px+1.5rem)]">
+    <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-[minmax(0,1fr)_300px] xl:items-stretch">
+      <WeeklyEntryFormPane controller={controller} />
+      <WeeklyCalendarPane controller={controller} />
+    </div>
+    <WeeklyGridPanel controller={controller} />
+  </div>
+);
+
+const WeeklyEntryFormPane: React.FC<{ controller: WeeklyController }> = ({ controller }) => (
+  <WeeklyEntryForm
+    selectedDate={controller.selectedDate}
+    selection={controller.selection}
+    weekNote={controller.weekNote}
+    errors={controller.errors}
+    onWeekNoteChange={controller.setWeekNote}
+    onClearError={controller.clearError}
+    clients={controller.selectableCatalogs.clients}
+    projects={controller.selectableCatalogs.projects}
+    permissions={controller.permissions}
+    currency={controller.currency}
+    onAddCustomTask={controller.onAddCustomTask}
+    defaultLocation={controller.defaultLocation}
+    onSubmit={controller.handleSubmit}
+    isSubmitting={controller.isLoading}
+    showSubmitSuccess={controller.showSuccess}
+    canSubmit={controller.hasPendingEdits}
+  />
+);
+
+const WeeklyCalendarPane: React.FC<{ controller: WeeklyController }> = ({ controller }) => (
+  <div className="w-full xl:h-full xl:max-w-[300px]">
+    <Calendar
+      selectedDate={controller.selectedDate}
+      onDateSelect={controller.onSelectedDateChange}
+      entries={controller.userEntries}
+      startOfWeek={controller.startOfWeek}
+      treatSaturdayAsHoliday={controller.treatSaturdayAsHoliday}
+      dailyGoal={controller.dailyGoal}
+      allowWeekendSelection={controller.allowWeekendSelection}
+      size="compact"
+    />
+  </div>
+);
+
+const WeeklyGridPanel: React.FC<{ controller: WeeklyController }> = ({ controller }) => (
+  <div className="rounded-lg border border-border bg-background p-5 shadow-sm">
+    <WeeklyGridToolbar controller={controller} />
+    <WeeklyGridTable controller={controller} />
+  </div>
+);
+
+const WeeklyGridToolbar: React.FC<{ controller: WeeklyController }> = ({ controller }) => (
+  <div className="mb-4 flex flex-wrap items-center justify-between gap-x-6 gap-y-2">
+    <div className="flex flex-wrap items-baseline gap-x-6 gap-y-1">
+      <WeeklyTotalMetric
+        label={controller.t('weekly.weekTotal')}
+        value={`${controller.weekTotal.toFixed(2)} h`}
+        isOverGoal={controller.weekTotal > controller.weeklyGoal}
+      />
+      <WeeklyTotalMetric label={controller.t('weekly.monthTotal')} value={`${controller.monthTotal.toFixed(2)} h`} />
+    </div>
+    <WeeklyGridActions controller={controller} />
+  </div>
+);
+
+const WeeklyTotalMetric: React.FC<{ label: string; value: string; isOverGoal?: boolean }> = ({
+  label,
+  value,
+  isOverGoal,
+}) => (
+  <div className="flex items-baseline gap-2">
+    <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">{label}</span>
+    <span
+      className={cn(
+        'text-lg font-black transition-colors',
+        isOverGoal === undefined
+          ? 'text-foreground'
+          : isOverGoal
+            ? 'text-destructive'
+            : 'text-praetor',
+      )}
+    >
+      {value}
+    </span>
+  </div>
+);
+
+const WeeklyGridActions: React.FC<{ controller: WeeklyController }> = ({ controller }) => (
+  <div className="flex items-center gap-2">
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span className="inline-flex">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            aria-label={controller.t('common:table.exportToCsv')}
+            onClick={controller.handleExportToCsv}
+            className={TABLE_CONTROL_BUTTON_CLASSNAME}
+          >
+            <i className="fa-solid fa-file-export text-xs" aria-hidden="true"></i>
+            <span>{controller.t('common:table.export')}</span>
+          </Button>
+        </span>
+      </TooltipTrigger>
+      <TooltipContent side="bottom">{controller.t('common:table.exportToCsv')}</TooltipContent>
+    </Tooltip>
+
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span className="inline-flex">
+          <Button
+            type="button"
+            variant={controller.hideWeekend ? 'secondary' : 'outline'}
+            size="sm"
+            aria-label={controller.t('weekly.hideWeekend')}
+            aria-pressed={controller.hideWeekend}
+            onClick={() => controller.setHideWeekend((value) => !value)}
+            className={TABLE_CONTROL_BUTTON_CLASSNAME}
+          >
+            {controller.hideWeekend ? (
+              <EyeOff className="size-3.5" aria-hidden="true" />
+            ) : (
+              <Eye className="size-3.5" aria-hidden="true" />
+            )}
+          </Button>
+        </span>
+      </TooltipTrigger>
+      <TooltipContent side="bottom">{controller.t('weekly.hideWeekend')}</TooltipContent>
+    </Tooltip>
+  </div>
+);
+
+const WeeklyGridTable: React.FC<{ controller: WeeklyController }> = ({ controller }) => (
+  <div className="-mx-5 -mb-5 overflow-x-auto">
+    <Table className="border-collapse">
+      <WeeklyGridHeader controller={controller} />
+      <WeeklyNewEntryBody controller={controller} />
+      <WeeklyExistingEntriesBody controller={controller} />
+      <WeeklyTotalsFooter controller={controller} />
+    </Table>
+  </div>
+);
+
+const WeeklyGridHeader: React.FC<{ controller: WeeklyController }> = ({ controller }) => (
+  <TableHeader className="bg-muted/40">
+    <TableRow className="border-b border-border">
+      <TableHead className="min-w-56 px-4 py-3" />
+      {controller.visibleWeekDays.map((day) => (
+        <WeeklyDayHeader key={day.dateStr} controller={controller} day={day} />
+      ))}
+    </TableRow>
+  </TableHeader>
+);
+
+const WeeklyDayHeader: React.FC<{
+  controller: WeeklyController;
+  day: WeeklyController['visibleWeekDays'][number];
+}> = ({ controller, day }) => (
+  <TableHead
+    className={cn(
+      'relative min-w-28 px-2 py-2 text-center align-middle',
+      day.isToday && 'bg-accent',
+      day.isWeekendOrHoliday && 'bg-destructive/5',
+    )}
+  >
+    <div
+      className={cn(
+        'flex items-center justify-center gap-1 text-[10px] font-black uppercase',
+        day.isToday
+          ? 'text-praetor'
+          : day.isWeekendOrHoliday
+            ? 'text-destructive'
+            : 'text-muted-foreground',
+      )}
+    >
+      {controller.t(`weekly.days.${day.dayKey}`)}
+      {day.holidayName && <WeeklyHolidayMarker holidayName={day.holidayName} />}
+    </div>
+    <p
+      className={cn(
+        'mt-0.5 text-sm font-black leading-none',
+        day.isToday
+          ? 'text-praetor'
+          : day.isWeekendOrHoliday
+            ? 'text-destructive'
+            : 'text-foreground',
+      )}
+    >
+      {day.dayNum}
+    </p>
+  </TableHead>
+);
+
+const WeeklyHolidayMarker: React.FC<{ holidayName: string }> = ({ holidayName }) => (
+  <Tooltip>
+    <TooltipTrigger asChild>
+      <span className="inline-flex">
+        <span className="block size-1.5 animate-pulse rounded-full bg-destructive"></span>
+      </span>
+    </TooltipTrigger>
+    <TooltipContent>{holidayName}</TooltipContent>
+  </Tooltip>
+);
+
+const WeeklyNewEntryBody: React.FC<{ controller: WeeklyController }> = ({ controller }) => (
+  <TableBody>
+    <TableRow className="bg-praetor/5 hover:bg-praetor/10">
+      <TableCell className="whitespace-normal px-4 py-3 align-top">
+        <p className="mb-2 text-[10px] font-bold text-praetor uppercase tracking-wider">
+          {controller.t('weekly.newEntry')}
+        </p>
+        <WeeklyRowLabel
+          clientName={controller.formSelectionLabels.clientName}
+          projectName={controller.formSelectionLabels.projectName}
+          taskName={controller.formSelectionLabels.taskName}
+        />
+      </TableCell>
+      {controller.visibleWeekDays.map((day) => (
+        <WeeklyEditableCell
+          key={day.dateStr}
+          controller={controller}
+          rowKey={FORM_ROW_KEY}
+          day={day}
+          cell={controller.getCellValue(FORM_ROW_KEY, day.dateStr, EMPTY_DAY_MAP)}
+        />
+      ))}
+    </TableRow>
+    <TableRow className="border-b-0 hover:bg-transparent">
+      <TableCell colSpan={1 + controller.visibleWeekDays.length} className="h-6 p-0" />
+    </TableRow>
+  </TableBody>
+);
+
+const WeeklyExistingEntriesBody: React.FC<{ controller: WeeklyController }> = ({ controller }) => (
+  <TableBody className="divide-y divide-border border-t-[3px] border-t-border">
+    {controller.entryRows.length === 0 ? (
+      <TableRow>
+        <TableCell
+          colSpan={1 + controller.visibleWeekDays.length}
+          className="px-4 py-6 text-center text-xs text-muted-foreground"
+        >
+          {controller.t('weekly.noRecentTasks')}
+        </TableCell>
+      </TableRow>
+    ) : (
+      controller.entryRows.map((row) => (
+        <WeeklyExistingEntryRow key={row.key} controller={controller} row={row} />
+      ))
+    )}
+  </TableBody>
+);
+
+const WeeklyExistingEntryRow: React.FC<{ controller: WeeklyController; row: EntryRow }> = ({
+  controller,
+  row,
+}) => (
+  <TableRow className="hover:bg-muted/30">
+    <TableCell className="whitespace-normal px-4 py-3 align-middle">
+      <WeeklyRowLabel
+        clientName={row.clientName}
+        projectName={row.projectName}
+        taskName={row.taskName}
+      />
+    </TableCell>
+    {controller.visibleWeekDays.map((day) => {
+      const cell = controller.getCellValue(row.key, day.dateStr, row.baseDays);
+      return (
+        <WeeklyEditableCell
+          key={day.dateStr}
+          controller={controller}
+          rowKey={row.key}
+          day={day}
+          cell={cell}
+          baseCell={row.baseDays[day.dateStr]}
+          highlightSuccess={controller.showSuccess && parseDuration(cell.duration) > 0}
+        />
+      );
+    })}
+  </TableRow>
+);
+
+const WeeklyEditableCell: React.FC<{
+  controller: WeeklyController;
+  rowKey: string;
+  day: WeeklyController['visibleWeekDays'][number];
+  cell: DayCell;
+  baseCell?: DayCell;
+  highlightSuccess?: boolean;
+}> = ({ controller, rowKey, day, cell, baseCell, highlightSuccess }) => (
+  <TableCell
+    className={cn(
+      'min-w-28 px-2 py-3 align-top',
+      day.isToday && 'bg-accent/60',
+      day.isWeekendOrHoliday && 'bg-destructive/5',
+      highlightSuccess && 'bg-emerald-500/10',
+    )}
+  >
+    <WeeklyDayCellInputs
+      rowKey={rowKey}
+      day={day}
+      cell={cell}
+      baseCell={baseCell}
+      notePlaceholder={controller.t('weekly.note')}
+      onUpdate={controller.updateCell}
+    />
+  </TableCell>
+);
+
+const WeeklyTotalsFooter: React.FC<{ controller: WeeklyController }> = ({ controller }) => (
+  <TableFooter className="bg-muted/30">
+    <TableRow className="border-t border-border">
+      <TableCell className="px-4 py-3 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+        {controller.t('weekly.total')}
+      </TableCell>
+      {controller.visibleWeekDays.map((day) => (
+        <TableCell
+          key={day.dateStr}
+          className={cn(
+            'min-w-28 px-2 py-3 text-center',
+            day.isToday && 'bg-accent',
+            day.isWeekendOrHoliday && 'bg-destructive/5',
+          )}
+        >
+          <p
+            className={cn(
+              'text-sm font-black',
+              controller.dayTotals[day.dateStr] > controller.dailyGoal
+                ? 'text-destructive'
+                : 'text-praetor',
+            )}
+          >
+            {controller.dayTotals[day.dateStr].toFixed(1)}
+          </p>
+        </TableCell>
+      ))}
+    </TableRow>
+  </TableFooter>
+);
 
 export default WeeklyView;

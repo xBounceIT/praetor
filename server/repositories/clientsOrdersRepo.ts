@@ -595,3 +595,33 @@ export const mapSaleItemsToSupplierItems = async (
         AND si.supplier_quote_item_id = v.quote_item_id`,
   );
 };
+
+export const linkSaleItemsToSupplierOrderAndItems = async (
+  args: {
+    orderId: string;
+    supplierQuoteId: string;
+    supplierOrderId: string;
+    supplierName: string;
+    mappings: Array<{ quoteItemId: string; saleItemId: string }>;
+  },
+  exec: DbExecutor,
+): Promise<void> => {
+  if (args.mappings.length === 0) {
+    await linkSaleItemsToSupplierOrder(args, exec);
+    return;
+  }
+
+  const valuesTuples = args.mappings.map((m) => sql`(${m.quoteItemId}, ${m.saleItemId})`);
+  await exec.execute(
+    sql`UPDATE sale_items si
+        SET supplier_sale_id = ${args.supplierOrderId},
+            supplier_sale_supplier_name = ${args.supplierName},
+            supplier_sale_item_id = COALESCE((
+              SELECT v.sale_item_id
+              FROM (VALUES ${sql.join(valuesTuples, sql`, `)}) v(quote_item_id, sale_item_id)
+              WHERE v.quote_item_id = si.supplier_quote_item_id
+            ), si.supplier_sale_item_id)
+      WHERE si.sale_id = ${args.orderId}
+        AND si.supplier_quote_id = ${args.supplierQuoteId}`,
+  );
+};

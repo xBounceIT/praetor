@@ -142,6 +142,445 @@ const suppliersViewReducer = (
   }
 };
 
+type SupplierFormModalProps = {
+  modalState: Pick<SuppliersViewState, 'isModalOpen' | 'editingSupplier' | 'errors' | 'formData'>;
+  canSubmit: boolean;
+  onSubmit: (event: React.FormEvent) => void;
+  onClose: () => void;
+  dispatch: React.Dispatch<SuppliersViewAction>;
+};
+
+const SupplierFormModal: React.FC<SupplierFormModalProps> = ({
+  modalState,
+  canSubmit,
+  onSubmit,
+  onClose,
+  dispatch,
+}) => {
+  const { t } = useTranslation(['crm', 'common']);
+  const { isModalOpen, editingSupplier, errors, formData } = modalState;
+
+  return (
+    <Modal isOpen={isModalOpen} onClose={onClose}>
+      <ModalContent size="2xl" className="max-h-[90vh]">
+        <form onSubmit={onSubmit} className="flex min-h-0 flex-1 flex-col" noValidate>
+          <ModalHeader>
+            <ModalTitle className="gap-3">
+              <span className="flex size-10 items-center justify-center rounded-md bg-muted text-primary">
+                <i
+                  className={`fa-solid ${editingSupplier ? 'fa-pen-to-square' : 'fa-plus'}`}
+                  aria-hidden="true"
+                ></i>
+              </span>
+              {editingSupplier ? t('crm:suppliers.editSupplier') : t('crm:suppliers.addSupplier')}
+            </ModalTitle>
+            <ModalCloseButton onClick={onClose} />
+          </ModalHeader>
+
+          <ModalBody className="flex-1 space-y-8">
+            <div className="space-y-4">
+              <h4 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-primary">
+                <span className="size-1.5 rounded-full bg-primary"></span>
+                {t('crm:suppliers.identifyingData')}
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Field data-invalid={Boolean(errors.supplierCode)}>
+                  <FieldLabel htmlFor="supplier-code" required>
+                    {t('crm:suppliers.code')}
+                  </FieldLabel>
+                  <Input
+                    id="supplier-code"
+                    type="text"
+                    value={formData.supplierCode}
+                    onChange={(e) => {
+                      dispatch({ type: 'patchForm', patch: { supplierCode: e.target.value } });
+                      dispatch({ type: 'clearError', field: 'supplierCode' });
+                    }}
+                    placeholder={t('crm:suppliers.codePlaceholder')}
+                    aria-invalid={Boolean(errors.supplierCode)}
+                  />
+                  <FieldError className="text-xs">{errors.supplierCode}</FieldError>
+                </Field>
+                <Field data-invalid={Boolean(errors.name)}>
+                  <FieldLabel htmlFor="supplier-name" required>
+                    {t('crm:suppliers.name')}
+                  </FieldLabel>
+                  <Input
+                    id="supplier-name"
+                    type="text"
+                    value={formData.name}
+                    onChange={(e) => {
+                      dispatch({ type: 'patchForm', patch: { name: e.target.value } });
+                      dispatch({ type: 'clearError', field: 'name' });
+                    }}
+                    placeholder={t('crm:suppliers.namePlaceholder')}
+                    aria-invalid={Boolean(errors.name)}
+                  />
+                  <FieldError className="text-xs">{errors.name}</FieldError>
+                </Field>
+                <Field className="col-span-full">
+                  <FieldLabel htmlFor="supplier-contact-name">
+                    {t('crm:suppliers.contactName')}
+                  </FieldLabel>
+                  <Input
+                    id="supplier-contact-name"
+                    type="text"
+                    value={formData.contactName}
+                    onChange={(e) =>
+                      dispatch({ type: 'patchForm', patch: { contactName: e.target.value } })
+                    }
+                    placeholder={t('crm:suppliers.contactPlaceholder')}
+                  />
+                </Field>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <h4 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-primary">
+                <span className="size-1.5 rounded-full bg-primary"></span>
+                {t('crm:suppliers.contacts')}
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Field>
+                  <FieldLabel htmlFor="supplier-email">{t('crm:suppliers.email')}</FieldLabel>
+                  <Input
+                    id="supplier-email"
+                    type="email"
+                    value={formData.email}
+                    onChange={(e) =>
+                      dispatch({ type: 'patchForm', patch: { email: e.target.value } })
+                    }
+                    placeholder={t('crm:suppliers.emailPlaceholder')}
+                  />
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="supplier-phone">{t('crm:suppliers.phone')}</FieldLabel>
+                  <Input
+                    id="supplier-phone"
+                    type="text"
+                    value={formData.phone}
+                    onChange={(e) =>
+                      dispatch({ type: 'patchForm', patch: { phone: e.target.value } })
+                    }
+                    placeholder={t('crm:suppliers.phonePlaceholder')}
+                  />
+                </Field>
+                <Field className="col-span-full">
+                  <FieldLabel htmlFor="supplier-address">{t('crm:suppliers.address')}</FieldLabel>
+                  <Textarea
+                    id="supplier-address"
+                    rows={2}
+                    value={formData.address}
+                    onChange={(e) =>
+                      dispatch({ type: 'patchForm', patch: { address: e.target.value } })
+                    }
+                    placeholder={t('crm:suppliers.addressPlaceholder')}
+                    className="resize-none"
+                  />
+                </Field>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <h4 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-primary">
+                <span className="size-1.5 rounded-full bg-primary"></span>
+                {t('crm:suppliers.adminFiscal')}
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Field data-invalid={Boolean(errors.vatNumber)}>
+                  <FieldLabel htmlFor="supplier-vat-number" required={!editingSupplier}>
+                    {t('crm:suppliers.vatNumber')}
+                  </FieldLabel>
+                  <Input
+                    id="supplier-vat-number"
+                    type="text"
+                    value={formData.vatNumber}
+                    onChange={(e) => {
+                      dispatch({ type: 'patchForm', patch: { vatNumber: e.target.value } });
+                      dispatch({ type: 'clearError', field: 'vatNumber' });
+                    }}
+                    placeholder={t('crm:suppliers.vatPlaceholder')}
+                    aria-invalid={Boolean(errors.vatNumber)}
+                  />
+                  <FieldError className="text-xs">{errors.vatNumber}</FieldError>
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="supplier-tax-code">{t('crm:suppliers.taxCode')}</FieldLabel>
+                  <Input
+                    id="supplier-tax-code"
+                    type="text"
+                    value={formData.taxCode}
+                    onChange={(e) =>
+                      dispatch({ type: 'patchForm', patch: { taxCode: e.target.value } })
+                    }
+                    placeholder={t('crm:suppliers.taxCodePlaceholder')}
+                  />
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="supplier-payment-terms">
+                    {t('crm:suppliers.paymentTerms')}
+                  </FieldLabel>
+                  <Input
+                    id="supplier-payment-terms"
+                    type="text"
+                    value={formData.paymentTerms}
+                    onChange={(e) =>
+                      dispatch({ type: 'patchForm', patch: { paymentTerms: e.target.value } })
+                    }
+                    placeholder={t('crm:suppliers.paymentTermsPlaceholder')}
+                  />
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="supplier-notes">{t('crm:suppliers.notes')}</FieldLabel>
+                  <Input
+                    id="supplier-notes"
+                    type="text"
+                    value={formData.notes}
+                    onChange={(e) =>
+                      dispatch({ type: 'patchForm', patch: { notes: e.target.value } })
+                    }
+                    placeholder={t('crm:suppliers.notesPlaceholder')}
+                  />
+                </Field>
+              </div>
+            </div>
+
+            {errors.general && (
+              <div className="flex items-center gap-3 rounded-md border border-destructive/30 bg-destructive/10 p-4 text-destructive">
+                <i className="fa-solid fa-circle-exclamation text-lg" aria-hidden="true"></i>
+                <p className="text-sm font-bold">{errors.general}</p>
+              </div>
+            )}
+          </ModalBody>
+
+          <ModalFooter>
+            <Button type="button" variant="outline" onClick={onClose}>
+              {t('common:buttons.cancel')}
+            </Button>
+            <Button type="submit" disabled={!canSubmit}>
+              {editingSupplier ? t('common:buttons.update') : t('common:buttons.save')}
+            </Button>
+          </ModalFooter>
+        </form>
+      </ModalContent>
+    </Modal>
+  );
+};
+
+type SuppliersTableProps = {
+  suppliers: Supplier[];
+  supplierOrders: SupplierSaleOrder[];
+  currency: string;
+  canUpdateSuppliers: boolean;
+  canDeleteSuppliers: boolean;
+  onEditSupplier: (supplier: Supplier) => void;
+  onConfirmDelete: (supplier: Supplier) => void;
+  onStatusUpdate: (id: string, updates: Partial<Supplier>) => Promise<void>;
+};
+
+const SuppliersTable: React.FC<SuppliersTableProps> = ({
+  suppliers,
+  supplierOrders,
+  currency,
+  canUpdateSuppliers,
+  canDeleteSuppliers,
+  onEditSupplier,
+  onConfirmDelete,
+  onStatusUpdate,
+}) => {
+  const { t, i18n } = useTranslation(['crm', 'common']);
+  const columns = useMemo<Column<Supplier>[]>(
+    () => [
+      {
+        header: t('crm:suppliers.tableHeaders.name'),
+        accessorKey: 'name',
+        cell: ({ row }) => (
+          <span
+            className={`font-semibold ${row.isDisabled ? 'line-through text-zinc-400' : 'text-zinc-800'}`}
+          >
+            {row.name}
+          </span>
+        ),
+      },
+      {
+        header: t('crm:suppliers.tableHeaders.code'),
+        accessorKey: 'supplierCode',
+        cell: ({ row }) =>
+          row.supplierCode ? (
+            <span className="text-[10px] font-black bg-zinc-100 text-zinc-500 px-2 py-0.5 rounded uppercase">
+              {row.supplierCode}
+            </span>
+          ) : null,
+      },
+      {
+        header: t('crm:suppliers.tableHeaders.insertDate'),
+        id: 'createdAt',
+        accessorFn: (row) => row.createdAt ?? 0,
+        cell: ({ row }) =>
+          row.createdAt ? (
+            <span className="text-xs text-slate-500 whitespace-nowrap">
+              {formatInsertDate(row.createdAt, i18n.language)}
+            </span>
+          ) : (
+            <span className="text-xs text-zinc-400">-</span>
+          ),
+        filterFormat: (value) => {
+          const timestamp = typeof value === 'number' ? value : Number(value);
+          return Number.isFinite(timestamp) && timestamp > 0
+            ? formatInsertDate(timestamp, i18n.language)
+            : '-';
+        },
+      },
+      {
+        header: t('crm:suppliers.tableHeaders.contact'),
+        id: 'contact',
+        accessorFn: (row) => row.contactName || row.email || row.phone || '',
+        cell: ({ row }) => (
+          <div className="flex flex-col gap-1">
+            {row.contactName && <span className="text-xs text-zinc-600">{row.contactName}</span>}
+            {row.email && (
+              <span className="text-xs text-zinc-500 flex items-center gap-1.5">
+                <i className="fa-solid fa-envelope text-[10px] text-zinc-300"></i>
+                {row.email}
+              </span>
+            )}
+            {row.phone && (
+              <span className="text-xs text-zinc-500 flex items-center gap-1.5">
+                <i className="fa-solid fa-phone text-[10px] text-zinc-300"></i>
+                {row.phone}
+              </span>
+            )}
+          </div>
+        ),
+      },
+      {
+        header: t('crm:suppliers.tableHeaders.vat'),
+        accessorKey: 'vatNumber',
+        className: 'font-mono text-xs text-zinc-400',
+      },
+      {
+        header: t('crm:suppliers.tableHeaders.taxCode'),
+        accessorKey: 'taxCode',
+        className: 'font-mono text-xs text-zinc-400',
+      },
+      {
+        header: t('crm:suppliers.tableHeaders.totalOrders'),
+        id: 'totalOrders',
+        accessorFn: (row: Supplier) =>
+          supplierOrders
+            .filter((order) => order.supplierId === row.id && order.status === 'sent')
+            .reduce((total, order) => total + calculateOrderTotal(order.items, order.discount), 0),
+        className: 'whitespace-nowrap font-mono text-xs',
+        align: 'right',
+        cell: (info) => {
+          const totalValue = info.value as number;
+          return (
+            <span
+              className={`font-semibold ${totalValue > 0 ? 'text-emerald-600' : 'text-zinc-400'}`}
+            >
+              {totalValue.toFixed(2)} {currency}
+            </span>
+          );
+        },
+        filterFormat: (value: unknown) => (value as number).toFixed(2),
+      },
+      {
+        header: t('crm:suppliers.tableHeaders.status'),
+        id: 'status',
+        accessorFn: (row) =>
+          row.isDisabled ? t('common:common.disabled') : t('common:common.active'),
+        cell: ({ row }) => (
+          <StatusBadge
+            type={row.isDisabled ? 'disabled' : 'active'}
+            label={row.isDisabled ? t('common:common.disabled') : t('common:common.active')}
+          />
+        ),
+      },
+      {
+        header: t('common:labels.actions'),
+        id: 'actions',
+        align: 'right',
+        disableSorting: true,
+        disableFiltering: true,
+        cell: ({ row }) => (
+          <div className="flex items-center justify-end gap-1">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="inline-flex">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (!canUpdateSuppliers) return;
+                      void onStatusUpdate(row.id, { isDisabled: !row.isDisabled });
+                    }}
+                    disabled={!canUpdateSuppliers}
+                    aria-label={
+                      row.isDisabled ? t('common:buttons.enable') : t('crm:suppliers.disable')
+                    }
+                    className={`p-2 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
+                      row.isDisabled
+                        ? 'text-praetor hover:bg-zinc-100'
+                        : 'text-amber-700 hover:text-amber-600 hover:bg-amber-50'
+                    }`}
+                  >
+                    <i className={`fa-solid ${row.isDisabled ? 'fa-rotate-left' : 'fa-ban'}`}></i>
+                  </button>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>
+                {row.isDisabled ? t('common:buttons.enable') : t('crm:suppliers.disable')}
+              </TooltipContent>
+            </Tooltip>
+            {canDeleteSuppliers && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="inline-flex">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onConfirmDelete(row);
+                      }}
+                      aria-label={t('common:buttons.delete')}
+                      className="p-2 text-red-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                    >
+                      <i className="fa-solid fa-trash-can"></i>
+                    </button>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>{t('common:buttons.delete')}</TooltipContent>
+              </Tooltip>
+            )}
+          </div>
+        ),
+      },
+    ],
+    [
+      t,
+      canUpdateSuppliers,
+      canDeleteSuppliers,
+      onStatusUpdate,
+      onConfirmDelete,
+      supplierOrders,
+      currency,
+      i18n.language,
+    ],
+  );
+
+  return (
+    <StandardTable<Supplier>
+      title={t('crm:suppliers.suppliersDirectory')}
+      viewKey="suppliers.directory"
+      data={suppliers}
+      columns={columns}
+      defaultRowsPerPage={10}
+      onRowClick={canUpdateSuppliers ? onEditSupplier : undefined}
+      rowClassName={(row) => (row.isDisabled ? 'opacity-70 grayscale hover:grayscale-0' : '')}
+    />
+  );
+};
+
 const SuppliersView: React.FC<SuppliersViewProps> = ({
   suppliers,
   supplierOrders,
@@ -151,7 +590,7 @@ const SuppliersView: React.FC<SuppliersViewProps> = ({
   onDeleteSupplier,
   permissions,
 }) => {
-  const { t, i18n } = useTranslation(['crm', 'common']);
+  const { t } = useTranslation(['crm', 'common']);
   const canCreateSuppliers = hasScopedActionPermission(permissions, 'crm.suppliers', 'create');
   const canUpdateSuppliers = hasScopedActionPermission(permissions, 'crm.suppliers', 'update');
   const canDeleteSuppliers = hasScopedActionPermission(permissions, 'crm.suppliers', 'delete');
@@ -267,408 +706,15 @@ const SuppliersView: React.FC<SuppliersViewProps> = ({
 
   const canSubmit = editingSupplier ? canUpdateSuppliers : canCreateSuppliers;
 
-  // Column definitions
-  const columns = useMemo<Column<Supplier>[]>(
-    () => [
-      {
-        header: t('crm:suppliers.tableHeaders.name'),
-        accessorKey: 'name',
-        cell: ({ row }) => (
-          <span
-            className={`font-semibold ${row.isDisabled ? 'line-through text-zinc-400' : 'text-zinc-800'}`}
-          >
-            {row.name}
-          </span>
-        ),
-      },
-      {
-        header: t('crm:suppliers.tableHeaders.code'),
-        accessorKey: 'supplierCode',
-        cell: ({ row }) =>
-          row.supplierCode ? (
-            <span className="text-[10px] font-black bg-zinc-100 text-zinc-500 px-2 py-0.5 rounded uppercase">
-              {row.supplierCode}
-            </span>
-          ) : null,
-      },
-      {
-        header: t('crm:suppliers.tableHeaders.insertDate'),
-        id: 'createdAt',
-        accessorFn: (row) => row.createdAt ?? 0,
-        cell: ({ row }) => {
-          if (!row.createdAt) {
-            return <span className="text-xs text-zinc-400">-</span>;
-          }
-          return (
-            <span className="text-xs text-slate-500 whitespace-nowrap">
-              {formatInsertDate(row.createdAt, i18n.language)}
-            </span>
-          );
-        },
-        filterFormat: (value) => {
-          const timestamp = typeof value === 'number' ? value : Number(value);
-          if (!Number.isFinite(timestamp) || timestamp <= 0) {
-            return '-';
-          }
-          return formatInsertDate(timestamp, i18n.language);
-        },
-      },
-      {
-        header: t('crm:suppliers.tableHeaders.contact'),
-        id: 'contact',
-        accessorFn: (row) => row.contactName || row.email || row.phone || '',
-        cell: ({ row }) => (
-          <div className="flex flex-col gap-1">
-            {row.contactName && <span className="text-xs text-zinc-600">{row.contactName}</span>}
-            {row.email && (
-              <span className="text-xs text-zinc-500 flex items-center gap-1.5">
-                <i className="fa-solid fa-envelope text-[10px] text-zinc-300"></i>
-                {row.email}
-              </span>
-            )}
-            {row.phone && (
-              <span className="text-xs text-zinc-500 flex items-center gap-1.5">
-                <i className="fa-solid fa-phone text-[10px] text-zinc-300"></i>
-                {row.phone}
-              </span>
-            )}
-          </div>
-        ),
-      },
-      {
-        header: t('crm:suppliers.tableHeaders.vat'),
-        accessorKey: 'vatNumber',
-        className: 'font-mono text-xs text-zinc-400',
-      },
-      {
-        header: t('crm:suppliers.tableHeaders.taxCode'),
-        accessorKey: 'taxCode',
-        className: 'font-mono text-xs text-zinc-400',
-      },
-      {
-        header: t('crm:suppliers.tableHeaders.totalOrders'),
-        id: 'totalOrders',
-        accessorFn: (row: Supplier) => {
-          const sentOrders = supplierOrders.filter(
-            (order) => order.supplierId === row.id && order.status === 'sent',
-          );
-          return sentOrders.reduce((total, order) => {
-            return total + calculateOrderTotal(order.items, order.discount);
-          }, 0);
-        },
-        className: 'whitespace-nowrap font-mono text-xs',
-        align: 'right',
-        cell: (info) => {
-          const totalValue = info.value as number;
-          return (
-            <span
-              className={`font-semibold ${totalValue > 0 ? 'text-emerald-600' : 'text-zinc-400'}`}
-            >
-              {totalValue.toFixed(2)} {currency}
-            </span>
-          );
-        },
-        filterFormat: (value: unknown) => (value as number).toFixed(2),
-      },
-      {
-        header: t('crm:suppliers.tableHeaders.status'),
-        id: 'status',
-        accessorFn: (row) =>
-          row.isDisabled ? t('common:common.disabled') : t('common:common.active'),
-        cell: ({ row }) => (
-          <StatusBadge
-            type={row.isDisabled ? 'disabled' : 'active'}
-            label={row.isDisabled ? t('common:common.disabled') : t('common:common.active')}
-          />
-        ),
-      },
-      {
-        header: t('common:labels.actions'),
-        id: 'actions',
-        align: 'right',
-        disableSorting: true,
-        disableFiltering: true,
-        cell: ({ row }) => (
-          <div className="flex items-center justify-end gap-1">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span className="inline-flex">
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (!canUpdateSuppliers) return;
-                      void handleStatusUpdate(row.id, { isDisabled: !row.isDisabled });
-                    }}
-                    disabled={!canUpdateSuppliers}
-                    aria-label={
-                      row.isDisabled ? t('common:buttons.enable') : t('crm:suppliers.disable')
-                    }
-                    className={`p-2 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
-                      row.isDisabled
-                        ? 'text-praetor hover:bg-zinc-100'
-                        : 'text-amber-700 hover:text-amber-600 hover:bg-amber-50'
-                    }`}
-                  >
-                    <i className={`fa-solid ${row.isDisabled ? 'fa-rotate-left' : 'fa-ban'}`}></i>
-                  </button>
-                </span>
-              </TooltipTrigger>
-              <TooltipContent>
-                {row.isDisabled ? t('common:buttons.enable') : t('crm:suppliers.disable')}
-              </TooltipContent>
-            </Tooltip>
-            {canDeleteSuppliers && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span className="inline-flex">
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        confirmDelete(row);
-                      }}
-                      aria-label={t('common:buttons.delete')}
-                      className="p-2 text-red-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
-                    >
-                      <i className="fa-solid fa-trash-can"></i>
-                    </button>
-                  </span>
-                </TooltipTrigger>
-                <TooltipContent>{t('common:buttons.delete')}</TooltipContent>
-              </Tooltip>
-            )}
-          </div>
-        ),
-      },
-    ],
-    [
-      t,
-      canUpdateSuppliers,
-      canDeleteSuppliers,
-      handleStatusUpdate,
-      confirmDelete,
-      supplierOrders,
-      currency,
-      i18n.language,
-    ],
-  );
-
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
-      {/* Add/Edit Modal */}
-      <Modal isOpen={isModalOpen} onClose={() => dispatch({ type: 'closeModal' })}>
-        <ModalContent size="2xl" className="max-h-[90vh]">
-          <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col" noValidate>
-            <ModalHeader>
-              <ModalTitle className="gap-3">
-                <span className="flex size-10 items-center justify-center rounded-md bg-muted text-primary">
-                  <i
-                    className={`fa-solid ${editingSupplier ? 'fa-pen-to-square' : 'fa-plus'}`}
-                    aria-hidden="true"
-                  ></i>
-                </span>
-                {editingSupplier ? t('crm:suppliers.editSupplier') : t('crm:suppliers.addSupplier')}
-              </ModalTitle>
-              <ModalCloseButton onClick={() => dispatch({ type: 'closeModal' })} />
-            </ModalHeader>
-
-            <ModalBody className="flex-1 space-y-8">
-              {/* Section 1: Supplier Details */}
-              <div className="space-y-4">
-                <h4 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-primary">
-                  <span className="size-1.5 rounded-full bg-primary"></span>
-                  {t('crm:suppliers.identifyingData')}
-                </h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <Field data-invalid={Boolean(errors.supplierCode)}>
-                    <FieldLabel htmlFor="supplier-code" required>
-                      {t('crm:suppliers.code')}
-                    </FieldLabel>
-                    <Input
-                      id="supplier-code"
-                      type="text"
-                      value={formData.supplierCode}
-                      onChange={(e) => {
-                        dispatch({ type: 'patchForm', patch: { supplierCode: e.target.value } });
-                        dispatch({ type: 'clearError', field: 'supplierCode' });
-                      }}
-                      placeholder={t('crm:suppliers.codePlaceholder')}
-                      aria-invalid={Boolean(errors.supplierCode)}
-                    />
-                    <FieldError className="text-xs">{errors.supplierCode}</FieldError>
-                  </Field>
-                  <Field data-invalid={Boolean(errors.name)}>
-                    <FieldLabel htmlFor="supplier-name" required>
-                      {t('crm:suppliers.name')}
-                    </FieldLabel>
-                    <Input
-                      id="supplier-name"
-                      type="text"
-                      value={formData.name}
-                      onChange={(e) => {
-                        dispatch({ type: 'patchForm', patch: { name: e.target.value } });
-                        dispatch({ type: 'clearError', field: 'name' });
-                      }}
-                      placeholder={t('crm:suppliers.namePlaceholder')}
-                      aria-invalid={Boolean(errors.name)}
-                    />
-                    <FieldError className="text-xs">{errors.name}</FieldError>
-                  </Field>
-                  <Field className="col-span-full">
-                    <FieldLabel htmlFor="supplier-contact-name">
-                      {t('crm:suppliers.contactName')}
-                    </FieldLabel>
-                    <Input
-                      id="supplier-contact-name"
-                      type="text"
-                      value={formData.contactName}
-                      onChange={(e) =>
-                        dispatch({ type: 'patchForm', patch: { contactName: e.target.value } })
-                      }
-                      placeholder={t('crm:suppliers.contactPlaceholder')}
-                    />
-                  </Field>
-                </div>
-              </div>
-
-              {/* Section 2: Contacts */}
-              <div className="space-y-4">
-                <h4 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-primary">
-                  <span className="size-1.5 rounded-full bg-primary"></span>
-                  {t('crm:suppliers.contacts')}
-                </h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <Field>
-                    <FieldLabel htmlFor="supplier-email">{t('crm:suppliers.email')}</FieldLabel>
-                    <Input
-                      id="supplier-email"
-                      type="email"
-                      value={formData.email}
-                      onChange={(e) =>
-                        dispatch({ type: 'patchForm', patch: { email: e.target.value } })
-                      }
-                      placeholder={t('crm:suppliers.emailPlaceholder')}
-                    />
-                  </Field>
-                  <Field>
-                    <FieldLabel htmlFor="supplier-phone">{t('crm:suppliers.phone')}</FieldLabel>
-                    <Input
-                      id="supplier-phone"
-                      type="text"
-                      value={formData.phone}
-                      onChange={(e) =>
-                        dispatch({ type: 'patchForm', patch: { phone: e.target.value } })
-                      }
-                      placeholder={t('crm:suppliers.phonePlaceholder')}
-                    />
-                  </Field>
-                  <Field className="col-span-full">
-                    <FieldLabel htmlFor="supplier-address">{t('crm:suppliers.address')}</FieldLabel>
-                    <Textarea
-                      id="supplier-address"
-                      rows={2}
-                      value={formData.address}
-                      onChange={(e) =>
-                        dispatch({ type: 'patchForm', patch: { address: e.target.value } })
-                      }
-                      placeholder={t('crm:suppliers.addressPlaceholder')}
-                      className="resize-none"
-                    />
-                  </Field>
-                </div>
-              </div>
-
-              {/* Section 3: Administrative */}
-              <div className="space-y-4">
-                <h4 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-primary">
-                  <span className="size-1.5 rounded-full bg-primary"></span>
-                  {t('crm:suppliers.adminFiscal')}
-                </h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <Field data-invalid={Boolean(errors.vatNumber)}>
-                    <FieldLabel htmlFor="supplier-vat-number" required={!editingSupplier}>
-                      {t('crm:suppliers.vatNumber')}
-                    </FieldLabel>
-                    <Input
-                      id="supplier-vat-number"
-                      type="text"
-                      value={formData.vatNumber}
-                      onChange={(e) => {
-                        dispatch({ type: 'patchForm', patch: { vatNumber: e.target.value } });
-                        dispatch({ type: 'clearError', field: 'vatNumber' });
-                      }}
-                      placeholder={t('crm:suppliers.vatPlaceholder')}
-                      aria-invalid={Boolean(errors.vatNumber)}
-                    />
-                    <FieldError className="text-xs">{errors.vatNumber}</FieldError>
-                  </Field>
-                  <Field>
-                    <FieldLabel htmlFor="supplier-tax-code">
-                      {t('crm:suppliers.taxCode')}
-                    </FieldLabel>
-                    <Input
-                      id="supplier-tax-code"
-                      type="text"
-                      value={formData.taxCode}
-                      onChange={(e) =>
-                        dispatch({ type: 'patchForm', patch: { taxCode: e.target.value } })
-                      }
-                      placeholder={t('crm:suppliers.taxCodePlaceholder')}
-                    />
-                  </Field>
-                  <Field>
-                    <FieldLabel htmlFor="supplier-payment-terms">
-                      {t('crm:suppliers.paymentTerms')}
-                    </FieldLabel>
-                    <Input
-                      id="supplier-payment-terms"
-                      type="text"
-                      value={formData.paymentTerms}
-                      onChange={(e) =>
-                        dispatch({ type: 'patchForm', patch: { paymentTerms: e.target.value } })
-                      }
-                      placeholder={t('crm:suppliers.paymentTermsPlaceholder')}
-                    />
-                  </Field>
-                  <Field>
-                    <FieldLabel htmlFor="supplier-notes">{t('crm:suppliers.notes')}</FieldLabel>
-                    <Input
-                      id="supplier-notes"
-                      type="text"
-                      value={formData.notes}
-                      onChange={(e) =>
-                        dispatch({ type: 'patchForm', patch: { notes: e.target.value } })
-                      }
-                      placeholder={t('crm:suppliers.notesPlaceholder')}
-                    />
-                  </Field>
-                </div>
-              </div>
-
-              {errors.general && (
-                <div className="flex items-center gap-3 rounded-md border border-destructive/30 bg-destructive/10 p-4 text-destructive">
-                  <i className="fa-solid fa-circle-exclamation text-lg" aria-hidden="true"></i>
-                  <p className="text-sm font-bold">{errors.general}</p>
-                </div>
-              )}
-            </ModalBody>
-
-            <ModalFooter>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => dispatch({ type: 'closeModal' })}
-              >
-                {t('common:buttons.cancel')}
-              </Button>
-              <Button type="submit" disabled={!canSubmit}>
-                {editingSupplier ? t('common:buttons.update') : t('common:buttons.save')}
-              </Button>
-            </ModalFooter>
-          </form>
-        </ModalContent>
-      </Modal>
+      <SupplierFormModal
+        modalState={{ isModalOpen, editingSupplier, errors, formData }}
+        canSubmit={canSubmit}
+        onSubmit={handleSubmit}
+        onClose={() => dispatch({ type: 'closeModal' })}
+        dispatch={dispatch}
+      />
 
       {/* Delete Confirmation Modal */}
       <DeleteConfirmModal
@@ -695,14 +741,15 @@ const SuppliersView: React.FC<SuppliersViewProps> = ({
         </div>
       </div>
 
-      <StandardTable<Supplier>
-        title={t('crm:suppliers.suppliersDirectory')}
-        viewKey="suppliers.directory"
-        data={suppliers}
-        columns={columns}
-        defaultRowsPerPage={10}
-        onRowClick={canUpdateSuppliers ? openEditModal : undefined}
-        rowClassName={(row) => (row.isDisabled ? 'opacity-70 grayscale hover:grayscale-0' : '')}
+      <SuppliersTable
+        suppliers={suppliers}
+        supplierOrders={supplierOrders}
+        currency={currency}
+        canUpdateSuppliers={canUpdateSuppliers}
+        canDeleteSuppliers={canDeleteSuppliers}
+        onEditSupplier={openEditModal}
+        onConfirmDelete={confirmDelete}
+        onStatusUpdate={handleStatusUpdate}
       />
     </div>
   );

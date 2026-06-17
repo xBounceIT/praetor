@@ -332,6 +332,25 @@ const authenticatePersonalAccessToken = async (
 // `totp_enroll` purpose token (no session yet). On a valid enroll token we record
 // `request.enrollUserId` and stop WITHOUT populating `request.user`; otherwise we fall through to
 // the normal session path. The missing-token case is handled exactly as authenticateToken does.
+const requireInteractiveSessionForTotpManagement = async (
+  request: FastifyRequest,
+  reply: FastifyReply,
+) => {
+  await authenticateToken(request, reply);
+  return request.user ? request.auth?.source : null;
+};
+
+const requireTotpManagementSession = async (request: FastifyRequest, reply: FastifyReply) => {
+  const authSource = await requireInteractiveSessionForTotpManagement(request, reply);
+  if (!authSource) return; // authenticateToken already sent its own 401/403
+  if (authSource !== 'session') {
+    return reply.code(403).send({
+      error: 'An interactive session is required to manage two-factor authentication',
+      errorCode: 'session_required',
+    });
+  }
+};
+
 export const requireEnrollOrSession = async (request: FastifyRequest, reply: FastifyReply) => {
   const authHeader = request.headers.authorization;
   const token = authHeader?.split(' ')[1];
@@ -350,14 +369,7 @@ export const requireEnrollOrSession = async (request: FastifyRequest, reply: Fas
     // authentication. These endpoints change the user's second factor, so a non-interactive
     // personal access token must NOT be able to enrol/confirm 2FA: after authenticating, require a
     // real session rather than a PAT.
-    await authenticateToken(request, reply);
-    if (!request.user) return; // authenticateToken already sent its own 401/403
-    if (request.auth?.source !== 'session') {
-      return reply.code(403).send({
-        error: 'An interactive session is required to manage two-factor authentication',
-        errorCode: 'session_required',
-      });
-    }
+    return requireTotpManagementSession(request, reply);
   }
 };
 

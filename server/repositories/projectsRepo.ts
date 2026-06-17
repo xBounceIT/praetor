@@ -517,9 +517,37 @@ export const deleteByIdAndRemoveUnusedClientCascade = async (
   clientId: string,
   exec: DbExecutor = db,
 ): Promise<void> => {
-  const previousUserIds = await findNonTopManagerUserIds(projectId, exec);
-  await deleteById(projectId, exec);
-  await removeClientCascadeForUsersIfUnused(previousUserIds, clientId, exec);
+  await executeRows(
+    exec,
+    sql`WITH previous_users AS (
+          SELECT user_id
+          FROM user_projects
+          WHERE project_id = ${projectId}
+            AND assignment_source != ${TOP_MANAGER_AUTO_ASSIGNMENT_SOURCE}
+        ),
+        deleted_project AS (
+          DELETE FROM projects
+          WHERE id = ${projectId}
+          RETURNING id
+        ),
+        removed_cascade AS (
+          DELETE FROM user_clients uc
+          WHERE EXISTS (SELECT 1 FROM deleted_project)
+            AND uc.user_id IN (SELECT user_id FROM previous_users)
+            AND uc.client_id = ${clientId}
+            AND uc.assignment_source = ${PROJECT_CASCADE_ASSIGNMENT_SOURCE}
+            AND NOT EXISTS (
+              SELECT 1
+              FROM user_projects up
+              INNER JOIN projects p ON up.project_id = p.id
+              WHERE up.user_id = uc.user_id
+                AND p.client_id = ${clientId}
+                AND up.project_id <> ${projectId}
+            )
+          RETURNING 1
+        )
+        SELECT 1`,
+  );
 };
 
 export const replaceNonTopManagerAssignments = async (
@@ -528,10 +556,59 @@ export const replaceNonTopManagerAssignments = async (
   clientId: string,
   exec: DbExecutor = db,
 ): Promise<void> => {
-  const previousUserIds = await findNonTopManagerUserIds(projectId, exec);
-  const removedUserIds = previousUserIds.filter((uid) => !userIds.includes(uid));
-  await clearNonTopManagerAssignments(projectId, exec);
-  await addManualAssignments(projectId, userIds, exec);
-  await ensureClientCascadeAssignments(userIds, clientId, exec);
-  await removeClientCascadeForUsersIfUnused(removedUserIds, clientId, exec);
+  await executeRows(
+    exec,
+    sql`WITH incoming_users AS (
+          SELECT unnest(${sql.param(userIds)}::text[]) AS user_id
+        ),
+        previous_users AS (
+          SELECT user_id
+          FROM user_projects
+          WHERE project_id = ${projectId}
+            AND assignment_source != ${TOP_MANAGER_AUTO_ASSIGNMENT_SOURCE}
+        ),
+        removed_users AS (
+          SELECT user_id
+          FROM previous_users
+          EXCEPT
+          SELECT user_id
+          FROM incoming_users
+        ),
+        cleared AS (
+          DELETE FROM user_projects
+          WHERE project_id = ${projectId}
+            AND assignment_source != ${TOP_MANAGER_AUTO_ASSIGNMENT_SOURCE}
+          RETURNING 1
+        ),
+        inserted_project AS (
+          INSERT INTO user_projects (user_id, project_id, assignment_source)
+          SELECT user_id, ${projectId}, ${MANUAL_ASSIGNMENT_SOURCE}
+          FROM incoming_users
+          ON CONFLICT DO NOTHING
+          RETURNING 1
+        ),
+        ensured_client AS (
+          INSERT INTO user_clients (user_id, client_id, assignment_source)
+          SELECT user_id, ${clientId}, ${PROJECT_CASCADE_ASSIGNMENT_SOURCE}
+          FROM incoming_users
+          ON CONFLICT DO NOTHING
+          RETURNING 1
+        ),
+        removed_cascade AS (
+          DELETE FROM user_clients uc
+          WHERE uc.user_id IN (SELECT user_id FROM removed_users)
+            AND uc.client_id = ${clientId}
+            AND uc.assignment_source = ${PROJECT_CASCADE_ASSIGNMENT_SOURCE}
+            AND NOT EXISTS (
+              SELECT 1
+              FROM user_projects up
+              INNER JOIN projects p ON up.project_id = p.id
+              WHERE up.user_id = uc.user_id
+                AND p.client_id = ${clientId}
+                AND up.project_id <> ${projectId}
+            )
+          RETURNING 1
+        )
+        SELECT 1`,
+  );
 };

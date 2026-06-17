@@ -386,6 +386,37 @@ describe('supplier-order auto-creation flow', () => {
     );
     expect(exec.calls).toHaveLength(0);
   });
+
+  test('linkSaleItemsToSupplierOrderAndItems links the order and maps supplier item ids in one update', async () => {
+    exec.enqueue({ rows: [], rowCount: 2 });
+    await repo.linkSaleItemsToSupplierOrderAndItems(
+      {
+        orderId: 'co-1',
+        supplierQuoteId: 'sq-1',
+        supplierOrderId: 'so-1',
+        supplierName: 'Vendor',
+        mappings: [
+          { quoteItemId: 'sqi-a', saleItemId: 'ssi-a' },
+          { quoteItemId: 'sqi-b', saleItemId: 'ssi-b' },
+        ],
+      },
+      testDb,
+    );
+
+    const sql = exec.calls[0].sql.toLowerCase();
+    expect(sql).toContain('update sale_items si');
+    expect(sql).toContain('supplier_sale_id');
+    expect(sql).toContain('supplier_sale_supplier_name');
+    expect(sql).toContain('supplier_sale_item_id');
+    expect(sql).toContain('from (values');
+    expect(sql).toContain('coalesce');
+    expect(exec.calls[0].params).toContain('co-1');
+    expect(exec.calls[0].params).toContain('sq-1');
+    expect(exec.calls[0].params).toContain('so-1');
+    expect(exec.calls[0].params).toContain('Vendor');
+    expect(exec.calls[0].params).toContain('sqi-a');
+    expect(exec.calls[0].params).toContain('ssi-a');
+  });
 });
 
 describe('deleteById', () => {

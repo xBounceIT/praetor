@@ -32,7 +32,10 @@ export const allocateDocumentCode = async (
   const year = getDocumentCodeYear(options.date);
   const template = await documentCodeTemplatesRepo.findByModuleId(moduleId, options.exec);
 
-  for (let attempt = 0; attempt < DOCUMENT_CODE_COLLISION_RETRIES; attempt++) {
+  const allocateAttempt = async (attempt: number): Promise<string> => {
+    if (attempt >= DOCUMENT_CODE_COLLISION_RETRIES) {
+      throw new DocumentCodeCollisionError(moduleId);
+    }
     const sequence = await documentCodeTemplatesRepo.allocateSequence(moduleId, year, options.exec);
     const code = renderDocumentCode(template, { year, sequence });
     if (code.length > DOCUMENT_CODE_MAX_LENGTH) {
@@ -41,9 +44,10 @@ export const allocateDocumentCode = async (
     if (!(await documentCodeTemplatesRepo.existsForModule(moduleId, code, options.exec))) {
       return code;
     }
-  }
+    return allocateAttempt(attempt + 1);
+  };
 
-  throw new DocumentCodeCollisionError(moduleId);
+  return allocateAttempt(0);
 };
 
 export const previewDocumentCode = async (
@@ -52,18 +56,25 @@ export const previewDocumentCode = async (
 ): Promise<DocumentCodePreview> => {
   const exec = options.exec ?? db;
   const year = getDocumentCodeYear(options.date);
-  const template = await documentCodeTemplatesRepo.findByModuleId(moduleId, exec);
-  const nextSequence = await documentCodeTemplatesRepo.getNextSequence(moduleId, year, exec);
+  const [template, nextSequence] = await Promise.all([
+    documentCodeTemplatesRepo.findByModuleId(moduleId, exec),
+    documentCodeTemplatesRepo.getNextSequence(moduleId, year, exec),
+  ]);
 
-  for (let attempt = 0; attempt < DOCUMENT_CODE_COLLISION_RETRIES; attempt++) {
+  const candidates = Array.from({ length: DOCUMENT_CODE_COLLISION_RETRIES }, (_, attempt) => {
     const sequence = nextSequence + attempt;
     const code = renderDocumentCode(template, { year, sequence });
     if (code.length > DOCUMENT_CODE_MAX_LENGTH) {
       throw new Error(`Generated document code exceeds ${DOCUMENT_CODE_MAX_LENGTH} characters`);
     }
-    if (!(await documentCodeTemplatesRepo.existsForModule(moduleId, code, exec))) {
-      return { moduleId, code, year, sequence };
-    }
+    return { moduleId, code, year, sequence };
+  });
+  const existing = await Promise.all(
+    candidates.map((candidate) => documentCodeTemplatesRepo.existsForModule(moduleId, candidate.code, exec)),
+  );
+  const availableIndex = existing.findIndex((exists) => !exists);
+  if (availableIndex >= 0) {
+    return candidates[availableIndex];
   }
 
   throw new DocumentCodeCollisionError(moduleId);

@@ -614,12 +614,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       let revokedTokens = 0;
       if (shouldRevokeTokens) {
         const result = await withDbTransaction(async (tx) => {
-          const updated = await generalSettingsRepo.update(settingsPatch, tx);
-          const revoked = await usersRepo.revokeTokensForUnenrolledEnforcedUsers(
-            resultEnforcedRoleIds,
-            resultExemptRoleIds,
-            tx,
-          );
+          const [updated, revoked] = await Promise.all([
+            generalSettingsRepo.update(settingsPatch, tx),
+            usersRepo.revokeTokensForUnenrolledEnforcedUsers(
+              resultEnforcedRoleIds,
+              resultExemptRoleIds,
+              tx,
+            ),
+          ]);
           return { updated, revoked };
         });
         settings = result.updated;
@@ -628,25 +630,29 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         settings = await generalSettingsRepo.update(settingsPatch);
       }
 
-      await logAudit({
-        request,
-        action: 'settings.updated',
-        entityType: 'settings',
-        details: {
-          secondaryLabel: settings.aiProvider ?? undefined,
-        },
-      });
-
       // Audit the revocation only after the transaction commits — an audit-write failure must not
       // roll back the security-critical token revocation it is recording.
-      if (revokedTokens > 0) {
-        await logAudit({
+      const auditWrites = [
+        logAudit({
           request,
-          action: 'settings.totp_enforcement_tokens_revoked',
+          action: 'settings.updated',
           entityType: 'settings',
-          details: { secondaryLabel: String(revokedTokens) },
-        });
+          details: {
+            secondaryLabel: settings.aiProvider ?? undefined,
+          },
+        }),
+      ];
+      if (revokedTokens > 0) {
+        auditWrites.push(
+          logAudit({
+            request,
+            action: 'settings.totp_enforcement_tokens_revoked',
+            entityType: 'settings',
+            details: { secondaryLabel: String(revokedTokens) },
+          }),
+        );
       }
+      await Promise.all(auditWrites);
 
       return toResponse(settings, true);
     },

@@ -211,8 +211,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
           if (managerIdsResult?.ok) {
             await workUnitsRepo.clearManagers(idResult.value, tx);
-            await workUnitsRepo.addManagers(idResult.value, managerIdsResult.value, tx);
-            await workUnitsRepo.addUsersToUnit(idResult.value, managerIdsResult.value, tx);
+            await Promise.all([
+              workUnitsRepo.addManagers(idResult.value, managerIdsResult.value, tx),
+              workUnitsRepo.addUsersToUnit(idResult.value, managerIdsResult.value, tx),
+            ]);
           }
 
           return workUnitsRepo.findById(idResult.value, tx);

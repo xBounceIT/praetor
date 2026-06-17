@@ -158,7 +158,7 @@ const getDbErrorCode = (err: unknown, depth = 0): string | undefined => {
 const withSerializableWriteTransaction = async <T>(
   callback: (tx: DbExecutor) => Promise<T>,
 ): Promise<T> => {
-  for (let attempt = 1; ; attempt += 1) {
+  const runAttempt = async (attempt: number): Promise<T> => {
     try {
       return await withDbTransaction(callback, {
         isolationLevel: 'serializable',
@@ -171,8 +171,11 @@ const withSerializableWriteTransaction = async <T>(
       ) {
         throw err;
       }
+      return runAttempt(attempt + 1);
     }
-  }
+  };
+
+  return runAttempt(1);
 };
 
 export const listTimeEntries = async (

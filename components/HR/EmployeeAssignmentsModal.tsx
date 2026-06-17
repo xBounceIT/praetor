@@ -220,75 +220,227 @@ const employeeAssignmentsReducer = (
   }
 };
 
-const EmployeeAssignmentsModal: React.FC<EmployeeAssignmentsModalProps> = ({
-  user,
+type AssignmentColumnItem = {
+  id: string;
+  name: string;
+  subtitle?: string;
+};
+
+const AssignmentColumn: React.FC<{
+  title: string;
+  count: number;
+  searchLabel: string;
+  searchValue: string;
+  items: AssignmentColumnItem[];
+  selectedIds: string[];
+  emptyMessage: string;
+  onSearchChange: (value: string) => void;
+  onToggle: (id: string) => void;
+}> = ({
+  title,
+  count,
+  searchLabel,
+  searchValue,
+  items,
+  selectedIds,
+  emptyMessage,
+  onSearchChange,
+  onToggle,
+}) => (
+  <div className="space-y-3">
+    <div className="sticky top-0 bg-card z-10 pb-2 border-b border-border mb-2">
+      <div className="flex items-center justify-between py-2">
+        <h4 className="font-semibold text-foreground text-sm uppercase tracking-wider">{title}</h4>
+        <span className="text-xs font-bold bg-muted text-muted-foreground px-2 py-0.5 rounded-full">
+          {count}
+        </span>
+      </div>
+      <input
+        type="text"
+        placeholder={searchLabel}
+        aria-label={searchLabel}
+        value={searchValue}
+        onChange={(event) => onSearchChange(event.target.value)}
+        className="w-full px-3 py-1.5 text-sm border border-border bg-background text-foreground rounded-lg focus:ring-2 focus:ring-praetor outline-none placeholder:text-muted-foreground"
+      />
+    </div>
+    <div className="space-y-2">
+      {items.map((item) => {
+        const selected = selectedIds.includes(item.id);
+        return (
+          <label
+            key={item.id}
+            className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
+              selected ? 'bg-accent border-border shadow-sm' : 'bg-card border-border hover:border-input'
+            }`}
+          >
+            <div className="relative flex items-center justify-center shrink-0">
+              <input
+                type="checkbox"
+                checked={selected}
+                onChange={() => onToggle(item.id)}
+                aria-label={item.name}
+                className="sr-only peer"
+              />
+              <div className="size-5 rounded-full border-2 border-border relative transition-all peer-checked:bg-praetor peer-checked:border-praetor bg-background shadow-sm flex items-center justify-center">
+                <div
+                  className={`size-2 rounded-full transition-all duration-200 ${
+                    selected ? 'bg-white scale-100 opacity-100' : 'bg-zinc-200 scale-0 opacity-0'
+                  }`}
+                ></div>
+              </div>
+            </div>
+            <span
+              className={`text-sm font-semibold ${
+                selected ? 'text-foreground' : 'text-muted-foreground'
+              }`}
+            >
+              {item.name}
+              {item.subtitle && (
+                <span className="block text-[10px] font-normal text-muted-foreground">
+                  {item.subtitle}
+                </span>
+              )}
+            </span>
+          </label>
+        );
+      })}
+      {items.length === 0 && <p className="text-xs text-muted-foreground italic">{emptyMessage}</p>}
+    </div>
+  </div>
+);
+
+const EmployeeAssignmentsHeader: React.FC<{
+  title: string;
+  closeLabel: string;
+  onClose: () => void;
+}> = ({ title, closeLabel, onClose }) => (
+  <div className="px-6 py-4 border-b border-border flex items-center justify-between bg-muted/50">
+    <h3 className="font-semibold text-lg text-foreground">{title}</h3>
+    <button
+      type="button"
+      onClick={onClose}
+      aria-label={closeLabel}
+      className="text-muted-foreground hover:text-foreground transition-colors"
+    >
+      <i className="fa-solid fa-xmark text-xl"></i>
+    </button>
+  </div>
+);
+
+const EmployeeAssignmentsFooter: React.FC<{
+  cancelLabel: string;
+  saveLabel: string;
+  isDirty: boolean;
+  loadFailed: boolean;
+  onClose: () => void;
+  onSave: () => void;
+}> = ({ cancelLabel, saveLabel, isDirty, loadFailed, onClose, onSave }) => (
+  <div className="p-6 border-t border-border bg-muted/50 flex justify-end gap-3">
+    <button
+      type="button"
+      onClick={onClose}
+      className="px-4 py-2 text-muted-foreground font-bold hover:bg-muted rounded-lg transition-colors text-sm"
+    >
+      {cancelLabel}
+    </button>
+    <button
+      type="button"
+      onClick={onSave}
+      disabled={!isDirty || loadFailed}
+      className={`px-6 py-2 font-bold rounded-lg transition-all shadow-sm active:scale-95 text-sm ${
+        !isDirty || loadFailed
+          ? 'bg-muted text-muted-foreground cursor-not-allowed border border-border'
+          : 'bg-praetor text-white hover:bg-praetor/90'
+      }`}
+    >
+      {saveLabel}
+    </button>
+  </div>
+);
+
+const AssignmentsLoadingState: React.FC = () => (
+  <div className="flex items-center justify-center py-12">
+    <i className="fa-solid fa-circle-notch fa-spin text-3xl text-praetor"></i>
+  </div>
+);
+
+const AssignmentsLoadError: React.FC<{ message: string }> = ({ message }) => (
+  <div className="flex flex-col items-center justify-center py-12 text-center px-4">
+    <i className="fa-solid fa-triangle-exclamation text-3xl text-red-500 mb-3"></i>
+    <p className="text-sm text-muted-foreground max-w-sm">{message}</p>
+  </div>
+);
+
+const AssignmentFilters: React.FC<{
+  clientOptions: { id: string; name: string }[];
+  projectOptions: { id: string; name: string }[];
+  filterClientId: string;
+  filterProjectId: string;
+  clientPlaceholder: string;
+  projectPlaceholder: string;
+  onClientChange: (value: string) => void;
+  onProjectChange: (value: string) => void;
+}> = ({
+  clientOptions,
+  projectOptions,
+  filterClientId,
+  filterProjectId,
+  clientPlaceholder,
+  projectPlaceholder,
+  onClientChange,
+  onProjectChange,
+}) => (
+  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+    <SelectControl
+      options={clientOptions}
+      value={filterClientId}
+      onChange={(value) => onClientChange(value as string)}
+      placeholder={clientPlaceholder}
+      searchable={true}
+      buttonClassName="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm font-semibold text-foreground shadow-sm"
+    />
+    <SelectControl
+      options={projectOptions}
+      value={filterProjectId}
+      onChange={(value) => onProjectChange(value as string)}
+      placeholder={projectPlaceholder}
+      searchable={true}
+      buttonClassName="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm font-semibold text-foreground shadow-sm"
+      disabled={projectOptions.length === 1}
+    />
+  </div>
+);
+
+type EmployeeAssignmentOptionsInput = {
+  clients: Client[];
+  projects: Project[];
+  tasks: ProjectTask[];
+  clientSearch: string;
+  projectSearch: string;
+  taskSearch: string;
+  filterClientId: string;
+  filterProjectId: string;
+};
+
+const useEmployeeAssignmentOptions = ({
   clients,
   projects,
   tasks,
-  isOpen,
-  onClose,
-}) => {
-  const { t } = useTranslation(['hr', 'common']);
-  const [state, dispatch] = useReducer(
-    employeeAssignmentsReducer,
-    undefined,
-    createEmployeeAssignmentsState,
+  clientSearch,
+  projectSearch,
+  taskSearch,
+  filterClientId,
+  filterProjectId,
+}: EmployeeAssignmentOptionsInput) => {
+  const { t } = useTranslation(['hr']);
+  const filteredProjectsForFilter = useMemo(
+    () =>
+      filterClientId === 'all'
+        ? projects
+        : projects.filter((project) => project.clientId === filterClientId),
+    [filterClientId, projects],
   );
-  const {
-    assignments,
-    initialAssignments,
-    clientSearch,
-    projectSearch,
-    taskSearch,
-    filterClientId,
-    filterProjectId,
-    isLoadingAssignments,
-    loadFailed,
-  } = state;
-  const modalSessionKey = isOpen && user ? user.id : 'closed';
-  const activeModalSessionKeyRef = useRef(modalSessionKey);
-
-  if (activeModalSessionKeyRef.current !== modalSessionKey) {
-    activeModalSessionKeyRef.current = modalSessionKey;
-    dispatch({ type: 'resetSession', isLoadingAssignments: modalSessionKey !== 'closed' });
-  }
-
-  useEffect(() => {
-    if (!isOpen || !user) return;
-
-    let isCancelled = false;
-
-    const loadAssignments = async () => {
-      try {
-        const data = await usersApi.getAssignments(user.id);
-        if (isCancelled) return;
-        dispatch({ type: 'loadSuccess', assignments: data });
-      } catch (err) {
-        if (isCancelled) return;
-        console.error('Failed to load assignments', err);
-        dispatch({ type: 'loadFailed' });
-        toastError(t('hr:workforce.failedToLoadAssignments'));
-      }
-    };
-
-    loadAssignments();
-
-    return () => {
-      isCancelled = true;
-    };
-  }, [isOpen, user, t]);
-
-  if (filterClientId !== 'all' && filterProjectId !== 'all') {
-    const selectedProject = projects.find((project) => project.id === filterProjectId);
-    if (!selectedProject || selectedProject.clientId !== filterClientId) {
-      dispatch({ type: 'setFilterProject', value: 'all' });
-    }
-  }
-
-  const filteredProjectsForFilter =
-    filterClientId === 'all'
-      ? projects
-      : projects.filter((project) => project.clientId === filterClientId);
 
   const clientFilterOptions = useMemo(
     () => [
@@ -398,8 +550,129 @@ const EmployeeAssignmentsModal: React.FC<EmployeeAssignmentsModalProps> = ({
     tasks,
   ]);
 
+  const visibleClientItems = useMemo(
+    () => visibleClients.map((client) => ({ id: client.id, name: client.name })),
+    [visibleClients],
+  );
+  const visibleProjectItems = useMemo(
+    () =>
+      visibleProjects.map((project) => ({
+        id: project.id,
+        name: project.name,
+        subtitle:
+          clients.find((client) => client.id === project.clientId)?.name ||
+          t('hr:workforce.unknownClient'),
+      })),
+    [clients, visibleProjects, t],
+  );
+  const visibleTaskItems = useMemo(
+    () =>
+      visibleTasks.map((task) => ({
+        id: task.id,
+        name: task.name,
+        subtitle:
+          projects.find((project) => project.id === task.projectId)?.name ||
+          t('hr:workforce.unknownProject'),
+      })),
+    [projects, visibleTasks, t],
+  );
+
+  return {
+    clientFilterOptions,
+    projectFilterOptions,
+    visibleClientItems,
+    visibleProjectItems,
+    visibleTaskItems,
+  };
+};
+
+const EmployeeAssignmentsModal: React.FC<EmployeeAssignmentsModalProps> = ({
+  user,
+  clients,
+  projects,
+  tasks,
+  isOpen,
+  onClose,
+}) => {
+  const { t } = useTranslation(['hr', 'common']);
+  const [state, dispatch] = useReducer(
+    employeeAssignmentsReducer,
+    undefined,
+    createEmployeeAssignmentsState,
+  );
+  const {
+    assignments,
+    initialAssignments,
+    clientSearch,
+    projectSearch,
+    taskSearch,
+    filterClientId,
+    filterProjectId,
+    isLoadingAssignments,
+    loadFailed,
+  } = state;
+  const modalSessionKey = isOpen && user ? user.id : 'closed';
+  const activeModalSessionKeyRef = useRef(modalSessionKey);
+
+  if (activeModalSessionKeyRef.current !== modalSessionKey) {
+    activeModalSessionKeyRef.current = modalSessionKey;
+    dispatch({ type: 'resetSession', isLoadingAssignments: modalSessionKey !== 'closed' });
+  }
+
+  useEffect(() => {
+    if (!isOpen || !user) return;
+
+    let isCancelled = false;
+
+    const loadAssignments = async () => {
+      try {
+        const data = await usersApi.getAssignments(user.id);
+        if (isCancelled) return;
+        dispatch({ type: 'loadSuccess', assignments: data });
+      } catch (err) {
+        if (isCancelled) return;
+        console.error('Failed to load assignments', err);
+        dispatch({ type: 'loadFailed' });
+        toastError(t('hr:workforce.failedToLoadAssignments'));
+      }
+    };
+
+    loadAssignments();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [isOpen, user, t]);
+
+  const {
+    clientFilterOptions,
+    projectFilterOptions,
+    visibleClientItems,
+    visibleProjectItems,
+    visibleTaskItems,
+  } = useEmployeeAssignmentOptions({
+    clientSearch,
+    clients,
+    filterClientId,
+    filterProjectId,
+    projectSearch,
+    projects,
+    taskSearch,
+    tasks,
+  });
+
   const toggleAssignment = (assignmentType: AssignmentKind, id: string) => {
     dispatch({ type: 'toggleAssignment', assignmentType, id, clients, projects, tasks });
+  };
+
+  const handleClientFilterChange = (value: string) => {
+    dispatch({ type: 'setFilterClient', value });
+    if (value === 'all' || filterProjectId === 'all') return;
+
+    const selectedProject = projects.find((project) => project.id === filterProjectId);
+    if (!selectedProject || selectedProject.clientId !== value) {
+      dispatch({ type: 'setFilterProject', value: 'all' });
+    }
   };
 
   const saveAssignments = async () => {
@@ -433,302 +706,77 @@ const EmployeeAssignmentsModal: React.FC<EmployeeAssignmentsModalProps> = ({
       backdropClass="bg-zinc-900/50 backdrop-blur-sm"
     >
       <div className="bg-card rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-        <div className="px-6 py-4 border-b border-border flex items-center justify-between bg-muted/50">
-          <h3 className="font-semibold text-lg text-foreground">
-            {t('hr:workforce.manageAccess', { name: user.name })}
-          </h3>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label={t('common:buttons.close')}
-            className="text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <i className="fa-solid fa-xmark text-xl"></i>
-          </button>
-        </div>
+        <EmployeeAssignmentsHeader
+          title={t('hr:workforce.manageAccess', { name: user.name })}
+          closeLabel={t('common:buttons.close')}
+          onClose={onClose}
+        />
 
         <div className="p-6 overflow-y-auto flex-1">
           {isLoadingAssignments ? (
-            <div className="flex items-center justify-center py-12">
-              <i className="fa-solid fa-circle-notch fa-spin text-3xl text-praetor"></i>
-            </div>
+            <AssignmentsLoadingState />
           ) : loadFailed ? (
-            <div className="flex flex-col items-center justify-center py-12 text-center px-4">
-              <i className="fa-solid fa-triangle-exclamation text-3xl text-red-500 mb-3"></i>
-              <p className="text-sm text-muted-foreground max-w-sm">
-                {t('hr:workforce.failedToLoadAssignments')}
-              </p>
-            </div>
+            <AssignmentsLoadError message={t('hr:workforce.failedToLoadAssignments')} />
           ) : (
             <>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                <SelectControl
-                  options={clientFilterOptions}
-                  value={filterClientId}
-                  onChange={(value) =>
-                    dispatch({ type: 'setFilterClient', value: value as string })
-                  }
-                  placeholder={t('hr:workforce.filterByClient')}
-                  searchable={true}
-                  buttonClassName="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm font-semibold text-foreground shadow-sm"
-                />
-                <SelectControl
-                  options={projectFilterOptions}
-                  value={filterProjectId}
-                  onChange={(value) =>
-                    dispatch({ type: 'setFilterProject', value: value as string })
-                  }
-                  placeholder={t('hr:workforce.filterByProject')}
-                  searchable={true}
-                  buttonClassName="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm font-semibold text-foreground shadow-sm"
-                  disabled={projectFilterOptions.length === 1}
-                />
-              </div>
+              <AssignmentFilters
+                clientOptions={clientFilterOptions}
+                projectOptions={projectFilterOptions}
+                filterClientId={filterClientId}
+                filterProjectId={filterProjectId}
+                clientPlaceholder={t('hr:workforce.filterByClient')}
+                projectPlaceholder={t('hr:workforce.filterByProject')}
+                onClientChange={handleClientFilterChange}
+                onProjectChange={(value) => dispatch({ type: 'setFilterProject', value })}
+              />
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="space-y-3">
-                  <div className="sticky top-0 bg-card z-10 pb-2 border-b border-border mb-2">
-                    <div className="flex items-center justify-between py-2">
-                      <h4 className="font-semibold text-foreground text-sm uppercase tracking-wider">
-                        {t('hr:workforce.clients')}
-                      </h4>
-                      <span className="text-xs font-bold bg-muted text-muted-foreground px-2 py-0.5 rounded-full">
-                        {assignments.clientIds.length}
-                      </span>
-                    </div>
-                    <input
-                      type="text"
-                      placeholder={t('hr:workforce.searchClients')}
-                      aria-label={t('hr:workforce.searchClients')}
-                      value={clientSearch}
-                      onChange={(event) =>
-                        dispatch({ type: 'setClientSearch', value: event.target.value })
-                      }
-                      className="w-full px-3 py-1.5 text-sm border border-border bg-background text-foreground rounded-lg focus:ring-2 focus:ring-praetor outline-none placeholder:text-muted-foreground"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    {visibleClients.map((client) => (
-                      <label
-                        key={client.id}
-                        className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
-                          assignments.clientIds.includes(client.id)
-                            ? 'bg-accent border-border shadow-sm'
-                            : 'bg-card border-border hover:border-input'
-                        }`}
-                      >
-                        <div className="relative flex items-center justify-center shrink-0">
-                          <input
-                            type="checkbox"
-                            checked={assignments.clientIds.includes(client.id)}
-                            onChange={() => toggleAssignment('client', client.id)}
-                            aria-label={client.name}
-                            className="sr-only peer"
-                          />
-                          <div className="size-5 rounded-full border-2 border-border relative transition-all peer-checked:bg-praetor peer-checked:border-praetor bg-background shadow-sm flex items-center justify-center">
-                            <div
-                              className={`size-2 rounded-full transition-all duration-200 ${
-                                assignments.clientIds.includes(client.id)
-                                  ? 'bg-white scale-100 opacity-100'
-                                  : 'bg-zinc-200 scale-0 opacity-0'
-                              }`}
-                            ></div>
-                          </div>
-                        </div>
-                        <span
-                          className={`text-sm font-semibold ${
-                            assignments.clientIds.includes(client.id)
-                              ? 'text-foreground'
-                              : 'text-muted-foreground'
-                          }`}
-                        >
-                          {client.name}
-                        </span>
-                      </label>
-                    ))}
-                    {clients.length === 0 && (
-                      <p className="text-xs text-muted-foreground italic">
-                        {t('hr:workforce.noClientsFound')}
-                      </p>
-                    )}
-                  </div>
-                </div>
-
-                <div className="space-y-3">
-                  <div className="sticky top-0 bg-card z-10 pb-2 border-b border-border mb-2">
-                    <div className="flex items-center justify-between py-2">
-                      <h4 className="font-semibold text-foreground text-sm uppercase tracking-wider">
-                        {t('hr:workforce.projects')}
-                      </h4>
-                      <span className="text-xs font-bold bg-muted text-muted-foreground px-2 py-0.5 rounded-full">
-                        {assignments.projectIds.length}
-                      </span>
-                    </div>
-                    <input
-                      type="text"
-                      placeholder={t('hr:workforce.searchProjects')}
-                      aria-label={t('hr:workforce.searchProjects')}
-                      value={projectSearch}
-                      onChange={(event) =>
-                        dispatch({ type: 'setProjectSearch', value: event.target.value })
-                      }
-                      className="w-full px-3 py-1.5 text-sm border border-border bg-background text-foreground rounded-lg focus:ring-2 focus:ring-praetor outline-none placeholder:text-muted-foreground"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    {visibleProjects.map((project) => (
-                      <label
-                        key={project.id}
-                        className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
-                          assignments.projectIds.includes(project.id)
-                            ? 'bg-accent border-border shadow-sm'
-                            : 'bg-card border-border hover:border-input'
-                        }`}
-                      >
-                        <div className="relative flex items-center justify-center shrink-0">
-                          <input
-                            type="checkbox"
-                            checked={assignments.projectIds.includes(project.id)}
-                            onChange={() => toggleAssignment('project', project.id)}
-                            aria-label={project.name}
-                            className="sr-only peer"
-                          />
-                          <div className="size-5 rounded-full border-2 border-border relative transition-all peer-checked:bg-praetor peer-checked:border-praetor bg-background shadow-sm flex items-center justify-center">
-                            <div
-                              className={`size-2 rounded-full transition-all duration-200 ${
-                                assignments.projectIds.includes(project.id)
-                                  ? 'bg-white scale-100 opacity-100'
-                                  : 'bg-zinc-200 scale-0 opacity-0'
-                              }`}
-                            ></div>
-                          </div>
-                        </div>
-                        <div className="flex flex-col">
-                          <span
-                            className={`text-sm font-semibold ${
-                              assignments.projectIds.includes(project.id)
-                                ? 'text-foreground'
-                                : 'text-muted-foreground'
-                            }`}
-                          >
-                            {project.name}
-                          </span>
-                          <span className="text-[10px] text-muted-foreground">
-                            {clients.find((client) => client.id === project.clientId)?.name ||
-                              t('hr:workforce.unknownClient')}
-                          </span>
-                        </div>
-                      </label>
-                    ))}
-                    {projects.length === 0 && (
-                      <p className="text-xs text-muted-foreground italic">
-                        {t('hr:workforce.noProjectsFound')}
-                      </p>
-                    )}
-                  </div>
-                </div>
-
-                <div className="space-y-3">
-                  <div className="sticky top-0 bg-card z-10 pb-2 border-b border-border mb-2">
-                    <div className="flex items-center justify-between py-2">
-                      <h4 className="font-semibold text-foreground text-sm uppercase tracking-wider">
-                        {t('hr:workforce.tasks')}
-                      </h4>
-                      <span className="text-xs font-bold bg-muted text-muted-foreground px-2 py-0.5 rounded-full">
-                        {assignments.taskIds.length}
-                      </span>
-                    </div>
-                    <input
-                      type="text"
-                      placeholder={t('hr:workforce.searchTasks')}
-                      aria-label={t('hr:workforce.searchTasks')}
-                      value={taskSearch}
-                      onChange={(event) =>
-                        dispatch({ type: 'setTaskSearch', value: event.target.value })
-                      }
-                      className="w-full px-3 py-1.5 text-sm border border-border bg-background text-foreground rounded-lg focus:ring-2 focus:ring-praetor outline-none placeholder:text-muted-foreground"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    {visibleTasks.map((task) => {
-                      const project = projects.find((item) => item.id === task.projectId);
-                      return (
-                        <label
-                          key={task.id}
-                          className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
-                            assignments.taskIds.includes(task.id)
-                              ? 'bg-accent border-border shadow-sm'
-                              : 'bg-card border-border hover:border-input'
-                          }`}
-                        >
-                          <div className="relative flex items-center justify-center shrink-0">
-                            <input
-                              type="checkbox"
-                              checked={assignments.taskIds.includes(task.id)}
-                              onChange={() => toggleAssignment('task', task.id)}
-                              aria-label={task.name}
-                              className="sr-only peer"
-                            />
-                            <div className="size-5 rounded-full border-2 border-border relative transition-all peer-checked:bg-praetor peer-checked:border-praetor bg-background shadow-sm flex items-center justify-center">
-                              <div
-                                className={`size-2 rounded-full transition-all duration-200 ${
-                                  assignments.taskIds.includes(task.id)
-                                    ? 'bg-white scale-100 opacity-100'
-                                    : 'bg-zinc-200 scale-0 opacity-0'
-                                }`}
-                              ></div>
-                            </div>
-                          </div>
-                          <div className="flex flex-col">
-                            <span
-                              className={`text-sm font-semibold ${
-                                assignments.taskIds.includes(task.id)
-                                  ? 'text-foreground'
-                                  : 'text-muted-foreground'
-                              }`}
-                            >
-                              {task.name}
-                            </span>
-                            <span className="text-[10px] text-muted-foreground">
-                              {project?.name || t('hr:workforce.unknownProject')}
-                            </span>
-                          </div>
-                        </label>
-                      );
-                    })}
-                    {tasks.length === 0 && (
-                      <p className="text-xs text-muted-foreground italic">
-                        {t('hr:workforce.noTasksFound')}
-                      </p>
-                    )}
-                  </div>
-                </div>
+                <AssignmentColumn
+                  title={t('hr:workforce.clients')}
+                  count={assignments.clientIds.length}
+                  searchLabel={t('hr:workforce.searchClients')}
+                  searchValue={clientSearch}
+                  items={visibleClientItems}
+                  selectedIds={assignments.clientIds}
+                  emptyMessage={t('hr:workforce.noClientsFound')}
+                  onSearchChange={(value) => dispatch({ type: 'setClientSearch', value })}
+                  onToggle={(id) => toggleAssignment('client', id)}
+                />
+                <AssignmentColumn
+                  title={t('hr:workforce.projects')}
+                  count={assignments.projectIds.length}
+                  searchLabel={t('hr:workforce.searchProjects')}
+                  searchValue={projectSearch}
+                  items={visibleProjectItems}
+                  selectedIds={assignments.projectIds}
+                  emptyMessage={t('hr:workforce.noProjectsFound')}
+                  onSearchChange={(value) => dispatch({ type: 'setProjectSearch', value })}
+                  onToggle={(id) => toggleAssignment('project', id)}
+                />
+                <AssignmentColumn
+                  title={t('hr:workforce.tasks')}
+                  count={assignments.taskIds.length}
+                  searchLabel={t('hr:workforce.searchTasks')}
+                  searchValue={taskSearch}
+                  items={visibleTaskItems}
+                  selectedIds={assignments.taskIds}
+                  emptyMessage={t('hr:workforce.noTasksFound')}
+                  onSearchChange={(value) => dispatch({ type: 'setTaskSearch', value })}
+                  onToggle={(id) => toggleAssignment('task', id)}
+                />
               </div>
             </>
           )}
         </div>
 
-        <div className="p-6 border-t border-border bg-muted/50 flex justify-end gap-3">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-4 py-2 text-muted-foreground font-bold hover:bg-muted rounded-lg transition-colors text-sm"
-          >
-            {t('common:buttons.cancel')}
-          </button>
-          <button
-            type="button"
-            onClick={saveAssignments}
-            disabled={!isDirty || loadFailed}
-            className={`px-6 py-2 font-bold rounded-lg transition-all shadow-sm active:scale-95 text-sm ${
-              !isDirty || loadFailed
-                ? 'bg-muted text-muted-foreground cursor-not-allowed border border-border'
-                : 'bg-praetor text-white hover:bg-praetor/90'
-            }`}
-          >
-            {t('hr:workforce.saveAssignments')}
-          </button>
-        </div>
+        <EmployeeAssignmentsFooter
+          cancelLabel={t('common:buttons.cancel')}
+          saveLabel={t('hr:workforce.saveAssignments')}
+          isDirty={isDirty}
+          loadFailed={loadFailed}
+          onClose={onClose}
+          onSave={saveAssignments}
+        />
       </div>
     </Modal>
   );

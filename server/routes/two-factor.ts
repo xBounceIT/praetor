@@ -98,6 +98,37 @@ const disableBodySchema = {
   },
 } as const;
 
+const hashBackupCodesForStorage = async (
+  plaintextCodes: readonly string[],
+): Promise<TotpBackupCode[]> =>
+  Promise.all(
+    plaintextCodes.map(async (plain) => ({ hash: await hashBackupCode(plain), usedAt: null })),
+  );
+
+const logTotpEnabled = (request: FastifyRequest, userId: string) =>
+  logAudit({
+    request,
+    action: 'user.totp_enabled',
+    entityType: 'user',
+    entityId: userId,
+    userId,
+  });
+
+const persistRegeneratedBackupCodes = async (
+  request: FastifyRequest,
+  userId: string,
+  codes: TotpBackupCode[],
+) => {
+  await usersRepo.setBackupCodes(userId, codes);
+  await logAudit({
+    request,
+    action: 'user.totp_backup_codes_regenerated',
+    entityType: 'user',
+    entityId: userId,
+    userId,
+  });
+};
+
 export default async function (fastify: FastifyInstance, _opts: unknown) {
   // POST /setup - Begin enrollment: generate + store an (unconfirmed) secret and backup codes,
   // return the secret/otpauth URI/QR plus the one-time plaintext backup codes. Reachable both by a
@@ -350,23 +381,18 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
       const newSessionVersion = enableOutcome.sessionVersion;
 
-      await logAudit({
-        request,
-        action: 'user.totp_enabled',
-        entityType: 'user',
-        entityId: userId,
-        userId,
-      });
-
       // Enroll-token path: the user had no session, so mint one now (mirroring the login no-2FA
       // success response). Mint it AFTER the rotation above, carrying the bumped sessionVersion, so
       // the new session is valid while any pre-enrollment sessions stay revoked. The account was
       // already re-validated above, before TOTP was enabled.
       if (enrollLoginUser) {
-        const session = await buildSessionSuccess({
-          ...enrollLoginUser,
-          sessionVersion: newSessionVersion ?? enrollLoginUser.sessionVersion,
-        });
+        const [session] = await Promise.all([
+          buildSessionSuccess({
+            ...enrollLoginUser,
+            sessionVersion: newSessionVersion ?? enrollLoginUser.sessionVersion,
+          }),
+          logTotpEnabled(request, userId),
+        ]);
         // This is the user's real login — they had no session, only an enroll token. Log
         // `user.login` here so a session born from mandatory enrollment isn't missing from the
         // sign-in audit trail (mirrors the /login no-2FA path and /totp-challenge).
@@ -383,6 +409,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         });
         return { enabled: true, ...session };
       }
+
+      await logTotpEnabled(request, userId);
 
       // Session path: re-sign the caller's x-auth-token with the bumped version (mirrors /disable)
       // so enabling 2FA keeps the current device signed in while still revoking the user's other
@@ -502,8 +530,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       // replacement x-auth-token (re-signed below, mirroring settings.ts PUT /password, so they
       // aren't logged out) is minted from the committed value without an extra read or a race.
       const newSessionVersion = await withDbTransaction(async (tx) => {
-        await usersRepo.disableTotp(userId, tx);
-        await usersRepo.bumpSessionVersion(userId, tx);
+        await Promise.all([
+          usersRepo.disableTotp(userId, tx),
+          usersRepo.bumpSessionVersion(userId, tx),
+        ]);
         const refreshed = await usersRepo.findAuthUserById(userId, tx);
         return refreshed?.sessionVersion;
       });
@@ -581,18 +611,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       const plaintextCodes = generateBackupCodes();
-      const codes: TotpBackupCode[] = await Promise.all(
-        plaintextCodes.map(async (plain) => ({ hash: await hashBackupCode(plain), usedAt: null })),
-      );
-      await usersRepo.setBackupCodes(userId, codes);
-
-      await logAudit({
-        request,
-        action: 'user.totp_backup_codes_regenerated',
-        entityType: 'user',
-        entityId: userId,
-        userId,
-      });
+      const codes = await hashBackupCodesForStorage(plaintextCodes);
+      await persistRegeneratedBackupCodes(request, userId, codes);
 
       return { backupCodes: plaintextCodes };
     },

@@ -189,9 +189,33 @@ describe('assertNoDemoDocumentIdConflicts', () => {
     await expect(assertNoDemoDocumentIdConflicts(client, 2027)).resolves.toBeUndefined();
     expect(calls[0]?.params?.[0]).toEqual(buildDemoIds(2027).quotes);
   });
+
+  test('allows compatibility demo clients to be cleaned before reseeding', async () => {
+    const { calls, client } = buildQueryRecorder(0);
+
+    await assertNoDemoDocumentIdConflicts(client, 2027);
+
+    expect(calls[0]?.params?.[5]).toEqual([
+      ...COMPATIBILITY_DEFAULTS.clients,
+      ...buildDemoIds(2027).clients,
+    ]);
+  });
 });
 
 describe('demoSeedManifest assignment coverage', () => {
+  test('seed.sql document collision guard allows compatibility demo clients', () => {
+    const guardStart = SEED_SQL.indexOf('INSERT INTO demo_document_code_conflicts');
+    const guardEnd = SEED_SQL.indexOf('SELECT CASE', guardStart);
+
+    expect(guardStart).toBeGreaterThan(-1);
+    expect(guardEnd).toBeGreaterThan(guardStart);
+    const guard = SEED_SQL.slice(guardStart, guardEnd);
+
+    expect(guard).toContain("q.client_id NOT IN ('c1', 'c2')");
+    expect(guard).toContain("o.client_id NOT IN ('c1', 'c2')");
+    expect(guard).toContain("s.client_id NOT IN ('c1', 'c2')");
+  });
+
   test('manifest document IDs use the admin default document code templates', () => {
     expect(DEMO_QUOTES.map((row) => row.id)).toEqual(documentCodesFor('client_quote', 14));
     expect(DEMO_CUSTOMER_OFFERS.map((row) => row.id)).toEqual(documentCodesFor('client_offer', 5));

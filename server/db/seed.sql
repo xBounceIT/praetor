@@ -113,6 +113,7 @@ JOIN pg_temp.demo_document_codes codes
   ON codes.module_id = 'client_quote'
  AND codes.code = q.id
 WHERE q.client_id NOT IN ('dm_cli_01', 'dm_cli_02', 'dm_cli_03', 'dm_cli_04', 'dm_cli_05')
+  AND q.client_id NOT IN ('c1', 'c2')
 UNION ALL
 SELECT 'customer_offers', o.id
 FROM customer_offers o
@@ -120,6 +121,7 @@ JOIN pg_temp.demo_document_codes codes
   ON codes.module_id = 'client_offer'
  AND codes.code = o.id
 WHERE o.client_id NOT IN ('dm_cli_01', 'dm_cli_02', 'dm_cli_03', 'dm_cli_04', 'dm_cli_05')
+  AND o.client_id NOT IN ('c1', 'c2')
 UNION ALL
 SELECT 'sales', s.id
 FROM sales s
@@ -127,6 +129,7 @@ JOIN pg_temp.demo_document_codes codes
   ON codes.module_id = 'client_order'
  AND codes.code = s.id
 WHERE s.client_id NOT IN ('dm_cli_01', 'dm_cli_02', 'dm_cli_03', 'dm_cli_04', 'dm_cli_05')
+  AND s.client_id NOT IN ('c1', 'c2')
 UNION ALL
 SELECT 'supplier_quotes', sq.id
 FROM supplier_quotes sq

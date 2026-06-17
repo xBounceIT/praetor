@@ -22,7 +22,7 @@ import {
   User,
 } from 'lucide-react';
 import type React from 'react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useReducer, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { siModelcontextprotocol } from 'simple-icons';
 import TotpSetupWizard from '@/components/TotpSetupWizard';
@@ -244,7 +244,147 @@ const RIL_WEEKDAY_KEYS: readonly RilWeekday[] = [
   'friday',
 ];
 
-const UserSettings: React.FC<UserSettingsProps> = ({
+type UserSettingsTab = 'profile' | 'appearance' | 'language' | 'security' | 'mcp' | 'ril';
+
+type TotpStatus = {
+  enabled: boolean;
+  applicable: boolean;
+  featureEnabled: boolean;
+  required: boolean;
+};
+
+type StateUpdate<T> = T | ((prev: T) => T);
+
+type UserSettingsState = {
+  fullName: string;
+  email: string;
+  language: LanguagePreference;
+  currentTheme: Theme;
+  activeTab: UserSettingsTab;
+  rilWeekdayTransferDefaults: RilWeekdayTransferDefaults;
+  isSaving: boolean;
+  isSaved: boolean;
+  currentPassword: string;
+  newPassword: string;
+  confirmPassword: string;
+  isSavingPassword: boolean;
+  passwordError: string;
+  passwordSuccess: boolean;
+  mcpTokens: McpToken[];
+  mcpTokenName: string;
+  mcpTokenScope: McpTokenScope;
+  rawMcpToken: string;
+  mcpError: string;
+  isLoadingMcpTokens: boolean;
+  isCreatingMcpToken: boolean;
+  revokingMcpTokenId: string | null;
+  personalAccessToken: PersonalAccessToken | null;
+  isLoadingToken: boolean;
+  isRenewingToken: boolean;
+  tokenError: string;
+  totpStatus: TotpStatus | null;
+  isLoadingTotpStatus: boolean;
+  totpStatusError: string;
+  isTotpSetupOpen: boolean;
+  totpSetupPassword: string;
+  totpSetupReauthDone: boolean;
+  isDisableDialogOpen: boolean;
+  disablePassword: string;
+  disableCode: string;
+  isDisablingTotp: boolean;
+  disableError: string;
+  isRegenerateDialogOpen: boolean;
+  regenerateCode: string;
+  isRegeneratingCodes: boolean;
+  regenerateError: string;
+  regeneratedBackupCodes: string[] | null;
+};
+
+type UserSettingsStateValue = UserSettingsState[keyof UserSettingsState];
+type UserSettingsStateUpdater = StateUpdate<UserSettingsStateValue>;
+
+type UserSettingsAction =
+  | {
+      type: 'setField';
+      field: keyof UserSettingsState;
+      update: UserSettingsStateUpdater;
+    }
+  | { type: 'patch'; values: Partial<UserSettingsState> };
+
+type TwoFactorViewState = {
+  isFeatureDisabled: boolean;
+  isIdpManagedTotp: boolean;
+  isTotpEnabled: boolean;
+  isTotpRequired: boolean;
+};
+
+const resolveStateUpdate = <T,>(current: T, update: StateUpdate<T>): T =>
+  typeof update === 'function' ? (update as (prev: T) => T)(current) : update;
+
+const createUserSettingsInitialState = (settings: Settings): UserSettingsState => ({
+  fullName: settings.fullName,
+  email: settings.email,
+  language: settings.language || 'auto',
+  currentTheme: getTheme(),
+  activeTab: 'profile',
+  rilWeekdayTransferDefaults: settings.rilWeekdayTransferDefaults ?? {},
+  isSaving: false,
+  isSaved: false,
+  currentPassword: '',
+  newPassword: '',
+  confirmPassword: '',
+  isSavingPassword: false,
+  passwordError: '',
+  passwordSuccess: false,
+  mcpTokens: [],
+  mcpTokenName: '',
+  mcpTokenScope: 'full',
+  rawMcpToken: '',
+  mcpError: '',
+  isLoadingMcpTokens: false,
+  isCreatingMcpToken: false,
+  revokingMcpTokenId: null,
+  personalAccessToken: null,
+  isLoadingToken: false,
+  isRenewingToken: false,
+  tokenError: '',
+  totpStatus: null,
+  isLoadingTotpStatus: false,
+  totpStatusError: '',
+  isTotpSetupOpen: false,
+  totpSetupPassword: '',
+  totpSetupReauthDone: false,
+  isDisableDialogOpen: false,
+  disablePassword: '',
+  disableCode: '',
+  isDisablingTotp: false,
+  disableError: '',
+  isRegenerateDialogOpen: false,
+  regenerateCode: '',
+  isRegeneratingCodes: false,
+  regenerateError: '',
+  regeneratedBackupCodes: null,
+});
+
+const userSettingsReducer = (
+  state: UserSettingsState,
+  action: UserSettingsAction,
+): UserSettingsState => {
+  switch (action.type) {
+    case 'setField':
+      return {
+        ...state,
+        [action.field]: resolveStateUpdate(
+          state[action.field],
+          action.update as StateUpdate<typeof state[typeof action.field]>,
+        ),
+      };
+    case 'patch':
+      return { ...state, ...action.values };
+  }
+};
+
+const useUserSettingsController = ({
   settings,
   authMethod = 'local',
   authProviderName = null,
@@ -262,7 +402,7 @@ const UserSettings: React.FC<UserSettingsProps> = ({
   onRevokeMcpToken,
   onGetPersonalAccessToken,
   onRenewPersonalAccessToken,
-}) => {
+}: UserSettingsProps) => {
   const { t, i18n } = useTranslation(['settings', 'common']);
   const translateRef = useRef(t);
   const isLocalAuth = authMethod === 'local';
@@ -270,23 +410,234 @@ const UserSettings: React.FC<UserSettingsProps> = ({
     ? ''
     : authProviderName || t(`settings:identityProviders.${authMethod}`);
 
-  // Initialize the editable fields from `settings` once at mount. We deliberately
-  // do not re-sync on later `settings` prop changes: the parent re-creates the
-  // settings object on unrelated re-renders, and re-syncing would clobber the
-  // user's in-progress edits. When the form should be reset (e.g. after a logout
-  // or user switch), the parent unmounts/remounts this component.
-  const hasLoadedInitialSettingsRef = useRef(false);
-  const [fullName, setFullName] = useState('');
-  const [email, setEmail] = useState('');
-  const [language, setLanguage] = useState(settings.language || 'auto');
-  const [currentTheme, setCurrentTheme] = useState<Theme>(() => getTheme());
+  const [userSettingsState, dispatchUserSettings] = useReducer(
+    userSettingsReducer,
+    settings,
+    createUserSettingsInitialState,
+  );
+  const setUserSettingsField = useCallback(
+    <K extends keyof UserSettingsState>(field: K, update: StateUpdate<UserSettingsState[K]>) => {
+      dispatchUserSettings({ type: 'setField', field, update: update as UserSettingsStateUpdater });
+    },
+    [],
+  );
+  const {
+    fullName,
+    email,
+    language,
+    currentTheme,
+    activeTab,
+    rilWeekdayTransferDefaults,
+    isSaving,
+    isSaved,
+    currentPassword,
+    newPassword,
+    confirmPassword,
+    isSavingPassword,
+    passwordError,
+    passwordSuccess,
+    mcpTokens,
+    mcpTokenName,
+    mcpTokenScope,
+    rawMcpToken,
+    mcpError,
+    isLoadingMcpTokens,
+    isCreatingMcpToken,
+    revokingMcpTokenId,
+    personalAccessToken,
+    isLoadingToken,
+    isRenewingToken,
+    tokenError,
+    totpStatus,
+    isLoadingTotpStatus,
+    totpStatusError,
+    isTotpSetupOpen,
+    totpSetupPassword,
+    totpSetupReauthDone,
+    isDisableDialogOpen,
+    disablePassword,
+    disableCode,
+    isDisablingTotp,
+    disableError,
+    isRegenerateDialogOpen,
+    regenerateCode,
+    isRegeneratingCodes,
+    regenerateError,
+    regeneratedBackupCodes,
+  } = userSettingsState;
+  const setFullName = useCallback(
+    (update: StateUpdate<string>) => setUserSettingsField('fullName', update),
+    [setUserSettingsField],
+  );
+  const setEmail = useCallback(
+    (update: StateUpdate<string>) => setUserSettingsField('email', update),
+    [setUserSettingsField],
+  );
+  const setLanguage = useCallback(
+    (update: StateUpdate<LanguagePreference>) => setUserSettingsField('language', update),
+    [setUserSettingsField],
+  );
+  const setCurrentTheme = useCallback(
+    (update: StateUpdate<Theme>) => setUserSettingsField('currentTheme', update),
+    [setUserSettingsField],
+  );
+  const setActiveTab = useCallback(
+    (update: StateUpdate<UserSettingsTab>) => setUserSettingsField('activeTab', update),
+    [setUserSettingsField],
+  );
+  const setRilWeekdayTransferDefaults = useCallback(
+    (update: StateUpdate<RilWeekdayTransferDefaults>) =>
+      setUserSettingsField('rilWeekdayTransferDefaults', update),
+    [setUserSettingsField],
+  );
+  const setIsSaving = useCallback(
+    (update: StateUpdate<boolean>) => setUserSettingsField('isSaving', update),
+    [setUserSettingsField],
+  );
+  const setIsSaved = useCallback(
+    (update: StateUpdate<boolean>) => setUserSettingsField('isSaved', update),
+    [setUserSettingsField],
+  );
+  const setCurrentPassword = useCallback(
+    (update: StateUpdate<string>) => setUserSettingsField('currentPassword', update),
+    [setUserSettingsField],
+  );
+  const setNewPassword = useCallback(
+    (update: StateUpdate<string>) => setUserSettingsField('newPassword', update),
+    [setUserSettingsField],
+  );
+  const setConfirmPassword = useCallback(
+    (update: StateUpdate<string>) => setUserSettingsField('confirmPassword', update),
+    [setUserSettingsField],
+  );
+  const setIsSavingPassword = useCallback(
+    (update: StateUpdate<boolean>) => setUserSettingsField('isSavingPassword', update),
+    [setUserSettingsField],
+  );
+  const setPasswordError = useCallback(
+    (update: StateUpdate<string>) => setUserSettingsField('passwordError', update),
+    [setUserSettingsField],
+  );
+  const setPasswordSuccess = useCallback(
+    (update: StateUpdate<boolean>) => setUserSettingsField('passwordSuccess', update),
+    [setUserSettingsField],
+  );
+  const setMcpTokens = useCallback(
+    (update: StateUpdate<McpToken[]>) => setUserSettingsField('mcpTokens', update),
+    [setUserSettingsField],
+  );
+  const setMcpTokenName = useCallback(
+    (update: StateUpdate<string>) => setUserSettingsField('mcpTokenName', update),
+    [setUserSettingsField],
+  );
+  const setMcpTokenScope = useCallback(
+    (update: StateUpdate<McpTokenScope>) => setUserSettingsField('mcpTokenScope', update),
+    [setUserSettingsField],
+  );
+  const setRawMcpToken = useCallback(
+    (update: StateUpdate<string>) => setUserSettingsField('rawMcpToken', update),
+    [setUserSettingsField],
+  );
+  const setMcpError = useCallback(
+    (update: StateUpdate<string>) => setUserSettingsField('mcpError', update),
+    [setUserSettingsField],
+  );
+  const setIsLoadingMcpTokens = useCallback(
+    (update: StateUpdate<boolean>) => setUserSettingsField('isLoadingMcpTokens', update),
+    [setUserSettingsField],
+  );
+  const setIsCreatingMcpToken = useCallback(
+    (update: StateUpdate<boolean>) => setUserSettingsField('isCreatingMcpToken', update),
+    [setUserSettingsField],
+  );
+  const setRevokingMcpTokenId = useCallback(
+    (update: StateUpdate<string | null>) => setUserSettingsField('revokingMcpTokenId', update),
+    [setUserSettingsField],
+  );
+  const setPersonalAccessToken = useCallback(
+    (update: StateUpdate<PersonalAccessToken | null>) =>
+      setUserSettingsField('personalAccessToken', update),
+    [setUserSettingsField],
+  );
+  const setIsLoadingToken = useCallback(
+    (update: StateUpdate<boolean>) => setUserSettingsField('isLoadingToken', update),
+    [setUserSettingsField],
+  );
+  const setIsRenewingToken = useCallback(
+    (update: StateUpdate<boolean>) => setUserSettingsField('isRenewingToken', update),
+    [setUserSettingsField],
+  );
+  const setTokenError = useCallback(
+    (update: StateUpdate<string>) => setUserSettingsField('tokenError', update),
+    [setUserSettingsField],
+  );
+  const setTotpStatus = useCallback(
+    (update: StateUpdate<TotpStatus | null>) => setUserSettingsField('totpStatus', update),
+    [setUserSettingsField],
+  );
+  const setIsLoadingTotpStatus = useCallback(
+    (update: StateUpdate<boolean>) => setUserSettingsField('isLoadingTotpStatus', update),
+    [setUserSettingsField],
+  );
+  const setTotpStatusError = useCallback(
+    (update: StateUpdate<string>) => setUserSettingsField('totpStatusError', update),
+    [setUserSettingsField],
+  );
+  const setIsTotpSetupOpen = useCallback(
+    (update: StateUpdate<boolean>) => setUserSettingsField('isTotpSetupOpen', update),
+    [setUserSettingsField],
+  );
+  const setTotpSetupPassword = useCallback(
+    (update: StateUpdate<string>) => setUserSettingsField('totpSetupPassword', update),
+    [setUserSettingsField],
+  );
+  const setTotpSetupReauthDone = useCallback(
+    (update: StateUpdate<boolean>) => setUserSettingsField('totpSetupReauthDone', update),
+    [setUserSettingsField],
+  );
+  const setIsDisableDialogOpen = useCallback(
+    (update: StateUpdate<boolean>) => setUserSettingsField('isDisableDialogOpen', update),
+    [setUserSettingsField],
+  );
+  const setDisablePassword = useCallback(
+    (update: StateUpdate<string>) => setUserSettingsField('disablePassword', update),
+    [setUserSettingsField],
+  );
+  const setDisableCode = useCallback(
+    (update: StateUpdate<string>) => setUserSettingsField('disableCode', update),
+    [setUserSettingsField],
+  );
+  const setIsDisablingTotp = useCallback(
+    (update: StateUpdate<boolean>) => setUserSettingsField('isDisablingTotp', update),
+    [setUserSettingsField],
+  );
+  const setDisableError = useCallback(
+    (update: StateUpdate<string>) => setUserSettingsField('disableError', update),
+    [setUserSettingsField],
+  );
+  const setIsRegenerateDialogOpen = useCallback(
+    (update: StateUpdate<boolean>) => setUserSettingsField('isRegenerateDialogOpen', update),
+    [setUserSettingsField],
+  );
+  const setRegenerateCode = useCallback(
+    (update: StateUpdate<string>) => setUserSettingsField('regenerateCode', update),
+    [setUserSettingsField],
+  );
+  const setIsRegeneratingCodes = useCallback(
+    (update: StateUpdate<boolean>) => setUserSettingsField('isRegeneratingCodes', update),
+    [setUserSettingsField],
+  );
+  const setRegenerateError = useCallback(
+    (update: StateUpdate<string>) => setUserSettingsField('regenerateError', update),
+    [setUserSettingsField],
+  );
+  const setRegeneratedBackupCodes = useCallback(
+    (update: StateUpdate<string[] | null>) =>
+      setUserSettingsField('regeneratedBackupCodes', update),
+    [setUserSettingsField],
+  );
 
-  const [activeTab, setActiveTab] = useState<
-    'profile' | 'appearance' | 'language' | 'security' | 'mcp' | 'ril'
-  >('profile');
   const showRilPreferences = rilTransferOptions.length > 0;
-  const [rilWeekdayTransferDefaults, setRilWeekdayTransferDefaults] =
-    useState<RilWeekdayTransferDefaults>(() => settings.rilWeekdayTransferDefaults ?? {});
   // Tail of the weekday-default save chain: each update waits for the previous one so two quick
   // edits can't land out of order and overwrite the server with a stale map.
   const rilWeekdaySaveRef = useRef<Promise<unknown> | null>(null);
@@ -304,30 +655,6 @@ const UserSettings: React.FC<UserSettingsProps> = ({
       return { key, label: label.charAt(0).toUpperCase() + label.slice(1) };
     });
   }, [i18n.language]);
-  const [isSaving, setIsSaving] = useState(false);
-  const [isSaved, setIsSaved] = useState(false);
-
-  if (!hasLoadedInitialSettingsRef.current) {
-    hasLoadedInitialSettingsRef.current = true;
-    setFullName(settings.fullName);
-    setEmail(settings.email);
-  }
-
-  // Password state
-  const [currentPassword, setCurrentPassword] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [isSavingPassword, setIsSavingPassword] = useState(false);
-  const [passwordError, setPasswordError] = useState('');
-  const [passwordSuccess, setPasswordSuccess] = useState(false);
-  const [mcpTokens, setMcpTokens] = useState<McpToken[]>([]);
-  const [mcpTokenName, setMcpTokenName] = useState('');
-  const [mcpTokenScope, setMcpTokenScope] = useState<McpTokenScope>('full');
-  const [rawMcpToken, setRawMcpToken] = useState('');
-  const [mcpError, setMcpError] = useState('');
-  const [isLoadingMcpTokens, setIsLoadingMcpTokens] = useState(false);
-  const [isCreatingMcpToken, setIsCreatingMcpToken] = useState(false);
-  const [revokingMcpTokenId, setRevokingMcpTokenId] = useState<string | null>(null);
   const mcpEndpointUrl = useMemo(getMcpEndpointUrl, []);
   const mcpSetupPrompt = useMemo(
     () =>
@@ -345,44 +672,12 @@ const UserSettings: React.FC<UserSettingsProps> = ({
     [mcpEndpointUrl, rawMcpToken],
   );
 
-  const [personalAccessToken, setPersonalAccessToken] = useState<PersonalAccessToken | null>(null);
-  const [isLoadingToken, setIsLoadingToken] = useState(false);
-  const [isRenewingToken, setIsRenewingToken] = useState(false);
-  const [tokenError, setTokenError] = useState('');
   const tokenLoadInFlightRef = useRef(false);
   const isMountedRef = useRef(true);
 
   // Two-factor authentication state. Status is loaded lazily when the Security
   // tab opens (mirroring the PAT loader below).
-  const [totpStatus, setTotpStatus] = useState<{
-    enabled: boolean;
-    applicable: boolean;
-    featureEnabled: boolean;
-    required: boolean;
-  } | null>(null);
-  const [isLoadingTotpStatus, setIsLoadingTotpStatus] = useState(false);
-  const [totpStatusError, setTotpStatusError] = useState('');
   const totpStatusInFlightRef = useRef(false);
-  const [isTotpSetupOpen, setIsTotpSetupOpen] = useState(false);
-  // Step-up re-auth gate shown before the setup wizard: a logged-in caller must re-enter their
-  // account password before a new second factor is enrolled (blocks a stolen-session 2FA implant).
-  const [totpSetupPassword, setTotpSetupPassword] = useState('');
-  const [totpSetupReauthDone, setTotpSetupReauthDone] = useState(false);
-
-  // Disable flow (re-auth dialog collecting password and/or a current code).
-  const [isDisableDialogOpen, setIsDisableDialogOpen] = useState(false);
-  const [disablePassword, setDisablePassword] = useState('');
-  const [disableCode, setDisableCode] = useState('');
-  const [isDisablingTotp, setIsDisablingTotp] = useState(false);
-  const [disableError, setDisableError] = useState('');
-
-  // Regenerate-backup-codes flow (collect a current code, then show new codes).
-  const [isRegenerateDialogOpen, setIsRegenerateDialogOpen] = useState(false);
-  const [regenerateCode, setRegenerateCode] = useState('');
-  const [isRegeneratingCodes, setIsRegeneratingCodes] = useState(false);
-  const [regenerateError, setRegenerateError] = useState('');
-  const [regeneratedBackupCodes, setRegeneratedBackupCodes] = useState<string[] | null>(null);
-
   useEffect(
     () => () => {
       isMountedRef.current = false;
@@ -416,7 +711,14 @@ const UserSettings: React.FC<UserSettingsProps> = ({
     };
 
     void loadToken();
-  }, [activeTab, onGetPersonalAccessToken, personalAccessToken]);
+  }, [
+    activeTab,
+    onGetPersonalAccessToken,
+    personalAccessToken,
+    setIsLoadingToken,
+    setPersonalAccessToken,
+    setTokenError,
+  ]);
 
   const loadTotpStatus = useCallback(async () => {
     if (totpStatusInFlightRef.current) return;
@@ -437,7 +739,7 @@ const UserSettings: React.FC<UserSettingsProps> = ({
       totpStatusInFlightRef.current = false;
       if (isMountedRef.current) setIsLoadingTotpStatus(false);
     }
-  }, [onGetTotpStatus]);
+  }, [onGetTotpStatus, setIsLoadingTotpStatus, setTotpStatus, setTotpStatusError]);
 
   // Lazily load the 2FA status the first time the Security tab is opened.
   useEffect(() => {
@@ -449,10 +751,10 @@ const UserSettings: React.FC<UserSettingsProps> = ({
     setIsTotpSetupOpen(false);
     setTotpStatus((prev) => (prev ? { ...prev, enabled: true } : prev));
     void loadTotpStatus();
-  }, [loadTotpStatus]);
+  }, [loadTotpStatus, setIsTotpSetupOpen, setTotpStatus]);
 
   const handleDisableTotp = useCallback(
-    async (event: React.FormEvent) => {
+    (event: React.FormEvent) => {
       event.preventDefault();
       if (isDisablingTotp) return;
       setIsDisablingTotp(true);
@@ -462,28 +764,43 @@ const UserSettings: React.FC<UserSettingsProps> = ({
       const trimmedCode = disableCode.trim();
       if (trimmedPassword) payload.password = trimmedPassword;
       if (trimmedCode) payload.code = trimmedCode;
-      try {
-        await onTotpDisable(payload);
-        if (!isMountedRef.current) return;
-        setIsDisableDialogOpen(false);
-        setDisablePassword('');
-        setDisableCode('');
-        setTotpStatus((prev) => (prev ? { ...prev, enabled: false } : prev));
-        void loadTotpStatus();
-      } catch (err: unknown) {
-        console.error('Failed to disable two-factor authentication:', err);
-        if (!isMountedRef.current) return;
-        const isInvalidCode = err instanceof ApiError && err.errorCode === 'invalid_totp_code';
-        setDisableError(
-          isInvalidCode
-            ? t('twoFactor.invalidCode')
-            : (err as Error).message || t('common:messages.errorOccurred'),
-        );
-      } finally {
-        if (isMountedRef.current) setIsDisablingTotp(false);
-      }
+      void onTotpDisable(payload)
+        .then(() => {
+          if (!isMountedRef.current) return;
+          setIsDisableDialogOpen(false);
+          setDisablePassword('');
+          setDisableCode('');
+          setTotpStatus((prev) => (prev ? { ...prev, enabled: false } : prev));
+          void loadTotpStatus();
+        })
+        .catch((err: unknown) => {
+          console.error('Failed to disable two-factor authentication:', err);
+          if (!isMountedRef.current) return;
+          const isInvalidCode = err instanceof ApiError && err.errorCode === 'invalid_totp_code';
+          setDisableError(
+            isInvalidCode
+              ? t('twoFactor.invalidCode')
+              : (err as Error).message || t('common:messages.errorOccurred'),
+          );
+        })
+        .finally(() => {
+          if (isMountedRef.current) setIsDisablingTotp(false);
+        });
     },
-    [disableCode, disablePassword, isDisablingTotp, loadTotpStatus, onTotpDisable, t],
+    [
+      disableCode,
+      disablePassword,
+      isDisablingTotp,
+      loadTotpStatus,
+      onTotpDisable,
+      setDisableCode,
+      setDisableError,
+      setDisablePassword,
+      setIsDisableDialogOpen,
+      setIsDisablingTotp,
+      setTotpStatus,
+      t,
+    ],
   );
 
   const handleRegenerateBackupCodes = useCallback(
@@ -510,7 +827,16 @@ const UserSettings: React.FC<UserSettingsProps> = ({
         if (isMountedRef.current) setIsRegeneratingCodes(false);
       }
     },
-    [isRegeneratingCodes, onRegenerateTotpBackupCodes, regenerateCode, t],
+    [
+      isRegeneratingCodes,
+      onRegenerateTotpBackupCodes,
+      regenerateCode,
+      setIsRegeneratingCodes,
+      setRegenerateCode,
+      setRegeneratedBackupCodes,
+      setRegenerateError,
+      t,
+    ],
   );
 
   const downloadBackupCodes = useCallback((codes: string[]) => {
@@ -611,14 +937,14 @@ const UserSettings: React.FC<UserSettingsProps> = ({
     } finally {
       setIsLoadingMcpTokens(false);
     }
-  }, [onListMcpTokens]);
+  }, [onListMcpTokens, setIsLoadingMcpTokens, setMcpError, setMcpTokens]);
 
   const handleTabChange = useCallback(
-    (tab: 'profile' | 'appearance' | 'language' | 'security' | 'mcp' | 'ril') => {
+    (tab: UserSettingsTab) => {
       setActiveTab(tab);
       if (tab === 'mcp') void loadMcpTokens();
     },
-    [loadMcpTokens],
+    [loadMcpTokens, setActiveTab],
   );
 
   // Persist the per-weekday default optimistically (same UX as the language picker): apply
@@ -723,1165 +1049,1372 @@ const UserSettings: React.FC<UserSettingsProps> = ({
     email !== settings.email ||
     language !== (settings.language || 'auto');
 
-  if (isLoading) {
-    return (
-      <div className="max-w-4xl mx-auto flex items-center justify-center py-20">
-        <div className="text-center">
-          <i className="fa-solid fa-circle-notch fa-spin text-praetor text-3xl mb-3"></i>
-          <p className="text-zinc-500 font-medium">{t('common:states.loading')}</p>
-        </div>
-      </div>
-    );
+  return {
+    activeTab,
+    authMethod,
+    confirmPassword,
+    currentPassword,
+    currentTheme,
+    disableCode,
+    disableError,
+    disablePassword,
+    downloadBackupCodes,
+    email,
+    formatPersonalAccessTokenDate,
+    fullName,
+    handleCreateMcpToken,
+    handleDisableTotp,
+    handleLanguageChange,
+    handlePasswordUpdate,
+    handleRegenerateBackupCodes,
+    handleRenewPersonalAccessToken,
+    handleRevokeMcpToken,
+    handleSave,
+    handleTabChange,
+    handleThemeChange,
+    handleTotpSetupFinished,
+    handleWeekdayTransferChange,
+    hasChanges,
+    identityProviderLabel,
+    isCreatingMcpToken,
+    isDisableDialogOpen,
+    isDisablingTotp,
+    isLoading,
+    isLoadingMcpTokens,
+    isLoadingToken,
+    isLoadingTotpStatus,
+    isLocalAuth,
+    isRegenerateDialogOpen,
+    isRegeneratingCodes,
+    isRenewingToken,
+    isSaved,
+    isSaving,
+    isSavingPassword,
+    isTotpSetupOpen,
+    language,
+    loadTotpStatus,
+    mcpEndpointUrl,
+    mcpError,
+    mcpSetupPrompt,
+    mcpTokenName,
+    mcpTokenScope,
+    mcpTokens,
+    newPassword,
+    onTotpConfirm,
+    onTotpSetup,
+    passwordError,
+    passwordSuccess,
+    personalAccessToken,
+    rawMcpToken,
+    regenerateCode,
+    regenerateError,
+    regeneratedBackupCodes,
+    revokingMcpTokenId,
+    rilTransferOptions,
+    rilWeekdayDefs,
+    rilWeekdayTransferDefaults,
+    setConfirmPassword,
+    setCurrentPassword,
+    setDisableCode,
+    setDisableError,
+    setDisablePassword,
+    setEmail,
+    setFullName,
+    setIsDisableDialogOpen,
+    setIsRegenerateDialogOpen,
+    setIsTotpSetupOpen,
+    setMcpTokenName,
+    setMcpTokenScope,
+    setNewPassword,
+    setRegenerateCode,
+    setRegenerateError,
+    setRegeneratedBackupCodes,
+    setTokenError,
+    setTotpSetupPassword,
+    setTotpSetupReauthDone,
+    showRilPreferences,
+    t,
+    tokenDisplayValue,
+    tokenError,
+    totpSetupPassword,
+    totpSetupReauthDone,
+    totpStatus,
+    totpStatusError,
+  };
+};
+
+type UserSettingsController = ReturnType<typeof useUserSettingsController>;
+
+const UserSettings: React.FC<UserSettingsProps> = (props) => {
+  const controller = useUserSettingsController(props);
+  return <UserSettingsLayout controller={controller} />;
+};
+
+const UserSettingsLayout: React.FC<{ controller: UserSettingsController }> = ({ controller }) => {
+  if (controller.isLoading) {
+    return <UserSettingsLoading controller={controller} />;
   }
 
   return (
     <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in duration-500">
-      <div className="flex justify-between items-center">
-        <div>
-          <h2 className="text-2xl font-semibold text-zinc-800">{t('title')}</h2>
-          <p className="text-sm text-zinc-500 mt-1">{t('subtitle')}</p>
-        </div>
-      </div>
+      <UserSettingsHeader controller={controller} />
+      <UserSettingsTabs controller={controller} />
+      <UserSettingsActivePanel controller={controller} />
+    </div>
+  );
+};
 
-      {/* Tabs */}
-      <div className="flex border-b border-zinc-200 gap-8">
-        <button
-          type="button"
-          onClick={() => handleTabChange('profile')}
-          className={`pb-4 text-sm font-bold transition-all relative ${activeTab === 'profile' ? 'text-praetor' : 'text-zinc-400 hover:text-zinc-600'}`}
-        >
-          <i className="fa-solid fa-user mr-2"></i>
-          {t('userProfile.title')}
-          {activeTab === 'profile' && (
-            <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-praetor rounded-full"></div>
-          )}
-        </button>
-        <button
-          type="button"
-          onClick={() => handleTabChange('appearance')}
-          className={`pb-4 text-sm font-bold transition-all relative ${activeTab === 'appearance' ? 'text-praetor' : 'text-zinc-400 hover:text-zinc-600'}`}
-        >
-          <i className="fa-solid fa-palette mr-2"></i>
-          {t('appearance.title')}
-          {activeTab === 'appearance' && (
-            <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-praetor rounded-full"></div>
-          )}
-        </button>
-        <button
-          type="button"
-          onClick={() => handleTabChange('language')}
-          className={`pb-4 text-sm font-bold transition-all relative ${activeTab === 'language' ? 'text-praetor' : 'text-zinc-400 hover:text-zinc-600'}`}
-        >
-          <i className="fa-solid fa-language mr-2"></i>
-          {t('language.title')}
-          {activeTab === 'language' && (
-            <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-praetor rounded-full"></div>
-          )}
-        </button>
-        <button
-          type="button"
-          onClick={() => handleTabChange('security')}
-          className={`pb-4 text-sm font-bold transition-all relative ${activeTab === 'security' ? 'text-praetor' : 'text-zinc-400 hover:text-zinc-600'}`}
-        >
-          <i className="fa-solid fa-lock mr-2"></i>
-          {t('security.title')}
-          {activeTab === 'security' && (
-            <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-praetor rounded-full"></div>
-          )}
-        </button>
-        <button
-          type="button"
-          onClick={() => handleTabChange('mcp')}
-          className={`pb-4 text-sm font-bold transition-all relative ${activeTab === 'mcp' ? 'text-praetor' : 'text-zinc-400 hover:text-zinc-600'}`}
-        >
-          <McpIcon className="inline size-4 mr-2 align-[-2px]" />
-          {t('mcp.title')}
-          {activeTab === 'mcp' && (
-            <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-praetor rounded-full"></div>
-          )}
-        </button>
-        {showRilPreferences && (
-          <button
-            type="button"
-            onClick={() => handleTabChange('ril')}
-            className={`pb-4 text-sm font-bold transition-all relative ${activeTab === 'ril' ? 'text-praetor' : 'text-zinc-400 hover:text-zinc-600'}`}
-          >
-            <CalendarDays aria-hidden="true" className="inline size-4 mr-2 align-[-2px]" />
-            {t('ril.title')}
-            {activeTab === 'ril' && (
-              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-praetor rounded-full"></div>
-            )}
-          </button>
+const UserSettingsLoading: React.FC<{ controller: UserSettingsController }> = ({ controller }) => (
+  <div className="max-w-4xl mx-auto flex items-center justify-center py-20">
+    <div className="text-center">
+      <i className="fa-solid fa-circle-notch fa-spin text-praetor text-3xl mb-3"></i>
+      <p className="text-zinc-500 font-medium">{controller.t('common:states.loading')}</p>
+    </div>
+  </div>
+);
+
+const UserSettingsHeader: React.FC<{ controller: UserSettingsController }> = ({ controller }) => (
+  <div className="flex justify-between items-center">
+    <div>
+      <h2 className="text-2xl font-semibold text-zinc-800">{controller.t('title')}</h2>
+      <p className="text-sm text-zinc-500 mt-1">{controller.t('subtitle')}</p>
+    </div>
+  </div>
+);
+
+const UserSettingsTabs: React.FC<{ controller: UserSettingsController }> = ({ controller }) => (
+  <div className="flex border-b border-zinc-200 gap-8">
+    <UserSettingsTabButton controller={controller} tab="profile" iconClass="fa-solid fa-user">
+      {controller.t('userProfile.title')}
+    </UserSettingsTabButton>
+    <UserSettingsTabButton controller={controller} tab="appearance" iconClass="fa-solid fa-palette">
+      {controller.t('appearance.title')}
+    </UserSettingsTabButton>
+    <UserSettingsTabButton controller={controller} tab="language" iconClass="fa-solid fa-language">
+      {controller.t('language.title')}
+    </UserSettingsTabButton>
+    <UserSettingsTabButton controller={controller} tab="security" iconClass="fa-solid fa-lock">
+      {controller.t('security.title')}
+    </UserSettingsTabButton>
+    <UserSettingsTabButton controller={controller} tab="mcp" icon={<McpIcon className="inline size-4 mr-2 align-[-2px]" />}>
+      {controller.t('mcp.title')}
+    </UserSettingsTabButton>
+    {controller.showRilPreferences && (
+      <UserSettingsTabButton
+        controller={controller}
+        tab="ril"
+        icon={<CalendarDays aria-hidden="true" className="inline size-4 mr-2 align-[-2px]" />}
+      >
+        {controller.t('ril.title')}
+      </UserSettingsTabButton>
+    )}
+  </div>
+);
+
+const UserSettingsTabButton: React.FC<{
+  controller: UserSettingsController;
+  tab: UserSettingsTab;
+  children: React.ReactNode;
+  iconClass?: string;
+  icon?: React.ReactNode;
+}> = ({ controller, tab, children, iconClass, icon }) => {
+  const isActive = controller.activeTab === tab;
+  return (
+    <button
+      type="button"
+      onClick={() => controller.handleTabChange(tab)}
+      className={`pb-4 text-sm font-bold transition-all relative ${
+        isActive ? 'text-praetor' : 'text-zinc-400 hover:text-zinc-600'
+      }`}
+    >
+      {icon ?? <i className={`${iconClass} mr-2`}></i>}
+      {children}
+      {isActive && (
+        <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-praetor rounded-full"></div>
+      )}
+    </button>
+  );
+};
+
+const UserSettingsActivePanel: React.FC<{ controller: UserSettingsController }> = ({
+  controller,
+}) => {
+  if (controller.activeTab === 'profile') return <ProfileSettingsPanel controller={controller} />;
+  if (controller.activeTab === 'appearance') {
+    return <AppearanceSettingsPanel controller={controller} />;
+  }
+  if (controller.activeTab === 'language') return <LanguageSettingsPanel controller={controller} />;
+  if (controller.activeTab === 'security') return <SecuritySettingsPanel controller={controller} />;
+  if (controller.activeTab === 'mcp') return <McpSettingsPanel controller={controller} />;
+  if (controller.activeTab === 'ril' && controller.showRilPreferences) {
+    return <RilSettingsPanel controller={controller} />;
+  }
+  return null;
+};
+
+const ProfileSettingsPanel: React.FC<{ controller: UserSettingsController }> = ({ controller }) => (
+  <Card className="gap-0 overflow-hidden rounded-lg border-border bg-background py-0 animate-in fade-in slide-in-from-left-4 duration-300">
+    <CardHeader className="border-b border-border bg-muted/40 px-6 py-4 [.border-b]:pb-4">
+      <CardTitle className="flex items-center gap-3 text-base">
+        <User aria-hidden="true" className="size-4 text-praetor" />
+        {controller.t('userProfile.title')}
+      </CardTitle>
+      <CardDescription>{controller.t('userProfile.description')}</CardDescription>
+    </CardHeader>
+    <form onSubmit={controller.handleSave}>
+      <CardContent className="space-y-6 p-6">
+        {!controller.isLocalAuth && (
+          <LockedSettingsBanner
+            icon={<Lock aria-hidden="true" className="size-4" />}
+            message={controller.t('userProfile.lockedBanner', {
+              provider: controller.identityProviderLabel,
+            })}
+          />
         )}
-      </div>
-
-      {activeTab === 'profile' && (
-        <Card className="gap-0 overflow-hidden rounded-lg border-border bg-background py-0 animate-in fade-in slide-in-from-left-4 duration-300">
-          <CardHeader className="border-b border-border bg-muted/40 px-6 py-4 [.border-b]:pb-4">
-            <CardTitle className="flex items-center gap-3 text-base">
-              <User aria-hidden="true" className="size-4 text-praetor" />
-              {t('userProfile.title')}
-            </CardTitle>
-            <CardDescription>{t('userProfile.description')}</CardDescription>
-          </CardHeader>
-          <form onSubmit={handleSave}>
-            <CardContent className="space-y-6 p-6">
-              {!isLocalAuth && (
-                <output
-                  aria-live="polite"
-                  className="flex items-center gap-2 rounded-md border border-border bg-muted/40 p-4 text-sm font-medium text-muted-foreground"
-                >
-                  <Lock aria-hidden="true" className="size-4" />
-                  {t('userProfile.lockedBanner', { provider: identityProviderLabel })}
-                </output>
-              )}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <Field>
-                  <FieldLabel htmlFor="profile-full-name" required={isLocalAuth}>
-                    {t('userProfile.fullName')}
-                  </FieldLabel>
-                  <Input
-                    id="profile-full-name"
-                    type="text"
-                    value={fullName}
-                    onChange={(e) => setFullName(e.target.value)}
-                    disabled={!isLocalAuth}
-                    readOnly={!isLocalAuth}
-                    aria-readonly={!isLocalAuth}
-                    required={isLocalAuth}
-                  />
-                </Field>
-                <Field>
-                  <FieldLabel htmlFor="profile-email" required={isLocalAuth}>
-                    {t('userProfile.email')}
-                  </FieldLabel>
-                  <Input
-                    id="profile-email"
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    disabled={!isLocalAuth}
-                    readOnly={!isLocalAuth}
-                    aria-readonly={!isLocalAuth}
-                    required={isLocalAuth}
-                  />
-                </Field>
-              </div>
-            </CardContent>
-            {isLocalAuth && (
-              <CardFooter className="justify-end border-t border-border px-6 py-4 [.border-t]:pt-4">
-                {(() => {
-                  const { Icon, iconClass, label } = isSaving
-                    ? { Icon: Loader2, iconClass: 'animate-spin', label: t('general.saving') }
-                    : isSaved
-                      ? { Icon: Check, iconClass: undefined, label: t('general.changesSaved') }
-                      : { Icon: Save, iconClass: undefined, label: t('general.saveChanges') };
-                  return (
-                    <Button type="submit" disabled={isSaving || !hasChanges}>
-                      <Icon aria-hidden="true" className={iconClass} />
-                      {label}
-                    </Button>
-                  );
-                })()}
-              </CardFooter>
-            )}
-          </form>
-        </Card>
-      )}
-
-      {activeTab === 'appearance' && (
-        <Card className="gap-0 overflow-hidden rounded-lg bg-background py-0">
-          <CardHeader className="border-b bg-muted/40 px-6 py-4 [.border-b]:pb-4">
-            <CardTitle className="flex items-center gap-3 text-base">
-              <Palette aria-hidden="true" className="size-4 text-praetor" />
-              {t('appearance.title')}
-            </CardTitle>
-            <CardDescription>{t('appearance.description')}</CardDescription>
-          </CardHeader>
-          <CardContent className="p-6">
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-              {THEMES.map((theme) => {
-                const isSelected = currentTheme === theme;
-                const option = THEME_OPTION_META[theme];
-
-                return (
-                  <Card
-                    key={theme}
-                    role="button"
-                    tabIndex={0}
-                    aria-pressed={isSelected}
-                    onClick={() => handleThemeChange(theme)}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter' || event.key === ' ') {
-                        event.preventDefault();
-                        handleThemeChange(theme);
-                      }
-                    }}
-                    className={cn(
-                      'flex-row items-start gap-3 p-4 cursor-pointer transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                      isSelected && 'border-primary ring-2 ring-primary/40',
-                    )}
-                  >
-                    <div className="relative shrink-0">
-                      <div
-                        className={cn(
-                          'size-10 overflow-hidden rounded-full',
-                          option.swatchClassName,
-                        )}
-                      >
-                        <ThemeSwatchContent option={option} />
-                      </div>
-                      {isSelected && (
-                        <span className="absolute -right-1 -top-1 flex size-4 items-center justify-center rounded-full border-2 border-background bg-primary text-primary-foreground">
-                          <Check aria-hidden="true" className="size-2.5" strokeWidth={3} />
-                        </span>
-                      )}
-                    </div>
-                    <div className="min-w-0">
-                      <h4 className="font-semibold text-foreground">
-                        {t(`appearance.${theme}.name`)}
-                      </h4>
-                      <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                        {t(`appearance.${theme}.description`)}
-                      </p>
-                    </div>
-                  </Card>
-                );
-              })}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {activeTab === 'language' && (
-        <Card className="gap-0 overflow-hidden rounded-lg bg-background py-0">
-          <CardHeader className="border-b bg-muted/40 px-6 py-4 [.border-b]:pb-4">
-            <CardTitle className="flex items-center gap-3 text-base">
-              <Languages aria-hidden="true" className="size-4 text-praetor" />
-              {t('language.title')}
-            </CardTitle>
-            <CardDescription>{t('language.description')}</CardDescription>
-          </CardHeader>
-          <CardContent className="p-6">
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-              {LANGUAGE_OPTIONS.map((option) => {
-                const active = language === option.value;
-                return (
-                  <Card
-                    key={option.value}
-                    role="button"
-                    tabIndex={0}
-                    aria-pressed={active}
-                    onClick={() => handleLanguageChange(option.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter' || event.key === ' ') {
-                        event.preventDefault();
-                        handleLanguageChange(option.value);
-                      }
-                    }}
-                    className={cn(
-                      'flex-row items-start gap-3 p-4 cursor-pointer transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                      active && 'border-primary ring-2 ring-primary/40',
-                    )}
-                  >
-                    <div className="relative flex size-10 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
-                      {option.icon}
-                      {active && (
-                        <span className="absolute -right-1 -top-1 flex size-4 items-center justify-center rounded-full border-2 border-background bg-primary text-primary-foreground">
-                          <Check aria-hidden="true" className="size-2.5" strokeWidth={3} />
-                        </span>
-                      )}
-                    </div>
-                    <div className="min-w-0">
-                      <h4 className="font-semibold text-foreground">{t(option.titleKey)}</h4>
-                      <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                        {t(option.descriptionKey)}
-                      </p>
-                    </div>
-                  </Card>
-                );
-              })}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {activeTab === 'security' && (
-        <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-          <Card className="gap-0 overflow-hidden rounded-lg border-border bg-background py-0">
-            <CardHeader className="border-b border-border bg-muted/40 px-6 py-4 [.border-b]:pb-4">
-              <CardTitle className="flex items-center gap-3 text-base">
-                <Lock aria-hidden="true" className="size-4 text-praetor" />
-                {t('password.title')}
-              </CardTitle>
-              <CardDescription>{t('password.description')}</CardDescription>
-            </CardHeader>
-            {isLocalAuth ? (
-              <form onSubmit={handlePasswordUpdate}>
-                <CardContent className="space-y-6 p-6">
-                  {passwordError && (
-                    <div className="flex items-center gap-2 rounded-md border border-destructive/20 bg-destructive/10 p-4 text-sm font-medium text-destructive animate-in fade-in slide-in-from-top-2">
-                      <AlertCircle aria-hidden="true" className="size-4" />
-                      {passwordError}
-                    </div>
-                  )}
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <Field>
-                      <FieldLabel htmlFor="security-current-password" required>
-                        {t('password.currentPassword')}
-                      </FieldLabel>
-                      <Input
-                        id="security-current-password"
-                        type="password"
-                        value={currentPassword}
-                        onChange={(e) => setCurrentPassword(e.target.value)}
-                        placeholder="••••••••"
-                        required
-                      />
-                    </Field>
-                    <Field className="md:col-start-1">
-                      <FieldLabel htmlFor="security-new-password" required>
-                        {t('password.newPassword')}
-                      </FieldLabel>
-                      <Input
-                        id="security-new-password"
-                        type="password"
-                        value={newPassword}
-                        onChange={(e) => setNewPassword(e.target.value)}
-                        placeholder="••••••••"
-                        required
-                      />
-                    </Field>
-                    <Field>
-                      <FieldLabel htmlFor="security-confirm-password" required>
-                        {t('password.confirmNewPassword')}
-                      </FieldLabel>
-                      <Input
-                        id="security-confirm-password"
-                        type="password"
-                        value={confirmPassword}
-                        onChange={(e) => setConfirmPassword(e.target.value)}
-                        placeholder="••••••••"
-                        required
-                      />
-                    </Field>
-                  </div>
-                </CardContent>
-                <CardFooter className="justify-end border-t border-border px-6 py-4 [.border-t]:pt-4">
-                  {(() => {
-                    const { Icon, iconClass, label } = isSavingPassword
-                      ? { Icon: Loader2, iconClass: 'animate-spin', label: t('password.updating') }
-                      : passwordSuccess
-                        ? {
-                            Icon: Check,
-                            iconClass: undefined,
-                            label: t('password.passwordUpdated'),
-                          }
-                        : {
-                            Icon: KeyRound,
-                            iconClass: undefined,
-                            label: t('password.updatePassword'),
-                          };
-                    return (
-                      <Button
-                        type="submit"
-                        disabled={
-                          isSavingPassword || !currentPassword || !newPassword || !confirmPassword
-                        }
-                      >
-                        <Icon aria-hidden="true" className={iconClass} />
-                        {label}
-                      </Button>
-                    );
-                  })()}
-                </CardFooter>
-              </form>
-            ) : (
-              <CardContent className="p-6">
-                <output
-                  aria-live="polite"
-                  className="flex items-center gap-2 rounded-md border border-border bg-muted/40 p-4 text-sm font-medium text-muted-foreground"
-                >
-                  <Lock aria-hidden="true" className="size-4" />
-                  {t('password.lockedBanner', { provider: identityProviderLabel })}
-                </output>
-              </CardContent>
-            )}
-          </Card>
-
-          {(() => {
-            const isIdpManagedTotp =
-              authMethod === 'oidc' || authMethod === 'saml' || totpStatus?.applicable === false;
-            const isTotpEnabled = totpStatus?.enabled === true;
-            // Org policy reflected from /status: the feature can be turned off org-wide (no
-            // enrollment, no challenge), and 2FA can be required for this user's role (then the
-            // server forbids self-disable, so the Disable action is hidden).
-            const isFeatureDisabled = totpStatus?.featureEnabled === false;
-            const isTotpRequired = totpStatus?.required === true;
-
-            return (
-              <Card className="gap-0 overflow-hidden rounded-lg border-border bg-background py-0">
-                <CardHeader className="border-b border-border bg-muted/40 px-6 py-4 [.border-b]:pb-4">
-                  <CardTitle className="flex items-center gap-3 text-base">
-                    <ShieldCheck aria-hidden="true" className="size-4 text-praetor" />
-                    {t('twoFactor.title')}
-                  </CardTitle>
-                  <CardDescription>{t('twoFactor.description')}</CardDescription>
-                  {totpStatus && !isIdpManagedTotp && !isFeatureDisabled && (
-                    <CardAction>
-                      <Badge variant={isTotpEnabled ? 'default' : 'secondary'}>
-                        {isTotpEnabled
-                          ? t('twoFactor.statusEnabled')
-                          : t('twoFactor.statusDisabled')}
-                      </Badge>
-                    </CardAction>
-                  )}
-                </CardHeader>
-                <CardContent className="space-y-4 p-6">
-                  {isIdpManagedTotp ? (
-                    <output
-                      aria-live="polite"
-                      className="flex w-full items-start gap-3 rounded-md border border-border bg-muted/40 p-4 text-sm text-muted-foreground"
-                    >
-                      <Lock aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
-                      <div className="space-y-1">
-                        <p className="font-medium text-foreground">
-                          {t('twoFactor.idpManagedTitle')}
-                        </p>
-                        <p>{t('twoFactor.idpManagedDescription')}</p>
-                      </div>
-                    </output>
-                  ) : isLoadingTotpStatus && !totpStatus ? (
-                    <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-                      <Loader2 aria-hidden="true" className="size-4 animate-spin" />
-                      {t('common:states.loading')}
-                    </div>
-                  ) : totpStatusError ? (
-                    <div className="space-y-3">
-                      <div className="rounded-md border border-destructive/20 bg-destructive/10 px-4 py-3 text-sm font-medium text-destructive">
-                        {totpStatusError}
-                      </div>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => void loadTotpStatus()}
-                        disabled={isLoadingTotpStatus}
-                      >
-                        <RefreshCw
-                          aria-hidden="true"
-                          className={isLoadingTotpStatus ? 'animate-spin' : undefined}
-                        />
-                        {t('common:buttons.retry', { defaultValue: 'Retry' })}
-                      </Button>
-                    </div>
-                  ) : isFeatureDisabled ? (
-                    <output
-                      aria-live="polite"
-                      className="flex w-full items-start gap-3 rounded-md border border-border bg-muted/40 p-4 text-sm text-muted-foreground"
-                    >
-                      <Lock aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
-                      <div className="space-y-1">
-                        <p className="font-medium text-foreground">
-                          {t('twoFactor.disabledByAdminTitle', 'Two-factor authentication is off')}
-                        </p>
-                        <p>
-                          {t(
-                            'twoFactor.disabledByAdminDescription',
-                            'Two-factor authentication is currently turned off for your organization. It cannot be set up until an administrator enables it.',
-                          )}
-                        </p>
-                      </div>
-                    </output>
-                  ) : isTotpEnabled ? (
-                    <div className="space-y-4">
-                      {isTotpRequired && (
-                        <p className="text-sm text-muted-foreground">
-                          {t(
-                            'twoFactor.requiredByOrg',
-                            'Two-factor authentication is required for your role. You can regenerate backup codes, but it cannot be turned off.',
-                          )}
-                        </p>
-                      )}
-                      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-                        {/* Disable (hidden when 2FA is mandatory for this user — the server forbids it). */}
-                        {!isTotpRequired && (
-                          <Dialog
-                            open={isDisableDialogOpen}
-                            onOpenChange={(open) => {
-                              setIsDisableDialogOpen(open);
-                              if (!open) {
-                                setDisablePassword('');
-                                setDisableCode('');
-                                setDisableError('');
-                              }
-                            }}
-                          >
-                            <DialogTrigger asChild>
-                              <Button type="button" variant="destructive">
-                                <Lock aria-hidden="true" />
-                                {t('twoFactor.disable')}
-                              </Button>
-                            </DialogTrigger>
-                            <DialogContent>
-                              <form onSubmit={handleDisableTotp}>
-                                <DialogHeader>
-                                  <DialogTitle>{t('twoFactor.disableTitle')}</DialogTitle>
-                                  <DialogDescription>
-                                    {t('twoFactor.disableDescription')}
-                                  </DialogDescription>
-                                </DialogHeader>
-                                <div className="space-y-4 py-4">
-                                  {disableError && (
-                                    <Alert variant="destructive">
-                                      <AlertCircle aria-hidden="true" />
-                                      <AlertTitle>{disableError}</AlertTitle>
-                                    </Alert>
-                                  )}
-                                  {isLocalAuth && (
-                                    <Field>
-                                      <FieldLabel htmlFor="totp-disable-password" required>
-                                        {t('twoFactor.disablePasswordLabel')}
-                                      </FieldLabel>
-                                      <Input
-                                        id="totp-disable-password"
-                                        type="password"
-                                        value={disablePassword}
-                                        onChange={(e) => {
-                                          setDisablePassword(e.target.value);
-                                          if (disableError) setDisableError('');
-                                        }}
-                                        placeholder="••••••••"
-                                        autoComplete="current-password"
-                                      />
-                                    </Field>
-                                  )}
-                                  <Field>
-                                    <FieldLabel htmlFor="totp-disable-code" required>
-                                      {t('twoFactor.disableCodeLabel')}
-                                    </FieldLabel>
-                                    <Input
-                                      id="totp-disable-code"
-                                      autoComplete="one-time-code"
-                                      value={disableCode}
-                                      onChange={(e) => {
-                                        setDisableCode(e.target.value);
-                                        if (disableError) setDisableError('');
-                                      }}
-                                      placeholder="123456"
-                                      className="font-mono tracking-[0.3em]"
-                                    />
-                                  </Field>
-                                </div>
-                                <DialogFooter>
-                                  <DialogClose asChild>
-                                    <Button
-                                      type="button"
-                                      variant="outline"
-                                      disabled={isDisablingTotp}
-                                    >
-                                      {t('twoFactor.cancel')}
-                                    </Button>
-                                  </DialogClose>
-                                  <Button
-                                    type="submit"
-                                    variant="destructive"
-                                    disabled={
-                                      isDisablingTotp ||
-                                      !disableCode.trim() ||
-                                      (isLocalAuth && !disablePassword.trim())
-                                    }
-                                  >
-                                    {isDisablingTotp ? (
-                                      <>
-                                        <Loader2 aria-hidden="true" className="animate-spin" />
-                                        {t('twoFactor.verifying')}
-                                      </>
-                                    ) : (
-                                      t('twoFactor.confirmDisable')
-                                    )}
-                                  </Button>
-                                </DialogFooter>
-                              </form>
-                            </DialogContent>
-                          </Dialog>
-                        )}
-
-                        {/* Regenerate backup codes: collect a current code, then display new codes. */}
-                        <Dialog
-                          open={isRegenerateDialogOpen}
-                          onOpenChange={(open) => {
-                            setIsRegenerateDialogOpen(open);
-                            if (!open) {
-                              setRegenerateCode('');
-                              setRegenerateError('');
-                              setRegeneratedBackupCodes(null);
-                            }
-                          }}
-                        >
-                          <DialogTrigger asChild>
-                            <Button type="button" variant="outline">
-                              <RefreshCw aria-hidden="true" />
-                              {t('twoFactor.regenerateBackupCodes')}
-                            </Button>
-                          </DialogTrigger>
-                          <DialogContent>
-                            {regeneratedBackupCodes ? (
-                              <>
-                                <DialogHeader>
-                                  <DialogTitle className="flex items-center gap-2">
-                                    <ShieldCheck
-                                      aria-hidden="true"
-                                      className="size-5 text-primary"
-                                    />
-                                    {t('twoFactor.backupTitle')}
-                                  </DialogTitle>
-                                  <DialogDescription>
-                                    {t('twoFactor.backupInstructions')}
-                                  </DialogDescription>
-                                </DialogHeader>
-                                <ul className="my-2 grid grid-cols-2 gap-2 rounded-lg border border-border bg-muted/40 p-4">
-                                  {regeneratedBackupCodes.map((backupCode) => (
-                                    <li
-                                      key={backupCode}
-                                      className="rounded-md border border-border bg-background px-3 py-2 text-center font-mono text-sm tracking-[0.15em] text-foreground"
-                                    >
-                                      {backupCode}
-                                    </li>
-                                  ))}
-                                </ul>
-                                <DialogFooter>
-                                  <CopyButton
-                                    variant="outline"
-                                    value={regeneratedBackupCodes.join('\n')}
-                                    label={t('twoFactor.copyCodes')}
-                                    copiedLabel={t('twoFactor.copyCodes')}
-                                  />
-                                  <Button
-                                    type="button"
-                                    variant="outline"
-                                    onClick={() => downloadBackupCodes(regeneratedBackupCodes)}
-                                  >
-                                    {t('twoFactor.downloadCodes')}
-                                  </Button>
-                                  <DialogClose asChild>
-                                    <Button type="button">{t('twoFactor.done')}</Button>
-                                  </DialogClose>
-                                </DialogFooter>
-                              </>
-                            ) : (
-                              <form onSubmit={handleRegenerateBackupCodes}>
-                                <DialogHeader>
-                                  <DialogTitle>{t('twoFactor.regenerateBackupCodes')}</DialogTitle>
-                                  <DialogDescription>
-                                    {t('twoFactor.enterCodeLabel')}
-                                  </DialogDescription>
-                                </DialogHeader>
-                                <div className="flex flex-col items-center gap-4 py-4">
-                                  <InputOTP
-                                    maxLength={TOTP_CODE_LENGTH}
-                                    value={regenerateCode}
-                                    onChange={(value) => {
-                                      setRegenerateCode(value);
-                                      if (regenerateError) setRegenerateError('');
-                                    }}
-                                    pattern={REGEXP_ONLY_DIGITS}
-                                    disabled={isRegeneratingCodes}
-                                    aria-invalid={regenerateError ? true : undefined}
-                                    aria-label={t('twoFactor.enterCodeLabel')}
-                                    containerClassName="justify-center"
-                                  >
-                                    <InputOTPGroup>
-                                      {Array.from({ length: TOTP_CODE_LENGTH }, (_, index) => (
-                                        <InputOTPSlot
-                                          key={index}
-                                          index={index}
-                                          aria-invalid={regenerateError ? true : undefined}
-                                        />
-                                      ))}
-                                    </InputOTPGroup>
-                                  </InputOTP>
-                                  {regenerateError && (
-                                    <Alert variant="destructive">
-                                      <AlertCircle aria-hidden="true" />
-                                      <AlertTitle>{regenerateError}</AlertTitle>
-                                    </Alert>
-                                  )}
-                                </div>
-                                <DialogFooter>
-                                  <DialogClose asChild>
-                                    <Button
-                                      type="button"
-                                      variant="outline"
-                                      disabled={isRegeneratingCodes}
-                                    >
-                                      {t('twoFactor.cancel')}
-                                    </Button>
-                                  </DialogClose>
-                                  <Button
-                                    type="submit"
-                                    disabled={
-                                      isRegeneratingCodes ||
-                                      regenerateCode.length !== TOTP_CODE_LENGTH
-                                    }
-                                  >
-                                    {isRegeneratingCodes ? (
-                                      <>
-                                        <Loader2 aria-hidden="true" className="animate-spin" />
-                                        {t('twoFactor.verifying')}
-                                      </>
-                                    ) : (
-                                      t('twoFactor.regenerate')
-                                    )}
-                                  </Button>
-                                </DialogFooter>
-                              </form>
-                            )}
-                          </DialogContent>
-                        </Dialog>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                      <p className="text-sm text-muted-foreground">
-                        {isTotpRequired
-                          ? t(
-                              'twoFactor.requiredByOrgSetup',
-                              'Two-factor authentication is required for your role. Set it up now — you will be asked to complete it at your next sign-in otherwise.',
-                            )
-                          : t('twoFactor.scanInstructions')}
-                      </p>
-                      <Dialog
-                        open={isTotpSetupOpen}
-                        onOpenChange={(open) => {
-                          // Block dismissal while the setup dialog is mid-flow only via the
-                          // wizard's own controls; closing here just resets local UI state.
-                          setIsTotpSetupOpen(open);
-                          if (!open) {
-                            setTotpSetupPassword('');
-                            setTotpSetupReauthDone(false);
-                          }
-                        }}
-                      >
-                        <DialogTrigger asChild>
-                          <Button type="button">
-                            <ShieldCheck aria-hidden="true" />
-                            {t('twoFactor.setUp')}
-                          </Button>
-                        </DialogTrigger>
-                        <DialogContent className="sm:max-w-md">
-                          {isTotpSetupOpen && !totpSetupReauthDone ? (
-                            // Step-up re-auth gate: confirm the account password before the wizard
-                            // generates a secret. The wizard's onSetup then carries this password to
-                            // /setup, which re-verifies it server-side.
-                            <form
-                              onSubmit={(e) => {
-                                e.preventDefault();
-                                if (!totpSetupPassword.trim()) return;
-                                setTotpSetupReauthDone(true);
-                              }}
-                            >
-                              <DialogHeader>
-                                <DialogTitle>{t('twoFactor.reauthTitle')}</DialogTitle>
-                                <DialogDescription>
-                                  {t('twoFactor.reauthDescription')}
-                                </DialogDescription>
-                              </DialogHeader>
-                              <div className="space-y-4 py-4">
-                                <Field>
-                                  <FieldLabel htmlFor="totp-setup-password" required>
-                                    {t('twoFactor.reauthPasswordLabel')}
-                                  </FieldLabel>
-                                  <Input
-                                    id="totp-setup-password"
-                                    type="password"
-                                    value={totpSetupPassword}
-                                    onChange={(e) => setTotpSetupPassword(e.target.value)}
-                                    placeholder="••••••••"
-                                    autoComplete="current-password"
-                                  />
-                                </Field>
-                              </div>
-                              <DialogFooter>
-                                <Button
-                                  type="button"
-                                  variant="outline"
-                                  onClick={() => setIsTotpSetupOpen(false)}
-                                >
-                                  {t('twoFactor.cancel')}
-                                </Button>
-                                <Button type="submit" disabled={!totpSetupPassword.trim()}>
-                                  {t('twoFactor.continue')}
-                                </Button>
-                              </DialogFooter>
-                            </form>
-                          ) : (
-                            <>
-                              <DialogHeader className="sr-only">
-                                <DialogTitle>{t('twoFactor.setupTitle')}</DialogTitle>
-                                <DialogDescription>
-                                  {t('twoFactor.scanInstructions')}
-                                </DialogDescription>
-                              </DialogHeader>
-                              {isTotpSetupOpen && (
-                                <TotpSetupWizard
-                                  onSetup={() => onTotpSetup(totpSetupPassword)}
-                                  onConfirm={onTotpConfirm}
-                                  onFinished={handleTotpSetupFinished}
-                                  onCancel={() => setIsTotpSetupOpen(false)}
-                                />
-                              )}
-                            </>
-                          )}
-                        </DialogContent>
-                      </Dialog>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            );
-          })()}
-
-          <Card className="gap-0 overflow-hidden rounded-lg border-border bg-background py-0">
-            <CardHeader className="border-b border-border bg-muted/40 px-6 py-4 [.border-b]:pb-4">
-              <CardTitle className="flex items-center gap-3 text-base">
-                <Shield aria-hidden="true" className="size-4 text-praetor" />
-                {t('security.personalAccessToken.title')}
-              </CardTitle>
-              <CardDescription>{t('security.personalAccessToken.description')}</CardDescription>
-              <CardAction>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={handleRenewPersonalAccessToken}
-                  disabled={isLoadingToken || isRenewingToken}
-                >
-                  <RefreshCw
-                    aria-hidden="true"
-                    className={isRenewingToken ? 'animate-spin' : undefined}
-                  />
-                  {isRenewingToken
-                    ? t('security.personalAccessToken.renewing')
-                    : t('security.personalAccessToken.renew')}
-                </Button>
-              </CardAction>
-            </CardHeader>
-            <CardContent className="space-y-4 p-6">
-              {tokenError && (
-                <div className="rounded-md border border-destructive/20 bg-destructive/10 px-4 py-3 text-sm font-medium text-destructive">
-                  {tokenError}
-                </div>
-              )}
-
-              <Field>
-                <FieldLabel htmlFor="security-pat-token">
-                  {t('security.personalAccessToken.tokenLabel')}
-                </FieldLabel>
-                <div className="flex flex-col gap-2 sm:flex-row">
-                  <Input
-                    id="security-pat-token"
-                    value={
-                      isLoadingToken ? t('security.personalAccessToken.loading') : tokenDisplayValue
-                    }
-                    readOnly
-                    className="font-mono text-sm"
-                  />
-                  <CopyButton
-                    variant="secondary"
-                    value={personalAccessToken?.token ?? ''}
-                    disabled={!personalAccessToken?.token}
-                    label={t('security.personalAccessToken.copy')}
-                    copiedLabel={t('security.personalAccessToken.copied')}
-                    onCopyError={() => setTokenError(t('security.copyFailed'))}
-                  />
-                </div>
-                <FieldDescription>
-                  {personalAccessToken?.token
-                    ? t('security.personalAccessToken.visibleOnce')
-                    : t('security.personalAccessToken.masked')}
-                </FieldDescription>
-              </Field>
-
-              {personalAccessToken && (
-                <dl className="grid grid-cols-1 gap-3 text-sm md:grid-cols-3">
-                  {(['createdAt', 'updatedAt', 'lastUsedAt'] as const).map((field) => (
-                    <div key={field}>
-                      <dt className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                        {t(`security.personalAccessToken.${field}`)}
-                      </dt>
-                      <dd className="mt-1 text-foreground">
-                        {formatPersonalAccessTokenDate(personalAccessToken[field])}
-                      </dd>
-                    </div>
-                  ))}
-                </dl>
-              )}
-            </CardContent>
-          </Card>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <Field>
+            <FieldLabel htmlFor="profile-full-name" required={controller.isLocalAuth}>
+              {controller.t('userProfile.fullName')}
+            </FieldLabel>
+            <Input
+              id="profile-full-name"
+              type="text"
+              value={controller.fullName}
+              onChange={(event) => controller.setFullName(event.target.value)}
+              disabled={!controller.isLocalAuth}
+              readOnly={!controller.isLocalAuth}
+              aria-readonly={!controller.isLocalAuth}
+              required={controller.isLocalAuth}
+            />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="profile-email" required={controller.isLocalAuth}>
+              {controller.t('userProfile.email')}
+            </FieldLabel>
+            <Input
+              id="profile-email"
+              type="email"
+              value={controller.email}
+              onChange={(event) => controller.setEmail(event.target.value)}
+              disabled={!controller.isLocalAuth}
+              readOnly={!controller.isLocalAuth}
+              aria-readonly={!controller.isLocalAuth}
+              required={controller.isLocalAuth}
+            />
+          </Field>
         </div>
+      </CardContent>
+      {controller.isLocalAuth && (
+        <CardFooter className="justify-end border-t border-border px-6 py-4 [.border-t]:pt-4">
+          <ProfileSaveButton controller={controller} />
+        </CardFooter>
       )}
+    </form>
+  </Card>
+);
 
-      {activeTab === 'mcp' && (
-        <section className="overflow-hidden rounded-lg border border-border bg-background shadow-sm animate-in fade-in slide-in-from-right-4 duration-300">
-          <div className="border-b border-border bg-muted/40 px-6 py-4">
-            <div className="flex items-center gap-3">
-              <McpIcon className="size-4 text-praetor" />
-              <h3 className="font-semibold text-foreground">{t('mcp.title')}</h3>
-            </div>
-            <p className="mt-1 text-sm text-muted-foreground">{t('mcp.description')}</p>
-          </div>
-          <div className="p-6 space-y-6">
-            {mcpError && (
-              <div className="flex items-center gap-2 rounded-md border border-destructive/20 bg-destructive/10 p-4 text-sm font-medium text-destructive">
-                <i className="fa-solid fa-circle-exclamation"></i>
-                {mcpError}
-              </div>
-            )}
+const LockedSettingsBanner: React.FC<{ icon: React.ReactNode; message: string }> = ({
+  icon,
+  message,
+}) => (
+  <output
+    aria-live="polite"
+    className="flex items-center gap-2 rounded-md border border-border bg-muted/40 p-4 text-sm font-medium text-muted-foreground"
+  >
+    {icon}
+    {message}
+  </output>
+);
 
-            <Field>
-              <FieldLabel htmlFor="mcp-endpoint-url">{t('mcp.urlLabel')}</FieldLabel>
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_auto]">
-                <Input id="mcp-endpoint-url" readOnly value={mcpEndpointUrl} />
-                <CopyButton
-                  variant="outline"
-                  value={mcpEndpointUrl}
-                  label={t('mcp.copyUrl')}
-                  copiedLabel={t('mcp.copyUrlCopied')}
-                />
-              </div>
-              <FieldDescription>{t('mcp.urlDescription')}</FieldDescription>
-            </Field>
+const ProfileSaveButton: React.FC<{ controller: UserSettingsController }> = ({ controller }) => {
+  const state = controller.isSaving
+    ? { Icon: Loader2, iconClass: 'animate-spin', label: controller.t('general.saving') }
+    : controller.isSaved
+      ? { Icon: Check, iconClass: undefined, label: controller.t('general.changesSaved') }
+      : { Icon: Save, iconClass: undefined, label: controller.t('general.saveChanges') };
+  return (
+    <Button type="submit" disabled={controller.isSaving || !controller.hasChanges}>
+      <state.Icon aria-hidden="true" className={state.iconClass} />
+      {state.label}
+    </Button>
+  );
+};
 
-            <Field>
-              <FieldLabel htmlFor="mcp-setup-prompt">{t('mcp.promptLabel')}</FieldLabel>
-              <Textarea
-                id="mcp-setup-prompt"
-                readOnly
-                value={mcpSetupPrompt}
-                className="min-h-44 resize-y font-mono text-xs"
-              />
-              <div className="flex justify-end">
-                <CopyButton
-                  variant="outline"
-                  value={mcpSetupPrompt}
-                  label={t('mcp.copyPrompt')}
-                  copiedLabel={t('mcp.copyPromptCopied')}
-                />
-              </div>
-              <FieldDescription>{t('mcp.promptDescription')}</FieldDescription>
-            </Field>
+const AppearanceSettingsPanel: React.FC<{ controller: UserSettingsController }> = ({
+  controller,
+}) => (
+  <Card className="gap-0 overflow-hidden rounded-lg bg-background py-0">
+    <CardHeader className="border-b bg-muted/40 px-6 py-4 [.border-b]:pb-4">
+      <CardTitle className="flex items-center gap-3 text-base">
+        <Palette aria-hidden="true" className="size-4 text-praetor" />
+        {controller.t('appearance.title')}
+      </CardTitle>
+      <CardDescription>{controller.t('appearance.description')}</CardDescription>
+    </CardHeader>
+    <CardContent className="p-6">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+        {THEMES.map((theme) => (
+          <ThemeOptionCard key={theme} controller={controller} theme={theme} />
+        ))}
+      </div>
+    </CardContent>
+  </Card>
+);
 
-            <form
-              onSubmit={handleCreateMcpToken}
-              className="grid grid-cols-1 gap-3 md:grid-cols-[1fr_minmax(10rem,auto)_auto]"
-            >
-              <Field>
-                <FieldLabel htmlFor="mcp-token-name" required>
-                  {t('mcp.nameLabel')}
-                </FieldLabel>
-                <Input
-                  id="mcp-token-name"
-                  type="text"
-                  value={mcpTokenName}
-                  onChange={(e) => setMcpTokenName(e.target.value)}
-                  placeholder={t('mcp.namePlaceholder')}
-                  maxLength={120}
-                />
-              </Field>
-              <Field>
-                <FieldLabel htmlFor="mcp-token-scope">{t('mcp.scopeLabel')}</FieldLabel>
-                <Select
-                  value={mcpTokenScope}
-                  onValueChange={(value) => setMcpTokenScope(value as McpTokenScope)}
-                >
-                  <SelectTrigger id="mcp-token-scope">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="full">{t('mcp.scopeFull')}</SelectItem>
-                    <SelectItem value="read_only">{t('mcp.scopeReadOnly')}</SelectItem>
-                  </SelectContent>
-                </Select>
-                <FieldDescription>
-                  {mcpTokenScope === 'read_only'
-                    ? t('mcp.scopeReadOnlyDescription')
-                    : t('mcp.scopeFullDescription')}
-                </FieldDescription>
-              </Field>
-              <Button
-                type="submit"
-                disabled={isCreatingMcpToken || !mcpTokenName.trim()}
-                className="self-end"
-              >
-                {isCreatingMcpToken ? (
-                  <i className="fa-solid fa-circle-notch fa-spin"></i>
-                ) : (
-                  <McpIcon className="size-4" />
-                )}
-                {t('mcp.create')}
-              </Button>
-            </form>
-
-            {rawMcpToken && (
-              <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-4">
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <p className="text-sm font-semibold text-foreground">
-                      {t('mcp.rawTokenTitle')}
-                    </p>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {t('mcp.rawTokenDescription')}
-                    </p>
-                  </div>
-                  <CopyButton
-                    variant="outline"
-                    size="sm"
-                    value={rawMcpToken}
-                    label={t('mcp.copy')}
-                    copiedLabel={t('mcp.copied')}
-                    className="shrink-0"
-                  />
-                </div>
-                <code className="mt-3 block rounded-md border border-border bg-background px-3 py-2 text-xs text-foreground break-all">
-                  {rawMcpToken}
-                </code>
-              </div>
-            )}
-
-            <div className="space-y-3">
-              {isLoadingMcpTokens ? (
-                <div className="text-sm text-zinc-500 font-medium flex items-center gap-2">
-                  <i className="fa-solid fa-circle-notch fa-spin"></i>
-                  {t('mcp.loading')}
-                </div>
-              ) : mcpTokens.length === 0 ? (
-                <div className="rounded-md border border-dashed border-border p-6 text-sm text-muted-foreground">
-                  {t('mcp.empty')}
-                </div>
-              ) : (
-                mcpTokens.map((token) => {
-                  const isRevoking = revokingMcpTokenId === token.id;
-
-                  return (
-                    <div
-                      key={token.id}
-                      className="flex flex-col justify-between gap-4 rounded-md border border-border p-4 md:flex-row md:items-center"
-                    >
-                      <div>
-                        <div className="flex flex-wrap items-center gap-2">
-                          <p className="font-semibold text-foreground">{token.name}</p>
-                          <span
-                            className="inline-flex items-center rounded-md border border-border bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground"
-                            data-scope={token.scope}
-                          >
-                            {token.scope === 'read_only'
-                              ? t('mcp.scopeReadOnly')
-                              : t('mcp.scopeFull')}
-                          </span>
-                        </div>
-                        <p className="text-xs text-muted-foreground mt-1">
-                          {token.tokenPrefix}... · {t('mcp.created')}{' '}
-                          {formatMcpTokenDate(token.createdAt)} · {t('mcp.lastUsed')}{' '}
-                          {formatMcpTokenDate(token.lastUsedAt)}
-                        </p>
-                      </div>
-                      <Dialog>
-                        <DialogTrigger asChild>
-                          <Button
-                            type="button"
-                            variant="destructive"
-                            size="sm"
-                            disabled={isRevoking}
-                          >
-                            <McpRevokeIcon isRevoking={isRevoking} />
-                            {t('mcp.revoke')}
-                          </Button>
-                        </DialogTrigger>
-                        <DialogContent>
-                          <DialogHeader>
-                            <DialogTitle>{t('mcp.revokeDialogTitle')}</DialogTitle>
-                            <DialogDescription>
-                              {t('mcp.revokeDialogDescription', { name: token.name })}
-                            </DialogDescription>
-                          </DialogHeader>
-                          <DialogFooter>
-                            <DialogClose asChild>
-                              <Button type="button" variant="outline" disabled={isRevoking}>
-                                {t('common:buttons.cancel')}
-                              </Button>
-                            </DialogClose>
-                            <Button
-                              type="button"
-                              variant="destructive"
-                              onClick={() => void handleRevokeMcpToken(token.id)}
-                              disabled={isRevoking}
-                            >
-                              <McpRevokeIcon isRevoking={isRevoking} />
-                              {t('mcp.revokeConfirm')}
-                            </Button>
-                          </DialogFooter>
-                        </DialogContent>
-                      </Dialog>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          </div>
-        </section>
+const ThemeOptionCard: React.FC<{ controller: UserSettingsController; theme: Theme }> = ({
+  controller,
+  theme,
+}) => {
+  const isSelected = controller.currentTheme === theme;
+  const option = THEME_OPTION_META[theme];
+  return (
+    <Card
+      role="button"
+      tabIndex={0}
+      aria-pressed={isSelected}
+      onClick={() => controller.handleThemeChange(theme)}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          controller.handleThemeChange(theme);
+        }
+      }}
+      className={cn(
+        'flex-row items-start gap-3 p-4 cursor-pointer transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+        isSelected && 'border-primary ring-2 ring-primary/40',
       )}
+    >
+      <div className="relative shrink-0">
+        <div className={cn('size-10 overflow-hidden rounded-full', option.swatchClassName)}>
+          <ThemeSwatchContent option={option} />
+        </div>
+        {isSelected && <SelectedOptionCheck />}
+      </div>
+      <div className="min-w-0">
+        <h4 className="font-semibold text-foreground">
+          {controller.t(`appearance.${theme}.name`)}
+        </h4>
+        <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+          {controller.t(`appearance.${theme}.description`)}
+        </p>
+      </div>
+    </Card>
+  );
+};
 
-      {activeTab === 'ril' && showRilPreferences && (
-        <Card className="gap-0 overflow-hidden rounded-lg bg-background py-0 animate-in fade-in slide-in-from-right-4 duration-300">
-          <CardHeader className="border-b bg-muted/40 px-6 py-4 [.border-b]:pb-4">
-            <CardTitle className="flex items-center gap-3 text-base">
-              <CalendarDays aria-hidden="true" className="size-4 text-praetor" />
-              {t('ril.title')}
-            </CardTitle>
-            <CardDescription>{t('ril.description')}</CardDescription>
-          </CardHeader>
-          <CardContent className="p-6">
-            <fieldset className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              {rilWeekdayDefs.map(({ key, label }) => {
-                const current = rilWeekdayTransferDefaults[key];
-                // Keep a stale value (an option an admin later removed) selectable so the user
-                // can see and change it rather than have it silently vanish.
-                const options =
-                  current && !rilTransferOptions.includes(current)
-                    ? [current, ...rilTransferOptions]
-                    : rilTransferOptions;
-                return (
-                  <Field key={key}>
-                    <FieldLabel htmlFor={`ril-transfer-${key}`}>{label}</FieldLabel>
-                    <Select
-                      value={current ?? RIL_NONE_TRANSFER_VALUE}
-                      onValueChange={(value) => void handleWeekdayTransferChange(key, value)}
-                    >
-                      <SelectTrigger id={`ril-transfer-${key}`} className="w-full">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value={RIL_NONE_TRANSFER_VALUE}>
-                          {t('ril.noDefault')}
-                        </SelectItem>
-                        {options.map((option) => (
-                          <SelectItem key={option} value={option}>
-                            {option}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </Field>
-                );
-              })}
-            </fieldset>
-            <FieldDescription className="mt-4">{t('ril.weekdayDefaultsHint')}</FieldDescription>
-          </CardContent>
-        </Card>
+const SelectedOptionCheck: React.FC = () => (
+  <span className="absolute -right-1 -top-1 flex size-4 items-center justify-center rounded-full border-2 border-background bg-primary text-primary-foreground">
+    <Check aria-hidden="true" className="size-2.5" strokeWidth={3} />
+  </span>
+);
+
+const LanguageSettingsPanel: React.FC<{ controller: UserSettingsController }> = ({
+  controller,
+}) => (
+  <Card className="gap-0 overflow-hidden rounded-lg bg-background py-0">
+    <CardHeader className="border-b bg-muted/40 px-6 py-4 [.border-b]:pb-4">
+      <CardTitle className="flex items-center gap-3 text-base">
+        <Languages aria-hidden="true" className="size-4 text-praetor" />
+        {controller.t('language.title')}
+      </CardTitle>
+      <CardDescription>{controller.t('language.description')}</CardDescription>
+    </CardHeader>
+    <CardContent className="p-6">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+        {LANGUAGE_OPTIONS.map((option) => (
+          <LanguageOptionCard key={option.value} controller={controller} option={option} />
+        ))}
+      </div>
+    </CardContent>
+  </Card>
+);
+
+const LanguageOptionCard: React.FC<{
+  controller: UserSettingsController;
+  option: (typeof LANGUAGE_OPTIONS)[number];
+}> = ({ controller, option }) => {
+  const active = controller.language === option.value;
+  return (
+    <Card
+      role="button"
+      tabIndex={0}
+      aria-pressed={active}
+      onClick={() => controller.handleLanguageChange(option.value)}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          controller.handleLanguageChange(option.value);
+        }
+      }}
+      className={cn(
+        'flex-row items-start gap-3 p-4 cursor-pointer transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+        active && 'border-primary ring-2 ring-primary/40',
+      )}
+    >
+      <div className="relative flex size-10 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
+        {option.icon}
+        {active && <SelectedOptionCheck />}
+      </div>
+      <div className="min-w-0">
+        <h4 className="font-semibold text-foreground">{controller.t(option.titleKey)}</h4>
+        <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+          {controller.t(option.descriptionKey)}
+        </p>
+      </div>
+    </Card>
+  );
+};
+
+const SecuritySettingsPanel: React.FC<{ controller: UserSettingsController }> = ({
+  controller,
+}) => (
+  <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+    <PasswordSettingsCard controller={controller} />
+    <TwoFactorSettingsCard controller={controller} />
+    <PersonalAccessTokenCard controller={controller} />
+  </div>
+);
+
+const PasswordSettingsCard: React.FC<{ controller: UserSettingsController }> = ({ controller }) => (
+  <Card className="gap-0 overflow-hidden rounded-lg border-border bg-background py-0">
+    <CardHeader className="border-b border-border bg-muted/40 px-6 py-4 [.border-b]:pb-4">
+      <CardTitle className="flex items-center gap-3 text-base">
+        <Lock aria-hidden="true" className="size-4 text-praetor" />
+        {controller.t('password.title')}
+      </CardTitle>
+      <CardDescription>{controller.t('password.description')}</CardDescription>
+    </CardHeader>
+    {controller.isLocalAuth ? (
+      <form onSubmit={controller.handlePasswordUpdate}>
+        <CardContent className="space-y-6 p-6">
+          {controller.passwordError && (
+            <div className="flex items-center gap-2 rounded-md border border-destructive/20 bg-destructive/10 p-4 text-sm font-medium text-destructive animate-in fade-in slide-in-from-top-2">
+              <AlertCircle aria-hidden="true" className="size-4" />
+              {controller.passwordError}
+            </div>
+          )}
+          <PasswordFields controller={controller} />
+        </CardContent>
+        <CardFooter className="justify-end border-t border-border px-6 py-4 [.border-t]:pt-4">
+          <PasswordSubmitButton controller={controller} />
+        </CardFooter>
+      </form>
+    ) : (
+      <CardContent className="p-6">
+        <LockedSettingsBanner
+          icon={<Lock aria-hidden="true" className="size-4" />}
+          message={controller.t('password.lockedBanner', {
+            provider: controller.identityProviderLabel,
+          })}
+        />
+      </CardContent>
+    )}
+  </Card>
+);
+
+const PasswordFields: React.FC<{ controller: UserSettingsController }> = ({ controller }) => (
+  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+    <Field>
+      <FieldLabel htmlFor="security-current-password" required>
+        {controller.t('password.currentPassword')}
+      </FieldLabel>
+      <Input
+        id="security-current-password"
+        type="password"
+        value={controller.currentPassword}
+        onChange={(event) => controller.setCurrentPassword(event.target.value)}
+        placeholder="••••••••"
+        required
+      />
+    </Field>
+    <Field className="md:col-start-1">
+      <FieldLabel htmlFor="security-new-password" required>
+        {controller.t('password.newPassword')}
+      </FieldLabel>
+      <Input
+        id="security-new-password"
+        type="password"
+        value={controller.newPassword}
+        onChange={(event) => controller.setNewPassword(event.target.value)}
+        placeholder="••••••••"
+        required
+      />
+    </Field>
+    <Field>
+      <FieldLabel htmlFor="security-confirm-password" required>
+        {controller.t('password.confirmNewPassword')}
+      </FieldLabel>
+      <Input
+        id="security-confirm-password"
+        type="password"
+        value={controller.confirmPassword}
+        onChange={(event) => controller.setConfirmPassword(event.target.value)}
+        placeholder="••••••••"
+        required
+      />
+    </Field>
+  </div>
+);
+
+const PasswordSubmitButton: React.FC<{ controller: UserSettingsController }> = ({ controller }) => {
+  const state = controller.isSavingPassword
+    ? { Icon: Loader2, iconClass: 'animate-spin', label: controller.t('password.updating') }
+    : controller.passwordSuccess
+      ? { Icon: Check, iconClass: undefined, label: controller.t('password.passwordUpdated') }
+      : { Icon: KeyRound, iconClass: undefined, label: controller.t('password.updatePassword') };
+  return (
+    <Button
+      type="submit"
+      disabled={
+        controller.isSavingPassword ||
+        !controller.currentPassword ||
+        !controller.newPassword ||
+        !controller.confirmPassword
+      }
+    >
+      <state.Icon aria-hidden="true" className={state.iconClass} />
+      {state.label}
+    </Button>
+  );
+};
+
+const TwoFactorSettingsCard: React.FC<{ controller: UserSettingsController }> = ({
+  controller,
+}) => {
+  const twoFactorView: TwoFactorViewState = {
+    isIdpManagedTotp:
+    controller.authMethod === 'oidc' ||
+    controller.authMethod === 'saml' ||
+    controller.totpStatus?.applicable === false,
+    isTotpEnabled: controller.totpStatus?.enabled === true,
+    isFeatureDisabled: controller.totpStatus?.featureEnabled === false,
+    isTotpRequired: controller.totpStatus?.required === true,
+  };
+
+  return (
+    <Card className="gap-0 overflow-hidden rounded-lg border-border bg-background py-0">
+      <CardHeader className="border-b border-border bg-muted/40 px-6 py-4 [.border-b]:pb-4">
+        <CardTitle className="flex items-center gap-3 text-base">
+          <ShieldCheck aria-hidden="true" className="size-4 text-praetor" />
+          {controller.t('twoFactor.title')}
+        </CardTitle>
+        <CardDescription>{controller.t('twoFactor.description')}</CardDescription>
+        {controller.totpStatus &&
+          !twoFactorView.isIdpManagedTotp &&
+          !twoFactorView.isFeatureDisabled && (
+          <CardAction>
+            <Badge variant={twoFactorView.isTotpEnabled ? 'default' : 'secondary'}>
+              {twoFactorView.isTotpEnabled
+                ? controller.t('twoFactor.statusEnabled')
+                : controller.t('twoFactor.statusDisabled')}
+            </Badge>
+          </CardAction>
+        )}
+      </CardHeader>
+      <CardContent className="space-y-4 p-6">
+        <TwoFactorCardContent controller={controller} view={twoFactorView} />
+      </CardContent>
+    </Card>
+  );
+};
+
+const TwoFactorCardContent: React.FC<{
+  controller: UserSettingsController;
+  view: TwoFactorViewState;
+}> = ({ controller, view }) => {
+  if (view.isIdpManagedTotp) return <TwoFactorInfo controller={controller} kind="idp" />;
+  if (controller.isLoadingTotpStatus && !controller.totpStatus) {
+    return (
+      <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+        <Loader2 aria-hidden="true" className="size-4 animate-spin" />
+        {controller.t('common:states.loading')}
+      </div>
+    );
+  }
+  if (controller.totpStatusError) return <TwoFactorStatusError controller={controller} />;
+  if (view.isFeatureDisabled) return <TwoFactorInfo controller={controller} kind="disabled" />;
+  if (view.isTotpEnabled) {
+    return <TwoFactorEnabledActions controller={controller} isTotpRequired={view.isTotpRequired} />;
+  }
+  return <TwoFactorSetupAction controller={controller} isTotpRequired={view.isTotpRequired} />;
+};
+
+const TwoFactorInfo: React.FC<{ controller: UserSettingsController; kind: 'idp' | 'disabled' }> = ({
+  controller,
+  kind,
+}) => (
+  <output
+    aria-live="polite"
+    className="flex w-full items-start gap-3 rounded-md border border-border bg-muted/40 p-4 text-sm text-muted-foreground"
+  >
+    <Lock aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
+    <div className="space-y-1">
+      <p className="font-medium text-foreground">
+        {kind === 'idp'
+          ? controller.t('twoFactor.idpManagedTitle')
+          : controller.t('twoFactor.disabledByAdminTitle', 'Two-factor authentication is off')}
+      </p>
+      <p>
+        {kind === 'idp'
+          ? controller.t('twoFactor.idpManagedDescription')
+          : controller.t(
+              'twoFactor.disabledByAdminDescription',
+              'Two-factor authentication is currently turned off for your organization. It cannot be set up until an administrator enables it.',
+            )}
+      </p>
+    </div>
+  </output>
+);
+
+const TwoFactorStatusError: React.FC<{ controller: UserSettingsController }> = ({
+  controller,
+}) => (
+  <div className="space-y-3">
+    <div className="rounded-md border border-destructive/20 bg-destructive/10 px-4 py-3 text-sm font-medium text-destructive">
+      {controller.totpStatusError}
+    </div>
+    <Button
+      type="button"
+      variant="outline"
+      size="sm"
+      onClick={() => void controller.loadTotpStatus()}
+      disabled={controller.isLoadingTotpStatus}
+    >
+      <RefreshCw
+        aria-hidden="true"
+        className={controller.isLoadingTotpStatus ? 'animate-spin' : undefined}
+      />
+      {controller.t('common:buttons.retry', { defaultValue: 'Retry' })}
+    </Button>
+  </div>
+);
+
+const TwoFactorEnabledActions: React.FC<{
+  controller: UserSettingsController;
+  isTotpRequired: boolean;
+}> = ({ controller, isTotpRequired }) => (
+  <div className="space-y-4">
+    {isTotpRequired && (
+      <p className="text-sm text-muted-foreground">
+        {controller.t(
+          'twoFactor.requiredByOrg',
+          'Two-factor authentication is required for your role. You can regenerate backup codes, but it cannot be turned off.',
+        )}
+      </p>
+    )}
+    <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+      {!isTotpRequired && <DisableTotpDialog controller={controller} />}
+      <RegenerateBackupCodesDialog controller={controller} />
+    </div>
+  </div>
+);
+
+const DisableTotpDialog: React.FC<{ controller: UserSettingsController }> = ({ controller }) => (
+  <Dialog
+    open={controller.isDisableDialogOpen}
+    onOpenChange={(open) => {
+      controller.setIsDisableDialogOpen(open);
+      if (!open) {
+        controller.setDisablePassword('');
+        controller.setDisableCode('');
+        controller.setDisableError('');
+      }
+    }}
+  >
+    <DialogTrigger asChild>
+      <Button type="button" variant="destructive">
+        <Lock aria-hidden="true" />
+        {controller.t('twoFactor.disable')}
+      </Button>
+    </DialogTrigger>
+    <DialogContent>
+      <form onSubmit={controller.handleDisableTotp}>
+        <DialogHeader>
+          <DialogTitle>{controller.t('twoFactor.disableTitle')}</DialogTitle>
+          <DialogDescription>{controller.t('twoFactor.disableDescription')}</DialogDescription>
+        </DialogHeader>
+        <DisableTotpFields controller={controller} />
+        <DialogFooter>
+          <DialogClose asChild>
+            <Button type="button" variant="outline" disabled={controller.isDisablingTotp}>
+              {controller.t('twoFactor.cancel')}
+            </Button>
+          </DialogClose>
+          <Button
+            type="submit"
+            variant="destructive"
+            disabled={
+              controller.isDisablingTotp ||
+              !controller.disableCode.trim() ||
+              (controller.isLocalAuth && !controller.disablePassword.trim())
+            }
+          >
+            {controller.isDisablingTotp ? (
+              <>
+                <Loader2 aria-hidden="true" className="animate-spin" />
+                {controller.t('twoFactor.verifying')}
+              </>
+            ) : (
+              controller.t('twoFactor.confirmDisable')
+            )}
+          </Button>
+        </DialogFooter>
+      </form>
+    </DialogContent>
+  </Dialog>
+);
+
+const DisableTotpFields: React.FC<{ controller: UserSettingsController }> = ({ controller }) => (
+  <div className="space-y-4 py-4">
+    {controller.disableError && (
+      <Alert variant="destructive">
+        <AlertCircle aria-hidden="true" />
+        <AlertTitle>{controller.disableError}</AlertTitle>
+      </Alert>
+    )}
+    {controller.isLocalAuth && (
+      <Field>
+        <FieldLabel htmlFor="totp-disable-password" required>
+          {controller.t('twoFactor.disablePasswordLabel')}
+        </FieldLabel>
+        <Input
+          id="totp-disable-password"
+          type="password"
+          value={controller.disablePassword}
+          onChange={(event) => {
+            controller.setDisablePassword(event.target.value);
+            if (controller.disableError) controller.setDisableError('');
+          }}
+          placeholder="••••••••"
+          autoComplete="current-password"
+        />
+      </Field>
+    )}
+    <Field>
+      <FieldLabel htmlFor="totp-disable-code" required>
+        {controller.t('twoFactor.disableCodeLabel')}
+      </FieldLabel>
+      <Input
+        id="totp-disable-code"
+        autoComplete="one-time-code"
+        value={controller.disableCode}
+        onChange={(event) => {
+          controller.setDisableCode(event.target.value);
+          if (controller.disableError) controller.setDisableError('');
+        }}
+        placeholder="123456"
+        className="font-mono tracking-[0.3em]"
+      />
+    </Field>
+  </div>
+);
+
+const RegenerateBackupCodesDialog: React.FC<{ controller: UserSettingsController }> = ({
+  controller,
+}) => (
+  <Dialog
+    open={controller.isRegenerateDialogOpen}
+    onOpenChange={(open) => {
+      controller.setIsRegenerateDialogOpen(open);
+      if (!open) {
+        controller.setRegenerateCode('');
+        controller.setRegenerateError('');
+        controller.setRegeneratedBackupCodes(null);
+      }
+    }}
+  >
+    <DialogTrigger asChild>
+      <Button type="button" variant="outline">
+        <RefreshCw aria-hidden="true" />
+        {controller.t('twoFactor.regenerateBackupCodes')}
+      </Button>
+    </DialogTrigger>
+    <DialogContent>
+      {controller.regeneratedBackupCodes ? (
+        <RegeneratedBackupCodes controller={controller} />
+      ) : (
+        <RegenerateBackupCodesForm controller={controller} />
+      )}
+    </DialogContent>
+  </Dialog>
+);
+
+const RegeneratedBackupCodes: React.FC<{ controller: UserSettingsController }> = ({
+  controller,
+}) => {
+  const codes = controller.regeneratedBackupCodes ?? [];
+  return (
+    <>
+      <DialogHeader>
+        <DialogTitle className="flex items-center gap-2">
+          <ShieldCheck aria-hidden="true" className="size-5 text-primary" />
+          {controller.t('twoFactor.backupTitle')}
+        </DialogTitle>
+        <DialogDescription>{controller.t('twoFactor.backupInstructions')}</DialogDescription>
+      </DialogHeader>
+      <ul className="my-2 grid grid-cols-2 gap-2 rounded-lg border border-border bg-muted/40 p-4">
+        {codes.map((backupCode) => (
+          <li
+            key={backupCode}
+            className="rounded-md border border-border bg-background px-3 py-2 text-center font-mono text-sm tracking-[0.15em] text-foreground"
+          >
+            {backupCode}
+          </li>
+        ))}
+      </ul>
+      <DialogFooter>
+        <CopyButton
+          variant="outline"
+          value={codes.join('\n')}
+          label={controller.t('twoFactor.copyCodes')}
+          copiedLabel={controller.t('twoFactor.copyCodes')}
+        />
+        <Button type="button" variant="outline" onClick={() => controller.downloadBackupCodes(codes)}>
+          {controller.t('twoFactor.downloadCodes')}
+        </Button>
+        <DialogClose asChild>
+          <Button type="button">{controller.t('twoFactor.done')}</Button>
+        </DialogClose>
+      </DialogFooter>
+    </>
+  );
+};
+
+const RegenerateBackupCodesForm: React.FC<{ controller: UserSettingsController }> = ({
+  controller,
+}) => (
+  <form onSubmit={controller.handleRegenerateBackupCodes}>
+    <DialogHeader>
+      <DialogTitle>{controller.t('twoFactor.regenerateBackupCodes')}</DialogTitle>
+      <DialogDescription>{controller.t('twoFactor.enterCodeLabel')}</DialogDescription>
+    </DialogHeader>
+    <div className="flex flex-col items-center gap-4 py-4">
+      <InputOTP
+        maxLength={TOTP_CODE_LENGTH}
+        value={controller.regenerateCode}
+        onChange={(value) => {
+          controller.setRegenerateCode(value);
+          if (controller.regenerateError) controller.setRegenerateError('');
+        }}
+        pattern={REGEXP_ONLY_DIGITS}
+        disabled={controller.isRegeneratingCodes}
+        aria-invalid={controller.regenerateError ? true : undefined}
+        aria-label={controller.t('twoFactor.enterCodeLabel')}
+        containerClassName="justify-center"
+      >
+        <InputOTPGroup>
+          {Array.from({ length: TOTP_CODE_LENGTH }, (_, index) => (
+            <InputOTPSlot
+              key={index}
+              index={index}
+              aria-invalid={controller.regenerateError ? true : undefined}
+            />
+          ))}
+        </InputOTPGroup>
+      </InputOTP>
+      {controller.regenerateError && (
+        <Alert variant="destructive">
+          <AlertCircle aria-hidden="true" />
+          <AlertTitle>{controller.regenerateError}</AlertTitle>
+        </Alert>
       )}
     </div>
+    <DialogFooter>
+      <DialogClose asChild>
+        <Button type="button" variant="outline" disabled={controller.isRegeneratingCodes}>
+          {controller.t('twoFactor.cancel')}
+        </Button>
+      </DialogClose>
+      <Button
+        type="submit"
+        disabled={
+          controller.isRegeneratingCodes || controller.regenerateCode.length !== TOTP_CODE_LENGTH
+        }
+      >
+        {controller.isRegeneratingCodes ? (
+          <>
+            <Loader2 aria-hidden="true" className="animate-spin" />
+            {controller.t('twoFactor.verifying')}
+          </>
+        ) : (
+          controller.t('twoFactor.regenerate')
+        )}
+      </Button>
+    </DialogFooter>
+  </form>
+);
+
+const TwoFactorSetupAction: React.FC<{
+  controller: UserSettingsController;
+  isTotpRequired: boolean;
+}> = ({ controller, isTotpRequired }) => (
+  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <p className="text-sm text-muted-foreground">
+      {isTotpRequired
+        ? controller.t(
+            'twoFactor.requiredByOrgSetup',
+            'Two-factor authentication is required for your role. Set it up now — you will be asked to complete it at your next sign-in otherwise.',
+          )
+        : controller.t('twoFactor.scanInstructions')}
+    </p>
+    <TotpSetupDialog controller={controller} />
+  </div>
+);
+
+const TotpSetupDialog: React.FC<{ controller: UserSettingsController }> = ({ controller }) => (
+  <Dialog
+    open={controller.isTotpSetupOpen}
+    onOpenChange={(open) => {
+      controller.setIsTotpSetupOpen(open);
+      if (!open) {
+        controller.setTotpSetupPassword('');
+        controller.setTotpSetupReauthDone(false);
+      }
+    }}
+  >
+    <DialogTrigger asChild>
+      <Button type="button">
+        <ShieldCheck aria-hidden="true" />
+        {controller.t('twoFactor.setUp')}
+      </Button>
+    </DialogTrigger>
+    <DialogContent className="sm:max-w-md">
+      {controller.isTotpSetupOpen && !controller.totpSetupReauthDone ? (
+        <TotpSetupReauthForm controller={controller} />
+      ) : (
+        <TotpSetupWizardPane controller={controller} />
+      )}
+    </DialogContent>
+  </Dialog>
+);
+
+const TotpSetupReauthForm: React.FC<{ controller: UserSettingsController }> = ({ controller }) => (
+  <form
+    onSubmit={(event) => {
+      event.preventDefault();
+      if (!controller.totpSetupPassword.trim()) return;
+      controller.setTotpSetupReauthDone(true);
+    }}
+  >
+    <DialogHeader>
+      <DialogTitle>{controller.t('twoFactor.reauthTitle')}</DialogTitle>
+      <DialogDescription>{controller.t('twoFactor.reauthDescription')}</DialogDescription>
+    </DialogHeader>
+    <div className="space-y-4 py-4">
+      <Field>
+        <FieldLabel htmlFor="totp-setup-password" required>
+          {controller.t('twoFactor.reauthPasswordLabel')}
+        </FieldLabel>
+        <Input
+          id="totp-setup-password"
+          type="password"
+          value={controller.totpSetupPassword}
+          onChange={(event) => controller.setTotpSetupPassword(event.target.value)}
+          placeholder="••••••••"
+          autoComplete="current-password"
+        />
+      </Field>
+    </div>
+    <DialogFooter>
+      <Button type="button" variant="outline" onClick={() => controller.setIsTotpSetupOpen(false)}>
+        {controller.t('twoFactor.cancel')}
+      </Button>
+      <Button type="submit" disabled={!controller.totpSetupPassword.trim()}>
+        {controller.t('twoFactor.continue')}
+      </Button>
+    </DialogFooter>
+  </form>
+);
+
+const TotpSetupWizardPane: React.FC<{ controller: UserSettingsController }> = ({ controller }) => (
+  <>
+    <DialogHeader className="sr-only">
+      <DialogTitle>{controller.t('twoFactor.setupTitle')}</DialogTitle>
+      <DialogDescription>{controller.t('twoFactor.scanInstructions')}</DialogDescription>
+    </DialogHeader>
+    {controller.isTotpSetupOpen && (
+      <TotpSetupWizard
+        onSetup={() => controller.onTotpSetup(controller.totpSetupPassword)}
+        onConfirm={controller.onTotpConfirm}
+        onFinished={controller.handleTotpSetupFinished}
+        onCancel={() => controller.setIsTotpSetupOpen(false)}
+      />
+    )}
+  </>
+);
+
+const PersonalAccessTokenCard: React.FC<{ controller: UserSettingsController }> = ({
+  controller,
+}) => (
+  <Card className="gap-0 overflow-hidden rounded-lg border-border bg-background py-0">
+    <CardHeader className="border-b border-border bg-muted/40 px-6 py-4 [.border-b]:pb-4">
+      <CardTitle className="flex items-center gap-3 text-base">
+        <Shield aria-hidden="true" className="size-4 text-praetor" />
+        {controller.t('security.personalAccessToken.title')}
+      </CardTitle>
+      <CardDescription>{controller.t('security.personalAccessToken.description')}</CardDescription>
+      <CardAction>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={controller.handleRenewPersonalAccessToken}
+          disabled={controller.isLoadingToken || controller.isRenewingToken}
+        >
+          <RefreshCw
+            aria-hidden="true"
+            className={controller.isRenewingToken ? 'animate-spin' : undefined}
+          />
+          {controller.isRenewingToken
+            ? controller.t('security.personalAccessToken.renewing')
+            : controller.t('security.personalAccessToken.renew')}
+        </Button>
+      </CardAction>
+    </CardHeader>
+    <CardContent className="space-y-4 p-6">
+      {controller.tokenError && (
+        <div className="rounded-md border border-destructive/20 bg-destructive/10 px-4 py-3 text-sm font-medium text-destructive">
+          {controller.tokenError}
+        </div>
+      )}
+      <PersonalAccessTokenField controller={controller} />
+      <PersonalAccessTokenMetadata controller={controller} />
+    </CardContent>
+  </Card>
+);
+
+const PersonalAccessTokenField: React.FC<{ controller: UserSettingsController }> = ({
+  controller,
+}) => (
+  <Field>
+    <FieldLabel htmlFor="security-pat-token">
+      {controller.t('security.personalAccessToken.tokenLabel')}
+    </FieldLabel>
+    <div className="flex flex-col gap-2 sm:flex-row">
+      <Input
+        id="security-pat-token"
+        value={
+          controller.isLoadingToken
+            ? controller.t('security.personalAccessToken.loading')
+            : controller.tokenDisplayValue
+        }
+        readOnly
+        className="font-mono text-sm"
+      />
+      <CopyButton
+        variant="secondary"
+        value={controller.personalAccessToken?.token ?? ''}
+        disabled={!controller.personalAccessToken?.token}
+        label={controller.t('security.personalAccessToken.copy')}
+        copiedLabel={controller.t('security.personalAccessToken.copied')}
+        onCopyError={() => controller.setTokenError(controller.t('security.copyFailed'))}
+      />
+    </div>
+    <FieldDescription>
+      {controller.personalAccessToken?.token
+        ? controller.t('security.personalAccessToken.visibleOnce')
+        : controller.t('security.personalAccessToken.masked')}
+    </FieldDescription>
+  </Field>
+);
+
+const PersonalAccessTokenMetadata: React.FC<{ controller: UserSettingsController }> = ({
+  controller,
+}) => {
+  if (!controller.personalAccessToken) return null;
+  return (
+    <dl className="grid grid-cols-1 gap-3 text-sm md:grid-cols-3">
+      {(['createdAt', 'updatedAt', 'lastUsedAt'] as const).map((field) => (
+        <div key={field}>
+          <dt className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+            {controller.t(`security.personalAccessToken.${field}`)}
+          </dt>
+          <dd className="mt-1 text-foreground">
+            {controller.formatPersonalAccessTokenDate(controller.personalAccessToken?.[field] ?? null)}
+          </dd>
+        </div>
+      ))}
+    </dl>
+  );
+};
+
+const McpSettingsPanel: React.FC<{ controller: UserSettingsController }> = ({ controller }) => (
+  <section className="overflow-hidden rounded-lg border border-border bg-background shadow-sm animate-in fade-in slide-in-from-right-4 duration-300">
+    <div className="border-b border-border bg-muted/40 px-6 py-4">
+      <div className="flex items-center gap-3">
+        <McpIcon className="size-4 text-praetor" />
+        <h3 className="font-semibold text-foreground">{controller.t('mcp.title')}</h3>
+      </div>
+      <p className="mt-1 text-sm text-muted-foreground">{controller.t('mcp.description')}</p>
+    </div>
+    <div className="p-6 space-y-6">
+      {controller.mcpError && (
+        <div className="flex items-center gap-2 rounded-md border border-destructive/20 bg-destructive/10 p-4 text-sm font-medium text-destructive">
+          <i className="fa-solid fa-circle-exclamation"></i>
+          {controller.mcpError}
+        </div>
+      )}
+      <McpEndpointField controller={controller} />
+      <McpSetupPromptField controller={controller} />
+      <McpTokenCreateForm controller={controller} />
+      <McpRawTokenNotice controller={controller} />
+      <McpTokenList controller={controller} />
+    </div>
+  </section>
+);
+
+const McpEndpointField: React.FC<{ controller: UserSettingsController }> = ({ controller }) => (
+  <Field>
+    <FieldLabel htmlFor="mcp-endpoint-url">{controller.t('mcp.urlLabel')}</FieldLabel>
+    <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_auto]">
+      <Input id="mcp-endpoint-url" readOnly value={controller.mcpEndpointUrl} />
+      <CopyButton
+        variant="outline"
+        value={controller.mcpEndpointUrl}
+        label={controller.t('mcp.copyUrl')}
+        copiedLabel={controller.t('mcp.copyUrlCopied')}
+      />
+    </div>
+    <FieldDescription>{controller.t('mcp.urlDescription')}</FieldDescription>
+  </Field>
+);
+
+const McpSetupPromptField: React.FC<{ controller: UserSettingsController }> = ({
+  controller,
+}) => (
+  <Field>
+    <FieldLabel htmlFor="mcp-setup-prompt">{controller.t('mcp.promptLabel')}</FieldLabel>
+    <Textarea
+      id="mcp-setup-prompt"
+      readOnly
+      value={controller.mcpSetupPrompt}
+      className="min-h-44 resize-y font-mono text-xs"
+    />
+    <div className="flex justify-end">
+      <CopyButton
+        variant="outline"
+        value={controller.mcpSetupPrompt}
+        label={controller.t('mcp.copyPrompt')}
+        copiedLabel={controller.t('mcp.copyPromptCopied')}
+      />
+    </div>
+    <FieldDescription>{controller.t('mcp.promptDescription')}</FieldDescription>
+  </Field>
+);
+
+const McpTokenCreateForm: React.FC<{ controller: UserSettingsController }> = ({ controller }) => (
+  <form
+    onSubmit={controller.handleCreateMcpToken}
+    className="grid grid-cols-1 gap-3 md:grid-cols-[1fr_minmax(10rem,auto)_auto]"
+  >
+    <Field>
+      <FieldLabel htmlFor="mcp-token-name" required>
+        {controller.t('mcp.nameLabel')}
+      </FieldLabel>
+      <Input
+        id="mcp-token-name"
+        type="text"
+        value={controller.mcpTokenName}
+        onChange={(event) => controller.setMcpTokenName(event.target.value)}
+        placeholder={controller.t('mcp.namePlaceholder')}
+        maxLength={120}
+      />
+    </Field>
+    <Field>
+      <FieldLabel htmlFor="mcp-token-scope">{controller.t('mcp.scopeLabel')}</FieldLabel>
+      <Select
+        value={controller.mcpTokenScope}
+        onValueChange={(value) => controller.setMcpTokenScope(value as McpTokenScope)}
+      >
+        <SelectTrigger id="mcp-token-scope">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="full">{controller.t('mcp.scopeFull')}</SelectItem>
+          <SelectItem value="read_only">{controller.t('mcp.scopeReadOnly')}</SelectItem>
+        </SelectContent>
+      </Select>
+      <FieldDescription>
+        {controller.mcpTokenScope === 'read_only'
+          ? controller.t('mcp.scopeReadOnlyDescription')
+          : controller.t('mcp.scopeFullDescription')}
+      </FieldDescription>
+    </Field>
+    <Button
+      type="submit"
+      disabled={controller.isCreatingMcpToken || !controller.mcpTokenName.trim()}
+      className="self-end"
+    >
+      {controller.isCreatingMcpToken ? (
+        <i className="fa-solid fa-circle-notch fa-spin"></i>
+      ) : (
+        <McpIcon className="size-4" />
+      )}
+      {controller.t('mcp.create')}
+    </Button>
+  </form>
+);
+
+const McpRawTokenNotice: React.FC<{ controller: UserSettingsController }> = ({ controller }) => {
+  if (!controller.rawMcpToken) return null;
+  return (
+    <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-4">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <p className="text-sm font-semibold text-foreground">{controller.t('mcp.rawTokenTitle')}</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {controller.t('mcp.rawTokenDescription')}
+          </p>
+        </div>
+        <CopyButton
+          variant="outline"
+          size="sm"
+          value={controller.rawMcpToken}
+          label={controller.t('mcp.copy')}
+          copiedLabel={controller.t('mcp.copied')}
+          className="shrink-0"
+        />
+      </div>
+      <code className="mt-3 block rounded-md border border-border bg-background px-3 py-2 text-xs text-foreground break-all">
+        {controller.rawMcpToken}
+      </code>
+    </div>
+  );
+};
+
+const McpTokenList: React.FC<{ controller: UserSettingsController }> = ({ controller }) => (
+  <div className="space-y-3">
+    {controller.isLoadingMcpTokens ? (
+      <div className="text-sm text-zinc-500 font-medium flex items-center gap-2">
+        <i className="fa-solid fa-circle-notch fa-spin"></i>
+        {controller.t('mcp.loading')}
+      </div>
+    ) : controller.mcpTokens.length === 0 ? (
+      <div className="rounded-md border border-dashed border-border p-6 text-sm text-muted-foreground">
+        {controller.t('mcp.empty')}
+      </div>
+    ) : (
+      controller.mcpTokens.map((token) => (
+        <McpTokenRow key={token.id} controller={controller} token={token} />
+      ))
+    )}
+  </div>
+);
+
+const McpTokenRow: React.FC<{ controller: UserSettingsController; token: McpToken }> = ({
+  controller,
+  token,
+}) => {
+  const isRevoking = controller.revokingMcpTokenId === token.id;
+  return (
+    <div className="flex flex-col justify-between gap-4 rounded-md border border-border p-4 md:flex-row md:items-center">
+      <div>
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="font-semibold text-foreground">{token.name}</p>
+          <span
+            className="inline-flex items-center rounded-md border border-border bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground"
+            data-scope={token.scope}
+          >
+            {token.scope === 'read_only'
+              ? controller.t('mcp.scopeReadOnly')
+              : controller.t('mcp.scopeFull')}
+          </span>
+        </div>
+        <p className="text-xs text-muted-foreground mt-1">
+          {token.tokenPrefix}... · {controller.t('mcp.created')}{' '}
+          {formatMcpTokenDate(token.createdAt)} · {controller.t('mcp.lastUsed')}{' '}
+          {formatMcpTokenDate(token.lastUsedAt)}
+        </p>
+      </div>
+      <Dialog>
+        <DialogTrigger asChild>
+          <Button type="button" variant="destructive" size="sm" disabled={isRevoking}>
+            <McpRevokeIcon isRevoking={isRevoking} />
+            {controller.t('mcp.revoke')}
+          </Button>
+        </DialogTrigger>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{controller.t('mcp.revokeDialogTitle')}</DialogTitle>
+            <DialogDescription>
+              {controller.t('mcp.revokeDialogDescription', { name: token.name })}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button type="button" variant="outline" disabled={isRevoking}>
+                {controller.t('common:buttons.cancel')}
+              </Button>
+            </DialogClose>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={() => void controller.handleRevokeMcpToken(token.id)}
+              disabled={isRevoking}
+            >
+              <McpRevokeIcon isRevoking={isRevoking} />
+              {controller.t('mcp.revokeConfirm')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+};
+
+const RilSettingsPanel: React.FC<{ controller: UserSettingsController }> = ({ controller }) => (
+  <Card className="gap-0 overflow-hidden rounded-lg bg-background py-0 animate-in fade-in slide-in-from-right-4 duration-300">
+    <CardHeader className="border-b bg-muted/40 px-6 py-4 [.border-b]:pb-4">
+      <CardTitle className="flex items-center gap-3 text-base">
+        <CalendarDays aria-hidden="true" className="size-4 text-praetor" />
+        {controller.t('ril.title')}
+      </CardTitle>
+      <CardDescription>{controller.t('ril.description')}</CardDescription>
+    </CardHeader>
+    <CardContent className="p-6">
+      <fieldset className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        {controller.rilWeekdayDefs.map(({ key, label }) => (
+          <RilWeekdayTransferField key={key} controller={controller} dayKey={key} label={label} />
+        ))}
+      </fieldset>
+      <FieldDescription className="mt-4">
+        {controller.t('ril.weekdayDefaultsHint')}
+      </FieldDescription>
+    </CardContent>
+  </Card>
+);
+
+const RilWeekdayTransferField: React.FC<{
+  controller: UserSettingsController;
+  dayKey: RilWeekday;
+  label: string;
+}> = ({ controller, dayKey, label }) => {
+  const current = controller.rilWeekdayTransferDefaults[dayKey];
+  const options =
+    current && !controller.rilTransferOptions.includes(current)
+      ? [current, ...controller.rilTransferOptions]
+      : controller.rilTransferOptions;
+
+  return (
+    <Field>
+      <FieldLabel htmlFor={`ril-transfer-${dayKey}`}>{label}</FieldLabel>
+      <Select
+        value={current ?? RIL_NONE_TRANSFER_VALUE}
+        onValueChange={(value) => void controller.handleWeekdayTransferChange(dayKey, value)}
+      >
+        <SelectTrigger id={`ril-transfer-${dayKey}`} className="w-full">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value={RIL_NONE_TRANSFER_VALUE}>{controller.t('ril.noDefault')}</SelectItem>
+          {options.map((option) => (
+            <SelectItem key={option} value={option}>
+              {option}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </Field>
   );
 };
 

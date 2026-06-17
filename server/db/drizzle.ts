@@ -45,6 +45,7 @@ import * as suppliersSchema from './schema/suppliers.ts';
 import * as tasksSchema from './schema/tasks.ts';
 import * as timeEntriesSchema from './schema/timeEntries.ts';
 import * as usersSchema from './schema/users.ts';
+import * as userRolesSchema from './schema/userRoles.ts';
 import * as userWorkUnitsSchema from './schema/userWorkUnits.ts';
 import * as webhooksSchema from './schema/webhooks.ts';
 import * as workUnitManagersSchema from './schema/workUnitManagers.ts';
@@ -94,6 +95,7 @@ export const schema = {
   ...tasksSchema,
   ...timeEntriesSchema,
   ...usersSchema,
+  ...userRolesSchema,
   ...userWorkUnitsSchema,
   ...webhooksSchema,
   ...workUnitManagersSchema,

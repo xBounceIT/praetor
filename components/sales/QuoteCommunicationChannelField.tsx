@@ -1,5 +1,5 @@
 import type React from 'react';
-import { useMemo, useState } from 'react';
+import { useMemo, useReducer } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { FieldError, FieldLabel } from '@/components/ui/field';
@@ -32,6 +32,76 @@ interface QuoteCommunicationChannelFieldProps {
 const errorMessage = (error: unknown, fallback: string) =>
   error instanceof Error ? error.message : fallback;
 
+interface ChannelManagerState {
+  isManageOpen: boolean;
+  editingChannel: QuoteCommunicationChannel | null;
+  channelName: string;
+  managerError: string | null;
+  isSaving: boolean;
+  deletingId: string | null;
+}
+
+type ChannelManagerAction =
+  | { type: 'openManage' }
+  | { type: 'closeManage' }
+  | { type: 'editChannel'; channel: QuoteCommunicationChannel }
+  | { type: 'setChannelName'; value: string }
+  | { type: 'showError'; message: string }
+  | { type: 'saveStarted' }
+  | { type: 'saveSucceeded' }
+  | { type: 'saveFailed'; message: string }
+  | { type: 'deleteStarted'; id: string }
+  | { type: 'deleteSucceeded'; id: string }
+  | { type: 'deleteFailed'; message: string };
+
+const initialChannelManagerState: ChannelManagerState = {
+  isManageOpen: false,
+  editingChannel: null,
+  channelName: '',
+  managerError: null,
+  isSaving: false,
+  deletingId: null,
+};
+
+const channelManagerReducer = (
+  state: ChannelManagerState,
+  action: ChannelManagerAction,
+): ChannelManagerState => {
+  switch (action.type) {
+    case 'openManage':
+      return { ...state, isManageOpen: true, editingChannel: null, channelName: '', managerError: null };
+    case 'closeManage':
+      return { ...state, isManageOpen: false };
+    case 'editChannel':
+      return {
+        ...state,
+        editingChannel: action.channel,
+        channelName: action.channel.name,
+        managerError: null,
+      };
+    case 'setChannelName':
+      return { ...state, channelName: action.value };
+    case 'showError':
+      return { ...state, managerError: action.message };
+    case 'saveStarted':
+      return { ...state, isSaving: true, managerError: null };
+    case 'saveSucceeded':
+      return { ...state, isSaving: false, editingChannel: null, channelName: '' };
+    case 'saveFailed':
+      return { ...state, isSaving: false, managerError: action.message };
+    case 'deleteStarted':
+      return { ...state, deletingId: action.id, managerError: null };
+    case 'deleteSucceeded':
+      return {
+        ...state,
+        deletingId: null,
+        ...(state.editingChannel?.id === action.id ? { editingChannel: null, channelName: '' } : {}),
+      };
+    case 'deleteFailed':
+      return { ...state, deletingId: null, managerError: action.message };
+  }
+};
+
 const QuoteCommunicationChannelField: React.FC<QuoteCommunicationChannelFieldProps> = ({
   id,
   value,
@@ -45,12 +115,10 @@ const QuoteCommunicationChannelField: React.FC<QuoteCommunicationChannelFieldPro
   onDelete,
 }) => {
   const { t } = useTranslation(['sales', 'common']);
-  const [isManageOpen, setIsManageOpen] = useState(false);
-  const [editingChannel, setEditingChannel] = useState<QuoteCommunicationChannel | null>(null);
-  const [channelName, setChannelName] = useState('');
-  const [managerError, setManagerError] = useState<string | null>(null);
-  const [isSaving, setIsSaving] = useState(false);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [
+    { isManageOpen, editingChannel, channelName, managerError, isSaving, deletingId },
+    dispatchManager,
+  ] = useReducer(channelManagerReducer, initialChannelManagerState);
 
   const channelOptions = useMemo(
     () => channels.map((channel) => ({ id: channel.id, name: channel.name })),
@@ -58,67 +126,67 @@ const QuoteCommunicationChannelField: React.FC<QuoteCommunicationChannelFieldPro
   );
 
   const openManage = () => {
-    setIsManageOpen(true);
-    setEditingChannel(null);
-    setChannelName('');
-    setManagerError(null);
+    dispatchManager({ type: 'openManage' });
   };
 
   const handleSave = async () => {
     const trimmed = channelName.trim();
     if (!trimmed) {
-      setManagerError(t('sales:communicationChannels.errors.nameRequired'));
+      dispatchManager({
+        type: 'showError',
+        message: t('sales:communicationChannels.errors.nameRequired'),
+      });
       return;
     }
 
-    setIsSaving(true);
-    setManagerError(null);
+    dispatchManager({ type: 'saveStarted' });
     try {
       if (editingChannel) {
         await onUpdate(editingChannel.id, { name: trimmed });
       } else {
         await onCreate({ name: trimmed });
       }
-      setEditingChannel(null);
-      setChannelName('');
+      dispatchManager({ type: 'saveSucceeded' });
     } catch (err) {
-      setManagerError(errorMessage(err, t('common:messages.errorOccurred')));
-    } finally {
-      setIsSaving(false);
+      dispatchManager({
+        type: 'saveFailed',
+        message: errorMessage(err, t('common:messages.errorOccurred')),
+      });
     }
   };
 
   const handleDelete = async (channel: QuoteCommunicationChannel) => {
     if (channel.totalQuoteCount > 0) {
-      setManagerError(
-        t('sales:communicationChannels.errors.deleteBlocked', {
+      dispatchManager({
+        type: 'showError',
+        message: t('sales:communicationChannels.errors.deleteBlocked', {
           count: channel.totalQuoteCount,
           name: channel.name,
         }),
-      );
+      });
       return;
     }
     if (channels.length <= 1) {
-      setManagerError(t('sales:communicationChannels.errors.deleteLast'));
+      dispatchManager({
+        type: 'showError',
+        message: t('sales:communicationChannels.errors.deleteLast'),
+      });
       return;
     }
 
-    setDeletingId(channel.id);
-    setManagerError(null);
+    dispatchManager({ type: 'deleteStarted', id: channel.id });
     try {
       await onDelete(channel.id);
       if (value === channel.id) {
         const next = channels.find((candidate) => candidate.id !== channel.id);
         onChange(next?.id ?? '');
       }
-      if (editingChannel?.id === channel.id) {
-        setEditingChannel(null);
-        setChannelName('');
-      }
+      dispatchManager({ type: 'deleteSucceeded', id: channel.id });
     } catch (err) {
-      setManagerError(errorMessage(err, t('common:messages.errorOccurred')));
-    } finally {
-      setDeletingId(null);
+      dispatchManager({
+        type: 'deleteFailed',
+        message: errorMessage(err, t('common:messages.errorOccurred')),
+      });
     }
   };
 
@@ -155,17 +223,19 @@ const QuoteCommunicationChannelField: React.FC<QuoteCommunicationChannelFieldPro
         {error && <FieldError className="text-xs">{error}</FieldError>}
       </div>
 
-      <Modal isOpen={isManageOpen} onClose={() => setIsManageOpen(false)} zIndex={90}>
+      <Modal isOpen={isManageOpen} onClose={() => dispatchManager({ type: 'closeManage' })} zIndex={90}>
         <ModalContent className="max-w-3xl">
           <ModalHeader>
             <ModalTitle>{t('sales:communicationChannels.manageTitle')}</ModalTitle>
-            <ModalCloseButton onClick={() => setIsManageOpen(false)} />
+            <ModalCloseButton onClick={() => dispatchManager({ type: 'closeManage' })} />
           </ModalHeader>
           <ModalBody className="space-y-6">
             <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
               <Input
                 value={channelName}
-                onChange={(event) => setChannelName(event.target.value)}
+                onChange={(event) =>
+                  dispatchManager({ type: 'setChannelName', value: event.target.value })
+                }
                 placeholder={t('sales:communicationChannels.namePlaceholder')}
               />
               <Button type="button" onClick={handleSave} disabled={isSaving}>
@@ -203,11 +273,7 @@ const QuoteCommunicationChannelField: React.FC<QuoteCommunicationChannelFieldPro
                             type="button"
                             variant="outline"
                             size="sm"
-                            onClick={() => {
-                              setEditingChannel(channel);
-                              setChannelName(channel.name);
-                              setManagerError(null);
-                            }}
+                            onClick={() => dispatchManager({ type: 'editChannel', channel })}
                           >
                             {t('common:buttons.edit')}
                           </Button>
@@ -236,7 +302,11 @@ const QuoteCommunicationChannelField: React.FC<QuoteCommunicationChannelFieldPro
             </div>
           </ModalBody>
           <ModalFooter>
-            <Button type="button" variant="outline" onClick={() => setIsManageOpen(false)}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => dispatchManager({ type: 'closeManage' })}
+            >
               {t('common:buttons.close')}
             </Button>
           </ModalFooter>

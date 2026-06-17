@@ -127,18 +127,19 @@ export const verifyDbReadiness = async (
     );
   }
 
-  const probedTables: string[] = [];
-  for (const probe of probes) {
-    try {
-      await probe.run(exec);
-      probedTables.push(probe.name);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      throw new Error(`Database schema probe failed for ${probe.name}: ${message}`, {
-        cause: err,
-      });
-    }
-  }
+  const probedTables = await Promise.all(
+    probes.map(async (probe) => {
+      try {
+        await probe.run(exec);
+        return probe.name;
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        throw new Error(`Database schema probe failed for ${probe.name}: ${message}`, {
+          cause: err,
+        });
+      }
+    }),
+  );
 
   return { appliedMigrations, expectedMigrations, probedTables };
 };

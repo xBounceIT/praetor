@@ -1,5 +1,5 @@
 import { and, asc, desc, eq, getTableColumns, inArray, ne, notInArray, or, sql } from 'drizzle-orm';
-import { type DbExecutor, db, runAtomically } from '../db/drizzle.ts';
+import { type DbExecutor, db, executeRows, runAtomically } from '../db/drizzle.ts';
 import { customerOfferItems } from '../db/schema/customerOfferItems.ts';
 import { quoteItems } from '../db/schema/quotes.ts';
 import { saleItems } from '../db/schema/sales.ts';
@@ -47,7 +47,7 @@ export type SupplierQuote = {
 // whole list query with "column reference \"id\" is ambiguous". The outer table is always
 // selected unaliased as "supplier_quotes" (see listAll/findById/lockEffectiveStatusById), so the
 // explicit reference is stable. Do NOT replace with ${supplierQuotes.id}.
-const outerSupplierQuoteId = sql.raw('"supplier_quotes"."id"');
+const outerSupplierQuoteId = sql`${sql.identifier('supplier_quotes')}.${sql.identifier('id')}`;
 
 // The client quote that most-advances this supplier quote, resolved through PRODUCT-LINE sourcing
 // (quote_items.supplier_quote_id) — issue #779 follow-up: the 1:1 quotes.linked_supplier_quote_id
@@ -684,6 +684,39 @@ export const deleteById = async (
   return { supplierName: rows[0].supplierName };
 };
 
+export const deleteByIdWithAttachmentStoredNames = async (
+  id: string,
+  exec: DbExecutor = db,
+): Promise<{ supplierName: string; attachmentStoredNames: string[] } | null> => {
+  const rows = await executeRows<{
+    supplierName: string;
+    attachmentStoredNames: string[] | null;
+  }>(
+    exec,
+    sql`
+      WITH attachments AS (
+        SELECT COALESCE(array_agg(stored_name ORDER BY created_at DESC), ARRAY[]::text[]) AS stored_names
+        FROM supplier_quote_attachments
+        WHERE quote_id = ${id}
+      ),
+      deleted AS (
+        DELETE FROM supplier_quotes
+        WHERE id = ${id}
+        RETURNING supplier_name
+      )
+      SELECT
+        deleted.supplier_name AS "supplierName",
+        attachments.stored_names AS "attachmentStoredNames"
+      FROM deleted
+      CROSS JOIN attachments
+    `,
+  );
+  const row = rows[0];
+  return row
+    ? { supplierName: row.supplierName, attachmentStoredNames: row.attachmentStoredNames ?? [] }
+    : null;
+};
+
 export type NewSupplierQuoteItem = {
   id: string;
   productId: string | null;
@@ -802,22 +835,24 @@ export const syncItemPricing = async (
   patches: SupplierItemSyncPatch[],
   exec: DbExecutor = db,
 ): Promise<void> => {
-  for (const patch of patches) {
-    const keepDiscount = patch.discountPercent < 100;
-    const discountPercent = keepDiscount ? patch.discountPercent : 0;
-    const listPrice = keepDiscount
-      ? patch.unitCost / (1 - patch.discountPercent / 100)
-      : patch.unitCost;
-    await exec
-      .update(supplierQuoteItems)
-      .set({
-        quantity: numericForDb(patch.quantity),
-        unitPrice: numericForDb(patch.unitCost),
-        listPrice: numericForDb(listPrice),
-        discountPercent: numericForDb(discountPercent),
-      })
-      .where(eq(supplierQuoteItems.id, patch.itemId));
-  }
+  await Promise.all(
+    patches.map((patch) => {
+      const keepDiscount = patch.discountPercent < 100;
+      const discountPercent = keepDiscount ? patch.discountPercent : 0;
+      const listPrice = keepDiscount
+        ? patch.unitCost / (1 - patch.discountPercent / 100)
+        : patch.unitCost;
+      return exec
+        .update(supplierQuoteItems)
+        .set({
+          quantity: numericForDb(patch.quantity),
+          unitPrice: numericForDb(patch.unitCost),
+          listPrice: numericForDb(listPrice),
+          discountPercent: numericForDb(discountPercent),
+        })
+        .where(eq(supplierQuoteItems.id, patch.itemId));
+    }),
+  );
   await exec
     .update(supplierQuotes)
     .set({ updatedAt: sql`CURRENT_TIMESTAMP` })
@@ -893,27 +928,30 @@ export const upsertItems = async (
         );
     }
     const inserts: NewSupplierQuoteItem[] = [];
-    for (const item of items) {
+    const updateWrites = items.flatMap((item) => {
       if (!existingIds.has(item.id)) {
         inserts.push(item);
-        continue;
+        return [];
       }
-      await tx
-        .update(supplierQuoteItems)
-        .set({
-          productId: item.productId,
-          productName: item.productName,
-          quantity: numericForDb(item.quantity),
-          listPrice: numericForDb(item.listPrice),
-          discountPercent: numericForDb(item.discountPercent),
-          unitPrice: numericForDb(item.unitPrice),
-          note: item.note,
-          unitType: item.unitType,
-          durationMonths: item.durationMonths ?? 1,
-          durationUnit: item.durationUnit ?? 'months',
-        })
-        .where(and(eq(supplierQuoteItems.id, item.id), eq(supplierQuoteItems.quoteId, quoteId)));
-    }
+      return [
+        tx
+          .update(supplierQuoteItems)
+          .set({
+            productId: item.productId,
+            productName: item.productName,
+            quantity: numericForDb(item.quantity),
+            listPrice: numericForDb(item.listPrice),
+            discountPercent: numericForDb(item.discountPercent),
+            unitPrice: numericForDb(item.unitPrice),
+            note: item.note,
+            unitType: item.unitType,
+            durationMonths: item.durationMonths ?? 1,
+            durationUnit: item.durationUnit ?? 'months',
+          })
+          .where(and(eq(supplierQuoteItems.id, item.id), eq(supplierQuoteItems.quoteId, quoteId))),
+      ];
+    });
+    await Promise.all(updateWrites);
     if (inserts.length > 0) await insertItems(quoteId, inserts, tx);
     return findItemsForQuote(quoteId, tx);
   });

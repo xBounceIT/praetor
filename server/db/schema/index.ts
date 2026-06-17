@@ -29,6 +29,7 @@ export * from './reportChatSessions.ts';
 export * from './resales.ts';
 export * from './rilDrafts.ts';
 export * from './roles.ts';
+export * from './userRoles.ts';
 export * from './sales.ts';
 export * from './savedViews.ts';
 export * from './settings.ts';

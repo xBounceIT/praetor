@@ -187,6 +187,307 @@ const projectRuleFormReducer = (
   }
 };
 
+type ProjectRuleOption = { id: string; name: string };
+
+const ProjectRuleConditionsEditor: React.FC<{
+  conditionLogic: ProjectRuleConditionLogic;
+  conditions: ProjectRuleCondition[];
+  errors: Record<string, string>;
+  submitting: boolean;
+  availableFields: ReturnType<typeof getAvailableProjectRuleFields>;
+  fieldOptions: ProjectRuleOption[];
+  permissions: string[];
+  dispatch: React.Dispatch<ProjectRuleFormAction>;
+  onAddCondition: () => void;
+  onRemoveCondition: (index: number) => void;
+  onUpdateCondition: (index: number, patch: Partial<ProjectRuleCondition>) => void;
+  onFieldChange: (index: number, nextField: string) => void;
+  onValueTypeChange: (index: number, nextValueType: ProjectRuleConditionValueType) => void;
+}> = ({
+  conditionLogic,
+  conditions,
+  errors,
+  submitting,
+  availableFields,
+  fieldOptions,
+  permissions,
+  dispatch,
+  onAddCondition,
+  onRemoveCondition,
+  onUpdateCondition,
+  onFieldChange,
+  onValueTypeChange,
+}) => {
+  const { t } = useTranslation(['projects', 'common']);
+
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <Field className="max-w-xs">
+          <FieldLabel htmlFor="project-rule-condition-logic">
+            {t('projects:detail.rules.form.conditionLogic')}
+          </FieldLabel>
+          <Select
+            value={conditionLogic}
+            onValueChange={(next) =>
+              dispatch({
+                type: 'setConditionLogic',
+                conditionLogic: next as ProjectRuleConditionLogic,
+              })
+            }
+            disabled={submitting}
+          >
+            <SelectTrigger id="project-rule-condition-logic" className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectGroup>
+                {(['and', 'or'] as const).map((logic) => (
+                  <SelectItem key={logic} value={logic}>
+                    {t(`projects:detail.rules.conditionLogic.${logic}`)}
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+            </SelectContent>
+          </Select>
+        </Field>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={onAddCondition}
+          disabled={submitting || availableFields.length === 0}
+        >
+          <PlusIcon className="size-4" />
+          {t('projects:detail.rules.actions.addCondition')}
+        </Button>
+      </div>
+
+      <div className="rounded-md border border-border">
+        <div
+          className={`${CONDITION_GRID_CLASSNAME} hidden border-b border-border px-3 py-2 text-sm font-medium text-muted-foreground md:grid`}
+        >
+          <span>{t('projects:detail.rules.form.field')}</span>
+          <span>{t('projects:detail.rules.form.operator')}</span>
+          <span>{t('projects:detail.rules.form.compareAgainst')}</span>
+          <span>
+            {t('projects:detail.rules.form.value')} /{' '}
+            {t('projects:detail.rules.form.targetField')}
+          </span>
+          <span className="sr-only">{t('projects:detail.rules.actions.removeCondition')}</span>
+        </div>
+
+        <div className="divide-y divide-border">
+          {conditions.map((condition, index) => {
+            const fieldDefinition = getProjectRuleFieldDefinition(condition.field);
+            const operatorOptions =
+              fieldDefinition?.operators.map((id) => ({
+                id,
+                name: t(`projects:detail.rules.operators.${id}`),
+              })) ?? [];
+            const enumValueOptions =
+              fieldDefinition?.enumValues?.map((id) => ({
+                id,
+                name: t(enumValueLabelKey(condition.field, id)),
+              })) ?? [];
+            const valueType = condition.valueType ?? 'literal';
+            const valueFieldOptions = getAvailableProjectRuleValueFields(
+              condition.field,
+              permissions,
+            ).map((definition) => ({
+              id: definition.id,
+              name: t(`projects:detail.rules.fields.${definition.id}`),
+            }));
+            const valueTypeChoices: readonly ProjectRuleConditionValueType[] =
+              valueFieldOptions.length > 0 ? (['literal', 'field'] as const) : (['literal'] as const);
+            const fieldError = errors[`field-${index}`];
+            const operatorError = errors[`operator-${index}`];
+            const valueError = errors[`value-${index}`];
+            return (
+              <div key={`${condition.field}-${index}`} className={`${CONDITION_GRID_CLASSNAME} p-3`}>
+                <Field data-invalid={!!fieldError}>
+                  <FieldLabel className="md:sr-only" htmlFor={`project-rule-field-${index}`} required>
+                    {t('projects:detail.rules.form.field')}
+                  </FieldLabel>
+                  <Select
+                    value={condition.field}
+                    onValueChange={(nextField) => onFieldChange(index, nextField)}
+                    disabled={submitting}
+                  >
+                    <SelectTrigger
+                      id={`project-rule-field-${index}`}
+                      className="w-full"
+                      aria-invalid={!!fieldError}
+                    >
+                      <SelectValue placeholder={t('projects:detail.rules.form.field')} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectGroup>
+                        {fieldOptions.map((option) => (
+                          <SelectItem key={option.id} value={option.id}>
+                            {option.name}
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
+                    </SelectContent>
+                  </Select>
+                  <FieldError>{fieldError}</FieldError>
+                </Field>
+
+                <Field data-invalid={!!operatorError}>
+                  <FieldLabel
+                    className="md:sr-only"
+                    htmlFor={`project-rule-operator-${index}`}
+                    required
+                  >
+                    {t('projects:detail.rules.form.operator')}
+                  </FieldLabel>
+                  <Select
+                    value={condition.operator}
+                    onValueChange={(operator) => onUpdateCondition(index, { operator })}
+                    disabled={submitting}
+                  >
+                    <SelectTrigger
+                      id={`project-rule-operator-${index}`}
+                      className="w-full"
+                      aria-invalid={!!operatorError}
+                    >
+                      <SelectValue placeholder={t('projects:detail.rules.form.operator')} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectGroup>
+                        {operatorOptions.map((option) => (
+                          <SelectItem key={option.id} value={option.id}>
+                            {option.name}
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
+                    </SelectContent>
+                  </Select>
+                  <FieldError>{operatorError}</FieldError>
+                </Field>
+
+                <Field>
+                  <FieldLabel className="md:sr-only" htmlFor={`project-rule-value-type-${index}`}>
+                    {t('projects:detail.rules.form.compareAgainst')}
+                  </FieldLabel>
+                  <Select
+                    value={valueType}
+                    onValueChange={(next) =>
+                      onValueTypeChange(index, next as ProjectRuleConditionValueType)
+                    }
+                    disabled={submitting}
+                  >
+                    <SelectTrigger id={`project-rule-value-type-${index}`} className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectGroup>
+                        {valueTypeChoices.map((nextValueType) => (
+                          <SelectItem key={nextValueType} value={nextValueType}>
+                            {t(`projects:detail.rules.valueTypes.${nextValueType}`)}
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
+                    </SelectContent>
+                  </Select>
+                </Field>
+
+                <Field data-invalid={!!valueError}>
+                  <FieldLabel className="md:sr-only" htmlFor={`project-rule-value-${index}`} required>
+                    {t(
+                      valueType === 'field'
+                        ? 'projects:detail.rules.form.targetField'
+                        : 'projects:detail.rules.form.value',
+                    )}
+                  </FieldLabel>
+                  {valueType === 'field' ? (
+                    <Select
+                      value={condition.value}
+                      onValueChange={(value) => onUpdateCondition(index, { value })}
+                      disabled={submitting || valueFieldOptions.length === 0}
+                    >
+                      <SelectTrigger
+                        id={`project-rule-value-${index}`}
+                        className="w-full"
+                        aria-invalid={!!valueError}
+                      >
+                        <SelectValue placeholder={t('projects:detail.rules.form.targetField')} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectGroup>
+                          {valueFieldOptions.map((option) => (
+                            <SelectItem key={option.id} value={option.id}>
+                              {option.name}
+                            </SelectItem>
+                          ))}
+                        </SelectGroup>
+                      </SelectContent>
+                    </Select>
+                  ) : fieldDefinition?.kind === 'enum' ? (
+                    <Select
+                      value={condition.value}
+                      onValueChange={(value) => onUpdateCondition(index, { value })}
+                      disabled={submitting}
+                    >
+                      <SelectTrigger
+                        id={`project-rule-value-${index}`}
+                        className="w-full"
+                        aria-invalid={!!valueError}
+                      >
+                        <SelectValue placeholder={t('projects:detail.rules.form.value')} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectGroup>
+                          {enumValueOptions.map((option) => (
+                            <SelectItem key={option.id} value={option.id}>
+                              {option.name}
+                            </SelectItem>
+                          ))}
+                        </SelectGroup>
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <Input
+                      id={`project-rule-value-${index}`}
+                      type="number"
+                      step="any"
+                      value={condition.value}
+                      onChange={(event) =>
+                        onUpdateCondition(index, { value: event.target.value })
+                      }
+                      disabled={submitting}
+                      aria-invalid={!!valueError}
+                      placeholder={t('projects:detail.rules.form.valuePlaceholder')}
+                    />
+                  )}
+                  <FieldError>{valueError}</FieldError>
+                </Field>
+
+                <div className="flex items-end justify-end md:items-center">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    onClick={() => onRemoveCondition(index)}
+                    disabled={submitting || conditions.length === 1}
+                    aria-label={t('projects:detail.rules.actions.removeCondition')}
+                  >
+                    <Trash2Icon className="size-4" />
+                  </Button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+      {errors.conditions && (
+        <p className="text-sm font-medium text-destructive">{errors.conditions}</p>
+      )}
+    </div>
+  );
+};
+
 type ProjectRuleFormModalSessionProps = ProjectRuleFormModalProps & {
   initialField: string;
 };
@@ -351,293 +652,21 @@ const ProjectRuleFormModalSession: React.FC<ProjectRuleFormModalSessionProps> = 
             <FieldError>{errors.name}</FieldError>
           </Field>
 
-          <div className="space-y-3">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-              <Field className="max-w-xs">
-                <FieldLabel htmlFor="project-rule-condition-logic">
-                  {t('projects:detail.rules.form.conditionLogic')}
-                </FieldLabel>
-                <Select
-                  value={conditionLogic}
-                  onValueChange={(next) =>
-                    dispatch({
-                      type: 'setConditionLogic',
-                      conditionLogic: next as ProjectRuleConditionLogic,
-                    })
-                  }
-                  disabled={submitting}
-                >
-                  <SelectTrigger id="project-rule-condition-logic" className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectGroup>
-                      {(['and', 'or'] as const).map((logic) => (
-                        <SelectItem key={logic} value={logic}>
-                          {t(`projects:detail.rules.conditionLogic.${logic}`)}
-                        </SelectItem>
-                      ))}
-                    </SelectGroup>
-                  </SelectContent>
-                </Select>
-              </Field>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={addCondition}
-                disabled={submitting || availableFields.length === 0}
-              >
-                <PlusIcon className="size-4" />
-                {t('projects:detail.rules.actions.addCondition')}
-              </Button>
-            </div>
-
-            <div className="rounded-md border border-border">
-              <div
-                className={`${CONDITION_GRID_CLASSNAME} hidden border-b border-border px-3 py-2 text-sm font-medium text-muted-foreground md:grid`}
-              >
-                <span>{t('projects:detail.rules.form.field')}</span>
-                <span>{t('projects:detail.rules.form.operator')}</span>
-                <span>{t('projects:detail.rules.form.compareAgainst')}</span>
-                <span>
-                  {t('projects:detail.rules.form.value')} /{' '}
-                  {t('projects:detail.rules.form.targetField')}
-                </span>
-                <span className="sr-only">
-                  {t('projects:detail.rules.actions.removeCondition')}
-                </span>
-              </div>
-
-              <div className="divide-y divide-border">
-                {conditions.map((condition, index) => {
-                  const fieldDefinition = getProjectRuleFieldDefinition(condition.field);
-                  const operatorOptions =
-                    fieldDefinition?.operators.map((id) => ({
-                      id,
-                      name: t(`projects:detail.rules.operators.${id}`),
-                    })) ?? [];
-                  const enumValueOptions =
-                    fieldDefinition?.enumValues?.map((id) => ({
-                      id,
-                      name: t(enumValueLabelKey(condition.field, id)),
-                    })) ?? [];
-                  const valueType = condition.valueType ?? 'literal';
-                  const valueFieldOptions = getAvailableProjectRuleValueFields(
-                    condition.field,
-                    permissions,
-                  ).map((definition) => ({
-                    id: definition.id,
-                    name: t(`projects:detail.rules.fields.${definition.id}`),
-                  }));
-                  // Only offer "compare against another field" when a comparable peer field
-                  // actually exists. Enum fields (e.g. billing_type, status) have no comparable
-                  // peer, so showing that option would lead to an unresolvable validation error.
-                  const valueTypeChoices: readonly ProjectRuleConditionValueType[] =
-                    valueFieldOptions.length > 0
-                      ? (['literal', 'field'] as const)
-                      : (['literal'] as const);
-                  const fieldError = errors[`field-${index}`];
-                  const operatorError = errors[`operator-${index}`];
-                  const valueError = errors[`value-${index}`];
-                  return (
-                    <div
-                      key={`${condition.field}-${index}`}
-                      className={`${CONDITION_GRID_CLASSNAME} p-3`}
-                    >
-                      <Field data-invalid={!!fieldError}>
-                        <FieldLabel
-                          className="md:sr-only"
-                          htmlFor={`project-rule-field-${index}`}
-                          required
-                        >
-                          {t('projects:detail.rules.form.field')}
-                        </FieldLabel>
-                        <Select
-                          value={condition.field}
-                          onValueChange={(nextField) => handleFieldChange(index, nextField)}
-                          disabled={submitting}
-                        >
-                          <SelectTrigger
-                            id={`project-rule-field-${index}`}
-                            className="w-full"
-                            aria-invalid={!!fieldError}
-                          >
-                            <SelectValue placeholder={t('projects:detail.rules.form.field')} />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectGroup>
-                              {fieldOptions.map((option) => (
-                                <SelectItem key={option.id} value={option.id}>
-                                  {option.name}
-                                </SelectItem>
-                              ))}
-                            </SelectGroup>
-                          </SelectContent>
-                        </Select>
-                        <FieldError>{fieldError}</FieldError>
-                      </Field>
-
-                      <Field data-invalid={!!operatorError}>
-                        <FieldLabel
-                          className="md:sr-only"
-                          htmlFor={`project-rule-operator-${index}`}
-                          required
-                        >
-                          {t('projects:detail.rules.form.operator')}
-                        </FieldLabel>
-                        <Select
-                          value={condition.operator}
-                          onValueChange={(operator) => updateCondition(index, { operator })}
-                          disabled={submitting}
-                        >
-                          <SelectTrigger
-                            id={`project-rule-operator-${index}`}
-                            className="w-full"
-                            aria-invalid={!!operatorError}
-                          >
-                            <SelectValue placeholder={t('projects:detail.rules.form.operator')} />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectGroup>
-                              {operatorOptions.map((option) => (
-                                <SelectItem key={option.id} value={option.id}>
-                                  {option.name}
-                                </SelectItem>
-                              ))}
-                            </SelectGroup>
-                          </SelectContent>
-                        </Select>
-                        <FieldError>{operatorError}</FieldError>
-                      </Field>
-
-                      <Field>
-                        <FieldLabel
-                          className="md:sr-only"
-                          htmlFor={`project-rule-value-type-${index}`}
-                        >
-                          {t('projects:detail.rules.form.compareAgainst')}
-                        </FieldLabel>
-                        <Select
-                          value={valueType}
-                          onValueChange={(next) =>
-                            handleValueTypeChange(index, next as ProjectRuleConditionValueType)
-                          }
-                          disabled={submitting}
-                        >
-                          <SelectTrigger id={`project-rule-value-type-${index}`} className="w-full">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectGroup>
-                              {valueTypeChoices.map((nextValueType) => (
-                                <SelectItem key={nextValueType} value={nextValueType}>
-                                  {t(`projects:detail.rules.valueTypes.${nextValueType}`)}
-                                </SelectItem>
-                              ))}
-                            </SelectGroup>
-                          </SelectContent>
-                        </Select>
-                      </Field>
-
-                      <Field data-invalid={!!valueError}>
-                        <FieldLabel
-                          className="md:sr-only"
-                          htmlFor={`project-rule-value-${index}`}
-                          required
-                        >
-                          {t(
-                            valueType === 'field'
-                              ? 'projects:detail.rules.form.targetField'
-                              : 'projects:detail.rules.form.value',
-                          )}
-                        </FieldLabel>
-                        {valueType === 'field' ? (
-                          <Select
-                            value={condition.value}
-                            onValueChange={(value) => updateCondition(index, { value })}
-                            disabled={submitting || valueFieldOptions.length === 0}
-                          >
-                            <SelectTrigger
-                              id={`project-rule-value-${index}`}
-                              className="w-full"
-                              aria-invalid={!!valueError}
-                            >
-                              <SelectValue
-                                placeholder={t('projects:detail.rules.form.targetField')}
-                              />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectGroup>
-                                {valueFieldOptions.map((option) => (
-                                  <SelectItem key={option.id} value={option.id}>
-                                    {option.name}
-                                  </SelectItem>
-                                ))}
-                              </SelectGroup>
-                            </SelectContent>
-                          </Select>
-                        ) : fieldDefinition?.kind === 'enum' ? (
-                          <Select
-                            value={condition.value}
-                            onValueChange={(value) => updateCondition(index, { value })}
-                            disabled={submitting}
-                          >
-                            <SelectTrigger
-                              id={`project-rule-value-${index}`}
-                              className="w-full"
-                              aria-invalid={!!valueError}
-                            >
-                              <SelectValue placeholder={t('projects:detail.rules.form.value')} />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectGroup>
-                                {enumValueOptions.map((option) => (
-                                  <SelectItem key={option.id} value={option.id}>
-                                    {option.name}
-                                  </SelectItem>
-                                ))}
-                              </SelectGroup>
-                            </SelectContent>
-                          </Select>
-                        ) : (
-                          <Input
-                            id={`project-rule-value-${index}`}
-                            type="number"
-                            step="any"
-                            value={condition.value}
-                            onChange={(event) =>
-                              updateCondition(index, { value: event.target.value })
-                            }
-                            disabled={submitting}
-                            aria-invalid={!!valueError}
-                            placeholder={t('projects:detail.rules.form.valuePlaceholder')}
-                          />
-                        )}
-                        <FieldError>{valueError}</FieldError>
-                      </Field>
-
-                      <div className="flex items-end justify-end md:items-center">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon-sm"
-                          onClick={() => removeCondition(index)}
-                          disabled={submitting || conditions.length === 1}
-                          aria-label={t('projects:detail.rules.actions.removeCondition')}
-                        >
-                          <Trash2Icon className="size-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-            {errors.conditions && (
-              <p className="text-sm font-medium text-destructive">{errors.conditions}</p>
-            )}
-          </div>
+          <ProjectRuleConditionsEditor
+            conditionLogic={conditionLogic}
+            conditions={conditions}
+            errors={errors}
+            submitting={submitting}
+            availableFields={availableFields}
+            fieldOptions={fieldOptions}
+            permissions={permissions}
+            dispatch={dispatch}
+            onAddCondition={addCondition}
+            onRemoveCondition={removeCondition}
+            onUpdateCondition={updateCondition}
+            onFieldChange={handleFieldChange}
+            onValueTypeChange={handleValueTypeChange}
+          />
 
           <div className="grid gap-4 md:grid-cols-2">
             <SelectControl

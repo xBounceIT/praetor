@@ -1,6 +1,6 @@
 import { Check, CircleAlert, Download, Loader2, RotateCcw } from 'lucide-react';
 import type React from 'react';
-import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useReducer, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Field, FieldLabel } from '@/components/ui/field';
@@ -177,6 +177,7 @@ type RilViewState = {
   rows: RilRow[];
   isLoading: boolean;
   isExporting: boolean;
+  draftStatus: RilDraftStatus;
   error: string | null;
 };
 
@@ -188,6 +189,7 @@ type RilViewAction =
   | { type: 'setRows'; rows: RilRow[] }
   | { type: 'updateRows'; updater: (rows: RilRow[]) => RilRow[] }
   | { type: 'setError'; error: string }
+  | { type: 'setDraftStatus'; draftStatus: RilDraftStatus }
   | { type: 'exportStart' }
   | { type: 'exportDone'; error?: string };
 
@@ -207,6 +209,8 @@ const rilViewReducer = (state: RilViewState, action: RilViewAction): RilViewStat
       return { ...state, rows: action.updater(state.rows) };
     case 'setError':
       return { ...state, error: action.error };
+    case 'setDraftStatus':
+      return { ...state, draftStatus: action.draftStatus };
     case 'exportStart':
       return { ...state, isExporting: true, error: null };
     case 'exportDone':
@@ -214,7 +218,7 @@ const rilViewReducer = (state: RilViewState, action: RilViewAction): RilViewStat
   }
 };
 
-const RilView: React.FC<RilViewProps> = ({
+const useRilController = ({
   currentUser,
   availableUsers,
   viewingUserId,
@@ -222,20 +226,20 @@ const RilView: React.FC<RilViewProps> = ({
   projects,
   settings,
   weekdayTransferDefaults,
-}) => {
+}: RilViewProps) => {
   const { t, i18n } = useTranslation('timesheets');
   const [state, dispatch] = useReducer(rilViewReducer, undefined, () => ({
     monthKey: getCurrentRilMonthKey(),
     rows: [],
     isLoading: false,
     isExporting: false,
+    draftStatus: 'idle' as RilDraftStatus,
     error: null,
   }));
-  const { monthKey, rows, isLoading, isExporting, error } = state;
+  const { monthKey, rows, isLoading, isExporting, draftStatus, error } = state;
   const sourceEntriesRef = useRef<TimeEntry[]>([]);
   const projectCatalogRef = useRef<Project[]>([]);
   const loadTokenRef = useRef(0);
-  const [draftStatus, setDraftStatus] = useState<RilDraftStatus>('idle');
   // Mirror of the latest rows so the debounced save reads current state without re-arming on
   // every keystroke.
   const rowsRef = useRef<RilRow[]>([]);
@@ -249,8 +253,14 @@ const RilView: React.FC<RilViewProps> = ({
   // after the current context's save so a late PUT can't resurrect a just-discarded draft. Lazily
   // created (initializer stays null) so it isn't reallocated on every render.
   const pendingSavesRef = useRef<Map<string, Promise<unknown>> | null>(null);
-  const changedDaysRef = useRef<Map<number, number>>(new Map());
+  const changedDaysRef = useRef<Map<number, number> | null>(null);
   const changedDayRevisionRef = useRef(0);
+  const getChangedDays = useCallback(() => {
+    if (changedDaysRef.current === null) {
+      changedDaysRef.current = new Map();
+    }
+    return changedDaysRef.current;
+  }, []);
   // Gates autosave: stays false until a draft GET succeeds for the active (user, month) so a
   // failed load can't overwrite a draft we never saw, and hydration itself can't trigger a save.
   const draftSyncReadyRef = useRef(false);
@@ -411,7 +421,7 @@ const RilView: React.FC<RilViewProps> = ({
           leaving.userId,
           leaving.monthKey,
           extractRilDraftRows(rowsRef.current),
-          Array.from(changedDaysRef.current.keys()),
+          Array.from(getChangedDays().keys()),
         );
       }
     }
@@ -477,11 +487,14 @@ const RilView: React.FC<RilViewProps> = ({
         if (draftResult.ok) {
           const merged = applyRilDraftToRows(baseRows, draftResult.draft?.rows, lunchBreakMinutes);
           dispatch({ type: 'loadSuccess', rows: merged });
-          setDraftStatus(draftResult.draft?.updatedAt ? 'saved' : 'idle');
+          dispatch({
+            type: 'setDraftStatus',
+            draftStatus: draftResult.draft?.updatedAt ? 'saved' : 'idle',
+          });
           draftSyncReadyRef.current = true;
         } else {
           dispatch({ type: 'loadSuccess', rows: baseRows });
-          setDraftStatus('error');
+          dispatch({ type: 'setDraftStatus', draftStatus: 'error' });
         }
       }
     } catch (err) {
@@ -493,7 +506,7 @@ const RilView: React.FC<RilViewProps> = ({
           error: err instanceof Error ? err.message : 'Failed to load RIL data',
           rows: generateRows([], []),
         });
-        setDraftStatus('idle');
+        dispatch({ type: 'setDraftStatus', draftStatus: 'idle' });
       }
     }
   }, [
@@ -505,6 +518,7 @@ const RilView: React.FC<RilViewProps> = ({
     lunchBreakMinutes,
     projects,
     enqueueDraftSave,
+    getChangedDays,
   ]);
 
   useEffect(() => {
@@ -524,7 +538,7 @@ const RilView: React.FC<RilViewProps> = ({
     saveTimerRef.current = null;
     const rowsToSave = rowsRef.current;
     if (!rowsToSave.length) return;
-    const changedDayEntries = Array.from(changedDaysRef.current.entries());
+    const changedDayEntries = Array.from(getChangedDays().entries());
     const changedDays = changedDayEntries.map(([day]) => day);
     // Enqueue a serialized save (chained after any in-flight PUT for this sheet) so overlapping
     // saves can't land out of order; the later edit always wins on the server.
@@ -535,7 +549,7 @@ const RilView: React.FC<RilViewProps> = ({
       changedDays,
     );
     if (!ok) {
-      setDraftStatus('error');
+      dispatch({ type: 'setDraftStatus', draftStatus: 'error' });
       return;
     }
     if (
@@ -543,16 +557,17 @@ const RilView: React.FC<RilViewProps> = ({
       draftContextRef.current.monthKey === draftMonthKey
     ) {
       for (const [day, revision] of changedDayEntries) {
-        if (changedDaysRef.current.get(day) === revision) changedDaysRef.current.delete(day);
+        const changedDays = getChangedDays();
+        if (changedDays.get(day) === revision) changedDays.delete(day);
       }
     }
     // A newer edit re-armed the timer while we were saving — let that save own the final status.
-    if (saveTimerRef.current === null) setDraftStatus('saved');
-  }, [draftMonthKey, effectiveUserId, enqueueDraftSave]);
+    if (saveTimerRef.current === null) dispatch({ type: 'setDraftStatus', draftStatus: 'saved' });
+  }, [draftMonthKey, effectiveUserId, enqueueDraftSave, getChangedDays]);
 
   const scheduleDraftSave = useCallback(() => {
     if (!draftSyncReadyRef.current) return;
-    setDraftStatus('saving');
+    dispatch({ type: 'setDraftStatus', draftStatus: 'saving' });
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(() => {
       void flushDraftSave();
@@ -569,7 +584,7 @@ const RilView: React.FC<RilViewProps> = ({
       type: 'setRows',
       rows: generateRows(sourceEntriesRef.current, projectCatalogRef.current),
     });
-    setDraftStatus('idle');
+    dispatch({ type: 'setDraftStatus', draftStatus: 'idle' });
     if (draftSyncReadyRef.current) {
       const userId = effectiveUserId;
       const monthKey = draftMonthKey;
@@ -622,11 +637,11 @@ const RilView: React.FC<RilViewProps> = ({
           }),
       });
       if (field === 'entrance' || field === 'exit') {
-        changedDaysRef.current.set(day, ++changedDayRevisionRef.current);
+        getChangedDays().set(day, ++changedDayRevisionRef.current);
       }
       scheduleDraftSave();
     },
-    [lunchBreakMinutes, scheduleDraftSave],
+    [getChangedDays, lunchBreakMinutes, scheduleDraftSave],
   );
 
   const handleExport = async () => {
@@ -719,205 +734,273 @@ const RilView: React.FC<RilViewProps> = ({
     [],
   );
 
-  const draftStatusContent =
-    draftStatus === 'saving' ? (
+  return {
+    availableUsers,
+    currentUser,
+    draftStatus,
+    effectiveUserId,
+    error,
+    getRowClassName,
+    handleExport,
+    handleReset,
+    isExporting,
+    isLoading,
+    monthOptions,
+    noteOptions,
+    onViewUserChange,
+    rows,
+    selectedMonthValue,
+    selectedYearValue,
+    summaryRows,
+    t,
+    tableHeaders,
+    transferOptions,
+    updateRow,
+    updateSelectedMonth,
+    updateSelectedYear,
+    yearOptions,
+  };
+};
+
+type RilController = ReturnType<typeof useRilController>;
+
+const RilView: React.FC<RilViewProps> = (props) => {
+  const controller = useRilController(props);
+  return <RilViewLayout controller={controller} />;
+};
+
+const RilViewLayout: React.FC<{ controller: RilController }> = ({ controller }) => (
+  <div className="space-y-6">
+    <RilHeader controller={controller} />
+    {controller.error && <RilErrorMessage message={controller.error} />}
+    <section className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_15rem]">
+      <RilDataTable controller={controller} />
+      <RilSummary controller={controller} />
+    </section>
+  </div>
+);
+
+const RilHeader: React.FC<{ controller: RilController }> = ({ controller }) => (
+  <div className="flex flex-col gap-4 border-b border-border pb-5 lg:flex-row lg:items-end lg:justify-between">
+    <div>
+      <h2 className="text-2xl font-semibold text-foreground">{controller.t('ril.title')}</h2>
+      <p className="mt-1 text-sm text-muted-foreground">{controller.t('ril.subtitle')}</p>
+      <output aria-live="polite" className="mt-2 block min-h-4 text-xs">
+        <RilDraftStatusIndicator controller={controller} />
+      </output>
+    </div>
+    <RilHeaderControls controller={controller} />
+  </div>
+);
+
+const RilDraftStatusIndicator: React.FC<{ controller: RilController }> = ({ controller }) => {
+  if (controller.draftStatus === 'saving') {
+    return (
       <span className="inline-flex items-center gap-1.5 text-muted-foreground">
         <Loader2 aria-hidden="true" className="size-3 animate-spin" />
-        {t('ril.draft.saving')}
+        {controller.t('ril.draft.saving')}
       </span>
-    ) : draftStatus === 'saved' ? (
+    );
+  }
+  if (controller.draftStatus === 'saved') {
+    return (
       <span className="inline-flex items-center gap-1.5 text-muted-foreground">
         <Check aria-hidden="true" className="size-3 text-emerald-600 dark:text-emerald-400" />
-        {t('ril.draft.saved')}
+        {controller.t('ril.draft.saved')}
       </span>
-    ) : draftStatus === 'error' ? (
+    );
+  }
+  if (controller.draftStatus === 'error') {
+    return (
       <span className="inline-flex items-center gap-1.5 text-destructive">
         <CircleAlert aria-hidden="true" className="size-3" />
-        {t('ril.draft.saveError')}
+        {controller.t('ril.draft.saveError')}
       </span>
-    ) : null;
-
-  return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-4 border-b border-border pb-5 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <h2 className="text-2xl font-semibold text-foreground">{t('ril.title')}</h2>
-          <p className="mt-1 text-sm text-muted-foreground">{t('ril.subtitle')}</p>
-          <output aria-live="polite" className="mt-2 block min-h-4 text-xs">
-            {draftStatusContent}
-          </output>
-        </div>
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-          <Field className="min-w-48">
-            <FieldLabel htmlFor="ril-user">{t('ril.user')}</FieldLabel>
-            <Select value={effectiveUserId} onValueChange={onViewUserChange}>
-              <SelectTrigger id="ril-user" className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {availableUsers.map((user) => (
-                  <SelectItem key={user.id} value={user.id}>
-                    {user.name}
-                    {user.id === currentUser.id ? ` (${t('tracker.you')})` : ''}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </Field>
-          <Field className="min-w-40">
-            <FieldLabel htmlFor="ril-month-select">{t('ril.month')}</FieldLabel>
-            <Select value={selectedMonthValue} onValueChange={updateSelectedMonth}>
-              <SelectTrigger id="ril-month-select" className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectGroup>
-                  {monthOptions.map((month) => (
-                    <SelectItem key={month.value} value={month.value}>
-                      {month.label}
-                    </SelectItem>
-                  ))}
-                </SelectGroup>
-              </SelectContent>
-            </Select>
-          </Field>
-          <Field className="min-w-28">
-            <FieldLabel htmlFor="ril-year-select">{t('ril.year')}</FieldLabel>
-            <Select value={selectedYearValue} onValueChange={updateSelectedYear}>
-              <SelectTrigger id="ril-year-select" className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectGroup>
-                  {yearOptions.map((year) => (
-                    <SelectItem key={year} value={String(year)}>
-                      {year}
-                    </SelectItem>
-                  ))}
-                </SelectGroup>
-              </SelectContent>
-            </Select>
-          </Field>
-          <Button type="button" variant="outline" onClick={handleReset} disabled={isLoading}>
-            <RotateCcw aria-hidden="true" />
-            {t('ril.reset')}
-          </Button>
-          <Button type="button" onClick={handleExport} disabled={isLoading || isExporting}>
-            {isExporting ? <Loader2 aria-hidden="true" className="animate-spin" /> : <Download />}
-            {t('ril.exportExcel')}
-          </Button>
-        </div>
-      </div>
-
-      {error && (
-        <div className="rounded-md border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-          {error}
-        </div>
-      )}
-
-      <section className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_15rem]">
-        <div className="overflow-x-auto rounded-md border border-border">
-          <Table className="min-w-[49rem] table-fixed text-xs">
-            <TableHeader>
-              <TableRow className="hover:bg-transparent">
-                <TableHead colSpan={2} className="h-8 w-16 min-w-16 px-2 text-center">
-                  {t('ril.columns.day')}
-                </TableHead>
-                {tableHeaders.map((header) => (
-                  <TableHead key={header.key} className={`h-8 px-2 ${header.className}`}>
-                    {header.label}
-                  </TableHead>
-                ))}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {rows.map((row) => (
-                <TableRow key={row.day} className={getRowClassName(row)}>
-                  <TableCell className="w-8 min-w-8 py-1 pr-1 pl-2 text-xs font-normal text-muted-foreground">
-                    {row.weekday || '-'}
-                  </TableCell>
-                  <TableCell className="w-8 min-w-8 py-1 pr-2 pl-1 text-right font-medium tabular-nums">
-                    {row.day}
-                  </TableCell>
-                  <TableCell className="w-24 min-w-24 px-2 py-1">
-                    <RilEditableInput
-                      row={row}
-                      field="entrance"
-                      label={t('ril.columns.entrance')}
-                      onUpdate={updateRow}
-                    />
-                  </TableCell>
-                  <TableCell className="w-24 min-w-24 px-2 py-1">
-                    <RilEditableInput
-                      row={row}
-                      field="exit"
-                      label={t('ril.columns.exit')}
-                      onUpdate={updateRow}
-                    />
-                  </TableCell>
-                  <TableCell className="w-20 min-w-20 px-2 py-1">
-                    <RilComputedValue row={row} label={t('ril.columns.hours')} value={row.hours} />
-                  </TableCell>
-                  <TableCell className="w-20 min-w-20 px-2 py-1">
-                    <RilComputedValue
-                      row={row}
-                      label={t('ril.columns.picap')}
-                      value={row.worked || row.picap > 0 ? row.picap : ''}
-                    />
-                  </TableCell>
-                  <TableCell className="w-32 min-w-32 px-2 py-1">
-                    <RilSelectControl
-                      row={row}
-                      field="notes"
-                      label={t('ril.columns.notes')}
-                      options={noteOptions}
-                      onUpdate={updateRow}
-                    />
-                  </TableCell>
-                  <TableCell className="w-40 min-w-40 px-2 py-1">
-                    <RilSelectControl
-                      row={row}
-                      field="transfer"
-                      label={t('ril.columns.transfer')}
-                      options={transferOptions}
-                      onUpdate={updateRow}
-                    />
-                  </TableCell>
-                  <TableCell className="w-32 min-w-32 px-2 py-1">
-                    <RilSelectControl
-                      row={row}
-                      field="code"
-                      label={t('ril.columns.code')}
-                      options={RIL_CODE_OPTIONS}
-                      onUpdate={updateRow}
-                    />
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-        <aside
-          aria-label={t('ril.summary.title')}
-          className="rounded-lg border border-border bg-card/95 p-3 shadow-sm xl:sticky xl:top-24"
-        >
-          <dl className="space-y-2">
-            {summaryRows.map((row) => (
-              <div
-                key={row.label}
-                className="grid grid-cols-[1fr_auto] items-center gap-3 rounded-md border border-border bg-muted/35 px-3 py-2 text-xs leading-tight"
-              >
-                <dt className="whitespace-nowrap text-muted-foreground">{row.label}</dt>
-                <dd className="whitespace-nowrap text-right font-semibold text-foreground tabular-nums">
-                  <output aria-label={row.label}>{row.value}</output>
-                </dd>
-              </div>
-            ))}
-          </dl>
-        </aside>
-      </section>
-    </div>
-  );
+    );
+  }
+  return null;
 };
+
+const RilHeaderControls: React.FC<{ controller: RilController }> = ({ controller }) => (
+  <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+    <Field className="min-w-48">
+      <FieldLabel htmlFor="ril-user">{controller.t('ril.user')}</FieldLabel>
+      <Select value={controller.effectiveUserId} onValueChange={controller.onViewUserChange}>
+        <SelectTrigger id="ril-user" className="w-full">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {controller.availableUsers.map((user) => (
+            <SelectItem key={user.id} value={user.id}>
+              {user.name}
+              {user.id === controller.currentUser.id ? ` (${controller.t('tracker.you')})` : ''}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </Field>
+    <Field className="min-w-40">
+      <FieldLabel htmlFor="ril-month-select">{controller.t('ril.month')}</FieldLabel>
+      <Select value={controller.selectedMonthValue} onValueChange={controller.updateSelectedMonth}>
+        <SelectTrigger id="ril-month-select" className="w-full">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectGroup>
+            {controller.monthOptions.map((month) => (
+              <SelectItem key={month.value} value={month.value}>
+                {month.label}
+              </SelectItem>
+            ))}
+          </SelectGroup>
+        </SelectContent>
+      </Select>
+    </Field>
+    <Field className="min-w-28">
+      <FieldLabel htmlFor="ril-year-select">{controller.t('ril.year')}</FieldLabel>
+      <Select value={controller.selectedYearValue} onValueChange={controller.updateSelectedYear}>
+        <SelectTrigger id="ril-year-select" className="w-full">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectGroup>
+            {controller.yearOptions.map((year) => (
+              <SelectItem key={year} value={String(year)}>
+                {year}
+              </SelectItem>
+            ))}
+          </SelectGroup>
+        </SelectContent>
+      </Select>
+    </Field>
+    <Button type="button" variant="outline" onClick={controller.handleReset} disabled={controller.isLoading}>
+      <RotateCcw aria-hidden="true" />
+      {controller.t('ril.reset')}
+    </Button>
+    <Button
+      type="button"
+      onClick={controller.handleExport}
+      disabled={controller.isLoading || controller.isExporting}
+    >
+      {controller.isExporting ? <Loader2 aria-hidden="true" className="animate-spin" /> : <Download />}
+      {controller.t('ril.exportExcel')}
+    </Button>
+  </div>
+);
+
+const RilErrorMessage: React.FC<{ message: string }> = ({ message }) => (
+  <div className="rounded-md border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+    {message}
+  </div>
+);
+
+const RilDataTable: React.FC<{ controller: RilController }> = ({ controller }) => (
+  <div className="overflow-x-auto rounded-md border border-border">
+    <Table className="min-w-[49rem] table-fixed text-xs">
+      <TableHeader>
+        <TableRow className="hover:bg-transparent">
+          <TableHead colSpan={2} className="h-8 w-16 min-w-16 px-2 text-center">
+            {controller.t('ril.columns.day')}
+          </TableHead>
+          {controller.tableHeaders.map((header) => (
+            <TableHead key={header.key} className={`h-8 px-2 ${header.className}`}>
+              {header.label}
+            </TableHead>
+          ))}
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {controller.rows.map((row) => (
+          <RilDataRow key={row.day} controller={controller} row={row} />
+        ))}
+      </TableBody>
+    </Table>
+  </div>
+);
+
+const RilDataRow: React.FC<{ controller: RilController; row: RilRow }> = ({ controller, row }) => (
+  <TableRow className={controller.getRowClassName(row)}>
+    <TableCell className="w-8 min-w-8 py-1 pr-1 pl-2 text-xs font-normal text-muted-foreground">
+      {row.weekday || '-'}
+    </TableCell>
+    <TableCell className="w-8 min-w-8 py-1 pr-2 pl-1 text-right font-medium tabular-nums">
+      {row.day}
+    </TableCell>
+    <TableCell className="w-24 min-w-24 px-2 py-1">
+      <RilEditableInput
+        row={row}
+        field="entrance"
+        label={controller.t('ril.columns.entrance')}
+        onUpdate={controller.updateRow}
+      />
+    </TableCell>
+    <TableCell className="w-24 min-w-24 px-2 py-1">
+      <RilEditableInput
+        row={row}
+        field="exit"
+        label={controller.t('ril.columns.exit')}
+        onUpdate={controller.updateRow}
+      />
+    </TableCell>
+    <TableCell className="w-20 min-w-20 px-2 py-1">
+      <RilComputedValue row={row} label={controller.t('ril.columns.hours')} value={row.hours} />
+    </TableCell>
+    <TableCell className="w-20 min-w-20 px-2 py-1">
+      <RilComputedValue
+        row={row}
+        label={controller.t('ril.columns.picap')}
+        value={row.worked || row.picap > 0 ? row.picap : ''}
+      />
+    </TableCell>
+    <TableCell className="w-32 min-w-32 px-2 py-1">
+      <RilSelectControl
+        row={row}
+        field="notes"
+        label={controller.t('ril.columns.notes')}
+        options={controller.noteOptions}
+        onUpdate={controller.updateRow}
+      />
+    </TableCell>
+    <TableCell className="w-40 min-w-40 px-2 py-1">
+      <RilSelectControl
+        row={row}
+        field="transfer"
+        label={controller.t('ril.columns.transfer')}
+        options={controller.transferOptions}
+        onUpdate={controller.updateRow}
+      />
+    </TableCell>
+    <TableCell className="w-32 min-w-32 px-2 py-1">
+      <RilSelectControl
+        row={row}
+        field="code"
+        label={controller.t('ril.columns.code')}
+        options={RIL_CODE_OPTIONS}
+        onUpdate={controller.updateRow}
+      />
+    </TableCell>
+  </TableRow>
+);
+
+const RilSummary: React.FC<{ controller: RilController }> = ({ controller }) => (
+  <aside
+    aria-label={controller.t('ril.summary.title')}
+    className="rounded-lg border border-border bg-card/95 p-3 shadow-sm xl:sticky xl:top-24"
+  >
+    <dl className="space-y-2">
+      {controller.summaryRows.map((row) => (
+        <div
+          key={row.label}
+          className="grid grid-cols-[1fr_auto] items-center gap-3 rounded-md border border-border bg-muted/35 px-3 py-2 text-xs leading-tight"
+        >
+          <dt className="whitespace-nowrap text-muted-foreground">{row.label}</dt>
+          <dd className="whitespace-nowrap text-right font-semibold text-foreground tabular-nums">
+            <output aria-label={row.label}>{row.value}</output>
+          </dd>
+        </div>
+      ))}
+    </dl>
+  </aside>
+);
 
 export default RilView;

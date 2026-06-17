@@ -816,22 +816,20 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             },
             tx,
           );
-          const createdItems = await clientOffersRepo.insertItems(
-            offer.id,
-            buildItemsForInsert(normalizedItems),
-            tx,
-          );
           // Bidirectional sync on CREATE too (user report after #812): a sourced line whose
           // quantity/cost was edited away from its pick-time baseline pushes the edit onto the
           // supplier item, atomically with the offer write. Conversion-inherited and
           // baseline-less lines are skipped (no diff anchor); audits are logged after commit.
-          const syncAudits = await syncSupplierItemsFromClientLines(
-            request,
-            'client_offer.create',
-            normalizedItems,
-            [],
-            tx,
-          );
+          const [createdItems, syncAudits] = await Promise.all([
+            clientOffersRepo.insertItems(offer.id, buildItemsForInsert(normalizedItems), tx),
+            syncSupplierItemsFromClientLines(
+              request,
+              'client_offer.create',
+              normalizedItems,
+              [],
+              tx,
+            ),
+          ]);
           return { ok: true, offer, items: createdItems, syncAudits };
         });
       } catch (err) {

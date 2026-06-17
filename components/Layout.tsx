@@ -112,6 +112,62 @@ export interface LayoutProps {
   onDeleteNotification?: (id: string) => void;
 }
 
+interface LayoutHeaderProps {
+  pageTitle: string;
+  todayLabel: string;
+  canViewNotifications: boolean;
+  notifications: Notification[];
+  unreadNotificationCount: number;
+  onMarkNotificationAsRead?: (id: string) => void;
+  onMarkAllNotificationsAsRead?: () => void;
+  onDeleteNotification?: (id: string) => void;
+}
+
+const LayoutHeader: React.FC<LayoutHeaderProps> = ({
+  pageTitle,
+  todayLabel,
+  canViewNotifications,
+  notifications,
+  unreadNotificationCount,
+  onMarkNotificationAsRead,
+  onMarkAllNotificationsAsRead,
+  onDeleteNotification,
+}) => (
+  <header className="sticky top-0 z-40 flex items-center justify-between border-b border-zinc-200 bg-white/80 px-4 py-4 backdrop-blur-md md:px-8">
+    <div className="flex min-w-0 items-center gap-2">
+      <SidebarTrigger className="-ml-1" />
+      <Separator orientation="vertical" className="mr-2 data-[orientation=vertical]:h-4" />
+      <h2 className="truncate text-lg font-semibold capitalize text-zinc-800">{pageTitle}</h2>
+    </div>
+    <div className="flex items-center gap-6">
+      <span className="hidden text-sm font-medium text-zinc-400 lg:inline">{todayLabel}</span>
+
+      {canViewNotifications &&
+        onMarkNotificationAsRead &&
+        onMarkAllNotificationsAsRead &&
+        onDeleteNotification && (
+          <NotificationBell
+            notifications={notifications}
+            unreadCount={unreadNotificationCount}
+            onMarkAsRead={onMarkNotificationAsRead}
+            onMarkAllAsRead={onMarkAllNotificationsAsRead}
+            onDelete={onDeleteNotification}
+          />
+        )}
+    </div>
+  </header>
+);
+
+const useRoleLabel = (currentUser: PraetorUser, roles: Role[]) => {
+  const { t } = useTranslation('hr');
+  return useMemo(() => {
+    const fromAvailable = currentUser.availableRoles?.find((r) => r.id === currentUser.role);
+    if (fromAvailable?.name) return fromAvailable.name;
+    const role = roles.find((item) => item.id === currentUser.role);
+    return role?.name || t(`roles.${currentUser.role}`, { defaultValue: currentUser.role });
+  }, [currentUser.availableRoles, currentUser.role, roles, t]);
+};
+
 const Layout: React.FC<LayoutProps> = ({
   children,
   activeView,
@@ -304,14 +360,7 @@ const Layout: React.FC<LayoutProps> = ({
     ];
   }, [currentUser.permissions, t]);
 
-  const roleLabel = useMemo(() => {
-    const fromAvailable = currentUser.availableRoles?.find((r) => r.id === currentUser.role);
-    if (fromAvailable?.name) return fromAvailable.name;
-    const role = roles.find((item) => item.id === currentUser.role);
-    return (
-      role?.name || t(`roles.${currentUser.role}`, { ns: 'hr', defaultValue: currentUser.role })
-    );
-  }, [currentUser.availableRoles, currentUser.role, roles, t]);
+  const roleLabel = useRoleLabel(currentUser, roles);
 
   const activeModuleId = getModuleFromRoute(activeView);
 
@@ -401,29 +450,16 @@ const Layout: React.FC<LayoutProps> = ({
           shadcnThemeClassName,
         )}
       >
-        <header className="sticky top-0 z-40 flex items-center justify-between border-b border-zinc-200 bg-white/80 px-4 py-4 backdrop-blur-md md:px-8">
-          <div className="flex min-w-0 items-center gap-2">
-            <SidebarTrigger className="-ml-1" />
-            <Separator orientation="vertical" className="mr-2 data-[orientation=vertical]:h-4" />
-            <h2 className="truncate text-lg font-semibold capitalize text-zinc-800">{pageTitle}</h2>
-          </div>
-          <div className="flex items-center gap-6">
-            <span className="hidden text-sm font-medium text-zinc-400 lg:inline">{todayLabel}</span>
-
-            {canViewNotifications &&
-              onMarkNotificationAsRead &&
-              onMarkAllNotificationsAsRead &&
-              onDeleteNotification && (
-                <NotificationBell
-                  notifications={notifications}
-                  unreadCount={unreadNotificationCount}
-                  onMarkAsRead={onMarkNotificationAsRead}
-                  onMarkAllAsRead={onMarkAllNotificationsAsRead}
-                  onDelete={onDeleteNotification}
-                />
-              )}
-          </div>
-        </header>
+        <LayoutHeader
+          pageTitle={pageTitle}
+          todayLabel={todayLabel}
+          canViewNotifications={canViewNotifications}
+          notifications={notifications}
+          unreadNotificationCount={unreadNotificationCount}
+          onMarkNotificationAsRead={onMarkNotificationAsRead}
+          onMarkAllNotificationsAsRead={onMarkAllNotificationsAsRead}
+          onDeleteNotification={onDeleteNotification}
+        />
         <div className="p-4 md:p-8">{children}</div>
       </SidebarInset>
     </SidebarProvider>

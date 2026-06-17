@@ -779,16 +779,18 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           );
 
           // Keep user_roles in sync with users.role (primary/default role).
-          await usersRepo.addUserRole(id, roleValue, tx);
-          await settingsRepo.upsertForUser(
-            id,
-            {
-              fullName: nameResult.value,
-              email: emailResult.value || '',
-              language: null,
-            },
-            tx,
-          );
+          await Promise.all([
+            usersRepo.addUserRole(id, roleValue, tx),
+            settingsRepo.upsertForUser(
+              id,
+              {
+                fullName: nameResult.value,
+                email: emailResult.value || '',
+                language: null,
+              },
+              tx,
+            ),
+          ]);
 
           if (roleValue === TOP_MANAGER_ROLE_ID) {
             await userAssignmentsRepo.syncTopManagerAssignmentsForUser(id, tx);
@@ -1173,12 +1175,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               if (!row) return { userExists: false };
               if (roleValue !== null) {
                 await usersRepo.replaceUserRoles(idResult.value, [roleValue], tx);
-                await userAssignmentsRepo.syncTopManagerAssignmentsForUser(idResult.value, tx);
                 // Atomic with the role grant: if the new role makes this an unenrolled admin under
                 // the mandate, revoke their live credentials (sessions + PAT/MCP tokens) in the same
                 // transaction, so a crash can't leave the admin role granted with credentials still
                 // valid. The enforcement lookups read via `tx`, seeing the just-written role.
-                const totpState = await usersRepo.getTotpState(idResult.value, tx);
+                const [totpState] = await Promise.all([
+                  usersRepo.getTotpState(idResult.value, tx),
+                  userAssignmentsRepo.syncTopManagerAssignmentsForUser(idResult.value, tx),
+                ]);
                 if (
                   await requiresTotpEnrollment(
                     {
@@ -1702,11 +1706,18 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (missing.length > 0) return badRequest(reply, `Invalid role(s): ${missing.join(', ')}`);
 
       await withDbTransaction(async (tx) => {
-        await usersRepo.replaceUserRoles(idResult.value, roleIdsResult.value, tx);
-        await usersRepo.setPrimaryRole(idResult.value, primaryRoleIdResult.value, tx);
+        await usersRepo.replaceUserRolesAndSetPrimary(
+          idResult.value,
+          roleIdsResult.value,
+          primaryRoleIdResult.value,
+          tx,
+        );
         // Sync runs inside the transaction so the role updates and the resulting
         // top-manager auto-assignments commit (or roll back) together.
-        await userAssignmentsRepo.syncTopManagerAssignmentsForUser(idResult.value, tx);
+        const [rolesTotpState] = await Promise.all([
+          usersRepo.getTotpState(idResult.value, tx),
+          userAssignmentsRepo.syncTopManagerAssignmentsForUser(idResult.value, tx),
+        ]);
 
         // If the new role set makes this user an admin without 2FA while the mandate is on, revoke
         // their live credentials so they must re-login and enrol before acting as an admin — the
@@ -1716,7 +1727,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         // so the role grant and the revocation commit (or roll back) together — a crash between
         // them must not leave the new admin role granted with credentials still valid. The
         // enforcement lookups read via `tx`, so they see the just-written role set.
-        const rolesTotpState = await usersRepo.getTotpState(idResult.value, tx);
         if (
           await requiresTotpEnrollment(
             {

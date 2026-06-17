@@ -71,11 +71,11 @@ export const autoCreateSupplierOrdersForClientOrder = async (
     ),
   ];
 
-  const warnings: string[] = [];
-  const supplierOrders: CreatedSupplierOrderSummary[] = [];
-  let didAutoCreate = false;
-
-  for (const sqId of supplierQuoteIds) {
+  const supplierOrderOutcomes = await Promise.all(
+    supplierQuoteIds.map(async (sqId): Promise<{
+      supplierOrder?: CreatedSupplierOrderSummary;
+      warning?: string;
+    }> => {
     try {
       // Cheap fast-fail outside any tx: skip if the quote isn't accepted or already has a
       // linked order. The authoritative decision is repeated inside the tx below under a row lock.
@@ -84,8 +84,7 @@ export const autoCreateSupplierOrdersForClientOrder = async (
         supplierQuotesRepo.findLinkedOrderId(sqId),
       ]);
       if (!fastFailQuote) {
-        warnings.push(`Supplier order not created: supplier quote ${sqId} no longer exists`);
-        continue;
+        return { warning: `Supplier order not created: supplier quote ${sqId} no longer exists` };
       }
       const fastFailStatus = effectiveSupplierQuoteStatusFromDate({
         expirationDate: fastFailQuote.expirationDate,
@@ -95,12 +94,11 @@ export const autoCreateSupplierOrdersForClientOrder = async (
         linkedOfferExpiration: fastFailQuote.linkedOfferExpiration,
       });
       if (fastFailStatus !== 'accepted') {
-        warnings.push(
-          `Supplier order not created for supplier quote ${sqId}: its status is '${fastFailStatus}', not 'accepted' (only the supplier quote linked to the accepted client document follows its status)`,
-        );
-        continue;
+        return {
+          warning: `Supplier order not created for supplier quote ${sqId}: its status is '${fastFailStatus}', not 'accepted' (only the supplier quote linked to the accepted client document follows its status)`,
+        };
       }
-      if (fastFailLinked) continue;
+      if (fastFailLinked) return {};
 
       const autoCreated = await runInTransaction(async (tx) => {
         const lockedStatus = await supplierQuotesRepo.lockEffectiveStatusById(sqId, tx);
@@ -120,8 +118,10 @@ export const autoCreateSupplierOrdersForClientOrder = async (
         if (linkedUnderLock) return null;
         const supplierQuote = await supplierQuotesRepo.findById(sqId, tx);
         if (!supplierQuote) return null;
-        const supplierItems = await supplierQuotesRepo.findItemsForQuote(sqId, tx);
-        const supplierOrderId = await allocateDocumentCode('supplier_order', { exec: tx });
+        const [supplierItems, supplierOrderId] = await Promise.all([
+          supplierQuotesRepo.findItemsForQuote(sqId, tx),
+          allocateDocumentCode('supplier_order', { exec: tx }),
+        ]);
         await clientsOrdersRepo.createSupplierOrder(
           {
             id: supplierOrderId,
@@ -150,30 +150,19 @@ export const autoCreateSupplierOrdersForClientOrder = async (
           };
         });
 
-        await clientsOrdersRepo.bulkInsertSupplierOrderItems(
-          supplierOrderId,
-          supplierItemRecords,
-          tx,
-        );
-
-        await clientsOrdersRepo.linkSaleItemsToSupplierOrder(
-          {
-            orderId: order.id,
-            supplierQuoteId: sqId,
-            supplierOrderId,
-            supplierName: supplierQuote.supplierName,
-          },
-          tx,
-        );
-
-        await clientsOrdersRepo.mapSaleItemsToSupplierItems(
-          {
-            orderId: order.id,
-            supplierQuoteId: sqId,
-            mappings: insertedSupplierItemIds,
-          },
-          tx,
-        );
+        await Promise.all([
+          clientsOrdersRepo.bulkInsertSupplierOrderItems(supplierOrderId, supplierItemRecords, tx),
+          clientsOrdersRepo.linkSaleItemsToSupplierOrderAndItems(
+            {
+              orderId: order.id,
+              supplierQuoteId: sqId,
+              supplierOrderId,
+              supplierName: supplierQuote.supplierName,
+              mappings: insertedSupplierItemIds,
+            },
+            tx,
+          ),
+        ]);
 
         await logAudit({
           request,
@@ -191,28 +180,31 @@ export const autoCreateSupplierOrdersForClientOrder = async (
           supplierName: supplierQuote.supplierName,
         };
       });
-      if (autoCreated) {
-        didAutoCreate = true;
-        supplierOrders.push(autoCreated);
-      }
+      return autoCreated ? { supplierOrder: autoCreated } : {};
     } catch (err) {
       if (err instanceof DocumentCodeCollisionError) {
         request.log.warn(
           { err, supplierQuoteId: sqId },
           'Supplier order auto-create skipped after document code collision',
         );
-        warnings.push(
-          `Supplier order not created for supplier quote ${sqId}: unable to allocate a unique supplier order code`,
-        );
-        continue;
+        return {
+          warning: `Supplier order not created for supplier quote ${sqId}: unable to allocate a unique supplier order code`,
+        };
       }
       request.log.error({ err, supplierQuoteId: sqId }, 'Failed to auto-create supplier order');
-      warnings.push(`Failed to auto-create supplier order for quote ${sqId}`);
+      return { warning: `Failed to auto-create supplier order for quote ${sqId}` };
     }
-  }
+    }),
+  );
+  const supplierOrders = supplierOrderOutcomes.flatMap((outcome) =>
+    outcome.supplierOrder ? [outcome.supplierOrder] : [],
+  );
+  const warnings = supplierOrderOutcomes.flatMap((outcome) =>
+    outcome.warning ? [outcome.warning] : [],
+  );
 
   return {
-    items: didAutoCreate ? await clientsOrdersRepo.findItemsForOrder(order.id) : items,
+    items: supplierOrders.length > 0 ? await clientsOrdersRepo.findItemsForOrder(order.id) : items,
     supplierOrders,
     warnings,
   };
