@@ -10,5 +10,5 @@ export const getEmployeeContactValue = (employee: EmployeeContactFields) =>
 
 export const mapLegacyContactFilterValue = (value: string) => {
   const trimmed = value.trim();
-  return trimmed || null;
+  return trimmed;
 };

@@ -200,7 +200,7 @@ export const computeViewApplication = (
       if (!allColIds.has(alias.columnId)) continue;
       const mappedValues = v
         .map((value) => (alias.mapValue ? alias.mapValue(value, k) : value))
-        .filter((value): value is string => typeof value === 'string' && value.trim().length > 0);
+        .filter((value): value is string => typeof value === 'string');
       if (mappedValues.length === 0) continue;
       const existingValues = filterState[alias.columnId] ?? [];
       const existingValueSet = new Set(existingValues);

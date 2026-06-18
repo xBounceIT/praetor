@@ -260,7 +260,7 @@ describe('computeViewApplication', () => {
 
   test('maps legacy filter entries to current columns', () => {
     const result = computeViewApplication(
-      view({ filterState: { contact: ['alice@example.com 555-1', '555-2'] } }),
+      view({ filterState: { contact: ['alice@example.com 555-1', '555-2', ''] } }),
       new Set(['email', 'phone']),
       new Set(['email', 'phone']),
       {
@@ -270,7 +270,7 @@ describe('computeViewApplication', () => {
             [
               {
                 columnId: 'email',
-                mapValue: (value) => value.trim() || null,
+                mapValue: (value) => value.trim(),
               },
             ],
           ],
@@ -280,6 +280,7 @@ describe('computeViewApplication', () => {
     expect(result.filterState.email?.map((value) => decodeLegacyFilterValue(value))).toEqual([
       { legacyColumnId: 'contact', value: 'alice@example.com 555-1' },
       { legacyColumnId: 'contact', value: '555-2' },
+      { legacyColumnId: 'contact', value: '' },
     ]);
   });
 

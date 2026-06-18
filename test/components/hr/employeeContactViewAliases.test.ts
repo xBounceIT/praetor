@@ -24,6 +24,6 @@ describe('employee contact view aliases', () => {
     expect(mapLegacyContactFilterValue('  alice@example.com +39 02 555 0101  ')).toBe(
       'alice@example.com +39 02 555 0101',
     );
-    expect(mapLegacyContactFilterValue('   ')).toBeNull();
+    expect(mapLegacyContactFilterValue('   ')).toBe('');
   });
 });

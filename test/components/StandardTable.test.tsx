@@ -41,7 +41,7 @@ const sampleColumns = [
   { header: 'Age', accessorKey: 'age' as const, id: 'age' },
 ];
 
-const mapLegacyContactEmailFilterValueForTest = (value: string) => value.trim() || null;
+const mapLegacyContactEmailFilterValueForTest = (value: string) => value.trim();
 
 const getLegacyContactFilterValueForTest = (row: ContactRow) =>
   [row.email, row.phone].filter(Boolean).join(' ');
@@ -1491,6 +1491,7 @@ describe('<StandardTable />', () => {
       { id: '2', name: 'Bob', age: 25, email: '', phone: '555-1' },
       { id: '3', name: 'Charlie', age: 35, email: 'mira@example.com', phone: '555-2' },
       { id: '4', name: 'Dana', age: 40, email: 'amy@example.com', phone: '555-1' },
+      { id: '5', name: 'Erin', age: 45, email: '', phone: '' },
     ];
     const stored = [
       {
@@ -1498,7 +1499,7 @@ describe('<StandardTable />', () => {
         name: 'Filtered contact',
         hiddenColIds: [],
         sortState: { colId: 'contact', px: 'asc' },
-        filterState: { contact: ['amy@example.com', '555-1'] },
+        filterState: { contact: ['amy@example.com', '555-1', ''] },
       },
     ];
     localStorage.setItem('praetor_table_customviews_contact_sort_filter', JSON.stringify(stored));
@@ -1520,6 +1521,7 @@ describe('<StandardTable />', () => {
     expect(rows.some((row) => row.includes('Bob'))).toBe(true);
     expect(rows.some((row) => row.includes('Charlie'))).toBe(false);
     expect(rows.some((row) => row.includes('Dana'))).toBe(false);
+    expect(rows.some((row) => row.includes('Erin'))).toBe(true);
     expect(screen.getByText('Email')).toBeInTheDocument();
     expect(screen.getByText('Phone')).toBeInTheDocument();
   });
