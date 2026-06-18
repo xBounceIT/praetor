@@ -54,6 +54,30 @@ describe('projectRuleRecipientsRepo', () => {
     });
   });
 
+  test('allows configured disabled webhook ids during update validation', async () => {
+    exec.enqueue({ rows: [{ id: 'webhook-disabled' }] });
+
+    const result = await recipientsRepo.findInvalidRecipientIds(
+      'p1',
+      {
+        recipientUserIds: [],
+        recipientRoleIds: [],
+        webhookIds: ['webhook-disabled', 'webhook-new-disabled'],
+        actions: [],
+      },
+      testDb,
+      { allowedDisabledWebhookIds: ['webhook-disabled'] },
+    );
+
+    expect(result).toEqual({
+      userIds: [],
+      roleIds: [],
+      webhookIds: ['webhook-new-disabled'],
+    });
+    expect(exec.calls[0].sql).toContain('enabled = true');
+    expect(exec.calls[0].sql).toContain('id = ANY');
+  });
+
   test('resolves explicit project users plus primary and secondary role users', async () => {
     exec.enqueue({ rows: [{ id: 'u1' }, { id: 'u2' }] });
 

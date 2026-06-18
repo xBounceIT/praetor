@@ -4,7 +4,10 @@ import * as projectMetricsRepo from '../repositories/projectMetricsRepo.ts';
 import * as projectRuleRecipientsRepo from '../repositories/projectRuleRecipientsRepo.ts';
 import * as projectRulesRepo from '../repositories/projectRulesRepo.ts';
 import { serializeError } from '../utils/logger.ts';
-import { evaluateProjectRuleCondition } from '../utils/projectRuleFields.ts';
+import {
+  evaluateProjectRuleCondition,
+  getProjectRuleFieldDefinition,
+} from '../utils/projectRuleFields.ts';
 import * as webhooksService from './webhooks.ts';
 
 export const PROJECT_RULE_TRIGGERED_NOTIFICATION_TYPE = 'project_rule_triggered';
@@ -44,29 +47,58 @@ const buildWebhookPayload = (
   rule: projectRulesRepo.ProjectRule,
   metrics: projectMetricsRepo.ProjectRuleMetrics,
   now: Date,
-): webhooksService.WebhookDispatchPayload => ({
-  eventType: PROJECT_RULE_TRIGGERED_NOTIFICATION_TYPE,
-  triggeredAt: now.toISOString(),
-  project: {
-    id: rule.projectId,
-    name: metrics.projectName,
-  },
-  rule: {
-    id: rule.id,
-    name: rule.name,
-    conditionLogic: rule.conditionLogic,
-    conditions: rule.conditions,
-  },
-  metrics: {
+): webhooksService.WebhookDispatchPayload => {
+  const payloadMetrics: Record<string, unknown> = {
     revenue: metrics.revenue,
-    costToDate: metrics.costToDate,
-    budgetUsedPct: metrics.budgetUsedPct,
     hoursToDate: metrics.hoursToDate,
     daysUntilDeadline: metrics.daysUntilDeadline,
     billingType: metrics.billingType,
     status: metrics.status,
-  },
-});
+  };
+
+  if (ruleUsesPermissionGatedCostFields(rule)) {
+    payloadMetrics.costToDate = metrics.costToDate;
+    payloadMetrics.budgetUsedPct = metrics.budgetUsedPct;
+  }
+
+  return {
+    eventType: PROJECT_RULE_TRIGGERED_NOTIFICATION_TYPE,
+    triggeredAt: now.toISOString(),
+    project: {
+      id: rule.projectId,
+      name: metrics.projectName,
+    },
+    rule: {
+      id: rule.id,
+      name: rule.name,
+      conditionLogic: rule.conditionLogic,
+      conditions: rule.conditions,
+    },
+    metrics: payloadMetrics,
+  };
+};
+
+const ruleUsesPermissionGatedCostFields = (rule: projectRulesRepo.ProjectRule): boolean => {
+  const conditions =
+    rule.conditions.length > 0
+      ? rule.conditions
+      : [
+          {
+            field: rule.field,
+            operator: rule.operator,
+            value: rule.value,
+            valueType: 'literal' as const,
+          },
+        ];
+
+  return conditions.some((condition) => {
+    const fieldDefinition = getProjectRuleFieldDefinition(condition.field);
+    if (fieldDefinition?.requiresPermission === 'reports.cost.view') return true;
+    if (condition.valueType !== 'field') return false;
+    const valueDefinition = getProjectRuleFieldDefinition(condition.value);
+    return valueDefinition?.requiresPermission === 'reports.cost.view';
+  });
+};
 
 const logWebhookWarning = (
   logger: ProjectRulesEvaluatorLogger | undefined,

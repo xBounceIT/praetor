@@ -502,6 +502,7 @@ const validateFinalRule = async ({
   rule,
   permissions,
   exec,
+  allowedDisabledWebhookIds,
 }: {
   projectId: string;
   rule: Pick<
@@ -510,6 +511,7 @@ const validateFinalRule = async ({
   >;
   permissions: readonly string[];
   exec?: DbExecutor;
+  allowedDisabledWebhookIds?: readonly string[];
 }) => {
   if (rule.actionType !== 'notify' && rule.actionType !== 'webhook') {
     throw new RecipientValidationError('actionType must be notify or webhook');
@@ -546,6 +548,7 @@ const validateFinalRule = async ({
     projectId,
     rule.actionConfig,
     exec,
+    { allowedDisabledWebhookIds },
   );
   if (
     invalidRecipients.userIds.length > 0 ||
@@ -805,6 +808,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             rule: finalRule,
             permissions: request.user?.permissions ?? [],
             exec: tx,
+            allowedDisabledWebhookIds: finalRule.isEnabled
+              ? []
+              : projectRulesRepo.normalizeProjectRuleActionConfig(existing.actionConfig).webhookIds,
           });
 
           const conditionChanged =

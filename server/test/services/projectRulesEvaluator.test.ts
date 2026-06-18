@@ -260,9 +260,39 @@ describe('evaluateProjectRulesOnce', () => {
         triggeredAt: '2026-05-31T12:00:00.000Z',
         project: { id: 'p1', name: 'Project' },
         rule: expect.objectContaining({ id: 'pr-1', name: 'Budget warning' }),
-        metrics: expect.objectContaining({ budgetUsedPct: 90, status: 'active' }),
+        metrics: expect.objectContaining({ costToDate: 900, budgetUsedPct: 90, status: 'active' }),
       }),
     );
+  });
+
+  test('omits cost metrics from non-cost rule webhook payloads', async () => {
+    listEnabledMock.mockResolvedValue([
+      {
+        ...RULE,
+        field: 'revenue',
+        operator: 'gte',
+        value: '1000',
+        conditions: [{ field: 'revenue', operator: 'gte', value: '1000', valueType: 'literal' }],
+        actionConfig: {
+          recipientUserIds: [],
+          recipientRoleIds: [],
+          webhookIds: ['webhook-1'],
+          actions: [{ type: 'webhook', webhookId: 'webhook-1' }],
+        },
+      },
+    ]);
+
+    const result = await evaluateProjectRulesOnce({ exec: TX_SENTINEL as never });
+    const payload = dispatchWebhookByIdMock.mock.calls[0][1] as {
+      metrics: Record<string, unknown>;
+    };
+
+    expect(result).toEqual({ evaluated: 1, triggered: 1, reset: 0, notified: 0 });
+    expect(payload.metrics).toEqual(
+      expect.objectContaining({ revenue: 1000, hoursToDate: 10, status: 'active' }),
+    );
+    expect(Object.keys(payload.metrics)).not.toContain('costToDate');
+    expect(Object.keys(payload.metrics)).not.toContain('budgetUsedPct');
   });
 
   test('logs webhook dispatch failures without failing the rule evaluation', async () => {

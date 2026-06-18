@@ -582,6 +582,102 @@ describe('project rule routes', () => {
     );
   });
 
+  test('PUT can disable a rule that references an existing inactive webhook', async () => {
+    currentPermissions = ['projects.rules.update'];
+    const existingRule = {
+      ...SAMPLE_RULE,
+      field: 'revenue',
+      operator: 'gte',
+      value: '1000',
+      conditions: [{ field: 'revenue', operator: 'gte', value: '1000', valueType: 'literal' }],
+      actionConfig: {
+        recipientUserIds: [],
+        recipientRoleIds: [],
+        webhookIds: ['webhook-disabled'],
+        actions: [{ type: 'webhook', webhookId: 'webhook-disabled' }],
+      },
+    };
+    findRuleMock.mockResolvedValue(existingRule);
+    updateRuleMock.mockResolvedValue({ ...existingRule, isEnabled: false });
+    findInvalidRecipientIdsMock.mockImplementation(async (...args: unknown[]) => {
+      const options = args[3] as { allowedDisabledWebhookIds?: string[] } | undefined;
+      return options?.allowedDisabledWebhookIds?.includes('webhook-disabled')
+        ? { userIds: [], roleIds: [], webhookIds: [] }
+        : { userIds: [], roleIds: [], webhookIds: ['webhook-disabled'] };
+    });
+
+    const res = await app.inject({
+      method: 'PUT',
+      url: '/api/projects/p1/rules/pr-1',
+      headers: authHeaders(),
+      payload: { isEnabled: false },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(findInvalidRecipientIdsMock).toHaveBeenCalledWith(
+      'p1',
+      existingRule.actionConfig,
+      TX_SENTINEL,
+      { allowedDisabledWebhookIds: ['webhook-disabled'] },
+    );
+    expect(updateRuleMock).toHaveBeenCalledWith(
+      'p1',
+      'pr-1',
+      expect.objectContaining({ isEnabled: false, resetCondition: false }),
+      TX_SENTINEL,
+    );
+  });
+
+  test('PUT rejects newly added inactive webhooks on disabled rules', async () => {
+    currentPermissions = ['projects.rules.update'];
+    const existingRule = {
+      ...SAMPLE_RULE,
+      field: 'revenue',
+      operator: 'gte',
+      value: '1000',
+      conditions: [{ field: 'revenue', operator: 'gte', value: '1000', valueType: 'literal' }],
+      isEnabled: false,
+      actionConfig: {
+        recipientUserIds: [],
+        recipientRoleIds: [],
+        webhookIds: ['webhook-existing'],
+        actions: [{ type: 'webhook', webhookId: 'webhook-existing' }],
+      },
+    };
+    findRuleMock.mockResolvedValue(existingRule);
+    findInvalidRecipientIdsMock.mockResolvedValue({
+      userIds: [],
+      roleIds: [],
+      webhookIds: ['webhook-new-disabled'],
+    });
+
+    const res = await app.inject({
+      method: 'PUT',
+      url: '/api/projects/p1/rules/pr-1',
+      headers: authHeaders(),
+      payload: {
+        isEnabled: false,
+        actionConfig: {
+          actions: [{ type: 'webhook', webhookId: 'webhook-new-disabled' }],
+        },
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(findInvalidRecipientIdsMock).toHaveBeenCalledWith(
+      'p1',
+      {
+        recipientUserIds: [],
+        recipientRoleIds: [],
+        webhookIds: ['webhook-new-disabled'],
+        actions: [{ type: 'webhook', webhookId: 'webhook-new-disabled' }],
+      },
+      TX_SENTINEL,
+      { allowedDisabledWebhookIds: ['webhook-existing'] },
+    );
+    expect(updateRuleMock).not.toHaveBeenCalled();
+  });
+
   test('DELETE checks ownership and writes an audit log', async () => {
     currentPermissions = ['projects.rules.delete'];
     findRuleMock.mockResolvedValue(SAMPLE_RULE);
