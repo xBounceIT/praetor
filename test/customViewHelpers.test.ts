@@ -210,12 +210,24 @@ describe('computeViewApplication', () => {
       view({ hiddenColIds: ['contact', 'legacyStatus'] }),
       new Set(['email', 'phone']),
       new Set(['email', 'phone', 'status']),
-      new Map([
-        ['contact', ['email', 'phone']],
-        ['legacyStatus', ['status']],
-      ]),
+      {
+        hiddenColumnAliases: new Map([
+          ['contact', ['email', 'phone']],
+          ['legacyStatus', ['status']],
+        ]),
+      },
     );
     expect(result.hiddenColIds).toEqual(new Set(['email', 'phone']));
+  });
+
+  test('maps legacy sort column ids to current columns', () => {
+    const result = computeViewApplication(
+      view({ sortState: { colId: 'contact', px: 'asc' } }),
+      new Set(['email', 'phone']),
+      new Set(['email', 'phone']),
+      { sortColumnAliases: new Map([['contact', 'email']]) },
+    );
+    expect(result.sortState).toEqual({ colId: 'email', px: 'asc' });
   });
 
   test('keeps sortState targeting any column in the full set', () => {
@@ -243,6 +255,36 @@ describe('computeViewApplication', () => {
       all,
     );
     expect(result.filterState).toEqual({ status: ['open'], name: ['Acme'] });
+  });
+
+  test('maps legacy filter entries to current columns', () => {
+    const result = computeViewApplication(
+      view({ filterState: { contact: ['alice@example.com 555-1', '555-2'] } }),
+      new Set(['email', 'phone']),
+      new Set(['email', 'phone']),
+      {
+        filterColumnAliases: new Map([
+          [
+            'contact',
+            [
+              {
+                columnId: 'email',
+                mapValue: (value) => (value.includes('@') ? value.split(' ')[0] : null),
+              },
+              {
+                columnId: 'phone',
+                mapValue: (value) =>
+                  value.includes('@') ? value.split(' ').slice(1).join(' ') : value,
+              },
+            ],
+          ],
+        ]),
+      },
+    );
+    expect(result.filterState).toEqual({
+      email: ['alice@example.com'],
+      phone: ['555-1', '555-2'],
+    });
   });
 
   test('handles missing filterState defensively', () => {

@@ -27,6 +27,7 @@ const countPaddingRows = (container: HTMLElement) =>
   container.querySelectorAll('tbody tr[aria-hidden="true"]').length;
 
 type Row = { id: string; name: string; age: number };
+type ContactRow = Row & { email: string; phone: string };
 
 const sampleRows: Row[] = [
   { id: '1', name: 'Alice', age: 30 },
@@ -37,6 +38,33 @@ const sampleRows: Row[] = [
 const sampleColumns = [
   { header: 'Name', accessorKey: 'name' as const, id: 'name' },
   { header: 'Age', accessorKey: 'age' as const, id: 'age' },
+];
+
+const mapLegacyContactEmailFilterValueForTest = (value: string) =>
+  value.includes('@') ? value.split(' ')[0] : null;
+
+const mapLegacyContactPhoneFilterValueForTest = (value: string) =>
+  value.includes('@') ? value.split(' ').slice(1).join(' ') : value;
+
+const contactAliasColumns = [
+  { header: 'Name', accessorKey: 'name' as const, id: 'name' },
+  {
+    header: 'Email',
+    accessorKey: 'email' as const,
+    id: 'email',
+    legacyHiddenColumnIds: ['contact'],
+    legacySortColumnIds: ['contact'],
+    legacyFilterColumnIds: ['contact'],
+    mapLegacyFilterValue: mapLegacyContactEmailFilterValueForTest,
+  },
+  {
+    header: 'Phone',
+    accessorKey: 'phone' as const,
+    id: 'phone',
+    legacyHiddenColumnIds: ['contact'],
+    legacyFilterColumnIds: ['contact'],
+    mapLegacyFilterValue: mapLegacyContactPhoneFilterValueForTest,
+  },
 ];
 
 const clickSortHeader = (headerText: string) => {
@@ -1426,27 +1454,11 @@ describe('<StandardTable />', () => {
   });
 
   test('loading a stored view hides columns through legacy hidden column aliases', () => {
-    type ContactRow = Row & { email: string; phone: string };
     const contactRows: ContactRow[] = sampleRows.map((row) => ({
       ...row,
       email: `${row.name.toLowerCase()}@example.com`,
       phone: `555-${row.id}`,
     }));
-    const contactColumns = [
-      { header: 'Name', accessorKey: 'name' as const, id: 'name' },
-      {
-        header: 'Email',
-        accessorKey: 'email' as const,
-        id: 'email',
-        legacyHiddenColumnIds: ['contact'],
-      },
-      {
-        header: 'Phone',
-        accessorKey: 'phone' as const,
-        id: 'phone',
-        legacyHiddenColumnIds: ['contact'],
-      },
-    ];
     const stored = [
       {
         id: 'v1',
@@ -1463,7 +1475,7 @@ describe('<StandardTable />', () => {
       <StandardTable<ContactRow>
         title="Contact Alias"
         data={contactRows}
-        columns={contactColumns}
+        columns={contactAliasColumns}
       />,
     );
 
@@ -1474,35 +1486,56 @@ describe('<StandardTable />', () => {
     expect(screen.queryByText('555-1')).not.toBeInTheDocument();
   });
 
+  test('loading a stored view maps legacy contact sort and filters to split columns', () => {
+    const contactRows: ContactRow[] = [
+      { id: '1', name: 'Alice', age: 30, email: 'zoe@example.com', phone: '555-3' },
+      { id: '2', name: 'Bob', age: 25, email: 'amy@example.com', phone: '555-1' },
+      { id: '3', name: 'Charlie', age: 35, email: 'mira@example.com', phone: '555-2' },
+    ];
+    const stored = [
+      {
+        id: 'v1',
+        name: 'Filtered contact',
+        hiddenColIds: [],
+        sortState: { colId: 'contact', px: 'asc' },
+        filterState: { contact: ['mira@example.com 555-2', 'amy@example.com 555-1'] },
+      },
+    ];
+    localStorage.setItem('praetor_table_customviews_contact_sort_filter', JSON.stringify(stored));
+    localStorage.setItem('praetor_table_activeview_contact_sort_filter', 'v1');
+
+    render(
+      <StandardTable<ContactRow>
+        title="Contact Sort Filter"
+        data={contactRows}
+        columns={contactAliasColumns}
+      />,
+    );
+
+    const rows = screen
+      .getAllByRole('row')
+      .slice(1)
+      .map((r) => r.textContent ?? '');
+    expect(rows[0]).toContain('Bob');
+    expect(rows[1]).toContain('Charlie');
+    expect(rows.some((row) => row.includes('Alice'))).toBe(false);
+    expect(screen.getByText('Email')).toBeInTheDocument();
+    expect(screen.getByText('Phone')).toBeInTheDocument();
+  });
+
   test('renaming a stored view preserves legacy hidden column aliases as current columns', async () => {
-    type ContactRow = Row & { email: string; phone: string };
     const contactRows: ContactRow[] = sampleRows.map((row) => ({
       ...row,
       email: `${row.name.toLowerCase()}@example.com`,
       phone: `555-${row.id}`,
     }));
-    const contactColumns = [
-      { header: 'Name', accessorKey: 'name' as const, id: 'name' },
-      {
-        header: 'Email',
-        accessorKey: 'email' as const,
-        id: 'email',
-        legacyHiddenColumnIds: ['contact'],
-      },
-      {
-        header: 'Phone',
-        accessorKey: 'phone' as const,
-        id: 'phone',
-        legacyHiddenColumnIds: ['contact'],
-      },
-    ];
     const stored = [
       {
         id: 'v1',
         name: 'No contact',
         hiddenColIds: ['contact'],
-        sortState: null,
-        filterState: {},
+        sortState: { colId: 'contact', px: 'desc' },
+        filterState: { contact: ['alice@example.com 555-1'] },
       },
     ];
     localStorage.setItem('praetor_table_customviews_contact_alias_edit', JSON.stringify(stored));
@@ -1511,7 +1544,7 @@ describe('<StandardTable />', () => {
       <StandardTable<ContactRow>
         title="Contact Alias Edit"
         data={contactRows}
-        columns={contactColumns}
+        columns={contactAliasColumns}
       />,
     );
     await openCustomViews();
@@ -1527,6 +1560,8 @@ describe('<StandardTable />', () => {
     expect(saved[0]).toMatchObject({
       name: 'Renamed no contact',
       hiddenColIds: ['email', 'phone'],
+      sortState: { colId: 'email', px: 'desc' },
+      filterState: { email: ['alice@example.com'], phone: ['555-1'] },
     });
   });
 

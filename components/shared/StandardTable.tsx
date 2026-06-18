@@ -64,6 +64,7 @@ import {
   generateViewId,
   IMPORT_PAYLOAD_MAX_BYTES,
   isValidImportedView,
+  type LegacyFilterColumnAlias,
   moveByDelta,
   parseFilterState,
   parseSortState,
@@ -561,6 +562,9 @@ export type Column<T> = {
   align?: 'left' | 'center' | 'right';
   hidden?: boolean;
   legacyHiddenColumnIds?: string[];
+  legacySortColumnIds?: string[];
+  legacyFilterColumnIds?: string[];
+  mapLegacyFilterValue?: (value: string, legacyColumnId: string) => string | null | undefined;
   sticky?: 'right';
   onCellDoubleClick?: (row: T) => void; // Cell-level double click handler
 };
@@ -576,6 +580,8 @@ const getViewApplicationForColumns = <T,>(view: CustomView, columns: Column<T>[]
   const gearIds = new Set<string>();
   const allIds = new Set<string>();
   const hiddenColumnAliases = new Map<string, string[]>();
+  const sortColumnAliases = new Map<string, string>();
+  const filterColumnAliases = new Map<string, LegacyFilterColumnAlias[]>();
   for (const column of columns ?? []) {
     const columnId = getColumnId(column);
     allIds.add(columnId);
@@ -586,18 +592,36 @@ const getViewApplicationForColumns = <T,>(view: CustomView, columns: Column<T>[]
         if (mappedIds) mappedIds.push(columnId);
         else hiddenColumnAliases.set(legacyId, [columnId]);
       }
+      for (const legacyId of column.legacySortColumnIds ?? []) {
+        if (!sortColumnAliases.has(legacyId)) sortColumnAliases.set(legacyId, columnId);
+      }
+      for (const legacyId of column.legacyFilterColumnIds ?? []) {
+        const mappedFilters = filterColumnAliases.get(legacyId);
+        const alias = { columnId, mapValue: column.mapLegacyFilterValue };
+        if (mappedFilters) mappedFilters.push(alias);
+        else filterColumnAliases.set(legacyId, [alias]);
+      }
     }
   }
-  return computeViewApplication(view, gearIds, allIds, hiddenColumnAliases);
+  return computeViewApplication(view, gearIds, allIds, {
+    hiddenColumnAliases,
+    sortColumnAliases,
+    filterColumnAliases,
+  });
 };
 
 const normalizeViewForColumns = <T,>(
   view: CustomView,
   columns: Column<T>[] | undefined,
-): CustomView => ({
-  ...view,
-  hiddenColIds: Array.from(getViewApplicationForColumns(view, columns).hiddenColIds),
-});
+): CustomView => {
+  const application = getViewApplicationForColumns(view, columns);
+  return {
+    ...view,
+    hiddenColIds: Array.from(application.hiddenColIds),
+    sortState: application.sortState,
+    filterState: application.filterState,
+  };
+};
 
 const readStoredActiveViewId = (title: string, skipSavedView: boolean) => {
   if (typeof window === 'undefined' || skipSavedView) return null;
@@ -1254,6 +1278,7 @@ const useStandardTableController = <T extends object>({
   );
 
   useEffect(() => {
+    if (initialFilterState === undefined && !suppressSavedView) return;
     const next = initialFilterState ?? {};
     if (filterStatesEqual(filterStateRef.current, next)) return;
     dispatchTableView({
@@ -1268,7 +1293,7 @@ const useStandardTableController = <T extends object>({
         } catch {}
       }
     }
-  }, [initialFilterState, title]);
+  }, [initialFilterState, suppressSavedView, title]);
 
   const getColId = useCallback(getColumnId, []);
 

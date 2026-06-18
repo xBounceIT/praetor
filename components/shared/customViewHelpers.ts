@@ -9,6 +9,17 @@ export type CustomView = {
   filterState: FilterState;
 };
 
+export type LegacyFilterColumnAlias = {
+  columnId: string;
+  mapValue?: (value: string, legacyColumnId: string) => string | null | undefined;
+};
+
+export type ViewApplicationColumnAliases = {
+  hiddenColumnAliases?: ReadonlyMap<string, readonly string[]>;
+  sortColumnAliases?: ReadonlyMap<string, string>;
+  filterColumnAliases?: ReadonlyMap<string, readonly LegacyFilterColumnAlias[]>;
+};
+
 // Cap on imported clipboard payload size: keeps a malicious/accidental huge
 // payload from being JSON-parsed and persisted to localStorage.
 export const IMPORT_PAYLOAD_MAX_BYTES = 100_000;
@@ -133,7 +144,7 @@ export const computeViewApplication = (
   view: CustomView,
   gearColIds: ReadonlySet<string>,
   allColIds: ReadonlySet<string>,
-  hiddenColumnAliases?: ReadonlyMap<string, readonly string[]>,
+  columnAliases?: ViewApplicationColumnAliases,
 ): { hiddenColIds: Set<string>; sortState: SortState; filterState: FilterState } => {
   const hiddenColIds = new Set<string>();
   for (const id of view.hiddenColIds) {
@@ -141,14 +152,43 @@ export const computeViewApplication = (
       hiddenColIds.add(id);
       continue;
     }
-    for (const mappedId of hiddenColumnAliases?.get(id) ?? []) {
+    for (const mappedId of columnAliases?.hiddenColumnAliases?.get(id) ?? []) {
       if (gearColIds.has(mappedId)) hiddenColIds.add(mappedId);
     }
   }
-  const sortState = view.sortState && allColIds.has(view.sortState.colId) ? view.sortState : null;
+
+  let sortState: SortState = null;
+  if (view.sortState) {
+    const mappedSortColId = allColIds.has(view.sortState.colId)
+      ? view.sortState.colId
+      : columnAliases?.sortColumnAliases?.get(view.sortState.colId);
+    sortState =
+      mappedSortColId && allColIds.has(mappedSortColId)
+        ? { ...view.sortState, colId: mappedSortColId }
+        : null;
+  }
+
   const filterState: FilterState = {};
   Object.entries(view.filterState ?? {}).forEach(([k, v]) => {
-    if (allColIds.has(k)) filterState[k] = v;
+    if (allColIds.has(k)) {
+      filterState[k] = v;
+      return;
+    }
+    for (const alias of columnAliases?.filterColumnAliases?.get(k) ?? []) {
+      if (!allColIds.has(alias.columnId)) continue;
+      const mappedValues = v
+        .map((value) => (alias.mapValue ? alias.mapValue(value, k) : value))
+        .filter((value): value is string => typeof value === 'string' && value.trim().length > 0);
+      if (mappedValues.length === 0) continue;
+      const existingValues = filterState[alias.columnId] ?? [];
+      const existingValueSet = new Set(existingValues);
+      for (const mappedValue of mappedValues) {
+        if (existingValueSet.has(mappedValue)) continue;
+        existingValueSet.add(mappedValue);
+        existingValues.push(mappedValue);
+      }
+      filterState[alias.columnId] = existingValues;
+    }
   });
   return { hiddenColIds, sortState, filterState };
 };
