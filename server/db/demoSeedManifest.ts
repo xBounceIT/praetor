@@ -314,8 +314,13 @@ export const DEMO_USERS = [
 export const DEMO_USER_IDS = DEMO_USERS.map((user) => user.id);
 export const DEMO_USERNAMES = DEMO_USERS.map((user) => user.username);
 
+export const COMPATIBILITY_DEFAULT_CLIENTS = [
+  { id: 'c1', clientCode: 'ACME-001', fiscalCode: 'IT20000000001' },
+  { id: 'c2', clientCode: 'GTECH-001', fiscalCode: 'IT20000000002' },
+] as const;
+
 export const COMPATIBILITY_DEFAULTS = {
-  clients: ['c1', 'c2'],
+  clients: COMPATIBILITY_DEFAULT_CLIENTS.map((client) => client.id),
   projects: ['p1', 'p2', 'p3'],
   tasks: ['t1', 't2', 't3', 't4', 't5'],
 } as const;

@@ -20,10 +20,95 @@ FROM users u
 WHERE u.id IN ('u1', 'u2', 'u3', 'u9')
 ON CONFLICT DO NOTHING;
 
--- Lightweight defaults kept for compatibility with existing frontend constants
-INSERT INTO clients (id, name, created_at) VALUES
-    ('c1', 'Acme Corp', '2024-01-15 09:30:00'),
-    ('c2', 'Global Tech', '2024-03-05 14:15:00')
+-- Compatibility defaults kept for existing frontend constants and fully populated so
+-- the CRM directory does not show partial client rows in demo mode.
+INSERT INTO clients (
+    id,
+    name,
+    is_disabled,
+    created_at,
+    type,
+    contact_name,
+    client_code,
+    email,
+    phone,
+    address,
+    description,
+    ateco_code,
+    website,
+    sector,
+    number_of_employees,
+    revenue,
+    fiscal_code,
+    vat_number,
+    tax_code,
+    office_count_range,
+    contacts,
+    address_country,
+    address_state,
+    address_cap,
+    address_province,
+    address_civic_number,
+    address_line
+) VALUES
+    (
+        'c1',
+        'Acme Corp',
+        FALSE,
+        '2024-01-15 09:30:00',
+        'company',
+        'Marta Colombo',
+        'ACME-001',
+        'operations@acme-corp.demo',
+        '+39 02 5550 6101',
+        'Via Dante 7, 20121 Milano (MI), Italia',
+        'Compatibility client used by the legacy Website Redesign and Mobile App demo projects.',
+        '62.01.00',
+        'https://acme-corp.demo',
+        'SERVICES',
+        '50..250',
+        '11..50',
+        'IT20000000001',
+        'IT20000000001',
+        NULL,
+        '2...5',
+        '[{"fullName":"Marta Colombo","role":"Operations Manager","email":"operations@acme-corp.demo","phone":"+39 02 5550 6101"}]'::jsonb,
+        'Italia',
+        'Milano',
+        '20121',
+        'MI',
+        '7',
+        'Via Dante'
+    ),
+    (
+        'c2',
+        'Global Tech',
+        FALSE,
+        '2024-03-05 14:15:00',
+        'company',
+        'Andrea Bassi',
+        'GTECH-001',
+        'research@global-tech.demo',
+        '+39 011 5550 6202',
+        'Corso Vittorio Emanuele II 74, 10121 Torino (TO), Italia',
+        'Compatibility client used by the legacy Internal Research demo project.',
+        '72.19.09',
+        'https://global-tech.demo',
+        'SERVICES',
+        '< 50',
+        '< 10',
+        'IT20000000002',
+        'IT20000000002',
+        NULL,
+        '1',
+        '[{"fullName":"Andrea Bassi","role":"Innovation Lead","email":"research@global-tech.demo","phone":"+39 011 5550 6202"}]'::jsonb,
+        'Italia',
+        'Torino',
+        '10121',
+        'TO',
+        '74',
+        'Corso Vittorio Emanuele II'
+    )
 ON CONFLICT (id) DO NOTHING;
 
 -- start_date/end_date bracket the demo time entries logged against each project

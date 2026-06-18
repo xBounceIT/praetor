@@ -7,6 +7,7 @@ import {
   buildDemoAssignmentTargetIds,
   buildDemoDocumentSeedManifest,
   buildDemoIds,
+  COMPATIBILITY_DEFAULT_CLIENTS,
   COMPATIBILITY_DEFAULTS,
   DEMO_CLIENTS,
   DEMO_EXPECTED_COUNTS,
@@ -114,13 +115,38 @@ const pushTextArrayPredicate = (
   builder.parts.push(`${expression} = ANY($${builder.params.length}::text[])`);
 };
 
-const pushLowerTextArrayPredicate = (
+const pushTextArrayPredicateExcludingIds = (
+  builder: PredicateBuilder,
+  expression: string,
+  values: readonly string[],
+  excludedIds: readonly string[],
+) => {
+  if (values.length === 0) return;
+  if (excludedIds.length === 0) {
+    pushTextArrayPredicate(builder, expression, values);
+    return;
+  }
+  builder.params.push([...values]);
+  const valuesParam = builder.params.length;
+  builder.params.push([...excludedIds]);
+  const excludedIdsParam = builder.params.length;
+  builder.parts.push(
+    `(${expression} = ANY($${valuesParam}::text[]) AND id <> ALL($${excludedIdsParam}::text[]))`,
+  );
+};
+
+const pushLowerTextArrayPredicateExcludingIds = (
   builder: PredicateBuilder,
   column: string,
   values: readonly string[],
+  excludedIds: readonly string[],
 ) => {
-  const lowered = values.map((value) => value.toLowerCase());
-  pushTextArrayPredicate(builder, `LOWER(${column})`, lowered);
+  pushTextArrayPredicateExcludingIds(
+    builder,
+    `LOWER(${column})`,
+    values.map((value) => value.toLowerCase()),
+    excludedIds,
+  );
 };
 
 const executeDelete = async (
@@ -156,38 +182,134 @@ export const insertCompatibilityDefaults = async (
   client: PoolClient,
   counts: Record<string, number>,
 ) => {
+  await executeStatement(
+    client,
+    `UPDATE clients
+     SET
+       client_code = NULL,
+       fiscal_code = NULL,
+       vat_number = NULL,
+       tax_code = NULL
+     WHERE id = ANY($1::text[])`,
+    [[...COMPATIBILITY_DEFAULTS.clients]],
+  );
+
   const clientsResult = await executeStatement(
     client,
-    `INSERT INTO clients (id, name, created_at) VALUES
-        ('c1', 'Acme Corp', '2024-01-15 09:30:00'),
-        ('c2', 'Global Tech', '2024-03-05 14:15:00')
+    `INSERT INTO clients (
+       id,
+       name,
+       is_disabled,
+       created_at,
+       type,
+       contact_name,
+       client_code,
+       email,
+       phone,
+       address,
+       description,
+       ateco_code,
+       website,
+       sector,
+       number_of_employees,
+       revenue,
+       fiscal_code,
+       vat_number,
+       tax_code,
+       office_count_range,
+       contacts,
+       address_country,
+       address_state,
+       address_cap,
+       address_province,
+       address_civic_number,
+       address_line
+     ) VALUES
+        (
+          'c1',
+          'Acme Corp',
+          FALSE,
+          '2024-01-15 09:30:00',
+          'company',
+          'Marta Colombo',
+          'ACME-001',
+          'operations@acme-corp.demo',
+          '+39 02 5550 6101',
+          'Via Dante 7, 20121 Milano (MI), Italia',
+          'Compatibility client used by the legacy Website Redesign and Mobile App demo projects.',
+          '62.01.00',
+          'https://acme-corp.demo',
+          'SERVICES',
+          '50..250',
+          '11..50',
+          'IT20000000001',
+          'IT20000000001',
+          NULL,
+          '2...5',
+          '[{"fullName":"Marta Colombo","role":"Operations Manager","email":"operations@acme-corp.demo","phone":"+39 02 5550 6101"}]'::jsonb,
+          'Italia',
+          'Milano',
+          '20121',
+          'MI',
+          '7',
+          'Via Dante'
+        ),
+        (
+          'c2',
+          'Global Tech',
+          FALSE,
+          '2024-03-05 14:15:00',
+          'company',
+          'Andrea Bassi',
+          'GTECH-001',
+          'research@global-tech.demo',
+          '+39 011 5550 6202',
+          'Corso Vittorio Emanuele II 74, 10121 Torino (TO), Italia',
+          'Compatibility client used by the legacy Internal Research demo project.',
+          '72.19.09',
+          'https://global-tech.demo',
+          'SERVICES',
+          '< 50',
+          '< 10',
+          'IT20000000002',
+          'IT20000000002',
+          NULL,
+          '1',
+          '[{"fullName":"Andrea Bassi","role":"Innovation Lead","email":"research@global-tech.demo","phone":"+39 011 5550 6202"}]'::jsonb,
+          'Italia',
+          'Torino',
+          '10121',
+          'TO',
+          '74',
+          'Corso Vittorio Emanuele II'
+        )
      ON CONFLICT (id) DO UPDATE SET
        name = EXCLUDED.name,
        created_at = EXCLUDED.created_at,
        is_disabled = FALSE,
-       type = DEFAULT,
-       contact_name = NULL,
-       client_code = NULL,
-       email = NULL,
-       phone = NULL,
-       address = NULL,
-       description = NULL,
-       ateco_code = NULL,
-       website = NULL,
-       sector = NULL,
-       number_of_employees = NULL,
-       revenue = NULL,
-       fiscal_code = NULL,
-       vat_number = NULL,
+       type = EXCLUDED.type,
+       contact_name = EXCLUDED.contact_name,
+       client_code = EXCLUDED.client_code,
+       email = EXCLUDED.email,
+       phone = EXCLUDED.phone,
+       address = EXCLUDED.address,
+       description = EXCLUDED.description,
+       ateco_code = EXCLUDED.ateco_code,
+       website = EXCLUDED.website,
+       sector = EXCLUDED.sector,
+       number_of_employees = EXCLUDED.number_of_employees,
+       revenue = EXCLUDED.revenue,
+       fiscal_code = EXCLUDED.fiscal_code,
+       vat_number = EXCLUDED.vat_number,
        tax_code = NULL,
-       office_count_range = NULL,
-       contacts = DEFAULT,
-       address_country = NULL,
-       address_state = NULL,
-       address_cap = NULL,
-       address_province = NULL,
-       address_civic_number = NULL,
-       address_line = NULL`,
+       office_count_range = EXCLUDED.office_count_range,
+       contacts = EXCLUDED.contacts,
+       address_country = EXCLUDED.address_country,
+       address_state = EXCLUDED.address_state,
+       address_cap = EXCLUDED.address_cap,
+       address_province = EXCLUDED.address_province,
+       address_civic_number = EXCLUDED.address_civic_number,
+       address_line = EXCLUDED.address_line`,
   );
   incrementCount(counts, 'clients', clientsResult.rowCount ?? 0);
 
@@ -704,16 +826,45 @@ export const cleanupDemoNamespace = async (
     cleanupCountsByTable,
     'clients',
     await executeDelete(client, 'clients', (builder) => {
+      const compatibilityClientCodes = COMPATIBILITY_DEFAULT_CLIENTS.map(
+        (clientItem) => clientItem.clientCode,
+      );
+      const compatibilityFiscalCodes = COMPATIBILITY_DEFAULT_CLIENTS.map(
+        (clientItem) => clientItem.fiscalCode,
+      );
+      const demoClientCodes = DEMO_CLIENTS.map((clientItem) => clientItem.clientCode);
+      const demoFiscalCodes = DEMO_CLIENTS.map((clientItem) => clientItem.fiscalCode);
+
       pushTextArrayPredicate(builder, 'id', demoIds.clients);
-      pushTextArrayPredicate(
+      pushTextArrayPredicateExcludingIds(
         builder,
         'client_code',
-        DEMO_CLIENTS.map((clientItem) => clientItem.clientCode),
+        demoClientCodes,
+        COMPATIBILITY_DEFAULTS.clients,
       );
-      pushLowerTextArrayPredicate(
+      pushLowerTextArrayPredicateExcludingIds(
         builder,
         'fiscal_code',
-        DEMO_CLIENTS.map((clientItem) => clientItem.fiscalCode),
+        demoFiscalCodes,
+        COMPATIBILITY_DEFAULTS.clients,
+      );
+      pushTextArrayPredicateExcludingIds(
+        builder,
+        'client_code',
+        compatibilityClientCodes,
+        COMPATIBILITY_DEFAULTS.clients,
+      );
+      pushLowerTextArrayPredicateExcludingIds(
+        builder,
+        'fiscal_code',
+        compatibilityFiscalCodes,
+        COMPATIBILITY_DEFAULTS.clients,
+      );
+      pushLowerTextArrayPredicateExcludingIds(
+        builder,
+        'vat_number',
+        compatibilityFiscalCodes,
+        COMPATIBILITY_DEFAULTS.clients,
       );
     }),
   );
