@@ -396,7 +396,7 @@ const SuppliersTable: React.FC<SuppliersTableProps> = ({
         accessorKey: 'name',
         cell: ({ row }) => (
           <span
-            className={`font-semibold ${row.isDisabled ? 'line-through text-zinc-400' : 'text-zinc-800'}`}
+            className={`font-semibold whitespace-nowrap ${row.isDisabled ? 'line-through text-zinc-400' : 'text-zinc-800'}`}
           >
             {row.name}
           </span>
@@ -432,36 +432,33 @@ const SuppliersTable: React.FC<SuppliersTableProps> = ({
         },
       },
       {
-        header: t('crm:suppliers.tableHeaders.contact'),
-        id: 'contact',
-        accessorFn: (row) => row.contactName || row.email || row.phone || '',
-        cell: ({ row }) => (
-          <div className="flex flex-col gap-1">
-            {row.contactName && <span className="text-xs text-zinc-600">{row.contactName}</span>}
-            {row.email && (
-              <span className="text-xs text-zinc-500 flex items-center gap-1.5">
-                <i className="fa-solid fa-envelope text-[10px] text-zinc-300"></i>
-                {row.email}
-              </span>
-            )}
-            {row.phone && (
-              <span className="text-xs text-zinc-500 flex items-center gap-1.5">
-                <i className="fa-solid fa-phone text-[10px] text-zinc-300"></i>
-                {row.phone}
-              </span>
-            )}
-          </div>
-        ),
+        header: t('crm:suppliers.tableHeaders.contactName'),
+        accessorKey: 'contactName',
+        cell: ({ row }) => <span className="text-xs text-zinc-600">{row.contactName || '-'}</span>,
+      },
+      {
+        header: t('crm:suppliers.tableHeaders.email'),
+        accessorKey: 'email',
+        cell: ({ row }) => <span className="text-xs text-zinc-600">{row.email || '-'}</span>,
+      },
+      {
+        header: t('crm:suppliers.tableHeaders.phone'),
+        accessorKey: 'phone',
+        cell: ({ row }) => <span className="text-xs text-zinc-600">{row.phone || '-'}</span>,
       },
       {
         header: t('crm:suppliers.tableHeaders.vat'),
         accessorKey: 'vatNumber',
-        className: 'font-mono text-xs text-zinc-400',
+        cell: ({ row }) => (
+          <span className="font-mono text-xs text-zinc-400">{row.vatNumber || '-'}</span>
+        ),
       },
       {
         header: t('crm:suppliers.tableHeaders.taxCode'),
         accessorKey: 'taxCode',
-        className: 'font-mono text-xs text-zinc-400',
+        cell: ({ row }) => (
+          <span className="font-mono text-xs text-zinc-400">{row.taxCode || '-'}</span>
+        ),
       },
       {
         header: t('crm:suppliers.tableHeaders.totalOrders'),
@@ -470,13 +467,14 @@ const SuppliersTable: React.FC<SuppliersTableProps> = ({
           supplierOrders
             .filter((order) => order.supplierId === row.id && order.status === 'sent')
             .reduce((total, order) => total + calculateOrderTotal(order.items, order.discount), 0),
-        className: 'whitespace-nowrap font-mono text-xs',
         align: 'right',
         cell: (info) => {
           const totalValue = info.value as number;
           return (
             <span
-              className={`font-semibold ${totalValue > 0 ? 'text-emerald-600' : 'text-zinc-400'}`}
+              className={`text-xs font-semibold whitespace-nowrap ${
+                totalValue > 0 ? 'text-emerald-700' : 'text-zinc-400'
+              }`}
             >
               {totalValue.toFixed(2)} {currency}
             </span>
