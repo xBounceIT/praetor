@@ -48,6 +48,9 @@ describe('HR employee modal styling', () => {
     expectSourceContainsAll(source, [
       "accessorKey: 'email'",
       "accessorKey: 'phone'",
+      "id: 'contact'",
+      "accessorFn: (row) => [row.email, row.phone].filter(Boolean).join(' ')",
+      'hidden: true',
       "id: 'roleTitle'",
       "id: 'hrStatus'",
     ]);

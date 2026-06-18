@@ -144,6 +144,12 @@ const InternalEmployeesTable: React.FC<InternalEmployeesTableProps> = ({
         cell: ({ value }) => <OptionalText value={value} fallback={notSetLabel} />,
       },
       {
+        header: t('employeeProfile.contact'),
+        id: 'contact',
+        accessorFn: (row) => [row.email, row.phone].filter(Boolean).join(' '),
+        hidden: true,
+      },
+      {
         header: t('employeeProfile.jobTitle'),
         id: 'roleTitle',
         accessorFn: (row) => row.jobTitle || '',
