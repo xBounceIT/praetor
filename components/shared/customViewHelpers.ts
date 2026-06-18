@@ -1,4 +1,4 @@
-export type SortState = { colId: string; px: 'asc' | 'desc' } | null;
+export type SortState = { colId: string; px: 'asc' | 'desc'; legacyColId?: string } | null;
 export type FilterState = Record<string, string[]>;
 
 export type CustomView = {
@@ -103,7 +103,11 @@ export const parseSortState = (raw: unknown): SortState => {
   const o = raw as Record<string, unknown>;
   if (typeof o.colId !== 'string') return null;
   if (o.px !== 'asc' && o.px !== 'desc') return null;
-  return { colId: o.colId, px: o.px };
+  const sortState: NonNullable<SortState> = { colId: o.colId, px: o.px };
+  if (typeof o.legacyColId === 'string' && o.legacyColId !== '') {
+    sortState.legacyColId = o.legacyColId;
+  }
+  return sortState;
 };
 
 export const filterStatesEqual = (a: FilterState, b: FilterState): boolean => {
@@ -181,13 +185,17 @@ export const computeViewApplication = (
 
   let sortState: SortState = null;
   if (view.sortState) {
-    const mappedSortColId = allColIds.has(view.sortState.colId)
+    const isCurrentSortColumn = allColIds.has(view.sortState.colId);
+    const mappedSortColId = isCurrentSortColumn
       ? view.sortState.colId
       : columnAliases?.sortColumnAliases?.get(view.sortState.colId);
-    sortState =
-      mappedSortColId && allColIds.has(mappedSortColId)
-        ? { ...view.sortState, colId: mappedSortColId }
-        : null;
+    if (mappedSortColId && allColIds.has(mappedSortColId)) {
+      const nextSortState = { ...view.sortState, colId: mappedSortColId };
+      if (!isCurrentSortColumn && !nextSortState.legacyColId) {
+        nextSortState.legacyColId = view.sortState.colId;
+      }
+      sortState = nextSortState;
+    }
   }
 
   const filterState: FilterState = {};

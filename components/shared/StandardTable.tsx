@@ -566,6 +566,10 @@ export type Column<T> = {
   legacySortColumnIds?: string[];
   legacyFilterColumnIds?: string[];
   mapLegacyFilterValue?: (value: string, legacyColumnId: string) => string | null | undefined;
+  legacySortAccessorFn?: (
+    row: T,
+    legacyColumnId: string,
+  ) => string | number | boolean | null | undefined;
   legacyFilterAccessorFn?: (
     row: T,
     legacyColumnId: string,
@@ -1047,6 +1051,7 @@ const useStandardTableController = <T extends object>({
   const copiedTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const viewErrorTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const viewsAppliedOnceRef = useRef(!isServerBacked);
+  const hasSeenInitialFilterStateRef = useRef(initialFilterState !== undefined);
 
   const handleGearOpenChange = useCallback(
     (open: boolean) => {
@@ -1283,7 +1288,11 @@ const useStandardTableController = <T extends object>({
   );
 
   useEffect(() => {
-    if (initialFilterState === undefined && !suppressSavedView) return;
+    if (initialFilterState === undefined && !suppressSavedView) {
+      if (!hasSeenInitialFilterStateRef.current) return;
+    } else {
+      hasSeenInitialFilterStateRef.current = true;
+    }
     const next = initialFilterState ?? {};
     if (filterStatesEqual(filterStateRef.current, next)) return;
     dispatchTableView({
@@ -1514,8 +1523,18 @@ const useStandardTableController = <T extends object>({
           enableColumnFilter: !col.disableFiltering,
           enableHiding: !col.hidden && !isRowActionColumn(col),
           sortingFn: (rowA, rowB) => {
-            const valA = rowA.getValue(colId);
-            const valB = rowB.getValue(colId);
+            const legacySortColumnId =
+              sortState?.colId === colId &&
+              sortState.legacyColId &&
+              col.legacySortColumnIds?.includes(sortState.legacyColId)
+                ? sortState.legacyColId
+                : null;
+            const getSortValue = (row: typeof rowA) =>
+              legacySortColumnId && col.legacySortAccessorFn
+                ? col.legacySortAccessorFn(row.original, legacySortColumnId)
+                : row.getValue(colId);
+            const valA = getSortValue(rowA);
+            const valB = getSortValue(rowB);
             if (typeof valA === 'number' && typeof valB === 'number') {
               return valA - valB;
             }
@@ -1567,6 +1586,7 @@ const useStandardTableController = <T extends object>({
       getValue,
       formatForFilter,
       isRowActionColumn,
+      sortState,
     ],
   );
 

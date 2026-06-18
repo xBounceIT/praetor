@@ -55,6 +55,7 @@ const contactAliasColumns = [
     legacyHiddenColumnIds: ['contact'],
     legacySortColumnIds: ['contact'],
     legacyFilterColumnIds: ['contact'],
+    legacySortAccessorFn: getLegacyContactFilterValueForTest,
     legacyFilterAccessorFn: getLegacyContactFilterValueForTest,
     mapLegacyFilterValue: mapLegacyContactEmailFilterValueForTest,
   },
@@ -702,6 +703,40 @@ describe('<StandardTable />', () => {
     expect(bodyRows).toHaveLength(1);
     expect(bodyRows[0].textContent).toContain('Paid');
     expect(bodyRows[0].textContent).not.toContain('Unpaid');
+  });
+
+  test('clears controlled initial filters when the prop returns to undefined', async () => {
+    const ControlledFilterTable = () => {
+      const [filters, setFilters] = useState<Record<string, string[]> | undefined>({
+        name: ['Alice'],
+      });
+      return (
+        <>
+          <button type="button" onClick={() => setFilters(undefined)}>
+            Clear controlled filter
+          </button>
+          <StandardTable<Row>
+            title="Controlled Filter"
+            data={sampleRows}
+            columns={sampleColumns}
+            initialFilterState={filters}
+          />
+        </>
+      );
+    };
+
+    render(<ControlledFilterTable />);
+    expect(screen.getByText('Alice')).toBeInTheDocument();
+    expect(screen.queryByText('Bob')).not.toBeInTheDocument();
+
+    act(() => {
+      fireEvent.click(screen.getByText('Clear controlled filter'));
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText('Bob')).toBeInTheDocument();
+      expect(screen.getByText('Charlie')).toBeInTheDocument();
+    });
   });
 
   test('multi-column filters intersect (Name + Age)', () => {
@@ -1517,6 +1552,10 @@ describe('<StandardTable />', () => {
       .getAllByRole('row')
       .slice(1)
       .map((r) => r.textContent ?? '');
+    const visibleRows = rows.filter((row) => row.trim().length > 0);
+    expect(visibleRows[0]).toContain('Erin');
+    expect(visibleRows[1]).toContain('Bob');
+    expect(visibleRows[2]).toContain('Alice');
     expect(rows.some((row) => row.includes('Alice'))).toBe(true);
     expect(rows.some((row) => row.includes('Bob'))).toBe(true);
     expect(rows.some((row) => row.includes('Charlie'))).toBe(false);
@@ -1563,7 +1602,7 @@ describe('<StandardTable />', () => {
     expect(saved[0]).toMatchObject({
       name: 'Renamed no contact',
       hiddenColIds: ['email', 'phone'],
-      sortState: { colId: 'email', px: 'desc' },
+      sortState: { colId: 'email', px: 'desc', legacyColId: 'contact' },
     });
     expect(
       saved[0].filterState.email.map((value: string) => decodeLegacyFilterValue(value)),

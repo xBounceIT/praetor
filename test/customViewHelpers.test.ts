@@ -121,6 +121,16 @@ describe('parseSortState', () => {
     const result = parseSortState({ colId: 'name', px: 'asc', extra: 'junk' });
     expect(result).toEqual({ colId: 'name', px: 'asc' });
   });
+
+  test('preserves legacy sort metadata', () => {
+    const result = parseSortState({
+      colId: 'email',
+      px: 'asc',
+      legacyColId: 'contact',
+      extra: 'junk',
+    });
+    expect(result).toEqual({ colId: 'email', px: 'asc', legacyColId: 'contact' });
+  });
 });
 
 describe('parseFilterState', () => {
@@ -228,7 +238,17 @@ describe('computeViewApplication', () => {
       new Set(['email', 'phone']),
       { sortColumnAliases: new Map([['contact', 'email']]) },
     );
-    expect(result.sortState).toEqual({ colId: 'email', px: 'asc' });
+    expect(result.sortState).toEqual({ colId: 'email', px: 'asc', legacyColId: 'contact' });
+  });
+
+  test('keeps already-migrated legacy sort metadata', () => {
+    const result = computeViewApplication(
+      view({ sortState: { colId: 'email', px: 'desc', legacyColId: 'contact' } }),
+      new Set(['email', 'phone']),
+      new Set(['email', 'phone']),
+      { sortColumnAliases: new Map([['contact', 'email']]) },
+    );
+    expect(result.sortState).toEqual({ colId: 'email', px: 'desc', legacyColId: 'contact' });
   });
 
   test('keeps sortState targeting any column in the full set', () => {
