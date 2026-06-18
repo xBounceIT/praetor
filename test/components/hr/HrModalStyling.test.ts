@@ -45,7 +45,12 @@ describe('HR employee modal styling', () => {
   ])('%s table accessor columns use stable ids', async (_name, path) => {
     const source = await readComponentSource(path);
 
-    expectSourceContainsAll(source, ["id: 'contact'", "id: 'roleTitle'", "id: 'hrStatus'"]);
+    expectSourceContainsAll(source, [
+      "accessorKey: 'email'",
+      "accessorKey: 'phone'",
+      "id: 'roleTitle'",
+      "id: 'hrStatus'",
+    ]);
   });
 });
 
