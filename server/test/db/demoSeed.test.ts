@@ -10,7 +10,9 @@ import {
 } from '../../db/demoSeed.ts';
 import {
   buildDemoIds,
+  COMPATIBILITY_DEFAULT_CLIENTS,
   COMPATIBILITY_DEFAULTS,
+  DEMO_CLIENTS,
   DEMO_CUSTOMER_OFFERS,
   DEMO_EXPECTED_COUNTS,
   DEMO_IDS,
@@ -106,19 +108,28 @@ describe('insertCompatibilityDefaults', () => {
 
     await insertCompatibilityDefaults(client, {});
 
-    expect(calls).toHaveLength(3);
-    expect(calls[0]?.sql).toContain('ON CONFLICT (id) DO UPDATE SET');
-    expect(calls[0]?.sql).toContain('name = EXCLUDED.name');
-    expect(calls[0]?.sql).toContain('is_disabled = FALSE');
-    expect(calls[0]?.sql).toContain('contacts = DEFAULT');
+    expect(calls).toHaveLength(4);
+    expect(calls[0]?.sql).toContain('UPDATE clients');
     expect(calls[0]?.sql).toContain('client_code = NULL');
-    expect(calls[1]?.sql).toContain('description = EXCLUDED.description');
-    expect(calls[1]?.sql).toContain('tipo_confirmed = EXCLUDED.tipo_confirmed');
-    expect(calls[1]?.sql).toContain('order_id = NULL');
-    expect(calls[1]?.sql).toContain('billing_type = DEFAULT');
-    expect(calls[2]?.sql).toContain('project_id = EXCLUDED.project_id');
-    expect(calls[2]?.sql).toContain('is_recurring = DEFAULT');
-    expect(calls[2]?.sql).toContain('monthly_effort = DEFAULT');
+    expect(calls[0]?.sql).toContain('fiscal_code = NULL');
+    expect(calls[0]?.sql).toContain('vat_number = NULL');
+    expect(calls[0]?.params).toEqual([[...COMPATIBILITY_DEFAULTS.clients]]);
+    expect(calls[1]?.sql).toContain('ON CONFLICT (id) DO UPDATE SET');
+    expect(calls[1]?.sql).toContain('name = EXCLUDED.name');
+    expect(calls[1]?.sql).toContain('is_disabled = FALSE');
+    expect(calls[1]?.sql).toContain('ACME-001');
+    expect(calls[1]?.sql).toContain('GTECH-001');
+    expect(calls[1]?.sql).toContain('contacts = EXCLUDED.contacts');
+    expect(calls[1]?.sql).toContain('client_code = EXCLUDED.client_code');
+    expect(calls[1]?.sql).toContain('fiscal_code = EXCLUDED.fiscal_code');
+    expect(calls[1]?.sql).toContain('address_line = EXCLUDED.address_line');
+    expect(calls[2]?.sql).toContain('description = EXCLUDED.description');
+    expect(calls[2]?.sql).toContain('tipo_confirmed = EXCLUDED.tipo_confirmed');
+    expect(calls[2]?.sql).toContain('order_id = NULL');
+    expect(calls[2]?.sql).toContain('billing_type = DEFAULT');
+    expect(calls[3]?.sql).toContain('project_id = EXCLUDED.project_id');
+    expect(calls[3]?.sql).toContain('is_recurring = DEFAULT');
+    expect(calls[3]?.sql).toContain('monthly_effort = DEFAULT');
   });
 });
 
@@ -170,6 +181,42 @@ describe('cleanupDemoNamespace', () => {
     expect(findDelete(calls, 'sales')?.params?.[0]).toEqual(
       documentCodesFor('client_order', 5, 2027),
     );
+  });
+
+  test('cleans compatibility client business-key collisions without deleting their ids', async () => {
+    const { calls, client } = buildQueryRecorder();
+
+    await cleanupDemoNamespace(
+      client,
+      {
+        dependentUserIds: ['u2', 'u3'],
+        userIdsToDelete: [],
+      },
+      2027,
+    );
+
+    const clientDelete = findDelete(calls, 'clients');
+    const compatibilityFiscalCodes = COMPATIBILITY_DEFAULT_CLIENTS.map((client) =>
+      client.fiscalCode.toLowerCase(),
+    );
+    const compatibilityClientIds = [...COMPATIBILITY_DEFAULTS.clients];
+    const demoFiscalCodes = DEMO_CLIENTS.map((client) => client.fiscalCode.toLowerCase());
+
+    expect(clientDelete?.sql).toContain('id <> ALL');
+    expect(clientDelete?.sql).toContain('LOWER(vat_number)');
+    expect(clientDelete?.params).toEqual([
+      buildDemoIds(2027).clients,
+      DEMO_CLIENTS.map((client) => client.clientCode),
+      compatibilityClientIds,
+      demoFiscalCodes,
+      compatibilityClientIds,
+      COMPATIBILITY_DEFAULT_CLIENTS.map((client) => client.clientCode),
+      compatibilityClientIds,
+      compatibilityFiscalCodes,
+      compatibilityClientIds,
+      compatibilityFiscalCodes,
+      compatibilityClientIds,
+    ]);
   });
 });
 
@@ -262,6 +309,46 @@ describe('demoSeedManifest assignment coverage', () => {
         .map((row) => row.id)
         .sort(),
     ).toEqual([...COMPATIBILITY_DEFAULTS.tasks, ...DEMO_IDS.tasks].sort());
+  });
+
+  test('seed.sql compatibility clients include complete CRM details', () => {
+    const compatibilityClientIds = new Set<string>(COMPATIBILITY_DEFAULTS.clients);
+    const compatibilityClients = parseInsertValuesBlocks(SEED_SQL, 'clients').filter((row) =>
+      compatibilityClientIds.has(row.id),
+    );
+
+    expect(compatibilityClients).toHaveLength(COMPATIBILITY_DEFAULTS.clients.length);
+    const compatibilityClientKeys = new Map<string, (typeof COMPATIBILITY_DEFAULT_CLIENTS)[number]>(
+      COMPATIBILITY_DEFAULT_CLIENTS.map((client) => [client.id, client]),
+    );
+    for (const client of compatibilityClients) {
+      const expected = compatibilityClientKeys.get(client.id);
+
+      if (!expected) throw new Error(`Missing compatibility client manifest row for ${client.id}`);
+      expect(client.type).toBe('company');
+      expect(client.is_disabled).toBe('FALSE');
+      expect(client.contact_name).not.toBe('NULL');
+      expect(client.client_code).toBe(expected.clientCode);
+      expect(client.email).toMatch(/@.+\.demo$/);
+      expect(client.phone).toMatch(/^\+39 /);
+      expect(client.address).not.toBe('NULL');
+      expect(client.description).not.toBe('NULL');
+      expect(client.ateco_code).toMatch(/^\d{2}\.\d{2}\.\d{2}$/);
+      expect(client.website).toMatch(/^https:\/\//);
+      expect(client.sector).not.toBe('NULL');
+      expect(client.number_of_employees).not.toBe('NULL');
+      expect(client.revenue).not.toBe('NULL');
+      expect(client.fiscal_code).toBe(expected.fiscalCode);
+      expect(client.vat_number).toBe(expected.fiscalCode);
+      expect(client.office_count_range).not.toBe('NULL');
+      expect(client.contacts).toContain('fullName');
+      expect(client.address_country).not.toBe('NULL');
+      expect(client.address_state).not.toBe('NULL');
+      expect(client.address_cap).toMatch(/^\d{5}$/);
+      expect(client.address_province).toMatch(/^[A-Z]{2}$/);
+      expect(client.address_civic_number).not.toBe('NULL');
+      expect(client.address_line).not.toBe('NULL');
+    }
   });
 
   test('seed.sql user assignment rows match the demo manifest', () => {
