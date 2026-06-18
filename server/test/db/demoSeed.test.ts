@@ -16,8 +16,10 @@ import {
   DEMO_CUSTOMER_OFFERS,
   DEMO_EXPECTED_COUNTS,
   DEMO_IDS,
+  DEMO_INVOICES,
   DEMO_QUOTES,
   DEMO_SALES,
+  DEMO_SUPPLIER_INVOICES,
   DEMO_SUPPLIER_QUOTES,
   DEMO_SUPPLIER_SALES,
   DEMO_TOP_MANAGER_USER_IDS,
@@ -25,6 +27,8 @@ import {
   DEMO_USER_PROJECT_ASSIGNMENTS,
   DEMO_USER_TASK_ASSIGNMENTS,
   DEMO_USERS,
+  LEGACY_DEMO_INVOICE_IDS,
+  LEGACY_DEMO_SUPPLIER_INVOICE_IDS,
 } from '../../db/demoSeedManifest.ts';
 import {
   DOCUMENT_CODE_MODULES,
@@ -181,6 +185,21 @@ describe('cleanupDemoNamespace', () => {
     expect(findDelete(calls, 'sales')?.params?.[0]).toEqual(
       documentCodesFor('client_order', 5, 2027),
     );
+    const cleanupInvoiceIds = [
+      ...documentCodesFor('client_invoice', 5, 2027),
+      ...LEGACY_DEMO_INVOICE_IDS,
+    ];
+    const cleanupSupplierInvoiceIds = [
+      ...documentCodesFor('supplier_invoice', 5, 2027),
+      ...LEGACY_DEMO_SUPPLIER_INVOICE_IDS,
+    ];
+
+    expect(findDelete(calls, 'invoice_items')?.params?.[1]).toEqual(cleanupInvoiceIds);
+    expect(findDelete(calls, 'invoices')?.params?.[0]).toEqual(cleanupInvoiceIds);
+    expect(findDelete(calls, 'supplier_invoice_items')?.params?.[1]).toEqual(
+      cleanupSupplierInvoiceIds,
+    );
+    expect(findDelete(calls, 'supplier_invoices')?.params?.[0]).toEqual(cleanupSupplierInvoiceIds);
   });
 
   test('cleans compatibility client business-key collisions without deleting their ids', async () => {
@@ -230,6 +249,26 @@ describe('assertNoDemoDocumentIdConflicts', () => {
     );
   });
 
+  test('guards client and supplier invoices that now use default document codes', async () => {
+    const { calls, client } = buildQueryRecorder(0);
+
+    await assertNoDemoDocumentIdConflicts(client, 2027);
+
+    expect(calls[0]?.sql).toContain("SELECT 'invoices' AS table_name");
+    expect(calls[0]?.sql).toContain("SELECT 'supplier_invoices' AS table_name");
+    expect(calls[0]?.sql).toContain('$8::text[] AS client_owner_ids');
+    expect(calls[0]?.sql).toContain('$9::text[] AS invoice_client_owner_ids');
+    expect(calls[0]?.sql).toContain('$10::text[] AS supplier_owner_ids');
+    expect(calls[0]?.sql).toContain('ALL(demo_inputs.client_owner_ids)');
+    expect(calls[0]?.sql).toContain('ALL(demo_inputs.invoice_client_owner_ids)');
+    expect(calls[0]?.sql).toContain('ALL(demo_inputs.supplier_owner_ids)');
+    expect(calls[0]?.params?.[3]).toEqual(documentCodesFor('client_invoice', 5, 2027));
+    expect(calls[0]?.params?.[6]).toEqual(documentCodesFor('supplier_invoice', 5, 2027));
+    expect(calls[0]?.params?.[8]).toEqual(buildDemoIds(2027).clients);
+    expect(calls[0]?.params?.[8]).not.toContain('c1');
+    expect(calls[0]?.params?.[8]).not.toContain('c2');
+  });
+
   test('passes when the runtime demo codes are unused by non-demo rows', async () => {
     const { calls, client } = buildQueryRecorder(0);
 
@@ -242,7 +281,7 @@ describe('assertNoDemoDocumentIdConflicts', () => {
 
     await assertNoDemoDocumentIdConflicts(client, 2027);
 
-    expect(calls[0]?.params?.[5]).toEqual([
+    expect(calls[0]?.params?.[7]).toEqual([
       ...COMPATIBILITY_DEFAULTS.clients,
       ...buildDemoIds(2027).clients,
     ]);
@@ -269,6 +308,10 @@ describe('demoSeedManifest assignment coverage', () => {
     );
     expect(DEMO_SALES.map((row) => row.id)).toEqual(documentCodesFor('client_order', 5));
     expect(DEMO_SUPPLIER_SALES.map((row) => row.id)).toEqual(documentCodesFor('supplier_order', 5));
+    expect(DEMO_INVOICES.map((row) => row.id)).toEqual(documentCodesFor('client_invoice', 5));
+    expect(DEMO_SUPPLIER_INVOICES.map((row) => row.id)).toEqual(
+      documentCodesFor('supplier_invoice', 5),
+    );
   });
 
   test('seed.sql document rows and counters match the default-code manifest', () => {
@@ -287,6 +330,32 @@ describe('demoSeedManifest assignment coverage', () => {
     expect(parseInsertValuesBlocks(SEED_SQL, 'supplier_sales').map((row) => row.id)).toEqual(
       DEMO_SUPPLIER_SALES.map((row) => row.id),
     );
+    expect(parseInsertValuesBlocks(SEED_SQL, 'invoices').map((row) => row.id)).toEqual(
+      DEMO_INVOICES.map((row) => row.id),
+    );
+    expect(parseInsertValuesBlocks(SEED_SQL, 'invoice_items').map((row) => row.invoice_id)).toEqual(
+      [
+        DEMO_INVOICES[0]?.id,
+        DEMO_INVOICES[1]?.id,
+        DEMO_INVOICES[2]?.id,
+        DEMO_INVOICES[2]?.id,
+        DEMO_INVOICES[3]?.id,
+        DEMO_INVOICES[4]?.id,
+      ],
+    );
+    expect(parseInsertValuesBlocks(SEED_SQL, 'supplier_invoices').map((row) => row.id)).toEqual(
+      DEMO_SUPPLIER_INVOICES.map((row) => row.id),
+    );
+    expect(
+      parseInsertValuesBlocks(SEED_SQL, 'supplier_invoice_items').map((row) => row.invoice_id),
+    ).toEqual([
+      DEMO_SUPPLIER_INVOICES[0]?.id,
+      DEMO_SUPPLIER_INVOICES[1]?.id,
+      DEMO_SUPPLIER_INVOICES[2]?.id,
+      DEMO_SUPPLIER_INVOICES[2]?.id,
+      DEMO_SUPPLIER_INVOICES[3]?.id,
+      DEMO_SUPPLIER_INVOICES[4]?.id,
+    ]);
 
     const counters = Object.fromEntries(
       parseInsertValuesBlocks(SEED_SQL, 'document_code_counters').map((row) => [
@@ -300,6 +369,8 @@ describe('demoSeedManifest assignment coverage', () => {
       supplier_quote: 15,
       client_order: 6,
       supplier_order: 6,
+      client_invoice: 6,
+      supplier_invoice: 6,
     });
   });
 
