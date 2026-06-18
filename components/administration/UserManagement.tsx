@@ -1,16 +1,25 @@
-import { Eye, EyeOff, Trash2, TriangleAlert, UserPlus } from 'lucide-react';
+import { Eye, EyeOff, Trash2, TriangleAlert, UserPen, UserPlus } from 'lucide-react';
 import React, { useReducer } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Dialog,
+  DialogClose,
   DialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { RequiredMark } from '@/components/ui/field';
+import {
+  Field,
+  FieldDescription,
+  FieldError,
+  FieldLabel,
+  FieldLegend,
+  FieldSet,
+} from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -21,6 +30,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { usersApi } from '../../services/api/users';
 import type {
@@ -34,13 +44,11 @@ import type {
 } from '../../types';
 import { buildPermission, hasPermission, TOP_MANAGER_ROLE_ID } from '../../utils/permissions';
 import { toastError, toastSuccess } from '../../utils/toast';
-import Checkbox from '../shared/Checkbox';
 import HeaderAddButton from '../shared/HeaderAddButton';
 import Modal from '../shared/Modal';
 import SelectControl from '../shared/SelectControl';
 import StandardTable, { type Column } from '../shared/StandardTable';
 import StatusBadge, { type StatusType } from '../shared/StatusBadge';
-import Toggle from '../shared/Toggle';
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
 
 const isSsoAuthMethod = (authMethod: UserAuthMethod): authMethod is 'oidc' | 'saml' =>
@@ -1785,76 +1793,69 @@ const UserEditModal: React.FC<{ controller: UserManagementController }> = ({ con
   const { state } = controller;
 
   return (
-    <Modal isOpen={Boolean(state.editingUser)} onClose={controller.closeEditModal}>
-      <div className="bg-card rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in duration-200">
-        <div className="p-6 space-y-4">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="size-10 bg-muted rounded-full flex items-center justify-center">
-              <i className="fa-solid fa-user-pen text-praetor"></i>
-            </div>
-            <h3 className="text-lg font-semibold text-foreground">
-              {controller.t('hr:workforce.editUser')}
-            </h3>
-          </div>
-          <div className="space-y-4">
-            {controller.editIdentityReadOnly && state.editingUser && (
-              <p className="text-xs text-muted-foreground">
-                {controller.t('hr:workforce.identityManagedByProvider', {
+    <Dialog
+      open={Boolean(state.editingUser)}
+      onOpenChange={(open) => {
+        if (!open) controller.closeEditModal();
+      }}
+    >
+      <DialogContent className="max-h-[calc(100vh-2rem)] overflow-y-auto sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-3">
+            <span className="flex size-10 items-center justify-center rounded-full bg-muted text-primary">
+              <UserPen className="size-5" aria-hidden="true" />
+            </span>
+            {controller.t('hr:workforce.editUser')}
+          </DialogTitle>
+          <DialogDescription className={controller.editIdentityReadOnly ? undefined : 'sr-only'}>
+            {controller.editIdentityReadOnly && state.editingUser
+              ? controller.t('hr:workforce.identityManagedByProvider', {
                   provider: controller.getAuthMethodLabel(state.editingUser),
-                })}
-              </p>
-            )}
-            <div className="grid grid-cols-2 gap-3">
-              <UserEditTextField controller={controller} field="firstName" />
-              <UserEditTextField controller={controller} field="surname" />
-            </div>
-            <UserEditTextField controller={controller} field="email" />
-            {controller.canUpdateUsers && <UserEditRolesField controller={controller} />}
-            {controller.canViewCosts &&
-              state.editingUser &&
-              controller.canEditCostFor(state.editingUser.id) && (
-                <UserEditCostField controller={controller} />
-              )}
-            {state.editingUser?.id !== controller.currentUserId && (
-              <div className="flex items-center justify-between p-3 bg-muted/50 rounded-xl border border-border">
-                <div>
-                  <p className="text-sm font-bold text-foreground">
-                    {controller.t('hr:workforce.disabled')}
-                  </p>
-                </div>
-                <Toggle
-                  checked={state.editIsDisabled}
-                  onChange={(checked) =>
-                    controller.dispatch({ type: 'set', values: { editIsDisabled: checked } })
-                  }
-                />
-              </div>
-            )}
+                })
+              : controller.t('hr:workforce.userDetails')}
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <UserEditTextField controller={controller} field="firstName" />
+            <UserEditTextField controller={controller} field="surname" />
           </div>
-          <div className="flex gap-3 pt-2">
-            <button
-              type="button"
-              onClick={controller.closeEditModal}
-              className="flex-1 py-3 text-sm font-bold text-muted-foreground hover:bg-muted rounded-xl transition-colors"
-            >
-              {controller.t('common:buttons.cancel')}
-            </button>
-            <button
-              type="button"
-              onClick={controller.saveEdit}
-              disabled={!controller.hasEditChanges}
-              className={`flex-1 py-3 text-sm font-bold rounded-xl shadow-lg transition-all active:scale-95 text-white ${
-                !controller.hasEditChanges
-                  ? 'bg-zinc-300 shadow-none cursor-not-allowed'
-                  : 'bg-praetor shadow-zinc-200 hover:bg-zinc-800'
-              }`}
-            >
-              {controller.t('hr:workforce.saveChanges')}
-            </button>
-          </div>
+          <UserEditTextField controller={controller} field="email" />
+          {controller.canUpdateUsers && <UserEditRolesField controller={controller} />}
+          {controller.canViewCosts &&
+            state.editingUser &&
+            controller.canEditCostFor(state.editingUser.id) && (
+              <UserEditCostField controller={controller} />
+            )}
+          {state.editingUser?.id !== controller.currentUserId && (
+            <Field className="flex-row items-center justify-between gap-4 rounded-md border border-border bg-muted/40 p-3">
+              <FieldLabel htmlFor="edit-user-disabled" className="text-sm font-semibold">
+                {controller.t('hr:workforce.disabled')}
+              </FieldLabel>
+              <Switch
+                id="edit-user-disabled"
+                checked={state.editIsDisabled}
+                onCheckedChange={(checked) =>
+                  controller.dispatch({ type: 'set', values: { editIsDisabled: checked } })
+                }
+              />
+            </Field>
+          )}
         </div>
-      </div>
-    </Modal>
+
+        <DialogFooter>
+          <DialogClose asChild>
+            <Button type="button" variant="outline">
+              {controller.t('common:buttons.cancel')}
+            </Button>
+          </DialogClose>
+          <Button type="button" onClick={controller.saveEdit} disabled={!controller.hasEditChanges}>
+            {controller.t('hr:workforce.saveChanges')}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 };
 
@@ -1864,107 +1865,124 @@ const UserEditTextField: React.FC<{
 }> = ({ controller, field }) => {
   const { state } = controller;
   const { editEmail, editFirstName, editFormErrors, editSurname } = state;
+  const fieldConfig = {
+    email: {
+      id: 'edit-user-email',
+      label: controller.t('common:labels.email'),
+      placeholder: 'e.g. alice.smith@example.com',
+      type: 'email',
+      value: editEmail,
+    },
+    firstName: {
+      id: 'edit-user-first-name',
+      label: controller.t('hr:workforce.name'),
+      required: !controller.editIdentityReadOnly,
+      type: 'text',
+      value: editFirstName,
+    },
+    surname: {
+      id: 'edit-user-surname',
+      label: controller.t('hr:workforce.surname'),
+      type: 'text',
+      value: editSurname,
+    },
+  }[field];
+  const error = editFormErrors[field];
 
-  if (field === 'email') {
-    const label = controller.t('common:labels.email');
-    const error = editFormErrors.email;
+  const setValue = (value: string) => {
+    const values =
+      field === 'email'
+        ? { editEmail: value }
+        : field === 'firstName'
+          ? { editFirstName: value }
+          : { editSurname: value };
 
-    return (
-      <div>
-        <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1">
-          {label}
-        </label>
-        <Input
-          type="email"
-          value={editEmail}
-          onChange={(event) => {
-            controller.dispatch({ type: 'set', values: { editEmail: event.target.value } });
-            if (error) {
-              controller.dispatch({
-                type: 'patchEditFormErrors',
-                value: { email: '' },
-              });
-            }
-          }}
-          placeholder="e.g. alice.smith@example.com"
-          aria-label={label}
-          readOnly={controller.editIdentityReadOnly}
-          disabled={controller.editIdentityReadOnly}
-          aria-invalid={Boolean(editFormErrors.email)}
-        />
-        {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
-      </div>
-    );
-  }
+    controller.dispatch({ type: 'set', values });
+    if (error) {
+      controller.dispatch({
+        type: 'patchEditFormErrors',
+        value: { [field]: '' },
+      });
+    }
+  };
 
-  if (field === 'firstName') {
-    const label = controller.t('hr:workforce.name');
-    const error = editFormErrors.firstName;
-
-    return (
-      <div>
-        <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1">
-          {label} {!controller.editIdentityReadOnly && <RequiredMark />}
-        </label>
-        <Input
-          type="text"
-          value={editFirstName}
-          onChange={(event) => {
-            controller.dispatch({ type: 'set', values: { editFirstName: event.target.value } });
-            if (error) {
-              controller.dispatch({
-                type: 'patchEditFormErrors',
-                value: { firstName: '' },
-              });
-            }
-          }}
-          aria-label={label}
-          readOnly={controller.editIdentityReadOnly}
-          disabled={controller.editIdentityReadOnly}
-          aria-invalid={Boolean(editFormErrors.firstName)}
-        />
-        {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
-      </div>
-    );
-  }
-
-  const label = controller.t('hr:workforce.surname');
-  const error = editFormErrors.surname;
   return (
-    <div>
-      <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1">
-        {label}
-      </label>
+    <Field
+      data-disabled={controller.editIdentityReadOnly || undefined}
+      data-invalid={Boolean(error) || undefined}
+    >
+      <FieldLabel
+        htmlFor={fieldConfig.id}
+        required={fieldConfig.required}
+        className="text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+      >
+        {fieldConfig.label}
+      </FieldLabel>
       <Input
-        type="text"
-        value={editSurname}
-        onChange={(event) => {
-          controller.dispatch({ type: 'set', values: { editSurname: event.target.value } });
-          if (error) {
-            controller.dispatch({
-              type: 'patchEditFormErrors',
-              value: { surname: '' },
-            });
-          }
-        }}
-        aria-label={label}
+        id={fieldConfig.id}
+        type={fieldConfig.type}
+        value={fieldConfig.value}
+        onChange={(event) => setValue(event.target.value)}
+        placeholder={fieldConfig.placeholder}
+        aria-label={fieldConfig.label}
         readOnly={controller.editIdentityReadOnly}
         disabled={controller.editIdentityReadOnly}
-        aria-invalid={Boolean(editFormErrors.surname)}
+        aria-invalid={Boolean(error)}
       />
-      {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
-    </div>
+      <FieldError className="text-xs">{error}</FieldError>
+    </Field>
   );
 };
+
+type UserEditSelectOption = {
+  id: string;
+  name: string;
+};
+
+const UserEditSelectField: React.FC<{
+  disabled?: boolean;
+  id: string;
+  label: string;
+  onChange: (value: string) => void;
+  options: UserEditSelectOption[];
+  placeholder?: string;
+  value: string;
+}> = ({ disabled = false, id, label, onChange, options, placeholder, value }) => (
+  <Field data-disabled={disabled || undefined}>
+    <FieldLabel
+      htmlFor={id}
+      className="text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+    >
+      {label}
+    </FieldLabel>
+    <Select value={value} onValueChange={onChange} disabled={disabled}>
+      <SelectTrigger id={id} className="w-full">
+        <SelectValue placeholder={placeholder || label} />
+      </SelectTrigger>
+      <SelectContent position="popper" sideOffset={4}>
+        <SelectGroup>
+          {options.map((option) => (
+            <SelectItem key={option.id} value={option.id}>
+              {option.name}
+            </SelectItem>
+          ))}
+        </SelectGroup>
+      </SelectContent>
+    </Select>
+  </Field>
+);
 
 const UserEditRolesField: React.FC<{ controller: UserManagementController }> = ({ controller }) =>
   controller.canEditAssignedRoles ? (
     <div className="space-y-3">
-      <div>
-        <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1">
+      <FieldSet className="gap-2">
+        <FieldLegend
+          variant="label"
+          className="text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+        >
           {controller.t('hr:workforce.assignedRoles')}
-        </label>
-        <div className="max-h-36 overflow-y-auto bg-muted/50 border border-border rounded-xl p-2 space-y-1">
+        </FieldLegend>
+        <div className="max-h-36 space-y-1 overflow-y-auto rounded-md border border-border bg-muted/30 p-1">
           {controller.roles
             .slice()
             .sort((a, b) => a.name.localeCompare(b.name))
@@ -1972,11 +1990,12 @@ const UserEditRolesField: React.FC<{ controller: UserManagementController }> = (
               <UserEditRoleOption key={role.id} controller={controller} role={role} />
             ))}
         </div>
-        <p className="text-[10px] text-muted-foreground mt-1">
+        <FieldDescription className="text-xs">
           {controller.t('hr:workforce.primaryRoleHelp')}
-        </p>
-      </div>
-      <SelectControl
+        </FieldDescription>
+      </FieldSet>
+      <UserEditSelectField
+        id="edit-user-primary-role"
         label={controller.t('hr:workforce.primaryRole')}
         options={controller.state.editAssignedRoleIds.flatMap((id) => {
           const role = controller.roles.find((item) => item.id === id);
@@ -1984,40 +2003,37 @@ const UserEditRolesField: React.FC<{ controller: UserManagementController }> = (
         })}
         value={controller.state.editPrimaryRoleId}
         onChange={(value) =>
-          controller.dispatch({ type: 'set', values: { editPrimaryRoleId: value as string } })
+          controller.dispatch({ type: 'set', values: { editPrimaryRoleId: value } })
         }
-        buttonClassName="py-2 text-sm"
         disabled={
           controller.state.isLoadingEditRoles || controller.state.editAssignedRoleIds.length < 1
         }
       />
       {controller.state.isLoadingEditRoles && (
-        <p className="text-[10px] text-muted-foreground font-bold">
+        <p className="text-xs font-medium text-muted-foreground">
           {controller.t('hr:workforce.loadingRoles')}
         </p>
       )}
       {controller.state.editRolesError && (
-        <p className="text-[10px] text-red-500 font-bold">{controller.state.editRolesError}</p>
+        <p className="text-xs font-medium text-destructive">{controller.state.editRolesError}</p>
       )}
     </div>
   ) : (
-    <>
-      <SelectControl
+    <div className="space-y-2">
+      <UserEditSelectField
+        id="edit-user-role"
         label={controller.t('hr:workforce.role')}
         options={controller.roleOptions}
         value={controller.state.editRole}
-        onChange={(value) =>
-          controller.dispatch({ type: 'set', values: { editRole: value as string } })
-        }
-        buttonClassName="py-2 text-sm"
+        onChange={(value) => controller.dispatch({ type: 'set', values: { editRole: value } })}
         disabled={controller.isEditingSelf}
       />
       {controller.isEditingSelf && (
-        <p className="text-[10px] text-muted-foreground mt-1">
+        <p className="text-xs text-muted-foreground">
           {controller.t('hr:workforce.cannotChangeOwnRole')}
         </p>
       )}
-    </>
+    </div>
   );
 
 const UserEditRoleOption: React.FC<{
@@ -2026,52 +2042,60 @@ const UserEditRoleOption: React.FC<{
 }> = ({ controller, role }) => {
   const checked = controller.state.editAssignedRoleIds.includes(role.id);
   const isPrimary = role.id === controller.state.editPrimaryRoleId;
+  const optionId = `edit-user-role-option-${role.id}`;
 
   return (
-    <label
-      className={`flex items-center justify-between gap-3 px-3 py-2 rounded-lg cursor-pointer transition-colors ${
+    <div
+      className={`flex items-center justify-between gap-3 rounded-md px-3 py-2 transition-colors ${
         checked ? 'bg-background shadow-sm' : 'hover:bg-accent'
       }`}
     >
       <div className="flex items-center gap-3 min-w-0">
         <Checkbox
+          id={optionId}
           checked={checked}
           disabled={isPrimary && checked}
-          onChange={() => {
+          onCheckedChange={() => {
             if (isPrimary && checked) return;
             controller.dispatch({ type: 'toggleEditAssignedRole', roleId: role.id });
           }}
         />
-        <span className="text-sm font-semibold text-foreground truncate">{role.name}</span>
+        <FieldLabel htmlFor={optionId} className="min-w-0 cursor-pointer text-sm font-medium">
+          <span className="truncate">{role.name}</span>
+        </FieldLabel>
       </div>
       {isPrimary && (
-        <span className="text-[10px] font-black uppercase tracking-wider bg-muted text-muted-foreground px-2 py-0.5 rounded">
+        <span className="rounded bg-muted px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
           {controller.t('hr:workforce.primary')}
         </span>
       )}
-    </label>
+    </div>
   );
 };
 
 const UserEditCostField: React.FC<{ controller: UserManagementController }> = ({ controller }) => (
-  <div>
-    <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1">
+  <Field>
+    <FieldLabel
+      htmlFor="edit-user-cost-per-hour"
+      className="text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+    >
       {controller.t('hr:workforce.costPerHour')}
-    </label>
-    <div className="flex items-center border border-input bg-transparent dark:bg-input/30 rounded-lg focus-within:ring-2 focus-within:ring-praetor transition-all overflow-hidden">
+    </FieldLabel>
+    <div className="flex items-center overflow-hidden rounded-md border border-input bg-transparent transition-[color,box-shadow] focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50 dark:bg-input/30">
       <div className="w-16 flex items-center justify-center text-muted-foreground text-sm font-bold border-r border-input py-2 bg-muted/50">
         {controller.currency}
       </div>
       <ValidatedNumberInput
+        id="edit-user-cost-per-hour"
         value={controller.state.editCostPerHour}
         onValueChange={(value) =>
           controller.dispatch({ type: 'set', values: { editCostPerHour: value } })
         }
-        className="flex-1 px-4 py-2 bg-transparent outline-none text-sm font-semibold"
+        className="h-9 flex-1 border-0 bg-transparent px-3 py-1 text-sm font-medium shadow-none outline-none focus-visible:ring-0"
         placeholder="0.00"
       />
     </div>
-  </div>
+  </Field>
 );
 
 const UserAssignmentsModal: React.FC<{ controller: UserManagementController }> = ({

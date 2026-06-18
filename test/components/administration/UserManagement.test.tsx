@@ -680,19 +680,26 @@ describe('<UserManagement />', () => {
 });
 
 describe('UserManagement dark-mode form chrome', () => {
-  test('edit and role-assignment modal chrome uses theme tokens, not light zinc', async () => {
+  test('edit dialog and role-assignment chrome use shadcn primitives and theme tokens', async () => {
     const source = await readComponentSource('administration/UserManagement.tsx');
 
-    // Modal panels, the roles list box, section labels, and the role-selector cards adapt to the
-    // theme instead of rendering as white/zinc slabs on the dark surface.
+    // The edit user surface uses shadcn Dialog primitives, and the roles list / labels adapt to
+    // the active theme instead of rendering as white/zinc slabs on the dark surface.
     expectSourceContainsAll(source, [
-      'bg-card rounded-2xl shadow-2xl',
-      'bg-muted/50 border border-border rounded-xl',
+      '<DialogContent className="max-h-[calc(100vh-2rem)] overflow-y-auto sm:max-w-md">',
+      '<DialogClose asChild>',
+      '<Switch',
+      '<Checkbox',
+      '<Select value={value} onValueChange={onChange} disabled={disabled}>',
+      'rounded-md border border-border bg-muted/30',
       "'bg-accent border-border shadow-sm'",
-      'text-xs font-bold text-muted-foreground uppercase tracking-wider',
+      'text-xs font-semibold uppercase tracking-wide text-muted-foreground',
     ]);
-    // The old hardcoded light chrome (white modal panels, zinc list box, light role cards) is gone.
+    // The old custom/light chrome for the edit dialog is gone.
     expectSourceOmitsAll(source, [
+      '<Modal isOpen={Boolean(state.editingUser)}',
+      '<Toggle',
+      "<SelectControl\n        label={controller.t('hr:workforce.primaryRole')}",
       'bg-white rounded-2xl shadow-2xl',
       'bg-zinc-50 border border-zinc-200 rounded-xl',
       "'bg-zinc-50 border-zinc-300 shadow-sm'",
@@ -702,15 +709,18 @@ describe('UserManagement dark-mode form chrome', () => {
 });
 
 describe('UserManagement dark-mode form inputs', () => {
-  test('edit-user identity fields use the shadcn Input with aria-invalid, not a light fill', async () => {
+  test('edit-user identity fields use shadcn Field/Input with aria-invalid, not a light fill', async () => {
     const source = await readComponentSource('administration/UserManagement.tsx');
 
     // The first name / surname / email fields were native <input>s with a hardcoded bg-zinc-50
-    // base (broken in dark mode). They now use the theme-aware shadcn Input + aria-invalid.
+    // base (broken in dark mode). They now share a theme-aware shadcn Field + Input renderer.
     expectSourceContainsAll(source, [
-      'aria-invalid={Boolean(editFormErrors.firstName)}',
-      'aria-invalid={Boolean(editFormErrors.surname)}',
-      'aria-invalid={Boolean(editFormErrors.email)}',
+      'const error = editFormErrors[field];',
+      '<FieldError className="text-xs">{error}</FieldError>',
+      '<Input',
+      'id={fieldConfig.id}',
+      'value={fieldConfig.value}',
+      'aria-invalid={Boolean(error)}',
     ]);
     expectSourceOmitsAll(source, [
       'bg-zinc-50 border rounded-lg focus:ring-2 focus:ring-praetor outline-none text-sm font-semibold',
@@ -721,8 +731,7 @@ describe('UserManagement dark-mode form inputs', () => {
     const source = await readComponentSource('administration/UserManagement.tsx');
     // The edit-user email field was left as a native <input> while first name / surname were
     // migrated, so it missed the theme-aware base + data-slot. It is now the shadcn Input.
-    // (`value={editEmail}` is unique to the edit field; the create field uses `value={newEmail}`.)
-    expect(source).not.toMatch(/<input\b[\s\S]{0,160}?value=\{editEmail\}/);
-    expect(source).toMatch(/<Input\b[\s\S]{0,160}?value=\{editEmail\}/);
+    expect(source).not.toMatch(/<input\b[\s\S]{0,200}?id=\{fieldConfig\.id\}/);
+    expect(source).toMatch(/<Input\b[\s\S]{0,220}?value=\{fieldConfig\.value\}/);
   });
 });
