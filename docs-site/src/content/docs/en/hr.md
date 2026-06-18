@@ -15,7 +15,7 @@ Application users with Praetor access appear among internal employees when you h
 
 Use **Internal Employees** for company personnel and application users. Use **External Employees** for contractors, consultants, suppliers, or other outside resources that need to be tracked in HR and project workflows but do not have an application account.
 
-The HR tables expose the fields needed for quick review: employee code, contact details, role or title, department, and HR status. Open a row to update the profile when you have the matching update permission.
+The HR tables expose the fields needed for quick review: employee code, email and phone in separate columns, role or title, department, and HR status. Open a row to update the profile when you have the matching update permission.
 
 HR status describes the employee lifecycle (**Active**, **Onboarding**, **On leave**, **Terminated**) and does not disable application access. To block an application account, keep using the account status in **Administration > Users**.
 

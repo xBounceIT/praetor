@@ -130,20 +130,16 @@ const InternalEmployeesTable: React.FC<InternalEmployeesTableProps> = ({
         ),
       },
       {
-        header: t('employeeProfile.contact'),
-        id: 'contact',
-        accessorFn: (row) => [row.email, row.phone].filter(Boolean).join(' '),
-        cell: ({ row }) => {
-          const email = row.email?.trim();
-          const phone = row.phone?.trim();
-          return (
-            <div className="flex min-w-40 flex-col gap-0.5 text-sm">
-              {email && <span className="text-foreground">{email}</span>}
-              {phone && <span className="text-muted-foreground">{phone}</span>}
-              {!email && !phone && <span className="text-muted-foreground">{notSetLabel}</span>}
-            </div>
-          );
-        },
+        header: t('common:labels.email'),
+        accessorKey: 'email',
+        cell: ({ value }) => (
+          <OptionalText value={value} fallback={notSetLabel} className="text-foreground" />
+        ),
+      },
+      {
+        header: t('common:labels.phone'),
+        accessorKey: 'phone',
+        cell: ({ value }) => <OptionalText value={value} fallback={notSetLabel} />,
       },
       {
         header: t('employeeProfile.jobTitle'),

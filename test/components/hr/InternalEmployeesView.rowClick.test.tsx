@@ -52,6 +52,25 @@ const renderView = (overrides: Partial<ComponentProps<typeof InternalEmployeesVi
 };
 
 describe('<InternalEmployeesView /> row click', () => {
+  test('renders email and phone as separate table columns', () => {
+    renderView();
+
+    const headerTexts = screen.getAllByRole('columnheader').map((header) => header.textContent);
+    expect(headerTexts).toContain('common:labels.email');
+    expect(headerTexts).toContain('common:labels.phone');
+    expect(headerTexts).not.toContain('employeeProfile.contact');
+
+    const row = screen.getByText('Mario Rossi').closest('tr');
+    if (!row) throw new Error('employee row not found');
+
+    const cellTexts = within(row)
+      .getAllByRole('cell')
+      .map((cell) => cell.textContent?.trim());
+    expect(cellTexts).toContain('mario@example.com');
+    expect(cellTexts).toContain('+39 02 1234');
+    expect(cellTexts).not.toContain('mario@example.com+39 02 1234');
+  });
+
   test('clicking a row opens the edit modal populated for that employee', () => {
     renderView();
     expect(screen.queryByDisplayValue('Mario Rossi')).not.toBeInTheDocument();

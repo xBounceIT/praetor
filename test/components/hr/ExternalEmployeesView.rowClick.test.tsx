@@ -25,6 +25,8 @@ const employee: User = {
   username: 'mrossi',
   employeeType: 'external',
   costPerHour: 25,
+  email: 'mario.contractor@example.com',
+  phone: '+39 02 9876',
 };
 
 const renderView = (overrides: Partial<ComponentProps<typeof ExternalEmployeesView>> = {}) => {
@@ -45,6 +47,25 @@ const renderView = (overrides: Partial<ComponentProps<typeof ExternalEmployeesVi
 };
 
 describe('<ExternalEmployeesView /> row click', () => {
+  test('renders email and phone as separate table columns', () => {
+    renderView();
+
+    const headerTexts = screen.getAllByRole('columnheader').map((header) => header.textContent);
+    expect(headerTexts).toContain('common:labels.email');
+    expect(headerTexts).toContain('common:labels.phone');
+    expect(headerTexts).not.toContain('employeeProfile.contact');
+
+    const row = screen.getByText('Mario Rossi').closest('tr');
+    if (!row) throw new Error('employee row not found');
+
+    const cellTexts = within(row)
+      .getAllByRole('cell')
+      .map((cell) => cell.textContent?.trim());
+    expect(cellTexts).toContain('mario.contractor@example.com');
+    expect(cellTexts).toContain('+39 02 9876');
+    expect(cellTexts).not.toContain('mario.contractor@example.com+39 02 9876');
+  });
+
   test('clicking a row opens the edit modal populated for that employee', () => {
     renderView();
     expect(screen.queryByDisplayValue('Mario Rossi')).not.toBeInTheDocument();

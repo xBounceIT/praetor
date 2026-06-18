@@ -15,7 +15,7 @@ Gli utenti applicativi con accesso a Praetor compaiono tra i dipendenti interni 
 
 Usa **Dipendenti Interni** per personale aziendale e utenti applicativi. Usa **Dipendenti Esterni** per collaboratori, consulenti, fornitori o altre risorse esterne che devono essere tracciate nei processi HR e di progetto ma non hanno un account applicativo.
 
-Le tabelle HR espongono i dati principali per lavorare rapidamente: codice dipendente, contatti, ruolo o mansione, reparto e stato HR. Apri una riga per aggiornare il profilo quando hai il permesso di modifica corrispondente.
+Le tabelle HR espongono i dati principali per lavorare rapidamente: codice dipendente, email e telefono in colonne separate, ruolo o mansione, reparto e stato HR. Apri una riga per aggiornare il profilo quando hai il permesso di modifica corrispondente.
 
 I valori di stato HR descrivono il ciclo di vita della risorsa (**Attivo**, **Onboarding**, **In permesso/assenza**, **Cessato**) e non disabilitano l'accesso all'applicazione. Per bloccare un account applicativo continua a usare lo stato account in **Amministrazione > Utenti**.
 
