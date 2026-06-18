@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import {
   type CustomView,
   computeViewApplication,
+  decodeLegacyFilterValue,
   filterStatesEqual,
   generateViewId,
   IMPORT_PAYLOAD_MAX_BYTES,
@@ -269,22 +270,17 @@ describe('computeViewApplication', () => {
             [
               {
                 columnId: 'email',
-                mapValue: (value) => (value.includes('@') ? value.split(' ')[0] : null),
-              },
-              {
-                columnId: 'phone',
-                mapValue: (value) =>
-                  value.includes('@') ? value.split(' ').slice(1).join(' ') : value,
+                mapValue: (value) => value.trim() || null,
               },
             ],
           ],
         ]),
       },
     );
-    expect(result.filterState).toEqual({
-      email: ['alice@example.com'],
-      phone: ['555-1', '555-2'],
-    });
+    expect(result.filterState.email?.map((value) => decodeLegacyFilterValue(value))).toEqual([
+      { legacyColumnId: 'contact', value: 'alice@example.com 555-1' },
+      { legacyColumnId: 'contact', value: '555-2' },
+    ]);
   });
 
   test('handles missing filterState defensively', () => {

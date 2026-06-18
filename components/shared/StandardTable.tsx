@@ -59,6 +59,7 @@ import CustomViewModal from './CustomViewModal';
 import {
   type CustomView,
   computeViewApplication,
+  decodeLegacyFilterValue,
   type FilterState,
   filterStatesEqual,
   generateViewId,
@@ -565,6 +566,10 @@ export type Column<T> = {
   legacySortColumnIds?: string[];
   legacyFilterColumnIds?: string[];
   mapLegacyFilterValue?: (value: string, legacyColumnId: string) => string | null | undefined;
+  legacyFilterAccessorFn?: (
+    row: T,
+    legacyColumnId: string,
+  ) => string | number | boolean | null | undefined;
   sticky?: 'right';
   onCellDoubleClick?: (row: T) => void; // Cell-level double click handler
 };
@@ -1529,7 +1534,28 @@ const useStandardTableController = <T extends object>({
                   : [];
             if (selected.length === 0) return true;
             const formatted = formatForFilter(row.getValue(columnId), col);
-            return selected.some((value) => formatted.toLowerCase() === value.toLowerCase());
+            const formattedLower = formatted.toLowerCase();
+            const legacyColumnIds = col.legacyFilterColumnIds
+              ? new Set(col.legacyFilterColumnIds)
+              : null;
+            return selected.some((value) => {
+              const legacyValue = decodeLegacyFilterValue(value);
+              if (legacyValue) {
+                if (
+                  !col.legacyFilterAccessorFn ||
+                  !legacyColumnIds?.has(legacyValue.legacyColumnId)
+                ) {
+                  return false;
+                }
+                return (
+                  formatForFilter(
+                    col.legacyFilterAccessorFn(row.original, legacyValue.legacyColumnId),
+                    col,
+                  ).toLowerCase() === legacyValue.value.toLowerCase()
+                );
+              }
+              return formattedLower === value.toLowerCase();
+            });
           },
         } satisfies ColumnDef<T, unknown>;
       }),

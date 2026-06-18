@@ -20,6 +20,28 @@ export type ViewApplicationColumnAliases = {
   filterColumnAliases?: ReadonlyMap<string, readonly LegacyFilterColumnAlias[]>;
 };
 
+const LEGACY_FILTER_VALUE_PREFIX = '__praetor_legacy_filter__:';
+
+export const encodeLegacyFilterValue = (legacyColumnId: string, value: string) =>
+  `${LEGACY_FILTER_VALUE_PREFIX}${encodeURIComponent(legacyColumnId)}:${encodeURIComponent(value)}`;
+
+export const decodeLegacyFilterValue = (
+  value: string,
+): { legacyColumnId: string; value: string } | null => {
+  if (!value.startsWith(LEGACY_FILTER_VALUE_PREFIX)) return null;
+  const payload = value.slice(LEGACY_FILTER_VALUE_PREFIX.length);
+  const separatorIndex = payload.indexOf(':');
+  if (separatorIndex === -1) return null;
+  try {
+    return {
+      legacyColumnId: decodeURIComponent(payload.slice(0, separatorIndex)),
+      value: decodeURIComponent(payload.slice(separatorIndex + 1)),
+    };
+  } catch {
+    return null;
+  }
+};
+
 // Cap on imported clipboard payload size: keeps a malicious/accidental huge
 // payload from being JSON-parsed and persisted to localStorage.
 export const IMPORT_PAYLOAD_MAX_BYTES = 100_000;
@@ -183,9 +205,10 @@ export const computeViewApplication = (
       const existingValues = filterState[alias.columnId] ?? [];
       const existingValueSet = new Set(existingValues);
       for (const mappedValue of mappedValues) {
-        if (existingValueSet.has(mappedValue)) continue;
-        existingValueSet.add(mappedValue);
-        existingValues.push(mappedValue);
+        const legacyValue = encodeLegacyFilterValue(k, mappedValue);
+        if (existingValueSet.has(legacyValue)) continue;
+        existingValueSet.add(legacyValue);
+        existingValues.push(legacyValue);
       }
       filterState[alias.columnId] = existingValues;
     }

@@ -21,9 +21,9 @@ import StatusBadge from '../shared/StatusBadge';
 import EmployeeAssignmentsModal from './EmployeeAssignmentsModal';
 import EmployeeHrFields from './EmployeeHrFields';
 import {
+  getEmployeeContactValue,
   LEGACY_CONTACT_COLUMN_ID,
-  mapLegacyContactEmailFilterValue,
-  mapLegacyContactPhoneFilterValue,
+  mapLegacyContactFilterValue,
 } from './employeeContactViewAliases';
 import {
   buildEmployeeCreatePayload,
@@ -140,7 +140,8 @@ const InternalEmployeesTable: React.FC<InternalEmployeesTableProps> = ({
         legacyHiddenColumnIds: [LEGACY_CONTACT_COLUMN_ID],
         legacySortColumnIds: [LEGACY_CONTACT_COLUMN_ID],
         legacyFilterColumnIds: [LEGACY_CONTACT_COLUMN_ID],
-        mapLegacyFilterValue: mapLegacyContactEmailFilterValue,
+        legacyFilterAccessorFn: getEmployeeContactValue,
+        mapLegacyFilterValue: mapLegacyContactFilterValue,
         cell: ({ value }) => (
           <OptionalText value={value} fallback={notSetLabel} className="text-foreground" />
         ),
@@ -149,8 +150,6 @@ const InternalEmployeesTable: React.FC<InternalEmployeesTableProps> = ({
         header: t('common:labels.phone'),
         accessorKey: 'phone',
         legacyHiddenColumnIds: [LEGACY_CONTACT_COLUMN_ID],
-        legacyFilterColumnIds: [LEGACY_CONTACT_COLUMN_ID],
-        mapLegacyFilterValue: mapLegacyContactPhoneFilterValue,
         cell: ({ value }) => <OptionalText value={value} fallback={notSetLabel} />,
       },
       {

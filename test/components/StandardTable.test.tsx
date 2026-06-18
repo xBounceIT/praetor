@@ -19,6 +19,7 @@ const readClipboardSpy = spyOn(clipboardModule, 'readTextFromClipboard').mockRes
 
 const { Tooltip, TooltipContent, TooltipTrigger } = await import('../../components/ui/tooltip');
 const { useState } = await import('react');
+const { decodeLegacyFilterValue } = await import('../../components/shared/customViewHelpers');
 const StandardTable = (await import('../../components/shared/StandardTable')).default;
 const Modal = (await import('../../components/shared/Modal')).default;
 const StatusBadge = (await import('../../components/shared/StatusBadge')).default;
@@ -40,11 +41,10 @@ const sampleColumns = [
   { header: 'Age', accessorKey: 'age' as const, id: 'age' },
 ];
 
-const mapLegacyContactEmailFilterValueForTest = (value: string) =>
-  value.includes('@') ? value.split(' ')[0] : null;
+const mapLegacyContactEmailFilterValueForTest = (value: string) => value.trim() || null;
 
-const mapLegacyContactPhoneFilterValueForTest = (value: string) =>
-  value.includes('@') ? value.split(' ').slice(1).join(' ') : value;
+const getLegacyContactFilterValueForTest = (row: ContactRow) =>
+  [row.email, row.phone].filter(Boolean).join(' ');
 
 const contactAliasColumns = [
   { header: 'Name', accessorKey: 'name' as const, id: 'name' },
@@ -55,6 +55,7 @@ const contactAliasColumns = [
     legacyHiddenColumnIds: ['contact'],
     legacySortColumnIds: ['contact'],
     legacyFilterColumnIds: ['contact'],
+    legacyFilterAccessorFn: getLegacyContactFilterValueForTest,
     mapLegacyFilterValue: mapLegacyContactEmailFilterValueForTest,
   },
   {
@@ -62,8 +63,6 @@ const contactAliasColumns = [
     accessorKey: 'phone' as const,
     id: 'phone',
     legacyHiddenColumnIds: ['contact'],
-    legacyFilterColumnIds: ['contact'],
-    mapLegacyFilterValue: mapLegacyContactPhoneFilterValueForTest,
   },
 ];
 
@@ -1488,9 +1487,10 @@ describe('<StandardTable />', () => {
 
   test('loading a stored view maps legacy contact sort and filters to split columns', () => {
     const contactRows: ContactRow[] = [
-      { id: '1', name: 'Alice', age: 30, email: 'zoe@example.com', phone: '555-3' },
-      { id: '2', name: 'Bob', age: 25, email: 'amy@example.com', phone: '555-1' },
+      { id: '1', name: 'Alice', age: 30, email: 'amy@example.com', phone: '' },
+      { id: '2', name: 'Bob', age: 25, email: '', phone: '555-1' },
       { id: '3', name: 'Charlie', age: 35, email: 'mira@example.com', phone: '555-2' },
+      { id: '4', name: 'Dana', age: 40, email: 'amy@example.com', phone: '555-1' },
     ];
     const stored = [
       {
@@ -1498,7 +1498,7 @@ describe('<StandardTable />', () => {
         name: 'Filtered contact',
         hiddenColIds: [],
         sortState: { colId: 'contact', px: 'asc' },
-        filterState: { contact: ['mira@example.com 555-2', 'amy@example.com 555-1'] },
+        filterState: { contact: ['amy@example.com', '555-1'] },
       },
     ];
     localStorage.setItem('praetor_table_customviews_contact_sort_filter', JSON.stringify(stored));
@@ -1516,9 +1516,10 @@ describe('<StandardTable />', () => {
       .getAllByRole('row')
       .slice(1)
       .map((r) => r.textContent ?? '');
-    expect(rows[0]).toContain('Bob');
-    expect(rows[1]).toContain('Charlie');
-    expect(rows.some((row) => row.includes('Alice'))).toBe(false);
+    expect(rows.some((row) => row.includes('Alice'))).toBe(true);
+    expect(rows.some((row) => row.includes('Bob'))).toBe(true);
+    expect(rows.some((row) => row.includes('Charlie'))).toBe(false);
+    expect(rows.some((row) => row.includes('Dana'))).toBe(false);
     expect(screen.getByText('Email')).toBeInTheDocument();
     expect(screen.getByText('Phone')).toBeInTheDocument();
   });
@@ -1561,8 +1562,10 @@ describe('<StandardTable />', () => {
       name: 'Renamed no contact',
       hiddenColIds: ['email', 'phone'],
       sortState: { colId: 'email', px: 'desc' },
-      filterState: { email: ['alice@example.com'], phone: ['555-1'] },
     });
+    expect(
+      saved[0].filterState.email.map((value: string) => decodeLegacyFilterValue(value)),
+    ).toEqual([{ legacyColumnId: 'contact', value: 'alice@example.com 555-1' }]);
   });
 
   test('deleting a saved view removes it from localStorage', async () => {

@@ -51,8 +51,8 @@ describe('HR employee modal styling', () => {
       'legacyHiddenColumnIds: [LEGACY_CONTACT_COLUMN_ID]',
       'legacySortColumnIds: [LEGACY_CONTACT_COLUMN_ID]',
       'legacyFilterColumnIds: [LEGACY_CONTACT_COLUMN_ID]',
-      'mapLegacyFilterValue: mapLegacyContactEmailFilterValue',
-      'mapLegacyFilterValue: mapLegacyContactPhoneFilterValue',
+      'legacyFilterAccessorFn: getEmployeeContactValue',
+      'mapLegacyFilterValue: mapLegacyContactFilterValue',
       "id: 'roleTitle'",
       "id: 'hrStatus'",
     ]);
