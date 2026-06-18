@@ -21,6 +21,11 @@ import StatusBadge from '../shared/StatusBadge';
 import EmployeeAssignmentsModal from './EmployeeAssignmentsModal';
 import EmployeeHrFields from './EmployeeHrFields';
 import {
+  getEmployeeContactValue,
+  LEGACY_CONTACT_COLUMN_ID,
+  mapLegacyContactFilterValue,
+} from './employeeContactViewAliases';
+import {
   buildEmployeeCreatePayload,
   buildEmployeeHrPayload,
   type EmployeeCreatePayload,
@@ -130,20 +135,23 @@ const InternalEmployeesTable: React.FC<InternalEmployeesTableProps> = ({
         ),
       },
       {
-        header: t('employeeProfile.contact'),
-        id: 'contact',
-        accessorFn: (row) => [row.email, row.phone].filter(Boolean).join(' '),
-        cell: ({ row }) => {
-          const email = row.email?.trim();
-          const phone = row.phone?.trim();
-          return (
-            <div className="flex min-w-40 flex-col gap-0.5 text-sm">
-              {email && <span className="text-foreground">{email}</span>}
-              {phone && <span className="text-muted-foreground">{phone}</span>}
-              {!email && !phone && <span className="text-muted-foreground">{notSetLabel}</span>}
-            </div>
-          );
-        },
+        header: t('common:labels.email'),
+        accessorKey: 'email',
+        legacyHiddenColumnIds: [LEGACY_CONTACT_COLUMN_ID],
+        legacySortColumnIds: [LEGACY_CONTACT_COLUMN_ID],
+        legacyFilterColumnIds: [LEGACY_CONTACT_COLUMN_ID],
+        legacySortAccessorFn: getEmployeeContactValue,
+        legacyFilterAccessorFn: getEmployeeContactValue,
+        mapLegacyFilterValue: mapLegacyContactFilterValue,
+        cell: ({ value }) => (
+          <OptionalText value={value} fallback={notSetLabel} className="text-foreground" />
+        ),
+      },
+      {
+        header: t('common:labels.phone'),
+        accessorKey: 'phone',
+        legacyHiddenColumnIds: [LEGACY_CONTACT_COLUMN_ID],
+        cell: ({ value }) => <OptionalText value={value} fallback={notSetLabel} />,
       },
       {
         header: t('employeeProfile.jobTitle'),

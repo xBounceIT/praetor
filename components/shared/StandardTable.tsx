@@ -59,11 +59,13 @@ import CustomViewModal from './CustomViewModal';
 import {
   type CustomView,
   computeViewApplication,
+  decodeLegacyFilterValue,
   type FilterState,
   filterStatesEqual,
   generateViewId,
   IMPORT_PAYLOAD_MAX_BYTES,
   isValidImportedView,
+  type LegacyFilterColumnAlias,
   moveByDelta,
   parseFilterState,
   parseSortState,
@@ -560,6 +562,18 @@ export type Column<T> = {
   filterFormat?: (value: T[keyof T] | string | number | boolean | null | undefined) => string;
   align?: 'left' | 'center' | 'right';
   hidden?: boolean;
+  legacyHiddenColumnIds?: string[];
+  legacySortColumnIds?: string[];
+  legacyFilterColumnIds?: string[];
+  mapLegacyFilterValue?: (value: string, legacyColumnId: string) => string | null | undefined;
+  legacySortAccessorFn?: (
+    row: T,
+    legacyColumnId: string,
+  ) => string | number | boolean | null | undefined;
+  legacyFilterAccessorFn?: (
+    row: T,
+    legacyColumnId: string,
+  ) => string | number | boolean | null | undefined;
   sticky?: 'right';
   onCellDoubleClick?: (row: T) => void; // Cell-level double click handler
 };
@@ -574,12 +588,48 @@ const isTableActionColumn = <T,>(col: Column<T>) =>
 const getViewApplicationForColumns = <T,>(view: CustomView, columns: Column<T>[] | undefined) => {
   const gearIds = new Set<string>();
   const allIds = new Set<string>();
+  const hiddenColumnAliases = new Map<string, string[]>();
+  const sortColumnAliases = new Map<string, string>();
+  const filterColumnAliases = new Map<string, LegacyFilterColumnAlias[]>();
   for (const column of columns ?? []) {
     const columnId = getColumnId(column);
     allIds.add(columnId);
-    if (!column.hidden && !isTableActionColumn(column)) gearIds.add(columnId);
+    if (!column.hidden && !isTableActionColumn(column)) {
+      gearIds.add(columnId);
+      for (const legacyId of column.legacyHiddenColumnIds ?? []) {
+        const mappedIds = hiddenColumnAliases.get(legacyId);
+        if (mappedIds) mappedIds.push(columnId);
+        else hiddenColumnAliases.set(legacyId, [columnId]);
+      }
+      for (const legacyId of column.legacySortColumnIds ?? []) {
+        if (!sortColumnAliases.has(legacyId)) sortColumnAliases.set(legacyId, columnId);
+      }
+      for (const legacyId of column.legacyFilterColumnIds ?? []) {
+        const mappedFilters = filterColumnAliases.get(legacyId);
+        const alias = { columnId, mapValue: column.mapLegacyFilterValue };
+        if (mappedFilters) mappedFilters.push(alias);
+        else filterColumnAliases.set(legacyId, [alias]);
+      }
+    }
   }
-  return computeViewApplication(view, gearIds, allIds);
+  return computeViewApplication(view, gearIds, allIds, {
+    hiddenColumnAliases,
+    sortColumnAliases,
+    filterColumnAliases,
+  });
+};
+
+const normalizeViewForColumns = <T,>(
+  view: CustomView,
+  columns: Column<T>[] | undefined,
+): CustomView => {
+  const application = getViewApplicationForColumns(view, columns);
+  return {
+    ...view,
+    hiddenColIds: Array.from(application.hiddenColIds),
+    sortState: application.sortState,
+    filterState: application.filterState,
+  };
 };
 
 const readStoredActiveViewId = (title: string, skipSavedView: boolean) => {
@@ -1001,6 +1051,7 @@ const useStandardTableController = <T extends object>({
   const copiedTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const viewErrorTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const viewsAppliedOnceRef = useRef(!isServerBacked);
+  const hasSeenInitialFilterStateRef = useRef(initialFilterState !== undefined);
 
   const handleGearOpenChange = useCallback(
     (open: boolean) => {
@@ -1237,6 +1288,11 @@ const useStandardTableController = <T extends object>({
   );
 
   useEffect(() => {
+    if (initialFilterState === undefined && !suppressSavedView) {
+      if (!hasSeenInitialFilterStateRef.current) return;
+    } else {
+      hasSeenInitialFilterStateRef.current = true;
+    }
     const next = initialFilterState ?? {};
     if (filterStatesEqual(filterStateRef.current, next)) return;
     dispatchTableView({
@@ -1251,7 +1307,7 @@ const useStandardTableController = <T extends object>({
         } catch {}
       }
     }
-  }, [initialFilterState, title]);
+  }, [initialFilterState, suppressSavedView, title]);
 
   const getColId = useCallback(getColumnId, []);
 
@@ -1387,6 +1443,18 @@ const useStandardTableController = <T extends object>({
     viewErrorTimeoutRef.current = setTimeout(() => setViewError(null), VIEW_ERROR_DURATION_MS);
   };
 
+  const normalizeViewForCurrentColumns = (view: CustomView) =>
+    normalizeViewForColumns(view, columns);
+
+  const normalizeHiddenColIdsForCurrentColumns = (ids: string[]) =>
+    normalizeViewForCurrentColumns({
+      id: '',
+      name: '',
+      hiddenColIds: ids,
+      sortState: null,
+      filterState: {},
+    }).hiddenColIds;
+
   const fontSizeClass = fontSize === 'xs' ? 'text-xs' : fontSize === 'sm' ? 'text-sm' : 'text-base';
 
   // Persist the clamped column widths whenever they change. The table renders from
@@ -1455,8 +1523,18 @@ const useStandardTableController = <T extends object>({
           enableColumnFilter: !col.disableFiltering,
           enableHiding: !col.hidden && !isRowActionColumn(col),
           sortingFn: (rowA, rowB) => {
-            const valA = rowA.getValue(colId);
-            const valB = rowB.getValue(colId);
+            const legacySortColumnId =
+              sortState?.colId === colId &&
+              sortState.legacyColId &&
+              col.legacySortColumnIds?.includes(sortState.legacyColId)
+                ? sortState.legacyColId
+                : null;
+            const getSortValue = (row: typeof rowA) =>
+              legacySortColumnId && col.legacySortAccessorFn
+                ? col.legacySortAccessorFn(row.original, legacySortColumnId)
+                : row.getValue(colId);
+            const valA = getSortValue(rowA);
+            const valB = getSortValue(rowB);
             if (typeof valA === 'number' && typeof valB === 'number') {
               return valA - valB;
             }
@@ -1475,7 +1553,28 @@ const useStandardTableController = <T extends object>({
                   : [];
             if (selected.length === 0) return true;
             const formatted = formatForFilter(row.getValue(columnId), col);
-            return selected.some((value) => formatted.toLowerCase() === value.toLowerCase());
+            const formattedLower = formatted.toLowerCase();
+            const legacyColumnIds = col.legacyFilterColumnIds
+              ? new Set(col.legacyFilterColumnIds)
+              : null;
+            return selected.some((value) => {
+              const legacyValue = decodeLegacyFilterValue(value);
+              if (legacyValue) {
+                if (
+                  !col.legacyFilterAccessorFn ||
+                  !legacyColumnIds?.has(legacyValue.legacyColumnId)
+                ) {
+                  return false;
+                }
+                return (
+                  formatForFilter(
+                    col.legacyFilterAccessorFn(row.original, legacyValue.legacyColumnId),
+                    col,
+                  ).toLowerCase() === legacyValue.value.toLowerCase()
+                );
+              }
+              return formattedLower === value.toLowerCase();
+            });
           },
         } satisfies ColumnDef<T, unknown>;
       }),
@@ -1487,6 +1586,7 @@ const useStandardTableController = <T extends object>({
       getValue,
       formatForFilter,
       isRowActionColumn,
+      sortState,
     ],
   );
 
@@ -1863,13 +1963,8 @@ const useStandardTableController = <T extends object>({
 
   // Legacy mode is synchronous (localStorage). Server mode persists optimistically and
   // reverts on failure. Returns a promise so the modal can stay closed only after success.
-  const saveView = async ({
-    name,
-    hiddenColIds: hidden,
-  }: {
-    name: string;
-    hiddenColIds: string[];
-  }) => {
+  const saveView = async ({ name, hiddenColIds }: { name: string; hiddenColIds: string[] }) => {
+    const hidden = normalizeHiddenColIdsForCurrentColumns(hiddenColIds);
     const editingView = modalState?.kind === 'edit' ? modalState.view : null;
     const editingId = editingView?.id ?? null;
     // The modal only edits name + visible columns. When editing an existing view, keep THAT view's
@@ -2219,6 +2314,7 @@ const useStandardTableController = <T extends object>({
     serverViewMeta,
     viewBusy,
     setModalState,
+    normalizeViewForCurrentColumns,
     duplicateView,
     exportView,
     setShareModalView,
@@ -2578,6 +2674,7 @@ const StandardTableViewRow = <T extends object>({
     serverViewMeta,
     viewBusy,
     setModalState,
+    normalizeViewForCurrentColumns,
     duplicateView,
     exportView,
     setShareModalView,
@@ -2668,7 +2765,7 @@ const StandardTableViewRow = <T extends object>({
         isServerBacked={isServerBacked}
         viewBusy={viewBusy}
         onEdit={() => {
-          setModalState({ kind: 'edit', view });
+          setModalState({ kind: 'edit', view: normalizeViewForCurrentColumns(view) });
           setGearOpen(false);
         }}
         onDuplicate={() => {

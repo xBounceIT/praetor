@@ -19,6 +19,7 @@ const readClipboardSpy = spyOn(clipboardModule, 'readTextFromClipboard').mockRes
 
 const { Tooltip, TooltipContent, TooltipTrigger } = await import('../../components/ui/tooltip');
 const { useState } = await import('react');
+const { decodeLegacyFilterValue } = await import('../../components/shared/customViewHelpers');
 const StandardTable = (await import('../../components/shared/StandardTable')).default;
 const Modal = (await import('../../components/shared/Modal')).default;
 const StatusBadge = (await import('../../components/shared/StatusBadge')).default;
@@ -27,6 +28,7 @@ const countPaddingRows = (container: HTMLElement) =>
   container.querySelectorAll('tbody tr[aria-hidden="true"]').length;
 
 type Row = { id: string; name: string; age: number };
+type ContactRow = Row & { email: string; phone: string };
 
 const sampleRows: Row[] = [
   { id: '1', name: 'Alice', age: 30 },
@@ -37,6 +39,32 @@ const sampleRows: Row[] = [
 const sampleColumns = [
   { header: 'Name', accessorKey: 'name' as const, id: 'name' },
   { header: 'Age', accessorKey: 'age' as const, id: 'age' },
+];
+
+const mapLegacyContactEmailFilterValueForTest = (value: string) => value.trim();
+
+const getLegacyContactFilterValueForTest = (row: ContactRow) =>
+  [row.email, row.phone].filter(Boolean).join(' ');
+
+const contactAliasColumns = [
+  { header: 'Name', accessorKey: 'name' as const, id: 'name' },
+  {
+    header: 'Email',
+    accessorKey: 'email' as const,
+    id: 'email',
+    legacyHiddenColumnIds: ['contact'],
+    legacySortColumnIds: ['contact'],
+    legacyFilterColumnIds: ['contact'],
+    legacySortAccessorFn: getLegacyContactFilterValueForTest,
+    legacyFilterAccessorFn: getLegacyContactFilterValueForTest,
+    mapLegacyFilterValue: mapLegacyContactEmailFilterValueForTest,
+  },
+  {
+    header: 'Phone',
+    accessorKey: 'phone' as const,
+    id: 'phone',
+    legacyHiddenColumnIds: ['contact'],
+  },
 ];
 
 const clickSortHeader = (headerText: string) => {
@@ -675,6 +703,40 @@ describe('<StandardTable />', () => {
     expect(bodyRows).toHaveLength(1);
     expect(bodyRows[0].textContent).toContain('Paid');
     expect(bodyRows[0].textContent).not.toContain('Unpaid');
+  });
+
+  test('clears controlled initial filters when the prop returns to undefined', async () => {
+    const ControlledFilterTable = () => {
+      const [filters, setFilters] = useState<Record<string, string[]> | undefined>({
+        name: ['Alice'],
+      });
+      return (
+        <>
+          <button type="button" onClick={() => setFilters(undefined)}>
+            Clear controlled filter
+          </button>
+          <StandardTable<Row>
+            title="Controlled Filter"
+            data={sampleRows}
+            columns={sampleColumns}
+            initialFilterState={filters}
+          />
+        </>
+      );
+    };
+
+    render(<ControlledFilterTable />);
+    expect(screen.getByText('Alice')).toBeInTheDocument();
+    expect(screen.queryByText('Bob')).not.toBeInTheDocument();
+
+    act(() => {
+      fireEvent.click(screen.getByText('Clear controlled filter'));
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText('Bob')).toBeInTheDocument();
+      expect(screen.getByText('Charlie')).toBeInTheDocument();
+    });
   });
 
   test('multi-column filters intersect (Name + Age)', () => {
@@ -1423,6 +1485,128 @@ describe('<StandardTable />', () => {
     expect(rows[0]).toContain('Charlie');
     expect(rows[1]).toContain('Alice');
     expect(rows[2]).toContain('Bob');
+  });
+
+  test('loading a stored view hides columns through legacy hidden column aliases', () => {
+    const contactRows: ContactRow[] = sampleRows.map((row) => ({
+      ...row,
+      email: `${row.name.toLowerCase()}@example.com`,
+      phone: `555-${row.id}`,
+    }));
+    const stored = [
+      {
+        id: 'v1',
+        name: 'No contact',
+        hiddenColIds: ['contact'],
+        sortState: null,
+        filterState: {},
+      },
+    ];
+    localStorage.setItem('praetor_table_customviews_contact_alias', JSON.stringify(stored));
+    localStorage.setItem('praetor_table_activeview_contact_alias', 'v1');
+
+    render(
+      <StandardTable<ContactRow>
+        title="Contact Alias"
+        data={contactRows}
+        columns={contactAliasColumns}
+      />,
+    );
+
+    expect(screen.getByText('Name')).toBeInTheDocument();
+    expect(screen.queryByText('Email')).not.toBeInTheDocument();
+    expect(screen.queryByText('Phone')).not.toBeInTheDocument();
+    expect(screen.queryByText('alice@example.com')).not.toBeInTheDocument();
+    expect(screen.queryByText('555-1')).not.toBeInTheDocument();
+  });
+
+  test('loading a stored view maps legacy contact sort and filters to split columns', () => {
+    const contactRows: ContactRow[] = [
+      { id: '1', name: 'Alice', age: 30, email: 'amy@example.com', phone: '' },
+      { id: '2', name: 'Bob', age: 25, email: '', phone: '555-1' },
+      { id: '3', name: 'Charlie', age: 35, email: 'mira@example.com', phone: '555-2' },
+      { id: '4', name: 'Dana', age: 40, email: 'amy@example.com', phone: '555-1' },
+      { id: '5', name: 'Erin', age: 45, email: '', phone: '' },
+    ];
+    const stored = [
+      {
+        id: 'v1',
+        name: 'Filtered contact',
+        hiddenColIds: [],
+        sortState: { colId: 'contact', px: 'asc' },
+        filterState: { contact: ['amy@example.com', '555-1', ''] },
+      },
+    ];
+    localStorage.setItem('praetor_table_customviews_contact_sort_filter', JSON.stringify(stored));
+    localStorage.setItem('praetor_table_activeview_contact_sort_filter', 'v1');
+
+    render(
+      <StandardTable<ContactRow>
+        title="Contact Sort Filter"
+        data={contactRows}
+        columns={contactAliasColumns}
+      />,
+    );
+
+    const rows = screen
+      .getAllByRole('row')
+      .slice(1)
+      .map((r) => r.textContent ?? '');
+    const visibleRows = rows.filter((row) => row.trim().length > 0);
+    expect(visibleRows[0]).toContain('Erin');
+    expect(visibleRows[1]).toContain('Bob');
+    expect(visibleRows[2]).toContain('Alice');
+    expect(rows.some((row) => row.includes('Alice'))).toBe(true);
+    expect(rows.some((row) => row.includes('Bob'))).toBe(true);
+    expect(rows.some((row) => row.includes('Charlie'))).toBe(false);
+    expect(rows.some((row) => row.includes('Dana'))).toBe(false);
+    expect(rows.some((row) => row.includes('Erin'))).toBe(true);
+    expect(screen.getByText('Email')).toBeInTheDocument();
+    expect(screen.getByText('Phone')).toBeInTheDocument();
+  });
+
+  test('renaming a stored view preserves legacy hidden column aliases as current columns', async () => {
+    const contactRows: ContactRow[] = sampleRows.map((row) => ({
+      ...row,
+      email: `${row.name.toLowerCase()}@example.com`,
+      phone: `555-${row.id}`,
+    }));
+    const stored = [
+      {
+        id: 'v1',
+        name: 'No contact',
+        hiddenColIds: ['contact'],
+        sortState: { colId: 'contact', px: 'desc' },
+        filterState: { contact: ['alice@example.com 555-1'] },
+      },
+    ];
+    localStorage.setItem('praetor_table_customviews_contact_alias_edit', JSON.stringify(stored));
+
+    render(
+      <StandardTable<ContactRow>
+        title="Contact Alias Edit"
+        data={contactRows}
+        columns={contactAliasColumns}
+      />,
+    );
+    await openCustomViews();
+    clickMenuAction(screen.getByLabelText('table.renameView'));
+
+    const input = screen.getByPlaceholderText('table.viewNamePlaceholder') as HTMLInputElement;
+    act(() => fireEvent.change(input, { target: { value: 'Renamed no contact' } }));
+    act(() => fireEvent.click(screen.getByText('table.save')));
+
+    const saved = JSON.parse(
+      localStorage.getItem('praetor_table_customviews_contact_alias_edit') as string,
+    );
+    expect(saved[0]).toMatchObject({
+      name: 'Renamed no contact',
+      hiddenColIds: ['email', 'phone'],
+      sortState: { colId: 'email', px: 'desc', legacyColId: 'contact' },
+    });
+    expect(
+      saved[0].filterState.email.map((value: string) => decodeLegacyFilterValue(value)),
+    ).toEqual([{ legacyColumnId: 'contact', value: 'alice@example.com 555-1' }]);
   });
 
   test('deleting a saved view removes it from localStorage', async () => {

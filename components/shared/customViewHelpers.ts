@@ -1,4 +1,4 @@
-export type SortState = { colId: string; px: 'asc' | 'desc' } | null;
+export type SortState = { colId: string; px: 'asc' | 'desc'; legacyColId?: string } | null;
 export type FilterState = Record<string, string[]>;
 
 export type CustomView = {
@@ -7,6 +7,39 @@ export type CustomView = {
   hiddenColIds: string[];
   sortState: SortState;
   filterState: FilterState;
+};
+
+export type LegacyFilterColumnAlias = {
+  columnId: string;
+  mapValue?: (value: string, legacyColumnId: string) => string | null | undefined;
+};
+
+export type ViewApplicationColumnAliases = {
+  hiddenColumnAliases?: ReadonlyMap<string, readonly string[]>;
+  sortColumnAliases?: ReadonlyMap<string, string>;
+  filterColumnAliases?: ReadonlyMap<string, readonly LegacyFilterColumnAlias[]>;
+};
+
+const LEGACY_FILTER_VALUE_PREFIX = '__praetor_legacy_filter__:';
+
+export const encodeLegacyFilterValue = (legacyColumnId: string, value: string) =>
+  `${LEGACY_FILTER_VALUE_PREFIX}${encodeURIComponent(legacyColumnId)}:${encodeURIComponent(value)}`;
+
+export const decodeLegacyFilterValue = (
+  value: string,
+): { legacyColumnId: string; value: string } | null => {
+  if (!value.startsWith(LEGACY_FILTER_VALUE_PREFIX)) return null;
+  const payload = value.slice(LEGACY_FILTER_VALUE_PREFIX.length);
+  const separatorIndex = payload.indexOf(':');
+  if (separatorIndex === -1) return null;
+  try {
+    return {
+      legacyColumnId: decodeURIComponent(payload.slice(0, separatorIndex)),
+      value: decodeURIComponent(payload.slice(separatorIndex + 1)),
+    };
+  } catch {
+    return null;
+  }
 };
 
 // Cap on imported clipboard payload size: keeps a malicious/accidental huge
@@ -70,7 +103,11 @@ export const parseSortState = (raw: unknown): SortState => {
   const o = raw as Record<string, unknown>;
   if (typeof o.colId !== 'string') return null;
   if (o.px !== 'asc' && o.px !== 'desc') return null;
-  return { colId: o.colId, px: o.px };
+  const sortState: NonNullable<SortState> = { colId: o.colId, px: o.px };
+  if (typeof o.legacyColId === 'string' && o.legacyColId !== '') {
+    sortState.legacyColId = o.legacyColId;
+  }
+  return sortState;
 };
 
 export const filterStatesEqual = (a: FilterState, b: FilterState): boolean => {
@@ -133,12 +170,56 @@ export const computeViewApplication = (
   view: CustomView,
   gearColIds: ReadonlySet<string>,
   allColIds: ReadonlySet<string>,
+  columnAliases?: ViewApplicationColumnAliases,
 ): { hiddenColIds: Set<string>; sortState: SortState; filterState: FilterState } => {
-  const hiddenColIds = new Set(view.hiddenColIds.filter((id) => gearColIds.has(id)));
-  const sortState = view.sortState && allColIds.has(view.sortState.colId) ? view.sortState : null;
+  const hiddenColIds = new Set<string>();
+  for (const id of view.hiddenColIds) {
+    if (gearColIds.has(id)) {
+      hiddenColIds.add(id);
+      continue;
+    }
+    for (const mappedId of columnAliases?.hiddenColumnAliases?.get(id) ?? []) {
+      if (gearColIds.has(mappedId)) hiddenColIds.add(mappedId);
+    }
+  }
+
+  let sortState: SortState = null;
+  if (view.sortState) {
+    const isCurrentSortColumn = allColIds.has(view.sortState.colId);
+    const mappedSortColId = isCurrentSortColumn
+      ? view.sortState.colId
+      : columnAliases?.sortColumnAliases?.get(view.sortState.colId);
+    if (mappedSortColId && allColIds.has(mappedSortColId)) {
+      const nextSortState = { ...view.sortState, colId: mappedSortColId };
+      if (!isCurrentSortColumn && !nextSortState.legacyColId) {
+        nextSortState.legacyColId = view.sortState.colId;
+      }
+      sortState = nextSortState;
+    }
+  }
+
   const filterState: FilterState = {};
   Object.entries(view.filterState ?? {}).forEach(([k, v]) => {
-    if (allColIds.has(k)) filterState[k] = v;
+    if (allColIds.has(k)) {
+      filterState[k] = v;
+      return;
+    }
+    for (const alias of columnAliases?.filterColumnAliases?.get(k) ?? []) {
+      if (!allColIds.has(alias.columnId)) continue;
+      const mappedValues = v
+        .map((value) => (alias.mapValue ? alias.mapValue(value, k) : value))
+        .filter((value): value is string => typeof value === 'string');
+      if (mappedValues.length === 0) continue;
+      const existingValues = filterState[alias.columnId] ?? [];
+      const existingValueSet = new Set(existingValues);
+      for (const mappedValue of mappedValues) {
+        const legacyValue = encodeLegacyFilterValue(k, mappedValue);
+        if (existingValueSet.has(legacyValue)) continue;
+        existingValueSet.add(legacyValue);
+        existingValues.push(legacyValue);
+      }
+      filterState[alias.columnId] = existingValues;
+    }
   });
   return { hiddenColIds, sortState, filterState };
 };

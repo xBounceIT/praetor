@@ -42,10 +42,26 @@ describe('HR employee modal styling', () => {
   test.each([
     ['internal employees', 'HR/InternalEmployeesView.tsx'],
     ['external employees', 'HR/ExternalEmployeesView.tsx'],
-  ])('%s table accessor columns use stable ids', async (_name, path) => {
+  ])('%s table contact columns preserve legacy view aliases', async (_name, path) => {
     const source = await readComponentSource(path);
 
-    expectSourceContainsAll(source, ["id: 'contact'", "id: 'roleTitle'", "id: 'hrStatus'"]);
+    expectSourceContainsAll(source, [
+      "accessorKey: 'email'",
+      "accessorKey: 'phone'",
+      'legacyHiddenColumnIds: [LEGACY_CONTACT_COLUMN_ID]',
+      'legacySortColumnIds: [LEGACY_CONTACT_COLUMN_ID]',
+      'legacyFilterColumnIds: [LEGACY_CONTACT_COLUMN_ID]',
+      'legacySortAccessorFn: getEmployeeContactValue',
+      'legacyFilterAccessorFn: getEmployeeContactValue',
+      'mapLegacyFilterValue: mapLegacyContactFilterValue',
+      "id: 'roleTitle'",
+      "id: 'hrStatus'",
+    ]);
+    expectSourceOmitsAll(source, [
+      "id: 'contact'",
+      "accessorFn: (row) => [row.email, row.phone].filter(Boolean).join(' ')",
+      'hidden: true',
+    ]);
   });
 });
 

@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import {
   type CustomView,
   computeViewApplication,
+  decodeLegacyFilterValue,
   filterStatesEqual,
   generateViewId,
   IMPORT_PAYLOAD_MAX_BYTES,
@@ -120,6 +121,16 @@ describe('parseSortState', () => {
     const result = parseSortState({ colId: 'name', px: 'asc', extra: 'junk' });
     expect(result).toEqual({ colId: 'name', px: 'asc' });
   });
+
+  test('preserves legacy sort metadata', () => {
+    const result = parseSortState({
+      colId: 'email',
+      px: 'asc',
+      legacyColId: 'contact',
+      extra: 'junk',
+    });
+    expect(result).toEqual({ colId: 'email', px: 'asc', legacyColId: 'contact' });
+  });
 });
 
 describe('parseFilterState', () => {
@@ -205,6 +216,41 @@ describe('computeViewApplication', () => {
     expect(result.hiddenColIds).toEqual(new Set(['name']));
   });
 
+  test('maps legacy hidden column ids to current gear-visible columns', () => {
+    const result = computeViewApplication(
+      view({ hiddenColIds: ['contact', 'legacyStatus'] }),
+      new Set(['email', 'phone']),
+      new Set(['email', 'phone', 'status']),
+      {
+        hiddenColumnAliases: new Map([
+          ['contact', ['email', 'phone']],
+          ['legacyStatus', ['status']],
+        ]),
+      },
+    );
+    expect(result.hiddenColIds).toEqual(new Set(['email', 'phone']));
+  });
+
+  test('maps legacy sort column ids to current columns', () => {
+    const result = computeViewApplication(
+      view({ sortState: { colId: 'contact', px: 'asc' } }),
+      new Set(['email', 'phone']),
+      new Set(['email', 'phone']),
+      { sortColumnAliases: new Map([['contact', 'email']]) },
+    );
+    expect(result.sortState).toEqual({ colId: 'email', px: 'asc', legacyColId: 'contact' });
+  });
+
+  test('keeps already-migrated legacy sort metadata', () => {
+    const result = computeViewApplication(
+      view({ sortState: { colId: 'email', px: 'desc', legacyColId: 'contact' } }),
+      new Set(['email', 'phone']),
+      new Set(['email', 'phone']),
+      { sortColumnAliases: new Map([['contact', 'email']]) },
+    );
+    expect(result.sortState).toEqual({ colId: 'email', px: 'desc', legacyColId: 'contact' });
+  });
+
   test('keeps sortState targeting any column in the full set', () => {
     const result = computeViewApplication(
       view({ sortState: { colId: 'status', px: 'desc' } }),
@@ -230,6 +276,32 @@ describe('computeViewApplication', () => {
       all,
     );
     expect(result.filterState).toEqual({ status: ['open'], name: ['Acme'] });
+  });
+
+  test('maps legacy filter entries to current columns', () => {
+    const result = computeViewApplication(
+      view({ filterState: { contact: ['alice@example.com 555-1', '555-2', ''] } }),
+      new Set(['email', 'phone']),
+      new Set(['email', 'phone']),
+      {
+        filterColumnAliases: new Map([
+          [
+            'contact',
+            [
+              {
+                columnId: 'email',
+                mapValue: (value) => value.trim(),
+              },
+            ],
+          ],
+        ]),
+      },
+    );
+    expect(result.filterState.email?.map((value) => decodeLegacyFilterValue(value))).toEqual([
+      { legacyColumnId: 'contact', value: 'alice@example.com 555-1' },
+      { legacyColumnId: 'contact', value: '555-2' },
+      { legacyColumnId: 'contact', value: '' },
+    ]);
   });
 
   test('handles missing filterState defensively', () => {
