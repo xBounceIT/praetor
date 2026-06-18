@@ -369,11 +369,11 @@ export const buildDemoDocumentSeedManifest = (seedYear = getDemoSeedYear()) => {
       { id: code('client_order', 5), linkedOfferId: null },
     ],
     invoices: [
-      { id: 'dm_inv_01', linkedSaleId: null },
-      { id: 'dm_inv_02', linkedSaleId: null },
-      { id: 'dm_inv_03', linkedSaleId: code('client_order', 4) },
-      { id: 'dm_inv_04', linkedSaleId: null },
-      { id: 'dm_inv_05', linkedSaleId: null },
+      { id: code('client_invoice', 1), linkedSaleId: null },
+      { id: code('client_invoice', 2), linkedSaleId: null },
+      { id: code('client_invoice', 3), linkedSaleId: code('client_order', 4) },
+      { id: code('client_invoice', 4), linkedSaleId: null },
+      { id: code('client_invoice', 5), linkedSaleId: null },
     ],
     supplierQuotes: rangeDocumentCodes('supplier_quote', 14, seedYear),
     supplierSales: [
@@ -399,11 +399,11 @@ export const buildDemoDocumentSeedManifest = (seedYear = getDemoSeedYear()) => {
       },
     ],
     supplierInvoices: [
-      { id: 'dm_sinv_01', linkedSaleId: null },
-      { id: 'dm_sinv_02', linkedSaleId: null },
-      { id: 'dm_sinv_03', linkedSaleId: code('supplier_order', 4) },
-      { id: 'dm_sinv_04', linkedSaleId: null },
-      { id: 'dm_sinv_05', linkedSaleId: null },
+      { id: code('supplier_invoice', 1), linkedSaleId: null },
+      { id: code('supplier_invoice', 2), linkedSaleId: null },
+      { id: code('supplier_invoice', 3), linkedSaleId: code('supplier_order', 4) },
+      { id: code('supplier_invoice', 4), linkedSaleId: null },
+      { id: code('supplier_invoice', 5), linkedSaleId: null },
     ],
   };
 };
@@ -558,6 +558,9 @@ export const DEMO_ITEM_IDS = {
   supplierSaleItems: rangeIds('dm_ssi_', 6),
   supplierInvoiceItems: rangeIds('dm_sinv_item_', 6),
 } as const;
+
+export const LEGACY_DEMO_INVOICE_IDS = rangeIds('dm_inv_', 5);
+export const LEGACY_DEMO_SUPPLIER_INVOICE_IDS = rangeIds('dm_sinv_', 5);
 
 export const buildDemoIds = (seedYear = getDemoSeedYear()) => {
   const documents = buildDemoDocumentSeedManifest(seedYear);

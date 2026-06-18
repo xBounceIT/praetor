@@ -51,7 +51,7 @@ ON CONFLICT (user_id) DO NOTHING;
 
 -- Refreshable demo dataset.
 -- Demo document records use the same default code templates exposed in admin settings
--- (PREV/OFF/FORN/ORD/SORD + YY + padded sequence). Non-document demo records keep dm_* ids.
+-- (PREV/OFF/FORN/ORD/SORD/INV/SINV + YY + padded sequence). Non-document demo records keep dm_* ids.
 -- The app-layer orchestrator executes these statements in a controlled refresh workflow after
 -- cleanup, verification, manager assignment, and cache invalidation steps are prepared.
 
@@ -86,7 +86,9 @@ FROM (
         ('client_offer', 'OFF', 5),
         ('supplier_quote', 'FORN', 14),
         ('client_order', 'ORD', 5),
-        ('supplier_order', 'SORD', 5)
+        ('supplier_order', 'SORD', 5),
+        ('client_invoice', 'INV', 5),
+        ('supplier_invoice', 'SINV', 5)
 ) AS modules(module_id, prefix, max_sequence)
 CROSS JOIN LATERAL generate_series(1, modules.max_sequence) AS sequence;
 
@@ -110,7 +112,9 @@ VALUES
     ('client_offer', pg_temp.demo_seed_year(), 6, CURRENT_TIMESTAMP),
     ('supplier_quote', pg_temp.demo_seed_year(), 15, CURRENT_TIMESTAMP),
     ('client_order', pg_temp.demo_seed_year(), 6, CURRENT_TIMESTAMP),
-    ('supplier_order', pg_temp.demo_seed_year(), 6, CURRENT_TIMESTAMP)
+    ('supplier_order', pg_temp.demo_seed_year(), 6, CURRENT_TIMESTAMP),
+    ('client_invoice', pg_temp.demo_seed_year(), 6, CURRENT_TIMESTAMP),
+    ('supplier_invoice', pg_temp.demo_seed_year(), 6, CURRENT_TIMESTAMP)
 ON CONFLICT (module_id, year) DO UPDATE SET
     next_sequence = GREATEST(document_code_counters.next_sequence, EXCLUDED.next_sequence),
     updated_at = CURRENT_TIMESTAMP;
@@ -785,11 +789,11 @@ INSERT INTO invoices (
     created_at,
     updated_at
 ) VALUES
-    ('dm_inv_01', NULL, 'dm_cli_02', 'Helios Energy Services S.r.l.', CURRENT_DATE - INTERVAL '18 days', CURRENT_DATE + INTERVAL '12 days', 'draft', 1090.00, 1090.00, 0.00, 'Editable draft invoice.', CURRENT_TIMESTAMP - INTERVAL '18 days', CURRENT_TIMESTAMP - INTERVAL '17 days'),
-    ('dm_inv_02', NULL, 'dm_cli_03', 'Comune di Verona - Innovazione Digitale', CURRENT_DATE - INTERVAL '30 days', CURRENT_DATE + INTERVAL '5 days', 'sent', 1795.00, 1795.00, 600.00, 'Partially paid invoice with remaining balance.', CURRENT_TIMESTAMP - INTERVAL '30 days', CURRENT_TIMESTAMP - INTERVAL '5 days'),
-    ('dm_inv_03', pg_temp.demo_document_code('client_order', 4), 'dm_cli_01', 'Northwind Retail Italia S.p.A.', CURRENT_DATE - INTERVAL '20 days', CURRENT_DATE + INTERVAL '10 days', 'paid', 6303.25, 6303.25, 6303.25, 'Fully paid invoice linked to the confirmed demo order.', CURRENT_TIMESTAMP - INTERVAL '20 days', CURRENT_TIMESTAMP - INTERVAL '2 days'),
-    ('dm_inv_04', NULL, 'dm_cli_01', 'Northwind Retail Italia S.p.A.', CURRENT_DATE - INTERVAL '45 days', CURRENT_DATE - INTERVAL '15 days', 'overdue', 10020.00, 10020.00, 0.00, 'Outstanding overdue invoice for collections reporting.', CURRENT_TIMESTAMP - INTERVAL '45 days', CURRENT_TIMESTAMP - INTERVAL '14 days'),
-    ('dm_inv_05', NULL, 'dm_cli_04', 'Giulia Ferri', CURRENT_DATE - INTERVAL '12 days', CURRENT_DATE + INTERVAL '20 days', 'cancelled', 1600.00, 1600.00, 0.00, 'Cancelled invoice retained for status coverage.', CURRENT_TIMESTAMP - INTERVAL '12 days', CURRENT_TIMESTAMP - INTERVAL '11 days')
+    (pg_temp.demo_document_code('client_invoice', 1), NULL, 'dm_cli_02', 'Helios Energy Services S.r.l.', CURRENT_DATE - INTERVAL '18 days', CURRENT_DATE + INTERVAL '12 days', 'draft', 1090.00, 1090.00, 0.00, 'Editable draft invoice.', CURRENT_TIMESTAMP - INTERVAL '18 days', CURRENT_TIMESTAMP - INTERVAL '17 days'),
+    (pg_temp.demo_document_code('client_invoice', 2), NULL, 'dm_cli_03', 'Comune di Verona - Innovazione Digitale', CURRENT_DATE - INTERVAL '30 days', CURRENT_DATE + INTERVAL '5 days', 'sent', 1795.00, 1795.00, 600.00, 'Partially paid invoice with remaining balance.', CURRENT_TIMESTAMP - INTERVAL '30 days', CURRENT_TIMESTAMP - INTERVAL '5 days'),
+    (pg_temp.demo_document_code('client_invoice', 3), pg_temp.demo_document_code('client_order', 4), 'dm_cli_01', 'Northwind Retail Italia S.p.A.', CURRENT_DATE - INTERVAL '20 days', CURRENT_DATE + INTERVAL '10 days', 'paid', 6303.25, 6303.25, 6303.25, 'Fully paid invoice linked to the confirmed demo order.', CURRENT_TIMESTAMP - INTERVAL '20 days', CURRENT_TIMESTAMP - INTERVAL '2 days'),
+    (pg_temp.demo_document_code('client_invoice', 4), NULL, 'dm_cli_01', 'Northwind Retail Italia S.p.A.', CURRENT_DATE - INTERVAL '45 days', CURRENT_DATE - INTERVAL '15 days', 'overdue', 10020.00, 10020.00, 0.00, 'Outstanding overdue invoice for collections reporting.', CURRENT_TIMESTAMP - INTERVAL '45 days', CURRENT_TIMESTAMP - INTERVAL '14 days'),
+    (pg_temp.demo_document_code('client_invoice', 5), NULL, 'dm_cli_04', 'Giulia Ferri', CURRENT_DATE - INTERVAL '12 days', CURRENT_DATE + INTERVAL '20 days', 'cancelled', 1600.00, 1600.00, 0.00, 'Cancelled invoice retained for status coverage.', CURRENT_TIMESTAMP - INTERVAL '12 days', CURRENT_TIMESTAMP - INTERVAL '11 days')
 ON CONFLICT (id) DO UPDATE SET
     linked_sale_id = EXCLUDED.linked_sale_id,
     client_id = EXCLUDED.client_id,
@@ -813,12 +817,12 @@ INSERT INTO invoice_items (
     unit_price,
     discount
 ) VALUES
-    ('dm_inv_item_01', 'dm_inv_01', 'dm_prd_04', 'Workshop Training Day', 1.00, 1090.00, 0.00),
-    ('dm_inv_item_02', 'dm_inv_02', 'dm_prd_07', 'Managed Firewall Appliance', 1.00, 1795.00, 0.00),
-    ('dm_inv_item_03', 'dm_inv_03', 'dm_prd_01', 'Strategy Assessment', 4.00, 1230.00, 5.00),
-    ('dm_inv_item_04', 'dm_inv_03', 'dm_prd_02', 'Deployment Sprint', 1.00, 1715.00, 5.00),
-    ('dm_inv_item_05', 'dm_inv_04', 'dm_prd_03', 'Managed Support Retainer', 12.00, 835.00, 0.00),
-    ('dm_inv_item_06', 'dm_inv_05', 'dm_prd_08', 'Branded Print Kit', 10.00, 160.00, 0.00)
+    ('dm_inv_item_01', pg_temp.demo_document_code('client_invoice', 1), 'dm_prd_04', 'Workshop Training Day', 1.00, 1090.00, 0.00),
+    ('dm_inv_item_02', pg_temp.demo_document_code('client_invoice', 2), 'dm_prd_07', 'Managed Firewall Appliance', 1.00, 1795.00, 0.00),
+    ('dm_inv_item_03', pg_temp.demo_document_code('client_invoice', 3), 'dm_prd_01', 'Strategy Assessment', 4.00, 1230.00, 5.00),
+    ('dm_inv_item_04', pg_temp.demo_document_code('client_invoice', 3), 'dm_prd_02', 'Deployment Sprint', 1.00, 1715.00, 5.00),
+    ('dm_inv_item_05', pg_temp.demo_document_code('client_invoice', 4), 'dm_prd_03', 'Managed Support Retainer', 12.00, 835.00, 0.00),
+    ('dm_inv_item_06', pg_temp.demo_document_code('client_invoice', 5), 'dm_prd_08', 'Branded Print Kit', 10.00, 160.00, 0.00)
 ON CONFLICT (id) DO UPDATE SET
     invoice_id = EXCLUDED.invoice_id,
     product_id = EXCLUDED.product_id,
@@ -1049,11 +1053,11 @@ INSERT INTO supplier_invoices (
     created_at,
     updated_at
 ) VALUES
-    ('dm_sinv_01', NULL, 'dm_sup_01', 'TechSource Distribution', CURRENT_DATE - INTERVAL '18 days', CURRENT_DATE + INTERVAL '12 days', 'draft', 1920.00, 1920.00, 0.00, 'Editable draft supplier invoice.', CURRENT_TIMESTAMP - INTERVAL '18 days', CURRENT_TIMESTAMP - INTERVAL '17 days'),
-    ('dm_sinv_02', NULL, 'dm_sup_02', 'CloudSeat Licensing', CURRENT_DATE - INTERVAL '32 days', CURRENT_DATE + INTERVAL '3 days', 'sent', 14560.00, 14560.00, 4000.00, 'Partially settled supplier invoice kept in sent state.', CURRENT_TIMESTAMP - INTERVAL '32 days', CURRENT_TIMESTAMP - INTERVAL '6 days'),
-    ('dm_sinv_03', pg_temp.demo_document_code('supplier_order', 4), 'dm_sup_03', 'SecureEdge Systems', CURRENT_DATE - INTERVAL '19 days', CURRENT_DATE + INTERVAL '11 days', 'paid', 6130.00, 6130.00, 6130.00, 'Paid supplier invoice linked to a sent order.', CURRENT_TIMESTAMP - INTERVAL '19 days', CURRENT_TIMESTAMP - INTERVAL '2 days'),
-    ('dm_sinv_04', NULL, 'dm_sup_04', 'PrintLogistics Hub', CURRENT_DATE - INTERVAL '48 days', CURRENT_DATE - INTERVAL '12 days', 'overdue', 23600.00, 23600.00, 0.00, 'Overdue supplier invoice kept for state coverage.', CURRENT_TIMESTAMP - INTERVAL '48 days', CURRENT_TIMESTAMP - INTERVAL '10 days'),
-    ('dm_sinv_05', NULL, 'dm_sup_01', 'TechSource Distribution', CURRENT_DATE - INTERVAL '11 days', CURRENT_DATE + INTERVAL '18 days', 'cancelled', 960.00, 960.00, 0.00, 'Cancelled supplier invoice kept for state coverage.', CURRENT_TIMESTAMP - INTERVAL '11 days', CURRENT_TIMESTAMP - INTERVAL '10 days')
+    (pg_temp.demo_document_code('supplier_invoice', 1), NULL, 'dm_sup_01', 'TechSource Distribution', CURRENT_DATE - INTERVAL '18 days', CURRENT_DATE + INTERVAL '12 days', 'draft', 1920.00, 1920.00, 0.00, 'Editable draft supplier invoice.', CURRENT_TIMESTAMP - INTERVAL '18 days', CURRENT_TIMESTAMP - INTERVAL '17 days'),
+    (pg_temp.demo_document_code('supplier_invoice', 2), NULL, 'dm_sup_02', 'CloudSeat Licensing', CURRENT_DATE - INTERVAL '32 days', CURRENT_DATE + INTERVAL '3 days', 'sent', 14560.00, 14560.00, 4000.00, 'Partially settled supplier invoice kept in sent state.', CURRENT_TIMESTAMP - INTERVAL '32 days', CURRENT_TIMESTAMP - INTERVAL '6 days'),
+    (pg_temp.demo_document_code('supplier_invoice', 3), pg_temp.demo_document_code('supplier_order', 4), 'dm_sup_03', 'SecureEdge Systems', CURRENT_DATE - INTERVAL '19 days', CURRENT_DATE + INTERVAL '11 days', 'paid', 6130.00, 6130.00, 6130.00, 'Paid supplier invoice linked to a sent order.', CURRENT_TIMESTAMP - INTERVAL '19 days', CURRENT_TIMESTAMP - INTERVAL '2 days'),
+    (pg_temp.demo_document_code('supplier_invoice', 4), NULL, 'dm_sup_04', 'PrintLogistics Hub', CURRENT_DATE - INTERVAL '48 days', CURRENT_DATE - INTERVAL '12 days', 'overdue', 23600.00, 23600.00, 0.00, 'Overdue supplier invoice kept for state coverage.', CURRENT_TIMESTAMP - INTERVAL '48 days', CURRENT_TIMESTAMP - INTERVAL '10 days'),
+    (pg_temp.demo_document_code('supplier_invoice', 5), NULL, 'dm_sup_01', 'TechSource Distribution', CURRENT_DATE - INTERVAL '11 days', CURRENT_DATE + INTERVAL '18 days', 'cancelled', 960.00, 960.00, 0.00, 'Cancelled supplier invoice kept for state coverage.', CURRENT_TIMESTAMP - INTERVAL '11 days', CURRENT_TIMESTAMP - INTERVAL '10 days')
 ON CONFLICT (id) DO UPDATE SET
     linked_sale_id = EXCLUDED.linked_sale_id,
     supplier_id = EXCLUDED.supplier_id,
@@ -1077,12 +1081,12 @@ INSERT INTO supplier_invoice_items (
     unit_price,
     discount
 ) VALUES
-    ('dm_sinv_item_01', 'dm_sinv_01', 'dm_prd_05', 'Business Laptop Bundle', 2.00, 960.00, 0.00),
-    ('dm_sinv_item_02', 'dm_sinv_02', 'dm_prd_06', 'Microsoft 365 Annual Seat', 80.00, 182.00, 0.00),
-    ('dm_sinv_item_03', 'dm_sinv_03', 'dm_prd_07', 'Managed Firewall Appliance', 1.00, 1410.00, 0.00),
-    ('dm_sinv_item_04', 'dm_sinv_03', 'dm_prd_08', 'Branded Print Kit', 40.00, 118.00, 0.00),
-    ('dm_sinv_item_05', 'dm_sinv_04', 'dm_prd_08', 'Branded Print Kit', 200.00, 118.00, 0.00),
-    ('dm_sinv_item_06', 'dm_sinv_05', 'dm_prd_05', 'Business Laptop Bundle', 1.00, 960.00, 0.00)
+    ('dm_sinv_item_01', pg_temp.demo_document_code('supplier_invoice', 1), 'dm_prd_05', 'Business Laptop Bundle', 2.00, 960.00, 0.00),
+    ('dm_sinv_item_02', pg_temp.demo_document_code('supplier_invoice', 2), 'dm_prd_06', 'Microsoft 365 Annual Seat', 80.00, 182.00, 0.00),
+    ('dm_sinv_item_03', pg_temp.demo_document_code('supplier_invoice', 3), 'dm_prd_07', 'Managed Firewall Appliance', 1.00, 1410.00, 0.00),
+    ('dm_sinv_item_04', pg_temp.demo_document_code('supplier_invoice', 3), 'dm_prd_08', 'Branded Print Kit', 40.00, 118.00, 0.00),
+    ('dm_sinv_item_05', pg_temp.demo_document_code('supplier_invoice', 4), 'dm_prd_08', 'Branded Print Kit', 200.00, 118.00, 0.00),
+    ('dm_sinv_item_06', pg_temp.demo_document_code('supplier_invoice', 5), 'dm_prd_05', 'Business Laptop Bundle', 1.00, 960.00, 0.00)
 ON CONFLICT (id) DO UPDATE SET
     invoice_id = EXCLUDED.invoice_id,
     product_id = EXCLUDED.product_id,

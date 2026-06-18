@@ -21,6 +21,8 @@ import {
   DEMO_USERS,
   DEMO_WORK_UNITS,
   getDemoSeedYear,
+  LEGACY_DEMO_INVOICE_IDS,
+  LEGACY_DEMO_SUPPLIER_INVOICE_IDS,
 } from './demoSeedManifest.ts';
 import pool, { query } from './index.ts';
 
@@ -360,41 +362,75 @@ const insertDemoUsersAndSettings = async (client: PoolClient, counts: Record<str
 export const assertNoDemoDocumentIdConflicts = async (client: PoolClient, seedYear: number) => {
   const demoIds = buildDemoIds(seedYear);
   const demoClientOwnerIds = [...COMPATIBILITY_DEFAULTS.clients, ...demoIds.clients];
+  const invoiceClientOwnerIds = demoIds.clients;
   const result = await client.query<{ table_name: string; id: string }>(
-    `WITH conflicts AS (
-       SELECT 'quotes' AS table_name, id
+    `WITH demo_inputs AS (
+       SELECT
+         $1::text[] AS quote_ids,
+         $2::text[] AS customer_offer_ids,
+         $3::text[] AS sale_ids,
+         $4::text[] AS invoice_ids,
+         $5::text[] AS supplier_quote_ids,
+         $6::text[] AS supplier_sale_ids,
+         $7::text[] AS supplier_invoice_ids,
+         $8::text[] AS client_owner_ids,
+         $9::text[] AS invoice_client_owner_ids,
+         $10::text[] AS supplier_owner_ids
+     ),
+     conflicts AS (
+       SELECT 'quotes' AS table_name, quotes.id
        FROM quotes
-       WHERE id = ANY($1::text[])
-         AND COALESCE(client_id, '') <> ALL($6::text[])
+       CROSS JOIN demo_inputs
+       WHERE quotes.id = ANY(demo_inputs.quote_ids)
+         AND COALESCE(quotes.client_id, '') <> ALL(demo_inputs.client_owner_ids)
        UNION ALL
-       SELECT 'customer_offers' AS table_name, id
+       SELECT 'customer_offers' AS table_name, customer_offers.id
        FROM customer_offers
-       WHERE id = ANY($2::text[])
-         AND COALESCE(client_id, '') <> ALL($6::text[])
+       CROSS JOIN demo_inputs
+       WHERE customer_offers.id = ANY(demo_inputs.customer_offer_ids)
+         AND COALESCE(customer_offers.client_id, '') <> ALL(demo_inputs.client_owner_ids)
        UNION ALL
-       SELECT 'sales' AS table_name, id
+       SELECT 'sales' AS table_name, sales.id
        FROM sales
-       WHERE id = ANY($3::text[])
-         AND COALESCE(client_id, '') <> ALL($6::text[])
+       CROSS JOIN demo_inputs
+       WHERE sales.id = ANY(demo_inputs.sale_ids)
+         AND COALESCE(sales.client_id, '') <> ALL(demo_inputs.client_owner_ids)
        UNION ALL
-       SELECT 'supplier_quotes' AS table_name, id
+       SELECT 'invoices' AS table_name, invoices.id
+       FROM invoices
+       CROSS JOIN demo_inputs
+       WHERE invoices.id = ANY(demo_inputs.invoice_ids)
+         AND COALESCE(invoices.client_id, '') <> ALL(demo_inputs.invoice_client_owner_ids)
+       UNION ALL
+       SELECT 'supplier_quotes' AS table_name, supplier_quotes.id
        FROM supplier_quotes
-       WHERE id = ANY($4::text[])
-         AND COALESCE(supplier_id, '') <> ALL($7::text[])
+       CROSS JOIN demo_inputs
+       WHERE supplier_quotes.id = ANY(demo_inputs.supplier_quote_ids)
+         AND COALESCE(supplier_quotes.supplier_id, '') <> ALL(demo_inputs.supplier_owner_ids)
        UNION ALL
-       SELECT 'supplier_sales' AS table_name, id
+       SELECT 'supplier_sales' AS table_name, supplier_sales.id
        FROM supplier_sales
-       WHERE id = ANY($5::text[])
-         AND COALESCE(supplier_id, '') <> ALL($7::text[])
+       CROSS JOIN demo_inputs
+       WHERE supplier_sales.id = ANY(demo_inputs.supplier_sale_ids)
+         AND COALESCE(supplier_sales.supplier_id, '') <> ALL(demo_inputs.supplier_owner_ids)
+       UNION ALL
+       SELECT 'supplier_invoices' AS table_name, supplier_invoices.id
+       FROM supplier_invoices
+       CROSS JOIN demo_inputs
+       WHERE supplier_invoices.id = ANY(demo_inputs.supplier_invoice_ids)
+         AND COALESCE(supplier_invoices.supplier_id, '') <> ALL(demo_inputs.supplier_owner_ids)
      )
      SELECT table_name, id FROM conflicts ORDER BY table_name, id LIMIT 10`,
     [
       demoIds.quotes,
       demoIds.customerOffers,
       demoIds.sales,
+      demoIds.invoices,
       demoIds.supplierQuotes,
       demoIds.supplierSales,
+      demoIds.supplierInvoices,
       demoClientOwnerIds,
+      invoiceClientOwnerIds,
       demoIds.suppliers,
     ],
   );
@@ -412,6 +448,11 @@ export const cleanupDemoNamespace = async (
 ) => {
   const demoDocuments = buildDemoDocumentSeedManifest(seedYear);
   const demoIds = buildDemoIds(seedYear);
+  const cleanupInvoiceIds = [...demoIds.invoices, ...LEGACY_DEMO_INVOICE_IDS];
+  const cleanupSupplierInvoiceIds = [
+    ...demoIds.supplierInvoices,
+    ...LEGACY_DEMO_SUPPLIER_INVOICE_IDS,
+  ];
   const cleanupCountsByTable: Record<string, number> = {};
 
   incrementCount(
@@ -492,7 +533,7 @@ export const cleanupDemoNamespace = async (
     'supplier_invoice_items',
     await executeDelete(client, 'supplier_invoice_items', (builder) => {
       pushTextArrayPredicate(builder, 'id', DEMO_ITEM_IDS.supplierInvoiceItems);
-      pushTextArrayPredicate(builder, 'invoice_id', demoIds.supplierInvoices);
+      pushTextArrayPredicate(builder, 'invoice_id', cleanupSupplierInvoiceIds);
       pushTextArrayPredicate(builder, 'product_id', demoIds.products);
     }),
   );
@@ -501,7 +542,7 @@ export const cleanupDemoNamespace = async (
     cleanupCountsByTable,
     'supplier_invoices',
     await executeDelete(client, 'supplier_invoices', (builder) => {
-      pushTextArrayPredicate(builder, 'id', demoIds.supplierInvoices);
+      pushTextArrayPredicate(builder, 'id', cleanupSupplierInvoiceIds);
       pushTextArrayPredicate(builder, 'supplier_id', demoIds.suppliers);
       pushTextArrayPredicate(
         builder,
@@ -559,7 +600,7 @@ export const cleanupDemoNamespace = async (
     'invoice_items',
     await executeDelete(client, 'invoice_items', (builder) => {
       pushTextArrayPredicate(builder, 'id', DEMO_ITEM_IDS.invoiceItems);
-      pushTextArrayPredicate(builder, 'invoice_id', demoIds.invoices);
+      pushTextArrayPredicate(builder, 'invoice_id', cleanupInvoiceIds);
       pushTextArrayPredicate(builder, 'product_id', demoIds.products);
     }),
   );
@@ -568,7 +609,7 @@ export const cleanupDemoNamespace = async (
     cleanupCountsByTable,
     'invoices',
     await executeDelete(client, 'invoices', (builder) => {
-      pushTextArrayPredicate(builder, 'id', demoIds.invoices);
+      pushTextArrayPredicate(builder, 'id', cleanupInvoiceIds);
       pushTextArrayPredicate(builder, 'client_id', demoIds.clients);
       pushTextArrayPredicate(
         builder,
