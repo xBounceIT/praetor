@@ -247,6 +247,7 @@
         "conditionLogic": "Combination",
         "actions": "Actions",
         "action": "Action",
+        "actionValue": "Recipients / webhook",
         "actionTypes": {
           "notify": "Send notification to",
           "webhook": "Send to webhook"

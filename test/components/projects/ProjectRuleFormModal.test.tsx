@@ -108,7 +108,16 @@ describe('<ProjectRuleFormModal />', () => {
       screen.getByRole('button', { name: 'projects:detail.rules.actions.addAction' }),
     );
 
-    expect(screen.getAllByText('projects:detail.rules.form.action')).toHaveLength(2);
+    const actionLabels = screen.getAllByText('projects:detail.rules.form.action');
+    expect(actionLabels).toHaveLength(3);
+    const actionHeader = actionLabels[0].parentElement;
+    expect(actionHeader).toHaveClass('hidden', 'md:grid', 'border-b');
+    expect(actionHeader?.parentElement).toHaveClass('rounded-md', 'border', 'border-border');
+    expect(actionHeader?.nextElementSibling).toHaveClass('divide-y', 'divide-border');
+    expect(actionHeader?.nextElementSibling?.children).toHaveLength(2);
+    for (const label of document.querySelectorAll('[for^="project-rule-action-type-"]')) {
+      expect(label).toHaveClass('md:sr-only');
+    }
     expect(
       screen.getAllByRole('button', { name: 'projects:detail.rules.actions.removeAction' }),
     ).toHaveLength(2);

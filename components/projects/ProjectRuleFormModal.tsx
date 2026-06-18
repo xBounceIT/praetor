@@ -103,6 +103,8 @@ type ProjectRuleFormAction =
 
 const CONDITION_GRID_CLASSNAME =
   'grid gap-3 md:grid-cols-[minmax(0,1fr)_10rem_10rem_minmax(10rem,14rem)_2.25rem]';
+const ACTION_GRID_CLASSNAME =
+  'grid gap-3 md:grid-cols-[minmax(0,12rem)_minmax(0,10rem)_minmax(12rem,1fr)_2.25rem]';
 
 const firstValueForField = (field: string) => {
   const definition = getProjectRuleFieldDefinition(field);
@@ -702,15 +704,25 @@ const ProjectRuleActionsEditor: React.FC<{
           {t('projects:detail.rules.actions.addAction')}
         </Button>
       </div>
-      <div className="space-y-2">
-        {actions.map((action, index) => (
-          <div key={action.uid} className="space-y-3 rounded-md border border-border p-3">
-            <div className="grid gap-3 md:grid-cols-[minmax(0,12rem)_minmax(0,10rem)_minmax(0,1fr)_2.25rem]">
+      <div className="rounded-md border border-border">
+        <div
+          className={`${ACTION_GRID_CLASSNAME} hidden border-b border-border px-3 py-2 text-sm font-medium text-muted-foreground md:grid`}
+        >
+          <span>{t('projects:detail.rules.form.action')}</span>
+          <span>{t('projects:detail.rules.form.recipientType')}</span>
+          <span>{t('projects:detail.rules.form.actionValue')}</span>
+          <span className="sr-only">{t('projects:detail.rules.actions.removeAction')}</span>
+        </div>
+
+        <div className="divide-y divide-border">
+          {actions.map((action, index) => (
+            <div key={action.uid} className={`${ACTION_GRID_CLASSNAME} p-3`}>
               <SelectControl
                 id={`project-rule-action-type-${index}`}
                 searchable={false}
                 disabled={submitting}
                 label={t('projects:detail.rules.form.action')}
+                labelClassName="md:sr-only"
                 options={actionTypeOptions}
                 value={action.type}
                 onChange={(next) =>
@@ -728,6 +740,7 @@ const ProjectRuleActionsEditor: React.FC<{
                     searchable={false}
                     disabled={submitting}
                     label={t('projects:detail.rules.form.recipientType')}
+                    labelClassName="md:sr-only"
                     options={recipientTypeOptions}
                     value={action.recipientType}
                     onChange={(next) =>
@@ -750,6 +763,7 @@ const ProjectRuleActionsEditor: React.FC<{
                         ? t('projects:detail.rules.form.users')
                         : t('projects:detail.rules.form.roles')
                     }
+                    labelClassName="md:sr-only"
                     placeholder={
                       action.recipientType === 'user'
                         ? t('projects:detail.rules.form.usersPlaceholder')
@@ -785,6 +799,7 @@ const ProjectRuleActionsEditor: React.FC<{
                   disabled={submitting}
                   className="md:col-span-2"
                   label={t('projects:detail.rules.form.webhook')}
+                  labelClassName="md:sr-only"
                   placeholder={t('projects:detail.rules.form.webhookPlaceholder')}
                   options={webhookOptions}
                   value={action.webhookId}
@@ -797,7 +812,7 @@ const ProjectRuleActionsEditor: React.FC<{
                   }
                 />
               )}
-              <div className="flex items-end">
+              <div className="flex items-end justify-end md:items-center">
                 <Button
                   type="button"
                   variant="ghost"
@@ -809,12 +824,14 @@ const ProjectRuleActionsEditor: React.FC<{
                   <Trash2Icon className="size-4" />
                 </Button>
               </div>
+              {errors[`action-${index}`] && (
+                <p className="text-sm font-medium text-destructive md:col-span-4">
+                  {errors[`action-${index}`]}
+                </p>
+              )}
             </div>
-            {errors[`action-${index}`] && (
-              <p className="text-sm font-medium text-destructive">{errors[`action-${index}`]}</p>
-            )}
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
       {errors.actions && <p className="text-sm font-medium text-destructive">{errors.actions}</p>}
     </div>
