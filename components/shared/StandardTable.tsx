@@ -591,6 +591,14 @@ const getViewApplicationForColumns = <T,>(view: CustomView, columns: Column<T>[]
   return computeViewApplication(view, gearIds, allIds, hiddenColumnAliases);
 };
 
+const normalizeViewForColumns = <T,>(
+  view: CustomView,
+  columns: Column<T>[] | undefined,
+): CustomView => ({
+  ...view,
+  hiddenColIds: Array.from(getViewApplicationForColumns(view, columns).hiddenColIds),
+});
+
 const readStoredActiveViewId = (title: string, skipSavedView: boolean) => {
   if (typeof window === 'undefined' || skipSavedView) return null;
   return localStorage.getItem(getStorageKey(title, STORAGE_SUFFIX.activeView));
@@ -1396,6 +1404,18 @@ const useStandardTableController = <T extends object>({
     viewErrorTimeoutRef.current = setTimeout(() => setViewError(null), VIEW_ERROR_DURATION_MS);
   };
 
+  const normalizeViewForCurrentColumns = (view: CustomView) =>
+    normalizeViewForColumns(view, columns);
+
+  const normalizeHiddenColIdsForCurrentColumns = (ids: string[]) =>
+    normalizeViewForCurrentColumns({
+      id: '',
+      name: '',
+      hiddenColIds: ids,
+      sortState: null,
+      filterState: {},
+    }).hiddenColIds;
+
   const fontSizeClass = fontSize === 'xs' ? 'text-xs' : fontSize === 'sm' ? 'text-sm' : 'text-base';
 
   // Persist the clamped column widths whenever they change. The table renders from
@@ -1872,13 +1892,8 @@ const useStandardTableController = <T extends object>({
 
   // Legacy mode is synchronous (localStorage). Server mode persists optimistically and
   // reverts on failure. Returns a promise so the modal can stay closed only after success.
-  const saveView = async ({
-    name,
-    hiddenColIds: hidden,
-  }: {
-    name: string;
-    hiddenColIds: string[];
-  }) => {
+  const saveView = async ({ name, hiddenColIds }: { name: string; hiddenColIds: string[] }) => {
+    const hidden = normalizeHiddenColIdsForCurrentColumns(hiddenColIds);
     const editingView = modalState?.kind === 'edit' ? modalState.view : null;
     const editingId = editingView?.id ?? null;
     // The modal only edits name + visible columns. When editing an existing view, keep THAT view's
@@ -2228,6 +2243,7 @@ const useStandardTableController = <T extends object>({
     serverViewMeta,
     viewBusy,
     setModalState,
+    normalizeViewForCurrentColumns,
     duplicateView,
     exportView,
     setShareModalView,
@@ -2587,6 +2603,7 @@ const StandardTableViewRow = <T extends object>({
     serverViewMeta,
     viewBusy,
     setModalState,
+    normalizeViewForCurrentColumns,
     duplicateView,
     exportView,
     setShareModalView,
@@ -2677,7 +2694,7 @@ const StandardTableViewRow = <T extends object>({
         isServerBacked={isServerBacked}
         viewBusy={viewBusy}
         onEdit={() => {
-          setModalState({ kind: 'edit', view });
+          setModalState({ kind: 'edit', view: normalizeViewForCurrentColumns(view) });
           setGearOpen(false);
         }}
         onDuplicate={() => {

@@ -1474,6 +1474,62 @@ describe('<StandardTable />', () => {
     expect(screen.queryByText('555-1')).not.toBeInTheDocument();
   });
 
+  test('renaming a stored view preserves legacy hidden column aliases as current columns', async () => {
+    type ContactRow = Row & { email: string; phone: string };
+    const contactRows: ContactRow[] = sampleRows.map((row) => ({
+      ...row,
+      email: `${row.name.toLowerCase()}@example.com`,
+      phone: `555-${row.id}`,
+    }));
+    const contactColumns = [
+      { header: 'Name', accessorKey: 'name' as const, id: 'name' },
+      {
+        header: 'Email',
+        accessorKey: 'email' as const,
+        id: 'email',
+        legacyHiddenColumnIds: ['contact'],
+      },
+      {
+        header: 'Phone',
+        accessorKey: 'phone' as const,
+        id: 'phone',
+        legacyHiddenColumnIds: ['contact'],
+      },
+    ];
+    const stored = [
+      {
+        id: 'v1',
+        name: 'No contact',
+        hiddenColIds: ['contact'],
+        sortState: null,
+        filterState: {},
+      },
+    ];
+    localStorage.setItem('praetor_table_customviews_contact_alias_edit', JSON.stringify(stored));
+
+    render(
+      <StandardTable<ContactRow>
+        title="Contact Alias Edit"
+        data={contactRows}
+        columns={contactColumns}
+      />,
+    );
+    await openCustomViews();
+    clickMenuAction(screen.getByLabelText('table.renameView'));
+
+    const input = screen.getByPlaceholderText('table.viewNamePlaceholder') as HTMLInputElement;
+    act(() => fireEvent.change(input, { target: { value: 'Renamed no contact' } }));
+    act(() => fireEvent.click(screen.getByText('table.save')));
+
+    const saved = JSON.parse(
+      localStorage.getItem('praetor_table_customviews_contact_alias_edit') as string,
+    );
+    expect(saved[0]).toMatchObject({
+      name: 'Renamed no contact',
+      hiddenColIds: ['email', 'phone'],
+    });
+  });
+
   test('deleting a saved view removes it from localStorage', async () => {
     const seeded = [
       { id: 'v1', name: 'View 1', hiddenColIds: [], sortState: null, filterState: {} },
