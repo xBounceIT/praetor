@@ -359,11 +359,34 @@ export interface ResaleOrderOption {
   }>;
 }
 
-export type ProjectRuleActionType = 'notify';
+export type ProjectRuleActionType = 'notify' | 'webhook';
+
+export type ProjectRuleNotifyRecipientType = 'user' | 'role';
+
+export type ProjectRuleNotifyAction =
+  | {
+      type: 'notify';
+      recipientType: 'user';
+      recipientUserIds: string[];
+    }
+  | {
+      type: 'notify';
+      recipientType: 'role';
+      recipientRoleIds: string[];
+    };
+
+export interface ProjectRuleWebhookAction {
+  type: 'webhook';
+  webhookId: string;
+}
+
+export type ProjectRuleAction = ProjectRuleNotifyAction | ProjectRuleWebhookAction;
 
 export interface ProjectRuleActionConfig {
   recipientUserIds: string[];
   recipientRoleIds: string[];
+  webhookIds: string[];
+  actions: ProjectRuleAction[];
 }
 
 export type ProjectRuleConditionLogic = 'and' | 'or';
@@ -405,6 +428,10 @@ export interface ProjectRuleRecipientUser {
 export interface ProjectRuleRecipientOptions {
   users: ProjectRuleRecipientUser[];
   roles: RoleSummary[];
+  webhooks: Array<{
+    id: string;
+    name: string;
+  }>;
 }
 
 export interface ProjectTask {

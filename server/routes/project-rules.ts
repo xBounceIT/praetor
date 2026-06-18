@@ -42,13 +42,34 @@ const projectRuleIdParamSchema = {
   required: ['projectId', 'ruleId'],
 } as const;
 
-const actionConfigSchema = {
+const projectRuleActionSchema = {
+  type: 'object',
+  properties: {
+    type: { type: 'string', enum: ['notify', 'webhook'] },
+    recipientType: { type: 'string', enum: ['user', 'role'] },
+    recipientUserIds: { type: 'array', items: { type: 'string' } },
+    recipientRoleIds: { type: 'array', items: { type: 'string' } },
+    webhookId: { type: 'string' },
+  },
+  required: ['type'],
+  additionalProperties: false,
+} as const;
+
+const actionConfigResponseSchema = {
   type: 'object',
   properties: {
     recipientUserIds: { type: 'array', items: { type: 'string' } },
     recipientRoleIds: { type: 'array', items: { type: 'string' } },
+    webhookIds: { type: 'array', items: { type: 'string' } },
+    actions: { type: 'array', items: projectRuleActionSchema },
   },
-  required: ['recipientUserIds', 'recipientRoleIds'],
+  required: ['recipientUserIds', 'recipientRoleIds', 'webhookIds', 'actions'],
+  additionalProperties: false,
+} as const;
+
+const actionConfigInputSchema = {
+  type: 'object',
+  properties: actionConfigResponseSchema.properties,
   additionalProperties: false,
 } as const;
 
@@ -76,7 +97,7 @@ const projectRuleSchema = {
     conditionLogic: { type: 'string', enum: ['and', 'or'] },
     conditions: { type: 'array', items: projectRuleConditionSchema },
     actionType: { type: 'string' },
-    actionConfig: actionConfigSchema,
+    actionConfig: actionConfigResponseSchema,
     isEnabled: { type: 'boolean' },
     conditionMet: { type: 'boolean' },
     lastTriggeredAt: { type: ['number', 'null'] },
@@ -131,8 +152,19 @@ const recipientOptionsSchema = {
         required: ['id', 'name'],
       },
     },
+    webhooks: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          id: { type: 'string' },
+          name: { type: 'string' },
+        },
+        required: ['id', 'name'],
+      },
+    },
   },
-  required: ['users', 'roles'],
+  required: ['users', 'roles', 'webhooks'],
 } as const;
 
 const projectRuleCreateBodySchema = {
@@ -145,7 +177,7 @@ const projectRuleCreateBodySchema = {
     conditionLogic: { type: 'string', enum: ['and', 'or'] },
     conditions: { type: 'array', items: projectRuleConditionSchema },
     actionType: { type: 'string' },
-    actionConfig: actionConfigSchema,
+    actionConfig: actionConfigInputSchema,
     isEnabled: { type: 'boolean' },
   },
   required: ['name', 'actionConfig'],
@@ -177,15 +209,106 @@ const parseActionConfig = (
   if (!recipientUserIds.ok) return { ok: false, message: recipientUserIds.message };
   const recipientRoleIds = ensureArrayOfStrings(raw.recipientRoleIds ?? [], 'recipientRoleIds');
   if (!recipientRoleIds.ok) return { ok: false, message: recipientRoleIds.message };
+  const webhookIds = ensureArrayOfStrings(raw.webhookIds ?? [], 'webhookIds');
+  if (!webhookIds.ok) return { ok: false, message: webhookIds.message };
+
+  const actions: projectRulesRepo.ProjectRule['actionConfig']['actions'] = [];
+  if (raw.actions !== undefined) {
+    if (!Array.isArray(raw.actions)) return { ok: false, message: 'actions must be an array' };
+    for (const [index, rawAction] of raw.actions.entries()) {
+      if (!rawAction || typeof rawAction !== 'object') {
+        return { ok: false, message: `actions[${index}] must be an object` };
+      }
+      const action = rawAction as Record<string, unknown>;
+      const actionType = requireNonEmptyString(action.type, `actions[${index}].type`);
+      if (!actionType.ok) return { ok: false, message: actionType.message };
+
+      if (actionType.value === 'notify') {
+        const recipientType = requireNonEmptyString(
+          action.recipientType,
+          `actions[${index}].recipientType`,
+        );
+        if (!recipientType.ok) return { ok: false, message: recipientType.message };
+        if (recipientType.value !== 'user' && recipientType.value !== 'role') {
+          return {
+            ok: false,
+            message: `actions[${index}].recipientType must be user or role`,
+          };
+        }
+        if (recipientType.value === 'user') {
+          const ids = ensureArrayOfStrings(
+            action.recipientUserIds ?? [],
+            `actions[${index}].recipientUserIds`,
+          );
+          if (!ids.ok) return { ok: false, message: ids.message };
+          if (ids.value.length === 0) {
+            return {
+              ok: false,
+              message: `actions[${index}].recipientUserIds must include at least one value`,
+            };
+          }
+          actions.push({
+            type: 'notify',
+            recipientType: 'user',
+            recipientUserIds: ids.value,
+          });
+        } else {
+          const ids = ensureArrayOfStrings(
+            action.recipientRoleIds ?? [],
+            `actions[${index}].recipientRoleIds`,
+          );
+          if (!ids.ok) return { ok: false, message: ids.message };
+          if (ids.value.length === 0) {
+            return {
+              ok: false,
+              message: `actions[${index}].recipientRoleIds must include at least one value`,
+            };
+          }
+          actions.push({
+            type: 'notify',
+            recipientType: 'role',
+            recipientRoleIds: ids.value,
+          });
+        }
+        continue;
+      }
+
+      if (actionType.value === 'webhook') {
+        const webhookId = requireNonEmptyString(action.webhookId, `actions[${index}].webhookId`);
+        if (!webhookId.ok) return { ok: false, message: webhookId.message };
+        actions.push({ type: 'webhook', webhookId: webhookId.value });
+        continue;
+      }
+
+      return { ok: false, message: `actions[${index}].type must be notify or webhook` };
+    }
+  }
 
   const normalized = projectRulesRepo.normalizeProjectRuleActionConfig({
     recipientUserIds: recipientUserIds.value,
     recipientRoleIds: recipientRoleIds.value,
+    webhookIds: webhookIds.value,
+    actions,
   });
-  if (normalized.recipientUserIds.length + normalized.recipientRoleIds.length === 0) {
-    return { ok: false, message: 'At least one recipient is required' };
+  if (normalized.actions.length === 0) {
+    return { ok: false, message: 'At least one rule action is required' };
   }
   return { ok: true, value: normalized };
+};
+
+const parseActionType = (
+  value: unknown,
+  fallback: projectRulesRepo.ProjectRule['actionType'],
+):
+  | { ok: true; value: projectRulesRepo.ProjectRule['actionType'] }
+  | { ok: false; message: string } => {
+  if (value === undefined) return { ok: true, value: fallback };
+  const actionType = requireNonEmptyString(value, 'actionType');
+  if (!actionType.ok) return actionType;
+  if (actionType.value !== 'notify' && actionType.value !== 'webhook') {
+    return { ok: false, message: 'actionType must be notify or webhook' };
+  }
+  return { ok: true, value: actionType.value };
 };
 
 const parseConditionLogic = (
@@ -288,14 +411,11 @@ const parseCreateBody = (
   const conditionLogic = parseConditionLogic(body.conditionLogic);
   if (!conditionLogic.ok) return conditionLogic;
   const primary = conditions.value[0];
-  const actionType = body.actionType === undefined ? 'notify' : body.actionType;
-  const actionTypeResult = requireNonEmptyString(actionType, 'actionType');
-  if (!actionTypeResult.ok) return { ok: false, message: actionTypeResult.message };
-  if (actionTypeResult.value !== 'notify') {
-    return { ok: false, message: 'actionType must be notify' };
-  }
   const actionConfig = parseActionConfig(body.actionConfig);
   if (!actionConfig.ok) return actionConfig;
+  const firstActionType = actionConfig.value.actions[0]?.type ?? 'notify';
+  const actionTypeResult = parseActionType(body.actionType, firstActionType);
+  if (!actionTypeResult.ok) return actionTypeResult;
   const isEnabled = parseBooleanField(body, 'isEnabled');
   if (!isEnabled.ok) return { ok: false, message: isEnabled.message };
 
@@ -354,15 +474,17 @@ const parseUpdateBody = (
     patch.value = primary.value;
   }
   if (Object.hasOwn(body, 'actionType')) {
-    const result = requireNonEmptyString(body.actionType, 'actionType');
-    if (!result.ok) return { ok: false, message: result.message };
-    if (result.value !== 'notify') return { ok: false, message: 'actionType must be notify' };
+    const result = parseActionType(body.actionType, 'notify');
+    if (!result.ok) return result;
     patch.actionType = result.value;
   }
   if (Object.hasOwn(body, 'actionConfig')) {
     const result = parseActionConfig(body.actionConfig);
     if (!result.ok) return result;
     patch.actionConfig = result.value;
+    if (!Object.hasOwn(body, 'actionType')) {
+      patch.actionType = result.value.actions[0]?.type ?? 'notify';
+    }
   }
   const isEnabled = parseBooleanField(body, 'isEnabled');
   if (!isEnabled.ok) return { ok: false, message: isEnabled.message };
@@ -389,8 +511,8 @@ const validateFinalRule = async ({
   permissions: readonly string[];
   exec?: DbExecutor;
 }) => {
-  if (rule.actionType !== 'notify') {
-    throw new RecipientValidationError('actionType must be notify');
+  if (rule.actionType !== 'notify' && rule.actionType !== 'webhook') {
+    throw new RecipientValidationError('actionType must be notify or webhook');
   }
 
   if (rule.conditionLogic !== 'and' && rule.conditionLogic !== 'or') {
@@ -398,6 +520,9 @@ const validateFinalRule = async ({
   }
   if (rule.conditions.length === 0) {
     throw new RecipientValidationError('At least one condition is required');
+  }
+  if (rule.actionConfig.actions.length === 0) {
+    throw new RecipientValidationError('At least one rule action is required');
   }
   const permissionSet = new Set(permissions);
   for (const conditionInput of rule.conditions) {
@@ -422,8 +547,12 @@ const validateFinalRule = async ({
     rule.actionConfig,
     exec,
   );
-  if (invalidRecipients.userIds.length > 0 || invalidRecipients.roleIds.length > 0) {
-    throw new RecipientValidationError('actionConfig contains invalid recipients');
+  if (
+    invalidRecipients.userIds.length > 0 ||
+    invalidRecipients.roleIds.length > 0 ||
+    invalidRecipients.webhookIds.length > 0
+  ) {
+    throw new RecipientValidationError('actionConfig contains invalid recipients or webhooks');
   }
 };
 
@@ -605,6 +734,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           counts: {
             recipientUsers: created.actionConfig.recipientUserIds.length,
             recipientRoles: created.actionConfig.recipientRoleIds.length,
+            webhooks: created.actionConfig.webhookIds.length,
           },
         },
       });

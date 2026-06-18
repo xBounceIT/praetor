@@ -1,7 +1,9 @@
 import { and, asc, eq } from 'drizzle-orm';
 import { type DbExecutor, db } from '../db/drizzle.ts';
 import {
+  type ProjectRuleAction,
   type ProjectRuleActionConfig,
+  type ProjectRuleActionType,
   type ProjectRuleCondition,
   type ProjectRuleConditionLogic,
   type ProjectRuleConditionValueType,
@@ -19,7 +21,7 @@ export type ProjectRule = {
   value: string;
   conditionLogic: ProjectRuleConditionLogic;
   conditions: ProjectRuleCondition[];
-  actionType: string;
+  actionType: ProjectRuleActionType;
   actionConfig: ProjectRuleActionConfig;
   isEnabled: boolean;
   conditionMet: boolean;
@@ -38,7 +40,7 @@ export type NewProjectRule = {
   value: string;
   conditionLogic: ProjectRuleConditionLogic;
   conditions: ProjectRuleCondition[];
-  actionType: string;
+  actionType: ProjectRuleActionType;
   actionConfig: ProjectRuleActionConfig;
   isEnabled: boolean;
   createdBy: string;
@@ -64,6 +66,8 @@ export type ProjectRuleUpdate = Partial<
 const EMPTY_ACTION_CONFIG: ProjectRuleActionConfig = {
   recipientUserIds: [],
   recipientRoleIds: [],
+  webhookIds: [],
+  actions: [],
 };
 
 const normalizeRecipientIds = (values: unknown): string[] =>
@@ -80,11 +84,61 @@ const normalizeRecipientIds = (values: unknown): string[] =>
     : [];
 
 export const normalizeProjectRuleActionConfig = (
-  value: ProjectRuleActionConfig | null | undefined,
-): ProjectRuleActionConfig => ({
-  recipientUserIds: normalizeRecipientIds(value?.recipientUserIds),
-  recipientRoleIds: normalizeRecipientIds(value?.recipientRoleIds),
-});
+  value: Partial<ProjectRuleActionConfig> | null | undefined,
+): ProjectRuleActionConfig => {
+  const raw = value && typeof value === 'object' ? value : EMPTY_ACTION_CONFIG;
+  const recipientUserIds = normalizeRecipientIds(raw.recipientUserIds);
+  const recipientRoleIds = normalizeRecipientIds(raw.recipientRoleIds);
+  const webhookIds = normalizeRecipientIds(raw.webhookIds);
+
+  if (Array.isArray(raw.actions)) {
+    for (const action of raw.actions) {
+      if (!action || typeof action !== 'object') continue;
+      const candidate = action as Record<string, unknown>;
+      if (candidate.type === 'notify') {
+        if (candidate.recipientType === 'role') {
+          recipientRoleIds.push(...normalizeRecipientIds(candidate.recipientRoleIds));
+          continue;
+        }
+        recipientUserIds.push(...normalizeRecipientIds(candidate.recipientUserIds));
+      }
+      if (candidate.type === 'webhook') {
+        const webhookId = typeof candidate.webhookId === 'string' ? candidate.webhookId.trim() : '';
+        if (webhookId) webhookIds.push(webhookId);
+      }
+    }
+  }
+
+  const uniqueRecipientUserIds = normalizeRecipientIds(recipientUserIds);
+  const uniqueRecipientRoleIds = normalizeRecipientIds(recipientRoleIds);
+  const uniqueWebhookIds = normalizeRecipientIds(webhookIds);
+  const actions: ProjectRuleAction[] = [];
+  if (uniqueRecipientUserIds.length > 0) {
+    actions.push({
+      type: 'notify',
+      recipientType: 'user',
+      recipientUserIds: uniqueRecipientUserIds,
+    });
+  }
+  if (uniqueRecipientRoleIds.length > 0) {
+    actions.push({
+      type: 'notify',
+      recipientType: 'role',
+      recipientRoleIds: uniqueRecipientRoleIds,
+    });
+  }
+  for (const webhookId of uniqueWebhookIds) actions.push({ type: 'webhook', webhookId });
+
+  return {
+    recipientUserIds: uniqueRecipientUserIds,
+    recipientRoleIds: uniqueRecipientRoleIds,
+    webhookIds: uniqueWebhookIds,
+    actions,
+  };
+};
+
+export const normalizeProjectRuleActionType = (value: unknown): ProjectRuleActionType =>
+  value === 'webhook' ? 'webhook' : 'notify';
 
 export const normalizeProjectRuleConditionLogic = (value: unknown): ProjectRuleConditionLogic =>
   value === 'or' ? 'or' : 'and';
@@ -141,7 +195,7 @@ const mapRow = (row: typeof projectRules.$inferSelect): ProjectRule => {
     value: primary.value,
     conditionLogic: normalizeProjectRuleConditionLogic(row.conditionLogic),
     conditions,
-    actionType: row.actionType,
+    actionType: normalizeProjectRuleActionType(row.actionType),
     actionConfig: normalizeProjectRuleActionConfig(row.actionConfig ?? EMPTY_ACTION_CONFIG),
     isEnabled: row.isEnabled,
     conditionMet: row.conditionMet,
@@ -200,7 +254,7 @@ export const create = async (rule: NewProjectRule, exec: DbExecutor = db): Promi
       value: primary.value,
       conditionLogic: normalizeProjectRuleConditionLogic(rule.conditionLogic),
       conditions,
-      actionType: rule.actionType,
+      actionType: normalizeProjectRuleActionType(rule.actionType),
       actionConfig: normalizeProjectRuleActionConfig(rule.actionConfig),
       isEnabled: rule.isEnabled,
       conditionMet: false,

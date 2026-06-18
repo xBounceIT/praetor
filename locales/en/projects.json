@@ -211,7 +211,7 @@
     },
     "rules": {
       "title": "Job rules",
-      "description": "Automatic controls that watch this job and notify you when something needs attention.",
+      "description": "Automatic controls that watch this job and trigger notifications or webhooks when something needs attention.",
       "conditionMet": "Met",
       "costPermissionRequired": "Cost-derived rule fields require cost report permission.",
       "actions": {
@@ -220,11 +220,13 @@
         "delete": "Delete rule",
         "toggle": "Enable rule",
         "addCondition": "Add condition",
-        "removeCondition": "Remove condition"
+        "removeCondition": "Remove condition",
+        "addAction": "Add action",
+        "removeAction": "Remove action"
       },
       "empty": {
         "title": "No rules configured",
-        "description": "Create a rule to notify users or roles when job metrics cross a threshold."
+        "description": "Create a rule to notify users or roles, or send a webhook, when job metrics cross a threshold."
       },
       "delete": {
         "title": "Delete job rule",
@@ -233,7 +235,7 @@
       "form": {
         "createTitle": "Create job rule",
         "editTitle": "Edit job rule",
-        "description": "Choose the condition to watch and who receives the notification.",
+        "description": "Choose the condition to watch and the actions to run.",
         "name": "Rule name",
         "namePlaceholder": "e.g. Budget above 80%",
         "field": "Field",
@@ -243,12 +245,31 @@
         "compareAgainst": "Compare",
         "targetField": "Other field",
         "conditionLogic": "Combination",
+        "actions": "Actions",
+        "action": "Action",
+        "actionTypes": {
+          "notify": "Send notification to",
+          "webhook": "Send to webhook"
+        },
+        "recipientType": "Recipient",
+        "recipientTypes": {
+          "user": "User",
+          "role": "Role"
+        },
         "users": "Users",
         "usersPlaceholder": "Select assigned users",
         "roles": "Roles",
         "rolesPlaceholder": "Select roles",
+        "webhook": "Webhook",
+        "webhookPlaceholder": "Select webhook",
         "enabled": "Enabled",
         "enabledDescription": "Enabled rules are checked by the scheduled evaluator."
+      },
+      "actionSummary": {
+        "users": "{{count}} users",
+        "roles": "{{count}} roles",
+        "webhooks": "Webhook: {{names}}",
+        "none": "No actions configured"
       },
       "conditionLogic": {
         "and": "All conditions (AND)",
@@ -296,7 +317,11 @@
         "operatorRequired": "Operator is required.",
         "valueInvalid": "Enter a valid value for the selected field.",
         "conditionsRequired": "Add at least one condition.",
-        "recipientsRequired": "Select at least one user or role recipient."
+        "recipientsRequired": "Select at least one user or role recipient.",
+        "actionsRequired": "Add at least one action.",
+        "usersRequired": "Select at least one user.",
+        "rolesRequired": "Select at least one role.",
+        "webhookRequired": "Select a webhook."
       },
       "toasts": {
         "created": "Job rule created.",

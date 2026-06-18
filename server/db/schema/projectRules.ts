@@ -3,9 +3,34 @@ import { boolean, index, jsonb, pgTable, timestamp, varchar } from 'drizzle-orm/
 import { projects } from './projects.ts';
 import { users } from './users.ts';
 
+export type ProjectRuleActionType = 'notify' | 'webhook';
+
+export type ProjectRuleNotifyRecipientType = 'user' | 'role';
+
+export type ProjectRuleNotifyAction =
+  | {
+      type: 'notify';
+      recipientType: 'user';
+      recipientUserIds: string[];
+    }
+  | {
+      type: 'notify';
+      recipientType: 'role';
+      recipientRoleIds: string[];
+    };
+
+export type ProjectRuleWebhookAction = {
+  type: 'webhook';
+  webhookId: string;
+};
+
+export type ProjectRuleAction = ProjectRuleNotifyAction | ProjectRuleWebhookAction;
+
 export type ProjectRuleActionConfig = {
   recipientUserIds: string[];
   recipientRoleIds: string[];
+  webhookIds: string[];
+  actions: ProjectRuleAction[];
 };
 
 export type ProjectRuleCondition = {

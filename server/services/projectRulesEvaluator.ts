@@ -5,6 +5,7 @@ import * as projectRuleRecipientsRepo from '../repositories/projectRuleRecipient
 import * as projectRulesRepo from '../repositories/projectRulesRepo.ts';
 import { serializeError } from '../utils/logger.ts';
 import { evaluateProjectRuleCondition } from '../utils/projectRuleFields.ts';
+import * as webhooksService from './webhooks.ts';
 
 export const PROJECT_RULE_TRIGGERED_NOTIFICATION_TYPE = 'project_rule_triggered';
 
@@ -38,6 +39,89 @@ const buildNotification = (rule: projectRulesRepo.ProjectRule, projectName: stri
     ruleName: rule.name,
   },
 });
+
+const buildWebhookPayload = (
+  rule: projectRulesRepo.ProjectRule,
+  metrics: projectMetricsRepo.ProjectRuleMetrics,
+  now: Date,
+): webhooksService.WebhookDispatchPayload => ({
+  eventType: PROJECT_RULE_TRIGGERED_NOTIFICATION_TYPE,
+  triggeredAt: now.toISOString(),
+  project: {
+    id: rule.projectId,
+    name: metrics.projectName,
+  },
+  rule: {
+    id: rule.id,
+    name: rule.name,
+    conditionLogic: rule.conditionLogic,
+    conditions: rule.conditions,
+  },
+  metrics: {
+    revenue: metrics.revenue,
+    costToDate: metrics.costToDate,
+    budgetUsedPct: metrics.budgetUsedPct,
+    hoursToDate: metrics.hoursToDate,
+    daysUntilDeadline: metrics.daysUntilDeadline,
+    billingType: metrics.billingType,
+    status: metrics.status,
+  },
+});
+
+const logWebhookWarning = (
+  logger: ProjectRulesEvaluatorLogger | undefined,
+  obj: unknown,
+  message: string,
+) => {
+  if (logger?.warn) {
+    logger.warn(obj, message);
+    return;
+  }
+  logger?.error(obj, message);
+};
+
+const dispatchRuleWebhooks = async ({
+  logger,
+  payload,
+  rule,
+  webhookIds,
+}: {
+  logger?: ProjectRulesEvaluatorLogger;
+  payload: webhooksService.WebhookDispatchPayload;
+  rule: projectRulesRepo.ProjectRule;
+  webhookIds: string[];
+}) => {
+  await Promise.all(
+    webhookIds.map(async (webhookId) => {
+      try {
+        const dispatchResult = await webhooksService.dispatchWebhookById(webhookId, payload);
+        if (dispatchResult.skipped) {
+          logWebhookWarning(
+            logger,
+            {
+              webhookId,
+              ruleId: rule.id,
+              projectId: rule.projectId,
+              reason: dispatchResult.reason,
+            },
+            'Project rule webhook skipped',
+          );
+        }
+      } catch (err) {
+        logWebhookWarning(
+          logger,
+          {
+            err: serializeError(err),
+            webhookId,
+            ruleId: rule.id,
+            projectId: rule.projectId,
+          },
+          'Project rule webhook dispatch failed',
+        );
+      }
+    }),
+  );
+};
 
 const evaluateRuleConditions = (
   rule: projectRulesRepo.ProjectRule,
@@ -104,22 +188,60 @@ export const evaluateProjectRulesOnce = async ({
 
         if (!metrics) return { evaluated: 1, triggered: 0, reset: 0, notified: 0 };
 
-        return runAtomically(exec, async (tx) => {
+        const outcome = await runAtomically(exec, async (tx) => {
           const acquired = await projectRulesRepo.markTriggeredOnRisingEdge(rule.id, now, tx);
-          if (!acquired) return { evaluated: 1, triggered: 0, reset: 0, notified: 0 };
+          if (!acquired) {
+            return {
+              evaluated: 1,
+              triggered: 0,
+              reset: 0,
+              notified: 0,
+              webhookIds: [],
+              webhookPayload: null,
+            };
+          }
 
-          const recipientUserIds = await projectRuleRecipientsRepo.resolveRecipientUserIds(
-            rule.projectId,
-            rule.actionConfig,
-            tx,
-          );
-          const notified = await notificationsRepo.createForUsers(
-            recipientUserIds,
-            buildNotification(rule, metrics.projectName),
-            tx,
-          );
-          return { evaluated: 1, triggered: 1, reset: 0, notified };
+          const actionConfig = projectRulesRepo.normalizeProjectRuleActionConfig(rule.actionConfig);
+          const hasNotificationRecipients =
+            actionConfig.recipientUserIds.length + actionConfig.recipientRoleIds.length > 0;
+          const recipientUserIds = hasNotificationRecipients
+            ? await projectRuleRecipientsRepo.resolveRecipientUserIds(
+                rule.projectId,
+                actionConfig,
+                tx,
+              )
+            : [];
+          const notified =
+            recipientUserIds.length > 0
+              ? await notificationsRepo.createForUsers(
+                  recipientUserIds,
+                  buildNotification(rule, metrics.projectName),
+                  tx,
+                )
+              : 0;
+          return {
+            evaluated: 1,
+            triggered: 1,
+            reset: 0,
+            notified,
+            webhookIds: actionConfig.webhookIds,
+            webhookPayload: buildWebhookPayload(rule, metrics, now),
+          };
         });
+        if (outcome.triggered && outcome.webhookIds.length > 0 && outcome.webhookPayload) {
+          await dispatchRuleWebhooks({
+            logger,
+            payload: outcome.webhookPayload,
+            rule,
+            webhookIds: outcome.webhookIds,
+          });
+        }
+        return {
+          evaluated: outcome.evaluated,
+          triggered: outcome.triggered,
+          reset: outcome.reset,
+          notified: outcome.notified,
+        };
       } catch (err) {
         logger?.error(
           { err: serializeError(err), ruleId: rule.id, projectId: rule.projectId },

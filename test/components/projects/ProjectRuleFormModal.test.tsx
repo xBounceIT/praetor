@@ -21,6 +21,7 @@ const ProjectRuleFormModal = realModalModule.default as FC<ProjectRuleFormModalP
 const recipients: ProjectRuleRecipientOptions = {
   users: [{ id: 'u1', name: 'Alice', username: 'alice', avatarInitials: 'AL' }],
   roles: [{ id: 'manager', name: 'Manager' }],
+  webhooks: [{ id: 'webhook-1', name: 'Slack' }],
 };
 
 const rule: ProjectRule = {
@@ -33,7 +34,12 @@ const rule: ProjectRule = {
   conditionLogic: 'and',
   conditions: [{ field: 'revenue', operator: 'gt', value: '1000', valueType: 'literal' }],
   actionType: 'notify',
-  actionConfig: { recipientUserIds: ['u1'], recipientRoleIds: [] },
+  actionConfig: {
+    recipientUserIds: ['u1'],
+    recipientRoleIds: [],
+    webhookIds: [],
+    actions: [{ type: 'notify', recipientType: 'user', recipientUserIds: ['u1'] }],
+  },
   isEnabled: true,
   conditionMet: false,
   lastTriggeredAt: null,
@@ -86,6 +92,28 @@ describe('<ProjectRuleFormModal />', () => {
     }
   });
 
+  test('renders project rule actions as addable rows', () => {
+    render(
+      <ProjectRuleFormModal
+        open
+        onOpenChange={() => {}}
+        rule={rule}
+        recipients={recipients}
+        permissions={['projects.rules.update']}
+        onSubmit={() => Promise.resolve()}
+      />,
+    );
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'projects:detail.rules.actions.addAction' }),
+    );
+
+    expect(screen.getAllByText('projects:detail.rules.form.action')).toHaveLength(2);
+    expect(
+      screen.getAllByRole('button', { name: 'projects:detail.rules.actions.removeAction' }),
+    ).toHaveLength(2);
+  });
+
   test('submits chained conditions with OR logic', async () => {
     const onSubmit = mock(() => Promise.resolve());
 
@@ -126,7 +154,12 @@ describe('<ProjectRuleFormModal />', () => {
           { field: 'revenue', operator: 'gt', value: '2500', valueType: 'literal' },
         ],
         actionType: 'notify',
-        actionConfig: { recipientUserIds: ['u1'], recipientRoleIds: [] },
+        actionConfig: {
+          recipientUserIds: ['u1'],
+          recipientRoleIds: [],
+          webhookIds: [],
+          actions: [{ type: 'notify', recipientType: 'user', recipientUserIds: ['u1'] }],
+        },
       }),
     );
   });
@@ -164,14 +197,17 @@ describe('<ProjectRuleFormModal />', () => {
     );
   });
 
-  test('does not submit and shows an error when no recipients are selected', async () => {
+  test('does not submit and shows an error when a notification action has no users', async () => {
     const onSubmit = mock(() => Promise.resolve());
 
     render(
       <ProjectRuleFormModal
         open
         onOpenChange={() => {}}
-        rule={{ ...rule, actionConfig: { recipientUserIds: [], recipientRoleIds: [] } }}
+        rule={{
+          ...rule,
+          actionConfig: { recipientUserIds: [], recipientRoleIds: [], webhookIds: [], actions: [] },
+        }}
         recipients={recipients}
         permissions={['projects.rules.update']}
         onSubmit={onSubmit}
@@ -181,9 +217,87 @@ describe('<ProjectRuleFormModal />', () => {
     fireEvent.click(screen.getByRole('button', { name: 'common:buttons.save' }));
 
     expect(
-      await screen.findByText('projects:detail.rules.errors.recipientsRequired'),
+      await screen.findByText('projects:detail.rules.errors.usersRequired'),
     ).toBeInTheDocument();
     expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  test('submits a notification action addressed to a role', async () => {
+    const onSubmit = mock(() => Promise.resolve());
+    const roleRule: ProjectRule = {
+      ...rule,
+      actionConfig: {
+        recipientUserIds: [],
+        recipientRoleIds: ['manager'],
+        webhookIds: [],
+        actions: [{ type: 'notify', recipientType: 'role', recipientRoleIds: ['manager'] }],
+      },
+    };
+
+    render(
+      <ProjectRuleFormModal
+        open
+        onOpenChange={() => {}}
+        rule={roleRule}
+        recipients={recipients}
+        permissions={['projects.rules.update']}
+        onSubmit={onSubmit}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'common:buttons.save' }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    expect(onSubmit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actionConfig: {
+          recipientUserIds: [],
+          recipientRoleIds: ['manager'],
+          webhookIds: [],
+          actions: [{ type: 'notify', recipientType: 'role', recipientRoleIds: ['manager'] }],
+        },
+      }),
+    );
+  });
+
+  test('submits a webhook action', async () => {
+    const onSubmit = mock(() => Promise.resolve());
+    const webhookRule: ProjectRule = {
+      ...rule,
+      actionType: 'webhook',
+      actionConfig: {
+        recipientUserIds: [],
+        recipientRoleIds: [],
+        webhookIds: ['webhook-1'],
+        actions: [{ type: 'webhook', webhookId: 'webhook-1' }],
+      },
+    };
+
+    render(
+      <ProjectRuleFormModal
+        open
+        onOpenChange={() => {}}
+        rule={webhookRule}
+        recipients={recipients}
+        permissions={['projects.rules.update']}
+        onSubmit={onSubmit}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'common:buttons.save' }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    expect(onSubmit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actionType: 'webhook',
+        actionConfig: {
+          recipientUserIds: [],
+          recipientRoleIds: [],
+          webhookIds: ['webhook-1'],
+          actions: [{ type: 'webhook', webhookId: 'webhook-1' }],
+        },
+      }),
+    );
   });
 
   test('does not submit and shows an error when a literal value is invalid', async () => {

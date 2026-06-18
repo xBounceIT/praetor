@@ -3,7 +3,7 @@
   "info": {
     "title": "Praetor API",
     "description": "Praetor API documentation",
-    "version": "0.8.0"
+    "version": "0.8.1"
   },
   "components": {
     "securitySchemes": {
@@ -11631,11 +11631,30 @@
                           "name"
                         ]
                       }
+                    },
+                    "webhooks": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "name"
+                        ]
+                      }
                     }
                   },
                   "required": [
                     "users",
-                    "roles"
+                    "roles",
+                    "webhooks"
                   ]
                 }
               }
@@ -11868,11 +11887,60 @@
                             "items": {
                               "type": "string"
                             }
+                          },
+                          "webhookIds": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "actions": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "type": {
+                                  "type": "string",
+                                  "enum": [
+                                    "notify",
+                                    "webhook"
+                                  ]
+                                },
+                                "recipientType": {
+                                  "type": "string",
+                                  "enum": [
+                                    "user",
+                                    "role"
+                                  ]
+                                },
+                                "recipientUserIds": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  }
+                                },
+                                "recipientRoleIds": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  }
+                                },
+                                "webhookId": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "type"
+                              ],
+                              "additionalProperties": false
+                            }
                           }
                         },
                         "required": [
                           "recipientUserIds",
-                          "recipientRoleIds"
+                          "recipientRoleIds",
+                          "webhookIds",
+                          "actions"
                         ],
                         "additionalProperties": false
                       },
@@ -12130,12 +12198,55 @@
                         "items": {
                           "type": "string"
                         }
+                      },
+                      "webhookIds": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      "actions": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "type": {
+                              "type": "string",
+                              "enum": [
+                                "notify",
+                                "webhook"
+                              ]
+                            },
+                            "recipientType": {
+                              "type": "string",
+                              "enum": [
+                                "user",
+                                "role"
+                              ]
+                            },
+                            "recipientUserIds": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            },
+                            "recipientRoleIds": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            },
+                            "webhookId": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "type"
+                          ],
+                          "additionalProperties": false
+                        }
                       }
                     },
-                    "required": [
-                      "recipientUserIds",
-                      "recipientRoleIds"
-                    ],
                     "additionalProperties": false
                   },
                   "isEnabled": {
@@ -12241,11 +12352,60 @@
                           "items": {
                             "type": "string"
                           }
+                        },
+                        "webhookIds": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "actions": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "type": {
+                                "type": "string",
+                                "enum": [
+                                  "notify",
+                                  "webhook"
+                                ]
+                              },
+                              "recipientType": {
+                                "type": "string",
+                                "enum": [
+                                  "user",
+                                  "role"
+                                ]
+                              },
+                              "recipientUserIds": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              },
+                              "recipientRoleIds": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              },
+                              "webhookId": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "type"
+                            ],
+                            "additionalProperties": false
+                          }
                         }
                       },
                       "required": [
                         "recipientUserIds",
-                        "recipientRoleIds"
+                        "recipientRoleIds",
+                        "webhookIds",
+                        "actions"
                       ],
                       "additionalProperties": false
                     },
@@ -12504,12 +12664,55 @@
                         "items": {
                           "type": "string"
                         }
+                      },
+                      "webhookIds": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      "actions": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "type": {
+                              "type": "string",
+                              "enum": [
+                                "notify",
+                                "webhook"
+                              ]
+                            },
+                            "recipientType": {
+                              "type": "string",
+                              "enum": [
+                                "user",
+                                "role"
+                              ]
+                            },
+                            "recipientUserIds": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            },
+                            "recipientRoleIds": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            },
+                            "webhookId": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "type"
+                          ],
+                          "additionalProperties": false
+                        }
                       }
                     },
-                    "required": [
-                      "recipientUserIds",
-                      "recipientRoleIds"
-                    ],
                     "additionalProperties": false
                   },
                   "isEnabled": {
@@ -12619,11 +12822,60 @@
                           "items": {
                             "type": "string"
                           }
+                        },
+                        "webhookIds": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "actions": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "type": {
+                                "type": "string",
+                                "enum": [
+                                  "notify",
+                                  "webhook"
+                                ]
+                              },
+                              "recipientType": {
+                                "type": "string",
+                                "enum": [
+                                  "user",
+                                  "role"
+                                ]
+                              },
+                              "recipientUserIds": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              },
+                              "recipientRoleIds": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              },
+                              "webhookId": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "type"
+                            ],
+                            "additionalProperties": false
+                          }
                         }
                       },
                       "required": [
                         "recipientUserIds",
-                        "recipientRoleIds"
+                        "recipientRoleIds",
+                        "webhookIds",
+                        "actions"
                       ],
                       "additionalProperties": false
                     },

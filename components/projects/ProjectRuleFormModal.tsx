@@ -24,9 +24,12 @@ import {
 import { Switch } from '@/components/ui/switch';
 import type {
   ProjectRule,
+  ProjectRuleActionConfig,
+  ProjectRuleActionType,
   ProjectRuleCondition,
   ProjectRuleConditionLogic,
   ProjectRuleConditionValueType,
+  ProjectRuleNotifyRecipientType,
   ProjectRuleRecipientOptions,
 } from '../../types';
 import SelectControl from '../shared/SelectControl';
@@ -44,11 +47,8 @@ export type ProjectRuleFormPayload = {
   value: string;
   conditionLogic: ProjectRuleConditionLogic;
   conditions: ProjectRuleCondition[];
-  actionType: 'notify';
-  actionConfig: {
-    recipientUserIds: string[];
-    recipientRoleIds: string[];
-  };
+  actionType: ProjectRuleActionType;
+  actionConfig: ProjectRuleActionConfig;
   isEnabled: boolean;
 };
 
@@ -65,11 +65,19 @@ type ProjectRuleFormState = {
   name: string;
   conditionLogic: ProjectRuleConditionLogic;
   conditions: ProjectRuleCondition[];
-  recipientUserIds: string[];
-  recipientRoleIds: string[];
+  actions: ProjectRuleFormActionRow[];
   isEnabled: boolean;
   errors: Record<string, string>;
   submitting: boolean;
+};
+
+type ProjectRuleFormActionRow = {
+  uid: string;
+  type: ProjectRuleActionType;
+  recipientType: ProjectRuleNotifyRecipientType;
+  recipientUserIds: string[];
+  recipientRoleIds: string[];
+  webhookId: string;
 };
 
 type ProjectRuleFormAction =
@@ -78,8 +86,17 @@ type ProjectRuleFormAction =
   | { type: 'updateCondition'; index: number; patch: Partial<ProjectRuleCondition> }
   | { type: 'addCondition'; field: string }
   | { type: 'removeCondition'; index: number }
-  | { type: 'setRecipientUserIds'; recipientUserIds: string[] }
-  | { type: 'setRecipientRoleIds'; recipientRoleIds: string[] }
+  | { type: 'addAction' }
+  | { type: 'removeAction'; index: number }
+  | { type: 'setActionType'; index: number; actionType: ProjectRuleActionType }
+  | {
+      type: 'setActionRecipientType';
+      index: number;
+      recipientType: ProjectRuleNotifyRecipientType;
+    }
+  | { type: 'setActionRecipientUserIds'; index: number; recipientUserIds: string[] }
+  | { type: 'setActionRecipientRoleIds'; index: number; recipientRoleIds: string[] }
+  | { type: 'setActionWebhookId'; index: number; webhookId: string }
   | { type: 'setEnabled'; isEnabled: boolean }
   | { type: 'setErrors'; errors: Record<string, string> }
   | { type: 'setSubmitting'; submitting: boolean };
@@ -107,6 +124,114 @@ const normalizeConditionForForm = (condition: ProjectRuleCondition): ProjectRule
   ...condition,
   valueType: condition.valueType ?? 'literal',
 });
+
+const uniqueStrings = (values: readonly string[]) => Array.from(new Set(values));
+
+let actionRowCounter = 0;
+
+const createActionRow = (
+  patch: Partial<Omit<ProjectRuleFormActionRow, 'uid'>> = {},
+): ProjectRuleFormActionRow => {
+  actionRowCounter += 1;
+  return {
+    uid: `project-rule-action-${actionRowCounter}`,
+    type: 'notify',
+    recipientType: 'user',
+    recipientUserIds: [],
+    recipientRoleIds: [],
+    webhookId: '',
+    ...patch,
+  };
+};
+
+const actionRowsForRule = (rule: ProjectRule | null | undefined): ProjectRuleFormActionRow[] => {
+  const config = rule?.actionConfig;
+  const rows: ProjectRuleFormActionRow[] = [];
+
+  for (const action of config?.actions ?? []) {
+    if (action.type === 'notify') {
+      if (action.recipientType === 'role') {
+        rows.push(
+          createActionRow({
+            type: 'notify',
+            recipientType: 'role',
+            recipientRoleIds: action.recipientRoleIds,
+          }),
+        );
+      } else {
+        rows.push(
+          createActionRow({
+            type: 'notify',
+            recipientType: 'user',
+            recipientUserIds: action.recipientUserIds,
+          }),
+        );
+      }
+      continue;
+    }
+    rows.push(createActionRow({ type: 'webhook', webhookId: action.webhookId }));
+  }
+
+  if (rows.length > 0) return rows;
+
+  if (config?.recipientUserIds?.length) {
+    rows.push(
+      createActionRow({
+        type: 'notify',
+        recipientType: 'user',
+        recipientUserIds: config.recipientUserIds,
+      }),
+    );
+  }
+  if (config?.recipientRoleIds?.length) {
+    rows.push(
+      createActionRow({
+        type: 'notify',
+        recipientType: 'role',
+        recipientRoleIds: config.recipientRoleIds,
+      }),
+    );
+  }
+  for (const webhookId of config?.webhookIds ?? []) {
+    rows.push(createActionRow({ type: 'webhook', webhookId }));
+  }
+
+  return rows.length > 0 ? rows : [createActionRow()];
+};
+
+const buildActionConfigFromRows = (
+  actions: ProjectRuleFormActionRow[],
+): ProjectRuleActionConfig => {
+  const recipientUserIds = uniqueStrings(
+    actions.flatMap((action) =>
+      action.type === 'notify' && action.recipientType === 'user' ? action.recipientUserIds : [],
+    ),
+  );
+  const recipientRoleIds = uniqueStrings(
+    actions.flatMap((action) =>
+      action.type === 'notify' && action.recipientType === 'role' ? action.recipientRoleIds : [],
+    ),
+  );
+  const webhookIds = uniqueStrings(
+    actions.flatMap((action) => (action.type === 'webhook' ? [action.webhookId] : [])),
+  );
+  const normalizedActions: ProjectRuleActionConfig['actions'] = [];
+
+  if (recipientUserIds.length > 0) {
+    normalizedActions.push({ type: 'notify', recipientType: 'user', recipientUserIds });
+  }
+  if (recipientRoleIds.length > 0) {
+    normalizedActions.push({ type: 'notify', recipientType: 'role', recipientRoleIds });
+  }
+  for (const webhookId of webhookIds) normalizedActions.push({ type: 'webhook', webhookId });
+
+  return {
+    recipientUserIds,
+    recipientRoleIds,
+    webhookIds,
+    actions: normalizedActions,
+  };
+};
 
 const conditionsForRule = (
   rule: ProjectRule | null | undefined,
@@ -141,8 +266,7 @@ const createProjectRuleFormState = (
   name: rule?.name ?? '',
   conditionLogic: rule?.conditionLogic ?? 'and',
   conditions: conditionsForRule(rule, initialField),
-  recipientUserIds: rule?.actionConfig.recipientUserIds ?? [],
-  recipientRoleIds: rule?.actionConfig.recipientRoleIds ?? [],
+  actions: actionRowsForRule(rule),
   isEnabled: rule?.isEnabled ?? true,
   errors: {},
   submitting: false,
@@ -174,10 +298,52 @@ const projectRuleFormReducer = (
         ...state,
         conditions: state.conditions.filter((_, conditionIndex) => conditionIndex !== action.index),
       };
-    case 'setRecipientUserIds':
-      return { ...state, recipientUserIds: action.recipientUserIds };
-    case 'setRecipientRoleIds':
-      return { ...state, recipientRoleIds: action.recipientRoleIds };
+    case 'addAction':
+      return { ...state, actions: [...state.actions, createActionRow()] };
+    case 'removeAction':
+      return {
+        ...state,
+        actions: state.actions.filter((_, actionIndex) => actionIndex !== action.index),
+      };
+    case 'setActionType':
+      return {
+        ...state,
+        actions: state.actions.map((row, actionIndex) =>
+          actionIndex === action.index ? { ...row, type: action.actionType } : row,
+        ),
+      };
+    case 'setActionRecipientType':
+      return {
+        ...state,
+        actions: state.actions.map((row, actionIndex) =>
+          actionIndex === action.index ? { ...row, recipientType: action.recipientType } : row,
+        ),
+      };
+    case 'setActionRecipientUserIds':
+      return {
+        ...state,
+        actions: state.actions.map((row, actionIndex) =>
+          actionIndex === action.index
+            ? { ...row, recipientUserIds: action.recipientUserIds }
+            : row,
+        ),
+      };
+    case 'setActionRecipientRoleIds':
+      return {
+        ...state,
+        actions: state.actions.map((row, actionIndex) =>
+          actionIndex === action.index
+            ? { ...row, recipientRoleIds: action.recipientRoleIds }
+            : row,
+        ),
+      };
+    case 'setActionWebhookId':
+      return {
+        ...state,
+        actions: state.actions.map((row, actionIndex) =>
+          actionIndex === action.index ? { ...row, webhookId: action.webhookId } : row,
+        ),
+      };
     case 'setEnabled':
       return { ...state, isEnabled: action.isEnabled };
     case 'setErrors':
@@ -498,6 +664,163 @@ const ProjectRuleConditionsEditor: React.FC<{
   );
 };
 
+const ProjectRuleActionsEditor: React.FC<{
+  actions: ProjectRuleFormActionRow[];
+  errors: Record<string, string>;
+  submitting: boolean;
+  userOptions: ProjectRuleOption[];
+  roleOptions: ProjectRuleOption[];
+  webhookOptions: ProjectRuleOption[];
+  actionTypeOptions: Array<{ id: ProjectRuleActionType; name: string }>;
+  recipientTypeOptions: Array<{ id: ProjectRuleNotifyRecipientType; name: string }>;
+  dispatch: React.Dispatch<ProjectRuleFormAction>;
+}> = ({
+  actions,
+  errors,
+  submitting,
+  userOptions,
+  roleOptions,
+  webhookOptions,
+  actionTypeOptions,
+  recipientTypeOptions,
+  dispatch,
+}) => {
+  const { t } = useTranslation(['projects', 'common']);
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between gap-3">
+        <FieldLabel>{t('projects:detail.rules.form.actions')}</FieldLabel>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => dispatch({ type: 'addAction' })}
+          disabled={submitting}
+        >
+          <PlusIcon className="size-4" />
+          {t('projects:detail.rules.actions.addAction')}
+        </Button>
+      </div>
+      <div className="space-y-2">
+        {actions.map((action, index) => (
+          <div key={action.uid} className="space-y-3 rounded-md border border-border p-3">
+            <div className="grid gap-3 md:grid-cols-[minmax(0,12rem)_minmax(0,10rem)_minmax(0,1fr)_2.25rem]">
+              <SelectControl
+                id={`project-rule-action-type-${index}`}
+                searchable={false}
+                disabled={submitting}
+                label={t('projects:detail.rules.form.action')}
+                options={actionTypeOptions}
+                value={action.type}
+                onChange={(next) =>
+                  dispatch({
+                    type: 'setActionType',
+                    index,
+                    actionType: (Array.isArray(next) ? next[0] : next) as ProjectRuleActionType,
+                  })
+                }
+              />
+              {action.type === 'notify' ? (
+                <>
+                  <SelectControl
+                    id={`project-rule-recipient-type-${index}`}
+                    searchable={false}
+                    disabled={submitting}
+                    label={t('projects:detail.rules.form.recipientType')}
+                    options={recipientTypeOptions}
+                    value={action.recipientType}
+                    onChange={(next) =>
+                      dispatch({
+                        type: 'setActionRecipientType',
+                        index,
+                        recipientType: (Array.isArray(next)
+                          ? next[0]
+                          : next) as ProjectRuleNotifyRecipientType,
+                      })
+                    }
+                  />
+                  <SelectControl
+                    id={`project-rule-action-recipient-${index}`}
+                    searchable
+                    isMulti
+                    disabled={submitting}
+                    label={
+                      action.recipientType === 'user'
+                        ? t('projects:detail.rules.form.users')
+                        : t('projects:detail.rules.form.roles')
+                    }
+                    placeholder={
+                      action.recipientType === 'user'
+                        ? t('projects:detail.rules.form.usersPlaceholder')
+                        : t('projects:detail.rules.form.rolesPlaceholder')
+                    }
+                    options={action.recipientType === 'user' ? userOptions : roleOptions}
+                    value={
+                      action.recipientType === 'user'
+                        ? action.recipientUserIds
+                        : action.recipientRoleIds
+                    }
+                    onChange={(next) =>
+                      dispatch(
+                        action.recipientType === 'user'
+                          ? {
+                              type: 'setActionRecipientUserIds',
+                              index,
+                              recipientUserIds: Array.isArray(next) ? next : [],
+                            }
+                          : {
+                              type: 'setActionRecipientRoleIds',
+                              index,
+                              recipientRoleIds: Array.isArray(next) ? next : [],
+                            },
+                      )
+                    }
+                  />
+                </>
+              ) : (
+                <SelectControl
+                  id={`project-rule-action-webhook-${index}`}
+                  searchable
+                  disabled={submitting}
+                  className="md:col-span-2"
+                  label={t('projects:detail.rules.form.webhook')}
+                  placeholder={t('projects:detail.rules.form.webhookPlaceholder')}
+                  options={webhookOptions}
+                  value={action.webhookId}
+                  onChange={(next) =>
+                    dispatch({
+                      type: 'setActionWebhookId',
+                      index,
+                      webhookId: Array.isArray(next) ? (next[0] ?? '') : next,
+                    })
+                  }
+                />
+              )}
+              <div className="flex items-end">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  disabled={submitting || actions.length === 1}
+                  onClick={() => dispatch({ type: 'removeAction', index })}
+                  aria-label={t('projects:detail.rules.actions.removeAction')}
+                >
+                  <Trash2Icon className="size-4" />
+                </Button>
+              </div>
+            </div>
+            {errors[`action-${index}`] && (
+              <p className="text-sm font-medium text-destructive">{errors[`action-${index}`]}</p>
+            )}
+          </div>
+        ))}
+      </div>
+      {errors.actions && <p className="text-sm font-medium text-destructive">{errors.actions}</p>}
+    </div>
+  );
+};
+
 type ProjectRuleFormModalSessionProps = ProjectRuleFormModalProps & {
   initialField: string;
 };
@@ -516,16 +839,7 @@ const ProjectRuleFormModalSession: React.FC<ProjectRuleFormModalSessionProps> = 
   const [formState, dispatch] = useReducer(projectRuleFormReducer, undefined, () =>
     createProjectRuleFormState(rule, initialField),
   );
-  const {
-    name,
-    conditionLogic,
-    conditions,
-    recipientUserIds,
-    recipientRoleIds,
-    isEnabled,
-    errors,
-    submitting,
-  } = formState;
+  const { name, conditionLogic, conditions, actions, isEnabled, errors, submitting } = formState;
 
   const fieldOptions = availableFields.map((definition) => ({
     id: definition.id,
@@ -536,6 +850,18 @@ const ProjectRuleFormModalSession: React.FC<ProjectRuleFormModalSessionProps> = 
     name: `${user.name} (${user.username})`,
   }));
   const roleOptions = recipients.roles.map((role) => ({ id: role.id, name: role.name }));
+  const webhookOptions = recipients.webhooks.map((webhook) => ({
+    id: webhook.id,
+    name: webhook.name,
+  }));
+  const actionTypeOptions: Array<{ id: ProjectRuleActionType; name: string }> = [
+    { id: 'notify', name: t('projects:detail.rules.form.actionTypes.notify') },
+    { id: 'webhook', name: t('projects:detail.rules.form.actionTypes.webhook') },
+  ];
+  const recipientTypeOptions: Array<{ id: ProjectRuleNotifyRecipientType; name: string }> = [
+    { id: 'user', name: t('projects:detail.rules.form.recipientTypes.user') },
+    { id: 'role', name: t('projects:detail.rules.form.recipientTypes.role') },
+  ];
 
   const updateCondition = (index: number, patch: Partial<ProjectRuleCondition>) => {
     dispatch({ type: 'updateCondition', index, patch });
@@ -601,9 +927,26 @@ const ProjectRuleFormModalSession: React.FC<ProjectRuleFormModalSessionProps> = 
         nextErrors[`value-${index}`] = t('projects:detail.rules.errors.valueInvalid');
       }
     });
-    if (recipientUserIds.length + recipientRoleIds.length === 0) {
-      nextErrors.recipients = t('projects:detail.rules.errors.recipientsRequired');
+    if (actions.length === 0) {
+      nextErrors.actions = t('projects:detail.rules.errors.actionsRequired');
     }
+    actions.forEach((action, index) => {
+      if (action.type === 'notify' && action.recipientType === 'user') {
+        if (action.recipientUserIds.length === 0) {
+          nextErrors[`action-${index}`] = t('projects:detail.rules.errors.usersRequired');
+        }
+        return;
+      }
+      if (action.type === 'notify' && action.recipientType === 'role') {
+        if (action.recipientRoleIds.length === 0) {
+          nextErrors[`action-${index}`] = t('projects:detail.rules.errors.rolesRequired');
+        }
+        return;
+      }
+      if (action.type === 'webhook' && !action.webhookId) {
+        nextErrors[`action-${index}`] = t('projects:detail.rules.errors.webhookRequired');
+      }
+    });
     dispatch({ type: 'setErrors', errors: nextErrors });
     if (Object.keys(nextErrors).length > 0) return;
 
@@ -617,6 +960,8 @@ const ProjectRuleFormModalSession: React.FC<ProjectRuleFormModalSessionProps> = 
       }));
       const firstCondition = normalizedConditions[0] ?? primary;
       if (!firstCondition) return;
+      const actionConfig = buildActionConfigFromRows(actions);
+      const actionType = actionConfig.actions[0]?.type ?? 'notify';
       await onSubmit({
         name: name.trim(),
         field: firstCondition.field,
@@ -624,8 +969,8 @@ const ProjectRuleFormModalSession: React.FC<ProjectRuleFormModalSessionProps> = 
         value: firstCondition.value,
         conditionLogic,
         conditions: normalizedConditions,
-        actionType: 'notify',
-        actionConfig: { recipientUserIds, recipientRoleIds },
+        actionType,
+        actionConfig,
         isEnabled,
       });
       onOpenChange(false);
@@ -678,43 +1023,17 @@ const ProjectRuleFormModalSession: React.FC<ProjectRuleFormModalSessionProps> = 
             onValueTypeChange={handleValueTypeChange}
           />
 
-          <div className="grid gap-4 md:grid-cols-2">
-            <SelectControl
-              id="project-rule-users"
-              searchable
-              isMulti
-              disabled={submitting}
-              label={t('projects:detail.rules.form.users')}
-              placeholder={t('projects:detail.rules.form.usersPlaceholder')}
-              options={userOptions}
-              value={recipientUserIds}
-              onChange={(next) =>
-                dispatch({
-                  type: 'setRecipientUserIds',
-                  recipientUserIds: Array.isArray(next) ? next : [],
-                })
-              }
-            />
-            <SelectControl
-              id="project-rule-roles"
-              searchable
-              isMulti
-              disabled={submitting}
-              label={t('projects:detail.rules.form.roles')}
-              placeholder={t('projects:detail.rules.form.rolesPlaceholder')}
-              options={roleOptions}
-              value={recipientRoleIds}
-              onChange={(next) =>
-                dispatch({
-                  type: 'setRecipientRoleIds',
-                  recipientRoleIds: Array.isArray(next) ? next : [],
-                })
-              }
-            />
-          </div>
-          {errors.recipients && (
-            <p className="text-sm font-medium text-destructive">{errors.recipients}</p>
-          )}
+          <ProjectRuleActionsEditor
+            actions={actions}
+            errors={errors}
+            submitting={submitting}
+            userOptions={userOptions}
+            roleOptions={roleOptions}
+            webhookOptions={webhookOptions}
+            actionTypeOptions={actionTypeOptions}
+            recipientTypeOptions={recipientTypeOptions}
+            dispatch={dispatch}
+          />
 
           <Field className="flex-row items-center justify-between rounded-md border border-border p-3">
             <div className="space-y-1">

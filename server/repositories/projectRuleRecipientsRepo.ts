@@ -14,9 +14,15 @@ export type ProjectRuleRoleRecipientOption = {
   name: string;
 };
 
+export type ProjectRuleWebhookOption = {
+  id: string;
+  name: string;
+};
+
 export type ProjectRuleRecipientOptions = {
   users: ProjectRuleUserRecipientOption[];
   roles: ProjectRuleRoleRecipientOption[];
+  webhooks: ProjectRuleWebhookOption[];
 };
 
 type UserRecipientRow = {
@@ -27,6 +33,11 @@ type UserRecipientRow = {
 };
 
 type RoleRecipientRow = {
+  id: string;
+  name: string;
+};
+
+type WebhookOptionRow = {
   id: string;
   name: string;
 };
@@ -51,7 +62,7 @@ export const listRecipientOptions = async (
   projectId: string,
   exec: DbExecutor = db,
 ): Promise<ProjectRuleRecipientOptions> => {
-  const [userRows, roleRows] = await Promise.all([
+  const [userRows, roleRows, webhookRows] = await Promise.all([
     executeRows<UserRecipientRow>(
       exec,
       sql`
@@ -71,11 +82,21 @@ export const listRecipientOptions = async (
         ORDER BY r.name
       `,
     ),
+    executeRows<WebhookOptionRow>(
+      exec,
+      sql`
+        SELECT id, name
+        FROM webhooks
+        WHERE enabled = true
+        ORDER BY name
+      `,
+    ),
   ]);
 
   return {
     users: userRows.map(mapUserRow),
     roles: roleRows,
+    webhooks: webhookRows,
   };
 };
 
@@ -83,10 +104,11 @@ export const findInvalidRecipientIds = async (
   projectId: string,
   config: ProjectRuleActionConfig,
   exec: DbExecutor = db,
-): Promise<{ userIds: string[]; roleIds: string[] }> => {
+): Promise<{ userIds: string[]; roleIds: string[]; webhookIds: string[] }> => {
   const userIds = uniqueStrings(config.recipientUserIds);
   const roleIds = uniqueStrings(config.recipientRoleIds);
-  const [validUserRows, validRoleRows] = await Promise.all([
+  const webhookIds = uniqueStrings(config.webhookIds);
+  const [validUserRows, validRoleRows, validWebhookRows] = await Promise.all([
     userIds.length === 0
       ? Promise.resolve([])
       : executeRows<{ id: string }>(
@@ -106,13 +128,26 @@ export const findInvalidRecipientIds = async (
           exec,
           sql`SELECT id FROM roles WHERE id = ANY(${sql.param(roleIds)}::text[])`,
         ),
+    webhookIds.length === 0
+      ? Promise.resolve([])
+      : executeRows<{ id: string }>(
+          exec,
+          sql`
+            SELECT id
+            FROM webhooks
+            WHERE id = ANY(${sql.param(webhookIds)}::text[])
+              AND enabled = true
+          `,
+        ),
   ]);
 
   const validUserIds = new Set(validUserRows.map((row) => row.id));
   const validRoleIds = new Set(validRoleRows.map((row) => row.id));
+  const validWebhookIds = new Set(validWebhookRows.map((row) => row.id));
   return {
     userIds: userIds.filter((id) => !validUserIds.has(id)),
     roleIds: roleIds.filter((id) => !validRoleIds.has(id)),
+    webhookIds: webhookIds.filter((id) => !validWebhookIds.has(id)),
   };
 };
 

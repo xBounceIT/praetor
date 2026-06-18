@@ -126,4 +126,4 @@ Ogni destinazione definisce:
 
 Le azioni di creazione, modifica ed eliminazione sono regolate rispettivamente dai permessi create, update e delete, e ogni modifica viene scritta nel log di audit.
 
-Questa pagina configura solo le destinazioni; gli eventi che attivano ciascun webhook vengono collegati separatamente.
+Questa pagina configura solo le destinazioni; gli eventi che attivano ciascun webhook vengono collegati separatamente, ad esempio nelle azioni delle regole commessa.

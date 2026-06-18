@@ -1,4 +1,11 @@
-import { BellRingIcon, PencilIcon, PlusIcon, RefreshCwIcon, Trash2Icon } from 'lucide-react';
+import {
+  BellRingIcon,
+  PencilIcon,
+  PlusIcon,
+  RefreshCwIcon,
+  Trash2Icon,
+  Webhook as WebhookIcon,
+} from 'lucide-react';
 import type React from 'react';
 import { useCallback, useEffect, useMemo, useReducer } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -28,7 +35,7 @@ export interface ProjectRulesProps {
   className?: string;
 }
 
-const emptyRecipients: ProjectRuleRecipientOptions = { users: [], roles: [] };
+const emptyRecipients: ProjectRuleRecipientOptions = { users: [], roles: [], webhooks: [] };
 
 type ProjectRulesState = {
   rules: ProjectRule[];
@@ -144,6 +151,249 @@ const enumValueLabelKey = (field: string, value: string) => {
   return `projects:detail.rules.values.${field}.${value}`;
 };
 
+type ProjectRuleFormatter = (rule: ProjectRule) => string;
+
+const ProjectRulesHeader: React.FC<{
+  canCreate: boolean;
+  loading: boolean;
+  error: boolean;
+  onCreate: () => void;
+}> = ({ canCreate, loading, error, onCreate }) => {
+  const { t } = useTranslation(['projects', 'common']);
+
+  return (
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+      <div className="space-y-1.5">
+        <h2 className="text-base font-semibold leading-none">{t('projects:detail.rules.title')}</h2>
+        <p className="text-sm text-muted-foreground">{t('projects:detail.rules.description')}</p>
+      </div>
+      {canCreate && (
+        <Button type="button" size="sm" onClick={onCreate} disabled={loading || error}>
+          <PlusIcon className="size-4" />
+          {t('projects:detail.rules.actions.add')}
+        </Button>
+      )}
+    </div>
+  );
+};
+
+const ProjectRuleListItem: React.FC<{
+  rule: ProjectRule;
+  permissions: string[];
+  canUpdate: boolean;
+  canDelete: boolean;
+  busyRuleId: string | null;
+  ruleSummary: ProjectRuleFormatter;
+  actionSummary: ProjectRuleFormatter;
+  onToggle: (rule: ProjectRule, checked: boolean) => void;
+  onEdit: (rule: ProjectRule) => void;
+  onDelete: (rule: ProjectRule) => void;
+}> = ({
+  rule,
+  permissions,
+  canUpdate,
+  canDelete,
+  busyRuleId,
+  ruleSummary,
+  actionSummary,
+  onToggle,
+  onEdit,
+  onDelete,
+}) => {
+  const { t } = useTranslation(['projects', 'common']);
+  const canUpdateThis = canUpdate && canModifyRuleField(rule, permissions);
+  const disabledReason =
+    canUpdate && !canUpdateThis ? t('projects:detail.rules.costPermissionRequired') : undefined;
+  const hasNotificationRecipients =
+    rule.actionConfig.recipientUserIds.length + rule.actionConfig.recipientRoleIds.length > 0;
+  const Icon =
+    !hasNotificationRecipients && rule.actionConfig.webhookIds.length > 0
+      ? WebhookIcon
+      : BellRingIcon;
+  const busy = busyRuleId === rule.id;
+
+  return (
+    <li className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex min-w-0 items-start gap-3">
+        <div className="flex size-9 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
+          <Icon className="size-4" />
+        </div>
+        <div className="min-w-0 space-y-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="truncate text-sm font-medium text-foreground">{rule.name}</p>
+            {rule.conditionMet && (
+              <span className="rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-[10px] font-medium uppercase text-primary">
+                {t('projects:detail.rules.conditionMet')}
+              </span>
+            )}
+          </div>
+          <p className="text-sm text-muted-foreground">{ruleSummary(rule)}</p>
+          <p className="text-xs text-muted-foreground">{actionSummary(rule)}</p>
+        </div>
+      </div>
+      <div className="flex items-center justify-end gap-2">
+        <Tooltip disabled={!disabledReason}>
+          <TooltipTrigger asChild>
+            <span className="inline-flex">
+              <Switch
+                checked={rule.isEnabled}
+                disabled={!canUpdateThis || busy}
+                onCheckedChange={(checked) => onToggle(rule, checked)}
+                aria-label={t('projects:detail.rules.actions.toggle')}
+              />
+            </span>
+          </TooltipTrigger>
+          <TooltipContent>{disabledReason}</TooltipContent>
+        </Tooltip>
+        {canUpdate && (
+          <Tooltip disabled={!disabledReason}>
+            <TooltipTrigger asChild>
+              <span className="inline-flex">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  disabled={!canUpdateThis || busy}
+                  onClick={() => onEdit(rule)}
+                  aria-label={t('projects:detail.rules.actions.edit')}
+                >
+                  <PencilIcon className="size-4" />
+                </Button>
+              </span>
+            </TooltipTrigger>
+            <TooltipContent>
+              {disabledReason ?? t('projects:detail.rules.actions.edit')}
+            </TooltipContent>
+          </Tooltip>
+        )}
+        {canDelete && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            disabled={busy}
+            onClick={() => onDelete(rule)}
+            aria-label={t('projects:detail.rules.actions.delete')}
+          >
+            <Trash2Icon className="size-4 text-destructive" />
+          </Button>
+        )}
+      </div>
+    </li>
+  );
+};
+
+const ProjectRulesPanel: React.FC<{
+  loading: boolean;
+  error: boolean;
+  sortedRules: ProjectRule[];
+  permissions: string[];
+  canUpdate: boolean;
+  canDelete: boolean;
+  busyRuleId: string | null;
+  ruleSummary: ProjectRuleFormatter;
+  actionSummary: ProjectRuleFormatter;
+  onRefresh: () => void;
+  onToggle: (rule: ProjectRule, checked: boolean) => void;
+  onEdit: (rule: ProjectRule) => void;
+  onDelete: (rule: ProjectRule) => void;
+}> = ({
+  loading,
+  error,
+  sortedRules,
+  permissions,
+  canUpdate,
+  canDelete,
+  busyRuleId,
+  ruleSummary,
+  actionSummary,
+  onRefresh,
+  onToggle,
+  onEdit,
+  onDelete,
+}) => {
+  const { t } = useTranslation(['projects', 'common']);
+
+  return (
+    <div className="rounded-lg border border-border bg-background">
+      {loading ? (
+        <div className="space-y-3 p-4">
+          <Skeleton className="h-14 w-full" />
+          <Skeleton className="h-14 w-full" />
+        </div>
+      ) : error ? (
+        <div className="flex flex-col items-center gap-3 px-4 py-8 text-center">
+          <p className="text-sm text-muted-foreground">
+            {t('projects:detail.rules.errors.loadFailed')}
+          </p>
+          <Button type="button" variant="outline" size="sm" onClick={onRefresh}>
+            <RefreshCwIcon className="size-4" />
+            {t('common:buttons.refresh')}
+          </Button>
+        </div>
+      ) : sortedRules.length === 0 ? (
+        <div className="flex flex-col items-center gap-3 px-4 py-8 text-center">
+          <BellRingIcon className="size-8 text-muted-foreground" />
+          <div className="space-y-1">
+            <p className="text-sm font-medium">{t('projects:detail.rules.empty.title')}</p>
+            <p className="text-sm text-muted-foreground">
+              {t('projects:detail.rules.empty.description')}
+            </p>
+          </div>
+        </div>
+      ) : (
+        <ul className="divide-y divide-border">
+          {sortedRules.map((rule) => (
+            <ProjectRuleListItem
+              key={rule.id}
+              rule={rule}
+              permissions={permissions}
+              canUpdate={canUpdate}
+              canDelete={canDelete}
+              busyRuleId={busyRuleId}
+              ruleSummary={ruleSummary}
+              actionSummary={actionSummary}
+              onToggle={onToggle}
+              onEdit={onEdit}
+              onDelete={onDelete}
+            />
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+};
+
+const ProjectRuleDeleteDialog: React.FC<{
+  ruleToDelete: ProjectRule | null;
+  deleting: boolean;
+  onCancel: () => void;
+  onDelete: () => void;
+}> = ({ ruleToDelete, deleting, onCancel, onDelete }) => {
+  const { t } = useTranslation(['projects', 'common']);
+
+  return (
+    <Dialog open={!!ruleToDelete} onOpenChange={(open) => !open && !deleting && onCancel()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{t('projects:detail.rules.delete.title')}</DialogTitle>
+          <DialogDescription>
+            {t('projects:detail.rules.delete.description', { name: ruleToDelete?.name ?? '' })}
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={onCancel} disabled={deleting}>
+            {t('common:buttons.cancel')}
+          </Button>
+          <Button type="button" variant="destructive" onClick={onDelete} disabled={deleting}>
+            {t('common:buttons.delete')}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
 const ProjectRules: React.FC<ProjectRulesProps> = ({ projectId, permissions, className }) => {
   const { t } = useTranslation(['projects', 'common']);
   const canView = hasPermission(permissions, 'projects.rules.view');
@@ -210,6 +460,33 @@ const ProjectRules: React.FC<ProjectRulesProps> = ({ projectId, permissions, cla
     [t],
   );
 
+  const webhookNameById = useMemo(
+    () => new Map(recipients.webhooks.map((webhook) => [webhook.id, webhook.name])),
+    [recipients.webhooks],
+  );
+
+  const actionSummary = useCallback(
+    (rule: ProjectRule) => {
+      const parts: string[] = [];
+      const userCount = rule.actionConfig.recipientUserIds.length;
+      const roleCount = rule.actionConfig.recipientRoleIds.length;
+      if (userCount > 0) {
+        parts.push(t('projects:detail.rules.actionSummary.users', { count: userCount }));
+      }
+      if (roleCount > 0) {
+        parts.push(t('projects:detail.rules.actionSummary.roles', { count: roleCount }));
+      }
+      if (rule.actionConfig.webhookIds.length > 0) {
+        const names = rule.actionConfig.webhookIds
+          .map((id) => webhookNameById.get(id) ?? id)
+          .join(', ');
+        parts.push(t('projects:detail.rules.actionSummary.webhooks', { names }));
+      }
+      return parts.length > 0 ? parts.join(' · ') : t('projects:detail.rules.actionSummary.none');
+    },
+    [t, webhookNameById],
+  );
+
   const handleSubmit = async (payload: ProjectRuleFormPayload) => {
     try {
       if (formRule) {
@@ -270,135 +547,28 @@ const ProjectRules: React.FC<ProjectRulesProps> = ({ projectId, permissions, cla
 
   return (
     <div className={cn('space-y-3', className)}>
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div className="space-y-1.5">
-          <h2 className="text-base font-semibold leading-none">
-            {t('projects:detail.rules.title')}
-          </h2>
-          <p className="text-sm text-muted-foreground">{t('projects:detail.rules.description')}</p>
-        </div>
-        {canCreate && (
-          <Button
-            type="button"
-            size="sm"
-            onClick={() => dispatch({ type: 'openCreateForm' })}
-            disabled={loading || error}
-          >
-            <PlusIcon className="size-4" />
-            {t('projects:detail.rules.actions.add')}
-          </Button>
-        )}
-      </div>
+      <ProjectRulesHeader
+        canCreate={canCreate}
+        loading={loading}
+        error={error}
+        onCreate={() => dispatch({ type: 'openCreateForm' })}
+      />
 
-      <div className="rounded-lg border border-border bg-background">
-        {loading ? (
-          <div className="space-y-3 p-4">
-            <Skeleton className="h-14 w-full" />
-            <Skeleton className="h-14 w-full" />
-          </div>
-        ) : error ? (
-          <div className="flex flex-col items-center gap-3 px-4 py-8 text-center">
-            <p className="text-sm text-muted-foreground">
-              {t('projects:detail.rules.errors.loadFailed')}
-            </p>
-            <Button type="button" variant="outline" size="sm" onClick={() => void loadRules()}>
-              <RefreshCwIcon className="size-4" />
-              {t('common:buttons.refresh')}
-            </Button>
-          </div>
-        ) : sortedRules.length === 0 ? (
-          <div className="flex flex-col items-center gap-3 px-4 py-8 text-center">
-            <BellRingIcon className="size-8 text-muted-foreground" />
-            <div className="space-y-1">
-              <p className="text-sm font-medium">{t('projects:detail.rules.empty.title')}</p>
-              <p className="text-sm text-muted-foreground">
-                {t('projects:detail.rules.empty.description')}
-              </p>
-            </div>
-          </div>
-        ) : (
-          <ul className="divide-y divide-border">
-            {sortedRules.map((rule) => {
-              const canUpdateThis = canUpdate && canModifyRuleField(rule, permissions);
-              const disabledReason =
-                canUpdate && !canUpdateThis
-                  ? t('projects:detail.rules.costPermissionRequired')
-                  : undefined;
-              return (
-                <li
-                  key={rule.id}
-                  className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
-                >
-                  <div className="flex min-w-0 items-start gap-3">
-                    <div className="flex size-9 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
-                      <BellRingIcon className="size-4" />
-                    </div>
-                    <div className="min-w-0 space-y-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <p className="truncate text-sm font-medium text-foreground">{rule.name}</p>
-                        {rule.conditionMet && (
-                          <span className="rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-[10px] font-medium uppercase text-primary">
-                            {t('projects:detail.rules.conditionMet')}
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-sm text-muted-foreground">{ruleSummary(rule)}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center justify-end gap-2">
-                    <Tooltip disabled={!disabledReason}>
-                      <TooltipTrigger asChild>
-                        <span className="inline-flex">
-                          <Switch
-                            checked={rule.isEnabled}
-                            disabled={!canUpdateThis || busyRuleId === rule.id}
-                            onCheckedChange={(checked) => void handleToggle(rule, checked)}
-                            aria-label={t('projects:detail.rules.actions.toggle')}
-                          />
-                        </span>
-                      </TooltipTrigger>
-                      <TooltipContent>{disabledReason}</TooltipContent>
-                    </Tooltip>
-                    {canUpdate && (
-                      <Tooltip disabled={!disabledReason}>
-                        <TooltipTrigger asChild>
-                          <span className="inline-flex">
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon-sm"
-                              disabled={!canUpdateThis || busyRuleId === rule.id}
-                              onClick={() => dispatch({ type: 'openEditForm', rule })}
-                              aria-label={t('projects:detail.rules.actions.edit')}
-                            >
-                              <PencilIcon className="size-4" />
-                            </Button>
-                          </span>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          {disabledReason ?? t('projects:detail.rules.actions.edit')}
-                        </TooltipContent>
-                      </Tooltip>
-                    )}
-                    {canDelete && (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon-sm"
-                        disabled={busyRuleId === rule.id}
-                        onClick={() => dispatch({ type: 'confirmDelete', rule })}
-                        aria-label={t('projects:detail.rules.actions.delete')}
-                      >
-                        <Trash2Icon className="size-4 text-destructive" />
-                      </Button>
-                    )}
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </div>
+      <ProjectRulesPanel
+        loading={loading}
+        error={error}
+        sortedRules={sortedRules}
+        permissions={permissions}
+        canUpdate={canUpdate}
+        canDelete={canDelete}
+        busyRuleId={busyRuleId}
+        ruleSummary={ruleSummary}
+        actionSummary={actionSummary}
+        onRefresh={() => void loadRules()}
+        onToggle={(rule, checked) => void handleToggle(rule, checked)}
+        onEdit={(rule) => dispatch({ type: 'openEditForm', rule })}
+        onDelete={(rule) => dispatch({ type: 'confirmDelete', rule })}
+      />
 
       <ProjectRuleFormModal
         open={formOpen}
@@ -409,37 +579,12 @@ const ProjectRules: React.FC<ProjectRulesProps> = ({ projectId, permissions, cla
         onSubmit={handleSubmit}
       />
 
-      <Dialog
-        open={!!ruleToDelete}
-        onOpenChange={(open) => !open && !deletingSelectedRule && dispatch({ type: 'clearDelete' })}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{t('projects:detail.rules.delete.title')}</DialogTitle>
-            <DialogDescription>
-              {t('projects:detail.rules.delete.description', { name: ruleToDelete?.name ?? '' })}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => dispatch({ type: 'clearDelete' })}
-              disabled={deletingSelectedRule}
-            >
-              {t('common:buttons.cancel')}
-            </Button>
-            <Button
-              type="button"
-              variant="destructive"
-              onClick={() => void handleDelete()}
-              disabled={deletingSelectedRule}
-            >
-              {t('common:buttons.delete')}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ProjectRuleDeleteDialog
+        ruleToDelete={ruleToDelete}
+        deleting={deletingSelectedRule}
+        onCancel={() => dispatch({ type: 'clearDelete' })}
+        onDelete={() => void handleDelete()}
+      />
     </div>
   );
 };

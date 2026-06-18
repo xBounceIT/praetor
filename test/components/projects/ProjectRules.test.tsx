@@ -54,7 +54,15 @@ mock.module('../../../components/projects/ProjectRuleFormModal', () => ({
               { field: 'revenue', operator: 'gte', value: '1000', valueType: 'literal' },
             ],
             actionType: 'notify',
-            actionConfig: { recipientUserIds: ['u1'], recipientRoleIds: [] },
+            actionConfig: {
+              recipientUserIds: ['u1'],
+              recipientRoleIds: [],
+              webhookIds: ['webhook-1'],
+              actions: [
+                { type: 'notify', recipientType: 'user', recipientUserIds: ['u1'] },
+                { type: 'webhook', webhookId: 'webhook-1' },
+              ],
+            },
             isEnabled: true,
           })
         }
@@ -78,7 +86,12 @@ const RULE: ProjectRule = {
   conditionLogic: 'and',
   conditions: [{ field: 'revenue', operator: 'gte', value: '1000', valueType: 'literal' }],
   actionType: 'notify',
-  actionConfig: { recipientUserIds: ['u1'], recipientRoleIds: [] },
+  actionConfig: {
+    recipientUserIds: ['u1'],
+    recipientRoleIds: [],
+    webhookIds: [],
+    actions: [{ type: 'notify', recipientType: 'user', recipientUserIds: ['u1'] }],
+  },
   isEnabled: true,
   conditionMet: false,
   lastTriggeredAt: null,
@@ -114,6 +127,7 @@ beforeEach(() => {
   recipientsMock.mockResolvedValue({
     users: [{ id: 'u1', name: 'Alice', username: 'alice', avatarInitials: 'AL' }],
     roles: [{ id: 'manager', name: 'Manager' }],
+    webhooks: [{ id: 'webhook-1', name: 'Slack' }],
   });
   createMock.mockResolvedValue({ ...RULE, id: 'pr-created', name: 'New rule' });
   updateMock.mockImplementation(
@@ -155,7 +169,7 @@ describe('<ProjectRules />', () => {
     expect(screen.queryByText('projects:detail.rules.empty.title')).not.toBeInTheDocument();
 
     pendingRules.resolve([]);
-    pendingRecipients.resolve({ users: [], roles: [] });
+    pendingRecipients.resolve({ users: [], roles: [], webhooks: [] });
 
     await waitFor(() => expect(addButton).not.toBeDisabled());
   });
@@ -193,8 +207,31 @@ describe('<ProjectRules />', () => {
     await waitFor(() => expect(createMock).toHaveBeenCalled());
     expect(createMock).toHaveBeenCalledWith(
       'p1',
-      expect.objectContaining({ name: 'New rule', actionType: 'notify' }),
+      expect.objectContaining({
+        name: 'New rule',
+        actionType: 'notify',
+        actionConfig: expect.objectContaining({ webhookIds: ['webhook-1'] }),
+      }),
     );
+  });
+
+  test('renders webhook action summaries', async () => {
+    listMock.mockResolvedValue([
+      {
+        ...RULE,
+        actionConfig: {
+          recipientUserIds: [],
+          recipientRoleIds: [],
+          webhookIds: ['webhook-1'],
+          actions: [{ type: 'webhook', webhookId: 'webhook-1' }],
+        },
+      },
+    ]);
+    renderProjectRules(['projects.rules.view']);
+
+    expect(
+      await screen.findByText('projects:detail.rules.actionSummary.webhooks'),
+    ).toBeInTheDocument();
   });
 
   test('hides edit and delete controls, and disables toggle without matching permissions', async () => {

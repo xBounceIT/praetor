@@ -4,6 +4,7 @@ import * as realNotificationsRepo from '../../repositories/notificationsRepo.ts'
 import * as realProjectMetricsRepo from '../../repositories/projectMetricsRepo.ts';
 import * as realRecipientsRepo from '../../repositories/projectRuleRecipientsRepo.ts';
 import * as realProjectRulesRepo from '../../repositories/projectRulesRepo.ts';
+import * as realWebhooksService from '../../services/webhooks.ts';
 import { TX_SENTINEL } from '../helpers/txSentinel.ts';
 
 const drizzleSnap = { ...realDrizzle };
@@ -11,6 +12,7 @@ const rulesRepoSnap = { ...realProjectRulesRepo };
 const metricsRepoSnap = { ...realProjectMetricsRepo };
 const recipientsRepoSnap = { ...realRecipientsRepo };
 const notificationsRepoSnap = { ...realNotificationsRepo };
+const webhooksServiceSnap = { ...realWebhooksService };
 
 const listEnabledMock = mock();
 const listMetricsMock = mock();
@@ -18,6 +20,7 @@ const markConditionNotMetMock = mock();
 const markTriggeredMock = mock();
 const resolveRecipientsMock = mock();
 const createForUsersMock = mock();
+const dispatchWebhookByIdMock = mock();
 const runAtomicallyMock = mock(async (_exec: unknown, cb: (tx: unknown) => unknown) =>
   cb(TX_SENTINEL),
 );
@@ -34,7 +37,15 @@ const RULE = {
   conditionLogic: 'and' as const,
   conditions: [{ field: 'budget_used_pct', operator: 'gte', value: '80', valueType: 'literal' }],
   actionType: 'notify',
-  actionConfig: { recipientUserIds: ['u1'], recipientRoleIds: ['manager'] },
+  actionConfig: {
+    recipientUserIds: ['u1'],
+    recipientRoleIds: ['manager'],
+    webhookIds: [],
+    actions: [
+      { type: 'notify', recipientType: 'user', recipientUserIds: ['u1'] },
+      { type: 'notify', recipientType: 'role', recipientRoleIds: ['manager'] },
+    ],
+  },
   isEnabled: true,
   conditionMet: false,
   lastTriggeredAt: null,
@@ -80,6 +91,10 @@ beforeAll(async () => {
     ...notificationsRepoSnap,
     createForUsers: createForUsersMock,
   }));
+  mock.module('../../services/webhooks.ts', () => ({
+    ...webhooksServiceSnap,
+    dispatchWebhookById: dispatchWebhookByIdMock,
+  }));
 
   ({ evaluateProjectRulesOnce } = await import('../../services/projectRulesEvaluator.ts'));
 });
@@ -90,6 +105,7 @@ afterAll(() => {
   mock.module('../../repositories/projectMetricsRepo.ts', () => metricsRepoSnap);
   mock.module('../../repositories/projectRuleRecipientsRepo.ts', () => recipientsRepoSnap);
   mock.module('../../repositories/notificationsRepo.ts', () => notificationsRepoSnap);
+  mock.module('../../services/webhooks.ts', () => webhooksServiceSnap);
 });
 
 beforeEach(() => {
@@ -100,6 +116,7 @@ beforeEach(() => {
     markTriggeredMock,
     resolveRecipientsMock,
     createForUsersMock,
+    dispatchWebhookByIdMock,
     runAtomicallyMock,
   ]) {
     fn.mockReset();
@@ -111,6 +128,7 @@ beforeEach(() => {
   markTriggeredMock.mockResolvedValue(true);
   resolveRecipientsMock.mockResolvedValue(['u1', 'u2']);
   createForUsersMock.mockResolvedValue(2);
+  dispatchWebhookByIdMock.mockResolvedValue({ delivered: true, skipped: false, status: 204 });
 });
 
 describe('evaluateProjectRulesOnce', () => {
@@ -144,6 +162,7 @@ describe('evaluateProjectRulesOnce', () => {
 
     expect(result.triggered).toBe(0);
     expect(createForUsersMock).not.toHaveBeenCalled();
+    expect(dispatchWebhookByIdMock).not.toHaveBeenCalled();
   });
 
   test('resets condition state when the condition becomes false', async () => {
@@ -212,5 +231,67 @@ describe('evaluateProjectRulesOnce', () => {
 
     expect(result.triggered).toBe(1);
     expect(markTriggeredMock).toHaveBeenCalledWith('pr-1', expect.any(Date), TX_SENTINEL);
+  });
+
+  test('dispatches configured webhooks after the rising edge commit', async () => {
+    const now = new Date('2026-05-31T12:00:00Z');
+    listEnabledMock.mockResolvedValue([
+      {
+        ...RULE,
+        actionConfig: {
+          recipientUserIds: ['u1'],
+          recipientRoleIds: [],
+          webhookIds: ['webhook-1'],
+          actions: [
+            { type: 'notify', recipientType: 'user', recipientUserIds: ['u1'] },
+            { type: 'webhook', webhookId: 'webhook-1' },
+          ],
+        },
+      },
+    ]);
+
+    const result = await evaluateProjectRulesOnce({ now, exec: TX_SENTINEL as never });
+
+    expect(result).toEqual({ evaluated: 1, triggered: 1, reset: 0, notified: 2 });
+    expect(dispatchWebhookByIdMock).toHaveBeenCalledWith(
+      'webhook-1',
+      expect.objectContaining({
+        eventType: 'project_rule_triggered',
+        triggeredAt: '2026-05-31T12:00:00.000Z',
+        project: { id: 'p1', name: 'Project' },
+        rule: expect.objectContaining({ id: 'pr-1', name: 'Budget warning' }),
+        metrics: expect.objectContaining({ budgetUsedPct: 90, status: 'active' }),
+      }),
+    );
+  });
+
+  test('logs webhook dispatch failures without failing the rule evaluation', async () => {
+    const warn = mock();
+    dispatchWebhookByIdMock.mockRejectedValue(new Error('remote down'));
+    listEnabledMock.mockResolvedValue([
+      {
+        ...RULE,
+        actionConfig: {
+          recipientUserIds: [],
+          recipientRoleIds: [],
+          webhookIds: ['webhook-1'],
+          actions: [{ type: 'webhook', webhookId: 'webhook-1' }],
+        },
+      },
+    ]);
+
+    const result = await evaluateProjectRulesOnce({
+      exec: TX_SENTINEL as never,
+      logger: { error: mock(), warn },
+    });
+
+    expect(result).toEqual({ evaluated: 1, triggered: 1, reset: 0, notified: 0 });
+    expect(warn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        webhookId: 'webhook-1',
+        err: expect.objectContaining({ message: 'remote down' }),
+      }),
+      'Project rule webhook dispatch failed',
+    );
   });
 });

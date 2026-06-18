@@ -4,7 +4,7 @@ import type {
   WebhookHttpMethod,
 } from '../db/schema/webhooks.ts';
 import * as webhooksRepo from '../repositories/webhooksRepo.ts';
-import { encrypt } from '../utils/crypto.ts';
+import { decrypt, encrypt } from '../utils/crypto.ts';
 import { generatePrefixedId } from '../utils/order-ids.ts';
 
 // Plaintext input from the route. `authSecret` carries the raw credential the admin typed, or
@@ -139,4 +139,101 @@ export const updateWebhook = async (
   if (input.enabled !== undefined) patch.enabled = input.enabled;
 
   return webhooksRepo.update(id, patch);
+};
+
+export type WebhookDispatchPayload = Record<string, unknown>;
+
+export type WebhookDispatchResult = {
+  delivered: boolean;
+  skipped: boolean;
+  status?: number;
+  reason?: 'missing' | 'disabled';
+};
+
+export type WebhookDispatchOptions = {
+  fetchFn?: typeof fetch;
+  timeoutMs?: number;
+};
+
+const WEBHOOK_DISPATCH_TIMEOUT_MS = 5000;
+
+const jsonBodyAllowed = (method: WebhookHttpMethod): boolean => method !== 'GET';
+
+const setHeader = (headers: Record<string, string>, key: string, value: string) => {
+  const trimmedKey = key.trim();
+  if (!trimmedKey) return;
+  headers[trimmedKey] = value;
+};
+
+const buildDispatchHeaders = (
+  webhook: webhooksRepo.Webhook,
+  authSecret: string,
+  hasJsonBody: boolean,
+): Record<string, string> => {
+  const headers: Record<string, string> = {};
+  if (hasJsonBody) headers['Content-Type'] = 'application/json';
+
+  for (const header of webhook.customHeaders) {
+    setHeader(headers, header.key, header.value);
+  }
+
+  switch (webhook.authType) {
+    case 'bearer':
+      setHeader(headers, 'Authorization', `Bearer ${authSecret}`);
+      break;
+    case 'basic':
+      setHeader(
+        headers,
+        'Authorization',
+        `Basic ${Buffer.from(`${webhook.authUsername}:${authSecret}`).toString('base64')}`,
+      );
+      break;
+    case 'api_key':
+      setHeader(headers, webhook.authHeaderName, authSecret);
+      break;
+    case 'none':
+      break;
+  }
+
+  return headers;
+};
+
+export const dispatchWebhook = async (
+  webhook: webhooksRepo.Webhook,
+  payload: WebhookDispatchPayload,
+  options: WebhookDispatchOptions = {},
+): Promise<WebhookDispatchResult> => {
+  const hasJsonBody = jsonBodyAllowed(webhook.httpMethod);
+  const authSecret = webhook.authSecret ? decrypt(webhook.authSecret) : '';
+  const controller = new AbortController();
+  const timer = setTimeout(
+    () => controller.abort(),
+    options.timeoutMs ?? WEBHOOK_DISPATCH_TIMEOUT_MS,
+  );
+
+  try {
+    const response = await (options.fetchFn ?? fetch)(webhook.url, {
+      method: webhook.httpMethod,
+      headers: buildDispatchHeaders(webhook, authSecret, hasJsonBody),
+      ...(hasJsonBody ? { body: JSON.stringify(payload) } : {}),
+      signal: controller.signal,
+    });
+    if (!response.ok) {
+      throw new Error(`Webhook ${webhook.id} dispatch failed: HTTP ${response.status}`);
+    }
+    return { delivered: true, skipped: false, status: response.status };
+  } finally {
+    clearTimeout(timer);
+  }
+};
+
+export const dispatchWebhookById = async (
+  webhookId: string,
+  payload: WebhookDispatchPayload,
+  options: WebhookDispatchOptions = {},
+): Promise<WebhookDispatchResult> => {
+  const webhook = await webhooksRepo.findById(webhookId);
+  if (!webhook) return { delivered: false, skipped: true, reason: 'missing' };
+  if (!webhook.enabled) return { delivered: false, skipped: true, reason: 'disabled' };
+  return dispatchWebhook(webhook, payload, options);
 };
