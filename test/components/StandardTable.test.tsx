@@ -1425,6 +1425,55 @@ describe('<StandardTable />', () => {
     expect(rows[2]).toContain('Bob');
   });
 
+  test('loading a stored view hides columns through legacy hidden column aliases', () => {
+    type ContactRow = Row & { email: string; phone: string };
+    const contactRows: ContactRow[] = sampleRows.map((row) => ({
+      ...row,
+      email: `${row.name.toLowerCase()}@example.com`,
+      phone: `555-${row.id}`,
+    }));
+    const contactColumns = [
+      { header: 'Name', accessorKey: 'name' as const, id: 'name' },
+      {
+        header: 'Email',
+        accessorKey: 'email' as const,
+        id: 'email',
+        legacyHiddenColumnIds: ['contact'],
+      },
+      {
+        header: 'Phone',
+        accessorKey: 'phone' as const,
+        id: 'phone',
+        legacyHiddenColumnIds: ['contact'],
+      },
+    ];
+    const stored = [
+      {
+        id: 'v1',
+        name: 'No contact',
+        hiddenColIds: ['contact'],
+        sortState: null,
+        filterState: {},
+      },
+    ];
+    localStorage.setItem('praetor_table_customviews_contact_alias', JSON.stringify(stored));
+    localStorage.setItem('praetor_table_activeview_contact_alias', 'v1');
+
+    render(
+      <StandardTable<ContactRow>
+        title="Contact Alias"
+        data={contactRows}
+        columns={contactColumns}
+      />,
+    );
+
+    expect(screen.getByText('Name')).toBeInTheDocument();
+    expect(screen.queryByText('Email')).not.toBeInTheDocument();
+    expect(screen.queryByText('Phone')).not.toBeInTheDocument();
+    expect(screen.queryByText('alice@example.com')).not.toBeInTheDocument();
+    expect(screen.queryByText('555-1')).not.toBeInTheDocument();
+  });
+
   test('deleting a saved view removes it from localStorage', async () => {
     const seeded = [
       { id: 'v1', name: 'View 1', hiddenColIds: [], sortState: null, filterState: {} },

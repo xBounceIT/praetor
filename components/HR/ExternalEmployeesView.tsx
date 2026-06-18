@@ -132,6 +132,7 @@ const ExternalEmployeesTable: React.FC<ExternalEmployeesTableProps> = ({
       {
         header: t('common:labels.email'),
         accessorKey: 'email',
+        legacyHiddenColumnIds: ['contact'],
         cell: ({ value }) => (
           <OptionalText value={value} fallback={notSetLabel} className="text-foreground" />
         ),
@@ -139,6 +140,7 @@ const ExternalEmployeesTable: React.FC<ExternalEmployeesTableProps> = ({
       {
         header: t('common:labels.phone'),
         accessorKey: 'phone',
+        legacyHiddenColumnIds: ['contact'],
         cell: ({ value }) => <OptionalText value={value} fallback={notSetLabel} />,
       },
       {

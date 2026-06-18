@@ -560,6 +560,7 @@ export type Column<T> = {
   filterFormat?: (value: T[keyof T] | string | number | boolean | null | undefined) => string;
   align?: 'left' | 'center' | 'right';
   hidden?: boolean;
+  legacyHiddenColumnIds?: string[];
   sticky?: 'right';
   onCellDoubleClick?: (row: T) => void; // Cell-level double click handler
 };
@@ -574,12 +575,20 @@ const isTableActionColumn = <T,>(col: Column<T>) =>
 const getViewApplicationForColumns = <T,>(view: CustomView, columns: Column<T>[] | undefined) => {
   const gearIds = new Set<string>();
   const allIds = new Set<string>();
+  const hiddenColumnAliases = new Map<string, string[]>();
   for (const column of columns ?? []) {
     const columnId = getColumnId(column);
     allIds.add(columnId);
-    if (!column.hidden && !isTableActionColumn(column)) gearIds.add(columnId);
+    if (!column.hidden && !isTableActionColumn(column)) {
+      gearIds.add(columnId);
+      for (const legacyId of column.legacyHiddenColumnIds ?? []) {
+        const mappedIds = hiddenColumnAliases.get(legacyId);
+        if (mappedIds) mappedIds.push(columnId);
+        else hiddenColumnAliases.set(legacyId, [columnId]);
+      }
+    }
   }
-  return computeViewApplication(view, gearIds, allIds);
+  return computeViewApplication(view, gearIds, allIds, hiddenColumnAliases);
 };
 
 const readStoredActiveViewId = (title: string, skipSavedView: boolean) => {

@@ -133,8 +133,18 @@ export const computeViewApplication = (
   view: CustomView,
   gearColIds: ReadonlySet<string>,
   allColIds: ReadonlySet<string>,
+  hiddenColumnAliases?: ReadonlyMap<string, readonly string[]>,
 ): { hiddenColIds: Set<string>; sortState: SortState; filterState: FilterState } => {
-  const hiddenColIds = new Set(view.hiddenColIds.filter((id) => gearColIds.has(id)));
+  const hiddenColIds = new Set<string>();
+  for (const id of view.hiddenColIds) {
+    if (gearColIds.has(id)) {
+      hiddenColIds.add(id);
+      continue;
+    }
+    for (const mappedId of hiddenColumnAliases?.get(id) ?? []) {
+      if (gearColIds.has(mappedId)) hiddenColIds.add(mappedId);
+    }
+  }
   const sortState = view.sortState && allColIds.has(view.sortState.colId) ? view.sortState : null;
   const filterState: FilterState = {};
   Object.entries(view.filterState ?? {}).forEach(([k, v]) => {

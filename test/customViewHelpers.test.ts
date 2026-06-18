@@ -205,6 +205,19 @@ describe('computeViewApplication', () => {
     expect(result.hiddenColIds).toEqual(new Set(['name']));
   });
 
+  test('maps legacy hidden column ids to current gear-visible columns', () => {
+    const result = computeViewApplication(
+      view({ hiddenColIds: ['contact', 'legacyStatus'] }),
+      new Set(['email', 'phone']),
+      new Set(['email', 'phone', 'status']),
+      new Map([
+        ['contact', ['email', 'phone']],
+        ['legacyStatus', ['status']],
+      ]),
+    );
+    expect(result.hiddenColIds).toEqual(new Set(['email', 'phone']));
+  });
+
   test('keeps sortState targeting any column in the full set', () => {
     const result = computeViewApplication(
       view({ sortState: { colId: 'status', px: 'desc' } }),
