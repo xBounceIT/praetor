@@ -211,7 +211,7 @@
     },
     "rules": {
       "title": "Regole della commessa",
-      "description": "Controlli automatici che monitorano questa commessa e ti avvisano quando qualcosa richiede attenzione.",
+      "description": "Controlli automatici che monitorano questa commessa e attivano notifiche o webhook quando qualcosa richiede attenzione.",
       "conditionMet": "Verificata",
       "costPermissionRequired": "I campi derivati dai costi richiedono il permesso sui report costi.",
       "actions": {
@@ -220,11 +220,13 @@
         "delete": "Elimina regola",
         "toggle": "Abilita regola",
         "addCondition": "Aggiungi condizione",
-        "removeCondition": "Rimuovi condizione"
+        "removeCondition": "Rimuovi condizione",
+        "addAction": "Aggiungi azione",
+        "removeAction": "Rimuovi azione"
       },
       "empty": {
         "title": "Nessuna regola configurata",
-        "description": "Crea una regola per notificare utenti o ruoli quando le metriche della commessa superano una soglia."
+        "description": "Crea una regola per notificare utenti o ruoli, oppure inviare un webhook, quando le metriche della commessa superano una soglia."
       },
       "delete": {
         "title": "Elimina regola commessa",
@@ -233,7 +235,7 @@
       "form": {
         "createTitle": "Crea regola commessa",
         "editTitle": "Modifica regola commessa",
-        "description": "Scegli la condizione da monitorare e chi riceve la notifica.",
+        "description": "Scegli la condizione da monitorare e le azioni da eseguire.",
         "name": "Nome regola",
         "namePlaceholder": "es. Budget oltre 80%",
         "field": "Campo",
@@ -243,12 +245,32 @@
         "compareAgainst": "Confronta",
         "targetField": "Altro campo",
         "conditionLogic": "Combinazione",
+        "actions": "Azioni",
+        "action": "Azione",
+        "actionValue": "Destinatari / webhook",
+        "actionTypes": {
+          "notify": "Invia notifica a",
+          "webhook": "Invia a webhook"
+        },
+        "recipientType": "Destinatario",
+        "recipientTypes": {
+          "user": "Utente",
+          "role": "Ruolo"
+        },
         "users": "Utenti",
         "usersPlaceholder": "Seleziona utenti assegnati",
         "roles": "Ruoli",
         "rolesPlaceholder": "Seleziona ruoli",
+        "webhook": "Webhook",
+        "webhookPlaceholder": "Seleziona webhook",
         "enabled": "Abilitata",
         "enabledDescription": "Le regole abilitate vengono controllate dal valutatore pianificato."
+      },
+      "actionSummary": {
+        "users": "{{count}} utenti",
+        "roles": "{{count}} ruoli",
+        "webhooks": "Webhook: {{names}}",
+        "none": "Nessuna azione configurata"
       },
       "conditionLogic": {
         "and": "Tutte le condizioni (AND)",
@@ -296,7 +318,11 @@
         "operatorRequired": "L'operatore è obbligatorio.",
         "valueInvalid": "Inserisci un valore valido per il campo selezionato.",
         "conditionsRequired": "Aggiungi almeno una condizione.",
-        "recipientsRequired": "Seleziona almeno un utente o un ruolo destinatario."
+        "recipientsRequired": "Seleziona almeno un utente o un ruolo destinatario.",
+        "actionsRequired": "Aggiungi almeno una azione.",
+        "usersRequired": "Seleziona almeno un utente.",
+        "rolesRequired": "Seleziona almeno un ruolo.",
+        "webhookRequired": "Seleziona un webhook."
       },
       "toasts": {
         "created": "Regola commessa creata.",

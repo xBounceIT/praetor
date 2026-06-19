@@ -56,7 +56,15 @@ describe('projectRulesRepo', () => {
           { field: 'budget_used_pct', operator: 'gte', value: '80', valueType: 'literal' },
         ],
         actionType: 'notify',
-        actionConfig: { recipientUserIds: ['u1'], recipientRoleIds: ['manager'] },
+        actionConfig: {
+          recipientUserIds: ['u1'],
+          recipientRoleIds: ['manager'],
+          webhookIds: [],
+          actions: [
+            { type: 'notify', recipientType: 'user', recipientUserIds: ['u1'] },
+            { type: 'notify', recipientType: 'role', recipientRoleIds: ['manager'] },
+          ],
+        },
         isEnabled: true,
         conditionMet: false,
         lastTriggeredAt: 1700000050000,
@@ -87,6 +95,12 @@ describe('projectRulesRepo', () => {
         actionConfig: {
           recipientUserIds: [' u1 ', 'u1', ''],
           recipientRoleIds: [' manager ', 'manager', ''],
+          webhookIds: [' webhook-1 ', 'webhook-1', ''],
+          actions: [
+            { type: 'notify', recipientType: 'user', recipientUserIds: ['u2', 'u2'] },
+            { type: 'notify', recipientType: 'role', recipientRoleIds: ['admin', 'admin'] },
+            { type: 'webhook', webhookId: 'webhook-2' },
+          ],
         },
         isEnabled: true,
         createdBy: 'u-admin',
@@ -96,8 +110,15 @@ describe('projectRulesRepo', () => {
 
     expect(exec.calls[0].params).toContain(
       JSON.stringify({
-        recipientUserIds: ['u1'],
-        recipientRoleIds: ['manager'],
+        recipientUserIds: ['u1', 'u2'],
+        recipientRoleIds: ['manager', 'admin'],
+        webhookIds: ['webhook-1', 'webhook-2'],
+        actions: [
+          { type: 'notify', recipientType: 'user', recipientUserIds: ['u1', 'u2'] },
+          { type: 'notify', recipientType: 'role', recipientRoleIds: ['manager', 'admin'] },
+          { type: 'webhook', webhookId: 'webhook-1' },
+          { type: 'webhook', webhookId: 'webhook-2' },
+        ],
       }),
     );
   });

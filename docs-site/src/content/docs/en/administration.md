@@ -126,4 +126,4 @@ Each target defines:
 
 Create, edit, and delete actions are gated by the create, update, and delete permissions respectively, and every change is written to the audit log.
 
-This page configures targets only; the events that trigger each webhook are wired up separately.
+This page configures targets only; the events that trigger each webhook are wired up separately, for example in job-rule actions.

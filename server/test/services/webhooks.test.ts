@@ -7,6 +7,7 @@ const cryptoSnapshot = { ...realCrypto };
 const repoSnapshot = { ...realWebhooksRepo };
 
 const encryptMock = mock((plaintext: string) => `enc(${plaintext})`);
+const decryptMock = mock((ciphertext: string) => `dec(${ciphertext})`);
 const insertMock = mock();
 const updateMock = mock();
 const findByIdMock = mock();
@@ -17,6 +18,7 @@ beforeAll(async () => {
   mock.module('../../utils/crypto.ts', () => ({
     ...cryptoSnapshot,
     encrypt: encryptMock,
+    decrypt: decryptMock,
     MASKED_SECRET: '********',
   }));
   mock.module('../../repositories/webhooksRepo.ts', () => ({
@@ -50,11 +52,14 @@ const existingWebhook = (
   ...overrides,
 });
 
+const asFetch = (fn: unknown): typeof fetch => fn as typeof fetch;
+
 const insertedArg = () => insertMock.mock.calls[0]?.[0] as realWebhooksRepo.NewWebhook;
 const updatedPatch = () => updateMock.mock.calls[0]?.[1] as realWebhooksRepo.WebhookPatch;
 
 beforeEach(() => {
   encryptMock.mockClear();
+  decryptMock.mockClear();
   insertMock.mockReset();
   updateMock.mockReset();
   findByIdMock.mockReset();
@@ -265,5 +270,130 @@ describe('updateWebhook', () => {
       webhooksService.updateWebhook('webhook-1', { authType: 'api_key' }),
     ).rejects.toThrow('authHeaderName is required');
     expect(updateMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('dispatchWebhook', () => {
+  test('sends a JSON body with custom headers and bearer auth', async () => {
+    const fetchMock = mock(
+      async (_input: Parameters<typeof fetch>[0], _init?: Parameters<typeof fetch>[1]) =>
+        new Response(null, { status: 204 }),
+    );
+    const webhook = existingWebhook({
+      authType: 'bearer',
+      authSecret: 'enc(tok)',
+      customHeaders: [{ key: 'X-Custom', value: '1' }],
+    });
+
+    const result = await webhooksService.dispatchWebhook(
+      webhook,
+      { eventType: 'project_rule_triggered' },
+      { fetchFn: asFetch(fetchMock) },
+    );
+
+    expect(result).toEqual({ delivered: true, skipped: false, status: 204 });
+    expect(decryptMock).toHaveBeenCalledWith('enc(tok)');
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://example.com/hook',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ eventType: 'project_rule_triggered' }),
+        headers: expect.objectContaining({
+          'Content-Type': 'application/json',
+          'X-Custom': '1',
+          Authorization: 'Bearer dec(enc(tok))',
+        }),
+      }),
+    );
+  });
+
+  test('sends api key auth under the configured header', async () => {
+    const fetchMock = mock(
+      async (_input: Parameters<typeof fetch>[0], _init?: Parameters<typeof fetch>[1]) =>
+        new Response(null, { status: 200 }),
+    );
+    const webhook = existingWebhook({
+      authType: 'api_key',
+      authHeaderName: 'X-API-Key',
+      authSecret: 'enc(key)',
+    });
+
+    await webhooksService.dispatchWebhook(webhook, { ok: true }, { fetchFn: asFetch(fetchMock) });
+
+    expect(fetchMock.mock.calls[0][1]).toEqual(
+      expect.objectContaining({
+        headers: expect.objectContaining({ 'X-API-Key': 'dec(enc(key))' }),
+      }),
+    );
+  });
+
+  test('does not send a body for GET webhooks', async () => {
+    const fetchMock = mock(
+      async (_input: Parameters<typeof fetch>[0], _init?: Parameters<typeof fetch>[1]) =>
+        new Response(null, { status: 200 }),
+    );
+    const webhook = existingWebhook({ httpMethod: 'GET', authType: 'none', authSecret: '' });
+
+    await webhooksService.dispatchWebhook(
+      webhook,
+      { ignored: true },
+      { fetchFn: asFetch(fetchMock) },
+    );
+
+    expect(fetchMock.mock.calls[0][1]).not.toHaveProperty('body');
+    expect(fetchMock.mock.calls[0][1]).not.toEqual(
+      expect.objectContaining({
+        headers: expect.objectContaining({ 'Content-Type': 'application/json' }),
+      }),
+    );
+  });
+
+  test('throws when the remote endpoint returns a non-2xx response', async () => {
+    const fetchMock = mock(
+      async (_input: Parameters<typeof fetch>[0], _init?: Parameters<typeof fetch>[1]) =>
+        new Response(null, { status: 500 }),
+    );
+
+    await expect(
+      webhooksService.dispatchWebhook(existingWebhook(), {}, { fetchFn: asFetch(fetchMock) }),
+    ).rejects.toThrow('HTTP 500');
+  });
+
+  test('aborts the fetch when the timeout elapses', async () => {
+    const fetchMock = mock(
+      (_input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) =>
+        new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () => reject(new Error('aborted')));
+        }),
+    );
+
+    await expect(
+      webhooksService.dispatchWebhook(
+        existingWebhook(),
+        {},
+        {
+          fetchFn: asFetch(fetchMock),
+          timeoutMs: 1,
+        },
+      ),
+    ).rejects.toThrow('aborted');
+  });
+});
+
+describe('dispatchWebhookById', () => {
+  test('skips missing and disabled webhook targets', async () => {
+    findByIdMock.mockResolvedValueOnce(null);
+    await expect(webhooksService.dispatchWebhookById('missing', {})).resolves.toEqual({
+      delivered: false,
+      skipped: true,
+      reason: 'missing',
+    });
+
+    findByIdMock.mockResolvedValueOnce(existingWebhook({ enabled: false }));
+    await expect(webhooksService.dispatchWebhookById('webhook-1', {})).resolves.toEqual({
+      delivered: false,
+      skipped: true,
+      reason: 'disabled',
+    });
   });
 });

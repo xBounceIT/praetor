@@ -1,5 +1,7 @@
 import type {
   ProjectRule,
+  ProjectRuleActionConfig,
+  ProjectRuleActionType,
   ProjectRuleCondition,
   ProjectRuleConditionLogic,
   ProjectRuleRecipientOptions,
@@ -13,11 +15,8 @@ export type ProjectRulePayload = {
   value: string;
   conditionLogic?: ProjectRuleConditionLogic;
   conditions?: ProjectRuleCondition[];
-  actionType?: 'notify';
-  actionConfig: {
-    recipientUserIds: string[];
-    recipientRoleIds: string[];
-  };
+  actionType?: ProjectRuleActionType;
+  actionConfig: ProjectRuleActionConfig;
   isEnabled?: boolean;
 };
 
@@ -31,7 +30,7 @@ export const projectRulesApi = {
   create: (projectId: string, data: ProjectRulePayload): Promise<ProjectRule> =>
     fetchApi<ProjectRule>(`/projects/${projectId}/rules`, {
       method: 'POST',
-      body: JSON.stringify({ actionType: 'notify', ...data }),
+      body: JSON.stringify(data),
     }),
 
   update: (

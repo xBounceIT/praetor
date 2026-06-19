@@ -70,7 +70,15 @@ const SAMPLE_RULE = {
   conditionLogic: 'and' as const,
   conditions: [{ field: 'budget_used_pct', operator: 'gte', value: '80', valueType: 'literal' }],
   actionType: 'notify',
-  actionConfig: { recipientUserIds: ['u2'], recipientRoleIds: ['manager'] },
+  actionConfig: {
+    recipientUserIds: ['u2'],
+    recipientRoleIds: ['manager'],
+    webhookIds: [],
+    actions: [
+      { type: 'notify', recipientType: 'user', recipientUserIds: ['u2'] },
+      { type: 'notify', recipientType: 'role', recipientRoleIds: ['manager'] },
+    ],
+  },
   isEnabled: true,
   conditionMet: false,
   lastTriggeredAt: null,
@@ -166,7 +174,7 @@ beforeEach(async () => {
   userHasRoleMock.mockResolvedValue(true);
   getRolePermissionsMock.mockImplementation(async () => currentPermissions);
   isProjectAssignedToUserMock.mockResolvedValue(true);
-  findInvalidRecipientIdsMock.mockResolvedValue({ userIds: [], roleIds: [] });
+  findInvalidRecipientIdsMock.mockResolvedValue({ userIds: [], roleIds: [], webhookIds: [] });
   findProjectNameMock.mockResolvedValue({ clientId: 'c1', name: 'Project' });
   app = await buildRouteTestApp(routePlugin, '/api/projects');
 });
@@ -207,6 +215,7 @@ describe('project rule routes', () => {
     listRecipientOptionsMock.mockResolvedValue({
       users: [{ id: 'u2', name: 'Alice', username: 'alice', avatarInitials: 'AL' }],
       roles: [{ id: 'manager', name: 'Manager' }],
+      webhooks: [{ id: 'webhook-1', name: 'Slack' }],
     });
 
     const res = await app.inject({
@@ -217,6 +226,7 @@ describe('project rule routes', () => {
 
     expect(res.statusCode).toBe(200);
     expect(JSON.parse(res.body).users[0].id).toBe('u2');
+    expect(JSON.parse(res.body).webhooks[0].id).toBe('webhook-1');
     expect(listRecipientOptionsMock).toHaveBeenCalledWith('p1');
   });
 
@@ -273,7 +283,12 @@ describe('project rule routes', () => {
         { field: 'revenue', operator: 'gte', value: '1000', valueType: 'literal' },
         { field: 'revenue', operator: 'gt', value: 'hours_to_date', valueType: 'field' },
       ],
-      actionConfig: { recipientUserIds: ['u2'], recipientRoleIds: [] },
+      actionConfig: {
+        recipientUserIds: ['u2'],
+        recipientRoleIds: [],
+        webhookIds: [],
+        actions: [{ type: 'notify', recipientType: 'user', recipientUserIds: ['u2'] }],
+      },
     };
     createRuleMock.mockResolvedValue(createdRule);
 
@@ -311,6 +326,59 @@ describe('project rule routes', () => {
     );
     expect(logAuditMock).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'project_rule.created', entityType: 'project_rule' }),
+    );
+  });
+
+  test('POST creates a rule with notification and webhook actions', async () => {
+    currentPermissions = ['projects.rules.create'];
+    const createdRule = {
+      ...SAMPLE_RULE,
+      field: 'revenue',
+      operator: 'gte',
+      value: '1000',
+      actionConfig: {
+        recipientUserIds: [],
+        recipientRoleIds: ['manager'],
+        webhookIds: ['webhook-1'],
+        actions: [
+          { type: 'notify', recipientType: 'role', recipientRoleIds: ['manager'] },
+          { type: 'webhook', webhookId: 'webhook-1' },
+        ],
+      },
+    };
+    createRuleMock.mockResolvedValue(createdRule);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/projects/p1/rules',
+      headers: authHeaders(),
+      payload: {
+        name: 'Revenue',
+        conditions: [{ field: 'revenue', operator: 'gte', value: '1000', valueType: 'literal' }],
+        actionConfig: {
+          actions: [
+            { type: 'notify', recipientType: 'role', recipientRoleIds: ['manager'] },
+            { type: 'webhook', webhookId: 'webhook-1' },
+          ],
+        },
+      },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(createRuleMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actionType: 'notify',
+        actionConfig: {
+          recipientUserIds: [],
+          recipientRoleIds: ['manager'],
+          webhookIds: ['webhook-1'],
+          actions: [
+            { type: 'notify', recipientType: 'role', recipientRoleIds: ['manager'] },
+            { type: 'webhook', webhookId: 'webhook-1' },
+          ],
+        },
+      }),
+      TX_SENTINEL,
     );
   });
 
@@ -370,7 +438,11 @@ describe('project rule routes', () => {
 
   test('POST rejects invalid recipients', async () => {
     currentPermissions = ['projects.rules.create'];
-    findInvalidRecipientIdsMock.mockResolvedValue({ userIds: ['u-missing'], roleIds: [] });
+    findInvalidRecipientIdsMock.mockResolvedValue({
+      userIds: ['u-missing'],
+      roleIds: [],
+      webhookIds: [],
+    });
 
     const res = await app.inject({
       method: 'POST',
@@ -386,7 +458,35 @@ describe('project rule routes', () => {
     });
 
     expect(res.statusCode).toBe(400);
-    expect(JSON.parse(res.body).error).toBe('actionConfig contains invalid recipients');
+    expect(JSON.parse(res.body).error).toBe('actionConfig contains invalid recipients or webhooks');
+    expect(createRuleMock).not.toHaveBeenCalled();
+  });
+
+  test('POST rejects missing or disabled webhooks', async () => {
+    currentPermissions = ['projects.rules.create'];
+    findInvalidRecipientIdsMock.mockResolvedValue({
+      userIds: [],
+      roleIds: [],
+      webhookIds: ['webhook-missing'],
+    });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/projects/p1/rules',
+      headers: authHeaders(),
+      payload: {
+        name: 'Webhook',
+        field: 'revenue',
+        operator: 'gte',
+        value: '1000',
+        actionConfig: {
+          actions: [{ type: 'webhook', webhookId: 'webhook-missing' }],
+        },
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body).error).toBe('actionConfig contains invalid recipients or webhooks');
     expect(createRuleMock).not.toHaveBeenCalled();
   });
 
@@ -480,6 +580,102 @@ describe('project rule routes', () => {
     expect(logAuditMock).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'project_rule.enabled' }),
     );
+  });
+
+  test('PUT can disable a rule that references an existing inactive webhook', async () => {
+    currentPermissions = ['projects.rules.update'];
+    const existingRule = {
+      ...SAMPLE_RULE,
+      field: 'revenue',
+      operator: 'gte',
+      value: '1000',
+      conditions: [{ field: 'revenue', operator: 'gte', value: '1000', valueType: 'literal' }],
+      actionConfig: {
+        recipientUserIds: [],
+        recipientRoleIds: [],
+        webhookIds: ['webhook-disabled'],
+        actions: [{ type: 'webhook', webhookId: 'webhook-disabled' }],
+      },
+    };
+    findRuleMock.mockResolvedValue(existingRule);
+    updateRuleMock.mockResolvedValue({ ...existingRule, isEnabled: false });
+    findInvalidRecipientIdsMock.mockImplementation(async (...args: unknown[]) => {
+      const options = args[3] as { allowedDisabledWebhookIds?: string[] } | undefined;
+      return options?.allowedDisabledWebhookIds?.includes('webhook-disabled')
+        ? { userIds: [], roleIds: [], webhookIds: [] }
+        : { userIds: [], roleIds: [], webhookIds: ['webhook-disabled'] };
+    });
+
+    const res = await app.inject({
+      method: 'PUT',
+      url: '/api/projects/p1/rules/pr-1',
+      headers: authHeaders(),
+      payload: { isEnabled: false },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(findInvalidRecipientIdsMock).toHaveBeenCalledWith(
+      'p1',
+      existingRule.actionConfig,
+      TX_SENTINEL,
+      { allowedDisabledWebhookIds: ['webhook-disabled'] },
+    );
+    expect(updateRuleMock).toHaveBeenCalledWith(
+      'p1',
+      'pr-1',
+      expect.objectContaining({ isEnabled: false, resetCondition: false }),
+      TX_SENTINEL,
+    );
+  });
+
+  test('PUT rejects newly added inactive webhooks on disabled rules', async () => {
+    currentPermissions = ['projects.rules.update'];
+    const existingRule = {
+      ...SAMPLE_RULE,
+      field: 'revenue',
+      operator: 'gte',
+      value: '1000',
+      conditions: [{ field: 'revenue', operator: 'gte', value: '1000', valueType: 'literal' }],
+      isEnabled: false,
+      actionConfig: {
+        recipientUserIds: [],
+        recipientRoleIds: [],
+        webhookIds: ['webhook-existing'],
+        actions: [{ type: 'webhook', webhookId: 'webhook-existing' }],
+      },
+    };
+    findRuleMock.mockResolvedValue(existingRule);
+    findInvalidRecipientIdsMock.mockResolvedValue({
+      userIds: [],
+      roleIds: [],
+      webhookIds: ['webhook-new-disabled'],
+    });
+
+    const res = await app.inject({
+      method: 'PUT',
+      url: '/api/projects/p1/rules/pr-1',
+      headers: authHeaders(),
+      payload: {
+        isEnabled: false,
+        actionConfig: {
+          actions: [{ type: 'webhook', webhookId: 'webhook-new-disabled' }],
+        },
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(findInvalidRecipientIdsMock).toHaveBeenCalledWith(
+      'p1',
+      {
+        recipientUserIds: [],
+        recipientRoleIds: [],
+        webhookIds: ['webhook-new-disabled'],
+        actions: [{ type: 'webhook', webhookId: 'webhook-new-disabled' }],
+      },
+      TX_SENTINEL,
+      { allowedDisabledWebhookIds: ['webhook-existing'] },
+    );
+    expect(updateRuleMock).not.toHaveBeenCalled();
   });
 
   test('DELETE checks ownership and writes an audit log', async () => {
