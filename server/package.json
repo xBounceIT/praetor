@@ -37,7 +37,7 @@
     "fastify-rate-limit": "npm:@fastify/rate-limit@^10.3.0",
     "jsonwebtoken": "^9.0.3",
     "ldapjs": "^3.0.7",
-    "nodemailer": "^8.0.7",
+    "nodemailer": "^9.0.1",
     "openid-client": "^6.8.4",
     "otplib": "^13.4.1",
     "pg": "^8.20.0",
