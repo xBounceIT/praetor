@@ -224,6 +224,7 @@ export const parseDocumentCodeCounter = (code: unknown): ParsedDocumentCodeCount
   if (parts.length < 3 || parts[0].length === 0) return null;
 
   let firstCandidate: ParsedDocumentCodeCounter | null = null;
+  let firstCandidateYearPart: string | null = null;
   let lastFullYearCandidate: ParsedDocumentCodeCounter | null = null;
   for (let yearIndex = 1; yearIndex <= parts.length - 2; yearIndex += 1) {
     const yearPart = parts[yearIndex];
@@ -234,10 +235,21 @@ export const parseDocumentCodeCounter = (code: unknown): ParsedDocumentCodeCount
     if (sequence === null) continue;
 
     const candidate = { year, sequence };
-    firstCandidate ??= candidate;
+    if (!firstCandidate) {
+      firstCandidate = candidate;
+      firstCandidateYearPart = yearPart;
+    }
     if (yearPart.length === 4 && !yearPart.startsWith('0')) {
       lastFullYearCandidate = candidate;
     }
+  }
+
+  if (
+    firstCandidate &&
+    firstCandidateYearPart?.length === 2 &&
+    lastFullYearCandidate?.year === firstCandidate.year
+  ) {
+    return firstCandidate;
   }
 
   return lastFullYearCandidate ?? firstCandidate;

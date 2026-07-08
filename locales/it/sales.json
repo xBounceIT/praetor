@@ -236,6 +236,8 @@
     "autoCodePlaceholder": "Generato automaticamente",
     "autoCodeDescription": "Lascia vuoto per usare il template dei codici documento.",
     "autoCodePreviewDescription": "Lascia vuoto per generare {{preview}} dal template dei codici documento.",
+    "inheritedCodePlaceholder": "Ereditato dal preventivo di origine",
+    "inheritedCodeDescription": "Lascia vuoto per ereditare il contatore dal preventivo di origine.",
     "offerColumn": "Offerta",
     "offerCodeColumn": "Codice offerta",
     "offerCodeRequired": "Il codice offerta è obbligatorio",

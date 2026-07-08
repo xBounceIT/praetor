@@ -236,6 +236,8 @@
     "autoCodePlaceholder": "Auto-generated",
     "autoCodeDescription": "Leave blank to use the document code template.",
     "autoCodePreviewDescription": "Leave blank to generate {{preview}} from the document code template.",
+    "inheritedCodePlaceholder": "Inherited from source quote",
+    "inheritedCodeDescription": "Leave blank to inherit the source quote code counter.",
     "offerColumn": "Offer",
     "offerCodeColumn": "Offer Code",
     "offerCodeRequired": "Offer code is required",

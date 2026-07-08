@@ -65,6 +65,14 @@ describe('document code templates', () => {
       sequence: 45,
     });
   });
+
+  test('keeps the leading counter when suffixes contain the same full year', () => {
+    expect(parseDocumentCodeCounter('PREV_26_0045_2026_01')).toEqual({
+      year: 2026,
+      sequence: 45,
+    });
+  });
+
   test('parses source counters when prefixes or literals contain separators', () => {
     expect(parseDocumentCodeCounter('ACME_PREV_26_0045')).toEqual({
       year: 2026,

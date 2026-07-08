@@ -439,11 +439,12 @@ const useClientOffersController = ({
     isDeleting,
     isReverting,
   } = state;
-  const { preview: clientOfferCodePreview } = useDocumentCodePreview('client_offer', {
-    enabled: isModalOpen && !editingOffer,
-  });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formData, setFormData] = useState<Partial<ClientOffer>>(() => getDefaultFormData());
+  const isSourcedCreate = !editingOffer && Boolean(formData.linkedQuoteId);
+  const { preview: clientOfferCodePreview } = useDocumentCodePreview('client_offer', {
+    enabled: isModalOpen && !editingOffer && !isSourcedCreate,
+  });
   const [previewVersion, setPreviewVersion] = useState<OfferVersion | null>(null);
   const [productRowToDelete, setProductRowToDelete] = useState<number | null>(null);
 
@@ -1342,6 +1343,7 @@ const useClientOffersController = ({
     isDeleting,
     isReverting,
     clientOfferCodePreview,
+    isSourcedCreate,
     errors,
     formData,
     setFormData,
@@ -1586,8 +1588,16 @@ const ClientOfferClientField: React.FC<{ controller: ClientOffersController }> =
 };
 
 const ClientOfferCodeField: React.FC<{ controller: ClientOffersController }> = ({ controller }) => {
-  const { t, errors, formData, setFormData, editingOffer, isReadOnly, clientOfferCodePreview } =
-    controller;
+  const {
+    t,
+    errors,
+    formData,
+    setFormData,
+    editingOffer,
+    isReadOnly,
+    clientOfferCodePreview,
+    isSourcedCreate,
+  } = controller;
 
   return (
     <Field data-invalid={Boolean(errors.id)}>
@@ -1601,8 +1611,12 @@ const ClientOfferCodeField: React.FC<{ controller: ClientOffersController }> = (
         disabled={isReadOnly}
         onChange={(event) => setFormData((prev) => ({ ...prev, id: event.target.value }))}
         placeholder={
-          clientOfferCodePreview ??
-          t('sales:clientOffers.autoCodePlaceholder', { defaultValue: 'Auto-generated' })
+          isSourcedCreate
+            ? t('sales:clientOffers.inheritedCodePlaceholder', {
+                defaultValue: 'Inherited from source quote',
+              })
+            : (clientOfferCodePreview ??
+              t('sales:clientOffers.autoCodePlaceholder', { defaultValue: 'Auto-generated' }))
         }
         className={errors.id ? 'border-red-300 font-medium' : 'font-medium'}
         aria-invalid={Boolean(errors.id)}
@@ -1610,15 +1624,19 @@ const ClientOfferCodeField: React.FC<{ controller: ClientOffersController }> = (
       <FieldError className="text-xs">{errors.id}</FieldError>
       {!editingOffer && (
         <FieldDescription className="text-xs">
-          {clientOfferCodePreview
-            ? t('sales:clientOffers.autoCodePreviewDescription', {
-                preview: clientOfferCodePreview,
-                defaultValue:
-                  'Leave blank to generate {{preview}} from the document code template.',
+          {isSourcedCreate
+            ? t('sales:clientOffers.inheritedCodeDescription', {
+                defaultValue: 'Leave blank to inherit the source quote code counter.',
               })
-            : t('sales:clientOffers.autoCodeDescription', {
-                defaultValue: 'Leave blank to generate the next code automatically.',
-              })}
+            : clientOfferCodePreview
+              ? t('sales:clientOffers.autoCodePreviewDescription', {
+                  preview: clientOfferCodePreview,
+                  defaultValue:
+                    'Leave blank to generate {{preview}} from the document code template.',
+                })
+              : t('sales:clientOffers.autoCodeDescription', {
+                  defaultValue: 'Leave blank to generate the next code automatically.',
+                })}
         </FieldDescription>
       )}
     </Field>
