@@ -223,16 +223,24 @@ export const parseDocumentCodeCounter = (code: unknown): ParsedDocumentCodeCount
   const parts = code.trim().split(DOCUMENT_CODE_COUNTER_SEPARATOR_PATTERN);
   if (parts.length < 3 || parts[0].length === 0) return null;
 
+  let firstCandidate: ParsedDocumentCodeCounter | null = null;
+  let lastFullYearCandidate: ParsedDocumentCodeCounter | null = null;
   for (let yearIndex = 1; yearIndex <= parts.length - 2; yearIndex += 1) {
-    const year = parseDocumentCodeYearPart(parts[yearIndex]);
+    const yearPart = parts[yearIndex];
+    const year = parseDocumentCodeYearPart(yearPart);
     if (year === null) continue;
 
     const sequence = parseDocumentCodeSequencePart(parts[yearIndex + 1]);
     if (sequence === null) continue;
-    return { year, sequence };
+
+    const candidate = { year, sequence };
+    firstCandidate ??= candidate;
+    if (yearPart.length === 4 && !yearPart.startsWith('0')) {
+      lastFullYearCandidate = candidate;
+    }
   }
 
-  return null;
+  return lastFullYearCandidate ?? firstCandidate;
 };
 
 export const renderDocumentCode = (

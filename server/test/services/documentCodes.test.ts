@@ -181,6 +181,24 @@ describe('allocateDocumentCode', () => {
     expect(reserveSequenceAtLeastMock).toHaveBeenCalledWith('client_offer', 2026, 7, TX_SENTINEL);
   });
 
+  test('uses generic fallback full years when no current source template matches', async () => {
+    findByModuleIdMock.mockResolvedValue({
+      moduleId: 'client_offer',
+      label: 'Client offers',
+      prefix: 'OFF',
+      template: '{PREFIX}_{YYYY}_{SEQ}',
+      sequencePadding: 4,
+    });
+    listMock.mockResolvedValue([]);
+
+    const code = await allocateDocumentCode('client_offer', {
+      exec: TX_SENTINEL as never,
+      sourceCode: 'ACME_12_345_2026_0007',
+    });
+
+    expect(code).toBe('OFF_2026_0007');
+    expect(reserveSequenceAtLeastMock).toHaveBeenCalledWith('client_offer', 2026, 7, TX_SENTINEL);
+  });
   test('uses the first parseable candidate from ordered source codes', async () => {
     findByModuleIdMock.mockResolvedValue({
       moduleId: 'client_order',

@@ -55,6 +55,16 @@ describe('document code templates', () => {
     });
   });
 
+  test('prefers a full source year over numeric prefix chunks in the generic fallback', () => {
+    expect(parseDocumentCodeCounter('ACME_12_345_2026_0007')).toEqual({
+      year: 2026,
+      sequence: 7,
+    });
+    expect(parseDocumentCodeCounter('PREV_26_0045_01')).toEqual({
+      year: 2026,
+      sequence: 45,
+    });
+  });
   test('parses source counters when prefixes or literals contain separators', () => {
     expect(parseDocumentCodeCounter('ACME_PREV_26_0045')).toEqual({
       year: 2026,
