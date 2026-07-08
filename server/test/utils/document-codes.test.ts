@@ -71,6 +71,10 @@ describe('document code templates', () => {
       year: 2026,
       sequence: 45,
     });
+    expect(parseDocumentCodeCounter('PREV_26_0045_2027_01')).toEqual({
+      year: 2026,
+      sequence: 45,
+    });
   });
 
   test('parses source counters when prefixes or literals contain separators', () => {

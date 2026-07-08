@@ -225,29 +225,41 @@ export const parseDocumentCodeCounter = (code: unknown): ParsedDocumentCodeCount
 
   let firstCandidate: ParsedDocumentCodeCounter | null = null;
   let firstCandidateYearPart: string | null = null;
+  let firstCandidateSequencePart: string | null = null;
   let lastFullYearCandidate: ParsedDocumentCodeCounter | null = null;
   for (let yearIndex = 1; yearIndex <= parts.length - 2; yearIndex += 1) {
     const yearPart = parts[yearIndex];
     const year = parseDocumentCodeYearPart(yearPart);
     if (year === null) continue;
 
-    const sequence = parseDocumentCodeSequencePart(parts[yearIndex + 1]);
+    const sequencePart = parts[yearIndex + 1];
+    const sequence = parseDocumentCodeSequencePart(sequencePart);
     if (sequence === null) continue;
 
     const candidate = { year, sequence };
     if (!firstCandidate) {
       firstCandidate = candidate;
       firstCandidateYearPart = yearPart;
+      firstCandidateSequencePart = sequencePart;
     }
     if (yearPart.length === 4 && !yearPart.startsWith('0')) {
       lastFullYearCandidate = candidate;
     }
   }
 
+  if (firstCandidate && firstCandidateYearPart?.length === 4) {
+    return firstCandidate;
+  }
+
+  const firstCandidateHasPaddedSequence =
+    firstCandidate !== null &&
+    firstCandidateSequencePart !== null &&
+    firstCandidateSequencePart.length > String(firstCandidate.sequence).length;
+
   if (
     firstCandidate &&
     firstCandidateYearPart?.length === 2 &&
-    lastFullYearCandidate?.year === firstCandidate.year
+    (firstCandidateHasPaddedSequence || lastFullYearCandidate?.year === firstCandidate.year)
   ) {
     return firstCandidate;
   }
