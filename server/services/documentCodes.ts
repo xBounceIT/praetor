@@ -50,6 +50,16 @@ export const normalizeDocumentCodeSource = (
   return parseDocumentCodeCounter(sourceCode) ? sourceCode : undefined;
 };
 
+export const normalizeFirstDocumentCodeSource = (
+  ...sourceCodes: Array<string | null | undefined>
+): string | undefined => {
+  for (const sourceCode of sourceCodes) {
+    const normalized = normalizeDocumentCodeSource(sourceCode);
+    if (normalized) return normalized;
+  }
+  return undefined;
+};
+
 export const reserveDocumentCodeCounterFromCode = async (
   moduleId: DocumentCodeModuleId,
   code: string | null | undefined,

@@ -21,6 +21,7 @@ mock.module('../../repositories/documentCodeTemplatesRepo.ts', () => ({
 let allocateDocumentCode: typeof import('../../services/documentCodes.ts').allocateDocumentCode;
 let previewDocumentCode: typeof import('../../services/documentCodes.ts').previewDocumentCode;
 let reserveDocumentCodeCounterFromCode: typeof import('../../services/documentCodes.ts').reserveDocumentCodeCounterFromCode;
+let normalizeFirstDocumentCodeSource: typeof import('../../services/documentCodes.ts').normalizeFirstDocumentCodeSource;
 let DocumentCodeCollisionError: typeof import('../../services/documentCodes.ts').DocumentCodeCollisionError;
 
 beforeAll(async () => {
@@ -28,6 +29,7 @@ beforeAll(async () => {
   allocateDocumentCode = mod.allocateDocumentCode;
   previewDocumentCode = mod.previewDocumentCode;
   reserveDocumentCodeCounterFromCode = mod.reserveDocumentCodeCounterFromCode;
+  normalizeFirstDocumentCodeSource = mod.normalizeFirstDocumentCodeSource;
   DocumentCodeCollisionError = mod.DocumentCodeCollisionError;
 });
 
@@ -187,6 +189,18 @@ describe('allocateDocumentCode', () => {
       }),
     ).rejects.toBeInstanceOf(DocumentCodeCollisionError);
     expect(allocateSequenceMock).toHaveBeenCalledTimes(5);
+  });
+});
+
+describe('normalizeFirstDocumentCodeSource', () => {
+  test('returns the first parseable source and skips legacy identifiers', () => {
+    expect(
+      normalizeFirstDocumentCodeSource('legacy-quote-id', 'OFF_26_0045_manual', 'ORD_26_0045'),
+    ).toBe('OFF_26_0045_manual');
+  });
+
+  test('returns undefined when no source is parseable', () => {
+    expect(normalizeFirstDocumentCodeSource(null, undefined, 'legacy-order-id')).toBeUndefined();
   });
 });
 

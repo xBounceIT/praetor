@@ -114,12 +114,7 @@ export const formatDocumentSequence = (sequence: string | number | bigint, paddi
   return value.padStart(padding, '0');
 };
 
-export const parseDocumentCodeCounter = (code: unknown): ParsedDocumentCodeCounter | null => {
-  if (typeof code !== 'string') return null;
-  const parts = code.trim().split('_');
-  if (parts.length < 3 || parts[0].length === 0) return null;
-  const yearPart = parts[1];
-  const sequencePart = parts[2];
+const parseDocumentCodeYearPart = (yearPart: string): number | null => {
   const year = /^\d{2}$/.test(yearPart)
     ? 2000 + Number.parseInt(yearPart, 10)
     : /^\d{4}$/.test(yearPart)
@@ -128,16 +123,32 @@ export const parseDocumentCodeCounter = (code: unknown): ParsedDocumentCodeCount
   if (!Number.isInteger(year) || year < DOCUMENT_CODE_YEAR_MIN || year > DOCUMENT_CODE_YEAR_MAX) {
     return null;
   }
-  if (!/^\d+$/.test(sequencePart)) return null;
-  const sequence = Number.parseInt(sequencePart, 10);
-  if (
-    !Number.isInteger(sequence) ||
-    sequence < 1 ||
-    sequence > DOCUMENT_CODE_MAX_RESERVED_SEQUENCE
-  ) {
-    return null;
+  return year;
+};
+
+export const parseDocumentCodeCounter = (code: unknown): ParsedDocumentCodeCounter | null => {
+  if (typeof code !== 'string') return null;
+  const parts = code.trim().split('_');
+  if (parts.length < 3 || parts[0].length === 0) return null;
+
+  for (let yearIndex = parts.length - 2; yearIndex >= 1; yearIndex -= 1) {
+    const year = parseDocumentCodeYearPart(parts[yearIndex]);
+    if (year === null) continue;
+
+    const sequencePart = parts[yearIndex + 1];
+    if (!/^\d+$/.test(sequencePart)) continue;
+    const sequence = Number.parseInt(sequencePart, 10);
+    if (
+      !Number.isInteger(sequence) ||
+      sequence < 1 ||
+      sequence > DOCUMENT_CODE_MAX_RESERVED_SEQUENCE
+    ) {
+      continue;
+    }
+    return { year, sequence };
   }
-  return { year, sequence };
+
+  return null;
 };
 
 export const renderDocumentCode = (

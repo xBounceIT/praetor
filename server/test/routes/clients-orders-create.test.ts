@@ -1,6 +1,7 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import * as realDrizzle from '../../db/drizzle.ts';
+import * as realClientOffersRepo from '../../repositories/clientOffersRepo.ts';
 import * as realClientsOrdersRepo from '../../repositories/clientsOrdersRepo.ts';
 import * as realRolesRepo from '../../repositories/rolesRepo.ts';
 import * as realSupplierQuotesRepo from '../../repositories/supplierQuotesRepo.ts';
@@ -19,6 +20,7 @@ import { makeWithDbTransactionMock } from '../helpers/withDbTransactionMock.ts';
 const usersRepoSnap = { ...realUsersRepo };
 const rolesRepoSnap = { ...realRolesRepo };
 const permissionsSnap = { ...realPermissions };
+const clientOffersRepoSnap = { ...realClientOffersRepo };
 const clientsOrdersRepoSnap = { ...realClientsOrdersRepo };
 const supplierQuotesRepoSnap = { ...realSupplierQuotesRepo };
 const documentCodesSnap = { ...realDocumentCodes };
@@ -32,6 +34,8 @@ const getRolePermissionsMock = mock();
 const coCreateMock = mock();
 const coInsertItemsMock = mock();
 const coFindItemsForOrderMock = mock();
+const coFindOfferDetailsMock = mock();
+const coFindExistingForOfferMock = mock();
 const coCreateSupplierOrderMock = mock();
 const coBulkInsertSupplierOrderItemsMock = mock();
 const coLinkSaleItemsToSupplierOrderMock = mock();
@@ -42,6 +46,7 @@ const sqFindLinkedOrderIdMock = mock();
 const sqLockEffectiveStatusByIdMock = mock();
 const sqFindItemsForQuoteMock = mock();
 const sqGetQuoteItemSnapshotsMock = mock();
+const clientOfferLockExistingByIdMock = mock();
 const allocateDocumentCodeMock = mock();
 
 const logAuditMock = mock(async () => undefined);
@@ -69,11 +74,17 @@ beforeAll(async () => {
     create: coCreateMock,
     insertItems: coInsertItemsMock,
     findItemsForOrder: coFindItemsForOrderMock,
+    findOfferDetails: coFindOfferDetailsMock,
+    findExistingForOffer: coFindExistingForOfferMock,
     createSupplierOrder: coCreateSupplierOrderMock,
     bulkInsertSupplierOrderItems: coBulkInsertSupplierOrderItemsMock,
     linkSaleItemsToSupplierOrder: coLinkSaleItemsToSupplierOrderMock,
     mapSaleItemsToSupplierItems: coMapSaleItemsToSupplierItemsMock,
     linkSaleItemsToSupplierOrderAndItems: coLinkSaleItemsToSupplierOrderAndItemsMock,
+  }));
+  mock.module('../../repositories/clientOffersRepo.ts', () => ({
+    ...clientOffersRepoSnap,
+    lockExistingById: clientOfferLockExistingByIdMock,
   }));
   mock.module('../../repositories/supplierQuotesRepo.ts', () => ({
     ...supplierQuotesRepoSnap,
@@ -104,6 +115,7 @@ afterAll(() => {
   mock.module('../../repositories/usersRepo.ts', () => usersRepoSnap);
   mock.module('../../repositories/rolesRepo.ts', () => rolesRepoSnap);
   mock.module('../../utils/permissions.ts', () => permissionsSnap);
+  mock.module('../../repositories/clientOffersRepo.ts', () => clientOffersRepoSnap);
   mock.module('../../repositories/clientsOrdersRepo.ts', () => clientsOrdersRepoSnap);
   mock.module('../../repositories/supplierQuotesRepo.ts', () => supplierQuotesRepoSnap);
   mock.module('../../services/documentCodes.ts', () => documentCodesSnap);
@@ -170,6 +182,8 @@ const allMocks = [
   coCreateMock,
   coInsertItemsMock,
   coFindItemsForOrderMock,
+  coFindOfferDetailsMock,
+  coFindExistingForOfferMock,
   coCreateSupplierOrderMock,
   coBulkInsertSupplierOrderItemsMock,
   coLinkSaleItemsToSupplierOrderMock,
@@ -180,6 +194,7 @@ const allMocks = [
   sqLockEffectiveStatusByIdMock,
   sqFindItemsForQuoteMock,
   sqGetQuoteItemSnapshotsMock,
+  clientOfferLockExistingByIdMock,
   allocateDocumentCodeMock,
   logAuditMock,
   withDbTransactionMock,
@@ -197,6 +212,17 @@ beforeEach(async () => {
   coCreateMock.mockResolvedValue(CREATED_ORDER);
   allocateDocumentCodeMock.mockResolvedValue('ORD-2999-0001');
   coFindItemsForOrderMock.mockResolvedValue([insertedItem()]);
+  coFindOfferDetailsMock.mockResolvedValue({
+    id: 'OFF_26_0045_manual',
+    linkedQuoteId: 'legacy-quote-id',
+    status: 'accepted',
+  });
+  coFindExistingForOfferMock.mockResolvedValue(null);
+  clientOfferLockExistingByIdMock.mockResolvedValue({
+    id: 'OFF_26_0045_manual',
+    linkedQuoteId: 'legacy-quote-id',
+    status: 'accepted',
+  });
   coCreateSupplierOrderMock.mockResolvedValue(undefined);
   coBulkInsertSupplierOrderItemsMock.mockResolvedValue(undefined);
   coLinkSaleItemsToSupplierOrderMock.mockResolvedValue(undefined);
@@ -288,6 +314,39 @@ describe('POST /api/clients-orders product-less supplier lines (issue #783)', ()
     expect(allocateDocumentCodeMock).toHaveBeenCalledWith('client_order', {
       exec: expect.anything(),
       sourceCode: 'PREV_26_0045_manual',
+    });
+  });
+
+  test('201 inherits from linked offer when linked quote id is not parseable', async () => {
+    coCreateMock.mockImplementation((input: Record<string, unknown>) =>
+      Promise.resolve({
+        ...CREATED_ORDER,
+        id: input.id,
+        linkedQuoteId: input.linkedQuoteId,
+        linkedOfferId: input.linkedOfferId,
+      }),
+    );
+    coInsertItemsMock.mockImplementation((orderId: string) =>
+      Promise.resolve([insertedItem({ orderId })]),
+    );
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/clients-orders',
+      headers: authHeader(),
+      payload: {
+        linkedQuoteId: 'legacy-quote-id',
+        linkedOfferId: 'OFF_26_0045_manual',
+        clientId: 'c1',
+        clientName: 'Acme',
+        items: [{ productId: 'p-1', productName: 'Service', quantity: 1, unitPrice: 100 }],
+      },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(allocateDocumentCodeMock).toHaveBeenCalledWith('client_order', {
+      exec: expect.anything(),
+      sourceCode: 'OFF_26_0045_manual',
     });
   });
 

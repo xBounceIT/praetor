@@ -41,7 +41,18 @@ describe('document code templates', () => {
     });
   });
 
-  test('rejects document codes without a valid year and numeric sequence in fixed positions', () => {
+  test('parses source counters when prefixes or literals contain underscores', () => {
+    expect(parseDocumentCodeCounter('ACME_PREV_26_0045')).toEqual({
+      year: 2026,
+      sequence: 45,
+    });
+    expect(parseDocumentCodeCounter('PREV_EU_2026_00045_extra')).toEqual({
+      year: 2026,
+      sequence: 45,
+    });
+  });
+
+  test('rejects document codes without a valid year and numeric sequence segment pair', () => {
     for (const code of [
       'PREV-26-045',
       'PREV_2026_0000',

@@ -316,6 +316,30 @@ describe('POST /api/invoices', () => {
     });
   });
 
+  test('201 inherits the invoice code source from offer when the linked order quote is legacy', async () => {
+    findClientOrderExistingMock.mockResolvedValue({
+      id: 'ORD_26_0045_manual',
+      linkedQuoteId: 'legacy-quote-id',
+      linkedOfferId: 'OFF_26_0045_manual',
+    });
+    createMock.mockResolvedValue({ ...SAMPLE_INVOICE, linkedSaleId: 'ORD_26_0045_manual' });
+    insertItemsMock.mockResolvedValue([SAMPLE_ITEM]);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/invoices',
+      headers: authHeader(),
+      payload: { ...validBody, linkedSaleId: 'ORD_26_0045_manual' },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(allocateDocumentCodeMock).toHaveBeenCalledWith('client_invoice', {
+      date: '2025-06-01',
+      exec: TX_SENTINEL,
+      sourceCode: 'OFF_26_0045_manual',
+    });
+  });
+
   test('409 when automatic invoice code allocation exhausts collision retries', async () => {
     allocateDocumentCodeMock.mockRejectedValue(
       new realDocumentCodes.DocumentCodeCollisionError('client_invoice'),

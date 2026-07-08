@@ -6,7 +6,7 @@ import * as invoicesRepo from '../repositories/invoicesRepo.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import {
   allocateDocumentCode,
-  normalizeDocumentCodeSource,
+  normalizeFirstDocumentCodeSource,
   reserveDocumentCodeCounterFromCode,
 } from '../services/documentCodes.ts';
 import { logAudit } from '../utils/audit.ts';
@@ -421,10 +421,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                 linkedSaleIdResult.value,
                 tx,
               );
-              const sourceCandidate = sourceOrder
-                ? (sourceOrder.linkedQuoteId ?? sourceOrder.linkedOfferId ?? sourceOrder.id)
-                : linkedSaleIdResult.value;
-              sourceCode = normalizeDocumentCodeSource(sourceCandidate);
+              sourceCode = sourceOrder
+                ? normalizeFirstDocumentCodeSource(
+                    sourceOrder.linkedQuoteId,
+                    sourceOrder.linkedOfferId,
+                    sourceOrder.id,
+                  )
+                : normalizeFirstDocumentCodeSource(linkedSaleIdResult.value);
             }
             invoiceId = await allocateDocumentCode('client_invoice', {
               date: issueDateResult.value,
