@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { ApiError } from '../../../services/api/client';
 import type { Client, Quote } from '../../../types';
 import { installI18nMock } from '../../helpers/i18n';
 import { LineDeleteConfirmStub } from '../../helpers/lineItemDeleteConfirm';
@@ -25,6 +26,8 @@ const viewsRemoveMock = mock(async () => {});
 const viewsDirectoryMock = mock(async () => []);
 const viewsGetSharesMock = mock(async () => []);
 const viewsReplaceSharesMock = mock(async () => []);
+const toastErrorMock = mock((_message: string) => {});
+const toastSuccessMock = mock((_message: string) => {});
 
 mock.module('sonner', () => ({
   toast: {
@@ -53,6 +56,18 @@ mock.module('../../../services/api/views', () => ({
 // last-write-wins), so pin the shared deterministic stub against this file's binding.
 mock.module('../../../components/shared/DeleteConfirmModal', () => ({
   default: LineDeleteConfirmStub,
+}));
+
+mock.module('../../../utils/toast', () => ({
+  toastError: toastErrorMock,
+  toastSuccess: toastSuccessMock,
+  toast: {
+    error: toastErrorMock,
+    success: toastSuccessMock,
+    info: () => {},
+    warning: () => {},
+    message: () => {},
+  },
 }));
 
 const ClientQuotesView = (await import('../../../components/sales/ClientQuotesView')).default;
@@ -132,6 +147,8 @@ beforeEach(() => {
   viewsDirectoryMock.mockClear();
   viewsGetSharesMock.mockClear();
   viewsReplaceSharesMock.mockClear();
+  toastErrorMock.mockClear();
+  toastSuccessMock.mockClear();
   viewsListMock.mockImplementation(async () => []);
   viewsDirectoryMock.mockImplementation(async () => []);
   viewsGetSharesMock.mockImplementation(async () => []);
@@ -260,6 +277,42 @@ describe('<ClientQuotesView />', () => {
     fireEvent.click(screen.getByRole('button', { name: 'sales:clientQuotes.createQuote' }));
 
     expect(screen.getByText('sales:communicationChannels.errors.required')).toBeInTheDocument();
+  });
+
+  test('shows duplicate quote code conflicts on the code field instead of a toast', async () => {
+    const duplicateQuote = { ...quotes[0], id: 'Q-DUP-A', expirationDate: '2099-12-31' };
+    const onUpdateQuote = mock(async () => {
+      throw new ApiError('Quote ID already exists', 409);
+    });
+
+    render(
+      <ClientQuotesView
+        quotes={[duplicateQuote]}
+        clients={clients}
+        products={[]}
+        supplierQuotes={[]}
+        communicationChannels={communicationChannels}
+        currency="EUR"
+        onAddQuote={mock(() => Promise.resolve())}
+        onUpdateQuote={onUpdateQuote}
+        onDeleteQuote={mock(() => Promise.resolve())}
+      />,
+    );
+
+    fireEvent.click(screen.getByText('Q-DUP-A'));
+    const dialog = await screen.findByRole('dialog');
+    const codeInput = within(dialog).getByDisplayValue('Q-DUP-A');
+    fireEvent.change(codeInput, { target: { value: 'Q-DUP-B' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'sales:clientQuotes.updateQuote' }));
+
+    await waitFor(() => {
+      expect(onUpdateQuote).toHaveBeenCalled();
+    });
+    expect(
+      await within(dialog).findByText('sales:clientQuotes.errors.quoteCodeAlreadyExists'),
+    ).toBeInTheDocument();
+    expect(toastErrorMock).not.toHaveBeenCalled();
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
   });
 
   test('scales line totals by a line item duration in the quote list (issue #757)', () => {

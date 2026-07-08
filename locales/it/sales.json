@@ -113,6 +113,7 @@
       "quantityGreaterThanZero": "Tutti gli articoli devono avere quantità maggiore di 0",
       "totalGreaterThanZero": "Il totale deve essere maggiore di 0",
       "quoteCodeRequired": "Il codice preventivo è obbligatorio",
+      "quoteCodeAlreadyExists": "Questo codice preventivo esiste già",
       "expiredCannotModify": "I preventivi scaduti non possono essere confermati o ripristinati",
       "expiredCannotDelete": "I preventivi scaduti non possono essere eliminati",
       "expirationExtendInvalid": "Imposta una data di scadenza odierna o successiva per riconvalidare il preventivo"
