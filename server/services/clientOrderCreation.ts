@@ -5,7 +5,12 @@ import * as supplierQuotesRepo from '../repositories/supplierQuotesRepo.ts';
 import { logAudit } from '../utils/audit.ts';
 import { generatePrefixedId, ITEM_ID_PREFIXES } from '../utils/order-ids.ts';
 import { effectiveSupplierQuoteStatusFromDate } from '../utils/quote-status.ts';
-import { allocateDocumentCode, DocumentCodeCollisionError } from './documentCodes.ts';
+import {
+  allocateDocumentCode,
+  DocumentCodeCollisionError,
+  normalizeDocumentCodeSource,
+  reserveDocumentCodeCounterFromCode,
+} from './documentCodes.ts';
 
 export type ClientOrderCreateFields = {
   id?: string | null;
@@ -34,7 +39,17 @@ export const createClientOrderRows = async (
   order: clientsOrdersRepo.ClientOrder;
   items: clientsOrdersRepo.ClientOrderItem[];
 }> => {
-  const orderId = fields.id || (await allocateDocumentCode('client_order', { exec: tx }));
+  const sourceCode = normalizeDocumentCodeSource(fields.linkedQuoteId ?? fields.linkedOfferId);
+  let orderId: string;
+  if (fields.id) {
+    await reserveDocumentCodeCounterFromCode('client_order', fields.id, tx);
+    orderId = fields.id;
+  } else {
+    orderId = await allocateDocumentCode('client_order', {
+      exec: tx,
+      ...(sourceCode ? { sourceCode } : {}),
+    });
+  }
   const order = await clientsOrdersRepo.create(
     {
       id: orderId,
@@ -123,9 +138,13 @@ export const autoCreateSupplierOrdersForClientOrder = async (
             if (linkedUnderLock) return null;
             const supplierQuote = await supplierQuotesRepo.findById(sqId, tx);
             if (!supplierQuote) return null;
+            const sourceCode = normalizeDocumentCodeSource(sqId);
             const [supplierItems, supplierOrderId] = await Promise.all([
               supplierQuotesRepo.findItemsForQuote(sqId, tx),
-              allocateDocumentCode('supplier_order', { exec: tx }),
+              allocateDocumentCode('supplier_order', {
+                exec: tx,
+                ...(sourceCode ? { sourceCode } : {}),
+              }),
             ]);
             await clientsOrdersRepo.createSupplierOrder(
               {

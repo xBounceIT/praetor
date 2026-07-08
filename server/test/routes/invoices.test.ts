@@ -1,6 +1,7 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import * as realDrizzle from '../../db/drizzle.ts';
+import * as realClientsOrdersRepo from '../../repositories/clientsOrdersRepo.ts';
 import * as realInvoicesRepo from '../../repositories/invoicesRepo.ts';
 import * as realRolesRepo from '../../repositories/rolesRepo.ts';
 import * as realUsersRepo from '../../repositories/usersRepo.ts';
@@ -20,6 +21,7 @@ import { makeWithDbTransactionMock } from '../helpers/withDbTransactionMock.ts';
 const usersRepoSnap = { ...realUsersRepo };
 const rolesRepoSnap = { ...realRolesRepo };
 const permissionsSnap = { ...realPermissions };
+const clientsOrdersRepoSnap = { ...realClientsOrdersRepo };
 const invoicesRepoSnap = { ...realInvoicesRepo };
 const documentCodesSnap = { ...realDocumentCodes };
 const auditSnap = { ...realAudit };
@@ -44,6 +46,7 @@ const findStatusAndClientNameMock = mock();
 const findIdConflictMock = mock();
 const renameDraftMock = mock();
 const deleteByIdMock = mock();
+const findClientOrderExistingMock = mock();
 const allocateDocumentCodeMock = mock();
 const logAuditMock = mock(async () => undefined);
 const { withDbTransactionMock, resetWithDbTransactionMock } = makeWithDbTransactionMock();
@@ -85,6 +88,10 @@ beforeAll(async () => {
     deleteById: deleteByIdMock,
     deleteDraftById: deleteByIdMock,
   }));
+  mock.module('../../repositories/clientsOrdersRepo.ts', () => ({
+    ...clientsOrdersRepoSnap,
+    findExisting: findClientOrderExistingMock,
+  }));
   mock.module('../../utils/audit.ts', () => ({
     ...auditSnap,
     logAudit: logAuditMock,
@@ -106,6 +113,7 @@ afterAll(() => {
   mock.module('../../repositories/usersRepo.ts', () => usersRepoSnap);
   mock.module('../../repositories/rolesRepo.ts', () => rolesRepoSnap);
   mock.module('../../utils/permissions.ts', () => permissionsSnap);
+  mock.module('../../repositories/clientsOrdersRepo.ts', () => clientsOrdersRepoSnap);
   mock.module('../../repositories/invoicesRepo.ts', () => invoicesRepoSnap);
   mock.module('../../services/documentCodes.ts', () => documentCodesSnap);
   mock.module('../../utils/audit.ts', () => auditSnap);
@@ -177,6 +185,7 @@ const allMocks = [
   findIdConflictMock,
   renameDraftMock,
   deleteByIdMock,
+  findClientOrderExistingMock,
   allocateDocumentCodeMock,
   logAuditMock,
   withDbTransactionMock,
@@ -191,6 +200,7 @@ beforeEach(async () => {
   getRolePermissionsMock.mockResolvedValue(FULL_PERMS);
   findStatusMock.mockResolvedValue('draft');
   findStatusAndClientNameMock.mockResolvedValue({ status: 'draft', clientName: 'Client' });
+  findClientOrderExistingMock.mockResolvedValue(null);
   allocateDocumentCodeMock.mockResolvedValue('inv-1');
   resetWithDbTransactionMock();
   logAuditMock.mockImplementation(async () => undefined);
@@ -280,6 +290,30 @@ describe('POST /api/invoices', () => {
         entityId: 'inv-1',
       }),
     );
+  });
+
+  test('201 inherits the invoice code source from the linked order quote when available', async () => {
+    findClientOrderExistingMock.mockResolvedValue({
+      id: 'ORD_26_0045_manual',
+      linkedQuoteId: 'PREV_26_0045_manual',
+      linkedOfferId: 'OFF_26_0045_manual',
+    });
+    createMock.mockResolvedValue({ ...SAMPLE_INVOICE, linkedSaleId: 'ORD_26_0045_manual' });
+    insertItemsMock.mockResolvedValue([SAMPLE_ITEM]);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/invoices',
+      headers: authHeader(),
+      payload: { ...validBody, linkedSaleId: 'ORD_26_0045_manual' },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(allocateDocumentCodeMock).toHaveBeenCalledWith('client_invoice', {
+      date: '2025-06-01',
+      exec: TX_SENTINEL,
+      sourceCode: 'PREV_26_0045_manual',
+    });
   });
 
   test('409 when automatic invoice code allocation exhausts collision retries', async () => {

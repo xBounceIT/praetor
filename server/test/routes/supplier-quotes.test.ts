@@ -54,6 +54,7 @@ const qccFindByIdMock = mock();
 const sqvInsertMock = mock();
 const sqvBuildSnapshotMock = mock();
 const allocateDocumentCodeMock = mock();
+const reserveDocumentCodeCounterFromCodeMock = mock();
 
 const logAuditMock = mock(async () => undefined);
 const { withDbTransactionMock, resetWithDbTransactionMock } = makeWithDbTransactionMock();
@@ -111,6 +112,7 @@ beforeAll(async () => {
   mock.module('../../services/documentCodes.ts', () => ({
     ...documentCodesSnap,
     allocateDocumentCode: allocateDocumentCodeMock,
+    reserveDocumentCodeCounterFromCode: reserveDocumentCodeCounterFromCodeMock,
   }));
   mock.module('../../db/drizzle.ts', () => ({
     ...drizzleSnap,
@@ -216,6 +218,7 @@ const allMocks = [
   sqvInsertMock,
   sqvBuildSnapshotMock,
   allocateDocumentCodeMock,
+  reserveDocumentCodeCounterFromCodeMock,
   logAuditMock,
   withDbTransactionMock,
 ];
@@ -248,6 +251,7 @@ beforeEach(async () => {
     Promise.resolve([{ ...SAMPLE_ITEM, quoteId }]),
   );
   allocateDocumentCodeMock.mockResolvedValue('FORN-2999-0001');
+  reserveDocumentCodeCounterFromCodeMock.mockResolvedValue(false);
   // snapshotPreState calls findFullForSnapshot; default to the current draft so the
   // pre-save snapshot path doesn't crash on tests that update content.
   sqFindFullForSnapshotMock.mockResolvedValue({ quote: DRAFT_QUOTE, items: [SAMPLE_ITEM] });
@@ -326,6 +330,23 @@ describe('POST /api/sales/supplier-quotes', () => {
       expect.anything(),
     );
     expect(JSON.parse(res.body).id).toBe('FORN-2999-0001');
+  });
+
+  test('201 reserves a caller-supplied parseable quote id', async () => {
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/sales/supplier-quotes',
+      headers: authHeader(),
+      payload: { ...CREATE_PAYLOAD, id: 'FORN_26_0045_manual' },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(allocateDocumentCodeMock).not.toHaveBeenCalled();
+    expect(reserveDocumentCodeCounterFromCodeMock).toHaveBeenCalledWith(
+      'supplier_quote',
+      'FORN_26_0045_manual',
+      expect.anything(),
+    );
   });
 
   test('201 preserves a caller-supplied quote id', async () => {
@@ -599,6 +620,28 @@ describe('PUT /api/sales/supplier-quotes/:id', () => {
     expect(sqIsSourcedByClientDocumentsMock).toHaveBeenCalledWith('sq-1');
     expect(sqRenameMock).not.toHaveBeenCalled();
     expect(sqUpdateMock).not.toHaveBeenCalled();
+  });
+
+  test('200 reserves a parseable renamed quote id', async () => {
+    sqFindByIdMock.mockResolvedValue(DRAFT_QUOTE);
+    sqFindLinkedOrderIdMock.mockResolvedValue(null);
+    sqFindIdConflictMock.mockResolvedValue(false);
+    sqIsSourcedByClientDocumentsMock.mockResolvedValue(false);
+    sqRenameMock.mockResolvedValue({ ...DRAFT_QUOTE, id: 'FORN_26_0046_manual' });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/sales/supplier-quotes/sq-1',
+      headers: authHeader(),
+      payload: { id: 'FORN_26_0046_manual' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(reserveDocumentCodeCounterFromCodeMock).toHaveBeenCalledWith(
+      'supplier_quote',
+      'FORN_26_0046_manual',
+      expect.anything(),
+    );
   });
 
   test('409 rejects supplier reassignment when the derived status is accepted', async () => {

@@ -103,6 +103,35 @@ export const allocateSequence = async (
   return sequence;
 };
 
+export const reserveSequenceAtLeast = async (
+  moduleId: DocumentCodeModuleId,
+  year: number,
+  sequence: number,
+  exec: DbExecutor = db,
+): Promise<void> => {
+  const nextSequence = sequence + 1;
+  if (
+    !Number.isInteger(year) ||
+    year < 1 ||
+    year > 9999 ||
+    !Number.isInteger(sequence) ||
+    sequence < 1 ||
+    !Number.isInteger(nextSequence)
+  ) {
+    throw new Error('Document code counter reservation is invalid');
+  }
+
+  await executeRows(
+    exec,
+    sql`INSERT INTO document_code_counters (module_id, year, next_sequence, updated_at)
+        VALUES (${moduleId}, ${year}, ${nextSequence}, CURRENT_TIMESTAMP)
+        ON CONFLICT (module_id, year)
+        DO UPDATE SET
+          next_sequence = GREATEST(document_code_counters.next_sequence, excluded.next_sequence),
+          updated_at = CURRENT_TIMESTAMP`,
+  );
+};
+
 export const getNextSequence = async (
   moduleId: DocumentCodeModuleId,
   year: number,

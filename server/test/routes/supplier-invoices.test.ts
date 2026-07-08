@@ -47,6 +47,7 @@ const deleteByIdMock = mock();
 const allocateDocumentCodeMock = mock();
 
 const findOrderByIdMock = mock();
+const lockOrderExistingByIdMock = mock();
 
 const logAuditMock = mock(async () => undefined);
 const { withDbTransactionMock, resetWithDbTransactionMock } = makeWithDbTransactionMock();
@@ -88,6 +89,7 @@ beforeAll(async () => {
   mock.module('../../repositories/supplierOrdersRepo.ts', () => ({
     ...supplierOrdersRepoSnap,
     findById: findOrderByIdMock,
+    lockExistingById: lockOrderExistingByIdMock,
   }));
   mock.module('../../utils/audit.ts', () => ({
     ...auditSnap,
@@ -199,6 +201,7 @@ const allMocks = [
   deleteByIdMock,
   allocateDocumentCodeMock,
   findOrderByIdMock,
+  lockOrderExistingByIdMock,
   logAuditMock,
   withDbTransactionMock,
 ];
@@ -213,6 +216,7 @@ beforeEach(async () => {
   resetWithDbTransactionMock();
   logAuditMock.mockImplementation(async () => undefined);
   allocateDocumentCodeMock.mockResolvedValue('SINV-2025-0001');
+  lockOrderExistingByIdMock.mockResolvedValue(null);
 
   testApp = await buildRouteTestApp(routePlugin, '/api/supplier-invoices');
 });
@@ -305,6 +309,33 @@ describe('POST /api/supplier-invoices', () => {
         entityType: 'supplier_invoice',
       }),
     );
+  });
+
+  test('201 inherits the automatic invoice code from a parseable linked supplier order id', async () => {
+    findOrderByIdMock.mockResolvedValue({
+      id: 'SORD_26_0045_manual',
+      supplierId: 's1',
+      supplierName: 'Acme Supply',
+      status: 'sent',
+    });
+    lockOrderExistingByIdMock.mockResolvedValue({ id: 'SORD_26_0045_manual', status: 'sent' });
+    findInvoiceForLinkedSaleMock.mockResolvedValue(null);
+    createMock.mockResolvedValue({ ...SAMPLE_INVOICE, linkedSaleId: 'SORD_26_0045_manual' });
+    insertItemsMock.mockResolvedValue([SAMPLE_ITEM]);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/supplier-invoices',
+      headers: authHeader(),
+      payload: { ...validBody, linkedSaleId: 'SORD_26_0045_manual' },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(allocateDocumentCodeMock).toHaveBeenCalledWith('supplier_invoice', {
+      date: '2025-06-01',
+      exec: expect.anything(),
+      sourceCode: 'SORD_26_0045_manual',
+    });
   });
 
   test('201 uses the centralized allocator output unmodified', async () => {

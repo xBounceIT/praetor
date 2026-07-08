@@ -9,7 +9,10 @@ import * as supplierQuotesRepo from '../repositories/supplierQuotesRepo.ts';
 import * as supplierQuoteVersionsRepo from '../repositories/supplierQuoteVersionsRepo.ts';
 import * as suppliersRepo from '../repositories/suppliersRepo.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
-import { allocateDocumentCode } from '../services/documentCodes.ts';
+import {
+  allocateDocumentCode,
+  reserveDocumentCodeCounterFromCode,
+} from '../services/documentCodes.ts';
 import { logAudit } from '../utils/audit.ts';
 import { getUniqueViolation } from '../utils/db-errors.ts';
 import { replyDocumentCodeCollision } from '../utils/document-code-replies.ts';
@@ -514,8 +517,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       };
       try {
         result = await withDbTransaction(async (tx) => {
-          const quoteId =
-            nextIdResult.value ?? (await allocateDocumentCode('supplier_quote', { exec: tx }));
+          let quoteId: string;
+          if (nextIdResult.value) {
+            await reserveDocumentCodeCounterFromCode('supplier_quote', nextIdResult.value, tx);
+            quoteId = nextIdResult.value;
+          } else {
+            quoteId = await allocateDocumentCode('supplier_quote', { exec: tx });
+          }
           const quote = await supplierQuotesRepo.create(
             {
               id: quoteId,
@@ -874,6 +882,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             if (!renamedQuote) {
               return { quote: null, items: [] as supplierQuotesRepo.SupplierQuoteItem[] };
             }
+            await reserveDocumentCodeCounterFromCode('supplier_quote', nextIdValue, tx);
           }
           // id-only renames have nothing left to write — reuse the row returned by rename().
           const quote =

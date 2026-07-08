@@ -4,7 +4,11 @@ import { authenticateToken, requirePermission } from '../middleware/auth.ts';
 import * as supplierInvoicesRepo from '../repositories/supplierInvoicesRepo.ts';
 import * as supplierOrdersRepo from '../repositories/supplierOrdersRepo.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
-import { allocateDocumentCode } from '../services/documentCodes.ts';
+import {
+  allocateDocumentCode,
+  normalizeDocumentCodeSource,
+  reserveDocumentCodeCounterFromCode,
+} from '../services/documentCodes.ts';
 import { logAudit } from '../utils/audit.ts';
 import { type DatabaseError, getUniqueViolation } from '../utils/db-errors.ts';
 import { replyDocumentCodeCollision } from '../utils/document-code-replies.ts';
@@ -426,12 +430,18 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             }
           }
 
-          const invoiceId =
-            nextIdResult.value ??
-            (await allocateDocumentCode('supplier_invoice', {
+          let invoiceId: string;
+          if (nextIdResult.value) {
+            await reserveDocumentCodeCounterFromCode('supplier_invoice', nextIdResult.value, tx);
+            invoiceId = nextIdResult.value;
+          } else {
+            const sourceCode = normalizeDocumentCodeSource(linkedSaleIdResult.value);
+            invoiceId = await allocateDocumentCode('supplier_invoice', {
               date: issueDateResult.value,
               exec: tx,
-            }));
+              ...(sourceCode ? { sourceCode } : {}),
+            });
+          }
           const invoice = await supplierInvoicesRepo.create(
             {
               id: invoiceId,
@@ -684,6 +694,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             if (!renamedInvoice) {
               return { invoice: null, items: [] as supplierInvoicesRepo.SupplierInvoiceItem[] };
             }
+            await reserveDocumentCodeCounterFromCode('supplier_invoice', nextIdValue, tx);
           }
           // id-only renames have nothing left to write — reuse the row returned by rename().
           const invoice =

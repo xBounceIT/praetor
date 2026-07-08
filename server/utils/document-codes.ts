@@ -83,6 +83,12 @@ const PREFIX_PATTERN = /^[A-Za-z0-9_-]+$/;
 const TEMPLATE_LITERAL_PATTERN = /^[A-Za-z0-9_-]*$/;
 const YEAR_PLACEHOLDER_PATTERN = /\{(?:YY|YYYY)\}/;
 const MAX_SEQUENCE_FOR_LENGTH_CHECK = 999_999_999;
+const DOCUMENT_CODE_MAX_RESERVED_SEQUENCE = 2_147_483_646;
+
+export type ParsedDocumentCodeCounter = {
+  year: number;
+  sequence: number;
+};
 
 export const isDocumentCodeModuleId = (value: unknown): value is DocumentCodeModuleId =>
   typeof value === 'string' && (DOCUMENT_CODE_MODULE_IDS as readonly string[]).includes(value);
@@ -106,6 +112,32 @@ export const formatDocumentSequence = (sequence: string | number | bigint, paddi
     throw new Error(`Invalid sequence value: ${value}`);
   }
   return value.padStart(padding, '0');
+};
+
+export const parseDocumentCodeCounter = (code: unknown): ParsedDocumentCodeCounter | null => {
+  if (typeof code !== 'string') return null;
+  const parts = code.trim().split('_');
+  if (parts.length < 3 || parts[0].length === 0) return null;
+  const yearPart = parts[1];
+  const sequencePart = parts[2];
+  const year = /^\d{2}$/.test(yearPart)
+    ? 2000 + Number.parseInt(yearPart, 10)
+    : /^\d{4}$/.test(yearPart)
+      ? Number.parseInt(yearPart, 10)
+      : Number.NaN;
+  if (!Number.isInteger(year) || year < DOCUMENT_CODE_YEAR_MIN || year > DOCUMENT_CODE_YEAR_MAX) {
+    return null;
+  }
+  if (!/^\d+$/.test(sequencePart)) return null;
+  const sequence = Number.parseInt(sequencePart, 10);
+  if (
+    !Number.isInteger(sequence) ||
+    sequence < 1 ||
+    sequence > DOCUMENT_CODE_MAX_RESERVED_SEQUENCE
+  ) {
+    return null;
+  }
+  return { year, sequence };
 };
 
 export const renderDocumentCode = (

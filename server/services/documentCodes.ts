@@ -4,6 +4,7 @@ import {
   DOCUMENT_CODE_MAX_LENGTH,
   type DocumentCodeModuleId,
   getDocumentCodeYear,
+  parseDocumentCodeCounter,
   renderDocumentCode,
 } from '../utils/document-codes.ts';
 
@@ -25,22 +26,75 @@ export type DocumentCodePreview = {
   sequence: number;
 };
 
+export type DocumentCodeAllocationOptions = {
+  date?: Date | string;
+  exec: DbExecutor;
+  sourceCode?: string | null;
+};
+
+const renderAndValidateDocumentCode = (
+  template: Parameters<typeof renderDocumentCode>[0],
+  options: { year: number; sequence: number },
+): string => {
+  const code = renderDocumentCode(template, options);
+  if (code.length > DOCUMENT_CODE_MAX_LENGTH) {
+    throw new Error(`Generated document code exceeds ${DOCUMENT_CODE_MAX_LENGTH} characters`);
+  }
+  return code;
+};
+
+export const normalizeDocumentCodeSource = (
+  sourceCode: string | null | undefined,
+): string | undefined => {
+  if (typeof sourceCode !== 'string') return undefined;
+  return parseDocumentCodeCounter(sourceCode) ? sourceCode : undefined;
+};
+
+export const reserveDocumentCodeCounterFromCode = async (
+  moduleId: DocumentCodeModuleId,
+  code: string | null | undefined,
+  exec: DbExecutor,
+): Promise<boolean> => {
+  const parsed = parseDocumentCodeCounter(code);
+  if (!parsed) return false;
+  await documentCodeTemplatesRepo.reserveSequenceAtLeast(
+    moduleId,
+    parsed.year,
+    parsed.sequence,
+    exec,
+  );
+  return true;
+};
+
 export const allocateDocumentCode = async (
   moduleId: DocumentCodeModuleId,
-  options: { date?: Date | string; exec: DbExecutor },
+  options: DocumentCodeAllocationOptions,
 ): Promise<string> => {
-  const year = getDocumentCodeYear(options.date);
   const template = await documentCodeTemplatesRepo.findByModuleId(moduleId, options.exec);
+  const sourceCounter = parseDocumentCodeCounter(options.sourceCode);
+
+  if (sourceCounter) {
+    const code = renderAndValidateDocumentCode(template, sourceCounter);
+    await documentCodeTemplatesRepo.reserveSequenceAtLeast(
+      moduleId,
+      sourceCounter.year,
+      sourceCounter.sequence,
+      options.exec,
+    );
+    if (await documentCodeTemplatesRepo.existsForModule(moduleId, code, options.exec)) {
+      throw new DocumentCodeCollisionError(moduleId);
+    }
+    return code;
+  }
+
+  const year = getDocumentCodeYear(options.date);
 
   const allocateAttempt = async (attempt: number): Promise<string> => {
     if (attempt >= DOCUMENT_CODE_COLLISION_RETRIES) {
       throw new DocumentCodeCollisionError(moduleId);
     }
     const sequence = await documentCodeTemplatesRepo.allocateSequence(moduleId, year, options.exec);
-    const code = renderDocumentCode(template, { year, sequence });
-    if (code.length > DOCUMENT_CODE_MAX_LENGTH) {
-      throw new Error(`Generated document code exceeds ${DOCUMENT_CODE_MAX_LENGTH} characters`);
-    }
+    const code = renderAndValidateDocumentCode(template, { year, sequence });
     if (!(await documentCodeTemplatesRepo.existsForModule(moduleId, code, options.exec))) {
       return code;
     }
@@ -63,10 +117,7 @@ export const previewDocumentCode = async (
 
   const candidates = Array.from({ length: DOCUMENT_CODE_COLLISION_RETRIES }, (_, attempt) => {
     const sequence = nextSequence + attempt;
-    const code = renderDocumentCode(template, { year, sequence });
-    if (code.length > DOCUMENT_CODE_MAX_LENGTH) {
-      throw new Error(`Generated document code exceeds ${DOCUMENT_CODE_MAX_LENGTH} characters`);
-    }
+    const code = renderAndValidateDocumentCode(template, { year, sequence });
     return { moduleId, code, year, sequence };
   });
   const existing = await Promise.all(

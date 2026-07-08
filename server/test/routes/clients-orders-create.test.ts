@@ -264,6 +264,33 @@ describe('POST /api/clients-orders product-less supplier lines (issue #783)', ()
     expect(JSON.parse(res.body).id).toBe('ORD-2999-0001');
   });
 
+  test('201 inherits the automatic order code from a parseable linked quote id', async () => {
+    coCreateMock.mockImplementation((input: Record<string, unknown>) =>
+      Promise.resolve({ ...CREATED_ORDER, id: input.id, linkedQuoteId: input.linkedQuoteId }),
+    );
+    coInsertItemsMock.mockImplementation((orderId: string) =>
+      Promise.resolve([insertedItem({ orderId })]),
+    );
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/clients-orders',
+      headers: authHeader(),
+      payload: {
+        linkedQuoteId: 'PREV_26_0045_manual',
+        clientId: 'c1',
+        clientName: 'Acme',
+        items: [{ productId: 'p-1', productName: 'Service', quantity: 1, unitPrice: 100 }],
+      },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(allocateDocumentCodeMock).toHaveBeenCalledWith('client_order', {
+      exec: expect.anything(),
+      sourceCode: 'PREV_26_0045_manual',
+    });
+  });
+
   test('201 creates an order from a supplier-quote line with no productId', async () => {
     // The offer→order conversion sends this exact shape: a free-form supplier line carries the
     // supplier-quote reference (supplierQuoteId + supplierQuoteItemId) but a null productId.

@@ -13,6 +13,7 @@ import {
   createClientOrderRows,
   logClientOrderCreated,
 } from '../services/clientOrderCreation.ts';
+import { reserveDocumentCodeCounterFromCode } from '../services/documentCodes.ts';
 import { logAudit } from '../utils/audit.ts';
 import { getForeignKeyViolation, getUniqueViolation } from '../utils/db-errors.ts';
 import { replyDocumentCodeCollision } from '../utils/document-code-replies.ts';
@@ -1215,6 +1216,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           if (nextIdValue && nextIdValue !== idResult.value) {
             renamedOrder = await clientsOrdersRepo.rename(idResult.value, nextIdValue, tx);
             if (!renamedOrder) return { order: null, items: [] };
+            await reserveDocumentCodeCounterFromCode('client_order', nextIdValue, tx);
           }
           // id-only renames have nothing left to write — reuse the row returned by rename().
           const order =

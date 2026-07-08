@@ -3,6 +3,7 @@ import {
   DOCUMENT_CODE_MODULES,
   formatDocumentSequence,
   getDocumentCodeYear,
+  parseDocumentCodeCounter,
   renderDocumentCode,
   validateDocumentCodeTemplate,
 } from '../../utils/document-codes.ts';
@@ -30,6 +31,29 @@ describe('document code templates', () => {
         { year: 2026, sequence: 123 },
       ),
     ).toBe('INV-2026-123');
+  });
+
+  test('parses source counters from underscore-separated document codes', () => {
+    expect(parseDocumentCodeCounter('PREV_26_045')).toEqual({ year: 2026, sequence: 45 });
+    expect(parseDocumentCodeCounter('PREV_2026_00045_extra')).toEqual({
+      year: 2026,
+      sequence: 45,
+    });
+  });
+
+  test('rejects document codes without a valid year and numeric sequence in fixed positions', () => {
+    for (const code of [
+      'PREV-26-045',
+      'PREV_2026_0000',
+      'PREV_20A6_0045',
+      'PREV_2026_ABC',
+      '_26_0045',
+      'PREV_20260_0045',
+      'PREV__0045',
+      null,
+    ]) {
+      expect(parseDocumentCodeCounter(code)).toBeNull();
+    }
   });
 
   test('validates configurable settings', () => {

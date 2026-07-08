@@ -321,6 +321,21 @@ describe('POST /api/accounting/supplier-orders', () => {
     expect(JSON.parse(res.body).id).toBe('SORD-2999-0001');
   });
 
+  test('201 inherits the automatic order code from a parseable linked supplier quote id', async () => {
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/accounting/supplier-orders',
+      headers: authHeader(),
+      payload: { ...validBody, linkedQuoteId: 'FORN_26_0045_manual' },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(allocateDocumentCodeMock).toHaveBeenCalledWith('supplier_order', {
+      exec: expect.anything(),
+      sourceCode: 'FORN_26_0045_manual',
+    });
+  });
+
   test('201 preserves a caller-supplied order id', async () => {
     const res = await testApp.inject({
       method: 'POST',

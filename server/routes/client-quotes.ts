@@ -9,7 +9,11 @@ import * as quoteCommunicationChannelsRepo from '../repositories/quoteCommunicat
 import * as quoteVersionsRepo from '../repositories/quoteVersionsRepo.ts';
 import * as supplierQuotesRepo from '../repositories/supplierQuotesRepo.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
-import { allocateDocumentCode } from '../services/documentCodes.ts';
+import {
+  allocateDocumentCode,
+  normalizeDocumentCodeSource,
+  reserveDocumentCodeCounterFromCode,
+} from '../services/documentCodes.ts';
 import { logAudit } from '../utils/audit.ts';
 import { isPastLocalDate } from '../utils/date.ts';
 import { getUniqueViolation } from '../utils/db-errors.ts';
@@ -694,7 +698,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     if (!quote.expirationDate) {
       throw new Error('Cannot create an offer from a quote without an expiration date');
     }
-    const offerId = await allocateDocumentCode('client_offer', { exec: tx });
+    const sourceCode = normalizeDocumentCodeSource(quote.id);
+    const offerId = await allocateDocumentCode('client_offer', {
+      exec: tx,
+      ...(sourceCode ? { sourceCode } : {}),
+    });
     const offer = await clientOffersRepo.create(
       {
         id: offerId,
@@ -1013,8 +1021,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       try {
         const { quote, createdItems, syncAudits } = await withDbTransaction(async (tx) => {
-          const quoteId =
-            nextIdResult.value ?? (await allocateDocumentCode('client_quote', { exec: tx }));
+          let quoteId: string;
+          if (nextIdResult.value) {
+            await reserveDocumentCodeCounterFromCode('client_quote', nextIdResult.value, tx);
+            quoteId = nextIdResult.value;
+          } else {
+            quoteId = await allocateDocumentCode('client_quote', { exec: tx });
+          }
           const created = await clientQuotesRepo.create(
             {
               id: quoteId,
@@ -1490,6 +1503,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           if (nextIdValue && nextIdValue !== idResult.value) {
             renamedQuote = await clientQuotesRepo.rename(idResult.value, nextIdValue, tx);
             if (!renamedQuote) return { quote: null, items: [], syncAudits: [] };
+            await reserveDocumentCodeCounterFromCode('client_quote', nextIdValue, tx);
           }
           // id-only renames have nothing left to write — reuse the row returned by rename().
           const quote =

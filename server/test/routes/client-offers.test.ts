@@ -978,6 +978,37 @@ describe('client-offers supplier-link resolution + forward sync (#779)', () => {
     expect(JSON.parse(res.body).id).toBe('OFF-2999-0001');
   });
 
+  test('POST: blank offer id inherits the parseable source quote counter', async () => {
+    cqFindStatusAndClientNameMock.mockResolvedValue({ status: 'accepted', clientName: 'Client' });
+    cqLockCurrentByIdMock.mockResolvedValue({ status: 'accepted' });
+    coFindExistingForQuoteMock.mockResolvedValue(null);
+    coCreateMock.mockImplementation((input: Record<string, unknown>) =>
+      Promise.resolve(updatedOffer({ id: input.id, linkedQuoteId: input.linkedQuoteId })),
+    );
+    coInsertItemsMock.mockResolvedValue([]);
+    sqGetQuoteItemSnapshotsMock.mockResolvedValue(SUPPLIER_SNAPSHOT);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/sales/client-offers',
+      headers: authHeader(),
+      payload: {
+        id: '',
+        linkedQuoteId: 'PREV_26_0045_manual',
+        clientId: 'c1',
+        clientName: 'Client',
+        expirationDate: '2999-12-31',
+        items: [lineItem(5, 80)],
+      },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(allocateDocumentCodeMock).toHaveBeenCalledWith('client_offer', {
+      exec: expect.anything(),
+      sourceCode: 'PREV_26_0045_manual',
+    });
+  });
+
   test('POST: a create-form edit away from the pick-time baseline is kept and pushed (user report after #812)', async () => {
     cqFindStatusAndClientNameMock.mockResolvedValue({ status: 'accepted', clientName: 'Client' });
     cqLockCurrentByIdMock.mockResolvedValue({ status: 'accepted' });
