@@ -5,7 +5,6 @@ import { createChildLogger, serializeError } from '../utils/logger.ts';
 import { ensureBootstrapAdmin } from './bootstrapAdmin.ts';
 import {
   buildDemoAssignmentTargetIds,
-  buildDemoDocumentSeedManifest,
   buildDemoIds,
   COMPATIBILITY_DEFAULT_CLIENTS,
   COMPATIBILITY_DEFAULTS,
@@ -71,9 +70,6 @@ type DemoUserCleanupIds = {
 
 type RuntimeDemoIds = ReturnType<typeof buildDemoIds>;
 type RuntimeDemoAssignmentTargetIds = ReturnType<typeof buildDemoAssignmentTargetIds>;
-
-const nonEmpty = <T>(values: readonly (T | null | undefined)[]) =>
-  values.filter((value): value is T => value !== null && value !== undefined);
 
 const incrementCount = (counts: Record<string, number>, table: string, delta: number) => {
   if (delta <= 0) return;
@@ -150,6 +146,69 @@ const pushLowerTextArrayPredicateExcludingIds = (
     excludedIds,
   );
 };
+
+const demoProductIdsQuery = (
+  productIdsParam: string,
+  productCodesParam: string,
+  productNamesParam: string,
+  supplierIdsParam: string,
+) => `SELECT id FROM products
+      WHERE id = ANY(${productIdsParam})
+         OR product_code = ANY(${productCodesParam})
+         OR name = ANY(${productNamesParam})
+         OR supplier_id = ANY(${supplierIdsParam})`;
+
+const pushDemoProductSqlPredicate = (
+  builder: PredicateBuilder,
+  demoIds: RuntimeDemoIds,
+  renderPredicate: (demoProductIds: string) => string,
+) => {
+  builder.params.push([...demoIds.products]);
+  const productIdsParam = `$${builder.params.length}::text[]`;
+  builder.params.push(DEMO_PRODUCTS.map((product) => product.productCode));
+  const productCodesParam = `$${builder.params.length}::text[]`;
+  builder.params.push(DEMO_PRODUCTS.map((product) => product.name));
+  const productNamesParam = `$${builder.params.length}::text[]`;
+  builder.params.push([...demoIds.suppliers]);
+  const supplierIdsParam = `$${builder.params.length}::text[]`;
+  builder.parts.push(
+    renderPredicate(
+      demoProductIdsQuery(productIdsParam, productCodesParam, productNamesParam, supplierIdsParam),
+    ),
+  );
+};
+
+const parentIdsWithDemoProductLines = (
+  itemTable: string,
+  parentIdColumn: string,
+  demoProductIds: string,
+) => `SELECT ${parentIdColumn} FROM ${itemTable} WHERE product_id IN (${demoProductIds})`;
+
+const quoteIdsWithDemoProductLines = (demoProductIds: string) =>
+  parentIdsWithDemoProductLines('quote_items', 'quote_id', demoProductIds);
+
+const customerOfferIdsWithDemoProductLines = (demoProductIds: string) =>
+  `SELECT id FROM customer_offers
+   WHERE id IN (${parentIdsWithDemoProductLines(
+     'customer_offer_items',
+     'offer_id',
+     demoProductIds,
+   )})
+      OR linked_quote_id IN (${quoteIdsWithDemoProductLines(demoProductIds)})`;
+
+const clientSaleIdsWithDemoProductLines = (demoProductIds: string) =>
+  `SELECT id FROM sales
+   WHERE id IN (${parentIdsWithDemoProductLines('sale_items', 'sale_id', demoProductIds)})
+      OR linked_offer_id IN (${customerOfferIdsWithDemoProductLines(demoProductIds)})
+      OR linked_quote_id IN (${quoteIdsWithDemoProductLines(demoProductIds)})`;
+
+const supplierQuoteIdsWithDemoProductLines = (demoProductIds: string) =>
+  parentIdsWithDemoProductLines('supplier_quote_items', 'quote_id', demoProductIds);
+
+const supplierSaleIdsWithDemoProductLines = (demoProductIds: string) =>
+  `SELECT id FROM supplier_sales
+   WHERE id IN (${parentIdsWithDemoProductLines('supplier_sale_items', 'sale_id', demoProductIds)})
+      OR linked_quote_id IN (${supplierQuoteIdsWithDemoProductLines(demoProductIds)})`;
 
 const executeDelete = async (
   client: PoolClient,
@@ -568,7 +627,6 @@ export const cleanupDemoNamespace = async (
   demoUserIds: DemoUserCleanupIds,
   seedYear = getDemoSeedYear(),
 ) => {
-  const demoDocuments = buildDemoDocumentSeedManifest(seedYear);
   const demoIds = buildDemoIds(seedYear);
   const cleanupInvoiceIds = [...demoIds.invoices, ...LEGACY_DEMO_INVOICE_IDS];
   const cleanupSupplierInvoiceIds = [
@@ -656,7 +714,6 @@ export const cleanupDemoNamespace = async (
     await executeDelete(client, 'supplier_invoice_items', (builder) => {
       pushTextArrayPredicate(builder, 'id', DEMO_ITEM_IDS.supplierInvoiceItems);
       pushTextArrayPredicate(builder, 'invoice_id', cleanupSupplierInvoiceIds);
-      pushTextArrayPredicate(builder, 'product_id', demoIds.products);
     }),
   );
 
@@ -666,10 +723,21 @@ export const cleanupDemoNamespace = async (
     await executeDelete(client, 'supplier_invoices', (builder) => {
       pushTextArrayPredicate(builder, 'id', cleanupSupplierInvoiceIds);
       pushTextArrayPredicate(builder, 'supplier_id', demoIds.suppliers);
-      pushTextArrayPredicate(
+      pushTextArrayPredicate(builder, 'linked_sale_id', demoIds.supplierSales);
+      pushDemoProductSqlPredicate(
         builder,
-        'linked_sale_id',
-        nonEmpty(demoDocuments.supplierInvoices.map((invoice) => invoice.linkedSaleId)),
+        demoIds,
+        (productIds) =>
+          `id IN (${parentIdsWithDemoProductLines(
+            'supplier_invoice_items',
+            'invoice_id',
+            productIds,
+          )})`,
+      );
+      pushDemoProductSqlPredicate(
+        builder,
+        demoIds,
+        (productIds) => `linked_sale_id IN (${supplierSaleIdsWithDemoProductLines(productIds)})`,
       );
     }),
   );
@@ -680,7 +748,6 @@ export const cleanupDemoNamespace = async (
     await executeDelete(client, 'supplier_sale_items', (builder) => {
       pushTextArrayPredicate(builder, 'id', DEMO_ITEM_IDS.supplierSaleItems);
       pushTextArrayPredicate(builder, 'sale_id', demoIds.supplierSales);
-      pushTextArrayPredicate(builder, 'product_id', demoIds.products);
     }),
   );
 
@@ -690,10 +757,17 @@ export const cleanupDemoNamespace = async (
     await executeDelete(client, 'supplier_sales', (builder) => {
       pushTextArrayPredicate(builder, 'id', demoIds.supplierSales);
       pushTextArrayPredicate(builder, 'supplier_id', demoIds.suppliers);
-      pushTextArrayPredicate(
+      pushTextArrayPredicate(builder, 'linked_quote_id', demoIds.supplierQuotes);
+      pushDemoProductSqlPredicate(
         builder,
-        'linked_quote_id',
-        nonEmpty(demoDocuments.supplierSales.map((sale) => sale.linkedQuoteId)),
+        demoIds,
+        (productIds) =>
+          `id IN (${parentIdsWithDemoProductLines('supplier_sale_items', 'sale_id', productIds)})`,
+      );
+      pushDemoProductSqlPredicate(
+        builder,
+        demoIds,
+        (productIds) => `linked_quote_id IN (${supplierQuoteIdsWithDemoProductLines(productIds)})`,
       );
     }),
   );
@@ -704,7 +778,6 @@ export const cleanupDemoNamespace = async (
     await executeDelete(client, 'supplier_quote_items', (builder) => {
       pushTextArrayPredicate(builder, 'id', DEMO_ITEM_IDS.supplierQuoteItems);
       pushTextArrayPredicate(builder, 'quote_id', demoIds.supplierQuotes);
-      pushTextArrayPredicate(builder, 'product_id', demoIds.products);
     }),
   );
 
@@ -714,6 +787,11 @@ export const cleanupDemoNamespace = async (
     await executeDelete(client, 'supplier_quotes', (builder) => {
       pushTextArrayPredicate(builder, 'id', demoIds.supplierQuotes);
       pushTextArrayPredicate(builder, 'supplier_id', demoIds.suppliers);
+      pushDemoProductSqlPredicate(
+        builder,
+        demoIds,
+        (productIds) => `id IN (${supplierQuoteIdsWithDemoProductLines(productIds)})`,
+      );
     }),
   );
 
@@ -723,7 +801,6 @@ export const cleanupDemoNamespace = async (
     await executeDelete(client, 'invoice_items', (builder) => {
       pushTextArrayPredicate(builder, 'id', DEMO_ITEM_IDS.invoiceItems);
       pushTextArrayPredicate(builder, 'invoice_id', cleanupInvoiceIds);
-      pushTextArrayPredicate(builder, 'product_id', demoIds.products);
     }),
   );
 
@@ -733,10 +810,17 @@ export const cleanupDemoNamespace = async (
     await executeDelete(client, 'invoices', (builder) => {
       pushTextArrayPredicate(builder, 'id', cleanupInvoiceIds);
       pushTextArrayPredicate(builder, 'client_id', demoIds.clients);
-      pushTextArrayPredicate(
+      pushTextArrayPredicate(builder, 'linked_sale_id', demoIds.sales);
+      pushDemoProductSqlPredicate(
         builder,
-        'linked_sale_id',
-        nonEmpty(demoDocuments.invoices.map((invoice) => invoice.linkedSaleId)),
+        demoIds,
+        (productIds) =>
+          `id IN (${parentIdsWithDemoProductLines('invoice_items', 'invoice_id', productIds)})`,
+      );
+      pushDemoProductSqlPredicate(
+        builder,
+        demoIds,
+        (productIds) => `linked_sale_id IN (${clientSaleIdsWithDemoProductLines(productIds)})`,
       );
     }),
   );
@@ -747,7 +831,6 @@ export const cleanupDemoNamespace = async (
     await executeDelete(client, 'sale_items', (builder) => {
       pushTextArrayPredicate(builder, 'id', DEMO_ITEM_IDS.saleItems);
       pushTextArrayPredicate(builder, 'sale_id', demoIds.sales);
-      pushTextArrayPredicate(builder, 'product_id', demoIds.products);
     }),
   );
 
@@ -757,10 +840,23 @@ export const cleanupDemoNamespace = async (
     await executeDelete(client, 'sales', (builder) => {
       pushTextArrayPredicate(builder, 'id', demoIds.sales);
       pushTextArrayPredicate(builder, 'client_id', demoIds.clients);
-      pushTextArrayPredicate(
+      pushTextArrayPredicate(builder, 'linked_offer_id', demoIds.customerOffers);
+      pushTextArrayPredicate(builder, 'linked_quote_id', demoIds.quotes);
+      pushDemoProductSqlPredicate(
         builder,
-        'linked_offer_id',
-        nonEmpty(demoDocuments.sales.map((sale) => sale.linkedOfferId)),
+        demoIds,
+        (productIds) =>
+          `id IN (${parentIdsWithDemoProductLines('sale_items', 'sale_id', productIds)})`,
+      );
+      pushDemoProductSqlPredicate(
+        builder,
+        demoIds,
+        (productIds) => `linked_offer_id IN (${customerOfferIdsWithDemoProductLines(productIds)})`,
+      );
+      pushDemoProductSqlPredicate(
+        builder,
+        demoIds,
+        (productIds) => `linked_quote_id IN (${quoteIdsWithDemoProductLines(productIds)})`,
       );
     }),
   );
@@ -771,7 +867,6 @@ export const cleanupDemoNamespace = async (
     await executeDelete(client, 'customer_offer_items', (builder) => {
       pushTextArrayPredicate(builder, 'id', DEMO_ITEM_IDS.customerOfferItems);
       pushTextArrayPredicate(builder, 'offer_id', demoIds.customerOffers);
-      pushTextArrayPredicate(builder, 'product_id', demoIds.products);
     }),
   );
 
@@ -781,10 +876,21 @@ export const cleanupDemoNamespace = async (
     await executeDelete(client, 'customer_offers', (builder) => {
       pushTextArrayPredicate(builder, 'id', demoIds.customerOffers);
       pushTextArrayPredicate(builder, 'client_id', demoIds.clients);
-      pushTextArrayPredicate(
+      pushTextArrayPredicate(builder, 'linked_quote_id', demoIds.quotes);
+      pushDemoProductSqlPredicate(
         builder,
-        'linked_quote_id',
-        demoDocuments.customerOffers.map((offer) => offer.linkedQuoteId),
+        demoIds,
+        (productIds) =>
+          `id IN (${parentIdsWithDemoProductLines(
+            'customer_offer_items',
+            'offer_id',
+            productIds,
+          )})`,
+      );
+      pushDemoProductSqlPredicate(
+        builder,
+        demoIds,
+        (productIds) => `linked_quote_id IN (${quoteIdsWithDemoProductLines(productIds)})`,
       );
     }),
   );
@@ -795,7 +901,6 @@ export const cleanupDemoNamespace = async (
     await executeDelete(client, 'quote_items', (builder) => {
       pushTextArrayPredicate(builder, 'id', DEMO_ITEM_IDS.quoteItems);
       pushTextArrayPredicate(builder, 'quote_id', demoIds.quotes);
-      pushTextArrayPredicate(builder, 'product_id', demoIds.products);
     }),
   );
 
@@ -805,6 +910,11 @@ export const cleanupDemoNamespace = async (
     await executeDelete(client, 'quotes', (builder) => {
       pushTextArrayPredicate(builder, 'id', demoIds.quotes);
       pushTextArrayPredicate(builder, 'client_id', demoIds.clients);
+      pushDemoProductSqlPredicate(
+        builder,
+        demoIds,
+        (productIds) => `id IN (${quoteIdsWithDemoProductLines(productIds)})`,
+      );
     }),
   );
 
