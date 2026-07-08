@@ -1,9 +1,14 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { withDbTransaction } from '../db/drizzle.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
+import * as clientsOrdersRepo from '../repositories/clientsOrdersRepo.ts';
 import * as invoicesRepo from '../repositories/invoicesRepo.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
-import { allocateDocumentCode } from '../services/documentCodes.ts';
+import {
+  allocateDocumentCode,
+  compactDocumentCodeSources,
+  reserveDocumentCodeCounterFromCode,
+} from '../services/documentCodes.ts';
 import { logAudit } from '../utils/audit.ts';
 import {
   type DatabaseError,
@@ -398,21 +403,48 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const nextIdResult = optionalNonEmptyString(nextId, 'id');
       if (!nextIdResult.ok) return badRequest(reply, nextIdResult.message);
+      const linkedSaleIdResult = optionalNonEmptyString(linkedSaleId, 'linkedSaleId');
+      if (!linkedSaleIdResult.ok) return badRequest(reply, linkedSaleIdResult.message);
 
       let result: { invoice: invoicesRepo.Invoice; items: invoicesRepo.InvoiceItem[] } | null =
         null;
       try {
         result = await withDbTransaction(async (tx) => {
-          const invoiceId =
-            nextIdResult.value ??
-            (await allocateDocumentCode('client_invoice', {
+          let invoiceId: string;
+          if (nextIdResult.value) {
+            await reserveDocumentCodeCounterFromCode('client_invoice', nextIdResult.value, tx);
+            invoiceId = nextIdResult.value;
+          } else {
+            let sourceCodes: string[] = [];
+            if (linkedSaleIdResult.value) {
+              const existingLinkedInvoiceId = await invoicesRepo.findInvoiceForLinkedSale(
+                linkedSaleIdResult.value,
+                tx,
+              );
+              if (!existingLinkedInvoiceId) {
+                const sourceOrder = await clientsOrdersRepo.findExisting(
+                  linkedSaleIdResult.value,
+                  tx,
+                );
+                sourceCodes = sourceOrder
+                  ? compactDocumentCodeSources(
+                      sourceOrder.linkedQuoteId,
+                      sourceOrder.linkedOfferId,
+                      sourceOrder.id,
+                    )
+                  : compactDocumentCodeSources(linkedSaleIdResult.value);
+              }
+            }
+            invoiceId = await allocateDocumentCode('client_invoice', {
               date: issueDateResult.value,
               exec: tx,
-            }));
+              ...(sourceCodes.length ? { sourceCodes } : {}),
+            });
+          }
           const invoice = await invoicesRepo.create(
             {
               id: invoiceId,
-              linkedSaleId: (linkedSaleId as string | null | undefined) || null,
+              linkedSaleId: linkedSaleIdResult.value,
               clientId: clientIdResult.value,
               clientName: clientNameResult.value,
               issueDate: issueDateResult.value,
@@ -718,6 +750,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           if (nextIdValue && nextIdValue !== idResult.value) {
             renamedInvoice = await invoicesRepo.renameDraft(idResult.value, nextIdValue, tx);
             if (!renamedInvoice) return { invoice: null, items: [] };
+            await reserveDocumentCodeCounterFromCode('client_invoice', nextIdValue, tx);
           }
           // id-only renames have nothing left to write — reuse the row returned by renameDraft().
           const updated =

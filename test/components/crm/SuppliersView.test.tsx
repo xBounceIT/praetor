@@ -14,6 +14,9 @@ mock.module('../../../services/api/views', () => ({
     create: () => Promise.reject(new Error('not used')),
     update: () => Promise.reject(new Error('not used')),
     remove: () => Promise.resolve(),
+    directory: () => Promise.resolve([]),
+    getShares: () => Promise.resolve([]),
+    replaceShares: () => Promise.resolve([]),
   },
 }));
 

@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useDocumentCodePreview } from '../../hooks/useDocumentCodePreview';
+import { ApiError } from '../../services/api/client';
 import { normalizeQuoteItem } from '../../services/api/normalizers';
 import type { QuoteCommunicationChannel } from '../../services/api/quoteCommunicationChannels';
 import type {
@@ -172,6 +173,9 @@ const quoteToFormData = (quote: Quote): Partial<Quote> => ({
 // display-value lookup so the two can never drift.
 const supplierQuoteItemLabel = (quote: SupplierQuote, item: SupplierQuote['items'][number]) =>
   `${quote.supplierName} · ${item.productName} (${item.unitPrice.toFixed(2)})`;
+
+const isQuoteCodeConflictError = (err: unknown) =>
+  err instanceof ApiError && err.status === 409 && err.message === 'Quote ID already exists';
 
 interface PendingClientChange {
   clientId: string;
@@ -647,6 +651,15 @@ const useClientQuotesController = ({
         await onAddQuote(payload);
       }
     } catch (err) {
+      if (isQuoteCodeConflictError(err)) {
+        setErrors((prev) => ({
+          ...prev,
+          id: t('sales:clientQuotes.errors.quoteCodeAlreadyExists', {
+            defaultValue: 'This quote code already exists',
+          }),
+        }));
+        return;
+      }
       toastError((err as Error).message || t('sales:clientQuotes.failedToSave'));
       return;
     } finally {

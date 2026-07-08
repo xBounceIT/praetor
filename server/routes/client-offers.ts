@@ -15,7 +15,10 @@ import {
   createClientOrderRows,
   logClientOrderCreated,
 } from '../services/clientOrderCreation.ts';
-import { allocateDocumentCode } from '../services/documentCodes.ts';
+import {
+  allocateDocumentCode,
+  reserveDocumentCodeCounterFromCode,
+} from '../services/documentCodes.ts';
 import { logAudit } from '../utils/audit.ts';
 import { todayLocalDateOnly } from '../utils/date.ts';
 import { getUniqueViolation } from '../utils/db-errors.ts';
@@ -797,8 +800,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             };
           }
 
-          const offerId =
-            nextIdResult.value ?? (await allocateDocumentCode('client_offer', { exec: tx }));
+          let offerId: string;
+          if (nextIdResult.value) {
+            await reserveDocumentCodeCounterFromCode('client_offer', nextIdResult.value, tx);
+            offerId = nextIdResult.value;
+          } else {
+            offerId = await allocateDocumentCode('client_offer', {
+              exec: tx,
+              sourceCode: linkedQuoteIdResult.value,
+            });
+          }
           const offer = await clientOffersRepo.create(
             {
               id: offerId,
@@ -1240,6 +1251,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           if (nextIdValue && nextIdValue !== idResult.value) {
             renamedOffer = await clientOffersRepo.rename(idResult.value, nextIdValue, tx);
             if (!renamedOffer) return { offer: null, items: [], syncAudits: [] };
+            await reserveDocumentCodeCounterFromCode('client_offer', nextIdValue, tx);
           }
           // id-only renames have nothing left to write — reuse the row returned by rename().
           const offer =

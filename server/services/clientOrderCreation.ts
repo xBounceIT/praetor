@@ -5,7 +5,12 @@ import * as supplierQuotesRepo from '../repositories/supplierQuotesRepo.ts';
 import { logAudit } from '../utils/audit.ts';
 import { generatePrefixedId, ITEM_ID_PREFIXES } from '../utils/order-ids.ts';
 import { effectiveSupplierQuoteStatusFromDate } from '../utils/quote-status.ts';
-import { allocateDocumentCode, DocumentCodeCollisionError } from './documentCodes.ts';
+import {
+  allocateDocumentCode,
+  compactDocumentCodeSources,
+  DocumentCodeCollisionError,
+  reserveDocumentCodeCounterFromCode,
+} from './documentCodes.ts';
 
 export type ClientOrderCreateFields = {
   id?: string | null;
@@ -34,7 +39,17 @@ export const createClientOrderRows = async (
   order: clientsOrdersRepo.ClientOrder;
   items: clientsOrdersRepo.ClientOrderItem[];
 }> => {
-  const orderId = fields.id || (await allocateDocumentCode('client_order', { exec: tx }));
+  const sourceCodes = compactDocumentCodeSources(fields.linkedQuoteId, fields.linkedOfferId);
+  let orderId: string;
+  if (fields.id) {
+    await reserveDocumentCodeCounterFromCode('client_order', fields.id, tx);
+    orderId = fields.id;
+  } else {
+    orderId = await allocateDocumentCode('client_order', {
+      exec: tx,
+      ...(sourceCodes.length ? { sourceCodes } : {}),
+    });
+  }
   const order = await clientsOrdersRepo.create(
     {
       id: orderId,
@@ -125,7 +140,10 @@ export const autoCreateSupplierOrdersForClientOrder = async (
             if (!supplierQuote) return null;
             const [supplierItems, supplierOrderId] = await Promise.all([
               supplierQuotesRepo.findItemsForQuote(sqId, tx),
-              allocateDocumentCode('supplier_order', { exec: tx }),
+              allocateDocumentCode('supplier_order', {
+                exec: tx,
+                sourceCode: sqId,
+              }),
             ]);
             await clientsOrdersRepo.createSupplierOrder(
               {

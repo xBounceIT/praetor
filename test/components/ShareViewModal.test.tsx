@@ -14,7 +14,8 @@ const DIRECTORY: ViewDirectoryUser[] = [
   { id: 'u4', name: 'Dave Jones', username: 'dave.jones', avatarInitials: 'DJ' },
 ];
 
-// Mocked viewsApi surface — only the methods ShareViewModal touches.
+// Mocked viewsApi surface. Bun's module mocks are process-wide, so keep the full
+// saved-views API shape to avoid leaking a partial module into StandardTable suites.
 const directoryMock = mock(
   async (_signal?: AbortSignal): Promise<ViewDirectoryUser[]> => DIRECTORY,
 );
@@ -25,6 +26,14 @@ const replaceSharesMock = mock(
 
 mock.module('../../services/api/views', () => ({
   viewsApi: {
+    list: mock(async () => []),
+    create: mock(async () => {
+      throw new Error('not used');
+    }),
+    update: mock(async () => {
+      throw new Error('not used');
+    }),
+    remove: mock(async () => {}),
     directory: directoryMock,
     getShares: getSharesMock,
     replaceShares: replaceSharesMock,
@@ -90,6 +99,9 @@ describe('<ShareViewModal />', () => {
 
   afterEach(() => {
     currentUserId = 'me';
+    document.body.style.overflow = '';
+    document.body.style.pointerEvents = '';
+    document.body.removeAttribute('data-scroll-locked');
   });
 
   test('loads the directory and existing shares, excluding the current user', async () => {

@@ -82,7 +82,15 @@ const DOCUMENT_CODE_PLACEHOLDERS = new Set(['PREFIX', 'YY', 'YYYY', 'SEQ']);
 const PREFIX_PATTERN = /^[A-Za-z0-9_-]+$/;
 const TEMPLATE_LITERAL_PATTERN = /^[A-Za-z0-9_-]*$/;
 const YEAR_PLACEHOLDER_PATTERN = /\{(?:YY|YYYY)\}/;
+const DOCUMENT_CODE_COUNTER_SEPARATOR_PATTERN = /[-_]/;
+const DOCUMENT_CODE_TEMPLATE_PLACEHOLDER_PATTERN = /\{(PREFIX|YY|YYYY|SEQ)\}/g;
 const MAX_SEQUENCE_FOR_LENGTH_CHECK = 999_999_999;
+const DOCUMENT_CODE_MAX_RESERVED_SEQUENCE = 2_147_483_646;
+
+export type ParsedDocumentCodeCounter = {
+  year: number;
+  sequence: number;
+};
 
 export const isDocumentCodeModuleId = (value: unknown): value is DocumentCodeModuleId =>
   typeof value === 'string' && (DOCUMENT_CODE_MODULE_IDS as readonly string[]).includes(value);
@@ -106,6 +114,157 @@ export const formatDocumentSequence = (sequence: string | number | bigint, paddi
     throw new Error(`Invalid sequence value: ${value}`);
   }
   return value.padStart(padding, '0');
+};
+
+const parseDocumentCodeYearPart = (yearPart: string): number | null => {
+  const year = /^\d{2}$/.test(yearPart)
+    ? 2000 + Number.parseInt(yearPart, 10)
+    : /^\d{4}$/.test(yearPart)
+      ? Number.parseInt(yearPart, 10)
+      : Number.NaN;
+  if (!Number.isInteger(year) || year < DOCUMENT_CODE_YEAR_MIN || year > DOCUMENT_CODE_YEAR_MAX) {
+    return null;
+  }
+  return year;
+};
+
+const parseDocumentCodeSequencePart = (sequencePart: string): number | null => {
+  if (!/^\d+$/.test(sequencePart)) return null;
+  const sequence = Number.parseInt(sequencePart, 10);
+  if (
+    !Number.isInteger(sequence) ||
+    sequence < 1 ||
+    sequence > DOCUMENT_CODE_MAX_RESERVED_SEQUENCE
+  ) {
+    return null;
+  }
+  return sequence;
+};
+
+const escapeRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+type DocumentCodeTemplatePlaceholder = 'PREFIX' | 'YY' | 'YYYY' | 'SEQ';
+type DocumentCodeTemplateCapture = Exclude<DocumentCodeTemplatePlaceholder, 'PREFIX'>;
+
+const buildDocumentCodeTemplateRegex = (
+  config: Pick<DocumentCodeTemplateConfig, 'prefix' | 'template'>,
+): { regex: RegExp; captures: DocumentCodeTemplateCapture[] } => {
+  let pattern = '^';
+  let cursor = 0;
+  const captures: DocumentCodeTemplateCapture[] = [];
+
+  for (const match of config.template.matchAll(DOCUMENT_CODE_TEMPLATE_PLACEHOLDER_PATTERN)) {
+    const index = match.index ?? 0;
+    pattern += escapeRegExp(config.template.slice(cursor, index));
+    const placeholder = match[1] as DocumentCodeTemplatePlaceholder;
+    if (placeholder === 'PREFIX') {
+      pattern += escapeRegExp(config.prefix);
+    } else {
+      captures.push(placeholder);
+      pattern += placeholder === 'SEQ' ? '(\\d+)' : placeholder === 'YY' ? '(\\d{2})' : '(\\d{4})';
+    }
+    cursor = index + match[0].length;
+  }
+
+  pattern += escapeRegExp(config.template.slice(cursor));
+  return { regex: new RegExp(`${pattern}$`), captures };
+};
+
+export const parseDocumentCodeCounterFromTemplate = (
+  code: unknown,
+  config: Pick<DocumentCodeTemplateConfig, 'prefix' | 'template'>,
+): ParsedDocumentCodeCounter | null => {
+  if (typeof code !== 'string') return null;
+  const { regex, captures } = buildDocumentCodeTemplateRegex(config);
+  const match = regex.exec(code.trim());
+  if (!match) return null;
+
+  let year: number | null = null;
+  let sequence: number | null = null;
+  let captureIndex = 1;
+
+  for (const capture of captures) {
+    const value = match[captureIndex];
+    captureIndex += 1;
+    if (!value) return null;
+
+    if (capture === 'SEQ') {
+      const parsedSequence = parseDocumentCodeSequencePart(value);
+      if (parsedSequence === null || (sequence !== null && sequence !== parsedSequence)) {
+        return null;
+      }
+      sequence = parsedSequence;
+      continue;
+    }
+
+    const parsedYear = parseDocumentCodeYearPart(value);
+    if (parsedYear === null || (year !== null && year !== parsedYear)) {
+      return null;
+    }
+    year = parsedYear;
+  }
+
+  return year !== null && sequence !== null ? { year, sequence } : null;
+};
+
+export const parseDocumentCodeCounterFromTemplates = (
+  code: unknown,
+  templates: readonly Pick<DocumentCodeTemplateConfig, 'prefix' | 'template'>[],
+): ParsedDocumentCodeCounter | null => {
+  for (const template of templates) {
+    const parsed = parseDocumentCodeCounterFromTemplate(code, template);
+    if (parsed) return parsed;
+  }
+  return null;
+};
+
+export const parseDocumentCodeCounter = (code: unknown): ParsedDocumentCodeCounter | null => {
+  if (typeof code !== 'string') return null;
+  const parts = code.trim().split(DOCUMENT_CODE_COUNTER_SEPARATOR_PATTERN);
+  if (parts.length < 3 || parts[0].length === 0) return null;
+
+  let firstCandidate: ParsedDocumentCodeCounter | null = null;
+  let firstCandidateYearPart: string | null = null;
+  let firstCandidateSequencePart: string | null = null;
+  let lastFullYearCandidate: ParsedDocumentCodeCounter | null = null;
+  for (let yearIndex = 1; yearIndex <= parts.length - 2; yearIndex += 1) {
+    const yearPart = parts[yearIndex];
+    const year = parseDocumentCodeYearPart(yearPart);
+    if (year === null) continue;
+
+    const sequencePart = parts[yearIndex + 1];
+    const sequence = parseDocumentCodeSequencePart(sequencePart);
+    if (sequence === null) continue;
+
+    const candidate = { year, sequence };
+    if (!firstCandidate) {
+      firstCandidate = candidate;
+      firstCandidateYearPart = yearPart;
+      firstCandidateSequencePart = sequencePart;
+    }
+    if (yearPart.length === 4 && !yearPart.startsWith('0')) {
+      lastFullYearCandidate = candidate;
+    }
+  }
+
+  if (firstCandidate && firstCandidateYearPart?.length === 4) {
+    return firstCandidate;
+  }
+
+  const firstCandidateHasPaddedSequence =
+    firstCandidate !== null &&
+    firstCandidateSequencePart !== null &&
+    firstCandidateSequencePart.length > String(firstCandidate.sequence).length;
+
+  if (
+    firstCandidate &&
+    firstCandidateYearPart?.length === 2 &&
+    (firstCandidateHasPaddedSequence || lastFullYearCandidate?.year === firstCandidate.year)
+  ) {
+    return firstCandidate;
+  }
+
+  return lastFullYearCandidate ?? firstCandidate;
 };
 
 export const renderDocumentCode = (
