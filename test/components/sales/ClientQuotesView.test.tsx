@@ -25,6 +25,15 @@ mock.module('sonner', () => ({
   Toaster: () => null,
 }));
 
+mock.module('../../../services/api/views', () => ({
+  viewsApi: {
+    list: () => Promise.resolve([]),
+    create: () => Promise.reject(new Error('not used')),
+    update: () => Promise.reject(new Error('not used')),
+    remove: () => Promise.resolve(),
+  },
+}));
+
 // Other suites globally stub DeleteConfirmModal (Bun's mock.module is process-wide and
 // last-write-wins), so pin the shared deterministic stub against this file's binding.
 mock.module('../../../components/shared/DeleteConfirmModal', () => ({
@@ -34,6 +43,7 @@ mock.module('../../../components/shared/DeleteConfirmModal', () => ({
 const ClientQuotesView = (await import('../../../components/sales/ClientQuotesView')).default;
 
 const clients: Client[] = [{ id: 'client-1', name: 'Helios Energy Services' }];
+const STABLE_FUTURE_EXPIRATION_DATE = '2099-06-30';
 const communicationChannels = [
   {
     id: 'qcc_email',
@@ -67,7 +77,7 @@ const quotes: Quote[] = [
     discount: 10,
     discountType: 'percentage',
     status: 'draft',
-    expirationDate: '2026-06-30',
+    expirationDate: STABLE_FUTURE_EXPIRATION_DATE,
     createdAt: Date.UTC(2026, 4, 14),
     updatedAt: Date.UTC(2026, 4, 14),
   },
@@ -93,7 +103,7 @@ const quotes: Quote[] = [
     discount: 25,
     discountType: 'currency',
     status: 'draft',
-    expirationDate: '2026-06-30',
+    expirationDate: STABLE_FUTURE_EXPIRATION_DATE,
     createdAt: Date.UTC(2026, 4, 14),
     updatedAt: Date.UTC(2026, 4, 14),
   },
@@ -239,7 +249,7 @@ describe('<ClientQuotesView />', () => {
       discount: 0,
       discountType: 'percentage',
       status: 'draft',
-      expirationDate: '2026-06-30',
+      expirationDate: STABLE_FUTURE_EXPIRATION_DATE,
       createdAt: Date.UTC(2026, 4, 14),
       updatedAt: Date.UTC(2026, 4, 14),
     };
@@ -289,7 +299,7 @@ describe('<ClientQuotesView />', () => {
       discount: 0,
       discountType: 'percentage',
       status: 'draft',
-      expirationDate: '2026-06-30',
+      expirationDate: STABLE_FUTURE_EXPIRATION_DATE,
       createdAt: Date.UTC(2026, 4, 14),
       updatedAt: Date.UTC(2026, 4, 14),
     };
@@ -341,7 +351,7 @@ describe('<ClientQuotesView />', () => {
       discount: 0,
       discountType: 'percentage',
       status: 'draft',
-      expirationDate: '2026-06-30',
+      expirationDate: STABLE_FUTURE_EXPIRATION_DATE,
       createdAt: Date.UTC(2026, 4, 14),
       updatedAt: Date.UTC(2026, 4, 14),
     };
@@ -394,7 +404,7 @@ describe('<ClientQuotesView />', () => {
       discount: 0,
       discountType: 'percentage',
       status: 'draft',
-      expirationDate: '2026-06-30',
+      expirationDate: STABLE_FUTURE_EXPIRATION_DATE,
       createdAt: Date.UTC(2026, 4, 14),
       updatedAt: Date.UTC(2026, 4, 14),
     };
@@ -439,7 +449,7 @@ describe('<ClientQuotesView />', () => {
       discount: 0,
       discountType: 'percentage',
       status: 'draft',
-      expirationDate: '2026-06-30',
+      expirationDate: STABLE_FUTURE_EXPIRATION_DATE,
       createdAt: Date.UTC(2026, 4, 14),
       updatedAt: Date.UTC(2026, 4, 14),
     };
