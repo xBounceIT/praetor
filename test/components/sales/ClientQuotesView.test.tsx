@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, mock, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { Client, Quote } from '../../../types';
@@ -14,6 +14,18 @@ import {
 
 installI18nMock();
 
+const viewsListMock = mock(async () => []);
+const viewsCreateMock = mock(async () => {
+  throw new Error('not used');
+});
+const viewsUpdateMock = mock(async () => {
+  throw new Error('not used');
+});
+const viewsRemoveMock = mock(async () => {});
+const viewsDirectoryMock = mock(async () => []);
+const viewsGetSharesMock = mock(async () => []);
+const viewsReplaceSharesMock = mock(async () => []);
+
 mock.module('sonner', () => ({
   toast: {
     error: () => {},
@@ -23,6 +35,18 @@ mock.module('sonner', () => ({
     message: () => {},
   },
   Toaster: () => null,
+}));
+
+mock.module('../../../services/api/views', () => ({
+  viewsApi: {
+    list: viewsListMock,
+    create: viewsCreateMock,
+    update: viewsUpdateMock,
+    remove: viewsRemoveMock,
+    directory: viewsDirectoryMock,
+    getShares: viewsGetSharesMock,
+    replaceShares: viewsReplaceSharesMock,
+  },
 }));
 
 // Other suites globally stub DeleteConfirmModal (Bun's mock.module is process-wide and
@@ -99,11 +123,32 @@ const quotes: Quote[] = [
   },
 ];
 
-describe('<ClientQuotesView />', () => {
-  beforeEach(() => {
-    localStorage.clear();
-  });
+beforeEach(() => {
+  localStorage.clear();
+  viewsListMock.mockClear();
+  viewsCreateMock.mockClear();
+  viewsUpdateMock.mockClear();
+  viewsRemoveMock.mockClear();
+  viewsDirectoryMock.mockClear();
+  viewsGetSharesMock.mockClear();
+  viewsReplaceSharesMock.mockClear();
+  viewsListMock.mockImplementation(async () => []);
+  viewsDirectoryMock.mockImplementation(async () => []);
+  viewsGetSharesMock.mockImplementation(async () => []);
+  viewsReplaceSharesMock.mockImplementation(async () => []);
+});
 
+afterEach(() => {
+  document.body.style.overflow = '';
+  document.body.style.pointerEvents = '';
+  document.body.removeAttribute('data-scroll-locked');
+});
+
+const waitForSavedViewsLoad = async () => {
+  await waitFor(() => expect(viewsListMock).toHaveBeenCalled());
+};
+
+describe('<ClientQuotesView />', () => {
   test('renders the quote list columns in the requested order with MOL next to margin', () => {
     const { container } = render(
       <ClientQuotesView
@@ -533,7 +578,13 @@ describe('<ClientQuotesView /> edit action gating (#812 round 13)', () => {
   // StandardTable collapses the actions cell into a per-row kebab menu; the edit entry (cloned
   // from the pencil button, aria-label + disabled preserved) only exists after opening it.
   const openRowActions = async (user: ReturnType<typeof userEvent.setup>) => {
+    await waitForSavedViewsLoad();
     await user.click(screen.getByRole('button', { name: 'table.rowActions' }));
+    await waitFor(() => {
+      expect(
+        document.body.querySelector('[data-standard-table-action-menu="true"]'),
+      ).not.toBeNull();
+    });
   };
 
   test('keeps the edit action enabled on an expired quote without an offer (extend-date recovery)', async () => {
@@ -550,8 +601,15 @@ describe('<ClientQuotesView /> edit action gating (#812 round 13)', () => {
 
   test('opens an in-offer quote row in read-only mode', async () => {
     const user = userEvent.setup();
-    renderQuote({ ...quotes[0], id: 'Q-OFFERED', status: 'offer', linkedOfferId: 'off-1' });
+    renderQuote({
+      ...quotes[0],
+      id: 'Q-OFFERED',
+      status: 'offer',
+      expirationDate: '2099-12-31',
+      linkedOfferId: 'off-1',
+    });
 
+    await waitForSavedViewsLoad();
     await user.click(screen.getByText('Q-OFFERED'));
 
     const dialog = await screen.findByRole('dialog');
@@ -563,7 +621,15 @@ describe('<ClientQuotesView /> edit action gating (#812 round 13)', () => {
     const onUpdateQuote = mock(() => Promise.resolve());
     render(
       <ClientQuotesView
-        quotes={[{ ...quotes[0], id: 'Q-OFFERED', status: 'offer', linkedOfferId: 'off-1' }]}
+        quotes={[
+          {
+            ...quotes[0],
+            id: 'Q-OFFERED',
+            status: 'offer',
+            expirationDate: '2099-12-31',
+            linkedOfferId: 'off-1',
+          },
+        ]}
         clients={clients}
         products={[]}
         supplierQuotes={[]}
@@ -588,7 +654,15 @@ describe('<ClientQuotesView /> edit action gating (#812 round 13)', () => {
     const user = userEvent.setup();
     render(
       <ClientQuotesView
-        quotes={[{ ...quotes[0], id: 'Q-OFFERED', status: 'offer', linkedOfferId: 'off-1' }]}
+        quotes={[
+          {
+            ...quotes[0],
+            id: 'Q-OFFERED',
+            status: 'offer',
+            expirationDate: '2099-12-31',
+            linkedOfferId: 'off-1',
+          },
+        ]}
         clients={clients}
         products={[]}
         supplierQuotes={[]}
@@ -643,7 +717,7 @@ describe('<ClientQuotesView /> line-item delete confirmation', () => {
   const openEditor = async () => {
     render(
       <ClientQuotesView
-        quotes={[quotes[0]]}
+        quotes={[{ ...quotes[0], expirationDate: '2099-12-31' }]}
         clients={clients}
         products={[]}
         supplierQuotes={[]}
@@ -653,8 +727,37 @@ describe('<ClientQuotesView /> line-item delete confirmation', () => {
         onDeleteQuote={mock(() => Promise.resolve())}
       />,
     );
+    await waitForSavedViewsLoad();
     fireEvent.click(screen.getByText('Q-001'));
     return screen.findByRole('dialog');
+  };
+
+  const findLineDeleteConfirm = async () => {
+    const title = await screen.findByText('sales:clientQuotes.removeProductTitle');
+    const root =
+      title.closest('[data-testid="line-delete-confirm"]') ?? title.closest('[role="dialog"]');
+    if (!(root instanceof HTMLElement)) {
+      throw new Error('Line delete confirmation root not found');
+    }
+    return root;
+  };
+
+  const clickLineDeleteConfirm = (root: HTMLElement) => {
+    const stubConfirm = within(root).queryByTestId('line-delete-confirm-btn');
+    if (stubConfirm) {
+      fireEvent.click(stubConfirm);
+      return;
+    }
+    fireEvent.click(within(root).getByRole('button', { name: 'buttons.yesDelete' }));
+  };
+
+  const clickLineDeleteCancel = (root: HTMLElement) => {
+    const stubCancel = within(root).queryByTestId('line-delete-cancel');
+    if (stubCancel) {
+      fireEvent.click(stubCancel);
+      return;
+    }
+    fireEvent.click(within(root).getByRole('button', { name: 'buttons.noGoBack' }));
   };
 
   test('confirms before removing a product line and removes it only after confirming', async () => {
@@ -664,13 +767,13 @@ describe('<ClientQuotesView /> line-item delete confirmation', () => {
 
     // Clicking the trash icon must NOT remove the row immediately — it opens a confirmation.
     fireEvent.click(rowDeletes[0]);
-    const confirmUi = await screen.findByTestId('line-delete-confirm');
-    expect(within(confirmUi).getByTestId('line-delete-title')).toHaveTextContent(
-      'sales:clientQuotes.removeProductTitle',
-    );
+    const confirmUi = await findLineDeleteConfirm();
+    expect(
+      within(confirmUi).getByText('sales:clientQuotes.removeProductTitle'),
+    ).toBeInTheDocument();
     expect(rowDeleteButtons(dialog)).toHaveLength(rowDeletes.length);
 
-    fireEvent.click(within(confirmUi).getByTestId('line-delete-confirm-btn'));
+    clickLineDeleteConfirm(confirmUi);
     await waitFor(() => {
       expect(rowDeleteButtons(dialog)).toHaveLength(0);
     });
@@ -681,10 +784,10 @@ describe('<ClientQuotesView /> line-item delete confirmation', () => {
     const rowDeletes = rowDeleteButtons(dialog);
 
     fireEvent.click(rowDeletes[0]);
-    fireEvent.click(await screen.findByTestId('line-delete-cancel'));
+    clickLineDeleteCancel(await findLineDeleteConfirm());
 
     await waitFor(() => {
-      expect(screen.queryByTestId('line-delete-confirm')).not.toBeInTheDocument();
+      expect(screen.queryByText('sales:clientQuotes.removeProductTitle')).not.toBeInTheDocument();
     });
     expect(rowDeleteButtons(dialog)).toHaveLength(rowDeletes.length);
   });
