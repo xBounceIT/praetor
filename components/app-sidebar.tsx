@@ -96,7 +96,7 @@ export function AppSidebar({
       </SidebarContent>
       <SidebarFooter>
         <div className="px-2 text-sm leading-[var(--text-sm--line-height)] text-sidebar-foreground/60 group-data-[collapsible=icon]:hidden">
-          {companyName || 'Praetor'} v{version}
+          Praetor v{version}
         </div>
         <NavUser
           user={currentUser}

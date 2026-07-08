@@ -512,14 +512,15 @@ describe('<Layout /> sidebar branding', () => {
       .closest('[data-sidebar="menu-button"]')
       ?.querySelector('img') as HTMLImageElement | null;
 
-  test('shows the company name and uploaded logo, replacing PRAETOR and the bundled icon', () => {
+  test('shows the company name and uploaded logo without changing the product version label', () => {
     renderLayout({ companyName: 'Acme', logoUrl: CUSTOM_LOGO });
 
     // Feature (b): the configurable company name replaces the "PRAETOR" wordmark...
     expect(screen.getByText('Acme')).toBeDefined();
     expect(screen.queryByText('PRAETOR')).toBeNull();
-    // ...including the footer (which otherwise reads "Praetor v<version>").
-    expect(screen.getByText(/^Acme v/)).toBeDefined();
+    // ...but the footer remains the Praetor product/version label.
+    expect(screen.getByText(/^Praetor v/)).toBeDefined();
+    expect(screen.queryByText(/^Acme v/)).toBeNull();
     // Feature (a): the uploaded logo URL is used as the sidebar icon, as-is.
     expect(brandImgVia('Acme')?.getAttribute('src')).toBe(CUSTOM_LOGO);
   });
