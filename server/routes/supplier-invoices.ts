@@ -6,7 +6,7 @@ import * as supplierOrdersRepo from '../repositories/supplierOrdersRepo.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import {
   allocateDocumentCode,
-  normalizeDocumentCodeSource,
+  normalizeFirstDocumentCodeSource,
   reserveDocumentCodeCounterFromCode,
 } from '../services/documentCodes.ts';
 import { logAudit } from '../utils/audit.ts';
@@ -400,6 +400,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               items: supplierInvoicesRepo.SupplierInvoiceItem[];
             };
         const txResult = await withDbTransaction(async (tx): Promise<CreateOutcome> => {
+          let lockedSourceOrder: { id: string; linkedQuoteId: string | null } | null = null;
           // Lock the linked supplier order so a concurrent supplier-order restore
           // (which gates on "no linked invoice exists") serializes against this insert.
           if (linkedSaleIdResult.value) {
@@ -428,6 +429,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                 body: { error: 'An invoice already exists for this order' },
               };
             }
+            lockedSourceOrder = lockedOrder;
           }
 
           let invoiceId: string;
@@ -435,7 +437,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             await reserveDocumentCodeCounterFromCode('supplier_invoice', nextIdResult.value, tx);
             invoiceId = nextIdResult.value;
           } else {
-            const sourceCode = normalizeDocumentCodeSource(linkedSaleIdResult.value);
+            const sourceCode = normalizeFirstDocumentCodeSource(
+              lockedSourceOrder?.linkedQuoteId,
+              lockedSourceOrder?.id ?? linkedSaleIdResult.value,
+            );
             invoiceId = await allocateDocumentCode('supplier_invoice', {
               date: issueDateResult.value,
               exec: tx,

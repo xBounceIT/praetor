@@ -44,9 +44,17 @@ describe('document code templates', () => {
       year: 2026,
       sequence: 45,
     });
+    expect(parseDocumentCodeCounter('PREV_2026_00045_01')).toEqual({
+      year: 2026,
+      sequence: 45,
+    });
+    expect(parseDocumentCodeCounter('PREV-2026-00045-01')).toEqual({
+      year: 2026,
+      sequence: 45,
+    });
   });
 
-  test('parses source counters when prefixes or literals contain underscores', () => {
+  test('parses source counters when prefixes or literals contain separators', () => {
     expect(parseDocumentCodeCounter('ACME_PREV_26_0045')).toEqual({
       year: 2026,
       sequence: 45,

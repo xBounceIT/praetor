@@ -338,6 +338,40 @@ describe('POST /api/supplier-invoices', () => {
     });
   });
 
+  test('201 inherits from linked supplier quote when the source order id is not parseable', async () => {
+    findOrderByIdMock.mockResolvedValue({
+      id: 'legacy-sord-id',
+      linkedQuoteId: 'FORN_26_0045_manual',
+      supplierId: 's1',
+      supplierName: 'Acme Supply',
+      status: 'sent',
+    });
+    lockOrderExistingByIdMock.mockResolvedValue({
+      id: 'legacy-sord-id',
+      linkedQuoteId: 'FORN_26_0045_manual',
+      supplierId: 's1',
+      supplierName: 'Acme Supply',
+      status: 'sent',
+    });
+    findInvoiceForLinkedSaleMock.mockResolvedValue(null);
+    createMock.mockResolvedValue({ ...SAMPLE_INVOICE, linkedSaleId: 'legacy-sord-id' });
+    insertItemsMock.mockResolvedValue([SAMPLE_ITEM]);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/supplier-invoices',
+      headers: authHeader(),
+      payload: { ...validBody, linkedSaleId: 'legacy-sord-id' },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(allocateDocumentCodeMock).toHaveBeenCalledWith('supplier_invoice', {
+      date: '2025-06-01',
+      exec: expect.anything(),
+      sourceCode: 'FORN_26_0045_manual',
+    });
+  });
+
   test('201 uses the centralized allocator output unmodified', async () => {
     allocateDocumentCodeMock.mockResolvedValue('SINV-2025-10000');
     createMock.mockImplementation(async (input: Record<string, unknown>) => ({

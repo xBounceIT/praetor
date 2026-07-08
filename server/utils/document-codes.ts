@@ -132,7 +132,7 @@ export const parseDocumentCodeCounter = (code: unknown): ParsedDocumentCodeCount
   const parts = code.trim().split(DOCUMENT_CODE_COUNTER_SEPARATOR_PATTERN);
   if (parts.length < 3 || parts[0].length === 0) return null;
 
-  for (let yearIndex = parts.length - 2; yearIndex >= 1; yearIndex -= 1) {
+  for (let yearIndex = 1; yearIndex <= parts.length - 2; yearIndex += 1) {
     const year = parseDocumentCodeYearPart(parts[yearIndex]);
     if (year === null) continue;
 
