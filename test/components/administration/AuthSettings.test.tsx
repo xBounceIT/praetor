@@ -279,13 +279,22 @@ describe('<AuthSettings />', () => {
           resolveSync = resolve;
         }),
     );
-    renderAuthSettings({ config: enabledLdapConfig });
+    const onSave = mock(async (_config: LdapConfig) => {});
+    renderAuthSettings({ config: enabledLdapConfig, onSave });
 
     fireEvent.click(screen.getByRole('button', { name: 'admin.ldap.sync.runNow' }));
 
     await waitFor(() => expect(ldapApiMock.syncUsers).toHaveBeenCalledTimes(1));
     const loadingButton = screen.getByRole('button', { name: 'admin.ldap.sync.running' });
     expect(loadingButton).toBeDisabled();
+    expect(inputForLabel('admin.ldap.serverUrlLabel')).toBeDisabled();
+
+    const saveButton = screen.getByRole('button', { name: 'admin.ldap.saveConfiguration' });
+    expect(saveButton).toBeDisabled();
+    const ldapForm = saveButton.closest('form');
+    if (!ldapForm) throw new Error('LDAP save form not found');
+    fireEvent.submit(ldapForm);
+    expect(onSave).not.toHaveBeenCalled();
 
     fireEvent.click(loadingButton);
     expect(ldapApiMock.syncUsers).toHaveBeenCalledTimes(1);

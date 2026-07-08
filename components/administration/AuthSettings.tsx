@@ -608,6 +608,7 @@ const useAuthSettingsController = ({
 
   const handleSaveLdap = async (event: React.FormEvent) => {
     event.preventDefault();
+    if (isSyncingLdap) return;
     if (!validateLdap()) return;
     setIsSaved(false);
     setSyncResult(null);
@@ -1093,27 +1094,31 @@ const MfaRoleSelect: React.FC<{
 
 const LdapSettingsPanel: React.FC<{ controller: AuthSettingsController }> = ({ controller }) => (
   <div className="space-y-8">
-    <form onSubmit={controller.handleSaveLdap} className="space-y-8">
-      <LdapServerCard controller={controller} />
-      <LdapTlsCard controller={controller} />
-      {controller.errors.general && (
-        <div
-          role="alert"
-          className="rounded-md border border-destructive/20 bg-destructive/10 p-4 text-sm font-medium text-destructive"
-        >
-          {controller.errors.general}
+    <form onSubmit={controller.handleSaveLdap}>
+      <fieldset disabled={controller.isSyncingLdap} className="m-0 min-w-0 space-y-8 border-0 p-0">
+        <LdapServerCard controller={controller} />
+        <LdapTlsCard controller={controller} />
+        {controller.errors.general && (
+          <div
+            role="alert"
+            className="rounded-md border border-destructive/20 bg-destructive/10 p-4 text-sm font-medium text-destructive"
+          >
+            {controller.errors.general}
+          </div>
+        )}
+        <div className="flex justify-end">
+          <Button
+            type="submit"
+            size="lg"
+            disabled={
+              controller.isSavingLdap || controller.isSyncingLdap || !controller.isLdapDirty
+            }
+          >
+            <Save aria-hidden="true" />
+            {controller.t('admin.ldap.saveConfiguration', 'Save Configuration')}
+          </Button>
         </div>
-      )}
-      <div className="flex justify-end">
-        <Button
-          type="submit"
-          size="lg"
-          disabled={controller.isSavingLdap || !controller.isLdapDirty}
-        >
-          <Save aria-hidden="true" />
-          {controller.t('admin.ldap.saveConfiguration', 'Save Configuration')}
-        </Button>
-      </div>
+      </fieldset>
     </form>
     <LdapTesterCard controller={controller} />
   </div>
