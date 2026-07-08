@@ -1,6 +1,6 @@
 {
   "name": "praetor-server",
-  "version": "0.8.1",
+  "version": "0.8.2",
   "description": "Praetor API Server",
   "main": "index.ts",
   "type": "module",
