@@ -66,6 +66,7 @@ type RoleOption = { id: string; name: string };
 export interface AuthSettingsProps {
   config: LdapConfig;
   onSave: (config: LdapConfig) => void | Promise<void>;
+  onLdapUsersSynced?: () => void;
   roles: Role[];
   ssoProviders: SsoProvider[];
   onSaveSsoProvider: (provider: Partial<SsoProvider>) => Promise<SsoProvider>;
@@ -323,6 +324,7 @@ const authSettingsReducer = (
 const useAuthSettingsController = ({
   config,
   onSave,
+  onLdapUsersSynced,
   roles,
   ssoProviders,
   onSaveSsoProvider,
@@ -640,6 +642,7 @@ const useAuthSettingsController = ({
       const result = await ldapApi.syncUsers();
       if (result.success) {
         setSyncResult(result);
+        onLdapUsersSynced?.();
       } else {
         setSyncError(
           result.error ||

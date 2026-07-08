@@ -3124,6 +3124,18 @@ const useAppContentController = () => {
 
   const handleSaveLdapConfig = ldapHandlers.saveConfig;
 
+  const handleLdapUsersSynced = useCallback(() => {
+    const permissions = currentUser?.permissions || [];
+    if (!hasViewAccess(permissions, 'administration/user-management')) return;
+
+    void api.users
+      .list()
+      .then(setUsers)
+      .catch((err) => {
+        console.error('Failed to refresh users after LDAP sync:', err);
+      });
+  }, [currentUser?.permissions, setUsers]);
+
   const handleSaveSsoProvider = async (provider: Partial<SsoProvider>) => {
     try {
       const updated = provider.id
@@ -3351,6 +3363,7 @@ const useAppContentController = () => {
     handleRenewPersonalAccessToken,
     handleNotFoundReturn,
     handleSaveLdapConfig,
+    handleLdapUsersSynced,
     handleSaveSsoProvider,
     handleDeleteSsoProvider,
     handleSaveEmailConfig,
@@ -4304,6 +4317,7 @@ const AdministrationRoutes: React.FC<{ controller: AuthenticatedAppContentContro
     handleRenameRole,
     handleSaveEmailConfig,
     handleSaveLdapConfig,
+    handleLdapUsersSynced,
     handleSaveSsoProvider,
     handleTestEmail,
     handleUpdateGeneralSettings,
@@ -4358,6 +4372,7 @@ const AdministrationRoutes: React.FC<{ controller: AuthenticatedAppContentContro
           <AuthSettings
             config={ldapConfig}
             onSave={handleSaveLdapConfig}
+            onLdapUsersSynced={handleLdapUsersSynced}
             roles={roles}
             ssoProviders={ssoProviders}
             onSaveSsoProvider={handleSaveSsoProvider}

@@ -238,11 +238,13 @@ describe('<AuthSettings />', () => {
 
   test('manual LDAP sync calls the saved sync endpoint and renders returned counts', async () => {
     ldapApiMock.syncUsers.mockResolvedValueOnce({ success: true, synced: 3, created: 12 });
-    renderAuthSettings({ config: enabledLdapConfig });
+    const onLdapUsersSynced = mock(() => {});
+    renderAuthSettings({ config: enabledLdapConfig, onLdapUsersSynced });
 
     fireEvent.click(screen.getByRole('button', { name: 'admin.ldap.sync.runNow' }));
 
     await waitFor(() => expect(ldapApiMock.syncUsers).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(onLdapUsersSynced).toHaveBeenCalledTimes(1));
     await waitFor(() => {
       expect(screen.getByTestId('ldap-sync-summary')).toBeInTheDocument();
     });
@@ -307,13 +309,15 @@ describe('<AuthSettings />', () => {
     ldapApiMock.syncUsers.mockRejectedValueOnce(
       new Error('LDAP sync failed: directory unreachable'),
     );
-    renderAuthSettings({ config: enabledLdapConfig });
+    const onLdapUsersSynced = mock(() => {});
+    renderAuthSettings({ config: enabledLdapConfig, onLdapUsersSynced });
 
     fireEvent.click(screen.getByRole('button', { name: 'admin.ldap.sync.runNow' }));
 
     const alert = await screen.findByTestId('ldap-sync-error');
     expect(alert).toHaveTextContent('admin.ldap.sync.errorTitle');
     expect(alert).toHaveTextContent('LDAP sync failed: directory unreachable');
+    expect(onLdapUsersSynced).not.toHaveBeenCalled();
     expect(screen.queryByText('admin.ldap.changesSaved')).not.toBeInTheDocument();
   });
 
