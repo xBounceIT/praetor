@@ -4,7 +4,10 @@ import {
   DOCUMENT_CODE_MAX_LENGTH,
   type DocumentCodeModuleId,
   getDocumentCodeYear,
+  type ParsedDocumentCodeCounter,
   parseDocumentCodeCounter,
+  parseDocumentCodeCounterFromTemplate,
+  parseDocumentCodeCounterFromTemplates,
   renderDocumentCode,
 } from '../utils/document-codes.ts';
 
@@ -30,6 +33,7 @@ export type DocumentCodeAllocationOptions = {
   date?: Date | string;
   exec: DbExecutor;
   sourceCode?: string | null;
+  sourceCodes?: readonly (string | null | undefined)[];
 };
 
 const renderAndValidateDocumentCode = (
@@ -43,21 +47,40 @@ const renderAndValidateDocumentCode = (
   return code;
 };
 
-export const normalizeDocumentCodeSource = (
-  sourceCode: string | null | undefined,
-): string | undefined => {
-  if (typeof sourceCode !== 'string') return undefined;
-  return parseDocumentCodeCounter(sourceCode) ? sourceCode : undefined;
+export const compactDocumentCodeSources = (
+  ...sourceCodes: Array<string | null | undefined>
+): string[] =>
+  sourceCodes
+    .map((sourceCode) => (typeof sourceCode === 'string' ? sourceCode.trim() : ''))
+    .filter((sourceCode): sourceCode is string => sourceCode.length > 0);
+
+const getDocumentCodeSourceCandidates = (options: DocumentCodeAllocationOptions): string[] =>
+  options.sourceCodes
+    ? compactDocumentCodeSources(...options.sourceCodes)
+    : compactDocumentCodeSources(options.sourceCode);
+
+const hasPotentialTemplateCounter = (sourceCode: string): boolean => {
+  const digitGroups = sourceCode.match(/\d+/g) ?? [];
+  return digitGroups.length >= 2 || digitGroups.some((group) => group.length >= 6);
 };
 
-export const normalizeFirstDocumentCodeSource = (
-  ...sourceCodes: Array<string | null | undefined>
-): string | undefined => {
-  for (const sourceCode of sourceCodes) {
-    const normalized = normalizeDocumentCodeSource(sourceCode);
-    if (normalized) return normalized;
+const findDocumentCodeSourceCounter = async (
+  sourceCodes: readonly string[],
+  exec: DbExecutor,
+): Promise<ParsedDocumentCodeCounter | null> => {
+  const candidateCodes = sourceCodes.filter(hasPotentialTemplateCounter);
+  if (candidateCodes.length === 0) return null;
+
+  const templates = await documentCodeTemplatesRepo.list(exec);
+  for (const sourceCode of candidateCodes) {
+    const parsedFromTemplate = parseDocumentCodeCounterFromTemplates(sourceCode, templates);
+    if (parsedFromTemplate) return parsedFromTemplate;
+
+    const parsed = parseDocumentCodeCounter(sourceCode);
+    if (parsed) return parsed;
   }
-  return undefined;
+
+  return null;
 };
 
 export const reserveDocumentCodeCounterFromCode = async (
@@ -65,7 +88,12 @@ export const reserveDocumentCodeCounterFromCode = async (
   code: string | null | undefined,
   exec: DbExecutor,
 ): Promise<boolean> => {
-  const parsed = parseDocumentCodeCounter(code);
+  const [sourceCode] = compactDocumentCodeSources(code);
+  if (!sourceCode || !hasPotentialTemplateCounter(sourceCode)) return false;
+  const template = await documentCodeTemplatesRepo.findByModuleId(moduleId, exec);
+  const parsed =
+    parseDocumentCodeCounterFromTemplate(sourceCode, template) ??
+    parseDocumentCodeCounter(sourceCode);
   if (!parsed) return false;
   await documentCodeTemplatesRepo.reserveSequenceAtLeast(
     moduleId,
@@ -80,8 +108,11 @@ export const allocateDocumentCode = async (
   moduleId: DocumentCodeModuleId,
   options: DocumentCodeAllocationOptions,
 ): Promise<string> => {
-  const template = await documentCodeTemplatesRepo.findByModuleId(moduleId, options.exec);
-  const sourceCounter = parseDocumentCodeCounter(options.sourceCode);
+  const sourceCodes = getDocumentCodeSourceCandidates(options);
+  const [template, sourceCounter] = await Promise.all([
+    documentCodeTemplatesRepo.findByModuleId(moduleId, options.exec),
+    findDocumentCodeSourceCounter(sourceCodes, options.exec),
+  ]);
 
   if (sourceCounter) {
     const code = renderAndValidateDocumentCode(template, sourceCounter);

@@ -6,7 +6,7 @@ import * as supplierOrdersRepo from '../repositories/supplierOrdersRepo.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import {
   allocateDocumentCode,
-  normalizeFirstDocumentCodeSource,
+  compactDocumentCodeSources,
   reserveDocumentCodeCounterFromCode,
 } from '../services/documentCodes.ts';
 import { logAudit } from '../utils/audit.ts';
@@ -437,14 +437,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             await reserveDocumentCodeCounterFromCode('supplier_invoice', nextIdResult.value, tx);
             invoiceId = nextIdResult.value;
           } else {
-            const sourceCode = normalizeFirstDocumentCodeSource(
+            const sourceCodes = compactDocumentCodeSources(
               lockedSourceOrder?.linkedQuoteId,
               lockedSourceOrder?.id ?? linkedSaleIdResult.value,
             );
             invoiceId = await allocateDocumentCode('supplier_invoice', {
               date: issueDateResult.value,
               exec: tx,
-              ...(sourceCode ? { sourceCode } : {}),
+              ...(sourceCodes.length ? { sourceCodes } : {}),
             });
           }
           const invoice = await supplierInvoicesRepo.create(

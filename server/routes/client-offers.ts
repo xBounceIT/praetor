@@ -17,7 +17,6 @@ import {
 } from '../services/clientOrderCreation.ts';
 import {
   allocateDocumentCode,
-  normalizeDocumentCodeSource,
   reserveDocumentCodeCounterFromCode,
 } from '../services/documentCodes.ts';
 import { logAudit } from '../utils/audit.ts';
@@ -806,10 +805,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             await reserveDocumentCodeCounterFromCode('client_offer', nextIdResult.value, tx);
             offerId = nextIdResult.value;
           } else {
-            const sourceCode = normalizeDocumentCodeSource(linkedQuoteIdResult.value);
             offerId = await allocateDocumentCode('client_offer', {
               exec: tx,
-              ...(sourceCode ? { sourceCode } : {}),
+              sourceCode: linkedQuoteIdResult.value,
             });
           }
           const offer = await clientOffersRepo.create(

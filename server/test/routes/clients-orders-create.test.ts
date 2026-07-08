@@ -313,7 +313,7 @@ describe('POST /api/clients-orders product-less supplier lines (issue #783)', ()
     expect(res.statusCode).toBe(201);
     expect(allocateDocumentCodeMock).toHaveBeenCalledWith('client_order', {
       exec: expect.anything(),
-      sourceCode: 'PREV_26_0045_manual',
+      sourceCodes: ['PREV_26_0045_manual'],
     });
   });
 
@@ -346,7 +346,7 @@ describe('POST /api/clients-orders product-less supplier lines (issue #783)', ()
     expect(res.statusCode).toBe(201);
     expect(allocateDocumentCodeMock).toHaveBeenCalledWith('client_order', {
       exec: expect.anything(),
-      sourceCode: 'OFF_26_0045_manual',
+      sourceCodes: ['legacy-quote-id', 'OFF_26_0045_manual'],
     });
   });
 

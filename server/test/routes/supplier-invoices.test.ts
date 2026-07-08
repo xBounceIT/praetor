@@ -334,7 +334,7 @@ describe('POST /api/supplier-invoices', () => {
     expect(allocateDocumentCodeMock).toHaveBeenCalledWith('supplier_invoice', {
       date: '2025-06-01',
       exec: expect.anything(),
-      sourceCode: 'SORD_26_0045_manual',
+      sourceCodes: ['SORD_26_0045_manual'],
     });
   });
 
@@ -368,7 +368,7 @@ describe('POST /api/supplier-invoices', () => {
     expect(allocateDocumentCodeMock).toHaveBeenCalledWith('supplier_invoice', {
       date: '2025-06-01',
       exec: expect.anything(),
-      sourceCode: 'FORN_26_0045_manual',
+      sourceCodes: ['FORN_26_0045_manual', 'legacy-sord-id'],
     });
   });
 

@@ -83,6 +83,7 @@ const PREFIX_PATTERN = /^[A-Za-z0-9_-]+$/;
 const TEMPLATE_LITERAL_PATTERN = /^[A-Za-z0-9_-]*$/;
 const YEAR_PLACEHOLDER_PATTERN = /\{(?:YY|YYYY)\}/;
 const DOCUMENT_CODE_COUNTER_SEPARATOR_PATTERN = /[-_]/;
+const DOCUMENT_CODE_TEMPLATE_PLACEHOLDER_PATTERN = /\{(PREFIX|YY|YYYY|SEQ)\}/g;
 const MAX_SEQUENCE_FOR_LENGTH_CHECK = 999_999_999;
 const DOCUMENT_CODE_MAX_RESERVED_SEQUENCE = 2_147_483_646;
 
@@ -127,6 +128,96 @@ const parseDocumentCodeYearPart = (yearPart: string): number | null => {
   return year;
 };
 
+const parseDocumentCodeSequencePart = (sequencePart: string): number | null => {
+  if (!/^\d+$/.test(sequencePart)) return null;
+  const sequence = Number.parseInt(sequencePart, 10);
+  if (
+    !Number.isInteger(sequence) ||
+    sequence < 1 ||
+    sequence > DOCUMENT_CODE_MAX_RESERVED_SEQUENCE
+  ) {
+    return null;
+  }
+  return sequence;
+};
+
+const escapeRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+type DocumentCodeTemplatePlaceholder = 'PREFIX' | 'YY' | 'YYYY' | 'SEQ';
+type DocumentCodeTemplateCapture = Exclude<DocumentCodeTemplatePlaceholder, 'PREFIX'>;
+
+const buildDocumentCodeTemplateRegex = (
+  config: Pick<DocumentCodeTemplateConfig, 'prefix' | 'template'>,
+): { regex: RegExp; captures: DocumentCodeTemplateCapture[] } => {
+  let pattern = '^';
+  let cursor = 0;
+  const captures: DocumentCodeTemplateCapture[] = [];
+
+  for (const match of config.template.matchAll(DOCUMENT_CODE_TEMPLATE_PLACEHOLDER_PATTERN)) {
+    const index = match.index ?? 0;
+    pattern += escapeRegExp(config.template.slice(cursor, index));
+    const placeholder = match[1] as DocumentCodeTemplatePlaceholder;
+    if (placeholder === 'PREFIX') {
+      pattern += escapeRegExp(config.prefix);
+    } else {
+      captures.push(placeholder);
+      pattern += placeholder === 'SEQ' ? '(\\d+)' : placeholder === 'YY' ? '(\\d{2})' : '(\\d{4})';
+    }
+    cursor = index + match[0].length;
+  }
+
+  pattern += escapeRegExp(config.template.slice(cursor));
+  return { regex: new RegExp(`${pattern}$`), captures };
+};
+
+export const parseDocumentCodeCounterFromTemplate = (
+  code: unknown,
+  config: Pick<DocumentCodeTemplateConfig, 'prefix' | 'template'>,
+): ParsedDocumentCodeCounter | null => {
+  if (typeof code !== 'string') return null;
+  const { regex, captures } = buildDocumentCodeTemplateRegex(config);
+  const match = regex.exec(code.trim());
+  if (!match) return null;
+
+  let year: number | null = null;
+  let sequence: number | null = null;
+  let captureIndex = 1;
+
+  for (const capture of captures) {
+    const value = match[captureIndex];
+    captureIndex += 1;
+    if (!value) return null;
+
+    if (capture === 'SEQ') {
+      const parsedSequence = parseDocumentCodeSequencePart(value);
+      if (parsedSequence === null || (sequence !== null && sequence !== parsedSequence)) {
+        return null;
+      }
+      sequence = parsedSequence;
+      continue;
+    }
+
+    const parsedYear = parseDocumentCodeYearPart(value);
+    if (parsedYear === null || (year !== null && year !== parsedYear)) {
+      return null;
+    }
+    year = parsedYear;
+  }
+
+  return year !== null && sequence !== null ? { year, sequence } : null;
+};
+
+export const parseDocumentCodeCounterFromTemplates = (
+  code: unknown,
+  templates: readonly Pick<DocumentCodeTemplateConfig, 'prefix' | 'template'>[],
+): ParsedDocumentCodeCounter | null => {
+  for (const template of templates) {
+    const parsed = parseDocumentCodeCounterFromTemplate(code, template);
+    if (parsed) return parsed;
+  }
+  return null;
+};
+
 export const parseDocumentCodeCounter = (code: unknown): ParsedDocumentCodeCounter | null => {
   if (typeof code !== 'string') return null;
   const parts = code.trim().split(DOCUMENT_CODE_COUNTER_SEPARATOR_PATTERN);
@@ -136,16 +227,8 @@ export const parseDocumentCodeCounter = (code: unknown): ParsedDocumentCodeCount
     const year = parseDocumentCodeYearPart(parts[yearIndex]);
     if (year === null) continue;
 
-    const sequencePart = parts[yearIndex + 1];
-    if (!/^\d+$/.test(sequencePart)) continue;
-    const sequence = Number.parseInt(sequencePart, 10);
-    if (
-      !Number.isInteger(sequence) ||
-      sequence < 1 ||
-      sequence > DOCUMENT_CODE_MAX_RESERVED_SEQUENCE
-    ) {
-      continue;
-    }
+    const sequence = parseDocumentCodeSequencePart(parts[yearIndex + 1]);
+    if (sequence === null) continue;
     return { year, sequence };
   }
 

@@ -6,7 +6,7 @@ import * as invoicesRepo from '../repositories/invoicesRepo.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import {
   allocateDocumentCode,
-  normalizeFirstDocumentCodeSource,
+  compactDocumentCodeSources,
   reserveDocumentCodeCounterFromCode,
 } from '../services/documentCodes.ts';
 import { logAudit } from '../utils/audit.ts';
@@ -415,24 +415,24 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             await reserveDocumentCodeCounterFromCode('client_invoice', nextIdResult.value, tx);
             invoiceId = nextIdResult.value;
           } else {
-            let sourceCode: string | undefined;
+            let sourceCodes: string[] = [];
             if (linkedSaleIdResult.value) {
               const sourceOrder = await clientsOrdersRepo.findExisting(
                 linkedSaleIdResult.value,
                 tx,
               );
-              sourceCode = sourceOrder
-                ? normalizeFirstDocumentCodeSource(
+              sourceCodes = sourceOrder
+                ? compactDocumentCodeSources(
                     sourceOrder.linkedQuoteId,
                     sourceOrder.linkedOfferId,
                     sourceOrder.id,
                   )
-                : normalizeFirstDocumentCodeSource(linkedSaleIdResult.value);
+                : compactDocumentCodeSources(linkedSaleIdResult.value);
             }
             invoiceId = await allocateDocumentCode('client_invoice', {
               date: issueDateResult.value,
               exec: tx,
-              ...(sourceCode ? { sourceCode } : {}),
+              ...(sourceCodes.length ? { sourceCodes } : {}),
             });
           }
           const invoice = await invoicesRepo.create(

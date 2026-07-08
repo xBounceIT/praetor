@@ -9,7 +9,6 @@ import * as suppliersRepo from '../repositories/suppliersRepo.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import {
   allocateDocumentCode,
-  normalizeDocumentCodeSource,
   reserveDocumentCodeCounterFromCode,
 } from '../services/documentCodes.ts';
 import { logAudit } from '../utils/audit.ts';
@@ -451,10 +450,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             await reserveDocumentCodeCounterFromCode('supplier_order', nextIdResult.value, tx);
             orderId = nextIdResult.value;
           } else {
-            const sourceCode = normalizeDocumentCodeSource(linkedQuoteIdResult.value);
             orderId = await allocateDocumentCode('supplier_order', {
               exec: tx,
-              ...(sourceCode ? { sourceCode } : {}),
+              sourceCode: linkedQuoteIdResult.value,
             });
           }
           const order = await supplierOrdersRepo.create(

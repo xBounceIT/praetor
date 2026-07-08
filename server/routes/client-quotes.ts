@@ -11,7 +11,6 @@ import * as supplierQuotesRepo from '../repositories/supplierQuotesRepo.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import {
   allocateDocumentCode,
-  normalizeDocumentCodeSource,
   reserveDocumentCodeCounterFromCode,
 } from '../services/documentCodes.ts';
 import { logAudit } from '../utils/audit.ts';
@@ -698,10 +697,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     if (!quote.expirationDate) {
       throw new Error('Cannot create an offer from a quote without an expiration date');
     }
-    const sourceCode = normalizeDocumentCodeSource(quote.id);
     const offerId = await allocateDocumentCode('client_offer', {
       exec: tx,
-      ...(sourceCode ? { sourceCode } : {}),
+      sourceCode: quote.id,
     });
     const offer = await clientOffersRepo.create(
       {

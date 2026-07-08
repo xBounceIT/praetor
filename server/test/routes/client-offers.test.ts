@@ -970,6 +970,7 @@ describe('client-offers supplier-link resolution + forward sync (#779)', () => {
     expect(res.statusCode).toBe(201);
     expect(allocateDocumentCodeMock).toHaveBeenCalledWith('client_offer', {
       exec: expect.anything(),
+      sourceCode: 'q-1',
     });
     expect(coCreateMock).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'OFF-2999-0001' }),

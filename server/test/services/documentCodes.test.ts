@@ -4,6 +4,7 @@ import { TX_SENTINEL } from '../helpers/txSentinel.ts';
 
 const repoSnap = { ...realRepo };
 const findByModuleIdMock = mock();
+const listMock = mock();
 const allocateSequenceMock = mock();
 const getNextSequenceMock = mock();
 const existsForModuleMock = mock();
@@ -12,6 +13,7 @@ const reserveSequenceAtLeastMock = mock();
 mock.module('../../repositories/documentCodeTemplatesRepo.ts', () => ({
   ...repoSnap,
   findByModuleId: findByModuleIdMock,
+  list: listMock,
   allocateSequence: allocateSequenceMock,
   getNextSequence: getNextSequenceMock,
   existsForModule: existsForModuleMock,
@@ -21,7 +23,6 @@ mock.module('../../repositories/documentCodeTemplatesRepo.ts', () => ({
 let allocateDocumentCode: typeof import('../../services/documentCodes.ts').allocateDocumentCode;
 let previewDocumentCode: typeof import('../../services/documentCodes.ts').previewDocumentCode;
 let reserveDocumentCodeCounterFromCode: typeof import('../../services/documentCodes.ts').reserveDocumentCodeCounterFromCode;
-let normalizeFirstDocumentCodeSource: typeof import('../../services/documentCodes.ts').normalizeFirstDocumentCodeSource;
 let DocumentCodeCollisionError: typeof import('../../services/documentCodes.ts').DocumentCodeCollisionError;
 
 beforeAll(async () => {
@@ -29,7 +30,6 @@ beforeAll(async () => {
   allocateDocumentCode = mod.allocateDocumentCode;
   previewDocumentCode = mod.previewDocumentCode;
   reserveDocumentCodeCounterFromCode = mod.reserveDocumentCodeCounterFromCode;
-  normalizeFirstDocumentCodeSource = mod.normalizeFirstDocumentCodeSource;
   DocumentCodeCollisionError = mod.DocumentCodeCollisionError;
 });
 
@@ -39,6 +39,7 @@ afterAll(() => {
 
 beforeEach(() => {
   findByModuleIdMock.mockReset();
+  listMock.mockReset();
   allocateSequenceMock.mockReset();
   getNextSequenceMock.mockReset();
   existsForModuleMock.mockReset();
@@ -50,6 +51,22 @@ beforeEach(() => {
     template: '{PREFIX}_{YYYY}_{SEQ}',
     sequencePadding: 4,
   });
+  listMock.mockResolvedValue([
+    {
+      moduleId: 'client_quote',
+      label: 'Client quotes',
+      prefix: 'PREV',
+      template: '{PREFIX}_{YY}_{SEQ}',
+      sequencePadding: 4,
+    },
+    {
+      moduleId: 'client_offer',
+      label: 'Client offers',
+      prefix: 'OFF',
+      template: '{PREFIX}_{YY}_{SEQ}',
+      sequencePadding: 4,
+    },
+  ]);
   getNextSequenceMock.mockResolvedValue(1);
   existsForModuleMock.mockResolvedValue(false);
   reserveSequenceAtLeastMock.mockResolvedValue(undefined);
@@ -110,6 +127,87 @@ describe('allocateDocumentCode', () => {
     expect(allocateSequenceMock).not.toHaveBeenCalled();
   });
 
+  test('uses source template shape when the sequence is not adjacent to the year', async () => {
+    findByModuleIdMock.mockResolvedValue({
+      moduleId: 'client_offer',
+      label: 'Client offers',
+      prefix: 'OFF',
+      template: '{PREFIX}_{YYYY}_{SEQ}',
+      sequencePadding: 4,
+    });
+    listMock.mockResolvedValue([
+      {
+        moduleId: 'client_quote',
+        label: 'Client quotes',
+        prefix: 'PREV',
+        template: '{PREFIX}_{YYYY}_DOC_{SEQ}',
+        sequencePadding: 4,
+      },
+    ]);
+
+    const code = await allocateDocumentCode('client_offer', {
+      exec: TX_SENTINEL as never,
+      sourceCode: 'PREV_2026_DOC_0007',
+    });
+
+    expect(code).toBe('OFF_2026_0007');
+    expect(reserveSequenceAtLeastMock).toHaveBeenCalledWith('client_offer', 2026, 7, TX_SENTINEL);
+  });
+
+  test('uses source template shape before numeric prefix segments', async () => {
+    findByModuleIdMock.mockResolvedValue({
+      moduleId: 'client_offer',
+      label: 'Client offers',
+      prefix: 'OFF',
+      template: '{PREFIX}_{YYYY}_{SEQ}',
+      sequencePadding: 4,
+    });
+    listMock.mockResolvedValue([
+      {
+        moduleId: 'client_quote',
+        label: 'Client quotes',
+        prefix: 'ACME_12_345',
+        template: '{PREFIX}_{YYYY}_{SEQ}',
+        sequencePadding: 4,
+      },
+    ]);
+
+    const code = await allocateDocumentCode('client_offer', {
+      exec: TX_SENTINEL as never,
+      sourceCode: 'ACME_12_345_2026_0007',
+    });
+
+    expect(code).toBe('OFF_2026_0007');
+    expect(reserveSequenceAtLeastMock).toHaveBeenCalledWith('client_offer', 2026, 7, TX_SENTINEL);
+  });
+
+  test('uses the first parseable candidate from ordered source codes', async () => {
+    findByModuleIdMock.mockResolvedValue({
+      moduleId: 'client_order',
+      label: 'Client orders',
+      prefix: 'ORD',
+      template: '{PREFIX}_{YYYY}_{SEQ}',
+      sequencePadding: 4,
+    });
+    listMock.mockResolvedValue([
+      {
+        moduleId: 'client_offer',
+        label: 'Client offers',
+        prefix: 'OFF',
+        template: '{PREFIX}_{YYYY}_DOC_{SEQ}',
+        sequencePadding: 4,
+      },
+    ]);
+
+    const code = await allocateDocumentCode('client_order', {
+      exec: TX_SENTINEL as never,
+      sourceCodes: ['legacy-quote-id', 'OFF_2026_DOC_0007'],
+    });
+
+    expect(code).toBe('ORD_2026_0007');
+    expect(reserveSequenceAtLeastMock).toHaveBeenCalledWith('client_order', 2026, 7, TX_SENTINEL);
+    expect(allocateSequenceMock).not.toHaveBeenCalled();
+  });
   test('falls back to sequential allocation when the source code is not parseable', async () => {
     findByModuleIdMock.mockResolvedValue({
       moduleId: 'client_offer',
@@ -192,19 +290,27 @@ describe('allocateDocumentCode', () => {
   });
 });
 
-describe('normalizeFirstDocumentCodeSource', () => {
-  test('returns the first parseable source and skips legacy identifiers', () => {
-    expect(
-      normalizeFirstDocumentCodeSource('legacy-quote-id', 'OFF_26_0045_manual', 'ORD_26_0045'),
-    ).toBe('OFF_26_0045_manual');
-  });
-
-  test('returns undefined when no source is parseable', () => {
-    expect(normalizeFirstDocumentCodeSource(null, undefined, 'legacy-order-id')).toBeUndefined();
-  });
-});
-
 describe('reserveDocumentCodeCounterFromCode', () => {
+  test('reserves the owning module counter from the configured template shape', async () => {
+    findByModuleIdMock.mockResolvedValue({
+      moduleId: 'supplier_order',
+      label: 'Supplier orders',
+      prefix: 'SORD',
+      template: '{PREFIX}_{YYYY}_DOC_{SEQ}',
+      sequencePadding: 4,
+    });
+
+    await expect(
+      reserveDocumentCodeCounterFromCode(
+        'supplier_order',
+        'SORD_2026_DOC_0009',
+        TX_SENTINEL as never,
+      ),
+    ).resolves.toBe(true);
+
+    expect(reserveSequenceAtLeastMock).toHaveBeenCalledWith('supplier_order', 2026, 9, TX_SENTINEL);
+  });
+
   test('reserves the owning module counter when a manual code is parseable', async () => {
     await expect(
       reserveDocumentCodeCounterFromCode(

@@ -4,6 +4,7 @@ import {
   formatDocumentSequence,
   getDocumentCodeYear,
   parseDocumentCodeCounter,
+  parseDocumentCodeCounterFromTemplate,
   renderDocumentCode,
   validateDocumentCodeTemplate,
 } from '../../utils/document-codes.ts';
@@ -71,6 +72,27 @@ describe('document code templates', () => {
       year: 2026,
       sequence: 45,
     });
+  });
+
+  test('parses counters from the configured template shape before generic segment order', () => {
+    expect(
+      parseDocumentCodeCounterFromTemplate('PREV_2026_DOC_0007', {
+        prefix: 'PREV',
+        template: '{PREFIX}_{YYYY}_DOC_{SEQ}',
+      }),
+    ).toEqual({ year: 2026, sequence: 7 });
+    expect(
+      parseDocumentCodeCounterFromTemplate('ACME_12_345_2026_0007', {
+        prefix: 'ACME_12_345',
+        template: '{PREFIX}_{YYYY}_{SEQ}',
+      }),
+    ).toEqual({ year: 2026, sequence: 7 });
+    expect(
+      parseDocumentCodeCounterFromTemplate('PREV_0007_2026', {
+        prefix: 'PREV',
+        template: '{PREFIX}_{SEQ}_{YYYY}',
+      }),
+    ).toEqual({ year: 2026, sequence: 7 });
   });
 
   test('rejects document codes without a valid year and numeric sequence segment pair', () => {

@@ -313,6 +313,7 @@ describe('POST /api/accounting/supplier-orders', () => {
     expect(res.statusCode).toBe(201);
     expect(allocateDocumentCodeMock).toHaveBeenCalledWith('supplier_order', {
       exec: expect.anything(),
+      sourceCode: 'sq-1',
     });
     expect(soCreateMock).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'SORD-2999-0001' }),

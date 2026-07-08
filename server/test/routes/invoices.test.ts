@@ -312,7 +312,7 @@ describe('POST /api/invoices', () => {
     expect(allocateDocumentCodeMock).toHaveBeenCalledWith('client_invoice', {
       date: '2025-06-01',
       exec: TX_SENTINEL,
-      sourceCode: 'PREV_26_0045_manual',
+      sourceCodes: ['PREV_26_0045_manual', 'OFF_26_0045_manual', 'ORD_26_0045_manual'],
     });
   });
 
@@ -336,7 +336,7 @@ describe('POST /api/invoices', () => {
     expect(allocateDocumentCodeMock).toHaveBeenCalledWith('client_invoice', {
       date: '2025-06-01',
       exec: TX_SENTINEL,
-      sourceCode: 'OFF_26_0045_manual',
+      sourceCodes: ['legacy-quote-id', 'OFF_26_0045_manual', 'ORD_26_0045_manual'],
     });
   });
 
