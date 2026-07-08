@@ -1,4 +1,4 @@
-import type { LdapConfig, LdapTestResponse } from '../../types';
+import type { LdapConfig, LdapSyncResponse, LdapTestResponse } from '../../types';
 import { fetchApi } from './client';
 
 export const ldapApi = {
@@ -14,5 +14,10 @@ export const ldapApi = {
     fetchApi('/ldap/test', {
       method: 'POST',
       body: JSON.stringify({ username, password }),
+    }),
+
+  syncUsers: (): Promise<LdapSyncResponse> =>
+    fetchApi('/ldap/sync', {
+      method: 'POST',
     }),
 };

@@ -1,7 +1,14 @@
-import { beforeEach, describe, expect, mock, test } from 'bun:test';
+import { afterAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import type { ComponentProps } from 'react';
-import type { LdapConfig, LdapTestResponse, Role, SsoProtocol, SsoProvider } from '../../../types';
+import type {
+  LdapConfig,
+  LdapSyncResponse,
+  LdapTestResponse,
+  Role,
+  SsoProtocol,
+  SsoProvider,
+} from '../../../types';
 import { installI18nMock } from '../../helpers/i18n';
 import { clearSpyStateAfterAll } from '../../helpers/mockCleanup.ts';
 import { render } from '../../helpers/render';
@@ -9,6 +16,13 @@ import { render } from '../../helpers/render';
 installI18nMock();
 
 const ldapApiMock = {
+  syncUsers: mock(
+    async (): Promise<LdapSyncResponse> => ({
+      success: true,
+      synced: 3,
+      created: 12,
+    }),
+  ),
   testAuthentication: mock(
     async (_username: string, _password: string): Promise<LdapTestResponse> => ({
       success: true,
@@ -31,9 +45,19 @@ const ssoApiMock = {
   })),
 };
 
-mock.module('../../../services/api/ldap', () => ({
-  ldapApi: ldapApiMock,
-}));
+const { ldapApi } = await import('../../../services/api/ldap');
+const originalLdapApi = {
+  syncUsers: ldapApi.syncUsers,
+  testAuthentication: ldapApi.testAuthentication,
+};
+
+ldapApi.syncUsers = ldapApiMock.syncUsers;
+ldapApi.testAuthentication = ldapApiMock.testAuthentication;
+
+afterAll(() => {
+  ldapApi.syncUsers = originalLdapApi.syncUsers;
+  ldapApi.testAuthentication = originalLdapApi.testAuthentication;
+});
 
 mock.module('../../../services/api/sso', () => ({
   ssoApi: ssoApiMock,
@@ -60,6 +84,8 @@ const ldapConfig: LdapConfig = {
   autoProvisionAll: false,
   provisionOnLogin: true,
 };
+
+const enabledLdapConfig: LdapConfig = { ...ldapConfig, enabled: true };
 
 const roles: Role[] = [
   {
@@ -156,6 +182,7 @@ const fillMinimalOidcProvider = () => {
 describe('<AuthSettings />', () => {
   beforeEach(() => {
     ldapApiMock.testAuthentication.mockClear();
+    ldapApiMock.syncUsers.mockClear();
   });
 
   test('allows testing the saved LDAP configuration before LDAP is enabled', async () => {
@@ -207,6 +234,78 @@ describe('<AuthSettings />', () => {
     const submitted = onSave.mock.calls[0]?.[0] as LdapConfig;
     expect(submitted.provisionOnLogin).toBe(false);
     expect(submitted.autoProvisionAll).toBe(true);
+  });
+
+  test('manual LDAP sync calls the saved sync endpoint and renders returned counts', async () => {
+    ldapApiMock.syncUsers.mockResolvedValueOnce({ success: true, synced: 3, created: 12 });
+    renderAuthSettings({ config: enabledLdapConfig });
+
+    fireEvent.click(screen.getByRole('button', { name: 'admin.ldap.sync.runNow' }));
+
+    await waitFor(() => expect(ldapApiMock.syncUsers).toHaveBeenCalledTimes(1));
+    await waitFor(() => {
+      expect(screen.getByTestId('ldap-sync-summary')).toBeInTheDocument();
+    });
+    expect(screen.getByTestId('ldap-sync-synced')).toHaveTextContent('3');
+    expect(screen.getByTestId('ldap-sync-created')).toHaveTextContent('12');
+  });
+
+  test('manual LDAP sync is disabled while LDAP is disabled', () => {
+    renderAuthSettings();
+
+    const syncButton = screen.getByRole('button', { name: 'admin.ldap.sync.runNow' });
+    expect(syncButton).toBeDisabled();
+    fireEvent.click(syncButton);
+    expect(ldapApiMock.syncUsers).not.toHaveBeenCalled();
+    expect(screen.getByText('admin.ldap.sync.ldapDisabled')).toBeInTheDocument();
+  });
+
+  test('manual LDAP sync is disabled while LDAP configuration has unsaved edits', () => {
+    renderAuthSettings({ config: enabledLdapConfig });
+
+    fireEvent.change(inputForLabel('admin.ldap.bindDnLabel'), {
+      target: { value: 'cn=changed,dc=example,dc=com' },
+    });
+
+    expect(screen.getByRole('button', { name: 'admin.ldap.sync.runNow' })).toBeDisabled();
+    expect(screen.getByText('admin.ldap.sync.unsavedChanges')).toBeInTheDocument();
+  });
+
+  test('manual LDAP sync shows loading state and ignores double clicks while in flight', async () => {
+    let resolveSync: (value: LdapSyncResponse) => void = () => {};
+    ldapApiMock.syncUsers.mockImplementationOnce(
+      () =>
+        new Promise<LdapSyncResponse>((resolve) => {
+          resolveSync = resolve;
+        }),
+    );
+    renderAuthSettings({ config: enabledLdapConfig });
+
+    fireEvent.click(screen.getByRole('button', { name: 'admin.ldap.sync.runNow' }));
+
+    await waitFor(() => expect(ldapApiMock.syncUsers).toHaveBeenCalledTimes(1));
+    const loadingButton = screen.getByRole('button', { name: 'admin.ldap.sync.running' });
+    expect(loadingButton).toBeDisabled();
+
+    fireEvent.click(loadingButton);
+    expect(ldapApiMock.syncUsers).toHaveBeenCalledTimes(1);
+
+    resolveSync({ success: true, synced: 1, created: 0 });
+    await waitFor(() => expect(screen.getByTestId('ldap-sync-summary')).toBeInTheDocument());
+  });
+
+  test('manual LDAP sync surfaces backend failures inline', async () => {
+    ldapApiMock.syncUsers.mockRejectedValueOnce(
+      new Error('LDAP sync failed: directory unreachable'),
+    );
+    renderAuthSettings({ config: enabledLdapConfig });
+
+    fireEvent.click(screen.getByRole('button', { name: 'admin.ldap.sync.runNow' }));
+
+    const alert = await screen.findByTestId('ldap-sync-error');
+    expect(alert).toHaveTextContent('admin.ldap.sync.errorTitle');
+    expect(alert).toHaveTextContent('LDAP sync failed: directory unreachable');
+    expect(screen.queryByText('admin.ldap.changesSaved')).not.toBeInTheDocument();
   });
 
   describe('2FA org policy (MFA tab)', () => {

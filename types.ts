@@ -523,6 +523,15 @@ export interface LdapTestResponse {
   roleResolution: LdapRoleResolution;
 }
 
+export interface LdapSyncResponse {
+  success: boolean;
+  synced?: number;
+  created?: number;
+  skipped?: boolean;
+  reason?: string;
+  error?: string;
+}
+
 export type SsoProtocol = 'oidc' | 'saml';
 
 export interface SsoRoleMapping {
