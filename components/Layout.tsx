@@ -429,7 +429,6 @@ const Layout: React.FC<LayoutProps> = ({
         roleLabel={roleLabel}
         roles={roles}
         navigationLabel={t('workspace')}
-        workspaceLabel={t('workspace')}
         settingsLabel={t('menu.settings')}
         documentationLabel={t('menu.documentation')}
         logoutLabel={t('menu.logout')}
