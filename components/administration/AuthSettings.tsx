@@ -2185,69 +2185,88 @@ const RoleMappings: React.FC<RoleMappingsProps> = ({
   onAdd,
   onRemove,
   onChange,
-}) => (
-  <div>
-    <div className="flex justify-between items-center mb-4">
-      <h4 className="text-sm font-semibold text-foreground">{heading}</h4>
-      <Button
-        type="button"
-        variant="secondary"
-        size="sm"
-        onClick={onAdd}
-        className="text-xs font-bold"
-      >
-        <Plus aria-hidden="true" />
-        {addLabel}
-      </Button>
-    </div>
-    <div className="space-y-3">
-      {mappings.length === 0 ? (
-        <p className="text-xs text-muted-foreground italic">{noMappingsLabel}</p>
-      ) : (
-        mappings.map((mapping, index) => (
-          <div
-            key={`${mapping.externalGroup || 'external-group'}:${mapping.role || roleOptions[0]?.id || 'user'}`}
-            className="flex gap-4 items-start"
-          >
-            <div className="flex-1">
-              <Input
-                type="text"
-                value={mapping.externalGroup}
-                onChange={(event) => onChange(index, 'externalGroup', event.target.value)}
-                placeholder={externalPlaceholder}
-                aria-label={externalPlaceholder}
-                aria-invalid={!!errors[`${errorPrefix}${index}`]}
-                className="font-mono"
-              />
-              {errors[`${errorPrefix}${index}`] && (
-                <FieldError
-                  className="mt-1"
-                  errors={[{ message: errors[`${errorPrefix}${index}`] }]}
+}) => {
+  const nextKeyRef = useRef(0);
+  const rowKeysRef = useRef<string[]>([]);
+
+  while (rowKeysRef.current.length < mappings.length) {
+    rowKeysRef.current.push(`role-mapping-${nextKeyRef.current}`);
+    nextKeyRef.current += 1;
+  }
+
+  if (rowKeysRef.current.length > mappings.length) {
+    rowKeysRef.current.length = mappings.length;
+  }
+
+  const handleRemove = (index: number) => {
+    rowKeysRef.current.splice(index, 1);
+    onRemove(index);
+  };
+
+  return (
+    <div>
+      <div className="flex justify-between items-center mb-4">
+        <h4 className="text-sm font-semibold text-foreground">{heading}</h4>
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          onClick={onAdd}
+          className="text-xs font-bold"
+        >
+          <Plus aria-hidden="true" />
+          {addLabel}
+        </Button>
+      </div>
+      <div className="space-y-3">
+        {mappings.length === 0 ? (
+          <p className="text-xs text-muted-foreground italic">{noMappingsLabel}</p>
+        ) : (
+          mappings.map((mapping, index) => (
+            <div key={rowKeysRef.current[index]} className="flex gap-4 items-start">
+              <div className="flex-1">
+                <Input
+                  type="text"
+                  value={mapping.externalGroup}
+                  onChange={(event) => onChange(index, 'externalGroup', event.target.value)}
+                  placeholder={externalPlaceholder}
+                  aria-label={externalPlaceholder}
+                  aria-invalid={!!errors[`${errorPrefix}${index}`]}
+                  className="font-mono"
                 />
-              )}
-            </div>
-            <ArrowRight aria-hidden="true" className="size-3 text-muted-foreground mt-3 shrink-0" />
-            <div className="w-44">
-              <SelectControl
-                options={roleOptions}
-                value={mapping.role || roleOptions[0]?.id || 'user'}
-                onChange={(role) => onChange(index, 'role', role as string)}
+                {errors[`${errorPrefix}${index}`] && (
+                  <FieldError
+                    className="mt-1"
+                    errors={[{ message: errors[`${errorPrefix}${index}`] }]}
+                  />
+                )}
+              </div>
+              <ArrowRight
+                aria-hidden="true"
+                className="size-3 text-muted-foreground mt-3 shrink-0"
               />
+              <div className="w-44">
+                <SelectControl
+                  options={roleOptions}
+                  value={mapping.role || roleOptions[0]?.id || 'user'}
+                  onChange={(role) => onChange(index, 'role', role as string)}
+                />
+              </div>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                onClick={() => handleRemove(index)}
+                className="text-muted-foreground hover:text-destructive"
+              >
+                <Trash2 aria-hidden="true" />
+              </Button>
             </div>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-sm"
-              onClick={() => onRemove(index)}
-              className="text-muted-foreground hover:text-destructive"
-            >
-              <Trash2 aria-hidden="true" />
-            </Button>
-          </div>
-        ))
-      )}
+          ))
+        )}
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 export default AuthSettings;

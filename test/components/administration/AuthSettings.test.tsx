@@ -209,6 +209,25 @@ describe('<AuthSettings />', () => {
     expect(submitted.autoProvisionAll).toBe(true);
   });
 
+  test('keeps focus in the LDAP role mapping input while typing', () => {
+    renderAuthSettings();
+
+    fireEvent.click(screen.getByRole('button', { name: 'admin.ldap.addMapping' }));
+    const input = screen.getByRole('textbox', {
+      name: 'admin.ldap.ldapGroupPlaceholder',
+    }) as HTMLInputElement;
+
+    input.focus();
+    fireEvent.change(input, { target: { value: 'CN=Praetor Admins' } });
+
+    const updatedInput = screen.getByRole('textbox', {
+      name: 'admin.ldap.ldapGroupPlaceholder',
+    }) as HTMLInputElement;
+    expect(updatedInput).toBe(input);
+    expect(updatedInput.value).toBe('CN=Praetor Admins');
+    expect(document.activeElement).toBe(updatedInput);
+  });
+
   describe('2FA org policy (MFA tab)', () => {
     const openMfaTab = () => {
       fireEvent.click(screen.getByRole('button', { name: 'admin.tabs.mfa' }));
