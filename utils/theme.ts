@@ -41,11 +41,11 @@ const clearLegacyRootTheme = () => {
   const root = document.documentElement;
   root.classList.remove('dark');
   root.removeAttribute('data-theme');
-  root.style.removeProperty('color-scheme');
 };
 
 const applyResolvedTheme = (theme: ResolvedTheme) => {
   clearLegacyRootTheme();
+  document.documentElement.style.colorScheme = theme === 'dark' ? 'dark' : 'light';
   document.querySelectorAll<HTMLElement>(SHADCN_THEME_SCOPE_SELECTOR).forEach((scope) => {
     scope.classList.toggle('dark', theme === 'dark');
     scope.dataset.shadcnTheme = theme;

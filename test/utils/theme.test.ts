@@ -128,18 +128,18 @@ describe('applyTheme', () => {
     expect(localStorage.getItem(THEME_STORAGE_KEY)).toBe('dark');
   });
 
-  test('applies light mode to shadcn theme scopes only', () => {
+  test('applies light color scheme and shadcn theme scope', () => {
     const scope = appendThemeScope();
     applyTheme('light');
     const root = document.documentElement;
     expect(root.classList.contains('dark')).toBe(false);
     expect(root.dataset.theme).toBeUndefined();
-    expect(root.style.colorScheme).toBe('');
+    expect(root.style.colorScheme).toBe('light');
     expect(scope.classList.contains('dark')).toBe(false);
     expect(scope.dataset.shadcnTheme).toBe('light');
   });
 
-  test('applies dark mode to shadcn theme scopes only', () => {
+  test('applies dark color scheme and shadcn theme scope', () => {
     const scope = appendThemeScope();
     let eventTheme: string | undefined;
     window.addEventListener(
@@ -154,6 +154,7 @@ describe('applyTheme', () => {
     const root = document.documentElement;
     expect(root.classList.contains('dark')).toBe(false);
     expect(root.dataset.theme).toBeUndefined();
+    expect(root.style.colorScheme).toBe('dark');
     expect(scope.classList.contains('dark')).toBe(true);
     expect(scope.dataset.shadcnTheme).toBe('dark');
     expect(eventTheme).toBe('dark');
@@ -164,6 +165,7 @@ describe('applyTheme', () => {
     applyTheme('zebra');
 
     expect(document.documentElement.classList.contains('dark')).toBe(false);
+    expect(document.documentElement.style.colorScheme).toBe('light');
     expect(scope.classList.contains('dark')).toBe(false);
     expect(scope.dataset.shadcnTheme).toBe('zebra');
   });
@@ -173,6 +175,7 @@ describe('applyTheme', () => {
     applyTheme('praetor');
 
     expect(document.documentElement.classList.contains('dark')).toBe(false);
+    expect(document.documentElement.style.colorScheme).toBe('light');
     expect(scope.classList.contains('dark')).toBe(false);
     expect(scope.dataset.shadcnTheme).toBe('praetor');
   });
@@ -182,6 +185,7 @@ describe('applyTheme', () => {
     setBrowserDarkMode(true);
     applyTheme('auto');
     expect(document.documentElement.classList.contains('dark')).toBe(false);
+    expect(document.documentElement.style.colorScheme).toBe('dark');
     expect(scope.classList.contains('dark')).toBe(true);
     expect(scope.dataset.shadcnTheme).toBe('dark');
   });
@@ -193,9 +197,11 @@ describe('applyTheme', () => {
     };
 
     applyTheme('auto');
+    expect(document.documentElement.style.colorScheme).toBe('light');
     expect(scope.classList.contains('dark')).toBe(false);
 
     mediaQuery.triggerChange(true);
+    expect(document.documentElement.style.colorScheme).toBe('dark');
     expect(scope.classList.contains('dark')).toBe(true);
   });
 
@@ -209,6 +215,7 @@ describe('applyTheme', () => {
     applyTheme('light');
 
     mediaQuery.triggerChange(true);
+    expect(document.documentElement.style.colorScheme).toBe('light');
     expect(scope.classList.contains('dark')).toBe(false);
     expect(localStorage.getItem(THEME_STORAGE_KEY)).toBe('light');
   });
@@ -244,6 +251,7 @@ describe('applyBrowserTheme', () => {
     const scope = appendThemeScope();
     setBrowserDarkMode(true);
     applyBrowserTheme();
+    expect(document.documentElement.style.colorScheme).toBe('dark');
     expect(scope.classList.contains('dark')).toBe(true);
     expect(scope.dataset.shadcnTheme).toBe('dark');
   });
@@ -252,6 +260,7 @@ describe('applyBrowserTheme', () => {
     const scope = appendThemeScope();
     setBrowserDarkMode(false);
     applyBrowserTheme();
+    expect(document.documentElement.style.colorScheme).toBe('light');
     expect(scope.classList.contains('dark')).toBe(false);
     expect(scope.dataset.shadcnTheme).toBe('light');
   });
@@ -260,6 +269,7 @@ describe('applyBrowserTheme', () => {
     localStorage.setItem(THEME_STORAGE_KEY, 'dark');
     setBrowserDarkMode(false);
     applyBrowserTheme();
+    expect(document.documentElement.style.colorScheme).toBe('light');
     // The login screen rendered light from the OS, but the user's choice stays.
     expect(localStorage.getItem(THEME_STORAGE_KEY)).toBe('dark');
     expect(getTheme()).toBe('dark');
@@ -272,9 +282,11 @@ describe('applyBrowserTheme', () => {
     };
 
     applyBrowserTheme();
+    expect(document.documentElement.style.colorScheme).toBe('light');
     expect(scope.classList.contains('dark')).toBe(false);
 
     mediaQuery.triggerChange(true);
+    expect(document.documentElement.style.colorScheme).toBe('dark');
     expect(scope.classList.contains('dark')).toBe(true);
   });
 });
