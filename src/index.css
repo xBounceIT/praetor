@@ -60,6 +60,10 @@
   --color-secondary: #94783f;
   --color-accent: #9a2222;
   --color-neutral: #b8b5b3;
+  --scrollbar-track: #f1f5f9;
+  --scrollbar-thumb: var(--color-primary);
+  --scrollbar-thumb-hover: var(--color-primary-hover);
+  color-scheme: light;
   --sidebar: hsl(0 0% 98%);
   --sidebar-foreground: var(--foreground);
   --sidebar-primary: hsl(240 5.9% 10%);
@@ -95,7 +99,7 @@ input[type="number"] {
 /* Custom Horizontal Scrollbar for Financial Reports Graphs */
 .custom-horizontal-scrollbar {
   scrollbar-width: thin;
-  scrollbar-color: var(--color-primary) #f1f5f9;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
   /* Force scrollbar to always show when content overflows */
   overflow-x: auto !important;
   overflow-y: hidden;
@@ -109,21 +113,21 @@ input[type="number"] {
 }
 
 .custom-horizontal-scrollbar::-webkit-scrollbar-track {
-  background: #f1f5f9 !important;
+  background: var(--scrollbar-track) !important;
   border-radius: 10px;
   margin: 0 4px;
 }
 
 .custom-horizontal-scrollbar::-webkit-scrollbar-thumb {
-  background: var(--color-primary) !important;
+  background: var(--scrollbar-thumb) !important;
   border-radius: 10px;
   transition: background 0.2s ease;
-  border: 2px solid #f1f5f9;
+  border: 2px solid var(--scrollbar-track);
   min-width: 20px;
 }
 
 .custom-horizontal-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: var(--color-primary-hover) !important;
+  background: var(--scrollbar-thumb-hover) !important;
 }
 
 /* Hide scrollbar buttons/arrows */
@@ -157,6 +161,10 @@ input[type="number"] {
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
   --ring: oklch(0.552 0.016 285.938);
+  --scrollbar-track: var(--muted);
+  --scrollbar-thumb: var(--muted-foreground);
+  --scrollbar-thumb-hover: var(--foreground);
+  color-scheme: dark;
   --sidebar: hsl(240 5.9% 10%);
   --sidebar-foreground: var(--foreground);
   --sidebar-primary: hsl(224.3 76.3% 48%);

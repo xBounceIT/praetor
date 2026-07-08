@@ -1112,6 +1112,28 @@ describe('POST /api/sales/client-quotes supplier sync on create (user report aft
     });
   });
 
+  test('creating a quote directly in offer status passes the generated quote code as offer source', async () => {
+    setupCreate();
+    const item = storedQuoteItem({ quoteId: 'PREV_26_0045' });
+    allocateDocumentCodeMock.mockImplementation(async (moduleId: string) => {
+      if (moduleId === 'client_quote') return 'PREV_26_0045';
+      if (moduleId === 'client_offer') return 'OFF_26_0045';
+      return `${moduleId}-generated`;
+    });
+    cqCreateMock.mockImplementation((input: Record<string, unknown>) =>
+      Promise.resolve(updatedQuote({ id: input.id, status: 'offer' })),
+    );
+    cqInsertItemsMock.mockResolvedValue([item]);
+
+    const res = await postQuote([freshLine()], { id: '', status: 'offer' });
+
+    expect(res.statusCode).toBe(201);
+    expect(allocateDocumentCodeMock).toHaveBeenCalledWith('client_offer', {
+      exec: expect.anything(),
+      sourceCode: 'PREV_26_0045',
+    });
+  });
+
   test('blank quote id auto-generates from the centralized template', async () => {
     setupCreate();
 

@@ -4,6 +4,10 @@ import {
   DOCUMENT_CODE_MAX_LENGTH,
   type DocumentCodeModuleId,
   getDocumentCodeYear,
+  type ParsedDocumentCodeCounter,
+  parseDocumentCodeCounter,
+  parseDocumentCodeCounterFromTemplate,
+  parseDocumentCodeCounterFromTemplates,
   renderDocumentCode,
 } from '../utils/document-codes.ts';
 
@@ -25,22 +29,114 @@ export type DocumentCodePreview = {
   sequence: number;
 };
 
+export type DocumentCodeAllocationOptions = {
+  date?: Date | string;
+  exec: DbExecutor;
+  sourceCode?: string | null;
+  sourceCodes?: readonly (string | null | undefined)[];
+};
+
+const renderAndValidateDocumentCode = (
+  template: Parameters<typeof renderDocumentCode>[0],
+  options: { year: number; sequence: number },
+): string => {
+  const code = renderDocumentCode(template, options);
+  if (code.length > DOCUMENT_CODE_MAX_LENGTH) {
+    throw new Error(`Generated document code exceeds ${DOCUMENT_CODE_MAX_LENGTH} characters`);
+  }
+  return code;
+};
+
+export const compactDocumentCodeSources = (
+  ...sourceCodes: Array<string | null | undefined>
+): string[] =>
+  sourceCodes
+    .map((sourceCode) => (typeof sourceCode === 'string' ? sourceCode.trim() : ''))
+    .filter((sourceCode): sourceCode is string => sourceCode.length > 0);
+
+const getDocumentCodeSourceCandidates = (options: DocumentCodeAllocationOptions): string[] =>
+  options.sourceCodes
+    ? compactDocumentCodeSources(...options.sourceCodes)
+    : compactDocumentCodeSources(options.sourceCode);
+
+const MIN_COMPACT_COUNTER_DIGITS = 3;
+
+const hasDocumentCodeCounterDigits = (sourceCode: string): boolean => {
+  return (sourceCode.match(/\d/g)?.length ?? 0) >= MIN_COMPACT_COUNTER_DIGITS;
+};
+
+const findDocumentCodeSourceCounter = async (
+  sourceCodes: readonly string[],
+  exec: DbExecutor,
+): Promise<ParsedDocumentCodeCounter | null> => {
+  const candidateCodes = sourceCodes.filter(hasDocumentCodeCounterDigits);
+  if (candidateCodes.length === 0) return null;
+
+  const templates = await documentCodeTemplatesRepo.list(exec);
+  for (const sourceCode of candidateCodes) {
+    const parsedFromTemplate = parseDocumentCodeCounterFromTemplates(sourceCode, templates);
+    if (parsedFromTemplate) return parsedFromTemplate;
+
+    const parsed = parseDocumentCodeCounter(sourceCode);
+    if (parsed) return parsed;
+  }
+
+  return null;
+};
+
+export const reserveDocumentCodeCounterFromCode = async (
+  moduleId: DocumentCodeModuleId,
+  code: string | null | undefined,
+  exec: DbExecutor,
+): Promise<boolean> => {
+  const [sourceCode] = compactDocumentCodeSources(code);
+  if (!sourceCode || !hasDocumentCodeCounterDigits(sourceCode)) return false;
+  const template = await documentCodeTemplatesRepo.findByModuleId(moduleId, exec);
+  const parsed =
+    parseDocumentCodeCounterFromTemplate(sourceCode, template) ??
+    parseDocumentCodeCounter(sourceCode);
+  if (!parsed) return false;
+  await documentCodeTemplatesRepo.reserveSequenceAtLeast(
+    moduleId,
+    parsed.year,
+    parsed.sequence,
+    exec,
+  );
+  return true;
+};
+
 export const allocateDocumentCode = async (
   moduleId: DocumentCodeModuleId,
-  options: { date?: Date | string; exec: DbExecutor },
+  options: DocumentCodeAllocationOptions,
 ): Promise<string> => {
+  const sourceCodes = getDocumentCodeSourceCandidates(options);
+  const [template, sourceCounter] = await Promise.all([
+    documentCodeTemplatesRepo.findByModuleId(moduleId, options.exec),
+    findDocumentCodeSourceCounter(sourceCodes, options.exec),
+  ]);
+
+  if (sourceCounter) {
+    const code = renderAndValidateDocumentCode(template, sourceCounter);
+    await documentCodeTemplatesRepo.reserveSequenceAtLeast(
+      moduleId,
+      sourceCounter.year,
+      sourceCounter.sequence,
+      options.exec,
+    );
+    if (await documentCodeTemplatesRepo.existsForModule(moduleId, code, options.exec)) {
+      throw new DocumentCodeCollisionError(moduleId);
+    }
+    return code;
+  }
+
   const year = getDocumentCodeYear(options.date);
-  const template = await documentCodeTemplatesRepo.findByModuleId(moduleId, options.exec);
 
   const allocateAttempt = async (attempt: number): Promise<string> => {
     if (attempt >= DOCUMENT_CODE_COLLISION_RETRIES) {
       throw new DocumentCodeCollisionError(moduleId);
     }
     const sequence = await documentCodeTemplatesRepo.allocateSequence(moduleId, year, options.exec);
-    const code = renderDocumentCode(template, { year, sequence });
-    if (code.length > DOCUMENT_CODE_MAX_LENGTH) {
-      throw new Error(`Generated document code exceeds ${DOCUMENT_CODE_MAX_LENGTH} characters`);
-    }
+    const code = renderAndValidateDocumentCode(template, { year, sequence });
     if (!(await documentCodeTemplatesRepo.existsForModule(moduleId, code, options.exec))) {
       return code;
     }
@@ -63,10 +159,7 @@ export const previewDocumentCode = async (
 
   const candidates = Array.from({ length: DOCUMENT_CODE_COLLISION_RETRIES }, (_, attempt) => {
     const sequence = nextSequence + attempt;
-    const code = renderDocumentCode(template, { year, sequence });
-    if (code.length > DOCUMENT_CODE_MAX_LENGTH) {
-      throw new Error(`Generated document code exceeds ${DOCUMENT_CODE_MAX_LENGTH} characters`);
-    }
+    const code = renderAndValidateDocumentCode(template, { year, sequence });
     return { moduleId, code, year, sequence };
   });
   const existing = await Promise.all(

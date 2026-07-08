@@ -113,6 +113,7 @@
       "quantityGreaterThanZero": "All items must have quantity greater than 0",
       "totalGreaterThanZero": "Total must be greater than 0",
       "quoteCodeRequired": "Quote Code is required",
+      "quoteCodeAlreadyExists": "This quote code already exists",
       "expiredCannotModify": "Expired quotes cannot be confirmed or reverted",
       "expiredCannotDelete": "Expired quotes cannot be deleted",
       "expirationExtendInvalid": "Set an expiration date of today or later to revalidate the quote"
@@ -236,6 +237,8 @@
     "autoCodePlaceholder": "Auto-generated",
     "autoCodeDescription": "Leave blank to use the document code template.",
     "autoCodePreviewDescription": "Leave blank to generate {{preview}} from the document code template.",
+    "inheritedCodePlaceholder": "Inherited from source quote",
+    "inheritedCodeDescription": "Leave blank to inherit the source quote code counter.",
     "offerColumn": "Offer",
     "offerCodeColumn": "Offer Code",
     "offerCodeRequired": "Offer code is required",

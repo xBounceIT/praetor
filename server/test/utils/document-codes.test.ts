@@ -3,6 +3,8 @@ import {
   DOCUMENT_CODE_MODULES,
   formatDocumentSequence,
   getDocumentCodeYear,
+  parseDocumentCodeCounter,
+  parseDocumentCodeCounterFromTemplate,
   renderDocumentCode,
   validateDocumentCodeTemplate,
 } from '../../utils/document-codes.ts';
@@ -30,6 +32,104 @@ describe('document code templates', () => {
         { year: 2026, sequence: 123 },
       ),
     ).toBe('INV-2026-123');
+  });
+
+  test('parses source counters from supported document code separators', () => {
+    expect(parseDocumentCodeCounter('PREV_26_045')).toEqual({ year: 2026, sequence: 45 });
+    expect(parseDocumentCodeCounter('PREV-26-045')).toEqual({ year: 2026, sequence: 45 });
+    expect(parseDocumentCodeCounter('PREV_2026_00045_extra')).toEqual({
+      year: 2026,
+      sequence: 45,
+    });
+    expect(parseDocumentCodeCounter('PREV-2026-00045-extra')).toEqual({
+      year: 2026,
+      sequence: 45,
+    });
+    expect(parseDocumentCodeCounter('PREV_2026_00045_01')).toEqual({
+      year: 2026,
+      sequence: 45,
+    });
+    expect(parseDocumentCodeCounter('PREV-2026-00045-01')).toEqual({
+      year: 2026,
+      sequence: 45,
+    });
+  });
+
+  test('prefers a full source year over numeric prefix chunks in the generic fallback', () => {
+    expect(parseDocumentCodeCounter('ACME_12_345_2026_0007')).toEqual({
+      year: 2026,
+      sequence: 7,
+    });
+    expect(parseDocumentCodeCounter('PREV_26_0045_01')).toEqual({
+      year: 2026,
+      sequence: 45,
+    });
+  });
+
+  test('keeps the leading counter when suffixes contain the same full year', () => {
+    expect(parseDocumentCodeCounter('PREV_26_0045_2026_01')).toEqual({
+      year: 2026,
+      sequence: 45,
+    });
+    expect(parseDocumentCodeCounter('PREV_26_0045_2027_01')).toEqual({
+      year: 2026,
+      sequence: 45,
+    });
+  });
+
+  test('parses source counters when prefixes or literals contain separators', () => {
+    expect(parseDocumentCodeCounter('ACME_PREV_26_0045')).toEqual({
+      year: 2026,
+      sequence: 45,
+    });
+    expect(parseDocumentCodeCounter('ACME-PREV-26-0045')).toEqual({
+      year: 2026,
+      sequence: 45,
+    });
+    expect(parseDocumentCodeCounter('PREV_EU_2026_00045_extra')).toEqual({
+      year: 2026,
+      sequence: 45,
+    });
+    expect(parseDocumentCodeCounter('PREV-EU-2026-00045-extra')).toEqual({
+      year: 2026,
+      sequence: 45,
+    });
+  });
+
+  test('parses counters from the configured template shape before generic segment order', () => {
+    expect(
+      parseDocumentCodeCounterFromTemplate('PREV_2026_DOC_0007', {
+        prefix: 'PREV',
+        template: '{PREFIX}_{YYYY}_DOC_{SEQ}',
+      }),
+    ).toEqual({ year: 2026, sequence: 7 });
+    expect(
+      parseDocumentCodeCounterFromTemplate('ACME_12_345_2026_0007', {
+        prefix: 'ACME_12_345',
+        template: '{PREFIX}_{YYYY}_{SEQ}',
+      }),
+    ).toEqual({ year: 2026, sequence: 7 });
+    expect(
+      parseDocumentCodeCounterFromTemplate('PREV_0007_2026', {
+        prefix: 'PREV',
+        template: '{PREFIX}_{SEQ}_{YYYY}',
+      }),
+    ).toEqual({ year: 2026, sequence: 7 });
+  });
+
+  test('rejects document codes without a valid year and numeric sequence segment pair', () => {
+    for (const code of [
+      'PREV/26/045',
+      'PREV_2026_0000',
+      'PREV_20A6_0045',
+      'PREV_2026_ABC',
+      '_26_0045',
+      'PREV_20260_0045',
+      'PREV__0045',
+      null,
+    ]) {
+      expect(parseDocumentCodeCounter(code)).toBeNull();
+    }
   });
 
   test('validates configurable settings', () => {

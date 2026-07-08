@@ -171,10 +171,10 @@ describe('<Layout />', () => {
     const activeButton = container.querySelector(
       '[data-sidebar="menu-button"][data-active="true"]',
     );
-    const brandButton = screen.getByText('PRAETOR').closest('[data-sidebar="menu-button"]');
+    const brandButton = screen.getAllByText('PRAETOR')[0]?.closest('[data-sidebar="menu-button"]');
     const brandLogoImage = brandButton?.querySelector('img');
     const brandLogo = brandLogoImage?.parentElement;
-    const brandSubtitle = screen.getByText('hr:roles.manager workspace');
+    const brandSubtitle = screen.getAllByText('PRAETOR')[1] as HTMLElement;
     const avatarFallback = screen.getByText('TU');
 
     expect(sidebarContainer?.className).toContain('border-sidebar-border');
@@ -508,26 +508,28 @@ describe('<Layout /> sidebar branding', () => {
 
   const brandImgVia = (label: string) =>
     screen
-      .getByText(label)
+      .getAllByText(label)[0]
       .closest('[data-sidebar="menu-button"]')
       ?.querySelector('img') as HTMLImageElement | null;
 
-  test('shows the company name and uploaded logo, replacing PRAETOR and the bundled icon', () => {
+  test('keeps the product wordmark and shows the company name as the sidebar subtitle', () => {
     renderLayout({ companyName: 'Acme', logoUrl: CUSTOM_LOGO });
 
-    // Feature (b): the configurable company name replaces the "PRAETOR" wordmark...
+    // The sidebar keeps the Praetor product wordmark in the header...
+    expect(screen.getByText('PRAETOR')).toBeDefined();
+    // ...and shows the configurable company name where the role/workspace label used to be.
     expect(screen.getByText('Acme')).toBeDefined();
-    expect(screen.queryByText('PRAETOR')).toBeNull();
-    // ...including the footer (which otherwise reads "Praetor v<version>").
-    expect(screen.getByText(/^Acme v/)).toBeDefined();
+    // The footer remains the Praetor product/version label.
+    expect(screen.getByText(/^Praetor v/)).toBeDefined();
+    expect(screen.queryByText(/^Acme v/)).toBeNull();
     // Feature (a): the uploaded logo URL is used as the sidebar icon, as-is.
-    expect(brandImgVia('Acme')?.getAttribute('src')).toBe(CUSTOM_LOGO);
+    expect(brandImgVia('PRAETOR')?.getAttribute('src')).toBe(CUSTOM_LOGO);
   });
 
-  test('falls back to the PRAETOR wordmark and bundled favicon when no branding is set', () => {
+  test('falls back to the PRAETOR wordmark, PRAETOR subtitle, and bundled favicon when no branding is set', () => {
     renderLayout();
 
-    expect(screen.getByText('PRAETOR')).toBeDefined();
+    expect(screen.getAllByText('PRAETOR')).toHaveLength(2);
     const src = brandImgVia('PRAETOR')?.getAttribute('src') ?? '';
     // The bundled favicon import resolves to a non-empty asset reference, never the API logo URL.
     expect(src.length).toBeGreaterThan(0);
@@ -537,13 +539,13 @@ describe('<Layout /> sidebar branding', () => {
   test('falls back to the bundled favicon when the custom sidebar logo fails to load', () => {
     renderLayout({ companyName: 'Acme', logoUrl: CUSTOM_LOGO });
 
-    const img = brandImgVia('Acme');
+    const img = brandImgVia('PRAETOR');
     expect(img?.getAttribute('src')).toBe(CUSTOM_LOGO);
 
     // Mirrors the server contract: a logo whose file is gone on disk 404s, so the <img> errors.
     fireEvent.error(img as HTMLImageElement);
 
     // The icon reverts to the bundled favicon instead of leaving a broken image.
-    expect(brandImgVia('Acme')?.getAttribute('src')).not.toBe(CUSTOM_LOGO);
+    expect(brandImgVia('PRAETOR')?.getAttribute('src')).not.toBe(CUSTOM_LOGO);
   });
 });

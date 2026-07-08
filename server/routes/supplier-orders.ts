@@ -7,7 +7,10 @@ import * as supplierOrderVersionsRepo from '../repositories/supplierOrderVersion
 import * as supplierQuotesRepo from '../repositories/supplierQuotesRepo.ts';
 import * as suppliersRepo from '../repositories/suppliersRepo.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
-import { allocateDocumentCode } from '../services/documentCodes.ts';
+import {
+  allocateDocumentCode,
+  reserveDocumentCodeCounterFromCode,
+} from '../services/documentCodes.ts';
 import { logAudit } from '../utils/audit.ts';
 import { getUniqueViolation } from '../utils/db-errors.ts';
 import { replyDocumentCodeCollision } from '../utils/document-code-replies.ts';
@@ -442,8 +445,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             };
           }
 
-          const orderId =
-            nextIdResult.value ?? (await allocateDocumentCode('supplier_order', { exec: tx }));
+          let orderId: string;
+          if (nextIdResult.value) {
+            await reserveDocumentCodeCounterFromCode('supplier_order', nextIdResult.value, tx);
+            orderId = nextIdResult.value;
+          } else {
+            orderId = await allocateDocumentCode('supplier_order', {
+              exec: tx,
+              sourceCode: linkedQuoteIdResult.value,
+            });
+          }
           const order = await supplierOrdersRepo.create(
             {
               id: orderId,
@@ -697,6 +708,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             if (!renamedOrder) {
               return { order: null, items: [] as supplierOrdersRepo.SupplierOrderItem[] };
             }
+            await reserveDocumentCodeCounterFromCode('supplier_order', nextIdValue, tx);
           }
           // id-only renames have nothing left to write — reuse the row returned by rename().
           const order =

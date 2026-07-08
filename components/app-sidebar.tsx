@@ -22,7 +22,6 @@ interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
   roleLabel: string;
   roles: Role[];
   navigationLabel: string;
-  workspaceLabel: string;
   settingsLabel: string;
   documentationLabel: string;
   logoutLabel: string;
@@ -41,7 +40,6 @@ export function AppSidebar({
   roleLabel,
   roles,
   navigationLabel,
-  workspaceLabel,
   settingsLabel,
   documentationLabel,
   logoutLabel,
@@ -82,9 +80,9 @@ export function AppSidebar({
                 />
               </div>
               <div className="grid flex-1 text-left text-sm leading-[var(--text-sm--line-height)] text-sidebar-foreground">
-                <span className="truncate font-semibold italic">{companyName || 'PRAETOR'}</span>
+                <span className="truncate font-semibold italic">PRAETOR</span>
                 <span className="truncate text-sm leading-[var(--text-sm--line-height)] text-sidebar-foreground/80">
-                  {roleLabel} {workspaceLabel}
+                  {companyName || 'PRAETOR'}
                 </span>
               </div>
             </SidebarMenuButton>
@@ -96,7 +94,7 @@ export function AppSidebar({
       </SidebarContent>
       <SidebarFooter>
         <div className="px-2 text-sm leading-[var(--text-sm--line-height)] text-sidebar-foreground/60 group-data-[collapsible=icon]:hidden">
-          {companyName || 'Praetor'} v{version}
+          Praetor v{version}
         </div>
         <NavUser
           user={currentUser}

@@ -11,6 +11,7 @@ function Input({ className, type, ...props }: React.ComponentProps<'input'>) {
       className={cn(
         inputBaseClassName,
         'selection:bg-primary selection:text-primary-foreground file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground',
+        type === 'time' && '[color-scheme:light] dark:[color-scheme:dark]',
         className,
       )}
       {...props}
