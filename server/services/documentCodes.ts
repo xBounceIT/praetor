@@ -59,16 +59,17 @@ const getDocumentCodeSourceCandidates = (options: DocumentCodeAllocationOptions)
     ? compactDocumentCodeSources(...options.sourceCodes)
     : compactDocumentCodeSources(options.sourceCode);
 
-const hasPotentialTemplateCounter = (sourceCode: string): boolean => {
-  const digitGroups = sourceCode.match(/\d+/g) ?? [];
-  return digitGroups.length >= 2 || digitGroups.some((group) => group.length >= 6);
+const MIN_COMPACT_COUNTER_DIGITS = 3;
+
+const hasDocumentCodeCounterDigits = (sourceCode: string): boolean => {
+  return (sourceCode.match(/\d/g)?.length ?? 0) >= MIN_COMPACT_COUNTER_DIGITS;
 };
 
 const findDocumentCodeSourceCounter = async (
   sourceCodes: readonly string[],
   exec: DbExecutor,
 ): Promise<ParsedDocumentCodeCounter | null> => {
-  const candidateCodes = sourceCodes.filter(hasPotentialTemplateCounter);
+  const candidateCodes = sourceCodes.filter(hasDocumentCodeCounterDigits);
   if (candidateCodes.length === 0) return null;
 
   const templates = await documentCodeTemplatesRepo.list(exec);
@@ -89,7 +90,7 @@ export const reserveDocumentCodeCounterFromCode = async (
   exec: DbExecutor,
 ): Promise<boolean> => {
   const [sourceCode] = compactDocumentCodeSources(code);
-  if (!sourceCode || !hasPotentialTemplateCounter(sourceCode)) return false;
+  if (!sourceCode || !hasDocumentCodeCounterDigits(sourceCode)) return false;
   const template = await documentCodeTemplatesRepo.findByModuleId(moduleId, exec);
   const parsed =
     parseDocumentCodeCounterFromTemplate(sourceCode, template) ??

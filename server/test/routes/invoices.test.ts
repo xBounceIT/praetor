@@ -48,6 +48,7 @@ const renameDraftMock = mock();
 const deleteByIdMock = mock();
 const findClientOrderExistingMock = mock();
 const allocateDocumentCodeMock = mock();
+const reserveDocumentCodeCounterFromCodeMock = mock();
 const logAuditMock = mock(async () => undefined);
 const { withDbTransactionMock, resetWithDbTransactionMock } = makeWithDbTransactionMock();
 
@@ -99,6 +100,7 @@ beforeAll(async () => {
   mock.module('../../services/documentCodes.ts', () => ({
     ...documentCodesSnap,
     allocateDocumentCode: allocateDocumentCodeMock,
+    reserveDocumentCodeCounterFromCode: reserveDocumentCodeCounterFromCodeMock,
   }));
   mock.module('../../db/drizzle.ts', () => ({
     ...drizzleSnap,
@@ -187,6 +189,7 @@ const allMocks = [
   deleteByIdMock,
   findClientOrderExistingMock,
   allocateDocumentCodeMock,
+  reserveDocumentCodeCounterFromCodeMock,
   logAuditMock,
   withDbTransactionMock,
 ];
@@ -202,6 +205,7 @@ beforeEach(async () => {
   findStatusAndClientNameMock.mockResolvedValue({ status: 'draft', clientName: 'Client' });
   findClientOrderExistingMock.mockResolvedValue(null);
   allocateDocumentCodeMock.mockResolvedValue('inv-1');
+  reserveDocumentCodeCounterFromCodeMock.mockResolvedValue(false);
   resetWithDbTransactionMock();
   logAuditMock.mockImplementation(async () => undefined);
 

@@ -154,6 +154,33 @@ describe('allocateDocumentCode', () => {
     expect(reserveSequenceAtLeastMock).toHaveBeenCalledWith('client_offer', 2026, 7, TX_SENTINEL);
   });
 
+  test('inherits compact source template counters', async () => {
+    findByModuleIdMock.mockResolvedValue({
+      moduleId: 'client_offer',
+      label: 'Client offers',
+      prefix: 'OFF',
+      template: '{PREFIX}_{YYYY}_{SEQ}',
+      sequencePadding: 4,
+    });
+    listMock.mockResolvedValue([
+      {
+        moduleId: 'client_quote',
+        label: 'Client quotes',
+        prefix: 'PREV',
+        template: '{PREFIX}{YYYY}{SEQ}',
+        sequencePadding: 1,
+      },
+    ]);
+
+    const code = await allocateDocumentCode('client_offer', {
+      exec: TX_SENTINEL as never,
+      sourceCode: 'PREV20261',
+    });
+
+    expect(code).toBe('OFF_2026_0001');
+    expect(reserveSequenceAtLeastMock).toHaveBeenCalledWith('client_offer', 2026, 1, TX_SENTINEL);
+  });
+
   test('uses source template shape before numeric prefix segments', async () => {
     findByModuleIdMock.mockResolvedValue({
       moduleId: 'client_offer',
@@ -199,6 +226,7 @@ describe('allocateDocumentCode', () => {
     expect(code).toBe('OFF_2026_0007');
     expect(reserveSequenceAtLeastMock).toHaveBeenCalledWith('client_offer', 2026, 7, TX_SENTINEL);
   });
+
   test('uses the first parseable candidate from ordered source codes', async () => {
     findByModuleIdMock.mockResolvedValue({
       moduleId: 'client_order',
@@ -327,6 +355,31 @@ describe('reserveDocumentCodeCounterFromCode', () => {
     ).resolves.toBe(true);
 
     expect(reserveSequenceAtLeastMock).toHaveBeenCalledWith('supplier_order', 2026, 9, TX_SENTINEL);
+  });
+
+  test('reserves compact manual codes from the configured template shape', async () => {
+    findByModuleIdMock.mockResolvedValue({
+      moduleId: 'supplier_order',
+      label: 'Supplier orders',
+      prefix: 'SORD',
+      template: '{PREFIX}{YYYY}{SEQ}',
+      sequencePadding: 1,
+    });
+
+    await expect(
+      reserveDocumentCodeCounterFromCode('supplier_order', 'SORD20269', TX_SENTINEL as never),
+    ).resolves.toBe(true);
+
+    expect(reserveSequenceAtLeastMock).toHaveBeenCalledWith('supplier_order', 2026, 9, TX_SENTINEL);
+  });
+
+  test('ignores short numeric manual codes before loading templates', async () => {
+    await expect(
+      reserveDocumentCodeCounterFromCode('supplier_order', 'CUSTOM-1', TX_SENTINEL as never),
+    ).resolves.toBe(false);
+
+    expect(findByModuleIdMock).not.toHaveBeenCalled();
+    expect(reserveSequenceAtLeastMock).not.toHaveBeenCalled();
   });
 
   test('reserves the owning module counter when a manual code is parseable', async () => {
