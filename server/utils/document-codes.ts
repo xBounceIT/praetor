@@ -82,6 +82,7 @@ const DOCUMENT_CODE_PLACEHOLDERS = new Set(['PREFIX', 'YY', 'YYYY', 'SEQ']);
 const PREFIX_PATTERN = /^[A-Za-z0-9_-]+$/;
 const TEMPLATE_LITERAL_PATTERN = /^[A-Za-z0-9_-]*$/;
 const YEAR_PLACEHOLDER_PATTERN = /\{(?:YY|YYYY)\}/;
+const DOCUMENT_CODE_COUNTER_SEPARATOR_PATTERN = /[-_]/;
 const MAX_SEQUENCE_FOR_LENGTH_CHECK = 999_999_999;
 const DOCUMENT_CODE_MAX_RESERVED_SEQUENCE = 2_147_483_646;
 
@@ -128,7 +129,7 @@ const parseDocumentCodeYearPart = (yearPart: string): number | null => {
 
 export const parseDocumentCodeCounter = (code: unknown): ParsedDocumentCodeCounter | null => {
   if (typeof code !== 'string') return null;
-  const parts = code.trim().split('_');
+  const parts = code.trim().split(DOCUMENT_CODE_COUNTER_SEPARATOR_PATTERN);
   if (parts.length < 3 || parts[0].length === 0) return null;
 
   for (let yearIndex = parts.length - 2; yearIndex >= 1; yearIndex -= 1) {

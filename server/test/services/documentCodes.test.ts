@@ -101,7 +101,7 @@ describe('allocateDocumentCode', () => {
 
     const code = await allocateDocumentCode('client_offer', {
       exec: TX_SENTINEL as never,
-      sourceCode: 'PREV_26_0045_manual',
+      sourceCode: 'PREV-26-0045-manual',
     });
 
     expect(code).toBe('OFF_26_0045');
@@ -144,7 +144,7 @@ describe('allocateDocumentCode', () => {
     await expect(
       allocateDocumentCode('client_offer', {
         exec: TX_SENTINEL as never,
-        sourceCode: 'PREV_26_0045_manual',
+        sourceCode: 'PREV-26-0045-manual',
       }),
     ).rejects.toBeInstanceOf(DocumentCodeCollisionError);
     expect(reserveSequenceAtLeastMock).toHaveBeenCalledWith('client_offer', 2026, 45, TX_SENTINEL);
