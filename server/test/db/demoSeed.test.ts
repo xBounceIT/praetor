@@ -81,6 +81,9 @@ const buildQueryRecorder = (rowCount = 1, rows: unknown[] = []) => {
 const findDelete = (calls: QueryCall[], table: string) =>
   calls.find((call) => call.sql.startsWith(`DELETE FROM ${table} `));
 
+const findDeleteIndex = (calls: QueryCall[], table: string) =>
+  calls.findIndex((call) => call.sql.startsWith(`DELETE FROM ${table} `));
+
 const paramsContainAny = (call: QueryCall | undefined, values: readonly string[]) =>
   call?.params?.some(
     (param) => Array.isArray(param) && values.some((value) => param.includes(value)),
@@ -291,6 +294,35 @@ describe('cleanupDemoNamespace', () => {
     );
     expect(findDelete(calls, 'invoices')?.sql).toContain('linked_sale_id IN (SELECT id FROM sales');
 
+    const resaleDelete = findDelete(calls, 'resales');
+    expect(resaleDelete?.sql).toContain('client_order_id = ANY');
+    expect(resaleDelete?.sql).toContain('supplier_order_id = ANY');
+    expect(resaleDelete?.sql).toContain(
+      'client_order_id IN (SELECT id FROM sales WHERE client_id = ANY',
+    );
+    expect(resaleDelete?.sql).toContain(
+      'client_order_id IN (SELECT id FROM sales WHERE linked_offer_id = ANY',
+    );
+    expect(resaleDelete?.sql).toContain(
+      'client_order_id IN (SELECT id FROM sales WHERE linked_quote_id = ANY',
+    );
+    expect(resaleDelete?.sql).toContain(
+      'supplier_order_id IN (SELECT id FROM supplier_sales WHERE supplier_id = ANY',
+    );
+    expect(resaleDelete?.sql).toContain(
+      'supplier_order_id IN (SELECT id FROM supplier_sales WHERE linked_quote_id = ANY',
+    );
+    expect(resaleDelete?.sql).toContain('client_order_id IN (SELECT id FROM sales');
+    expect(resaleDelete?.sql).toContain('sale_items WHERE product_id IN (SELECT id FROM products');
+    expect(resaleDelete?.sql).toContain('supplier_order_id IN (SELECT id FROM supplier_sales');
+    expect(resaleDelete?.sql).toContain(
+      'supplier_sale_items WHERE product_id IN (SELECT id FROM products',
+    );
+    const resaleDeleteIndex = findDeleteIndex(calls, 'resales');
+    expect(resaleDeleteIndex).toBeGreaterThanOrEqual(0);
+    expect(resaleDeleteIndex).toBeLessThan(findDeleteIndex(calls, 'sales'));
+    expect(resaleDeleteIndex).toBeLessThan(findDeleteIndex(calls, 'supplier_sales'));
+
     expect(findDelete(calls, 'supplier_quotes')?.sql).toContain(
       'supplier_quote_items WHERE product_id IN (SELECT id FROM products',
     );
@@ -322,6 +354,20 @@ describe('cleanupDemoNamespace', () => {
       ),
     ).toBe(true);
     expect(paramsContainAny(quoteDelete, buildDemoIds(2027).suppliers)).toBe(true);
+    expect(paramsContainAny(resaleDelete, buildDemoIds(2027).products)).toBe(true);
+    expect(
+      paramsContainAny(
+        resaleDelete,
+        DEMO_PRODUCTS.map((product) => product.productCode),
+      ),
+    ).toBe(true);
+    expect(
+      paramsContainAny(
+        resaleDelete,
+        DEMO_PRODUCTS.map((product) => product.name),
+      ),
+    ).toBe(true);
+    expect(paramsContainAny(resaleDelete, buildDemoIds(2027).suppliers)).toBe(true);
   });
 
   test('does not treat compatibility clients as blanket financial document owners', async () => {
@@ -336,7 +382,7 @@ describe('cleanupDemoNamespace', () => {
       2027,
     );
 
-    for (const table of ['quotes', 'customer_offers', 'sales', 'invoices']) {
+    for (const table of ['quotes', 'customer_offers', 'sales', 'invoices', 'resales']) {
       expect(paramsContainAny(findDelete(calls, table), COMPATIBILITY_DEFAULTS.clients)).toBe(
         false,
       );

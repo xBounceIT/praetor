@@ -147,6 +147,16 @@ const pushLowerTextArrayPredicateExcludingIds = (
   );
 };
 
+const pushTextArraySqlPredicate = (
+  builder: PredicateBuilder,
+  values: readonly string[],
+  renderPredicate: (valuesParam: string) => string,
+) => {
+  if (values.length === 0) return;
+  builder.params.push([...values]);
+  builder.parts.push(renderPredicate(`$${builder.params.length}::text[]`));
+};
+
 const demoProductIdsQuery = (
   productIdsParam: string,
   productCodesParam: string,
@@ -209,6 +219,12 @@ const supplierSaleIdsWithDemoProductLines = (demoProductIds: string) =>
   `SELECT id FROM supplier_sales
    WHERE id IN (${parentIdsWithDemoProductLines('supplier_sale_items', 'sale_id', demoProductIds)})
       OR linked_quote_id IN (${supplierQuoteIdsWithDemoProductLines(demoProductIds)})`;
+
+const clientSaleIdsForOwner = (ownerIdsParam: string) =>
+  `SELECT id FROM sales WHERE client_id = ANY(${ownerIdsParam})`;
+
+const supplierSaleIdsForOwner = (ownerIdsParam: string) =>
+  `SELECT id FROM supplier_sales WHERE supplier_id = ANY(${ownerIdsParam})`;
 
 const executeDelete = async (
   client: PoolClient,
@@ -738,6 +754,53 @@ export const cleanupDemoNamespace = async (
         builder,
         demoIds,
         (productIds) => `linked_sale_id IN (${supplierSaleIdsWithDemoProductLines(productIds)})`,
+      );
+    }),
+  );
+
+  incrementCount(
+    cleanupCountsByTable,
+    'resales',
+    await executeDelete(client, 'resales', (builder) => {
+      pushTextArrayPredicate(builder, 'client_order_id', demoIds.sales);
+      pushTextArrayPredicate(builder, 'supplier_order_id', demoIds.supplierSales);
+      pushTextArraySqlPredicate(
+        builder,
+        demoIds.clients,
+        (clientIds) => `client_order_id IN (${clientSaleIdsForOwner(clientIds)})`,
+      );
+      pushTextArraySqlPredicate(
+        builder,
+        demoIds.customerOffers,
+        (offerIds) =>
+          `client_order_id IN (SELECT id FROM sales WHERE linked_offer_id = ANY(${offerIds}))`,
+      );
+      pushTextArraySqlPredicate(
+        builder,
+        demoIds.quotes,
+        (quoteIds) =>
+          `client_order_id IN (SELECT id FROM sales WHERE linked_quote_id = ANY(${quoteIds}))`,
+      );
+      pushTextArraySqlPredicate(
+        builder,
+        demoIds.suppliers,
+        (supplierIds) => `supplier_order_id IN (${supplierSaleIdsForOwner(supplierIds)})`,
+      );
+      pushTextArraySqlPredicate(
+        builder,
+        demoIds.supplierQuotes,
+        (quoteIds) =>
+          `supplier_order_id IN (SELECT id FROM supplier_sales WHERE linked_quote_id = ANY(${quoteIds}))`,
+      );
+      pushDemoProductSqlPredicate(
+        builder,
+        demoIds,
+        (productIds) => `client_order_id IN (${clientSaleIdsWithDemoProductLines(productIds)})`,
+      );
+      pushDemoProductSqlPredicate(
+        builder,
+        demoIds,
+        (productIds) => `supplier_order_id IN (${supplierSaleIdsWithDemoProductLines(productIds)})`,
       );
     }),
   );
