@@ -207,6 +207,18 @@ export const findItemsForInvoice = async (
   return rows.map(mapItem);
 };
 
+export const findInvoiceForLinkedSale = async (
+  saleId: string,
+  exec: DbExecutor = db,
+): Promise<string | null> => {
+  const rows = await exec
+    .select({ id: invoices.id })
+    .from(invoices)
+    .where(eq(invoices.linkedSaleId, saleId))
+    .limit(1);
+  return rows[0]?.id ?? null;
+};
+
 export type NewInvoice = {
   id: string;
   linkedSaleId: string | null;

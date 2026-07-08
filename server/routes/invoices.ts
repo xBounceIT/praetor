@@ -417,17 +417,23 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           } else {
             let sourceCodes: string[] = [];
             if (linkedSaleIdResult.value) {
-              const sourceOrder = await clientsOrdersRepo.findExisting(
+              const existingLinkedInvoiceId = await invoicesRepo.findInvoiceForLinkedSale(
                 linkedSaleIdResult.value,
                 tx,
               );
-              sourceCodes = sourceOrder
-                ? compactDocumentCodeSources(
-                    sourceOrder.linkedQuoteId,
-                    sourceOrder.linkedOfferId,
-                    sourceOrder.id,
-                  )
-                : compactDocumentCodeSources(linkedSaleIdResult.value);
+              if (!existingLinkedInvoiceId) {
+                const sourceOrder = await clientsOrdersRepo.findExisting(
+                  linkedSaleIdResult.value,
+                  tx,
+                );
+                sourceCodes = sourceOrder
+                  ? compactDocumentCodeSources(
+                      sourceOrder.linkedQuoteId,
+                      sourceOrder.linkedOfferId,
+                      sourceOrder.id,
+                    )
+                  : compactDocumentCodeSources(linkedSaleIdResult.value);
+              }
             }
             invoiceId = await allocateDocumentCode('client_invoice', {
               date: issueDateResult.value,

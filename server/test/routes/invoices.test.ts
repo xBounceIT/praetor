@@ -44,6 +44,7 @@ const findAmountPaidMock = mock();
 const findStatusMock = mock();
 const findStatusAndClientNameMock = mock();
 const findIdConflictMock = mock();
+const findInvoiceForLinkedSaleMock = mock();
 const renameDraftMock = mock();
 const deleteByIdMock = mock();
 const findClientOrderExistingMock = mock();
@@ -85,6 +86,7 @@ beforeAll(async () => {
     findStatus: findStatusMock,
     findStatusAndClientName: findStatusAndClientNameMock,
     findIdConflict: findIdConflictMock,
+    findInvoiceForLinkedSale: findInvoiceForLinkedSaleMock,
     renameDraft: renameDraftMock,
     deleteById: deleteByIdMock,
     deleteDraftById: deleteByIdMock,
@@ -185,6 +187,7 @@ const allMocks = [
   findStatusMock,
   findStatusAndClientNameMock,
   findIdConflictMock,
+  findInvoiceForLinkedSaleMock,
   renameDraftMock,
   deleteByIdMock,
   findClientOrderExistingMock,
@@ -204,6 +207,7 @@ beforeEach(async () => {
   findStatusMock.mockResolvedValue('draft');
   findStatusAndClientNameMock.mockResolvedValue({ status: 'draft', clientName: 'Client' });
   findClientOrderExistingMock.mockResolvedValue(null);
+  findInvoiceForLinkedSaleMock.mockResolvedValue(null);
   allocateDocumentCodeMock.mockResolvedValue('inv-1');
   reserveDocumentCodeCounterFromCodeMock.mockResolvedValue(false);
   resetWithDbTransactionMock();
@@ -341,6 +345,26 @@ describe('POST /api/invoices', () => {
       date: '2025-06-01',
       exec: TX_SENTINEL,
       sourceCodes: ['legacy-quote-id', 'OFF_26_0045_manual', 'ORD_26_0045_manual'],
+    });
+  });
+
+  test('201 uses sequential allocation for repeat linked order invoices', async () => {
+    findInvoiceForLinkedSaleMock.mockResolvedValue('INV_26_0045');
+    createMock.mockResolvedValue({ ...SAMPLE_INVOICE, linkedSaleId: 'ORD_26_0045_manual' });
+    insertItemsMock.mockResolvedValue([SAMPLE_ITEM]);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/invoices',
+      headers: authHeader(),
+      payload: { ...validBody, linkedSaleId: 'ORD_26_0045_manual' },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(findClientOrderExistingMock).not.toHaveBeenCalled();
+    expect(allocateDocumentCodeMock).toHaveBeenCalledWith('client_invoice', {
+      date: '2025-06-01',
+      exec: TX_SENTINEL,
     });
   });
 
