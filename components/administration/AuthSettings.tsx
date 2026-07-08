@@ -10,6 +10,7 @@ import {
   Lock,
   Pencil,
   Plus,
+  RefreshCw,
   Save,
   Server,
   ShieldCheck,
@@ -26,6 +27,7 @@ import { ssoApi } from '../../services/api/sso';
 import type {
   LdapConfig,
   LdapRoleResolution,
+  LdapSyncResponse,
   LdapTestResponse,
   Role,
   SsoProtocol,
@@ -64,6 +66,7 @@ type RoleOption = { id: string; name: string };
 export interface AuthSettingsProps {
   config: LdapConfig;
   onSave: (config: LdapConfig) => void | Promise<void>;
+  onLdapUsersSynced?: () => void;
   roles: Role[];
   ssoProviders: SsoProvider[];
   onSaveSsoProvider: (provider: Partial<SsoProvider>) => Promise<SsoProvider>;
@@ -206,6 +209,9 @@ type AuthSettingsState = {
   testResult: LdapTestResponse | null;
   isTestingLdap: boolean;
   isSaved: boolean;
+  syncResult: LdapSyncResponse | null;
+  syncError: string | null;
+  isSyncingLdap: boolean;
   isSavingLdap: boolean;
   savingProvider: SsoProtocol | null;
   providerSaveErrors: Partial<Record<SsoProtocol, string>>;
@@ -224,6 +230,9 @@ type AuthSettingsAction =
   | { type: 'setTestResult'; update: StateUpdate<AuthSettingsState['testResult']> }
   | { type: 'setIsTestingLdap'; update: StateUpdate<AuthSettingsState['isTestingLdap']> }
   | { type: 'setIsSaved'; update: StateUpdate<AuthSettingsState['isSaved']> }
+  | { type: 'setSyncResult'; update: StateUpdate<AuthSettingsState['syncResult']> }
+  | { type: 'setSyncError'; update: StateUpdate<AuthSettingsState['syncError']> }
+  | { type: 'setIsSyncingLdap'; update: StateUpdate<AuthSettingsState['isSyncingLdap']> }
   | { type: 'setIsSavingLdap'; update: StateUpdate<AuthSettingsState['isSavingLdap']> }
   | { type: 'setSavingProvider'; update: StateUpdate<AuthSettingsState['savingProvider']> }
   | {
@@ -250,6 +259,9 @@ const createAuthSettingsState = (): AuthSettingsState => ({
   testResult: null,
   isTestingLdap: false,
   isSaved: false,
+  syncResult: null,
+  syncError: null,
+  isSyncingLdap: false,
   isSavingLdap: false,
   savingProvider: null,
   providerSaveErrors: {},
@@ -289,6 +301,12 @@ const authSettingsReducer = (
       return { ...state, isTestingLdap: resolveStateUpdate(state.isTestingLdap, action.update) };
     case 'setIsSaved':
       return { ...state, isSaved: resolveStateUpdate(state.isSaved, action.update) };
+    case 'setSyncResult':
+      return { ...state, syncResult: resolveStateUpdate(state.syncResult, action.update) };
+    case 'setSyncError':
+      return { ...state, syncError: resolveStateUpdate(state.syncError, action.update) };
+    case 'setIsSyncingLdap':
+      return { ...state, isSyncingLdap: resolveStateUpdate(state.isSyncingLdap, action.update) };
     case 'setIsSavingLdap':
       return { ...state, isSavingLdap: resolveStateUpdate(state.isSavingLdap, action.update) };
     case 'setSavingProvider':
@@ -306,6 +324,7 @@ const authSettingsReducer = (
 const useAuthSettingsController = ({
   config,
   onSave,
+  onLdapUsersSynced,
   roles,
   ssoProviders,
   onSaveSsoProvider,
@@ -339,6 +358,9 @@ const useAuthSettingsController = ({
     isTestingLdap,
     isSaved,
     isSavingLdap,
+    syncResult,
+    syncError,
+    isSyncingLdap,
     savingProvider,
     providerSaveErrors,
     acsUrlState,
@@ -391,6 +413,21 @@ const useAuthSettingsController = ({
   const setIsTestingLdap = useCallback(
     (update: StateUpdate<AuthSettingsState['isTestingLdap']>) =>
       dispatchAuthState({ type: 'setIsTestingLdap', update }),
+    [],
+  );
+  const setSyncResult = useCallback(
+    (update: StateUpdate<AuthSettingsState['syncResult']>) =>
+      dispatchAuthState({ type: 'setSyncResult', update }),
+    [],
+  );
+  const setSyncError = useCallback(
+    (update: StateUpdate<AuthSettingsState['syncError']>) =>
+      dispatchAuthState({ type: 'setSyncError', update }),
+    [],
+  );
+  const setIsSyncingLdap = useCallback(
+    (update: StateUpdate<AuthSettingsState['isSyncingLdap']>) =>
+      dispatchAuthState({ type: 'setIsSyncingLdap', update }),
     [],
   );
   const setIsSaved = useCallback(
@@ -573,8 +610,11 @@ const useAuthSettingsController = ({
 
   const handleSaveLdap = async (event: React.FormEvent) => {
     event.preventDefault();
+    if (isSyncingLdap) return;
     if (!validateLdap()) return;
     setIsSaved(false);
+    setSyncResult(null);
+    setSyncError(null);
     setIsSavingLdap(true);
     try {
       await onSave(ldapForm);
@@ -589,6 +629,35 @@ const useAuthSettingsController = ({
       }));
     } finally {
       setIsSavingLdap(false);
+    }
+  };
+
+  const handleSyncLdapUsers = async () => {
+    if (!ldapForm.enabled || isLdapDirty || isSavingLdap || isSyncingLdap) return;
+
+    setSyncResult(null);
+    setSyncError(null);
+    setIsSyncingLdap(true);
+    try {
+      const result = await ldapApi.syncUsers();
+      if (result.success) {
+        setSyncResult(result);
+        onLdapUsersSynced?.();
+      } else {
+        setSyncError(
+          result.error ||
+            result.reason ||
+            t('admin.ldap.sync.errorFallback', 'Could not synchronize LDAP users'),
+        );
+      }
+    } catch (err) {
+      setSyncError(
+        err instanceof Error && err.message
+          ? err.message
+          : t('admin.ldap.sync.errorFallback', 'Could not synchronize LDAP users'),
+      );
+    } finally {
+      setIsSyncingLdap(false);
     }
   };
 
@@ -795,11 +864,13 @@ const useAuthSettingsController = ({
     handleActiveTabSelect,
     handleSaveLdap,
     handleSaveProvider,
+    handleSyncLdapUsers,
     handleTestLdap,
     handleTlsCaFileImport,
     isLdapDirty,
     isSaved,
     isSavingLdap,
+    isSyncingLdap,
     isTestingLdap,
     ldapForm,
     loadProviderDraft,
@@ -826,6 +897,8 @@ const useAuthSettingsController = ({
     testPassword,
     testResult,
     testUsername,
+    syncError,
+    syncResult,
     tlsCaFileInputRef,
     updateLdapMapping,
     updateProviderDraft,
@@ -1024,27 +1097,31 @@ const MfaRoleSelect: React.FC<{
 
 const LdapSettingsPanel: React.FC<{ controller: AuthSettingsController }> = ({ controller }) => (
   <div className="space-y-8">
-    <form onSubmit={controller.handleSaveLdap} className="space-y-8">
-      <LdapServerCard controller={controller} />
-      <LdapTlsCard controller={controller} />
-      {controller.errors.general && (
-        <div
-          role="alert"
-          className="rounded-md border border-destructive/20 bg-destructive/10 p-4 text-sm font-medium text-destructive"
-        >
-          {controller.errors.general}
+    <form onSubmit={controller.handleSaveLdap}>
+      <fieldset disabled={controller.isSyncingLdap} className="m-0 min-w-0 space-y-8 border-0 p-0">
+        <LdapServerCard controller={controller} />
+        <LdapTlsCard controller={controller} />
+        {controller.errors.general && (
+          <div
+            role="alert"
+            className="rounded-md border border-destructive/20 bg-destructive/10 p-4 text-sm font-medium text-destructive"
+          >
+            {controller.errors.general}
+          </div>
+        )}
+        <div className="flex justify-end">
+          <Button
+            type="submit"
+            size="lg"
+            disabled={
+              controller.isSavingLdap || controller.isSyncingLdap || !controller.isLdapDirty
+            }
+          >
+            <Save aria-hidden="true" />
+            {controller.t('admin.ldap.saveConfiguration', 'Save Configuration')}
+          </Button>
         </div>
-      )}
-      <div className="flex justify-end">
-        <Button
-          type="submit"
-          size="lg"
-          disabled={controller.isSavingLdap || !controller.isLdapDirty}
-        >
-          <Save aria-hidden="true" />
-          {controller.t('admin.ldap.saveConfiguration', 'Save Configuration')}
-        </Button>
-      </div>
+      </fieldset>
     </form>
     <LdapTesterCard controller={controller} />
   </div>
@@ -1220,6 +1297,7 @@ const LdapProvisioningSettings: React.FC<{ controller: AuthSettingsController }>
         'When on, the periodic sync creates a local account for every LDAP entry that matches the user filter, applying group role mappings at creation. When off, sync only refreshes display names of users that already exist. Either way, role mappings are never re-applied to users that already exist in Praetor.',
       )}
     />
+    <LdapManualSync controller={controller} />
   </fieldset>
 );
 
@@ -1242,6 +1320,92 @@ const LdapProvisioningSwitch: React.FC<{
   </div>
 );
 
+const LdapManualSync: React.FC<{ controller: AuthSettingsController }> = ({ controller }) => {
+  const isLdapDisabled = !controller.ldapForm.enabled;
+  const disabled =
+    isLdapDisabled || controller.isSavingLdap || controller.isSyncingLdap || controller.isLdapDirty;
+
+  return (
+    <div className="rounded-md border border-border bg-muted/30 p-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="space-y-1">
+          <div className="text-sm font-medium text-foreground">
+            {controller.t('admin.ldap.sync.runNow', 'Sync users now')}
+          </div>
+          <FieldDescription>
+            {controller.t(
+              'admin.ldap.sync.help',
+              'Run the saved LDAP synchronization immediately. Missing users are created only when bulk provisioning during sync is enabled.',
+            )}
+          </FieldDescription>
+        </div>
+        <Button
+          type="button"
+          variant="secondary"
+          onClick={controller.handleSyncLdapUsers}
+          disabled={disabled}
+          className="w-full sm:w-auto"
+        >
+          {controller.isSyncingLdap ? (
+            <Loader2 aria-hidden="true" data-icon="inline-start" className="animate-spin" />
+          ) : (
+            <RefreshCw aria-hidden="true" data-icon="inline-start" />
+          )}
+          {controller.isSyncingLdap
+            ? controller.t('admin.ldap.sync.running', 'Syncing users...')
+            : controller.t('admin.ldap.sync.runNow', 'Sync users now')}
+        </Button>
+      </div>
+      {controller.isLdapDirty ? (
+        <p className="mt-3 text-xs font-medium text-muted-foreground">
+          {controller.t(
+            'admin.ldap.sync.unsavedChanges',
+            'Save the LDAP configuration before syncing users.',
+          )}
+        </p>
+      ) : isLdapDisabled ? (
+        <p className="mt-3 text-xs font-medium text-muted-foreground">
+          {controller.t('admin.ldap.sync.ldapDisabled', 'Enable LDAP before syncing users.')}
+        </p>
+      ) : controller.syncError ? (
+        <Alert
+          variant="destructive"
+          data-testid="ldap-sync-error"
+          className="mt-3 border-destructive/30"
+        >
+          <CircleAlert aria-hidden="true" />
+          <AlertTitle>
+            {controller.t('admin.ldap.sync.errorTitle', 'LDAP synchronization failed')}
+          </AlertTitle>
+          <AlertDescription>{controller.syncError}</AlertDescription>
+        </Alert>
+      ) : controller.syncResult ? (
+        <div
+          role="status"
+          data-testid="ldap-sync-summary"
+          className="mt-3 rounded-md border border-border bg-background p-3 text-sm"
+        >
+          <div className="mb-2 flex items-center gap-2 font-semibold text-foreground">
+            <Check aria-hidden="true" className="size-4" />
+            {controller.t('admin.ldap.sync.successTitle', 'LDAP synchronization completed')}
+          </div>
+          <div className="grid grid-cols-1 gap-2 text-muted-foreground sm:grid-cols-2">
+            <div data-testid="ldap-sync-synced">
+              {controller.t('admin.ldap.sync.syncedLabel', 'Updated users')}:{' '}
+              <span className="font-mono text-foreground">{controller.syncResult.synced ?? 0}</span>
+            </div>
+            <div data-testid="ldap-sync-created">
+              {controller.t('admin.ldap.sync.createdLabel', 'Created users')}:{' '}
+              <span className="font-mono text-foreground">
+                {controller.syncResult.created ?? 0}
+              </span>
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+};
 const LdapRoleMappings: React.FC<{ controller: AuthSettingsController }> = ({ controller }) => (
   <div className="border-t border-border p-6">
     <RoleMappings

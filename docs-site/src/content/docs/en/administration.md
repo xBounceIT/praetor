@@ -43,7 +43,7 @@ When you bind a user to LDAP, Praetor looks them up in the directory and applies
 
 LDAP synchronization updates only application users that are already set to LDAP. A local user with the same username remains local until an administrator explicitly changes their authentication method.
 
-Manual LDAP synchronization requires an enabled LDAP configuration. If LDAP is disabled or not configured, the request is rejected and is not recorded as a successful sync; if the directory is unreachable, Praetor reports the error instead of reporting success.
+Manual LDAP synchronization requires an enabled LDAP configuration. The **Sync users now** button in LDAP settings runs the saved synchronization immediately and respects the **Bulk-provision during sync** switch: it creates missing users only when that option is on, otherwise it only refreshes existing LDAP users. If LDAP is disabled or not configured, the request is rejected and is not recorded as a successful sync; if the directory is unreachable, Praetor reports the error instead of reporting success.
 
 The LDAP connection tester uses the saved configuration and can run while LDAP is still disabled. Save configuration edits first, validate credentials and groups with the tester, then enable LDAP after the validation succeeds. Repeated tester attempts use the same rate-limit threshold as login to protect the directory from retry loops or password spraying. The tester reports the role the **real login** would assign: an existing LDAP-bound user is always shown as `Current Role` preserved (because the real login is bootstrap-only and never overrides their stored role), and a username with no matching Praetor row falls back to the default `User` role when no group maps to a configured mapping.
 
@@ -64,7 +64,7 @@ The **User Provisioning** section in the LDAP settings exposes two independent s
 - **Provision on first login** (on by default) — when on, any LDAP user that authenticates successfully gets a local account created on first sign-in. Turn off to restrict logins to users that already have a local account (created manually or via the bulk sync below). Existing LDAP-bound users keep logging in either way; only the auto-create branch for unknown directory users is gated.
 - **Bulk-provision during sync** (off by default) — when on, the periodic sync also creates a local account for every LDAP entry that matches the configured user filter, applying LDAP group role mappings at creation. When off, the sync only refreshes display names of users that already exist. Either way, role mappings are never re-applied to users that already exist in Praetor.
 
-The two switches are independent: turning both off (combined with manual user creation) is the configuration to use when you want a manually-curated set of users to be the only accounts that can sign in via LDAP.
+The two switches are independent: turning both off (combined with manual user creation) is the configuration to use when you want a manually-curated set of users to be the only accounts that can sign in via LDAP. The manual sync button follows the same rule as the scheduled sync and requires saving configuration edits first.
 
 If a user cannot sign in, check credentials, user status, assigned role, and authentication logs.
 
