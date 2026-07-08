@@ -131,7 +131,7 @@ const DatePickerButton: React.FC<DatePickerButtonProps> = ({
               aria-label={t('labels.time')}
               value={formatTimeValue(hours, minutes)}
               onChange={handleTimeChange}
-              className="h-9 flex-1 rounded-full bg-transparent px-4 text-sm font-semibold tabular-nums text-foreground dark:bg-transparent dark:[color-scheme:dark]"
+              className="h-9 flex-1 rounded-full bg-transparent px-4 text-sm font-semibold tabular-nums text-foreground dark:bg-transparent"
             />
             <Button
               type="button"

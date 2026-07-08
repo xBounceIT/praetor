@@ -73,6 +73,7 @@ mock.module('../../../utils/toast', () => ({
 const ClientQuotesView = (await import('../../../components/sales/ClientQuotesView')).default;
 
 const clients: Client[] = [{ id: 'client-1', name: 'Helios Energy Services' }];
+const STABLE_FUTURE_EXPIRATION_DATE = '2099-06-30';
 const communicationChannels = [
   {
     id: 'qcc_email',
@@ -106,7 +107,7 @@ const quotes: Quote[] = [
     discount: 10,
     discountType: 'percentage',
     status: 'draft',
-    expirationDate: '2026-06-30',
+    expirationDate: STABLE_FUTURE_EXPIRATION_DATE,
     createdAt: Date.UTC(2026, 4, 14),
     updatedAt: Date.UTC(2026, 4, 14),
   },
@@ -132,7 +133,7 @@ const quotes: Quote[] = [
     discount: 25,
     discountType: 'currency',
     status: 'draft',
-    expirationDate: '2026-06-30',
+    expirationDate: STABLE_FUTURE_EXPIRATION_DATE,
     createdAt: Date.UTC(2026, 4, 14),
     updatedAt: Date.UTC(2026, 4, 14),
   },
@@ -337,7 +338,7 @@ describe('<ClientQuotesView />', () => {
       discount: 0,
       discountType: 'percentage',
       status: 'draft',
-      expirationDate: '2026-06-30',
+      expirationDate: STABLE_FUTURE_EXPIRATION_DATE,
       createdAt: Date.UTC(2026, 4, 14),
       updatedAt: Date.UTC(2026, 4, 14),
     };
@@ -387,7 +388,7 @@ describe('<ClientQuotesView />', () => {
       discount: 0,
       discountType: 'percentage',
       status: 'draft',
-      expirationDate: '2026-06-30',
+      expirationDate: STABLE_FUTURE_EXPIRATION_DATE,
       createdAt: Date.UTC(2026, 4, 14),
       updatedAt: Date.UTC(2026, 4, 14),
     };
@@ -439,7 +440,7 @@ describe('<ClientQuotesView />', () => {
       discount: 0,
       discountType: 'percentage',
       status: 'draft',
-      expirationDate: '2026-06-30',
+      expirationDate: STABLE_FUTURE_EXPIRATION_DATE,
       createdAt: Date.UTC(2026, 4, 14),
       updatedAt: Date.UTC(2026, 4, 14),
     };
@@ -492,7 +493,7 @@ describe('<ClientQuotesView />', () => {
       discount: 0,
       discountType: 'percentage',
       status: 'draft',
-      expirationDate: '2026-06-30',
+      expirationDate: STABLE_FUTURE_EXPIRATION_DATE,
       createdAt: Date.UTC(2026, 4, 14),
       updatedAt: Date.UTC(2026, 4, 14),
     };
@@ -537,7 +538,7 @@ describe('<ClientQuotesView />', () => {
       discount: 0,
       discountType: 'percentage',
       status: 'draft',
-      expirationDate: '2026-06-30',
+      expirationDate: STABLE_FUTURE_EXPIRATION_DATE,
       createdAt: Date.UTC(2026, 4, 14),
       updatedAt: Date.UTC(2026, 4, 14),
     };
