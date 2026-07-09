@@ -125,6 +125,10 @@ export interface User {
   authProviderName?: string | null;
 }
 
+export type MfaExemptionUser = Pick<User, 'id' | 'name' | 'username' | 'avatarInitials'> & {
+  isDisabled?: boolean;
+};
+
 export interface Role {
   id: string;
   name: string;

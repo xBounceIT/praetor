@@ -29,11 +29,11 @@ import type {
   LdapRoleResolution,
   LdapSyncResponse,
   LdapTestResponse,
+  MfaExemptionUser,
   Role,
   SsoProtocol,
   SsoProvider,
   SsoRoleMapping,
-  User,
 } from '../../types';
 import { isStoredSecret, MASKED_SECRET } from '../../utils/maskedSecret';
 import SecretField from '../shared/SecretField';
@@ -69,7 +69,7 @@ export interface AuthSettingsProps {
   onSave: (config: LdapConfig) => void | Promise<void>;
   onLdapUsersSynced?: () => void;
   roles: Role[];
-  users: User[];
+  users: MfaExemptionUser[];
   ssoProviders: SsoProvider[];
   onSaveSsoProvider: (provider: Partial<SsoProvider>) => Promise<SsoProvider>;
   onDeleteSsoProvider: (id: string) => Promise<void>;

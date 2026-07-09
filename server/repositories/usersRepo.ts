@@ -902,6 +902,13 @@ export const listDirectory = async (exec: DbExecutor = db): Promise<DirectoryUse
   }));
 };
 
+export type TotpExemptionUserOption = DirectoryUser;
+
+// Same minimal identity shape, permission-scoped to MFA policy administration.
+export const listTotpExemptionOptions = async (
+  exec: DbExecutor = db,
+): Promise<TotpExemptionUserOption[]> => listDirectory(exec);
+
 export const listTopManagerIds = async (exec: DbExecutor = db): Promise<string[]> => {
   const rows = await executeRows<{ id: string }>(
     exec,
