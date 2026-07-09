@@ -1759,6 +1759,20 @@ const useAppContentController = () => {
 
   const ldapHandlers = useMemo(() => makeLdapHandlers({ setLdapConfig }), [setLdapConfig]);
 
+  const refreshMfaExemptionUsers = useCallback(async () => {
+    const permissions = currentUser?.permissions || [];
+    const canRefreshMfaExemptions =
+      hasPermission(permissions, VIEW_PERMISSION_MAP['administration/authentication']) &&
+      hasPermission(permissions, 'administration.general.update');
+    if (!canRefreshMfaExemptions) return;
+
+    try {
+      const options = await api.users.listTotpExemptionOptions();
+      setMfaExemptionUsers(options);
+    } catch (err) {
+      console.error('Failed to refresh MFA exemption users:', err);
+    }
+  }, [currentUser?.permissions, setMfaExemptionUsers]);
   const supplierHandlers = useMemo(() => makeSupplierHandlers({ setSuppliers }), [setSuppliers]);
 
   const supplierInvoiceHandlers = useMemo(
@@ -1779,8 +1793,17 @@ const useAppContentController = () => {
         setRoles,
         setWorkUnits,
         setViewingUserId,
+        refreshMfaExemptionUsers,
       }),
-    [currentUser, viewingUserId, setUsers, setRoles, setWorkUnits, setViewingUserId],
+    [
+      currentUser,
+      viewingUserId,
+      setUsers,
+      setRoles,
+      setWorkUnits,
+      setViewingUserId,
+      refreshMfaExemptionUsers,
+    ],
   );
 
   const quoteIdsWithOffers = useMemo(() => {
@@ -3147,9 +3170,6 @@ const useAppContentController = () => {
   const handleLdapUsersSynced = useCallback(() => {
     const permissions = currentUser?.permissions || [];
     const canRefreshUserManagement = hasViewAccess(permissions, 'administration/user-management');
-    const canRefreshMfaExemptions =
-      hasPermission(permissions, VIEW_PERMISSION_MAP['administration/authentication']) &&
-      hasPermission(permissions, 'administration.general.update');
 
     if (canRefreshUserManagement) {
       void api.users
@@ -3160,15 +3180,8 @@ const useAppContentController = () => {
         });
     }
 
-    if (canRefreshMfaExemptions) {
-      void api.users
-        .listTotpExemptionOptions()
-        .then(setMfaExemptionUsers)
-        .catch((err) => {
-          console.error('Failed to refresh MFA exemption users after LDAP sync:', err);
-        });
-    }
-  }, [currentUser?.permissions, setMfaExemptionUsers, setUsers]);
+    void refreshMfaExemptionUsers();
+  }, [currentUser?.permissions, refreshMfaExemptionUsers, setUsers]);
 
   const handleSaveSsoProvider = async (provider: Partial<SsoProvider>) => {
     try {

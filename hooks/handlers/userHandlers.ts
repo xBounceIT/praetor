@@ -12,12 +12,29 @@ export type UserHandlersDeps = {
   setRoles: React.Dispatch<React.SetStateAction<Role[]>>;
   setWorkUnits: React.Dispatch<React.SetStateAction<WorkUnit[]>>;
   setViewingUserId: React.Dispatch<React.SetStateAction<string>>;
+  refreshMfaExemptionUsers?: () => void | Promise<void>;
 };
 
 type EmployeeCreatePayload = Partial<User> & { name: string; costPerHour?: number };
 
 export const makeUserHandlers = (deps: UserHandlersDeps) => {
-  const { currentUser, setUsers, setRoles, setWorkUnits, setViewingUserId } = deps;
+  const {
+    currentUser,
+    refreshMfaExemptionUsers: refreshMfaExemptionUsersCallback,
+    setUsers,
+    setRoles,
+    setWorkUnits,
+    setViewingUserId,
+  } = deps;
+
+  const refreshMfaExemptionUsers = async () => {
+    if (!refreshMfaExemptionUsersCallback) return;
+    try {
+      await refreshMfaExemptionUsersCallback();
+    } catch (err) {
+      console.error('Failed to refresh MFA exemption users:', err);
+    }
+  };
 
   const addUser = async (
     name: string,
@@ -29,6 +46,7 @@ export const makeUserHandlers = (deps: UserHandlersDeps) => {
     try {
       const user = await api.users.create(name, username, password, role, email);
       setUsers((prev) => [...prev, user]);
+      await refreshMfaExemptionUsers();
       return { success: true } as const;
     } catch (err) {
       console.error('Failed to add user:', err);
@@ -40,6 +58,7 @@ export const makeUserHandlers = (deps: UserHandlersDeps) => {
     try {
       const updated = await api.users.update(id, updates);
       setUsers((prev) => prev.map((u) => (u.id === id ? updated : u)));
+      await refreshMfaExemptionUsers();
     } catch (err) {
       console.error('Failed to update user:', err);
       toastError(`Failed to update user: ${getErrorMessage(err)}`);
@@ -93,6 +112,7 @@ export const makeUserHandlers = (deps: UserHandlersDeps) => {
       // profile while the delete was in flight, that newer selection wins.
       setViewingUserId((prev) => (prev === id ? currentUser?.id || '' : prev));
       setUsers((prev) => prev.filter((u) => u.id !== id));
+      await refreshMfaExemptionUsers();
     } catch (err) {
       console.error('Failed to delete user:', err);
       toastError(`Failed to delete user: ${getErrorMessage(err)}`);
@@ -106,6 +126,7 @@ export const makeUserHandlers = (deps: UserHandlersDeps) => {
     try {
       const employee = await api.employees.create({ ...data, employeeType });
       setUsers((prev) => [...prev, employee]);
+      await refreshMfaExemptionUsers();
       return { success: true };
     } catch (err) {
       console.error(`Failed to add ${employeeType} employee:`, err);
@@ -124,6 +145,7 @@ export const makeUserHandlers = (deps: UserHandlersDeps) => {
     try {
       const updated = await api.employees.update(id, updates);
       setUsers((prev) => prev.map((u) => (u.id === id ? updated : u)));
+      await refreshMfaExemptionUsers();
     } catch (err) {
       console.error('Failed to update employee:', err);
     }
@@ -133,6 +155,7 @@ export const makeUserHandlers = (deps: UserHandlersDeps) => {
     try {
       await api.employees.delete(id);
       setUsers((prev) => prev.filter((u) => u.id !== id));
+      await refreshMfaExemptionUsers();
     } catch (err) {
       console.error('Failed to delete employee:', err);
     }

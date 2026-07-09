@@ -455,11 +455,39 @@ describe('<AuthSettings />', () => {
 
       const exemptUsersSelect = document.getElementById('totp-exempt-users') as HTMLButtonElement;
       fireEvent.click(exemptUsersSelect);
-      expect(screen.queryByText('Disabled User')).not.toBeInTheDocument();
+      expect(screen.queryByText('Disabled User (disabled)')).not.toBeInTheDocument();
 
-      fireEvent.click(screen.getByText('Bob User'));
+      fireEvent.click(screen.getByText('Bob User (bob)'));
       expect(onSetExemptUserIds).toHaveBeenCalledTimes(1);
       expect(onSetExemptUserIds).toHaveBeenCalledWith(['u2']);
+    });
+    test('shows usernames for duplicate exempt user display names', () => {
+      renderAuthSettings({
+        enforceTotp: true,
+        users: [
+          {
+            id: 'u1',
+            name: 'Shared Name',
+            avatarInitials: 'SN',
+            username: 'shared.one',
+            isDisabled: false,
+          },
+          {
+            id: 'u2',
+            name: 'Shared Name',
+            avatarInitials: 'SN',
+            username: 'shared.two',
+            isDisabled: false,
+          },
+        ],
+      });
+      openMfaTab();
+
+      const exemptUsersSelect = document.getElementById('totp-exempt-users') as HTMLButtonElement;
+      fireEvent.click(exemptUsersSelect);
+
+      expect(screen.getByText('Shared Name (shared.one)')).toBeInTheDocument();
+      expect(screen.getByText('Shared Name (shared.two)')).toBeInTheDocument();
     });
 
     test('hides the MFA tab when the user lacks general-settings update permission', () => {

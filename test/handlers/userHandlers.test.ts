@@ -137,6 +137,7 @@ const buildHandlers = (overrides: Record<string, unknown> = {}) => {
     setRoles: roles.setter as never,
     setWorkUnits: workUnits.setter as never,
     setViewingUserId: viewingUserId.setter as never,
+    refreshMfaExemptionUsers: overrides.refreshMfaExemptionUsers as never,
   });
   return { handlers, users, roles, workUnits, viewingUserId };
 };
@@ -203,6 +204,28 @@ describe('makeUserHandlers - users', () => {
     } finally {
       restore();
     }
+  });
+  test('refreshes MFA exemption users after directory user mutations', async () => {
+    apiMocks.usersCreate.mockImplementation((name: string) =>
+      Promise.resolve({ id: 'u-new', name }),
+    );
+    apiMocks.usersUpdate.mockImplementation((id: string, updates: unknown) =>
+      Promise.resolve({ id, ...(updates as object) }),
+    );
+    apiMocks.usersDelete.mockImplementation(() => Promise.resolve());
+    const refreshMfaExemptionUsers = mock(async () => {});
+    const ctx = buildHandlers({
+      users: [{ id: 'u1', name: 'Old' }],
+      currentUser: { id: 'u-current' } as never,
+      refreshMfaExemptionUsers,
+      viewingUserId: 'u1',
+    });
+
+    await ctx.handlers.addUser('Alice', 'alice', 'pw', 'admin');
+    await ctx.handlers.updateUser('u1', { name: 'New' });
+    await ctx.handlers.deleteUser('u1');
+
+    expect(refreshMfaExemptionUsers).toHaveBeenCalledTimes(3);
   });
 
   test('updateUserRoles flags top-manager and admin-only correctly', async () => {

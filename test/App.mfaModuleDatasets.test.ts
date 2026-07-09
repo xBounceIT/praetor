@@ -21,4 +21,10 @@ describe('App.tsx MFA exemption datasets', () => {
     expect(dataset).toContain('shouldLoadMfaExemptionUsers');
     expect(dataset).not.toContain('canListUsers');
   });
+
+  test('refreshes MFA exemption options after user directory changes', () => {
+    expect(source).toContain('const refreshMfaExemptionUsers = useCallback(async () => {');
+    expect(source).toContain('refreshMfaExemptionUsers,\n      }),');
+    expect(source).toContain('void refreshMfaExemptionUsers();');
+  });
 });

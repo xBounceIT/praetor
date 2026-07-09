@@ -556,7 +556,13 @@ const useAuthSettingsController = ({
     const options: RoleOption[] = [];
     for (const user of users) {
       if (user.isDisabled === true) continue;
-      options.push({ id: user.id, name: user.name.trim() || user.username });
+      const displayName = user.name.trim();
+      const username = user.username.trim();
+      const name =
+        displayName && username && displayName !== username
+          ? `${displayName} (${username})`
+          : displayName || username;
+      options.push({ id: user.id, name });
     }
     return options.sort((a, b) => a.name.localeCompare(b.name));
   }, [users]);
