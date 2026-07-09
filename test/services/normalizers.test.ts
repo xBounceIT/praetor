@@ -973,6 +973,17 @@ describe('normalizeProject', () => {
       billingFrequency: 'one_time',
     });
   });
+
+  test('normalizes project date-only fields from datetime payloads', () => {
+    const project = make<Project>(baseProject, {
+      startDate: '2026-04-01T12:00:00.000Z',
+      endDate: '2026-04-30T12:00:00.000Z',
+    });
+    expect(normalizeProject(project)).toMatchObject({
+      startDate: '2026-04-01',
+      endDate: '2026-04-30',
+    });
+  });
 });
 
 describe('normalizeResale', () => {

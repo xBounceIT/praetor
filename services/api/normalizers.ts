@@ -284,6 +284,8 @@ export const normalizeProduct = (p: Product): Product => ({
 
 export const normalizeProject = (p: Project): Project => ({
   ...p,
+  startDate: p.startDate ? normalizeDateOnlyString(p.startDate) : null,
+  endDate: p.endDate ? normalizeDateOnlyString(p.endDate) : null,
   revenue: p.revenue === undefined || p.revenue === null ? null : Number(p.revenue),
   ...normalizeProjectBilling(p.billingType, p.billingFrequency),
   // `tipo` defaults to 'attivo' (the rollout default); `tipoConfirmed` to false so a

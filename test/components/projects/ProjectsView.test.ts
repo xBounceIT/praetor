@@ -124,6 +124,22 @@ describe('ProjectsView create-form validation', () => {
     expect(source).toContain('accessorFn: (row) => formatTipo(row.tipo)');
   });
 
+  test('shows localized start and end dates in the commissions archive', async () => {
+    const source = await Bun.file(
+      new URL('../../../components/projects/ProjectsView.tsx', import.meta.url),
+    ).text();
+    expect(source).toContain(
+      "import { formatDateOnlyForLocale, formatInsertDate } from '../../utils/date'",
+    );
+    expect(source).toContain("header: t('projects:projects.tableHeaders.startDate')");
+    expect(source).toContain("header: t('projects:projects.tableHeaders.endDate')");
+    expect(source).toContain("accessorKey: 'startDate'");
+    expect(source).toContain("accessorKey: 'endDate'");
+    expect(source).toContain('formatDateOnlyForLocale(row.startDate, i18n.language)');
+    expect(source).toContain('formatDateOnlyForLocale(row.endDate, i18n.language)');
+    expect(source).toContain('formatDateOnlyForLocale(String(value), i18n.language)');
+  });
+
   test('tipo labels and values exist in both locales (issue #784)', async () => {
     const en = await Bun.file(new URL('../../../locales/en/projects.json', import.meta.url)).json();
     const it = await Bun.file(new URL('../../../locales/it/projects.json', import.meta.url)).json();
@@ -136,10 +152,14 @@ describe('ProjectsView create-form validation', () => {
       expect(loc.projects.offerOptionalLabel).toBeTruthy();
       expect(loc.projects.noOfferLinked).toBeTruthy();
       expect(loc.projects.entityLabel).toBeTruthy();
+      expect(loc.projects.tableHeaders.startDate).toBeTruthy();
+      expect(loc.projects.tableHeaders.endDate).toBeTruthy();
       expect(loc.tabs.commissions).toBeTruthy();
       expect(loc.tabs.tasks).toBeTruthy();
       expect(loc.projects.tipoValues.attivo).toBeTruthy();
       expect(loc.projects.tipoValues.passivo).toBeTruthy();
+      expect(loc.resales.columns.startDate).toBeTruthy();
+      expect(loc.resales.columns.endDate).toBeTruthy();
       expect(loc.resales.tabs.activities).toBeTruthy();
       expect(loc.resales.selectResaleForActivities).toBeTruthy();
     }

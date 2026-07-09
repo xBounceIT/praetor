@@ -673,12 +673,31 @@ const useResalesController = ({
           ),
       },
       {
+        id: 'startDate',
+        header: t('resales.columns.startDate'),
+        accessorKey: 'startDate',
+        className: 'whitespace-nowrap',
+        filterFormat: (value) =>
+          value ? formatDateOnlyForLocale(String(value), i18n.language) : '-',
+        cell: ({ row }) =>
+          row.startDate ? (
+            <span className="text-xs text-muted-foreground whitespace-nowrap">
+              {formatDateOnlyForLocale(row.startDate, i18n.language)}
+            </span>
+          ) : (
+            <span className="text-xs text-muted-foreground">-</span>
+          ),
+      },
+      {
         id: 'dueDate',
-        header: t('resales.columns.dueDate'),
+        header: t('resales.columns.endDate'),
         accessorKey: 'dueDate',
+        className: 'whitespace-nowrap',
+        filterFormat: (value) =>
+          value ? formatDateOnlyForLocale(String(value), i18n.language) : '-',
         cell: ({ row }) =>
           row.dueDate ? (
-            <span className="text-xs text-muted-foreground">
+            <span className="text-xs text-muted-foreground whitespace-nowrap">
               {formatDateOnlyForLocale(row.dueDate, i18n.language)}
             </span>
           ) : (
