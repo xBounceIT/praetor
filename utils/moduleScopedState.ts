@@ -22,6 +22,7 @@ export type ModuleScopedStateKey =
   | 'supplierInvoices'
   | 'entries'
   | 'workUnits'
+  | 'responsibleUserOptions'
   | 'users';
 
 // Every key listed here is a module-scoped state-array on App.tsx.
@@ -46,6 +47,7 @@ export const ALL_MODULE_SCOPED_KEYS: readonly ModuleScopedStateKey[] = [
   'supplierInvoices',
   'entries',
   'workUnits',
+  'responsibleUserOptions',
   'users',
 ];
 
@@ -55,7 +57,7 @@ export const ALL_MODULE_SCOPED_KEYS: readonly ModuleScopedStateKey[] = [
 // A module not listed here returns no stale keys (defensive default).
 const MODULE_OWNED_KEYS: Record<string, readonly ModuleScopedStateKey[]> = {
   timesheets: ['entries', 'clients', 'projects', 'projectTasks', 'users'],
-  hr: ['users', 'workUnits', 'clients', 'projects', 'projectTasks'],
+  hr: ['users', 'workUnits', 'responsibleUserOptions', 'clients', 'projects', 'projectTasks'],
   administration: ['users'],
   crm: ['clients', 'suppliers'],
   sales: [

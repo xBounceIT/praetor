@@ -67,6 +67,8 @@ describe('employeeHrProfile first/last name', () => {
         lastName: 'Doe',
         phone: '+39 02 1234',
         jobTitle: 'Consultant',
+        department: 'Legacy Department',
+        responsibleUserId: 'u-manager',
         employeeCode: 'EMP-123',
       }),
       costPerHour: 80,
@@ -79,5 +81,24 @@ describe('employeeHrProfile first/last name', () => {
     expect(payload).toEqual({
       name: 'Alice Smith',
     });
+  });
+
+  test('buildEmployeeHrPayload sends responsibleUserId and omits department', () => {
+    const form = createEmployeeHrForm(
+      buildUser({ department: 'Legacy Department', responsibleUserId: '  u-manager  ' }),
+    );
+    const payload = buildEmployeeHrPayload(form, { includeIdentity: false, includeCost: false });
+
+    expect(payload.responsibleUserId).toBe('u-manager');
+    expect(payload).not.toHaveProperty('department');
+  });
+
+  test('buildEmployeeHrPayload clears responsibleUserId when blank', () => {
+    const form = createEmployeeHrForm(buildUser({ responsibleUserId: 'u-manager' }));
+    form.responsibleUserId = '   ';
+
+    const payload = buildEmployeeHrPayload(form, { includeIdentity: false, includeCost: false });
+
+    expect(payload.responsibleUserId).toBeNull();
   });
 });

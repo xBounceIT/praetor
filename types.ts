@@ -111,6 +111,8 @@ export interface User {
   phone?: string | null;
   jobTitle?: string | null;
   department?: string | null;
+  responsibleUserId?: string | null;
+  responsibleUserName?: string | null;
   employeeCode?: string | null;
   hireDate?: string | null;
   terminationDate?: string | null;
@@ -123,6 +125,13 @@ export interface User {
   authMethod?: UserAuthMethod;
   authProviderId?: string | null;
   authProviderName?: string | null;
+}
+
+export interface ResponsibleUserOption {
+  id: string;
+  name: string;
+  username: string;
+  avatarInitials: string;
 }
 
 export interface Role {

@@ -108,6 +108,7 @@ import type {
   Resale,
   ResaleCategory,
   ResaleOrderOption,
+  ResponsibleUserOption,
   Role,
   SsoProvider,
   Supplier,
@@ -187,6 +188,7 @@ type AppModuleState = {
   supplierInvoices: SupplierInvoice[];
   entries: TimeEntry[];
   workUnits: WorkUnit[];
+  responsibleUserOptions: ResponsibleUserOption[];
 };
 
 const INITIAL_APP_MODULE_STATE: AppModuleState = {
@@ -209,6 +211,7 @@ const INITIAL_APP_MODULE_STATE: AppModuleState = {
   supplierInvoices: [],
   entries: [],
   workUnits: [],
+  responsibleUserOptions: [],
 };
 
 type AppModuleStateSetAction = {
@@ -1114,6 +1117,7 @@ const useAppContentController = () => {
     supplierInvoices,
     entries,
     workUnits,
+    responsibleUserOptions,
   } = moduleState;
   const setUsers = useCallback<React.Dispatch<React.SetStateAction<User[]>>>(
     (value) => dispatchModuleState({ type: 'set', key: 'users', value }),
@@ -1189,6 +1193,9 @@ const useAppContentController = () => {
     (value) => dispatchModuleState({ type: 'set', key: 'workUnits', value }),
     [],
   );
+  const setResponsibleUserOptions = useCallback<
+    React.Dispatch<React.SetStateAction<ResponsibleUserOption[]>>
+  >((value) => dispatchModuleState({ type: 'set', key: 'responsibleUserOptions', value }), []);
   const taskUpdateQueueStateRef = useRef<TaskUpdateQueueState | null>(null);
   if (taskUpdateQueueStateRef.current === null) {
     taskUpdateQueueStateRef.current = createTaskUpdateQueueState();
@@ -1503,6 +1510,7 @@ const useAppContentController = () => {
       supplierInvoices: () => setModuleState('supplierInvoices', []),
       entries: () => setModuleState('entries', []),
       workUnits: () => setModuleState('workUnits', []),
+      responsibleUserOptions: () => setModuleState('responsibleUserOptions', []),
       viewingUserAssignmentState: () =>
         setLocalState('viewingUserAssignmentState', {
           userId: '',
@@ -2184,6 +2192,15 @@ const useAppContentController = () => {
           buildPermission('accounting.supplier_invoices', 'view'),
         );
         const canListWorkUnits = hasViewAccess(permissions, 'hr/work-units');
+        const canListResponsibleUsers = hasAnyPermission(permissions, [
+          buildPermission('administration.user_management', 'view'),
+          buildPermission('administration.user_management_all', 'view'),
+          buildPermission('administration.user_management', 'update'),
+          buildPermission('hr.internal', 'view'),
+          buildPermission('hr.external', 'view'),
+          buildPermission('hr.internal', 'update'),
+          buildPermission('hr.external', 'update'),
+        ]);
         const canManageEmployeeAssignments = hasPermission(
           permissions,
           buildPermission('hr.employee_assignments', 'update'),
@@ -2362,6 +2379,12 @@ const useAppContentController = () => {
               module,
               [
                 listRequest('users', canListUsers, () => api.users.list(), setUsers),
+                listRequest(
+                  'responsible users',
+                  canListResponsibleUsers,
+                  () => api.users.getResponsibleOptions(),
+                  setResponsibleUserOptions,
+                ),
                 listRequest(
                   'competence centers',
                   canListWorkUnits,
@@ -2709,6 +2732,7 @@ const useAppContentController = () => {
     setSsoProviders,
     setEmailConfig,
     setRoles,
+    setResponsibleUserOptions,
   ]);
 
   // Load target user assignments when the timesheet user switcher changes.
@@ -3225,6 +3249,7 @@ const useAppContentController = () => {
     supplierInvoices,
     entries,
     workUnits,
+    responsibleUserOptions,
     setQuotes,
     setClientOffers,
     setClientsOrders,
@@ -3439,7 +3464,6 @@ const LoginRoute: React.FC<{ controller: AppContentController }> = ({ controller
     logoutReason,
     serverUnreachable,
   } = controller;
-
   return (
     <Login
       onLogin={handleLogin}
@@ -4037,7 +4061,11 @@ const HrRoutes: React.FC<{ controller: AuthenticatedAppContentController }> = ({
     updateWorkUnit,
     users,
     workUnits,
+    responsibleUserOptions,
   } = controller;
+  const visibleWorkUnits = hasPermission(currentUser.permissions, 'hr.work_units_all.view')
+    ? workUnits
+    : [];
 
   return (
     <>
@@ -4048,6 +4076,8 @@ const HrRoutes: React.FC<{ controller: AuthenticatedAppContentController }> = ({
             clients={clients}
             projects={projects}
             tasks={projectTasks}
+            workUnits={visibleWorkUnits}
+            responsibleUserOptions={responsibleUserOptions}
             onAddEmployee={addInternalEmployee}
             onUpdateEmployee={handleUpdateEmployee}
             onDeleteEmployee={handleDeleteEmployee}
@@ -4062,6 +4092,8 @@ const HrRoutes: React.FC<{ controller: AuthenticatedAppContentController }> = ({
             clients={clients}
             projects={projects}
             tasks={projectTasks}
+            workUnits={visibleWorkUnits}
+            responsibleUserOptions={responsibleUserOptions}
             onAddEmployee={addExternalEmployee}
             onUpdateEmployee={handleUpdateEmployee}
             onDeleteEmployee={handleDeleteEmployee}

@@ -415,6 +415,8 @@ describe('normalizeUser', () => {
       phone: '  +39 02 1234  ',
       jobTitle: '  Consultant  ',
       department: '  Delivery  ',
+      responsibleUserId: '  u-manager  ',
+      responsibleUserName: '  Boss User  ',
       employeeCode: '  EMP-001  ',
       hireDate: '2024-01-15T10:30:00Z',
       terminationDate: '',
@@ -442,6 +444,8 @@ describe('normalizeUser', () => {
     expect(result.phone).toBe('+39 02 1234');
     expect(result.jobTitle).toBe('Consultant');
     expect(result.department).toBe('Delivery');
+    expect(result.responsibleUserId).toBe('u-manager');
+    expect(result.responsibleUserName).toBe('Boss User');
     expect(result.employeeCode).toBe('EMP-001');
     expect(result.hireDate).toBe('2024-01-15');
     expect(result.terminationDate).toBeNull();

@@ -3,7 +3,14 @@ import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import type { Client, Project, ProjectTask, User } from '../../types';
+import type {
+  Client,
+  Project,
+  ProjectTask,
+  ResponsibleUserOption,
+  User,
+  WorkUnit,
+} from '../../types';
 import { buildPermission, hasPermission, TOP_MANAGER_ROLE_ID } from '../../utils/permissions';
 import DeleteConfirmModal from '../shared/DeleteConfirmModal';
 import HeaderAddButton from '../shared/HeaderAddButton';
@@ -29,7 +36,9 @@ import {
   buildEmployeeCreatePayload,
   buildEmployeeHrPayload,
   type EmployeeCreatePayload,
+  getEmployeeDepartmentDisplay,
   getEmployeeHrStatusBadgeType,
+  getResponsibleUserDisplay,
   validateEmployeeHrForm,
 } from './employeeHrProfile';
 import { useEmployeeViewState } from './useEmployeeViewState';
@@ -39,6 +48,8 @@ export interface InternalEmployeesViewProps {
   clients: Client[];
   projects: Project[];
   tasks: ProjectTask[];
+  workUnits: WorkUnit[];
+  responsibleUserOptions: ResponsibleUserOption[];
   onAddEmployee: (employee: EmployeeCreatePayload) => Promise<{ success: boolean; error?: string }>;
   onUpdateEmployee: (id: string, updates: Partial<User>) => void;
   onDeleteEmployee: (id: string) => void;
@@ -85,6 +96,8 @@ const OptionalText: React.FC<{
 
 interface InternalEmployeesTableProps {
   employees: User[];
+  workUnits: WorkUnit[];
+  responsibleUserOptions: ResponsibleUserOption[];
   currency: string;
   permissions: {
     canViewCosts: boolean;
@@ -99,6 +112,8 @@ interface InternalEmployeesTableProps {
 
 const InternalEmployeesTable: React.FC<InternalEmployeesTableProps> = ({
   employees,
+  workUnits,
+  responsibleUserOptions,
   currency,
   permissions,
   onManageEmployee,
@@ -107,6 +122,16 @@ const InternalEmployeesTable: React.FC<InternalEmployeesTableProps> = ({
 }) => {
   const { t } = useTranslation(['hr', 'common']);
   const notSetLabel = t('employeeProfile.notSet');
+  const displayEmployees = useMemo(
+    () =>
+      employees.map((employee) => ({
+        ...employee,
+        department: getEmployeeDepartmentDisplay(employee, workUnits) || undefined,
+        responsibleUserName:
+          getResponsibleUserDisplay(employee, responsibleUserOptions) || undefined,
+      })),
+    [employees, responsibleUserOptions, workUnits],
+  );
   const { canViewCosts, canManageEmployeeAssignments, canUpdateEmployees, canDeleteEmployees } =
     permissions;
   const columns = useMemo<Column<User>[]>(
@@ -148,7 +173,7 @@ const InternalEmployeesTable: React.FC<InternalEmployeesTableProps> = ({
         ),
       },
       {
-        header: t('common:labels.phone'),
+        header: t('employeeProfile.phone'),
         accessorKey: 'phone',
         legacyHiddenColumnIds: [LEGACY_CONTACT_COLUMN_ID],
         cell: ({ value }) => <OptionalText value={value} fallback={notSetLabel} />,
@@ -168,6 +193,11 @@ const InternalEmployeesTable: React.FC<InternalEmployeesTableProps> = ({
       {
         header: t('employeeProfile.department'),
         accessorKey: 'department',
+        cell: ({ value }) => <OptionalText value={value} fallback={notSetLabel} />,
+      },
+      {
+        header: t('employeeProfile.responsible'),
+        accessorKey: 'responsibleUserName',
         cell: ({ value }) => <OptionalText value={value} fallback={notSetLabel} />,
       },
       {
@@ -317,7 +347,7 @@ const InternalEmployeesTable: React.FC<InternalEmployeesTableProps> = ({
   return (
     <StandardTable<User>
       title={t('internalEmployees.allEmployees')}
-      data={employees}
+      data={displayEmployees}
       columns={columns}
       onRowClick={canUpdateEmployees ? onEditEmployee : undefined}
       emptyState={
@@ -335,6 +365,8 @@ const InternalEmployeesView: React.FC<InternalEmployeesViewProps> = ({
   clients,
   projects,
   tasks,
+  workUnits,
+  responsibleUserOptions,
   onAddEmployee,
   onUpdateEmployee,
   onDeleteEmployee,
@@ -507,6 +539,9 @@ const InternalEmployeesView: React.FC<InternalEmployeesViewProps> = ({
                   editingEmployee && editingEmployee.authMethod !== 'local',
                 )}
                 canEditHrDetails={canUpdateEmployees}
+                departmentValue={getEmployeeDepartmentDisplay(editingEmployee, workUnits)}
+                responsibleUserOptions={responsibleUserOptions}
+                currentEmployeeId={editingEmployee?.id ?? null}
               />
             </ModalBody>
 
@@ -550,6 +585,8 @@ const InternalEmployeesView: React.FC<InternalEmployeesViewProps> = ({
 
       <InternalEmployeesTable
         employees={allEmployees}
+        workUnits={workUnits}
+        responsibleUserOptions={responsibleUserOptions}
         currency={currency}
         permissions={{
           canViewCosts,

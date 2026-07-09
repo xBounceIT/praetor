@@ -2,7 +2,7 @@ import { describe, expect, mock, test } from 'bun:test';
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ComponentProps } from 'react';
-import type { User } from '../../../types';
+import type { ResponsibleUserOption, User, WorkUnit } from '../../../types';
 import { installI18nMock } from '../../helpers/i18n';
 import { render } from '../../helpers/render';
 
@@ -30,9 +30,31 @@ const employee: User = {
   phone: '+39 02 1234',
   jobTitle: 'Consultant',
   department: 'Delivery',
+  responsibleUserId: 'u-manager',
+  responsibleUserName: 'Paola Manager',
   employeeCode: 'EMP-001',
   employmentStatus: 'active',
 };
+
+const responsibleUserOptions: ResponsibleUserOption[] = [
+  { id: 'u1', name: 'Mario Rossi', username: 'mrossi', avatarInitials: 'MR' },
+  { id: 'u-manager', name: 'Paola Manager', username: 'pmanager', avatarInitials: 'PM' },
+];
+
+const workUnits: WorkUnit[] = [
+  {
+    id: 'wu-beta',
+    name: 'Beta Center',
+    managers: [],
+    members: [{ id: 'u1', name: 'Mario Rossi' }],
+  },
+  {
+    id: 'wu-alpha',
+    name: 'Alpha Center',
+    managers: [],
+    members: [{ id: 'u1', name: 'Mario Rossi' }],
+  },
+];
 
 const renderView = (overrides: Partial<ComponentProps<typeof InternalEmployeesView>> = {}) => {
   const props: ComponentProps<typeof InternalEmployeesView> = {
@@ -40,6 +62,8 @@ const renderView = (overrides: Partial<ComponentProps<typeof InternalEmployeesVi
     clients: [],
     projects: [],
     tasks: [],
+    workUnits: [],
+    responsibleUserOptions,
     onAddEmployee: mock(async () => ({ success: true })),
     onUpdateEmployee: mock<(id: string, updates: Partial<User>) => void>(() => {}),
     onDeleteEmployee: mock(() => {}),
@@ -57,7 +81,8 @@ describe('<InternalEmployeesView /> row click', () => {
 
     const headerTexts = screen.getAllByRole('columnheader').map((header) => header.textContent);
     expect(headerTexts).toContain('common:labels.email');
-    expect(headerTexts).toContain('common:labels.phone');
+    expect(headerTexts).toContain('employeeProfile.phone');
+    expect(headerTexts).toContain('employeeProfile.responsible');
     expect(headerTexts).not.toContain('employeeProfile.contact');
 
     const row = screen.getByText('Mario Rossi').closest('tr');
@@ -68,6 +93,7 @@ describe('<InternalEmployeesView /> row click', () => {
       .map((cell) => cell.textContent?.trim());
     expect(cellTexts).toContain('mario@example.com');
     expect(cellTexts).toContain('+39 02 1234');
+    expect(cellTexts).toContain('Paola Manager');
     expect(cellTexts).not.toContain('mario@example.com+39 02 1234');
   });
 
@@ -86,6 +112,25 @@ describe('<InternalEmployeesView /> row click', () => {
     expect(screen.getByDisplayValue('mario@example.com')).toBeInTheDocument();
     expect(screen.getByDisplayValue('+39 02 1234')).toBeInTheDocument();
     expect(screen.getByDisplayValue('EMP-001')).toBeInTheDocument();
+  });
+
+  test('shows derived department as read-only and filters responsible self option', async () => {
+    const user = userEvent.setup();
+    renderView({ workUnits });
+
+    const row = screen.getByText('Mario Rossi').closest('tr');
+    if (!row) throw new Error('employee row not found');
+
+    expect(within(row).getByText('Alpha Center, Beta Center')).toBeInTheDocument();
+    fireEvent.click(row);
+
+    const department = screen.getByLabelText('employeeProfile.department');
+    expect(department).toHaveValue('Alpha Center, Beta Center');
+    expect(department).toHaveAttribute('readonly');
+
+    await user.click(screen.getByLabelText('employeeProfile.responsible'));
+    expect(screen.queryByText('Mario Rossi (mrossi)')).not.toBeInTheDocument();
+    expect(await screen.findAllByText('Paola Manager (pmanager)')).not.toHaveLength(0);
   });
 
   test('row is not clickable without update permission', () => {
@@ -112,6 +157,8 @@ describe('<InternalEmployeesView /> row click', () => {
           phone: null,
           jobTitle: null,
           department: null,
+          responsibleUserId: null,
+          responsibleUserName: null,
           employeeCode: null,
           employmentStatus: null,
         },
@@ -136,7 +183,10 @@ describe('<InternalEmployeesView /> row click', () => {
   });
 
   test('submits HR profile fields when creating an internal employee', async () => {
-    const onAddEmployee = mock(async () => ({ success: true }));
+    const user = userEvent.setup();
+    const onAddEmployee = mock<ComponentProps<typeof InternalEmployeesView>['onAddEmployee']>(
+      async () => ({ success: true }),
+    );
     renderView({
       users: [],
       onAddEmployee,
@@ -163,6 +213,8 @@ describe('<InternalEmployeesView /> row click', () => {
     fireEvent.change(screen.getByLabelText('employeeProfile.employeeCode'), {
       target: { value: 'EMP-222' },
     });
+    await user.click(screen.getByLabelText('employeeProfile.responsible'));
+    await user.click(await screen.findByText('Paola Manager (pmanager)'));
 
     fireEvent.click(screen.getByText('internalEmployees.saveChanges'));
 
@@ -173,9 +225,11 @@ describe('<InternalEmployeesView /> row click', () => {
         email: 'luisa@example.com',
         phone: '+39 02 5555',
         jobTitle: 'HR Specialist',
+        responsibleUserId: 'u-manager',
         employeeCode: 'EMP-222',
       }),
     );
+    expect(onAddEmployee.mock.calls[0][0]).not.toHaveProperty('department');
   });
 
   test('omits HR profile fields when creating with only user-management create', async () => {

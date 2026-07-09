@@ -60,6 +60,8 @@ const markPatUsedMock = mock(async () => undefined);
 // usersRepo
 const listAllForAdminMock = mock();
 const listScopedForManagerMock = mock();
+const listResponsibleOptionsMock = mock();
+const isActiveAppUserMock = mock();
 const findCoreByIdMock = mock();
 const findByIdMock = mock();
 const existsByUsernameMock = mock();
@@ -140,6 +142,8 @@ beforeAll(async () => {
     findAuthUserById: findAuthUserByIdMock,
     listAllForAdmin: listAllForAdminMock,
     listScopedForManager: listScopedForManagerMock,
+    listResponsibleOptions: listResponsibleOptionsMock,
+    isActiveAppUser: isActiveAppUserMock,
     findCoreById: findCoreByIdMock,
     findById: findByIdMock,
     existsByUsername: existsByUsernameMock,
@@ -326,6 +330,8 @@ const SAMPLE_USER_ROW = {
   phone: '+39 02 1234',
   jobTitle: 'Consultant',
   department: 'Delivery',
+  responsibleUserId: 'u-manager',
+  responsibleUserName: 'Manager User',
   employeeCode: 'EMP-001',
   hireDate: '2024-01-15',
   terminationDate: null,
@@ -350,6 +356,7 @@ const SAMPLE_USER_CORE = {
   employeeType: 'app_user' as const,
   hireDate: '2024-01-15',
   terminationDate: null,
+  responsibleUserId: null,
   authMethod: 'local' as const,
   authProviderId: null,
 };
@@ -360,6 +367,8 @@ const allMocks = [
   getRolePermissionsMock,
   listAllForAdminMock,
   listScopedForManagerMock,
+  listResponsibleOptionsMock,
+  isActiveAppUserMock,
   findCoreByIdMock,
   findByIdMock,
   existsByUsernameMock,
@@ -450,6 +459,10 @@ beforeEach(async () => {
     updatedAt: new Date(),
   });
   markPatUsedMock.mockResolvedValue(undefined);
+  listResponsibleOptionsMock.mockResolvedValue([
+    { id: 'u-manager', name: 'Manager User', username: 'manager', avatarInitials: 'MU' },
+  ]);
+  isActiveAppUserMock.mockResolvedValue(true);
 
   testApp = await buildRouteTestApp(routePlugin, '/api/users');
 });
@@ -665,6 +678,41 @@ describe('GET /api/users', () => {
 });
 
 // =========================================================================
+// GET /api/users/responsible-options
+// =========================================================================
+
+describe('GET /api/users/responsible-options', () => {
+  test('200 returns active app-user responsible options for HR viewers', async () => {
+    getRolePermissionsMock.mockResolvedValue(['hr.internal.view']);
+
+    const res = await testApp.inject({
+      method: 'GET',
+      url: '/api/users/responsible-options',
+      headers: adminAuth(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(listResponsibleOptionsMock).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(res.body)).toEqual([
+      { id: 'u-manager', name: 'Manager User', username: 'manager', avatarInitials: 'MU' },
+    ]);
+  });
+
+  test('403 without a user-management or HR view/update permission', async () => {
+    getRolePermissionsMock.mockResolvedValue([]);
+
+    const res = await testApp.inject({
+      method: 'GET',
+      url: '/api/users/responsible-options',
+      headers: adminAuth(),
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(listResponsibleOptionsMock).not.toHaveBeenCalled();
+  });
+});
+
+// =========================================================================
 // POST /api/users - create user
 // =========================================================================
 
@@ -767,6 +815,7 @@ describe('POST /api/users', () => {
         phone: '+39 02 1234',
         jobTitle: 'Consultant',
         department: 'Delivery',
+        responsibleUserId: 'u-manager',
         employeeCode: 'EMP-123',
         hireDate: '2024-01-15',
         contractType: 'permanent',
@@ -787,6 +836,7 @@ describe('POST /api/users', () => {
         phone: '+39 02 1234',
         jobTitle: 'Consultant',
         department: 'Delivery',
+        responsibleUserId: 'u-manager',
         employeeCode: 'EMP-123',
         hireDate: '2024-01-15',
         contractType: 'permanent',
@@ -795,13 +845,39 @@ describe('POST /api/users', () => {
         costPerHour: 70,
       }),
     );
+    expect(isActiveAppUserMock).toHaveBeenCalledWith('u-manager');
     expect(JSON.parse(res.body)).toEqual(
       expect.objectContaining({
         email: 'bob@example.com',
         employeeCode: 'EMP-123',
         employmentStatus: 'onboarding',
+        responsibleUserId: 'u-manager',
       }),
     );
+  });
+
+  test('400 rejects invalid responsible user on create', async () => {
+    getRolePermissionsMock.mockResolvedValue([
+      'administration.user_management.create',
+      'hr.internal.update',
+      'hr.internal.view',
+    ]);
+    isActiveAppUserMock.mockResolvedValue(false);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/users',
+      headers: adminAuth(),
+      payload: {
+        name: 'Internal Bob',
+        employeeType: 'internal',
+        responsibleUserId: 'u-disabled',
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body).error).toBe('responsibleUserId must reference an active app user');
+    expect(insertUserMock).not.toHaveBeenCalled();
   });
 
   test('403 rejects internal HR profile fields without HR update on create', async () => {
@@ -1260,6 +1336,7 @@ describe('PUT /api/users/:id', () => {
       phone: '+39 02 1234',
       jobTitle: 'Consultant',
       department: 'Delivery',
+      responsibleUserId: 'u-manager',
       employeeCode: 'EMP-123',
       hireDate: '2024-01-15',
       contractType: 'permanent',
@@ -1273,6 +1350,8 @@ describe('PUT /api/users/:id', () => {
       ...SAMPLE_USER_ROW,
       email: 'target.hr@example.com',
       phone: '+39 02 1234',
+      responsibleUserId: 'u-manager',
+      responsibleUserName: 'Manager User',
       employeeCode: 'EMP-123',
       employmentStatus: 'active',
     });
@@ -1286,6 +1365,7 @@ describe('PUT /api/users/:id', () => {
         phone: '+39 02 1234',
         jobTitle: 'Consultant',
         department: 'Delivery',
+        responsibleUserId: 'u-manager',
         employeeCode: 'EMP-123',
         hireDate: '2024-01-15',
         contractType: 'permanent',
@@ -1302,6 +1382,7 @@ describe('PUT /api/users/:id', () => {
         phone: '+39 02 1234',
         jobTitle: 'Consultant',
         department: 'Delivery',
+        responsibleUserId: 'u-manager',
         employeeCode: 'EMP-123',
         hireDate: '2024-01-15',
         contractType: 'permanent',
@@ -1310,6 +1391,7 @@ describe('PUT /api/users/:id', () => {
       }),
       TX_SENTINEL,
     );
+    expect(isActiveAppUserMock).toHaveBeenCalledWith('u-manager');
     expect(settingsUpsertForUserMock).toHaveBeenCalledWith(
       'u-target',
       expect.objectContaining({ email: 'target.hr@example.com' }),
@@ -1317,6 +1399,82 @@ describe('PUT /api/users/:id', () => {
     );
     expect(JSON.parse(res.body)).toEqual(
       expect.objectContaining({ email: 'target.hr@example.com', employeeCode: 'EMP-123' }),
+    );
+  });
+
+  test('400 rejects assigning the user as their own responsible', async () => {
+    getRolePermissionsMock.mockResolvedValue(['hr.internal.update', 'hr.internal.view']);
+    findCoreByIdMock.mockResolvedValue(SAMPLE_USER_CORE);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/users/u-target',
+      headers: adminAuth(),
+      payload: { responsibleUserId: 'u-target' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body).error).toBe('responsibleUserId cannot reference the same user');
+    expect(isActiveAppUserMock).not.toHaveBeenCalled();
+    expect(updateUserDynamicMock).not.toHaveBeenCalled();
+  });
+
+  test('400 rejects inactive or non-app responsible user on update', async () => {
+    getRolePermissionsMock.mockResolvedValue(['hr.internal.update', 'hr.internal.view']);
+    findCoreByIdMock.mockResolvedValue(SAMPLE_USER_CORE);
+    isActiveAppUserMock.mockResolvedValue(false);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/users/u-target',
+      headers: adminAuth(),
+      payload: { responsibleUserId: 'u-disabled' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body).error).toBe('responsibleUserId must reference an active app user');
+    expect(isActiveAppUserMock).toHaveBeenCalledWith('u-disabled');
+    expect(updateUserDynamicMock).not.toHaveBeenCalled();
+  });
+
+  test('200 allows saving an unchanged inactive responsible user', async () => {
+    getRolePermissionsMock.mockResolvedValue(['hr.internal.update', 'hr.internal.view']);
+    findCoreByIdMock.mockResolvedValue({ ...SAMPLE_USER_CORE, responsibleUserId: 'u-disabled' });
+    isActiveAppUserMock.mockResolvedValue(false);
+    updateUserDynamicMock.mockResolvedValue({
+      ...SAMPLE_USER_CORE,
+      responsibleUserId: 'u-disabled',
+      phone: '+39 02 1234',
+      avatarInitials: 'T',
+      costPerHour: 50,
+      isDisabled: false,
+    });
+    findByIdMock.mockResolvedValue({
+      ...SAMPLE_USER_ROW,
+      responsibleUserId: 'u-disabled',
+      responsibleUserName: 'Disabled Manager',
+      phone: '+39 02 1234',
+    });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/users/u-target',
+      headers: adminAuth(),
+      payload: { responsibleUserId: 'u-disabled', phone: '+39 02 1234' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(isActiveAppUserMock).not.toHaveBeenCalled();
+    expect(updateUserDynamicMock).toHaveBeenCalledWith(
+      'u-target',
+      expect.objectContaining({ responsibleUserId: 'u-disabled', phone: '+39 02 1234' }),
+      TX_SENTINEL,
+    );
+    expect(JSON.parse(res.body)).toEqual(
+      expect.objectContaining({
+        responsibleUserId: 'u-disabled',
+        responsibleUserName: 'Disabled Manager',
+      }),
     );
   });
 
