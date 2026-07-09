@@ -1,5 +1,6 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import jwt, { type JwtPayload } from 'jsonwebtoken';
+import * as generalSettingsRepo from '../repositories/generalSettingsRepo.ts';
 import * as personalAccessTokensRepo from '../repositories/personalAccessTokensRepo.ts';
 import * as rolesRepo from '../repositories/rolesRepo.ts';
 import * as usersRepo from '../repositories/usersRepo.ts';
@@ -20,6 +21,11 @@ import {
   resolvePositiveDurationMs,
   TEST_JWT_SECRET,
 } from '../utils/runtimeConfig.ts';
+import {
+  DEFAULT_SESSION_IDLE_TIMEOUT_MINUTES,
+  normalizeSessionIdleTimeoutMinutes,
+  sessionIdleTimeoutMinutesToMs,
+} from '../utils/sessionTimeout.ts';
 
 const resolveJwtSecret = () => {
   const configured = process.env.JWT_SECRET?.trim();
@@ -85,6 +91,11 @@ const getPatIdleTimeoutMs = (): number => {
 
 export const __resetPatIdleTimeoutCacheForTests = () => {
   cachedPatIdleTimeoutMs = null;
+};
+
+export const getConfiguredSessionIdleTimeoutMinutes = async (): Promise<number> => {
+  const settings = await generalSettingsRepo.get();
+  return normalizeSessionIdleTimeoutMinutes(settings?.sessionIdleTimeoutMinutes);
 };
 
 type SessionJwtPayload = JwtPayload & {
@@ -262,6 +273,18 @@ export const authenticateToken = async (request: FastifyRequest, reply: FastifyR
       });
     }
 
+    if (typeof decoded.iat !== 'number') {
+      return reply.code(401).send({
+        error: 'Session token outdated, please log in again',
+        errorCode: 'session_outdated',
+      });
+    }
+
+    const sessionIdleTimeoutMinutes = await getConfiguredSessionIdleTimeoutMinutes();
+    if (now - decoded.iat * 1000 > sessionIdleTimeoutMinutesToMs(sessionIdleTimeoutMinutes)) {
+      return reply.code(403).send({ error: 'Invalid or expired token' });
+    }
+
     request.auth = {
       userId: decoded.userId,
       sessionStart,
@@ -275,13 +298,14 @@ export const authenticateToken = async (request: FastifyRequest, reply: FastifyR
     });
     if (!userContext) return;
 
-    // Sliding window: reset the 30m idle timer while preserving sessionStart (8h cap)
+    // Sliding window: reset the configured idle timer while preserving sessionStart (8h cap)
     // and sessionVersion (so the rotated token survives until logout bumps it).
     const newToken = generateToken(
       decoded.userId,
       sessionStart,
       userContext.effectiveRole,
       decoded.sessionVersion,
+      sessionIdleTimeoutMinutes,
     );
     reply.header('x-auth-token', newToken);
   } catch {
@@ -474,11 +498,26 @@ export const generateToken = (
   sessionStart: number,
   activeRole: string | undefined,
   sessionVersion: number,
+  sessionIdleTimeoutMinutes = DEFAULT_SESSION_IDLE_TIMEOUT_MINUTES,
 ) =>
   jwt.sign({ userId, sessionStart, activeRole, sessionVersion }, getJwtSecret(), {
-    expiresIn: '30m',
+    expiresIn: normalizeSessionIdleTimeoutMinutes(sessionIdleTimeoutMinutes) * 60,
     algorithm: JWT_ALGORITHM,
   });
+
+export const generateTokenWithCurrentIdleTimeout = async (
+  userId: string,
+  sessionStart: number,
+  activeRole: string | undefined,
+  sessionVersion: number,
+) =>
+  generateToken(
+    userId,
+    sessionStart,
+    activeRole,
+    sessionVersion,
+    await getConfiguredSessionIdleTimeoutMinutes(),
+  );
 
 // Signs a single-purpose 2FA token. No sessionStart claim — these tokens grant only the narrow step
 // they name and are rejected by authenticateToken on the strength of their `purpose` claim, so they
@@ -527,6 +566,7 @@ export default {
   requireEnrollOrSession,
   getSessionAuth,
   generateToken,
+  generateTokenWithCurrentIdleTimeout,
   signPurposeToken,
   verifyPurposeToken,
 };

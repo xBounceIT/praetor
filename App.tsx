@@ -158,6 +158,7 @@ import {
   normalizeRilNoteOptions,
   normalizeRilTransferOptions,
 } from './utils/ril';
+import { getSessionTimeoutThresholds } from './utils/sessionTimeout';
 import { sourcesSupplierQuote } from './utils/supplierLineSync';
 import { applyBrowserTheme, applyTheme, getTheme } from './utils/theme';
 import { toastError } from './utils/toast';
@@ -1087,6 +1088,10 @@ const TrackerView: React.FC<{
   );
 };
 
+const handleGeneralSettingsUpdateError = (err: unknown) => {
+  console.error('Failed to update general settings:', err);
+  toastError('Failed to update settings');
+};
 const useAppContentController = () => {
   const { t: tApp } = useTranslation(['common', 'reports', 'sales', 'accounting']);
 
@@ -3067,28 +3072,45 @@ const useAppContentController = () => {
     setBranding(next);
   };
 
+  const applyGeneralSettingsUpdate = (updated: IGeneralSettings) => {
+    setGeneralSettings({
+      ...updated,
+      currency: normalizeCurrency(updated.currency),
+      geminiApiKey: updated.geminiApiKey || '',
+      aiProvider: updated.aiProvider || 'gemini',
+      openrouterApiKey: updated.openrouterApiKey || '',
+      geminiModelId: updated.geminiModelId || '',
+      openrouterModelId: updated.openrouterModelId || '',
+      defaultLocation: updated.defaultLocation || 'remote',
+      rilCompanyName: updated.rilCompanyName || '',
+      rilDefaultStartTime: updated.rilDefaultStartTime || DEFAULT_RIL_START_TIME,
+      rilDefaultExitTime: updated.rilDefaultExitTime || DEFAULT_RIL_EXIT_TIME,
+      rilLunchBreakMinutes: updated.rilLunchBreakMinutes ?? 60,
+      rilNoteOptions: normalizeRilNoteOptions(updated.rilNoteOptions),
+      rilTransferOptions: normalizeRilTransferOptions(updated.rilTransferOptions),
+    });
+  };
+
+  const updateGeneralSettings = async (updates: Partial<IGeneralSettings>) => {
+    const updated = await api.generalSettings.update(updates);
+    applyGeneralSettingsUpdate(updated);
+    return updated;
+  };
+
   const handleUpdateGeneralSettings = async (updates: Partial<IGeneralSettings>) => {
     try {
-      const updated = await api.generalSettings.update(updates);
-      setGeneralSettings({
-        ...updated,
-        currency: normalizeCurrency(updated.currency),
-        geminiApiKey: updated.geminiApiKey || '',
-        aiProvider: updated.aiProvider || 'gemini',
-        openrouterApiKey: updated.openrouterApiKey || '',
-        geminiModelId: updated.geminiModelId || '',
-        openrouterModelId: updated.openrouterModelId || '',
-        defaultLocation: updated.defaultLocation || 'remote',
-        rilCompanyName: updated.rilCompanyName || '',
-        rilDefaultStartTime: updated.rilDefaultStartTime || DEFAULT_RIL_START_TIME,
-        rilDefaultExitTime: updated.rilDefaultExitTime || DEFAULT_RIL_EXIT_TIME,
-        rilLunchBreakMinutes: updated.rilLunchBreakMinutes ?? 60,
-        rilNoteOptions: normalizeRilNoteOptions(updated.rilNoteOptions),
-        rilTransferOptions: normalizeRilTransferOptions(updated.rilTransferOptions),
-      });
+      await updateGeneralSettings(updates);
     } catch (err) {
-      console.error('Failed to update general settings:', err);
-      toastError('Failed to update settings');
+      handleGeneralSettingsUpdateError(err);
+    }
+  };
+
+  const handleUpdateGeneralSettingsStrict = async (updates: Partial<IGeneralSettings>) => {
+    try {
+      await updateGeneralSettings(updates);
+    } catch (err) {
+      handleGeneralSettingsUpdateError(err);
+      throw err;
     }
   };
 
@@ -3354,6 +3376,7 @@ const useAppContentController = () => {
     handleUpdateUserAuthMethod,
     handleBrandingChange,
     handleUpdateGeneralSettings,
+    handleUpdateGeneralSettingsStrict,
     handleUpdateUserSettings,
     handleUpdateUserPassword,
     handleListMcpTokens,
@@ -3424,7 +3447,10 @@ const TechnicalDocsRoute: React.FC<{
 }> = ({ controller, view }) => (
   <>
     {controller.currentUser && (
-      <SessionTimeoutHandler onLogout={() => controller.handleLogout('inactivity')} />
+      <SessionTimeoutHandler
+        onLogout={() => controller.handleLogout('inactivity')}
+        {...getSessionTimeoutThresholds(controller.generalSettings.sessionIdleTimeoutMinutes)}
+      />
     )}
     {view === 'api' ? <ApiDocsView /> : <FrontendDocsView />}
   </>
@@ -3476,7 +3502,10 @@ const AuthenticatedAppShell: React.FC<{ controller: AppContentController }> = ({
 
   return (
     <CurrentUserIdProvider userId={currentUser.id}>
-      <SessionTimeoutHandler onLogout={() => handleLogout('inactivity')} />
+      <SessionTimeoutHandler
+        onLogout={() => handleLogout('inactivity')}
+        {...getSessionTimeoutThresholds(generalSettings.sessionIdleTimeoutMinutes)}
+      />
       <Layout
         activeView={!isRouteAccessible ? 'timesheets/tracker' : (activeView as View)}
         onViewChange={setActiveView}
@@ -4321,6 +4350,7 @@ const AdministrationRoutes: React.FC<{ controller: AuthenticatedAppContentContro
     handleSaveSsoProvider,
     handleTestEmail,
     handleUpdateGeneralSettings,
+    handleUpdateGeneralSettingsStrict,
     handleUpdateRolePermissions,
     handleUpdateUser,
     handleUpdateUserAuthMethod,
@@ -4389,7 +4419,15 @@ const AdministrationRoutes: React.FC<{ controller: AuthenticatedAppContentContro
             onSetExemptRoleIds={(value) =>
               handleUpdateGeneralSettings({ totpExemptRoleIds: value })
             }
+            sessionIdleTimeoutMinutes={generalSettings.sessionIdleTimeoutMinutes}
+            onSetSessionIdleTimeoutMinutes={(value) =>
+              handleUpdateGeneralSettingsStrict({ sessionIdleTimeoutMinutes: value })
+            }
             canManageMfa={hasPermission(currentUser.permissions, 'administration.general.update')}
+            canManageSession={hasPermission(
+              currentUser.permissions,
+              'administration.general.update',
+            )}
           />
         )}
       {hasPermission(currentUser.permissions, VIEW_PERMISSION_MAP['administration/roles']) &&

@@ -269,6 +269,7 @@ const baseGeneralSettings: GeneralSettings = {
   enforceTotp: false,
   totpEnforcedRoleIds: [],
   totpExemptRoleIds: [],
+  sessionIdleTimeoutMinutes: 30,
   allowWeekendSelection: false,
   rilCompanyName: '',
   rilDefaultStartTime: '09:00',
@@ -1141,6 +1142,24 @@ describe('normalizeGeneralSettings', () => {
       totpEnforcedRoleIds: ['admin'],
       totpExemptRoleIds: ['service-account'],
     });
+  });
+
+  test('normalizes sessionIdleTimeoutMinutes and falls back to 30 for invalid values', () => {
+    expect(
+      normalizeGeneralSettings(
+        make<GeneralSettings>(baseGeneralSettings, { sessionIdleTimeoutMinutes: '45' }),
+      ).sessionIdleTimeoutMinutes,
+    ).toBe(45);
+    expect(
+      normalizeGeneralSettings(
+        make<GeneralSettings>(baseGeneralSettings, { sessionIdleTimeoutMinutes: undefined }),
+      ).sessionIdleTimeoutMinutes,
+    ).toBe(30);
+    expect(
+      normalizeGeneralSettings(
+        make<GeneralSettings>(baseGeneralSettings, { sessionIdleTimeoutMinutes: 4 }),
+      ).sessionIdleTimeoutMinutes,
+    ).toBe(30);
   });
 
   test('defaults missing 2FA policy fields (enableTotp true, enforceTotp false, role lists [])', () => {

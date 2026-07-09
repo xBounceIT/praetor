@@ -6,6 +6,7 @@ import {
   __resetSessionMaxDurationCacheForTests,
   authenticateToken,
 } from '../../middleware/auth.ts';
+import * as realGeneralSettingsRepo from '../../repositories/generalSettingsRepo.ts';
 import * as realRolesRepo from '../../repositories/rolesRepo.ts';
 import * as realUsersRepo from '../../repositories/usersRepo.ts';
 import * as realPermissions from '../../utils/permissions.ts';
@@ -13,11 +14,13 @@ import { signToken } from '../helpers/jwt.ts';
 
 const usersRepoSnapshot = { ...realUsersRepo };
 const rolesRepoSnapshot = { ...realRolesRepo };
+const generalSettingsRepoSnapshot = { ...realGeneralSettingsRepo };
 const permissionsSnapshot = { ...realPermissions };
 
 const findAuthUserByIdMock = mock();
 const userHasRoleMock = mock();
 const getRolePermissionsMock = mock();
+const generalSettingsGetMock = mock();
 
 const HAPPY_USER = {
   id: 'u1',
@@ -46,6 +49,10 @@ beforeAll(() => {
     ...permissionsSnapshot,
     getRolePermissions: getRolePermissionsMock,
   }));
+  mock.module('../../repositories/generalSettingsRepo.ts', () => ({
+    ...generalSettingsRepoSnapshot,
+    get: generalSettingsGetMock,
+  }));
 });
 
 afterAll(() => {
@@ -59,6 +66,7 @@ afterAll(() => {
   mock.module('../../repositories/usersRepo.ts', () => usersRepoSnapshot);
   mock.module('../../repositories/rolesRepo.ts', () => rolesRepoSnapshot);
   mock.module('../../utils/permissions.ts', () => permissionsSnapshot);
+  mock.module('../../repositories/generalSettingsRepo.ts', () => generalSettingsRepoSnapshot);
 });
 
 type FakeReply = {
@@ -100,9 +108,11 @@ beforeEach(() => {
   findAuthUserByIdMock.mockReset();
   userHasRoleMock.mockReset();
   getRolePermissionsMock.mockReset();
+  generalSettingsGetMock.mockReset();
   findAuthUserByIdMock.mockResolvedValue(HAPPY_USER);
   userHasRoleMock.mockResolvedValue(true);
   getRolePermissionsMock.mockResolvedValue(HAPPY_PERMISSIONS);
+  generalSettingsGetMock.mockResolvedValue({ sessionIdleTimeoutMinutes: 30 });
   // Apply our overridden window and reset the cached value so the next request re-resolves.
   process.env.SESSION_MAX_DURATION_MS = '1000';
   __resetSessionMaxDurationCacheForTests();

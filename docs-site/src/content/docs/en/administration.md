@@ -68,6 +68,14 @@ The two switches are independent: turning both off (combined with manual user cr
 
 If a user cannot sign in, check credentials, user status, assigned role, and authentication logs.
 
+### Session inactivity timeout
+
+The **Session** tab in **Authentication** settings lets administrators with general-settings update permission configure how many idle minutes a browser session may keep running before Praetor signs the user out.
+
+The **Inactivity timeout** field accepts whole numbers from `5` to `1440` minutes. The default remains `30` minutes. Praetor uses this threshold both to show the browser warning before expiry and to verify the server-side idle age of the token, rotating it with a matching expiry on every valid request.
+
+If the timeout is reduced, the server applies the new threshold on the next request by checking the JWT `iat`. The absolute maximum session limit remains separate and unchanged: a session cannot exceed 8 total hours even when the inactivity timeout is longer.
+
 ### Two-factor authentication (2FA)
 
 Praetor supports TOTP-based two-factor authentication (authenticator apps such as Google Authenticator, Authy, or 1Password) for accounts with local or LDAP credentials. Each user enables 2FA from their own **Settings → Security**. For security, enrolling from a logged-in session first requires re-entering the account password (so a hijacked session alone cannot register a second factor); Praetor then shows a QR code (and a key for manual entry) to scan with the authenticator app, asks for a six-digit code to confirm, and finally displays a set of single-use **backup codes** to store safely. Backup codes are shown only once; you can regenerate them at any time — invalidating the previous ones — by entering a valid code. Enabling 2FA also signs you out of your other devices and revokes your existing API tokens, so nothing issued before enrollment can keep bypassing the new second factor (the device you enrolled from stays signed in).

@@ -19,6 +19,7 @@ const settings: IGeneralSettings = {
   enforceTotp: false,
   totpEnforcedRoleIds: [],
   totpExemptRoleIds: [],
+  sessionIdleTimeoutMinutes: 30,
   allowWeekendSelection: true,
   defaultLocation: 'remote',
   rilCompanyName: '',

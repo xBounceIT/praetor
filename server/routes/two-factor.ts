@@ -4,7 +4,7 @@ import { withDbTransaction } from '../db/drizzle.ts';
 import type { TotpBackupCode } from '../db/schema/users.ts';
 import {
   authenticateToken,
-  generateToken,
+  generateTokenWithCurrentIdleTimeout,
   requireEnrollOrSession,
   requireSessionAuth,
 } from '../middleware/auth.ts';
@@ -420,7 +420,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         request.auth.sessionStart !== undefined &&
         newSessionVersion !== undefined
       ) {
-        const refreshedToken = generateToken(
+        const refreshedToken = await generateTokenWithCurrentIdleTimeout(
           userId,
           request.auth.sessionStart,
           request.user?.role,
@@ -542,7 +542,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         request.auth?.source === 'session' &&
         request.auth.sessionStart !== undefined
       ) {
-        const refreshedToken = generateToken(
+        const refreshedToken = await generateTokenWithCurrentIdleTimeout(
           userId,
           request.auth.sessionStart,
           request.user?.role,

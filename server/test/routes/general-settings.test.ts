@@ -115,6 +115,7 @@ const SETTINGS_WITH_KEYS = {
   enforceTotp: false,
   totpEnforcedRoleIds: [],
   totpExemptRoleIds: [],
+  sessionIdleTimeoutMinutes: 30,
 };
 
 const allMocks = [
@@ -207,6 +208,7 @@ describe('GET /api/general-settings', () => {
       { value: 'F', label: 'Festivita' },
     ]);
     expect(body.rilTransferOptions).toEqual(['In sede', 'Telelavoro']);
+    expect(body.sessionIdleTimeoutMinutes).toBe(30);
   });
 
   test('401 missing token', async () => {
@@ -364,6 +366,53 @@ describe('PUT /api/general-settings', () => {
 
     expect(res.statusCode).toBe(200);
     expect(revokeTokensForUnenrolledEnforcedUsersMock).not.toHaveBeenCalled();
+  });
+
+  test('200 round-trips sessionIdleTimeoutMinutes', async () => {
+    settingsUpdateMock.mockResolvedValue({
+      ...SETTINGS_WITH_KEYS,
+      sessionIdleTimeoutMinutes: 45,
+    });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/general-settings',
+      headers: authHeader(),
+      payload: { sessionIdleTimeoutMinutes: 45 },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(settingsUpdateMock).toHaveBeenCalledWith(
+      expect.objectContaining({ sessionIdleTimeoutMinutes: 45 }),
+    );
+    expect(JSON.parse(res.body).sessionIdleTimeoutMinutes).toBe(45);
+  });
+
+  test('400 rejects sessionIdleTimeoutMinutes outside the allowed range', async () => {
+    for (const value of [4, 1441]) {
+      const res = await testApp.inject({
+        method: 'PUT',
+        url: '/api/general-settings',
+        headers: authHeader(),
+        payload: { sessionIdleTimeoutMinutes: value },
+      });
+
+      expect(res.statusCode).toBe(400);
+      expect(JSON.parse(res.body).error).toMatch(/sessionIdleTimeoutMinutes must be an integer/);
+    }
+    expect(settingsUpdateMock).not.toHaveBeenCalled();
+  });
+
+  test('400 rejects non-integer sessionIdleTimeoutMinutes', async () => {
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/general-settings',
+      headers: authHeader(),
+      payload: { sessionIdleTimeoutMinutes: 30.5 },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(settingsUpdateMock).not.toHaveBeenCalled();
   });
 
   test('200 round-trips totpEnforcedRoleIds and totpExemptRoleIds', async () => {

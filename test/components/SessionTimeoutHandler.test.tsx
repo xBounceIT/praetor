@@ -94,6 +94,24 @@ describe('<SessionTimeoutHandler />', () => {
     addSpy.mockRestore();
   });
 
+  test('resets warning and logout timers when thresholds change', async () => {
+    const view = render(
+      <SessionTimeoutHandler onLogout={() => {}} warnAfterMs={100} logoutAfterMs={1_000} />,
+    );
+
+    await wait(70);
+    view.rerender(
+      <SessionTimeoutHandler onLogout={() => {}} warnAfterMs={120} logoutAfterMs={1_000} />,
+    );
+    await wait(60);
+
+    expect(screen.queryByText('sessionTimeout.title')).toBeNull();
+
+    await waitFor(() => {
+      expect(screen.getByText('sessionTimeout.title')).toBeInTheDocument();
+    });
+  });
+
   test('warning appears after warnAfterMs of inactivity', async () => {
     render(<SessionTimeoutHandler onLogout={() => {}} warnAfterMs={60} logoutAfterMs={10_000} />);
 

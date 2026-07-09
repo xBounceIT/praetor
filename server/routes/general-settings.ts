@@ -10,6 +10,11 @@ import { MASKED_SECRET } from '../utils/crypto.ts';
 import { requestHasPermission as hasPermission } from '../utils/permissions.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import {
+  DEFAULT_SESSION_IDLE_TIMEOUT_MINUTES,
+  MAX_SESSION_IDLE_TIMEOUT_MINUTES,
+  MIN_SESSION_IDLE_TIMEOUT_MINUTES,
+} from '../utils/sessionTimeout.ts';
+import {
   badRequest,
   optionalEnum,
   optionalLocalizedNonNegativeNumber,
@@ -85,6 +90,7 @@ const generalSettingsSchema = {
     enforceTotp: { type: 'boolean' },
     totpEnforcedRoleIds: roleIdArraySchema,
     totpExemptRoleIds: roleIdArraySchema,
+    sessionIdleTimeoutMinutes: { type: 'integer' },
   },
   required: [
     'currency',
@@ -109,6 +115,7 @@ const generalSettingsSchema = {
     'enforceTotp',
     'totpEnforcedRoleIds',
     'totpExemptRoleIds',
+    'sessionIdleTimeoutMinutes',
   ],
 } as const;
 
@@ -137,6 +144,7 @@ const generalSettingsUpdateBodySchema = {
     enforceTotp: { type: 'boolean' },
     totpEnforcedRoleIds: roleIdArraySchema,
     totpExemptRoleIds: roleIdArraySchema,
+    sessionIdleTimeoutMinutes: { type: 'integer' },
   },
 } as const;
 
@@ -163,6 +171,7 @@ const DEFAULT_SETTINGS: generalSettingsRepo.GeneralSettings = {
   enforceTotp: false,
   totpEnforcedRoleIds: [],
   totpExemptRoleIds: [],
+  sessionIdleTimeoutMinutes: DEFAULT_SESSION_IDLE_TIMEOUT_MINUTES,
 };
 
 const maskApiKey = (value: string | null, reveal: boolean) =>
@@ -346,6 +355,24 @@ const validateOptionalRoleIdArray = (value: unknown, fieldName: string) => {
   return { ok: true as const, value: roleIds };
 };
 
+const validateOptionalSessionIdleTimeoutMinutes = (value: unknown) => {
+  if (value === undefined || value === null || value === '') {
+    return { ok: true as const, value: null };
+  }
+  if (
+    typeof value !== 'number' ||
+    !Number.isInteger(value) ||
+    value < MIN_SESSION_IDLE_TIMEOUT_MINUTES ||
+    value > MAX_SESSION_IDLE_TIMEOUT_MINUTES
+  ) {
+    return {
+      ok: false as const,
+      message: `sessionIdleTimeoutMinutes must be an integer between ${MIN_SESSION_IDLE_TIMEOUT_MINUTES} and ${MAX_SESSION_IDLE_TIMEOUT_MINUTES}`,
+    };
+  }
+  return { ok: true as const, value };
+};
+
 const toResponse = (settings: generalSettingsRepo.GeneralSettings, revealApiKeys: boolean) => ({
   currency: settings.currency,
   dailyLimit: settings.dailyLimit,
@@ -369,6 +396,8 @@ const toResponse = (settings: generalSettingsRepo.GeneralSettings, revealApiKeys
   enforceTotp: settings.enforceTotp ?? false,
   totpEnforcedRoleIds: settings.totpEnforcedRoleIds ?? [],
   totpExemptRoleIds: settings.totpExemptRoleIds ?? [],
+  sessionIdleTimeoutMinutes:
+    settings.sessionIdleTimeoutMinutes ?? DEFAULT_SESSION_IDLE_TIMEOUT_MINUTES,
 });
 
 export default async function (fastify: FastifyInstance, _opts: unknown) {
@@ -436,6 +465,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         enforceTotp?: boolean;
         totpEnforcedRoleIds?: string[];
         totpExemptRoleIds?: string[];
+        sessionIdleTimeoutMinutes?: number;
       };
       const {
         currency,
@@ -455,6 +485,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         rilTransferOptions,
         totpEnforcedRoleIds,
         totpExemptRoleIds,
+        sessionIdleTimeoutMinutes,
       } = body;
       const currencyResult = optionalNonEmptyString(currency, 'currency');
       if (!currencyResult.ok) return badRequest(reply, currencyResult.message);
@@ -553,6 +584,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         'totpExemptRoleIds',
       );
       if (!totpExemptRoleIdsResult.ok) return badRequest(reply, totpExemptRoleIdsResult.message);
+      const sessionIdleTimeoutMinutesResult =
+        validateOptionalSessionIdleTimeoutMinutes(sessionIdleTimeoutMinutes);
+      if (!sessionIdleTimeoutMinutesResult.ok) {
+        return badRequest(reply, sessionIdleTimeoutMinutesResult.message);
+      }
 
       const previousSettings = await generalSettingsRepo.get();
       const settingsPatch = {
@@ -578,6 +614,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         enforceTotp: enforceTotpResult.value,
         totpEnforcedRoleIds: totpEnforcedRoleIdsResult.value,
         totpExemptRoleIds: totpExemptRoleIdsResult.value,
+        sessionIdleTimeoutMinutes: sessionIdleTimeoutMinutesResult.value,
       };
 
       // Resolve the policy that WILL be in effect after this write (a null patch value leaves the

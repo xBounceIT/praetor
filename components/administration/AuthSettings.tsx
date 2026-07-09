@@ -3,6 +3,7 @@ import {
   Building2,
   Check,
   CircleAlert,
+  Clock,
   FileUp,
   FlaskConical,
   FolderTree,
@@ -17,7 +18,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import type React from 'react';
-import { useCallback, useEffect, useId, useMemo, useReducer, useRef } from 'react';
+import { useCallback, useEffect, useId, useMemo, useReducer, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { siOpenid } from 'simple-icons';
 import { cn } from '@/lib/utils';
@@ -35,6 +36,10 @@ import type {
   SsoRoleMapping,
 } from '../../types';
 import { isStoredSecret, MASKED_SECRET } from '../../utils/maskedSecret';
+import {
+  MAX_SESSION_IDLE_TIMEOUT_MINUTES,
+  MIN_SESSION_IDLE_TIMEOUT_MINUTES,
+} from '../../utils/sessionTimeout';
 import SecretField from '../shared/SecretField';
 import SelectControl from '../shared/SelectControl';
 import { Alert, AlertDescription, AlertTitle } from '../ui/alert';
@@ -85,6 +90,9 @@ export interface AuthSettingsProps {
   // The controls live on this auth page for discoverability, so we hide the MFA tab from users who
   // can view auth settings but lack general.update — otherwise they would see controls that 403 on
   // save. Visible iff usable.
+  sessionIdleTimeoutMinutes: number;
+  onSetSessionIdleTimeoutMinutes: (value: number) => void | Promise<void>;
+  canManageSession: boolean;
   canManageMfa: boolean;
 }
 
@@ -148,11 +156,11 @@ const ProviderIcon: React.FC<{ protocol: SsoProtocol; className?: string }> = ({
   );
 
 const AuthTabButton: React.FC<{
-  tab: 'ldap' | 'mfa' | SsoProtocol;
-  activeTab: 'ldap' | 'mfa' | SsoProtocol;
+  tab: AuthSettingsTab;
+  activeTab: AuthSettingsTab;
   icon: React.ReactNode;
   label: string;
-  onSelect: (tab: 'ldap' | 'mfa' | SsoProtocol) => void;
+  onSelect: (tab: AuthSettingsTab) => void;
 }> = ({ tab, activeTab, icon, label, onSelect }) => (
   <Button
     type="button"
@@ -194,7 +202,7 @@ const LDAP_ROLE_RESOLUTION_HELP_KEYS: Partial<Record<LdapRoleResolution, string>
   rejected: 'admin.ldap.test.rejectedRoleHelp',
 };
 
-type AuthSettingsTab = 'ldap' | 'mfa' | SsoProtocol;
+type AuthSettingsTab = 'ldap' | 'mfa' | 'session' | SsoProtocol;
 type StateUpdate<T> = T | ((prev: T) => T);
 
 type AuthSettingsState = {
@@ -338,6 +346,9 @@ const useAuthSettingsController = ({
   exemptRoleIds,
   onSetExemptRoleIds,
   canManageMfa,
+  sessionIdleTimeoutMinutes,
+  onSetSessionIdleTimeoutMinutes,
+  canManageSession,
 }: AuthSettingsProps) => {
   const { t } = useTranslation('auth');
   const [authState, dispatchAuthState] = useReducer(
@@ -470,7 +481,7 @@ const useAuthSettingsController = ({
     setLdapForm(config || DEFAULT_LDAP_CONFIG);
   }
 
-  const handleActiveTabSelect = (tab: 'ldap' | 'mfa' | SsoProtocol) => {
+  const handleActiveTabSelect = (tab: AuthSettingsTab) => {
     setActiveTab(tab);
     // Re-entering the SAML tab after a transient failure resets the state to 'loading' so the
     // fetch effect below retries. Without this, a one-off 503/network error would permanently
@@ -856,6 +867,7 @@ const useAuthSettingsController = ({
     activeTab,
     bindPasswordReplace,
     canManageMfa,
+    canManageSession,
     enableTotp,
     enforceTotp,
     enforcedRoleIds,
@@ -879,12 +891,14 @@ const useAuthSettingsController = ({
     onSetEnforceTotp,
     onSetEnforcedRoleIds,
     onSetExemptRoleIds,
+    onSetSessionIdleTimeoutMinutes,
     providerDrafts,
     providerSaveErrors,
     providersByProtocol,
     replacingSecrets,
     roleOptions,
     savingProvider,
+    sessionIdleTimeoutMinutes,
     setErrors,
     setLdapForm,
     setTestErrors,
@@ -968,12 +982,24 @@ const AuthSettingsTabs: React.FC<{ controller: AuthSettingsController }> = ({ co
         onSelect={controller.handleActiveTabSelect}
       />
     )}
+    {controller.canManageSession && (
+      <AuthTabButton
+        tab="session"
+        activeTab={controller.activeTab}
+        icon={<Clock aria-hidden="true" className="size-4" />}
+        label={controller.t('admin.tabs.session', 'Session')}
+        onSelect={controller.handleActiveTabSelect}
+      />
+    )}
   </div>
 );
 
 const AuthSettingsPanel: React.FC<{ controller: AuthSettingsController }> = ({ controller }) => {
   if (controller.activeTab === 'mfa' && controller.canManageMfa) {
     return <MfaPolicyPanel controller={controller} />;
+  }
+  if (controller.activeTab === 'session' && controller.canManageSession) {
+    return <SessionPolicyPanel controller={controller} />;
   }
   if (controller.activeTab === 'ldap') return <LdapSettingsPanel controller={controller} />;
   if (controller.activeTab === 'oidc' || controller.activeTab === 'saml') {
@@ -1017,6 +1043,130 @@ const MfaPolicyPanel: React.FC<{ controller: AuthSettingsController }> = ({ cont
     <MfaEnforcementCard controller={controller} />
   </div>
 );
+
+const SessionPolicyPanel: React.FC<{ controller: AuthSettingsController }> = ({ controller }) => {
+  const timeoutInputId = useId();
+  const descriptionId = `${timeoutInputId}-description`;
+  const errorId = `${timeoutInputId}-error`;
+  const [draftMinutes, setDraftMinutes] = useState(String(controller.sessionIdleTimeoutMinutes));
+  const [isSavingSession, setIsSavingSession] = useState(false);
+  const [isSessionSaved, setIsSessionSaved] = useState(false);
+  const [pendingSavedMinutes, setPendingSavedMinutes] = useState<number | null>(null);
+  const [lastSessionIdleTimeoutMinutes, setLastSessionIdleTimeoutMinutes] = useState(
+    controller.sessionIdleTimeoutMinutes,
+  );
+
+  if (controller.sessionIdleTimeoutMinutes !== lastSessionIdleTimeoutMinutes) {
+    const didSavePendingValue = controller.sessionIdleTimeoutMinutes === pendingSavedMinutes;
+    setLastSessionIdleTimeoutMinutes(controller.sessionIdleTimeoutMinutes);
+    setDraftMinutes(String(controller.sessionIdleTimeoutMinutes));
+    setIsSessionSaved(didSavePendingValue);
+    if (pendingSavedMinutes !== null) setPendingSavedMinutes(null);
+  }
+
+  const parsedMinutes = Number(draftMinutes);
+  const isValid =
+    draftMinutes.trim() !== '' &&
+    Number.isInteger(parsedMinutes) &&
+    parsedMinutes >= MIN_SESSION_IDLE_TIMEOUT_MINUTES &&
+    parsedMinutes <= MAX_SESSION_IDLE_TIMEOUT_MINUTES;
+  const validationMessage =
+    draftMinutes.trim() !== '' && !isValid
+      ? controller.t('sessionPolicy.validation', {
+          min: MIN_SESSION_IDLE_TIMEOUT_MINUTES,
+          max: MAX_SESSION_IDLE_TIMEOUT_MINUTES,
+        })
+      : '';
+  const hasChanges = isValid && parsedMinutes !== controller.sessionIdleTimeoutMinutes;
+
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!isValid) return;
+
+    setIsSavingSession(true);
+    setIsSessionSaved(false);
+    setPendingSavedMinutes(parsedMinutes);
+    try {
+      await controller.onSetSessionIdleTimeoutMinutes(parsedMinutes);
+      setIsSessionSaved(true);
+    } catch {
+      setPendingSavedMinutes(null);
+      setIsSessionSaved(false);
+    } finally {
+      setIsSavingSession(false);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit}>
+      <Card className="gap-0 overflow-hidden rounded-lg border-border bg-background py-0">
+        <CardHeader className="border-b border-border bg-muted/40 px-6 py-4 [.border-b]:pb-4">
+          <CardTitle className="flex items-center gap-3 text-base">
+            <Clock aria-hidden="true" className="size-4 text-praetor" />
+            {controller.t('sessionPolicy.title', 'Session inactivity')}
+          </CardTitle>
+          <CardDescription>
+            {controller.t(
+              'sessionPolicy.description',
+              'Choose how long a browser session can stay idle before Praetor signs the user out.',
+            )}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-5 p-6">
+          <UIField data-invalid={validationMessage ? true : undefined}>
+            <FieldLabel htmlFor={timeoutInputId}>
+              {controller.t('sessionPolicy.timeoutLabel', 'Inactivity timeout')}
+            </FieldLabel>
+            <div className="flex max-w-xs items-center gap-3">
+              <Input
+                id={timeoutInputId}
+                type="number"
+                min={MIN_SESSION_IDLE_TIMEOUT_MINUTES}
+                max={MAX_SESSION_IDLE_TIMEOUT_MINUTES}
+                step={1}
+                value={draftMinutes}
+                onChange={(event) => {
+                  setDraftMinutes(event.target.value);
+                  setPendingSavedMinutes(null);
+                  setIsSessionSaved(false);
+                }}
+                aria-invalid={validationMessage ? true : undefined}
+                aria-describedby={validationMessage ? `${descriptionId} ${errorId}` : descriptionId}
+              />
+              <span className="text-sm text-muted-foreground">
+                {controller.t('sessionPolicy.minutesSuffix', 'minutes')}
+              </span>
+            </div>
+            <FieldDescription id={descriptionId}>
+              {controller.t('sessionPolicy.timeoutDescription', {
+                min: MIN_SESSION_IDLE_TIMEOUT_MINUTES,
+                max: MAX_SESSION_IDLE_TIMEOUT_MINUTES,
+              })}
+            </FieldDescription>
+            <FieldError id={errorId}>{validationMessage}</FieldError>
+          </UIField>
+        </CardContent>
+        <CardFooter className="flex items-center justify-between border-t border-border bg-muted/20 px-6 py-4">
+          <div className="text-sm text-muted-foreground" aria-live="polite">
+            {isSessionSaved ? controller.t('sessionPolicy.saved', 'Session policy saved') : null}
+          </div>
+          <Button type="submit" disabled={!hasChanges || isSavingSession}>
+            {isSavingSession ? (
+              <Loader2 data-icon="inline-start" className="animate-spin" />
+            ) : isSessionSaved ? (
+              <Check data-icon="inline-start" />
+            ) : (
+              <Save data-icon="inline-start" />
+            )}
+            {isSavingSession
+              ? controller.t('sessionPolicy.saving', 'Saving...')
+              : controller.t('sessionPolicy.save', 'Save session policy')}
+          </Button>
+        </CardFooter>
+      </Card>
+    </form>
+  );
+};
 
 const MfaEnforcementCard: React.FC<{ controller: AuthSettingsController }> = ({ controller }) => (
   <Card className="gap-0 overflow-hidden rounded-lg border-border bg-background py-0">

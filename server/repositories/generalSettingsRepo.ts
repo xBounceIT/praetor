@@ -2,6 +2,7 @@ import { eq, sql } from 'drizzle-orm';
 import { type DbExecutor, db } from '../db/drizzle.ts';
 import type { StoredRilNoteOption } from '../db/schema/generalSettings.ts';
 import { generalSettings } from '../db/schema/generalSettings.ts';
+import { normalizeSessionIdleTimeoutMinutes } from '../utils/sessionTimeout.ts';
 
 export type GeneralSettings = {
   currency: string;
@@ -13,6 +14,7 @@ export type GeneralSettings = {
   enforceTotp: boolean | null;
   totpEnforcedRoleIds: string[] | null;
   totpExemptRoleIds: string[] | null;
+  sessionIdleTimeoutMinutes: number;
   geminiApiKey: string | null;
   aiProvider: string | null;
   openrouterApiKey: string | null;
@@ -38,6 +40,7 @@ export type GeneralSettingsPatch = {
   enforceTotp?: boolean | null;
   totpEnforcedRoleIds?: string[] | null;
   totpExemptRoleIds?: string[] | null;
+  sessionIdleTimeoutMinutes?: number | null;
   geminiApiKey?: string | null;
   aiProvider?: string | null;
   openrouterApiKey?: string | null;
@@ -63,6 +66,7 @@ const GENERAL_SETTINGS_PROJECTION = {
   enforceTotp: generalSettings.enforceTotp,
   totpEnforcedRoleIds: generalSettings.totpEnforcedRoleIds,
   totpExemptRoleIds: generalSettings.totpExemptRoleIds,
+  sessionIdleTimeoutMinutes: generalSettings.sessionIdleTimeoutMinutes,
   geminiApiKey: generalSettings.geminiApiKey,
   aiProvider: generalSettings.aiProvider,
   openrouterApiKey: generalSettings.openrouterApiKey,
@@ -88,6 +92,7 @@ type GeneralSettingsRow = {
   enforceTotp: boolean | null;
   totpEnforcedRoleIds: string[] | null;
   totpExemptRoleIds: string[] | null;
+  sessionIdleTimeoutMinutes: number | null;
   geminiApiKey: string | null;
   aiProvider: string | null;
   openrouterApiKey: string | null;
@@ -103,7 +108,7 @@ type GeneralSettingsRow = {
   rilTransferOptions: string[] | null;
 };
 
-// Centralized fallbacks for the four non-nullable `GeneralSettings` fields. The schema
+// Centralized fallbacks for the non-nullable `GeneralSettings` fields. The schema
 // columns are nullable in TS (Drizzle infers from `.default(...)` without `.notNull()`)
 // but always populated at runtime via DB defaults on the seeded id=1 row, so these
 // fallbacks are TS-strict appeasement that fire only on a never-actually-happens null.
@@ -121,6 +126,7 @@ const DEFAULT_FALLBACKS = {
   dailyLimit: '8.00',
   startOfWeek: 'Monday',
   treatSaturdayAsHoliday: true,
+  sessionIdleTimeoutMinutes: 30,
 } as const;
 
 const mapRow = (row: GeneralSettingsRow): GeneralSettings => ({
@@ -133,6 +139,9 @@ const mapRow = (row: GeneralSettingsRow): GeneralSettings => ({
   enforceTotp: row.enforceTotp,
   totpEnforcedRoleIds: row.totpEnforcedRoleIds,
   totpExemptRoleIds: row.totpExemptRoleIds,
+  sessionIdleTimeoutMinutes: normalizeSessionIdleTimeoutMinutes(
+    row.sessionIdleTimeoutMinutes ?? DEFAULT_FALLBACKS.sessionIdleTimeoutMinutes,
+  ),
   geminiApiKey: row.geminiApiKey,
   aiProvider: row.aiProvider,
   openrouterApiKey: row.openrouterApiKey,
@@ -184,6 +193,7 @@ export const update = async (
       enforceTotp: sql`COALESCE(${patch.enforceTotp ?? null}, ${generalSettings.enforceTotp})`,
       totpEnforcedRoleIds: sql`COALESCE(${totpEnforcedRoleIdsParam}::jsonb, ${generalSettings.totpEnforcedRoleIds})`,
       totpExemptRoleIds: sql`COALESCE(${totpExemptRoleIdsParam}::jsonb, ${generalSettings.totpExemptRoleIds})`,
+      sessionIdleTimeoutMinutes: sql`COALESCE(${patch.sessionIdleTimeoutMinutes ?? null}, ${generalSettings.sessionIdleTimeoutMinutes})`,
       geminiApiKey: sql`COALESCE(${patch.geminiApiKey ?? null}, ${generalSettings.geminiApiKey})`,
       aiProvider: sql`COALESCE(${patch.aiProvider ?? null}, ${generalSettings.aiProvider})`,
       openrouterApiKey: sql`COALESCE(${patch.openrouterApiKey ?? null}, ${generalSettings.openrouterApiKey})`,

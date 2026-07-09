@@ -1,0 +1,2 @@
+ALTER TABLE "general_settings" ADD COLUMN "session_idle_timeout_minutes" integer DEFAULT 30 NOT NULL;--> statement-breakpoint
+ALTER TABLE "general_settings" ADD CONSTRAINT "general_settings_session_idle_timeout_minutes_check" CHECK ("general_settings"."session_idle_timeout_minutes" >= 5 AND "general_settings"."session_idle_timeout_minutes" <= 1440);

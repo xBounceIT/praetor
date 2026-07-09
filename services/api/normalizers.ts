@@ -45,6 +45,7 @@ import {
   normalizeRilNoteOptions,
   normalizeRilTransferOptions,
 } from '../../utils/ril';
+import { normalizeSessionIdleTimeoutMinutes } from '../../utils/sessionTimeout';
 
 const nullableNumber = (value: unknown, fallback: number | null = null): number | null =>
   value === undefined || value === null ? fallback : Number(value);
@@ -445,6 +446,7 @@ export const normalizeGeneralSettings = (s: GeneralSettings): GeneralSettings =>
   enforceTotp: s.enforceTotp ?? false,
   totpEnforcedRoleIds: Array.isArray(s.totpEnforcedRoleIds) ? s.totpEnforcedRoleIds : [],
   totpExemptRoleIds: Array.isArray(s.totpExemptRoleIds) ? s.totpExemptRoleIds : [],
+  sessionIdleTimeoutMinutes: normalizeSessionIdleTimeoutMinutes(s.sessionIdleTimeoutMinutes),
 });
 
 // Allowlist mirroring the server's UNIT_OF_MEASURE_VALUES (server/routes/invoices.ts).

@@ -3,7 +3,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { withDbTransaction } from '../db/drizzle.ts';
 import {
   authenticateToken,
-  generateToken,
+  generateTokenWithCurrentIdleTimeout,
   getSessionAuth,
   requireSessionAuth,
   signPurposeToken,
@@ -553,7 +553,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                 isAdmin: roleIdResult.value === 'admin',
               },
             ];
-      const token = generateToken(
+      const token = await generateTokenWithCurrentIdleTimeout(
         session.userId,
         session.sessionStart,
         roleIdResult.value,

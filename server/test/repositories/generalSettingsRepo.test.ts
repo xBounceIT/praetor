@@ -28,6 +28,7 @@ const PROJECTION_KEYS = [
   'enforceTotp',
   'totpEnforcedRoleIds',
   'totpExemptRoleIds',
+  'sessionIdleTimeoutMinutes',
   'geminiApiKey',
   'aiProvider',
   'openrouterApiKey',
@@ -57,6 +58,7 @@ const baseFields: RowFields = {
   enforceTotp: false,
   totpEnforcedRoleIds: [],
   totpExemptRoleIds: [],
+  sessionIdleTimeoutMinutes: 30,
   geminiApiKey: null,
   aiProvider: null,
   openrouterApiKey: null,
@@ -171,6 +173,7 @@ describe('update', () => {
         enforceTotp: true,
         totpEnforcedRoleIds: ['admin'],
         totpExemptRoleIds: ['guest'],
+        sessionIdleTimeoutMinutes: 45,
         geminiApiKey: 'g-key',
         aiProvider: 'gemini',
         openrouterApiKey: 'or-key',
@@ -193,6 +196,7 @@ describe('update', () => {
     expect(params).toContain('Sunday');
     expect(params).toContain(true);
     expect(params).toContain(false);
+    expect(params).toContain(45);
     expect(params).toContain('g-key');
     expect(params).toContain('gemini');
     expect(params).toContain('or-key');
@@ -212,12 +216,12 @@ describe('update', () => {
     expect(params).toContain(noteOptionsJson);
     expect(params).toContain(transferOptionsJson);
     // Tighter check on top of the .toContain() pattern from the canonical ldap/email tests:
-    // since the SET clause emits its 22 COALESCE pairs in projection-declaration order and
+    // since the SET clause emits its 23 COALESCE pairs in projection-declaration order and
     // each pair binds exactly one patch-value param (the column ref renders as a SQL
-    // identifier, not a parameter), the first 22 params must match PROJECTION_KEYS order.
+    // identifier, not a parameter), the first 23 params must match PROJECTION_KEYS order.
     // Catches column→param wiring bugs where two same-typed booleans (e.g.,
     // treatSaturdayAsHoliday vs allowWeekendSelection) get swapped.
-    expect(params.slice(0, 22)).toEqual([
+    expect(params.slice(0, 23)).toEqual([
       'USD',
       9,
       'Sunday',
@@ -227,6 +231,7 @@ describe('update', () => {
       true,
       enforcedRolesJson,
       exemptRolesJson,
+      45,
       'g-key',
       'gemini',
       'or-key',
@@ -246,11 +251,11 @@ describe('update', () => {
   test('binds NULL for omitted patch fields (COALESCE preserves existing column)', async () => {
     exec.enqueue({ rows: [buildRow()] });
     await generalSettingsRepo.update({ currency: 'USD' }, testDb);
-    // The SET clause always emits 22 COALESCE pairs (one per patchable column); 21 of those
+    // The SET clause always emits 23 COALESCE pairs (one per patchable column); 22 of those
     // patch-value params are null when only `currency` is provided. The UPDATE also binds the
-    // singleton WHERE param (1), so we expect >=21 nulls in the param list.
+    // singleton WHERE param (1), so we expect >=22 nulls in the param list.
     const nullCount = exec.calls[0].params.filter((p) => p === null).length;
-    expect(nullCount).toBeGreaterThanOrEqual(21);
+    expect(nullCount).toBeGreaterThanOrEqual(22);
   });
 
   test('binds NULL for explicit null RIL arrays to preserve existing values', async () => {
@@ -258,8 +263,8 @@ describe('update', () => {
     await generalSettingsRepo.update({ rilNoteOptions: null, rilTransferOptions: null }, testDb);
 
     const params = exec.calls[0].params;
-    expect(params[20]).toBeNull();
     expect(params[21]).toBeNull();
+    expect(params[22]).toBeNull();
     expect(params).not.toContain('null');
   });
 
@@ -287,11 +292,11 @@ describe('schema invariants', () => {
     expect([...PROJECTION_KEYS] as string[]).toEqual(expectedKeys);
   });
 
-  // The four typed-non-nullable `GeneralSettings` fields can technically be null at the row
+  // The typed-non-nullable `GeneralSettings` fields can technically be null at the row
   // layer (the schema columns are nullable in TS), so `mapRow` falls back via a private
   // `DEFAULT_FALLBACKS` const. Those fallbacks duplicate the `.default(...)` values declared
   // on the Drizzle schema (and, by transit, the DEFAULTs in schema.sql:693-720). This test
-  // builds a row where those four columns are null and asserts mapRow's fallback values
+  // builds a row where those columns are null and asserts mapRow's fallback values
   // match the schema column defaults - so any drift between schema.sql, the Drizzle schema,
   // and the repo's fallback const fails CI rather than silently shipping a wrong default.
   test('mapRow defaults match the schema column defaults (drift guard)', async () => {
@@ -303,6 +308,7 @@ describe('schema invariants', () => {
           dailyLimit: null,
           startOfWeek: null,
           treatSaturdayAsHoliday: null,
+          sessionIdleTimeoutMinutes: null,
         }),
       ],
     });
@@ -311,5 +317,8 @@ describe('schema invariants', () => {
     expect(result?.dailyLimit).toBe(parseFloat(cols.dailyLimit.default as string));
     expect(result?.startOfWeek).toBe(cols.startOfWeek.default as string);
     expect(result?.treatSaturdayAsHoliday).toBe(cols.treatSaturdayAsHoliday.default as boolean);
+    expect(result?.sessionIdleTimeoutMinutes).toBe(
+      cols.sessionIdleTimeoutMinutes.default as number,
+    );
   });
 });
