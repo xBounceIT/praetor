@@ -100,8 +100,7 @@ const getOrderStatusLabel = (status: ClientsOrder['status'], t: (key: string) =>
   return t('accounting:clientsOrders.statusDraft');
 };
 
-const isHistoryRow = (status: ClientsOrder['status']) =>
-  status === 'confirmed' || status === 'denied';
+const isDeniedRow = (status: ClientsOrder['status']) => status === 'denied';
 
 type ClientsOrdersViewState = {
   isModalOpen: boolean;
@@ -568,12 +567,13 @@ const useClientsOrdersController = ({
   const isLinkedProductMissing = (item: ClientsOrderItem) =>
     Boolean(item.supplierQuoteItemId && (!item.productId || !activeProductIds.has(item.productId)));
 
-  // A draft order is always editable — including one created from an offer. The order is the
-  // live downstream document, so an upstream offer link must not lock it (mirrors the offers
-  // view, which keys read-only off status alone). Read-only kicks in once the order is
-  // confirmed/denied, or while previewing a historical version.
-  const baseReadOnly = Boolean(editingOrder && editingOrder.status !== 'draft');
-  const isReadOnly = baseReadOnly || previewVersion !== null;
+  // A confirmed order keeps its identity fixed but remains commercially editable. Denied orders
+  // and historical previews are fully read-only.
+  const isHistoricalPreviewReadOnly = previewVersion !== null;
+  const isDeniedReadOnly = editingOrder?.status === 'denied';
+  const isConfirmedIdentityLocked = editingOrder?.status === 'confirmed';
+  const isReadOnly = isHistoricalPreviewReadOnly || isDeniedReadOnly;
+  const isVersionRestoreLocked = Boolean(editingOrder && editingOrder.status !== 'draft');
 
   const tableInitialFilterState = useMemo(() => {
     if (orderFilterId) {
@@ -639,7 +639,7 @@ const useClientsOrdersController = ({
         cell: ({ row }: { row: ClientsOrder }) => (
           <div>
             <div
-              className={`font-bold ${isHistoryRow(row.status) ? 'text-muted-foreground' : 'text-foreground'}`}
+              className={`font-bold ${isDeniedRow(row.status) ? 'text-muted-foreground' : 'text-foreground'}`}
             >
               {row.clientName}
             </div>
@@ -655,7 +655,7 @@ const useClientsOrdersController = ({
         headerClassName: 'min-w-[9rem]',
         disableSorting: true,
         cell: ({ row }: { row: ClientsOrder }) => {
-          const history = isHistoryRow(row.status);
+          const history = isDeniedRow(row.status);
           return (
             <span
               className={`text-sm font-semibold whitespace-nowrap ${history ? 'text-muted-foreground' : 'text-foreground'}`}
@@ -675,7 +675,7 @@ const useClientsOrdersController = ({
         cell: ({ row, value }: { row: ClientsOrder; value: unknown }) => (
           <PricingCell
             value={Number(value)}
-            isHistory={isHistoryRow(row.status)}
+            isHistory={isDeniedRow(row.status)}
             colorClass="text-foreground"
             currency={currency}
           />
@@ -691,7 +691,7 @@ const useClientsOrdersController = ({
         cell: ({ row, value }: { row: ClientsOrder; value: unknown }) => (
           <PricingCell
             value={Number(value)}
-            isHistory={isHistoryRow(row.status)}
+            isHistory={isDeniedRow(row.status)}
             colorClass="text-amber-600"
             prefix="-"
             dashOnZero
@@ -709,7 +709,7 @@ const useClientsOrdersController = ({
         cell: ({ row, value }: { row: ClientsOrder; value: unknown }) => (
           <PricingCell
             value={Number(value)}
-            isHistory={isHistoryRow(row.status)}
+            isHistory={isDeniedRow(row.status)}
             colorClass="text-emerald-600"
             bold
             currency={currency}
@@ -726,7 +726,7 @@ const useClientsOrdersController = ({
         cell: ({ row, value }: { row: ClientsOrder; value: unknown }) => (
           <PricingCell
             value={Number(value)}
-            isHistory={isHistoryRow(row.status)}
+            isHistory={isDeniedRow(row.status)}
             colorClass="text-foreground"
             currency={currency}
           />
@@ -741,7 +741,7 @@ const useClientsOrdersController = ({
         cell: ({ row, value }: { row: ClientsOrder; value: unknown }) => (
           <PricingCell
             value={Number(value)}
-            isHistory={isHistoryRow(row.status)}
+            isHistory={isDeniedRow(row.status)}
             colorClass="text-foreground"
             bold
             currency={currency}
@@ -757,7 +757,7 @@ const useClientsOrdersController = ({
         headerClassName: 'min-w-[10rem]',
         cell: ({ row }: { row: ClientsOrder }) => (
           <span
-            className={`text-sm font-semibold ${isHistoryRow(row.status) ? 'text-muted-foreground' : 'text-foreground'}`}
+            className={`text-sm font-semibold ${isDeniedRow(row.status) ? 'text-muted-foreground' : 'text-foreground'}`}
           >
             {row.paymentTerms === 'immediate' ? t('crm:paymentTerms.immediate') : row.paymentTerms}
           </span>
@@ -769,7 +769,7 @@ const useClientsOrdersController = ({
         className: 'whitespace-nowrap',
         headerClassName: 'min-w-[9rem]',
         cell: ({ row }: { row: ClientsOrder }) => (
-          <div className={isHistoryRow(row.status) ? 'opacity-60' : ''}>
+          <div className={isDeniedRow(row.status) ? 'opacity-60' : ''}>
             <StatusBadge
               type={row.status as StatusType}
               label={getOrderStatusLabel(row.status, t)}
@@ -819,22 +819,22 @@ const useClientsOrdersController = ({
                       openEditModal(row);
                     }}
                     aria-label={
-                      row.status === 'draft'
-                        ? t('accounting:clientsOrders.editOrder')
-                        : t('accounting:clientsOrders.viewOrder')
+                      row.status === 'denied'
+                        ? t('accounting:clientsOrders.viewOrder')
+                        : t('accounting:clientsOrders.editOrder')
                     }
                     className={TABLE_ROW_ACTION_BUTTON_CLASSNAME}
                   >
                     <i
-                      className={`fa-solid ${row.status === 'draft' ? 'fa-pen-to-square' : 'fa-eye'}`}
+                      className={`fa-solid ${row.status === 'denied' ? 'fa-eye' : 'fa-pen-to-square'}`}
                     ></i>
                   </button>
                 </span>
               </TooltipTrigger>
               <TooltipContent>
-                {row.status === 'draft'
-                  ? t('accounting:clientsOrders.editOrder')
-                  : t('accounting:clientsOrders.viewOrder')}
+                {row.status === 'denied'
+                  ? t('accounting:clientsOrders.viewOrder')
+                  : t('accounting:clientsOrders.editOrder')}
               </TooltipContent>
             </Tooltip>
             {row.status === 'draft' && (
@@ -916,7 +916,6 @@ const useClientsOrdersController = ({
     addProductRow,
     allProductIds,
     allSupplierOrderIds,
-    baseReadOnly,
     canViewInternalListing,
     canViewSupplierOrders,
     closeEditModal,
@@ -937,9 +936,11 @@ const useClientsOrdersController = ({
     handleVersionRestored,
     i18n,
     isDeleteConfirmOpen,
+    isConfirmedIdentityLocked,
     isLinkedProductMissing,
     isModalOpen,
     isReadOnly,
+    isVersionRestoreLocked,
     onViewOffer,
     openEditModal,
     orderToDelete,
@@ -978,7 +979,7 @@ const ClientsOrdersLayout: React.FC<{ controller: ClientsOrdersController }> = (
       initialFilterState={controller.tableInitialFilterState}
       containerClassName="overflow-visible"
       rowClassName={(row: ClientsOrder) =>
-        isHistoryRow(row.status) ? 'bg-muted text-muted-foreground' : 'hover:bg-muted/50'
+        isDeniedRow(row.status) ? 'bg-muted text-muted-foreground' : 'hover:bg-muted/50'
       }
       onRowClick={(row: ClientsOrder) => controller.openEditModal(row)}
     />
@@ -1044,7 +1045,7 @@ const ClientsOrderModal: React.FC<{ controller: ClientsOrdersController }> = ({ 
           onPreview={controller.handleVersionPreview}
           onClearPreview={controller.handleClearPreview}
           onRestored={controller.handleVersionRestored}
-          disabled={controller.baseReadOnly}
+          disabled={controller.isVersionRestoreLocked}
         />
       )}
     </div>
@@ -1080,7 +1081,14 @@ const ClientsOrderModalAlerts: React.FC<{ controller: ClientsOrdersController }>
         </Button>
       </div>
     )}
-    {controller.editingOrder && controller.editingOrder.status !== 'draft' && (
+    {controller.editingOrder?.status === 'confirmed' && (
+      <div className="flex items-center gap-3 rounded-md border border-amber-500/30 bg-amber-500/10 px-4 py-3">
+        <span className="text-xs font-medium text-amber-700 dark:text-amber-300">
+          {controller.t('accounting:clientsOrders.confirmedIdentityLockedStatus')}
+        </span>
+      </div>
+    )}
+    {controller.editingOrder?.status === 'denied' && (
       <div className="flex items-center gap-3 rounded-md border border-amber-500/30 bg-amber-500/10 px-4 py-3">
         <span className="text-xs font-medium text-amber-700 dark:text-amber-300">
           {controller.t('accounting:clientsOrders.readOnlyStatus', {
@@ -1144,7 +1152,7 @@ const OrderDetailsSection: React.FC<{ controller: ClientsOrdersController }> = (
           required
           placeholder={controller.t('sales:clientQuotes.selectAClient')}
           searchable={true}
-          disabled={controller.isReadOnly}
+          disabled={controller.isReadOnly || controller.isConfirmedIdentityLocked}
           buttonClassName={controller.errors.clientId ? 'h-9 border-destructive' : 'h-9'}
         />
         <FieldError className="text-xs">{controller.errors.clientId}</FieldError>
@@ -1155,7 +1163,13 @@ const OrderDetailsSection: React.FC<{ controller: ClientsOrdersController }> = (
             defaultValue: 'Order Number',
           })}
         </FieldLabel>
-        <div className="flex h-9 items-center rounded-md border border-border bg-muted/30 px-3 text-sm font-medium text-foreground">
+        <div
+          className={`flex h-9 items-center rounded-md border border-border px-3 text-sm font-medium ${
+            controller.isReadOnly || controller.isConfirmedIdentityLocked
+              ? 'bg-muted text-muted-foreground'
+              : 'bg-muted/30 text-foreground'
+          }`}
+        >
           {controller.editingOrder?.id || '-'}
         </div>
       </Field>

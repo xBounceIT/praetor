@@ -1,7 +1,14 @@
 import { afterEach, describe, expect, mock, test } from 'bun:test';
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import type { ReactNode } from 'react';
-import type { Client, ClientsOrder, Product, SupplierSaleOrder } from '../../../types';
+import type {
+  Client,
+  ClientsOrder,
+  OrderVersion,
+  OrderVersionRow,
+  Product,
+  SupplierSaleOrder,
+} from '../../../types';
 import { LineDeleteConfirmStub } from '../../helpers/lineItemDeleteConfirm';
 import { render } from '../../helpers/render';
 import { rowDeleteButtons } from '../../helpers/rowDeleteButtons';
@@ -34,18 +41,24 @@ mock.module('sonner', () => ({
   Toaster: () => null,
 }));
 
+let versionRows: OrderVersionRow[] = [];
+let versionPreview: OrderVersion | null = null;
+
 // Opening the edit modal mounts OrderVersionsPanel, which fetches version history on mount.
 // Stub the API so the modal renders without a real network call.
 mock.module('../../../services/api/clientsOrders', () => ({
   clientsOrdersApi: {
-    listVersions: () => Promise.resolve([]),
-    getVersion: () => Promise.reject(new Error('not used')),
+    listVersions: () => Promise.resolve(versionRows),
+    getVersion: () =>
+      versionPreview ? Promise.resolve(versionPreview) : Promise.reject(new Error('not used')),
     restoreVersion: () => Promise.reject(new Error('not used')),
   },
 }));
 
 // Modal locks body scroll while open; reset it between tests.
 afterEach(() => {
+  versionRows = [];
+  versionPreview = null;
   document.body.style.overflow = '';
 });
 
@@ -129,6 +142,39 @@ describe('<ClientsOrdersView />', () => {
 
     expect(screen.getByText('Helios Energy Services')).toBeInTheDocument();
     expect(screen.queryByText('accounting:clientsOrders.itemsCount')).toBeNull();
+  });
+
+  test('only denied rows use the muted table style', () => {
+    const confirmedOrder: ClientsOrder = {
+      ...orders[0],
+      id: 'dm_so_confirmed',
+      status: 'confirmed',
+    };
+    const deniedOrder: ClientsOrder = {
+      ...orders[0],
+      id: 'dm_so_denied',
+      status: 'denied',
+    };
+
+    render(
+      <ClientsOrdersView
+        orders={[confirmedOrder, deniedOrder]}
+        clients={clients}
+        products={[]}
+        currency="EUR"
+        onUpdateClientsOrder={mock(() => Promise.resolve())}
+        onDeleteClientsOrder={mock(() => Promise.resolve())}
+      />,
+    );
+
+    const confirmedRow = screen.getByText('dm_so_confirmed').closest('tr');
+    const deniedRow = screen.getByText('dm_so_denied').closest('tr');
+
+    expect(confirmedRow?.className).toContain('hover:bg-muted/50');
+    expect(confirmedRow?.className).not.toContain('bg-muted text-muted-foreground');
+    expect(confirmedRow?.querySelector('.opacity-60')).toBeNull();
+    expect(deniedRow?.className).toContain('bg-muted text-muted-foreground');
+    expect(deniedRow?.querySelector('.opacity-60')).not.toBeNull();
   });
 
   test('scales order-row totals by a line item duration (issue #757)', () => {
@@ -387,10 +433,40 @@ describe('<ClientsOrdersView /> draft-from-offer editability', () => {
     expect(within(dialog).queryByText('accounting:clientsOrders.offerDetailsReadOnly')).toBeNull();
   });
 
-  test('a confirmed order linked to an offer stays read-only', async () => {
+  test('a confirmed order linked to an offer keeps identity locked but content editable', async () => {
     const { dialog } = await openModal(confirmedLinkedOrder);
 
     expect(isDisabled(dialog.querySelector('#client-order-client'))).toBe(true);
+    expect(within(dialog).getByText(confirmedLinkedOrder.id).className).toContain(
+      'text-muted-foreground',
+    );
+    expect(isDisabled(dialog.querySelector('#client-order-notes'))).toBe(false);
+    expect(
+      isDisabled(within(dialog).getByRole('button', { name: /clientQuotes\.addProduct/ })),
+    ).toBe(false);
+    expect(
+      isDisabled(
+        within(dialog).getByRole('button', { name: 'accounting:clientsOrders.updateOrder' }),
+      ),
+    ).toBe(false);
+    expect(
+      within(dialog).getByText('accounting:clientsOrders.confirmedIdentityLockedStatus'),
+    ).toBeInTheDocument();
+    expect(within(dialog).queryByText('accounting:clientsOrders.readOnlyStatus')).toBeNull();
+  });
+
+  test('a denied order linked to an offer stays fully read-only', async () => {
+    const deniedLinkedOrder: ClientsOrder = {
+      ...confirmedLinkedOrder,
+      id: 'dm_so_06',
+      status: 'denied',
+    };
+    const { dialog } = await openModal(deniedLinkedOrder);
+
+    expect(isDisabled(dialog.querySelector('#client-order-client'))).toBe(true);
+    expect(within(dialog).getByText(deniedLinkedOrder.id).className).toContain(
+      'text-muted-foreground',
+    );
     expect(isDisabled(dialog.querySelector('#client-order-notes'))).toBe(true);
     expect(
       isDisabled(within(dialog).getByRole('button', { name: /clientQuotes\.addProduct/ })),
@@ -401,6 +477,40 @@ describe('<ClientsOrdersView /> draft-from-offer editability', () => {
       ),
     ).toBe(true);
     expect(within(dialog).getByText('accounting:clientsOrders.readOnlyStatus')).toBeInTheDocument();
+  });
+
+  test('a historical version preview stays fully read-only for a confirmed order', async () => {
+    versionRows = [
+      {
+        id: 'ov-1',
+        orderId: confirmedLinkedOrder.id,
+        reason: 'update',
+        createdByUserId: 'u1',
+        createdAt: 1,
+      },
+    ];
+    versionPreview = {
+      ...versionRows[0],
+      snapshot: {
+        schemaVersion: 1,
+        order: {
+          ...confirmedLinkedOrder,
+          notes: 'historical note',
+        },
+        items: confirmedLinkedOrder.items,
+      },
+    };
+    const { dialog } = await openModal(confirmedLinkedOrder);
+
+    fireEvent.click(await screen.findByText('clientsOrders.versionHistory.reasonUpdate'));
+
+    await waitFor(() => expect(isDisabled(dialog.querySelector('#client-order-notes'))).toBe(true));
+    expect(
+      isDisabled(within(dialog).getByRole('button', { name: /clientQuotes\.addProduct/ })),
+    ).toBe(true);
+    expect(
+      within(dialog).queryByRole('button', { name: 'accounting:clientsOrders.updateOrder' }),
+    ).toBeNull();
   });
 
   test('submitting an edited draft-from-offer order calls onUpdateClientsOrder', async () => {

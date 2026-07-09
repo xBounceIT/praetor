@@ -944,6 +944,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         });
       }
 
+      const requestedOrderIdChanged = nextIdValue !== null && nextIdValue !== idResult.value;
       const hasLockedFieldUpdates =
         linkedOfferId !== undefined ||
         clientIdValue !== undefined ||
@@ -954,25 +955,62 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         notes !== undefined ||
         items !== undefined;
 
-      if (existingOrder.status !== 'draft' && hasLockedFieldUpdates) {
+      if (existingOrder.status === 'denied' && (requestedOrderIdChanged || hasLockedFieldUpdates)) {
         return replyError(request, reply, {
           statusCode: 409,
-          message: 'Non-draft clients_orders are read-only',
+          message: 'Denied clients_orders are read-only',
           action: 'client_order.update.conflict',
           entityType: 'client_order',
           entityId: idResult.value,
-          details: { secondaryLabel: 'non_draft_read_only', fromValue: existingOrder.status },
+          details: { secondaryLabel: 'denied_read_only', fromValue: existingOrder.status },
           extraBody: { currentStatus: existingOrder.status },
         });
       }
 
+      if (existingOrder.status === 'confirmed') {
+        const identityLockedFields: string[] = [];
+        if (requestedOrderIdChanged) identityLockedFields.push('id');
+        if (
+          linkedOfferIdValue !== undefined &&
+          (linkedOfferIdValue ?? null) !== (existingOrder.linkedOfferId ?? null)
+        ) {
+          identityLockedFields.push('linkedOfferId');
+        }
+        if (clientIdValue !== undefined && clientIdValue !== existingOrder.clientId) {
+          identityLockedFields.push('clientId');
+        }
+        if (clientNameValue !== undefined && clientNameValue !== existingOrder.clientName) {
+          identityLockedFields.push('clientName');
+        }
+
+        if (identityLockedFields.length > 0) {
+          return replyError(request, reply, {
+            statusCode: 409,
+            message: 'Confirmed client order identity fields are read-only',
+            action: 'client_order.update.conflict',
+            entityType: 'client_order',
+            entityId: idResult.value,
+            details: {
+              secondaryLabel: 'confirmed_identity_locked_fields',
+              changedFields: identityLockedFields,
+            },
+            extraBody: { fields: identityLockedFields, currentStatus: existingOrder.status },
+          });
+        }
+      }
+
+      const nextLinkedOfferId =
+        typeof linkedOfferIdValue === 'string' && linkedOfferIdValue !== existingOrder.linkedOfferId
+          ? linkedOfferIdValue
+          : null;
       const isSourceLinkedOrder = Boolean(
         existingOrder.linkedQuoteId || existingOrder.linkedOfferId,
       );
-      // A draft order created from an offer/quote is the live downstream document and stays
-      // fully editable. Non-draft orders are already fully locked by the status gate above
-      // (hasLockedFieldUpdates), so relaxing the source-linked lock only ever opens up drafts.
-      const allowSourceLinkedEdit = existingOrder.status === 'draft';
+      // Draft and confirmed orders created from an offer/quote are live downstream documents.
+      // Confirmed orders keep identity fields locked above, while commercial fields and guarded
+      // line edits still flow through this source-linked path.
+      const allowSourceLinkedEdit =
+        existingOrder.status === 'draft' || existingOrder.status === 'confirmed';
 
       let existingItems: clientsOrdersRepo.ClientOrderItem[] | null = null;
 
@@ -1092,8 +1130,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       let linkedQuoteIdValue: string | null = null;
-      if (linkedOfferId !== undefined && linkedOfferIdValue) {
-        if (existingOrder.linkedOfferId && existingOrder.linkedOfferId !== linkedOfferIdValue) {
+      if (nextLinkedOfferId !== null) {
+        if (existingOrder.linkedOfferId && existingOrder.linkedOfferId !== nextLinkedOfferId) {
           return replyError(request, reply, {
             statusCode: 409,
             message: 'Orders cannot be relinked to a different offer',
@@ -1104,14 +1142,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           });
         }
 
-        const offer = await clientsOrdersRepo.findOfferDetails(linkedOfferIdValue);
+        const offer = await clientsOrdersRepo.findOfferDetails(nextLinkedOfferId);
         if (!offer) {
           return replyError(request, reply, {
             statusCode: 404,
             message: 'Source offer not found',
             action: 'client_order.update.not_found',
             entityType: 'client_offer',
-            entityId: linkedOfferIdValue,
+            entityId: nextLinkedOfferId,
           });
         }
         if (offer.status !== 'accepted') {
@@ -1120,7 +1158,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             message: 'Sale orders can only be created from accepted offers',
             action: 'client_order.update.conflict',
             entityType: 'client_offer',
-            entityId: linkedOfferIdValue,
+            entityId: nextLinkedOfferId,
             details: { secondaryLabel: 'source_offer_not_accepted', fromValue: offer.status },
           });
         }
@@ -1135,13 +1173,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           });
         }
 
-        if (await clientsOrdersRepo.findExistingForOffer(linkedOfferIdValue, idResult.value)) {
+        if (await clientsOrdersRepo.findExistingForOffer(nextLinkedOfferId, idResult.value)) {
           return replyError(request, reply, {
             statusCode: 409,
             message: 'A sale order already exists for this offer',
             action: 'client_order.update.conflict',
             entityType: 'client_offer',
-            entityId: linkedOfferIdValue,
+            entityId: nextLinkedOfferId,
             details: { secondaryLabel: 'duplicate_order_for_offer' },
           });
         }
@@ -1155,8 +1193,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       let hasContentChanges = false;
       if ((!isSourceLinkedOrder || allowSourceLinkedEdit) && hasLockedFieldUpdates) {
         if (
-          (linkedOfferIdValue !== undefined &&
-            linkedOfferIdValue !== existingOrder.linkedOfferId) ||
+          nextLinkedOfferId !== null ||
           (clientIdValue !== undefined &&
             clientIdValue !== null &&
             clientIdValue !== existingOrder.clientId) ||
@@ -1194,8 +1231,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             await snapshotPreState(idResult.value, 'update', request, tx);
           }
           const patch: clientsOrdersRepo.ClientOrderUpdate = {};
-          if (linkedOfferId !== undefined && linkedOfferIdValue) {
-            patch.linkedOfferId = linkedOfferIdValue;
+          if (nextLinkedOfferId !== null) {
+            patch.linkedOfferId = nextLinkedOfferId;
             patch.linkedQuoteId = linkedQuoteIdValue;
           }
           if (clientIdValue !== undefined && clientIdValue !== null) {
@@ -1261,7 +1298,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               message: 'A sale order already exists for this offer',
               action: 'client_order.update.conflict',
               entityType: 'client_offer',
-              entityId: linkedOfferIdValue ?? undefined,
+              entityId: nextLinkedOfferId ?? undefined,
               details: { secondaryLabel: 'duplicate_order_for_offer' },
             });
           }
@@ -1442,18 +1479,17 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           entityId: idResult.value,
         });
       }
-      // Draft orders are restorable regardless of an offer/quote link — they are editable, so
-      // their version history must be reversible too (the restore preserves the link IDs and
-      // the snapshot/replaceItems path below carries supplier references). Non-draft orders stay
-      // read-only via the status check below; for them the version panel is disabled in the UI.
+      // Draft orders are restorable regardless of an offer/quote link. Restoring a historical
+      // snapshot can change identity and line structure, so restore remains draft-only even
+      // though confirmed orders allow commercial edits through PUT.
       if (current.status !== 'draft') {
         return replyError(request, reply, {
           statusCode: 409,
-          message: 'Non-draft clients_orders are read-only',
+          message: 'Client order version restore is only available for draft orders',
           action: 'client_order.restore.conflict',
           entityType: 'client_order',
           entityId: idResult.value,
-          details: { secondaryLabel: 'non_draft_read_only', fromValue: current.status },
+          details: { secondaryLabel: 'restore_requires_draft', fromValue: current.status },
           extraBody: { currentStatus: current.status },
         });
       }
