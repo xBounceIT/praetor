@@ -683,11 +683,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       onRequest: [
         authenticateToken,
         requireAnyPermission(
-          'administration.user_management.view',
           'administration.user_management_all.view',
           'administration.user_management.update',
-          'hr.internal.view',
-          'hr.external.view',
+          HR_EXTERNAL_CREATE_PERMISSION,
           'hr.internal.update',
           'hr.external.update',
         ),

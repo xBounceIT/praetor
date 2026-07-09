@@ -682,8 +682,8 @@ describe('GET /api/users', () => {
 // =========================================================================
 
 describe('GET /api/users/responsible-options', () => {
-  test('200 returns active app-user responsible options for HR viewers', async () => {
-    getRolePermissionsMock.mockResolvedValue(['hr.internal.view']);
+  test('200 returns active app-user responsible options for HR editors and external creators', async () => {
+    getRolePermissionsMock.mockResolvedValue(['hr.external.create']);
 
     const res = await testApp.inject({
       method: 'GET',
@@ -698,7 +698,23 @@ describe('GET /api/users/responsible-options', () => {
     ]);
   });
 
-  test('403 without a user-management or HR view/update permission', async () => {
+  test('403 for view-only HR or scoped user-management permissions', async () => {
+    getRolePermissionsMock.mockResolvedValue([
+      'hr.external.view',
+      'administration.user_management.view',
+    ]);
+
+    const res = await testApp.inject({
+      method: 'GET',
+      url: '/api/users/responsible-options',
+      headers: adminAuth(),
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(listResponsibleOptionsMock).not.toHaveBeenCalled();
+  });
+
+  test('403 without a user-management or HR edit/create permission', async () => {
     getRolePermissionsMock.mockResolvedValue([]);
 
     const res = await testApp.inject({

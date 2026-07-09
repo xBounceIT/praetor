@@ -2193,11 +2193,9 @@ const useAppContentController = () => {
         );
         const canListWorkUnits = hasViewAccess(permissions, 'hr/work-units');
         const canListResponsibleUsers = hasAnyPermission(permissions, [
-          buildPermission('administration.user_management', 'view'),
           buildPermission('administration.user_management_all', 'view'),
           buildPermission('administration.user_management', 'update'),
-          buildPermission('hr.internal', 'view'),
-          buildPermission('hr.external', 'view'),
+          buildPermission('hr.external', 'create'),
           buildPermission('hr.internal', 'update'),
           buildPermission('hr.external', 'update'),
         ]);
