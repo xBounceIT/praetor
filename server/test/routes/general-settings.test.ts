@@ -410,6 +410,7 @@ describe('PUT /api/general-settings', () => {
     expect(typeof rotatedToken).toBe('string');
     const decoded = decodeForAssertion(rotatedToken as string);
     expect(decoded.sessionStart).toBe(sessionStart);
+    expect(decoded.sessionMaxExpiresAt).toBeGreaterThan(sessionStart);
     if (typeof decoded.exp !== 'number' || typeof decoded.iat !== 'number') {
       throw new Error('Rotated token is missing exp or iat');
     }

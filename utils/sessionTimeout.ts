@@ -1,10 +1,10 @@
 export const DEFAULT_SESSION_IDLE_TIMEOUT_MINUTES = 30;
 export const MIN_SESSION_IDLE_TIMEOUT_MINUTES = 5;
 export const MAX_SESSION_IDLE_TIMEOUT_MINUTES = 24 * 60;
-export const SESSION_MAX_DURATION_MS = 8 * 60 * 60 * 1000;
 
 type SessionTokenPayload = {
-  sessionStart?: unknown;
+  exp?: unknown;
+  sessionMaxExpiresAt?: unknown;
 };
 
 export const normalizeSessionIdleTimeoutMinutes = (value: unknown): number => {
@@ -34,15 +34,37 @@ const decodeTokenPayload = (token: string | null | undefined): SessionTokenPaylo
   }
 };
 
-export const getSessionMaxExpiresAtMs = (token: string | null | undefined): number | null => {
-  const sessionStart = Number(decodeTokenPayload(token)?.sessionStart);
-  if (!Number.isFinite(sessionStart) || sessionStart <= 0) return null;
-  return sessionStart + SESSION_MAX_DURATION_MS;
+const normalizeFutureTimestampMs = (value: unknown): number | null => {
+  const timestamp = Number(value);
+  return Number.isFinite(timestamp) && timestamp > 0 ? timestamp : null;
+};
+
+const getPayloadTokenExpiresAtMs = (payload: SessionTokenPayload | null): number | null => {
+  const expSeconds = normalizeFutureTimestampMs(payload?.exp);
+  return expSeconds === null ? null : expSeconds * 1000;
+};
+
+const getPayloadSessionMaxExpiresAtMs = (payload: SessionTokenPayload | null): number | null =>
+  normalizeFutureTimestampMs(payload?.sessionMaxExpiresAt);
+
+export const getTokenExpiresAtMs = (token: string | null | undefined): number | null =>
+  getPayloadTokenExpiresAtMs(decodeTokenPayload(token));
+
+export const getSessionMaxExpiresAtMs = (token: string | null | undefined): number | null =>
+  getPayloadSessionMaxExpiresAtMs(decodeTokenPayload(token));
+
+const getEffectiveTokenExpiresAtMs = (token: string | null | undefined): number | null => {
+  const payload = decodeTokenPayload(token);
+  const expiresAtValues = [
+    getPayloadTokenExpiresAtMs(payload),
+    getPayloadSessionMaxExpiresAtMs(payload),
+  ].filter((value): value is number => value !== null);
+  return expiresAtValues.length === 0 ? null : Math.min(...expiresAtValues);
 };
 
 export const getSessionTimeoutThresholds = (minutes: unknown, token?: string | null) => {
   const timeoutMs = normalizeSessionIdleTimeoutMinutes(minutes) * 60 * 1000;
-  const absoluteSessionExpiresAtMs = getSessionMaxExpiresAtMs(token);
+  const absoluteSessionExpiresAtMs = getEffectiveTokenExpiresAtMs(token);
   const effectiveTimeoutMs =
     absoluteSessionExpiresAtMs === null
       ? timeoutMs

@@ -158,7 +158,6 @@ import {
   normalizeRilNoteOptions,
   normalizeRilTransferOptions,
 } from './utils/ril';
-import { getSessionTimeoutThresholds } from './utils/sessionTimeout';
 import { sourcesSupplierQuote } from './utils/supplierLineSync';
 import { applyBrowserTheme, applyTheme, getTheme } from './utils/theme';
 import { toastError } from './utils/toast';
@@ -431,6 +430,23 @@ const INITIAL_APP_LOCAL_STATE: AppLocalState = {
     isLoading: false,
   },
 };
+
+const toGeneralSettingsState = (genSettings: IGeneralSettings): GeneralSettingsState => ({
+  ...genSettings,
+  currency: normalizeCurrency(genSettings.currency),
+  geminiApiKey: genSettings.geminiApiKey || '',
+  aiProvider: genSettings.aiProvider || 'gemini',
+  openrouterApiKey: genSettings.openrouterApiKey || '',
+  geminiModelId: genSettings.geminiModelId || '',
+  openrouterModelId: genSettings.openrouterModelId || '',
+  defaultLocation: genSettings.defaultLocation || 'remote',
+  rilCompanyName: genSettings.rilCompanyName || '',
+  rilDefaultStartTime: genSettings.rilDefaultStartTime || DEFAULT_RIL_START_TIME,
+  rilDefaultExitTime: genSettings.rilDefaultExitTime || DEFAULT_RIL_EXIT_TIME,
+  rilLunchBreakMinutes: genSettings.rilLunchBreakMinutes ?? 60,
+  rilNoteOptions: normalizeRilNoteOptions(genSettings.rilNoteOptions),
+  rilTransferOptions: normalizeRilTransferOptions(genSettings.rilTransferOptions),
+});
 
 type AppLocalStateAction = {
   [Key in keyof AppLocalState]: {
@@ -1261,12 +1277,31 @@ const useAppContentController = () => {
     reset: resetModuleLoader,
   } = useModuleLoader();
   const hasLoadedGeneralSettingsRef = useRef(false);
+  const generalSettingsLoadPromiseRef = useRef<Promise<IGeneralSettings> | null>(null);
   const hasLoadedLdapConfigRef = useRef(false);
   const hasLoadedSsoProvidersRef = useRef(false);
   const hasLoadedEmailConfigRef = useRef(false);
   const hasLoadedGeneralSettings = hasLoadedGeneralSettingsRef.current;
 
   const hasLoadedRolesRef = useRef(false);
+
+  const loadGeneralSettingsOnce = useCallback(
+    async (shouldApply: () => boolean = () => true) => {
+      if (hasLoadedGeneralSettingsRef.current) return;
+      if (generalSettingsLoadPromiseRef.current === null) {
+        generalSettingsLoadPromiseRef.current = api.generalSettings.get().finally(() => {
+          generalSettingsLoadPromiseRef.current = null;
+        });
+      }
+
+      const genSettings = await generalSettingsLoadPromiseRef.current;
+      if (!shouldApply() || hasLoadedGeneralSettingsRef.current) return;
+
+      setGeneralSettings(toGeneralSettingsState(genSettings));
+      hasLoadedGeneralSettingsRef.current = true;
+    },
+    [setGeneralSettings],
+  );
 
   // Items and unread count share one state so handlers can derive both from
   // `prev` in a single updater — splitting them races the 60s polling refresh
@@ -1555,6 +1590,21 @@ const useAppContentController = () => {
   // Read by the hashchange listener (mounted once) so it sees the latest user
   // without the effect resubscribing — events fired during teardown are lost.
   currentUserRef.current = currentUser;
+
+  // The inactivity timer is global session state, so load its admin policy once per
+  // authenticated session instead of depending on whichever module datasets happen to run.
+  useEffect(() => {
+    if (!currentUser) return;
+
+    let isCancelled = false;
+    loadGeneralSettingsOnce(() => !isCancelled).catch((err) => {
+      if (!isCancelled) console.error('Failed to load general settings:', err);
+    });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [currentUser, loadGeneralSettingsOnce]);
 
   // The login screen always follows the OS/browser color scheme; the signed-in
   // app honors the user's saved theme. applyBrowserTheme() never persists, so a
@@ -1959,29 +2009,7 @@ const useAppContentController = () => {
       return cancelModuleLoad;
     }
 
-    const loadGeneralSettings = async () => {
-      if (hasLoadedGeneralSettingsRef.current) return;
-      const genSettings = await api.generalSettings.get();
-      if (isCurrentModuleLoad()) {
-        setGeneralSettings({
-          ...genSettings,
-          currency: normalizeCurrency(genSettings.currency),
-          geminiApiKey: genSettings.geminiApiKey || '',
-          aiProvider: genSettings.aiProvider || 'gemini',
-          openrouterApiKey: genSettings.openrouterApiKey || '',
-          geminiModelId: genSettings.geminiModelId || '',
-          openrouterModelId: genSettings.openrouterModelId || '',
-          defaultLocation: genSettings.defaultLocation || 'remote',
-          rilCompanyName: genSettings.rilCompanyName || '',
-          rilDefaultStartTime: genSettings.rilDefaultStartTime || DEFAULT_RIL_START_TIME,
-          rilDefaultExitTime: genSettings.rilDefaultExitTime || DEFAULT_RIL_EXIT_TIME,
-          rilLunchBreakMinutes: genSettings.rilLunchBreakMinutes ?? 60,
-          rilNoteOptions: normalizeRilNoteOptions(genSettings.rilNoteOptions),
-          rilTransferOptions: normalizeRilTransferOptions(genSettings.rilTransferOptions),
-        });
-        hasLoadedGeneralSettingsRef.current = true;
-      }
-    };
+    const loadGeneralSettings = () => loadGeneralSettingsOnce(isCurrentModuleLoad);
 
     const loadLdapConfig = async () => {
       if (hasLoadedLdapConfigRef.current) return;
@@ -2709,7 +2737,7 @@ const useAppContentController = () => {
     setResales,
     setResaleCategories,
     setResaleOrderOptions,
-    setGeneralSettings,
+    loadGeneralSettingsOnce,
     setLdapConfig,
     setSsoProviders,
     setEmailConfig,
@@ -3449,10 +3477,7 @@ const TechnicalDocsRoute: React.FC<{
     {controller.currentUser && (
       <SessionTimeoutHandler
         onLogout={() => controller.handleLogout('inactivity')}
-        {...getSessionTimeoutThresholds(
-          controller.generalSettings.sessionIdleTimeoutMinutes,
-          api.getAuthToken(),
-        )}
+        sessionIdleTimeoutMinutes={controller.generalSettings.sessionIdleTimeoutMinutes}
       />
     )}
     {view === 'api' ? <ApiDocsView /> : <FrontendDocsView />}
@@ -3507,10 +3532,7 @@ const AuthenticatedAppShell: React.FC<{ controller: AppContentController }> = ({
     <CurrentUserIdProvider userId={currentUser.id}>
       <SessionTimeoutHandler
         onLogout={() => handleLogout('inactivity')}
-        {...getSessionTimeoutThresholds(
-          generalSettings.sessionIdleTimeoutMinutes,
-          api.getAuthToken(),
-        )}
+        sessionIdleTimeoutMinutes={generalSettings.sessionIdleTimeoutMinutes}
       />
       <Layout
         activeView={!isRouteAccessible ? 'timesheets/tracker' : (activeView as View)}

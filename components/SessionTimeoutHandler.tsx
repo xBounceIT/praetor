@@ -12,12 +12,15 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import api from '../services/api';
+import { getSessionTimeoutThresholds } from '../utils/sessionTimeout';
 
 export interface SessionTimeoutHandlerProps {
   onLogout: () => void;
   warnAfterMs?: number;
   logoutAfterMs?: number;
   absoluteSessionExpiresAtMs?: number | null;
+  sessionIdleTimeoutMinutes?: number;
+  tokenProvider?: () => string | null;
 }
 
 const SessionTimeoutHandler: React.FC<SessionTimeoutHandlerProps> = ({
@@ -25,6 +28,8 @@ const SessionTimeoutHandler: React.FC<SessionTimeoutHandlerProps> = ({
   warnAfterMs = 20 * 60 * 1000,
   logoutAfterMs = 30 * 60 * 1000,
   absoluteSessionExpiresAtMs = null,
+  sessionIdleTimeoutMinutes,
+  tokenProvider = api.getAuthToken,
 }) => {
   const { t } = useTranslation('auth');
   const [showWarning, setShowWarning] = useState(false);
@@ -48,17 +53,34 @@ const SessionTimeoutHandler: React.FC<SessionTimeoutHandlerProps> = ({
     onLogoutRef.current();
   }, []);
 
+  const resolveThresholds = useCallback(() => {
+    if (sessionIdleTimeoutMinutes === undefined) {
+      return { warnAfterMs, logoutAfterMs, absoluteSessionExpiresAtMs };
+    }
+    return getSessionTimeoutThresholds(sessionIdleTimeoutMinutes, tokenProvider());
+  }, [
+    absoluteSessionExpiresAtMs,
+    logoutAfterMs,
+    sessionIdleTimeoutMinutes,
+    tokenProvider,
+    warnAfterMs,
+  ]);
+
   const resetTimers = useCallback(() => {
     setShowWarning(false);
 
     if (warningTimerRef.current) clearTimeout(warningTimerRef.current);
     if (logoutTimerRef.current) clearTimeout(logoutTimerRef.current);
 
+    const thresholds = resolveThresholds();
     const effectiveLogoutAfterMs =
-      absoluteSessionExpiresAtMs === null
-        ? logoutAfterMs
-        : Math.min(logoutAfterMs, Math.max(0, absoluteSessionExpiresAtMs - Date.now()));
-    const warningLeadMs = Math.max(0, logoutAfterMs - warnAfterMs);
+      thresholds.absoluteSessionExpiresAtMs === null
+        ? thresholds.logoutAfterMs
+        : Math.min(
+            thresholds.logoutAfterMs,
+            Math.max(0, thresholds.absoluteSessionExpiresAtMs - Date.now()),
+          );
+    const warningLeadMs = Math.max(0, thresholds.logoutAfterMs - thresholds.warnAfterMs);
     const effectiveWarnAfterMs = Math.max(0, effectiveLogoutAfterMs - warningLeadMs);
 
     warningTimerRef.current = setTimeout(() => {
@@ -68,7 +90,7 @@ const SessionTimeoutHandler: React.FC<SessionTimeoutHandlerProps> = ({
     logoutTimerRef.current = setTimeout(() => {
       handleLogoutNow();
     }, effectiveLogoutAfterMs);
-  }, [absoluteSessionExpiresAtMs, handleLogoutNow, warnAfterMs, logoutAfterMs]);
+  }, [handleLogoutNow, resolveThresholds]);
 
   const clearTimers = useCallback(() => {
     const warningTimer = warningTimerRef.current;

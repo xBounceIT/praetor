@@ -988,16 +988,18 @@ describe('requireAnyPermission (ANY semantics)', () => {
 
 describe('generateToken', () => {
   test('embeds userId, sessionStart, activeRole and sessionVersion; expires in 30m', () => {
-    const sessionStart = 1_700_000_000_000;
+    const sessionStart = Date.now();
     const token = generateToken('u1', sessionStart, 'admin', 4);
     const decoded = decodeForAssertion(token) as jwt.JwtPayload & {
       userId: string;
       sessionStart: number;
+      sessionMaxExpiresAt: number;
       activeRole: string;
       sessionVersion: number;
     };
     expect(decoded.userId).toBe('u1');
     expect(decoded.sessionStart).toBe(sessionStart);
+    expect(decoded.sessionMaxExpiresAt).toBeGreaterThan(sessionStart);
     expect(decoded.activeRole).toBe('admin');
     expect(decoded.sessionVersion).toBe(4);
     expect(decoded.exp).toBeDefined();
@@ -1006,7 +1008,7 @@ describe('generateToken', () => {
   });
 
   test('uses the provided idle timeout as token expiry', () => {
-    const token = generateToken('u1', 1_700_000_000_000, 'admin', 4, 45);
+    const token = generateToken('u1', Date.now(), 'admin', 4, 45);
     const decoded = decodeForAssertion(token) as jwt.JwtPayload;
     expect((decoded.exp as number) - (decoded.iat as number)).toBe(45 * 60);
   });

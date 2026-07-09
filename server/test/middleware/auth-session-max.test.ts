@@ -10,7 +10,7 @@ import * as realGeneralSettingsRepo from '../../repositories/generalSettingsRepo
 import * as realRolesRepo from '../../repositories/rolesRepo.ts';
 import * as realUsersRepo from '../../repositories/usersRepo.ts';
 import * as realPermissions from '../../utils/permissions.ts';
-import { signToken } from '../helpers/jwt.ts';
+import { decodeForAssertion, signToken } from '../helpers/jwt.ts';
 
 const usersRepoSnapshot = { ...realUsersRepo };
 const rolesRepoSnapshot = { ...realRolesRepo };
@@ -133,8 +133,9 @@ describe('SESSION_MAX_DURATION_MS env override', () => {
     expect(findAuthUserByIdMock).not.toHaveBeenCalled();
   });
 
-  test('a fresh session (sessionStart = now) is still accepted', async () => {
-    const token = signToken({ userId: 'u1', sessionStart: Date.now() });
+  test('a fresh session (sessionStart = now) is still accepted and rotated within max', async () => {
+    const sessionStart = Date.now();
+    const token = signToken({ userId: 'u1', sessionStart });
     const reply = buildFakeReply();
 
     await authenticateToken(buildFakeRequest(token) as never, reply as never);
@@ -142,6 +143,9 @@ describe('SESSION_MAX_DURATION_MS env override', () => {
     expect(reply.statusCode).toBe(0);
     expect(reply.body).toBeUndefined();
     expect(findAuthUserByIdMock).toHaveBeenCalledWith('u1');
+    const decoded = decodeForAssertion(reply.headers['x-auth-token']);
+    expect(decoded.sessionMaxExpiresAt).toBe(sessionStart + 1000);
+    expect((decoded.exp as number) - (decoded.iat as number)).toBe(1);
   });
 
   test('non-positive values fall back to the default 8h window', async () => {

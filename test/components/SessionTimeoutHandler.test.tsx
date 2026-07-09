@@ -29,6 +29,14 @@ const dispatch = (event: (typeof ACTIVITY_EVENTS)[number]) =>
 
 const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
+const tokenWithPayload = (payload: Record<string, unknown>) => {
+  const encodedPayload = btoa(JSON.stringify(payload))
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
+  return `header.${encodedPayload}.signature`;
+};
+
 describe('<SessionTimeoutHandler />', () => {
   beforeEach(() => {
     apiAuthMe.mockReset();
@@ -174,6 +182,21 @@ describe('<SessionTimeoutHandler />', () => {
     const onLogout = mock(() => {});
 
     render(<SessionTimeoutHandler onLogout={onLogout} warnAfterMs={20} logoutAfterMs={80} />);
+
+    await waitFor(() => expect(onLogout).toHaveBeenCalledTimes(1), { timeout: 500 });
+  });
+
+  test('derives timers from the current token when idle minutes are provided', async () => {
+    const onLogout = mock(() => {});
+    const token = tokenWithPayload({ sessionMaxExpiresAt: Date.now() + 80 });
+
+    render(
+      <SessionTimeoutHandler
+        onLogout={onLogout}
+        sessionIdleTimeoutMinutes={30}
+        tokenProvider={() => token}
+      />,
+    );
 
     await waitFor(() => expect(onLogout).toHaveBeenCalledTimes(1), { timeout: 500 });
   });

@@ -101,6 +101,7 @@ export const getConfiguredSessionIdleTimeoutMinutes = async (): Promise<number> 
 type SessionJwtPayload = JwtPayload & {
   userId: string;
   sessionStart?: number;
+  sessionMaxExpiresAt?: number;
   activeRole?: string;
   sessionVersion?: number;
 };
@@ -499,11 +500,23 @@ export const generateToken = (
   activeRole: string | undefined,
   sessionVersion: number,
   sessionIdleTimeoutMinutes = DEFAULT_SESSION_IDLE_TIMEOUT_MINUTES,
-) =>
-  jwt.sign({ userId, sessionStart, activeRole, sessionVersion }, getJwtSecret(), {
-    expiresIn: normalizeSessionIdleTimeoutMinutes(sessionIdleTimeoutMinutes) * 60,
-    algorithm: JWT_ALGORITHM,
-  });
+): string => {
+  const sessionMaxExpiresAt = sessionStart + getSessionMaxDurationMs();
+  const idleTimeoutSeconds = normalizeSessionIdleTimeoutMinutes(sessionIdleTimeoutMinutes) * 60;
+  const remainingSessionSeconds = Math.max(
+    1,
+    Math.floor((sessionMaxExpiresAt - Date.now()) / 1000),
+  );
+
+  return jwt.sign(
+    { userId, sessionStart, sessionMaxExpiresAt, activeRole, sessionVersion },
+    getJwtSecret(),
+    {
+      expiresIn: Math.min(idleTimeoutSeconds, remainingSessionSeconds),
+      algorithm: JWT_ALGORITHM,
+    },
+  );
+};
 
 export const generateTokenWithCurrentIdleTimeout = async (
   userId: string,
