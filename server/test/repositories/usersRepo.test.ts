@@ -344,7 +344,9 @@ describe('listAllForAdmin', () => {
     exec.enqueue({ rows: [sampleListRow] });
     const result = await usersRepo.listAllForAdmin(testDb);
     expect(exec.calls[0].params).toEqual(['top_manager', 'admin', 'admin']);
+    expect(exec.calls[0].sql).toContain('COALESCE(');
     expect(exec.calls[0].sql).toContain('string_agg(w_department.name');
+    expect(exec.calls[0].sql).toContain('u.department');
     expect(exec.calls[0].sql).toContain('LEFT JOIN users responsible_user');
     expect(result).toEqual([
       {

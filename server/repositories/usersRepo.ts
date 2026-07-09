@@ -713,12 +713,15 @@ const USER_HR_SELECT_COLUMNS = sql`
             u.last_name AS "lastName",
             u.phone,
             u.job_title AS "jobTitle",
-            (
-              SELECT string_agg(w_department.name, ', ' ORDER BY w_department.name)
-              FROM user_work_units uw_department
-              JOIN work_units w_department ON w_department.id = uw_department.work_unit_id
-              WHERE uw_department.user_id = u.id
-                AND COALESCE(w_department.is_disabled, false) = false
+            COALESCE(
+              (
+                SELECT string_agg(w_department.name, ', ' ORDER BY w_department.name)
+                FROM user_work_units uw_department
+                JOIN work_units w_department ON w_department.id = uw_department.work_unit_id
+                WHERE uw_department.user_id = u.id
+                  AND COALESCE(w_department.is_disabled, false) = false
+              ),
+              u.department
             ) AS department,
             u.responsible_user_id AS "responsibleUserId",
             responsible_user.name AS "responsibleUserName",
