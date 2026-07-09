@@ -148,9 +148,9 @@
     "user": "User"
   },
   "employeeProfile": {
-    "contactSection": "Contact",
+    "contactSection": "Company Profile",
     "employmentSection": "Employment",
-    "emergencySection": "Personal Contacts",
+    "emergencySection": "Personal Profile",
     "notSet": "Not set",
     "firstName": "First Name",
     "lastName": "Last Name",
@@ -165,8 +165,9 @@
     "contractType": "Contract Type",
     "employmentStatus": "HR Status",
     "workLocation": "Work Location",
-    "emergencyContactName": "Personal Contact",
+    "emergencyContactName": "Full Name",
     "emergencyContactPhone": "Personal Phone",
+    "address": "Full Address",
     "notes": "Notes",
     "contact": "Contact",
     "roleTitle": "Role",

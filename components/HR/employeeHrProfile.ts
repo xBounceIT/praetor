@@ -26,6 +26,7 @@ export type EmployeeHrFormData = {
   workLocation: UserWorkLocation | '';
   emergencyContactName: string;
   emergencyContactPhone: string;
+  address: string;
   notes: string;
   costPerHour: string;
 };
@@ -77,6 +78,7 @@ export const createEmptyEmployeeHrForm = (): EmployeeHrFormData => ({
   workLocation: '',
   emergencyContactName: '',
   emergencyContactPhone: '',
+  address: '',
   notes: '',
   costPerHour: '',
 });
@@ -99,6 +101,7 @@ export const createEmployeeHrForm = (employee: User): EmployeeHrFormData => ({
   workLocation: employee.workLocation || '',
   emergencyContactName: employee.emergencyContactName || '',
   emergencyContactPhone: employee.emergencyContactPhone || '',
+  address: employee.address || '',
   notes: employee.notes || '',
   costPerHour: employee.costPerHour?.toString() || '',
 });
@@ -124,6 +127,7 @@ export const buildEmployeeHrPayload = (
     workLocation: formData.workLocation || null,
     emergencyContactName: nullableText(formData.emergencyContactName),
     emergencyContactPhone: nullableText(formData.emergencyContactPhone),
+    address: nullableText(formData.address),
     notes: nullableText(formData.notes),
   };
 

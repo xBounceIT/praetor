@@ -331,6 +331,7 @@ const sampleListRow = {
   workLocation: 'hybrid',
   emergencyContactName: 'Maria',
   emergencyContactPhone: '+39 02 5678',
+  address: 'Via Roma 1',
   notes: 'Prefers morning shifts',
   hasTopManagerRole: false,
   isAdminOnly: false,
@@ -372,6 +373,7 @@ describe('listAllForAdmin', () => {
         workLocation: 'hybrid',
         emergencyContactName: 'Maria',
         emergencyContactPhone: '+39 02 5678',
+        address: 'Via Roma 1',
         notes: 'Prefers morning shifts',
         hasTopManagerRole: false,
         isAdminOnly: false,
@@ -536,6 +538,7 @@ describe('insertUser', () => {
         workLocation: 'hybrid',
         emergencyContactName: 'Maria',
         emergencyContactPhone: '+39 02 5678',
+        address: 'Via Roma 1',
         notes: 'Prefers morning shifts',
       },
       testDb,
@@ -561,6 +564,7 @@ describe('insertUser', () => {
     expect(exec.calls[0].params).toContain('hybrid');
     expect(exec.calls[0].params).toContain('Maria');
     expect(exec.calls[0].params).toContain('+39 02 5678');
+    expect(exec.calls[0].params).toContain('Via Roma 1');
     expect(exec.calls[0].params).toContain('Prefers morning shifts');
   });
 });
@@ -736,6 +740,7 @@ describe('updateUserDynamic', () => {
           'hybrid',
           'Maria',
           '+39 02 5678',
+          'Via Roma 1',
           'Prefers morning shifts',
         ],
       ],
@@ -758,6 +763,7 @@ describe('updateUserDynamic', () => {
         workLocation: 'hybrid',
         emergencyContactName: 'Maria',
         emergencyContactPhone: '+39 02 5678',
+        address: 'Via Roma 1',
         notes: 'Prefers morning shifts',
       },
       testDb,
@@ -783,6 +789,7 @@ describe('updateUserDynamic', () => {
         workLocation: 'hybrid',
         emergencyContactName: 'Maria',
         emergencyContactPhone: '+39 02 5678',
+        address: 'Via Roma 1',
         notes: 'Prefers morning shifts',
       }),
     );

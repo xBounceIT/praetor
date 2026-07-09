@@ -68,6 +68,7 @@ describe('employeeHrProfile first/last name', () => {
         phone: '+39 02 1234',
         jobTitle: 'Consultant',
         department: 'Legacy Department',
+        address: 'Via Roma 1',
         responsibleUserId: 'u-manager',
         employeeCode: 'EMP-123',
       }),
@@ -83,13 +84,18 @@ describe('employeeHrProfile first/last name', () => {
     });
   });
 
-  test('buildEmployeeHrPayload sends responsibleUserId and omits department', () => {
+  test('buildEmployeeHrPayload sends responsibleUserId, address and omits department', () => {
     const form = createEmployeeHrForm(
-      buildUser({ department: 'Legacy Department', responsibleUserId: '  u-manager  ' }),
+      buildUser({
+        department: 'Legacy Department',
+        responsibleUserId: '  u-manager  ',
+        address: '  Via Roma 1  ',
+      }),
     );
     const payload = buildEmployeeHrPayload(form, { includeIdentity: false, includeCost: false });
 
     expect(payload.responsibleUserId).toBe('u-manager');
+    expect(payload.address).toBe('Via Roma 1');
     expect(payload).not.toHaveProperty('department');
   });
 

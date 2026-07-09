@@ -65,6 +65,7 @@ export const users = pgTable(
     workLocation: varchar('work_location', { length: 30 }).$type<UserWorkLocation>(),
     emergencyContactName: varchar('emergency_contact_name', { length: 255 }),
     emergencyContactPhone: varchar('emergency_contact_phone', { length: 50 }),
+    address: text('address'),
     notes: text('notes'),
     responsibleUserId: varchar('responsible_user_id', { length: 50 }).references(
       (): AnyPgColumn => users.id,

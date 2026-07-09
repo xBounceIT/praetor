@@ -125,8 +125,9 @@ describe('<InternalEmployeesView /> row click', () => {
     fireEvent.click(row);
 
     const department = screen.getByLabelText('employeeProfile.department');
-    expect(department).toHaveValue('Alpha Center, Beta Center');
-    expect(department).toHaveAttribute('readonly');
+    expect(department.tagName).toBe('OUTPUT');
+    expect(department).toHaveTextContent('Alpha Center, Beta Center');
+    expect(screen.queryByDisplayValue('Alpha Center, Beta Center')).not.toBeInTheDocument();
 
     await user.click(screen.getByLabelText('employeeProfile.responsible'));
     expect(screen.queryByText('Mario Rossi (mrossi)')).not.toBeInTheDocument();
@@ -178,7 +179,9 @@ describe('<InternalEmployeesView /> row click', () => {
 
     expect(screen.getByLabelText('employeeProfile.email')).toHaveValue('');
     expect(screen.getByLabelText('employeeProfile.jobTitle')).toHaveValue('');
-    expect(screen.getByLabelText('employeeProfile.department')).toHaveValue('');
+    const department = screen.getByLabelText('employeeProfile.department');
+    expect(department.tagName).toBe('OUTPUT');
+    expect(department).toHaveTextContent('employeeProfile.notSet');
     expect(screen.getByLabelText('employeeProfile.employeeCode')).toHaveValue('');
   });
 
@@ -213,6 +216,9 @@ describe('<InternalEmployeesView /> row click', () => {
     fireEvent.change(screen.getByLabelText('employeeProfile.employeeCode'), {
       target: { value: 'EMP-222' },
     });
+    fireEvent.change(screen.getByLabelText('employeeProfile.address'), {
+      target: { value: 'Via Roma 1' },
+    });
     await user.click(screen.getByLabelText('employeeProfile.responsible'));
     await user.click(await screen.findByText('Paola Manager (pmanager)'));
 
@@ -227,6 +233,7 @@ describe('<InternalEmployeesView /> row click', () => {
         jobTitle: 'HR Specialist',
         responsibleUserId: 'u-manager',
         employeeCode: 'EMP-222',
+        address: 'Via Roma 1',
       }),
     );
     expect(onAddEmployee.mock.calls[0][0]).not.toHaveProperty('department');

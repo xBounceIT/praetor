@@ -3099,6 +3099,16 @@
                           }
                         ]
                       },
+                      "address": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
                       "notes": {
                         "anyOf": [
                           {
@@ -3516,6 +3526,16 @@
                       }
                     ]
                   },
+                  "address": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
                   "notes": {
                     "anyOf": [
                       {
@@ -3738,6 +3758,16 @@
                       ]
                     },
                     "emergencyContactPhone": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "address": {
                       "anyOf": [
                         {
                           "type": "string"
@@ -4449,6 +4479,16 @@
                       }
                     ]
                   },
+                  "address": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
                   "notes": {
                     "anyOf": [
                       {
@@ -4678,6 +4718,16 @@
                       ]
                     },
                     "emergencyContactPhone": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "address": {
                       "anyOf": [
                         {
                           "type": "string"
@@ -5136,6 +5186,16 @@
                       ]
                     },
                     "emergencyContactPhone": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "address": {
                       "anyOf": [
                         {
                           "type": "string"

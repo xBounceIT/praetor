@@ -110,6 +110,7 @@ const userSchema = {
     workLocation: nullableWorkLocationSchema,
     emergencyContactName: nullableStringSchema,
     emergencyContactPhone: nullableStringSchema,
+    address: nullableStringSchema,
     notes: nullableStringSchema,
     authMethod: { type: 'string', enum: ['local', 'ldap', 'oidc', 'saml'] },
     authProviderId: { anyOf: [{ type: 'string' }, { type: 'null' }] },
@@ -159,6 +160,7 @@ const userCreateBodySchema = {
     workLocation: nullableWorkLocationSchema,
     emergencyContactName: nullableStringSchema,
     emergencyContactPhone: nullableStringSchema,
+    address: nullableStringSchema,
     notes: nullableStringSchema,
   },
   required: ['name'],
@@ -186,6 +188,7 @@ const userUpdateBodySchema = {
     workLocation: nullableWorkLocationSchema,
     emergencyContactName: nullableStringSchema,
     emergencyContactPhone: nullableStringSchema,
+    address: nullableStringSchema,
     notes: nullableStringSchema,
   },
 } as const;
@@ -386,6 +389,7 @@ const HR_DETAIL_FIELDS = [
   'workLocation',
   'emergencyContactName',
   'emergencyContactPhone',
+  'address',
   'notes',
 ] as const;
 
@@ -465,6 +469,7 @@ const parseHrDetails = (
     'employeeCode',
     'emergencyContactName',
     'emergencyContactPhone',
+    'address',
     'notes',
   ] as const;
 
@@ -1323,6 +1328,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         workLocation: fields.workLocation,
         emergencyContactName: fields.emergencyContactName,
         emergencyContactPhone: fields.emergencyContactPhone,
+        address: fields.address,
         notes: fields.notes,
       });
 

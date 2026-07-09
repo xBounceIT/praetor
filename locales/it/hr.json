@@ -148,9 +148,9 @@
     "user": "Utente"
   },
   "employeeProfile": {
-    "contactSection": "Contatti",
+    "contactSection": "Anagrafica Aziendale",
     "employmentSection": "Rapporto di lavoro",
-    "emergencySection": "Contatti personali",
+    "emergencySection": "Anagrafica Personale",
     "notSet": "Non impostato",
     "firstName": "Nome",
     "lastName": "Cognome",
@@ -165,8 +165,9 @@
     "contractType": "Tipo contratto",
     "employmentStatus": "Stato HR",
     "workLocation": "Sede di lavoro",
-    "emergencyContactName": "Contatto personale",
+    "emergencyContactName": "Nome Completo",
     "emergencyContactPhone": "Telefono personale",
+    "address": "Indirizzo completo",
     "notes": "Note",
     "contact": "Contatto",
     "roleTitle": "Ruolo",

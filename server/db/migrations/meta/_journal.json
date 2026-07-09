@@ -666,6 +666,13 @@
       "when": 1783594109597,
       "tag": "0094_add_user_responsible",
       "breakpoints": true
+    },
+    {
+      "idx": 95,
+      "version": "7",
+      "when": 1783612499703,
+      "tag": "0095_add_user_address",
+      "breakpoints": true
     }
   ]
 }

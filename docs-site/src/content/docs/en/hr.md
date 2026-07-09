@@ -7,7 +7,7 @@ sidebar:
 
 ## Employee records
 
-The **HR** module manages operational employee data separately from access controls. The **Internal Employees** and **External Employees** screens show the details HR needs for daily work: employee code, company phone, email, role, department derived from competence centers, responsible user, contract type, HR status, work location, hire or termination dates, personal contacts, and notes.
+The **HR** module manages operational employee data separately from access controls. The **Internal Employees** and **External Employees** screens show the details HR needs for daily work: employee code, company phone, email, role, department derived from competence centers, responsible user, contract type, HR status, work location, hire or termination dates, and personal profile data with full name, personal phone, full address, and notes.
 
 Application users with Praetor access appear among internal employees when you have the right HR permissions. This lets HR maintain the operational profile for people who also use the application, while **Administration > Users** stays focused on roles, permissions, authentication method, account status, and other security controls.
 
@@ -25,7 +25,7 @@ In demo environments, the data seed includes realistic HR profiles for applicati
 
 ## Name, email, and company providers
 
-For local users, HR can update name and email directly from the employee profile. Email is saved through the same settings-backed path used by personal settings, so it stays consistent with the rest of the application.
+For local users, HR can update name and email directly from the employee profile's **Company Profile** section. Email is saved through the same settings-backed path used by personal settings, so it stays consistent with the rest of the application.
 
 For users managed by LDAP, OIDC, or SAML, name and email are controlled by the company provider. Praetor shows those fields as read-only in HR screens and rejects manual server-side changes. On each login or synchronization, non-empty provider values refresh the user's name, avatar initials, and email; missing provider values do not erase existing local data.
 

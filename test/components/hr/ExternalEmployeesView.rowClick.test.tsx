@@ -117,8 +117,9 @@ describe('<ExternalEmployeesView /> row click', () => {
     fireEvent.click(row);
 
     const department = screen.getByLabelText('employeeProfile.department');
-    expect(department).toHaveValue('Alpha Center, Beta Center');
-    expect(department).toHaveAttribute('readonly');
+    expect(department.tagName).toBe('OUTPUT');
+    expect(department).toHaveTextContent('Alpha Center, Beta Center');
+    expect(screen.queryByDisplayValue('Alpha Center, Beta Center')).not.toBeInTheDocument();
   });
 
   test('row is not clickable without update permission', () => {
@@ -164,7 +165,9 @@ describe('<ExternalEmployeesView /> row click', () => {
 
     expect(screen.getByLabelText('employeeProfile.email')).toHaveValue('');
     expect(screen.getByLabelText('employeeProfile.jobTitle')).toHaveValue('');
-    expect(screen.getByLabelText('employeeProfile.department')).toHaveValue('');
+    const department = screen.getByLabelText('employeeProfile.department');
+    expect(department.tagName).toBe('OUTPUT');
+    expect(department).toHaveTextContent('employeeProfile.notSet');
     expect(screen.getByLabelText('employeeProfile.employeeCode')).toHaveValue('');
   });
 
@@ -192,6 +195,9 @@ describe('<ExternalEmployeesView /> row click', () => {
     fireEvent.change(screen.getByLabelText('employeeProfile.jobTitle'), {
       target: { value: 'Contractor' },
     });
+    fireEvent.change(screen.getByLabelText('employeeProfile.address'), {
+      target: { value: 'Via Milano 2' },
+    });
     await user.click(screen.getByLabelText('employeeProfile.responsible'));
     await user.click(await screen.findByText('Paola Manager (pmanager)'));
 
@@ -205,6 +211,7 @@ describe('<ExternalEmployeesView /> row click', () => {
         phone: '+39 02 5555',
         jobTitle: 'Contractor',
         responsibleUserId: 'u-manager',
+        address: 'Via Milano 2',
       }),
     );
     expect(onAddEmployee.mock.calls[0][0]).not.toHaveProperty('department');

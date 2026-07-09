@@ -425,6 +425,7 @@ describe('normalizeUser', () => {
       workLocation: 'hybrid',
       emergencyContactName: '  Maria  ',
       emergencyContactPhone: '  +39 02 5678  ',
+      address: '  Via Roma 1  ',
       notes: '  Starts next week  ',
       permissions: ['read', '  write  ', ''],
     });
@@ -454,6 +455,7 @@ describe('normalizeUser', () => {
     expect(result.workLocation).toBe('hybrid');
     expect(result.emergencyContactName).toBe('Maria');
     expect(result.emergencyContactPhone).toBe('+39 02 5678');
+    expect(result.address).toBe('Via Roma 1');
     expect(result.notes).toBe('Starts next week');
     expect(result.permissions).toEqual(['read', 'write']);
   });

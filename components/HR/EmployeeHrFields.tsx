@@ -286,13 +286,12 @@ const EmployeeHrFields: React.FC<EmployeeHrFieldsProps> = ({
             <FieldLabel htmlFor={`${prefix}-department`}>
               {t('employeeProfile.department')}
             </FieldLabel>
-            <Input
+            <output
               id={`${prefix}-department`}
-              value={departmentValue ?? formData.department}
-              readOnly
-              aria-readonly="true"
-              className="bg-muted/50"
-            />
+              className="flex min-h-9 cursor-default items-center rounded-md border border-dashed border-border bg-muted/60 px-3 py-2 text-sm text-muted-foreground"
+            >
+              {(departmentValue ?? formData.department) || notSetLabel}
+            </output>
           </Field>
 
           <SelectControl
@@ -427,6 +426,16 @@ const EmployeeHrFields: React.FC<EmployeeHrFieldsProps> = ({
             />
           </Field>
         </div>
+
+        <Field>
+          <FieldLabel htmlFor={`${prefix}-address`}>{t('employeeProfile.address')}</FieldLabel>
+          <Input
+            id={`${prefix}-address`}
+            value={formData.address}
+            onChange={(e) => setField('address', e.target.value)}
+            disabled={!canEditHrDetails}
+          />
+        </Field>
 
         <Field>
           <FieldLabel htmlFor={`${prefix}-notes`}>{t('employeeProfile.notes')}</FieldLabel>

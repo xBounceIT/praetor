@@ -270,6 +270,7 @@ export const normalizeUser = (u: User): User => {
   assignIfPresent(raw, result, 'workLocation', normalizeUserWorkLocation);
   assignIfPresent(raw, result, 'emergencyContactName', normalizeOptionalString);
   assignIfPresent(raw, result, 'emergencyContactPhone', normalizeOptionalString);
+  assignIfPresent(raw, result, 'address', normalizeOptionalString);
   assignIfPresent(raw, result, 'notes', normalizeOptionalString);
   assignIfPresent(raw, result, 'authMethod', normalizeUserAuthMethod);
   assignIfPresent(raw, result, 'authProviderId', normalizeNullableTrimmedString);

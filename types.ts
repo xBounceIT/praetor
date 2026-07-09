@@ -121,6 +121,7 @@ export interface User {
   workLocation?: UserWorkLocation | null;
   emergencyContactName?: string | null;
   emergencyContactPhone?: string | null;
+  address?: string | null;
   notes?: string | null;
   authMethod?: UserAuthMethod;
   authProviderId?: string | null;

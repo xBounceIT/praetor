@@ -7,7 +7,7 @@ sidebar:
 
 ## Anagrafica dipendenti
 
-Il modulo **HR** gestisce i dati operativi dei dipendenti separandoli dai controlli di accesso. Le schermate **Dipendenti Interni** e **Dipendenti Esterni** mostrano i dettagli utili alla gestione quotidiana: codice dipendente, telefono aziendale, email, ruolo, dipartimento derivato dai Competence Center, responsabile, tipo di contratto, stato HR, sede di lavoro, date di assunzione o cessazione, contatti personali e note.
+Il modulo **HR** gestisce i dati operativi dei dipendenti separandoli dai controlli di accesso. Le schermate **Dipendenti Interni** e **Dipendenti Esterni** mostrano i dettagli utili alla gestione quotidiana: codice dipendente, telefono aziendale, email, ruolo, dipartimento derivato dai Competence Center, responsabile, tipo di contratto, stato HR, sede di lavoro, date di assunzione o cessazione, anagrafica personale con nome completo, telefono personale, indirizzo completo e note.
 
 Gli utenti applicativi con accesso a Praetor compaiono tra i dipendenti interni quando hai i permessi HR necessari. In questo modo HR può mantenere il profilo operativo anche per chi usa l'applicazione, mentre **Amministrazione > Utenti** resta dedicata a ruoli, permessi, metodo di autenticazione, stato account e altri controlli di sicurezza.
 
@@ -25,7 +25,7 @@ Negli ambienti demo, il seed dati include profili HR realistici per utenti appli
 
 ## Nome, email e provider aziendali
 
-Per utenti locali, HR può aggiornare nome ed email direttamente dal profilo dipendente. L'email viene salvata tramite lo stesso percorso usato dalle impostazioni personali, quindi resta coerente con le altre funzioni dell'applicazione.
+Per utenti locali, HR può aggiornare nome ed email direttamente dall'**Anagrafica Aziendale** del profilo dipendente. L'email viene salvata tramite lo stesso percorso usato dalle impostazioni personali, quindi resta coerente con le altre funzioni dell'applicazione.
 
 Per utenti gestiti da LDAP, OIDC o SAML, nome ed email sono controllati dal provider aziendale. Praetor li mostra in sola lettura nelle schermate HR e rifiuta modifiche manuali inviate al server. A ogni login o sincronizzazione, valori non vuoti provenienti dal provider aggiornano nome, iniziali avatar ed email; valori mancanti non cancellano i dati locali esistenti.
 

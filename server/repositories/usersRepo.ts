@@ -40,6 +40,7 @@ export type UserHrFields = {
   workLocation?: WorkLocation | null;
   emergencyContactName?: string | null;
   emergencyContactPhone?: string | null;
+  address?: string | null;
   notes?: string | null;
 };
 
@@ -503,6 +504,7 @@ export type UserListRow = {
   workLocation?: WorkLocation | null;
   emergencyContactName?: string | null;
   emergencyContactPhone?: string | null;
+  address?: string | null;
   notes?: string | null;
   hasTopManagerRole: boolean;
   isAdminOnly: boolean;
@@ -593,6 +595,7 @@ type UserListRowDb = {
   workLocation: string | null;
   emergencyContactName: string | null;
   emergencyContactPhone: string | null;
+  address: string | null;
   notes: string | null;
   hasTopManagerRole: boolean | null;
   isAdminOnly: boolean | null;
@@ -626,6 +629,7 @@ const mapUserListRow = (row: UserListRowDb): UserListRow => ({
   workLocation: (row.workLocation as WorkLocation | null) ?? null,
   emergencyContactName: row.emergencyContactName ?? undefined,
   emergencyContactPhone: row.emergencyContactPhone ?? undefined,
+  address: row.address ?? undefined,
   notes: row.notes ?? undefined,
   hasTopManagerRole: !!row.hasTopManagerRole,
   isAdminOnly: !!row.isAdminOnly,
@@ -657,6 +661,7 @@ type UpdatedUserRowDb = {
   workLocation: string | null;
   emergencyContactName: string | null;
   emergencyContactPhone: string | null;
+  address: string | null;
   notes: string | null;
 };
 
@@ -683,6 +688,7 @@ const mapUpdatedUserRow = (row: UpdatedUserRowDb): UpdatedUserRow => ({
   workLocation: (row.workLocation as WorkLocation | null) ?? null,
   emergencyContactName: row.emergencyContactName ?? null,
   emergencyContactPhone: row.emergencyContactPhone ?? null,
+  address: row.address ?? null,
   notes: row.notes ?? null,
 });
 
@@ -705,6 +711,7 @@ const setHrFields = (set: Record<string, unknown>, fields: UserHrFields): void =
   if (fields.emergencyContactPhone !== undefined) {
     set.emergencyContactPhone = fields.emergencyContactPhone;
   }
+  if (fields.address !== undefined) set.address = fields.address;
   if (fields.notes !== undefined) set.notes = fields.notes;
 };
 
@@ -733,6 +740,7 @@ const USER_HR_SELECT_COLUMNS = sql`
             u.work_location AS "workLocation",
             u.emergency_contact_name AS "emergencyContactName",
             u.emergency_contact_phone AS "emergencyContactPhone",
+            u.address,
             u.notes,
 `;
 
@@ -1016,6 +1024,7 @@ export const insertUser = async (user: NewFullUser, exec: DbExecutor = db): Prom
     workLocation: user.workLocation ?? null,
     emergencyContactName: user.emergencyContactName ?? null,
     emergencyContactPhone: user.emergencyContactPhone ?? null,
+    address: user.address ?? null,
     notes: user.notes ?? null,
     authMethod: user.authMethod ?? 'local',
     authProviderId: user.authProviderId ?? null,
@@ -1076,6 +1085,7 @@ export const updateUserDynamic = async (
     workLocation: users.workLocation,
     emergencyContactName: users.emergencyContactName,
     emergencyContactPhone: users.emergencyContactPhone,
+    address: users.address,
     notes: users.notes,
   });
   return rows[0] ? mapUpdatedUserRow(rows[0]) : null;
