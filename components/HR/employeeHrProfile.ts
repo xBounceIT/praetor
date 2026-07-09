@@ -188,7 +188,7 @@ export const getEmployeeDepartmentDisplay = (
   names.sort((a, b) => a.localeCompare(b));
 
   if (names.length > 0) return names.join(', ');
-  return workUnits.length === 0 ? employee.department || '' : '';
+  return employee.department || '';
 };
 
 export const getResponsibleUserDisplay = (
