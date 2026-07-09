@@ -151,8 +151,11 @@ afterEach(async () => {
 const authHeader = () => ({ authorization: `Bearer ${signToken({ userId: 'u1' })}` });
 
 describe('GET /api/general-settings', () => {
-  test('200 with administration.general.update reveals API keys', async () => {
-    settingsGetMock.mockResolvedValue(SETTINGS_WITH_KEYS);
+  test('200 with administration.general.update reveals API keys and MFA exemption user IDs', async () => {
+    settingsGetMock.mockResolvedValue({
+      ...SETTINGS_WITH_KEYS,
+      totpExemptUserIds: ['u2'],
+    });
 
     const res = await testApp.inject({
       method: 'GET',
@@ -164,11 +167,15 @@ describe('GET /api/general-settings', () => {
     const body = JSON.parse(res.body);
     expect(body.geminiApiKey).toBe('plaintext-gemini-key');
     expect(body.openrouterApiKey).toBe('plaintext-openrouter-key');
+    expect(body.totpExemptUserIds).toEqual(['u2']);
   });
 
   test('200 without admin perm masks API keys', async () => {
     getRolePermissionsMock.mockResolvedValue([]); // no admin perm
-    settingsGetMock.mockResolvedValue(SETTINGS_WITH_KEYS);
+    settingsGetMock.mockResolvedValue({
+      ...SETTINGS_WITH_KEYS,
+      totpExemptUserIds: ['u2'],
+    });
 
     const res = await testApp.inject({
       method: 'GET',
@@ -180,6 +187,7 @@ describe('GET /api/general-settings', () => {
     const body = JSON.parse(res.body);
     expect(body.geminiApiKey).toBe(MASKED_SECRET);
     expect(body.openrouterApiKey).toBe(MASKED_SECRET);
+    expect(body).not.toHaveProperty('totpExemptUserIds');
   });
 
   test('200 returns DEFAULT_SETTINGS when repo returns null', async () => {

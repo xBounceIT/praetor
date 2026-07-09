@@ -24759,8 +24759,7 @@
                     "enableTotp",
                     "enforceTotp",
                     "totpEnforcedRoleIds",
-                    "totpExemptRoleIds",
-                    "totpExemptUserIds"
+                    "totpExemptRoleIds"
                   ]
                 }
               }
@@ -25179,8 +25178,7 @@
                     "enableTotp",
                     "enforceTotp",
                     "totpEnforcedRoleIds",
-                    "totpExemptRoleIds",
-                    "totpExemptUserIds"
+                    "totpExemptRoleIds"
                   ]
                 }
               }

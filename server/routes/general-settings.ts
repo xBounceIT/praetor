@@ -110,7 +110,6 @@ const generalSettingsSchema = {
     'enforceTotp',
     'totpEnforcedRoleIds',
     'totpExemptRoleIds',
-    'totpExemptUserIds',
   ],
 } as const;
 
@@ -356,15 +355,18 @@ const validateOptionalRoleIdArray = (value: unknown, fieldName: string) =>
 const validateOptionalUserIdArray = (value: unknown, fieldName: string) =>
   validateOptionalStringIdArray(value, fieldName, 'users');
 
-const toResponse = (settings: generalSettingsRepo.GeneralSettings, revealApiKeys: boolean) => ({
+const toResponse = (
+  settings: generalSettingsRepo.GeneralSettings,
+  revealSensitiveSettings: boolean,
+) => ({
   currency: settings.currency,
   dailyLimit: settings.dailyLimit,
   startOfWeek: settings.startOfWeek,
   treatSaturdayAsHoliday: settings.treatSaturdayAsHoliday,
   enableAiReporting: settings.enableAiReporting ?? false,
-  geminiApiKey: maskApiKey(settings.geminiApiKey, revealApiKeys),
+  geminiApiKey: maskApiKey(settings.geminiApiKey, revealSensitiveSettings),
   aiProvider: settings.aiProvider || 'gemini',
-  openrouterApiKey: maskApiKey(settings.openrouterApiKey, revealApiKeys),
+  openrouterApiKey: maskApiKey(settings.openrouterApiKey, revealSensitiveSettings),
   geminiModelId: settings.geminiModelId || '',
   openrouterModelId: settings.openrouterModelId || '',
   allowWeekendSelection: settings.allowWeekendSelection ?? true,
@@ -379,7 +381,7 @@ const toResponse = (settings: generalSettingsRepo.GeneralSettings, revealApiKeys
   enforceTotp: settings.enforceTotp ?? false,
   totpEnforcedRoleIds: settings.totpEnforcedRoleIds ?? [],
   totpExemptRoleIds: settings.totpExemptRoleIds ?? [],
-  totpExemptUserIds: settings.totpExemptUserIds ?? [],
+  ...(revealSensitiveSettings ? { totpExemptUserIds: settings.totpExemptUserIds ?? [] } : {}),
 });
 
 export default async function (fastify: FastifyInstance, _opts: unknown) {
