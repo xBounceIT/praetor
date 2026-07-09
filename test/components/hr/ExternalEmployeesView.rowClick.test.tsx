@@ -1,5 +1,6 @@
 import { describe, expect, mock, test } from 'bun:test';
-import { fireEvent, screen, within } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import type { ComponentProps } from 'react';
 import type { ResponsibleUserOption, User, WorkUnit } from '../../../types';
 import { installI18nMock } from '../../helpers/i18n';
@@ -165,5 +166,47 @@ describe('<ExternalEmployeesView /> row click', () => {
     expect(screen.getByLabelText('employeeProfile.jobTitle')).toHaveValue('');
     expect(screen.getByLabelText('employeeProfile.department')).toHaveValue('');
     expect(screen.getByLabelText('employeeProfile.employeeCode')).toHaveValue('');
+  });
+
+  test('submits HR profile fields when creating with external create permission', async () => {
+    const user = userEvent.setup();
+    const onAddEmployee = mock<ComponentProps<typeof ExternalEmployeesView>['onAddEmployee']>(
+      async () => ({ success: true }),
+    );
+    renderView({
+      users: [],
+      onAddEmployee,
+      permissions: ['hr.external.view', 'hr.external.create'],
+    });
+
+    fireEvent.click(screen.getByText('externalEmployees.addEmployee'));
+    fireEvent.change(screen.getByLabelText('externalEmployees.name *'), {
+      target: { value: 'Luisa Bianchi' },
+    });
+    fireEvent.change(screen.getByLabelText('employeeProfile.email'), {
+      target: { value: 'luisa.contractor@example.com' },
+    });
+    fireEvent.change(screen.getByLabelText('employeeProfile.phone'), {
+      target: { value: '+39 02 5555' },
+    });
+    fireEvent.change(screen.getByLabelText('employeeProfile.jobTitle'), {
+      target: { value: 'Contractor' },
+    });
+    await user.click(screen.getByLabelText('employeeProfile.responsible'));
+    await user.click(await screen.findByText('Paola Manager (pmanager)'));
+
+    fireEvent.click(screen.getByText('externalEmployees.saveChanges'));
+
+    await waitFor(() => expect(onAddEmployee).toHaveBeenCalledTimes(1));
+    expect(onAddEmployee).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: 'Luisa Bianchi',
+        email: 'luisa.contractor@example.com',
+        phone: '+39 02 5555',
+        jobTitle: 'Contractor',
+        responsibleUserId: 'u-manager',
+      }),
+    );
+    expect(onAddEmployee.mock.calls[0][0]).not.toHaveProperty('department');
   });
 });

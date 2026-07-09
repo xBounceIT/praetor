@@ -508,7 +508,7 @@ const ExternalEmployeesView: React.FC<ExternalEmployeesViewProps> = ({
                 identityReadOnly={Boolean(
                   editingEmployee && editingEmployee.authMethod !== 'local',
                 )}
-                canEditHrDetails={canUpdateEmployees}
+                canEditHrDetails={editingEmployee ? canUpdateEmployees : canCreateEmployees}
                 departmentValue={getEmployeeDepartmentDisplay(editingEmployee, workUnits)}
                 responsibleUserOptions={responsibleUserOptions}
                 currentEmployeeId={editingEmployee?.id ?? null}
