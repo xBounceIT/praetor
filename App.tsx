@@ -1492,6 +1492,7 @@ const useAppContentController = () => {
       },
       roles: () => setLocalState('roles', []),
       users: () => setModuleState('users', []),
+      mfaExemptionUsers: () => setModuleState('mfaExemptionUsers', []),
       clients: () => setModuleState('clients', []),
       projects: () => setModuleState('projects', []),
       projectTasks: () => setModuleState('projectTasks', []),

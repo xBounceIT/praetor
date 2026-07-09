@@ -18,6 +18,7 @@ const EXPECTED_KEYS: readonly AuthScopedStateKey[] = [
   'hasLoadedRoles',
   'roles',
   'users',
+  'mfaExemptionUsers',
   'clients',
   'projects',
   'projectTasks',

@@ -46,5 +46,6 @@ describe('App.tsx auth-scoped reset defaults', () => {
     expect(body).toContain('setGeneralSettings(INITIAL_GENERAL_SETTINGS)');
     expect(body).toContain('setLdapConfig(INITIAL_LDAP_CONFIG)');
     expect(body).toContain('setEmailConfig(INITIAL_EMAIL_CONFIG)');
+    expect(body).toContain("mfaExemptionUsers: () => setModuleState('mfaExemptionUsers', [])");
   });
 });
