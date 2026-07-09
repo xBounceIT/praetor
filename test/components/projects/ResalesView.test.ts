@@ -207,6 +207,17 @@ describe('ResalesView wiring', () => {
     }
   });
 
+  test('shows localized start and end dates in the resales archive', async () => {
+    const source = await readSource();
+    expect(source).toContain("header: t('resales." + "columns.startDate')");
+    expect(source).toContain("header: t('resales." + "columns.endDate')");
+    expect(source).toContain("accessorKey: 'startDate'");
+    expect(source).toContain("accessorKey: 'dueDate'");
+    expect(source).toContain('formatDateOnlyForLocale(row.startDate, i18n.language)');
+    expect(source).toContain('formatDateOnlyForLocale(row.dueDate, i18n.language)');
+    expect(source).toContain('formatDateOnlyForLocale(String(value), i18n.language)');
+  });
+
   test('shows supplier cost variance without blocking save', async () => {
     const source = await readSource();
     expect(source).toContain('controller.selectedResale.costVariance');

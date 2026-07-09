@@ -34,7 +34,7 @@ import type {
   StoredBillingType,
   User,
 } from '../../types';
-import { formatInsertDate } from '../../utils/date';
+import { formatDateOnlyForLocale, formatInsertDate } from '../../utils/date';
 import { buildPermission, hasPermission, hasScopedActionPermission } from '../../utils/permissions';
 import DateField from '../shared/DateField';
 import DeleteConfirmModal from '../shared/DeleteConfirmModal';
@@ -888,6 +888,30 @@ const useProjectsController = ({
       cell: ({ row }) => (
         <span className="text-xs text-slate-500 whitespace-nowrap">
           {row.createdAt ? formatInsertDate(row.createdAt, i18n.language) : '—'}
+        </span>
+      ),
+    },
+    {
+      header: t('projects:projects.tableHeaders.startDate'),
+      accessorKey: 'startDate',
+      className: 'whitespace-nowrap',
+      filterFormat: (value) =>
+        value ? formatDateOnlyForLocale(String(value), i18n.language) : '-',
+      cell: ({ row }) => (
+        <span className="text-xs text-slate-500 whitespace-nowrap">
+          {row.startDate ? formatDateOnlyForLocale(row.startDate, i18n.language) : '-'}
+        </span>
+      ),
+    },
+    {
+      header: t('projects:projects.tableHeaders.endDate'),
+      accessorKey: 'endDate',
+      className: 'whitespace-nowrap',
+      filterFormat: (value) =>
+        value ? formatDateOnlyForLocale(String(value), i18n.language) : '-',
+      cell: ({ row }) => (
+        <span className="text-xs text-slate-500 whitespace-nowrap">
+          {row.endDate ? formatDateOnlyForLocale(row.endDate, i18n.language) : '-'}
         </span>
       ),
     },
