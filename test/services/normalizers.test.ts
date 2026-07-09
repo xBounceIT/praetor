@@ -416,6 +416,8 @@ describe('normalizeUser', () => {
       phone: '  +39 02 1234  ',
       jobTitle: '  Consultant  ',
       department: '  Delivery  ',
+      responsibleUserId: '  u-manager  ',
+      responsibleUserName: '  Boss User  ',
       employeeCode: '  EMP-001  ',
       hireDate: '2024-01-15T10:30:00Z',
       terminationDate: '',
@@ -424,6 +426,7 @@ describe('normalizeUser', () => {
       workLocation: 'hybrid',
       emergencyContactName: '  Maria  ',
       emergencyContactPhone: '  +39 02 5678  ',
+      address: '  Via Roma 1  ',
       notes: '  Starts next week  ',
       permissions: ['read', '  write  ', ''],
     });
@@ -443,6 +446,8 @@ describe('normalizeUser', () => {
     expect(result.phone).toBe('+39 02 1234');
     expect(result.jobTitle).toBe('Consultant');
     expect(result.department).toBe('Delivery');
+    expect(result.responsibleUserId).toBe('u-manager');
+    expect(result.responsibleUserName).toBe('Boss User');
     expect(result.employeeCode).toBe('EMP-001');
     expect(result.hireDate).toBe('2024-01-15');
     expect(result.terminationDate).toBeNull();
@@ -451,6 +456,7 @@ describe('normalizeUser', () => {
     expect(result.workLocation).toBe('hybrid');
     expect(result.emergencyContactName).toBe('Maria');
     expect(result.emergencyContactPhone).toBe('+39 02 5678');
+    expect(result.address).toBe('Via Roma 1');
     expect(result.notes).toBe('Starts next week');
     expect(result.permissions).toEqual(['read', 'write']);
   });

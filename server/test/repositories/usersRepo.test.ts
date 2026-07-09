@@ -321,6 +321,8 @@ const sampleListRow = {
   phone: '+39 02 1234',
   jobTitle: 'Consultant',
   department: 'Delivery',
+  responsibleUserId: 'u-manager',
+  responsibleUserName: 'Manager User',
   employeeCode: 'EMP-001',
   hireDate: '2024-01-15',
   terminationDate: null,
@@ -329,6 +331,7 @@ const sampleListRow = {
   workLocation: 'hybrid',
   emergencyContactName: 'Maria',
   emergencyContactPhone: '+39 02 5678',
+  address: 'Via Roma 1',
   notes: 'Prefers morning shifts',
   hasTopManagerRole: false,
   isAdminOnly: false,
@@ -342,6 +345,10 @@ describe('listAllForAdmin', () => {
     exec.enqueue({ rows: [sampleListRow] });
     const result = await usersRepo.listAllForAdmin(testDb);
     expect(exec.calls[0].params).toEqual(['top_manager', 'admin', 'admin']);
+    expect(exec.calls[0].sql).toContain('COALESCE(');
+    expect(exec.calls[0].sql).toContain('string_agg(w_department.name');
+    expect(exec.calls[0].sql).toContain('u.department');
+    expect(exec.calls[0].sql).toContain('LEFT JOIN users responsible_user');
     expect(result).toEqual([
       {
         id: 'user-1',
@@ -356,6 +363,8 @@ describe('listAllForAdmin', () => {
         phone: '+39 02 1234',
         jobTitle: 'Consultant',
         department: 'Delivery',
+        responsibleUserId: 'u-manager',
+        responsibleUserName: 'Manager User',
         employeeCode: 'EMP-001',
         hireDate: '2024-01-15',
         terminationDate: null,
@@ -364,6 +373,7 @@ describe('listAllForAdmin', () => {
         workLocation: 'hybrid',
         emergencyContactName: 'Maria',
         emergencyContactPhone: '+39 02 5678',
+        address: 'Via Roma 1',
         notes: 'Prefers morning shifts',
         hasTopManagerRole: false,
         isAdminOnly: false,
@@ -444,10 +454,21 @@ describe('findById', () => {
 
 describe('findCoreById', () => {
   test('returns the mapped core user when the row exists', async () => {
-    // Projection: id, name, username, role, employeeType, hireDate, terminationDate, authMethod, authProviderId
+    // Projection: id, name, username, role, employeeType, hireDate, terminationDate, responsibleUserId, authMethod, authProviderId
     exec.enqueue({
       rows: [
-        ['user-1', 'Alice', 'alice', 'manager', 'internal', '2024-01-15', null, 'local', null],
+        [
+          'user-1',
+          'Alice',
+          'alice',
+          'manager',
+          'internal',
+          '2024-01-15',
+          null,
+          'u-manager',
+          'local',
+          null,
+        ],
       ],
     });
     const result = await usersRepo.findCoreById('user-1', testDb);
@@ -459,6 +480,7 @@ describe('findCoreById', () => {
       employeeType: 'internal',
       hireDate: '2024-01-15',
       terminationDate: null,
+      responsibleUserId: 'u-manager',
       authMethod: 'local',
       authProviderId: null,
     });
@@ -466,7 +488,9 @@ describe('findCoreById', () => {
   });
 
   test('defaults employeeType to app_user when null', async () => {
-    exec.enqueue({ rows: [['user-1', 'Alice', 'alice', 'manager', null, null, null, null, null]] });
+    exec.enqueue({
+      rows: [['user-1', 'Alice', 'alice', 'manager', null, null, null, null, null, null]],
+    });
     const result = await usersRepo.findCoreById('user-1', testDb);
     expect(result?.employeeType).toBe('app_user');
   });
@@ -505,6 +529,7 @@ describe('insertUser', () => {
         phone: '+39 02 1234',
         jobTitle: 'Consultant',
         department: 'Delivery',
+        responsibleUserId: 'u-manager',
         employeeCode: 'EMP-001',
         hireDate: '2024-01-15',
         terminationDate: null,
@@ -513,6 +538,7 @@ describe('insertUser', () => {
         workLocation: 'hybrid',
         emergencyContactName: 'Maria',
         emergencyContactPhone: '+39 02 5678',
+        address: 'Via Roma 1',
         notes: 'Prefers morning shifts',
       },
       testDb,
@@ -530,6 +556,7 @@ describe('insertUser', () => {
     expect(exec.calls[0].params).toContain('+39 02 1234');
     expect(exec.calls[0].params).toContain('Consultant');
     expect(exec.calls[0].params).toContain('Delivery');
+    expect(exec.calls[0].params).toContain('u-manager');
     expect(exec.calls[0].params).toContain('EMP-001');
     expect(exec.calls[0].params).toContain('2024-01-15');
     expect(exec.calls[0].params).toContain('permanent');
@@ -537,7 +564,39 @@ describe('insertUser', () => {
     expect(exec.calls[0].params).toContain('hybrid');
     expect(exec.calls[0].params).toContain('Maria');
     expect(exec.calls[0].params).toContain('+39 02 5678');
+    expect(exec.calls[0].params).toContain('Via Roma 1');
     expect(exec.calls[0].params).toContain('Prefers morning shifts');
+  });
+});
+
+describe('listResponsibleOptions', () => {
+  test('returns active app users with only picker fields', async () => {
+    exec.enqueue({
+      rows: [['u-manager', 'Manager User', 'manager', null]],
+    });
+
+    const result = await usersRepo.listResponsibleOptions(testDb);
+
+    expect(result).toEqual([
+      { id: 'u-manager', name: 'Manager User', username: 'manager', avatarInitials: '' },
+    ]);
+    expect(exec.calls[0].sql).toContain('COALESCE');
+    expect(exec.calls[0].sql).toContain("'app_user'");
+  });
+});
+
+describe('isActiveAppUser', () => {
+  test.each([
+    [[['u-manager']], true],
+    [[], false],
+  ] as const)('returns %s when validation lookup returns %j rows', async (rows, expected) => {
+    exec.enqueue({ rows: [...rows] });
+
+    const result = await usersRepo.isActiveAppUser('u-manager', testDb);
+
+    expect(result).toBe(expected);
+    expect(exec.calls[0].params).toContain('u-manager');
+    expect(exec.calls[0].sql).toContain("'app_user'");
   });
 });
 
@@ -580,6 +639,8 @@ describe('updateUserDynamic', () => {
           '50',
           true,
           'app_user',
+          null,
+          null,
           null,
           null,
           null,
@@ -670,6 +731,7 @@ describe('updateUserDynamic', () => {
           '+39 02 1234',
           'Consultant',
           'Delivery',
+          'u-manager',
           'EMP-001',
           '2024-01-15',
           null,
@@ -678,6 +740,7 @@ describe('updateUserDynamic', () => {
           'hybrid',
           'Maria',
           '+39 02 5678',
+          'Via Roma 1',
           'Prefers morning shifts',
         ],
       ],
@@ -692,6 +755,7 @@ describe('updateUserDynamic', () => {
         phone: '+39 02 1234',
         jobTitle: 'Consultant',
         department: 'Delivery',
+        responsibleUserId: 'u-manager',
         employeeCode: 'EMP-001',
         hireDate: '2024-01-15',
         contractType: 'permanent',
@@ -699,6 +763,7 @@ describe('updateUserDynamic', () => {
         workLocation: 'hybrid',
         emergencyContactName: 'Maria',
         emergencyContactPhone: '+39 02 5678',
+        address: 'Via Roma 1',
         notes: 'Prefers morning shifts',
       },
       testDb,
@@ -708,6 +773,7 @@ describe('updateUserDynamic', () => {
     expect(sql).toContain('"phone"');
     expect(sql).toContain('"job_title"');
     expect(sql).toContain('"employee_code"');
+    expect(sql).toContain('"responsible_user_id"');
     expect(result).toEqual(
       expect.objectContaining({
         firstName: 'Giulia',
@@ -715,6 +781,7 @@ describe('updateUserDynamic', () => {
         phone: '+39 02 1234',
         jobTitle: 'Consultant',
         department: 'Delivery',
+        responsibleUserId: 'u-manager',
         employeeCode: 'EMP-001',
         hireDate: '2024-01-15',
         contractType: 'permanent',
@@ -722,6 +789,7 @@ describe('updateUserDynamic', () => {
         workLocation: 'hybrid',
         emergencyContactName: 'Maria',
         emergencyContactPhone: '+39 02 5678',
+        address: 'Via Roma 1',
         notes: 'Prefers morning shifts',
       }),
     );

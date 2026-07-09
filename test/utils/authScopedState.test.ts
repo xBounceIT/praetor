@@ -36,6 +36,7 @@ const EXPECTED_KEYS: readonly AuthScopedStateKey[] = [
   'supplierInvoices',
   'entries',
   'workUnits',
+  'responsibleUserOptions',
   'viewingUserAssignmentState',
 ];
 

@@ -9,7 +9,7 @@ sidebar:
 
 Administrators manage users, roles, and permissions. Each role should grant only the functions needed for daily work.
 
-The **Users** page stays focused on application access: username, role, permissions, authentication method, and account status. HR data such as phone, work email, job title, department, contract, location, and emergency contacts is managed in the **HR** module, not in Administration.
+The **Users** page stays focused on application access: username, role, permissions, authentication method, and account status. HR data such as company phone, work email, role, department derived from competence centers, responsible user, contract, location, personal profile, and full address is managed in the **HR** module, not in Administration.
 
 Permission rows marked **All** grant cross-record access for the same area, such as all clients, suppliers, projects, tasks, time entries, or competence centers. **View** opens the matching view and allows reading every matching record; when selected, **Create**, **Update**, and **Delete** are real write permissions and can operate on records that are not assigned to the user. Non-**All** permissions keep the user's assigned-record scope.
 

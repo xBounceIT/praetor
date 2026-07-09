@@ -1,10 +1,20 @@
-import type { Client, Project, ProjectTask, User, UserAuthMethod } from '../../types';
+import type {
+  Client,
+  Project,
+  ProjectTask,
+  ResponsibleUserOption,
+  User,
+  UserAuthMethod,
+} from '../../types';
 import type { TrackerCatalogs } from '../../utils/trackerCatalogs';
 import { fetchApi } from './client';
 import { normalizeClient, normalizeProject, normalizeTask, normalizeUser } from './normalizers';
 
 export const usersApi = {
   list: (): Promise<User[]> => fetchApi<User[]>('/users').then((users) => users.map(normalizeUser)),
+
+  getResponsibleOptions: (): Promise<ResponsibleUserOption[]> =>
+    fetchApi<ResponsibleUserOption[]>('/users/responsible-options'),
 
   create: (
     name: string,

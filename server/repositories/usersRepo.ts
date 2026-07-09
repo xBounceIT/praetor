@@ -31,6 +31,7 @@ export type UserHrFields = {
   phone?: string | null;
   jobTitle?: string | null;
   department?: string | null;
+  responsibleUserId?: string | null;
   employeeCode?: string | null;
   hireDate?: string | null;
   terminationDate?: string | null;
@@ -39,6 +40,7 @@ export type UserHrFields = {
   workLocation?: WorkLocation | null;
   emergencyContactName?: string | null;
   emergencyContactPhone?: string | null;
+  address?: string | null;
   notes?: string | null;
 };
 
@@ -492,6 +494,8 @@ export type UserListRow = {
   phone?: string | null;
   jobTitle?: string | null;
   department?: string | null;
+  responsibleUserId?: string | null;
+  responsibleUserName?: string | null;
   employeeCode?: string | null;
   hireDate?: string | null;
   terminationDate?: string | null;
@@ -500,6 +504,7 @@ export type UserListRow = {
   workLocation?: WorkLocation | null;
   emergencyContactName?: string | null;
   emergencyContactPhone?: string | null;
+  address?: string | null;
   notes?: string | null;
   hasTopManagerRole: boolean;
   isAdminOnly: boolean;
@@ -516,6 +521,7 @@ export type UserCore = {
   employeeType: EmployeeType;
   hireDate: string | null;
   terminationDate: string | null;
+  responsibleUserId: string | null;
   authMethod: AuthMethod;
   authProviderId: string | null;
 };
@@ -579,6 +585,8 @@ type UserListRowDb = {
   phone: string | null;
   jobTitle: string | null;
   department: string | null;
+  responsibleUserId: string | null;
+  responsibleUserName: string | null;
   employeeCode: string | null;
   hireDate: string | null;
   terminationDate: string | null;
@@ -587,6 +595,7 @@ type UserListRowDb = {
   workLocation: string | null;
   emergencyContactName: string | null;
   emergencyContactPhone: string | null;
+  address: string | null;
   notes: string | null;
   hasTopManagerRole: boolean | null;
   isAdminOnly: boolean | null;
@@ -610,6 +619,8 @@ const mapUserListRow = (row: UserListRowDb): UserListRow => ({
   phone: row.phone ?? undefined,
   jobTitle: row.jobTitle ?? undefined,
   department: row.department ?? undefined,
+  responsibleUserId: row.responsibleUserId ?? undefined,
+  responsibleUserName: row.responsibleUserName ?? undefined,
   employeeCode: row.employeeCode ?? undefined,
   hireDate: row.hireDate ?? null,
   terminationDate: row.terminationDate ?? null,
@@ -618,6 +629,7 @@ const mapUserListRow = (row: UserListRowDb): UserListRow => ({
   workLocation: (row.workLocation as WorkLocation | null) ?? null,
   emergencyContactName: row.emergencyContactName ?? undefined,
   emergencyContactPhone: row.emergencyContactPhone ?? undefined,
+  address: row.address ?? undefined,
   notes: row.notes ?? undefined,
   hasTopManagerRole: !!row.hasTopManagerRole,
   isAdminOnly: !!row.isAdminOnly,
@@ -640,6 +652,7 @@ type UpdatedUserRowDb = {
   phone: string | null;
   jobTitle: string | null;
   department: string | null;
+  responsibleUserId: string | null;
   employeeCode: string | null;
   hireDate: string | null;
   terminationDate: string | null;
@@ -648,6 +661,7 @@ type UpdatedUserRowDb = {
   workLocation: string | null;
   emergencyContactName: string | null;
   emergencyContactPhone: string | null;
+  address: string | null;
   notes: string | null;
 };
 
@@ -665,6 +679,7 @@ const mapUpdatedUserRow = (row: UpdatedUserRowDb): UpdatedUserRow => ({
   phone: row.phone ?? null,
   jobTitle: row.jobTitle ?? null,
   department: row.department ?? null,
+  responsibleUserId: row.responsibleUserId ?? null,
   employeeCode: row.employeeCode ?? null,
   hireDate: row.hireDate ?? null,
   terminationDate: row.terminationDate ?? null,
@@ -673,6 +688,7 @@ const mapUpdatedUserRow = (row: UpdatedUserRowDb): UpdatedUserRow => ({
   workLocation: (row.workLocation as WorkLocation | null) ?? null,
   emergencyContactName: row.emergencyContactName ?? null,
   emergencyContactPhone: row.emergencyContactPhone ?? null,
+  address: row.address ?? null,
   notes: row.notes ?? null,
 });
 
@@ -682,6 +698,7 @@ const setHrFields = (set: Record<string, unknown>, fields: UserHrFields): void =
   if (fields.phone !== undefined) set.phone = fields.phone;
   if (fields.jobTitle !== undefined) set.jobTitle = fields.jobTitle;
   if (fields.department !== undefined) set.department = fields.department;
+  if (fields.responsibleUserId !== undefined) set.responsibleUserId = fields.responsibleUserId;
   if (fields.employeeCode !== undefined) set.employeeCode = fields.employeeCode;
   if (fields.hireDate !== undefined) set.hireDate = fields.hireDate;
   if (fields.terminationDate !== undefined) set.terminationDate = fields.terminationDate;
@@ -694,6 +711,7 @@ const setHrFields = (set: Record<string, unknown>, fields: UserHrFields): void =
   if (fields.emergencyContactPhone !== undefined) {
     set.emergencyContactPhone = fields.emergencyContactPhone;
   }
+  if (fields.address !== undefined) set.address = fields.address;
   if (fields.notes !== undefined) set.notes = fields.notes;
 };
 
@@ -702,7 +720,18 @@ const USER_HR_SELECT_COLUMNS = sql`
             u.last_name AS "lastName",
             u.phone,
             u.job_title AS "jobTitle",
-            u.department,
+            COALESCE(
+              (
+                SELECT string_agg(w_department.name, ', ' ORDER BY w_department.name)
+                FROM user_work_units uw_department
+                JOIN work_units w_department ON w_department.id = uw_department.work_unit_id
+                WHERE uw_department.user_id = u.id
+                  AND COALESCE(w_department.is_disabled, false) = false
+              ),
+              u.department
+            ) AS department,
+            u.responsible_user_id AS "responsibleUserId",
+            responsible_user.name AS "responsibleUserName",
             u.employee_code AS "employeeCode",
             u.hire_date AS "hireDate",
             u.termination_date AS "terminationDate",
@@ -711,6 +740,7 @@ const USER_HR_SELECT_COLUMNS = sql`
             u.work_location AS "workLocation",
             u.emergency_contact_name AS "emergencyContactName",
             u.emergency_contact_phone AS "emergencyContactPhone",
+            u.address,
             u.notes,
 `;
 
@@ -749,6 +779,7 @@ export const listAllForAdmin = async (exec: DbExecutor = db): Promise<UserListRo
             ${USER_LIST_FLAG_COLUMNS}
        FROM users u
        LEFT JOIN settings s ON s.user_id = u.id
+       LEFT JOIN users responsible_user ON responsible_user.id = u.responsible_user_id
        LEFT JOIN sso_providers sp ON sp.id = u.auth_provider_id
        ORDER BY u.name`,
   );
@@ -803,6 +834,7 @@ export const listScopedForManager = async (
                      ${USER_LIST_FLAG_COLUMNS}
        FROM users u
        LEFT JOIN settings s ON s.user_id = u.id
+       LEFT JOIN users responsible_user ON responsible_user.id = u.responsible_user_id
        LEFT JOIN sso_providers sp ON sp.id = u.auth_provider_id
        LEFT JOIN user_work_units uw ON u.id = uw.user_id
        LEFT JOIN work_unit_managers wum ON uw.work_unit_id = wum.work_unit_id
@@ -832,6 +864,7 @@ export const findById = async (id: string, exec: DbExecutor = db): Promise<UserL
             ${USER_LIST_FLAG_COLUMNS}
        FROM users u
        LEFT JOIN settings s ON s.user_id = u.id
+       LEFT JOIN users responsible_user ON responsible_user.id = u.responsible_user_id
        LEFT JOIN sso_providers sp ON sp.id = u.auth_provider_id
       WHERE u.id = ${id}`,
   );
@@ -848,6 +881,7 @@ export const findCoreById = async (id: string, exec: DbExecutor = db): Promise<U
       employeeType: users.employeeType,
       hireDate: users.hireDate,
       terminationDate: users.terminationDate,
+      responsibleUserId: users.responsibleUserId,
       authMethod: users.authMethod,
       authProviderId: users.authProviderId,
     })
@@ -862,9 +896,17 @@ export const findCoreById = async (id: string, exec: DbExecutor = db): Promise<U
     employeeType: (rows[0].employeeType as EmployeeType | null) ?? 'app_user',
     hireDate: rows[0].hireDate ?? null,
     terminationDate: rows[0].terminationDate ?? null,
+    responsibleUserId: rows[0].responsibleUserId ?? null,
     authMethod: rows[0].authMethod ?? 'local',
     authProviderId: rows[0].authProviderId ?? null,
   };
+};
+
+export type ResponsibleUserOption = {
+  id: string;
+  name: string;
+  username: string;
+  avatarInitials: string;
 };
 
 export type DirectoryUser = {
@@ -895,6 +937,41 @@ export const listDirectory = async (exec: DbExecutor = db): Promise<DirectoryUse
     username: row.username,
     avatarInitials: row.avatarInitials ?? '',
   }));
+};
+
+export const listResponsibleOptions = async (
+  exec: DbExecutor = db,
+): Promise<ResponsibleUserOption[]> => {
+  const rows = await exec
+    .select({
+      id: users.id,
+      name: users.name,
+      username: users.username,
+      avatarInitials: users.avatarInitials,
+    })
+    .from(users)
+    .where(
+      sql`COALESCE(${users.isDisabled}, false) = false AND COALESCE(${users.employeeType}, 'app_user') = 'app_user'`,
+    )
+    .orderBy(users.name, users.username);
+
+  return rows.map((row) => ({
+    id: row.id,
+    name: row.name,
+    username: row.username,
+    avatarInitials: row.avatarInitials ?? '',
+  }));
+};
+
+export const isActiveAppUser = async (id: string, exec: DbExecutor = db): Promise<boolean> => {
+  const rows = await exec
+    .select({ id: users.id })
+    .from(users)
+    .where(
+      sql`${users.id} = ${id} AND COALESCE(${users.isDisabled}, false) = false AND COALESCE(${users.employeeType}, 'app_user') = 'app_user'`,
+    )
+    .limit(1);
+  return rows.length > 0;
 };
 
 export const listTopManagerIds = async (exec: DbExecutor = db): Promise<string[]> => {
@@ -938,6 +1015,7 @@ export const insertUser = async (user: NewFullUser, exec: DbExecutor = db): Prom
     phone: user.phone ?? null,
     jobTitle: user.jobTitle ?? null,
     department: user.department ?? null,
+    responsibleUserId: user.responsibleUserId ?? null,
     employeeCode: user.employeeCode ?? null,
     hireDate: user.hireDate ?? null,
     terminationDate: user.terminationDate ?? null,
@@ -946,6 +1024,7 @@ export const insertUser = async (user: NewFullUser, exec: DbExecutor = db): Prom
     workLocation: user.workLocation ?? null,
     emergencyContactName: user.emergencyContactName ?? null,
     emergencyContactPhone: user.emergencyContactPhone ?? null,
+    address: user.address ?? null,
     notes: user.notes ?? null,
     authMethod: user.authMethod ?? 'local',
     authProviderId: user.authProviderId ?? null,
@@ -997,6 +1076,7 @@ export const updateUserDynamic = async (
     phone: users.phone,
     jobTitle: users.jobTitle,
     department: users.department,
+    responsibleUserId: users.responsibleUserId,
     employeeCode: users.employeeCode,
     hireDate: users.hireDate,
     terminationDate: users.terminationDate,
@@ -1005,6 +1085,7 @@ export const updateUserDynamic = async (
     workLocation: users.workLocation,
     emergencyContactName: users.emergencyContactName,
     emergencyContactPhone: users.emergencyContactPhone,
+    address: users.address,
     notes: users.notes,
   });
   return rows[0] ? mapUpdatedUserRow(rows[0]) : null;

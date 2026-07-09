@@ -261,6 +261,8 @@ export const normalizeUser = (u: User): User => {
   assignIfPresent(raw, result, 'phone', normalizeOptionalString);
   assignIfPresent(raw, result, 'jobTitle', normalizeOptionalString);
   assignIfPresent(raw, result, 'department', normalizeOptionalString);
+  assignIfPresent(raw, result, 'responsibleUserId', normalizeOptionalString);
+  assignIfPresent(raw, result, 'responsibleUserName', normalizeOptionalString);
   assignIfPresent(raw, result, 'employeeCode', normalizeOptionalString);
   assignIfPresent(raw, result, 'hireDate', normalizeNullableDateOnlyString);
   assignIfPresent(raw, result, 'terminationDate', normalizeNullableDateOnlyString);
@@ -269,6 +271,7 @@ export const normalizeUser = (u: User): User => {
   assignIfPresent(raw, result, 'workLocation', normalizeUserWorkLocation);
   assignIfPresent(raw, result, 'emergencyContactName', normalizeOptionalString);
   assignIfPresent(raw, result, 'emergencyContactPhone', normalizeOptionalString);
+  assignIfPresent(raw, result, 'address', normalizeOptionalString);
   assignIfPresent(raw, result, 'notes', normalizeOptionalString);
   assignIfPresent(raw, result, 'authMethod', normalizeUserAuthMethod);
   assignIfPresent(raw, result, 'authProviderId', normalizeNullableTrimmedString);

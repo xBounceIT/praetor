@@ -666,6 +666,13 @@
       "when": 1783593228219,
       "tag": "0094_add_session_idle_timeout_minutes",
       "breakpoints": true
+    },
+    {
+      "idx": 95,
+      "version": "7",
+      "when": 1783625579887,
+      "tag": "0095_add_user_responsible_and_address",
+      "breakpoints": true
     }
   ]
 }

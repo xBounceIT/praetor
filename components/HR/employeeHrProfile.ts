@@ -1,4 +1,11 @@
-import type { User, UserContractType, UserEmploymentStatus, UserWorkLocation } from '../../types';
+import type {
+  ResponsibleUserOption,
+  User,
+  UserContractType,
+  UserEmploymentStatus,
+  UserWorkLocation,
+  WorkUnit,
+} from '../../types';
 import type { StatusType } from '../shared/StatusBadge';
 
 export type EmployeeHrFormData = {
@@ -9,6 +16,8 @@ export type EmployeeHrFormData = {
   phone: string;
   jobTitle: string;
   department: string;
+  responsibleUserId: string;
+  responsibleUserName: string;
   employeeCode: string;
   hireDate: string;
   terminationDate: string;
@@ -17,6 +26,7 @@ export type EmployeeHrFormData = {
   workLocation: UserWorkLocation | '';
   emergencyContactName: string;
   emergencyContactPhone: string;
+  address: string;
   notes: string;
   costPerHour: string;
 };
@@ -58,6 +68,8 @@ export const createEmptyEmployeeHrForm = (): EmployeeHrFormData => ({
   phone: '',
   jobTitle: '',
   department: '',
+  responsibleUserId: '',
+  responsibleUserName: '',
   employeeCode: '',
   hireDate: '',
   terminationDate: '',
@@ -66,6 +78,7 @@ export const createEmptyEmployeeHrForm = (): EmployeeHrFormData => ({
   workLocation: '',
   emergencyContactName: '',
   emergencyContactPhone: '',
+  address: '',
   notes: '',
   costPerHour: '',
 });
@@ -78,6 +91,8 @@ export const createEmployeeHrForm = (employee: User): EmployeeHrFormData => ({
   phone: employee.phone || '',
   jobTitle: employee.jobTitle || '',
   department: employee.department || '',
+  responsibleUserId: employee.responsibleUserId || '',
+  responsibleUserName: employee.responsibleUserName || '',
   employeeCode: employee.employeeCode || '',
   hireDate: employee.hireDate || '',
   terminationDate: employee.terminationDate || '',
@@ -86,6 +101,7 @@ export const createEmployeeHrForm = (employee: User): EmployeeHrFormData => ({
   workLocation: employee.workLocation || '',
   emergencyContactName: employee.emergencyContactName || '',
   emergencyContactPhone: employee.emergencyContactPhone || '',
+  address: employee.address || '',
   notes: employee.notes || '',
   costPerHour: employee.costPerHour?.toString() || '',
 });
@@ -102,7 +118,7 @@ export const buildEmployeeHrPayload = (
   const payload: EmployeeHrSubmitPayload = {
     phone: nullableText(formData.phone),
     jobTitle: nullableText(formData.jobTitle),
-    department: nullableText(formData.department),
+    responsibleUserId: nullableText(formData.responsibleUserId),
     employeeCode: nullableText(formData.employeeCode),
     hireDate: formData.hireDate || null,
     terminationDate: formData.terminationDate || null,
@@ -111,6 +127,7 @@ export const buildEmployeeHrPayload = (
     workLocation: formData.workLocation || null,
     emergencyContactName: nullableText(formData.emergencyContactName),
     emergencyContactPhone: nullableText(formData.emergencyContactPhone),
+    address: nullableText(formData.address),
     notes: nullableText(formData.notes),
   };
 
@@ -154,6 +171,36 @@ export const buildEmployeeCreatePayload = (
   }
 
   return payload;
+};
+
+export const getEmployeeDepartmentDisplay = (
+  employee: Pick<User, 'id' | 'department'> | null | undefined,
+  workUnits: WorkUnit[],
+): string => {
+  if (!employee) return '';
+  const names: string[] = [];
+  for (const unit of workUnits) {
+    if (unit.isDisabled) continue;
+    if (!unit.members?.some((member) => member.id === employee.id)) continue;
+    const name = unit.name.trim();
+    if (name) names.push(name);
+  }
+  names.sort((a, b) => a.localeCompare(b));
+
+  if (names.length > 0) return names.join(', ');
+  return employee.department || '';
+};
+
+export const getResponsibleUserDisplay = (
+  employee: Pick<User, 'responsibleUserId' | 'responsibleUserName'>,
+  responsibleUserOptions: ResponsibleUserOption[],
+): string => {
+  const name = employee.responsibleUserName?.trim();
+  if (name) return name;
+  if (!employee.responsibleUserId) return '';
+  return (
+    responsibleUserOptions.find((option) => option.id === employee.responsibleUserId)?.name || ''
+  );
 };
 
 export const getEmployeeHrStatusBadgeType = (

@@ -9,7 +9,7 @@ sidebar:
 
 Gli amministratori gestiscono utenti, ruoli e permessi. Ogni ruolo dovrebbe concedere solo le funzioni necessarie al lavoro quotidiano.
 
-La pagina **Utenti** resta focalizzata sull'accesso applicativo: username, ruolo, permessi, metodo di autenticazione e stato account. I dati HR come telefono, email operativa, mansione, reparto, contratto, sede e contatti di emergenza si gestiscono dal modulo **HR**, non da Amministrazione.
+La pagina **Utenti** resta focalizzata sull'accesso applicativo: username, ruolo, permessi, metodo di autenticazione e stato account. I dati HR come telefono aziendale, email operativa, ruolo, dipartimento derivato dai Competence Center, responsabile, contratto, sede, anagrafica personale e indirizzo completo si gestiscono dal modulo **HR**, non da Amministrazione.
 
 Le righe di permesso con ambito **All** concedono accesso trasversale a tutti i record della stessa area, ad esempio tutti i clienti, fornitori, progetti, task, consuntivi o Competence Center. L'azione **View** abilita la vista e la consultazione su tutti i record; quando selezionate, anche **Create**, **Update** e **Delete** sono permessi reali e consentono scritture su record non assegnati. I permessi senza **All** mantengono l'ambito assegnato all'utente.
 
