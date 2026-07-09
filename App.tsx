@@ -4061,9 +4061,6 @@ const HrRoutes: React.FC<{ controller: AuthenticatedAppContentController }> = ({
     workUnits,
     responsibleUserOptions,
   } = controller;
-  const visibleWorkUnits = hasPermission(currentUser.permissions, 'hr.work_units_all.view')
-    ? workUnits
-    : [];
 
   return (
     <>
@@ -4074,7 +4071,7 @@ const HrRoutes: React.FC<{ controller: AuthenticatedAppContentController }> = ({
             clients={clients}
             projects={projects}
             tasks={projectTasks}
-            workUnits={visibleWorkUnits}
+            workUnits={workUnits}
             responsibleUserOptions={responsibleUserOptions}
             onAddEmployee={addInternalEmployee}
             onUpdateEmployee={handleUpdateEmployee}
@@ -4090,7 +4087,7 @@ const HrRoutes: React.FC<{ controller: AuthenticatedAppContentController }> = ({
             clients={clients}
             projects={projects}
             tasks={projectTasks}
-            workUnits={visibleWorkUnits}
+            workUnits={workUnits}
             responsibleUserOptions={responsibleUserOptions}
             onAddEmployee={addExternalEmployee}
             onUpdateEmployee={handleUpdateEmployee}
