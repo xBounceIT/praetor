@@ -28,6 +28,7 @@ import {
 import { ForeignKeyError, NotFoundError } from '../utils/http-errors.ts';
 import { generatePrefixedId } from '../utils/order-ids.ts';
 import { requestHasPermission as hasPermission, makeAccessChecker } from '../utils/permissions.ts';
+import { PROJECT_STATUSES } from '../utils/projectStatus.ts';
 import { PROJECT_TIPOS } from '../utils/projectTipo.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { replyError } from '../utils/replyError.ts';
@@ -82,6 +83,7 @@ const projectSchema = {
     revenue: { type: ['number', 'null'] },
     billingType: { type: 'string', enum: BILLING_TYPES },
     billingFrequency: { type: 'string', enum: BILLING_FREQUENCIES },
+    status: { type: 'string', enum: PROJECT_STATUSES },
     tipo: { type: 'string', enum: PROJECT_TIPOS },
     tipoConfirmed: { type: 'boolean' },
   },
@@ -92,6 +94,7 @@ const projectSchema = {
     'isDisabled',
     'billingType',
     'billingFrequency',
+    'status',
     'tipo',
     'tipoConfirmed',
   ],
@@ -123,6 +126,7 @@ const projectCreateBodySchema = {
     revenue: { type: ['number', 'null'] },
     billingType: { type: 'string', enum: STORED_BILLING_TYPES },
     billingFrequency: { type: 'string', enum: BILLING_FREQUENCIES },
+    status: { type: 'string', enum: PROJECT_STATUSES },
     tipo: { type: 'string', enum: PROJECT_TIPOS },
   },
   required: ['name', 'clientId', 'orderId', 'startDate', 'endDate', 'tipo'],
@@ -142,6 +146,7 @@ const projectUpdateBodySchema = {
     revenue: { type: ['number', 'null'] },
     billingType: { type: 'string', enum: STORED_BILLING_TYPES },
     billingFrequency: { type: 'string', enum: BILLING_FREQUENCIES },
+    status: { type: 'string', enum: PROJECT_STATUSES },
     tipo: { type: 'string', enum: PROJECT_TIPOS },
   },
 } as const;
@@ -292,6 +297,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         endDate?: string;
         revenue?: number | string | null;
         tipo?: string;
+        status?: string;
       };
 
       const nameResult = requireNonEmptyString(name, 'name');
@@ -344,6 +350,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       // `tipo` is mandatory on create (issue #784): the form requires a deliberate choice.
       const tipoResult = validateEnum(body.tipo, PROJECT_TIPOS, 'tipo');
       if (!tipoResult.ok) return badRequest(reply, tipoResult.message);
+      const statusResult = optionalEnum(body.status, PROJECT_STATUSES, 'status');
+      if (!statusResult.ok) return badRequest(reply, statusResult.message);
 
       const id = generatePrefixedId('p');
 
@@ -384,6 +392,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               billingType,
               billingFrequency,
               tipo: tipoResult.value,
+              status: statusResult.value ?? undefined,
             },
             tx,
           );
@@ -534,6 +543,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         billingType?: string;
         billingFrequency?: string;
         tipo?: string;
+        status?: string;
       };
       const {
         name,
@@ -544,6 +554,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         billingType,
         billingFrequency,
         tipo,
+        status,
       } = body;
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
@@ -570,6 +581,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       // confirmation for rollout-defaulted projects (issue #784).
       const tipoResult = optionalEnum(tipo, PROJECT_TIPOS, 'tipo');
       if (!tipoResult.ok) return badRequest(reply, tipoResult.message);
+      const statusResult = optionalEnum(status, PROJECT_STATUSES, 'status');
+      if (!statusResult.ok) return badRequest(reply, statusResult.message);
 
       // Parse each optional patch field into a `{provided, value}` tuple so we can distinguish
       // "absent from body" (skip) from "explicitly null" (clear) in the repo call below.
@@ -701,6 +714,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               billingType: billingTypeResult.value ?? undefined,
               billingFrequency: billingFrequencyResult.value ?? undefined,
               tipo: tipoResult.value ?? undefined,
+              status: statusResult.value ?? undefined,
             },
             tx,
           );

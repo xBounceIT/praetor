@@ -40,6 +40,21 @@
     "statusDisabled": "Disabilitato",
     "statusInheritedDisable": "Disabilitazione Ereditata",
     "statusActive": "Attivo",
+    "status": "Stato",
+    "selectStatus": "Seleziona stato...",
+    "statusHelpLabel": "Informazioni stato commessa",
+    "statusValues": {
+      "da_fare": "DA FARE",
+      "in_corso": "In Corso",
+      "in_pausa": "In Pausa",
+      "terminato": "TERMINATO"
+    },
+    "statusHelp": {
+      "da_fare": "Commessa pianificata, ore inseribili.",
+      "in_corso": "Commessa attiva, ore inseribili.",
+      "in_pausa": "Commessa sospesa, ore non inseribili.",
+      "terminato": "Commessa conclusa, ore non inseribili."
+    },
     "inheritedFromDisabledClient": "Ereditato da Cliente disabilitato: {{clientName}}",
     "allClients": "Tutti i Clienti",
     "searchPlaceholder": "Cerca commesse, descrizioni o clienti...",
@@ -309,8 +324,10 @@
           "retainer": "Canone"
         },
         "status": {
-          "active": "Attivo",
-          "disabled": "Disabilitato"
+          "da_fare": "DA FARE",
+          "in_corso": "In Corso",
+          "in_pausa": "In Pausa",
+          "terminato": "TERMINATO"
         }
       },
       "errors": {

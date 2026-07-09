@@ -34,6 +34,7 @@ export const makeProjectHandlers = (deps: ProjectHandlersDeps) => {
         billingType: input.billingType,
         billingFrequency: input.billingFrequency,
         tipo: input.tipo,
+        status: input.status,
       });
       setProjects((prev) => [...prev, project]);
 

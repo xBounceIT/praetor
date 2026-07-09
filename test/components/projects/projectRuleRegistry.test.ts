@@ -33,7 +33,7 @@ describe('project rule registry', () => {
   test('validates number and enum values by field type', () => {
     expect(isValidProjectRuleValue('revenue', '1000')).toBe(true);
     expect(isValidProjectRuleValue('revenue', 'not-a-number')).toBe(false);
-    expect(isValidProjectRuleValue('status', 'active')).toBe(true);
+    expect(isValidProjectRuleValue('status', 'in_corso')).toBe(true);
     expect(isValidProjectRuleValue('status', 'archived')).toBe(false);
   });
 

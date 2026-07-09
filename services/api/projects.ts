@@ -2,6 +2,7 @@ import type {
   BillingFrequency,
   ClientsOrder,
   Project,
+  ProjectStatus,
   ProjectTipo,
   StoredBillingType,
 } from '../../types';
@@ -47,6 +48,7 @@ export const projectsApi = {
     revenue?: number | null;
     billingType?: StoredBillingType;
     billingFrequency?: BillingFrequency;
+    status: ProjectStatus;
     tipo: ProjectTipo;
   }): Promise<Project> =>
     fetchApi<Project>('/projects', {

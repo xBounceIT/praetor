@@ -63,7 +63,7 @@ const METRICS = {
   hoursToDate: 10,
   daysUntilDeadline: 5,
   billingType: 'retainer' as const,
-  status: 'active' as const,
+  status: 'in_corso' as const,
 };
 
 beforeAll(async () => {
@@ -193,7 +193,7 @@ describe('evaluateProjectRulesOnce', () => {
         conditionLogic: 'and',
         conditions: [
           { field: 'budget_used_pct', operator: 'gte', value: '80', valueType: 'literal' },
-          { field: 'status', operator: 'eq', value: 'active', valueType: 'literal' },
+          { field: 'status', operator: 'eq', value: 'in_corso', valueType: 'literal' },
         ],
       },
       {
@@ -202,7 +202,7 @@ describe('evaluateProjectRulesOnce', () => {
         conditionLogic: 'or',
         conditions: [
           { field: 'budget_used_pct', operator: 'gte', value: '95', valueType: 'literal' },
-          { field: 'status', operator: 'eq', value: 'active', valueType: 'literal' },
+          { field: 'status', operator: 'eq', value: 'in_corso', valueType: 'literal' },
         ],
       },
     ]);
@@ -260,7 +260,11 @@ describe('evaluateProjectRulesOnce', () => {
         triggeredAt: '2026-05-31T12:00:00.000Z',
         project: { id: 'p1', name: 'Project' },
         rule: expect.objectContaining({ id: 'pr-1', name: 'Budget warning' }),
-        metrics: expect.objectContaining({ costToDate: 900, budgetUsedPct: 90, status: 'active' }),
+        metrics: expect.objectContaining({
+          costToDate: 900,
+          budgetUsedPct: 90,
+          status: 'in_corso',
+        }),
       }),
     );
   });
@@ -289,7 +293,7 @@ describe('evaluateProjectRulesOnce', () => {
 
     expect(result).toEqual({ evaluated: 1, triggered: 1, reset: 0, notified: 0 });
     expect(payload.metrics).toEqual(
-      expect.objectContaining({ revenue: 1000, hoursToDate: 10, status: 'active' }),
+      expect.objectContaining({ revenue: 1000, hoursToDate: 10, status: 'in_corso' }),
     );
     expect(Object.keys(payload.metrics)).not.toContain('costToDate');
     expect(Object.keys(payload.metrics)).not.toContain('budgetUsedPct');

@@ -1,5 +1,5 @@
 import { describe, expect, mock, test } from 'bun:test';
-import { fireEvent, waitFor } from '@testing-library/react';
+import { fireEvent, screen, waitFor } from '@testing-library/react';
 import type { Client, Project, ProjectTask, TimeEntry } from '../../../types';
 import { installI18nMock } from '../../helpers/i18n';
 import { render } from '../../helpers/render';
@@ -218,6 +218,52 @@ describe('<EntryEditDialog />', () => {
     expect(patch).toEqual({ version: 3, notes: 'just the note' });
   });
 
+  test('hides paused and terminated projects from the edit catalog selector', () => {
+    const pausedProject: Project = {
+      id: 'project-paused',
+      name: 'Paused Project',
+      clientId: 'client-alpha',
+      status: 'in_pausa',
+    };
+    const terminatedProject: Project = {
+      id: 'project-terminated',
+      name: 'Terminated Project',
+      clientId: 'client-alpha',
+      status: 'terminato',
+    };
+    const expiredProject: Project = {
+      id: 'project-expired',
+      name: 'Expired Project',
+      clientId: 'client-alpha',
+      endDate: '2000-01-01',
+      status: 'in_corso',
+    };
+
+    render(
+      <EntryEditDialog
+        {...baseProps}
+        projects={[...projects, pausedProject, terminatedProject, expiredProject]}
+        projectTasks={[
+          ...projectTasks,
+          { id: 'task-paused', name: 'Paused Task', projectId: 'project-paused' },
+          { id: 'task-terminated', name: 'Terminated Task', projectId: 'project-terminated' },
+          { id: 'task-expired', name: 'Expired Task', projectId: 'project-expired' },
+        ]}
+        entry={sampleEntry}
+        onClose={mock(() => {})}
+        onSave={mock(() => {})}
+      />,
+    );
+
+    const projectTrigger = screen.getByRole('button', { name: /Alpha Project/ });
+    fireEvent.click(projectTrigger);
+
+    expect(document.body).not.toHaveTextContent('Paused Project');
+    expect(document.body).not.toHaveTextContent('Paused Task');
+    expect(document.body).not.toHaveTextContent('Terminated Project');
+    expect(document.body).not.toHaveTextContent('Terminated Task');
+    expect(document.body).toHaveTextContent('Expired Project');
+  });
   test('resolves seeded taskId via name lookup when the entry has no taskId FK', () => {
     render(
       <EntryEditDialog

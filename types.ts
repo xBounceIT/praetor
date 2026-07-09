@@ -79,6 +79,11 @@ export type BillingFrequency = 'monthly' | 'one_time';
 export const PROJECT_TIPOS = ['attivo', 'passivo'] as const;
 export type ProjectTipo = (typeof PROJECT_TIPOS)[number];
 
+export const PROJECT_STATUSES = ['da_fare', 'in_corso', 'in_pausa', 'terminato'] as const;
+export type ProjectStatus = (typeof PROJECT_STATUSES)[number];
+export const DEFAULT_PROJECT_STATUS: ProjectStatus = 'da_fare';
+export const LEGACY_PROJECT_STATUS: ProjectStatus = 'in_corso';
+
 export interface RilNoteOption {
   value: string;
   label: string;
@@ -308,6 +313,7 @@ export interface Project {
   revenue?: number | null;
   billingType?: BillingType;
   billingFrequency?: BillingFrequency;
+  status?: ProjectStatus;
   tipo?: ProjectTipo;
   // False until a user explicitly confirms `tipo`. Rollout-defaulted projects start false so the
   // edit form can force a deliberate first choice; projects created in-app are true (issue #784).

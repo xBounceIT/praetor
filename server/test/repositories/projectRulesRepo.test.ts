@@ -89,7 +89,7 @@ describe('projectRulesRepo', () => {
         conditionLogic: 'and',
         conditions: [
           { field: 'budget_used_pct', operator: 'gte', value: '80', valueType: 'literal' },
-          { field: 'status', operator: 'eq', value: 'active', valueType: 'literal' },
+          { field: 'status', operator: 'eq', value: 'in_corso', valueType: 'literal' },
         ],
         actionType: 'notify',
         actionConfig: {
