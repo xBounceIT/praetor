@@ -1163,7 +1163,13 @@ const OrderDetailsSection: React.FC<{ controller: ClientsOrdersController }> = (
             defaultValue: 'Order Number',
           })}
         </FieldLabel>
-        <div className="flex h-9 items-center rounded-md border border-border bg-muted/30 px-3 text-sm font-medium text-foreground">
+        <div
+          className={`flex h-9 items-center rounded-md border border-border px-3 text-sm font-medium ${
+            controller.isReadOnly || controller.isConfirmedIdentityLocked
+              ? 'bg-muted text-muted-foreground'
+              : 'bg-muted/30 text-foreground'
+          }`}
+        >
           {controller.editingOrder?.id || '-'}
         </div>
       </Field>

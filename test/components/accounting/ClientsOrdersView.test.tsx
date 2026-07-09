@@ -437,6 +437,9 @@ describe('<ClientsOrdersView /> draft-from-offer editability', () => {
     const { dialog } = await openModal(confirmedLinkedOrder);
 
     expect(isDisabled(dialog.querySelector('#client-order-client'))).toBe(true);
+    expect(within(dialog).getByText(confirmedLinkedOrder.id).className).toContain(
+      'text-muted-foreground',
+    );
     expect(isDisabled(dialog.querySelector('#client-order-notes'))).toBe(false);
     expect(
       isDisabled(within(dialog).getByRole('button', { name: /clientQuotes\.addProduct/ })),
@@ -461,6 +464,9 @@ describe('<ClientsOrdersView /> draft-from-offer editability', () => {
     const { dialog } = await openModal(deniedLinkedOrder);
 
     expect(isDisabled(dialog.querySelector('#client-order-client'))).toBe(true);
+    expect(within(dialog).getByText(deniedLinkedOrder.id).className).toContain(
+      'text-muted-foreground',
+    );
     expect(isDisabled(dialog.querySelector('#client-order-notes'))).toBe(true);
     expect(
       isDisabled(within(dialog).getByRole('button', { name: /clientQuotes\.addProduct/ })),
