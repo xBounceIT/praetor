@@ -870,6 +870,7 @@ describe('POST /api/users', () => {
         email: 'bob@example.com',
         employeeCode: 'EMP-123',
         employmentStatus: 'onboarding',
+        department: 'Delivery',
         responsibleUserId: 'u-manager',
       }),
     );

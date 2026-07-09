@@ -895,7 +895,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           isDisabled: false,
           employeeType: effectiveEmployeeType,
           ...hrDetails,
-          department: null,
+          department: hrDetails.department ?? null,
           responsibleUserName: null,
           authMethod: 'local',
           authProviderId: null,
