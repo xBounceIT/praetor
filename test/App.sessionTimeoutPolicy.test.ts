@@ -16,6 +16,17 @@ describe('App session timeout policy', () => {
     expect(block).toContain('loadGeneralSettingsOnce(() => !isCancelled)');
   });
 
+  test('clears any in-flight general settings load on auth reset', () => {
+    const start = source.indexOf('const clearAuthScopedAppState = useCallback(');
+    expect(start).toBeGreaterThan(-1);
+    const end = source.indexOf('}, [resetModuleLoader]);', start);
+    expect(end).toBeGreaterThan(start);
+    const block = source.slice(start, end);
+
+    expect(block).toContain('hasLoadedGeneralSettingsRef.current = false');
+    expect(block).toContain('generalSettingsLoadPromiseRef.current = null');
+  });
+
   test('passes idle minutes to the global timer so it can derive token expiry dynamically', () => {
     const start = source.indexOf('const AuthenticatedAppShell');
     expect(start).toBeGreaterThan(-1);

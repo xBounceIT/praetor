@@ -1506,6 +1506,7 @@ const useAppContentController = () => {
     clearAuthScopedState({
       hasLoadedGeneralSettings: () => {
         hasLoadedGeneralSettingsRef.current = false;
+        generalSettingsLoadPromiseRef.current = null;
       },
       generalSettings: () => setGeneralSettings(INITIAL_GENERAL_SETTINGS),
       hasLoadedLdapConfig: () => {
