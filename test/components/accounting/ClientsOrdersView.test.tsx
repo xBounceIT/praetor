@@ -144,6 +144,39 @@ describe('<ClientsOrdersView />', () => {
     expect(screen.queryByText('accounting:clientsOrders.itemsCount')).toBeNull();
   });
 
+  test('only denied rows use the muted table style', () => {
+    const confirmedOrder: ClientsOrder = {
+      ...orders[0],
+      id: 'dm_so_confirmed',
+      status: 'confirmed',
+    };
+    const deniedOrder: ClientsOrder = {
+      ...orders[0],
+      id: 'dm_so_denied',
+      status: 'denied',
+    };
+
+    render(
+      <ClientsOrdersView
+        orders={[confirmedOrder, deniedOrder]}
+        clients={clients}
+        products={[]}
+        currency="EUR"
+        onUpdateClientsOrder={mock(() => Promise.resolve())}
+        onDeleteClientsOrder={mock(() => Promise.resolve())}
+      />,
+    );
+
+    const confirmedRow = screen.getByText('dm_so_confirmed').closest('tr');
+    const deniedRow = screen.getByText('dm_so_denied').closest('tr');
+
+    expect(confirmedRow?.className).toContain('hover:bg-muted/50');
+    expect(confirmedRow?.className).not.toContain('bg-muted text-muted-foreground');
+    expect(confirmedRow?.querySelector('.opacity-60')).toBeNull();
+    expect(deniedRow?.className).toContain('bg-muted text-muted-foreground');
+    expect(deniedRow?.querySelector('.opacity-60')).not.toBeNull();
+  });
+
   test('scales order-row totals by a line item duration (issue #757)', () => {
     const durationOrder: ClientsOrder = {
       id: 'dm_so_dur',

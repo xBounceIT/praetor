@@ -100,8 +100,7 @@ const getOrderStatusLabel = (status: ClientsOrder['status'], t: (key: string) =>
   return t('accounting:clientsOrders.statusDraft');
 };
 
-const isHistoryRow = (status: ClientsOrder['status']) =>
-  status === 'confirmed' || status === 'denied';
+const isDeniedRow = (status: ClientsOrder['status']) => status === 'denied';
 
 type ClientsOrdersViewState = {
   isModalOpen: boolean;
@@ -640,7 +639,7 @@ const useClientsOrdersController = ({
         cell: ({ row }: { row: ClientsOrder }) => (
           <div>
             <div
-              className={`font-bold ${isHistoryRow(row.status) ? 'text-muted-foreground' : 'text-foreground'}`}
+              className={`font-bold ${isDeniedRow(row.status) ? 'text-muted-foreground' : 'text-foreground'}`}
             >
               {row.clientName}
             </div>
@@ -656,7 +655,7 @@ const useClientsOrdersController = ({
         headerClassName: 'min-w-[9rem]',
         disableSorting: true,
         cell: ({ row }: { row: ClientsOrder }) => {
-          const history = isHistoryRow(row.status);
+          const history = isDeniedRow(row.status);
           return (
             <span
               className={`text-sm font-semibold whitespace-nowrap ${history ? 'text-muted-foreground' : 'text-foreground'}`}
@@ -676,7 +675,7 @@ const useClientsOrdersController = ({
         cell: ({ row, value }: { row: ClientsOrder; value: unknown }) => (
           <PricingCell
             value={Number(value)}
-            isHistory={isHistoryRow(row.status)}
+            isHistory={isDeniedRow(row.status)}
             colorClass="text-foreground"
             currency={currency}
           />
@@ -692,7 +691,7 @@ const useClientsOrdersController = ({
         cell: ({ row, value }: { row: ClientsOrder; value: unknown }) => (
           <PricingCell
             value={Number(value)}
-            isHistory={isHistoryRow(row.status)}
+            isHistory={isDeniedRow(row.status)}
             colorClass="text-amber-600"
             prefix="-"
             dashOnZero
@@ -710,7 +709,7 @@ const useClientsOrdersController = ({
         cell: ({ row, value }: { row: ClientsOrder; value: unknown }) => (
           <PricingCell
             value={Number(value)}
-            isHistory={isHistoryRow(row.status)}
+            isHistory={isDeniedRow(row.status)}
             colorClass="text-emerald-600"
             bold
             currency={currency}
@@ -727,7 +726,7 @@ const useClientsOrdersController = ({
         cell: ({ row, value }: { row: ClientsOrder; value: unknown }) => (
           <PricingCell
             value={Number(value)}
-            isHistory={isHistoryRow(row.status)}
+            isHistory={isDeniedRow(row.status)}
             colorClass="text-foreground"
             currency={currency}
           />
@@ -742,7 +741,7 @@ const useClientsOrdersController = ({
         cell: ({ row, value }: { row: ClientsOrder; value: unknown }) => (
           <PricingCell
             value={Number(value)}
-            isHistory={isHistoryRow(row.status)}
+            isHistory={isDeniedRow(row.status)}
             colorClass="text-foreground"
             bold
             currency={currency}
@@ -758,7 +757,7 @@ const useClientsOrdersController = ({
         headerClassName: 'min-w-[10rem]',
         cell: ({ row }: { row: ClientsOrder }) => (
           <span
-            className={`text-sm font-semibold ${isHistoryRow(row.status) ? 'text-muted-foreground' : 'text-foreground'}`}
+            className={`text-sm font-semibold ${isDeniedRow(row.status) ? 'text-muted-foreground' : 'text-foreground'}`}
           >
             {row.paymentTerms === 'immediate' ? t('crm:paymentTerms.immediate') : row.paymentTerms}
           </span>
@@ -770,7 +769,7 @@ const useClientsOrdersController = ({
         className: 'whitespace-nowrap',
         headerClassName: 'min-w-[9rem]',
         cell: ({ row }: { row: ClientsOrder }) => (
-          <div className={isHistoryRow(row.status) ? 'opacity-60' : ''}>
+          <div className={isDeniedRow(row.status) ? 'opacity-60' : ''}>
             <StatusBadge
               type={row.status as StatusType}
               label={getOrderStatusLabel(row.status, t)}
@@ -980,7 +979,7 @@ const ClientsOrdersLayout: React.FC<{ controller: ClientsOrdersController }> = (
       initialFilterState={controller.tableInitialFilterState}
       containerClassName="overflow-visible"
       rowClassName={(row: ClientsOrder) =>
-        isHistoryRow(row.status) ? 'bg-muted text-muted-foreground' : 'hover:bg-muted/50'
+        isDeniedRow(row.status) ? 'bg-muted text-muted-foreground' : 'hover:bg-muted/50'
       }
       onRowClick={(row: ClientsOrder) => controller.openEditModal(row)}
     />
