@@ -184,6 +184,7 @@ export interface GeneralSettings {
   enforceTotp: boolean;
   totpEnforcedRoleIds: string[];
   totpExemptRoleIds: string[];
+  sessionIdleTimeoutMinutes: number;
 }
 
 export type DocumentCodeModuleId =

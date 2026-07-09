@@ -12,6 +12,7 @@ export type SignTokenInput = {
   // Pass null to omit the claim entirely (simulates pre-feature tokens).
   sessionVersion?: number | null;
   expiresIn?: jwt.SignOptions['expiresIn'];
+  issuedAtSeconds?: number;
   secret?: string;
 };
 
@@ -21,11 +22,13 @@ export const signToken = ({
   activeRole,
   sessionVersion = 1,
   expiresIn = '30m',
+  issuedAtSeconds,
   secret = TEST_JWT_SECRET,
 }: SignTokenInput): string => {
   const payload: Record<string, unknown> = { userId, activeRole };
   if (sessionStart !== null) payload.sessionStart = sessionStart;
   if (sessionVersion !== null) payload.sessionVersion = sessionVersion;
+  if (issuedAtSeconds !== undefined) payload.iat = issuedAtSeconds;
   return jwt.sign(payload, secret, { expiresIn });
 };
 

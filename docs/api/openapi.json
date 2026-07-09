@@ -3,7 +3,7 @@
   "info": {
     "title": "Praetor API",
     "description": "Praetor API documentation",
-    "version": "0.8.1"
+    "version": "0.8.2"
   },
   "components": {
     "securitySchemes": {
@@ -24535,6 +24535,9 @@
                       "items": {
                         "type": "string"
                       }
+                    },
+                    "sessionIdleTimeoutMinutes": {
+                      "type": "integer"
                     }
                   },
                   "required": [
@@ -24559,7 +24562,8 @@
                     "enableTotp",
                     "enforceTotp",
                     "totpEnforcedRoleIds",
-                    "totpExemptRoleIds"
+                    "totpExemptRoleIds",
+                    "sessionIdleTimeoutMinutes"
                   ]
                 }
               }
@@ -24823,6 +24827,9 @@
                     "items": {
                       "type": "string"
                     }
+                  },
+                  "sessionIdleTimeoutMinutes": {
+                    "type": "integer"
                   }
                 }
               }
@@ -24934,6 +24941,9 @@
                       "items": {
                         "type": "string"
                       }
+                    },
+                    "sessionIdleTimeoutMinutes": {
+                      "type": "integer"
                     }
                   },
                   "required": [
@@ -24958,7 +24968,8 @@
                     "enableTotp",
                     "enforceTotp",
                     "totpEnforcedRoleIds",
-                    "totpExemptRoleIds"
+                    "totpExemptRoleIds",
+                    "sessionIdleTimeoutMinutes"
                   ]
                 }
               }

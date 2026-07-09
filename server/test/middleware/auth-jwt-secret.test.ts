@@ -1,12 +1,15 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 import { __resetJwtSecretCacheForTests, authenticateToken } from '../../middleware/auth.ts';
+import * as realGeneralSettingsRepo from '../../repositories/generalSettingsRepo.ts';
 import * as realRolesRepo from '../../repositories/rolesRepo.ts';
 import * as realUsersRepo from '../../repositories/usersRepo.ts';
 import * as realPermissions from '../../utils/permissions.ts';
+import { DEFAULT_SESSION_IDLE_TIMEOUT_MINUTES } from '../../utils/sessionTimeout.ts';
 import { signToken } from '../helpers/jwt.ts';
 
 const usersRepoSnapshot = { ...realUsersRepo };
 const rolesRepoSnapshot = { ...realRolesRepo };
+const generalSettingsRepoSnapshot = { ...realGeneralSettingsRepo };
 const permissionsSnapshot = { ...realPermissions };
 
 const findAuthUserByIdMock = mock();
@@ -43,6 +46,10 @@ beforeAll(() => {
     ...permissionsSnapshot,
     getRolePermissions: getRolePermissionsMock,
   }));
+  mock.module('../../repositories/generalSettingsRepo.ts', () => ({
+    ...generalSettingsRepoSnapshot,
+    get: async () => ({ sessionIdleTimeoutMinutes: DEFAULT_SESSION_IDLE_TIMEOUT_MINUTES }),
+  }));
 });
 
 afterAll(() => {
@@ -55,6 +62,7 @@ afterAll(() => {
   mock.module('../../repositories/usersRepo.ts', () => usersRepoSnapshot);
   mock.module('../../repositories/rolesRepo.ts', () => rolesRepoSnapshot);
   mock.module('../../utils/permissions.ts', () => permissionsSnapshot);
+  mock.module('../../repositories/generalSettingsRepo.ts', () => generalSettingsRepoSnapshot);
 });
 
 type FakeReply = {

@@ -68,6 +68,14 @@ I due interruttori sono indipendenti: disattivando entrambi (e creando manualmen
 
 Se un utente non riesce ad accedere, controlla credenziali, stato dell'utente, ruolo assegnato e log di autenticazione.
 
+### Timeout di inattività sessione
+
+La scheda **Sessione** nelle impostazioni di **Autenticazione** consente agli amministratori con permesso di modifica delle impostazioni generali di configurare dopo quanti minuti di inattività una sessione browser viene disconnessa.
+
+Il campo **Timeout di inattività** accetta valori interi da `5` a `1440` minuti. Il valore predefinito resta `30` minuti. Praetor usa questa soglia per verificare lato server l'età idle del token, ruotandolo con una nuova scadenza coerente a ogni richiesta valida e subito dopo il salvataggio della policy quando il valore cambia.
+
+Se il timeout viene ridotto, il server applica la nuova soglia alla prima richiesta successiva controllando l'`iat` del JWT. Il limite massimo assoluto della sessione resta separato e invariato: una sessione non può superare le 8 ore complessive anche se il timeout di inattività è più lungo. L'avviso e il logout nel browser usano sempre la scadenza effettiva più vicina tra timeout di inattività e limite assoluto residuo della sessione.
+
 ### Autenticazione a due fattori (2FA)
 
 Praetor supporta l'autenticazione a due fattori basata su TOTP (app authenticator come Google Authenticator, Authy o 1Password) per gli account con credenziali locali o LDAP. Ogni utente abilita la 2FA dalle proprie **Impostazioni → Sicurezza**. Per sicurezza, l'attivazione da una sessione già autenticata richiede prima di reinserire la password dell'account (così una sessione compromessa da sola non può registrare un secondo fattore); Praetor mostra poi un codice QR (e una chiave da inserire manualmente) da scansionare con l'app authenticator, chiede un codice a sei cifre per confermare e infine mostra una serie di **codici di backup** monouso da conservare al sicuro. I codici di backup vengono mostrati una sola volta; puoi rigenerarli in qualsiasi momento — invalidando i precedenti — inserendo un codice valido. L'attivazione della 2FA disconnette anche gli altri tuoi dispositivi e revoca i token API esistenti, così nulla emesso prima dell'attivazione può continuare ad aggirare il nuovo secondo fattore (il dispositivo da cui hai effettuato l'attivazione resta connesso).

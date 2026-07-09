@@ -42,6 +42,7 @@ export const generalSettings = pgTable(
       .$type<string[]>()
       .default(sql`'[]'::jsonb`),
     totpExemptRoleIds: jsonb('totp_exempt_role_ids').$type<string[]>().default(sql`'[]'::jsonb`),
+    sessionIdleTimeoutMinutes: integer('session_idle_timeout_minutes').notNull().default(30),
     geminiApiKey: varchar('gemini_api_key', { length: 255 }),
     aiProvider: varchar('ai_provider', { length: 20 })
       .$type<'gemini' | 'openrouter'>()
@@ -102,6 +103,10 @@ export const generalSettings = pgTable(
     check(
       'general_settings_totp_exempt_role_ids_array_check',
       sql`jsonb_typeof(${table.totpExemptRoleIds}) = 'array'`,
+    ),
+    check(
+      'general_settings_session_idle_timeout_minutes_check',
+      sql`${table.sessionIdleTimeoutMinutes} >= 5 AND ${table.sessionIdleTimeoutMinutes} <= 1440`,
     ),
   ],
 );

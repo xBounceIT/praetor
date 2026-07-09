@@ -1,15 +1,18 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 import Fastify, { type FastifyInstance, type FastifyPluginAsync } from 'fastify';
 import rateLimit from 'fastify-rate-limit';
+import * as realGeneralSettingsRepo from '../../repositories/generalSettingsRepo.ts';
 import * as realRolesRepo from '../../repositories/rolesRepo.ts';
 import * as realUsersRepo from '../../repositories/usersRepo.ts';
 import * as realLdapService from '../../services/ldap.ts';
 import * as realPermissions from '../../utils/permissions.ts';
 import * as realRateLimit from '../../utils/rate-limit.ts';
+import { DEFAULT_SESSION_IDLE_TIMEOUT_MINUTES } from '../../utils/sessionTimeout.ts';
 import { signToken } from '../helpers/jwt.ts';
 
 const usersRepoSnap = { ...realUsersRepo };
 const rolesRepoSnap = { ...realRolesRepo };
+const generalSettingsRepoSnap = { ...realGeneralSettingsRepo };
 const permissionsSnap = { ...realPermissions };
 const ldapServiceSnap = { ...(realLdapService as Record<string, unknown>) };
 const rateLimitSnap = { ...realRateLimit };
@@ -39,6 +42,10 @@ beforeAll(async () => {
     ...permissionsSnap,
     getRolePermissions: getRolePermissionsMock,
   }));
+  mock.module('../../repositories/generalSettingsRepo.ts', () => ({
+    ...generalSettingsRepoSnap,
+    get: async () => ({ sessionIdleTimeoutMinutes: DEFAULT_SESSION_IDLE_TIMEOUT_MINUTES }),
+  }));
   mock.module('../../services/ldap.ts', () => ({
     default: {
       authenticateWithProfile: authenticateWithProfileMock,
@@ -53,6 +60,7 @@ afterAll(async () => {
   mock.module('../../repositories/usersRepo.ts', () => usersRepoSnap);
   mock.module('../../repositories/rolesRepo.ts', () => rolesRepoSnap);
   mock.module('../../utils/permissions.ts', () => permissionsSnap);
+  mock.module('../../repositories/generalSettingsRepo.ts', () => generalSettingsRepoSnap);
   mock.module('../../services/ldap.ts', () => ldapServiceSnap);
   mock.module('../../utils/rate-limit.ts', () => rateLimitSnap);
 });

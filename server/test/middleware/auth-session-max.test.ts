@@ -6,18 +6,21 @@ import {
   __resetSessionMaxDurationCacheForTests,
   authenticateToken,
 } from '../../middleware/auth.ts';
+import * as realGeneralSettingsRepo from '../../repositories/generalSettingsRepo.ts';
 import * as realRolesRepo from '../../repositories/rolesRepo.ts';
 import * as realUsersRepo from '../../repositories/usersRepo.ts';
 import * as realPermissions from '../../utils/permissions.ts';
-import { signToken } from '../helpers/jwt.ts';
+import { decodeForAssertion, signToken } from '../helpers/jwt.ts';
 
 const usersRepoSnapshot = { ...realUsersRepo };
 const rolesRepoSnapshot = { ...realRolesRepo };
+const generalSettingsRepoSnapshot = { ...realGeneralSettingsRepo };
 const permissionsSnapshot = { ...realPermissions };
 
 const findAuthUserByIdMock = mock();
 const userHasRoleMock = mock();
 const getRolePermissionsMock = mock();
+const generalSettingsGetMock = mock();
 
 const HAPPY_USER = {
   id: 'u1',
@@ -46,6 +49,10 @@ beforeAll(() => {
     ...permissionsSnapshot,
     getRolePermissions: getRolePermissionsMock,
   }));
+  mock.module('../../repositories/generalSettingsRepo.ts', () => ({
+    ...generalSettingsRepoSnapshot,
+    get: generalSettingsGetMock,
+  }));
 });
 
 afterAll(() => {
@@ -59,6 +66,7 @@ afterAll(() => {
   mock.module('../../repositories/usersRepo.ts', () => usersRepoSnapshot);
   mock.module('../../repositories/rolesRepo.ts', () => rolesRepoSnapshot);
   mock.module('../../utils/permissions.ts', () => permissionsSnapshot);
+  mock.module('../../repositories/generalSettingsRepo.ts', () => generalSettingsRepoSnapshot);
 });
 
 type FakeReply = {
@@ -100,9 +108,11 @@ beforeEach(() => {
   findAuthUserByIdMock.mockReset();
   userHasRoleMock.mockReset();
   getRolePermissionsMock.mockReset();
+  generalSettingsGetMock.mockReset();
   findAuthUserByIdMock.mockResolvedValue(HAPPY_USER);
   userHasRoleMock.mockResolvedValue(true);
   getRolePermissionsMock.mockResolvedValue(HAPPY_PERMISSIONS);
+  generalSettingsGetMock.mockResolvedValue({ sessionIdleTimeoutMinutes: 30 });
   // Apply our overridden window and reset the cached value so the next request re-resolves.
   process.env.SESSION_MAX_DURATION_MS = '1000';
   __resetSessionMaxDurationCacheForTests();
@@ -123,8 +133,9 @@ describe('SESSION_MAX_DURATION_MS env override', () => {
     expect(findAuthUserByIdMock).not.toHaveBeenCalled();
   });
 
-  test('a fresh session (sessionStart = now) is still accepted', async () => {
-    const token = signToken({ userId: 'u1', sessionStart: Date.now() });
+  test('a fresh session (sessionStart = now) is still accepted and rotated within max', async () => {
+    const sessionStart = Date.now();
+    const token = signToken({ userId: 'u1', sessionStart });
     const reply = buildFakeReply();
 
     await authenticateToken(buildFakeRequest(token) as never, reply as never);
@@ -132,6 +143,9 @@ describe('SESSION_MAX_DURATION_MS env override', () => {
     expect(reply.statusCode).toBe(0);
     expect(reply.body).toBeUndefined();
     expect(findAuthUserByIdMock).toHaveBeenCalledWith('u1');
+    const decoded = decodeForAssertion(reply.headers['x-auth-token']);
+    expect(decoded.sessionMaxExpiresAt).toBe(sessionStart + 1000);
+    expect((decoded.exp as number) - (decoded.iat as number)).toBe(1);
   });
 
   test('non-positive values fall back to the default 8h window', async () => {
