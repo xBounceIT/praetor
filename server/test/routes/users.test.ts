@@ -820,7 +820,14 @@ describe('POST /api/users', () => {
       'hr.costs_all.update',
     ]);
     insertUserMock.mockResolvedValue(undefined);
-
+    findByIdMock.mockResolvedValue({
+      ...SAMPLE_USER_ROW,
+      id: 'u-manager',
+      name: 'Manager User',
+      username: 'manager',
+      responsibleUserId: null,
+      responsibleUserName: null,
+    });
     const res = await testApp.inject({
       method: 'POST',
       url: '/api/users',
@@ -872,6 +879,7 @@ describe('POST /api/users', () => {
         employmentStatus: 'onboarding',
         department: 'Delivery',
         responsibleUserId: 'u-manager',
+        responsibleUserName: 'Manager User',
       }),
     );
   });

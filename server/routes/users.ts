@@ -823,6 +823,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const id = generatePrefixedId('u');
       const responsibleUserError = await getResponsibleUserValidationError(hrDetails, id);
       if (responsibleUserError) return badRequest(reply, responsibleUserError);
+      const responsibleUserName = hrDetails.responsibleUserId
+        ? ((await usersRepo.findById(hrDetails.responsibleUserId))?.name ?? null)
+        : null;
 
       try {
         // Atomic create: user row, primary user_roles entry, settings row, and (for top
@@ -896,7 +899,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           employeeType: effectiveEmployeeType,
           ...hrDetails,
           department: hrDetails.department ?? null,
-          responsibleUserName: null,
+          responsibleUserName,
           authMethod: 'local',
           authProviderId: null,
           authProviderName: null,
