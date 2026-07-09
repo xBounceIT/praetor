@@ -3,8 +3,9 @@ import {
   buildEmployeeCreatePayload,
   buildEmployeeHrPayload,
   createEmployeeHrForm,
+  getEmployeeDepartmentDisplay,
 } from '../../../components/HR/employeeHrProfile';
-import type { User } from '../../../types';
+import type { User, WorkUnit } from '../../../types';
 
 const buildUser = (overrides: Partial<User> = {}): User => ({
   id: 'u1',
@@ -67,6 +68,9 @@ describe('employeeHrProfile first/last name', () => {
         lastName: 'Doe',
         phone: '+39 02 1234',
         jobTitle: 'Consultant',
+        department: 'Legacy Department',
+        address: 'Via Roma 1',
+        responsibleUserId: 'u-manager',
         employeeCode: 'EMP-123',
       }),
       costPerHour: 80,
@@ -79,5 +83,72 @@ describe('employeeHrProfile first/last name', () => {
     expect(payload).toEqual({
       name: 'Alice Smith',
     });
+  });
+
+  test('buildEmployeeHrPayload sends responsibleUserId, address and omits department', () => {
+    const form = createEmployeeHrForm(
+      buildUser({
+        department: 'Legacy Department',
+        responsibleUserId: '  u-manager  ',
+        address: '  Via Roma 1  ',
+      }),
+    );
+    const payload = buildEmployeeHrPayload(form, { includeIdentity: false, includeCost: false });
+
+    expect(payload.responsibleUserId).toBe('u-manager');
+    expect(payload.address).toBe('Via Roma 1');
+    expect(payload).not.toHaveProperty('department');
+  });
+
+  test('buildEmployeeHrPayload clears responsibleUserId when blank', () => {
+    const form = createEmployeeHrForm(buildUser({ responsibleUserId: 'u-manager' }));
+    form.responsibleUserId = '   ';
+
+    const payload = buildEmployeeHrPayload(form, { includeIdentity: false, includeCost: false });
+
+    expect(payload.responsibleUserId).toBeNull();
+  });
+});
+
+describe('employeeHrProfile department display', () => {
+  const employee = buildUser({ id: 'u-employee', department: 'API Department' });
+
+  test('uses active matching work units sorted by name', () => {
+    const workUnits: WorkUnit[] = [
+      {
+        id: 'wu-beta',
+        name: 'Beta Center',
+        managers: [],
+        members: [{ id: 'u-employee', name: 'Alice' }],
+      },
+      {
+        id: 'wu-disabled',
+        name: 'Disabled Center',
+        managers: [],
+        members: [{ id: 'u-employee', name: 'Alice' }],
+        isDisabled: true,
+      },
+      {
+        id: 'wu-alpha',
+        name: 'Alpha Center',
+        managers: [],
+        members: [{ id: 'u-employee', name: 'Alice' }],
+      },
+    ];
+
+    expect(getEmployeeDepartmentDisplay(employee, workUnits)).toBe('Alpha Center, Beta Center');
+  });
+
+  test('falls back to API department when visible work units omit the employee', () => {
+    const scopedWorkUnits: WorkUnit[] = [
+      {
+        id: 'wu-other',
+        name: 'Other Center',
+        managers: [],
+        members: [{ id: 'u-other', name: 'Other' }],
+      },
+    ];
+
+    expect(getEmployeeDepartmentDisplay(employee, scopedWorkUnits)).toBe('API Department');
   });
 });

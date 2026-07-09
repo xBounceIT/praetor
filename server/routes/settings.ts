@@ -1,6 +1,6 @@
 import bcrypt from 'bcryptjs';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { authenticateToken, generateToken } from '../middleware/auth.ts';
+import { authenticateToken, generateTokenWithCurrentIdleTimeout } from '../middleware/auth.ts';
 import * as mcpTokensRepo from '../repositories/mcpTokensRepo.ts';
 import * as notificationsRepo from '../repositories/notificationsRepo.ts';
 import * as personalAccessTokensRepo from '../repositories/personalAccessTokensRepo.ts';
@@ -439,7 +439,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       // header — without it, the admin would be force-logged-out by their own
       // password change. PAT callers have nothing to rotate.
       if (request.auth?.source === 'session' && request.auth.sessionStart !== undefined) {
-        const refreshedToken = generateToken(
+        const refreshedToken = await generateTokenWithCurrentIdleTimeout(
           request.user.id,
           request.auth.sessionStart,
           request.user.role,

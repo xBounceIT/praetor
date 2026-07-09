@@ -100,6 +100,8 @@ const userSchema = {
     phone: nullableStringSchema,
     jobTitle: nullableStringSchema,
     department: nullableStringSchema,
+    responsibleUserId: nullableStringSchema,
+    responsibleUserName: nullableStringSchema,
     employeeCode: nullableStringSchema,
     hireDate: nullableDateSchema,
     terminationDate: nullableDateSchema,
@@ -108,6 +110,7 @@ const userSchema = {
     workLocation: nullableWorkLocationSchema,
     emergencyContactName: nullableStringSchema,
     emergencyContactPhone: nullableStringSchema,
+    address: nullableStringSchema,
     notes: nullableStringSchema,
     authMethod: { type: 'string', enum: ['local', 'ldap', 'oidc', 'saml'] },
     authProviderId: { anyOf: [{ type: 'string' }, { type: 'null' }] },
@@ -159,6 +162,7 @@ const userCreateBodySchema = {
     phone: nullableStringSchema,
     jobTitle: nullableStringSchema,
     department: nullableStringSchema,
+    responsibleUserId: nullableStringSchema,
     employeeCode: nullableStringSchema,
     hireDate: nullableDateSchema,
     terminationDate: nullableDateSchema,
@@ -167,6 +171,7 @@ const userCreateBodySchema = {
     workLocation: nullableWorkLocationSchema,
     emergencyContactName: nullableStringSchema,
     emergencyContactPhone: nullableStringSchema,
+    address: nullableStringSchema,
     notes: nullableStringSchema,
   },
   required: ['name'],
@@ -185,6 +190,7 @@ const userUpdateBodySchema = {
     phone: nullableStringSchema,
     jobTitle: nullableStringSchema,
     department: nullableStringSchema,
+    responsibleUserId: nullableStringSchema,
     employeeCode: nullableStringSchema,
     hireDate: nullableDateSchema,
     terminationDate: nullableDateSchema,
@@ -193,8 +199,20 @@ const userUpdateBodySchema = {
     workLocation: nullableWorkLocationSchema,
     emergencyContactName: nullableStringSchema,
     emergencyContactPhone: nullableStringSchema,
+    address: nullableStringSchema,
     notes: nullableStringSchema,
   },
+} as const;
+
+const responsibleUserOptionSchema = {
+  type: 'object',
+  properties: {
+    id: { type: 'string' },
+    name: { type: 'string' },
+    username: { type: 'string' },
+    avatarInitials: { type: 'string' },
+  },
+  required: ['id', 'name', 'username', 'avatarInitials'],
 } as const;
 
 const assignmentsSchema = {
@@ -373,6 +391,7 @@ const HR_DETAIL_FIELDS = [
   'phone',
   'jobTitle',
   'department',
+  'responsibleUserId',
   'employeeCode',
   'hireDate',
   'terminationDate',
@@ -381,8 +400,11 @@ const HR_DETAIL_FIELDS = [
   'workLocation',
   'emergencyContactName',
   'emergencyContactPhone',
+  'address',
   'notes',
 ] as const;
+
+const HR_RESPONSE_DETAIL_FIELDS = [...HR_DETAIL_FIELDS, 'responsibleUserName'] as const;
 
 const canViewHrDetailsFor = (request: FastifyRequest, employeeType: usersRepo.EmployeeType) =>
   hasPermission(request, HR_VIEW_PERM_BY_EMPLOYEE_TYPE[employeeType]);
@@ -406,7 +428,7 @@ const maskUserResponse = (
   };
 
   if (!canRevealHrDetails) {
-    for (const field of HR_DETAIL_FIELDS) {
+    for (const field of HR_RESPONSE_DETAIL_FIELDS) {
       delete response[field];
     }
   }
@@ -454,9 +476,11 @@ const parseHrDetails = (
     'phone',
     'jobTitle',
     'department',
+    'responsibleUserId',
     'employeeCode',
     'emergencyContactName',
     'emergencyContactPhone',
+    'address',
     'notes',
   ] as const;
 
@@ -532,6 +556,22 @@ const getHrDateRangeError = (
 
   if (hireDate && terminationDate && hireDate > terminationDate) {
     return 'hireDate must be on or before terminationDate';
+  }
+  return null;
+};
+
+const getResponsibleUserValidationError = async (
+  fields: usersRepo.UserHrFields,
+  targetUserId: string,
+  currentResponsibleUserId: string | null = null,
+): Promise<string | null> => {
+  if (fields.responsibleUserId === undefined || fields.responsibleUserId === null) return null;
+  if (fields.responsibleUserId === targetUserId) {
+    return 'responsibleUserId cannot reference the same user';
+  }
+  if (fields.responsibleUserId === currentResponsibleUserId) return null;
+  if (!(await usersRepo.isActiveAppUser(fields.responsibleUserId))) {
+    return 'responsibleUserId must reference an active app user';
   }
   return null;
 };
@@ -675,6 +715,33 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       return usersRepo.listTotpExemptionOptions();
     },
   );
+
+  // GET /responsible-options - Active app users eligible as HR responsible users
+  fastify.get(
+    '/responsible-options',
+    {
+      onRequest: [
+        authenticateToken,
+        requireAnyPermission(
+          'administration.user_management_all.view',
+          'administration.user_management.update',
+          HR_EXTERNAL_CREATE_PERMISSION,
+          'hr.internal.update',
+          'hr.external.update',
+        ),
+      ],
+      schema: {
+        tags: ['users'],
+        summary: 'List responsible user options',
+        response: {
+          200: { type: 'array', items: responsibleUserOptionSchema },
+          ...standardErrorResponses,
+        },
+      },
+    },
+    async () => usersRepo.listResponsibleOptions(),
+  );
+
   // POST / - Create user (admin only for app_user/internal, manager can create external)
   fastify.post(
     '/',
@@ -789,6 +856,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const avatarInitials = computeAvatarInitials(nameResult.value);
       const id = generatePrefixedId('u');
+      const responsibleUserError = await getResponsibleUserValidationError(hrDetails, id);
+      if (responsibleUserError) return badRequest(reply, responsibleUserError);
+      const responsibleUserName = hrDetails.responsibleUserId
+        ? ((await usersRepo.findById(hrDetails.responsibleUserId))?.name ?? null)
+        : null;
 
       try {
         // Atomic create: user row, primary user_roles entry, settings row, and (for top
@@ -861,6 +933,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           isDisabled: false,
           employeeType: effectiveEmployeeType,
           ...hrDetails,
+          department: hrDetails.department ?? null,
+          responsibleUserName,
           authMethod: 'local',
           authProviderId: null,
           authProviderName: null,
@@ -1128,6 +1202,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       if (hasHrDetails) {
+        const responsibleUserError = await getResponsibleUserValidationError(
+          hrDetails,
+          idResult.value,
+          targetUser.responsibleUserId,
+        );
+        if (responsibleUserError) return badRequest(reply, responsibleUserError);
         Object.assign(fields, hrDetails);
       }
 
@@ -1277,6 +1357,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         phone: fields.phone,
         jobTitle: fields.jobTitle,
         department: fields.department,
+        responsibleUserId: fields.responsibleUserId,
         employeeCode: fields.employeeCode,
         hireDate: fields.hireDate,
         terminationDate: fields.terminationDate,
@@ -1285,6 +1366,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         workLocation: fields.workLocation,
         emergencyContactName: fields.emergencyContactName,
         emergencyContactPhone: fields.emergencyContactPhone,
+        address: fields.address,
         notes: fields.notes,
       });
 

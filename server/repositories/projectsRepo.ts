@@ -12,6 +12,7 @@ import {
 import { getForeignKeyViolation } from '../utils/db-errors.ts';
 import { ForeignKeyError } from '../utils/http-errors.ts';
 import { numericForDb, parseNullableDbNumber } from '../utils/parse.ts';
+import { DEFAULT_PROJECT_STATUS, type ProjectStatus } from '../utils/projectStatus.ts';
 import { DEFAULT_PROJECT_TIPO, type ProjectTipo } from '../utils/projectTipo.ts';
 import {
   MANUAL_ASSIGNMENT_SOURCE,
@@ -33,6 +34,7 @@ export type Project = {
   revenue: number | null;
   billingType: BillingType;
   billingFrequency: BillingFrequency;
+  status: ProjectStatus;
   tipo: ProjectTipo;
   tipoConfirmed: boolean;
 };
@@ -53,6 +55,7 @@ const mapRow = (row: typeof projects.$inferSelect): Project => ({
   revenue: parseNullableDbNumber(row.revenue),
   billingType: row.billingType ?? DEFAULT_BILLING_TYPE,
   billingFrequency: row.billingFrequency ?? DEFAULT_BILLING_FREQUENCY,
+  status: row.status ?? DEFAULT_PROJECT_STATUS,
   tipo: row.tipo ?? DEFAULT_PROJECT_TIPO,
   tipoConfirmed: row.tipoConfirmed ?? false,
 });
@@ -71,6 +74,7 @@ type ProjectRawRow = {
   revenue: string | number | null;
   billing_type: BillingType | null;
   billing_frequency: BillingFrequency | null;
+  status: ProjectStatus | null;
   tipo: ProjectTipo | null;
   tipo_confirmed: boolean | null;
 };
@@ -101,13 +105,14 @@ const mapRawRow = (row: ProjectRawRow): Project => ({
   revenue: parseNullableDbNumber(row.revenue),
   billingType: row.billing_type ?? DEFAULT_BILLING_TYPE,
   billingFrequency: row.billing_frequency ?? DEFAULT_BILLING_FREQUENCY,
+  status: row.status ?? DEFAULT_PROJECT_STATUS,
   tipo: row.tipo ?? DEFAULT_PROJECT_TIPO,
   tipoConfirmed: row.tipo_confirmed ?? false,
 });
 
 const projectSelectSql = sql`p.id, p.name, p.client_id, p.description, p.is_disabled, p.created_at, p.order_id,
        p.offer_id, p.start_date::text AS start_date, p.end_date::text AS end_date, p.revenue,
-       ${derivedBillingTypeSql} AS billing_type, p.billing_frequency, p.tipo, p.tipo_confirmed`;
+       ${derivedBillingTypeSql} AS billing_type, p.billing_frequency, p.status, p.tipo, p.tipo_confirmed`;
 
 export const listAll = async (exec: DbExecutor = db): Promise<Project[]> => {
   const rows = await executeRows<ProjectRawRow>(
@@ -167,7 +172,16 @@ export const listNamesByIds = async (
   ids: string[],
   exec: DbExecutor = db,
 ): Promise<
-  Map<string, { projectName: string; clientId: string; clientName: string; endDate: string | null }>
+  Map<
+    string,
+    {
+      projectName: string;
+      clientId: string;
+      clientName: string;
+      endDate: string | null;
+      status: ProjectStatus;
+    }
+  >
 > => {
   if (ids.length === 0) return new Map();
   const rows = await executeRows<{
@@ -176,9 +190,10 @@ export const listNamesByIds = async (
     client_id: string;
     client_name: string;
     end_date: string | null;
+    status: ProjectStatus | null;
   }>(
     exec,
-    sql`SELECT p.id, p.name, p.client_id, c.name AS client_name, p.end_date::text AS end_date
+    sql`SELECT p.id, p.name, p.client_id, c.name AS client_name, p.end_date::text AS end_date, p.status
           FROM projects p
           INNER JOIN clients c ON c.id = p.client_id
          WHERE p.id = ANY(${sql.param(ids)}::text[])`,
@@ -191,11 +206,11 @@ export const listNamesByIds = async (
         clientId: row.client_id,
         clientName: row.client_name,
         endDate: row.end_date,
+        status: row.status ?? DEFAULT_PROJECT_STATUS,
       },
     ]),
   );
 };
-
 export const findClientId = async (id: string, exec: DbExecutor = db): Promise<string | null> => {
   const rows = await exec
     .select({ clientId: projects.clientId })
@@ -207,23 +222,37 @@ export const findClientId = async (id: string, exec: DbExecutor = db): Promise<s
 export const findClientIdAndEndDate = async (
   id: string,
   exec: DbExecutor = db,
-): Promise<{ clientId: string; endDate: string | null } | null> => {
+): Promise<{ clientId: string; endDate: string | null; status: ProjectStatus } | null> => {
   const rows = await exec
-    .select({ clientId: projects.clientId, endDate: projects.endDate })
+    .select({
+      clientId: projects.clientId,
+      endDate: projects.endDate,
+      status: projects.status,
+    })
     .from(projects)
     .where(eq(projects.id, id));
-  return rows[0] ?? null;
+  return rows[0] ? { ...rows[0], status: rows[0].status ?? DEFAULT_PROJECT_STATUS } : null;
 };
 
 export const findClientIdAndName = async (
   id: string,
   exec: DbExecutor = db,
-): Promise<{ clientId: string; name: string; endDate: string | null } | null> => {
+): Promise<{
+  clientId: string;
+  name: string;
+  endDate: string | null;
+  status: ProjectStatus;
+} | null> => {
   const rows = await exec
-    .select({ clientId: projects.clientId, name: projects.name, endDate: projects.endDate })
+    .select({
+      clientId: projects.clientId,
+      name: projects.name,
+      endDate: projects.endDate,
+      status: projects.status,
+    })
     .from(projects)
     .where(eq(projects.id, id));
-  return rows[0] ?? null;
+  return rows[0] ? { ...rows[0], status: rows[0].status ?? DEFAULT_PROJECT_STATUS } : null;
 };
 
 export const findEndDateById = async (
@@ -235,6 +264,19 @@ export const findEndDateById = async (
     .from(projects)
     .where(eq(projects.id, id));
   return rows[0]?.endDate ?? null;
+};
+
+export const findTimeEntryAvailabilityById = async (
+  id: string,
+  exec: DbExecutor = db,
+): Promise<{ endDate: string | null; status: ProjectStatus } | null> => {
+  const rows = await exec
+    .select({ endDate: projects.endDate, status: projects.status })
+    .from(projects)
+    .where(eq(projects.id, id));
+  return rows[0]
+    ? { endDate: rows[0].endDate ?? null, status: rows[0].status ?? DEFAULT_PROJECT_STATUS }
+    : null;
 };
 
 export const lockClientIdById = async (
@@ -275,6 +317,7 @@ export type NewProject = {
   billingType?: StoredBillingType;
   billingFrequency?: BillingFrequency;
   tipo: ProjectTipo;
+  status?: ProjectStatus;
 };
 
 // Legacy auto-generated name from schema.sql, plus the canonical Drizzle name produced by
@@ -304,6 +347,7 @@ export const create = async (project: NewProject, exec: DbExecutor = db): Promis
         billingType: project.billingType ?? DEFAULT_BILLING_TYPE,
         billingFrequency: normalizeBillingFrequency(project.billingFrequency),
         tipo: project.tipo,
+        status: project.status ?? DEFAULT_PROJECT_STATUS,
         // A project created through the app always has an explicitly chosen tipo (NewProject
         // requires it), so it is confirmed by definition.
         tipoConfirmed: true,
@@ -335,6 +379,7 @@ export type ProjectUpdate = {
   billingType?: StoredBillingType | null;
   billingFrequency?: BillingFrequency | null;
   tipo?: ProjectTipo | null;
+  status?: ProjectStatus | null;
 };
 
 export const update = async (
@@ -353,6 +398,9 @@ export const update = async (
   if (patch.endDate !== undefined) set.endDate = patch.endDate;
   if (patch.revenue !== undefined) {
     set.revenue = numericForDb(patch.revenue);
+  }
+  if (patch.status != null) {
+    set.status = patch.status;
   }
   // billing_type and billing_frequency are independent columns now, so each is set on its
   // own - no need to read back the current type to normalize the frequency against it.

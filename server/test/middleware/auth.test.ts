@@ -11,6 +11,7 @@ import {
   requireSessionAuth,
 } from '../../middleware/auth.ts';
 import * as realAuditLogsRepo from '../../repositories/auditLogsRepo.ts';
+import * as realGeneralSettingsRepo from '../../repositories/generalSettingsRepo.ts';
 import * as realPersonalAccessTokensRepo from '../../repositories/personalAccessTokensRepo.ts';
 import * as realRolesRepo from '../../repositories/rolesRepo.ts';
 import * as realUsersRepo from '../../repositories/usersRepo.ts';
@@ -31,6 +32,7 @@ process.env.ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || 'test-encryption-key-
 // only top-level mock.module calls get hoisted ahead of imports.
 const usersRepoSnapshot = { ...realUsersRepo };
 const rolesRepoSnapshot = { ...realRolesRepo };
+const generalSettingsRepoSnapshot = { ...realGeneralSettingsRepo };
 const permissionsSnapshot = { ...realPermissions };
 const personalAccessTokensRepoSnapshot = { ...realPersonalAccessTokensRepo };
 const auditLogsRepoSnapshot = { ...realAuditLogsRepo };
@@ -38,6 +40,7 @@ const auditLogsRepoSnapshot = { ...realAuditLogsRepo };
 const findAuthUserByIdMock = mock();
 const userHasRoleMock = mock();
 const getRolePermissionsMock = mock();
+const generalSettingsGetMock = mock();
 const findPersonalAccessTokenByHashMock = mock();
 const markPersonalAccessTokenUsedMock = mock();
 const auditLogsCreateMock = mock();
@@ -55,6 +58,10 @@ beforeAll(() => {
     ...permissionsSnapshot,
     getRolePermissions: getRolePermissionsMock,
   }));
+  mock.module('../../repositories/generalSettingsRepo.ts', () => ({
+    ...generalSettingsRepoSnapshot,
+    get: generalSettingsGetMock,
+  }));
   mock.module('../../repositories/personalAccessTokensRepo.ts', () => ({
     ...personalAccessTokensRepoSnapshot,
     findByTokenHash: findPersonalAccessTokenByHashMock,
@@ -71,6 +78,7 @@ afterAll(() => {
   mock.module('../../repositories/usersRepo.ts', () => usersRepoSnapshot);
   mock.module('../../repositories/rolesRepo.ts', () => rolesRepoSnapshot);
   mock.module('../../utils/permissions.ts', () => permissionsSnapshot);
+  mock.module('../../repositories/generalSettingsRepo.ts', () => generalSettingsRepoSnapshot);
   mock.module(
     '../../repositories/personalAccessTokensRepo.ts',
     () => personalAccessTokensRepoSnapshot,
@@ -166,6 +174,7 @@ beforeEach(() => {
   findAuthUserByIdMock.mockReset();
   userHasRoleMock.mockReset();
   getRolePermissionsMock.mockReset();
+  generalSettingsGetMock.mockReset();
   findPersonalAccessTokenByHashMock.mockReset();
   markPersonalAccessTokenUsedMock.mockReset();
   auditLogsCreateMock.mockReset();
@@ -174,6 +183,7 @@ beforeEach(() => {
   findAuthUserByIdMock.mockResolvedValue(HAPPY_USER);
   userHasRoleMock.mockResolvedValue(true);
   getRolePermissionsMock.mockResolvedValue(HAPPY_PERMISSIONS);
+  generalSettingsGetMock.mockResolvedValue({ sessionIdleTimeoutMinutes: 30 });
   findPersonalAccessTokenByHashMock.mockResolvedValue({
     userId: 'u1',
     tokenHash: hashPersonalAccessToken('praetor_pat_valid-token'),
@@ -251,6 +261,38 @@ describe('authenticateToken', () => {
     await authenticateToken(request as never, reply as never);
     expect(reply.statusCode).toBe(401);
     expect(reply.body).toEqual({ error: 'Session expired (max duration exceeded)' });
+  });
+
+  test('403 when token exceeds the configured idle timeout but is still within jwt exp', async () => {
+    generalSettingsGetMock.mockResolvedValue({ sessionIdleTimeoutMinutes: 5 });
+    const issuedAtSeconds = Math.floor((Date.now() - 6 * 60 * 1000) / 1000);
+    const request = buildFakeRequest(
+      signToken({
+        userId: 'u1',
+        sessionStart: Date.now() - 6 * 60 * 1000,
+        issuedAtSeconds,
+        expiresIn: '2h',
+      }),
+    );
+    const reply = buildFakeReply();
+
+    await authenticateToken(request as never, reply as never);
+
+    expect(reply.statusCode).toBe(403);
+    expect(reply.body).toEqual({ error: 'Invalid or expired token' });
+    expect(findAuthUserByIdMock).not.toHaveBeenCalled();
+  });
+
+  test('rotated token expires after the configured idle timeout', async () => {
+    generalSettingsGetMock.mockResolvedValue({ sessionIdleTimeoutMinutes: 45 });
+    const request = buildFakeRequest(signToken({ userId: 'u1' }));
+    const reply = buildFakeReply();
+
+    await authenticateToken(request as never, reply as never);
+
+    expect(reply.statusCode).toBe(0);
+    const decoded = decodeForAssertion(reply.headers['x-auth-token']) as jwt.JwtPayload;
+    expect((decoded.exp as number) - (decoded.iat as number)).toBe(45 * 60);
   });
 
   test('401 when usersRepo.findAuthUserById returns null', async () => {
@@ -946,20 +988,28 @@ describe('requireAnyPermission (ANY semantics)', () => {
 
 describe('generateToken', () => {
   test('embeds userId, sessionStart, activeRole and sessionVersion; expires in 30m', () => {
-    const sessionStart = 1_700_000_000_000;
+    const sessionStart = Date.now();
     const token = generateToken('u1', sessionStart, 'admin', 4);
     const decoded = decodeForAssertion(token) as jwt.JwtPayload & {
       userId: string;
       sessionStart: number;
+      sessionMaxExpiresAt: number;
       activeRole: string;
       sessionVersion: number;
     };
     expect(decoded.userId).toBe('u1');
     expect(decoded.sessionStart).toBe(sessionStart);
+    expect(decoded.sessionMaxExpiresAt).toBeGreaterThan(sessionStart);
     expect(decoded.activeRole).toBe('admin');
     expect(decoded.sessionVersion).toBe(4);
     expect(decoded.exp).toBeDefined();
     expect(decoded.iat).toBeDefined();
     expect((decoded.exp as number) - (decoded.iat as number)).toBe(30 * 60);
+  });
+
+  test('uses the provided idle timeout as token expiry', () => {
+    const token = generateToken('u1', Date.now(), 'admin', 4, 45);
+    const decoded = decodeForAssertion(token) as jwt.JwtPayload;
+    expect((decoded.exp as number) - (decoded.iat as number)).toBe(45 * 60);
   });
 });

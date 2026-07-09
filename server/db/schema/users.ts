@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm';
 import {
+  type AnyPgColumn,
   boolean,
   check,
   date,
@@ -64,7 +65,14 @@ export const users = pgTable(
     workLocation: varchar('work_location', { length: 30 }).$type<UserWorkLocation>(),
     emergencyContactName: varchar('emergency_contact_name', { length: 255 }),
     emergencyContactPhone: varchar('emergency_contact_phone', { length: 50 }),
+    address: text('address'),
     notes: text('notes'),
+    responsibleUserId: varchar('responsible_user_id', { length: 50 }).references(
+      (): AnyPgColumn => users.id,
+      {
+        onDelete: 'set null',
+      },
+    ),
     authMethod: varchar('auth_method', { length: 20 }).$type<UserAuthMethod>().default('local'),
     authProviderId: varchar('auth_provider_id', { length: 50 }).references(() => ssoProviders.id, {
       onDelete: 'set null',
@@ -106,7 +114,12 @@ export const users = pgTable(
       'users_hr_date_range_check',
       sql`${table.hireDate} IS NULL OR ${table.terminationDate} IS NULL OR ${table.hireDate} <= ${table.terminationDate}`,
     ),
+    check(
+      'users_responsible_not_self_check',
+      sql`${table.responsibleUserId} IS NULL OR ${table.responsibleUserId} <> ${table.id}`,
+    ),
     uniqueIndex('idx_users_employee_code_unique').on(table.employeeCode),
+    index('idx_users_responsible_user_id').on(table.responsibleUserId),
     index('idx_users_auth_provider_id').on(table.authProviderId),
   ],
 );

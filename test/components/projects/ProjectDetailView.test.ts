@@ -147,6 +147,17 @@ describe('ProjectDetailView wiring', () => {
     expect(source).toContain('tipo !== baselineTipo');
   });
 
+  test('project status selector saves status and shows the help tooltip', async () => {
+    const source = await readSource();
+
+    expect(source).toContain('const baselineStatus = project.status ?? LEGACY_PROJECT_STATUS;');
+    expect(source).toContain('status !== baselineStatus');
+    expect(source).toContain('id="detail-status"');
+    expect(source).toContain('labelAccessory={<ProjectStatusInfoTooltip t={t} />}');
+    expect(source).toContain('ProjectStatusInfoTooltip');
+    expect(source).toContain('status,');
+    expect(source).toContain('type={getProjectStatusBadgeType(project.status)}');
+  });
   test('requires a linked client order and keeps offer optional on save', async () => {
     const source = await readSource();
     expect(source).toContain("const [orderId, setOrderId] = useState(project.orderId ?? '')");

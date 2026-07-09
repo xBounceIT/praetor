@@ -12,6 +12,7 @@ import { formatLocalDateOnly, parseLocalDateOnly, todayLocalDateOnly } from '../
 import { isItalianHoliday } from '../utils/holidays.ts';
 import { generatePrefixedId } from '../utils/order-ids.ts';
 import { hasScopedActionPermission } from '../utils/permissions.ts';
+import { isProjectStatusBlockingTimeEntries, type ProjectStatus } from '../utils/projectStatus.ts';
 import {
   optionalLocalizedNonNegativeNumber,
   optionalNonEmptyString,
@@ -85,11 +86,23 @@ const canWriteExpiredProjectEntries = (actor: AuthenticatedActor) =>
 const isProjectExpired = (endDate: string | null | undefined): boolean =>
   !!endDate && endDate < todayLocalDateOnly();
 
-const enforceProjectNotExpired = (
+type ProjectEntryAvailability = {
+  endDate: string | null | undefined;
+  status: ProjectStatus | null | undefined;
+};
+
+const enforceProjectStatusAllowsTimeEntryChanges = (project: ProjectEntryAvailability) => {
+  if (isProjectStatusBlockingTimeEntries(project.status)) {
+    fail(403, 'Project status does not allow time entries');
+  }
+};
+
+const enforceProjectCanAcceptTimeEntries = (
   actor: AuthenticatedActor,
-  endDate: string | null | undefined,
+  project: ProjectEntryAvailability,
 ) => {
-  if (!canWriteExpiredProjectEntries(actor) && isProjectExpired(endDate)) {
+  enforceProjectStatusAllowsTimeEntryChanges(project);
+  if (!canWriteExpiredProjectEntries(actor) && isProjectExpired(project.endDate)) {
     fail(403, 'Project is expired');
   }
 };
@@ -304,7 +317,7 @@ export const createTimeEntry = async (
   if (projectHeader.clientId !== clientId) {
     badRequest('Project does not belong to the selected client');
   }
-  enforceProjectNotExpired(actor, projectHeader.endDate);
+  enforceProjectCanAcceptTimeEntries(actor, projectHeader);
 
   if (!hasPermission(actor, 'timesheets.tracker_all.create')) {
     const [clientAllowed, projectAllowed, taskAllowed] = await Promise.all([
@@ -393,6 +406,18 @@ export const updateTimeEntry = async (
     if (!allowed) fail(403, 'Not authorized to update this entry');
   }
 
+  let currentProjectAvailability: ProjectEntryAvailability | null | undefined;
+  const getCurrentProjectAvailability = async (): Promise<ProjectEntryAvailability | null> => {
+    if (currentProjectAvailability === undefined) {
+      currentProjectAvailability = await projectsRepo.findTimeEntryAvailabilityById(
+        context.projectId,
+      );
+    }
+    return currentProjectAvailability;
+  };
+  const availability = await getCurrentProjectAvailability();
+  if (availability) enforceProjectStatusAllowsTimeEntryChanges(availability);
+
   const date =
     input.date !== undefined ? requireValid(parseDateString(input.date, 'date')) : undefined;
   const clientId =
@@ -442,7 +467,7 @@ export const updateTimeEntry = async (
       effectiveProjectId !== context.projectId ||
       effectiveTask !== context.task;
     if (catalogChangedFromContext || dateChanging) {
-      enforceProjectNotExpired(actor, projectHeader.endDate);
+      enforceProjectCanAcceptTimeEntries(actor, projectHeader);
     }
 
     resolvedTaskId = taskFkLookup ?? null;
@@ -462,15 +487,20 @@ export const updateTimeEntry = async (
       }
     }
   } else if (context.taskId === null) {
-    const endDate = await projectsRepo.findEndDateById(context.projectId);
-    if (canWriteExpiredProjectEntries(actor) || !isProjectExpired(endDate)) {
+    const availability = await getCurrentProjectAvailability();
+    if (
+      availability &&
+      !isProjectStatusBlockingTimeEntries(availability.status) &&
+      (canWriteExpiredProjectEntries(actor) || !isProjectExpired(availability.endDate))
+    ) {
       const backfill = await tasksRepo.findIdByProjectAndName(context.projectId, context.task);
       if (backfill) resolvedTaskId = backfill;
     }
   }
 
   if (dateChanging && !catalogChanging) {
-    enforceProjectNotExpired(actor, await projectsRepo.findEndDateById(context.projectId));
+    const availability = await getCurrentProjectAvailability();
+    if (availability) enforceProjectCanAcceptTimeEntries(actor, availability);
   }
 
   const parsedIsPlaceholder = requireValid(parseBooleanField(input, 'isPlaceholder'));
@@ -633,7 +663,10 @@ export const generateRecurringEntries = async (
   // `listRecurringForUser` already gates on `user_tasks`, but a stale `user_tasks` row can
   // outlive a revoked client/project assignment. Re-apply the same per-row checks
   // `createTimeEntry` runs so the recurring path can't escape an assignment downgrade.
-  let allowedTasks = recurringTasks;
+  let allowedTasks = recurringTasks.filter((task) => {
+    const project = projectsByProjectId.get(task.projectId);
+    return project !== undefined && !isProjectStatusBlockingTimeEntries(project.status);
+  });
   if (!canWriteExpiredProjectEntries(actor)) {
     allowedTasks = allowedTasks.filter((task) => {
       const project = projectsByProjectId.get(task.projectId);

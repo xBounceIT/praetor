@@ -3,6 +3,7 @@ import type {
   MfaExemptionUser,
   Project,
   ProjectTask,
+  ResponsibleUserOption,
   User,
   UserAuthMethod,
 } from '../../types';
@@ -17,6 +18,9 @@ export const usersApi = {
 
   listTotpExemptionOptions: (): Promise<TotpExemptionUserOption[]> =>
     fetchApi<TotpExemptionUserOption[]>('/users/totp-exemption-options'),
+
+  getResponsibleOptions: (): Promise<ResponsibleUserOption[]> =>
+    fetchApi<ResponsibleUserOption[]>('/users/responsible-options'),
 
   create: (
     name: string,

@@ -4,6 +4,7 @@ import { type BillingType, DEFAULT_BILLING_TYPE } from '../utils/billing.ts';
 import { roundCurrency } from '../utils/invoice-math.ts';
 import { parseNullableDbNumber } from '../utils/parse.ts';
 import type { ProjectRuleField } from '../utils/projectRuleFields.ts';
+import { DEFAULT_PROJECT_STATUS, type ProjectStatus } from '../utils/projectStatus.ts';
 
 export type ProjectRuleMetricValue = string | number | null;
 
@@ -16,20 +17,19 @@ export type ProjectRuleMetrics = {
   hoursToDate: number;
   daysUntilDeadline: number | null;
   billingType: BillingType;
-  status: 'active' | 'disabled';
+  status: ProjectStatus;
 };
 
 type ProjectMetricsRow = {
   projectId: string;
   projectName: string;
-  projectIsDisabled: boolean | null;
-  clientIsDisabled: boolean | null;
   endDate: string | null;
   manualRevenue: string | number | null;
   taskRevenue: string | number | null;
   costToDate: string | number | null;
   hoursToDate: string | number | null;
   billingType: BillingType | null;
+  status: ProjectStatus | null;
 };
 
 const MS_PER_DAY = 86_400_000;
@@ -63,7 +63,7 @@ const mapRow = (row: ProjectMetricsRow, now: Date): ProjectRuleMetrics => {
     hoursToDate: parseNullableDbNumber(row.hoursToDate) ?? 0,
     daysUntilDeadline: diffCalendarDays(row.endDate, now),
     billingType: row.billingType ?? DEFAULT_BILLING_TYPE,
-    status: row.projectIsDisabled || row.clientIsDisabled ? 'disabled' : 'active',
+    status: row.status ?? DEFAULT_PROJECT_STATUS,
   };
 };
 
@@ -98,13 +98,12 @@ export const listForProjects = async (
       SELECT
         p.id AS "projectId",
         p.name AS "projectName",
-        p.is_disabled AS "projectIsDisabled",
-        c.is_disabled AS "clientIsDisabled",
         p.end_date::text AS "endDate",
         p.revenue AS "manualRevenue",
         tm.task_revenue AS "taskRevenue",
         em.cost_to_date AS "costToDate",
         em.hours_to_date AS "hoursToDate",
+        p.status AS "status",
         CASE
           WHEN EXISTS (
             SELECT 1 FROM tasks bt

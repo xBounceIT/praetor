@@ -22,6 +22,7 @@ export type ModuleScopedStateKey =
   | 'supplierInvoices'
   | 'entries'
   | 'workUnits'
+  | 'responsibleUserOptions'
   | 'users'
   | 'mfaExemptionUsers';
 
@@ -47,6 +48,7 @@ export const ALL_MODULE_SCOPED_KEYS: readonly ModuleScopedStateKey[] = [
   'supplierInvoices',
   'entries',
   'workUnits',
+  'responsibleUserOptions',
   'users',
   'mfaExemptionUsers',
 ];
@@ -57,7 +59,7 @@ export const ALL_MODULE_SCOPED_KEYS: readonly ModuleScopedStateKey[] = [
 // A module not listed here returns no stale keys (defensive default).
 const MODULE_OWNED_KEYS: Record<string, readonly ModuleScopedStateKey[]> = {
   timesheets: ['entries', 'clients', 'projects', 'projectTasks', 'users'],
-  hr: ['users', 'workUnits', 'clients', 'projects', 'projectTasks'],
+  hr: ['users', 'workUnits', 'responsibleUserOptions', 'clients', 'projects', 'projectTasks'],
   administration: ['users', 'mfaExemptionUsers'],
   crm: ['clients', 'suppliers'],
   sales: [

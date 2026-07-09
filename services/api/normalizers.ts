@@ -11,6 +11,7 @@ import type {
   InvoiceItem,
   Product,
   Project,
+  ProjectStatus,
   ProjectTask,
   Quote,
   QuoteItem,
@@ -32,6 +33,7 @@ import type {
   UserEmploymentStatus,
   UserWorkLocation,
 } from '../../types';
+import { LEGACY_PROJECT_STATUS, PROJECT_STATUSES } from '../../types';
 import {
   DEFAULT_BILLING_TYPE,
   normalizeBillingFrequency,
@@ -45,6 +47,7 @@ import {
   normalizeRilNoteOptions,
   normalizeRilTransferOptions,
 } from '../../utils/ril';
+import { normalizeSessionIdleTimeoutMinutes } from '../../utils/sessionTimeout';
 
 const nullableNumber = (value: unknown, fallback: number | null = null): number | null =>
   value === undefined || value === null ? fallback : Number(value);
@@ -227,6 +230,11 @@ const normalizeOptionalString = (raw: unknown): string | undefined =>
 const normalizeNullableTrimmedString = (raw: unknown): string | null =>
   normalizeTrimmedString(raw) || null;
 
+const projectStatusSet = new Set<string>(PROJECT_STATUSES);
+const normalizeProjectStatus = (value: unknown): ProjectStatus =>
+  typeof value === 'string' && projectStatusSet.has(value)
+    ? (value as ProjectStatus)
+    : LEGACY_PROJECT_STATUS;
 const normalizeNullableDateOnlyString = (raw: unknown): string | null => {
   const normalized = normalizeTrimmedString(raw);
   if (!normalized) return null;
@@ -260,6 +268,8 @@ export const normalizeUser = (u: User): User => {
   assignIfPresent(raw, result, 'phone', normalizeOptionalString);
   assignIfPresent(raw, result, 'jobTitle', normalizeOptionalString);
   assignIfPresent(raw, result, 'department', normalizeOptionalString);
+  assignIfPresent(raw, result, 'responsibleUserId', normalizeOptionalString);
+  assignIfPresent(raw, result, 'responsibleUserName', normalizeOptionalString);
   assignIfPresent(raw, result, 'employeeCode', normalizeOptionalString);
   assignIfPresent(raw, result, 'hireDate', normalizeNullableDateOnlyString);
   assignIfPresent(raw, result, 'terminationDate', normalizeNullableDateOnlyString);
@@ -268,6 +278,7 @@ export const normalizeUser = (u: User): User => {
   assignIfPresent(raw, result, 'workLocation', normalizeUserWorkLocation);
   assignIfPresent(raw, result, 'emergencyContactName', normalizeOptionalString);
   assignIfPresent(raw, result, 'emergencyContactPhone', normalizeOptionalString);
+  assignIfPresent(raw, result, 'address', normalizeOptionalString);
   assignIfPresent(raw, result, 'notes', normalizeOptionalString);
   assignIfPresent(raw, result, 'authMethod', normalizeUserAuthMethod);
   assignIfPresent(raw, result, 'authProviderId', normalizeNullableTrimmedString);
@@ -284,11 +295,14 @@ export const normalizeProduct = (p: Product): Product => ({
 
 export const normalizeProject = (p: Project): Project => ({
   ...p,
+  startDate: p.startDate ? normalizeDateOnlyString(p.startDate) : null,
+  endDate: p.endDate ? normalizeDateOnlyString(p.endDate) : null,
   revenue: p.revenue === undefined || p.revenue === null ? null : Number(p.revenue),
   ...normalizeProjectBilling(p.billingType, p.billingFrequency),
   // `tipo` defaults to 'attivo' (the rollout default); `tipoConfirmed` to false so a
   // payload missing the flag is treated as "needs confirmation" rather than confirmed.
   tipo: p.tipo === 'passivo' ? 'passivo' : 'attivo',
+  status: normalizeProjectStatus(p.status),
   tipoConfirmed: p.tipoConfirmed === true,
 });
 
@@ -446,6 +460,7 @@ export const normalizeGeneralSettings = (s: GeneralSettings): GeneralSettings =>
   totpEnforcedRoleIds: Array.isArray(s.totpEnforcedRoleIds) ? s.totpEnforcedRoleIds : [],
   totpExemptRoleIds: Array.isArray(s.totpExemptRoleIds) ? s.totpExemptRoleIds : [],
   totpExemptUserIds: Array.isArray(s.totpExemptUserIds) ? s.totpExemptUserIds : [],
+  sessionIdleTimeoutMinutes: normalizeSessionIdleTimeoutMinutes(s.sessionIdleTimeoutMinutes),
 });
 
 // Allowlist mirroring the server's UNIT_OF_MEASURE_VALUES (server/routes/invoices.ts).

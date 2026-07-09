@@ -9,7 +9,7 @@ sidebar:
 
 Gli amministratori gestiscono utenti, ruoli e permessi. Ogni ruolo dovrebbe concedere solo le funzioni necessarie al lavoro quotidiano.
 
-La pagina **Utenti** resta focalizzata sull'accesso applicativo: username, ruolo, permessi, metodo di autenticazione e stato account. I dati HR come telefono, email operativa, mansione, reparto, contratto, sede e contatti di emergenza si gestiscono dal modulo **HR**, non da Amministrazione.
+La pagina **Utenti** resta focalizzata sull'accesso applicativo: username, ruolo, permessi, metodo di autenticazione e stato account. I dati HR come telefono aziendale, email operativa, ruolo, dipartimento derivato dai Competence Center, responsabile, contratto, sede, anagrafica personale e indirizzo completo si gestiscono dal modulo **HR**, non da Amministrazione.
 
 Le righe di permesso con ambito **All** concedono accesso trasversale a tutti i record della stessa area, ad esempio tutti i clienti, fornitori, progetti, task, consuntivi o Competence Center. L'azione **View** abilita la vista e la consultazione su tutti i record; quando selezionate, anche **Create**, **Update** e **Delete** sono permessi reali e consentono scritture su record non assegnati. I permessi senza **All** mantengono l'ambito assegnato all'utente.
 
@@ -67,6 +67,14 @@ La sezione **Provisioning Utenti** delle impostazioni LDAP espone due interrutto
 I due interruttori sono indipendenti: disattivando entrambi (e creando manualmente gli utenti) ottieni la configurazione che limita gli accessi LDAP a un insieme di utenti curato manualmente. Il pulsante di sincronizzazione manuale usa la stessa regola della sincronizzazione pianificata e richiede di salvare prima eventuali modifiche alla configurazione.
 
 Se un utente non riesce ad accedere, controlla credenziali, stato dell'utente, ruolo assegnato e log di autenticazione.
+
+### Timeout di inattività sessione
+
+La scheda **Sessione** nelle impostazioni di **Autenticazione** consente agli amministratori con permesso di modifica delle impostazioni generali di configurare dopo quanti minuti di inattività una sessione browser viene disconnessa.
+
+Il campo **Timeout di inattività** accetta valori interi da `5` a `1440` minuti. Il valore predefinito resta `30` minuti. Praetor usa questa soglia per verificare lato server l'età idle del token, ruotandolo con una nuova scadenza coerente a ogni richiesta valida e subito dopo il salvataggio della policy quando il valore cambia.
+
+Se il timeout viene ridotto, il server applica la nuova soglia alla prima richiesta successiva controllando l'`iat` del JWT. Il limite massimo assoluto della sessione resta separato e invariato: una sessione non può superare le 8 ore complessive anche se il timeout di inattività è più lungo. L'avviso e il logout nel browser usano sempre la scadenza effettiva più vicina tra timeout di inattività e limite assoluto residuo della sessione.
 
 ### Autenticazione a due fattori (2FA)
 

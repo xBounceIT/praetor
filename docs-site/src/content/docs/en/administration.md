@@ -9,7 +9,7 @@ sidebar:
 
 Administrators manage users, roles, and permissions. Each role should grant only the functions needed for daily work.
 
-The **Users** page stays focused on application access: username, role, permissions, authentication method, and account status. HR data such as phone, work email, job title, department, contract, location, and emergency contacts is managed in the **HR** module, not in Administration.
+The **Users** page stays focused on application access: username, role, permissions, authentication method, and account status. HR data such as company phone, work email, role, department derived from competence centers, responsible user, contract, location, personal profile, and full address is managed in the **HR** module, not in Administration.
 
 Permission rows marked **All** grant cross-record access for the same area, such as all clients, suppliers, projects, tasks, time entries, or competence centers. **View** opens the matching view and allows reading every matching record; when selected, **Create**, **Update**, and **Delete** are real write permissions and can operate on records that are not assigned to the user. Non-**All** permissions keep the user's assigned-record scope.
 
@@ -67,6 +67,14 @@ The **User Provisioning** section in the LDAP settings exposes two independent s
 The two switches are independent: turning both off (combined with manual user creation) is the configuration to use when you want a manually-curated set of users to be the only accounts that can sign in via LDAP. The manual sync button follows the same rule as the scheduled sync and requires saving configuration edits first.
 
 If a user cannot sign in, check credentials, user status, assigned role, and authentication logs.
+
+### Session inactivity timeout
+
+The **Session** tab in **Authentication** settings lets administrators with general-settings update permission configure how many idle minutes a browser session may keep running before Praetor signs the user out.
+
+The **Inactivity timeout** field accepts whole numbers from `5` to `1440` minutes. The default remains `30` minutes. Praetor uses this threshold to verify the server-side idle age of the token, rotating it with a matching expiry on every valid request and immediately after saving the policy when the value changes.
+
+If the timeout is reduced, the server applies the new threshold on the next request by checking the JWT `iat`. The absolute maximum session limit remains separate and unchanged: a session cannot exceed 8 total hours even when the inactivity timeout is longer. The browser warning and logout timers always use the nearest effective expiry between the inactivity timeout and the remaining absolute session limit.
 
 ### Two-factor authentication (2FA)
 

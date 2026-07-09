@@ -1,5 +1,5 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { generateToken } from '../middleware/auth.ts';
+import { generateTokenWithCurrentIdleTimeout } from '../middleware/auth.ts';
 import { standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import { authUserSchema } from '../services/sessionResponse.ts';
 import * as ssoService from '../services/sso.ts';
@@ -197,7 +197,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const consumed = await ssoService.consumeLoginTicket(ticketResult.value);
       if (!consumed) return reply.code(401).send({ error: 'Invalid or expired SSO ticket' });
 
-      const token = generateToken(
+      const token = await generateTokenWithCurrentIdleTimeout(
         consumed.tokenUser.id,
         Date.now(),
         consumed.activeRole,

@@ -174,11 +174,14 @@ const renderAuthSettings = (overrides: Partial<ComponentProps<typeof AuthSetting
     onSetExemptRoleIds: mock((_value: string[]) => {}),
     onSetExemptUserIds: mock((_value: string[]) => {}),
     canManageMfa: true,
+    sessionIdleTimeoutMinutes: 30,
+    onSetSessionIdleTimeoutMinutes: mock((_value: number) => {}),
+    canManageSession: true,
     ...overrides,
   };
 
-  render(<AuthSettings {...props} />);
-  return props;
+  const view = render(<AuthSettings {...props} />);
+  return { ...view, props };
 };
 
 const inputForLabel = (label: string): HTMLInputElement => {
@@ -498,6 +501,100 @@ describe('<AuthSettings />', () => {
       expect(screen.queryByRole('button', { name: 'admin.tabs.mfa' })).not.toBeInTheDocument();
       expect(document.getElementById('enable-totp')).toBeNull();
       expect(document.getElementById('enforce-totp')).toBeNull();
+    });
+  });
+
+  describe('session policy tab', () => {
+    const openSessionTab = () => {
+      fireEvent.click(screen.getByRole('button', { name: 'admin.tabs.session' }));
+    };
+
+    test('shows the Session tab for admins who can update general settings', () => {
+      renderAuthSettings();
+
+      expect(screen.queryByLabelText('sessionPolicy.timeoutLabel')).not.toBeInTheDocument();
+
+      openSessionTab();
+
+      const input = screen.getByLabelText('sessionPolicy.timeoutLabel') as HTMLInputElement;
+      expect(input.value).toBe('30');
+      expect(screen.getByText('sessionPolicy.timeoutDescription')).toBeInTheDocument();
+    });
+
+    test('saves a valid inactivity timeout in minutes', async () => {
+      const onSetSessionIdleTimeoutMinutes = mock(async (_value: number) => {});
+      renderAuthSettings({ onSetSessionIdleTimeoutMinutes });
+      openSessionTab();
+
+      fireEvent.change(screen.getByLabelText('sessionPolicy.timeoutLabel'), {
+        target: { value: '45' },
+      });
+      fireEvent.click(screen.getByRole('button', { name: 'sessionPolicy.save' }));
+
+      await waitFor(() => {
+        expect(onSetSessionIdleTimeoutMinutes).toHaveBeenCalledWith(45);
+      });
+    });
+
+    test('keeps the saved state when the parent applies the returned timeout', async () => {
+      const onSetSessionIdleTimeoutMinutes = mock(async (_value: number) => {});
+      const view = renderAuthSettings({ onSetSessionIdleTimeoutMinutes });
+      openSessionTab();
+
+      fireEvent.change(screen.getByLabelText('sessionPolicy.timeoutLabel'), {
+        target: { value: '45' },
+      });
+      fireEvent.click(screen.getByRole('button', { name: 'sessionPolicy.save' }));
+
+      await waitFor(() => {
+        expect(onSetSessionIdleTimeoutMinutes).toHaveBeenCalledWith(45);
+      });
+
+      view.rerender(<AuthSettings {...view.props} sessionIdleTimeoutMinutes={45} />);
+
+      expect(screen.getByText('sessionPolicy.saved')).toBeInTheDocument();
+      expect((screen.getByLabelText('sessionPolicy.timeoutLabel') as HTMLInputElement).value).toBe(
+        '45',
+      );
+    });
+    test('does not show saved state when session timeout save fails', async () => {
+      const onSetSessionIdleTimeoutMinutes = mock(async (_value: number) => {
+        throw new Error('save failed');
+      });
+      renderAuthSettings({ onSetSessionIdleTimeoutMinutes });
+      openSessionTab();
+
+      fireEvent.change(screen.getByLabelText('sessionPolicy.timeoutLabel'), {
+        target: { value: '45' },
+      });
+      fireEvent.click(screen.getByRole('button', { name: 'sessionPolicy.save' }));
+
+      await waitFor(() => {
+        expect(onSetSessionIdleTimeoutMinutes).toHaveBeenCalledWith(45);
+      });
+      await waitFor(() => {
+        expect(screen.queryByText('sessionPolicy.saved')).not.toBeInTheDocument();
+      });
+      expect(screen.getByRole('button', { name: 'sessionPolicy.save' })).not.toBeDisabled();
+    });
+    test('validates the allowed timeout range before saving', () => {
+      const onSetSessionIdleTimeoutMinutes = mock((_value: number) => {});
+      renderAuthSettings({ onSetSessionIdleTimeoutMinutes });
+      openSessionTab();
+
+      fireEvent.change(screen.getByLabelText('sessionPolicy.timeoutLabel'), {
+        target: { value: '4' },
+      });
+
+      expect(screen.getByText('sessionPolicy.validation')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'sessionPolicy.save' })).toBeDisabled();
+      expect(onSetSessionIdleTimeoutMinutes).not.toHaveBeenCalled();
+    });
+
+    test('hides the Session tab when the user lacks general-settings update permission', () => {
+      renderAuthSettings({ canManageSession: false });
+
+      expect(screen.queryByRole('button', { name: 'admin.tabs.session' })).not.toBeInTheDocument();
     });
   });
 

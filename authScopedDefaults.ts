@@ -5,6 +5,7 @@ import {
   DEFAULT_RIL_START_TIME,
   DEFAULT_RIL_TRANSFER_OPTIONS,
 } from './utils/ril';
+import { DEFAULT_SESSION_IDLE_TIMEOUT_MINUTES } from './utils/sessionTimeout';
 
 // State variant: every optional field on the API-response type is present as
 // a concrete value (empty string / default) so consumers never see `undefined`.
@@ -67,6 +68,7 @@ export const INITIAL_GENERAL_SETTINGS = deepFreeze<GeneralSettingsState>({
   totpEnforcedRoleIds: [],
   totpExemptRoleIds: [],
   totpExemptUserIds: [],
+  sessionIdleTimeoutMinutes: DEFAULT_SESSION_IDLE_TIMEOUT_MINUTES,
 });
 
 export const INITIAL_EMAIL_CONFIG = deepFreeze<EmailConfig>({

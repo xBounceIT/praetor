@@ -40,6 +40,21 @@
     "statusDisabled": "Disabled",
     "statusInheritedDisable": "Inherited Disable",
     "statusActive": "Active",
+    "status": "Status",
+    "selectStatus": "Select status...",
+    "statusHelpLabel": "Job status information",
+    "statusValues": {
+      "da_fare": "DA FARE",
+      "in_corso": "In Corso",
+      "in_pausa": "In Pausa",
+      "terminato": "TERMINATO"
+    },
+    "statusHelp": {
+      "da_fare": "Planned job, time entries allowed.",
+      "in_corso": "Active job, time entries allowed.",
+      "in_pausa": "Suspended job, time entries blocked.",
+      "terminato": "Closed job, time entries blocked."
+    },
     "inheritedFromDisabledClient": "Inherited from disabled Client: {{clientName}}",
     "allClients": "All Clients",
     "searchPlaceholder": "Search jobs, descriptions, or clients...",
@@ -109,6 +124,8 @@
       "projectName": "Job Name",
       "description": "Description",
       "insertDate": "Insert Date",
+      "startDate": "Start Date",
+      "endDate": "End Date",
       "progress": "Progress",
       "status": "Status",
       "actions": "Actions"
@@ -307,8 +324,10 @@
           "retainer": "Retainer"
         },
         "status": {
-          "active": "Active",
-          "disabled": "Disabled"
+          "da_fare": "DA FARE",
+          "in_corso": "In Corso",
+          "in_pausa": "In Pausa",
+          "terminato": "TERMINATO"
         }
       },
       "errors": {
@@ -375,6 +394,8 @@
       "supplierCost": "Supplier order cost",
       "activityCost": "Activity cost",
       "variance": "Variance",
+      "startDate": "Start date",
+      "endDate": "End date",
       "dueDate": "Due date",
       "activityName": "Activity name",
       "billing": "Billing",

@@ -90,6 +90,7 @@ describe('makeProjectHandlers', () => {
       orderId: 'order-1',
       offerId: 'of-1',
       tipo: 'attivo',
+      status: 'da_fare',
     });
     expect(apiMocks.projectsCreate).toHaveBeenCalled();
     const callArg = apiMocks.projectsCreate.mock.calls[0][0] as Record<string, unknown>;
@@ -116,6 +117,7 @@ describe('makeProjectHandlers', () => {
       clientId: 'client-B',
       orderId: 'order-1',
       tipo: 'attivo',
+      status: 'da_fare',
     });
     expect(apiMocks.projectsCreate).toHaveBeenCalled();
     const callArg = apiMocks.projectsCreate.mock.calls[0][0] as Record<string, unknown>;
@@ -145,6 +147,7 @@ describe('makeProjectHandlers', () => {
       endDate: '2026-12-31',
       revenue: 5000,
       tipo: 'passivo',
+      status: 'in_pausa',
     });
     const callArg = apiMocks.projectsCreate.mock.calls[0][0] as Record<string, unknown>;
     expect(callArg.startDate).toBe('2026-01-01');
@@ -153,6 +156,7 @@ describe('makeProjectHandlers', () => {
     expect(callArg.offerId).toBe('of-1');
     // tipo (issue #784) is forwarded to the create API.
     expect(callArg.tipo).toBe('passivo');
+    expect(callArg.status).toBe('in_pausa');
   });
 
   test('add with draftTasks creates tasks too', async () => {
@@ -175,6 +179,7 @@ describe('makeProjectHandlers', () => {
       orderId: 'order-1',
       offerId: 'of-1',
       tipo: 'attivo',
+      status: 'da_fare',
       draftTasks: [
         { name: 'task-A', duration: 3 },
         { name: 'task-B', duration: 1 },
@@ -204,6 +209,7 @@ describe('makeProjectHandlers', () => {
         orderId: 'order-1',
         offerId: 'of-1',
         tipo: 'attivo',
+        status: 'da_fare',
       });
       expect(apiMocks.projectsCreate).not.toHaveBeenCalled();
       expect(projects.get()).toEqual([]);
@@ -253,6 +259,7 @@ describe('makeProjectHandlers', () => {
         orderId: 'order-1',
         offerId: 'of-1',
         tipo: 'attivo',
+        status: 'da_fare',
       });
       expect(projects.get()).toEqual([]);
       expect(toastErrorMock).toHaveBeenCalledTimes(1);

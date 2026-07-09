@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { withDbTransaction } from '../db/drizzle.ts';
-import { authenticateToken, requirePermission } from '../middleware/auth.ts';
+import { authenticateToken, generateToken, requirePermission } from '../middleware/auth.ts';
 import * as generalSettingsRepo from '../repositories/generalSettingsRepo.ts';
 import * as usersRepo from '../repositories/usersRepo.ts';
 import { standardRateLimitedErrorResponses } from '../schemas/common.ts';
@@ -9,6 +9,11 @@ import { logAudit } from '../utils/audit.ts';
 import { MASKED_SECRET } from '../utils/crypto.ts';
 import { requestHasPermission as hasPermission } from '../utils/permissions.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
+import {
+  DEFAULT_SESSION_IDLE_TIMEOUT_MINUTES,
+  MAX_SESSION_IDLE_TIMEOUT_MINUTES,
+  MIN_SESSION_IDLE_TIMEOUT_MINUTES,
+} from '../utils/sessionTimeout.ts';
 import {
   badRequest,
   optionalEnum,
@@ -86,6 +91,7 @@ const generalSettingsSchema = {
     totpEnforcedRoleIds: stringIdArraySchema,
     totpExemptRoleIds: stringIdArraySchema,
     totpExemptUserIds: stringIdArraySchema,
+    sessionIdleTimeoutMinutes: { type: 'integer' },
   },
   required: [
     'currency',
@@ -110,6 +116,7 @@ const generalSettingsSchema = {
     'enforceTotp',
     'totpEnforcedRoleIds',
     'totpExemptRoleIds',
+    'sessionIdleTimeoutMinutes',
   ],
 } as const;
 
@@ -139,6 +146,7 @@ const generalSettingsUpdateBodySchema = {
     totpEnforcedRoleIds: stringIdArraySchema,
     totpExemptRoleIds: stringIdArraySchema,
     totpExemptUserIds: stringIdArraySchema,
+    sessionIdleTimeoutMinutes: { type: 'integer' },
   },
 } as const;
 
@@ -166,6 +174,7 @@ const DEFAULT_SETTINGS: generalSettingsRepo.GeneralSettings = {
   totpEnforcedRoleIds: [],
   totpExemptRoleIds: [],
   totpExemptUserIds: [],
+  sessionIdleTimeoutMinutes: DEFAULT_SESSION_IDLE_TIMEOUT_MINUTES,
 };
 
 const maskApiKey = (value: string | null, reveal: boolean) =>
@@ -355,6 +364,24 @@ const validateOptionalRoleIdArray = (value: unknown, fieldName: string) =>
 const validateOptionalUserIdArray = (value: unknown, fieldName: string) =>
   validateOptionalStringIdArray(value, fieldName, 'users');
 
+const validateOptionalSessionIdleTimeoutMinutes = (value: unknown) => {
+  if (value === undefined || value === null || value === '') {
+    return { ok: true as const, value: null };
+  }
+  if (
+    typeof value !== 'number' ||
+    !Number.isInteger(value) ||
+    value < MIN_SESSION_IDLE_TIMEOUT_MINUTES ||
+    value > MAX_SESSION_IDLE_TIMEOUT_MINUTES
+  ) {
+    return {
+      ok: false as const,
+      message: `sessionIdleTimeoutMinutes must be an integer between ${MIN_SESSION_IDLE_TIMEOUT_MINUTES} and ${MAX_SESSION_IDLE_TIMEOUT_MINUTES}`,
+    };
+  }
+  return { ok: true as const, value };
+};
+
 const toResponse = (
   settings: generalSettingsRepo.GeneralSettings,
   revealSensitiveSettings: boolean,
@@ -382,7 +409,42 @@ const toResponse = (
   totpEnforcedRoleIds: settings.totpEnforcedRoleIds ?? [],
   totpExemptRoleIds: settings.totpExemptRoleIds ?? [],
   ...(revealSensitiveSettings ? { totpExemptUserIds: settings.totpExemptUserIds ?? [] } : {}),
+  sessionIdleTimeoutMinutes:
+    settings.sessionIdleTimeoutMinutes ?? DEFAULT_SESSION_IDLE_TIMEOUT_MINUTES,
 });
+
+const refreshSessionTokenAfterTimeoutChange = (
+  request: FastifyRequest,
+  reply: FastifyReply,
+  settings: generalSettingsRepo.GeneralSettings,
+  previousSettings: generalSettingsRepo.GeneralSettings | null,
+  sessionIdleTimeoutWasPatched: boolean,
+) => {
+  if (!sessionIdleTimeoutWasPatched) return;
+
+  const previousTimeoutMinutes =
+    previousSettings?.sessionIdleTimeoutMinutes ?? DEFAULT_SESSION_IDLE_TIMEOUT_MINUTES;
+  if (settings.sessionIdleTimeoutMinutes === previousTimeoutMinutes) return;
+
+  if (
+    request.auth?.source !== 'session' ||
+    request.auth.sessionStart === undefined ||
+    request.auth.sessionVersion === undefined
+  ) {
+    return;
+  }
+
+  reply.header(
+    'x-auth-token',
+    generateToken(
+      request.auth.userId,
+      request.auth.sessionStart,
+      request.user?.role,
+      request.auth.sessionVersion,
+      settings.sessionIdleTimeoutMinutes,
+    ),
+  );
+};
 
 export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.get(
@@ -450,6 +512,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         totpEnforcedRoleIds?: string[];
         totpExemptRoleIds?: string[];
         totpExemptUserIds?: string[];
+        sessionIdleTimeoutMinutes?: number;
       };
       const {
         currency,
@@ -470,6 +533,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         totpEnforcedRoleIds,
         totpExemptRoleIds,
         totpExemptUserIds,
+        sessionIdleTimeoutMinutes,
       } = body;
       const currencyResult = optionalNonEmptyString(currency, 'currency');
       if (!currencyResult.ok) return badRequest(reply, currencyResult.message);
@@ -573,6 +637,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         'totpExemptUserIds',
       );
       if (!totpExemptUserIdsResult.ok) return badRequest(reply, totpExemptUserIdsResult.message);
+      const sessionIdleTimeoutMinutesResult =
+        validateOptionalSessionIdleTimeoutMinutes(sessionIdleTimeoutMinutes);
+      if (!sessionIdleTimeoutMinutesResult.ok) {
+        return badRequest(reply, sessionIdleTimeoutMinutesResult.message);
+      }
 
       const previousSettings = await generalSettingsRepo.get();
       const settingsPatch = {
@@ -599,6 +668,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         totpEnforcedRoleIds: totpEnforcedRoleIdsResult.value,
         totpExemptRoleIds: totpExemptRoleIdsResult.value,
         totpExemptUserIds: totpExemptUserIdsResult.value,
+        sessionIdleTimeoutMinutes: sessionIdleTimeoutMinutesResult.value,
       };
 
       // Resolve the policy that WILL be in effect after this write (a null patch value leaves the
@@ -654,6 +724,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       } else {
         settings = await generalSettingsRepo.update(settingsPatch);
       }
+
+      refreshSessionTokenAfterTimeoutChange(
+        request,
+        reply,
+        settings,
+        previousSettings,
+        sessionIdleTimeoutMinutesResult.value !== null,
+      );
 
       // Audit the revocation only after the transaction commits — an audit-write failure must not
       // roll back the security-critical token revocation it is recording.

@@ -50,6 +50,7 @@ import type {
   ClientOffer,
   ClientsOrder,
   Project,
+  ProjectStatus,
   ProjectTask,
   ProjectTipo,
   Role,
@@ -57,6 +58,7 @@ import type {
   TimeEntry,
   User,
 } from '../../types';
+import { LEGACY_PROJECT_STATUS } from '../../types';
 import { formatInsertDate } from '../../utils/date';
 import { hasPermission, hasScopedActionPermission } from '../../utils/permissions';
 import DateField from '../shared/DateField';
@@ -69,7 +71,9 @@ import DashboardControls from './DashboardControls';
 import DashboardGrid, { DashboardItem } from './DashboardGrid';
 import type { DashboardWidgetDef } from './dashboardLayout';
 import ProjectRules from './ProjectRules';
+import { ProjectStatusInfoTooltip } from './ProjectStatusInfoTooltip';
 import ProjectTasksTable from './ProjectTasksTable';
+import { getProjectStatusBadgeType, projectStatusOptions } from './projectStatusUi';
 import type { RecurringConfig } from './TaskFormModal';
 import { useDashboardLayout } from './useDashboardLayout';
 
@@ -192,6 +196,7 @@ type ProjectDetailFormState = {
   offerId: string;
   revenue: string;
   tempIsDisabled: boolean;
+  status: ProjectStatus;
   tipo: ProjectTipo | '';
   errors: Record<string, string>;
 };
@@ -246,6 +251,7 @@ const createProjectDetailFormState = (project: Project): ProjectDetailFormState 
   offerId: project.offerId ?? '',
   revenue: project.revenue !== null && project.revenue !== undefined ? String(project.revenue) : '',
   tempIsDisabled: project.isDisabled ?? false,
+  status: project.status ?? LEGACY_PROJECT_STATUS,
   tipo: getProjectDetailBaselineTipo(project),
   errors: {},
 });
@@ -343,6 +349,7 @@ const useProjectDetailController = ({
     offerId,
     revenue,
     tempIsDisabled,
+    status,
     tipo,
     errors,
   } = formState;
@@ -359,6 +366,7 @@ const useProjectDetailController = ({
   const setOfferId = (value: string) => setFormField('offerId', value);
   const setRevenue = (value: string) => setFormField('revenue', value);
   const setTempIsDisabled = (value: boolean) => setFormField('tempIsDisabled', value);
+  const setStatus = (value: ProjectStatus) => setFormField('status', value);
   const setTipo = (value: ProjectTipo | '') => setFormField('tipo', value);
   const setErrors = (value: React.SetStateAction<Record<string, string>>) =>
     dispatchForm({ type: 'setErrors', value });
@@ -454,6 +462,7 @@ const useProjectDetailController = ({
   // pre-fill the silent 'attivo' default. A confirmed project shows its stored value.
   const tipoNeedsConfirmation = !project.tipoConfirmed;
   const baselineTipo: ProjectTipo | '' = project.tipoConfirmed ? (project.tipo ?? '') : '';
+  const baselineStatus = project.status ?? LEGACY_PROJECT_STATUS;
 
   // No prop-sync useEffect: the parent passes `key={project.id}` so this component
   // remounts on project switch. Same-id parent updates (background poll / optimistic update)
@@ -829,6 +838,10 @@ const useProjectDetailController = ({
     id: o.id,
     name: t(o.name),
   }));
+  const translatedStatusOptions = projectStatusOptions.map((option) => ({
+    id: option.id,
+    name: t(option.name),
+  }));
 
   const projectTasks = useMemo(
     () => tasks.filter((t) => t.projectId === project.id),
@@ -924,6 +937,7 @@ const useProjectDetailController = ({
     offerId !== (project.offerId ?? '') ||
     revenueChanged ||
     tempIsDisabled !== (project.isDisabled ?? false) ||
+    status !== baselineStatus ||
     projectBillingChanged ||
     // For an unconfirmed project baselineTipo is '', so picking a value (or any other edit)
     // raises the save bar; for a confirmed project this fires only on an actual tipo change.
@@ -991,6 +1005,7 @@ const useProjectDetailController = ({
       // Guaranteed non-empty by the `!tipo` guard above. Sending it confirms the field
       // server-side (tipo_confirmed = true), clearing the forced-confirmation state.
       tipo: tipo as ProjectTipo,
+      status,
     };
     // Only touch `revenue` when the source is manual: activity-derived values are
     // recomputed on read. Sending `null` here would
@@ -1136,6 +1151,7 @@ const useProjectDetailController = ({
     offerId,
     revenue,
     tempIsDisabled,
+    status,
     tipo,
     errors,
     setName,
@@ -1147,6 +1163,7 @@ const useProjectDetailController = ({
     setOfferId,
     setRevenue,
     setTempIsDisabled,
+    setStatus,
     setTipo,
     setErrors,
     entries,
@@ -1174,6 +1191,7 @@ const useProjectDetailController = ({
     displayedRevenue,
     revenueHintBySource,
     translatedTipoOptions,
+    translatedStatusOptions,
     tipoNeedsConfirmation,
     projectBillingTypeOptions,
     displayedBillingType,
@@ -1243,6 +1261,7 @@ const ProjectDetailHeader: React.FC<{ controller: ProjectDetailController }> = (
     canDeleteProjects,
     setIsDeleteConfirmOpen,
   } = controller;
+  const projectStatus = project.status ?? LEGACY_PROJECT_STATUS;
 
   return (
     <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -1257,12 +1276,15 @@ const ProjectDetailHeader: React.FC<{ controller: ProjectDetailController }> = (
         </button>
         <div className="flex flex-wrap items-center gap-3">
           <h1 className="text-2xl font-semibold text-foreground">{project.name}</h1>
-          {project.isDisabled ? (
+          <StatusBadge
+            type={getProjectStatusBadgeType(project.status)}
+            label={t(`projects:projects.statusValues.${projectStatus}`)}
+          />
+          {project.isDisabled && (
             <StatusBadge type="disabled" label={t('projects:projects.statusDisabled')} />
-          ) : isClientDisabled ? (
+          )}
+          {!project.isDisabled && isClientDisabled && (
             <StatusBadge type="inherited" label={t('projects:projects.statusInheritedDisable')} />
-          ) : (
-            <StatusBadge type="active" label={t('projects:projects.statusActive')} />
           )}
           {project.createdAt && (
             <span className="text-xs text-muted-foreground">
@@ -1374,6 +1396,7 @@ const ProjectDetailFieldsGrid: React.FC<{ controller: ProjectDetailController }>
     <ProjectDetailOfferField controller={controller} />
     <ProjectDetailRevenueField controller={controller} />
     <ProjectDetailTipoField controller={controller} />
+    <ProjectDetailStatusField controller={controller} />
     <ProjectDetailBillingTypeField controller={controller} />
     <ProjectDetailBillingFrequencyField controller={controller} />
   </div>
@@ -1394,7 +1417,6 @@ const ProjectDetailOrderField: React.FC<{ controller: ProjectDetailController }>
     clearStaleClientLinks,
     canUpdateProjects,
   } = controller;
-
   return (
     <div className="space-y-1.5">
       <SelectControl
@@ -1441,7 +1463,6 @@ const ProjectDetailClientField: React.FC<{ controller: ProjectDetailController }
     isClientLockedByOrder,
     linkedOrder,
   } = controller;
-
   return (
     <div className="space-y-1.5">
       <SelectControl
@@ -1626,7 +1647,6 @@ const ProjectDetailRevenueField: React.FC<{ controller: ProjectDetailController 
     revenueHintBySource,
     canUpdateProjects,
   } = controller;
-
   return (
     <Field>
       <FieldLabel htmlFor="detail-revenue">
@@ -1663,7 +1683,6 @@ const ProjectDetailTipoField: React.FC<{ controller: ProjectDetailController }> 
     tipoNeedsConfirmation,
     canUpdateProjects,
   } = controller;
-
   return (
     <div className="space-y-1.5">
       <SelectControl
@@ -1695,6 +1714,27 @@ const ProjectDetailTipoField: React.FC<{ controller: ProjectDetailController }> 
   );
 };
 
+const ProjectDetailStatusField: React.FC<{ controller: ProjectDetailController }> = ({
+  controller,
+}) => {
+  const { t, translatedStatusOptions, status, setStatus, canUpdateProjects } = controller;
+
+  return (
+    <SelectControl
+      id="detail-status"
+      options={translatedStatusOptions}
+      value={status}
+      onChange={(value) => setStatus(value as ProjectStatus)}
+      label={t('projects:projects.status')}
+      labelAccessory={<ProjectStatusInfoTooltip t={t} />}
+      required
+      placeholder={t('projects:projects.selectStatus')}
+      searchable={false}
+      buttonClassName="h-9"
+      disabled={!canUpdateProjects}
+    />
+  );
+};
 const ProjectDetailBillingTypeField: React.FC<{ controller: ProjectDetailController }> = ({
   controller,
 }) => {
@@ -1706,7 +1746,6 @@ const ProjectDetailBillingTypeField: React.FC<{ controller: ProjectDetailControl
     derivedBillingType,
     canUpdateProjects,
   } = controller;
-
   return (
     <SelectControl
       id="detail-billing-type"
@@ -1733,7 +1772,6 @@ const ProjectDetailBillingFrequencyField: React.FC<{ controller: ProjectDetailCo
     setBillingFrequencyDraft,
     canUpdateProjects,
   } = controller;
-
   return (
     <SelectControl
       id="detail-billing-frequency"
@@ -1762,7 +1800,6 @@ const ProjectDetailDisabledSection: React.FC<{ controller: ProjectDetailControll
     tempIsDisabled,
     setTempIsDisabled,
   } = controller;
-
   return (
     <div className="grid gap-4 md:grid-cols-2">
       <Field>
@@ -1816,7 +1853,6 @@ const ProjectDetailTasksSection: React.FC<{ controller: ProjectDetailController 
     setTaskToDelete,
     setIsTaskDeleteConfirmOpen,
   } = controller;
-
   return (
     <div className="space-y-3">
       <div className="space-y-1.5">
@@ -2035,7 +2071,6 @@ const ProjectKpiDashboardItems: React.FC<{ controller: ProjectDetailController }
     budgetUsedPct,
     displayedRevenue,
   } = controller;
-
   return (
     <>
       <DashboardItem id="totalHours" title={t('projects:detail.kpi.totalHours')}>
@@ -2680,7 +2715,6 @@ const ProjectDetailModals: React.FC<{ controller: ProjectDetailController }> = (
     assignableUsers,
     setAssignedUserIds,
   } = controller;
-
   return (
     <>
       <DeleteConfirmModal

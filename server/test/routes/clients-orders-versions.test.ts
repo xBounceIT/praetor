@@ -39,6 +39,8 @@ const coFindExistingMock = mock();
 const coFindFullForSnapshotMock = mock();
 const coFindItemsForOrderMock = mock();
 const coFindIdConflictMock = mock();
+const coFindOfferDetailsMock = mock();
+const coFindExistingForOfferMock = mock();
 const coUpdateMock = mock();
 const coRenameMock = mock();
 const coRestoreSnapshotOrderMock = mock();
@@ -84,6 +86,8 @@ beforeAll(async () => {
     findFullForSnapshot: coFindFullForSnapshotMock,
     findItemsForOrder: coFindItemsForOrderMock,
     findIdConflict: coFindIdConflictMock,
+    findOfferDetails: coFindOfferDetailsMock,
+    findExistingForOffer: coFindExistingForOfferMock,
     update: coUpdateMock,
     rename: coRenameMock,
     restoreSnapshotOrder: coRestoreSnapshotOrderMock,
@@ -221,6 +225,8 @@ const allMocks = [
   coFindFullForSnapshotMock,
   coFindItemsForOrderMock,
   coFindIdConflictMock,
+  coFindOfferDetailsMock,
+  coFindExistingForOfferMock,
   coUpdateMock,
   coRenameMock,
   coRestoreSnapshotOrderMock,
@@ -252,6 +258,14 @@ beforeEach(async () => {
   }));
   coFindItemsForOrderMock.mockResolvedValue([SAMPLE_ITEM]);
   coFindIdConflictMock.mockResolvedValue(false);
+  coFindOfferDetailsMock.mockResolvedValue({
+    id: 'off-1',
+    linkedQuoteId: null,
+    clientId: 'c1',
+    clientName: 'Client',
+    status: 'accepted',
+  });
+  coFindExistingForOfferMock.mockResolvedValue(null);
 
   testApp = await buildRouteTestApp(routePlugin, '/api/clients-orders');
 });
@@ -619,10 +633,11 @@ describe('POST /api/clients-orders/:id/versions/:versionId/restore', () => {
     });
 
     expect(res.statusCode).toBe(409);
+    expect(JSON.parse(res.body).error).toContain('restore is only available for draft');
     expect(coRestoreSnapshotOrderMock).not.toHaveBeenCalled();
   });
 
-  test('409 when order is non-draft', async () => {
+  test('409 when restore target is not draft', async () => {
     coFindExistingMock.mockResolvedValue({
       id: 'o-1',
       linkedQuoteId: null,
@@ -644,6 +659,7 @@ describe('POST /api/clients-orders/:id/versions/:versionId/restore', () => {
     });
 
     expect(res.statusCode).toBe(409);
+    expect(JSON.parse(res.body).error).toContain('restore is only available for draft');
     expect(coRestoreSnapshotOrderMock).not.toHaveBeenCalled();
   });
 
@@ -1093,7 +1109,7 @@ describe('PUT /api/clients-orders/:id snapshots pre-update state', () => {
   });
 });
 
-describe('PUT /api/clients-orders/:id source-linked draft editability', () => {
+describe('PUT /api/clients-orders/:id source-linked editability', () => {
   test('200 allows editing a DRAFT order linked to an offer (content + items)', async () => {
     coFindExistingMock.mockResolvedValue({
       id: 'o-1',
@@ -1152,7 +1168,119 @@ describe('PUT /api/clients-orders/:id source-linked draft editability', () => {
     );
   });
 
-  test('409 still rejects editing a CONFIRMED order linked to an offer', async () => {
+  test('200 allows editing content on a CONFIRMED order linked to an offer', async () => {
+    coFindExistingMock.mockResolvedValue({
+      id: 'o-1',
+      linkedQuoteId: null,
+      linkedOfferId: 'off-1',
+      clientId: 'c1',
+      clientName: 'Client',
+      paymentTerms: 'immediate',
+      discount: 0,
+      discountType: 'percentage' as const,
+      status: 'confirmed',
+      notes: null,
+    });
+    coFindItemsForOrderMock.mockResolvedValue([SAMPLE_ITEM]);
+    coFindFullForSnapshotMock.mockResolvedValue({
+      order: { ...SAMPLE_ORDER, linkedOfferId: 'off-1', status: 'confirmed' },
+      items: [SAMPLE_ITEM],
+    });
+    coUpdateMock.mockResolvedValue({
+      ...SAMPLE_ORDER,
+      linkedOfferId: 'off-1',
+      status: 'confirmed',
+      notes: 'edited',
+      paymentTerms: '30gg',
+    });
+    coReplaceItemsMock.mockResolvedValue([{ ...SAMPLE_ITEM, quantity: 3 }]);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/clients-orders/o-1',
+      headers: authHeader(),
+      payload: {
+        linkedOfferId: 'off-1',
+        clientId: 'c1',
+        clientName: 'Client',
+        paymentTerms: '30gg',
+        notes: 'edited',
+        items: [
+          {
+            id: SAMPLE_ITEM.id,
+            productId: SAMPLE_ITEM.productId,
+            productName: SAMPLE_ITEM.productName,
+            quantity: 3,
+            unitPrice: SAMPLE_ITEM.unitPrice,
+            productCost: SAMPLE_ITEM.productCost,
+            discount: SAMPLE_ITEM.discount,
+            unitType: 'hours',
+          },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(coUpdateMock).toHaveBeenCalledWith(
+      'o-1',
+      expect.objectContaining({
+        clientId: 'c1',
+        clientName: 'Client',
+        notes: 'edited',
+        paymentTerms: '30gg',
+      }),
+      TX_SENTINEL,
+    );
+    expect(coReplaceItemsMock).toHaveBeenCalled();
+    expect(coFindOfferDetailsMock).not.toHaveBeenCalled();
+    expect(ovInsertMock).toHaveBeenCalledWith(
+      expect.objectContaining({ orderId: 'o-1', reason: 'update' }),
+      TX_SENTINEL,
+    );
+  });
+
+  test('409 rejects identity changes on a CONFIRMED order', async () => {
+    const cases = [
+      { field: 'clientId', payload: { clientId: 'c2' } },
+      { field: 'clientName', payload: { clientName: 'Other Client' } },
+      { field: 'linkedOfferId', payload: { linkedOfferId: 'off-2' } },
+      { field: 'id', payload: { id: 'o-2' } },
+    ];
+
+    for (const { field, payload } of cases) {
+      coFindExistingMock.mockResolvedValue({
+        id: 'o-1',
+        linkedQuoteId: null,
+        linkedOfferId: 'off-1',
+        clientId: 'c1',
+        clientName: 'Client',
+        paymentTerms: 'immediate',
+        discount: 0,
+        discountType: 'percentage' as const,
+        status: 'confirmed',
+        notes: null,
+      });
+
+      const res = await testApp.inject({
+        method: 'PUT',
+        url: '/api/clients-orders/o-1',
+        headers: authHeader(),
+        payload,
+      });
+
+      expect(res.statusCode).toBe(409);
+      const body = JSON.parse(res.body);
+      expect(body.error).toContain('identity fields are read-only');
+      const auditCall = logAuditMock.mock.calls.at(-1) as
+        | [{ details?: { changedFields?: string[] } }]
+        | undefined;
+      expect(auditCall?.[0].details?.changedFields).toContain(field);
+    }
+    expect(coUpdateMock).not.toHaveBeenCalled();
+    expect(ovInsertMock).not.toHaveBeenCalled();
+  });
+
+  test('409 still rejects content edits on a DENIED order linked to an offer', async () => {
     coFindExistingMock.mockResolvedValue({
       id: 'o-1',
       linkedQuoteId: null,
@@ -1162,7 +1290,7 @@ describe('PUT /api/clients-orders/:id source-linked draft editability', () => {
       paymentTerms: 'immediate',
       discount: 0,
       discountType: 'percentage' as const,
-      status: 'confirmed',
+      status: 'denied',
       notes: null,
     });
 
@@ -1174,9 +1302,54 @@ describe('PUT /api/clients-orders/:id source-linked draft editability', () => {
     });
 
     expect(res.statusCode).toBe(409);
-    expect(JSON.parse(res.body).error).toContain('Non-draft');
+    expect(JSON.parse(res.body).error).toContain('Denied');
     expect(coUpdateMock).not.toHaveBeenCalled();
     expect(ovInsertMock).not.toHaveBeenCalled();
+  });
+
+  test('409 keeps supplier-order-backed lines protected on a CONFIRMED order', async () => {
+    coFindExistingMock.mockResolvedValue({
+      id: 'o-1',
+      linkedQuoteId: null,
+      linkedOfferId: 'off-1',
+      clientId: 'c1',
+      clientName: 'Client',
+      paymentTerms: 'immediate',
+      discount: 0,
+      discountType: 'percentage' as const,
+      status: 'confirmed',
+      notes: null,
+    });
+    coFindItemsForOrderMock.mockResolvedValue([SUPPLIER_BACKED_ITEM]);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/clients-orders/o-1',
+      headers: authHeader(),
+      payload: {
+        items: [
+          {
+            id: SUPPLIER_BACKED_ITEM.id,
+            productId: SUPPLIER_BACKED_ITEM.productId,
+            productName: SUPPLIER_BACKED_ITEM.productName,
+            quantity: 99,
+            unitPrice: SUPPLIER_BACKED_ITEM.unitPrice,
+            productCost: SUPPLIER_BACKED_ITEM.productCost,
+            discount: SUPPLIER_BACKED_ITEM.discount,
+            supplierQuoteId: SUPPLIER_BACKED_ITEM.supplierQuoteId,
+            supplierQuoteItemId: SUPPLIER_BACKED_ITEM.supplierQuoteItemId,
+            supplierSaleId: SUPPLIER_BACKED_ITEM.supplierSaleId,
+            supplierSaleItemId: SUPPLIER_BACKED_ITEM.supplierSaleItemId,
+            unitType: 'hours',
+          },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(JSON.parse(res.body).error).toContain('supplier order');
+    expect(coReplaceItemsMock).not.toHaveBeenCalled();
+    expect(coUpdateMock).not.toHaveBeenCalled();
   });
 
   const draftOfferLinkedOrder = {

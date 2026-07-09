@@ -1,7 +1,8 @@
 import { describe, expect, mock, test } from 'bun:test';
-import { fireEvent, screen, within } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import type { ComponentProps } from 'react';
-import type { User } from '../../../types';
+import type { ResponsibleUserOption, User, WorkUnit } from '../../../types';
 import { installI18nMock } from '../../helpers/i18n';
 import { render } from '../../helpers/render';
 
@@ -27,7 +28,29 @@ const employee: User = {
   costPerHour: 25,
   email: 'mario.contractor@example.com',
   phone: '+39 02 9876',
+  responsibleUserId: 'u-manager',
+  responsibleUserName: 'Paola Manager',
 };
+
+const responsibleUserOptions: ResponsibleUserOption[] = [
+  { id: 'u1', name: 'Mario Rossi', username: 'mrossi', avatarInitials: 'MR' },
+  { id: 'u-manager', name: 'Paola Manager', username: 'pmanager', avatarInitials: 'PM' },
+];
+
+const workUnits: WorkUnit[] = [
+  {
+    id: 'wu-beta',
+    name: 'Beta Center',
+    managers: [],
+    members: [{ id: 'u1', name: 'Mario Rossi' }],
+  },
+  {
+    id: 'wu-alpha',
+    name: 'Alpha Center',
+    managers: [],
+    members: [{ id: 'u1', name: 'Mario Rossi' }],
+  },
+];
 
 const renderView = (overrides: Partial<ComponentProps<typeof ExternalEmployeesView>> = {}) => {
   const props: ComponentProps<typeof ExternalEmployeesView> = {
@@ -35,6 +58,8 @@ const renderView = (overrides: Partial<ComponentProps<typeof ExternalEmployeesVi
     clients: [],
     projects: [],
     tasks: [],
+    workUnits: [],
+    responsibleUserOptions,
     onAddEmployee: mock(async () => ({ success: true })),
     onUpdateEmployee: mock(() => {}),
     onDeleteEmployee: mock(() => {}),
@@ -52,7 +77,8 @@ describe('<ExternalEmployeesView /> row click', () => {
 
     const headerTexts = screen.getAllByRole('columnheader').map((header) => header.textContent);
     expect(headerTexts).toContain('common:labels.email');
-    expect(headerTexts).toContain('common:labels.phone');
+    expect(headerTexts).toContain('employeeProfile.phone');
+    expect(headerTexts).toContain('employeeProfile.responsible');
     expect(headerTexts).not.toContain('employeeProfile.contact');
 
     const row = screen.getByText('Mario Rossi').closest('tr');
@@ -63,6 +89,7 @@ describe('<ExternalEmployeesView /> row click', () => {
       .map((cell) => cell.textContent?.trim());
     expect(cellTexts).toContain('mario.contractor@example.com');
     expect(cellTexts).toContain('+39 02 9876');
+    expect(cellTexts).toContain('Paola Manager');
     expect(cellTexts).not.toContain('mario.contractor@example.com+39 02 9876');
   });
 
@@ -78,6 +105,21 @@ describe('<ExternalEmployeesView /> row click', () => {
     fireEvent.click(row);
 
     expect(screen.getByDisplayValue('Mario Rossi')).toBeInTheDocument();
+  });
+
+  test('shows derived department in table and edit form', () => {
+    renderView({ workUnits });
+
+    const row = screen.getByText('Mario Rossi').closest('tr');
+    if (!row) throw new Error('employee row not found');
+
+    expect(within(row).getByText('Alpha Center, Beta Center')).toBeInTheDocument();
+    fireEvent.click(row);
+
+    const department = screen.getByLabelText('employeeProfile.department');
+    expect(department.tagName).toBe('OUTPUT');
+    expect(department).toHaveTextContent('Alpha Center, Beta Center');
+    expect(screen.queryByDisplayValue('Alpha Center, Beta Center')).not.toBeInTheDocument();
   });
 
   test('row is not clickable without update permission', () => {
@@ -102,6 +144,8 @@ describe('<ExternalEmployeesView /> row click', () => {
           phone: null,
           jobTitle: null,
           department: null,
+          responsibleUserId: null,
+          responsibleUserName: null,
           employeeCode: null,
           employmentStatus: null,
           contractType: 'contractor',
@@ -121,7 +165,55 @@ describe('<ExternalEmployeesView /> row click', () => {
 
     expect(screen.getByLabelText('employeeProfile.email')).toHaveValue('');
     expect(screen.getByLabelText('employeeProfile.jobTitle')).toHaveValue('');
-    expect(screen.getByLabelText('employeeProfile.department')).toHaveValue('');
+    const department = screen.getByLabelText('employeeProfile.department');
+    expect(department.tagName).toBe('OUTPUT');
+    expect(department).toHaveTextContent('employeeProfile.notSet');
     expect(screen.getByLabelText('employeeProfile.employeeCode')).toHaveValue('');
+  });
+
+  test('submits HR profile fields when creating with external create permission', async () => {
+    const user = userEvent.setup();
+    const onAddEmployee = mock<ComponentProps<typeof ExternalEmployeesView>['onAddEmployee']>(
+      async () => ({ success: true }),
+    );
+    renderView({
+      users: [],
+      onAddEmployee,
+      permissions: ['hr.external.view', 'hr.external.create'],
+    });
+
+    fireEvent.click(screen.getByText('externalEmployees.addEmployee'));
+    fireEvent.change(screen.getByLabelText('externalEmployees.name *'), {
+      target: { value: 'Luisa Bianchi' },
+    });
+    fireEvent.change(screen.getByLabelText('employeeProfile.email'), {
+      target: { value: 'luisa.contractor@example.com' },
+    });
+    fireEvent.change(screen.getByLabelText('employeeProfile.phone'), {
+      target: { value: '+39 02 5555' },
+    });
+    fireEvent.change(screen.getByLabelText('employeeProfile.jobTitle'), {
+      target: { value: 'Contractor' },
+    });
+    fireEvent.change(screen.getByLabelText('employeeProfile.address'), {
+      target: { value: 'Via Milano 2' },
+    });
+    await user.click(screen.getByLabelText('employeeProfile.responsible'));
+    await user.click(await screen.findByText('Paola Manager (pmanager)'));
+
+    fireEvent.click(screen.getByText('externalEmployees.saveChanges'));
+
+    await waitFor(() => expect(onAddEmployee).toHaveBeenCalledTimes(1));
+    expect(onAddEmployee).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: 'Luisa Bianchi',
+        email: 'luisa.contractor@example.com',
+        phone: '+39 02 5555',
+        jobTitle: 'Contractor',
+        responsibleUserId: 'u-manager',
+        address: 'Via Milano 2',
+      }),
+    );
+    expect(onAddEmployee.mock.calls[0][0]).not.toHaveProperty('department');
   });
 });

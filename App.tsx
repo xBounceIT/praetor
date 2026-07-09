@@ -109,6 +109,7 @@ import type {
   Resale,
   ResaleCategory,
   ResaleOrderOption,
+  ResponsibleUserOption,
   Role,
   SsoProvider,
   Supplier,
@@ -189,6 +190,7 @@ type AppModuleState = {
   supplierInvoices: SupplierInvoice[];
   entries: TimeEntry[];
   workUnits: WorkUnit[];
+  responsibleUserOptions: ResponsibleUserOption[];
 };
 
 const INITIAL_APP_MODULE_STATE: AppModuleState = {
@@ -212,6 +214,7 @@ const INITIAL_APP_MODULE_STATE: AppModuleState = {
   supplierInvoices: [],
   entries: [],
   workUnits: [],
+  responsibleUserOptions: [],
 };
 
 type AppModuleStateSetAction = {
@@ -433,6 +436,23 @@ const INITIAL_APP_LOCAL_STATE: AppLocalState = {
     isLoading: false,
   },
 };
+
+const toGeneralSettingsState = (genSettings: IGeneralSettings): GeneralSettingsState => ({
+  ...genSettings,
+  currency: normalizeCurrency(genSettings.currency),
+  geminiApiKey: genSettings.geminiApiKey || '',
+  aiProvider: genSettings.aiProvider || 'gemini',
+  openrouterApiKey: genSettings.openrouterApiKey || '',
+  geminiModelId: genSettings.geminiModelId || '',
+  openrouterModelId: genSettings.openrouterModelId || '',
+  defaultLocation: genSettings.defaultLocation || 'remote',
+  rilCompanyName: genSettings.rilCompanyName || '',
+  rilDefaultStartTime: genSettings.rilDefaultStartTime || DEFAULT_RIL_START_TIME,
+  rilDefaultExitTime: genSettings.rilDefaultExitTime || DEFAULT_RIL_EXIT_TIME,
+  rilLunchBreakMinutes: genSettings.rilLunchBreakMinutes ?? 60,
+  rilNoteOptions: normalizeRilNoteOptions(genSettings.rilNoteOptions),
+  rilTransferOptions: normalizeRilTransferOptions(genSettings.rilTransferOptions),
+});
 
 type AppLocalStateAction = {
   [Key in keyof AppLocalState]: {
@@ -1090,6 +1110,10 @@ const TrackerView: React.FC<{
   );
 };
 
+const handleGeneralSettingsUpdateError = (err: unknown) => {
+  console.error('Failed to update general settings:', err);
+  toastError('Failed to update settings');
+};
 const useAppContentController = () => {
   const { t: tApp } = useTranslation(['common', 'reports', 'sales', 'accounting']);
 
@@ -1118,6 +1142,7 @@ const useAppContentController = () => {
     supplierInvoices,
     entries,
     workUnits,
+    responsibleUserOptions,
   } = moduleState;
   const setUsers = useCallback<React.Dispatch<React.SetStateAction<User[]>>>(
     (value) => dispatchModuleState({ type: 'set', key: 'users', value }),
@@ -1196,6 +1221,9 @@ const useAppContentController = () => {
     (value) => dispatchModuleState({ type: 'set', key: 'workUnits', value }),
     [],
   );
+  const setResponsibleUserOptions = useCallback<
+    React.Dispatch<React.SetStateAction<ResponsibleUserOption[]>>
+  >((value) => dispatchModuleState({ type: 'set', key: 'responsibleUserOptions', value }), []);
   const taskUpdateQueueStateRef = useRef<TaskUpdateQueueState | null>(null);
   if (taskUpdateQueueStateRef.current === null) {
     taskUpdateQueueStateRef.current = createTaskUpdateQueueState();
@@ -1263,12 +1291,31 @@ const useAppContentController = () => {
     reset: resetModuleLoader,
   } = useModuleLoader();
   const hasLoadedGeneralSettingsRef = useRef(false);
+  const generalSettingsLoadPromiseRef = useRef<Promise<IGeneralSettings> | null>(null);
   const hasLoadedLdapConfigRef = useRef(false);
   const hasLoadedSsoProvidersRef = useRef(false);
   const hasLoadedEmailConfigRef = useRef(false);
   const hasLoadedGeneralSettings = hasLoadedGeneralSettingsRef.current;
 
   const hasLoadedRolesRef = useRef(false);
+
+  const loadGeneralSettingsOnce = useCallback(
+    async (shouldApply: () => boolean = () => true) => {
+      if (hasLoadedGeneralSettingsRef.current) return;
+      if (generalSettingsLoadPromiseRef.current === null) {
+        generalSettingsLoadPromiseRef.current = api.generalSettings.get().finally(() => {
+          generalSettingsLoadPromiseRef.current = null;
+        });
+      }
+
+      const genSettings = await generalSettingsLoadPromiseRef.current;
+      if (!shouldApply() || hasLoadedGeneralSettingsRef.current) return;
+
+      setGeneralSettings(toGeneralSettingsState(genSettings));
+      hasLoadedGeneralSettingsRef.current = true;
+    },
+    [setGeneralSettings],
+  );
 
   // Items and unread count share one state so handlers can derive both from
   // `prev` in a single updater — splitting them races the 60s polling refresh
@@ -1473,6 +1520,7 @@ const useAppContentController = () => {
     clearAuthScopedState({
       hasLoadedGeneralSettings: () => {
         hasLoadedGeneralSettingsRef.current = false;
+        generalSettingsLoadPromiseRef.current = null;
       },
       generalSettings: () => setGeneralSettings(INITIAL_GENERAL_SETTINGS),
       hasLoadedLdapConfig: () => {
@@ -1511,6 +1559,7 @@ const useAppContentController = () => {
       supplierInvoices: () => setModuleState('supplierInvoices', []),
       entries: () => setModuleState('entries', []),
       workUnits: () => setModuleState('workUnits', []),
+      responsibleUserOptions: () => setModuleState('responsibleUserOptions', []),
       viewingUserAssignmentState: () =>
         setLocalState('viewingUserAssignmentState', {
           userId: '',
@@ -1558,6 +1607,21 @@ const useAppContentController = () => {
   // Read by the hashchange listener (mounted once) so it sees the latest user
   // without the effect resubscribing — events fired during teardown are lost.
   currentUserRef.current = currentUser;
+
+  // The inactivity timer is global session state, so load its admin policy once per
+  // authenticated session instead of depending on whichever module datasets happen to run.
+  useEffect(() => {
+    if (!currentUser) return;
+
+    let isCancelled = false;
+    loadGeneralSettingsOnce(() => !isCancelled).catch((err) => {
+      if (!isCancelled) console.error('Failed to load general settings:', err);
+    });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [currentUser, loadGeneralSettingsOnce]);
 
   // The login screen always follows the OS/browser color scheme; the signed-in
   // app honors the user's saved theme. applyBrowserTheme() never persists, so a
@@ -1985,29 +2049,7 @@ const useAppContentController = () => {
       return cancelModuleLoad;
     }
 
-    const loadGeneralSettings = async () => {
-      if (hasLoadedGeneralSettingsRef.current) return;
-      const genSettings = await api.generalSettings.get();
-      if (isCurrentModuleLoad()) {
-        setGeneralSettings({
-          ...genSettings,
-          currency: normalizeCurrency(genSettings.currency),
-          geminiApiKey: genSettings.geminiApiKey || '',
-          aiProvider: genSettings.aiProvider || 'gemini',
-          openrouterApiKey: genSettings.openrouterApiKey || '',
-          geminiModelId: genSettings.geminiModelId || '',
-          openrouterModelId: genSettings.openrouterModelId || '',
-          defaultLocation: genSettings.defaultLocation || 'remote',
-          rilCompanyName: genSettings.rilCompanyName || '',
-          rilDefaultStartTime: genSettings.rilDefaultStartTime || DEFAULT_RIL_START_TIME,
-          rilDefaultExitTime: genSettings.rilDefaultExitTime || DEFAULT_RIL_EXIT_TIME,
-          rilLunchBreakMinutes: genSettings.rilLunchBreakMinutes ?? 60,
-          rilNoteOptions: normalizeRilNoteOptions(genSettings.rilNoteOptions),
-          rilTransferOptions: normalizeRilTransferOptions(genSettings.rilTransferOptions),
-        });
-        hasLoadedGeneralSettingsRef.current = true;
-      }
-    };
+    const loadGeneralSettings = () => loadGeneralSettingsOnce(isCurrentModuleLoad);
 
     const loadLdapConfig = async () => {
       if (hasLoadedLdapConfigRef.current) return;
@@ -2215,6 +2257,13 @@ const useAppContentController = () => {
           buildPermission('accounting.supplier_invoices', 'view'),
         );
         const canListWorkUnits = hasViewAccess(permissions, 'hr/work-units');
+        const canListResponsibleUsers = hasAnyPermission(permissions, [
+          buildPermission('administration.user_management_all', 'view'),
+          buildPermission('administration.user_management', 'update'),
+          buildPermission('hr.external', 'create'),
+          buildPermission('hr.internal', 'update'),
+          buildPermission('hr.external', 'update'),
+        ]);
         const canManageEmployeeAssignments = hasPermission(
           permissions,
           buildPermission('hr.employee_assignments', 'update'),
@@ -2397,6 +2446,12 @@ const useAppContentController = () => {
               module,
               [
                 listRequest('users', canListUsers, () => api.users.list(), setUsers),
+                listRequest(
+                  'responsible users',
+                  canListResponsibleUsers,
+                  () => api.users.getResponsibleOptions(),
+                  setResponsibleUserOptions,
+                ),
                 listRequest(
                   'competence centers',
                   canListWorkUnits,
@@ -2747,11 +2802,12 @@ const useAppContentController = () => {
     setResales,
     setResaleCategories,
     setResaleOrderOptions,
-    setGeneralSettings,
+    loadGeneralSettingsOnce,
     setLdapConfig,
     setSsoProviders,
     setEmailConfig,
     setRoles,
+    setResponsibleUserOptions,
   ]);
 
   // Load target user assignments when the timesheet user switcher changes.
@@ -3110,28 +3166,45 @@ const useAppContentController = () => {
     setBranding(next);
   };
 
+  const applyGeneralSettingsUpdate = (updated: IGeneralSettings) => {
+    setGeneralSettings({
+      ...updated,
+      currency: normalizeCurrency(updated.currency),
+      geminiApiKey: updated.geminiApiKey || '',
+      aiProvider: updated.aiProvider || 'gemini',
+      openrouterApiKey: updated.openrouterApiKey || '',
+      geminiModelId: updated.geminiModelId || '',
+      openrouterModelId: updated.openrouterModelId || '',
+      defaultLocation: updated.defaultLocation || 'remote',
+      rilCompanyName: updated.rilCompanyName || '',
+      rilDefaultStartTime: updated.rilDefaultStartTime || DEFAULT_RIL_START_TIME,
+      rilDefaultExitTime: updated.rilDefaultExitTime || DEFAULT_RIL_EXIT_TIME,
+      rilLunchBreakMinutes: updated.rilLunchBreakMinutes ?? 60,
+      rilNoteOptions: normalizeRilNoteOptions(updated.rilNoteOptions),
+      rilTransferOptions: normalizeRilTransferOptions(updated.rilTransferOptions),
+    });
+  };
+
+  const updateGeneralSettings = async (updates: Partial<IGeneralSettings>) => {
+    const updated = await api.generalSettings.update(updates);
+    applyGeneralSettingsUpdate(updated);
+    return updated;
+  };
+
   const handleUpdateGeneralSettings = async (updates: Partial<IGeneralSettings>) => {
     try {
-      const updated = await api.generalSettings.update(updates);
-      setGeneralSettings({
-        ...updated,
-        currency: normalizeCurrency(updated.currency),
-        geminiApiKey: updated.geminiApiKey || '',
-        aiProvider: updated.aiProvider || 'gemini',
-        openrouterApiKey: updated.openrouterApiKey || '',
-        geminiModelId: updated.geminiModelId || '',
-        openrouterModelId: updated.openrouterModelId || '',
-        defaultLocation: updated.defaultLocation || 'remote',
-        rilCompanyName: updated.rilCompanyName || '',
-        rilDefaultStartTime: updated.rilDefaultStartTime || DEFAULT_RIL_START_TIME,
-        rilDefaultExitTime: updated.rilDefaultExitTime || DEFAULT_RIL_EXIT_TIME,
-        rilLunchBreakMinutes: updated.rilLunchBreakMinutes ?? 60,
-        rilNoteOptions: normalizeRilNoteOptions(updated.rilNoteOptions),
-        rilTransferOptions: normalizeRilTransferOptions(updated.rilTransferOptions),
-      });
+      await updateGeneralSettings(updates);
     } catch (err) {
-      console.error('Failed to update general settings:', err);
-      toastError('Failed to update settings');
+      handleGeneralSettingsUpdateError(err);
+    }
+  };
+
+  const handleUpdateGeneralSettingsStrict = async (updates: Partial<IGeneralSettings>) => {
+    try {
+      await updateGeneralSettings(updates);
+    } catch (err) {
+      handleGeneralSettingsUpdateError(err);
+      throw err;
     }
   };
 
@@ -3273,6 +3346,7 @@ const useAppContentController = () => {
     supplierInvoices,
     entries,
     workUnits,
+    responsibleUserOptions,
     setQuotes,
     setClientOffers,
     setClientsOrders,
@@ -3402,6 +3476,7 @@ const useAppContentController = () => {
     handleUpdateUserAuthMethod,
     handleBrandingChange,
     handleUpdateGeneralSettings,
+    handleUpdateGeneralSettingsStrict,
     handleUpdateUserSettings,
     handleUpdateUserPassword,
     handleListMcpTokens,
@@ -3472,7 +3547,10 @@ const TechnicalDocsRoute: React.FC<{
 }> = ({ controller, view }) => (
   <>
     {controller.currentUser && (
-      <SessionTimeoutHandler onLogout={() => controller.handleLogout('inactivity')} />
+      <SessionTimeoutHandler
+        onLogout={() => controller.handleLogout('inactivity')}
+        sessionIdleTimeoutMinutes={controller.generalSettings.sessionIdleTimeoutMinutes}
+      />
     )}
     {view === 'api' ? <ApiDocsView /> : <FrontendDocsView />}
   </>
@@ -3487,7 +3565,6 @@ const LoginRoute: React.FC<{ controller: AppContentController }> = ({ controller
     logoutReason,
     serverUnreachable,
   } = controller;
-
   return (
     <Login
       onLogin={handleLogin}
@@ -3524,7 +3601,10 @@ const AuthenticatedAppShell: React.FC<{ controller: AppContentController }> = ({
 
   return (
     <CurrentUserIdProvider userId={currentUser.id}>
-      <SessionTimeoutHandler onLogout={() => handleLogout('inactivity')} />
+      <SessionTimeoutHandler
+        onLogout={() => handleLogout('inactivity')}
+        sessionIdleTimeoutMinutes={generalSettings.sessionIdleTimeoutMinutes}
+      />
       <Layout
         activeView={!isRouteAccessible ? 'timesheets/tracker' : (activeView as View)}
         onViewChange={setActiveView}
@@ -4085,6 +4165,7 @@ const HrRoutes: React.FC<{ controller: AuthenticatedAppContentController }> = ({
     updateWorkUnit,
     users,
     workUnits,
+    responsibleUserOptions,
   } = controller;
 
   return (
@@ -4096,6 +4177,8 @@ const HrRoutes: React.FC<{ controller: AuthenticatedAppContentController }> = ({
             clients={clients}
             projects={projects}
             tasks={projectTasks}
+            workUnits={workUnits}
+            responsibleUserOptions={responsibleUserOptions}
             onAddEmployee={addInternalEmployee}
             onUpdateEmployee={handleUpdateEmployee}
             onDeleteEmployee={handleDeleteEmployee}
@@ -4110,6 +4193,8 @@ const HrRoutes: React.FC<{ controller: AuthenticatedAppContentController }> = ({
             clients={clients}
             projects={projects}
             tasks={projectTasks}
+            workUnits={workUnits}
+            responsibleUserOptions={responsibleUserOptions}
             onAddEmployee={addExternalEmployee}
             onUpdateEmployee={handleUpdateEmployee}
             onDeleteEmployee={handleDeleteEmployee}
@@ -4369,6 +4454,7 @@ const AdministrationRoutes: React.FC<{ controller: AuthenticatedAppContentContro
     handleSaveSsoProvider,
     handleTestEmail,
     handleUpdateGeneralSettings,
+    handleUpdateGeneralSettingsStrict,
     handleUpdateRolePermissions,
     handleUpdateUser,
     handleUpdateUserAuthMethod,
@@ -4443,7 +4529,15 @@ const AdministrationRoutes: React.FC<{ controller: AuthenticatedAppContentContro
             onSetExemptUserIds={(value) =>
               handleUpdateGeneralSettings({ totpExemptUserIds: value })
             }
+            sessionIdleTimeoutMinutes={generalSettings.sessionIdleTimeoutMinutes}
+            onSetSessionIdleTimeoutMinutes={(value) =>
+              handleUpdateGeneralSettingsStrict({ sessionIdleTimeoutMinutes: value })
+            }
             canManageMfa={hasPermission(currentUser.permissions, 'administration.general.update')}
+            canManageSession={hasPermission(
+              currentUser.permissions,
+              'administration.general.update',
+            )}
           />
         )}
       {hasPermission(currentUser.permissions, VIEW_PERMISSION_MAP['administration/roles']) &&

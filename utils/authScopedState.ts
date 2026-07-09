@@ -39,6 +39,7 @@ export type AuthScopedStateKey =
   | 'supplierInvoices'
   | 'entries'
   | 'workUnits'
+  | 'responsibleUserOptions'
   | 'viewingUserAssignmentState';
 
 export const ALL_AUTH_SCOPED_KEYS: readonly AuthScopedStateKey[] = [
@@ -72,6 +73,7 @@ export const ALL_AUTH_SCOPED_KEYS: readonly AuthScopedStateKey[] = [
   'supplierInvoices',
   'entries',
   'workUnits',
+  'responsibleUserOptions',
   'viewingUserAssignmentState',
 ];
 

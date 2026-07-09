@@ -1,4 +1,5 @@
 import type React from 'react';
+import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Field, FieldError, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
@@ -10,7 +11,9 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import type { ResponsibleUserOption } from '../../types';
 import DateField from '../shared/DateField';
+import SelectControl, { type Option } from '../shared/SelectControl';
 import {
   CONTRACT_TYPE_OPTIONS,
   EMPLOYMENT_STATUS_OPTIONS,
@@ -20,6 +23,7 @@ import {
 } from './employeeHrProfile';
 
 const NONE_SELECT_VALUE = '__none__';
+const EMPTY_RESPONSIBLE_USER_OPTIONS: ResponsibleUserOption[] = [];
 
 type EmployeeHrFieldsProps = {
   section: EmployeeSectionKey;
@@ -32,6 +36,9 @@ type EmployeeHrFieldsProps = {
   canUpdateCosts: boolean;
   identityReadOnly: boolean;
   canEditHrDetails?: boolean;
+  departmentValue?: string;
+  responsibleUserOptions?: ResponsibleUserOption[];
+  currentEmployeeId?: string | null;
 };
 
 type SelectFieldProps<T extends string> = {
@@ -81,6 +88,79 @@ const EmployeeSelectField = <T extends string>({
   );
 };
 
+const buildResponsibleOptions = (
+  responsibleUserOptions: ResponsibleUserOption[],
+  currentEmployeeId: string | null,
+  responsibleUserId: string,
+  responsibleUserName: string,
+  notSetLabel: string,
+): Option[] => {
+  const options: Option[] = [];
+  for (const option of responsibleUserOptions) {
+    if (option.id === currentEmployeeId) continue;
+    options.push({
+      id: option.id,
+      name: option.username ? `${option.name} (${option.username})` : option.name,
+    });
+  }
+
+  if (responsibleUserId && !options.some((option) => option.id === responsibleUserId)) {
+    options.unshift({
+      id: responsibleUserId,
+      name: responsibleUserName || responsibleUserId,
+    });
+  }
+
+  return [{ id: '', name: notSetLabel }, ...options];
+};
+
+const useResponsibleSelect = ({
+  currentEmployeeId,
+  formData,
+  notSetLabel,
+  responsibleUserOptions,
+  setFormData,
+}: {
+  currentEmployeeId: string | null;
+  formData: EmployeeHrFormData;
+  notSetLabel: string;
+  responsibleUserOptions: ResponsibleUserOption[];
+  setFormData: React.Dispatch<React.SetStateAction<EmployeeHrFormData>>;
+}) => {
+  const responsibleOptions = useMemo(
+    () =>
+      buildResponsibleOptions(
+        responsibleUserOptions,
+        currentEmployeeId,
+        formData.responsibleUserId,
+        formData.responsibleUserName,
+        notSetLabel,
+      ),
+    [
+      currentEmployeeId,
+      formData.responsibleUserId,
+      formData.responsibleUserName,
+      notSetLabel,
+      responsibleUserOptions,
+    ],
+  );
+
+  const handleResponsibleChange = useCallback(
+    (value: string | string[]) => {
+      const responsibleUserId = Array.isArray(value) ? '' : value;
+      const selected = responsibleUserOptions.find((option) => option.id === responsibleUserId);
+      setFormData((prev) => ({
+        ...prev,
+        responsibleUserId,
+        responsibleUserName: selected?.name || '',
+      }));
+    },
+    [responsibleUserOptions, setFormData],
+  );
+
+  return { handleResponsibleChange, responsibleOptions };
+};
+
 const EmployeeHrFields: React.FC<EmployeeHrFieldsProps> = ({
   section,
   prefix,
@@ -92,12 +172,24 @@ const EmployeeHrFields: React.FC<EmployeeHrFieldsProps> = ({
   canUpdateCosts,
   identityReadOnly,
   canEditHrDetails = true,
+  departmentValue,
+  responsibleUserOptions = EMPTY_RESPONSIBLE_USER_OPTIONS,
+  currentEmployeeId = null,
 }) => {
   const { t } = useTranslation(['hr', 'common']);
+  const notSetLabel = t('employeeProfile.notSet');
 
   const setField = <K extends keyof EmployeeHrFormData>(field: K, value: EmployeeHrFormData[K]) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
+
+  const { handleResponsibleChange, responsibleOptions } = useResponsibleSelect({
+    currentEmployeeId,
+    formData,
+    notSetLabel,
+    responsibleUserOptions,
+    setFormData,
+  });
 
   return (
     <div className="space-y-6">
@@ -194,13 +286,25 @@ const EmployeeHrFields: React.FC<EmployeeHrFieldsProps> = ({
             <FieldLabel htmlFor={`${prefix}-department`}>
               {t('employeeProfile.department')}
             </FieldLabel>
-            <Input
+            <output
               id={`${prefix}-department`}
-              value={formData.department}
-              onChange={(e) => setField('department', e.target.value)}
-              disabled={!canEditHrDetails}
-            />
+              className="flex min-h-9 cursor-default items-center rounded-md border border-dashed border-border bg-muted/60 px-3 py-2 text-sm text-muted-foreground"
+            >
+              {(departmentValue ?? formData.department) || notSetLabel}
+            </output>
           </Field>
+
+          <SelectControl
+            id={`${prefix}-responsible`}
+            label={t('employeeProfile.responsible')}
+            options={responsibleOptions}
+            value={formData.responsibleUserId}
+            onChange={handleResponsibleChange}
+            searchable
+            placeholder={notSetLabel}
+            displayValueIsPlaceholder={!formData.responsibleUserId}
+            disabled={!canEditHrDetails}
+          />
 
           <Field>
             <FieldLabel htmlFor={`${prefix}-employee-code`}>
@@ -322,6 +426,16 @@ const EmployeeHrFields: React.FC<EmployeeHrFieldsProps> = ({
             />
           </Field>
         </div>
+
+        <Field>
+          <FieldLabel htmlFor={`${prefix}-address`}>{t('employeeProfile.address')}</FieldLabel>
+          <Input
+            id={`${prefix}-address`}
+            value={formData.address}
+            onChange={(e) => setField('address', e.target.value)}
+            disabled={!canEditHrDetails}
+          />
+        </Field>
 
         <Field>
           <FieldLabel htmlFor={`${prefix}-notes`}>{t('employeeProfile.notes')}</FieldLabel>
