@@ -21,6 +21,7 @@ describe('projectMetricsRepo.listForProjects', () => {
           projectName: 'Task revenue project',
           projectIsDisabled: false,
           clientIsDisabled: false,
+          status: 'terminato',
           endDate: '2026-06-05',
           manualRevenue: '1000',
           taskRevenue: '1200',
@@ -33,6 +34,7 @@ describe('projectMetricsRepo.listForProjects', () => {
           projectName: 'Manual disabled project',
           projectIsDisabled: false,
           clientIsDisabled: true,
+          status: 'in_pausa',
           endDate: null,
           manualRevenue: null,
           taskRevenue: '0',
@@ -58,7 +60,7 @@ describe('projectMetricsRepo.listForProjects', () => {
       hoursToDate: 12.5,
       daysUntilDeadline: 5,
       billingType: 'mixed',
-      status: 'active',
+      status: 'terminato',
     });
     expect(result.get('p-manual-disabled')).toEqual({
       projectId: 'p-manual-disabled',
@@ -69,7 +71,7 @@ describe('projectMetricsRepo.listForProjects', () => {
       hoursToDate: 2,
       daysUntilDeadline: null,
       billingType: 'retainer',
-      status: 'disabled',
+      status: 'in_pausa',
     });
   });
 
@@ -81,6 +83,7 @@ describe('projectMetricsRepo.listForProjects', () => {
           projectName: 'Order project',
           projectIsDisabled: false,
           clientIsDisabled: false,
+          status: 'in_corso',
           endDate: null,
           manualRevenue: '500',
           taskRevenue: '0',
@@ -107,5 +110,6 @@ describe('projectMetricsRepo.listForProjects', () => {
     expect(sql).toContain('round((coalesce(te.duration');
     expect(sql).toContain("then 'mixed'");
     expect(sql).toContain('count(distinct bt2.billing_type)');
+    expect(sql).toContain('p.status');
   });
 });

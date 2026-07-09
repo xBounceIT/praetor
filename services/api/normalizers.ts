@@ -11,6 +11,7 @@ import type {
   InvoiceItem,
   Product,
   Project,
+  ProjectStatus,
   ProjectTask,
   Quote,
   QuoteItem,
@@ -32,6 +33,7 @@ import type {
   UserEmploymentStatus,
   UserWorkLocation,
 } from '../../types';
+import { LEGACY_PROJECT_STATUS, PROJECT_STATUSES } from '../../types';
 import {
   DEFAULT_BILLING_TYPE,
   normalizeBillingFrequency,
@@ -228,6 +230,11 @@ const normalizeOptionalString = (raw: unknown): string | undefined =>
 const normalizeNullableTrimmedString = (raw: unknown): string | null =>
   normalizeTrimmedString(raw) || null;
 
+const projectStatusSet = new Set<string>(PROJECT_STATUSES);
+const normalizeProjectStatus = (value: unknown): ProjectStatus =>
+  typeof value === 'string' && projectStatusSet.has(value)
+    ? (value as ProjectStatus)
+    : LEGACY_PROJECT_STATUS;
 const normalizeNullableDateOnlyString = (raw: unknown): string | null => {
   const normalized = normalizeTrimmedString(raw);
   if (!normalized) return null;
@@ -295,6 +302,7 @@ export const normalizeProject = (p: Project): Project => ({
   // `tipo` defaults to 'attivo' (the rollout default); `tipoConfirmed` to false so a
   // payload missing the flag is treated as "needs confirmation" rather than confirmed.
   tipo: p.tipo === 'passivo' ? 'passivo' : 'attivo',
+  status: normalizeProjectStatus(p.status),
   tipoConfirmed: p.tipoConfirmed === true,
 });
 

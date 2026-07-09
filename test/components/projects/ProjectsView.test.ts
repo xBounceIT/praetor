@@ -140,6 +140,29 @@ describe('ProjectsView create-form validation', () => {
     expect(source).toContain('formatDateOnlyForLocale(String(value), i18n.language)');
   });
 
+  test('requires and forwards the project status with tooltip and table column', async () => {
+    const source = await Bun.file(
+      new URL('../../../components/projects/ProjectsView.tsx', import.meta.url),
+    ).text();
+    const statusUiSource = await Bun.file(
+      new URL('../../../components/projects/ProjectStatusInfoTooltip.tsx', import.meta.url),
+    ).text();
+
+    expect(source).toContain('status: DEFAULT_PROJECT_STATUS');
+    expect(source).toContain('id="project-status"');
+    expect(source).toContain("placeholder={controller.t('projects:projects.selectStatus')}");
+    expect(source).toContain('labelAccessory={<ProjectStatusInfoTooltip t={controller.t} />}');
+    expect(source).toContain('ProjectStatusInfoTooltip');
+    expect(source).toContain('status,');
+    expect(source).toContain('accessorFn: (row) => formatProjectStatus(row.status)');
+    expect(source).toContain('type={getProjectStatusBadgeType(row.status)}');
+    expect(statusUiSource).toContain('projects:projects.statusHelp');
+    expect(statusUiSource).toContain("import { Info } from 'lucide-react'");
+    const statusUtilsSource = await Bun.file(
+      new URL('../../../components/projects/projectStatusUi.ts', import.meta.url),
+    ).text();
+    expect(statusUtilsSource).toContain('export const projectStatusOptions');
+  });
   test('tipo labels and values exist in both locales (issue #784)', async () => {
     const en = await Bun.file(new URL('../../../locales/en/projects.json', import.meta.url)).json();
     const it = await Bun.file(new URL('../../../locales/it/projects.json', import.meta.url)).json();
@@ -160,6 +183,13 @@ describe('ProjectsView create-form validation', () => {
       expect(loc.projects.tipoValues.passivo).toBeTruthy();
       expect(loc.resales.columns.startDate).toBeTruthy();
       expect(loc.resales.columns.endDate).toBeTruthy();
+      expect(loc.projects.status).toBeTruthy();
+      expect(loc.projects.selectStatus).toBeTruthy();
+      expect(loc.projects.statusValues.da_fare).toBe('DA FARE');
+      expect(loc.projects.statusValues.in_corso).toBe('In Corso');
+      expect(loc.projects.statusValues.in_pausa).toBe('In Pausa');
+      expect(loc.projects.statusValues.terminato).toBe('TERMINATO');
+      expect(loc.projects.statusHelp.in_pausa).toBeTruthy();
       expect(loc.resales.tabs.activities).toBeTruthy();
       expect(loc.resales.selectResaleForActivities).toBeTruthy();
     }

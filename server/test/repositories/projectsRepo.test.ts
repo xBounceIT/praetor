@@ -26,7 +26,7 @@ beforeEach(() => {
 // and the user_projects/user_clients-touching helpers use executeRows (named-key rows).
 //
 // Schema column order: id, name, client_id, description, is_disabled, created_at, order_id,
-// offer_id, start_date, end_date, revenue, billing_type, billing_frequency, tipo, tipo_confirmed
+// offer_id, start_date, end_date, revenue, billing_type, billing_frequency, status, tipo, tipo_confirmed
 const PROJECT_ROW: readonly unknown[] = [
   'p-1',
   'Alpha',
@@ -41,6 +41,7 @@ const PROJECT_ROW: readonly unknown[] = [
   null,
   'time_and_materials',
   'monthly',
+  'in_corso',
   'attivo',
   true,
 ];
@@ -59,6 +60,7 @@ const mappedRow: projectsRepo.Project = {
   revenue: null,
   billingType: 'time_and_materials',
   billingFrequency: 'monthly',
+  status: 'in_corso',
   tipo: 'attivo',
   tipoConfirmed: true,
 };
@@ -77,6 +79,7 @@ const rawProjectRow = {
   revenue: null,
   billing_type: 'time_and_materials',
   billing_frequency: 'monthly',
+  status: 'in_corso',
   tipo: 'attivo',
   tipo_confirmed: true,
 };
@@ -95,11 +98,15 @@ describe('listAll', () => {
     expect(result[0].billingType).toBe('mixed');
   });
 
-  test('selects and maps tipo / tipo_confirmed, defaulting confirmed to false', async () => {
-    exec.enqueue({ rows: [{ ...rawProjectRow, tipo: 'passivo', tipo_confirmed: false }] });
+  test('selects and maps status / tipo / tipo_confirmed, defaulting confirmed to false', async () => {
+    exec.enqueue({
+      rows: [{ ...rawProjectRow, status: 'in_pausa', tipo: 'passivo', tipo_confirmed: false }],
+    });
     const result = await projectsRepo.listAll(testDb);
+    expect(exec.calls[0].sql).toContain('p.status');
     expect(exec.calls[0].sql).toContain('p.tipo');
     expect(exec.calls[0].sql).toContain('p.tipo_confirmed');
+    expect(result[0].status).toBe('in_pausa');
     expect(result[0].tipo).toBe('passivo');
     expect(result[0].tipoConfirmed).toBe(false);
   });
@@ -150,7 +157,16 @@ describe('listByIds', () => {
 describe('listNamesByIds', () => {
   test('returns project/client display names and binds ids as one array parameter', async () => {
     exec.enqueue({
-      rows: [{ id: 'p-1', name: 'Alpha', client_id: 'c-1', client_name: 'Acme', end_date: null }],
+      rows: [
+        {
+          id: 'p-1',
+          name: 'Alpha',
+          client_id: 'c-1',
+          client_name: 'Acme',
+          end_date: null,
+          status: 'in_corso',
+        },
+      ],
     });
 
     const result = await projectsRepo.listNamesByIds(['p-1', 'p-2'], testDb);
@@ -162,6 +178,7 @@ describe('listNamesByIds', () => {
       clientId: 'c-1',
       clientName: 'Acme',
       endDate: null,
+      status: 'in_corso',
     });
   });
 
@@ -260,7 +277,7 @@ describe('create', () => {
   });
 
   test('persists tipo and confirms it on create (issue #784)', async () => {
-    exec.enqueue({ rows: [makeRow(PROJECT_ROW, { 13: 'passivo' })] });
+    exec.enqueue({ rows: [makeRow(PROJECT_ROW, { 14: 'passivo' })] });
     exec.enqueue({ rows: [{ ...rawProjectRow, tipo: 'passivo' }] });
     const created = await projectsRepo.create(
       {
@@ -273,13 +290,34 @@ describe('create', () => {
       },
       testDb,
     );
-    // tipo / tipo_confirmed are the last two table columns, so they bind last.
+    // status, tipo, and tipo_confirmed are the last three bound create values.
+    expect(exec.calls[0].params.at(-3)).toBe('da_fare');
     expect(exec.calls[0].params.at(-2)).toBe('passivo');
     expect(exec.calls[0].params.at(-1)).toBe(true);
     expect(created.tipo).toBe('passivo');
     expect(created.tipoConfirmed).toBe(true);
   });
 
+  test('persists status on create', async () => {
+    exec.enqueue({ rows: [makeRow(PROJECT_ROW, { 13: 'in_pausa' })] });
+    exec.enqueue({ rows: [{ ...rawProjectRow, status: 'in_pausa' }] });
+
+    const created = await projectsRepo.create(
+      {
+        id: 'p-1',
+        name: 'Alpha',
+        clientId: 'c-1',
+        description: 'desc',
+        isDisabled: false,
+        tipo: 'attivo',
+        status: 'in_pausa',
+      },
+      testDb,
+    );
+
+    expect(exec.calls[0].params).toContain('in_pausa');
+    expect(created.status).toBe('in_pausa');
+  });
   // Drizzle wraps driver errors in DrizzleQueryError with the original DatabaseError on .cause.
   // The repo must unwrap to read .constraint, otherwise it can't distinguish order-FK from
   // client-FK violations.

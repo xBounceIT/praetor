@@ -5,6 +5,7 @@ import {
   filterTrackerCatalogs,
   filterTrackerEntrySelectableCatalogs,
   isProjectExpiredForTimeEntries,
+  isProjectStatusBlockedForTimeEntries,
   type TrackerAssignmentState,
 } from '../../utils/trackerCatalogs';
 
@@ -50,6 +51,31 @@ const expiredProjectTask: ProjectTask = {
   projectId: 'project-expired',
 };
 
+const pausedProject: Project = {
+  id: 'project-paused',
+  name: 'Paused Project',
+  clientId: 'client-a',
+  status: 'in_pausa',
+};
+
+const terminatedProject: Project = {
+  id: 'project-terminated',
+  name: 'Terminated Project',
+  clientId: 'client-b',
+  status: 'terminato',
+};
+
+const pausedProjectTask: ProjectTask = {
+  id: 'task-paused',
+  name: 'Paused Task',
+  projectId: 'project-paused',
+};
+
+const terminatedProjectTask: ProjectTask = {
+  id: 'task-terminated',
+  name: 'Terminated Task',
+  projectId: 'project-terminated',
+};
 const loadingState: TrackerAssignmentState = {
   userId: 'user-b',
   assignments: null,
@@ -176,6 +202,11 @@ describe('filterTrackerEntrySelectableCatalogs', () => {
     expect(isProjectExpiredForTimeEntries({ endDate: null })).toBe(false);
   });
 
+  test('detects project status blocks for time entries', () => {
+    expect(isProjectStatusBlockedForTimeEntries(pausedProject)).toBe(true);
+    expect(isProjectStatusBlockedForTimeEntries(terminatedProject)).toBe(true);
+    expect(isProjectStatusBlockedForTimeEntries(projects[0])).toBe(false);
+  });
   test('removes expired projects and their tasks without the override permission', () => {
     const result = filterTrackerEntrySelectableCatalogs({
       clients,
@@ -188,6 +219,21 @@ describe('filterTrackerEntrySelectableCatalogs', () => {
     expect(result.projectTasks.map((task) => task.id)).not.toContain('task-expired');
   });
 
+  test('removes paused and terminated projects even with the expired override permission', () => {
+    const result = filterTrackerEntrySelectableCatalogs({
+      clients,
+      projects: [...projects, expiredProject, pausedProject, terminatedProject],
+      projectTasks: [...projectTasks, expiredProjectTask, pausedProjectTask, terminatedProjectTask],
+      permissions: [EXPIRED_PROJECT_TIME_ENTRY_PERMISSION],
+    });
+
+    expect(result.projects.map((project) => project.id)).toContain('project-expired');
+    expect(result.projects.map((project) => project.id)).not.toContain('project-paused');
+    expect(result.projects.map((project) => project.id)).not.toContain('project-terminated');
+    expect(result.projectTasks.map((task) => task.id)).toContain('task-expired');
+    expect(result.projectTasks.map((task) => task.id)).not.toContain('task-paused');
+    expect(result.projectTasks.map((task) => task.id)).not.toContain('task-terminated');
+  });
   test('keeps expired projects with the override permission', () => {
     const result = filterTrackerEntrySelectableCatalogs({
       clients,

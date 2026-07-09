@@ -1,6 +1,6 @@
 import { Save } from 'lucide-react';
 import type React from 'react';
-import { useReducer } from 'react';
+import { useMemo, useReducer } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Field, FieldLabel, RequiredMark } from '@/components/ui/field';
@@ -9,6 +9,10 @@ import { cn } from '@/lib/utils';
 import type { Client, Project, ProjectTask, TimeEntry } from '../../types';
 import { hasScopedActionPermission } from '../../utils/permissions';
 import { toastError } from '../../utils/toast';
+import {
+  EXPIRED_PROJECT_TIME_ENTRY_PERMISSION,
+  filterTrackerEntrySelectableCatalogs,
+} from '../../utils/trackerCatalogs';
 import TaskFormModal, {
   type RecurringConfig,
   type TaskFormDetails,
@@ -116,6 +120,23 @@ const EntryEditDialogContent: React.FC<ContentProps> = ({
 }) => {
   const { t } = useTranslation(['timesheets', 'common']);
   const canCreateCustomTask = hasScopedActionPermission(permissions, 'projects.tasks', 'create');
+  const editSelectorPermissions = useMemo(
+    () =>
+      permissions.includes(EXPIRED_PROJECT_TIME_ENTRY_PERMISSION)
+        ? permissions
+        : [...permissions, EXPIRED_PROJECT_TIME_ENTRY_PERMISSION],
+    [permissions],
+  );
+  const selectableCatalogs = useMemo(
+    () =>
+      filterTrackerEntrySelectableCatalogs({
+        clients,
+        projects,
+        projectTasks,
+        permissions: editSelectorPermissions,
+      }),
+    [clients, editSelectorPermissions, projectTasks, projects],
+  );
 
   // Resolve a missing taskId via name lookup so legacy/orphan entries (FK never set)
   // still seed a real catalog id rather than '', which would render an empty dropdown.
@@ -125,9 +146,9 @@ const EntryEditDialogContent: React.FC<ContentProps> = ({
     '';
 
   const selection = useCatalogSelection({
-    clients,
-    projects,
-    projectTasks,
+    clients: selectableCatalogs.clients,
+    projects: selectableCatalogs.projects,
+    projectTasks: selectableCatalogs.projectTasks,
     defaultLocation: entry.location || 'remote',
     initialSelection: {
       clientId: entry.clientId,
@@ -232,7 +253,7 @@ const EntryEditDialogContent: React.FC<ContentProps> = ({
         <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
           <ModalBody className="space-y-4">
             <EntryCatalogSelector
-              clients={clients}
+              clients={selectableCatalogs.clients}
               filteredProjects={selection.filteredProjects}
               filteredTasks={selection.filteredTasks}
               selectedClientId={selection.clientId}
@@ -313,8 +334,8 @@ const EntryEditDialogContent: React.FC<ContentProps> = ({
         isOpen={isAddTaskModalOpen}
         onClose={() => dispatch({ type: 'setAddTaskModalOpen', isOpen: false })}
         mode="add"
-        projects={projects}
-        clients={clients}
+        projects={selectableCatalogs.projects}
+        clients={selectableCatalogs.clients}
         currency={currency}
         permissions={{
           canCreate: canCreateCustomTask,

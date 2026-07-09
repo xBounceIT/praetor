@@ -1,3 +1,5 @@
+import { PROJECT_STATUSES } from './projectStatus.ts';
+
 export const PROJECT_RULE_NUMBER_OPERATORS = ['gt', 'gte', 'lt', 'lte', 'eq', 'neq'] as const;
 export const PROJECT_RULE_ENUM_OPERATORS = ['eq', 'neq'] as const;
 export const PROJECT_RULE_CONDITION_VALUE_TYPES = ['literal', 'field'] as const;
@@ -54,7 +56,7 @@ export const PROJECT_RULE_FIELD_DEFINITIONS: readonly ProjectRuleFieldDefinition
     id: 'status',
     kind: 'enum',
     operators: PROJECT_RULE_ENUM_OPERATORS,
-    enumValues: ['active', 'disabled'],
+    enumValues: PROJECT_STATUSES,
   },
 ];
 

@@ -28,12 +28,14 @@ import type {
   ClientOffer,
   ClientsOrder,
   Project,
+  ProjectStatus,
   ProjectTask,
   ProjectTipo,
   Role,
   StoredBillingType,
   User,
 } from '../../types';
+import { DEFAULT_PROJECT_STATUS, LEGACY_PROJECT_STATUS } from '../../types';
 import { formatDateOnlyForLocale, formatInsertDate } from '../../utils/date';
 import { buildPermission, hasPermission, hasScopedActionPermission } from '../../utils/permissions';
 import DateField from '../shared/DateField';
@@ -53,6 +55,8 @@ import StandardTable, { type Column } from '../shared/StandardTable';
 import StatusBadge from '../shared/StatusBadge';
 import { TABLE_CONTROL_BUTTON_CLASSNAME } from '../shared/tableControlStyles';
 import UserAssignmentModal from '../shared/UserAssignmentModal';
+import { ProjectStatusInfoTooltip } from './ProjectStatusInfoTooltip';
+import { getProjectStatusBadgeType, projectStatusOptions } from './projectStatusUi';
 import type { RecurringConfig } from './TaskFormModal';
 import TasksView from './TasksView';
 
@@ -123,6 +127,7 @@ export type AddProjectFormInput = {
   startDate?: string | null;
   endDate?: string | null;
   revenue?: number | null;
+  status: ProjectStatus;
   tipo: ProjectTipo;
 };
 
@@ -178,6 +183,7 @@ interface ProjectsViewState {
   revenue: string;
   // '' = no choice yet; the create form requires a deliberate Attivo/Passivo pick (issue #784).
   tipo: ProjectTipo | '';
+  status: ProjectStatus;
   errors: Record<string, string>;
   draftTasks: DraftTask[];
 }
@@ -198,6 +204,7 @@ const INITIAL_PROJECTS_STATE: ProjectsViewState = {
   endDate: '',
   revenue: '',
   tipo: '',
+  status: DEFAULT_PROJECT_STATUS,
   errors: {},
   draftTasks: [],
 };
@@ -214,6 +221,7 @@ type ProjectsViewAction =
   | { type: 'setEndDate'; value: string }
   | { type: 'setRevenue'; value: string }
   | { type: 'setTipo'; value: ProjectTipo | '' }
+  | { type: 'setStatus'; value: ProjectStatus }
   | { type: 'setErrors'; value: Record<string, string> }
   | { type: 'patchErrors'; value: Record<string, string> }
   | { type: 'setDraftTasks'; value: DraftTask[] }
@@ -249,6 +257,8 @@ const projectsViewReducer = (
       return { ...state, revenue: action.value };
     case 'setTipo':
       return { ...state, tipo: action.value };
+    case 'setStatus':
+      return { ...state, status: action.value };
     case 'setErrors':
       return { ...state, errors: action.value };
     case 'patchErrors':
@@ -269,6 +279,7 @@ const projectsViewReducer = (
         endDate: '',
         revenue: '',
         tipo: '',
+        status: DEFAULT_PROJECT_STATUS,
         draftTasks: [],
         errors: {},
         isModalOpen: true,
@@ -340,6 +351,7 @@ const useProjectsController = ({
     endDate,
     revenue,
     tipo,
+    status,
     errors,
     draftTasks,
   } = state;
@@ -521,6 +533,7 @@ const useProjectsController = ({
       revenue: persistedRevenue,
       // Guaranteed non-empty by the `!tipo` validation guard above.
       tipo: tipo as ProjectTipo,
+      status,
     });
     closeModal();
     if (result && onNavigateToProject) {
@@ -612,6 +625,14 @@ const useProjectsController = ({
   }));
   const formatTipo = (value: ProjectTipo | undefined) =>
     translatedTipoOptions.find((option) => option.id === value)?.name ?? '-';
+
+  const translatedStatusOptions = projectStatusOptions.map((option) => ({
+    id: option.id,
+    name: t(option.name),
+  }));
+  const formatProjectStatus = (value: ProjectStatus | undefined) =>
+    translatedStatusOptions.find((option) => option.id === (value ?? LEGACY_PROJECT_STATUS))
+      ?.name ?? '-';
 
   const clientOptions = clients.map((c: Client) => ({ id: c.id, name: c.name }));
 
@@ -1008,24 +1029,24 @@ const useProjectsController = ({
     {
       header: t('projects:projects.tableHeaders.status'),
       id: 'status',
-      accessorFn: (row) => {
-        const client = clientById.get(row.clientId);
-        if (row.isDisabled) return t('projects:projects.statusDisabled');
-        if (client?.isDisabled) return t('projects:projects.statusInheritedDisable');
-        return t('projects:projects.statusActive');
-      },
+      accessorFn: (row) => formatProjectStatus(row.status),
       cell: ({ row }) => {
         const client = clientById.get(row.clientId);
         const isClientDisabled = client?.isDisabled || false;
-        if (row.isDisabled) {
-          return <StatusBadge type="disabled" label={t('projects:projects.statusDisabled')} />;
-        }
-        if (isClientDisabled) {
-          return (
-            <StatusBadge type="inherited" label={t('projects:projects.statusInheritedDisable')} />
-          );
-        }
-        return <StatusBadge type="active" label={t('projects:projects.statusActive')} />;
+        return (
+          <div className="flex flex-wrap items-center gap-1.5">
+            <StatusBadge
+              type={getProjectStatusBadgeType(row.status)}
+              label={formatProjectStatus(row.status)}
+            />
+            {row.isDisabled && (
+              <StatusBadge type="disabled" label={t('projects:projects.statusDisabled')} />
+            )}
+            {!row.isDisabled && isClientDisabled && (
+              <StatusBadge type="inherited" label={t('projects:projects.statusInheritedDisable')} />
+            )}
+          </div>
+        );
       },
     },
     {
@@ -1179,12 +1200,14 @@ const useProjectsController = ({
     selectedOrder,
     selectedTab,
     startDate,
+    status,
     t,
     tasks,
     tipo,
     translatedBillingFrequencyOptions,
     translatedBillingTypeOptions,
     translatedTipoOptions,
+    translatedStatusOptions,
     users,
   };
 };
@@ -1243,6 +1266,7 @@ const CreateProjectFormFields: React.FC<{ controller: ProjectsController }> = ({
     <ProjectDateFields controller={controller} />
     <ProjectOfferRevenueFields controller={controller} />
     <ProjectTipoField controller={controller} />
+    <ProjectStatusField controller={controller} />
     <ProjectBillingFields controller={controller} />
     <ProjectDraftTasksTable controller={controller} />
   </div>
@@ -1481,6 +1505,25 @@ const ProjectTipoField: React.FC<{ controller: ProjectsController }> = ({ contro
       />
       <FieldError className="text-xs">{controller.errors.tipo}</FieldError>
     </div>
+  </div>
+);
+
+const ProjectStatusField: React.FC<{ controller: ProjectsController }> = ({ controller }) => (
+  <div className="grid gap-4 md:grid-cols-2">
+    <SelectControl
+      id="project-status"
+      options={controller.translatedStatusOptions}
+      value={controller.status}
+      onChange={(value) =>
+        controller.dispatch({ type: 'setStatus', value: value as ProjectStatus })
+      }
+      label={controller.t('projects:projects.status')}
+      labelAccessory={<ProjectStatusInfoTooltip t={controller.t} />}
+      required
+      placeholder={controller.t('projects:projects.selectStatus')}
+      searchable={false}
+      buttonClassName="h-9"
+    />
   </div>
 );
 

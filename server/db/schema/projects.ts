@@ -10,6 +10,7 @@ import {
   timestamp,
   varchar,
 } from 'drizzle-orm/pg-core';
+import { DEFAULT_PROJECT_STATUS, type ProjectStatus } from '../../utils/projectStatus.ts';
 import { defineUserAssignmentTable } from './_userAssignmentTable.ts';
 import { clients } from './clients.ts';
 import { customerOffers } from './customerOffers.ts';
@@ -52,6 +53,10 @@ export const projects = pgTable(
       .$type<'monthly' | 'one_time'>()
       .notNull()
       .default('monthly'),
+    status: varchar('status', { length: 20 })
+      .$type<ProjectStatus>()
+      .notNull()
+      .default(DEFAULT_PROJECT_STATUS),
     // `tipo` (issue #784): mandatory active/passive classification. Existing rows are
     // defaulted to 'attivo' by the rollout migration; `tipo_confirmed` stays false until a
     // user explicitly chooses a value, so the edit form can force a deliberate first choice.
@@ -65,6 +70,10 @@ export const projects = pgTable(
       sql`${table.billingType} IN ('retainer', 'time_and_materials')`,
     ),
     check('projects_tipo_check', sql`${table.tipo} IN ('attivo', 'passivo')`),
+    check(
+      'projects_status_check',
+      sql`${table.status} IN ('da_fare', 'in_corso', 'in_pausa', 'terminato')`,
+    ),
     check(
       'projects_billing_frequency_check',
       sql`${table.billingFrequency} IN ('monthly', 'one_time')`,

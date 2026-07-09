@@ -26,17 +26,20 @@ export const EXPIRED_PROJECT_TIME_ENTRY_PERMISSION = 'timesheets.expired_project
 export const isProjectExpiredForTimeEntries = (project: Pick<Project, 'endDate'>): boolean =>
   !!project.endDate && isDateOnlyBeforeToday(project.endDate);
 
+export const isProjectStatusBlockedForTimeEntries = (project: Pick<Project, 'status'>): boolean =>
+  project.status === 'in_pausa' || project.status === 'terminato';
+
 export const filterTrackerEntrySelectableCatalogs = ({
   clients,
   projects,
   projectTasks,
   permissions,
 }: TrackerCatalogs & { permissions: string[] }): TrackerCatalogs => {
-  if (hasPermission(permissions, EXPIRED_PROJECT_TIME_ENTRY_PERMISSION)) {
-    return { clients, projects, projectTasks };
-  }
-
-  const selectableProjects = projects.filter((project) => !isProjectExpiredForTimeEntries(project));
+  const canUseExpiredProjects = hasPermission(permissions, EXPIRED_PROJECT_TIME_ENTRY_PERMISSION);
+  const selectableProjects = projects.filter((project) => {
+    if (isProjectStatusBlockedForTimeEntries(project)) return false;
+    return canUseExpiredProjects || !isProjectExpiredForTimeEntries(project);
+  });
   const selectableProjectIds = new Set(selectableProjects.map((project) => project.id));
   const selectableClientIds = new Set(selectableProjects.map((project) => project.clientId));
 

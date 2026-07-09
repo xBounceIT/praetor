@@ -23,6 +23,24 @@ describe('<SelectControl />', () => {
     expect(source).not.toContain("Field className={cn('relative min-w-0 gap-1.5'");
   });
 
+  test('renders label accessories outside the label element', () => {
+    render(
+      <SelectControl
+        id="fruit"
+        options={options}
+        value="a"
+        onChange={() => {}}
+        label="Fruit"
+        labelAccessory={<button type="button">Help</button>}
+        required
+      />,
+    );
+
+    const label = screen.getByText('Fruit').closest('label');
+    expect(label).toHaveAttribute('for', 'fruit');
+    expect(within(label as HTMLElement).queryByRole('button', { name: 'Help' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Help' }).closest('label')).toBeNull();
+  });
   test('plain select displays the selected value and calls onChange', () => {
     const onChange = mock((_value: string | string[]) => {});
     render(<SelectControl options={options} value="b" onChange={onChange} />);

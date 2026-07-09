@@ -37,6 +37,7 @@ export interface SelectControlProps {
   value: string | string[];
   onChange: (value: string | string[]) => void;
   label?: React.ReactNode;
+  labelAccessory?: React.ReactNode;
   labelClassName?: string;
   required?: boolean;
   placeholder?: string;
@@ -105,15 +106,29 @@ const getMultiButtonLabel = ({
 const SelectLabel = ({
   id,
   label,
+  labelAccessory,
   labelClassName,
   required,
 }: {
   id?: string;
   label?: React.ReactNode;
+  labelAccessory?: React.ReactNode;
   labelClassName?: string;
   required?: boolean;
 }) => {
   if (!label) return null;
+
+  if (labelAccessory) {
+    return (
+      <div className="flex w-fit items-center gap-2">
+        <FieldLabel className={labelClassName} htmlFor={id} required={required}>
+          {label}
+        </FieldLabel>
+        {labelAccessory}
+      </div>
+    );
+  }
+
   return (
     <FieldLabel className={labelClassName} htmlFor={id} required={required}>
       {label}
@@ -186,6 +201,7 @@ const PlainSelectControl = ({
   displayValueIsPlaceholder,
   id,
   label,
+  labelAccessory,
   labelClassName,
   required,
   onChange,
@@ -203,7 +219,13 @@ const PlainSelectControl = ({
 
   return (
     <Field className={cn('relative min-w-0', className)}>
-      <SelectLabel id={id} label={label} labelClassName={labelClassName} required={required} />
+      <SelectLabel
+        id={id}
+        label={label}
+        labelAccessory={labelAccessory}
+        labelClassName={labelClassName}
+        required={required}
+      />
       <Select
         disabled={disabled}
         value={selectValue}
@@ -250,6 +272,7 @@ const SearchableSelectControl = ({
   id,
   isMulti = false,
   label,
+  labelAccessory,
   labelClassName,
   required,
   onChange,
@@ -319,7 +342,13 @@ const SearchableSelectControl = ({
 
   return (
     <Field className={cn('relative min-w-0', className)}>
-      <SelectLabel id={id} label={label} labelClassName={labelClassName} required={required} />
+      <SelectLabel
+        id={id}
+        label={label}
+        labelAccessory={labelAccessory}
+        labelClassName={labelClassName}
+        required={required}
+      />
       <Popover
         open={open}
         modal={modal}

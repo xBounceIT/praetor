@@ -207,6 +207,7 @@ const SAMPLE_PROJECT = {
   revenue: null,
   billingType: 'time_and_materials',
   billingFrequency: 'monthly',
+  status: 'in_corso',
   tipo: 'attivo',
   tipoConfirmed: true,
 };
@@ -650,6 +651,23 @@ describe('POST /api/projects', () => {
     expect(JSON.parse(res.body)).toMatchObject({ tipo: 'passivo', tipoConfirmed: true });
   });
 
+  test('201: forwards status to the repo and serializes it', async () => {
+    createMock.mockResolvedValue({ ...SAMPLE_PROJECT, status: 'in_pausa' });
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/projects',
+      headers: authHeader(),
+      payload: { ...VALID_CREATE_PAYLOAD, status: 'in_pausa' },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(createMock).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'in_pausa' }),
+      TX_SENTINEL,
+    );
+    expect(JSON.parse(res.body)).toMatchObject({ status: 'in_pausa' });
+  });
   test('400: missing tipo is rejected (mandatory field)', async () => {
     const res = await testApp.inject({
       method: 'POST',
@@ -691,6 +709,17 @@ describe('POST /api/projects', () => {
     expect(createMock).not.toHaveBeenCalled();
   });
 
+  test('400: invalid status on create is rejected', async () => {
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/projects',
+      headers: authHeader(),
+      payload: { ...VALID_CREATE_PAYLOAD, status: 'active' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(createMock).not.toHaveBeenCalled();
+  });
   test('400: unknown orderId is rejected on create', async () => {
     findOrderClientIdByIdMock.mockResolvedValue(null);
 
@@ -1540,6 +1569,25 @@ describe('PUT /api/projects/:id', () => {
     expect(JSON.parse(res.body)).toMatchObject({ tipo: 'passivo' });
   });
 
+  test('200: forwards status to the repo on update', async () => {
+    lockClientIdByIdMock.mockResolvedValue('c-1');
+    updateMock.mockResolvedValue({ ...SAMPLE_PROJECT, status: 'terminato' });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/projects/p-1',
+      headers: authHeader(),
+      payload: { status: 'terminato' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(updateMock).toHaveBeenCalledWith(
+      'p-1',
+      expect.objectContaining({ status: 'terminato' }),
+      TX_SENTINEL,
+    );
+    expect(JSON.parse(res.body)).toMatchObject({ status: 'terminato' });
+  });
   test('400: invalid tipo on update is rejected', async () => {
     lockClientIdByIdMock.mockResolvedValue('c-1');
 
@@ -1554,6 +1602,19 @@ describe('PUT /api/projects/:id', () => {
     expect(updateMock).not.toHaveBeenCalled();
   });
 
+  test('400: invalid status on update is rejected', async () => {
+    lockClientIdByIdMock.mockResolvedValue('c-1');
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/projects/p-1',
+      headers: authHeader(),
+      payload: { status: 'active' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(updateMock).not.toHaveBeenCalled();
+  });
   test('200: clearing revenue with null is forwarded', async () => {
     lockClientIdByIdMock.mockResolvedValue('c-1');
     updateMock.mockResolvedValue({ ...SAMPLE_PROJECT, revenue: null });
