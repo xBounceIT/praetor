@@ -28,6 +28,7 @@
     "removeProductTitle": "Remove product?",
     "removeProductConfirm": "Are you sure you want to remove this product from the order?",
     "readOnlyStatus": "{{status}} orders are read-only",
+    "confirmedIdentityLockedStatus": "Confirmed order: order code and client are locked, all other details remain editable",
     "clientColumn": "Client",
     "totalColumn": "Total",
     "paymentTermsColumn": "Payment Terms",

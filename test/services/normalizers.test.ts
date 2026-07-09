@@ -269,6 +269,7 @@ const baseGeneralSettings: GeneralSettings = {
   enforceTotp: false,
   totpEnforcedRoleIds: [],
   totpExemptRoleIds: [],
+  sessionIdleTimeoutMinutes: 30,
   allowWeekendSelection: false,
   rilCompanyName: '',
   rilDefaultStartTime: '09:00',
@@ -979,6 +980,17 @@ describe('normalizeProject', () => {
       billingFrequency: 'one_time',
     });
   });
+
+  test('normalizes project date-only fields from datetime payloads', () => {
+    const project = make<Project>(baseProject, {
+      startDate: '2026-04-01T12:00:00.000Z',
+      endDate: '2026-04-30T12:00:00.000Z',
+    });
+    expect(normalizeProject(project)).toMatchObject({
+      startDate: '2026-04-01',
+      endDate: '2026-04-30',
+    });
+  });
 });
 
 describe('normalizeResale', () => {
@@ -1147,6 +1159,24 @@ describe('normalizeGeneralSettings', () => {
       totpEnforcedRoleIds: ['admin'],
       totpExemptRoleIds: ['service-account'],
     });
+  });
+
+  test('normalizes sessionIdleTimeoutMinutes and falls back to 30 for invalid values', () => {
+    expect(
+      normalizeGeneralSettings(
+        make<GeneralSettings>(baseGeneralSettings, { sessionIdleTimeoutMinutes: '45' }),
+      ).sessionIdleTimeoutMinutes,
+    ).toBe(45);
+    expect(
+      normalizeGeneralSettings(
+        make<GeneralSettings>(baseGeneralSettings, { sessionIdleTimeoutMinutes: undefined }),
+      ).sessionIdleTimeoutMinutes,
+    ).toBe(30);
+    expect(
+      normalizeGeneralSettings(
+        make<GeneralSettings>(baseGeneralSettings, { sessionIdleTimeoutMinutes: 4 }),
+      ).sessionIdleTimeoutMinutes,
+    ).toBe(30);
   });
 
   test('defaults missing 2FA policy fields (enableTotp true, enforceTotp false, role lists [])', () => {

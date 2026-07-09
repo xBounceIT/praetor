@@ -12,17 +12,24 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import api from '../services/api';
+import { getSessionTimeoutThresholds } from '../utils/sessionTimeout';
 
 export interface SessionTimeoutHandlerProps {
   onLogout: () => void;
   warnAfterMs?: number;
   logoutAfterMs?: number;
+  absoluteSessionExpiresAtMs?: number | null;
+  sessionIdleTimeoutMinutes?: number;
+  tokenProvider?: () => string | null;
 }
 
 const SessionTimeoutHandler: React.FC<SessionTimeoutHandlerProps> = ({
   onLogout,
   warnAfterMs = 20 * 60 * 1000,
   logoutAfterMs = 30 * 60 * 1000,
+  absoluteSessionExpiresAtMs = null,
+  sessionIdleTimeoutMinutes,
+  tokenProvider = api.getAuthToken,
 }) => {
   const { t } = useTranslation('auth');
   const [showWarning, setShowWarning] = useState(false);
@@ -32,10 +39,32 @@ const SessionTimeoutHandler: React.FC<SessionTimeoutHandlerProps> = ({
   const logoutTimerRef = useRef<NodeJS.Timeout | null>(null);
   const showWarningRef = useRef(false);
   const resetTimersRef = useRef<() => void>(() => {});
+  const onLogoutRef = useRef(onLogout);
 
   useEffect(() => {
     showWarningRef.current = showWarning;
   }, [showWarning]);
+
+  useEffect(() => {
+    onLogoutRef.current = onLogout;
+  }, [onLogout]);
+
+  const handleLogoutNow = useCallback(() => {
+    onLogoutRef.current();
+  }, []);
+
+  const resolveThresholds = useCallback(() => {
+    if (sessionIdleTimeoutMinutes === undefined) {
+      return { warnAfterMs, logoutAfterMs, absoluteSessionExpiresAtMs };
+    }
+    return getSessionTimeoutThresholds(sessionIdleTimeoutMinutes, tokenProvider());
+  }, [
+    absoluteSessionExpiresAtMs,
+    logoutAfterMs,
+    sessionIdleTimeoutMinutes,
+    tokenProvider,
+    warnAfterMs,
+  ]);
 
   const resetTimers = useCallback(() => {
     setShowWarning(false);
@@ -43,14 +72,25 @@ const SessionTimeoutHandler: React.FC<SessionTimeoutHandlerProps> = ({
     if (warningTimerRef.current) clearTimeout(warningTimerRef.current);
     if (logoutTimerRef.current) clearTimeout(logoutTimerRef.current);
 
+    const thresholds = resolveThresholds();
+    const effectiveLogoutAfterMs =
+      thresholds.absoluteSessionExpiresAtMs === null
+        ? thresholds.logoutAfterMs
+        : Math.min(
+            thresholds.logoutAfterMs,
+            Math.max(0, thresholds.absoluteSessionExpiresAtMs - Date.now()),
+          );
+    const warningLeadMs = Math.max(0, thresholds.logoutAfterMs - thresholds.warnAfterMs);
+    const effectiveWarnAfterMs = Math.max(0, effectiveLogoutAfterMs - warningLeadMs);
+
     warningTimerRef.current = setTimeout(() => {
       setShowWarning(true);
-    }, warnAfterMs);
+    }, effectiveWarnAfterMs);
 
     logoutTimerRef.current = setTimeout(() => {
-      onLogout();
-    }, logoutAfterMs);
-  }, [onLogout, warnAfterMs, logoutAfterMs]);
+      handleLogoutNow();
+    }, effectiveLogoutAfterMs);
+  }, [handleLogoutNow, resolveThresholds]);
 
   const clearTimers = useCallback(() => {
     const warningTimer = warningTimerRef.current;
@@ -63,6 +103,7 @@ const SessionTimeoutHandler: React.FC<SessionTimeoutHandlerProps> = ({
 
   useEffect(() => {
     resetTimersRef.current = resetTimers;
+    resetTimers();
   }, [resetTimers]);
 
   useEffect(() => {
@@ -77,8 +118,6 @@ const SessionTimeoutHandler: React.FC<SessionTimeoutHandlerProps> = ({
     events.forEach((event) => {
       window.addEventListener(event, handleActivity, { passive: true });
     });
-
-    resetTimersRef.current();
 
     return () => {
       events.forEach((event) => {
@@ -96,7 +135,7 @@ const SessionTimeoutHandler: React.FC<SessionTimeoutHandlerProps> = ({
       resetTimers();
     } catch (err) {
       console.error('Failed to extend session:', err);
-      onLogout();
+      handleLogoutNow();
     } finally {
       setIsRefreshing(false);
     }
@@ -145,7 +184,7 @@ const SessionTimeoutHandler: React.FC<SessionTimeoutHandlerProps> = ({
             )}
             {t('sessionTimeout.stayLoggedIn')}
           </Button>
-          <Button type="button" variant="outline" onClick={onLogout}>
+          <Button type="button" variant="outline" onClick={handleLogoutNow}>
             <LogOut data-icon="inline-start" />
             {t('sessionTimeout.logout')}
           </Button>

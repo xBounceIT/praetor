@@ -1,5 +1,5 @@
 {
-  "id": "b09d06a0-4fa0-4e5c-b6c6-4bcb2d4ce682",
+  "id": "d88fe8d5-1b4b-4f6d-a57a-61cabce44278",
   "prevId": "77d1c8d7-4d5a-4c9b-881a-6497cbbf58a8",
   "version": "7",
   "dialect": "postgresql",
@@ -1263,6 +1263,13 @@
           "notNull": false,
           "default": "'[]'::jsonb"
         },
+        "session_idle_timeout_minutes": {
+          "name": "session_idle_timeout_minutes",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 30
+        },
         "gemini_api_key": {
           "name": "gemini_api_key",
           "type": "varchar(255)",
@@ -1403,6 +1410,10 @@
         "general_settings_totp_exempt_role_ids_array_check": {
           "name": "general_settings_totp_exempt_role_ids_array_check",
           "value": "jsonb_typeof(\"general_settings\".\"totp_exempt_role_ids\") = 'array'"
+        },
+        "general_settings_session_idle_timeout_minutes_check": {
+          "name": "general_settings_session_idle_timeout_minutes_check",
+          "value": "\"general_settings\".\"session_idle_timeout_minutes\" >= 5 AND \"general_settings\".\"session_idle_timeout_minutes\" <= 1440"
         }
       },
       "isRLSEnabled": false
@@ -8107,12 +8118,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "responsible_user_id": {
-          "name": "responsible_user_id",
-          "type": "varchar(50)",
-          "primaryKey": false,
-          "notNull": false
-        },
         "auth_method": {
           "name": "auth_method",
           "type": "varchar(20)",
@@ -8182,21 +8187,6 @@
           "method": "btree",
           "with": {}
         },
-        "idx_users_responsible_user_id": {
-          "name": "idx_users_responsible_user_id",
-          "columns": [
-            {
-              "expression": "responsible_user_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
         "idx_users_auth_provider_id": {
           "name": "idx_users_auth_provider_id",
           "columns": [
@@ -8221,15 +8211,6 @@
           "columnsFrom": ["role"],
           "columnsTo": ["id"],
           "onDelete": "restrict",
-          "onUpdate": "no action"
-        },
-        "users_responsible_user_id_users_id_fk": {
-          "name": "users_responsible_user_id_users_id_fk",
-          "tableFrom": "users",
-          "tableTo": "users",
-          "columnsFrom": ["responsible_user_id"],
-          "columnsTo": ["id"],
-          "onDelete": "set null",
           "onUpdate": "no action"
         },
         "users_auth_provider_id_sso_providers_id_fk": {
@@ -8275,10 +8256,6 @@
         "users_hr_date_range_check": {
           "name": "users_hr_date_range_check",
           "value": "\"users\".\"hire_date\" IS NULL OR \"users\".\"termination_date\" IS NULL OR \"users\".\"hire_date\" <= \"users\".\"termination_date\""
-        },
-        "users_responsible_not_self_check": {
-          "name": "users_responsible_not_self_check",
-          "value": "\"users\".\"responsible_user_id\" IS NULL OR \"users\".\"responsible_user_id\" <> \"users\".\"id\""
         }
       },
       "isRLSEnabled": false

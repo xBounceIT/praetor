@@ -9,8 +9,11 @@
 import { mock } from 'bun:test';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import * as realMiddleware from '../../middleware/auth.ts';
+import * as realGeneralSettingsRepo from '../../repositories/generalSettingsRepo.ts';
+import { DEFAULT_SESSION_IDLE_TIMEOUT_MINUTES } from '../../utils/sessionTimeout.ts';
 
 const middlewareSnap = { ...realMiddleware };
+const generalSettingsRepoSnap = { ...realGeneralSettingsRepo };
 
 const wrapHook = (hook: (req: FastifyRequest, reply: FastifyReply) => Promise<unknown>) => {
   return async (req: FastifyRequest, reply: FastifyReply) => {
@@ -21,6 +24,11 @@ const wrapHook = (hook: (req: FastifyRequest, reply: FastifyReply) => Promise<un
 };
 
 export const installAuthMiddlewareMock = () => {
+  mock.module('../../repositories/generalSettingsRepo.ts', () => ({
+    ...generalSettingsRepoSnap,
+    get: async () => ({ sessionIdleTimeoutMinutes: DEFAULT_SESSION_IDLE_TIMEOUT_MINUTES }),
+  }));
+
   mock.module('../../middleware/auth.ts', () => ({
     ...middlewareSnap,
     authenticateToken: wrapHook(middlewareSnap.authenticateToken),
@@ -36,5 +44,6 @@ export const installAuthMiddlewareMock = () => {
 };
 
 export const restoreAuthMiddlewareMock = () => {
+  mock.module('../../repositories/generalSettingsRepo.ts', () => generalSettingsRepoSnap);
   mock.module('../../middleware/auth.ts', () => middlewareSnap);
 };

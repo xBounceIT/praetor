@@ -12,7 +12,7 @@ import {
   restoreAuthMiddlewareMock,
 } from '../helpers/authMiddlewareMock.ts';
 import { buildRouteTestApp } from '../helpers/buildRouteTestApp.ts';
-import { signToken } from '../helpers/jwt.ts';
+import { decodeForAssertion, signToken } from '../helpers/jwt.ts';
 
 const usersRepoSnap = { ...realUsersRepo };
 const rolesRepoSnap = { ...realRolesRepo };
@@ -115,6 +115,7 @@ const SETTINGS_WITH_KEYS = {
   enforceTotp: false,
   totpEnforcedRoleIds: [],
   totpExemptRoleIds: [],
+  sessionIdleTimeoutMinutes: 30,
 };
 
 const allMocks = [
@@ -207,6 +208,7 @@ describe('GET /api/general-settings', () => {
       { value: 'F', label: 'Festivita' },
     ]);
     expect(body.rilTransferOptions).toEqual(['In sede', 'Telelavoro']);
+    expect(body.sessionIdleTimeoutMinutes).toBe(30);
   });
 
   test('401 missing token', async () => {
@@ -364,6 +366,82 @@ describe('PUT /api/general-settings', () => {
 
     expect(res.statusCode).toBe(200);
     expect(revokeTokensForUnenrolledEnforcedUsersMock).not.toHaveBeenCalled();
+  });
+
+  test('200 round-trips sessionIdleTimeoutMinutes', async () => {
+    settingsUpdateMock.mockResolvedValue({
+      ...SETTINGS_WITH_KEYS,
+      sessionIdleTimeoutMinutes: 45,
+    });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/general-settings',
+      headers: authHeader(),
+      payload: { sessionIdleTimeoutMinutes: 45 },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(settingsUpdateMock).toHaveBeenCalledWith(
+      expect.objectContaining({ sessionIdleTimeoutMinutes: 45 }),
+    );
+    expect(JSON.parse(res.body).sessionIdleTimeoutMinutes).toBe(45);
+  });
+
+  test('200 re-signs x-auth-token with the saved sessionIdleTimeoutMinutes', async () => {
+    const sessionStart = Date.now() - 60_000;
+    settingsGetMock.mockResolvedValue({ ...SETTINGS_WITH_KEYS, sessionIdleTimeoutMinutes: 5 });
+    settingsUpdateMock.mockResolvedValue({
+      ...SETTINGS_WITH_KEYS,
+      sessionIdleTimeoutMinutes: 45,
+    });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/general-settings',
+      headers: {
+        authorization: `Bearer ${signToken({ userId: 'u1', sessionStart, expiresIn: '5m' })}`,
+      },
+      payload: { sessionIdleTimeoutMinutes: 45 },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const rotatedToken = res.headers['x-auth-token'];
+    expect(typeof rotatedToken).toBe('string');
+    const decoded = decodeForAssertion(rotatedToken as string);
+    expect(decoded.sessionStart).toBe(sessionStart);
+    expect(decoded.sessionMaxExpiresAt).toBeGreaterThan(sessionStart);
+    if (typeof decoded.exp !== 'number' || typeof decoded.iat !== 'number') {
+      throw new Error('Rotated token is missing exp or iat');
+    }
+    expect(decoded.exp - decoded.iat).toBe(45 * 60);
+  });
+
+  test('400 rejects sessionIdleTimeoutMinutes outside the allowed range', async () => {
+    for (const value of [4, 1441]) {
+      const res = await testApp.inject({
+        method: 'PUT',
+        url: '/api/general-settings',
+        headers: authHeader(),
+        payload: { sessionIdleTimeoutMinutes: value },
+      });
+
+      expect(res.statusCode).toBe(400);
+      expect(JSON.parse(res.body).error).toMatch(/sessionIdleTimeoutMinutes must be an integer/);
+    }
+    expect(settingsUpdateMock).not.toHaveBeenCalled();
+  });
+
+  test('400 rejects non-integer sessionIdleTimeoutMinutes', async () => {
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/general-settings',
+      headers: authHeader(),
+      payload: { sessionIdleTimeoutMinutes: 30.5 },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(settingsUpdateMock).not.toHaveBeenCalled();
   });
 
   test('200 round-trips totpEnforcedRoleIds and totpExemptRoleIds', async () => {

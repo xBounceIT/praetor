@@ -27,7 +27,7 @@ Aggiorna il listino quando cambiano costi, margini o condizioni di vendita, cos�
 
 ## Commesse e attività
 
-Le commesse collegano clienti, attività e registrazioni di tempo. Il modulo resta **Progetti**, ma le pagine operative sono **Commesse** e **Rivendite**. Dentro **Commesse**, usa le tab **Commesse** e **Attività** per passare dall'archivio commesse alla gestione attività.
+Le commesse collegano clienti, attività e registrazioni di tempo. Il modulo resta **Progetti**, ma le pagine operative sono **Commesse** e **Rivendite**. Dentro **Commesse**, usa le tab **Commesse** e **Attività** per passare dall'archivio commesse alla gestione attività; l'archivio mostra anche data inizio e data fine di ogni commessa.
 
 Per ogni commessa e attività puoi indicare il tipo di consuntivazione (canone o a misura) e la frequenza (mensile o una tantum) in modo indipendente: entrambi i tipi di consuntivazione supportano entrambe le frequenze. Se le attività usano un tipo diverso da quello della commessa, la commessa viene mostrata come mista.
 
@@ -56,7 +56,7 @@ Quando una commessa termina, verifica che le attività siano coerenti e che non 
 
 ### Rivendite
 
-La voce **Rivendite** nel modulo Progetti gestisce operazioni economiche separate da attività operative, timesheet e assegnazioni utenti. La pagina è divisa nelle tab **Rivendite** e **Attività**: la prima mostra l'elenco rivendite, mentre la tab attività si abilita dopo aver selezionato una rivendita e contiene riepilogo economico e attività rivendita. In creazione devi selezionare un **ordine cliente**, un solo **ordine fornitore** collegato a quell'ordine cliente, indicare **data inizio** e **scadenza rivendita** obbligatorie e aggiungere almeno una **attività rivendita** nella tabella iniziale: il sistema accetta l'ordine fornitore solo se almeno una riga dell'ordine cliente lo referenzia.
+La voce **Rivendite** nel modulo Progetti gestisce operazioni economiche separate da attività operative, timesheet e assegnazioni utenti. La pagina è divisa nelle tab **Rivendite** e **Attività**: la prima mostra l'elenco rivendite con data inizio e data fine, mentre la tab attività si abilita dopo aver selezionato una rivendita e contiene riepilogo economico e attività rivendita. In creazione devi selezionare un **ordine cliente**, un solo **ordine fornitore** collegato a quell'ordine cliente, indicare **data inizio** e **scadenza rivendita** obbligatorie e aggiungere almeno una **attività rivendita** nella tabella iniziale: il sistema accetta l'ordine fornitore solo se almeno una riga dell'ordine cliente lo referenzia.
 
 Ogni rivendita mostra il **Ricavo Rivendita** come somma dei ricavi inseriti nelle sue attività. Il **Costo Rivendita** ufficiale è invece importato dal totale dell'ordine fornitore e non viene modificato manualmente. Nel form di creazione entrambi i valori sono mostrati in sola lettura mentre compili le attività. Le attività rivendita restano compilate a mano e includono nome attività, fatturazione (mensile, trimestrale, annuale o una tantum), categoria, costo, ricavo, stato rilasciato, scadenza indipendente e note.
 

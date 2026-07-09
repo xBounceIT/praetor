@@ -24864,6 +24864,9 @@
                       "items": {
                         "type": "string"
                       }
+                    },
+                    "sessionIdleTimeoutMinutes": {
+                      "type": "integer"
                     }
                   },
                   "required": [
@@ -24888,7 +24891,8 @@
                     "enableTotp",
                     "enforceTotp",
                     "totpEnforcedRoleIds",
-                    "totpExemptRoleIds"
+                    "totpExemptRoleIds",
+                    "sessionIdleTimeoutMinutes"
                   ]
                 }
               }
@@ -25152,6 +25156,9 @@
                     "items": {
                       "type": "string"
                     }
+                  },
+                  "sessionIdleTimeoutMinutes": {
+                    "type": "integer"
                   }
                 }
               }
@@ -25263,6 +25270,9 @@
                       "items": {
                         "type": "string"
                       }
+                    },
+                    "sessionIdleTimeoutMinutes": {
+                      "type": "integer"
                     }
                   },
                   "required": [
@@ -25287,7 +25297,8 @@
                     "enableTotp",
                     "enforceTotp",
                     "totpEnforcedRoleIds",
-                    "totpExemptRoleIds"
+                    "totpExemptRoleIds",
+                    "sessionIdleTimeoutMinutes"
                   ]
                 }
               }

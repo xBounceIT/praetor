@@ -109,6 +109,8 @@
       "projectName": "Nome Commessa",
       "description": "Descrizione",
       "insertDate": "Data Inserimento",
+      "startDate": "Data Inizio",
+      "endDate": "Data Fine",
       "progress": "Avanzamento",
       "status": "Stato",
       "actions": "Azioni"
@@ -375,6 +377,8 @@
       "supplierCost": "Costo ordine fornitore",
       "activityCost": "Costo attività",
       "variance": "Varianza",
+      "startDate": "Data inizio",
+      "endDate": "Data fine",
       "dueDate": "Scadenza",
       "activityName": "Nome attività",
       "billing": "Fatturazione",

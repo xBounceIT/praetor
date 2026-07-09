@@ -28,6 +28,7 @@
     "removeProductTitle": "Rimuovere il prodotto?",
     "removeProductConfirm": "Sei sicuro di voler rimuovere questo prodotto dall'ordine?",
     "readOnlyStatus": "Gli ordini {{status}} sono in sola lettura",
+    "confirmedIdentityLockedStatus": "Ordine confermato: codice ordine e cliente sono bloccati, gli altri dettagli restano modificabili",
     "clientColumn": "Cliente",
     "totalColumn": "Totale",
     "paymentTermsColumn": "Termini di Pagamento",

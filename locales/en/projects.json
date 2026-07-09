@@ -109,6 +109,8 @@
       "projectName": "Job Name",
       "description": "Description",
       "insertDate": "Insert Date",
+      "startDate": "Start Date",
+      "endDate": "End Date",
       "progress": "Progress",
       "status": "Status",
       "actions": "Actions"
@@ -375,6 +377,8 @@
       "supplierCost": "Supplier order cost",
       "activityCost": "Activity cost",
       "variance": "Variance",
+      "startDate": "Start date",
+      "endDate": "End date",
       "dueDate": "Due date",
       "activityName": "Activity name",
       "billing": "Billing",

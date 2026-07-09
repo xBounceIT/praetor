@@ -1,6 +1,6 @@
 {
-  "id": "594c12d4-0f6a-4421-bd4c-99f5a5504935",
-  "prevId": "b09d06a0-4fa0-4e5c-b6c6-4bcb2d4ce682",
+  "id": "e543438a-4b5c-427b-9e51-a5f2dcc87cb1",
+  "prevId": "d88fe8d5-1b4b-4f6d-a57a-61cabce44278",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -1263,6 +1263,13 @@
           "notNull": false,
           "default": "'[]'::jsonb"
         },
+        "session_idle_timeout_minutes": {
+          "name": "session_idle_timeout_minutes",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 30
+        },
         "gemini_api_key": {
           "name": "gemini_api_key",
           "type": "varchar(255)",
@@ -1403,6 +1410,10 @@
         "general_settings_totp_exempt_role_ids_array_check": {
           "name": "general_settings_totp_exempt_role_ids_array_check",
           "value": "jsonb_typeof(\"general_settings\".\"totp_exempt_role_ids\") = 'array'"
+        },
+        "general_settings_session_idle_timeout_minutes_check": {
+          "name": "general_settings_session_idle_timeout_minutes_check",
+          "value": "\"general_settings\".\"session_idle_timeout_minutes\" >= 5 AND \"general_settings\".\"session_idle_timeout_minutes\" <= 1440"
         }
       },
       "isRLSEnabled": false

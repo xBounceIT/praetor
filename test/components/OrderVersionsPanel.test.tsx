@@ -258,7 +258,7 @@ describe('<OrderVersionsPanel />', () => {
   test('Restore error surfaces the server message verbatim', async () => {
     listVersionsMock.mockImplementation(() => Promise.resolve([VERSION_ROW_UPDATE]));
     restoreVersionMock.mockImplementation(() =>
-      Promise.reject(new Error('Confirmed orders are read-only')),
+      Promise.reject(new Error('Version restore is only available for draft orders')),
     );
     render(<OrderVersionsPanel {...baseProps} selectedVersionId="orv-1" />);
     await waitFor(() =>
@@ -270,7 +270,9 @@ describe('<OrderVersionsPanel />', () => {
     fireEvent.click(screen.getByText('confirm-yes'));
 
     await waitFor(() =>
-      expect(screen.getByText('Confirmed orders are read-only')).toBeInTheDocument(),
+      expect(
+        screen.getByText('Version restore is only available for draft orders'),
+      ).toBeInTheDocument(),
     );
   });
 });

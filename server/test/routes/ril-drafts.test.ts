@@ -289,7 +289,7 @@ describe('PUT /api/ril-drafts/:monthKey', () => {
     expect(res.statusCode).toBe(200);
     expect(JSON.parse(res.body)).toEqual(draft);
     expect(upsertForUserMonthMock).toHaveBeenCalledWith('u1', '2026-05', SAMPLE_ROWS, TX_SENTINEL);
-    expect(generalSettingsGetMock).not.toHaveBeenCalled();
+    expect(generalSettingsGetMock).not.toHaveBeenCalledWith(TX_SENTINEL);
     expect(notifyRilManualOvertimeForRowsMock).not.toHaveBeenCalled();
     expect(isUserManagedByMock).not.toHaveBeenCalled();
   });

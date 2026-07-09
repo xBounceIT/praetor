@@ -27,7 +27,7 @@ Update the listing when costs, margins, or sales conditions change so new docume
 
 ## Jobs and tasks
 
-Jobs connect customers, tasks, and time entries. The module remains named **Projects**, but its operational pages are **Jobs** and **Resales**. Inside **Jobs**, use the **Jobs** and **Tasks** tabs to switch between the jobs archive and task management.
+Jobs connect customers, tasks, and time entries. The module remains named **Projects**, but its operational pages are **Jobs** and **Resales**. Inside **Jobs**, use the **Jobs** and **Tasks** tabs to switch between the jobs archive and task management; the archive also shows each job's start and end dates.
 
 For each job and task, you can set the billing type (retainer or time and materials) and the billing frequency (monthly or one-time) independently — both billing types support either frequency. If tasks use a billing type that differs from the job, the job is shown as mixed.
 
@@ -56,7 +56,7 @@ When a job ends, check that tasks are consistent and that no pending entries rem
 
 ### Resales
 
-The **Resales** entry in the Projects module manages economic resale operations separately from operational tasks, timesheets, and user assignments. The page is split into **Resales** and **Activities** tabs: the first tab shows the resales list, while Activities becomes available after selecting a resale and contains the economic summary plus resale activities. When creating a resale, you must select a **client order**, exactly one **supplier order** linked to that client order, set the required **start date** and **resale due date**, and add at least one **resale activity** in the initial activities table: the system accepts the supplier order only when at least one client-order line references it.
+The **Resales** entry in the Projects module manages economic resale operations separately from operational tasks, timesheets, and user assignments. The page is split into **Resales** and **Activities** tabs: the first tab shows the resales list with start and end dates, while Activities becomes available after selecting a resale and contains the economic summary plus resale activities. When creating a resale, you must select a **client order**, exactly one **supplier order** linked to that client order, set the required **start date** and **resale due date**, and add at least one **resale activity** in the initial activities table: the system accepts the supplier order only when at least one client-order line references it.
 
 Each resale shows **Resale revenue** as the sum of the revenues entered on its activities. The official **Resale cost** is imported from the supplier order total and is not edited manually. The create form shows both values as read-only fields while you fill in the activities. Resale activities are entered manually and include activity name, billing frequency (monthly, quarterly, annual, or one-time), category, cost, revenue, released status, independent due date, and notes.
 
