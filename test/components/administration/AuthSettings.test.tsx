@@ -8,6 +8,7 @@ import type {
   Role,
   SsoProtocol,
   SsoProvider,
+  User,
 } from '../../../types';
 import { installI18nMock } from '../../helpers/i18n';
 import { clearSpyStateAfterAll } from '../../helpers/mockCleanup.ts';
@@ -97,6 +98,32 @@ const roles: Role[] = [
   },
 ];
 
+const users: User[] = [
+  {
+    id: 'u1',
+    name: 'Alice Admin',
+    role: 'user',
+    avatarInitials: 'AA',
+    username: 'alice',
+    isDisabled: false,
+  },
+  {
+    id: 'u2',
+    name: 'Bob User',
+    role: 'user',
+    avatarInitials: 'BU',
+    username: 'bob',
+    isDisabled: false,
+  },
+  {
+    id: 'u-disabled',
+    name: 'Disabled User',
+    role: 'user',
+    avatarInitials: 'DU',
+    username: 'disabled',
+    isDisabled: true,
+  },
+];
 const buildProvider = (protocol: SsoProtocol, patch: Partial<SsoProvider> = {}): SsoProvider => ({
   id: `${protocol}-provider`,
   protocol,
@@ -132,6 +159,7 @@ const renderAuthSettings = (overrides: Partial<ComponentProps<typeof AuthSetting
     config: ldapConfig,
     onSave: mock(async () => {}),
     roles,
+    users,
     ssoProviders: [],
     onSaveSsoProvider: defaultOnSaveSsoProvider,
     onDeleteSsoProvider: mock(async () => {}),
@@ -142,7 +170,9 @@ const renderAuthSettings = (overrides: Partial<ComponentProps<typeof AuthSetting
     enforcedRoleIds: [],
     onSetEnforcedRoleIds: mock((_value: string[]) => {}),
     exemptRoleIds: [],
+    exemptUserIds: [],
     onSetExemptRoleIds: mock((_value: string[]) => {}),
+    onSetExemptUserIds: mock((_value: string[]) => {}),
     canManageMfa: true,
     ...overrides,
   };
@@ -362,9 +392,10 @@ describe('<AuthSettings />', () => {
       expect(enableSwitch.getAttribute('aria-checked')).toBe('true');
       expect(enforceSwitch.getAttribute('aria-checked')).toBe('false');
 
-      // The role multi-selects are present too.
+      // The role and user multi-selects are present too.
       expect(document.getElementById('totp-enforced-roles')).toBeTruthy();
       expect(document.getElementById('totp-exempt-roles')).toBeTruthy();
+      expect(document.getElementById('totp-exempt-users')).toBeTruthy();
     });
 
     test('reflects enforceTotp=true on the Enforce switch', () => {
@@ -404,7 +435,31 @@ describe('<AuthSettings />', () => {
       openMfaTab();
 
       const enforceSwitch = document.getElementById('enforce-totp') as HTMLInputElement;
+      const exemptUsersSelect = document.getElementById('totp-exempt-users') as HTMLButtonElement;
       expect(enforceSwitch).toBeDisabled();
+      expect(exemptUsersSelect).toBeDisabled();
+    });
+
+    test('disables the exempt users select while enforcement is off', () => {
+      renderAuthSettings({ enableTotp: true, enforceTotp: false });
+      openMfaTab();
+
+      const exemptUsersSelect = document.getElementById('totp-exempt-users') as HTMLButtonElement;
+      expect(exemptUsersSelect).toBeDisabled();
+    });
+
+    test('selecting an exempt user calls onSetExemptUserIds with active user ids only', () => {
+      const onSetExemptUserIds = mock((_value: string[]) => {});
+      renderAuthSettings({ enforceTotp: true, onSetExemptUserIds });
+      openMfaTab();
+
+      const exemptUsersSelect = document.getElementById('totp-exempt-users') as HTMLButtonElement;
+      fireEvent.click(exemptUsersSelect);
+      expect(screen.queryByText('Disabled User')).not.toBeInTheDocument();
+
+      fireEvent.click(screen.getByText('Bob User'));
+      expect(onSetExemptUserIds).toHaveBeenCalledTimes(1);
+      expect(onSetExemptUserIds).toHaveBeenCalledWith(['u2']);
     });
 
     test('hides the MFA tab when the user lacks general-settings update permission', () => {

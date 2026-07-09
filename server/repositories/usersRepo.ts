@@ -327,7 +327,7 @@ export const rotatePasswordAndBumpSession = async (
 // Revokes only the non-interactive credentials — PAT/MCP tokens (token_version) — of each
 // local/ldap user who is subject to the 2FA mandate (their primary role or any assigned/(multi-)role
 // is in `enforcedRoleIds`, OR `enforcedRoleIds` is empty which means "everyone"), is NOT carved out
-// by `exemptRoleIds` (exempt wins — holding any exempt role spares the user), and has NOT enrolled in
+// by `exemptRoleIds` or `exemptUserIds` (exempt wins), and has NOT enrolled in
 // TOTP. Called when enforcement is switched on or its role scope is broadened. Interactive sessions
 // (session_version) are deliberately left intact: those traverse the login 2FA gate, so an unenrolled
 // enforced user is routed into mandatory enrollment on their next sign-in (see auth.ts) and blocked
@@ -339,6 +339,7 @@ export const rotatePasswordAndBumpSession = async (
 export const revokeTokensForUnenrolledEnforcedUsers = async (
   enforcedRoleIds: string[],
   exemptRoleIds: string[],
+  exemptUserIds: string[],
   exec: DbExecutor = db,
 ): Promise<number> => {
   const inList = (ids: string[]) =>
@@ -348,6 +349,10 @@ export const revokeTokensForUnenrolledEnforcedUsers = async (
     );
 
   const conditions = [sql`totp_enabled = false`, sql`auth_method IN ('local', 'ldap')`];
+
+  if (exemptUserIds.length > 0) {
+    conditions.push(sql`id NOT IN (${inList(exemptUserIds)})`);
+  }
 
   // Exempt wins: skip users whose primary role OR any assigned role is exempt. Omitted when the
   // exempt list is empty (an empty `NOT IN ()` is invalid SQL and would exclude no one anyway).

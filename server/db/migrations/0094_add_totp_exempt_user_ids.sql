@@ -1,0 +1,2 @@
+ALTER TABLE "general_settings" ADD COLUMN "totp_exempt_user_ids" jsonb DEFAULT '[]'::jsonb;--> statement-breakpoint
+ALTER TABLE "general_settings" ADD CONSTRAINT "general_settings_totp_exempt_user_ids_array_check" CHECK (jsonb_typeof("general_settings"."totp_exempt_user_ids") = 'array');

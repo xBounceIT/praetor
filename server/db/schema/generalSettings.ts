@@ -33,15 +33,17 @@ export const generalSettings = pgTable(
     // challenge even for enrolled users, no enforcement). `enforceTotp` deliberately keeps the
     // original DB column name `enforce_totp_for_admins` — renaming the column would force a
     // destructive drop/recreate migration; only the TS/API name changed when admin-only enforcement
-    // generalized to per-role enforcement. The two jsonb arrays hold role ids: a user is required to
-    // use 2FA when enforcement is active and (enforced list is empty OR they hold an enforced role)
-    // AND they hold no exempt role (exempt wins). Empty enforced list = everyone (local/ldap).
+    // generalized to per-role enforcement. The jsonb arrays hold role ids and user ids: a user
+    // is required to use 2FA when enforcement is active and (enforced list is empty OR they hold
+    // an enforced role) AND they hold no exempt role and are not an exempt user (exempt wins).
+    // Empty enforced list = everyone (local/ldap).
     enableTotp: boolean('enable_totp').notNull().default(true),
     enforceTotp: boolean('enforce_totp_for_admins').notNull().default(false),
     totpEnforcedRoleIds: jsonb('totp_enforced_role_ids')
       .$type<string[]>()
       .default(sql`'[]'::jsonb`),
     totpExemptRoleIds: jsonb('totp_exempt_role_ids').$type<string[]>().default(sql`'[]'::jsonb`),
+    totpExemptUserIds: jsonb('totp_exempt_user_ids').$type<string[]>().default(sql`'[]'::jsonb`),
     geminiApiKey: varchar('gemini_api_key', { length: 255 }),
     aiProvider: varchar('ai_provider', { length: 20 })
       .$type<'gemini' | 'openrouter'>()
@@ -102,6 +104,10 @@ export const generalSettings = pgTable(
     check(
       'general_settings_totp_exempt_role_ids_array_check',
       sql`jsonb_typeof(${table.totpExemptRoleIds}) = 'array'`,
+    ),
+    check(
+      'general_settings_totp_exempt_user_ids_array_check',
+      sql`jsonb_typeof(${table.totpExemptUserIds}) = 'array'`,
     ),
   ],
 );

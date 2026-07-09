@@ -179,11 +179,12 @@ export interface GeneralSettings {
   rilNoteOptions?: RilNoteOption[];
   rilTransferOptions?: string[];
   // 2FA org policy. `enableTotp` is the global feature switch; `enforceTotp` the master enforcement
-  // switch; the role-id lists scope enforcement (empty enforced list = everyone; exempt wins).
+  // switch; the role/user-id lists scope enforcement (empty enforced list = everyone; exempt wins).
   enableTotp: boolean;
   enforceTotp: boolean;
   totpEnforcedRoleIds: string[];
   totpExemptRoleIds: string[];
+  totpExemptUserIds: string[];
 }
 
 export type DocumentCodeModuleId =

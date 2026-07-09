@@ -445,6 +445,7 @@ export const normalizeGeneralSettings = (s: GeneralSettings): GeneralSettings =>
   enforceTotp: s.enforceTotp ?? false,
   totpEnforcedRoleIds: Array.isArray(s.totpEnforcedRoleIds) ? s.totpEnforcedRoleIds : [],
   totpExemptRoleIds: Array.isArray(s.totpExemptRoleIds) ? s.totpExemptRoleIds : [],
+  totpExemptUserIds: Array.isArray(s.totpExemptUserIds) ? s.totpExemptUserIds : [],
 });
 
 // Allowlist mirroring the server's UNIT_OF_MEASURE_VALUES (server/routes/invoices.ts).

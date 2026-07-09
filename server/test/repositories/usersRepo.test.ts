@@ -150,7 +150,7 @@ describe('revokeTokensForUnenrolledEnforcedUsers', () => {
   test('bumps ONLY token_version (not session_version) for unenrolled local/ldap enforced users', async () => {
     // RETURNING id yields one row per revoked user; the count is the return value.
     exec.enqueue({ rows: [{ id: 'a1' }, { id: 'a2' }, { id: 'a3' }] });
-    const count = await usersRepo.revokeTokensForUnenrolledEnforcedUsers(['admin'], [], testDb);
+    const count = await usersRepo.revokeTokensForUnenrolledEnforcedUsers(['admin'], [], [], testDb);
     expect(count).toBe(3);
 
     const sql = exec.calls[0].sql;
@@ -166,7 +166,12 @@ describe('revokeTokensForUnenrolledEnforcedUsers', () => {
 
   test('restricts to the enforced role ids (primary role and user_roles) and binds them as params', async () => {
     exec.enqueue({ rows: [{ id: 'a1' }] });
-    await usersRepo.revokeTokensForUnenrolledEnforcedUsers(['admin', 'top_manager'], [], testDb);
+    await usersRepo.revokeTokensForUnenrolledEnforcedUsers(
+      ['admin', 'top_manager'],
+      [],
+      [],
+      testDb,
+    );
 
     const sql = exec.calls[0].sql;
     // A non-empty enforced list restricts to users holding one of those roles, matched against
@@ -181,7 +186,7 @@ describe('revokeTokensForUnenrolledEnforcedUsers', () => {
 
   test('excludes exempt role ids (exempt wins) and binds them as params', async () => {
     exec.enqueue({ rows: [{ id: 'a1' }] });
-    await usersRepo.revokeTokensForUnenrolledEnforcedUsers(['admin'], ['contractor'], testDb);
+    await usersRepo.revokeTokensForUnenrolledEnforcedUsers(['admin'], ['contractor'], [], testDb);
 
     const sql = exec.calls[0].sql;
     // A non-empty exempt list carves out users whose primary role OR any assigned role is exempt.
@@ -189,10 +194,18 @@ describe('revokeTokensForUnenrolledEnforcedUsers', () => {
     expect(sql).toContain('NOT EXISTS');
     expect(exec.calls[0].params).toContain('contractor');
   });
+  test('excludes exempt user ids and binds them as params', async () => {
+    exec.enqueue({ rows: [{ id: 'a1' }] });
+    await usersRepo.revokeTokensForUnenrolledEnforcedUsers(['admin'], [], ['u-exempt'], testDb);
+
+    const sql = exec.calls[0].sql;
+    expect(sql).toContain('id NOT IN');
+    expect(exec.calls[0].params).toContain('u-exempt');
+  });
 
   test('adds no enforced-role restriction when the enforced list is empty (the "everyone" case)', async () => {
     exec.enqueue({ rows: [{ id: 'a1' }, { id: 'a2' }] });
-    const count = await usersRepo.revokeTokensForUnenrolledEnforcedUsers([], [], testDb);
+    const count = await usersRepo.revokeTokensForUnenrolledEnforcedUsers([], [], [], testDb);
     expect(count).toBe(2);
 
     const sql = exec.calls[0].sql;
@@ -206,7 +219,9 @@ describe('revokeTokensForUnenrolledEnforcedUsers', () => {
 
   test('returns 0 when no unenrolled enforced user matched', async () => {
     exec.enqueue({ rows: [] });
-    expect(await usersRepo.revokeTokensForUnenrolledEnforcedUsers(['admin'], [], testDb)).toBe(0);
+    expect(await usersRepo.revokeTokensForUnenrolledEnforcedUsers(['admin'], [], [], testDb)).toBe(
+      0,
+    );
   });
 });
 

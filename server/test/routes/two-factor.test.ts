@@ -64,6 +64,7 @@ const generalSettingsGetMock = mock<
     enforceTotp?: boolean;
     totpEnforcedRoleIds?: string[];
     totpExemptRoleIds?: string[];
+    totpExemptUserIds?: string[];
   } | null>
 >(async () => null);
 const logAuditMock = mock(async () => undefined);
@@ -718,6 +719,7 @@ describe('POST /api/auth/2fa/disable', () => {
       enforceTotp: true,
       totpEnforcedRoleIds: ['admin'],
       totpExemptRoleIds: [],
+      totpExemptUserIds: [],
     });
     // The user's primary role ('admin') already satisfies the enforced set; no extra assignable
     // roles needed.
@@ -916,6 +918,7 @@ describe('GET /api/auth/2fa/status', () => {
       enforceTotp: true,
       totpEnforcedRoleIds: ['admin'],
       totpExemptRoleIds: [],
+      totpExemptUserIds: [],
     });
     listAvailableRolesForUserMock.mockResolvedValue([]);
 

@@ -659,6 +659,13 @@
       "when": 1781542816977,
       "tag": "0093_remove_admin_hr_module_access",
       "breakpoints": true
+    },
+    {
+      "idx": 94,
+      "version": "7",
+      "when": 1783593131551,
+      "tag": "0094_add_totp_exempt_user_ids",
+      "breakpoints": true
     }
   ]
 }

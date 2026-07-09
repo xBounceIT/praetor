@@ -13,6 +13,7 @@ export type GeneralSettings = {
   enforceTotp: boolean | null;
   totpEnforcedRoleIds: string[] | null;
   totpExemptRoleIds: string[] | null;
+  totpExemptUserIds: string[] | null;
   geminiApiKey: string | null;
   aiProvider: string | null;
   openrouterApiKey: string | null;
@@ -38,6 +39,7 @@ export type GeneralSettingsPatch = {
   enforceTotp?: boolean | null;
   totpEnforcedRoleIds?: string[] | null;
   totpExemptRoleIds?: string[] | null;
+  totpExemptUserIds?: string[] | null;
   geminiApiKey?: string | null;
   aiProvider?: string | null;
   openrouterApiKey?: string | null;
@@ -63,6 +65,7 @@ const GENERAL_SETTINGS_PROJECTION = {
   enforceTotp: generalSettings.enforceTotp,
   totpEnforcedRoleIds: generalSettings.totpEnforcedRoleIds,
   totpExemptRoleIds: generalSettings.totpExemptRoleIds,
+  totpExemptUserIds: generalSettings.totpExemptUserIds,
   geminiApiKey: generalSettings.geminiApiKey,
   aiProvider: generalSettings.aiProvider,
   openrouterApiKey: generalSettings.openrouterApiKey,
@@ -88,6 +91,7 @@ type GeneralSettingsRow = {
   enforceTotp: boolean | null;
   totpEnforcedRoleIds: string[] | null;
   totpExemptRoleIds: string[] | null;
+  totpExemptUserIds: string[] | null;
   geminiApiKey: string | null;
   aiProvider: string | null;
   openrouterApiKey: string | null;
@@ -133,6 +137,7 @@ const mapRow = (row: GeneralSettingsRow): GeneralSettings => ({
   enforceTotp: row.enforceTotp,
   totpEnforcedRoleIds: row.totpEnforcedRoleIds,
   totpExemptRoleIds: row.totpExemptRoleIds,
+  totpExemptUserIds: row.totpExemptUserIds,
   geminiApiKey: row.geminiApiKey,
   aiProvider: row.aiProvider,
   openrouterApiKey: row.openrouterApiKey,
@@ -171,6 +176,8 @@ export const update = async (
     patch.totpEnforcedRoleIds == null ? null : JSON.stringify(patch.totpEnforcedRoleIds);
   const totpExemptRoleIdsParam =
     patch.totpExemptRoleIds == null ? null : JSON.stringify(patch.totpExemptRoleIds);
+  const totpExemptUserIdsParam =
+    patch.totpExemptUserIds == null ? null : JSON.stringify(patch.totpExemptUserIds);
 
   const result = await exec
     .update(generalSettings)
@@ -184,6 +191,7 @@ export const update = async (
       enforceTotp: sql`COALESCE(${patch.enforceTotp ?? null}, ${generalSettings.enforceTotp})`,
       totpEnforcedRoleIds: sql`COALESCE(${totpEnforcedRoleIdsParam}::jsonb, ${generalSettings.totpEnforcedRoleIds})`,
       totpExemptRoleIds: sql`COALESCE(${totpExemptRoleIdsParam}::jsonb, ${generalSettings.totpExemptRoleIds})`,
+      totpExemptUserIds: sql`COALESCE(${totpExemptUserIdsParam}::jsonb, ${generalSettings.totpExemptUserIds})`,
       geminiApiKey: sql`COALESCE(${patch.geminiApiKey ?? null}, ${generalSettings.geminiApiKey})`,
       aiProvider: sql`COALESCE(${patch.aiProvider ?? null}, ${generalSettings.aiProvider})`,
       openrouterApiKey: sql`COALESCE(${patch.openrouterApiKey ?? null}, ${generalSettings.openrouterApiKey})`,

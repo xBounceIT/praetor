@@ -3,7 +3,7 @@
   "info": {
     "title": "Praetor API",
     "description": "Praetor API documentation",
-    "version": "0.8.1"
+    "version": "0.8.2"
   },
   "components": {
     "securitySchemes": {
@@ -24526,14 +24526,24 @@
                       "type": "array",
                       "maxItems": 100,
                       "items": {
-                        "type": "string"
+                        "type": "string",
+                        "maxLength": 50
                       }
                     },
                     "totpExemptRoleIds": {
                       "type": "array",
                       "maxItems": 100,
                       "items": {
-                        "type": "string"
+                        "type": "string",
+                        "maxLength": 50
+                      }
+                    },
+                    "totpExemptUserIds": {
+                      "type": "array",
+                      "maxItems": 100,
+                      "items": {
+                        "type": "string",
+                        "maxLength": 50
                       }
                     }
                   },
@@ -24559,7 +24569,8 @@
                     "enableTotp",
                     "enforceTotp",
                     "totpEnforcedRoleIds",
-                    "totpExemptRoleIds"
+                    "totpExemptRoleIds",
+                    "totpExemptUserIds"
                   ]
                 }
               }
@@ -24814,14 +24825,24 @@
                     "type": "array",
                     "maxItems": 100,
                     "items": {
-                      "type": "string"
+                      "type": "string",
+                      "maxLength": 50
                     }
                   },
                   "totpExemptRoleIds": {
                     "type": "array",
                     "maxItems": 100,
                     "items": {
-                      "type": "string"
+                      "type": "string",
+                      "maxLength": 50
+                    }
+                  },
+                  "totpExemptUserIds": {
+                    "type": "array",
+                    "maxItems": 100,
+                    "items": {
+                      "type": "string",
+                      "maxLength": 50
                     }
                   }
                 }
@@ -24925,14 +24946,24 @@
                       "type": "array",
                       "maxItems": 100,
                       "items": {
-                        "type": "string"
+                        "type": "string",
+                        "maxLength": 50
                       }
                     },
                     "totpExemptRoleIds": {
                       "type": "array",
                       "maxItems": 100,
                       "items": {
-                        "type": "string"
+                        "type": "string",
+                        "maxLength": 50
+                      }
+                    },
+                    "totpExemptUserIds": {
+                      "type": "array",
+                      "maxItems": 100,
+                      "items": {
+                        "type": "string",
+                        "maxLength": 50
                       }
                     }
                   },
@@ -24958,7 +24989,8 @@
                     "enableTotp",
                     "enforceTotp",
                     "totpEnforcedRoleIds",
-                    "totpExemptRoleIds"
+                    "totpExemptRoleIds",
+                    "totpExemptUserIds"
                   ]
                 }
               }

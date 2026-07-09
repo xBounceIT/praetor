@@ -4374,6 +4374,7 @@ const AdministrationRoutes: React.FC<{ controller: AuthenticatedAppContentContro
             onSave={handleSaveLdapConfig}
             onLdapUsersSynced={handleLdapUsersSynced}
             roles={roles}
+            users={users}
             ssoProviders={ssoProviders}
             onSaveSsoProvider={handleSaveSsoProvider}
             onDeleteSsoProvider={handleDeleteSsoProvider}
@@ -4386,8 +4387,12 @@ const AdministrationRoutes: React.FC<{ controller: AuthenticatedAppContentContro
               handleUpdateGeneralSettings({ totpEnforcedRoleIds: value })
             }
             exemptRoleIds={generalSettings.totpExemptRoleIds}
+            exemptUserIds={generalSettings.totpExemptUserIds}
             onSetExemptRoleIds={(value) =>
               handleUpdateGeneralSettings({ totpExemptRoleIds: value })
+            }
+            onSetExemptUserIds={(value) =>
+              handleUpdateGeneralSettings({ totpExemptUserIds: value })
             }
             canManageMfa={hasPermission(currentUser.permissions, 'administration.general.update')}
           />

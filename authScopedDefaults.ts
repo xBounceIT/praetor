@@ -66,6 +66,7 @@ export const INITIAL_GENERAL_SETTINGS = deepFreeze<GeneralSettingsState>({
   enforceTotp: false,
   totpEnforcedRoleIds: [],
   totpExemptRoleIds: [],
+  totpExemptUserIds: [],
 });
 
 export const INITIAL_EMAIL_CONFIG = deepFreeze<EmailConfig>({

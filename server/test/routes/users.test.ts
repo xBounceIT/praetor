@@ -83,6 +83,7 @@ const generalSettingsGetMock = mock<
     enforceTotp?: boolean;
     totpEnforcedRoleIds?: string[];
     totpExemptRoleIds?: string[];
+    totpExemptUserIds?: string[];
   } | null>
 >(async () => null);
 
@@ -1554,6 +1555,7 @@ describe('PUT /api/users/:id', () => {
       enforceTotp: true,
       totpEnforcedRoleIds: ['admin'],
       totpExemptRoleIds: [],
+      totpExemptUserIds: [],
     });
     getTotpStateMock.mockResolvedValue({
       totpSecret: null,
@@ -2600,6 +2602,7 @@ describe('PUT /api/users/:id/auth-method', () => {
         enforceTotp: true,
         totpEnforcedRoleIds: ['admin'],
         totpExemptRoleIds: [],
+        totpExemptUserIds: [],
       });
       getTotpStateMock.mockResolvedValue({
         totpSecret: null,
@@ -2688,6 +2691,7 @@ describe('PUT /api/users/:id/auth-method', () => {
         enforceTotp: true,
         totpEnforcedRoleIds: ['admin'],
         totpExemptRoleIds: [],
+        totpExemptUserIds: [],
       });
       getTotpStateMock.mockResolvedValue({
         totpSecret: null,
@@ -3084,6 +3088,7 @@ describe('PUT /api/users/:id/roles', () => {
       enforceTotp: true,
       totpEnforcedRoleIds: ['admin'],
       totpExemptRoleIds: [],
+      totpExemptUserIds: [],
     });
     getTotpStateMock.mockResolvedValue({
       totpSecret: null,

@@ -52,12 +52,12 @@ const rilTransferOptionsSchema = {
   items: { type: 'string' },
 } as const;
 
-// Role-id lists for the 2FA enforce/exempt policy. Free-form strings (role ids), like the RIL
+// Role/user-id lists for the 2FA enforce/exempt policy. Free-form strings, like the RIL
 // arrays — no foreign-key check, matching the existing array-field convention.
-const roleIdArraySchema = {
+const stringIdArraySchema = {
   type: 'array',
   maxItems: 100,
-  items: { type: 'string' },
+  items: { type: 'string', maxLength: 50 },
 } as const;
 
 const generalSettingsSchema = {
@@ -83,8 +83,9 @@ const generalSettingsSchema = {
     rilTransferOptions: rilTransferOptionsSchema,
     enableTotp: { type: 'boolean' },
     enforceTotp: { type: 'boolean' },
-    totpEnforcedRoleIds: roleIdArraySchema,
-    totpExemptRoleIds: roleIdArraySchema,
+    totpEnforcedRoleIds: stringIdArraySchema,
+    totpExemptRoleIds: stringIdArraySchema,
+    totpExemptUserIds: stringIdArraySchema,
   },
   required: [
     'currency',
@@ -109,6 +110,7 @@ const generalSettingsSchema = {
     'enforceTotp',
     'totpEnforcedRoleIds',
     'totpExemptRoleIds',
+    'totpExemptUserIds',
   ],
 } as const;
 
@@ -135,8 +137,9 @@ const generalSettingsUpdateBodySchema = {
     rilTransferOptions: rilTransferOptionsSchema,
     enableTotp: { type: 'boolean' },
     enforceTotp: { type: 'boolean' },
-    totpEnforcedRoleIds: roleIdArraySchema,
-    totpExemptRoleIds: roleIdArraySchema,
+    totpEnforcedRoleIds: stringIdArraySchema,
+    totpExemptRoleIds: stringIdArraySchema,
+    totpExemptUserIds: stringIdArraySchema,
   },
 } as const;
 
@@ -163,6 +166,7 @@ const DEFAULT_SETTINGS: generalSettingsRepo.GeneralSettings = {
   enforceTotp: false,
   totpEnforcedRoleIds: [],
   totpExemptRoleIds: [],
+  totpExemptUserIds: [],
 };
 
 const maskApiKey = (value: string | null, reveal: boolean) =>
@@ -320,11 +324,11 @@ const validateOptionalRilTransferOptions = (value: unknown) => {
   return { ok: true as const, value: options };
 };
 
-// Validate a 2FA enforce/exempt role-id list: an optional array of non-empty role-id strings
-// (deduplicated). null/undefined leaves the column unchanged (COALESCE). An empty array is a valid,
-// meaningful value (clears the list) so it is preserved rather than coerced to null. Role ids are
+// Validate 2FA enforce/exempt id lists: optional arrays of non-empty strings (deduplicated).
+// null/undefined leaves the column unchanged (COALESCE). An empty array is a valid, meaningful
+// value (clears the list) so it is preserved rather than coerced to null. Role/user ids are
 // free-form strings (no FK check), matching the rilTransferOptions convention.
-const validateOptionalRoleIdArray = (value: unknown, fieldName: string) => {
+const validateOptionalStringIdArray = (value: unknown, fieldName: string, itemName: string) => {
   if (value === undefined || value === null) {
     return { ok: true as const, value: null };
   }
@@ -332,19 +336,25 @@ const validateOptionalRoleIdArray = (value: unknown, fieldName: string) => {
     return { ok: false as const, message: `${fieldName} must be an array` };
   }
   if (value.length > 100) {
-    return { ok: false as const, message: `${fieldName} must contain 100 or fewer roles` };
+    return { ok: false as const, message: `${fieldName} must contain 100 or fewer ${itemName}` };
   }
-  const roleIds: string[] = [];
+  const ids: string[] = [];
   const seen = new Set<string>();
   for (const [index, entry] of value.entries()) {
     const result = validateOptionString(entry, `${fieldName}[${index}]`, 50);
     if (!result.ok) return result;
     if (seen.has(result.value)) continue;
-    roleIds.push(result.value);
+    ids.push(result.value);
     seen.add(result.value);
   }
-  return { ok: true as const, value: roleIds };
+  return { ok: true as const, value: ids };
 };
+
+const validateOptionalRoleIdArray = (value: unknown, fieldName: string) =>
+  validateOptionalStringIdArray(value, fieldName, 'roles');
+
+const validateOptionalUserIdArray = (value: unknown, fieldName: string) =>
+  validateOptionalStringIdArray(value, fieldName, 'users');
 
 const toResponse = (settings: generalSettingsRepo.GeneralSettings, revealApiKeys: boolean) => ({
   currency: settings.currency,
@@ -369,6 +379,7 @@ const toResponse = (settings: generalSettingsRepo.GeneralSettings, revealApiKeys
   enforceTotp: settings.enforceTotp ?? false,
   totpEnforcedRoleIds: settings.totpEnforcedRoleIds ?? [],
   totpExemptRoleIds: settings.totpExemptRoleIds ?? [],
+  totpExemptUserIds: settings.totpExemptUserIds ?? [],
 });
 
 export default async function (fastify: FastifyInstance, _opts: unknown) {
@@ -436,6 +447,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         enforceTotp?: boolean;
         totpEnforcedRoleIds?: string[];
         totpExemptRoleIds?: string[];
+        totpExemptUserIds?: string[];
       };
       const {
         currency,
@@ -455,6 +467,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         rilTransferOptions,
         totpEnforcedRoleIds,
         totpExemptRoleIds,
+        totpExemptUserIds,
       } = body;
       const currencyResult = optionalNonEmptyString(currency, 'currency');
       if (!currencyResult.ok) return badRequest(reply, currencyResult.message);
@@ -553,6 +566,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         'totpExemptRoleIds',
       );
       if (!totpExemptRoleIdsResult.ok) return badRequest(reply, totpExemptRoleIdsResult.message);
+      const totpExemptUserIdsResult = validateOptionalUserIdArray(
+        totpExemptUserIds,
+        'totpExemptUserIds',
+      );
+      if (!totpExemptUserIdsResult.ok) return badRequest(reply, totpExemptUserIdsResult.message);
 
       const previousSettings = await generalSettingsRepo.get();
       const settingsPatch = {
@@ -578,6 +596,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         enforceTotp: enforceTotpResult.value,
         totpEnforcedRoleIds: totpEnforcedRoleIdsResult.value,
         totpExemptRoleIds: totpExemptRoleIdsResult.value,
+        totpExemptUserIds: totpExemptUserIdsResult.value,
       };
 
       // Resolve the policy that WILL be in effect after this write (a null patch value leaves the
@@ -588,6 +607,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         totpEnforcedRoleIdsResult.value ?? previousSettings?.totpEnforcedRoleIds ?? [];
       const resultExemptRoleIds =
         totpExemptRoleIdsResult.value ?? previousSettings?.totpExemptRoleIds ?? [];
+      const resultExemptUserIds =
+        totpExemptUserIdsResult.value ?? previousSettings?.totpExemptUserIds ?? [];
 
       // Whenever the resulting policy enforces anyone AND an enforcement-relevant field actually
       // changed (turning the feature/enforcement on, or broadening the enforced/exempt role sets),
@@ -599,15 +620,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       // policy takes hold without abruptly logging anyone out — most importantly the admin toggling it.
       // The setting write + token revocation run in ONE transaction so a crash can't persist the policy
       // while leaving stale tokens valid.
-      // Compare via JSON of the sorted arrays so a role id containing the delimiter character can't
+      // Compare via JSON of the sorted arrays so an id containing the delimiter character can't
       // collide (ids are free-form strings) and wrongly skip the security-critical revocation below.
-      const sameRoleSet = (a: string[], b: string[]): boolean =>
+      const sameIdSet = (a: string[], b: string[]): boolean =>
         a.length === b.length && JSON.stringify(a.toSorted()) === JSON.stringify(b.toSorted());
       const enforcementRelevantChange =
         resultEnableTotp !== (previousSettings?.enableTotp ?? true) ||
         resultEnforceTotp !== (previousSettings?.enforceTotp ?? false) ||
-        !sameRoleSet(resultEnforcedRoleIds, previousSettings?.totpEnforcedRoleIds ?? []) ||
-        !sameRoleSet(resultExemptRoleIds, previousSettings?.totpExemptRoleIds ?? []);
+        !sameIdSet(resultEnforcedRoleIds, previousSettings?.totpEnforcedRoleIds ?? []) ||
+        !sameIdSet(resultExemptRoleIds, previousSettings?.totpExemptRoleIds ?? []) ||
+        !sameIdSet(resultExemptUserIds, previousSettings?.totpExemptUserIds ?? []);
       const shouldRevokeTokens = resultEnableTotp && resultEnforceTotp && enforcementRelevantChange;
 
       let settings: Awaited<ReturnType<typeof generalSettingsRepo.update>>;
@@ -619,6 +641,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             usersRepo.revokeTokensForUnenrolledEnforcedUsers(
               resultEnforcedRoleIds,
               resultExemptRoleIds,
+              resultExemptUserIds,
               tx,
             ),
           ]);
