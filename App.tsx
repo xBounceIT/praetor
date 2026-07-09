@@ -100,6 +100,7 @@ import type {
   GeneralSettings as IGeneralSettings,
   Invoice,
   LdapConfig,
+  MfaExemptionUser,
   Notification,
   Product,
   Project,
@@ -170,6 +171,7 @@ import {
 
 type AppModuleState = {
   users: User[];
+  mfaExemptionUsers: MfaExemptionUser[];
   clients: Client[];
   projects: Project[];
   projectTasks: ProjectTask[];
@@ -193,6 +195,7 @@ type AppModuleState = {
 
 const INITIAL_APP_MODULE_STATE: AppModuleState = {
   users: [],
+  mfaExemptionUsers: [],
   clients: [],
   projects: [],
   projectTasks: [],
@@ -1120,6 +1123,7 @@ const useAppContentController = () => {
   );
   const {
     users,
+    mfaExemptionUsers,
     clients,
     projects,
     projectTasks,
@@ -1144,6 +1148,9 @@ const useAppContentController = () => {
     (value) => dispatchModuleState({ type: 'set', key: 'users', value }),
     [],
   );
+  const setMfaExemptionUsers = useCallback<
+    React.Dispatch<React.SetStateAction<MfaExemptionUser[]>>
+  >((value) => dispatchModuleState({ type: 'set', key: 'mfaExemptionUsers', value }), []);
   const setClients = useCallback<React.Dispatch<React.SetStateAction<Client[]>>>(
     (value) => dispatchModuleState({ type: 'set', key: 'clients', value }),
     [],
@@ -1533,6 +1540,7 @@ const useAppContentController = () => {
       },
       roles: () => setLocalState('roles', []),
       users: () => setModuleState('users', []),
+      mfaExemptionUsers: () => setModuleState('mfaExemptionUsers', []),
       clients: () => setModuleState('clients', []),
       projects: () => setModuleState('projects', []),
       projectTasks: () => setModuleState('projectTasks', []),
@@ -1815,6 +1823,20 @@ const useAppContentController = () => {
 
   const ldapHandlers = useMemo(() => makeLdapHandlers({ setLdapConfig }), [setLdapConfig]);
 
+  const refreshMfaExemptionUsers = useCallback(async () => {
+    const permissions = currentUser?.permissions || [];
+    const canRefreshMfaExemptions =
+      hasPermission(permissions, VIEW_PERMISSION_MAP['administration/authentication']) &&
+      hasPermission(permissions, 'administration.general.update');
+    if (!canRefreshMfaExemptions) return;
+
+    try {
+      const options = await api.users.listTotpExemptionOptions();
+      setMfaExemptionUsers(options);
+    } catch (err) {
+      console.error('Failed to refresh MFA exemption users:', err);
+    }
+  }, [currentUser?.permissions, setMfaExemptionUsers]);
   const supplierHandlers = useMemo(() => makeSupplierHandlers({ setSuppliers }), [setSuppliers]);
 
   const supplierInvoiceHandlers = useMemo(
@@ -1835,8 +1857,17 @@ const useAppContentController = () => {
         setRoles,
         setWorkUnits,
         setViewingUserId,
+        refreshMfaExemptionUsers,
       }),
-    [currentUser, viewingUserId, setUsers, setRoles, setWorkUnits, setViewingUserId],
+    [
+      currentUser,
+      viewingUserId,
+      setUsers,
+      setRoles,
+      setWorkUnits,
+      setViewingUserId,
+      refreshMfaExemptionUsers,
+    ],
   );
 
   const quoteIdsWithOffers = useMemo(() => {
@@ -2251,6 +2282,10 @@ const useAppContentController = () => {
           permissions,
           buildPermission('administration.authentication', 'view'),
         );
+        const canManageMfa = hasPermission(
+          permissions,
+          buildPermission('administration.general', 'update'),
+        );
         const canViewEmail = hasPermission(
           permissions,
           buildPermission('administration.email', 'view'),
@@ -2455,6 +2490,7 @@ const useAppContentController = () => {
           case 'administration': {
             if (!canViewConfiguration) return;
             const shouldLoadUsers = canViewUserManagement;
+            const shouldLoadMfaExemptionUsers = canViewAuthentication && canManageMfa;
             const shouldLoadRoles = canViewRoles || canViewAuthentication || canViewUserManagement;
 
             failedDatasets = await loadDatasets(
@@ -2465,6 +2501,12 @@ const useAppContentController = () => {
                   shouldLoadUsers && canListUsers,
                   () => api.users.list(),
                   setUsers,
+                ),
+                listRequest(
+                  'MFA exemption users',
+                  shouldLoadMfaExemptionUsers,
+                  () => api.users.listTotpExemptionOptions(),
+                  setMfaExemptionUsers,
                 ),
               ],
               { shouldApply: isCurrentModuleLoad },
@@ -2745,6 +2787,7 @@ const useAppContentController = () => {
     setProjects,
     setProjectTasks,
     setUsers,
+    setMfaExemptionUsers,
     setWorkUnits,
     setSuppliers,
     setQuotes,
@@ -3199,15 +3242,19 @@ const useAppContentController = () => {
 
   const handleLdapUsersSynced = useCallback(() => {
     const permissions = currentUser?.permissions || [];
-    if (!hasViewAccess(permissions, 'administration/user-management')) return;
+    const canRefreshUserManagement = hasViewAccess(permissions, 'administration/user-management');
 
-    void api.users
-      .list()
-      .then(setUsers)
-      .catch((err) => {
-        console.error('Failed to refresh users after LDAP sync:', err);
-      });
-  }, [currentUser?.permissions, setUsers]);
+    if (canRefreshUserManagement) {
+      void api.users
+        .list()
+        .then(setUsers)
+        .catch((err) => {
+          console.error('Failed to refresh users after LDAP sync:', err);
+        });
+    }
+
+    void refreshMfaExemptionUsers();
+  }, [currentUser?.permissions, refreshMfaExemptionUsers, setUsers]);
 
   const handleSaveSsoProvider = async (provider: Partial<SsoProvider>) => {
     try {
@@ -3280,6 +3327,7 @@ const useAppContentController = () => {
   return {
     tApp,
     users,
+    mfaExemptionUsers,
     clients,
     projects,
     projectTasks,
@@ -4417,6 +4465,7 @@ const AdministrationRoutes: React.FC<{ controller: AuthenticatedAppContentContro
     roles,
     ssoProviders,
     users,
+    mfaExemptionUsers,
   } = controller;
 
   return (
@@ -4460,6 +4509,7 @@ const AdministrationRoutes: React.FC<{ controller: AuthenticatedAppContentContro
             onSave={handleSaveLdapConfig}
             onLdapUsersSynced={handleLdapUsersSynced}
             roles={roles}
+            users={mfaExemptionUsers}
             ssoProviders={ssoProviders}
             onSaveSsoProvider={handleSaveSsoProvider}
             onDeleteSsoProvider={handleDeleteSsoProvider}
@@ -4472,8 +4522,12 @@ const AdministrationRoutes: React.FC<{ controller: AuthenticatedAppContentContro
               handleUpdateGeneralSettings({ totpEnforcedRoleIds: value })
             }
             exemptRoleIds={generalSettings.totpExemptRoleIds}
+            exemptUserIds={generalSettings.totpExemptUserIds}
             onSetExemptRoleIds={(value) =>
               handleUpdateGeneralSettings({ totpExemptRoleIds: value })
+            }
+            onSetExemptUserIds={(value) =>
+              handleUpdateGeneralSettings({ totpExemptUserIds: value })
             }
             sessionIdleTimeoutMinutes={generalSettings.sessionIdleTimeoutMinutes}
             onSetSessionIdleTimeoutMinutes={(value) =>

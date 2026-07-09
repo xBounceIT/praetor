@@ -680,6 +680,13 @@
       "when": 1783627765406,
       "tag": "0096_add_project_status",
       "breakpoints": true
+    },
+    {
+      "idx": 97,
+      "version": "7",
+      "when": 1783629256278,
+      "tag": "0097_add_totp_exempt_user_ids",
+      "breakpoints": true
     }
   ]
 }

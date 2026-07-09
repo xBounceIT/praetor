@@ -115,6 +115,7 @@ const SETTINGS_WITH_KEYS = {
   enforceTotp: false,
   totpEnforcedRoleIds: [],
   totpExemptRoleIds: [],
+  totpExemptUserIds: [],
   sessionIdleTimeoutMinutes: 30,
 };
 
@@ -151,8 +152,11 @@ afterEach(async () => {
 const authHeader = () => ({ authorization: `Bearer ${signToken({ userId: 'u1' })}` });
 
 describe('GET /api/general-settings', () => {
-  test('200 with administration.general.update reveals API keys', async () => {
-    settingsGetMock.mockResolvedValue(SETTINGS_WITH_KEYS);
+  test('200 with administration.general.update reveals API keys and MFA exemption user IDs', async () => {
+    settingsGetMock.mockResolvedValue({
+      ...SETTINGS_WITH_KEYS,
+      totpExemptUserIds: ['u2'],
+    });
 
     const res = await testApp.inject({
       method: 'GET',
@@ -164,11 +168,15 @@ describe('GET /api/general-settings', () => {
     const body = JSON.parse(res.body);
     expect(body.geminiApiKey).toBe('plaintext-gemini-key');
     expect(body.openrouterApiKey).toBe('plaintext-openrouter-key');
+    expect(body.totpExemptUserIds).toEqual(['u2']);
   });
 
   test('200 without admin perm masks API keys', async () => {
     getRolePermissionsMock.mockResolvedValue([]); // no admin perm
-    settingsGetMock.mockResolvedValue(SETTINGS_WITH_KEYS);
+    settingsGetMock.mockResolvedValue({
+      ...SETTINGS_WITH_KEYS,
+      totpExemptUserIds: ['u2'],
+    });
 
     const res = await testApp.inject({
       method: 'GET',
@@ -180,6 +188,7 @@ describe('GET /api/general-settings', () => {
     const body = JSON.parse(res.body);
     expect(body.geminiApiKey).toBe(MASKED_SECRET);
     expect(body.openrouterApiKey).toBe(MASKED_SECRET);
+    expect(body).not.toHaveProperty('totpExemptUserIds');
   });
 
   test('200 returns DEFAULT_SETTINGS when repo returns null', async () => {
@@ -311,7 +320,7 @@ describe('PUT /api/general-settings', () => {
   });
 
   test('200 broadening the enforced role list (enforcement already on) revokes tokens', async () => {
-    // Enforcement stays on but the role scope changes — the change-detection (sameRoleSet) must
+    // Enforcement stays on but the role scope changes — the change-detection (sameIdSet) must
     // notice it and revoke the now-enforced users' tokens, passing the NEW enforced/exempt lists.
     settingsGetMock.mockResolvedValue({
       ...SETTINGS_WITH_KEYS,
@@ -340,6 +349,7 @@ describe('PUT /api/general-settings', () => {
     expect(revokeTokensForUnenrolledEnforcedUsersMock).toHaveBeenCalledTimes(1);
     expect(revokeTokensForUnenrolledEnforcedUsersMock).toHaveBeenCalledWith(
       ['admin', 'manager'],
+      [],
       [],
       expect.anything(),
     );
@@ -444,18 +454,23 @@ describe('PUT /api/general-settings', () => {
     expect(settingsUpdateMock).not.toHaveBeenCalled();
   });
 
-  test('200 round-trips totpEnforcedRoleIds and totpExemptRoleIds', async () => {
+  test('200 round-trips and deduplicates MFA role/user policy ids', async () => {
     settingsUpdateMock.mockResolvedValue({
       ...SETTINGS_WITH_KEYS,
       totpEnforcedRoleIds: ['admin'],
       totpExemptRoleIds: ['viewer'],
+      totpExemptUserIds: ['u2', 'u3'],
     });
 
     const res = await testApp.inject({
       method: 'PUT',
       url: '/api/general-settings',
       headers: authHeader(),
-      payload: { totpEnforcedRoleIds: ['admin'], totpExemptRoleIds: ['viewer'] },
+      payload: {
+        totpEnforcedRoleIds: ['admin'],
+        totpExemptRoleIds: ['viewer'],
+        totpExemptUserIds: ['u2', 'u2', 'u3'],
+      },
     });
 
     expect(res.statusCode).toBe(200);
@@ -463,11 +478,25 @@ describe('PUT /api/general-settings', () => {
       expect.objectContaining({
         totpEnforcedRoleIds: ['admin'],
         totpExemptRoleIds: ['viewer'],
+        totpExemptUserIds: ['u2', 'u3'],
       }),
     );
     const body = JSON.parse(res.body);
     expect(body.totpEnforcedRoleIds).toEqual(['admin']);
     expect(body.totpExemptRoleIds).toEqual(['viewer']);
+    expect(body.totpExemptUserIds).toEqual(['u2', 'u3']);
+  });
+
+  test('400 rejects overlong MFA user policy ids', async () => {
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/general-settings',
+      headers: authHeader(),
+      payload: { totpExemptUserIds: ['u'.repeat(51)] },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(settingsUpdateMock).not.toHaveBeenCalled();
   });
 
   test('200 accepts RIL settings and returns them', async () => {

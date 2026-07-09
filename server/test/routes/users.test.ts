@@ -60,6 +60,7 @@ const markPatUsedMock = mock(async () => undefined);
 // usersRepo
 const listAllForAdminMock = mock();
 const listScopedForManagerMock = mock();
+const listTotpExemptionOptionsMock = mock();
 const listResponsibleOptionsMock = mock();
 const isActiveAppUserMock = mock();
 const findCoreByIdMock = mock();
@@ -85,6 +86,7 @@ const generalSettingsGetMock = mock<
     enforceTotp?: boolean;
     totpEnforcedRoleIds?: string[];
     totpExemptRoleIds?: string[];
+    totpExemptUserIds?: string[];
   } | null>
 >(async () => null);
 
@@ -142,6 +144,7 @@ beforeAll(async () => {
     findAuthUserById: findAuthUserByIdMock,
     listAllForAdmin: listAllForAdminMock,
     listScopedForManager: listScopedForManagerMock,
+    listTotpExemptionOptions: listTotpExemptionOptionsMock,
     listResponsibleOptions: listResponsibleOptionsMock,
     isActiveAppUser: isActiveAppUserMock,
     findCoreById: findCoreByIdMock,
@@ -368,6 +371,7 @@ const allMocks = [
   getRolePermissionsMock,
   listAllForAdminMock,
   listScopedForManagerMock,
+  listTotpExemptionOptionsMock,
   listResponsibleOptionsMock,
   isActiveAppUserMock,
   findCoreByIdMock,
@@ -675,6 +679,56 @@ describe('GET /api/users', () => {
       headers: adminAuth(),
     });
     expect(res.statusCode).toBe(403);
+  });
+});
+
+// =========================================================================
+// GET /api/users/totp-exemption-options - MFA exemption picker users
+// =========================================================================
+
+describe('GET /api/users/totp-exemption-options', () => {
+  test('200 with MFA settings update permission returns only minimal option fields', async () => {
+    getRolePermissionsMock.mockResolvedValue(['administration.general.update']);
+    const options = [
+      { id: 'u1', name: 'Alice Admin', username: 'alice', avatarInitials: 'AA' },
+      { id: 'u2', name: 'Bob User', username: 'bob', avatarInitials: 'BU' },
+    ];
+    listTotpExemptionOptionsMock.mockResolvedValue(options);
+
+    const res = await testApp.inject({
+      method: 'GET',
+      url: '/api/users/totp-exemption-options',
+      headers: adminAuth(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body)).toEqual(options);
+    expect(listTotpExemptionOptionsMock).toHaveBeenCalledTimes(1);
+    expect(listAllForAdminMock).not.toHaveBeenCalled();
+    expect(listScopedForManagerMock).not.toHaveBeenCalled();
+  });
+
+  test('403 without MFA settings update permission', async () => {
+    getRolePermissionsMock.mockResolvedValue(['administration.authentication.view']);
+
+    const res = await testApp.inject({
+      method: 'GET',
+      url: '/api/users/totp-exemption-options',
+      headers: adminAuth(),
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(listTotpExemptionOptionsMock).not.toHaveBeenCalled();
+  });
+
+  test('401 missing token', async () => {
+    const res = await testApp.inject({
+      method: 'GET',
+      url: '/api/users/totp-exemption-options',
+    });
+
+    expect(res.statusCode).toBe(401);
+    expect(listTotpExemptionOptionsMock).not.toHaveBeenCalled();
   });
 });
 
@@ -1742,6 +1796,7 @@ describe('PUT /api/users/:id', () => {
       enforceTotp: true,
       totpEnforcedRoleIds: ['admin'],
       totpExemptRoleIds: [],
+      totpExemptUserIds: [],
     });
     getTotpStateMock.mockResolvedValue({
       totpSecret: null,
@@ -2788,6 +2843,7 @@ describe('PUT /api/users/:id/auth-method', () => {
         enforceTotp: true,
         totpEnforcedRoleIds: ['admin'],
         totpExemptRoleIds: [],
+        totpExemptUserIds: [],
       });
       getTotpStateMock.mockResolvedValue({
         totpSecret: null,
@@ -2876,6 +2932,7 @@ describe('PUT /api/users/:id/auth-method', () => {
         enforceTotp: true,
         totpEnforcedRoleIds: ['admin'],
         totpExemptRoleIds: [],
+        totpExemptUserIds: [],
       });
       getTotpStateMock.mockResolvedValue({
         totpSecret: null,
@@ -3272,6 +3329,7 @@ describe('PUT /api/users/:id/roles', () => {
       enforceTotp: true,
       totpEnforcedRoleIds: ['admin'],
       totpExemptRoleIds: [],
+      totpExemptUserIds: [],
     });
     getTotpStateMock.mockResolvedValue({
       totpSecret: null,

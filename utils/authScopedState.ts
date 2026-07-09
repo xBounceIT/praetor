@@ -20,6 +20,7 @@ export type AuthScopedStateKey =
   | 'hasLoadedRoles'
   | 'roles'
   | 'users'
+  | 'mfaExemptionUsers'
   | 'clients'
   | 'projects'
   | 'projectTasks'
@@ -53,6 +54,7 @@ export const ALL_AUTH_SCOPED_KEYS: readonly AuthScopedStateKey[] = [
   'hasLoadedRoles',
   'roles',
   'users',
+  'mfaExemptionUsers',
   'clients',
   'projects',
   'projectTasks',

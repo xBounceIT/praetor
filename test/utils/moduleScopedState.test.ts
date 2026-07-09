@@ -39,8 +39,16 @@ describe('moduleScopedState', () => {
       expect(stale).toContain('clientOffers');
       expect(stale).toContain('supplierOrders');
       expect(stale).toContain('supplierInvoices');
+      expect(stale).toContain('mfaExemptionUsers');
     });
 
+    test('administration keeps user-management users and MFA exemption users', () => {
+      const stale = getStaleModuleScopedKeys('administration');
+      expect(stale).not.toContain('users');
+      expect(stale).not.toContain('mfaExemptionUsers');
+      expect(stale).toContain('clients');
+      expect(stale).toContain('entries');
+    });
     test('projects module keeps its arrays and stales sales/accounting-only data', () => {
       const stale = getStaleModuleScopedKeys('projects');
       // projects owns projects/projectTasks/clients/users/workUnits/clientsOrders

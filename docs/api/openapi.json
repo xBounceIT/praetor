@@ -3972,6 +3972,196 @@
         }
       }
     },
+    "/api/users/totp-exemption-options": {
+      "get": {
+        "summary": "List users for MFA exemption options",
+        "tags": [
+          "users"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "username": {
+                        "type": "string"
+                      },
+                      "avatarInitials": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "name",
+                      "username",
+                      "avatarInitials"
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/users/responsible-options": {
       "get": {
         "summary": "List responsible user options",
@@ -10408,6 +10598,15 @@
                           "one_time"
                         ]
                       },
+                      "status": {
+                        "type": "string",
+                        "enum": [
+                          "da_fare",
+                          "in_corso",
+                          "in_pausa",
+                          "terminato"
+                        ]
+                      },
                       "tipo": {
                         "type": "string",
                         "enum": [
@@ -10426,6 +10625,7 @@
                       "isDisabled",
                       "billingType",
                       "billingFrequency",
+                      "status",
                       "tipo",
                       "tipoConfirmed"
                     ]
@@ -10639,6 +10839,15 @@
                       "one_time"
                     ]
                   },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "da_fare",
+                      "in_corso",
+                      "in_pausa",
+                      "terminato"
+                    ]
+                  },
                   "tipo": {
                     "type": "string",
                     "enum": [
@@ -10733,6 +10942,15 @@
                         "one_time"
                       ]
                     },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "da_fare",
+                        "in_corso",
+                        "in_pausa",
+                        "terminato"
+                      ]
+                    },
                     "tipo": {
                       "type": "string",
                       "enum": [
@@ -10751,6 +10969,7 @@
                     "isDisabled",
                     "billingType",
                     "billingFrequency",
+                    "status",
                     "tipo",
                     "tipoConfirmed"
                   ]
@@ -11301,6 +11520,15 @@
                       "one_time"
                     ]
                   },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "da_fare",
+                      "in_corso",
+                      "in_pausa",
+                      "terminato"
+                    ]
+                  },
                   "tipo": {
                     "type": "string",
                     "enum": [
@@ -11397,6 +11625,15 @@
                         "one_time"
                       ]
                     },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "da_fare",
+                        "in_corso",
+                        "in_pausa",
+                        "terminato"
+                      ]
+                    },
                     "tipo": {
                       "type": "string",
                       "enum": [
@@ -11415,6 +11652,7 @@
                     "isDisabled",
                     "billingType",
                     "billingFrequency",
+                    "status",
                     "tipo",
                     "tipoConfirmed"
                   ]
@@ -18711,7 +18949,7 @@
         "tags": [
           "entries"
         ],
-        "description": "Creates one time entry. Returns 409 when the target user already has an entry for the same date, project, and task. Returns 403 when the selected project is expired and the role lacks timesheets.expired_projects.create.",
+        "description": "Creates one time entry. Returns 409 when the target user already has an entry for the same date, project, and task. Returns 403 when the selected project is in a status that blocks time entries, or when it is expired and the role lacks timesheets.expired_projects.create.",
         "requestBody": {
           "required": true,
           "content": {
@@ -19632,7 +19870,7 @@
         "tags": [
           "entries"
         ],
-        "description": "Walks the active recurring task templates assigned to the target user (or the authenticated user if `userId` is omitted) and inserts a placeholder time entry for every matching day in `[fromDate, toDate]` that does not already have an entry for the same (date, project, task) tuple. Expired projects are skipped unless the role has timesheets.expired_projects.create. Idempotent.",
+        "description": "Walks the active recurring task templates assigned to the target user (or the authenticated user if `userId` is omitted) and inserts a placeholder time entry for every matching day in `[fromDate, toDate]` that does not already have an entry for the same (date, project, task) tuple. Projects in statuses that block time entries are always skipped; expired projects are skipped unless the role has timesheets.expired_projects.create. Idempotent.",
         "requestBody": {
           "required": true,
           "content": {
@@ -24855,14 +25093,24 @@
                       "type": "array",
                       "maxItems": 100,
                       "items": {
-                        "type": "string"
+                        "type": "string",
+                        "maxLength": 50
                       }
                     },
                     "totpExemptRoleIds": {
                       "type": "array",
                       "maxItems": 100,
                       "items": {
-                        "type": "string"
+                        "type": "string",
+                        "maxLength": 50
+                      }
+                    },
+                    "totpExemptUserIds": {
+                      "type": "array",
+                      "maxItems": 100,
+                      "items": {
+                        "type": "string",
+                        "maxLength": 50
                       }
                     },
                     "sessionIdleTimeoutMinutes": {
@@ -25147,14 +25395,24 @@
                     "type": "array",
                     "maxItems": 100,
                     "items": {
-                      "type": "string"
+                      "type": "string",
+                      "maxLength": 50
                     }
                   },
                   "totpExemptRoleIds": {
                     "type": "array",
                     "maxItems": 100,
                     "items": {
-                      "type": "string"
+                      "type": "string",
+                      "maxLength": 50
+                    }
+                  },
+                  "totpExemptUserIds": {
+                    "type": "array",
+                    "maxItems": 100,
+                    "items": {
+                      "type": "string",
+                      "maxLength": 50
                     }
                   },
                   "sessionIdleTimeoutMinutes": {
@@ -25261,14 +25519,24 @@
                       "type": "array",
                       "maxItems": 100,
                       "items": {
-                        "type": "string"
+                        "type": "string",
+                        "maxLength": 50
                       }
                     },
                     "totpExemptRoleIds": {
                       "type": "array",
                       "maxItems": 100,
                       "items": {
-                        "type": "string"
+                        "type": "string",
+                        "maxLength": 50
+                      }
+                    },
+                    "totpExemptUserIds": {
+                      "type": "array",
+                      "maxItems": 100,
+                      "items": {
+                        "type": "string",
+                        "maxLength": 50
                       }
                     },
                     "sessionIdleTimeoutMinutes": {

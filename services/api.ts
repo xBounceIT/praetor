@@ -45,6 +45,7 @@ export { supplierOrdersApi } from './api/supplierOrders';
 export { supplierQuotesApi } from './api/supplierQuotes';
 export { suppliersApi } from './api/suppliers';
 export { tasksApi } from './api/tasks';
+export type { TotpExemptionUserOption } from './api/users';
 export { usersApi } from './api/users';
 export type {
   CreateViewBody,

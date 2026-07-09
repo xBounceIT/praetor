@@ -14,6 +14,7 @@ export type GeneralSettings = {
   enforceTotp: boolean | null;
   totpEnforcedRoleIds: string[] | null;
   totpExemptRoleIds: string[] | null;
+  totpExemptUserIds: string[] | null;
   sessionIdleTimeoutMinutes: number;
   geminiApiKey: string | null;
   aiProvider: string | null;
@@ -40,6 +41,7 @@ export type GeneralSettingsPatch = {
   enforceTotp?: boolean | null;
   totpEnforcedRoleIds?: string[] | null;
   totpExemptRoleIds?: string[] | null;
+  totpExemptUserIds?: string[] | null;
   sessionIdleTimeoutMinutes?: number | null;
   geminiApiKey?: string | null;
   aiProvider?: string | null;
@@ -66,6 +68,7 @@ const GENERAL_SETTINGS_PROJECTION = {
   enforceTotp: generalSettings.enforceTotp,
   totpEnforcedRoleIds: generalSettings.totpEnforcedRoleIds,
   totpExemptRoleIds: generalSettings.totpExemptRoleIds,
+  totpExemptUserIds: generalSettings.totpExemptUserIds,
   sessionIdleTimeoutMinutes: generalSettings.sessionIdleTimeoutMinutes,
   geminiApiKey: generalSettings.geminiApiKey,
   aiProvider: generalSettings.aiProvider,
@@ -92,6 +95,7 @@ type GeneralSettingsRow = {
   enforceTotp: boolean | null;
   totpEnforcedRoleIds: string[] | null;
   totpExemptRoleIds: string[] | null;
+  totpExemptUserIds: string[] | null;
   sessionIdleTimeoutMinutes: number | null;
   geminiApiKey: string | null;
   aiProvider: string | null;
@@ -139,6 +143,7 @@ const mapRow = (row: GeneralSettingsRow): GeneralSettings => ({
   enforceTotp: row.enforceTotp,
   totpEnforcedRoleIds: row.totpEnforcedRoleIds,
   totpExemptRoleIds: row.totpExemptRoleIds,
+  totpExemptUserIds: row.totpExemptUserIds,
   sessionIdleTimeoutMinutes: normalizeSessionIdleTimeoutMinutes(
     row.sessionIdleTimeoutMinutes ?? DEFAULT_FALLBACKS.sessionIdleTimeoutMinutes,
   ),
@@ -180,6 +185,8 @@ export const update = async (
     patch.totpEnforcedRoleIds == null ? null : JSON.stringify(patch.totpEnforcedRoleIds);
   const totpExemptRoleIdsParam =
     patch.totpExemptRoleIds == null ? null : JSON.stringify(patch.totpExemptRoleIds);
+  const totpExemptUserIdsParam =
+    patch.totpExemptUserIds == null ? null : JSON.stringify(patch.totpExemptUserIds);
 
   const result = await exec
     .update(generalSettings)
@@ -193,6 +200,7 @@ export const update = async (
       enforceTotp: sql`COALESCE(${patch.enforceTotp ?? null}, ${generalSettings.enforceTotp})`,
       totpEnforcedRoleIds: sql`COALESCE(${totpEnforcedRoleIdsParam}::jsonb, ${generalSettings.totpEnforcedRoleIds})`,
       totpExemptRoleIds: sql`COALESCE(${totpExemptRoleIdsParam}::jsonb, ${generalSettings.totpExemptRoleIds})`,
+      totpExemptUserIds: sql`COALESCE(${totpExemptUserIdsParam}::jsonb, ${generalSettings.totpExemptUserIds})`,
       sessionIdleTimeoutMinutes: sql`COALESCE(${patch.sessionIdleTimeoutMinutes ?? null}, ${generalSettings.sessionIdleTimeoutMinutes})`,
       geminiApiKey: sql`COALESCE(${patch.geminiApiKey ?? null}, ${generalSettings.geminiApiKey})`,
       aiProvider: sql`COALESCE(${patch.aiProvider ?? null}, ${generalSettings.aiProvider})`,

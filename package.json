@@ -18,7 +18,7 @@
     "lint:fix": "biome check --write .",
     "format": "biome format --write .",
     "docs:frontend": "typedoc --options typedoc.json",
-    "docs:api": "bun ./server/scripts/generate-openapi.ts",
+    "docs:api": "cd server && bun ./scripts/generate-openapi.ts",
     "docs:user": "astro build --root docs-site",
     "docs:user:dev": "astro dev --root docs-site",
     "docs": "bun run docs:frontend && bun run docs:api && bun run docs:user",

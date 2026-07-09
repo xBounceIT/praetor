@@ -58,14 +58,15 @@ const getTotpStateMock = mock();
 const markBackupCodeUsedMock = mock();
 // Resolves null by default (no settings row). The TOTP-enforcement /login tests point it at an
 // enforcing policy; the union return type keeps both the null default and that override valid.
-// The real totpEnforcement service reads this repo, so the four policy fields drive enforcement:
+// The real totpEnforcement service reads this repo, so the five policy fields drive enforcement:
 // enableTotp (global kill-switch), enforceTotp (master), totpEnforcedRoleIds (empty = everyone),
-// totpExemptRoleIds (exempt wins).
+// totpExemptRoleIds/totpExemptUserIds (exempt wins).
 type TotpPolicySettings = {
   enableTotp: boolean;
   enforceTotp: boolean;
   totpEnforcedRoleIds: string[];
   totpExemptRoleIds: string[];
+  totpExemptUserIds: string[];
 };
 const generalSettingsGetMock = mock<() => Promise<TotpPolicySettings | null>>(async () => null);
 const updateDirectoryProfileMock = mock();
@@ -884,6 +885,7 @@ describe('POST /api/auth/login', () => {
       enforceTotp: false,
       totpEnforcedRoleIds: [],
       totpExemptRoleIds: [],
+      totpExemptUserIds: [],
     });
 
     const res = await testApp.inject({
@@ -927,6 +929,7 @@ describe('POST /api/auth/login', () => {
       enforceTotp: true,
       totpEnforcedRoleIds: ['admin'],
       totpExemptRoleIds: [],
+      totpExemptUserIds: [],
     });
 
     const res = await testApp.inject({
@@ -977,6 +980,7 @@ describe('POST /api/auth/login', () => {
       enforceTotp: true,
       totpEnforcedRoleIds: ['admin'],
       totpExemptRoleIds: [],
+      totpExemptUserIds: [],
     });
     listAvailableRolesForUserMock.mockResolvedValue([
       { id: 'manager', name: 'Manager', isSystem: true, isAdmin: false },
@@ -1019,6 +1023,7 @@ describe('POST /api/auth/login', () => {
       enforceTotp: true,
       totpEnforcedRoleIds: ['top_manager'],
       totpExemptRoleIds: [],
+      totpExemptUserIds: [],
     });
     listAvailableRolesForUserMock.mockResolvedValue([
       { id: 'manager', name: 'Manager', isSystem: true, isAdmin: false },
@@ -1080,6 +1085,7 @@ describe('POST /api/auth/login', () => {
       enforceTotp: true,
       totpEnforcedRoleIds: ['admin'],
       totpExemptRoleIds: [],
+      totpExemptUserIds: [],
     });
 
     const res = await testApp.inject({
@@ -1217,6 +1223,7 @@ describe('POST /api/auth/switch-role', () => {
       enforceTotp: true,
       totpEnforcedRoleIds: ['admin'],
       totpExemptRoleIds: [],
+      totpExemptUserIds: [],
     });
     findLoginUserByIdMock.mockResolvedValue({
       ...LOGIN_USER,
@@ -1521,6 +1528,7 @@ describe('POST /api/auth/totp-challenge', () => {
       enforceTotp: false,
       totpEnforcedRoleIds: [],
       totpExemptRoleIds: [],
+      totpExemptUserIds: [],
     });
 
     const res = await testApp.inject({

@@ -23,7 +23,8 @@ export type ModuleScopedStateKey =
   | 'entries'
   | 'workUnits'
   | 'responsibleUserOptions'
-  | 'users';
+  | 'users'
+  | 'mfaExemptionUsers';
 
 // Every key listed here is a module-scoped state-array on App.tsx.
 // Keep this list in sync with App.tsx's module-loading effect (the switch
@@ -49,6 +50,7 @@ export const ALL_MODULE_SCOPED_KEYS: readonly ModuleScopedStateKey[] = [
   'workUnits',
   'responsibleUserOptions',
   'users',
+  'mfaExemptionUsers',
 ];
 
 // Per-module: which state keys are loaded/owned by that module.
@@ -58,7 +60,7 @@ export const ALL_MODULE_SCOPED_KEYS: readonly ModuleScopedStateKey[] = [
 const MODULE_OWNED_KEYS: Record<string, readonly ModuleScopedStateKey[]> = {
   timesheets: ['entries', 'clients', 'projects', 'projectTasks', 'users'],
   hr: ['users', 'workUnits', 'responsibleUserOptions', 'clients', 'projects', 'projectTasks'],
-  administration: ['users'],
+  administration: ['users', 'mfaExemptionUsers'],
   crm: ['clients', 'suppliers'],
   sales: [
     'quotes',

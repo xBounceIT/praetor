@@ -1,5 +1,6 @@
 import type {
   Client,
+  MfaExemptionUser,
   Project,
   ProjectTask,
   ResponsibleUserOption,
@@ -10,8 +11,13 @@ import type { TrackerCatalogs } from '../../utils/trackerCatalogs';
 import { fetchApi } from './client';
 import { normalizeClient, normalizeProject, normalizeTask, normalizeUser } from './normalizers';
 
+export type TotpExemptionUserOption = MfaExemptionUser;
+
 export const usersApi = {
   list: (): Promise<User[]> => fetchApi<User[]>('/users').then((users) => users.map(normalizeUser)),
+
+  listTotpExemptionOptions: (): Promise<TotpExemptionUserOption[]> =>
+    fetchApi<TotpExemptionUserOption[]>('/users/totp-exemption-options'),
 
   getResponsibleOptions: (): Promise<ResponsibleUserOption[]> =>
     fetchApi<ResponsibleUserOption[]>('/users/responsible-options'),

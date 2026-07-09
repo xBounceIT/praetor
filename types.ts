@@ -133,6 +133,10 @@ export interface User {
   authProviderName?: string | null;
 }
 
+export type MfaExemptionUser = Pick<User, 'id' | 'name' | 'username' | 'avatarInitials'> & {
+  isDisabled?: boolean;
+};
+
 export interface ResponsibleUserOption {
   id: string;
   name: string;
@@ -194,11 +198,12 @@ export interface GeneralSettings {
   rilNoteOptions?: RilNoteOption[];
   rilTransferOptions?: string[];
   // 2FA org policy. `enableTotp` is the global feature switch; `enforceTotp` the master enforcement
-  // switch; the role-id lists scope enforcement (empty enforced list = everyone; exempt wins).
+  // switch; the role/user-id lists scope enforcement (empty enforced list = everyone; exempt wins).
   enableTotp: boolean;
   enforceTotp: boolean;
   totpEnforcedRoleIds: string[];
   totpExemptRoleIds: string[];
+  totpExemptUserIds: string[];
   sessionIdleTimeoutMinutes: number;
 }
 

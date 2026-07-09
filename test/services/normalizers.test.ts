@@ -269,6 +269,7 @@ const baseGeneralSettings: GeneralSettings = {
   enforceTotp: false,
   totpEnforcedRoleIds: [],
   totpExemptRoleIds: [],
+  totpExemptUserIds: [],
   sessionIdleTimeoutMinutes: 30,
   allowWeekendSelection: false,
   rilCompanyName: '',
@@ -1152,12 +1153,14 @@ describe('normalizeGeneralSettings', () => {
       enforceTotp: true,
       totpEnforcedRoleIds: ['admin'],
       totpExemptRoleIds: ['service-account'],
+      totpExemptUserIds: ['u1'],
     });
     expect(normalizeGeneralSettings(settings)).toMatchObject({
       enableTotp: false,
       enforceTotp: true,
       totpEnforcedRoleIds: ['admin'],
       totpExemptRoleIds: ['service-account'],
+      totpExemptUserIds: ['u1'],
     });
   });
 
@@ -1179,18 +1182,20 @@ describe('normalizeGeneralSettings', () => {
     ).toBe(30);
   });
 
-  test('defaults missing 2FA policy fields (enableTotp true, enforceTotp false, role lists [])', () => {
+  test('defaults missing 2FA policy fields (enableTotp true, enforceTotp false, id lists [])', () => {
     const settings = make<GeneralSettings>(baseGeneralSettings, {
       enableTotp: undefined,
       enforceTotp: undefined,
       totpEnforcedRoleIds: undefined,
       totpExemptRoleIds: undefined,
+      totpExemptUserIds: undefined,
     });
     expect(normalizeGeneralSettings(settings)).toMatchObject({
       enableTotp: true,
       enforceTotp: false,
       totpEnforcedRoleIds: [],
       totpExemptRoleIds: [],
+      totpExemptUserIds: [],
     });
   });
 });

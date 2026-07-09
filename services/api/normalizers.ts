@@ -459,6 +459,7 @@ export const normalizeGeneralSettings = (s: GeneralSettings): GeneralSettings =>
   enforceTotp: s.enforceTotp ?? false,
   totpEnforcedRoleIds: Array.isArray(s.totpEnforcedRoleIds) ? s.totpEnforcedRoleIds : [],
   totpExemptRoleIds: Array.isArray(s.totpExemptRoleIds) ? s.totpExemptRoleIds : [],
+  totpExemptUserIds: Array.isArray(s.totpExemptUserIds) ? s.totpExemptUserIds : [],
   sessionIdleTimeoutMinutes: normalizeSessionIdleTimeoutMinutes(s.sessionIdleTimeoutMinutes),
 });
 

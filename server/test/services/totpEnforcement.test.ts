@@ -11,12 +11,13 @@ const listAvailableRolesForUserMock = mock();
 let svc: typeof import('../../services/totpEnforcement.ts');
 
 // Build a full GeneralSettings-shaped object so generalSettingsRepo.get returns something the service
-// reads; only the four 2FA policy fields matter here, the rest are filler defaults.
+// reads; only the five 2FA policy fields matter here, the rest are filler defaults.
 const makeSettings = (policy: {
   enableTotp?: boolean;
   enforceTotp?: boolean;
   totpEnforcedRoleIds?: string[];
   totpExemptRoleIds?: string[];
+  totpExemptUserIds?: string[];
 }) => ({
   currency: 'EUR',
   dailyLimit: 8,
@@ -27,6 +28,7 @@ const makeSettings = (policy: {
   enforceTotp: false,
   totpEnforcedRoleIds: [],
   totpExemptRoleIds: [],
+  totpExemptUserIds: [],
   geminiApiKey: '',
   aiProvider: 'gemini',
   ...policy,
@@ -67,6 +69,7 @@ describe('userIsEnforced (pure)', () => {
       enforceTotp: true,
       enforcedRoleIds: ['admin'],
       exemptRoleIds: ['admin'],
+      exemptUserIds: [],
     };
     expect(svc.userIsEnforced(policy, ['admin'])).toBe(false);
   });
@@ -77,6 +80,7 @@ describe('userIsEnforced (pure)', () => {
       enforceTotp: true,
       enforcedRoleIds: [],
       exemptRoleIds: [],
+      exemptUserIds: [],
     };
     expect(svc.userIsEnforced(policy, ['user'])).toBe(true);
   });
@@ -87,6 +91,7 @@ describe('userIsEnforced (pure)', () => {
       enforceTotp: true,
       enforcedRoleIds: [],
       exemptRoleIds: ['service-account'],
+      exemptUserIds: [],
     };
     expect(svc.userIsEnforced(policy, ['service-account'])).toBe(false);
   });
@@ -97,6 +102,7 @@ describe('userIsEnforced (pure)', () => {
       enforceTotp: true,
       enforcedRoleIds: ['admin'],
       exemptRoleIds: [],
+      exemptUserIds: [],
     };
     expect(svc.userIsEnforced(policy, ['admin'])).toBe(true);
   });
@@ -107,6 +113,7 @@ describe('userIsEnforced (pure)', () => {
       enforceTotp: true,
       enforcedRoleIds: ['admin'],
       exemptRoleIds: [],
+      exemptUserIds: [],
     };
     expect(svc.userIsEnforced(policy, ['user'])).toBe(false);
   });
@@ -117,6 +124,7 @@ describe('userIsEnforced (pure)', () => {
       enforceTotp: true,
       enforcedRoleIds: ['admin'],
       exemptRoleIds: [],
+      exemptUserIds: [],
     };
     expect(svc.userIsEnforced(policy, ['user', 'admin'])).toBe(true);
   });
@@ -205,6 +213,19 @@ describe('isTotpMandatory', () => {
       }),
     );
     expect(await svc.isTotpMandatory({ id: 'u1', role: 'admin', authMethod: 'local' })).toBe(false);
+  });
+
+  test('respects exempt users: an explicitly exempt user is not mandatory even when enforced', async () => {
+    settingsGetMock.mockResolvedValue(
+      makeSettings({
+        enableTotp: true,
+        enforceTotp: true,
+        totpEnforcedRoleIds: ['admin'],
+        totpExemptUserIds: ['u1'],
+      }),
+    );
+    expect(await svc.isTotpMandatory({ id: 'u1', role: 'admin', authMethod: 'local' })).toBe(false);
+    expect(listAvailableRolesForUserMock).not.toHaveBeenCalled();
   });
 
   test('false when the user holds no enforced role', async () => {
@@ -346,6 +367,24 @@ describe('totpRoleSwitchBlocked', () => {
         'admin',
       ),
     ).toBe(false);
+  });
+
+  test('false when the user is explicitly exempt while switching into an enforced target', async () => {
+    settingsGetMock.mockResolvedValue(
+      makeSettings({
+        enableTotp: true,
+        enforceTotp: true,
+        totpEnforcedRoleIds: ['admin'],
+        totpExemptUserIds: ['u1'],
+      }),
+    );
+    expect(
+      await svc.totpRoleSwitchBlocked(
+        { id: 'u1', authMethod: 'local', totpEnabled: false },
+        'admin',
+      ),
+    ).toBe(false);
+    expect(listAvailableRolesForUserMock).not.toHaveBeenCalled();
   });
 
   test('false when switching into a non-enforced target role', async () => {

@@ -28,6 +28,7 @@ const PROJECTION_KEYS = [
   'enforceTotp',
   'totpEnforcedRoleIds',
   'totpExemptRoleIds',
+  'totpExemptUserIds',
   'sessionIdleTimeoutMinutes',
   'geminiApiKey',
   'aiProvider',
@@ -58,6 +59,7 @@ const baseFields: RowFields = {
   enforceTotp: false,
   totpEnforcedRoleIds: [],
   totpExemptRoleIds: [],
+  totpExemptUserIds: [],
   sessionIdleTimeoutMinutes: 30,
   geminiApiKey: null,
   aiProvider: null,
@@ -173,6 +175,7 @@ describe('update', () => {
         enforceTotp: true,
         totpEnforcedRoleIds: ['admin'],
         totpExemptRoleIds: ['guest'],
+        totpExemptUserIds: ['u1'],
         sessionIdleTimeoutMinutes: 45,
         geminiApiKey: 'g-key',
         aiProvider: 'gemini',
@@ -209,19 +212,21 @@ describe('update', () => {
     expect(params).toContain(45);
     const enforcedRolesJson = JSON.stringify(['admin']);
     const exemptRolesJson = JSON.stringify(['guest']);
+    const exemptUsersJson = JSON.stringify(['u1']);
     const noteOptionsJson = JSON.stringify([{ value: 'HOL', label: 'Holiday' }]);
     const transferOptionsJson = JSON.stringify(['Office', 'Remote']);
     expect(params).toContain(enforcedRolesJson);
     expect(params).toContain(exemptRolesJson);
+    expect(params).toContain(exemptUsersJson);
     expect(params).toContain(noteOptionsJson);
     expect(params).toContain(transferOptionsJson);
     // Tighter check on top of the .toContain() pattern from the canonical ldap/email tests:
-    // since the SET clause emits its 23 COALESCE pairs in projection-declaration order and
+    // since the SET clause emits its 24 COALESCE pairs in projection-declaration order and
     // each pair binds exactly one patch-value param (the column ref renders as a SQL
-    // identifier, not a parameter), the first 23 params must match PROJECTION_KEYS order.
+    // identifier, not a parameter), the first 24 params must match PROJECTION_KEYS order.
     // Catches column→param wiring bugs where two same-typed booleans (e.g.,
     // treatSaturdayAsHoliday vs allowWeekendSelection) get swapped.
-    expect(params.slice(0, 23)).toEqual([
+    expect(params.slice(0, 24)).toEqual([
       'USD',
       9,
       'Sunday',
@@ -231,6 +236,7 @@ describe('update', () => {
       true,
       enforcedRolesJson,
       exemptRolesJson,
+      exemptUsersJson,
       45,
       'g-key',
       'gemini',
@@ -251,11 +257,11 @@ describe('update', () => {
   test('binds NULL for omitted patch fields (COALESCE preserves existing column)', async () => {
     exec.enqueue({ rows: [buildRow()] });
     await generalSettingsRepo.update({ currency: 'USD' }, testDb);
-    // The SET clause always emits 23 COALESCE pairs (one per patchable column); 22 of those
+    // The SET clause always emits 24 COALESCE pairs (one per patchable column); 23 of those
     // patch-value params are null when only `currency` is provided. The UPDATE also binds the
-    // singleton WHERE param (1), so we expect >=22 nulls in the param list.
+    // singleton WHERE param (1), so we expect >=23 nulls in the param list.
     const nullCount = exec.calls[0].params.filter((p) => p === null).length;
-    expect(nullCount).toBeGreaterThanOrEqual(22);
+    expect(nullCount).toBeGreaterThanOrEqual(23);
   });
 
   test('binds NULL for explicit null RIL arrays to preserve existing values', async () => {

@@ -9,12 +9,13 @@ import { type AuthMethod, isTotpApplicable } from '../repositories/usersRepo.ts'
 // an existing session could be granted an enforced role, or a user could simply turn their second
 // factor off — all while the policy says they must use 2FA.
 //
-// The policy (org-wide, in general_settings) has four inputs:
+// The policy (org-wide, in general_settings) has five inputs:
 //   - enableTotp: global feature switch. OFF = no enrollment, no login challenge even for enrolled
 //     users, no enforcement (a true kill-switch). All other checks short-circuit to false.
 //   - enforceTotp: master enforcement switch.
 //   - enforcedRoleIds: roles whose holders must use 2FA. EMPTY = everyone (applicable users).
 //   - exemptRoleIds: roles whose holders are never forced (exempt wins over enforced).
+//   - exemptUserIds: users who are never forced (exempt wins over enforced).
 // SSO (oidc/saml) users are always exempt via `isTotpApplicable` — their IdP owns MFA.
 
 export type TotpPolicy = {
@@ -22,6 +23,7 @@ export type TotpPolicy = {
   enforceTotp: boolean;
   enforcedRoleIds: string[];
   exemptRoleIds: string[];
+  exemptUserIds: string[];
 };
 
 /** Read the org 2FA policy. `enableTotp` defaults to true (feature available, matching pre-policy
@@ -33,6 +35,7 @@ export const getTotpPolicy = async (exec: DbExecutor = db): Promise<TotpPolicy> 
     enforceTotp: settings?.enforceTotp ?? false,
     enforcedRoleIds: settings?.totpEnforcedRoleIds ?? [],
     exemptRoleIds: settings?.totpExemptRoleIds ?? [],
+    exemptUserIds: settings?.totpExemptUserIds ?? [],
   };
 };
 
@@ -55,9 +58,11 @@ const collectUserRoleIds = async (
  * on `enableTotp`/`enforceTotp`/`isTotpApplicable` first (see `isTotpMandatory`).
  */
 export const userIsEnforced = (policy: TotpPolicy, roleIds: string[]): boolean => {
-  if (roleIds.some((id) => policy.exemptRoleIds.includes(id))) return false;
+  const exemptRoleIds = new Set(policy.exemptRoleIds);
+  if (roleIds.some((id) => exemptRoleIds.has(id))) return false;
   if (policy.enforcedRoleIds.length === 0) return true;
-  return roleIds.some((id) => policy.enforcedRoleIds.includes(id));
+  const enforcedRoleIds = new Set(policy.enforcedRoleIds);
+  return roleIds.some((id) => enforcedRoleIds.has(id));
 };
 
 /** Whether the global 2FA feature is on. Gates login challenges, enrollment, and the /status card. */
@@ -86,6 +91,7 @@ export const isTotpMandatory = async (
   if (!isTotpApplicable(user.authMethod)) return false;
   const policy = await getTotpPolicy(exec);
   if (!policy.enableTotp || !policy.enforceTotp) return false;
+  if (policy.exemptUserIds.includes(user.id)) return false;
   const roleIds = await collectUserRoleIds(user.id, user.role, exec);
   return userIsEnforced(policy, roleIds);
 };
@@ -118,6 +124,7 @@ export const totpRoleSwitchBlocked = async (
   if (!isTotpApplicable(user.authMethod)) return false;
   const policy = await getTotpPolicy(exec);
   if (!policy.enableTotp || !policy.enforceTotp) return false;
+  if (policy.exemptUserIds.includes(user.id)) return false;
   // Consider the role they are switching into alongside the roles they already hold (exempt wins).
   const roleIds = await collectUserRoleIds(user.id, targetRole, exec);
   return userIsEnforced(policy, roleIds);

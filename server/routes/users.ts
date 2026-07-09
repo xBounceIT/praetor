@@ -136,6 +136,17 @@ const userSchema = {
   ],
 } as const;
 
+const totpExemptionUserSchema = {
+  type: 'object',
+  properties: {
+    id: { type: 'string' },
+    name: { type: 'string' },
+    username: { type: 'string' },
+    avatarInitials: { type: 'string' },
+  },
+  required: ['id', 'name', 'username', 'avatarInitials'],
+} as const;
+
 const userCreateBodySchema = {
   type: 'object',
   properties: {
@@ -678,6 +689,30 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           });
 
       return users.map((u) => maskUserForRequest(request, u));
+    },
+  );
+
+  // GET /totp-exemption-options - Minimal active user list for the MFA exemption picker.
+  fastify.get(
+    '/totp-exemption-options',
+    {
+      onRequest: [
+        fastify.rateLimit(STANDARD_ROUTE_RATE_LIMIT),
+        authenticateToken,
+        requirePermission('administration.general.update'),
+      ],
+      schema: {
+        tags: ['users'],
+        summary: 'List users for MFA exemption options',
+        response: {
+          200: { type: 'array', items: totpExemptionUserSchema },
+          ...standardRateLimitedErrorResponses,
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      if (!assertAuthenticated(request, reply)) return;
+      return usersRepo.listTotpExemptionOptions();
     },
   );
 

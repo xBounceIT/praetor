@@ -67,6 +67,7 @@ export const INITIAL_GENERAL_SETTINGS = deepFreeze<GeneralSettingsState>({
   enforceTotp: false,
   totpEnforcedRoleIds: [],
   totpExemptRoleIds: [],
+  totpExemptUserIds: [],
   sessionIdleTimeoutMinutes: DEFAULT_SESSION_IDLE_TIMEOUT_MINUTES,
 });
 

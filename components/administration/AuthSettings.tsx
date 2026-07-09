@@ -30,6 +30,7 @@ import type {
   LdapRoleResolution,
   LdapSyncResponse,
   LdapTestResponse,
+  MfaExemptionUser,
   Role,
   SsoProtocol,
   SsoProvider,
@@ -73,11 +74,12 @@ export interface AuthSettingsProps {
   onSave: (config: LdapConfig) => void | Promise<void>;
   onLdapUsersSynced?: () => void;
   roles: Role[];
+  users: MfaExemptionUser[];
   ssoProviders: SsoProvider[];
   onSaveSsoProvider: (provider: Partial<SsoProvider>) => Promise<SsoProvider>;
   onDeleteSsoProvider: (id: string) => Promise<void>;
   // 2FA org policy (all persisted through the general-settings endpoint). `enableTotp` is the global
-  // feature switch; `enforceTotp` the master enforcement switch; the role-id lists scope enforcement.
+  // feature switch; `enforceTotp` the master enforcement switch; the role/user-id lists scope enforcement.
   enableTotp: boolean;
   onSetEnableTotp: (value: boolean) => void | Promise<void>;
   enforceTotp: boolean;
@@ -85,7 +87,9 @@ export interface AuthSettingsProps {
   enforcedRoleIds: string[];
   onSetEnforcedRoleIds: (value: string[]) => void | Promise<void>;
   exemptRoleIds: string[];
+  exemptUserIds: string[];
   onSetExemptRoleIds: (value: string[]) => void | Promise<void>;
+  onSetExemptUserIds: (value: string[]) => void | Promise<void>;
   // The 2FA policy persists through the general-settings endpoint (administration.general.update).
   // The controls live on this auth page for discoverability, so we hide the MFA tab from users who
   // can view auth settings but lack general.update — otherwise they would see controls that 403 on
@@ -334,6 +338,7 @@ const useAuthSettingsController = ({
   onSave,
   onLdapUsersSynced,
   roles,
+  users,
   ssoProviders,
   onSaveSsoProvider,
   onDeleteSsoProvider,
@@ -344,7 +349,9 @@ const useAuthSettingsController = ({
   enforcedRoleIds,
   onSetEnforcedRoleIds,
   exemptRoleIds,
+  exemptUserIds,
   onSetExemptRoleIds,
+  onSetExemptUserIds,
   canManageMfa,
   sessionIdleTimeoutMinutes,
   onSetSessionIdleTimeoutMinutes,
@@ -556,6 +563,20 @@ const useAuthSettingsController = ({
     [roles, t],
   );
 
+  const userOptions = useMemo(() => {
+    const options: RoleOption[] = [];
+    for (const user of users) {
+      if (user.isDisabled === true) continue;
+      const displayName = user.name.trim();
+      const username = user.username.trim();
+      const name =
+        displayName && username && displayName !== username
+          ? `${displayName} (${username})`
+          : displayName || username;
+      options.push({ id: user.id, name });
+    }
+    return options.sort((a, b) => a.name.localeCompare(b.name));
+  }, [users]);
   const providersByProtocol = useMemo(
     () => ({
       oidc: ssoProviders.filter((provider) => provider.protocol === 'oidc'),
@@ -873,6 +894,7 @@ const useAuthSettingsController = ({
     enforcedRoleIds,
     errors,
     exemptRoleIds,
+    exemptUserIds,
     handleActiveTabSelect,
     handleSaveLdap,
     handleSaveProvider,
@@ -891,12 +913,14 @@ const useAuthSettingsController = ({
     onSetEnforceTotp,
     onSetEnforcedRoleIds,
     onSetExemptRoleIds,
+    onSetExemptUserIds,
     onSetSessionIdleTimeoutMinutes,
     providerDrafts,
     providerSaveErrors,
     providersByProtocol,
     replacingSecrets,
     roleOptions,
+    userOptions,
     savingProvider,
     sessionIdleTimeoutMinutes,
     setErrors,
@@ -1200,6 +1224,7 @@ const MfaEnforcementCard: React.FC<{ controller: AuthSettingsController }> = ({ 
           'mfa.enforcedRoles.description',
           'Users holding any selected role must use 2FA. Leave empty to require it for everyone (local/LDAP).',
         )}
+        options={controller.roleOptions}
         value={controller.enforcedRoleIds}
         placeholder={controller.t('mfa.enforcedRoles.placeholder', 'Everyone (local/LDAP)')}
         onChange={controller.onSetEnforcedRoleIds}
@@ -1212,9 +1237,23 @@ const MfaEnforcementCard: React.FC<{ controller: AuthSettingsController }> = ({ 
           'mfa.exemptRoles.description',
           'Users holding any selected role are never required to use 2FA, even if another of their roles is enforced.',
         )}
+        options={controller.roleOptions}
         value={controller.exemptRoleIds}
         placeholder={controller.t('mfa.exemptRoles.placeholder', 'No exemptions')}
         onChange={controller.onSetExemptRoleIds}
+      />
+      <MfaRoleSelect
+        controller={controller}
+        id="totp-exempt-users"
+        label={controller.t('mfa.exemptUsers.label', 'Exempt these users from 2FA')}
+        description={controller.t(
+          'mfa.exemptUsers.description',
+          'Selected users are never required to use 2FA, even if their roles are enforced.',
+        )}
+        options={controller.userOptions}
+        value={controller.exemptUserIds}
+        placeholder={controller.t('mfa.exemptUsers.placeholder', 'No user exemptions')}
+        onChange={controller.onSetExemptUserIds}
       />
     </CardContent>
   </Card>
@@ -1225,10 +1264,11 @@ const MfaRoleSelect: React.FC<{
   id: string;
   label: string;
   description: string;
+  options: RoleOption[];
   value: string[];
   placeholder: string;
   onChange: (value: string[]) => void | Promise<void>;
-}> = ({ controller, id, label, description, value, placeholder, onChange }) => (
+}> = ({ controller, id, label, description, options, value, placeholder, onChange }) => (
   <UIField>
     <FieldLabel htmlFor={id}>{label}</FieldLabel>
     <FieldDescription>{description}</FieldDescription>
@@ -1237,7 +1277,7 @@ const MfaRoleSelect: React.FC<{
       isMulti
       searchable
       disabled={!controller.enableTotp || !controller.enforceTotp}
-      options={controller.roleOptions}
+      options={options}
       value={value}
       onChange={(nextValue) => onChange(Array.isArray(nextValue) ? nextValue : [nextValue])}
       placeholder={placeholder}
