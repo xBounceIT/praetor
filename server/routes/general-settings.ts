@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { withDbTransaction } from '../db/drizzle.ts';
-import { authenticateToken, requirePermission } from '../middleware/auth.ts';
+import { authenticateToken, generateToken, requirePermission } from '../middleware/auth.ts';
 import * as generalSettingsRepo from '../repositories/generalSettingsRepo.ts';
 import * as usersRepo from '../repositories/usersRepo.ts';
 import { standardRateLimitedErrorResponses } from '../schemas/common.ts';
@@ -400,6 +400,39 @@ const toResponse = (settings: generalSettingsRepo.GeneralSettings, revealApiKeys
     settings.sessionIdleTimeoutMinutes ?? DEFAULT_SESSION_IDLE_TIMEOUT_MINUTES,
 });
 
+const refreshSessionTokenAfterTimeoutChange = (
+  request: FastifyRequest,
+  reply: FastifyReply,
+  settings: generalSettingsRepo.GeneralSettings,
+  previousSettings: generalSettingsRepo.GeneralSettings | null,
+  sessionIdleTimeoutWasPatched: boolean,
+) => {
+  if (!sessionIdleTimeoutWasPatched) return;
+
+  const previousTimeoutMinutes =
+    previousSettings?.sessionIdleTimeoutMinutes ?? DEFAULT_SESSION_IDLE_TIMEOUT_MINUTES;
+  if (settings.sessionIdleTimeoutMinutes === previousTimeoutMinutes) return;
+
+  if (
+    request.auth?.source !== 'session' ||
+    request.auth.sessionStart === undefined ||
+    request.auth.sessionVersion === undefined
+  ) {
+    return;
+  }
+
+  reply.header(
+    'x-auth-token',
+    generateToken(
+      request.auth.userId,
+      request.auth.sessionStart,
+      request.user?.role,
+      request.auth.sessionVersion,
+      settings.sessionIdleTimeoutMinutes,
+    ),
+  );
+};
+
 export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.get(
     '/',
@@ -666,6 +699,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       } else {
         settings = await generalSettingsRepo.update(settingsPatch);
       }
+
+      refreshSessionTokenAfterTimeoutChange(
+        request,
+        reply,
+        settings,
+        previousSettings,
+        sessionIdleTimeoutMinutesResult.value !== null,
+      );
 
       // Audit the revocation only after the transaction commits — an audit-write failure must not
       // roll back the security-critical token revocation it is recording.

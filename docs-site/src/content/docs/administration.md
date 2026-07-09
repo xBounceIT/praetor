@@ -72,9 +72,9 @@ Se un utente non riesce ad accedere, controlla credenziali, stato dell'utente, r
 
 La scheda **Sessione** nelle impostazioni di **Autenticazione** consente agli amministratori con permesso di modifica delle impostazioni generali di configurare dopo quanti minuti di inattività una sessione browser viene disconnessa.
 
-Il campo **Timeout di inattività** accetta valori interi da `5` a `1440` minuti. Il valore predefinito resta `30` minuti. Praetor usa questa soglia sia per mostrare l'avviso nel browser prima della scadenza sia per verificare lato server l'età idle del token e ruotarlo con una nuova scadenza coerente a ogni richiesta valida.
+Il campo **Timeout di inattività** accetta valori interi da `5` a `1440` minuti. Il valore predefinito resta `30` minuti. Praetor usa questa soglia per verificare lato server l'età idle del token, ruotandolo con una nuova scadenza coerente a ogni richiesta valida e subito dopo il salvataggio della policy quando il valore cambia.
 
-Se il timeout viene ridotto, il server applica la nuova soglia alla prima richiesta successiva controllando l'`iat` del JWT. Il limite massimo assoluto della sessione resta separato e invariato: una sessione non può superare le 8 ore complessive anche se il timeout di inattività è più lungo.
+Se il timeout viene ridotto, il server applica la nuova soglia alla prima richiesta successiva controllando l'`iat` del JWT. Il limite massimo assoluto della sessione resta separato e invariato: una sessione non può superare le 8 ore complessive anche se il timeout di inattività è più lungo. L'avviso e il logout nel browser usano sempre la scadenza effettiva più vicina tra timeout di inattività e limite assoluto residuo della sessione.
 
 ### Autenticazione a due fattori (2FA)
 

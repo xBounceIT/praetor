@@ -17,12 +17,14 @@ export interface SessionTimeoutHandlerProps {
   onLogout: () => void;
   warnAfterMs?: number;
   logoutAfterMs?: number;
+  absoluteSessionExpiresAtMs?: number | null;
 }
 
 const SessionTimeoutHandler: React.FC<SessionTimeoutHandlerProps> = ({
   onLogout,
   warnAfterMs = 20 * 60 * 1000,
   logoutAfterMs = 30 * 60 * 1000,
+  absoluteSessionExpiresAtMs = null,
 }) => {
   const { t } = useTranslation('auth');
   const [showWarning, setShowWarning] = useState(false);
@@ -52,14 +54,21 @@ const SessionTimeoutHandler: React.FC<SessionTimeoutHandlerProps> = ({
     if (warningTimerRef.current) clearTimeout(warningTimerRef.current);
     if (logoutTimerRef.current) clearTimeout(logoutTimerRef.current);
 
+    const effectiveLogoutAfterMs =
+      absoluteSessionExpiresAtMs === null
+        ? logoutAfterMs
+        : Math.min(logoutAfterMs, Math.max(0, absoluteSessionExpiresAtMs - Date.now()));
+    const warningLeadMs = Math.max(0, logoutAfterMs - warnAfterMs);
+    const effectiveWarnAfterMs = Math.max(0, effectiveLogoutAfterMs - warningLeadMs);
+
     warningTimerRef.current = setTimeout(() => {
       setShowWarning(true);
-    }, warnAfterMs);
+    }, effectiveWarnAfterMs);
 
     logoutTimerRef.current = setTimeout(() => {
       handleLogoutNow();
-    }, logoutAfterMs);
-  }, [handleLogoutNow, warnAfterMs, logoutAfterMs]);
+    }, effectiveLogoutAfterMs);
+  }, [absoluteSessionExpiresAtMs, handleLogoutNow, warnAfterMs, logoutAfterMs]);
 
   const clearTimers = useCallback(() => {
     const warningTimer = warningTimerRef.current;

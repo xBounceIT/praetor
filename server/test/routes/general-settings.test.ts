@@ -12,7 +12,7 @@ import {
   restoreAuthMiddlewareMock,
 } from '../helpers/authMiddlewareMock.ts';
 import { buildRouteTestApp } from '../helpers/buildRouteTestApp.ts';
-import { signToken } from '../helpers/jwt.ts';
+import { decodeForAssertion, signToken } from '../helpers/jwt.ts';
 
 const usersRepoSnap = { ...realUsersRepo };
 const rolesRepoSnap = { ...realRolesRepo };
@@ -386,6 +386,34 @@ describe('PUT /api/general-settings', () => {
       expect.objectContaining({ sessionIdleTimeoutMinutes: 45 }),
     );
     expect(JSON.parse(res.body).sessionIdleTimeoutMinutes).toBe(45);
+  });
+
+  test('200 re-signs x-auth-token with the saved sessionIdleTimeoutMinutes', async () => {
+    const sessionStart = Date.now() - 60_000;
+    settingsGetMock.mockResolvedValue({ ...SETTINGS_WITH_KEYS, sessionIdleTimeoutMinutes: 5 });
+    settingsUpdateMock.mockResolvedValue({
+      ...SETTINGS_WITH_KEYS,
+      sessionIdleTimeoutMinutes: 45,
+    });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/general-settings',
+      headers: {
+        authorization: `Bearer ${signToken({ userId: 'u1', sessionStart, expiresIn: '5m' })}`,
+      },
+      payload: { sessionIdleTimeoutMinutes: 45 },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const rotatedToken = res.headers['x-auth-token'];
+    expect(typeof rotatedToken).toBe('string');
+    const decoded = decodeForAssertion(rotatedToken as string);
+    expect(decoded.sessionStart).toBe(sessionStart);
+    if (typeof decoded.exp !== 'number' || typeof decoded.iat !== 'number') {
+      throw new Error('Rotated token is missing exp or iat');
+    }
+    expect(decoded.exp - decoded.iat).toBe(45 * 60);
   });
 
   test('400 rejects sessionIdleTimeoutMinutes outside the allowed range', async () => {

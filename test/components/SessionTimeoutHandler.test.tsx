@@ -178,6 +178,21 @@ describe('<SessionTimeoutHandler />', () => {
     await waitFor(() => expect(onLogout).toHaveBeenCalledTimes(1), { timeout: 500 });
   });
 
+  test('caps logout timers to the absolute session expiry when it is sooner', async () => {
+    const onLogout = mock(() => {});
+
+    render(
+      <SessionTimeoutHandler
+        onLogout={onLogout}
+        warnAfterMs={1_000}
+        logoutAfterMs={5_000}
+        absoluteSessionExpiresAtMs={Date.now() + 80}
+      />,
+    );
+
+    await waitFor(() => expect(onLogout).toHaveBeenCalledTimes(1), { timeout: 500 });
+  });
+
   test('removes all activity listeners on unmount', () => {
     const removeSpy = spyOn(window, 'removeEventListener');
     removeSpy.mockClear();

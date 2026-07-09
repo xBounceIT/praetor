@@ -3449,7 +3449,10 @@ const TechnicalDocsRoute: React.FC<{
     {controller.currentUser && (
       <SessionTimeoutHandler
         onLogout={() => controller.handleLogout('inactivity')}
-        {...getSessionTimeoutThresholds(controller.generalSettings.sessionIdleTimeoutMinutes)}
+        {...getSessionTimeoutThresholds(
+          controller.generalSettings.sessionIdleTimeoutMinutes,
+          api.getAuthToken(),
+        )}
       />
     )}
     {view === 'api' ? <ApiDocsView /> : <FrontendDocsView />}
@@ -3504,7 +3507,10 @@ const AuthenticatedAppShell: React.FC<{ controller: AppContentController }> = ({
     <CurrentUserIdProvider userId={currentUser.id}>
       <SessionTimeoutHandler
         onLogout={() => handleLogout('inactivity')}
-        {...getSessionTimeoutThresholds(generalSettings.sessionIdleTimeoutMinutes)}
+        {...getSessionTimeoutThresholds(
+          generalSettings.sessionIdleTimeoutMinutes,
+          api.getAuthToken(),
+        )}
       />
       <Layout
         activeView={!isRouteAccessible ? 'timesheets/tracker' : (activeView as View)}
