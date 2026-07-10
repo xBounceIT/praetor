@@ -461,6 +461,12 @@ const sanitizeColumnWidths = (
 
 const FONT_SIZES = ['xs', 'sm', 'base'] as const;
 type FontSize = (typeof FONT_SIZES)[number];
+const DEFAULT_FONT_SIZE: FontSize = 'sm';
+const FONT_SIZE_STORAGE_KEY = 'praetor_table_fontsize';
+const FONT_SIZE_CHANGE_EVENT = 'praetor:table-font-size-change';
+
+const isFontSize = (value: unknown): value is FontSize =>
+  typeof value === 'string' && (FONT_SIZES as readonly string[]).includes(value);
 
 const VIEW_ERROR_DURATION_MS = 3000;
 const COPIED_FEEDBACK_DURATION_MS = 1500;
@@ -652,11 +658,27 @@ const readInitialRowsPerPage = (title: string, defaultRowsPerPage: number) => {
   return defaultRowsPerPage;
 };
 
-const readInitialFontSize = (title: string): FontSize => {
-  if (typeof window === 'undefined') return 'sm';
+const readLegacyFontSize = (title: string): FontSize | null => {
   const saved = localStorage.getItem(getStorageKey(title, STORAGE_SUFFIX.fontSize));
-  if (saved && (FONT_SIZES as readonly string[]).includes(saved)) return saved as FontSize;
-  return 'sm';
+  return isFontSize(saved) ? saved : null;
+};
+
+const readInitialFontSize = (title: string): FontSize => {
+  if (typeof window === 'undefined') return DEFAULT_FONT_SIZE;
+
+  const saved = localStorage.getItem(FONT_SIZE_STORAGE_KEY);
+  if (isFontSize(saved)) return saved;
+  if (saved !== null) return DEFAULT_FONT_SIZE;
+
+  return readLegacyFontSize(title) ?? DEFAULT_FONT_SIZE;
+};
+
+const persistFontSize = (fontSize: FontSize) => {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(FONT_SIZE_STORAGE_KEY, fontSize);
+  } catch {}
+  window.dispatchEvent(new CustomEvent<FontSize>(FONT_SIZE_CHANGE_EVENT, { detail: fontSize }));
 };
 
 const readInitialColumnSizing = (title: string): ColumnSizingState => {
@@ -961,6 +983,8 @@ const useStandardTableController = <T extends object>({
     (update: StateUpdate<FontSize>) => setTableUiField('fontSize', update),
     [setTableUiField],
   );
+  const fontSizeRef = useRef(fontSize);
+  fontSizeRef.current = fontSize;
   const setColumnSizing = useCallback(
     (update: StateUpdate<ColumnSizingState>) => setTableUiField('columnSizing', update),
     [setTableUiField],
@@ -1030,6 +1054,43 @@ const useStandardTableController = <T extends object>({
       setTableUiField('filterSearchByColumnId', update),
     [setTableUiField],
   );
+
+  useEffect(() => {
+    const applyFontSize = (next: FontSize) => {
+      if (fontSizeRef.current === next) return;
+      fontSizeRef.current = next;
+      setFontSize(next);
+    };
+    const handleFontSizeChange = (event: Event) => {
+      const next = (event as CustomEvent<unknown>).detail;
+      if (isFontSize(next)) applyFontSize(next);
+    };
+    const handleFontSizeStorageChange = (event: StorageEvent) => {
+      if (
+        event.key !== FONT_SIZE_STORAGE_KEY ||
+        (event.storageArea !== null && event.storageArea !== localStorage)
+      ) {
+        return;
+      }
+      applyFontSize(isFontSize(event.newValue) ? event.newValue : DEFAULT_FONT_SIZE);
+    };
+
+    window.addEventListener(FONT_SIZE_CHANGE_EVENT, handleFontSizeChange);
+    window.addEventListener('storage', handleFontSizeStorageChange);
+
+    const saved = localStorage.getItem(FONT_SIZE_STORAGE_KEY);
+    if (isFontSize(saved)) {
+      applyFontSize(saved);
+    } else if (saved === null) {
+      const legacyValue = readLegacyFontSize(title);
+      if (legacyValue) persistFontSize(legacyValue);
+    }
+
+    return () => {
+      window.removeEventListener(FONT_SIZE_CHANGE_EVENT, handleFontSizeChange);
+      window.removeEventListener('storage', handleFontSizeStorageChange);
+    };
+  }, [setFontSize, title]);
 
   // Upsert a view's ownership/permission metadata from a server response (server-backed only).
   const rememberServerViewMeta = useCallback(
@@ -1909,14 +1970,13 @@ const useStandardTableController = <T extends object>({
   };
 
   const stepFontSize = (delta: -1 | 1) => {
-    setFontSize((prev) => {
-      const idx = FONT_SIZES.indexOf(prev);
-      const targetIdx = idx + delta;
-      if (targetIdx < 0 || targetIdx >= FONT_SIZES.length) return prev;
-      const next = FONT_SIZES[targetIdx];
-      localStorage.setItem(getStorageKey(title, STORAGE_SUFFIX.fontSize), next);
-      return next;
-    });
+    const idx = FONT_SIZES.indexOf(fontSizeRef.current);
+    const targetIdx = idx + delta;
+    if (targetIdx < 0 || targetIdx >= FONT_SIZES.length) return;
+    const next = FONT_SIZES[targetIdx];
+    fontSizeRef.current = next;
+    setFontSize(next);
+    persistFontSize(next);
   };
 
   // Exports the currently visible columns and the post-filter/sort rows so the
