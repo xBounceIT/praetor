@@ -7,6 +7,7 @@ import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { cn } from '@/lib/utils';
 import { useDocumentCodePreview } from '../../hooks/useDocumentCodePreview';
 import type { QuoteCommunicationChannel } from '../../services/api/quoteCommunicationChannels';
 import { supplierQuotesApi } from '../../services/api/supplierQuotes';
@@ -1732,7 +1733,7 @@ const SupplierQuoteQuantityInput: React.FC<{
           context.controller.updateItem(context.index, 'quantity', parseNumberInputValue(value))
         }
         disabled={context.controller.isReadOnly}
-        className={inputClassName}
+        className={cn('min-w-[4rem]', inputClassName)}
       />
       <span className="text-xs font-semibold text-zinc-400 shrink-0">/</span>
       <UnitTypeSelector

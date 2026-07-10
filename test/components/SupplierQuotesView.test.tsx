@@ -623,6 +623,12 @@ describe('<SupplierQuotesView /> dark-mode banners (issue #768)', () => {
 describe('<SupplierQuotesView /> compact line-item numeric columns', () => {
   test('discount/quantity inputs are width-capped and unit cost is content-sized', async () => {
     const source = await readComponentSource('sales/SupplierQuotesView.tsx');
+    // Quantity keeps the same 4rem minimum width as UnitTypeSelector in both renderings, while the
+    // desktop call site continues to cap it at 5rem.
+    expectSourceContainsAll(source, [
+      "className={cn('min-w-[4rem]', inputClassName)}",
+      'text-center max-w-[5rem]',
+    ]);
     // The desktop "Sconto a noi (%)" and "Quantità" inputs are BOTH capped at max-w-[5rem] so the
     // columns only have to fit values like "100" or "45.47" instead of stretching the cell. The cap
     // sits directly after text-center (the duration input also uses max-w-[5rem], but not adjacent
