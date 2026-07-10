@@ -64,6 +64,7 @@ import {
   buildSupplierQuoteItemIndex,
   isSupplierLineLocked,
   isSupplierLineStale,
+  pickedSupplierLineFields,
   refreshedSupplierLineFields,
 } from '../../utils/supplierLineSync';
 import { toastError } from '../../utils/toast';
@@ -932,18 +933,12 @@ const useClientQuotesController = ({
           newItems[index].productCost = netCost;
           newItems[index].productMolPercentage = null;
         }
-        // Same math as the refresh chip: refreshedSupplierLineFields recomputes the sale price
-        // from the picked cost and the line MOL, converting FROM the supplier item's own unit
-        // (#812 round 14) — the picked cost is priced in that unit, so converting from a
-        // hardcoded 'hours' multiplied a days-priced item by 8 on initial selection.
-        const refreshed = refreshedSupplierLineFields(newItems[index], selectedQuoteItem);
-        newItems[index].quantity = refreshed.quantity;
-        newItems[index].supplierQuoteUnitPrice = refreshed.supplierQuoteUnitPrice;
-        // Pick-time baseline: lets the server tell a deliberate pre-save edit (pushed onto the
-        // supplier item) from an untouched stale snapshot (server values win).
-        newItems[index].supplierQuoteBaseQuantity = refreshed.supplierQuoteBaseQuantity;
-        newItems[index].supplierQuoteBaseUnitPrice = refreshed.supplierQuoteBaseUnitPrice;
-        newItems[index].unitPrice = refreshed.unitPrice;
+        // Pull quantity, cost, sale price, and duration from the supplier item. The helper also
+        // stamps the pick-time quantity/cost baseline used by the server's genuine-edit check.
+        Object.assign(
+          newItems[index],
+          pickedSupplierLineFields(newItems[index], selectedQuoteItem),
+        );
       } else {
         // Supplier quote item not found - clear supplier quote and revert
         newItems[index].supplierQuoteItemId = null;

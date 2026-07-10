@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ApiError } from '../../../services/api/client';
-import type { Client, Quote } from '../../../types';
+import type { Client, Quote, SupplierQuote } from '../../../types';
 import { installI18nMock } from '../../helpers/i18n';
 import { LineDeleteConfirmStub } from '../../helpers/lineItemDeleteConfirm';
 import { render } from '../../helpers/render';
@@ -232,6 +232,64 @@ describe('<ClientQuotesView />', () => {
       .filter((el): el is HTMLInputElement => el instanceof HTMLInputElement);
     expect(durationInputs.length).toBeGreaterThan(0);
     expect(durationInputs[0].value).toBe('1');
+  });
+
+  test('inherits duration and its unit when selecting a supplier quote item', () => {
+    const supplierQuote: SupplierQuote = {
+      id: 'SQ-DURATION',
+      supplierId: 'supplier-1',
+      supplierName: 'Acme Supplies',
+      items: [
+        {
+          id: 'sqi-duration',
+          quoteId: 'SQ-DURATION',
+          productName: 'Managed Service',
+          quantity: 1,
+          listPrice: 120,
+          discountPercent: 0,
+          unitPrice: 120,
+          unitType: 'unit',
+          durationMonths: 24,
+          durationUnit: 'years',
+        },
+      ],
+      paymentTerms: 'immediate',
+      status: 'draft',
+      expirationDate: STABLE_FUTURE_EXPIRATION_DATE,
+      createdAt: Date.UTC(2026, 4, 14),
+      updatedAt: Date.UTC(2026, 4, 14),
+    };
+
+    render(
+      <ClientQuotesView
+        quotes={[]}
+        clients={clients}
+        products={[]}
+        supplierQuotes={[supplierQuote]}
+        currency="EUR"
+        onAddQuote={mock(() => Promise.resolve())}
+        onUpdateQuote={mock(() => Promise.resolve())}
+        onDeleteQuote={mock(() => Promise.resolve())}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'sales:clientQuotes.createNewQuote' }));
+    fireEvent.click(screen.getByText('sales:clientQuotes.addProduct'));
+    fireEvent.click(
+      screen.getAllByRole('button', { name: 'sales:clientQuotes.noSupplierQuote' })[0],
+    );
+    fireEvent.click(
+      screen.getByRole('option', {
+        name: /Acme Supplies · Managed Service \(120\.00\)$/,
+      }),
+    );
+
+    const durationInputs = screen
+      .getAllByPlaceholderText('sales:clientQuotes.durationColumn')
+      .filter((element): element is HTMLInputElement => element instanceof HTMLInputElement);
+    expect(durationInputs.length).toBeGreaterThan(0);
+    expect(durationInputs.every((input) => input.value === '2')).toBe(true);
+    expect(screen.getAllByText('sales:clientQuotes.years').length).toBeGreaterThan(0);
   });
 
   test('defaults a new quote to the first communication channel and shows inline management', () => {
