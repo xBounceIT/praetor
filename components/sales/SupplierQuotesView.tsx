@@ -160,6 +160,9 @@ interface SupplierQuotesViewState {
   previewVersion: SupplierQuoteVersion | null;
   isSubmitting: boolean;
   isDeleting: boolean;
+  // A numeric zero can be a deliberate price, so keep draft rows whose list price has never been
+  // entered separate from the numeric item data. This lets the input stay truly empty/required.
+  blankListPriceItemIds: ReadonlySet<string>;
   // Files chosen while creating a new quote. A new quote has no id to upload against yet, so they
   // are buffered here and flushed to /attachments right after the quote is created.
   stagedAttachments: File[];
@@ -175,6 +178,7 @@ const getInitialSupplierQuotesState = (): SupplierQuotesViewState => ({
   previewVersion: null,
   isSubmitting: false,
   isDeleting: false,
+  blankListPriceItemIds: new Set<string>(),
   stagedAttachments: [],
 });
 
@@ -202,6 +206,13 @@ type SupplierQuotesViewAction =
   | { type: 'addStagedAttachment'; file: File }
   | { type: 'removeStagedAttachment'; index: number };
 
+const omitError = (errors: Record<string, string>, key: string): Record<string, string> => {
+  if (!(key in errors)) return errors;
+  const next = { ...errors };
+  delete next[key];
+  return next;
+};
+
 const supplierQuotesViewReducer = (
   state: SupplierQuotesViewState,
   action: SupplierQuotesViewAction,
@@ -217,13 +228,10 @@ const supplierQuotesViewReducer = (
       return { ...state, isDeleteConfirmOpen: action.value };
     case 'setErrors':
       return { ...state, errors: action.value };
-    case 'clearError': {
-      const next = { ...state.errors };
-      delete next[action.key];
-      return { ...state, errors: next };
-    }
+    case 'clearError':
+      return { ...state, errors: omitError(state.errors, action.key) };
     case 'setFormData':
-      return { ...state, formData: action.value };
+      return { ...state, formData: action.value, blankListPriceItemIds: new Set<string>() };
     case 'patchFormData':
       return { ...state, formData: { ...state.formData, ...action.value } };
     case 'setPreviewVersion':
@@ -233,7 +241,13 @@ const supplierQuotesViewReducer = (
     case 'setIsDeleting':
       return { ...state, isDeleting: action.value };
     case 'closeModal':
-      return { ...state, isModalOpen: false, previewVersion: null, stagedAttachments: [] };
+      return {
+        ...state,
+        isModalOpen: false,
+        previewVersion: null,
+        blankListPriceItemIds: new Set<string>(),
+        stagedAttachments: [],
+      };
     case 'openAddModal':
       return {
         ...state,
@@ -242,6 +256,7 @@ const supplierQuotesViewReducer = (
         errors: {},
         previewVersion: null,
         isModalOpen: true,
+        blankListPriceItemIds: new Set<string>(),
         stagedAttachments: [],
       };
     case 'openEditModal':
@@ -252,6 +267,7 @@ const supplierQuotesViewReducer = (
         errors: {},
         previewVersion: null,
         isModalOpen: true,
+        blankListPriceItemIds: new Set<string>(),
         // A persisted quote uses the live attachments section, not staging; drop any stale queue.
         stagedAttachments: [],
       };
@@ -261,6 +277,7 @@ const supplierQuotesViewReducer = (
         previewVersion: action.version,
         formData: action.formData,
         errors: {},
+        blankListPriceItemIds: new Set<string>(),
       };
     case 'restoreVersion':
       return {
@@ -268,12 +285,25 @@ const supplierQuotesViewReducer = (
         editingQuote: action.quote,
         formData: action.formData,
         previewVersion: null,
+        blankListPriceItemIds: new Set<string>(),
       };
     case 'updateItem': {
       const items = [...(state.formData.items || [])];
       const current = items[action.index];
       if (!current) return state;
-      const next = { ...current, [action.field]: action.value };
+      const isListPriceUpdate = action.field === 'listPrice';
+      const isBlankListPrice = isListPriceUpdate && action.value === '';
+      let blankListPriceItemIds = state.blankListPriceItemIds;
+      if (isListPriceUpdate) {
+        const nextBlankListPriceItemIds = new Set(blankListPriceItemIds);
+        if (isBlankListPrice) nextBlankListPriceItemIds.add(current.id);
+        else nextBlankListPriceItemIds.delete(current.id);
+        blankListPriceItemIds = nextBlankListPriceItemIds;
+      }
+      const normalizedValue = isListPriceUpdate
+        ? parseNumberInputValue(String(action.value))
+        : action.value;
+      const next = { ...current, [action.field]: normalizedValue };
       // Prezzo listino / Sconto a noi edits re-derive the whole line at the persisted DB scale in
       // the same update, so the rounded list price/discount and the net cost — and every total that
       // reads them — stay in lockstep with what the server will store.
@@ -284,17 +314,40 @@ const supplierQuotesViewReducer = (
         next.unitPrice = pricing.unitPrice;
       }
       items[action.index] = next;
-      return { ...state, formData: { ...state.formData, items } };
+      return {
+        ...state,
+        formData: { ...state.formData, items },
+        blankListPriceItemIds,
+        errors:
+          isListPriceUpdate && !isBlankListPrice && blankListPriceItemIds.size === 0
+            ? omitError(state.errors, 'items')
+            : state.errors,
+      };
     }
-    case 'addItem':
+    case 'addItem': {
+      const blankListPriceItemIds = new Set(state.blankListPriceItemIds);
+      blankListPriceItemIds.add(action.item.id);
       return {
         ...state,
         formData: { ...state.formData, items: [...(state.formData.items || []), action.item] },
+        blankListPriceItemIds,
       };
+    }
     case 'removeItem': {
       const items = [...(state.formData.items || [])];
+      const removedItem = items[action.index];
       items.splice(action.index, 1);
-      return { ...state, formData: { ...state.formData, items } };
+      const blankListPriceItemIds = new Set(state.blankListPriceItemIds);
+      if (removedItem) blankListPriceItemIds.delete(removedItem.id);
+      return {
+        ...state,
+        formData: { ...state.formData, items },
+        blankListPriceItemIds,
+        errors:
+          removedItem && blankListPriceItemIds.size === 0
+            ? omitError(state.errors, 'items')
+            : state.errors,
+      };
     }
     case 'setItem': {
       const items = [...(state.formData.items || [])];
@@ -378,6 +431,7 @@ const useSupplierQuotesController = ({
     previewVersion,
     isSubmitting,
     isDeleting,
+    blankListPriceItemIds,
     stagedAttachments,
   } = state;
   const { preview: supplierQuoteCodePreview } = useDocumentCodePreview('supplier_quote', {
@@ -568,7 +622,7 @@ const useSupplierQuotesController = ({
     dispatch({
       type: 'addItem',
       item: {
-        id: `tmp-${Date.now()}`,
+        id: `tmp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         quoteId: editingQuote?.id || '',
         productName: '',
         quantity: 1,
@@ -958,6 +1012,10 @@ const useSupplierQuotesController = ({
       nextErrors.items = t('sales:supplierQuotes.errors.itemsRequired', {
         defaultValue: 'At least one item is required',
       });
+    } else if (formData.items.some((item) => blankListPriceItemIds.has(item.id))) {
+      nextErrors.items = t('sales:supplierQuotes.errors.listPriceRequired', {
+        defaultValue: 'List price is required for every item',
+      });
     }
 
     if (Object.keys(nextErrors).length > 0) {
@@ -1041,6 +1099,7 @@ const useSupplierQuotesController = ({
     closeModal,
     columns,
     communicationChannels,
+    blankListPriceItemIds,
     currency,
     dispatch,
     editingQuote,
@@ -1554,6 +1613,7 @@ interface SupplierQuoteItemContext extends SupplierQuoteItemRowProps {
   durationValue: number;
   isSupply: boolean;
   itemDiscountPercent: number;
+  isListPriceBlank: boolean;
   itemListPrice: number;
   itemUnitCost: number;
   lineTotal: number;
@@ -1577,6 +1637,7 @@ const SupplierQuoteItemRow: React.FC<SupplierQuoteItemRowProps> = ({ controller,
     isSupply: itemProduct?.type === 'supply',
     item,
     itemDiscountPercent,
+    isListPriceBlank: controller.blankListPriceItemIds.has(item.id),
     itemListPrice,
     itemUnitCost,
     lineTotal,
@@ -1802,11 +1863,11 @@ const SupplierQuoteListPriceInput: React.FC<{
     <SupplierQuoteFieldLabel>{label}</SupplierQuoteFieldLabel>
     <div className="flex items-center gap-1">
       <ValidatedNumberInput
-        value={context.itemListPrice}
+        value={context.isListPriceBlank ? '' : context.itemListPrice}
         formatDecimals={2}
-        onValueChange={(value) =>
-          context.controller.updateItem(context.index, 'listPrice', parseNumberInputValue(value))
-        }
+        aria-required="true"
+        placeholder="0,00"
+        onValueChange={(value) => context.controller.updateItem(context.index, 'listPrice', value)}
         disabled={context.controller.isReadOnly}
         className={inputClassName}
       />
