@@ -4,6 +4,7 @@ import { useCallback, useMemo, useReducer } from 'react';
 import { useTranslation } from 'react-i18next';
 import { LinkedRecordBanner } from '@/components/shared/LinkedRecordBanner';
 import { Button } from '@/components/ui/button';
+import DocumentLineItemsScrollArea from '@/components/ui/document-line-items-scroll-area';
 import { Field, FieldError, FieldLabel } from '@/components/ui/field';
 import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -1223,13 +1224,15 @@ const OrderItemsSection: React.FC<{ controller: ClientsOrdersController }> = ({ 
       </Button>
     </div>
     <FieldError className="-mt-2 text-xs">{controller.errors.items}</FieldError>
-    <OrderItemsHeader controller={controller} />
     {controller.formData.items && controller.formData.items.length > 0 ? (
-      <div className="space-y-3">
-        {controller.formData.items.map((item, index) => (
-          <OrderItemRow key={item.id} controller={controller} item={item} index={index} />
-        ))}
-      </div>
+      <DocumentLineItemsScrollArea aria-label={controller.t('sales:clientQuotes.productsServices')}>
+        <OrderItemsHeader controller={controller} />
+        <div className="space-y-3">
+          {controller.formData.items.map((item, index) => (
+            <OrderItemRow key={item.id} controller={controller} item={item} index={index} />
+          ))}
+        </div>
+      </DocumentLineItemsScrollArea>
     ) : (
       <div className="rounded-md border border-dashed border-border py-8 text-center text-sm text-muted-foreground">
         {controller.t('sales:clientQuotes.noProductsAdded')}

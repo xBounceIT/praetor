@@ -2,6 +2,7 @@ import type React from 'react';
 import { useCallback, useMemo, useReducer } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
+import DocumentLineItemsScrollArea from '@/components/ui/document-line-items-scroll-area';
 import { Field, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -694,13 +695,20 @@ const SupplierInvoiceItemsSection: React.FC<{ controller: SupplierInvoicesContro
         {controller.t('accounting:supplierInvoices.items')}
       </SupplierInvoiceSectionTitle>
     </div>
-    <SupplierInvoiceItemsHeader controller={controller} />
     {(controller.formData.items || []).length > 0 ? (
-      <div className="space-y-3">
-        {controller.formData.items?.map((item, index) => (
-          <SupplierInvoiceItemRow key={item.id} controller={controller} item={item} index={index} />
-        ))}
-      </div>
+      <DocumentLineItemsScrollArea aria-label={controller.t('accounting:supplierInvoices.items')}>
+        <SupplierInvoiceItemsHeader controller={controller} />
+        <div className="space-y-3">
+          {controller.formData.items?.map((item, index) => (
+            <SupplierInvoiceItemRow
+              key={item.id}
+              controller={controller}
+              item={item}
+              index={index}
+            />
+          ))}
+        </div>
+      </DocumentLineItemsScrollArea>
     ) : (
       <div className="rounded-md border border-dashed border-border py-8 text-center text-sm text-muted-foreground">
         {controller.t('accounting:supplierInvoices.noItems')}

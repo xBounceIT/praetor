@@ -3,6 +3,7 @@ import { useCallback, useMemo, useReducer } from 'react';
 import { useTranslation } from 'react-i18next';
 import { LinkedRecordBanner } from '@/components/shared/LinkedRecordBanner';
 import { Button } from '@/components/ui/button';
+import DocumentLineItemsScrollArea from '@/components/ui/document-line-items-scroll-area';
 import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -1492,13 +1493,17 @@ const SupplierQuoteItemsSection: React.FC<{ controller: SupplierQuotesController
     {controller.errors.items && (
       <p className="text-red-500 text-[10px] font-bold ml-1 -mt-2">{controller.errors.items}</p>
     )}
-    <SupplierQuoteItemsHeader controller={controller} />
     {(controller.formData.items || []).length > 0 ? (
-      <div className="space-y-3">
-        {controller.formData.items?.map((item, index) => (
-          <SupplierQuoteItemRow key={item.id} controller={controller} item={item} index={index} />
-        ))}
-      </div>
+      <DocumentLineItemsScrollArea
+        aria-label={controller.t('sales:supplierQuotes.items', { defaultValue: 'Items' })}
+      >
+        <SupplierQuoteItemsHeader controller={controller} />
+        <div className="space-y-3">
+          {controller.formData.items?.map((item, index) => (
+            <SupplierQuoteItemRow key={item.id} controller={controller} item={item} index={index} />
+          ))}
+        </div>
+      </DocumentLineItemsScrollArea>
     ) : (
       <div className="rounded-md border border-dashed border-border py-8 text-center text-sm text-muted-foreground">
         {controller.t('sales:supplierQuotes.noItemsAdded', { defaultValue: 'No items added yet' })}
