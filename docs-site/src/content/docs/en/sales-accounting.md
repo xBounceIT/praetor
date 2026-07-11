@@ -29,6 +29,8 @@ While creating or editing a draft, supplier items already used by a line in the 
 
 Each picker option starts with the supplier quote code in square brackets, for example `[SQ-001]`.
 
+When you select a supplier quote item, the client line also inherits its **Duration**, preserving both the canonical month value and the displayed unit (**Months**, **Years**, or **N/A**); you can then customize it on the client document.
+
 When creating or editing a **quote** or an **offer**, each **Products / Services** row that references a **Supplier Quote** or a **product** shows a quick-view icon; on **client orders** and **client invoices** the same icon opens the row's linked **product**. Open it to inspect the linked record on its pre-filtered page in a new browser tab, without closing or changing the document in progress. The icon is always shown (so rows stay aligned) when you have permission to access the destination view: if the row has no record to open, it stays visible but disabled, with a tooltip saying so. On the destination page the filter is applied through the column's native filter (**Code**), so it stays visible and you can clear it from the filter menu to return to the full list. Removing a row asks for confirmation first: clicking the trash icon opens a prompt, so an accidental click never drops a product line until you confirm.
 
 In offer summaries, the **Discount** row always shows the equivalent percentage in parentheses, even when the global discount is entered as a fixed amount. The discount amount remains visible in currency on the right.

@@ -1,5 +1,10 @@
 import type { SupplierQuote, SupplierUnitType } from '../types';
-import { calcProductSalePrice, convertUnitPrice } from './numbers';
+import {
+  calcProductSalePrice,
+  convertUnitPrice,
+  getEffectiveDurationMonths,
+  normalizeDurationUnit,
+} from './numbers';
 import { isFrozenEffectiveStatus } from './quoteStatus';
 
 // Shared #779 bidirectional-sync helpers for the client-quote and client-offer line editors.
@@ -110,3 +115,16 @@ export const refreshedSupplierLineFields = (
     ),
   };
 };
+
+// A freshly picked supplier item also initializes the client line's duration. Keep this separate
+// from the refresh helper above: quantity/cost are bidirectionally synchronized after linking,
+// while duration is only inherited when the supplier item is selected and can then be customized
+// independently on the client document.
+export const pickedSupplierLineFields = (
+  line: { productMolPercentage?: number | string | null; unitType?: SupplierUnitType },
+  source: SupplierQuote['items'][number],
+) => ({
+  ...refreshedSupplierLineFields(line, source),
+  durationMonths: getEffectiveDurationMonths(source),
+  durationUnit: normalizeDurationUnit(source.durationUnit),
+});
