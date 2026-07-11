@@ -1098,6 +1098,7 @@ const useStandardTableController = <T extends object>({
   activeViewIdRef.current = activeViewId;
   const columnsRef = useRef(columns);
   columnsRef.current = columns;
+  const hasResolvedColumns = columns !== undefined;
   const copiedTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const viewErrorTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const viewsAppliedOnceRef = useRef(!isServerBacked);
@@ -1178,6 +1179,8 @@ const useStandardTableController = <T extends object>({
   const migrateLegacyViews = useCallback(
     async (key: string, noOwnViews: boolean, signal: AbortSignal): Promise<boolean> => {
       if (typeof window === 'undefined') return false;
+      const currentColumns = columnsRef.current;
+      if (!currentColumns) return false;
       const sentinelKey = `praetor_table_viewsmigrated_${slugify(key)}`;
       const legacyKey = getStorageKey(title, STORAGE_SUFFIX.customViews);
       let state: string | null = null;
@@ -1219,7 +1222,7 @@ const useStandardTableController = <T extends object>({
               kind: 'table',
               scopeKey: key,
               name: view.name,
-              config: customViewToConfig(normalizeViewForColumns(view, columnsRef.current)),
+              config: customViewToConfig(normalizeViewForColumns(view, currentColumns)),
             });
             return { status: 'uploaded' as const, view, dto };
           } catch (err) {
@@ -1266,7 +1269,7 @@ const useStandardTableController = <T extends object>({
   // the list resolves. Legacy mode is a no-op here (localStorage hydration happened in state init).
   useEffect(() => {
     void viewsReloadToken;
-    if (!isServerBacked || !viewKey) return;
+    if (!isServerBacked || !viewKey || !hasResolvedColumns) return;
     const controller = new AbortController();
     loadAbortRef.current?.abort();
     loadAbortRef.current = controller;
@@ -1320,6 +1323,7 @@ const useStandardTableController = <T extends object>({
     return () => controller.abort();
   }, [
     isServerBacked,
+    hasResolvedColumns,
     migrateLegacyViews,
     setCustomViews,
     setServerViewMeta,

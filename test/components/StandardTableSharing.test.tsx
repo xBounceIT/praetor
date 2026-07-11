@@ -221,6 +221,54 @@ describe('<StandardTable /> server-backed sharing', () => {
     expect(await screen.findByText('Legacy View')).toBeInTheDocument();
   });
 
+  test('waits for asynchronously resolved columns before migrating legacy views', async () => {
+    localStorage.setItem(
+      'praetor_table_customviews_people',
+      JSON.stringify([
+        {
+          id: 'old-1',
+          name: 'Async Legacy View',
+          hiddenColIds: ['age'],
+          columnOrder: ['age', 'name'],
+          sortState: { colId: 'age', px: 'desc' },
+          filterState: { age: ['30'] },
+        },
+      ]),
+    );
+    listMock.mockImplementation(async () => []);
+
+    const { rerender } = render(
+      <StandardTable<Row>
+        title="People"
+        data={sampleRows}
+        columns={undefined}
+        viewKey="people.directory"
+      />,
+    );
+
+    await Promise.resolve();
+    expect(listMock).not.toHaveBeenCalled();
+    expect(createMock).not.toHaveBeenCalled();
+    expect(localStorage.getItem('praetor_table_customviews_people')).toContain('Async Legacy View');
+    expect(localStorage.getItem('praetor_table_viewsmigrated_people_directory')).toBeNull();
+
+    rerender(
+      <StandardTable<Row>
+        title="People"
+        data={sampleRows}
+        columns={sampleColumns}
+        viewKey="people.directory"
+      />,
+    );
+
+    await waitFor(() => expect(createMock).toHaveBeenCalledTimes(1));
+    const config = createMock.mock.calls[0][0].config;
+    expect(config.hiddenColIds).toEqual(['age']);
+    expect(config.columnOrder).toEqual(['age', 'name']);
+    expect(config.sortState).toEqual({ colId: 'age', px: 'desc' });
+    expect(config.filterState).toEqual({ age: ['30'] });
+  });
+
   test('leaves migration retryable (pending) when an upload fails, preserving legacy views', async () => {
     localStorage.setItem(
       'praetor_table_customviews_people',
