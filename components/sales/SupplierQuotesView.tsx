@@ -1673,12 +1673,14 @@ const SupplierQuoteItemDesktopFields: React.FC<{ context: SupplierQuoteItemConte
       />
       <SupplierQuoteQuantityInput
         context={context}
-        className="col-span-2 flex items-center justify-center gap-1"
+        wrapperClassName="col-span-2"
+        className="flex items-center justify-center gap-1"
         inputClassName={`${context.controller.itemInputClassName} text-center max-w-[5rem]`}
       />
       <SupplierQuoteDurationInput
         context={context}
-        className="col-span-2 flex items-center justify-center gap-1"
+        wrapperClassName="col-span-2"
+        className="flex items-center justify-center gap-1"
         inputClassName="w-full max-w-[5rem] text-sm px-1 py-2 bg-white border border-zinc-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
       />
     </div>
@@ -1723,8 +1725,9 @@ const SupplierQuoteQuantityInput: React.FC<{
   className?: string;
   inputClassName?: string;
   label?: React.ReactNode;
-}> = ({ context, className, inputClassName, label }) => (
-  <div>
+  wrapperClassName?: string;
+}> = ({ context, className, inputClassName, label, wrapperClassName }) => (
+  <div className={wrapperClassName}>
     <SupplierQuoteFieldLabel>{label}</SupplierQuoteFieldLabel>
     <div className={className}>
       <ValidatedNumberInput
@@ -1753,8 +1756,9 @@ const SupplierQuoteDurationInput: React.FC<{
   className?: string;
   inputClassName?: string;
   label?: React.ReactNode;
-}> = ({ context, className, inputClassName, label }) => (
-  <div>
+  wrapperClassName?: string;
+}> = ({ context, className, inputClassName, label, wrapperClassName }) => (
+  <div className={wrapperClassName}>
     {label && (
       <div className="mb-1 text-[10px] font-black text-zinc-400 uppercase tracking-wider flex items-center gap-1">
         {label}

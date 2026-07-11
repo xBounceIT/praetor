@@ -654,6 +654,13 @@ describe('<SupplierQuotesView /> compact line-item numeric columns', () => {
     // The product column is widened to col-span-6 (the five remaining columns stay col-span-2:
     // 6 + 5×2 = 16) to soak up the reclaimed width — header + data row → at least 2 occurrences.
     expect((source.match(/col-span-6/g) ?? []).length).toBeGreaterThanOrEqual(2);
+    // Quantity and duration apply their two-column span to the field wrapper, which is the direct
+    // grid child. Keeping col-span-2 on the nested flex row would leave each field in one column and
+    // make the fixed-width controls overlap at narrower desktop widths.
+    expect((source.match(/wrapperClassName="col-span-2"/g) ?? []).length).toBeGreaterThanOrEqual(2);
+    expect((source.match(/className=\{wrapperClassName\}/g) ?? []).length).toBeGreaterThanOrEqual(
+      2,
+    );
     // The old evenly-split 12-col grid that wasted horizontal space is gone from both rows.
     expectSourceOmitsAll(source, ['grid grid-cols-12 gap-3']);
   });
