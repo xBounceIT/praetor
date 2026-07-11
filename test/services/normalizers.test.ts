@@ -15,6 +15,7 @@ import {
   normalizeResale,
   normalizeResaleCategory,
   normalizeResaleOrderOption,
+  normalizeSupplier,
   normalizeSupplierInvoice,
   normalizeSupplierInvoiceItem,
   normalizeSupplierQuote,
@@ -42,6 +43,7 @@ import type {
   Resale,
   ResaleCategory,
   ResaleOrderOption,
+  Supplier,
   SupplierInvoice,
   SupplierInvoiceItem,
   SupplierQuote,
@@ -396,6 +398,50 @@ describe('normalizeClient', () => {
     expect(result.fiscalCode).toBeUndefined();
     expect(result.vatNumber).toBeUndefined();
     expect(result.taxCode).toBeUndefined();
+  });
+});
+
+describe('normalizeSupplier', () => {
+  test('normalizes contacts and nullable compatibility fields', () => {
+    const input = make<Supplier>(
+      { id: 's-1', name: 'Acme' },
+      {
+        contacts: [
+          null,
+          'invalid',
+          {
+            fullName: '  Jane Doe  ',
+            role: '  Buyer  ',
+            email: '  jane@acme.test  ',
+            phone: '  555  ',
+          },
+          { fullName: '   ', email: 'ignored@acme.test' },
+        ],
+        contactName: null,
+        email: null,
+        phone: null,
+        address: null,
+      },
+    );
+
+    const result = normalizeSupplier(input);
+    expect(result.contacts).toEqual([
+      {
+        fullName: 'Jane Doe',
+        role: 'Buyer',
+        email: 'jane@acme.test',
+        phone: '555',
+      },
+    ]);
+    expect(result.contactName).toBeUndefined();
+    expect(result.email).toBeUndefined();
+    expect(result.phone).toBeUndefined();
+    expect(result.address).toBeUndefined();
+  });
+
+  test('returns undefined contacts when the payload is not an array', () => {
+    const input = make<Supplier>({ id: 's-1', name: 'Acme' }, { contacts: 'invalid' });
+    expect(normalizeSupplier(input).contacts).toBeUndefined();
   });
 });
 

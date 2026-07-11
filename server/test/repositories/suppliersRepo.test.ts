@@ -13,8 +13,8 @@ beforeEach(() => {
 // drizzle-orm/node-postgres uses rowMode: 'array' for select queries; rows are positional
 // in the column-declaration order from db/schema/suppliers.ts.
 //
-// Order: id, name, is_disabled, supplier_code, contact_name, email, phone, address,
-//        vat_number, tax_code, payment_terms, notes, created_at
+// Order: id, name, is_disabled, supplier_code, contact_name, email, phone, contacts,
+//        address, vat_number, tax_code, payment_terms, notes, created_at
 const SUPPLIER_ROW: readonly unknown[] = [
   's-1',
   'Acme Co',
@@ -23,6 +23,7 @@ const SUPPLIER_ROW: readonly unknown[] = [
   'Jane',
   'jane@acme.test',
   '555',
+  [{ fullName: 'Jane', role: 'Buyer', email: 'jane@acme.test', phone: '555' }],
   '1 Main',
   'IT123',
   'TC1',
@@ -36,6 +37,7 @@ const mappedRow = {
   name: 'Acme Co',
   isDisabled: false,
   supplierCode: 'ACM',
+  contacts: [{ fullName: 'Jane', role: 'Buyer', email: 'jane@acme.test', phone: '555' }],
   contactName: 'Jane',
   email: 'jane@acme.test',
   phone: '555',
@@ -56,7 +58,7 @@ describe('listAll', () => {
   });
 
   test('createdAt is undefined when DB has null timestamp', async () => {
-    exec.enqueue({ rows: [makeRow(SUPPLIER_ROW, { 12: null })] });
+    exec.enqueue({ rows: [makeRow(SUPPLIER_ROW, { 13: null })] });
     const result = await suppliersRepo.listAll(testDb);
     expect(result[0].createdAt).toBeUndefined();
   });
@@ -65,6 +67,47 @@ describe('listAll', () => {
     exec.enqueue({ rows: [makeRow(SUPPLIER_ROW, { 2: null })] });
     const result = await suppliersRepo.listAll(testDb);
     expect(result[0].isDisabled).toBe(false);
+  });
+  test('sanitizes contacts and treats the primary contact as authoritative for legacy aliases', async () => {
+    exec.enqueue({
+      rows: [
+        makeRow(SUPPLIER_ROW, {
+          4: 'Stale legacy name',
+          5: 'stale@example.test',
+          6: '999',
+          7: [
+            { name: ' Alice ', role: ' Buyer ', email: ' alice@example.test ', phone: ' 123 ' },
+            { fullName: '   ', email: 'ignored@example.test' },
+            null,
+          ],
+        }),
+      ],
+    });
+
+    const [result] = await suppliersRepo.listAll(testDb);
+    expect(result.contacts).toEqual([
+      {
+        fullName: 'Alice',
+        role: 'Buyer',
+        email: 'alice@example.test',
+        phone: '123',
+      },
+    ]);
+    expect(result.contactName).toBe('Alice');
+    expect(result.email).toBe('alice@example.test');
+    expect(result.phone).toBe('123');
+  });
+
+  test('preserves unnamed legacy aliases when the contacts array is empty', async () => {
+    exec.enqueue({
+      rows: [makeRow(SUPPLIER_ROW, { 4: null, 5: 'legacy@example.test', 6: '555', 7: [] })],
+    });
+
+    const [result] = await suppliersRepo.listAll(testDb);
+    expect(result.contacts).toEqual([]);
+    expect(result.contactName).toBeNull();
+    expect(result.email).toBe('legacy@example.test');
+    expect(result.phone).toBe('555');
   });
 });
 
@@ -104,6 +147,7 @@ describe('create', () => {
         name: 'Acme Co',
         supplierCode: 'ACM',
         contactName: 'Jane',
+        contacts: [{ fullName: 'Jane' }],
         email: 'jane@acme.test',
         phone: '555',
         address: '1 Main',
@@ -129,6 +173,7 @@ describe('create', () => {
         name: 'Acme Co',
         supplierCode: null,
         contactName: null,
+        contacts: [],
         email: null,
         phone: null,
         address: null,

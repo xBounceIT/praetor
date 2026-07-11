@@ -40426,6 +40426,38 @@
                           "string"
                         ]
                       },
+                      "contacts": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "fullName": {
+                              "type": "string"
+                            },
+                            "role": {
+                              "type": [
+                                "null",
+                                "string"
+                              ]
+                            },
+                            "email": {
+                              "type": [
+                                "null",
+                                "string"
+                              ]
+                            },
+                            "phone": {
+                              "type": [
+                                "null",
+                                "string"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "fullName"
+                          ]
+                        }
+                      },
                       "contactName": {
                         "type": [
                           "null",
@@ -40655,6 +40687,38 @@
                   "supplierCode": {
                     "type": "string"
                   },
+                  "contacts": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "fullName": {
+                          "type": "string"
+                        },
+                        "role": {
+                          "type": [
+                            "null",
+                            "string"
+                          ]
+                        },
+                        "email": {
+                          "type": [
+                            "null",
+                            "string"
+                          ]
+                        },
+                        "phone": {
+                          "type": [
+                            "null",
+                            "string"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "fullName"
+                      ]
+                    }
+                  },
                   "contactName": {
                     "type": "string"
                   },
@@ -40710,6 +40774,38 @@
                         "null",
                         "string"
                       ]
+                    },
+                    "contacts": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "fullName": {
+                            "type": "string"
+                          },
+                          "role": {
+                            "type": [
+                              "null",
+                              "string"
+                            ]
+                          },
+                          "email": {
+                            "type": [
+                              "null",
+                              "string"
+                            ]
+                          },
+                          "phone": {
+                            "type": [
+                              "null",
+                              "string"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "fullName"
+                        ]
+                      }
                     },
                     "contactName": {
                       "type": [
@@ -40923,6 +41019,38 @@
                   "supplierCode": {
                     "type": "string"
                   },
+                  "contacts": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "fullName": {
+                          "type": "string"
+                        },
+                        "role": {
+                          "type": [
+                            "null",
+                            "string"
+                          ]
+                        },
+                        "email": {
+                          "type": [
+                            "null",
+                            "string"
+                          ]
+                        },
+                        "phone": {
+                          "type": [
+                            "null",
+                            "string"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "fullName"
+                      ]
+                    }
+                  },
                   "contactName": {
                     "type": "string"
                   },
@@ -40984,6 +41112,38 @@
                         "null",
                         "string"
                       ]
+                    },
+                    "contacts": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "fullName": {
+                            "type": "string"
+                          },
+                          "role": {
+                            "type": [
+                              "null",
+                              "string"
+                            ]
+                          },
+                          "email": {
+                            "type": [
+                              "null",
+                              "string"
+                            ]
+                          },
+                          "phone": {
+                            "type": [
+                              "null",
+                              "string"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "fullName"
+                        ]
+                      }
                     },
                     "contactName": {
                       "type": [

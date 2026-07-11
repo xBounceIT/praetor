@@ -4,9 +4,13 @@ import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Field, FieldError, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import type { Supplier, SupplierSaleOrder, SupplierSaleOrderItem } from '../../types';
+import type {
+  Supplier,
+  SupplierContact,
+  SupplierSaleOrder,
+  SupplierSaleOrderItem,
+} from '../../types';
 import { formatInsertDate } from '../../utils/date';
 import { formatDecimal } from '../../utils/numbers';
 import { hasScopedActionPermission } from '../../utils/permissions';
@@ -24,6 +28,7 @@ import {
 } from '../shared/ModalLayout';
 import StandardTable, { type Column } from '../shared/StandardTable';
 import StatusBadge from '../shared/StatusBadge';
+import SupplierContactsSection, { type SupplierContactRow } from './SupplierContactsSection';
 
 export interface SuppliersViewProps {
   suppliers: Supplier[];
@@ -47,12 +52,60 @@ const calculateOrderTotal = (items: SupplierSaleOrderItem[], discount: number): 
   return subtotal - discountAmount;
 };
 
+const EMPTY_CONTACT: SupplierContact = {
+  fullName: '',
+  role: '',
+  email: '',
+  phone: '',
+};
+
+const normalizeContact = (contact?: SupplierContact | null): SupplierContact => ({
+  fullName: contact?.fullName?.trim() || '',
+  role: contact?.role?.trim() || '',
+  email: contact?.email?.trim() || '',
+  phone: contact?.phone?.trim() || '',
+});
+
+const normalizeContacts = (contacts?: SupplierContact[]) =>
+  (contacts ?? []).map((contact) => normalizeContact(contact));
+
+const buildLegacyPrimaryContact = (
+  supplier: Pick<Supplier, 'contactName' | 'email' | 'phone'>,
+): SupplierContact | null => {
+  const fullName = supplier.contactName?.trim() || '';
+  if (!fullName) return null;
+  return {
+    fullName,
+    role: '',
+    email: supplier.email?.trim() || '',
+    phone: supplier.phone?.trim() || '',
+  };
+};
+
+const hydrateContactsForEdit = (
+  supplier: Pick<Supplier, 'contactName' | 'email' | 'phone'>,
+  contacts: SupplierContact[],
+): SupplierContact[] => {
+  const legacyPrimary = buildLegacyPrimaryContact(supplier);
+  if (!legacyPrimary) return contacts;
+  if (contacts.length === 0) return [legacyPrimary];
+  const [firstContact, ...otherContacts] = contacts;
+  if (!firstContact) return [legacyPrimary];
+  return [
+    {
+      ...firstContact,
+      fullName: firstContact.fullName || legacyPrimary.fullName,
+      email: firstContact.email || legacyPrimary.email,
+      phone: firstContact.phone || legacyPrimary.phone,
+    },
+    ...otherContacts,
+  ];
+};
+
 const createEmptySupplierForm = (): Partial<Supplier> => ({
   name: '',
   supplierCode: '',
-  contactName: '',
-  email: '',
-  phone: '',
+  contacts: [],
   address: '',
   vatNumber: '',
   taxCode: '',
@@ -63,9 +116,7 @@ const createEmptySupplierForm = (): Partial<Supplier> => ({
 const createSupplierForm = (supplier: Supplier): Partial<Supplier> => ({
   name: supplier.name || '',
   supplierCode: supplier.supplierCode || '',
-  contactName: supplier.contactName || '',
-  email: supplier.email || '',
-  phone: supplier.phone || '',
+  contacts: hydrateContactsForEdit(supplier, normalizeContacts(supplier.contacts)),
   address: supplier.address || '',
   vatNumber: supplier.vatNumber || '',
   taxCode: supplier.taxCode || '',
@@ -76,6 +127,11 @@ const createSupplierForm = (supplier: Supplier): Partial<Supplier> => ({
 type SuppliersViewState = {
   isModalOpen: boolean;
   editingSupplier: Supplier | null;
+  contactsExpanded: boolean;
+  contactDraft: SupplierContact | null;
+  editingContactIndex: number | null;
+  contactDraftError: string | null;
+  contactsTouched: boolean;
   isDeleteConfirmOpen: boolean;
   supplierToDelete: Supplier | null;
   errors: Record<string, string>;
@@ -87,6 +143,14 @@ type SuppliersViewAction =
   | { type: 'openEdit'; supplier: Supplier }
   | { type: 'closeModal' }
   | { type: 'patchForm'; patch: Partial<Supplier> }
+  | { type: 'toggleContactsExpanded' }
+  | { type: 'addContact' }
+  | { type: 'editContact'; contact: SupplierContact; index: number }
+  | { type: 'patchContactDraft'; field: keyof SupplierContact; value: string }
+  | { type: 'cancelContactDraft' }
+  | { type: 'setContactDraftError'; error: string | null }
+  | { type: 'setContacts'; contacts: SupplierContact[] }
+  | { type: 'removeContact'; index: number }
   | { type: 'clearError'; field: string }
   | { type: 'setErrors'; errors: Record<string, string> }
   | { type: 'submitSuccess' }
@@ -96,6 +160,11 @@ type SuppliersViewAction =
 const createSuppliersViewState = (): SuppliersViewState => ({
   isModalOpen: false,
   editingSupplier: null,
+  contactsExpanded: false,
+  contactDraft: null,
+  editingContactIndex: null,
+  contactDraftError: null,
+  contactsTouched: false,
   isDeleteConfirmOpen: false,
   supplierToDelete: null,
   errors: {},
@@ -112,21 +181,96 @@ const suppliersViewReducer = (
         ...state,
         isModalOpen: true,
         editingSupplier: null,
+        contactsExpanded: false,
+        contactDraft: null,
+        editingContactIndex: null,
+        contactDraftError: null,
+        contactsTouched: false,
         errors: {},
         formData: createEmptySupplierForm(),
       };
-    case 'openEdit':
+    case 'openEdit': {
+      const formData = createSupplierForm(action.supplier);
       return {
         ...state,
         isModalOpen: true,
         editingSupplier: action.supplier,
+        contactsExpanded: normalizeContacts(formData.contacts).length > 1,
+        contactDraft: null,
+        editingContactIndex: null,
+        contactDraftError: null,
+        contactsTouched: false,
         errors: {},
-        formData: createSupplierForm(action.supplier),
+        formData,
       };
+    }
     case 'closeModal':
-      return { ...state, isModalOpen: false };
+      return {
+        ...state,
+        isModalOpen: false,
+        contactsExpanded: false,
+        contactDraft: null,
+        editingContactIndex: null,
+        contactDraftError: null,
+        errors: {},
+      };
     case 'patchForm':
       return { ...state, formData: { ...state.formData, ...action.patch } };
+    case 'toggleContactsExpanded':
+      return { ...state, contactsExpanded: !state.contactsExpanded };
+    case 'addContact':
+      return {
+        ...state,
+        contactDraft: { ...EMPTY_CONTACT },
+        editingContactIndex: null,
+        contactDraftError: null,
+        contactsExpanded: true,
+      };
+    case 'editContact':
+      return {
+        ...state,
+        contactDraft: { ...action.contact },
+        editingContactIndex: action.index,
+        contactDraftError: null,
+        contactsExpanded: true,
+      };
+    case 'patchContactDraft':
+      return {
+        ...state,
+        contactDraft: {
+          ...(state.contactDraft ?? { ...EMPTY_CONTACT }),
+          [action.field]: action.value,
+        },
+      };
+    case 'cancelContactDraft':
+      return {
+        ...state,
+        contactDraft: null,
+        editingContactIndex: null,
+        contactDraftError: null,
+      };
+    case 'setContactDraftError':
+      return { ...state, contactDraftError: action.error };
+    case 'setContacts':
+      return {
+        ...state,
+        formData: { ...state.formData, contacts: action.contacts },
+        contactsTouched: true,
+      };
+    case 'removeContact':
+      return {
+        ...state,
+        formData: {
+          ...state.formData,
+          contacts: normalizeContacts(state.formData.contacts).filter(
+            (_, index) => index !== action.index,
+          ),
+        },
+        contactsTouched: true,
+        contactDraft: null,
+        editingContactIndex: null,
+        contactDraftError: null,
+      };
     case 'clearError':
       if (!state.errors[action.field]) return state;
       return { ...state, errors: { ...state.errors, [action.field]: '' } };
@@ -144,11 +288,80 @@ const suppliersViewReducer = (
 };
 
 type SupplierFormModalProps = {
-  modalState: Pick<SuppliersViewState, 'isModalOpen' | 'editingSupplier' | 'errors' | 'formData'>;
+  modalState: Pick<
+    SuppliersViewState,
+    | 'isModalOpen'
+    | 'editingSupplier'
+    | 'errors'
+    | 'formData'
+    | 'contactsExpanded'
+    | 'contactDraft'
+    | 'editingContactIndex'
+    | 'contactDraftError'
+  >;
   canSubmit: boolean;
   onSubmit: (event: React.FormEvent) => void;
   onClose: () => void;
   dispatch: React.Dispatch<SuppliersViewAction>;
+};
+
+type SupplierIdentitySectionProps = {
+  formData: Partial<Supplier>;
+  errors: Record<string, string>;
+  dispatch: React.Dispatch<SuppliersViewAction>;
+};
+
+const SupplierIdentitySection: React.FC<SupplierIdentitySectionProps> = ({
+  formData,
+  errors,
+  dispatch,
+}) => {
+  const { t } = useTranslation(['crm', 'common']);
+
+  return (
+    <div className="space-y-4">
+      <h4 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-primary">
+        <span className="size-1.5 rounded-full bg-primary"></span>
+        {t('crm:suppliers.identifyingData')}
+      </h4>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <Field data-invalid={Boolean(errors.supplierCode)}>
+          <FieldLabel htmlFor="supplier-code" required>
+            {t('crm:suppliers.code')}
+          </FieldLabel>
+          <Input
+            id="supplier-code"
+            type="text"
+            value={formData.supplierCode}
+            onChange={(event) => {
+              dispatch({ type: 'patchForm', patch: { supplierCode: event.target.value } });
+              dispatch({ type: 'clearError', field: 'supplierCode' });
+            }}
+            placeholder={t('crm:suppliers.codePlaceholder')}
+            aria-invalid={Boolean(errors.supplierCode)}
+          />
+          <FieldError className="text-xs">{errors.supplierCode}</FieldError>
+        </Field>
+        <Field data-invalid={Boolean(errors.name)}>
+          <FieldLabel htmlFor="supplier-name" required>
+            {t('crm:suppliers.name')}
+          </FieldLabel>
+          <Input
+            id="supplier-name"
+            type="text"
+            value={formData.name}
+            onChange={(event) => {
+              dispatch({ type: 'patchForm', patch: { name: event.target.value } });
+              dispatch({ type: 'clearError', field: 'name' });
+            }}
+            placeholder={t('crm:suppliers.namePlaceholder')}
+            aria-invalid={Boolean(errors.name)}
+          />
+          <FieldError className="text-xs">{errors.name}</FieldError>
+        </Field>
+      </div>
+    </div>
+  );
 };
 
 const SupplierFormModal: React.FC<SupplierFormModalProps> = ({
@@ -159,7 +372,147 @@ const SupplierFormModal: React.FC<SupplierFormModalProps> = ({
   dispatch,
 }) => {
   const { t } = useTranslation(['crm', 'common']);
-  const { isModalOpen, editingSupplier, errors, formData } = modalState;
+  const {
+    isModalOpen,
+    editingSupplier,
+    errors,
+    formData,
+    contactsExpanded,
+    contactDraft,
+    editingContactIndex,
+    contactDraftError,
+  } = modalState;
+
+  const updateContactDraft = useCallback(
+    (field: keyof SupplierContact, value: string) => {
+      dispatch({ type: 'patchContactDraft', field, value });
+      if (contactDraftError) dispatch({ type: 'setContactDraftError', error: null });
+    },
+    [contactDraftError, dispatch],
+  );
+
+  const saveContactDraft = useCallback(() => {
+    if (!contactDraft) return;
+    const normalizedDraft = normalizeContact(contactDraft);
+    if (!normalizedDraft.fullName) {
+      dispatch({
+        type: 'setContactDraftError',
+        error: t('common:validation.required'),
+      });
+      return;
+    }
+
+    const contacts = normalizeContacts(formData.contacts);
+    const nextContacts =
+      editingContactIndex === null
+        ? [...contacts, normalizedDraft]
+        : contacts.map((contact, index) =>
+            index === editingContactIndex ? normalizedDraft : contact,
+          );
+    dispatch({ type: 'setContacts', contacts: nextContacts });
+    dispatch({ type: 'cancelContactDraft' });
+  }, [contactDraft, dispatch, editingContactIndex, formData.contacts, t]);
+
+  const editContact = useCallback(
+    (index: number) => {
+      const contact = normalizeContacts(formData.contacts)[index];
+      if (contact) dispatch({ type: 'editContact', contact, index });
+    },
+    [dispatch, formData.contacts],
+  );
+
+  const removeContact = useCallback(
+    (index: number) => dispatch({ type: 'removeContact', index }),
+    [dispatch],
+  );
+
+  const contactRows = normalizeContacts(formData.contacts).map((contact, contactIndex) => ({
+    ...contact,
+    contactIndex,
+  }));
+
+  const contactColumns = useMemo<Column<SupplierContactRow>[]>(
+    () => [
+      {
+        header: t('crm:suppliers.fullName'),
+        accessorKey: 'fullName',
+        disableFiltering: true,
+        cell: ({ row }) => (
+          <span className="font-semibold text-foreground">{row.fullName || '-'}</span>
+        ),
+      },
+      {
+        header: t('crm:suppliers.role'),
+        accessorKey: 'role',
+        disableFiltering: true,
+        cell: ({ row }) => <span className="text-xs text-muted-foreground">{row.role || '-'}</span>,
+      },
+      {
+        header: t('crm:suppliers.email'),
+        accessorKey: 'email',
+        disableFiltering: true,
+        cell: ({ row }) => (
+          <span className="text-xs text-muted-foreground">{row.email || '-'}</span>
+        ),
+      },
+      {
+        header: t('crm:suppliers.phone'),
+        accessorKey: 'phone',
+        disableFiltering: true,
+        cell: ({ row }) => (
+          <span className="text-xs text-muted-foreground">{row.phone || '-'}</span>
+        ),
+      },
+      {
+        header: t('common:labels.actions'),
+        id: 'actions',
+        disableSorting: true,
+        disableFiltering: true,
+        sticky: 'right',
+        cell: ({ row }) => (
+          <div className="flex items-center justify-end gap-1">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    editContact(row.contactIndex);
+                  }}
+                  aria-label={t('common:buttons.edit')}
+                  className="text-muted-foreground hover:text-primary"
+                >
+                  <i className="fa-solid fa-pen" aria-hidden="true"></i>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>{t('common:buttons.edit')}</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    removeContact(row.contactIndex);
+                  }}
+                  aria-label={t('common:buttons.delete')}
+                  className="text-destructive hover:text-destructive"
+                >
+                  <i className="fa-solid fa-trash" aria-hidden="true"></i>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>{t('common:buttons.delete')}</TooltipContent>
+            </Tooltip>
+          </div>
+        ),
+      },
+    ],
+    [editContact, removeContact, t],
+  );
 
   return (
     <Modal isOpen={isModalOpen} onClose={onClose}>
@@ -179,108 +532,23 @@ const SupplierFormModal: React.FC<SupplierFormModalProps> = ({
           </ModalHeader>
 
           <ModalBody className="flex-1 space-y-8">
-            <div className="space-y-4">
-              <h4 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-primary">
-                <span className="size-1.5 rounded-full bg-primary"></span>
-                {t('crm:suppliers.identifyingData')}
-              </h4>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <Field data-invalid={Boolean(errors.supplierCode)}>
-                  <FieldLabel htmlFor="supplier-code" required>
-                    {t('crm:suppliers.code')}
-                  </FieldLabel>
-                  <Input
-                    id="supplier-code"
-                    type="text"
-                    value={formData.supplierCode}
-                    onChange={(e) => {
-                      dispatch({ type: 'patchForm', patch: { supplierCode: e.target.value } });
-                      dispatch({ type: 'clearError', field: 'supplierCode' });
-                    }}
-                    placeholder={t('crm:suppliers.codePlaceholder')}
-                    aria-invalid={Boolean(errors.supplierCode)}
-                  />
-                  <FieldError className="text-xs">{errors.supplierCode}</FieldError>
-                </Field>
-                <Field data-invalid={Boolean(errors.name)}>
-                  <FieldLabel htmlFor="supplier-name" required>
-                    {t('crm:suppliers.name')}
-                  </FieldLabel>
-                  <Input
-                    id="supplier-name"
-                    type="text"
-                    value={formData.name}
-                    onChange={(e) => {
-                      dispatch({ type: 'patchForm', patch: { name: e.target.value } });
-                      dispatch({ type: 'clearError', field: 'name' });
-                    }}
-                    placeholder={t('crm:suppliers.namePlaceholder')}
-                    aria-invalid={Boolean(errors.name)}
-                  />
-                  <FieldError className="text-xs">{errors.name}</FieldError>
-                </Field>
-                <Field className="col-span-full">
-                  <FieldLabel htmlFor="supplier-contact-name">
-                    {t('crm:suppliers.contactName')}
-                  </FieldLabel>
-                  <Input
-                    id="supplier-contact-name"
-                    type="text"
-                    value={formData.contactName}
-                    onChange={(e) =>
-                      dispatch({ type: 'patchForm', patch: { contactName: e.target.value } })
-                    }
-                    placeholder={t('crm:suppliers.contactPlaceholder')}
-                  />
-                </Field>
-              </div>
-            </div>
+            <SupplierIdentitySection formData={formData} errors={errors} dispatch={dispatch} />
 
-            <div className="space-y-4">
-              <h4 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-primary">
-                <span className="size-1.5 rounded-full bg-primary"></span>
-                {t('crm:suppliers.contacts')}
-              </h4>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <Field>
-                  <FieldLabel htmlFor="supplier-email">{t('crm:suppliers.email')}</FieldLabel>
-                  <Input
-                    id="supplier-email"
-                    type="email"
-                    value={formData.email}
-                    onChange={(e) =>
-                      dispatch({ type: 'patchForm', patch: { email: e.target.value } })
-                    }
-                    placeholder={t('crm:suppliers.emailPlaceholder')}
-                  />
-                </Field>
-                <Field>
-                  <FieldLabel htmlFor="supplier-phone">{t('crm:suppliers.phone')}</FieldLabel>
-                  <Input
-                    id="supplier-phone"
-                    type="text"
-                    value={formData.phone}
-                    onChange={(e) =>
-                      dispatch({ type: 'patchForm', patch: { phone: e.target.value } })
-                    }
-                    placeholder={t('crm:suppliers.phonePlaceholder')}
-                  />
-                </Field>
-                <Field className="col-span-full">
-                  <FieldLabel htmlFor="supplier-address">{t('crm:suppliers.address')}</FieldLabel>
-                  <Textarea
-                    id="supplier-address"
-                    rows={2}
-                    value={formData.address}
-                    onChange={(e) =>
-                      dispatch({ type: 'patchForm', patch: { address: e.target.value } })
-                    }
-                    placeholder={t('crm:suppliers.addressPlaceholder')}
-                    className="resize-none"
-                  />
-                </Field>
-              </div>
-            </div>
+            <SupplierContactsSection
+              address={formData.address}
+              contactsExpanded={contactsExpanded}
+              contactDraft={contactDraft}
+              editingContactIndex={editingContactIndex}
+              contactDraftError={contactDraftError}
+              contactRows={contactRows}
+              contactColumns={contactColumns}
+              onAddressChange={(address) => dispatch({ type: 'patchForm', patch: { address } })}
+              onToggleContacts={() => dispatch({ type: 'toggleContactsExpanded' })}
+              onAddContact={() => dispatch({ type: 'addContact' })}
+              onUpdateContactDraft={updateContactDraft}
+              onCancelContactDraft={() => dispatch({ type: 'cancelContactDraft' })}
+              onSaveContactDraft={saveContactDraft}
+            />
 
             <div className="space-y-4">
               <h4 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-primary">
@@ -594,8 +862,19 @@ const SuppliersView: React.FC<SuppliersViewProps> = ({
   const canUpdateSuppliers = hasScopedActionPermission(permissions, 'crm.suppliers', 'update');
   const canDeleteSuppliers = hasScopedActionPermission(permissions, 'crm.suppliers', 'delete');
   const [state, dispatch] = useReducer(suppliersViewReducer, undefined, createSuppliersViewState);
-  const { isModalOpen, editingSupplier, isDeleteConfirmOpen, supplierToDelete, errors, formData } =
-    state;
+  const {
+    isModalOpen,
+    editingSupplier,
+    contactsExpanded,
+    contactDraft,
+    editingContactIndex,
+    contactDraftError,
+    contactsTouched,
+    isDeleteConfirmOpen,
+    supplierToDelete,
+    errors,
+    formData,
+  } = state;
 
   const openAddModal = () => {
     if (!canCreateSuppliers) return;
@@ -613,6 +892,34 @@ const SuppliersView: React.FC<SuppliersViewProps> = ({
     if (editingSupplier && !canUpdateSuppliers) return;
     if (!editingSupplier && !canCreateSuppliers) return;
 
+    const normalizedDraft = contactDraft ? normalizeContact(contactDraft) : null;
+    const hasDraftValues = normalizedDraft
+      ? Boolean(
+          normalizedDraft.fullName ||
+            normalizedDraft.role ||
+            normalizedDraft.email ||
+            normalizedDraft.phone,
+        )
+      : false;
+    let contactsForSubmit = normalizeContacts(formData.contacts);
+
+    if (normalizedDraft && (editingContactIndex !== null || hasDraftValues)) {
+      if (!normalizedDraft.fullName) {
+        dispatch({
+          type: 'setContactDraftError',
+          error: t('common:validation.required'),
+        });
+        return;
+      }
+      contactsForSubmit =
+        editingContactIndex === null
+          ? [...contactsForSubmit, normalizedDraft]
+          : contactsForSubmit.map((contact, index) =>
+              index === editingContactIndex ? normalizedDraft : contact,
+            );
+    }
+
+    const normalizedContacts = contactsForSubmit.filter((contact) => contact.fullName.length > 0);
     // Validation
     const trimmedName = formData.name?.trim() || '';
     const trimmedSupplierCode = formData.supplierCode?.trim() || '';
@@ -646,12 +953,24 @@ const SuppliersView: React.FC<SuppliersViewProps> = ({
       return;
     }
 
-    const payload = {
+    const payload: Partial<Supplier> = {
       ...formData,
       name: trimmedName,
       supplierCode: trimmedSupplierCode,
       vatNumber: trimmedVatNumber,
     };
+    delete payload.contacts;
+    delete payload.contactName;
+    delete payload.email;
+    delete payload.phone;
+
+    if (normalizedContacts.length > 0 || contactsTouched) {
+      const primaryContact = normalizedContacts[0];
+      payload.contacts = normalizedContacts;
+      payload.contactName = primaryContact?.fullName || '';
+      payload.email = primaryContact?.email || '';
+      payload.phone = primaryContact?.phone || '';
+    }
 
     try {
       if (editingSupplier) {
@@ -708,7 +1027,16 @@ const SuppliersView: React.FC<SuppliersViewProps> = ({
   return (
     <div className="space-y-8">
       <SupplierFormModal
-        modalState={{ isModalOpen, editingSupplier, errors, formData }}
+        modalState={{
+          isModalOpen,
+          editingSupplier,
+          errors,
+          formData,
+          contactsExpanded,
+          contactDraft,
+          editingContactIndex,
+          contactDraftError,
+        }}
         canSubmit={canSubmit}
         onSubmit={handleSubmit}
         onClose={() => dispatch({ type: 'closeModal' })}
