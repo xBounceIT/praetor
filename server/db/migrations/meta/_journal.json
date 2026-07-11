@@ -687,6 +687,13 @@
       "when": 1783629256278,
       "tag": "0097_add_totp_exempt_user_ids",
       "breakpoints": true
+    },
+    {
+      "idx": 98,
+      "version": "7",
+      "when": 1783690619178,
+      "tag": "0098_add_supplier_contacts",
+      "breakpoints": true
     }
   ]
 }

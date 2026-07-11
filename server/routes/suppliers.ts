@@ -27,6 +27,24 @@ const idParamSchema = {
   required: ['id'],
 } as const;
 
+type SupplierContactInput = {
+  fullName: unknown;
+  role?: unknown;
+  email?: unknown;
+  phone?: unknown;
+};
+
+const supplierContactSchema = {
+  type: 'object',
+  properties: {
+    fullName: { type: 'string' },
+    role: { type: ['string', 'null'] },
+    email: { type: ['string', 'null'] },
+    phone: { type: ['string', 'null'] },
+  },
+  required: ['fullName'],
+} as const;
+
 const supplierSchema = {
   type: 'object',
   properties: {
@@ -34,6 +52,7 @@ const supplierSchema = {
     name: { type: 'string' },
     isDisabled: { type: 'boolean' },
     supplierCode: { type: ['string', 'null'] },
+    contacts: { type: 'array', items: supplierContactSchema },
     contactName: { type: ['string', 'null'] },
     email: { type: ['string', 'null'] },
     phone: { type: ['string', 'null'] },
@@ -52,6 +71,7 @@ const supplierCreateBodySchema = {
   properties: {
     name: { type: 'string' },
     supplierCode: { type: 'string' },
+    contacts: { type: 'array', items: supplierContactSchema },
     contactName: { type: 'string' },
     email: { type: 'string' },
     phone: { type: 'string' },
@@ -70,6 +90,7 @@ const supplierUpdateBodySchema = {
     name: { type: 'string' },
     isDisabled: { type: 'boolean' },
     supplierCode: { type: 'string' },
+    contacts: { type: 'array', items: supplierContactSchema },
     contactName: { type: 'string' },
     email: { type: 'string' },
     phone: { type: 'string' },
@@ -80,6 +101,76 @@ const supplierUpdateBodySchema = {
     notes: { type: 'string' },
   },
 } as const;
+
+const parseContacts = (
+  value: unknown,
+): { ok: true; value: suppliersRepo.SupplierContact[] } | { ok: false; message: string } => {
+  if (value === undefined || value === null) return { ok: true, value: [] };
+  if (!Array.isArray(value)) return { ok: false, message: 'contacts must be an array' };
+
+  const contacts: suppliersRepo.SupplierContact[] = [];
+  for (let index = 0; index < value.length; index++) {
+    const raw = value[index];
+    if (!raw || typeof raw !== 'object') {
+      return { ok: false, message: `contacts[${index}] must be an object` };
+    }
+    const contact = raw as SupplierContactInput;
+    const fullNameResult = requireNonEmptyString(contact.fullName, `contacts[${index}].fullName`);
+    if (!fullNameResult.ok) return { ok: false, message: fullNameResult.message };
+    const roleResult = optionalNonEmptyString(contact.role, `contacts[${index}].role`);
+    if (!roleResult.ok) return { ok: false, message: roleResult.message };
+    const emailResult = optionalEmail(contact.email, `contacts[${index}].email`);
+    if (!emailResult.ok) return { ok: false, message: emailResult.message };
+    const phoneResult = optionalNonEmptyString(contact.phone, `contacts[${index}].phone`);
+    if (!phoneResult.ok) return { ok: false, message: phoneResult.message };
+    contacts.push({
+      fullName: fullNameResult.value,
+      role: roleResult.value ?? undefined,
+      email: emailResult.value ?? undefined,
+      phone: phoneResult.value ?? undefined,
+    });
+  }
+  return { ok: true, value: contacts };
+};
+
+const buildPrimaryFields = (contacts: suppliersRepo.SupplierContact[]) => {
+  const primary = contacts[0] ?? null;
+  return {
+    contactName: primary?.fullName ?? null,
+    email: primary?.email ?? null,
+    phone: primary?.phone ?? null,
+  };
+};
+
+type LegacyContactPatch = {
+  contactName?: string | null;
+  email?: string | null;
+  phone?: string | null;
+};
+
+const mergeLegacyPrimaryContact = (
+  contacts: suppliersRepo.SupplierContact[],
+  patch: LegacyContactPatch,
+): suppliersRepo.SupplierContact[] => {
+  const remainingContacts =
+    Object.hasOwn(patch, 'contactName') && patch.contactName === null
+      ? contacts.slice(1)
+      : contacts;
+  const [primary, ...otherContacts] = remainingContacts;
+  if (!primary) return [];
+
+  return [
+    {
+      ...primary,
+      ...(Object.hasOwn(patch, 'contactName') && patch.contactName !== null
+        ? { fullName: patch.contactName }
+        : {}),
+      ...(Object.hasOwn(patch, 'email') ? { email: patch.email ?? undefined } : {}),
+      ...(Object.hasOwn(patch, 'phone') ? { phone: patch.phone ?? undefined } : {}),
+    },
+    ...otherContacts,
+  ];
+};
 
 export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.addHook('onRequest', authenticateToken);
@@ -124,9 +215,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
+      const body = request.body as Record<string, unknown>;
       const {
         name,
         supplierCode,
+        contacts,
         contactName,
         email,
         phone,
@@ -135,21 +228,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         taxCode,
         paymentTerms,
         notes,
-      } = request.body as {
-        name?: string;
-        supplierCode?: string;
-        contactName?: string;
-        email?: string;
-        phone?: string;
-        address?: string;
-        vatNumber?: string;
-        taxCode?: string;
-        paymentTerms?: string;
-        notes?: string;
-      };
+      } = body;
 
       const nameResult = requireNonEmptyString(name, 'name');
       if (!nameResult.ok) return badRequest(reply, nameResult.message);
+
+      const hasContacts = Object.hasOwn(body, 'contacts');
+      const contactsResult = parseContacts(contacts);
+      if (!contactsResult.ok) return badRequest(reply, contactsResult.message);
 
       const emailResult = optionalEmail(email, 'email');
       if (!emailResult.ok) return badRequest(reply, emailResult.message);
@@ -180,13 +266,19 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const now = Date.now();
       const id = generatePrefixedId('s');
+      const contactFields = hasContacts
+        ? buildPrimaryFields(contactsResult.value)
+        : {
+            contactName: contactNameResult.value,
+            email: emailResult.value,
+            phone: phoneResult.value,
+          };
       const created = await suppliersRepo.create({
         id,
         name: nameResult.value,
         supplierCode: supplierCodeResult.value,
-        contactName: contactNameResult.value,
-        email: emailResult.value,
-        phone: phoneResult.value,
+        contacts: contactsResult.value,
+        ...contactFields,
         address: addressResult.value,
         vatNumber: vatNumberResult.value,
         taxCode: taxCodeResult.value,
@@ -226,22 +318,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id } = request.params as { id: string };
-      const body = (request.body ?? {}) as {
-        name?: string;
-        isDisabled?: boolean;
-        supplierCode?: string;
-        contactName?: string;
-        email?: string;
-        phone?: string;
-        address?: string;
-        vatNumber?: string;
-        taxCode?: string;
-        paymentTerms?: string;
-        notes?: string;
-      };
+      const body = (request.body ?? {}) as Record<string, unknown>;
       const {
         name,
         supplierCode,
+        contacts,
         contactName,
         email,
         phone,
@@ -254,6 +335,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
+
+      const hasContacts = Object.hasOwn(body, 'contacts');
+      const hasContactName = Object.hasOwn(body, 'contactName');
+      const hasEmail = Object.hasOwn(body, 'email');
+      const hasPhone = Object.hasOwn(body, 'phone');
+      const hasLegacyContactPatch = hasContactName || hasEmail || hasPhone;
+      const contactsResult = parseContacts(hasContacts ? contacts : undefined);
+      if (!contactsResult.ok) return badRequest(reply, contactsResult.message);
 
       const emailResult = optionalEmail(email, 'email');
       if (!emailResult.ok) return badRequest(reply, emailResult.message);
@@ -304,9 +393,42 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (Object.hasOwn(body, 'name') && nameResult.value !== null) patch.name = nameResult.value;
       if (isDisabledValue !== undefined) patch.isDisabled = isDisabledValue;
       if (Object.hasOwn(body, 'supplierCode')) patch.supplierCode = supplierCodeResult.value;
-      if (Object.hasOwn(body, 'contactName')) patch.contactName = contactNameResult.value;
-      if (Object.hasOwn(body, 'email')) patch.email = emailResult.value;
-      if (Object.hasOwn(body, 'phone')) patch.phone = phoneResult.value;
+      if (hasContacts) {
+        patch.contacts = contactsResult.value;
+        const primary = buildPrimaryFields(contactsResult.value);
+        patch.contactName = primary.contactName;
+        patch.email = primary.email;
+        patch.phone = primary.phone;
+      } else {
+        if (hasContactName) patch.contactName = contactNameResult.value;
+        if (hasEmail) patch.email = emailResult.value;
+        if (hasPhone) patch.phone = phoneResult.value;
+
+        if (hasLegacyContactPatch) {
+          const current = await suppliersRepo.findById(idResult.value);
+          if (!current) {
+            return replyError(request, reply, {
+              statusCode: 404,
+              message: 'Supplier not found',
+              action: 'supplier.update.not_found',
+              entityType: 'supplier',
+              entityId: idResult.value,
+            });
+          }
+
+          if (current.contacts.length > 0) {
+            const nextContacts = mergeLegacyPrimaryContact(current.contacts, {
+              ...(hasContactName ? { contactName: contactNameResult.value } : {}),
+              ...(hasEmail ? { email: emailResult.value } : {}),
+              ...(hasPhone ? { phone: phoneResult.value } : {}),
+            });
+            patch.contacts = nextContacts;
+            if (nextContacts.length > 0) {
+              Object.assign(patch, buildPrimaryFields(nextContacts));
+            }
+          }
+        }
+      }
       if (Object.hasOwn(body, 'address')) patch.address = addressResult.value;
       if (vatNumberValue !== undefined) patch.vatNumber = vatNumberValue;
       if (Object.hasOwn(body, 'taxCode')) patch.taxCode = taxCodeResult.value;
@@ -328,9 +450,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         Object.hasOwn(body, 'name') ? 'name' : null,
         Object.hasOwn(body, 'isDisabled') ? 'isDisabled' : null,
         Object.hasOwn(body, 'supplierCode') ? 'supplierCode' : null,
-        Object.hasOwn(body, 'contactName') ? 'contactName' : null,
-        Object.hasOwn(body, 'email') ? 'email' : null,
-        Object.hasOwn(body, 'phone') ? 'phone' : null,
+        hasContacts ? 'contacts' : null,
+        !hasContacts && hasContactName ? 'contactName' : null,
+        !hasContacts && hasEmail ? 'email' : null,
+        !hasContacts && hasPhone ? 'phone' : null,
         Object.hasOwn(body, 'address') ? 'address' : null,
         Object.hasOwn(body, 'vatNumber') ? 'vatNumber' : null,
         Object.hasOwn(body, 'taxCode') ? 'taxCode' : null,
