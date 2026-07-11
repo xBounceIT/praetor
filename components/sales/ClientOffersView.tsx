@@ -1106,6 +1106,7 @@ const useClientOffersController = ({
       unitPrice: 0,
       productCost: 0,
       productMolPercentage: null,
+      discount: 0,
       supplierQuoteId: null,
       supplierQuoteItemId: null,
       supplierQuoteSupplierName: null,
@@ -1290,6 +1291,7 @@ const useClientOffersController = ({
         ...item,
         unitPrice: Number(item.unitPrice ?? 0),
         productCost: Number(item.productCost ?? 0),
+        discount: item.discount ?? 0,
         durationMonths: Number(item.durationMonths ?? 1) || 1,
         durationUnit: normalizeDurationUnit(item.durationUnit),
       })),
@@ -1770,7 +1772,7 @@ const ClientOfferItemsColumnHeader: React.FC<{ controller: ClientOffersControlle
 
   return (
     <div className="hidden lg:flex gap-2 px-3 mb-1 items-center">
-      <div className="flex-1 min-w-0 grid grid-cols-16 gap-2">
+      <div className="flex-1 min-w-0 grid grid-cols-17 gap-2">
         <div className="col-span-3 text-[10px] font-black text-zinc-400 uppercase tracking-wider ml-1">
           {t('sales:clientQuotes.supplierQuoteColumn')}
         </div>
@@ -1791,6 +1793,9 @@ const ClientOfferItemsColumnHeader: React.FC<{ controller: ClientOffersControlle
         </div>
         <div className="col-span-1 text-[10px] font-black text-zinc-400 uppercase tracking-wider text-center whitespace-nowrap">
           {t('sales:clientQuotes.totalCost', { defaultValue: 'Total cost' })}
+        </div>
+        <div className="col-span-1 text-[10px] font-black text-zinc-400 uppercase tracking-wider text-center">
+          {t('common:labels.discount')}
         </div>
         <div className="col-span-1 text-[10px] font-black text-zinc-400 uppercase tracking-wider text-center">
           {t('sales:clientQuotes.marginLabel')}
@@ -1825,16 +1830,13 @@ const getClientOfferLineContext = (
     unitCost: cost,
     molPercentage,
     lineCost,
-    quantity,
-    durationMonths,
+    netRevenue: lineSalePrice,
+    lineMargin,
   } = getItemPricingContext(item);
   const durationUnit = normalizeDurationUnit(item.durationUnit);
   const durationValue = getDurationDisplayValue(item);
   const product = products.find((p) => p.id === item.productId);
   const isSupply = product?.type === 'supply';
-  const unitSalePrice = Number(item.unitPrice || 0);
-  const lineSalePrice = unitSalePrice * quantity * durationMonths;
-  const lineMargin = lineSalePrice - lineCost;
   const isLinkedToSupplierQuote = Boolean(item.supplierQuoteItemId);
   const linkedSupplierRef = item.supplierQuoteItemId
     ? supplierQuoteItemIndex.get(item.supplierQuoteItemId)
@@ -1979,7 +1981,7 @@ const ClientOfferItemMobileMetrics: React.FC<{
   const { t, currency, readOnlyStatus, statusLabel } = controller;
 
   return (
-    <div className="grid grid-cols-2 gap-3 md:grid-cols-7 lg:hidden">
+    <div className="grid grid-cols-2 gap-3 md:grid-cols-8 lg:hidden">
       <div>
         <ClientOfferLineLabel
           label={t('sales:clientOffers.qty', { defaultValue: 'Qty' })}
@@ -2023,6 +2025,16 @@ const ClientOfferItemMobileMetrics: React.FC<{
         value={`${formatDecimal(line.lineCost)} ${currency}`}
         valueClassName="text-xs font-bold text-zinc-700 whitespace-nowrap"
       />
+      <ClientOfferInputPanel
+        label={t('common:labels.discount')}
+        description={t('sales:fieldInfo.discount', {
+          defaultValue: 'Percentage discount applied to this line',
+        })}
+        status={readOnlyStatus}
+        statusLabel={statusLabel}
+      >
+        <ClientOfferDiscountEditor controller={controller} item={item} index={index} />
+      </ClientOfferInputPanel>
       <ClientOfferValuePanel
         label={t('sales:clientQuotes.marginLabel')}
         value={`${formatDecimal(line.lineMargin)} ${currency}`}
@@ -2049,7 +2061,7 @@ const ClientOfferItemDesktopRow: React.FC<{
 
   return (
     <div className="hidden lg:flex gap-2 items-center pt-5">
-      <div className="flex-1 min-w-0 grid grid-cols-16 gap-2 items-center">
+      <div className="flex-1 min-w-0 grid grid-cols-17 gap-2 items-center">
         <div className="relative col-span-3 min-w-0">
           {line.supplierDataStale && linkedSupplierRef && (
             <StaleSupplierDataButton
@@ -2102,6 +2114,9 @@ const ClientOfferItemDesktopRow: React.FC<{
           <ClientOfferMolEditor controller={controller} line={line} compact />
         </div>
         <ClientOfferDesktopAmount value={`${formatDecimal(line.lineCost)} ${currency}`} />
+        <div className="col-span-1 flex items-center justify-center">
+          <ClientOfferDiscountEditor controller={controller} item={item} index={index} compact />
+        </div>
         <ClientOfferDesktopAmount
           value={`${formatDecimal(line.lineMargin)} ${currency}`}
           className="text-emerald-600"
@@ -2379,6 +2394,34 @@ const ClientOfferMolEditor: React.FC<{
     </>
   );
 };
+
+const ClientOfferDiscountEditor: React.FC<{
+  controller: ClientOffersController;
+  item: ClientOfferItem;
+  index: number;
+  compact?: boolean;
+}> = ({ controller, item, index, compact }) => (
+  <div className="flex w-full items-center justify-center gap-1">
+    <ValidatedNumberInput
+      value={item.discount ?? 0}
+      min={0}
+      max={100}
+      step="0.01"
+      formatDecimals={2}
+      aria-label={controller.t('common:labels.discount')}
+      onValueChange={(value) =>
+        controller.updateItem(index, 'discount', parseNumberInputValue(value) ?? 0)
+      }
+      disabled={controller.isReadOnly}
+      className={
+        compact
+          ? 'w-full text-sm px-1 py-2 bg-white border border-zinc-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed'
+          : 'w-full text-sm p-2 bg-white border border-zinc-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed'
+      }
+    />
+    <span className="shrink-0 text-[9px] font-semibold text-zinc-400">%</span>
+  </div>
+);
 
 const ClientOfferDesktopAmount: React.FC<{ value: string; className?: string }> = ({
   value,

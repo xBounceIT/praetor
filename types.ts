@@ -658,7 +658,7 @@ export interface QuoteItem {
   // pick/refresh time so a pre-save quantity/cost edit pushes onto the supplier item.
   supplierQuoteBaseQuantity?: number | null;
   supplierQuoteBaseUnitPrice?: number | null;
-  discount?: number; // item-level discount percentage
+  discount?: number; // item-level discount percentage (0–100)
   note?: string;
   unitType?: SupplierUnitType;
   durationMonths?: number; // months the service runs; multiplies cost & revenue (issue #757)
@@ -753,7 +753,7 @@ export interface ClientOfferItem {
   // fresh-link genuine-edit baseline, mirroring QuoteItem.
   supplierQuoteBaseQuantity?: number | null;
   supplierQuoteBaseUnitPrice?: number | null;
-  discount?: number;
+  discount?: number; // item-level discount percentage (0–100)
   note?: string;
   unitType?: SupplierUnitType;
   durationMonths?: number; // months the service runs; multiplies cost & revenue (issue #757)
@@ -846,7 +846,7 @@ export interface ClientsOrderItem {
   supplierSaleId?: string | null;
   supplierSaleItemId?: string | null;
   supplierSaleSupplierName?: string | null;
-  discount?: number;
+  discount?: number; // item-level discount percentage (0–100)
   note?: string;
   unitType?: SupplierUnitType;
   durationMonths?: number; // months the service runs; multiplies cost & revenue (issue #757)

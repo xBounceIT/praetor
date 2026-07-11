@@ -15,6 +15,7 @@ import {
   optionalEnum,
   optionalLocalizedNonNegativeNumber,
   optionalLocalizedNumber,
+  optionalLocalizedPercentage,
   optionalLocalizedPositiveNumber,
   optionalNonEmptyString,
   optionalNonNegativeNumber,
@@ -376,6 +377,26 @@ describe('optionalLocalizedNonNegativeNumber', () => {
     const result = optionalLocalizedNonNegativeNumber(-3, 'amount');
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.message).toContain('amount');
+  });
+});
+
+describe('optionalLocalizedPercentage', () => {
+  test('accepts empty values, localized decimals, and inclusive boundaries', () => {
+    expect(optionalLocalizedPercentage('')).toEqual({ ok: true, value: null });
+    expect(optionalLocalizedPercentage('12,5')).toEqual({ ok: true, value: 12.5 });
+    expect(optionalLocalizedPercentage(0)).toEqual({ ok: true, value: 0 });
+    expect(optionalLocalizedPercentage(100)).toEqual({ ok: true, value: 100 });
+  });
+
+  test('rejects percentages outside 0–100', () => {
+    expect(optionalLocalizedPercentage(-0.01, 'discount')).toEqual({
+      ok: false,
+      message: 'discount must be zero or positive',
+    });
+    expect(optionalLocalizedPercentage(100.01, 'discount')).toEqual({
+      ok: false,
+      message: 'discount must be between 0 and 100',
+    });
   });
 });
 

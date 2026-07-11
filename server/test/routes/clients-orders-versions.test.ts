@@ -182,7 +182,7 @@ const SAMPLE_ITEM = {
   supplierSaleId: null,
   supplierSaleItemId: null,
   supplierSaleSupplierName: null,
-  discount: 0,
+  discount: 12.5,
   note: null,
   unitType: 'hours' as const,
 };
@@ -1451,14 +1451,14 @@ describe('PUT /api/clients-orders/:id source-linked editability', () => {
         notes: 'edited',
         items: [
           {
-            // Supplier-backed line preserved (same product + quantity); only its sale price moves.
+            // Supplier-backed line preserved (same product + quantity); sale price and discount may move.
             id: SUPPLIER_BACKED_ITEM.id,
             productId: SUPPLIER_BACKED_ITEM.productId,
             productName: SUPPLIER_BACKED_ITEM.productName,
             quantity: SUPPLIER_BACKED_ITEM.quantity,
             unitPrice: 250,
             productCost: SUPPLIER_BACKED_ITEM.productCost,
-            discount: SUPPLIER_BACKED_ITEM.discount,
+            discount: 25,
             supplierQuoteId: SUPPLIER_BACKED_ITEM.supplierQuoteId,
             supplierQuoteItemId: SUPPLIER_BACKED_ITEM.supplierQuoteItemId,
             supplierSaleId: SUPPLIER_BACKED_ITEM.supplierSaleId,
@@ -1482,6 +1482,8 @@ describe('PUT /api/clients-orders/:id source-linked editability', () => {
 
     expect(res.statusCode).toBe(200);
     expect(coReplaceItemsMock).toHaveBeenCalled();
+    const inserted = coReplaceItemsMock.mock.calls[0][1] as Array<Record<string, unknown>>;
+    expect(inserted[0].discount).toBe(25);
     expect(coUpdateMock).toHaveBeenCalledWith(
       'o-1',
       expect.objectContaining({ notes: 'edited' }),
