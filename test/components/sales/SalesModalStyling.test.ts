@@ -159,6 +159,10 @@ describe('sales modal styling', () => {
     expect((source.match(/max-w-\[5rem\] flex-none/g) ?? []).length).toBeGreaterThanOrEqual(3);
     expect((source.match(/outline-none text-right/g) ?? []).length).toBeGreaterThanOrEqual(5);
     expect((source.match(/minWidth: 174/g) ?? []).length).toBeGreaterThanOrEqual(2);
+    expect((source.match(/placeholder=\{controller\.t/g) ?? []).length).toBeGreaterThanOrEqual(3);
+    expect(source).toContain('quantity: Number.NaN');
+    expect(source).toContain('getDurationInputValue(item)');
+    expect(source).toContain('value={item.discount}');
     expect(source).toContain('minWidth: 244');
     expectSourceOmitsAll(source, ['outline-none text-center']);
     expectSourceOmitsAll(source, ['grid grid-cols-17 gap-2 items-center pt-5']);
@@ -176,6 +180,10 @@ describe('sales modal styling', () => {
       'className="flex min-w-[150px] items-center justify-end gap-1"',
       'max-w-[5rem] text-right',
       'minWidth: 244',
+      'quantity: Number.NaN',
+      'discountPercent: Number.NaN',
+      'getDurationInputValue(item)',
+      "defaultValue: 'List Price'",
     ]);
     expect((source.match(/minWidth: 174/g) ?? []).length).toBeGreaterThanOrEqual(2);
     expectSourceOmitsAll(source, ['showColumnSettings={false}']);

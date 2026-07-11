@@ -350,6 +350,9 @@ describe('<ClientsOrdersView />', () => {
       'className="flex h-9 items-center justify-end gap-1"',
       'className="flex h-9 items-center justify-end whitespace-nowrap px-3 text-sm font-bold text-foreground"',
       'minWidth: 244',
+      'quantity: Number.NaN',
+      'getDurationInputValue(item)',
+      'value={item.discount}',
     ]);
     expect((source.match(/minWidth: 174/g) ?? []).length).toBeGreaterThanOrEqual(2);
     expect(source).not.toContain('showColumnSettings={false}');

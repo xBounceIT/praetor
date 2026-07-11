@@ -40,6 +40,12 @@ export const parseNumberInputValue = (value: string, fallback: number | undefine
   return Number.isNaN(parsed) ? fallback : parsed;
 };
 
+export const parseOptionalNumberInputValue = (value: string): number | undefined => {
+  if (value === '') return undefined;
+  const parsed = Number.parseFloat(normalizeLocalizedNumber(value));
+  return Number.isNaN(parsed) ? undefined : parsed;
+};
+
 const numberFormatters = new Map<string, Intl.NumberFormat>();
 
 /** Format every user-visible number with Italian decimal and thousands separators. */
@@ -150,6 +156,16 @@ export const durationValueToMonths = (value: number, unit: DurationUnit): number
 // always months; 'years' is derived as months / 12.
 export const getDurationDisplayValue = (item: PricingItem): number => {
   const months = getEffectiveDurationMonths(item);
+  return normalizeDurationUnit(item.durationUnit) === 'years' ? months / MONTHS_PER_YEAR : months;
+};
+
+// Unlike getDurationDisplayValue, this helper preserves an unfilled duration so editable fields
+// can show their text placeholder. Pricing still uses getEffectiveDurationMonths and therefore
+// keeps the legacy neutral ×1 multiplier for blank values.
+export const getDurationInputValue = (item: PricingItem): number | undefined => {
+  if (item.durationMonths === undefined || item.durationMonths === null) return undefined;
+  const months = Number(item.durationMonths);
+  if (!Number.isFinite(months) || months <= 0) return undefined;
   return normalizeDurationUnit(item.durationUnit) === 'years' ? months / MONTHS_PER_YEAR : months;
 };
 

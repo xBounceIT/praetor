@@ -35,6 +35,9 @@ describe('supplier accounting modal styling', () => {
       "inputClassName = 'text-right'",
       'minWidth: 244',
       'minWidth: 174',
+      'getDurationInputValue(item)',
+      'value={item.discount}',
+      "value === '' ? Number.NaN : Number(value)",
     ]);
     expectSourceOmitsAll(source, [
       'rounded-2xl bg-white',

@@ -760,7 +760,7 @@ describe('<ClientOffersView /> MOL precision (issue #780)', () => {
 });
 
 describe('<ClientOffersView /> line discounts', () => {
-  test('defaults added lines to 0% and includes zero in the payload', async () => {
+  test('leaves added-line discounts empty and does not inject zero into the payload', async () => {
     const onUpdateOffer = mock((_id: string, _updates: Partial<ClientOffer>) => Promise.resolve());
     render(<ClientOffersView {...baseProps} offers={[acmeDraft]} onUpdateOffer={onUpdateOffer} />);
 
@@ -772,11 +772,21 @@ describe('<ClientOffersView /> line discounts', () => {
       .getAllByRole('textbox', { name: 'common:labels.discount' })
       .filter((input): input is HTMLInputElement => input instanceof HTMLInputElement);
     expect(lineDiscountInputs.length).toBeGreaterThan(1);
-    expect(lineDiscountInputs.every((input) => input.value === '0,00')).toBe(true);
+    expect(lineDiscountInputs.every((input) => input.value === '')).toBe(true);
+
+    const quantityInputs = within(dialog)
+      .getAllByPlaceholderText('sales:clientOffers.qty')
+      .filter((input): input is HTMLInputElement => input instanceof HTMLInputElement);
+    const blankQuantity = quantityInputs.find((input) => input.value === '');
+    expect(blankQuantity).toBeDefined();
+    fireEvent.change(blankQuantity as HTMLInputElement, { target: { value: '1' } });
 
     fireEvent.click(within(dialog).getByRole('button', { name: 'common:buttons.update' }));
     await waitFor(() => expect(onUpdateOffer).toHaveBeenCalledTimes(1));
-    expect(onUpdateOffer.mock.calls[0][1].items?.map((item) => item.discount)).toEqual([0, 0]);
+    expect(onUpdateOffer.mock.calls[0][1].items?.map((item) => item.discount)).toEqual([
+      undefined,
+      undefined,
+    ]);
   });
 
   test('edits a supplier-linked line discount, shows net values, and submits it', async () => {

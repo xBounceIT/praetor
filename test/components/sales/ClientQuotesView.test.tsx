@@ -244,12 +244,12 @@ describe('<ClientQuotesView />', () => {
 
     // The Durata column header renders once a line item exists...
     expect(screen.getAllByText('sales:clientQuotes.durationColumn').length).toBeGreaterThan(0);
-    // ...and the row carries a duration input defaulting to 1 month (one-off).
+    // ...and the new row leaves duration empty so only its text placeholder is visible.
     const durationInputs = screen
       .getAllByPlaceholderText('sales:clientQuotes.durationColumn')
       .filter((el): el is HTMLInputElement => el instanceof HTMLInputElement);
     expect(durationInputs.length).toBeGreaterThan(0);
-    expect(durationInputs[0].value).toBe('1');
+    expect(durationInputs[0].value).toBe('');
   });
 
   test('edits a per-line discount and submits net revenue and margin', async () => {

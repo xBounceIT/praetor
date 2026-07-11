@@ -280,7 +280,11 @@ describe('<SupplierQuotesView /> deep-link filter', () => {
 // Opens the New-quote dialog and fills every required field (supplier, code, one line item).
 // Pass a customer name to also pick it from the Customer combobox. The caller must render with
 // `quotes={[]}` so the supplier/customer names are unambiguous (no table rows behind the modal).
-const fillNewQuoteForm = (customerName?: string, listPrice: string | null = '100') => {
+const fillNewQuoteForm = (
+  customerName?: string,
+  listPrice: string | null = '100',
+  quantity: string | null = '1',
+) => {
   fireEvent.click(screen.getByText('sales:supplierQuotes.addQuote'));
   fireEvent.click(document.getElementById('supplier-quote-supplier') as HTMLElement);
   fireEvent.click(screen.getByText('Acme Supplies'));
@@ -292,21 +296,26 @@ const fillNewQuoteForm = (customerName?: string, listPrice: string | null = '100
     target: { value: 'SQ-NEW' },
   });
   fireEvent.click(screen.getByText('sales:supplierQuotes.addItem'));
+  if (quantity !== null) {
+    fireEvent.change(screen.getAllByPlaceholderText('sales:supplierQuotes.qty')[0], {
+      target: { value: quantity },
+    });
+  }
   if (listPrice !== null) {
-    fireEvent.change(screen.getAllByPlaceholderText('0,00')[0], {
+    fireEvent.change(screen.getAllByPlaceholderText('sales:supplierQuotes.listPrice')[0], {
       target: { value: listPrice },
     });
   }
 };
 
 describe('<SupplierQuotesView /> required list price', () => {
-  test('keeps new-item prices empty with the 0,00 placeholder and blocks save until entered', async () => {
+  test('keeps new-item prices empty with a text placeholder and blocks save until entered', async () => {
     const onAddQuote = mock((_data: Partial<SupplierQuote>) => Promise.resolve(draft));
     render(<SupplierQuotesView {...baseProps} quotes={[]} onAddQuote={onAddQuote} />);
 
     fillNewQuoteForm('Globex Corp', null);
 
-    const listPriceInputs = screen.getAllByPlaceholderText('0,00');
+    const listPriceInputs = screen.getAllByPlaceholderText('sales:supplierQuotes.listPrice');
     expect(listPriceInputs.length).toBeGreaterThan(0);
     for (const input of listPriceInputs) {
       expect(input).toHaveValue('');
@@ -341,7 +350,7 @@ describe('<SupplierQuotesView /> required list price', () => {
       fillNewQuoteForm('Globex Corp', null);
       fireEvent.click(screen.getByText('sales:supplierQuotes.addItem'));
 
-      const listPriceInputs = screen.getAllByPlaceholderText('0,00');
+      const listPriceInputs = screen.getAllByPlaceholderText('sales:supplierQuotes.listPrice');
       fireEvent.submit(screen.getByText('common:buttons.save').closest('form') as HTMLFormElement);
       fireEvent.change(listPriceInputs[0], { target: { value: '125' } });
 
@@ -361,6 +370,19 @@ describe('<SupplierQuotesView /> required list price', () => {
 
     expect(onAddQuote).not.toHaveBeenCalled();
     expect(screen.getByText('sales:supplierQuotes.errors.listPriceRequired')).toBeInTheDocument();
+  });
+
+  test('shows only text placeholders for every numeric value on a new line', () => {
+    render(<SupplierQuotesView {...baseProps} quotes={[]} />);
+
+    fillNewQuoteForm('Globex Corp', null, null);
+
+    expect(screen.getAllByPlaceholderText('sales:supplierQuotes.qty')[0]).toHaveValue('');
+    expect(screen.getAllByPlaceholderText('sales:supplierQuotes.durationColumn')[0]).toHaveValue(
+      '',
+    );
+    expect(screen.getAllByPlaceholderText('sales:supplierQuotes.listPrice')[0]).toHaveValue('');
+    expect(screen.getAllByPlaceholderText('sales:supplierQuotes.discountToUs')[0]).toHaveValue('');
   });
 });
 

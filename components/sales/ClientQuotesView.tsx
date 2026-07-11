@@ -43,13 +43,14 @@ import {
   formatDiscountValue,
   formatMolPercentage,
   formatNumber,
-  getDurationDisplayValue,
+  getDurationInputValue,
   getItemPricingContext,
   MOL_PERCENTAGE_DECIMALS,
   normalizeDurationUnit,
   type PricingTotals,
   parseDurationValueToMonths,
   parseNumberInputValue,
+  parseOptionalNumberInputValue,
   roundCurrency,
 } from '../../utils/numbers';
 import { getPaymentTermsOptions } from '../../utils/options';
@@ -670,10 +671,10 @@ const useClientQuotesController = ({
       return {
         ...item,
         unitPrice: getClientQuoteUnitSalePrice(item),
-        discount: item.discount ? item.discount : 0,
-        durationMonths: Number(item.durationMonths ?? 1) || 1,
+        discount: item.discount === undefined ? undefined : Number(item.discount),
+        durationMonths: item.durationMonths === undefined ? undefined : Number(item.durationMonths),
         durationUnit: normalizeDurationUnit(item.durationUnit),
-        productCost: Number(item.productCost ?? 0),
+        productCost: item.productCost === undefined ? undefined : Number(item.productCost),
         productMolPercentage:
           item.productMolPercentage === undefined || item.productMolPercentage === null
             ? null
@@ -866,12 +867,10 @@ const useClientQuotesController = ({
       id: 'temp-' + Date.now(),
       productId: '',
       productName: '',
-      quantity: 1,
-      durationMonths: 1,
+      quantity: Number.NaN,
       durationUnit: 'months',
       unitType: 'hours',
       unitPrice: 0,
-      productCost: 0,
       productMolPercentage: null,
       // Supplier quote fields
       supplierQuoteId: null,
@@ -879,7 +878,6 @@ const useClientQuotesController = ({
       supplierQuoteSupplierName: null,
       supplierQuoteUnitPrice: null,
 
-      discount: 0,
       note: '',
     };
     setFormData((prev) => ({ ...prev, items: [...(formData.items || []), newItem as QuoteItem] }));
@@ -959,7 +957,11 @@ const useClientQuotesController = ({
     [formData.items?.length, isReadOnly, moveProductRow],
   );
 
-  const updateProductRow = (index: number, field: keyof QuoteItem, value: string | number) => {
+  const updateProductRow = (
+    index: number,
+    field: keyof QuoteItem,
+    value: string | number | undefined,
+  ) => {
     if (isReadOnly) return;
     const newItems = [...(formData.items || [])];
     newItems[index] = { ...newItems[index], [field]: value };
@@ -1192,11 +1194,15 @@ const useClientQuotesController = ({
   };
 
   // Duration value entered in the item's chosen unit (issue #757). Stored canonically as whole
-  // months; 'years' multiplies by 12. Empty/invalid input falls back to 1 of the chosen unit.
+  // months; 'years' multiplies by 12. An empty input stays empty while pricing uses neutral ×1.
   const handleDurationValueChange = (index: number, value: string) => {
     if (isReadOnly) return;
     const unit = normalizeDurationUnit(formData.items?.[index]?.durationUnit);
-    updateProductRow(index, 'durationMonths', parseDurationValueToMonths(value, unit));
+    updateProductRow(
+      index,
+      'durationMonths',
+      value === '' ? undefined : parseDurationValueToMonths(value, unit),
+    );
   };
 
   // Switching months↔years keeps the displayed number and reinterprets it under the new unit
@@ -1207,8 +1213,11 @@ const useClientQuotesController = ({
     if (!item || normalizeDurationUnit(item.durationUnit) === newUnit) return;
     // 'N/A' marks the line as duration-less: reset to the neutral 1 month so it never multiplies
     // (issue #775). Months/years instead keeps the displayed number under the new unit.
+    const durationValue = getDurationInputValue(item);
     const durationMonths =
-      newUnit === 'na' ? 1 : durationValueToMonths(getDurationDisplayValue(item), newUnit);
+      newUnit === 'na' || durationValue === undefined
+        ? undefined
+        : durationValueToMonths(durationValue, newUnit);
     const newItems = [...(formData.items || [])];
     newItems[index] = {
       ...newItems[index],
@@ -2561,14 +2570,20 @@ const getClientQuoteLineContext = (
     setFormData,
   } = controller;
   const {
-    unitCost: cost,
-    molPercentage,
     lineCost,
     netRevenue: lineSalePrice,
     lineMargin,
   } = getClientQuoteItemPricingContext(item);
+  const rawCost = item.supplierQuoteItemId ? item.supplierQuoteUnitPrice : item.productCost;
+  const cost =
+    rawCost === undefined || rawCost === null || !Number.isFinite(Number(rawCost))
+      ? undefined
+      : item.supplierQuoteItemId
+        ? Number(rawCost)
+        : convertUnitPrice(Number(rawCost), 'hours', item.unitType || 'hours');
+  const molPercentage = item.productMolPercentage ?? undefined;
   const durationUnit = normalizeDurationUnit(item.durationUnit);
-  const durationValue = getDurationDisplayValue(item);
+  const durationValue = getDurationInputValue(item);
   const product = products.find((p) => p.id === item.productId);
   const isSupply = product?.type === 'supply';
   const isLinkedToSupplierQuote = Boolean(item.supplierQuoteItemId);
@@ -2706,7 +2721,11 @@ const ClientQuoteQuantityEditor: React.FC<{
         value={item.quantity}
         onValueChange={(value) => {
           const parsed = parseFloat(value);
-          updateProductRow(index, 'quantity', value === '' || Number.isNaN(parsed) ? 0 : parsed);
+          updateProductRow(
+            index,
+            'quantity',
+            value === '' || Number.isNaN(parsed) ? Number.NaN : parsed,
+          );
         }}
         disabled={isReadOnly || line.supplierLineLocked}
         className={
@@ -2762,7 +2781,7 @@ const ClientQuoteDurationEditor: React.FC<{
       <DurationUnitSelector
         value={line.durationUnit}
         onChange={(val) => handleDurationUnitChange(index, val)}
-        count={line.durationValue}
+        count={line.durationValue ?? 0}
         disabled={isReadOnly}
       />
     </div>
@@ -2781,6 +2800,7 @@ const ClientQuoteCostEditor: React.FC<{
     <div className="flex w-full items-center justify-end gap-1">
       <ValidatedNumberInput
         value={line.cost}
+        placeholder={controller.t('crm:internalListing.cost')}
         formatDecimals={2}
         onValueChange={line.handleCostChange}
         disabled={isReadOnly || line.supplierLineLocked}
@@ -2807,6 +2827,7 @@ const ClientQuoteMolEditor: React.FC<{
     <>
       <ValidatedNumberInput
         value={line.molPercentage}
+        placeholder={controller.t('sales:clientQuotes.molLabel', { defaultValue: 'MOL' })}
         formatDecimals={MOL_PERCENTAGE_DECIMALS}
         onValueChange={line.handleMolChange}
         disabled={isReadOnly}
@@ -2829,14 +2850,15 @@ const ClientQuoteDiscountEditor: React.FC<{
 }> = ({ controller, item, index, compact }) => (
   <div className="flex w-full items-center justify-end gap-1">
     <ValidatedNumberInput
-      value={item.discount ?? 0}
+      value={item.discount}
+      placeholder={controller.t('common:labels.discount')}
       min={0}
       max={100}
       step="0.01"
       formatDecimals={2}
       aria-label={controller.t('common:labels.discount')}
       onValueChange={(value) =>
-        controller.updateProductRow(index, 'discount', parseNumberInputValue(value) ?? 0)
+        controller.updateProductRow(index, 'discount', parseOptionalNumberInputValue(value))
       }
       disabled={controller.isReadOnly}
       className={

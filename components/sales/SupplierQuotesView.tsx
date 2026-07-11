@@ -35,7 +35,7 @@ import {
   convertUnitPrice,
   durationValueToMonths,
   formatDecimal,
-  getDurationDisplayValue,
+  getDurationInputValue,
   getEffectiveDurationMonths,
   normalizeDurationUnit,
   parseDurationValueToMonths,
@@ -110,8 +110,9 @@ const calculateTotals = (items: SupplierQuoteItem[]): TotalsBreakdown => {
     // Duration multiplies the line total alongside quantity (issue #776). Unit-measured lines
     // never carry a duration, so getEffectiveDurationMonths returns 1 for them.
     const durationMonths = getEffectiveDurationMonths(item);
-    grossListTotal += item.quantity * listPrice * durationMonths;
-    netTotal += item.quantity * item.unitPrice * durationMonths;
+    const quantity = Number(item.quantity) || 0;
+    grossListTotal += quantity * (Number(listPrice) || 0) * durationMonths;
+    netTotal += quantity * (Number(item.unitPrice) || 0) * durationMonths;
   });
   const subtotal = roundCurrency(grossListTotal);
   const total = roundCurrency(netTotal);
@@ -202,7 +203,12 @@ type SupplierQuotesViewAction =
   | { type: 'openEditModal'; quote: SupplierQuote; formData: Partial<SupplierQuote> }
   | { type: 'previewVersion'; version: SupplierQuoteVersion; formData: Partial<SupplierQuote> }
   | { type: 'restoreVersion'; quote: SupplierQuote; formData: Partial<SupplierQuote> }
-  | { type: 'updateItem'; index: number; field: keyof SupplierQuoteItem; value: string | number }
+  | {
+      type: 'updateItem';
+      index: number;
+      field: keyof SupplierQuoteItem;
+      value: string | number | undefined;
+    }
   | { type: 'addItem'; item: SupplierQuoteItem }
   | { type: 'removeItem'; index: number }
   | { type: 'setItem'; index: number; item: SupplierQuoteItem }
@@ -318,9 +324,10 @@ const supplierQuotesViewReducer = (
       // the same update, so the rounded list price/discount and the net cost — and every total that
       // reads them — stay in lockstep with what the server will store.
       if (action.field === 'listPrice' || action.field === 'discountPercent') {
+        const hasDiscount = Number.isFinite(Number(next.discountPercent));
         const pricing = deriveLinePricing(next.listPrice, next.discountPercent);
         next.listPrice = pricing.listPrice;
-        next.discountPercent = pricing.discountPercent;
+        next.discountPercent = hasDiscount ? pricing.discountPercent : Number.NaN;
         next.unitPrice = pricing.unitPrice;
       }
       items[action.index] = next;
@@ -620,7 +627,7 @@ const useSupplierQuotesController = ({
   );
 
   const updateItem = useCallback(
-    (index: number, field: keyof SupplierQuoteItem, value: string | number) => {
+    (index: number, field: keyof SupplierQuoteItem, value: string | number | undefined) => {
       if (isReadOnly) return;
       dispatch({ type: 'updateItem', index, field, value });
     },
@@ -635,12 +642,11 @@ const useSupplierQuotesController = ({
         id: `tmp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         quoteId: editingQuote?.id || '',
         productName: '',
-        quantity: 1,
+        quantity: Number.NaN,
         listPrice: 0,
-        discountPercent: 0,
+        discountPercent: Number.NaN,
         unitPrice: 0,
         unitType: 'unit' as const,
-        durationMonths: 1,
         durationUnit: 'months' as const,
         note: '',
       },
@@ -683,7 +689,11 @@ const useSupplierQuotesController = ({
   const handleDurationValueChange = (index: number, value: string) => {
     if (isReadOnly) return;
     const unit = normalizeDurationUnit(formData.items?.[index]?.durationUnit);
-    updateItem(index, 'durationMonths', parseDurationValueToMonths(value, unit));
+    updateItem(
+      index,
+      'durationMonths',
+      value === '' ? undefined : parseDurationValueToMonths(value, unit),
+    );
   };
 
   const handleDurationUnitChange = (index: number, newUnit: DurationUnit) => {
@@ -692,8 +702,11 @@ const useSupplierQuotesController = ({
     if (!item || normalizeDurationUnit(item.durationUnit) === newUnit) return;
     // Switching to 'na' (N/A) drops the multiplier to a single month — the value input is disabled
     // and the line never multiplies (issue #775). Other units convert the displayed value to months.
+    const durationValue = getDurationInputValue(item);
     const durationMonths =
-      newUnit === 'na' ? 1 : durationValueToMonths(getDurationDisplayValue(item), newUnit);
+      newUnit === 'na' || durationValue === undefined
+        ? undefined
+        : durationValueToMonths(durationValue, newUnit);
     dispatch({
       type: 'setItem',
       index,
@@ -1705,9 +1718,9 @@ interface SupplierQuoteItemContext {
   item: SupplierQuoteItem;
   index: number;
   durationUnit: DurationUnit;
-  durationValue: number;
+  durationValue?: number;
   isSupply: boolean;
-  itemDiscountPercent: number;
+  itemDiscountPercent?: number;
   isListPriceBlank: boolean;
   itemListPrice: number;
   itemUnitCost: number;
@@ -1720,11 +1733,13 @@ const getSupplierQuoteItemContext = (
   index: number,
 ): SupplierQuoteItemContext => {
   const itemListPrice = item.listPrice ?? item.unitPrice ?? 0;
-  const itemDiscountPercent = item.discountPercent ?? 0;
+  const itemDiscountPercent = Number.isFinite(Number(item.discountPercent))
+    ? item.discountPercent
+    : undefined;
   const itemUnitCost = item.unitPrice ?? 0;
   const durationUnit = normalizeDurationUnit(item.durationUnit);
-  const durationValue = getDurationDisplayValue(item);
-  const lineTotal = item.quantity * itemUnitCost * getEffectiveDurationMonths(item);
+  const durationValue = getDurationInputValue(item);
+  const lineTotal = (Number(item.quantity) || 0) * itemUnitCost * getEffectiveDurationMonths(item);
   const itemProduct = item.productId
     ? controller.products.find((product) => product.id === item.productId)
     : undefined;
@@ -1783,8 +1798,14 @@ const SupplierQuoteQuantityInput: React.FC<{
     <div className={className}>
       <ValidatedNumberInput
         value={context.item.quantity}
+        required
+        placeholder={context.controller.t('sales:supplierQuotes.qty', { defaultValue: 'Qty' })}
         onValueChange={(value) =>
-          context.controller.updateItem(context.index, 'quantity', parseNumberInputValue(value))
+          context.controller.updateItem(
+            context.index,
+            'quantity',
+            parseNumberInputValue(value, Number.NaN),
+          )
         }
         disabled={context.controller.isReadOnly}
         className={cn('min-w-[4rem]', inputClassName)}
@@ -1840,7 +1861,7 @@ const SupplierQuoteDurationInput: React.FC<{
       <DurationUnitSelector
         value={context.durationUnit}
         onChange={(value) => context.controller.handleDurationUnitChange(context.index, value)}
-        count={context.durationValue}
+        count={context.durationValue ?? 0}
         disabled={context.controller.isReadOnly}
         i18nPrefix="sales:supplierQuotes"
       />
@@ -1861,7 +1882,9 @@ const SupplierQuoteListPriceInput: React.FC<{
         value={context.isListPriceBlank ? '' : context.itemListPrice}
         formatDecimals={2}
         aria-required="true"
-        placeholder="0,00"
+        placeholder={context.controller.t('sales:supplierQuotes.listPrice', {
+          defaultValue: 'List Price',
+        })}
         onValueChange={(value) => context.controller.updateItem(context.index, 'listPrice', value)}
         disabled={context.controller.isReadOnly}
         className={inputClassName}
@@ -1884,13 +1907,16 @@ const SupplierQuoteDiscountInput: React.FC<{
     <div className="flex items-center gap-1">
       <ValidatedNumberInput
         value={context.itemDiscountPercent}
+        placeholder={context.controller.t('sales:supplierQuotes.discountToUs', {
+          defaultValue: 'Discount to Us',
+        })}
         min={0}
         max={100}
         onValueChange={(value) =>
           context.controller.updateItem(
             context.index,
             'discountPercent',
-            parseNumberInputValue(value),
+            parseNumberInputValue(value, Number.NaN),
           )
         }
         disabled={context.controller.isReadOnly}

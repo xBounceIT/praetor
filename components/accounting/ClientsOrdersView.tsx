@@ -33,13 +33,14 @@ import {
   formatDecimal,
   formatDiscountValue,
   formatMolPercentage,
-  getDurationDisplayValue,
+  getDurationInputValue,
   getItemPricingContext,
   MOL_PERCENTAGE_DECIMALS,
   normalizeDurationUnit,
   type PricingTotals,
   parseDurationValueToMonths,
   parseNumberInputValue,
+  parseOptionalNumberInputValue,
 } from '../../utils/numbers';
 import { getPaymentTermsOptions } from '../../utils/options';
 import { makeCostUpdater, makeMolUpdater } from '../../utils/pricingHandlers';
@@ -371,10 +372,10 @@ const useClientsOrdersController = ({
       return {
         ...item,
         unitPrice: item.unitPrice,
-        discount: item.discount ? item.discount : 0,
-        durationMonths: Number(item.durationMonths ?? 1) || 1,
+        discount: item.discount === undefined ? undefined : Number(item.discount),
+        durationMonths: item.durationMonths === undefined ? undefined : Number(item.durationMonths),
         durationUnit: normalizeDurationUnit(item.durationUnit),
-        productCost: Number(item.productCost ?? 0),
+        productCost: item.productCost === undefined ? undefined : Number(item.productCost),
         productMolPercentage:
           item.productMolPercentage === undefined || item.productMolPercentage === null
             ? null
@@ -447,14 +448,11 @@ const useClientsOrdersController = ({
       id: 'temp-' + Date.now(),
       productId: '',
       productName: '',
-      quantity: 1,
-      durationMonths: 1,
+      quantity: Number.NaN,
       durationUnit: 'months',
       unitType: DEFAULT_UNIT_TYPE,
       unitPrice: 0,
-      productCost: 0,
       productMolPercentage: null,
-      discount: 0,
     };
     setFormData((prev) => ({
       ...prev,
@@ -482,7 +480,7 @@ const useClientsOrdersController = ({
   const updateProductRow = (
     index: number,
     field: keyof ClientsOrderItem,
-    value: string | number,
+    value: string | number | undefined,
   ) => {
     const newItems = [...(formData.items || [])];
     newItems[index] = { ...newItems[index], [field]: value };
@@ -519,11 +517,15 @@ const useClientsOrdersController = ({
   };
 
   // Duration value entered in the item's chosen unit (issue #757). Stored canonically as whole
-  // months; 'years' multiplies by 12. Empty/invalid input falls back to 1 of the chosen unit.
+  // months; 'years' multiplies by 12. An empty input stays empty while pricing uses neutral ×1.
   const handleDurationValueChange = (index: number, value: string) => {
     if (isReadOnly) return;
     const unit = normalizeDurationUnit(formData.items?.[index]?.durationUnit);
-    updateProductRow(index, 'durationMonths', parseDurationValueToMonths(value, unit));
+    updateProductRow(
+      index,
+      'durationMonths',
+      value === '' ? undefined : parseDurationValueToMonths(value, unit),
+    );
   };
 
   // Switching months↔years keeps the displayed number and reinterprets it under the new unit
@@ -534,8 +536,11 @@ const useClientsOrdersController = ({
     if (!item || normalizeDurationUnit(item.durationUnit) === newUnit) return;
     // 'N/A' marks the line as duration-less: reset to the neutral 1 month so it never multiplies
     // (issue #775). Months/years instead keeps the displayed number under the new unit.
+    const durationValue = getDurationInputValue(item);
     const durationMonths =
-      newUnit === 'na' ? 1 : durationValueToMonths(getDurationDisplayValue(item), newUnit);
+      newUnit === 'na' || durationValue === undefined
+        ? undefined
+        : durationValueToMonths(durationValue, newUnit);
     const newItems = [...(formData.items || [])];
     newItems[index] = {
       ...newItems[index],
@@ -1284,7 +1289,7 @@ const OrderItemsSection: React.FC<{ controller: ClientsOrdersController }> = ({ 
             controller={controller}
             index={getIndex(row)}
             durationUnit={normalizeDurationUnit(row.durationUnit)}
-            durationValue={getDurationDisplayValue(row)}
+            durationValue={getDurationInputValue(row)}
           />
         </div>
       ),
@@ -1300,7 +1305,17 @@ const OrderItemsSection: React.FC<{ controller: ClientsOrdersController }> = ({ 
             controller={controller}
             item={row}
             index={getIndex(row)}
-            unitCost={getClientsOrderItemPricing(row).unitCost}
+            unitCost={
+              row.supplierQuoteItemId
+                ? (row.supplierQuoteUnitPrice ?? undefined)
+                : row.productCost === undefined
+                  ? undefined
+                  : convertUnitPrice(
+                      Number(row.productCost),
+                      'hours',
+                      row.unitType || DEFAULT_UNIT_TYPE,
+                    )
+            }
           />
         </div>
       ),
@@ -1315,7 +1330,7 @@ const OrderItemsSection: React.FC<{ controller: ClientsOrdersController }> = ({ 
           <OrderItemMolField
             controller={controller}
             index={getIndex(row)}
-            molPercentage={getClientsOrderItemPricing(row).molPercentage}
+            molPercentage={row.productMolPercentage ?? undefined}
           />
         </div>
       ),
@@ -1543,7 +1558,7 @@ const OrderItemQuantityField: React.FC<{
           controller.updateProductRow(
             index,
             'quantity',
-            value === '' || Number.isNaN(parsed) ? 0 : parsed,
+            value === '' || Number.isNaN(parsed) ? Number.NaN : parsed,
           );
         }}
         disabled={controller.isReadOnly || Boolean(item.supplierQuoteItemId)}
@@ -1566,7 +1581,7 @@ const OrderItemDurationField: React.FC<{
   controller: ClientsOrdersController;
   index: number;
   durationUnit: DurationUnit;
-  durationValue: number;
+  durationValue?: number;
 }> = ({ controller, index, durationUnit, durationValue }) => (
   <div className="space-y-1 lg:col-span-2 lg:space-y-0">
     <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
@@ -1588,7 +1603,7 @@ const OrderItemDurationField: React.FC<{
       <DurationUnitSelector
         value={durationUnit}
         onChange={(value) => controller.handleDurationUnitChange(index, value)}
-        count={durationValue}
+        count={durationValue ?? 0}
         disabled={controller.isReadOnly}
       />
     </div>
@@ -1599,7 +1614,7 @@ const OrderItemCostField: React.FC<{
   controller: ClientsOrdersController;
   item: ClientsOrderItem;
   index: number;
-  unitCost: number;
+  unitCost?: number;
 }> = ({ controller, item, index, unitCost }) => (
   <div className="space-y-1 lg:col-span-1 lg:space-y-0">
     <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
@@ -1608,6 +1623,7 @@ const OrderItemCostField: React.FC<{
     <div className="flex h-9 items-center justify-end gap-1">
       <ValidatedNumberInput
         value={unitCost}
+        placeholder={controller.t('crm:internalListing.cost')}
         formatDecimals={2}
         onValueChange={(value) => {
           if (!controller.isReadOnly) {
@@ -1632,7 +1648,7 @@ const OrderItemCostField: React.FC<{
 const OrderItemMolField: React.FC<{
   controller: ClientsOrdersController;
   index: number;
-  molPercentage: number;
+  molPercentage?: number;
 }> = ({ controller, index, molPercentage }) => (
   <div className="space-y-1 lg:col-span-1 lg:space-y-0">
     <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
@@ -1641,6 +1657,7 @@ const OrderItemMolField: React.FC<{
     <div className="flex h-9 items-center justify-end gap-1">
       <ValidatedNumberInput
         value={molPercentage}
+        placeholder={controller.t('sales:clientQuotes.molLabel', { defaultValue: 'MOL' })}
         formatDecimals={MOL_PERCENTAGE_DECIMALS}
         onValueChange={(value) => {
           if (!controller.isReadOnly) {
@@ -1668,14 +1685,15 @@ const OrderItemDiscountField: React.FC<{
     </FieldLabel>
     <div className="flex h-9 items-center justify-end gap-1">
       <ValidatedNumberInput
-        value={item.discount ?? 0}
+        value={item.discount}
+        placeholder={controller.t('common:labels.discount')}
         min={0}
         max={100}
         step="0.01"
         formatDecimals={2}
         aria-label={controller.t('common:labels.discount')}
         onValueChange={(value) =>
-          controller.updateProductRow(index, 'discount', parseNumberInputValue(value) ?? 0)
+          controller.updateProductRow(index, 'discount', parseOptionalNumberInputValue(value))
         }
         disabled={controller.isReadOnly}
         className={compactInputClass}

@@ -21,7 +21,7 @@ import {
   durationValueToMonths,
   formatDecimal,
   formatDiscountValue,
-  getDurationDisplayValue,
+  getDurationInputValue,
   getEffectiveDurationMonths,
   normalizeDurationUnit,
   parseDurationValueToMonths,
@@ -73,7 +73,8 @@ const calculateTotals = (
     // Duration multiplies the line total alongside quantity (issue #776), matching the supplier
     // quote the order was created from.
     const durationMonths = getEffectiveDurationMonths(item);
-    const lineSubtotal = Number(item.quantity ?? 0) * Number(item.unitPrice ?? 0) * durationMonths;
+    const lineSubtotal =
+      (Number(item.quantity) || 0) * (Number(item.unitPrice) || 0) * durationMonths;
     const lineDiscount = (lineSubtotal * Number(item.discount ?? 0)) / 100;
     const lineNet = lineSubtotal - lineDiscount;
     subtotal += lineNet;
@@ -139,7 +140,7 @@ type SupplierOrdersAction =
       type: 'updateItem';
       index: number;
       field: keyof SupplierSaleOrderItem;
-      value: string | number;
+      value: string | number | undefined;
       products: Product[];
     }
   | { type: 'removeItem'; index: number };
@@ -332,7 +333,7 @@ const useSupplierOrdersController = ({
   }, [onDeleteOrder, orderToDelete]);
 
   const updateItem = useCallback(
-    (index: number, field: keyof SupplierSaleOrderItem, value: string | number) => {
+    (index: number, field: keyof SupplierSaleOrderItem, value: string | number | undefined) => {
       if (isReadOnly) return;
       dispatch({ type: 'updateItem', index, field, value, products });
     },
@@ -353,7 +354,11 @@ const useSupplierOrdersController = ({
     (index: number, value: string) => {
       if (isReadOnly) return;
       const unit = normalizeDurationUnit(formData.items?.[index]?.durationUnit);
-      updateItem(index, 'durationMonths', parseDurationValueToMonths(value, unit));
+      updateItem(
+        index,
+        'durationMonths',
+        value === '' ? undefined : parseDurationValueToMonths(value, unit),
+      );
     },
     [formData.items, isReadOnly, updateItem],
   );
@@ -367,8 +372,11 @@ const useSupplierOrdersController = ({
       // Switch unit and recompute canonical months in a single update so the line never lands in a
       // transient state (durationMonths under the old unit). 'na' (N/A) drops the multiplier to a
       // single month — the value input is disabled and the line never multiplies (issue #775).
+      const durationValue = getDurationInputValue(item);
       const durationMonths =
-        newUnit === 'na' ? 1 : durationValueToMonths(getDurationDisplayValue(item), newUnit);
+        newUnit === 'na' || durationValue === undefined
+          ? undefined
+          : durationValueToMonths(durationValue, newUnit);
       const nextItems = items.map((current, i) =>
         i === index ? { ...current, durationMonths, durationUnit: newUnit } : current,
       );
@@ -387,8 +395,8 @@ const useSupplierOrdersController = ({
         discount: Number(formData.discount ?? 0),
         items: (formData.items || []).map((item) => ({
           ...item,
-          unitPrice: Number(item.unitPrice ?? 0),
-          discount: Number(item.discount ?? 0),
+          unitPrice: Number(item.unitPrice) || 0,
+          discount: item.discount === undefined ? undefined : Number(item.discount),
         })),
       });
 
@@ -995,7 +1003,7 @@ const SupplierOrderItemsSection: React.FC<{ controller: SupplierOrdersController
             controller={controller}
             index={getIndex(row)}
             durationUnit={normalizeDurationUnit(row.durationUnit)}
-            durationValue={getDurationDisplayValue(row)}
+            durationValue={getDurationInputValue(row)}
           />
         </div>
       ),
@@ -1097,9 +1105,11 @@ const SupplierOrderItemQuantityField: React.FC<{
     </FieldLabel>
     <ValidatedNumberInput
       value={item.quantity}
+      required
+      placeholder={controller.t('common:labels.quantity')}
       disabled={controller.isReadOnly}
       onValueChange={(value) =>
-        controller.updateItem(index, 'quantity', value === '' ? 0 : Number(value))
+        controller.updateItem(index, 'quantity', value === '' ? Number.NaN : Number(value))
       }
       className={inputClassName}
     />
@@ -1119,10 +1129,12 @@ const SupplierOrderItemPriceField: React.FC<{
     </FieldLabel>
     <ValidatedNumberInput
       value={item.unitPrice}
+      required
+      placeholder={controller.t('crm:internalListing.salePrice')}
       formatDecimals={2}
       disabled={controller.isReadOnly}
       onValueChange={(value) =>
-        controller.updateItem(index, 'unitPrice', value === '' ? 0 : Number(value))
+        controller.updateItem(index, 'unitPrice', value === '' ? Number.NaN : Number(value))
       }
       className={inputClassName}
     />
@@ -1141,11 +1153,12 @@ const SupplierOrderItemDiscountField: React.FC<{
       {controller.t('accounting:supplierOrders.discount')}
     </FieldLabel>
     <ValidatedNumberInput
-      value={item.discount || 0}
+      value={item.discount}
+      placeholder={controller.t('accounting:supplierOrders.discount')}
       formatDecimals={2}
       disabled={controller.isReadOnly}
       onValueChange={(value) =>
-        controller.updateItem(index, 'discount', value === '' ? 0 : Number(value))
+        controller.updateItem(index, 'discount', value === '' ? undefined : Number(value))
       }
       className={inputClassName}
     />
@@ -1156,7 +1169,7 @@ const SupplierOrderItemDurationField: React.FC<{
   controller: SupplierOrdersController;
   index: number;
   durationUnit: DurationUnit;
-  durationValue: number;
+  durationValue?: number;
   className?: string;
   inputClassName?: string;
 }> = ({
@@ -1189,7 +1202,7 @@ const SupplierOrderItemDurationField: React.FC<{
       <DurationUnitSelector
         value={durationUnit}
         onChange={(value) => controller.handleDurationUnitChange(index, value)}
-        count={durationValue}
+        count={durationValue ?? 0}
         disabled={controller.isReadOnly}
         i18nPrefix="accounting:supplierOrders"
       />

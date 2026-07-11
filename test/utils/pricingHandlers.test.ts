@@ -91,6 +91,13 @@ describe('makeCostUpdater', () => {
     // The sale price is recomputed from the entered per-day cost (MOL 0 → equal).
     expect(next.items?.[0].unitPrice).toBe(80);
   });
+
+  test('keeps a cleared cost unfilled while calculations retain a safe zero price', () => {
+    const state: FormState = { items: [baseItem({ productCost: 50, productMolPercentage: 25 })] };
+    const next = makeCostUpdater<FormState>(0, '')(state);
+    expect(next.items?.[0].productCost).toBeUndefined();
+    expect(next.items?.[0].unitPrice).toBe(0);
+  });
 });
 
 describe('makeMolUpdater', () => {
@@ -126,5 +133,12 @@ describe('makeMolUpdater', () => {
     const state: FormState = { items: [a, b] };
     const next = makeMolUpdater<FormState>(0, '20')(state);
     expect(next.items?.[1]).toBe(b);
+  });
+
+  test('keeps a cleared MOL unfilled while recalculating with the neutral percentage', () => {
+    const state: FormState = { items: [baseItem({ productCost: 50, productMolPercentage: 25 })] };
+    const next = makeMolUpdater<FormState>(0, '')(state);
+    expect(next.items?.[0].productMolPercentage).toBeNull();
+    expect(next.items?.[0].unitPrice).toBe(50);
   });
 });
