@@ -157,6 +157,8 @@ describe('sales modal styling', () => {
       'showColumnSettings={false}',
     ]);
     expect((source.match(/max-w-\[5rem\] flex-none/g) ?? []).length).toBeGreaterThanOrEqual(3);
+    expect((source.match(/outline-none text-right/g) ?? []).length).toBeGreaterThanOrEqual(5);
+    expectSourceOmitsAll(source, ['outline-none text-center']);
     expectSourceOmitsAll(source, ['grid grid-cols-17 gap-2 items-center pt-5']);
   });
 
@@ -169,6 +171,8 @@ describe('sales modal styling', () => {
       'persistenceKey="sales.supplierQuotes.items"',
       'allowColumnHiding={false}',
       '<Button type="button" size="sm" onClick={controller.addItem}>',
+      'className="flex min-w-[150px] items-center justify-end gap-1"',
+      'max-w-[5rem] text-right',
     ]);
     expectSourceOmitsAll(source, ['showColumnSettings={false}']);
   });

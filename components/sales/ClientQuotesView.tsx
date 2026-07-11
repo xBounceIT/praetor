@@ -2345,7 +2345,7 @@ const ClientQuoteItemsSection: React.FC<{ controller: ClientQuotesController }> 
       id: 'quantity',
       header: t('sales:clientQuotes.qty'),
       accessorKey: 'quantity',
-      align: 'center',
+      align: 'right',
       cell: ({ row }) => {
         const index = getIndex(row);
         return (
@@ -2365,7 +2365,7 @@ const ClientQuoteItemsSection: React.FC<{ controller: ClientQuotesController }> 
       id: 'duration',
       header: t('sales:clientQuotes.durationColumn', { defaultValue: 'Duration' }),
       accessorFn: (item) => getItemPricingContext(item).durationMonths,
-      align: 'center',
+      align: 'right',
       cell: ({ row }) => {
         const index = getIndex(row);
         return (
@@ -2395,9 +2395,9 @@ const ClientQuoteItemsSection: React.FC<{ controller: ClientQuotesController }> 
       id: 'mol',
       header: t('sales:clientQuotes.molLabel', { defaultValue: 'MOL' }),
       accessorFn: (item) => getItemPricingContext(item).molPercentage,
-      align: 'center',
+      align: 'right',
       cell: ({ row }) => (
-        <div className="flex min-w-[100px] items-center justify-center gap-1">
+        <div className="flex min-w-[100px] items-center justify-end gap-1">
           <ClientQuoteMolEditor controller={controller} line={getLine(row)} compact />
         </div>
       ),
@@ -2417,7 +2417,7 @@ const ClientQuoteItemsSection: React.FC<{ controller: ClientQuotesController }> 
       id: 'discount',
       header: t('common:labels.discount'),
       accessorFn: (item) => item.discount ?? 0,
-      align: 'center',
+      align: 'right',
       cell: ({ row }) => (
         <div className="min-w-[110px]">
           <ClientQuoteDiscountEditor
@@ -2693,7 +2693,7 @@ const ClientQuoteQuantityEditor: React.FC<{
   const { t, isReadOnly, updateProductRow, handleUnitTypeChange } = controller;
 
   return (
-    <div className="flex items-center justify-center gap-1">
+    <div className="flex items-center justify-end gap-1">
       <ValidatedNumberInput
         step="0.01"
         min="0"
@@ -2707,8 +2707,8 @@ const ClientQuoteQuantityEditor: React.FC<{
         disabled={isReadOnly || line.supplierLineLocked}
         className={
           compact
-            ? 'w-full max-w-[5rem] text-sm p-2 bg-white border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed'
-            : 'w-full text-sm px-3 py-2 bg-white border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed flex-1'
+            ? 'w-full max-w-[5rem] text-sm p-2 bg-white border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-right disabled:opacity-50 disabled:cursor-not-allowed'
+            : 'w-full text-sm px-3 py-2 bg-white border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-right disabled:opacity-50 disabled:cursor-not-allowed flex-1'
         }
       />
       <span className="text-xs font-semibold text-zinc-400 shrink-0">/</span>
@@ -2732,7 +2732,7 @@ const ClientQuoteDurationEditor: React.FC<{
   const { t, isReadOnly, handleDurationValueChange, handleDurationUnitChange } = controller;
 
   return (
-    <div className="flex items-center gap-1">
+    <div className="flex items-center justify-end gap-1">
       <ValidatedNumberInput
         step="1"
         min="1"
@@ -2742,8 +2742,8 @@ const ClientQuoteDurationEditor: React.FC<{
         disabled={isReadOnly || line.durationUnit === 'na'}
         className={
           compact
-            ? 'w-full max-w-[5rem] text-sm px-1 py-2 bg-white border border-zinc-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed'
-            : 'w-full text-sm px-3 py-2 bg-white border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed flex-1'
+            ? 'w-full max-w-[5rem] text-sm px-1 py-2 bg-white border border-zinc-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-right disabled:opacity-50 disabled:cursor-not-allowed'
+            : 'w-full text-sm px-3 py-2 bg-white border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-right disabled:opacity-50 disabled:cursor-not-allowed flex-1'
         }
       />
       <span
@@ -2782,8 +2782,8 @@ const ClientQuoteCostEditor: React.FC<{
         disabled={isReadOnly || line.supplierLineLocked}
         className={
           compact
-            ? 'w-full max-w-[5rem] flex-none text-sm px-1 py-2 bg-white border border-zinc-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed'
-            : 'w-full text-sm p-2 bg-white border border-zinc-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed'
+            ? 'w-full max-w-[5rem] flex-none text-sm px-1 py-2 bg-white border border-zinc-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-right disabled:opacity-50 disabled:cursor-not-allowed'
+            : 'w-full text-sm p-2 bg-white border border-zinc-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-right disabled:opacity-50 disabled:cursor-not-allowed'
         }
       />
       <span className="text-[9px] font-semibold text-zinc-400 shrink-0">{currency}</span>
@@ -2808,8 +2808,8 @@ const ClientQuoteMolEditor: React.FC<{
         disabled={isReadOnly}
         className={
           compact
-            ? 'w-full max-w-[5rem] flex-none text-sm px-1 py-2 bg-white border border-zinc-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed'
-            : 'w-full text-sm p-2 bg-white border border-zinc-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed'
+            ? 'w-full max-w-[5rem] flex-none text-sm px-1 py-2 bg-white border border-zinc-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-right disabled:opacity-50 disabled:cursor-not-allowed'
+            : 'w-full text-sm p-2 bg-white border border-zinc-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-right disabled:opacity-50 disabled:cursor-not-allowed'
         }
       />
       <span className="text-[9px] font-semibold text-zinc-400 shrink-0">%</span>
@@ -2823,7 +2823,7 @@ const ClientQuoteDiscountEditor: React.FC<{
   index: number;
   compact?: boolean;
 }> = ({ controller, item, index, compact }) => (
-  <div className="flex w-full items-center justify-center gap-1">
+  <div className="flex w-full items-center justify-end gap-1">
     <ValidatedNumberInput
       value={item.discount ?? 0}
       min={0}
@@ -2837,8 +2837,8 @@ const ClientQuoteDiscountEditor: React.FC<{
       disabled={controller.isReadOnly}
       className={
         compact
-          ? 'w-full max-w-[5rem] flex-none text-sm px-1 py-2 bg-white border border-zinc-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed'
-          : 'w-full text-sm p-2 bg-white border border-zinc-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed'
+          ? 'w-full max-w-[5rem] flex-none text-sm px-1 py-2 bg-white border border-zinc-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-right disabled:opacity-50 disabled:cursor-not-allowed'
+          : 'w-full text-sm p-2 bg-white border border-zinc-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-right disabled:opacity-50 disabled:cursor-not-allowed'
       }
     />
     <span className="shrink-0 text-[9px] font-semibold text-zinc-400">%</span>

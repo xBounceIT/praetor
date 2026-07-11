@@ -1792,7 +1792,7 @@ const ClientOfferItemsSection: React.FC<{ controller: ClientOffersController }> 
       id: 'quantity',
       header: t('sales:clientOffers.qty', { defaultValue: 'Qty' }),
       accessorKey: 'quantity',
-      align: 'center',
+      align: 'right',
       cell: ({ row }) => {
         const index = getIndex(row);
         return (
@@ -1812,7 +1812,7 @@ const ClientOfferItemsSection: React.FC<{ controller: ClientOffersController }> 
       id: 'duration',
       header: t('sales:clientOffers.durationColumn', { defaultValue: 'Duration' }),
       accessorFn: (item) => getItemPricingContext(item).durationMonths,
-      align: 'center',
+      align: 'right',
       cell: ({ row }) => {
         const index = getIndex(row);
         return (
@@ -1842,9 +1842,9 @@ const ClientOfferItemsSection: React.FC<{ controller: ClientOffersController }> 
       id: 'mol',
       header: t('sales:clientQuotes.molLabel', { defaultValue: 'MOL' }),
       accessorFn: (item) => getItemPricingContext(item).molPercentage,
-      align: 'center',
+      align: 'right',
       cell: ({ row }) => (
-        <div className="flex min-w-[100px] items-center justify-center gap-1">
+        <div className="flex min-w-[100px] items-center justify-end gap-1">
           <ClientOfferMolEditor controller={controller} line={getLine(row)} compact />
         </div>
       ),
@@ -1864,7 +1864,7 @@ const ClientOfferItemsSection: React.FC<{ controller: ClientOffersController }> 
       id: 'discount',
       header: t('common:labels.discount'),
       accessorFn: (item) => item.discount ?? 0,
-      align: 'center',
+      align: 'right',
       cell: ({ row }) => (
         <div className="min-w-[110px]">
           <ClientOfferDiscountEditor
@@ -2128,7 +2128,7 @@ const ClientOfferQuantityEditor: React.FC<{
   const { t, isReadOnly, updateItem, handleUnitTypeChange } = controller;
 
   return (
-    <div className="flex items-center justify-center gap-1">
+    <div className="flex items-center justify-end gap-1">
       <ValidatedNumberInput
         step="0.01"
         min="0"
@@ -2139,8 +2139,8 @@ const ClientOfferQuantityEditor: React.FC<{
         disabled={isReadOnly || line.supplierLineLocked}
         className={
           compact
-            ? 'w-full max-w-[5rem] text-sm p-2 bg-white border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed'
-            : 'w-full text-sm px-3 py-2 bg-white border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed flex-1'
+            ? 'w-full max-w-[5rem] text-sm p-2 bg-white border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-right disabled:opacity-50 disabled:cursor-not-allowed'
+            : 'w-full text-sm px-3 py-2 bg-white border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-right disabled:opacity-50 disabled:cursor-not-allowed flex-1'
         }
       />
       <span className="text-xs font-semibold text-zinc-400 shrink-0">/</span>
@@ -2164,7 +2164,7 @@ const ClientOfferDurationEditor: React.FC<{
   const { t, isReadOnly, handleDurationValueChange, handleDurationUnitChange } = controller;
 
   return (
-    <div className="flex items-center gap-1">
+    <div className="flex items-center justify-end gap-1">
       <ValidatedNumberInput
         step="1"
         min="1"
@@ -2174,8 +2174,8 @@ const ClientOfferDurationEditor: React.FC<{
         disabled={isReadOnly || line.durationUnit === 'na'}
         className={
           compact
-            ? 'w-full max-w-[5rem] text-sm px-1 py-2 bg-white border border-zinc-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed'
-            : 'w-full text-sm px-3 py-2 bg-white border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed flex-1'
+            ? 'w-full max-w-[5rem] text-sm px-1 py-2 bg-white border border-zinc-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-right disabled:opacity-50 disabled:cursor-not-allowed'
+            : 'w-full text-sm px-3 py-2 bg-white border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-right disabled:opacity-50 disabled:cursor-not-allowed flex-1'
         }
       />
       <span
@@ -2214,8 +2214,8 @@ const ClientOfferCostEditor: React.FC<{
         disabled={isReadOnly || line.supplierLineLocked}
         className={
           compact
-            ? 'w-full max-w-[5rem] flex-none text-sm px-1 py-2 bg-white border border-zinc-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed'
-            : 'w-full text-sm p-2 bg-white border border-zinc-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed'
+            ? 'w-full max-w-[5rem] flex-none text-sm px-1 py-2 bg-white border border-zinc-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-right disabled:opacity-50 disabled:cursor-not-allowed'
+            : 'w-full text-sm p-2 bg-white border border-zinc-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-right disabled:opacity-50 disabled:cursor-not-allowed'
         }
       />
       <span className="text-[9px] font-semibold text-zinc-400 shrink-0">{currency}</span>
@@ -2240,8 +2240,8 @@ const ClientOfferMolEditor: React.FC<{
         disabled={isReadOnly}
         className={
           compact
-            ? 'w-full max-w-[5rem] flex-none text-sm px-1 py-2 bg-white border border-zinc-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed'
-            : 'w-full text-sm p-2 bg-white border border-zinc-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed'
+            ? 'w-full max-w-[5rem] flex-none text-sm px-1 py-2 bg-white border border-zinc-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-right disabled:opacity-50 disabled:cursor-not-allowed'
+            : 'w-full text-sm p-2 bg-white border border-zinc-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-right disabled:opacity-50 disabled:cursor-not-allowed'
         }
       />
       <span className="text-[9px] font-semibold text-zinc-400 shrink-0">%</span>
@@ -2255,7 +2255,7 @@ const ClientOfferDiscountEditor: React.FC<{
   index: number;
   compact?: boolean;
 }> = ({ controller, item, index, compact }) => (
-  <div className="flex w-full items-center justify-center gap-1">
+  <div className="flex w-full items-center justify-end gap-1">
     <ValidatedNumberInput
       value={item.discount ?? 0}
       min={0}
@@ -2269,8 +2269,8 @@ const ClientOfferDiscountEditor: React.FC<{
       disabled={controller.isReadOnly}
       className={
         compact
-          ? 'w-full max-w-[5rem] flex-none text-sm px-1 py-2 bg-white border border-zinc-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed'
-          : 'w-full text-sm p-2 bg-white border border-zinc-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed'
+          ? 'w-full max-w-[5rem] flex-none text-sm px-1 py-2 bg-white border border-zinc-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-right disabled:opacity-50 disabled:cursor-not-allowed'
+          : 'w-full text-sm p-2 bg-white border border-zinc-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-right disabled:opacity-50 disabled:cursor-not-allowed'
       }
     />
     <span className="shrink-0 text-[9px] font-semibold text-zinc-400">%</span>

@@ -1571,12 +1571,12 @@ const SupplierQuoteItemsSection: React.FC<{ controller: SupplierQuotesController
         defaultValue: 'Discount to Us (%)',
       }),
       accessorFn: (item) => item.discountPercent ?? 0,
-      align: 'center',
+      align: 'right',
       cell: ({ row }) => (
         <SupplierQuoteDiscountInput
           context={getContext(row)}
-          className="flex min-w-[120px] items-center justify-center gap-1"
-          inputClassName={`${controller.itemInputClassName} max-w-[5rem] text-center`}
+          className="flex min-w-[120px] items-center justify-end gap-1"
+          inputClassName={`${controller.itemInputClassName} max-w-[5rem] text-right`}
         />
       ),
     },
@@ -1596,12 +1596,12 @@ const SupplierQuoteItemsSection: React.FC<{ controller: SupplierQuotesController
       id: 'quantity',
       header: controller.t('sales:supplierQuotes.qty', { defaultValue: 'Qty' }),
       accessorKey: 'quantity',
-      align: 'center',
+      align: 'right',
       cell: ({ row }) => (
         <SupplierQuoteQuantityInput
           context={getContext(row)}
-          className="flex min-w-[150px] items-center justify-center gap-1"
-          inputClassName={`${controller.itemInputClassName} max-w-[5rem] text-center`}
+          className="flex min-w-[150px] items-center justify-end gap-1"
+          inputClassName={`${controller.itemInputClassName} max-w-[5rem] text-right`}
         />
       ),
     },
@@ -1609,12 +1609,12 @@ const SupplierQuoteItemsSection: React.FC<{ controller: SupplierQuotesController
       id: 'duration',
       header: controller.t('sales:supplierQuotes.durationColumn', { defaultValue: 'Duration' }),
       accessorFn: (item) => getEffectiveDurationMonths(item),
-      align: 'center',
+      align: 'right',
       cell: ({ row }) => (
         <SupplierQuoteDurationInput
           context={getContext(row)}
-          className="flex min-w-[150px] items-center justify-center gap-1"
-          inputClassName="w-full max-w-[5rem] rounded-lg border border-zinc-200 bg-white px-1 py-2 text-center text-sm outline-none focus:ring-1 focus:ring-praetor disabled:cursor-not-allowed disabled:opacity-50"
+          className="flex min-w-[150px] items-center justify-end gap-1"
+          inputClassName="w-full max-w-[5rem] rounded-lg border border-zinc-200 bg-white px-1 py-2 text-right text-sm outline-none focus:ring-1 focus:ring-praetor disabled:cursor-not-allowed disabled:opacity-50"
         />
       ),
     },

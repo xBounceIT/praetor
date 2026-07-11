@@ -90,7 +90,7 @@ export interface ClientsOrdersViewProps {
 
 const DEFAULT_UNIT_TYPE: SupplierUnitType = 'hours';
 
-const compactInputClass = 'h-9 max-w-[5rem] flex-none text-center font-medium';
+const compactInputClass = 'h-9 max-w-[5rem] flex-none text-right font-medium';
 const EMPTY_SUPPLIER_ORDERS: SupplierSaleOrder[] = [];
 
 const convertHourlyToUnit = (hourlyPrice: number, unitType: SupplierUnitType | undefined) =>
@@ -1255,7 +1255,7 @@ const OrderItemsSection: React.FC<{ controller: ClientsOrdersController }> = ({ 
       id: 'quantity',
       header: controller.t('sales:clientQuotes.qty'),
       accessorKey: 'quantity',
-      align: 'center',
+      align: 'right',
       cell: ({ row }) => (
         <div className="min-w-[150px]">
           <OrderItemQuantityField
@@ -1273,7 +1273,7 @@ const OrderItemsSection: React.FC<{ controller: ClientsOrdersController }> = ({ 
       id: 'duration',
       header: controller.t('sales:clientQuotes.durationColumn', { defaultValue: 'Duration' }),
       accessorFn: (item) => getClientsOrderItemPricing(item).durationMonths,
-      align: 'center',
+      align: 'right',
       cell: ({ row }) => (
         <div className="min-w-[150px]">
           <OrderItemDurationField
@@ -1305,7 +1305,7 @@ const OrderItemsSection: React.FC<{ controller: ClientsOrdersController }> = ({ 
       id: 'mol',
       header: controller.t('sales:clientQuotes.molLabel', { defaultValue: 'MOL' }),
       accessorFn: (item) => getClientsOrderItemPricing(item).molPercentage,
-      align: 'center',
+      align: 'right',
       cell: ({ row }) => (
         <div className="min-w-[100px]">
           <OrderItemMolField
@@ -1334,7 +1334,7 @@ const OrderItemsSection: React.FC<{ controller: ClientsOrdersController }> = ({ 
       id: 'discount',
       header: controller.t('common:labels.discount'),
       accessorFn: (item) => item.discount ?? 0,
-      align: 'center',
+      align: 'right',
       cell: ({ row }) => (
         <div className="min-w-[110px]">
           <OrderItemDiscountField controller={controller} item={row} index={getIndex(row)} />
@@ -1367,7 +1367,6 @@ const OrderItemsSection: React.FC<{ controller: ClientsOrdersController }> = ({ 
           value={getClientsOrderItemRevenue(row)}
           currency={controller.currency}
           className="min-w-[120px]"
-          align="right"
         />
       ),
     },
@@ -1528,7 +1527,7 @@ const OrderItemQuantityField: React.FC<{
     <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
       {controller.t('sales:clientQuotes.qty')}
     </FieldLabel>
-    <div className="flex h-9 items-center justify-center gap-1">
+    <div className="flex h-9 items-center justify-end gap-1">
       <ValidatedNumberInput
         step="0.01"
         min="0"
@@ -1544,7 +1543,7 @@ const OrderItemQuantityField: React.FC<{
           );
         }}
         disabled={controller.isReadOnly || Boolean(item.supplierQuoteItemId)}
-        className="max-w-[5rem] flex-1 text-center"
+        className="max-w-[5rem] flex-1 text-right"
       />
       <span className="shrink-0 text-xs font-medium text-muted-foreground">/</span>
       <UnitTypeSelector
@@ -1569,7 +1568,7 @@ const OrderItemDurationField: React.FC<{
     <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
       {controller.t('sales:clientQuotes.durationColumn', { defaultValue: 'Duration' })}
     </FieldLabel>
-    <div className="flex h-9 items-center justify-center gap-1">
+    <div className="flex h-9 items-center justify-end gap-1">
       <ValidatedNumberInput
         step="1"
         min="1"
@@ -1602,7 +1601,7 @@ const OrderItemCostField: React.FC<{
     <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
       {controller.t('crm:internalListing.cost')}
     </FieldLabel>
-    <div className="flex h-9 items-center justify-center gap-1">
+    <div className="flex h-9 items-center justify-end gap-1">
       <ValidatedNumberInput
         value={unitCost}
         formatDecimals={2}
@@ -1635,7 +1634,7 @@ const OrderItemMolField: React.FC<{
     <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
       {controller.t('sales:clientQuotes.molLabel', { defaultValue: 'MOL' })}
     </FieldLabel>
-    <div className="flex h-9 items-center justify-center gap-1">
+    <div className="flex h-9 items-center justify-end gap-1">
       <ValidatedNumberInput
         value={molPercentage}
         formatDecimals={MOL_PERCENTAGE_DECIMALS}
@@ -1663,7 +1662,7 @@ const OrderItemDiscountField: React.FC<{
     <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
       {controller.t('common:labels.discount')}
     </FieldLabel>
-    <div className="flex h-9 items-center justify-center gap-1">
+    <div className="flex h-9 items-center justify-end gap-1">
       <ValidatedNumberInput
         value={item.discount ?? 0}
         min={0}
@@ -1688,15 +1687,7 @@ const OrderItemAmountField: React.FC<{
   currency: string;
   className: string;
   valueClassName?: string;
-  align?: 'center' | 'right';
-}> = ({
-  label,
-  value,
-  currency,
-  className,
-  valueClassName = 'text-foreground',
-  align = 'center',
-}) => {
+}> = ({ label, value, currency, className, valueClassName = 'text-foreground' }) => {
   const valueLabel = (
     <span className={`text-xs font-bold ${valueClassName}`}>
       {formatDecimal(value)} {currency}
@@ -1708,15 +1699,9 @@ const OrderItemAmountField: React.FC<{
       <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
         {label}
       </FieldLabel>
-      {align === 'right' ? (
-        <div className="flex h-9 items-center justify-end whitespace-nowrap px-3 text-sm font-bold text-foreground">
-          {valueLabel}
-        </div>
-      ) : (
-        <div className="flex h-9 items-center justify-center whitespace-nowrap px-3">
-          {valueLabel}
-        </div>
-      )}
+      <div className="flex h-9 items-center justify-end whitespace-nowrap px-3 text-sm font-bold text-foreground">
+        {valueLabel}
+      </div>
     </div>
   );
 };

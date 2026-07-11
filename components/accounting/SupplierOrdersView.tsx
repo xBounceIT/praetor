@@ -943,7 +943,7 @@ const SupplierOrderItemsSection: React.FC<{ controller: SupplierOrdersController
       id: 'quantity',
       header: controller.t('common:labels.quantity'),
       accessorKey: 'quantity',
-      align: 'center',
+      align: 'right',
       cell: ({ row }) => (
         <div className="min-w-[120px]">
           <SupplierOrderItemQuantityField
@@ -969,7 +969,7 @@ const SupplierOrderItemsSection: React.FC<{ controller: SupplierOrdersController
       id: 'discount',
       header: controller.t('accounting:supplierOrders.discount'),
       accessorFn: (item) => item.discount || 0,
-      align: 'center',
+      align: 'right',
       cell: ({ row }) => (
         <div className="min-w-[110px]">
           <SupplierOrderItemDiscountField
@@ -986,7 +986,7 @@ const SupplierOrderItemsSection: React.FC<{ controller: SupplierOrdersController
         defaultValue: 'Duration',
       }),
       accessorFn: (item) => getEffectiveDurationMonths(item),
-      align: 'center',
+      align: 'right',
       cell: ({ row }) => (
         <div className="min-w-[150px]">
           <SupplierOrderItemDurationField
@@ -1088,7 +1088,7 @@ const SupplierOrderItemQuantityField: React.FC<{
   index: number;
   className?: string;
   inputClassName?: string;
-}> = ({ controller, item, index, className = 'space-y-1', inputClassName = 'text-center' }) => (
+}> = ({ controller, item, index, className = 'space-y-1', inputClassName = 'text-right' }) => (
   <div className={className}>
     <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
       {controller.t('common:labels.quantity')}
@@ -1110,7 +1110,7 @@ const SupplierOrderItemPriceField: React.FC<{
   index: number;
   className?: string;
   inputClassName?: string;
-}> = ({ controller, item, index, className = 'space-y-1', inputClassName = 'text-center' }) => (
+}> = ({ controller, item, index, className = 'space-y-1', inputClassName = 'text-right' }) => (
   <div className={className}>
     <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
       {controller.t('crm:internalListing.salePrice')}
@@ -1133,7 +1133,7 @@ const SupplierOrderItemDiscountField: React.FC<{
   index: number;
   className?: string;
   inputClassName?: string;
-}> = ({ controller, item, index, className = 'space-y-1', inputClassName = 'text-center' }) => (
+}> = ({ controller, item, index, className = 'space-y-1', inputClassName = 'text-right' }) => (
   <div className={className}>
     <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
       {controller.t('accounting:supplierOrders.discount')}
@@ -1163,7 +1163,7 @@ const SupplierOrderItemDurationField: React.FC<{
   durationUnit,
   durationValue,
   className = 'space-y-1',
-  inputClassName = 'text-center',
+  inputClassName = 'text-right',
 }) => (
   <div className={className}>
     <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
