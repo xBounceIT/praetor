@@ -3,10 +3,12 @@ import { useCallback, useMemo, useReducer } from 'react';
 import { useTranslation } from 'react-i18next';
 import { LinkedRecordBanner } from '@/components/shared/LinkedRecordBanner';
 import { Button } from '@/components/ui/button';
+import DocumentLineItemsScrollArea from '@/components/ui/document-line-items-scroll-area';
 import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { cn } from '@/lib/utils';
 import { useDocumentCodePreview } from '../../hooks/useDocumentCodePreview';
 import type { QuoteCommunicationChannel } from '../../services/api/quoteCommunicationChannels';
 import { supplierQuotesApi } from '../../services/api/supplierQuotes';
@@ -1558,13 +1560,18 @@ const SupplierQuoteItemsSection: React.FC<{ controller: SupplierQuotesController
     {controller.errors.items && (
       <p className="text-red-500 text-[10px] font-bold ml-1 -mt-2">{controller.errors.items}</p>
     )}
-    <SupplierQuoteItemsHeader controller={controller} />
     {(controller.formData.items || []).length > 0 ? (
-      <div className="space-y-3">
-        {controller.formData.items?.map((item, index) => (
-          <SupplierQuoteItemRow key={item.id} controller={controller} item={item} index={index} />
-        ))}
-      </div>
+      <DocumentLineItemsScrollArea
+        aria-label={controller.t('sales:supplierQuotes.items', { defaultValue: 'Items' })}
+        contentClassName="lg:min-w-[88rem]"
+      >
+        <SupplierQuoteItemsHeader controller={controller} />
+        <div className="space-y-3">
+          {controller.formData.items?.map((item, index) => (
+            <SupplierQuoteItemRow key={item.id} controller={controller} item={item} index={index} />
+          ))}
+        </div>
+      </DocumentLineItemsScrollArea>
     ) : (
       <div className="rounded-md border border-dashed border-border py-8 text-center text-sm text-muted-foreground">
         {controller.t('sales:supplierQuotes.noItemsAdded', { defaultValue: 'No items added yet' })}
@@ -1741,12 +1748,14 @@ const SupplierQuoteItemDesktopFields: React.FC<{ context: SupplierQuoteItemConte
       />
       <SupplierQuoteQuantityInput
         context={context}
-        className="col-span-2 flex items-center justify-center gap-1"
+        wrapperClassName="col-span-2"
+        className="flex items-center justify-center gap-1"
         inputClassName={`${context.controller.itemInputClassName} text-center max-w-[5rem]`}
       />
       <SupplierQuoteDurationInput
         context={context}
-        className="col-span-2 flex items-center justify-center gap-1"
+        wrapperClassName="col-span-2"
+        className="flex items-center justify-center gap-1"
         inputClassName="w-full max-w-[5rem] text-sm px-1 py-2 bg-white border border-zinc-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
       />
     </div>
@@ -1791,8 +1800,9 @@ const SupplierQuoteQuantityInput: React.FC<{
   className?: string;
   inputClassName?: string;
   label?: React.ReactNode;
-}> = ({ context, className, inputClassName, label }) => (
-  <div>
+  wrapperClassName?: string;
+}> = ({ context, className, inputClassName, label, wrapperClassName }) => (
+  <div className={wrapperClassName}>
     <SupplierQuoteFieldLabel>{label}</SupplierQuoteFieldLabel>
     <div className={className}>
       <ValidatedNumberInput
@@ -1801,7 +1811,7 @@ const SupplierQuoteQuantityInput: React.FC<{
           context.controller.updateItem(context.index, 'quantity', parseNumberInputValue(value))
         }
         disabled={context.controller.isReadOnly}
-        className={inputClassName}
+        className={cn('min-w-[4rem]', inputClassName)}
       />
       <span className="text-xs font-semibold text-zinc-400 shrink-0">/</span>
       <UnitTypeSelector
@@ -1821,8 +1831,9 @@ const SupplierQuoteDurationInput: React.FC<{
   className?: string;
   inputClassName?: string;
   label?: React.ReactNode;
-}> = ({ context, className, inputClassName, label }) => (
-  <div>
+  wrapperClassName?: string;
+}> = ({ context, className, inputClassName, label, wrapperClassName }) => (
+  <div className={wrapperClassName}>
     {label && (
       <div className="mb-1 text-[10px] font-black text-zinc-400 uppercase tracking-wider flex items-center gap-1">
         {label}

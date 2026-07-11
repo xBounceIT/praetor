@@ -2,6 +2,7 @@ import type React from 'react';
 import { useCallback, useMemo, useReducer } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
+import DocumentLineItemsScrollArea from '@/components/ui/document-line-items-scroll-area';
 import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -892,17 +893,20 @@ const InvoiceItemsSection: React.FC<{ controller: ClientsInvoicesController }> =
       </Button>
     </div>
     <FieldError className="-mt-2 text-xs">{controller.errors.items}</FieldError>
-    <InvoiceItemsHeader controller={controller} />
-    <div className="space-y-3">
-      {controller.formData.items?.map((item, index) => (
-        <InvoiceItemRow key={item.id} controller={controller} item={item} index={index} />
-      ))}
-      {(!controller.formData.items || controller.formData.items.length === 0) && (
-        <div className="rounded-md border border-dashed border-border py-8 text-center text-sm text-muted-foreground">
-          {controller.t('accounting:clientsInvoices.noItems')}
+    {controller.formData.items && controller.formData.items.length > 0 ? (
+      <DocumentLineItemsScrollArea aria-label={controller.t('accounting:clientsInvoices.items')}>
+        <InvoiceItemsHeader controller={controller} />
+        <div className="space-y-3">
+          {controller.formData.items.map((item, index) => (
+            <InvoiceItemRow key={item.id} controller={controller} item={item} index={index} />
+          ))}
         </div>
-      )}
-    </div>
+      </DocumentLineItemsScrollArea>
+    ) : (
+      <div className="rounded-md border border-dashed border-border py-8 text-center text-sm text-muted-foreground">
+        {controller.t('accounting:clientsInvoices.noItems')}
+      </div>
+    )}
   </div>
 );
 

@@ -693,6 +693,12 @@ describe('<SupplierQuotesView /> dark-mode banners (issue #768)', () => {
 describe('<SupplierQuotesView /> compact line-item numeric columns', () => {
   test('discount/quantity inputs are width-capped and unit cost is content-sized', async () => {
     const source = await readComponentSource('sales/SupplierQuotesView.tsx');
+    // Quantity keeps the same 4rem minimum width as UnitTypeSelector in both renderings, while the
+    // desktop call site continues to cap it at 5rem.
+    expectSourceContainsAll(source, [
+      "className={cn('min-w-[4rem]', inputClassName)}",
+      'text-center max-w-[5rem]',
+    ]);
     // The desktop "Sconto a noi (%)" and "Quantità" inputs are BOTH capped at max-w-[5rem] so the
     // columns only have to fit values like "100" or "45.47" instead of stretching the cell. The cap
     // sits directly after text-center (the duration input also uses max-w-[5rem], but not adjacent
@@ -718,6 +724,17 @@ describe('<SupplierQuotesView /> compact line-item numeric columns', () => {
     // The product column is widened to col-span-6 (the five remaining columns stay col-span-2:
     // 6 + 5×2 = 16) to soak up the reclaimed width — header + data row → at least 2 occurrences.
     expect((source.match(/col-span-6/g) ?? []).length).toBeGreaterThanOrEqual(2);
+    // Quantity and duration apply their two-column span to the field wrapper, which is the direct
+    // grid child. Keeping col-span-2 on the nested flex row would leave each field in one column and
+    // make the fixed-width controls overlap at narrower desktop widths.
+    expect((source.match(/wrapperClassName="col-span-2"/g) ?? []).length).toBeGreaterThanOrEqual(2);
+    expect((source.match(/className=\{wrapperClassName\}/g) ?? []).length).toBeGreaterThanOrEqual(
+      2,
+    );
+    // Supplier quote rows need more room than the shared document default because quantity has
+    // two 4rem-min controls plus the separator. The wider content scrolls instead of spilling into
+    // the adjacent duration column at compact desktop widths.
+    expectSourceContainsAll(source, ['contentClassName="lg:min-w-[88rem]"']);
     // The old evenly-split 12-col grid that wasted horizontal space is gone from both rows.
     expectSourceOmitsAll(source, ['grid grid-cols-12 gap-3']);
   });

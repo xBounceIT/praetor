@@ -3,6 +3,7 @@ import { useCallback, useMemo, useReducer } from 'react';
 import { useTranslation } from 'react-i18next';
 import { LinkedRecordBanner } from '@/components/shared/LinkedRecordBanner';
 import { Button } from '@/components/ui/button';
+import DocumentLineItemsScrollArea from '@/components/ui/document-line-items-scroll-area';
 import { Field, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -925,13 +926,15 @@ const SupplierOrderItemsSection: React.FC<{ controller: SupplierOrdersController
         {controller.t('accounting:supplierOrders.items')}
       </SupplierOrderSectionTitle>
     </div>
-    <SupplierOrderItemsHeader controller={controller} />
     {(controller.formData.items || []).length > 0 ? (
-      <div className="space-y-3">
-        {controller.formData.items?.map((item, index) => (
-          <SupplierOrderItemRow key={item.id} controller={controller} item={item} index={index} />
-        ))}
-      </div>
+      <DocumentLineItemsScrollArea aria-label={controller.t('accounting:supplierOrders.items')}>
+        <SupplierOrderItemsHeader controller={controller} />
+        <div className="space-y-3">
+          {controller.formData.items?.map((item, index) => (
+            <SupplierOrderItemRow key={item.id} controller={controller} item={item} index={index} />
+          ))}
+        </div>
+      </DocumentLineItemsScrollArea>
     ) : (
       <div className="rounded-md border border-dashed border-border py-8 text-center text-sm text-muted-foreground">
         {controller.t('accounting:supplierOrders.noItemsAdded')}

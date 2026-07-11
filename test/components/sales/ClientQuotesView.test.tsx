@@ -350,7 +350,7 @@ describe('<ClientQuotesView />', () => {
     );
     await user.click(
       await screen.findByRole('option', {
-        name: /Acme Supplies · Managed Service \(120,00\)$/,
+        name: /^\[SQ-DURATION\] Acme Supplies · Managed Service/,
       }),
     );
 

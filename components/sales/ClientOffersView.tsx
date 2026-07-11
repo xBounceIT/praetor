@@ -4,6 +4,7 @@ import { useCallback, useMemo, useReducer, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { LinkedRecordBanner } from '@/components/shared/LinkedRecordBanner';
 import { Button } from '@/components/ui/button';
+import DocumentLineItemsScrollArea from '@/components/ui/document-line-items-scroll-area';
 import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -1744,13 +1745,17 @@ const ClientOfferItemsSection: React.FC<{ controller: ClientOffersController }> 
       {errors.items && (
         <p className="text-red-500 text-[10px] font-bold ml-1 -mt-2">{errors.items}</p>
       )}
-      {items.length > 0 && <ClientOfferItemsColumnHeader controller={controller} />}
       {items.length > 0 ? (
-        <div className="space-y-3">
-          {items.map((item, index) => (
-            <ClientOfferItemRow key={item.id} controller={controller} item={item} index={index} />
-          ))}
-        </div>
+        <DocumentLineItemsScrollArea
+          aria-label={t('sales:clientOffers.items', { defaultValue: 'Items' })}
+        >
+          <ClientOfferItemsColumnHeader controller={controller} />
+          <div className="space-y-3">
+            {items.map((item, index) => (
+              <ClientOfferItemRow key={item.id} controller={controller} item={item} index={index} />
+            ))}
+          </div>
+        </DocumentLineItemsScrollArea>
       ) : (
         <div className="rounded-md border border-dashed border-border py-8 text-center text-sm text-muted-foreground">
           {t('sales:clientOffers.noItemsAdded', { defaultValue: 'No items added yet' })}
