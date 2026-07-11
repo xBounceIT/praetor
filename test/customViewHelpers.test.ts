@@ -257,6 +257,18 @@ describe('computeViewApplication', () => {
     expect(result.columnOrder).toEqual(['amount', 'name']);
   });
 
+  test('uses a narrower reorderable set without disabling visibility for pinned columns', () => {
+    const result = computeViewApplication(
+      view({ hiddenColIds: ['amount'], columnOrder: ['amount', 'name'] }),
+      gear,
+      all,
+      undefined,
+      new Set(['name']),
+    );
+    expect(result.hiddenColIds).toEqual(new Set(['amount']));
+    expect(result.columnOrder).toEqual(['name']);
+  });
+
   test('hides only gear-visible columns', () => {
     const result = computeViewApplication(
       view({ hiddenColIds: ['name', 'status', 'ghost'] }),

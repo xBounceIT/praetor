@@ -26,6 +26,7 @@ import {
 export interface CustomViewModalColumn {
   id: string;
   header: string;
+  reorderable: boolean;
 }
 
 export interface CustomViewModalProps {
@@ -46,6 +47,14 @@ type ColumnDragState = {
 const EMPTY_COLUMN_DRAG_STATE: ColumnDragState = {
   draggingColumnId: null,
   dropTarget: null,
+};
+
+const getReorderableColumnIdSet = (columns: CustomViewModalColumn[]) => {
+  const columnIds = new Set<string>();
+  for (const column of columns) {
+    if (column.reorderable) columnIds.add(column.id);
+  }
+  return columnIds;
 };
 
 // Initial state is computed once when the modal mounts. The parent passes a
@@ -76,15 +85,16 @@ const CustomViewModal: React.FC<CustomViewModalProps> = ({
   const [columnOrder, setColumnOrder] = useState(() =>
     normalizeColumnOrder(
       editingView?.columnOrder ?? initialColumnOrder,
-      new Set(columns.map((column) => column.id)),
+      getReorderableColumnIdSet(columns),
     ),
   );
   const [columnDragState, setColumnDragState] = useState<ColumnDragState>(EMPTY_COLUMN_DRAG_STATE);
   const orderedColumns = useMemo(() => {
     const columnsById = new Map(columns.map((column) => [column.id, column]));
-    return columnOrder
+    const reorderedColumns = columnOrder
       .map((columnId) => columnsById.get(columnId))
       .filter((column): column is CustomViewModalColumn => column !== undefined);
+    return [...reorderedColumns, ...columns.filter((column) => !column.reorderable)];
   }, [columnOrder, columns]);
 
   const visibleCount = columns.length - hiddenColIds.size;
@@ -173,6 +183,7 @@ const CustomViewModal: React.FC<CustomViewModalProps> = ({
                       data-custom-view-column-id={col.id}
                       onDragOver={(event) => {
                         if (
+                          !col.reorderable ||
                           !columnDragState.draggingColumnId ||
                           columnDragState.draggingColumnId === col.id
                         ) {
@@ -208,7 +219,9 @@ const CustomViewModal: React.FC<CustomViewModalProps> = ({
                       }}
                       onDrop={(event) => {
                         const { draggingColumnId } = columnDragState;
-                        if (!draggingColumnId || draggingColumnId === col.id) return;
+                        if (!col.reorderable || !draggingColumnId || draggingColumnId === col.id) {
+                          return;
+                        }
                         event.preventDefault();
                         const position = getDirectionalDropPosition(
                           columnOrder,
@@ -228,32 +241,36 @@ const CustomViewModal: React.FC<CustomViewModalProps> = ({
                           : ''
                       }`}
                     >
-                      <button
-                        type="button"
-                        draggable
-                        data-custom-view-column-drag-handle={col.id}
-                        title={`${t('table.reorderColumnHandle')}: ${col.header}`}
-                        aria-label={`${t('table.reorderColumnHandle')}: ${col.header}`}
-                        aria-keyshortcuts="ArrowUp ArrowDown"
-                        onKeyDown={(event) => {
-                          if (event.key === 'ArrowUp') {
-                            event.preventDefault();
-                            moveColumn(col.id, -1);
-                          } else if (event.key === 'ArrowDown') {
-                            event.preventDefault();
-                            moveColumn(col.id, 1);
-                          }
-                        }}
-                        onDragStart={(event) => {
-                          event.dataTransfer.effectAllowed = 'move';
-                          event.dataTransfer.setData('text/plain', col.id);
-                          setColumnDragState({ draggingColumnId: col.id, dropTarget: null });
-                        }}
-                        onDragEnd={() => setColumnDragState(EMPTY_COLUMN_DRAG_STATE)}
-                        className="flex size-7 shrink-0 cursor-grab items-center justify-center rounded-sm text-muted-foreground outline-none hover:bg-accent hover:text-accent-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 active:cursor-grabbing"
-                      >
-                        <GripVertical className="size-3.5" aria-hidden="true" />
-                      </button>
+                      {col.reorderable ? (
+                        <button
+                          type="button"
+                          draggable
+                          data-custom-view-column-drag-handle={col.id}
+                          title={`${t('table.reorderColumnHandle')}: ${col.header}`}
+                          aria-label={`${t('table.reorderColumnHandle')}: ${col.header}`}
+                          aria-keyshortcuts="ArrowUp ArrowDown"
+                          onKeyDown={(event) => {
+                            if (event.key === 'ArrowUp') {
+                              event.preventDefault();
+                              moveColumn(col.id, -1);
+                            } else if (event.key === 'ArrowDown') {
+                              event.preventDefault();
+                              moveColumn(col.id, 1);
+                            }
+                          }}
+                          onDragStart={(event) => {
+                            event.dataTransfer.effectAllowed = 'move';
+                            event.dataTransfer.setData('text/plain', col.id);
+                            setColumnDragState({ draggingColumnId: col.id, dropTarget: null });
+                          }}
+                          onDragEnd={() => setColumnDragState(EMPTY_COLUMN_DRAG_STATE)}
+                          className="flex size-7 shrink-0 cursor-grab items-center justify-center rounded-sm text-muted-foreground outline-none hover:bg-accent hover:text-accent-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 active:cursor-grabbing"
+                        >
+                          <GripVertical className="size-3.5" aria-hidden="true" />
+                        </button>
+                      ) : (
+                        <span className="size-7 shrink-0" aria-hidden="true" />
+                      )}
                       <button
                         type="button"
                         aria-pressed={isVisible}

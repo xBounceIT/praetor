@@ -603,16 +603,20 @@ const isTableActionColumn = <T,>(col: Column<T>) =>
   getColumnId(col) === 'actions' ||
   (col.sticky === 'right' && col.accessorKey == null && col.accessorFn == null);
 
+const isTableReorderableColumn = <T,>(col: Column<T>) =>
+  !col.hidden && col.sticky !== 'right' && !isTableActionColumn(col);
+
 const getReorderableColumnIds = <T,>(columns: Column<T>[] | undefined) => {
   const ids: string[] = [];
   for (const column of columns ?? []) {
-    if (!column.hidden && !isTableActionColumn(column)) ids.push(getColumnId(column));
+    if (isTableReorderableColumn(column)) ids.push(getColumnId(column));
   }
   return ids;
 };
 
 const getViewApplicationForColumns = <T,>(view: CustomView, columns: Column<T>[] | undefined) => {
   const gearIds = new Set<string>();
+  const reorderableIds = new Set<string>();
   const allIds = new Set<string>();
   const hiddenColumnAliases = new Map<string, string[]>();
   const sortColumnAliases = new Map<string, string>();
@@ -622,6 +626,7 @@ const getViewApplicationForColumns = <T,>(view: CustomView, columns: Column<T>[]
     allIds.add(columnId);
     if (!column.hidden && !isTableActionColumn(column)) {
       gearIds.add(columnId);
+      if (column.sticky !== 'right') reorderableIds.add(columnId);
       for (const legacyId of column.legacyHiddenColumnIds ?? []) {
         const mappedIds = hiddenColumnAliases.get(legacyId);
         if (mappedIds) mappedIds.push(columnId);
@@ -638,11 +643,17 @@ const getViewApplicationForColumns = <T,>(view: CustomView, columns: Column<T>[]
       }
     }
   }
-  return computeViewApplication(view, gearIds, allIds, {
-    hiddenColumnAliases,
-    sortColumnAliases,
-    filterColumnAliases,
-  });
+  return computeViewApplication(
+    view,
+    gearIds,
+    allIds,
+    {
+      hiddenColumnAliases,
+      sortColumnAliases,
+      filterColumnAliases,
+    },
+    reorderableIds,
+  );
 };
 
 const normalizeViewForColumns = <T,>(
@@ -1429,7 +1440,12 @@ const useStandardTableController = <T extends object>({
   );
 
   const modalColumns = useMemo(
-    () => gearColumns.map((col) => ({ id: getColId(col), header: col.header })),
+    () =>
+      gearColumns.map((col) => ({
+        id: getColId(col),
+        header: col.header,
+        reorderable: isTableReorderableColumn(col),
+      })),
     [gearColumns, getColId],
   );
 
@@ -3187,6 +3203,7 @@ const StandardTableHeaderCell = <T extends object>({
   if (!col) return null;
   const colId = getColId(col);
   const isActionColumn = isRowActionColumn(col);
+  const isReorderableColumn = isTableReorderableColumn(col);
   const isStickyRightColumn = col.sticky === 'right' || isActionColumn;
   const isFirstColumn = colIdx === 0;
   const isLastColumn = colIdx === headerCount - 1;
@@ -3219,7 +3236,7 @@ const StandardTableHeaderCell = <T extends object>({
         aria-label={isActionColumn ? col.header : undefined}
         data-column-drop-position={dropPosition ?? undefined}
         onDragOver={(event) => {
-          if (!draggingColumnId || draggingColumnId === colId || isActionColumn) return;
+          if (!draggingColumnId || draggingColumnId === colId || !isReorderableColumn) return;
           event.preventDefault();
           event.stopPropagation();
           event.dataTransfer.dropEffect = 'move';
@@ -3240,7 +3257,7 @@ const StandardTableHeaderCell = <T extends object>({
           if (columnDropTarget?.columnId === colId) setColumnDropTarget(null);
         }}
         onDrop={(event) => {
-          if (!draggingColumnId || draggingColumnId === colId || isActionColumn) return;
+          if (!draggingColumnId || draggingColumnId === colId || !isReorderableColumn) return;
           event.preventDefault();
           event.stopPropagation();
           const position = getDirectionalDropPosition(
@@ -3406,11 +3423,13 @@ const StandardTableSortableHeader = <T extends object>({
   onResetPage: () => void;
 }) => (
   <div data-column-header-content={colId} className="inline-flex w-max items-center gap-1">
-    <StandardTableColumnDragHandle
-      controller={controller}
-      columnId={colId}
-      columnName={col.header}
-    />
+    {isTableReorderableColumn(col) && (
+      <StandardTableColumnDragHandle
+        controller={controller}
+        columnId={colId}
+        columnName={col.header}
+      />
+    )}
     <button
       type="button"
       disabled={!header.column.getCanSort()}

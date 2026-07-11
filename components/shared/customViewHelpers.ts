@@ -212,12 +212,14 @@ export const parseStoredViews = (raw: string | null): CustomView[] => {
 
 // `gearColIds` gates hidden-column toggles (only gear-visible columns can be
 // hidden); `allColIds` gates sort/filter, which can target statically-hidden
-// filter-only columns too.
+// filter-only columns too; `reorderableColIds` can further exclude pinned
+// columns while defaulting to the gear columns for existing callers.
 export const computeViewApplication = (
   view: CustomView,
   gearColIds: ReadonlySet<string>,
   allColIds: ReadonlySet<string>,
   columnAliases?: ViewApplicationColumnAliases,
+  reorderableColIds: ReadonlySet<string> = gearColIds,
 ): {
   hiddenColIds: Set<string>;
   columnOrder: string[];
@@ -275,7 +277,7 @@ export const computeViewApplication = (
   });
   return {
     hiddenColIds,
-    columnOrder: normalizeColumnOrder(view.columnOrder, gearColIds),
+    columnOrder: normalizeColumnOrder(view.columnOrder, reorderableColIds),
     sortState,
     filterState,
   };

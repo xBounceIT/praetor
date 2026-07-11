@@ -964,11 +964,27 @@ describe('<StandardTable />', () => {
       { header: 'Name', accessorKey: 'name' as const, id: 'name' },
       { header: 'Age', accessorKey: 'age' as const, id: 'age', sticky: 'right' as const },
     ];
-    render(<StandardTable<Row> title="People" data={sampleRows} columns={cols} />);
+    localStorage.setItem(
+      'praetor_table_customviews_stickyorder',
+      JSON.stringify([
+        {
+          id: 'sticky-view',
+          name: 'Sticky order',
+          hiddenColIds: [],
+          columnOrder: ['age', 'name'],
+          sortState: null,
+          filterState: {},
+        },
+      ]),
+    );
+    localStorage.setItem('praetor_table_activeview_stickyorder', 'sticky-view');
+    render(<StandardTable<Row> title="StickyOrder" data={sampleRows} columns={cols} />);
 
     expect(screen.getByText('Age')).toBeInTheDocument();
     expect(screen.getByText('30')).toBeInTheDocument();
     expect(screen.queryByLabelText('table.rowActions')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('table.reorderColumnHandle: Age')).not.toBeInTheDocument();
+    expect(getRenderedColumnIds()).toEqual(['name', 'age']);
   });
 
   test('sticky-right body cell collapses actions behind an ellipsis menu', async () => {
