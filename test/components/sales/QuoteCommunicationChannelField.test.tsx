@@ -116,17 +116,13 @@ describe('<QuoteCommunicationChannelField />', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'common:buttons.manage' }));
 
-    const customActions = screen.getByRole('button', {
-      name: 'common:labels.actions: Phone',
-    });
+    const customActions = screen.getByRole('button', { name: 'table.rowActions' });
     expect(customActions.querySelector('.fa-ellipsis')).not.toBeNull();
     expect(screen.queryByRole('button', { name: 'common:buttons.edit' })).not.toBeInTheDocument();
 
     await user.click(customActions);
-    const editAction = await screen.findByRole('menuitem', { name: 'common:buttons.edit' });
-    expect(editAction.closest('[data-slot="dropdown-menu-content"]')?.className).toContain(
-      'z-[100]',
-    );
+    const editAction = await screen.findByRole('button', { name: 'common:buttons.edit' });
+    expect(editAction.closest('[data-standard-table-action-menu="true"]')).not.toBeNull();
     await user.click(editAction);
 
     expect(screen.getByPlaceholderText('sales:communicationChannels.namePlaceholder')).toHaveValue(
@@ -141,7 +137,7 @@ describe('<QuoteCommunicationChannelField />', () => {
     );
 
     await user.click(customActions);
-    await user.click(await screen.findByRole('menuitem', { name: 'common:buttons.delete' }));
+    await user.click(await screen.findByRole('button', { name: 'common:buttons.delete' }));
 
     await waitFor(() => expect(onDelete).toHaveBeenCalledWith('qcc_phone'));
   });
@@ -171,12 +167,14 @@ describe('<QuoteCommunicationChannelField />', () => {
       'className="absolute -top-1 right-0 gap-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"',
       'className="fa-solid fa-gear"',
       'zIndex={90}',
+      'StandardTable<QuoteCommunicationChannel>',
     ]);
     expectSourceOmitsAll(source, [
       'flex min-h-6 items-center justify-between gap-2',
       'flex h-5 items-start justify-between gap-2',
       'hover:bg-transparent',
       'leading-none',
+      '<table',
     ]);
   });
 });

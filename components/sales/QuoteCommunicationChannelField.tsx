@@ -2,12 +2,6 @@ import type React from 'react';
 import { useMemo, useReducer } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 import { FieldError, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
@@ -25,6 +19,7 @@ import {
   ModalTitle,
 } from '../shared/ModalLayout';
 import SelectControl from '../shared/SelectControl';
+import StandardTable, { type Column } from '../shared/StandardTable';
 import {
   getQuoteCommunicationChannelIconClass,
   QUOTE_COMMUNICATION_CHANNEL_ICON_OPTIONS,
@@ -94,56 +89,6 @@ const ChannelIconPicker: React.FC<{
         })}
       </ToggleGroup>
     </div>
-  );
-};
-
-interface ChannelActionsMenuProps {
-  channel: QuoteCommunicationChannel;
-  deleting: boolean;
-  onEdit: () => void;
-  onDelete: () => void;
-}
-
-const ChannelActionsMenu: React.FC<ChannelActionsMenuProps> = ({
-  channel,
-  deleting,
-  onEdit,
-  onDelete,
-}) => {
-  const { t } = useTranslation('common');
-
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-xs"
-          aria-label={`${t('common:labels.actions')}: ${channel.name}`}
-          className="rounded-lg"
-        >
-          <i className="fa-solid fa-ellipsis text-[10px]" aria-hidden="true"></i>
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent
-        align="end"
-        className="z-[100] w-max min-w-[9rem] max-w-[calc(100vw-2rem)] p-1"
-      >
-        <DropdownMenuItem onSelect={onEdit} className="h-7 gap-2 text-xs font-medium">
-          <i className="fa-solid fa-pen text-[10px]" aria-hidden="true"></i>
-          {t('common:buttons.edit')}
-        </DropdownMenuItem>
-        <DropdownMenuItem
-          variant="destructive"
-          onSelect={onDelete}
-          disabled={deleting}
-          className="h-7 gap-2 text-xs font-medium"
-        >
-          <i className="fa-solid fa-trash text-[10px]" aria-hidden="true"></i>
-          {t('common:buttons.delete')}
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
   );
 };
 
@@ -333,6 +278,70 @@ const QuoteCommunicationChannelField: React.FC<QuoteCommunicationChannelFieldPro
     }
   };
 
+  const channelColumns: Column<QuoteCommunicationChannel>[] = [
+    {
+      header: t('sales:communicationChannels.name'),
+      accessorKey: 'name',
+      disableFiltering: true,
+      cell: ({ row: channel }) => (
+        <div className="flex items-center gap-2">
+          <ChannelIcon icon={channel.icon} />
+          <span>{channel.name}</span>
+          {channel.isDefault && (
+            <>
+              <span className="text-xs text-muted-foreground">
+                {t('sales:communicationChannels.defaultValue')}
+              </span>
+              <span role="img" aria-label={t('sales:communicationChannels.defaultLocked')}>
+                <i
+                  className="fa-solid fa-lock text-xs text-muted-foreground"
+                  aria-hidden="true"
+                ></i>
+              </span>
+            </>
+          )}
+        </div>
+      ),
+    },
+    {
+      header: t('sales:communicationChannels.usedByQuotes'),
+      accessorKey: 'totalQuoteCount',
+      disableFiltering: true,
+      align: 'right',
+      className: 'tabular-nums',
+    },
+    {
+      header: t('common:labels.actions'),
+      id: 'actions',
+      disableSorting: true,
+      disableFiltering: true,
+      cell: ({ row: channel }) =>
+        channel.isDefault ? null : (
+          <div className="flex items-center gap-1">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-xs"
+              aria-label={t('common:buttons.edit')}
+              onClick={() => dispatchManager({ type: 'editChannel', channel })}
+            >
+              <i className="fa-solid fa-pen text-[10px]" aria-hidden="true"></i>
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-xs"
+              aria-label={t('common:buttons.delete')}
+              onClick={() => void handleDelete(channel)}
+              disabled={deletingId === channel.id}
+            >
+              <i className="fa-solid fa-trash text-[10px]" aria-hidden="true"></i>
+            </Button>
+          </div>
+        ),
+    },
+  ];
+
   return (
     <>
       <div className="space-y-1.5">
@@ -400,72 +409,20 @@ const QuoteCommunicationChannelField: React.FC<QuoteCommunicationChannelFieldPro
 
             {managerError && <p className="text-sm font-medium text-destructive">{managerError}</p>}
 
-            <div className="overflow-hidden rounded-md border border-border">
-              <table className="w-full text-sm">
-                <thead className="bg-muted/50 text-left text-muted-foreground">
-                  <tr>
-                    <th className="px-3 py-2 font-medium">
-                      {t('sales:communicationChannels.name')}
-                    </th>
-                    <th className="px-3 py-2 text-right font-medium">
-                      {t('sales:communicationChannels.usedByQuotes')}
-                    </th>
-                    <th className="px-3 py-2 text-right font-medium">
-                      {t('common:labels.actions')}
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {channels.map((channel) => (
-                    <tr key={channel.id} className="border-t border-border">
-                      <td className="px-3 py-2">
-                        <div className="flex items-center gap-2">
-                          <ChannelIcon icon={channel.icon} />
-                          <span>{channel.name}</span>
-                          {channel.isDefault && (
-                            <span className="text-xs text-muted-foreground">
-                              {t('sales:communicationChannels.defaultValue')}
-                            </span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-3 py-2 text-right tabular-nums">
-                        {channel.totalQuoteCount}
-                      </td>
-                      <td className="px-3 py-2">
-                        <div className="flex justify-end">
-                          {channel.isDefault ? (
-                            <span
-                              role="img"
-                              aria-label={t('sales:communicationChannels.defaultLocked')}
-                            >
-                              <i
-                                className="fa-solid fa-lock text-xs text-muted-foreground"
-                                aria-hidden="true"
-                              ></i>
-                            </span>
-                          ) : (
-                            <ChannelActionsMenu
-                              channel={channel}
-                              deleting={deletingId === channel.id}
-                              onEdit={() => dispatchManager({ type: 'editChannel', channel })}
-                              onDelete={() => void handleDelete(channel)}
-                            />
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                  {channels.length === 0 && (
-                    <tr>
-                      <td className="px-3 py-6 text-center text-muted-foreground" colSpan={3}>
-                        {t('sales:communicationChannels.noChannels')}
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
+            <StandardTable<QuoteCommunicationChannel>
+              title={t('sales:communicationChannels.manageTitle')}
+              data={channels}
+              columns={channelColumns}
+              defaultRowsPerPage={5}
+              minBodyRows={0}
+              containerClassName="shadow-none border-border"
+              tableContainerClassName="max-h-[35vh] overflow-y-auto"
+              emptyState={
+                <div className="px-3 py-6 text-center text-sm text-muted-foreground">
+                  {t('sales:communicationChannels.noChannels')}
+                </div>
+              }
+            />
           </ModalBody>
           <ModalFooter>
             <Button
