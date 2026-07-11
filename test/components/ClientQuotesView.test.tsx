@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, mock, test } from 'bun:test';
-import { fireEvent, screen, waitFor } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ReactNode } from 'react';
 import type { Client, Product, Quote, SupplierQuote } from '../../types';
@@ -426,6 +426,61 @@ describe('<ClientQuotesView /> expired-quote handling (issue #779)', () => {
     expect(onUpdateQuote).not.toHaveBeenCalled();
     const stillOpen = screen.getAllByRole('button', { name: 'sales:clientQuotes.updateQuote' });
     expect(stillOpen.length).toBeGreaterThan(0);
+  });
+});
+
+describe('<ClientQuotesView /> supplier-quote pricing', () => {
+  test('uses the line-local MOL instead of the supplier discount to show the margin', async () => {
+    const discountedSupplierQuote: SupplierQuote = {
+      ...supplierQuote,
+      status: 'draft',
+      items: [
+        {
+          ...supplierQuote.items[0],
+          listPrice: 100,
+          discountPercent: 20,
+          unitPrice: 80,
+        },
+      ],
+    };
+    const quote = buildQuote({
+      id: 'Q-LOCAL-MOL',
+      items: [
+        {
+          id: 'qi-local-mol',
+          quoteId: 'Q-LOCAL-MOL',
+          productId: 'prod-1',
+          productName: 'Solar Panel',
+          quantity: 1,
+          unitType: 'unit',
+          // Reproduces the stale list-price value shown in the reported create flow.
+          unitPrice: 100,
+          productCost: 50,
+          productMolPercentage: 0,
+          supplierQuoteId: 'SQ-1',
+          supplierQuoteItemId: 'sqi-1',
+          supplierQuoteSupplierName: 'Acme Supplies',
+          supplierQuoteUnitPrice: 80,
+        },
+      ],
+    });
+
+    render(
+      <ClientQuotesView
+        {...baseProps}
+        quotes={[quote]}
+        supplierQuotes={[discountedSupplierQuote]}
+      />,
+    );
+    fireEvent.click(screen.getByText('Q-LOCAL-MOL'));
+    const dialog = await screen.findByRole('dialog');
+
+    expect(within(dialog).getAllByDisplayValue('0.00').length).toBeGreaterThan(0);
+    const marginLabels = within(dialog).getAllByText('sales:clientQuotes.marginLabel');
+    expect(
+      marginLabels.some((label) => label.parentElement?.textContent?.includes('0.00 EUR')),
+    ).toBe(true);
+    expect(within(dialog).queryAllByText('20.00 EUR')).toHaveLength(0);
   });
 });
 

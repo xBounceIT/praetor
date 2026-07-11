@@ -17,6 +17,8 @@ Each quote line includes a **Duration** column, placed between **Quantity** and 
 
 Duration applies to **every line**, regardless of the quantity unit (**Hours**, **Days**, or **Unit**): the Duration field is editable with the **Months** / **Years** / **N/A** selector and multiplies the line totals. Selecting **N/A** marks the line as duration-less: the numeric field beside it is disabled and the line totals are not multiplied by duration.
 
+The **MOL** on each line is local to the customer quote and determines its sale price from the line's effective cost. When an item comes from a supplier quote, that effective cost is the net cost after **Discount to Us**, so the supplier discount is not shown as customer margin. With MOL set to 0, line revenue equals line cost and the displayed margin is 0.
+
 The quote list shows code, insertion date, client, subtotal, discount percentage, absolute discount, discounted total, margin, MOL, payment terms, due date, and status so the main values can be checked without opening each record.
 
 The client quote **Status** follows the **Draft → Sent → Offer → Accepted / Denied** pipeline. The **Expired** status is derived automatically from the **Expiration Date** (once it has passed) and takes precedence over the displayed status; an **Accepted** or **Denied** quote is never shown as Expired. A quote can return to **Draft** only from **Sent** or **Offer**: from Accepted, Denied, or Expired the transition is not allowed. **Accepted** and **Denied** are terminal — once a quote reaches either, its status can no longer change at all (downstream offers and orders may already depend on that final state). You leave Expired only by extending the **Expiration Date** (always editable), not by changing the status manually.

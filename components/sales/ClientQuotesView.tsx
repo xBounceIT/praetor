@@ -174,6 +174,32 @@ const quoteToFormData = (quote: Quote): Partial<Quote> => ({
 const supplierQuoteItemLabel = (quote: SupplierQuote, item: SupplierQuote['items'][number]) =>
   `${quote.supplierName} · ${item.productName} (${item.unitPrice.toFixed(2)})`;
 
+// A client quote line's MOL snapshot is authoritative for its sale price. In particular, a
+// supplier-sourced line starts from the supplier's NET cost (`supplierQuoteUnitPrice`), not from
+// its list price: otherwise "Discount to us" is incorrectly surfaced as customer margin.
+const getClientQuoteUnitSalePrice = (item: QuoteItem): number => {
+  const { unitCost, molPercentage } = getItemPricingContext(item);
+  return calcProductSalePrice(unitCost, molPercentage);
+};
+
+const priceClientQuoteItemsFromLocalMol = (items: QuoteItem[]): QuoteItem[] =>
+  items.map((item) => {
+    const unitPrice = getClientQuoteUnitSalePrice(item);
+    return unitPrice === item.unitPrice ? item : { ...item, unitPrice };
+  });
+
+const calculateClientQuotePricingTotals = (
+  items: QuoteItem[],
+  globalDiscount: number,
+  discountType: Quote['discountType'],
+): PricingTotals =>
+  calculatePricingTotals(
+    priceClientQuoteItemsFromLocalMol(items),
+    globalDiscount,
+    'hours',
+    discountType,
+  );
+
 const isQuoteCodeConflictError = (err: unknown) =>
   err instanceof ApiError && err.status === 409 && err.message === 'Quote ID already exists';
 
@@ -425,10 +451,9 @@ const useClientQuotesController = ({
     const discountValue = Number.isNaN(formData.discount ?? 0) ? 0 : (formData.discount ?? 0);
     return {
       discountValue,
-      ...calculatePricingTotals(
+      ...calculateClientQuotePricingTotals(
         formData.items || [],
         discountValue,
-        'hours',
         formData.discountType || 'percentage',
       ),
     };
@@ -442,7 +467,7 @@ const useClientQuotesController = ({
     for (const quote of quotes) {
       map.set(
         quote.id,
-        calculatePricingTotals(quote.items, quote.discount, 'hours', quote.discountType),
+        calculateClientQuotePricingTotals(quote.items, quote.discount, quote.discountType),
       );
     }
     return map;
@@ -596,10 +621,9 @@ const useClientQuotesController = ({
         newErrors.items = t('sales:clientQuotes.errors.quantityGreaterThanZero');
       }
       if (!newErrors.items) {
-        const { total } = calculatePricingTotals(
+        const { total } = calculateClientQuotePricingTotals(
           formData.items,
           discountValue,
-          'hours',
           formData.discountType || 'percentage',
         );
         if (!Number.isFinite(total) || total <= 0) {
@@ -616,7 +640,7 @@ const useClientQuotesController = ({
     const itemsWithSnapshots = (formData.items || []).map((item) => {
       return {
         ...item,
-        unitPrice: item.unitPrice,
+        unitPrice: getClientQuoteUnitSalePrice(item),
         discount: item.discount ? item.discount : 0,
         durationMonths: Number(item.durationMonths ?? 1) || 1,
         durationUnit: normalizeDurationUnit(item.durationUnit),
@@ -2235,7 +2259,7 @@ const getClientQuoteLineContext = (
   const durationValue = getDurationDisplayValue(item);
   const product = products.find((p) => p.id === item.productId);
   const isSupply = product?.type === 'supply';
-  const unitSalePrice = Number(item.unitPrice || 0);
+  const unitSalePrice = getClientQuoteUnitSalePrice(item);
   const lineSalePrice = unitSalePrice * quantity * durationMonths;
   const lineMargin = lineSalePrice - lineCost;
   const isLinkedToSupplierQuote = Boolean(item.supplierQuoteItemId);
