@@ -22,19 +22,30 @@ const channelSchema = {
   properties: {
     id: { type: 'string' },
     name: { type: 'string' },
+    icon: { type: 'string', enum: [...channelsRepo.QUOTE_COMMUNICATION_CHANNEL_ICONS] },
+    isDefault: { type: 'boolean' },
     createdAt: { type: 'number' },
     updatedAt: { type: 'number' },
     clientQuoteCount: { type: 'number' },
     supplierQuoteCount: { type: 'number' },
     totalQuoteCount: { type: 'number' },
   },
-  required: ['id', 'name', 'clientQuoteCount', 'supplierQuoteCount', 'totalQuoteCount'],
+  required: [
+    'id',
+    'name',
+    'icon',
+    'isDefault',
+    'clientQuoteCount',
+    'supplierQuoteCount',
+    'totalQuoteCount',
+  ],
 } as const;
 
 const channelBodySchema = {
   type: 'object',
   properties: {
     name: { type: 'string' },
+    icon: { type: 'string', enum: [...channelsRepo.QUOTE_COMMUNICATION_CHANNEL_ICONS] },
   },
   required: ['name'],
 } as const;
@@ -43,6 +54,16 @@ const viewPermissions = ['sales.client_quotes.view', 'sales.supplier_quotes.view
 const createPermissions = ['sales.client_quotes.create', 'sales.supplier_quotes.create'];
 const updatePermissions = ['sales.client_quotes.update', 'sales.supplier_quotes.update'];
 const deletePermissions = ['sales.client_quotes.delete', 'sales.supplier_quotes.delete'];
+
+const resolveIcon = (
+  value: unknown,
+  fallback: channelsRepo.QuoteCommunicationChannelIcon,
+): channelsRepo.QuoteCommunicationChannelIcon | null =>
+  value === undefined || value === null
+    ? fallback
+    : channelsRepo.isQuoteCommunicationChannelIcon(value)
+      ? value
+      : null;
 
 export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.addHook('onRequest', authenticateToken);
@@ -81,9 +102,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const { name } = request.body as { name: unknown };
+      const { name, icon } = request.body as { name: unknown; icon?: unknown };
       const nameResult = requireNonEmptyString(name, 'name');
       if (!nameResult.ok) return badRequest(reply, nameResult.message);
+      const resolvedIcon = resolveIcon(
+        icon,
+        channelsRepo.DEFAULT_CUSTOM_QUOTE_COMMUNICATION_CHANNEL_ICON,
+      );
+      if (!resolvedIcon) return badRequest(reply, 'Invalid communication channel icon');
 
       if (await channelsRepo.existsByName(nameResult.value, null)) {
         return badRequest(reply, 'Communication channel with this name already exists');
@@ -91,7 +117,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const id = generatePrefixedId('qcc');
       try {
-        const created = await channelsRepo.create(id, nameResult.value);
+        const created = await channelsRepo.create(id, nameResult.value, resolvedIcon);
         await logAudit({
           request,
           action: 'quote_communication_channel.created',
@@ -127,7 +153,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id } = request.params as { id: string };
-      const { name } = request.body as { name: unknown };
+      const { name, icon } = request.body as { name: unknown; icon?: unknown };
 
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
@@ -145,11 +171,25 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         });
       }
 
+      if (current.isDefault) {
+        return replyError(request, reply, {
+          statusCode: 409,
+          message: 'Default communication channels cannot be modified',
+          action: 'quote_communication_channel.update.conflict',
+          entityType: 'quote_communication_channel',
+          entityId: idResult.value,
+          details: { targetLabel: current.name, secondaryLabel: 'default_channel' },
+        });
+      }
+
+      const resolvedIcon = resolveIcon(icon, current.icon);
+      if (!resolvedIcon) return badRequest(reply, 'Invalid communication channel icon');
+
       if (await channelsRepo.existsByName(nameResult.value, idResult.value)) {
         return badRequest(reply, 'Communication channel with this name already exists');
       }
 
-      const updated = await channelsRepo.update(idResult.value, nameResult.value);
+      const updated = await channelsRepo.update(idResult.value, nameResult.value, resolvedIcon);
       if (!updated) {
         return replyError(request, reply, {
           statusCode: 404,
@@ -205,6 +245,17 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         });
       }
 
+      if (current.isDefault) {
+        return replyError(request, reply, {
+          statusCode: 409,
+          message: 'Default communication channels cannot be deleted',
+          action: 'quote_communication_channel.delete.conflict',
+          entityType: 'quote_communication_channel',
+          entityId: idResult.value,
+          details: { targetLabel: current.name, secondaryLabel: 'default_channel' },
+        });
+      }
+
       const totalChannels = await channelsRepo.countAll();
       if (totalChannels <= 1) {
         return replyError(request, reply, {
@@ -236,7 +287,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         });
       }
 
-      await channelsRepo.deleteById(idResult.value);
+      const deleted = await channelsRepo.deleteById(idResult.value);
+      if (!deleted) {
+        return replyError(request, reply, {
+          statusCode: 404,
+          message: 'Communication channel not found',
+          action: 'quote_communication_channel.delete.not_found',
+          entityType: 'quote_communication_channel',
+          entityId: idResult.value,
+        });
+      }
       await logAudit({
         request,
         action: 'quote_communication_channel.deleted',

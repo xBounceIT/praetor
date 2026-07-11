@@ -90,7 +90,10 @@ import { useAuth } from './hooks/useAuth';
 import { listRequest, useModuleLoader } from './hooks/useModuleLoader';
 import api, { type McpTokenScope, type PersonalAccessToken, type Settings } from './services/api';
 import { decodeEntriesCursor } from './services/api/entries';
-import type { QuoteCommunicationChannel } from './services/api/quoteCommunicationChannels';
+import type {
+  QuoteCommunicationChannel,
+  QuoteCommunicationChannelIcon,
+} from './services/api/quoteCommunicationChannels';
 import type {
   AppBranding,
   Client,
@@ -3078,7 +3081,7 @@ const useAppContentController = () => {
   }, [setQuoteCommunicationChannels]);
 
   const handleCreateQuoteCommunicationChannel = useCallback(
-    async (data: { name: string }) => {
+    async (data: { name: string; icon: QuoteCommunicationChannelIcon }) => {
       await api.quoteCommunicationChannels.create(data);
       await refreshQuoteCommunicationChannels();
     },
@@ -3086,7 +3089,7 @@ const useAppContentController = () => {
   );
 
   const handleUpdateQuoteCommunicationChannel = useCallback(
-    async (id: string, updates: { name: string }) => {
+    async (id: string, updates: { name: string; icon: QuoteCommunicationChannelIcon }) => {
       await api.quoteCommunicationChannels.update(id, updates);
       await refreshQuoteCommunicationChannels();
     },

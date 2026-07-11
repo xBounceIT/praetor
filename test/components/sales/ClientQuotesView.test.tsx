@@ -78,6 +78,8 @@ const communicationChannels = [
   {
     id: 'qcc_email',
     name: 'Email',
+    icon: 'envelope' as const,
+    isDefault: true,
     clientQuoteCount: 0,
     supplierQuoteCount: 0,
     totalQuoteCount: 0,

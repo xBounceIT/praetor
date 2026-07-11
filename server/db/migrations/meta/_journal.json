@@ -701,6 +701,13 @@
       "when": 1783795833984,
       "tag": "0099_stable_client_quote_item_order",
       "breakpoints": true
+    },
+    {
+      "idx": 100,
+      "version": "7",
+      "when": 1783800130752,
+      "tag": "0100_add_quote_communication_channel_icons",
+      "breakpoints": true
     }
   ]
 }

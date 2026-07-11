@@ -17,6 +17,8 @@ describe('listAllWithCounts', () => {
         {
           id: 'qcc_email',
           name: 'Email',
+          icon: 'envelope',
+          isDefault: true,
           createdAt: '2026-01-01T10:00:00.000Z',
           updatedAt: '2026-01-02T11:30:00.000Z',
           clientQuoteCount: '2',
@@ -31,11 +33,34 @@ describe('listAllWithCounts', () => {
     expect(channel).toEqual({
       id: 'qcc_email',
       name: 'Email',
+      icon: 'envelope',
+      isDefault: true,
       createdAt: new Date('2026-01-01T10:00:00.000Z').getTime(),
       updatedAt: new Date('2026-01-02T11:30:00.000Z').getTime(),
       clientQuoteCount: 2,
       supplierQuoteCount: 3,
       totalQuoteCount: 5,
     });
+  });
+});
+
+describe('default channel mutation guards', () => {
+  test('update changes the icon only for non-default channels', async () => {
+    const updated = await repo.update('qcc_custom', 'Video call', 'video', testDb);
+
+    expect(updated).toBeNull();
+    expect(exec.calls[0].sql).toContain('update "quote_communication_channels"');
+    expect(exec.calls[0].sql).toContain('"is_default" =');
+    expect(exec.calls[0].params).toContain('video');
+    expect(exec.calls[0].params).toContain(false);
+  });
+
+  test('delete removes only non-default channels', async () => {
+    const deleted = await repo.deleteById('qcc_custom', testDb);
+
+    expect(deleted).toBe(false);
+    expect(exec.calls[0].sql).toContain('delete from "quote_communication_channels"');
+    expect(exec.calls[0].sql).toContain('"is_default" =');
+    expect(exec.calls[0].params).toContain(false);
   });
 });

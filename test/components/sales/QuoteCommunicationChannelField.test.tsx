@@ -1,5 +1,6 @@
 import { describe, expect, mock, test } from 'bun:test';
 import { fireEvent, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import type React from 'react';
 import QuoteCommunicationChannelField from '../../../components/sales/QuoteCommunicationChannelField';
 import type { QuoteCommunicationChannel } from '../../../services/api/quoteCommunicationChannels';
@@ -17,6 +18,8 @@ const baseChannels: QuoteCommunicationChannel[] = [
   {
     id: 'qcc_email',
     name: 'Email',
+    icon: 'envelope',
+    isDefault: true,
     clientQuoteCount: 0,
     supplierQuoteCount: 0,
     totalQuoteCount: 0,
@@ -56,7 +59,7 @@ describe('<QuoteCommunicationChannelField />', () => {
     fireEvent.click(screen.getByRole('button', { name: 'common:buttons.add' }));
 
     await waitFor(() => {
-      expect(onCreate).toHaveBeenCalledWith({ name: 'PEC' });
+      expect(onCreate).toHaveBeenCalledWith({ name: 'PEC', icon: 'comments' });
     });
   });
 
@@ -72,6 +75,8 @@ describe('<QuoteCommunicationChannelField />', () => {
           {
             id: 'qcc_pec',
             name: 'PEC',
+            icon: 'comments',
+            isDefault: false,
             clientQuoteCount: 0,
             supplierQuoteCount: 0,
             totalQuoteCount: 0,
@@ -86,6 +91,75 @@ describe('<QuoteCommunicationChannelField />', () => {
     );
 
     expect(screen.getByText('PEC')).toBeInTheDocument();
+  });
+
+  test('groups each channel edit and delete action behind an ellipsis menu', async () => {
+    const user = userEvent.setup();
+    const onUpdate = mock(async () => undefined);
+    const onDelete = mock(async () => undefined);
+    renderField({
+      channels: [
+        ...baseChannels,
+        {
+          id: 'qcc_phone',
+          name: 'Phone',
+          icon: 'comments',
+          isDefault: false,
+          clientQuoteCount: 0,
+          supplierQuoteCount: 0,
+          totalQuoteCount: 0,
+        },
+      ],
+      onUpdate,
+      onDelete,
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'common:buttons.manage' }));
+
+    const customActions = screen.getByRole('button', {
+      name: 'common:labels.actions: Phone',
+    });
+    expect(customActions.querySelector('.fa-ellipsis')).not.toBeNull();
+    expect(screen.queryByRole('button', { name: 'common:buttons.edit' })).not.toBeInTheDocument();
+
+    await user.click(customActions);
+    const editAction = await screen.findByRole('menuitem', { name: 'common:buttons.edit' });
+    expect(editAction.closest('[data-slot="dropdown-menu-content"]')?.className).toContain(
+      'z-[100]',
+    );
+    await user.click(editAction);
+
+    expect(screen.getByPlaceholderText('sales:communicationChannels.namePlaceholder')).toHaveValue(
+      'Phone',
+    );
+    expect(screen.getByRole('button', { name: 'common:buttons.save' })).toBeInTheDocument();
+    await user.click(screen.getByLabelText('communicationChannels.icons.video'));
+    await user.click(screen.getByRole('button', { name: 'common:buttons.save' }));
+
+    await waitFor(() =>
+      expect(onUpdate).toHaveBeenCalledWith('qcc_phone', { name: 'Phone', icon: 'video' }),
+    );
+
+    await user.click(customActions);
+    await user.click(await screen.findByRole('menuitem', { name: 'common:buttons.delete' }));
+
+    await waitFor(() => expect(onDelete).toHaveBeenCalledWith('qcc_phone'));
+  });
+
+  test('shows default icons and keeps default channels immutable', () => {
+    renderField();
+
+    fireEvent.click(screen.getByRole('button', { name: 'common:buttons.manage' }));
+
+    const emailRow = screen
+      .getAllByText('Email')
+      .map((element) => element.closest('tr'))
+      .find((row) => row !== null);
+    expect(emailRow?.querySelector('.fa-envelope')).not.toBeNull();
+    expect(screen.getByLabelText('sales:communicationChannels.defaultLocked')).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'common:labels.actions: Email' }),
+    ).not.toBeInTheDocument();
   });
 
   test('keeps the manage control compact and raises its nested modal above quote dialogs', async () => {

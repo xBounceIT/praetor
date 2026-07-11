@@ -10,7 +10,10 @@ import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { useDocumentCodePreview } from '../../hooks/useDocumentCodePreview';
-import type { QuoteCommunicationChannel } from '../../services/api/quoteCommunicationChannels';
+import type {
+  QuoteCommunicationChannel,
+  QuoteCommunicationChannelIcon,
+} from '../../services/api/quoteCommunicationChannels';
 import { supplierQuotesApi } from '../../services/api/supplierQuotes';
 import type {
   Client,
@@ -125,8 +128,14 @@ export interface SupplierQuotesViewProps {
   products: Product[];
   communicationChannels?: QuoteCommunicationChannel[];
   canManageCommunicationChannels?: boolean;
-  onCreateCommunicationChannel?: (data: { name: string }) => Promise<void>;
-  onUpdateCommunicationChannel?: (id: string, updates: { name: string }) => Promise<void>;
+  onCreateCommunicationChannel?: (data: {
+    name: string;
+    icon: QuoteCommunicationChannelIcon;
+  }) => Promise<void>;
+  onUpdateCommunicationChannel?: (
+    id: string,
+    updates: { name: string; icon: QuoteCommunicationChannelIcon },
+  ) => Promise<void>;
   onDeleteCommunicationChannel?: (id: string) => Promise<void>;
   // Resolves to the created quote so the modal can upload any files staged during creation.
   onAddQuote: (quoteData: Partial<SupplierQuote>) => Promise<SupplierQuote>;

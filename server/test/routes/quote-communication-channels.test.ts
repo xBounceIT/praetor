@@ -98,6 +98,8 @@ const FULL_PERMS = [
 const CHANNEL = {
   id: 'qcc_email',
   name: 'Email',
+  icon: 'envelope',
+  isDefault: false,
   createdAt: 1,
   updatedAt: 2,
   clientQuoteCount: 1,
@@ -130,8 +132,14 @@ beforeEach(async () => {
   listAllWithCountsMock.mockResolvedValue([CHANNEL]);
   findByIdMock.mockResolvedValue(CHANNEL);
   existsByNameMock.mockResolvedValue(false);
-  createMock.mockResolvedValue({ ...CHANNEL, id: 'qcc_new', name: 'PEC', totalQuoteCount: 0 });
-  updateMock.mockResolvedValue({ ...CHANNEL, name: 'PEC' });
+  createMock.mockResolvedValue({
+    ...CHANNEL,
+    id: 'qcc_new',
+    name: 'PEC',
+    icon: 'comments',
+    totalQuoteCount: 0,
+  });
+  updateMock.mockResolvedValue({ ...CHANNEL, name: 'PEC', icon: 'video' });
   countAllMock.mockResolvedValue(2);
   countReferencesMock.mockResolvedValue({
     clientQuoteCount: 0,
@@ -173,6 +181,7 @@ describe('/api/sales/quote-communication-channels', () => {
     expect(res.statusCode).toBe(201);
     expect(String(createMock.mock.calls[0]?.[0]).startsWith('qcc-')).toBe(true);
     expect(createMock.mock.calls[0]?.[1]).toBe('PEC');
+    expect(createMock.mock.calls[0]?.[2]).toBe('comments');
   });
 
   test('POST rejects duplicate names', async () => {
@@ -189,7 +198,32 @@ describe('/api/sales/quote-communication-channels', () => {
     expect(createMock).not.toHaveBeenCalled();
   });
 
+  test('POST rejects icons outside the supported set', async () => {
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/sales/quote-communication-channels',
+      headers: authHeader(),
+      payload: { name: 'Carrier pigeon', icon: 'bird' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(createMock).not.toHaveBeenCalled();
+  });
+
   test('PUT updates a channel and returns refreshed counts', async () => {
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/sales/quote-communication-channels/qcc_email',
+      headers: authHeader(),
+      payload: { name: 'PEC', icon: 'video' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(updateMock).toHaveBeenCalledWith('qcc_email', 'PEC', 'video');
+    expect(listAllWithCountsMock).toHaveBeenCalled();
+  });
+
+  test('PUT preserves the current icon when older clients omit it', async () => {
     const res = await testApp.inject({
       method: 'PUT',
       url: '/api/sales/quote-communication-channels/qcc_email',
@@ -198,8 +232,21 @@ describe('/api/sales/quote-communication-channels', () => {
     });
 
     expect(res.statusCode).toBe(200);
-    expect(updateMock).toHaveBeenCalledWith('qcc_email', 'PEC');
-    expect(listAllWithCountsMock).toHaveBeenCalled();
+    expect(updateMock).toHaveBeenCalledWith('qcc_email', 'PEC', 'envelope');
+  });
+
+  test('PUT blocks changes to default channels', async () => {
+    findByIdMock.mockResolvedValue({ ...CHANNEL, isDefault: true });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/sales/quote-communication-channels/qcc_email',
+      headers: authHeader(),
+      payload: { name: 'Renamed', icon: 'video' },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(updateMock).not.toHaveBeenCalled();
   });
 
   test('DELETE removes an unused channel', async () => {
@@ -211,6 +258,34 @@ describe('/api/sales/quote-communication-channels', () => {
 
     expect(res.statusCode).toBe(204);
     expect(deleteByIdMock).toHaveBeenCalledWith('qcc_email');
+  });
+
+  test('DELETE blocks default channels', async () => {
+    findByIdMock.mockResolvedValue({ ...CHANNEL, isDefault: true });
+
+    const res = await testApp.inject({
+      method: 'DELETE',
+      url: '/api/sales/quote-communication-channels/qcc_email',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(deleteByIdMock).not.toHaveBeenCalled();
+  });
+
+  test('DELETE returns not found when the channel disappears before deletion', async () => {
+    deleteByIdMock.mockResolvedValue(false);
+
+    const res = await testApp.inject({
+      method: 'DELETE',
+      url: '/api/sales/quote-communication-channels/qcc_email',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(404);
+    expect(logAuditMock).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'quote_communication_channel.delete.not_found' }),
+    );
   });
 
   test('DELETE blocks the last remaining channel', async () => {
