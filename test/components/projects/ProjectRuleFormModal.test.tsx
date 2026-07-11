@@ -147,7 +147,9 @@ describe('<ProjectRuleFormModal />', () => {
     fireEvent.click(
       screen.getByRole('button', { name: 'projects:detail.rules.actions.addCondition' }),
     );
-    fireEvent.change(screen.getAllByRole('spinbutton')[1], { target: { value: '2500' } });
+    fireEvent.change(document.getElementById('project-rule-value-1') as HTMLInputElement, {
+      target: { value: '2500' },
+    });
 
     fireEvent.click(screen.getByRole('button', { name: 'common:buttons.save' }));
 
@@ -169,6 +171,32 @@ describe('<ProjectRuleFormModal />', () => {
           webhookIds: [],
           actions: [{ type: 'notify', recipientType: 'user', recipientUserIds: ['u1'] }],
         },
+      }),
+    );
+  });
+
+  test('preserves localized negative literal thresholds', async () => {
+    const onSubmit = mock(() => Promise.resolve());
+    render(
+      <ProjectRuleFormModal
+        open
+        onOpenChange={() => {}}
+        rule={rule}
+        recipients={recipients}
+        permissions={['projects.rules.update']}
+        onSubmit={onSubmit}
+      />,
+    );
+
+    const valueInput = document.getElementById('project-rule-value-0') as HTMLInputElement;
+    fireEvent.change(valueInput, { target: { value: '-25,5' } });
+    fireEvent.click(screen.getByRole('button', { name: 'common:buttons.save' }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    expect(onSubmit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        value: '-25.5',
+        conditions: [{ field: 'revenue', operator: 'gt', value: '-25.5', valueType: 'literal' }],
       }),
     );
   });
@@ -323,7 +351,9 @@ describe('<ProjectRuleFormModal />', () => {
       />,
     );
 
-    fireEvent.change(screen.getByRole('spinbutton'), { target: { value: '' } });
+    fireEvent.change(document.getElementById('project-rule-value-0') as HTMLInputElement, {
+      target: { value: '' },
+    });
     fireEvent.click(screen.getByRole('button', { name: 'common:buttons.save' }));
 
     expect(

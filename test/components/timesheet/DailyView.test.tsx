@@ -225,7 +225,7 @@ describe('<DailyView /> RBAC catalog sync', () => {
       expect(document.body).not.toHaveTextContent('Alpha Task');
     });
 
-    fireEvent.change(screen.getByPlaceholderText('0.0'), { target: { value: '1' } });
+    fireEvent.change(screen.getByPlaceholderText('0,0'), { target: { value: '1' } });
     fireEvent.click(screen.getByText('entry.logTime'));
 
     await waitFor(() => {
@@ -249,8 +249,8 @@ describe('<DailyView /> RBAC catalog sync', () => {
     const submitButton = await screen.findByText('entry.logTime');
     expect(submitButton).toBeDisabled();
 
-    const hoursInput = screen.getByPlaceholderText('0.0');
-    fireEvent.change(hoursInput, { target: { value: '1.5' } });
+    const hoursInput = screen.getByPlaceholderText('0,0');
+    fireEvent.change(hoursInput, { target: { value: '1,5' } });
     expect(submitButton).not.toBeDisabled();
 
     fireEvent.change(hoursInput, { target: { value: '0' } });

@@ -162,7 +162,7 @@ describe('<SupplierQuotesView /> supplier pricing chain', () => {
     fireEvent.click(screen.getByText('SQ-DRAFT'));
 
     // List price starts at 100 (formatted to 2 decimals); there is one input per layout.
-    const listPriceInputs = screen.getAllByDisplayValue('100.00');
+    const listPriceInputs = screen.getAllByDisplayValue('100,00');
     fireEvent.change(listPriceInputs[0], { target: { value: '200' } });
     // Discount starts at 0; qty shows "1", so "0" uniquely matches the discount inputs.
     const discountInputs = screen.getAllByDisplayValue('0');
@@ -206,8 +206,8 @@ describe('<SupplierQuotesView /> supplier pricing chain', () => {
     // A list price with >2 decimals must be rounded to the persisted scale (NUMERIC(_,2)) before
     // deriving the net cost, exactly as the server does — otherwise the UI would show/submit a net
     // cost the server would not store.
-    const listPriceInputs = screen.getAllByDisplayValue('100.00');
-    fireEvent.change(listPriceInputs[0], { target: { value: '10.005' } });
+    const listPriceInputs = screen.getAllByDisplayValue('100,00');
+    fireEvent.change(listPriceInputs[0], { target: { value: '10,005' } });
     const discountInputs = screen.getAllByDisplayValue('0');
     fireEvent.change(discountInputs[0], { target: { value: '10' } });
 
@@ -246,7 +246,7 @@ describe('<SupplierQuotesView /> summary discount line', () => {
     // Discount row label renders only when the aggregate discount is > 0.
     expect(screen.getByText('sales:supplierQuotes.discountAmount')).toBeInTheDocument();
     // Subtotale = gross 500, Sconto = 75, Totale = net 425.
-    expect(screen.getByText('-75.00 EUR')).toBeInTheDocument();
+    expect(screen.getByText('-75,00 EUR')).toBeInTheDocument();
   });
 
   test('omits the discount line when no line has a discount', () => {
@@ -448,8 +448,8 @@ describe('<SupplierQuotesView /> line item duration (issue #776)', () => {
     render(<SupplierQuotesView {...baseProps} quotes={[daysLineQuote]} />);
     // Total column = unitPrice 100 × quantity 2 × durationMonths 3 = 600.00
     // (without the duration multiplier it would be 200.00).
-    expect(screen.getAllByText('600.00 EUR').length).toBeGreaterThan(0);
-    expect(screen.queryByText('200.00 EUR')).not.toBeInTheDocument();
+    expect(screen.getAllByText('600,00 EUR').length).toBeGreaterThan(0);
+    expect(screen.queryByText('200,00 EUR')).not.toBeInTheDocument();
   });
 
   test('renders an editable duration for a unit-measured line (duration applies to every type)', () => {
@@ -487,8 +487,8 @@ describe('<SupplierQuotesView /> line item duration (issue #776)', () => {
     render(<SupplierQuotesView {...baseProps} quotes={[naQuote]} />);
     fireEvent.click(screen.getByText('SQ-DUR-NA'));
     // 2 × 100 × 1 (na) = 200.00 — not 600.00, even though durationMonths is 3.
-    expect(screen.getAllByText('200.00 EUR').length).toBeGreaterThan(0);
-    expect(screen.queryByText('600.00 EUR')).not.toBeInTheDocument();
+    expect(screen.getAllByText('200,00 EUR').length).toBeGreaterThan(0);
+    expect(screen.queryByText('600,00 EUR')).not.toBeInTheDocument();
     // The value input is disabled while the unit is N/A; the selector stays usable.
     const durationInputs = screen
       .getAllByPlaceholderText('sales:supplierQuotes.durationColumn')

@@ -203,8 +203,26 @@ describe('<ClientQuotesView />', () => {
     ]);
     expect(screen.getAllByText('Email').length).toBeGreaterThan(0);
     // MOL column shows the margin percentage with two decimals (issue #780).
-    expect(screen.getByText('33.33%')).toBeInTheDocument();
-    expect(screen.getByText('12.5%')).toBeInTheDocument();
+    expect(screen.getByText('33,33%')).toBeInTheDocument();
+    expect(screen.getByText('12,5%')).toBeInTheDocument();
+  });
+
+  test('formats a fractional percentage discount with a comma', () => {
+    render(
+      <ClientQuotesView
+        quotes={[{ ...quotes[0], id: 'Q-DECIMAL', discount: 10.5 }]}
+        clients={clients}
+        products={[]}
+        supplierQuotes={[]}
+        currency="EUR"
+        onAddQuote={mock(() => Promise.resolve())}
+        onUpdateQuote={mock(() => Promise.resolve())}
+        onDeleteQuote={mock(() => Promise.resolve())}
+      />,
+    );
+
+    expect(screen.getByText('10,5%')).toBeInTheDocument();
+    expect(screen.queryByText('10.5%')).not.toBeInTheDocument();
   });
 
   test('exposes a Durata column and per-row duration input in the create dialog (issue #757)', () => {
@@ -358,10 +376,10 @@ describe('<ClientQuotesView />', () => {
 
     // Subtotal (revenue) = unitPrice 100 × quantity 2 × durationMonths 3 = 600.00
     // (without the duration multiplier it would be 200.00).
-    expect(screen.getAllByText('600.00 EUR').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('600,00 EUR').length).toBeGreaterThan(0);
     // Margin = revenue 600 − cost (60 × 2 × 3 = 360) = 240.00, which only holds when BOTH
     // revenue and cost are scaled by duration.
-    expect(screen.getAllByText('240.00 EUR').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('240,00 EUR').length).toBeGreaterThan(0);
   });
 
   test('shows an editable duration field for "unit"-measured lines (always usable)', async () => {
@@ -512,9 +530,9 @@ describe('<ClientQuotesView />', () => {
     );
 
     // Subtotal (revenue) = 100 × 2 × 24 = 4800.00 — identical to a 24-month item.
-    expect(screen.getAllByText('4800.00 EUR').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('4.800,00 EUR').length).toBeGreaterThan(0);
     // Margin = 4800 − (60 × 2 × 24 = 2880) = 1920.00.
-    expect(screen.getAllByText('1920.00 EUR').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('1.920,00 EUR').length).toBeGreaterThan(0);
   });
 
   test('MOL line input keeps two decimals instead of rounding to one (issue #780)', async () => {
@@ -559,10 +577,10 @@ describe('<ClientQuotesView />', () => {
     fireEvent.click(screen.getByText('Q-MOL'));
     await screen.findByRole('dialog');
 
-    // formatDecimals={2}: the MOL inputs (mobile + desktop layouts) show 12.34, not the
-    // pre-fix rounded 12.3 that silently dropped the second decimal.
-    expect(screen.queryAllByDisplayValue('12.34').length).toBeGreaterThan(0);
-    expect(screen.queryAllByDisplayValue('12.3')).toHaveLength(0);
+    // formatDecimals={2}: the MOL inputs (mobile + desktop layouts) show 12,34, not the
+    // pre-fix rounded 12,3 that silently dropped the second decimal.
+    expect(screen.queryAllByDisplayValue('12,34').length).toBeGreaterThan(0);
+    expect(screen.queryAllByDisplayValue('12,3')).toHaveLength(0);
   });
 
   test('the read-only banner renders dark-mode-compatible amber, not a light slab (issue #768)', async () => {

@@ -24,6 +24,7 @@ import type {
   ResaleOrderOption,
 } from '../../types';
 import { formatDateOnlyForLocale } from '../../utils/date';
+import { formatDecimal } from '../../utils/numbers';
 import { buildPermission, hasPermission } from '../../utils/permissions';
 import DateField from '../shared/DateField';
 import DeleteConfirmModal from '../shared/DeleteConfirmModal';
@@ -41,6 +42,7 @@ import SelectControl from '../shared/SelectControl';
 import StandardTable, { type Column } from '../shared/StandardTable';
 import StatusBadge from '../shared/StatusBadge';
 import { TABLE_CONTROL_BUTTON_CLASSNAME } from '../shared/tableControlStyles';
+import ValidatedNumberInput from '../shared/ValidatedNumberInput';
 
 const billingFrequencyValues: ResaleBillingFrequency[] = [
   'monthly',
@@ -336,12 +338,8 @@ const useResalesController = ({
   };
 
   const formatMoney = useCallback(
-    (value: number) =>
-      `${Number(value || 0).toLocaleString(i18n.language, {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
-      })} ${currency}`,
-    [currency, i18n.language],
+    (value: number) => `${formatDecimal(value)} ${currency}`,
+    [currency],
   );
 
   const billingOptions = billingFrequencyValues.map((value) => ({
@@ -947,14 +945,12 @@ const useResalesController = ({
       accessorKey: 'cost',
       disableFiltering: true,
       cell: ({ row }) => (
-        <Input
-          type="number"
+        <ValidatedNumberInput
           min="0"
-          step="0.01"
           required
           value={row.cost}
-          placeholder="0.00"
-          onChange={(event) => updateDraftActivity(row._id, 'cost', event.target.value)}
+          placeholder="0,00"
+          onValueChange={(value) => updateDraftActivity(row._id, 'cost', value)}
           className="h-8 min-w-[90px] text-xs"
         />
       ),
@@ -965,14 +961,12 @@ const useResalesController = ({
       accessorKey: 'revenue',
       disableFiltering: true,
       cell: ({ row }) => (
-        <Input
-          type="number"
+        <ValidatedNumberInput
           min="0"
-          step="0.01"
           required
           value={row.revenue}
-          placeholder="0.00"
-          onChange={(event) => updateDraftActivity(row._id, 'revenue', event.target.value)}
+          placeholder="0,00"
+          onValueChange={(value) => updateDraftActivity(row._id, 'revenue', value)}
           className="h-8 min-w-[90px] text-xs"
         />
       ),
@@ -1606,15 +1600,11 @@ const ActivityMoneyInput: React.FC<{
     <FieldLabel htmlFor={`resale-activity-${field}`}>
       {controller.t(`resales.columns.${field}`)} ({controller.currency}) <RequiredMark />
     </FieldLabel>
-    <Input
+    <ValidatedNumberInput
       id={`resale-activity-${field}`}
-      type="number"
       min="0"
-      step="0.01"
       value={controller.activityForm[field]}
-      onChange={(event) =>
-        controller.setActivityForm((prev) => ({ ...prev, [field]: event.target.value }))
-      }
+      onValueChange={(value) => controller.setActivityForm((prev) => ({ ...prev, [field]: value }))}
     />
     <FieldError className="text-xs">{controller.activityForm.errors[field]}</FieldError>
   </Field>

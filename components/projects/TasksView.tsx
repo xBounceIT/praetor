@@ -6,6 +6,7 @@ import { useBillingFrequencyOptions, useBillingTypeOptions } from '../../hooks/u
 import { tasksApi } from '../../services/api/tasks';
 import type { BillingFrequency, Client, Project, ProjectTask, Role, User } from '../../types';
 import { formatInsertDate } from '../../utils/date';
+import { formatNumber } from '../../utils/numbers';
 import { hasScopedActionPermission } from '../../utils/permissions';
 import DeleteConfirmModal from '../shared/DeleteConfirmModal';
 import HeaderAddButton from '../shared/HeaderAddButton';
@@ -271,7 +272,11 @@ const useTaskColumns = ({
         cell: ({ row }) => {
           const effort = row.monthlyEffort;
           if (!effort) return <span className="text-xs text-zinc-400">-</span>;
-          return <span className="text-xs font-bold text-zinc-600 tabular-nums">{effort}h</span>;
+          return (
+            <span className="text-xs font-bold text-zinc-600 tabular-nums">
+              {formatNumber(effort, { maximumFractionDigits: 2 })}h
+            </span>
+          );
         },
       },
       {
@@ -280,7 +285,7 @@ const useTaskColumns = ({
         accessorFn: (task) => task.duration ?? 1,
         cell: ({ row }) => (
           <span className="text-xs font-bold text-zinc-600 tabular-nums">
-            {(row.duration ?? 1).toLocaleString(undefined, {
+            {formatNumber(row.duration ?? 1, {
               maximumFractionDigits: 2,
             })}
           </span>
@@ -293,7 +298,11 @@ const useTaskColumns = ({
         cell: ({ row }) => {
           const effort = row.expectedEffort;
           if (!effort) return <span className="text-xs text-zinc-400">-</span>;
-          return <span className="text-xs font-bold text-zinc-600 tabular-nums">{effort}h</span>;
+          return (
+            <span className="text-xs font-bold text-zinc-600 tabular-nums">
+              {formatNumber(effort, { maximumFractionDigits: 2 })}h
+            </span>
+          );
         },
       },
       {
@@ -306,7 +315,7 @@ const useTaskColumns = ({
           return (
             <span className="text-xs font-bold text-zinc-600 tabular-nums">
               {currency}
-              {rev.toLocaleString(undefined, {
+              {formatNumber(rev, {
                 minimumFractionDigits: 2,
                 maximumFractionDigits: 2,
               })}
@@ -324,7 +333,7 @@ const useTaskColumns = ({
           return (
             <span className="text-xs font-bold text-zinc-600 tabular-nums">
               {currency}
-              {totalRevenue.toLocaleString(undefined, {
+              {formatNumber(totalRevenue, {
                 minimumFractionDigits: 2,
                 maximumFractionDigits: 2,
               })}

@@ -29,6 +29,7 @@ import {
   calculatePricingTotals,
   convertUnitPrice,
   durationValueToMonths,
+  formatDecimal,
   formatDiscountValue,
   formatMolPercentage,
   getDurationDisplayValue,
@@ -203,7 +204,7 @@ const PricingCell: React.FC<PricingCellProps> = ({
       className={`text-sm ${bold ? 'font-bold' : 'font-semibold'} whitespace-nowrap ${isHistory ? 'text-muted-foreground' : colorClass}`}
     >
       {prefix}
-      {value.toFixed(2)} {currency}
+      {formatDecimal(value)} {currency}
     </span>
   );
 };
@@ -747,7 +748,7 @@ const useClientsOrdersController = ({
             currency={currency}
           />
         ),
-        filterFormat: (val: unknown) => (val as number).toFixed(2),
+        filterFormat: (val: unknown) => formatDecimal(val as number),
       },
       {
         header: t('accounting:clientsOrders.paymentTermsColumn'),
@@ -1596,7 +1597,7 @@ const OrderItemAmountField: React.FC<{
 }) => {
   const valueLabel = (
     <span className={`text-xs font-bold ${valueClassName}`}>
-      {value.toFixed(2)} {currency}
+      {formatDecimal(value)} {currency}
     </span>
   );
 

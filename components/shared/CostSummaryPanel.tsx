@@ -1,13 +1,12 @@
 import type React from 'react';
 import type { DiscountType } from '../../types';
+import { formatDecimal } from '../../utils/numbers';
 import SelectControl from './SelectControl';
 import ValidatedNumberInput from './ValidatedNumberInput';
 
 // Guard against NaN / Infinity / undefined leaking from caller-supplied totals
-// — `Number.prototype.toFixed` on a non-finite number returns "NaN" which then
-// renders as literal "NaN" in the UI; explicit fallback keeps totals readable.
-const formatAmount = (value: number | undefined | null): string =>
-  Number.isFinite(value) ? (value as number).toFixed(2) : '0.00';
+// so non-finite values never render as literal "NaN" in the UI.
+const formatAmount = (value: number | undefined | null): string => formatDecimal(value);
 
 export interface CostSummaryPanelProps {
   currency: string;

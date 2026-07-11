@@ -473,6 +473,6 @@ describe('<ClientQuotesView /> supplier-quote item labels', () => {
     );
     fireEvent.click(screen.getByText('Q-OLD-SOURCE'));
 
-    expect(screen.getAllByText('Acme Supplies · Solar Panel (60.00)').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Acme Supplies · Solar Panel (60,00)').length).toBeGreaterThan(0);
   });
 });

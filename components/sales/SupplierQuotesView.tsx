@@ -32,6 +32,7 @@ import {
 import {
   convertUnitPrice,
   durationValueToMonths,
+  formatDecimal,
   getDurationDisplayValue,
   getEffectiveDurationMonths,
   normalizeDurationUnit,
@@ -709,7 +710,7 @@ const useSupplierQuotesController = ({
             <span
               className={`text-sm font-bold whitespace-nowrap ${history ? 'text-zinc-400' : 'text-zinc-700'}`}
             >
-              {total.toFixed(2)} {currency}
+              {formatDecimal(total)} {currency}
             </span>
           );
         },
@@ -1853,7 +1854,7 @@ const SupplierQuoteUnitCostValue: React.FC<{
   <div className={className}>
     <SupplierQuoteFieldLabel>{label}</SupplierQuoteFieldLabel>
     <div className="text-xs font-bold text-zinc-700 whitespace-nowrap">
-      {context.itemUnitCost.toFixed(2)} {context.controller.currency}
+      {formatDecimal(context.itemUnitCost)} {context.controller.currency}
     </div>
   </div>
 );
@@ -1866,7 +1867,7 @@ const SupplierQuoteLineTotalValue: React.FC<{
   <div className={className}>
     <SupplierQuoteFieldLabel>{label}</SupplierQuoteFieldLabel>
     <span className="text-sm font-bold text-zinc-800 whitespace-nowrap">
-      {context.lineTotal.toFixed(2)} {context.controller.currency}
+      {formatDecimal(context.lineTotal)} {context.controller.currency}
     </span>
   </div>
 );

@@ -19,6 +19,7 @@ import type {
   ProjectTask,
   StoredBillingType,
 } from '../../types';
+import { formatNumber } from '../../utils/numbers';
 import Modal from '../shared/Modal';
 import {
   ModalBody,
@@ -30,8 +31,14 @@ import {
 } from '../shared/ModalLayout';
 import SelectControl from '../shared/SelectControl';
 import Toggle from '../shared/Toggle';
+import ValidatedNumberInput from '../shared/ValidatedNumberInput';
 
 const formatOrderId = (id: string) => `#${id.replace('co-', '')}`;
+const formatTaskNumber = (value: number, minimumFractionDigits = 0) =>
+  formatNumber(value, {
+    minimumFractionDigits,
+    maximumFractionDigits: 2,
+  });
 
 export type RecurringConfig = { isRecurring: boolean; pattern: 'daily' | 'weekly' | 'monthly' };
 
@@ -301,18 +308,12 @@ const TaskBillingFields: React.FC<{
   currency: string;
   dispatch: React.Dispatch<TaskFormAction>;
 }> = ({ formState, currency, dispatch }) => {
-  const { t, i18n } = useTranslation(['projects', 'common']);
+  const { t } = useTranslation(['projects', 'common']);
   const translatedBillingTypeOptions = useBillingTypeOptions();
   const translatedBillingFrequencyOptions = useBillingFrequencyOptions();
   const { billingType, billingFrequency, monthlyEffort, duration, revenue } = formState;
   const totalEffort = parseFormNumber(monthlyEffort) * parseFormNumber(duration, 1);
   const totalRevenue = parseFormNumber(revenue) * parseFormNumber(duration, 1);
-  const formatNumber = (value: number, minimumFractionDigits = 0) =>
-    value.toLocaleString(i18n.language, {
-      minimumFractionDigits,
-      maximumFractionDigits: 2,
-    });
-
   return (
     <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
       <SelectControl
@@ -363,20 +364,15 @@ const TaskBillingFields: React.FC<{
       </Field>
       <Field>
         <FieldLabel htmlFor="task-duration">{t('projects:projects.duration')}</FieldLabel>
-        <Input
+        <ValidatedNumberInput
           id="task-duration"
-          type="number"
           min="0"
-          step="any"
           value={duration}
-          onKeyDown={(e) => {
-            if (['e', 'E', '+', '-'].includes(e.key)) e.preventDefault();
-          }}
-          onChange={(e) =>
+          onValueChange={(value) =>
             dispatch({
               type: 'setTextField',
               field: 'duration',
-              value: e.target.value,
+              value,
             })
           }
           placeholder="1"
@@ -390,23 +386,19 @@ const TaskBillingFields: React.FC<{
           id="task-expected-effort"
           className="flex h-9 w-full items-center rounded-md border border-input bg-muted/40 px-3 text-sm text-muted-foreground tabular-nums"
         >
-          {formatNumber(totalEffort)}h
+          {formatTaskNumber(totalEffort)}h
         </output>
       </Field>
       <Field>
         <FieldLabel htmlFor="task-revenue">
           {`${t('projects:projects.taskRevenue')} (${currency})`}
         </FieldLabel>
-        <Input
+        <ValidatedNumberInput
           id="task-revenue"
-          type="number"
           min="0"
-          step="0.01"
           value={revenue}
-          onChange={(e) =>
-            dispatch({ type: 'setTextField', field: 'revenue', value: e.target.value })
-          }
-          placeholder="0.00"
+          onValueChange={(value) => dispatch({ type: 'setTextField', field: 'revenue', value })}
+          placeholder="0,00"
         />
       </Field>
       <Field>
@@ -418,7 +410,7 @@ const TaskBillingFields: React.FC<{
           className="flex h-9 w-full items-center rounded-md border border-input bg-muted/40 px-3 text-sm text-muted-foreground tabular-nums"
         >
           {currency}
-          {formatNumber(totalRevenue, 2)}
+          {formatTaskNumber(totalRevenue, 2)}
         </output>
       </Field>
     </div>

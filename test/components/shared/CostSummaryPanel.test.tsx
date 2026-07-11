@@ -7,7 +7,7 @@ installI18nMock();
 const CostSummaryPanel = (await import('../../../components/shared/CostSummaryPanel')).default;
 
 describe('<CostSummaryPanel />', () => {
-  test('renders fallback "0.00" for NaN subtotal/total without throwing', () => {
+  test('renders fallback "0,00" for NaN subtotal/total without throwing', () => {
     const { container } = render(
       <CostSummaryPanel
         currency="EUR"
@@ -19,12 +19,12 @@ describe('<CostSummaryPanel />', () => {
     );
     // Neither value should leak the string "NaN" into the DOM.
     expect(container.textContent).not.toContain('NaN');
-    // Two amount fields (subtotal, total) → at least two "0.00" placeholders.
-    const matches = container.textContent?.match(/0\.00/g) ?? [];
+    // Two amount fields (subtotal, total) → at least two "0,00" placeholders.
+    const matches = container.textContent?.match(/0,00/g) ?? [];
     expect(matches.length).toBeGreaterThanOrEqual(2);
   });
 
-  test('renders "0.00" for undefined-shaped numeric values (cast)', () => {
+  test('renders "0,00" for undefined-shaped numeric values (cast)', () => {
     // The contract says number, but defensive consumers can still hit this if
     // they cast `undefined` through `as unknown as number`.
     const { container } = render(
@@ -53,14 +53,14 @@ describe('<CostSummaryPanel />', () => {
         balanceDue={{ label: 'Balance', amount: 90.25 }}
       />,
     );
-    expect(container.textContent).toContain('100.50');
-    expect(container.textContent).toContain('120.75');
-    expect(container.textContent).toContain('5.25');
-    expect(container.textContent).toContain('30.50');
-    expect(container.textContent).toContain('90.25');
+    expect(container.textContent).toContain('100,50');
+    expect(container.textContent).toContain('120,75');
+    expect(container.textContent).toContain('5,25');
+    expect(container.textContent).toContain('30,50');
+    expect(container.textContent).toContain('90,25');
   });
 
-  test('NaN values in optional rows (margin, balance) also fall back to 0.00', () => {
+  test('NaN values in optional rows (margin, balance) also fall back to 0,00', () => {
     // discountRow is gated on `amount > 0`, so NaN there silently drops the row.
     // margin and balanceDue always render — they are the rows that need the guard.
     const { container } = render(

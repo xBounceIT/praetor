@@ -73,7 +73,7 @@ L'importo pagato non può superare il totale della fattura. Quando una fattura v
 
 Sia le **fatture clienti sia quelle fornitori** riportano la colonna **Durata** sulle righe, con lo stesso selettore **Mesi** / **Anni** / **N/D**, e moltiplicano il totale della riga per i mesi corrispondenti. Quando crei una **fattura fornitore** da un ordine fornitore la durata viene riportata così il totale della fattura coincide con quello dell'ordine; altrimenti è modificabile riga per riga finché la fattura è in bozza. Selezionando **N/D** la riga viene esclusa dal moltiplicatore di durata.
 
-Praetor arrotonda imponibili, IVA, costi e totali alla precisione monetaria di due decimali usando l'arrotondamento commerciale sui mezzi centesimi: valori come 1,005 diventano 1,01.
+Praetor arrotonda imponibili, IVA, costi e totali alla precisione monetaria di due decimali usando l'arrotondamento commerciale sui mezzi centesimi: valori come 1,005 diventano 1,01. Tutti i numeri decimali mostrati o inseriti nell'interfaccia usano la virgola come separatore decimale e il punto esclusivamente per le migliaia (per esempio `1.234,56`), anche quando l'interfaccia è in inglese.
 
 ### IVA per riga
 

@@ -215,9 +215,9 @@ describe('<ClientsOrdersView />', () => {
     );
 
     // Subtotal (revenue) = 100 × 2 × 3 = 600 (would be 200 without duration).
-    expect(screen.getAllByText('600.00 EUR').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('600,00 EUR').length).toBeGreaterThan(0);
     // Margin = 600 − (60 × 2 × 3 = 360) = 240, only correct when both scale by duration.
-    expect(screen.getAllByText('240.00 EUR').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('240,00 EUR').length).toBeGreaterThan(0);
   });
 
   test('a years duration prices off the canonical months, matching the months equivalent (issue #757)', () => {
@@ -261,9 +261,9 @@ describe('<ClientsOrdersView />', () => {
     );
 
     // Subtotal (revenue) = 100 × 2 × 24 = 4800.
-    expect(screen.getAllByText('4800.00 EUR').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('4.800,00 EUR').length).toBeGreaterThan(0);
     // Margin = 4800 − (60 × 2 × 24 = 2880) = 1920.
-    expect(screen.getAllByText('1920.00 EUR').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('1.920,00 EUR').length).toBeGreaterThan(0);
   });
 
   test('MOL line input keeps two decimals instead of rounding to one (issue #780)', async () => {
@@ -305,10 +305,10 @@ describe('<ClientsOrdersView />', () => {
     fireEvent.click(screen.getByText('Helios Energy Services').closest('tr') as HTMLElement);
     await screen.findByRole('dialog');
 
-    // The MOL input must preserve both decimals (12.34). The pre-fix formatDecimals={1}
-    // rounded the displayed value to a single decimal (12.3), silently dropping precision.
-    expect(screen.queryAllByDisplayValue('12.34').length).toBeGreaterThan(0);
-    expect(screen.queryAllByDisplayValue('12.3')).toHaveLength(0);
+    // The MOL input must preserve both decimals (12,34). The pre-fix formatDecimals={1}
+    // rounded the displayed value to a single decimal (12,3), silently dropping precision.
+    expect(screen.queryAllByDisplayValue('12,34').length).toBeGreaterThan(0);
+    expect(screen.queryAllByDisplayValue('12,3')).toHaveLength(0);
   });
 
   test('edit modal uses the shared shadcn modal layout and form primitives', async () => {
