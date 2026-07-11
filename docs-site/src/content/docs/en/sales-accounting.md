@@ -77,7 +77,7 @@ The amount paid cannot exceed the invoice total. When an invoice is set to **pai
 
 Both **customer and supplier invoices** carry the **Duration** column on their lines, with the same **Months** / **Years** / **N/A** selector, and multiply the line total by the corresponding months. When you create a **supplier invoice** from a supplier order the duration is carried over so the invoice total matches the order; otherwise it can be edited per line while the invoice is a draft. Selecting **N/A** leaves the line out of the duration multiplier.
 
-Praetor rounds taxable amounts, VAT, costs, and totals to two currency decimals using commercial half-cent rounding: values such as 1.005 become 1.01.
+Praetor rounds taxable amounts, VAT, costs, and totals to two currency decimals using commercial half-cent rounding: values such as `1,005` become `1,01`. Every decimal shown or entered in the interface uses a comma as the decimal separator and dots only for thousands (for example `1.234,56`), including when the interface language is English.
 
 ### Per-line VAT (IVA)
 

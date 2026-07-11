@@ -2,6 +2,8 @@ import type { DiscountType, DurationUnit, SupplierUnitType } from '../types';
 
 const CURRENCY_DECIMAL_PLACES = 2;
 
+export const NUMBER_LOCALE = 'it-IT';
+
 const MONTHS_PER_YEAR = 12;
 
 const shiftDecimal = (value: number, decimalPlaces: number): number => {
@@ -23,11 +25,45 @@ export const roundCurrency = (value: number): number => {
   return sign * shiftDecimal(cents, -CURRENCY_DECIMAL_PLACES);
 };
 
+/**
+ * Convert a localized user-entered number to the canonical dot-decimal representation used by
+ * JavaScript and the API. A dot is treated as a thousands separator when a comma is present.
+ */
+export const normalizeLocalizedNumber = (value: string): string => {
+  const trimmed = value.trim();
+  return trimmed.includes(',') ? trimmed.replaceAll('.', '').replace(',', '.') : trimmed;
+};
+
 export const parseNumberInputValue = (value: string, fallback: number | undefined = 0) => {
   if (value === '') return fallback;
-  const parsed = parseFloat(value);
+  const parsed = Number.parseFloat(normalizeLocalizedNumber(value));
   return Number.isNaN(parsed) ? fallback : parsed;
 };
+
+const numberFormatters = new Map<string, Intl.NumberFormat>();
+
+/** Format every user-visible number with Italian decimal and thousands separators. */
+export const formatNumber = (
+  value: number | null | undefined,
+  options: Intl.NumberFormatOptions = {},
+): string => {
+  const finiteValue = Number.isFinite(value) ? (value as number) : 0;
+  const displayValue = Object.is(finiteValue, -0) ? 0 : finiteValue;
+  const cacheKey = JSON.stringify(options);
+  let formatter = numberFormatters.get(cacheKey);
+  if (!formatter) {
+    formatter = new Intl.NumberFormat(NUMBER_LOCALE, options);
+    numberFormatters.set(cacheKey, formatter);
+  }
+  return formatter.format(displayValue);
+};
+
+/** Format a user-visible decimal with a fixed precision. */
+export const formatDecimal = (value: number | null | undefined, decimals = 2): string =>
+  formatNumber(value, {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  });
 
 export const convertUnitPrice = (
   price: number,
@@ -124,7 +160,7 @@ export const getDurationDisplayValue = (item: PricingItem): number => {
 // fractional year (e.g. 18 months → 1.5), and that decimal must survive editing — `durationValueToMonths`
 // then folds it back to canonical whole months (1.5 × 12 = 18), so the value round-trips.
 export const parseDurationValueToMonths = (value: string, unit: DurationUnit): number => {
-  const parsed = Number.parseFloat(value);
+  const parsed = Number.parseFloat(normalizeLocalizedNumber(value));
   if (value === '' || Number.isNaN(parsed)) return durationValueToMonths(1, unit);
   return durationValueToMonths(Math.max(1, parsed), unit);
 };
@@ -204,7 +240,10 @@ export const formatDiscountValue = (
   discount: number,
   discountType: DiscountType,
   currency: string,
-): string => (discountType === 'currency' ? `${discount} ${currency}` : `${discount}%`);
+): string =>
+  discountType === 'currency'
+    ? `${formatNumber(discount, { maximumFractionDigits: 20 })} ${currency}`
+    : `${formatNumber(discount, { maximumFractionDigits: 20 })}%`;
 
 /**
  * Display precision (decimal places) for MOL / margin percentages. Single source of truth
@@ -215,9 +254,9 @@ export const formatDiscountValue = (
 export const MOL_PERCENTAGE_DECIMALS = 2;
 
 /**
- * Render a margin/MOL percentage for display with a fixed two decimals (e.g. "33.33%").
+ * Render a margin/MOL percentage for display with a fixed two decimals (e.g. "33,33%").
  * Centralizes the precision so the quote, offer and order views stay consistent; the value
  * is already rounded to two decimals upstream by `calculatePricingTotals`.
  */
 export const formatMolPercentage = (value: number): string =>
-  `${(value || 0).toFixed(MOL_PERCENTAGE_DECIMALS)}%`;
+  `${formatDecimal(value || 0, MOL_PERCENTAGE_DECIMALS)}%`;

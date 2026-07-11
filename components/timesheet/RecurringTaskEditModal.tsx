@@ -196,7 +196,7 @@ const RecurringTaskEditModal: React.FC<RecurringTaskEditModalProps> = ({
                   onValueChange={(nextDuration) =>
                     dispatch({ type: 'setDuration', duration: nextDuration })
                   }
-                  placeholder="0.0"
+                  placeholder="0,0"
                 />
               </Field>
             </ModalBody>

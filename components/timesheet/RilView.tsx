@@ -23,6 +23,7 @@ import {
 } from '@/components/ui/table';
 import api from '../../services/api';
 import type { GeneralSettings, Project, TimeEntry, User } from '../../types';
+import { formatDecimal } from '../../utils/numbers';
 import {
   applyRilDraftToRows,
   calculateRilTotals,
@@ -702,24 +703,13 @@ const useRilController = ({
     { key: 'code', label: t('ril.columns.code'), className: 'w-32 min-w-32' },
   ];
 
-  const numberLocale = locale === 'it' ? 'it-IT' : 'en-US';
-  const formatOneDecimal = useMemo(
-    () =>
-      new Intl.NumberFormat(numberLocale, { minimumFractionDigits: 1, maximumFractionDigits: 1 }),
-    [numberLocale],
-  );
-  const formatTwoDecimals = useMemo(
-    () =>
-      new Intl.NumberFormat(numberLocale, { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
-    [numberLocale],
-  );
   const extraHours = Math.max(0, totals.totalHours - totals.workedDays * 8);
   const summaryRows = [
     { label: t('ril.summary.workedDays'), value: String(totals.workedDays) },
     { label: t('ril.summary.lunchWindow'), value: formatRilLunchWindow(lunchBreakMinutes) },
-    { label: t('ril.summary.extraHours'), value: formatOneDecimal.format(extraHours) },
-    { label: t('ril.summary.totalHours'), value: formatOneDecimal.format(totals.totalHours) },
-    { label: t('ril.summary.totalPicap'), value: formatTwoDecimals.format(totals.totalPicap) },
+    { label: t('ril.summary.extraHours'), value: formatDecimal(extraHours, 1) },
+    { label: t('ril.summary.totalHours'), value: formatDecimal(totals.totalHours, 1) },
+    { label: t('ril.summary.totalPicap'), value: formatDecimal(totals.totalPicap) },
   ];
 
   const getRowClassName = useCallback(

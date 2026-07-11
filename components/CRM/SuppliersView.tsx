@@ -8,6 +8,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import type { Supplier, SupplierSaleOrder, SupplierSaleOrderItem } from '../../types';
 import { formatInsertDate } from '../../utils/date';
+import { formatDecimal } from '../../utils/numbers';
 import { hasScopedActionPermission } from '../../utils/permissions';
 import { toastError } from '../../utils/toast';
 import DeleteConfirmModal from '../shared/DeleteConfirmModal';
@@ -476,11 +477,11 @@ const SuppliersTable: React.FC<SuppliersTableProps> = ({
                 totalValue > 0 ? 'text-emerald-700' : 'text-zinc-400'
               }`}
             >
-              {totalValue.toFixed(2)} {currency}
+              {formatDecimal(totalValue)} {currency}
             </span>
           );
         },
-        filterFormat: (value: unknown) => (value as number).toFixed(2),
+        filterFormat: (value: unknown) => formatDecimal(value as number),
       },
       {
         header: t('crm:suppliers.tableHeaders.status'),

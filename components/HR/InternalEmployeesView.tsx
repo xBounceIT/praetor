@@ -11,6 +11,7 @@ import type {
   User,
   WorkUnit,
 } from '../../types';
+import { formatDecimal } from '../../utils/numbers';
 import { buildPermission, hasPermission, TOP_MANAGER_ROLE_ID } from '../../utils/permissions';
 import DeleteConfirmModal from '../shared/DeleteConfirmModal';
 import HeaderAddButton from '../shared/HeaderAddButton';
@@ -227,7 +228,7 @@ const InternalEmployeesTable: React.FC<InternalEmployeesTableProps> = ({
               cell: ({ value }: { value: unknown }) => (
                 <span className="font-medium text-muted-foreground">
                   {currency}
-                  {Number(value ?? 0).toFixed(2)}
+                  {formatDecimal(Number(value ?? 0))}
                 </span>
               ),
             },

@@ -16,6 +16,7 @@ import type { Product } from '../../types';
 import { formatInsertDate } from '../../utils/date';
 import {
   calcProductSalePrice,
+  formatDecimal,
   formatMolPercentage,
   MOL_PERCENTAGE_DECIMALS,
   parseNumberInputValue,
@@ -1832,7 +1833,7 @@ const InternalListingProductPricingSection: React.FC<{ controller: InternalListi
           label={controller.t('crm:internalListing.salePriceCalculated')}
           value={
             controller.pricing
-              ? `${calcProductSalePrice(controller.pricing.cost, controller.pricing.mol).toFixed(2)} ${
+              ? `${formatDecimal(calcProductSalePrice(controller.pricing.cost, controller.pricing.mol))} ${
                   controller.currency
                 }`
               : '--'
@@ -1843,7 +1844,7 @@ const InternalListingProductPricingSection: React.FC<{ controller: InternalListi
           label={controller.t('crm:internalListing.marginCalculated')}
           value={
             controller.pricing
-              ? `${calcMargine(controller.pricing.cost, controller.pricing.mol).toFixed(2)} ${
+              ? `${formatDecimal(calcMargine(controller.pricing.cost, controller.pricing.mol))} ${
                   controller.currency
                 }`
               : '--'
@@ -2010,7 +2011,7 @@ const getInternalListingProductColumns = (controller: InternalListingController)
     align: 'right' as const,
     className: 'px-6 py-5 whitespace-nowrap text-right',
     accessorFn: (row: Product) => Number(row.costo),
-    filterFormat: (value: unknown) => Number(value).toFixed(2),
+    filterFormat: (value: unknown) => formatDecimal(Number(value)),
     cell: ({ row: product }: { row: Product }) => (
       <InternalListingCurrencyCell
         controller={controller}
@@ -2024,7 +2025,7 @@ const getInternalListingProductColumns = (controller: InternalListingController)
     align: 'right' as const,
     className: 'px-6 py-5 whitespace-nowrap text-right',
     accessorKey: 'molPercentage' as const,
-    filterFormat: (value: unknown) => Number(value).toFixed(MOL_PERCENTAGE_DECIMALS),
+    filterFormat: (value: unknown) => formatDecimal(Number(value), MOL_PERCENTAGE_DECIMALS),
     cell: ({ row: product }: { row: Product }) => (
       <span className="text-sm font-semibold text-zinc-500">
         {formatMolPercentage(Number(product.molPercentage))}
@@ -2038,7 +2039,7 @@ const getInternalListingProductColumns = (controller: InternalListingController)
     id: 'salePrice',
     accessorFn: (row: Product) =>
       calcProductSalePrice(Number(row.costo), Number(row.molPercentage)),
-    filterFormat: (value: unknown) => Number(value).toFixed(2),
+    filterFormat: (value: unknown) => formatDecimal(Number(value)),
     cell: ({ row: product, value }: { row: Product; value: unknown }) => (
       <InternalListingCurrencyCell controller={controller} product={product} value={value} />
     ),
@@ -2049,10 +2050,10 @@ const getInternalListingProductColumns = (controller: InternalListingController)
     className: 'px-6 py-5 whitespace-nowrap text-right',
     id: 'margin',
     accessorFn: (row: Product) => calcMargine(Number(row.costo), Number(row.molPercentage)),
-    filterFormat: (value: unknown) => Number(value).toFixed(2),
+    filterFormat: (value: unknown) => formatDecimal(Number(value)),
     cell: ({ value }: { value: unknown }) => (
       <span className="text-sm font-semibold text-emerald-600">
-        {Number(value).toFixed(2)} {controller.currency}
+        {formatDecimal(Number(value))} {controller.currency}
       </span>
     ),
   },
@@ -2098,7 +2099,7 @@ const InternalListingCurrencyCell: React.FC<{
 
   return (
     <span className="text-sm font-semibold text-zinc-700">
-      {Number(value).toFixed(2)} {controller.currency} /{' '}
+      {formatDecimal(Number(value))} {controller.currency} /{' '}
       {costUnit === 'hours'
         ? controller.t('crm:internalListing.hour')
         : controller.t('crm:internalListing.unit')}

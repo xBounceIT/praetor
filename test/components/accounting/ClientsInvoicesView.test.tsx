@@ -88,7 +88,7 @@ describe('<ClientsInvoicesView /> duration unit (issue #757)', () => {
 
   // Taxable line total = quantity 3 × unitPrice 100 × durationMonths 24 × (1 - 0 discount) = 7200.00.
   // With taxRate 0 the rendered line total equals the taxable amount, regardless of display unit.
-  const TAXABLE_LINE_TOTAL = '7200.00 EUR';
+  const TAXABLE_LINE_TOTAL = '7.200,00 EUR';
 
   test('a months item shows the duration as 24 (the raw months) and folds 24 months into the taxable line total', async () => {
     const dialog = await openEditModal(buildInvoice('INV-MONTHS', 'months'));

@@ -41,7 +41,7 @@ describe('ProjectDetailView wiring', () => {
     const source = await readProjectTasksTableSource();
     expect(source).toContain("header: t('projects:projects.duration')");
     expect(source).toContain(
-      "onChange={(e) => setTaskFieldValue(row.id, 'duration', e.target.value)}",
+      "onValueChange={(value) => setTaskFieldValue(row.id, 'duration', value)}",
     );
     expect(source).not.toContain("commitTaskField(row, 'expectedEffort'");
     expect(source).toContain(
@@ -402,15 +402,15 @@ describe('ProjectDetailView chart scaling on wide displays', () => {
   });
 
   test('cost-vs-revenue tooltip formats values with the currency symbol', async () => {
-    // Default ChartTooltipContent renders a bare `value.toLocaleString()` with no
-    // currency and crams it against the label ("Costo cumulato2505"). A formatter
+    // Default ChartTooltipContent renders a bare value with no currency and crams it
+    // against the label ("Costo cumulato2505"). A localized formatter
     // adds the project currency and proper spacing.
     const source = await readSource();
     // A formatter is passed to the cost-vs-revenue tooltip.
     expect(source).toMatch(/formatter=\{\(value, name, item\) =>/);
     // The formatted numeric value appends the currency with a space.
     expect(source).toMatch(
-      /value\.toLocaleString\(i18n\.language, \{ maximumFractionDigits: 0 \}\)\}\s*\$\{currency\}/,
+      /formatNumber\(value, \{ maximumFractionDigits: 0 \}\)\}\s*\$\{currency\}/,
     );
   });
 
@@ -568,9 +568,7 @@ describe('ProjectDetailView chart scaling on wide displays', () => {
   test('hours-by-task tooltip summarises logged vs total effort, not raw stack values', async () => {
     const source = await readSource();
     expect(source).toContain('const TaskEffortTooltip');
-    expect(source).toMatch(
-      /content=\{<TaskEffortTooltip language=\{i18n\.language\} t=\{t\} \/>\}/,
-    );
+    expect(source).toMatch(/content=\{<TaskEffortTooltip t=\{t\} \/>\}/);
     expect(source).toContain("t('projects:detail.charts.totalEffortLabel')");
   });
 

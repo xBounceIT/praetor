@@ -37,8 +37,10 @@ import {
   calculatePricingTotals,
   convertUnitPrice,
   durationValueToMonths,
+  formatDecimal,
   formatDiscountValue,
   formatMolPercentage,
+  formatNumber,
   getDurationDisplayValue,
   getItemPricingContext,
   MOL_PERCENTAGE_DECIMALS,
@@ -172,7 +174,7 @@ const quoteToFormData = (quote: Quote): Partial<Quote> => ({
 // One label shape for a supplier-quote line item, shared by the picker options and the
 // display-value lookup so the two can never drift.
 const supplierQuoteItemLabel = (quote: SupplierQuote, item: SupplierQuote['items'][number]) =>
-  `[${quote.id}] ${quote.supplierName} · ${item.productName} (${item.unitPrice.toFixed(2)})`;
+  `[${quote.id}] ${quote.supplierName} · ${item.productName} (${formatDecimal(item.unitPrice)})`;
 
 const isQuoteCodeConflictError = (err: unknown) =>
   err instanceof ApiError && err.status === 409 && err.message === 'Quote ID already exists';
@@ -451,13 +453,13 @@ const useClientQuotesController = ({
   const formatDiscountPercentage = useCallback(
     (quote: Quote) => {
       if (quote.discountType !== 'currency') {
-        return `${quote.discount}%`;
+        return `${formatNumber(quote.discount, { maximumFractionDigits: 20 })}%`;
       }
 
       const { discountAmount, subtotal } = quotePricingMap.get(quote.id) ?? EMPTY_PRICING_TOTALS;
       if (subtotal <= 0) return '0%';
 
-      return `${Number(((discountAmount / subtotal) * 100).toFixed(1))}%`;
+      return `${formatNumber((discountAmount / subtotal) * 100, { maximumFractionDigits: 1 })}%`;
     },
     [quotePricingMap],
   );
@@ -1165,7 +1167,7 @@ const useClientQuotesController = ({
           <span
             className={`text-sm font-semibold whitespace-nowrap ${history ? 'text-zinc-400' : 'text-zinc-700'}`}
           >
-            {subtotal.toFixed(2)} {currency}
+            {formatDecimal(subtotal)} {currency}
           </span>
         );
       },
@@ -1211,7 +1213,7 @@ const useClientQuotesController = ({
           <span
             className={`text-sm font-semibold whitespace-nowrap ${history ? 'text-amber-300' : 'text-amber-600'}`}
           >
-            -{discountAmount.toFixed(2)} {currency}
+            -{formatDecimal(discountAmount)} {currency}
           </span>
         );
       },
@@ -1230,7 +1232,7 @@ const useClientQuotesController = ({
           <span
             className={`text-sm font-bold whitespace-nowrap ${history ? 'text-zinc-400' : 'text-zinc-700'}`}
           >
-            {total.toFixed(2)} {currency}
+            {formatDecimal(total)} {currency}
           </span>
         );
       },
@@ -1249,7 +1251,7 @@ const useClientQuotesController = ({
           <span
             className={`text-sm font-bold whitespace-nowrap ${history ? 'text-zinc-400' : 'text-emerald-600'}`}
           >
-            {margin.toFixed(2)} {currency}
+            {formatDecimal(margin)} {currency}
           </span>
         );
       },
@@ -2419,17 +2421,17 @@ const ClientQuoteItemMobileMetrics: React.FC<{
       </ClientQuoteInputPanel>
       <ClientQuoteValuePanel
         label={t('sales:clientQuotes.totalCost', { defaultValue: 'Total cost' })}
-        value={`${line.lineCost.toFixed(2)} ${currency}`}
+        value={`${formatDecimal(line.lineCost)} ${currency}`}
         valueClassName="text-xs font-bold text-zinc-700 whitespace-nowrap"
       />
       <ClientQuoteValuePanel
         label={t('sales:clientQuotes.marginLabel')}
-        value={`${line.lineMargin.toFixed(2)} ${currency}`}
+        value={`${formatDecimal(line.lineMargin)} ${currency}`}
         valueClassName="text-xs font-bold text-emerald-600 whitespace-nowrap"
       />
       <ClientQuoteValuePanel
         label={t('sales:clientQuotes.revenue')}
-        value={`${line.lineSalePrice.toFixed(2)} ${currency}`}
+        value={`${formatDecimal(line.lineSalePrice)} ${currency}`}
         valueClassName="text-sm font-semibold whitespace-nowrap text-zinc-800"
         className="col-span-2 md:col-span-1"
       />
@@ -2500,13 +2502,13 @@ const ClientQuoteItemDesktopRow: React.FC<{
         <div className="col-span-1 flex items-center justify-center gap-1">
           <ClientQuoteMolEditor controller={controller} line={line} compact />
         </div>
-        <ClientQuoteDesktopAmount value={`${line.lineCost.toFixed(2)} ${currency}`} />
+        <ClientQuoteDesktopAmount value={`${formatDecimal(line.lineCost)} ${currency}`} />
         <ClientQuoteDesktopAmount
-          value={`${line.lineMargin.toFixed(2)} ${currency}`}
+          value={`${formatDecimal(line.lineMargin)} ${currency}`}
           className="text-emerald-600"
         />
         <ClientQuoteDesktopAmount
-          value={`${line.lineSalePrice.toFixed(2)} ${currency}`}
+          value={`${formatDecimal(line.lineSalePrice)} ${currency}`}
           className="font-semibold text-zinc-800"
         />
       </div>
