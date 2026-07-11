@@ -1,3 +1,4 @@
+import { GripVertical } from 'lucide-react';
 import type React from 'react';
 import { useCallback, useMemo, useReducer, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -143,6 +144,22 @@ const EMPTY_PRICING_TOTALS: PricingTotals = {
   totalCost: 0,
   margin: 0,
   marginPercentage: 0,
+};
+
+const moveQuoteItem = (items: QuoteItem[], fromIndex: number, toIndex: number): QuoteItem[] => {
+  if (
+    fromIndex === toIndex ||
+    fromIndex < 0 ||
+    toIndex < 0 ||
+    fromIndex >= items.length ||
+    toIndex >= items.length
+  ) {
+    return items;
+  }
+  const reordered = [...items];
+  const [movedItem] = reordered.splice(fromIndex, 1);
+  reordered.splice(toIndex, 0, movedItem);
+  return reordered;
 };
 
 const getDefaultFormData = (): Partial<Quote> => ({
@@ -424,6 +441,7 @@ const useClientQuotesController = ({
 
   const [formData, setFormData] = useState<Partial<Quote>>(() => getDefaultFormData());
   const [previewVersion, setPreviewVersion] = useState<QuoteVersion | null>(null);
+  const [draggedItemId, setDraggedItemId] = useState<string | null>(null);
   // Expired quotes are read-only EXCEPT their expiration date, which stays editable so the user can
   // revalidate the quote (issue #779). Other read-only reasons (offer/accepted/denied) lock all.
   const isEditingExpired = Boolean(editingQuote && isQuoteExpired(editingQuote));
@@ -880,6 +898,66 @@ const useClientQuotesController = ({
     newItems.splice(index, 1);
     setFormData((prev) => ({ ...prev, items: newItems }));
   };
+
+  const moveProductRow = useCallback(
+    (fromIndex: number, toIndex: number) => {
+      if (isReadOnly || fromIndex === toIndex) return;
+      setFormData((prev) => {
+        const items = prev.items || [];
+        const reordered = moveQuoteItem(items, fromIndex, toIndex);
+        return reordered === items ? prev : { ...prev, items: reordered };
+      });
+    },
+    [isReadOnly],
+  );
+
+  const handleProductRowDragStart = useCallback(
+    (itemId: string, event: React.DragEvent<HTMLButtonElement>) => {
+      if (isReadOnly) return;
+      event.dataTransfer.effectAllowed = 'move';
+      event.dataTransfer.setData('text/plain', itemId);
+      setDraggedItemId(itemId);
+    },
+    [isReadOnly],
+  );
+
+  const handleProductRowDrop = useCallback(
+    (targetItemId: string, event: React.DragEvent<HTMLTableRowElement>) => {
+      event.preventDefault();
+      if (!isReadOnly && draggedItemId && draggedItemId !== targetItemId) {
+        setFormData((prev) => {
+          const items = prev.items || [];
+          const fromIndex = items.findIndex((item) => item.id === draggedItemId);
+          const toIndex = items.findIndex((item) => item.id === targetItemId);
+          const reordered = moveQuoteItem(items, fromIndex, toIndex);
+          return reordered === items ? prev : { ...prev, items: reordered };
+        });
+      }
+      setDraggedItemId(null);
+    },
+    [draggedItemId, isReadOnly],
+  );
+
+  const handleProductRowDragEnd = useCallback(() => {
+    setDraggedItemId(null);
+  }, []);
+
+  const handleProductRowKeyDown = useCallback(
+    (index: number, event: React.KeyboardEvent<HTMLButtonElement>) => {
+      if (isReadOnly) return;
+      const lastIndex = (formData.items?.length ?? 0) - 1;
+      let targetIndex = index;
+      if (event.key === 'ArrowUp') targetIndex = Math.max(0, index - 1);
+      else if (event.key === 'ArrowDown') targetIndex = Math.min(lastIndex, index + 1);
+      else if (event.key === 'Home') targetIndex = 0;
+      else if (event.key === 'End') targetIndex = lastIndex;
+      else return;
+
+      event.preventDefault();
+      moveProductRow(index, targetIndex);
+    },
+    [formData.items?.length, isReadOnly, moveProductRow],
+  );
 
   const updateProductRow = (index: number, field: keyof QuoteItem, value: string | number) => {
     if (isReadOnly) return;
@@ -1761,6 +1839,11 @@ const useClientQuotesController = ({
     handleClientChangeReprice,
     addProductRow,
     removeProductRow,
+    draggedItemId,
+    handleProductRowDragStart,
+    handleProductRowDrop,
+    handleProductRowDragEnd,
+    handleProductRowKeyDown,
     updateProductRow,
     activeClients,
     activeProductOptions,
@@ -2157,6 +2240,42 @@ const ClientQuoteExpirationField: React.FC<{ controller: ClientQuotesController 
   );
 };
 
+const ClientQuoteReorderButton: React.FC<{
+  controller: ClientQuotesController;
+  item: QuoteItem;
+  index: number;
+}> = ({ controller, item, index }) => {
+  if (controller.isReadOnly || (controller.formData.items?.length ?? 0) < 2) return null;
+
+  const label = controller.t('sales:clientQuotes.reorderItem', {
+    item: item.productName,
+    position: index + 1,
+    total: controller.formData.items?.length ?? 0,
+  });
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          draggable
+          aria-label={label}
+          aria-keyshortcuts="ArrowUp ArrowDown Home End"
+          onDragStart={(event) => controller.handleProductRowDragStart(item.id, event)}
+          onDragEnd={controller.handleProductRowDragEnd}
+          onKeyDown={(event) => controller.handleProductRowKeyDown(index, event)}
+          className="shrink-0 cursor-grab text-muted-foreground active:cursor-grabbing"
+        >
+          <GripVertical className="size-4" aria-hidden="true" />
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent>{controller.t('sales:clientQuotes.reorderItemHint')}</TooltipContent>
+    </Tooltip>
+  );
+};
+
 const getClientQuoteItemRevenue = (item: QuoteItem) =>
   getClientQuoteItemPricingContext(item).netRevenue;
 
@@ -2180,6 +2299,7 @@ const ClientQuoteItemsSection: React.FC<{ controller: ClientQuotesController }> 
         const line = getLine(row);
         return (
           <div className="relative flex min-w-[240px] items-center gap-1">
+            <ClientQuoteReorderButton controller={controller} item={row} index={index} />
             {line.supplierDataStale && line.linkedSupplierRef && (
               <StaleSupplierDataButton
                 onClick={() =>
@@ -2393,7 +2513,18 @@ const ClientQuoteItemsSection: React.FC<{ controller: ClientQuotesController }> 
       <StandardTable<QuoteItem>
         title={t('sales:clientQuotes.productsServices')}
         persistenceKey="sales.clientQuotes.items"
-        showColumnSettings={false}
+        allowColumnHiding={false}
+        getRowProps={(item) => ({
+          'data-quote-item-id': item.id,
+          onDragOver: (event) => {
+            if (!controller.draggedItemId) return;
+            event.preventDefault();
+            event.dataTransfer.dropEffect = 'move';
+          },
+          onDrop: (event) => controller.handleProductRowDrop(item.id, event),
+          className:
+            controller.draggedItemId === item.id ? 'opacity-60 ring-2 ring-primary/40' : undefined,
+        })}
         data={items ?? []}
         columns={columns}
         defaultRowsPerPage={5}

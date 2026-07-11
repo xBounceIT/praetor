@@ -1680,7 +1680,7 @@ const SupplierQuoteItemsSection: React.FC<{ controller: SupplierQuotesController
       <StandardTable<SupplierQuoteItem>
         title={controller.t('sales:supplierQuotes.items', { defaultValue: 'Items' })}
         persistenceKey="sales.supplierQuotes.items"
-        showColumnSettings={false}
+        allowColumnHiding={false}
         data={items ?? []}
         columns={columns}
         defaultRowsPerPage={5}

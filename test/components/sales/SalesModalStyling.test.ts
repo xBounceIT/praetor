@@ -140,7 +140,7 @@ describe('sales modal styling', () => {
       sectionMarker,
       addActionMarker,
       `persistenceKey="${persistenceKey}"`,
-      'showColumnSettings={false}',
+      'allowColumnHiding={false}',
       'defaultRowsPerPage={5}',
       'minBodyRows={0}',
       'tableContainerClassName="overflow-x-auto"',
@@ -154,20 +154,22 @@ describe('sales modal styling', () => {
       'className="hidden lg:flex gap-2 items-center pt-5"',
       'className="flex-1 min-w-0 grid grid-cols-17 gap-2 items-center"',
       'floating',
+      'showColumnSettings={false}',
     ]);
     expect((source.match(/max-w-\[5rem\] flex-none/g) ?? []).length).toBeGreaterThanOrEqual(3);
     expectSourceOmitsAll(source, ['grid grid-cols-17 gap-2 items-center pt-5']);
   });
 
-  test('supplier quote items restore the modal section heading and hide column settings', async () => {
+  test('supplier quote items restore the section heading and lock column visibility', async () => {
     const source = await readComponentSource('sales/SupplierQuotesView.tsx');
 
     expectSourceContainsAll(source, [
       '<SupplierQuoteSectionTitle>',
       '<StandardTable<SupplierQuoteItem>',
       'persistenceKey="sales.supplierQuotes.items"',
-      'showColumnSettings={false}',
+      'allowColumnHiding={false}',
       '<Button type="button" size="sm" onClick={controller.addItem}>',
     ]);
+    expectSourceOmitsAll(source, ['showColumnSettings={false}']);
   });
 });

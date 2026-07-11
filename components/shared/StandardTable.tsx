@@ -902,8 +902,8 @@ export type StandardTableProps<T extends object = object> = {
   totalLabel?: string;
   headerExtras?: ReactNode;
   headerAction?: ReactNode;
-  /** Whether to render column visibility and saved-view controls. Defaults to true. */
-  showColumnSettings?: boolean;
+  /** Whether users and saved views may hide columns. Defaults to true. */
+  allowColumnHiding?: boolean;
   containerClassName?: string;
   tableContainerClassName?: string;
   footer?: ReactNode;
@@ -921,6 +921,7 @@ export type StandardTableProps<T extends object = object> = {
    * stable across empty / sparse / full states. Defaults to 4.
    */
   minBodyRows?: number;
+  getRowProps?: (row: T) => React.ComponentProps<typeof TableRow>;
   rowClassName?: (row: T) => string;
   disabledRow?: (row: T) => boolean;
   onRowClick?: (row: T) => void;
@@ -949,7 +950,7 @@ const useStandardTableController = <T extends object>({
   totalLabel,
   headerExtras,
   headerAction,
-  showColumnSettings = true,
+  allowColumnHiding = true,
   containerClassName,
   tableContainerClassName,
   footer: externalFooter,
@@ -962,6 +963,7 @@ const useStandardTableController = <T extends object>({
   columns,
   defaultRowsPerPage = 10,
   minBodyRows = 4,
+  getRowProps,
   rowClassName,
   disabledRow,
   onRowClick,
@@ -1572,7 +1574,7 @@ const useStandardTableController = <T extends object>({
       const result = getViewApplicationForColumns(view, columns);
       dispatchTableView({
         type: 'apply-view',
-        application: result,
+        application: allowColumnHiding ? result : { ...result, hiddenColIds: new Set<string>() },
         activeViewId: nextActiveViewId,
       });
       if (nextActiveViewId !== undefined && typeof window !== 'undefined') {
@@ -1583,7 +1585,7 @@ const useStandardTableController = <T extends object>({
         } catch {}
       }
     },
-    [columns, storageIdentity],
+    [allowColumnHiding, columns, storageIdentity],
   );
 
   useEffect(
@@ -1604,14 +1606,16 @@ const useStandardTableController = <T extends object>({
     normalizeViewForColumns(view, columns);
 
   const normalizeHiddenColIdsForCurrentColumns = (ids: string[]) =>
-    normalizeViewForCurrentColumns({
-      id: '',
-      name: '',
-      hiddenColIds: ids,
-      columnOrder: normalizedColumnOrder,
-      sortState: null,
-      filterState: {},
-    }).hiddenColIds;
+    allowColumnHiding
+      ? normalizeViewForCurrentColumns({
+          id: '',
+          name: '',
+          hiddenColIds: ids,
+          columnOrder: normalizedColumnOrder,
+          sortState: null,
+          filterState: {},
+        }).hiddenColIds
+      : [];
 
   const fontSizeClass = fontSize === 'xs' ? 'text-xs' : fontSize === 'sm' ? 'text-sm' : 'text-base';
 
@@ -1679,7 +1683,7 @@ const useStandardTableController = <T extends object>({
           enableResizing: !isRowActionColumn(col),
           enableSorting: !col.disableSorting,
           enableColumnFilter: !col.disableFiltering,
-          enableHiding: !col.hidden && !isRowActionColumn(col),
+          enableHiding: allowColumnHiding && !col.hidden && !isRowActionColumn(col),
           sortingFn: (rowA, rowB) => {
             const legacySortColumnId =
               sortState?.colId === colId &&
@@ -1739,6 +1743,7 @@ const useStandardTableController = <T extends object>({
     [
       clampedColumnSizing,
       columns,
+      allowColumnHiding,
       getColId,
       getColumnMinWidth,
       getValue,
@@ -1769,10 +1774,10 @@ const useStandardTableController = <T extends object>({
         (columns ?? []).map((col) => {
           const colId = getColId(col);
           if (isRowActionColumn(col)) return [colId, true];
-          return [colId, !col.hidden && !hiddenColIds.has(colId)];
+          return [colId, !col.hidden && (!allowColumnHiding || !hiddenColIds.has(colId))];
         }),
       ) as VisibilityState,
-    [columns, getColId, hiddenColIds, isRowActionColumn],
+    [allowColumnHiding, columns, getColId, hiddenColIds, isRowActionColumn],
   );
 
   const onSortingChange = useCallback(
@@ -1830,6 +1835,7 @@ const useStandardTableController = <T extends object>({
 
   const onColumnVisibilityChange = useCallback(
     (updater: Updater<VisibilityState>) => {
+      if (!allowColumnHiding) return;
       const next = functionalUpdate(updater, columnVisibility);
       const nextHiddenColIds = new Set<string>();
       for (const col of gearColumns) {
@@ -1847,7 +1853,7 @@ const useStandardTableController = <T extends object>({
         } catch {}
       }
     },
-    [columnVisibility, gearColumns, getColId, storageIdentity],
+    [allowColumnHiding, columnVisibility, gearColumns, getColId, storageIdentity],
   );
 
   const onColumnOrderChange = useCallback(
@@ -2556,7 +2562,7 @@ const useStandardTableController = <T extends object>({
     totalLabel,
     headerExtras,
     headerAction,
-    showColumnSettings,
+    allowColumnHiding,
     containerClassName,
     tableContainerClassName,
     externalFooter,
@@ -2566,6 +2572,7 @@ const useStandardTableController = <T extends object>({
     loadingState,
     data,
     columns,
+    getRowProps,
     rowClassName,
     disabledRow,
     onRowClick,
@@ -2713,8 +2720,7 @@ const StandardTableToolbar = <T extends object>({
 }: {
   controller: StandardTableController<T>;
 }) => {
-  const { t, handleExportToCsv, processedRows, stepFontSize, fontSize, showColumnSettings } =
-    controller;
+  const { t, handleExportToCsv, processedRows, stepFontSize, fontSize } = controller;
 
   return (
     <>
@@ -2737,7 +2743,7 @@ const StandardTableToolbar = <T extends object>({
         onClick={() => stepFontSize(1)}
         disabled={fontSize === 'base'}
       />
-      {showColumnSettings && <StandardTableColumnSettingsMenu controller={controller} />}
+      <StandardTableColumnSettingsMenu controller={controller} />
     </>
   );
 };
@@ -2747,8 +2753,16 @@ const StandardTableColumnSettingsMenu = <T extends object>({
 }: {
   controller: StandardTableController<T>;
 }) => {
-  const { t, gearOpen, handleGearOpenChange, activeView, table, colsById, resetColumnVisibility } =
-    controller;
+  const {
+    t,
+    gearOpen,
+    handleGearOpenChange,
+    activeView,
+    table,
+    colsById,
+    resetColumnVisibility,
+    allowColumnHiding,
+  } = controller;
 
   return (
     <DropdownMenu open={gearOpen} onOpenChange={handleGearOpenChange}>
@@ -2772,8 +2786,12 @@ const StandardTableColumnSettingsMenu = <T extends object>({
           {activeView ? `${t('table.columns')} · ${activeView.name}` : t('table.columns')}
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
-        <StandardTableColumnVisibilityItems table={table} colsById={colsById} />
-        <DropdownMenuSeparator />
+        {allowColumnHiding && (
+          <>
+            <StandardTableColumnVisibilityItems table={table} colsById={colsById} />
+            <DropdownMenuSeparator />
+          </>
+        )}
         <DropdownMenuItem
           onSelect={(e) => {
             e.preventDefault();
@@ -3685,6 +3703,7 @@ const StandardTableDataRow = <T extends object>({
     openActionMenuRowId,
     openContextMenuRowId,
     setOpenContextMenuRowId,
+    getRowProps,
   } = controller;
   const row = tableRow.original;
   const visibleCells = tableRow.getVisibleCells();
@@ -3718,6 +3737,7 @@ const StandardTableDataRow = <T extends object>({
       rowActionContent={rowActionContent}
       rowActionMenuItems={rowActionMenuItems}
       isActionMenuOpen={isActionMenuOpen}
+      {...getRowProps?.(row)}
     />
   );
 
@@ -3986,8 +4006,15 @@ const StandardTableCustomViewModal = <T extends object>({
 }: {
   controller: StandardTableController<T>;
 }) => {
-  const { modalState, setModalState, saveView, modalColumns, hiddenColIds, normalizedColumnOrder } =
-    controller;
+  const {
+    modalState,
+    setModalState,
+    saveView,
+    modalColumns,
+    hiddenColIds,
+    normalizedColumnOrder,
+    allowColumnHiding,
+  } = controller;
 
   return (
     <CustomViewModal
@@ -4004,8 +4031,9 @@ const StandardTableCustomViewModal = <T extends object>({
         void saveView(view);
       }}
       columns={modalColumns}
-      initialHiddenColIds={hiddenColIds}
+      initialHiddenColIds={allowColumnHiding ? hiddenColIds : new Set<string>()}
       initialColumnOrder={normalizedColumnOrder}
+      allowColumnHiding={allowColumnHiding}
       editingView={modalState?.kind === 'edit' ? modalState.view : undefined}
     />
   );

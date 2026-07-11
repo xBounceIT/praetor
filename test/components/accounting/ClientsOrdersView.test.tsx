@@ -342,7 +342,7 @@ describe('<ClientsOrdersView />', () => {
       'persistenceKey="accounting.clientOrders.items"',
       '<OrderSectionTitle>',
       'onClick={controller.addProductRow}',
-      'showColumnSettings={false}',
+      'allowColumnHiding={false}',
       'defaultRowsPerPage={5}',
       'minBodyRows={0}',
       'className="min-w-[220px]"',
@@ -350,6 +350,7 @@ describe('<ClientsOrdersView />', () => {
       'className="flex h-9 items-center justify-center gap-1"',
       'className="flex h-9 items-center justify-end whitespace-nowrap px-3 text-sm font-bold text-foreground"',
     ]);
+    expect(source).not.toContain('showColumnSettings={false}');
   });
 
   test('notes section header matches other modal section headers', async () => {

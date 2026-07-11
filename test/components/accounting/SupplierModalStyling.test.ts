@@ -31,9 +31,13 @@ describe('supplier accounting modal styling', () => {
       '<DeleteConfirmModal',
       '<SupplierOrderSectionTitle>',
       '<StandardTable<SupplierSaleOrderItem>',
+      'allowColumnHiding={false}',
+    ]);
+    expectSourceOmitsAll(source, [
+      'rounded-2xl bg-white',
+      '<textarea',
       'showColumnSettings={false}',
     ]);
-    expectSourceOmitsAll(source, ['rounded-2xl bg-white', '<textarea']);
     expectSourceContainsAll(versionsSource, [
       "import { VersionHistoryPanel } from '../shared/VersionHistoryPanel';",
       '<VersionHistoryPanel',

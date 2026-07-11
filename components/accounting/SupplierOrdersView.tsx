@@ -1049,7 +1049,7 @@ const SupplierOrderItemsSection: React.FC<{ controller: SupplierOrdersController
       <StandardTable<SupplierSaleOrderItem>
         title={controller.t('accounting:supplierOrders.items')}
         persistenceKey="accounting.supplierOrders.items"
-        showColumnSettings={false}
+        allowColumnHiding={false}
         data={items ?? []}
         columns={columns}
         defaultRowsPerPage={5}

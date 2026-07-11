@@ -1962,7 +1962,7 @@ const ClientOfferItemsSection: React.FC<{ controller: ClientOffersController }> 
       <StandardTable<ClientOfferItem>
         title={t('sales:clientOffers.items', { defaultValue: 'Items' })}
         persistenceKey="sales.clientOffers.items"
-        showColumnSettings={false}
+        allowColumnHiding={false}
         data={items ?? []}
         columns={columns}
         defaultRowsPerPage={5}

@@ -438,21 +438,54 @@ describe('<StandardTable />', () => {
     expect(screen.getByText(/3\s+users/)).toBeInTheDocument();
   });
 
-  test('can hide column settings while keeping its native header and remaining toolbar', () => {
+  test('keeps column ordering available when column hiding is disabled', async () => {
     render(
       <StandardTable<Row>
-        title="People"
+        title="Fixed Columns"
         data={sampleRows}
         columns={sampleColumns}
-        showColumnSettings={false}
+        allowColumnHiding={false}
       />,
     );
 
-    expect(screen.getByRole('heading', { name: 'People' })).toBeInTheDocument();
-    expect(screen.getByText('3 table.total')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'table.columnSettings' })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'table.exportToCsv' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'table.decreaseFont' })).toBeInTheDocument();
+    expect(document.querySelectorAll('[data-column-drag-handle]')).toHaveLength(2);
+    const user = await openColumnSettings();
+    expect(screen.queryAllByRole('menuitemcheckbox')).toHaveLength(0);
+    expect(screen.getByText('table.resetColumns')).toBeInTheDocument();
+
+    await user.click(screen.getByText('table.customViews'));
+    clickMenuItemByText('buttons.add');
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog.querySelector('[aria-pressed]')).toBeNull();
+    expect(dialog.querySelectorAll('[data-custom-view-column-drag-handle]')).toHaveLength(2);
+  });
+
+  test('ignores hidden columns from an active saved view when hiding is disabled', () => {
+    localStorage.setItem(
+      'praetor_table_customviews_fixed_columns',
+      JSON.stringify([
+        {
+          id: 'hidden-age',
+          name: 'Hidden age',
+          hiddenColIds: ['age'],
+          columnOrder: ['name', 'age'],
+          sortState: null,
+          filterState: {},
+        },
+      ]),
+    );
+    localStorage.setItem('praetor_table_activeview_fixed_columns', 'hidden-age');
+
+    render(
+      <StandardTable<Row>
+        title="Fixed Columns"
+        data={sampleRows}
+        columns={sampleColumns}
+        allowColumnHiding={false}
+      />,
+    );
+
+    expect(screen.getByText('Age')).toBeInTheDocument();
   });
 
   test('disabled row receives disabled styling', () => {
