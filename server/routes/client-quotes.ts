@@ -283,6 +283,9 @@ const calculateUnitPriceFromMol = (unitCost: number, molPercentage: number | nul
   return roundCurrency(unitPrice);
 };
 
+const productCostInLineUnit = (productCost: number, unitType: UnitType | undefined): number =>
+  unitType === 'days' ? productCost * 8 : productCost;
+
 const resolveQuoteItemSnapshots = async (
   items: IncomingQuoteItem[],
   existingItemsById?: Map<string, IncomingQuoteItem & QuoteItemSnapshot>,
@@ -340,7 +343,7 @@ const resolveQuoteItemSnapshots = async (
           item.supplierQuoteUnitPrice ?? existingItem.supplierQuoteUnitPrice ?? null;
         const effectiveUnitCost = normalizedSupplierQuoteItemId
           ? (supplierQuoteUnitPrice ?? 0)
-          : existingItem.productCost;
+          : productCostInLineUnit(existingItem.productCost, item.unitType);
         resolvedItems.push({
           ...item,
           supplierQuoteItemId: normalizedSupplierQuoteItemId,
@@ -437,7 +440,7 @@ const resolveQuoteItemSnapshots = async (
         : (productSnapshot?.productMolPercentage ?? null);
     const effectiveUnitCost = normalizedSupplierQuoteItemId
       ? (supplierQuoteUnitPrice ?? 0)
-      : productCost;
+      : productCostInLineUnit(productCost, item.unitType);
     resolvedItems.push({
       ...item,
       productId: resolvedProductId,
@@ -467,7 +470,7 @@ const quoteItemSchema = {
   properties: {
     id: { type: 'string' },
     quoteId: { type: 'string' },
-    productId: { type: 'string' },
+    productId: { type: ['string', 'null'] },
     productName: { type: 'string' },
     quantity: { type: 'number' },
     unitPrice: { type: 'number' },
@@ -547,7 +550,7 @@ const quoteItemBodySchema = {
   type: 'object',
   properties: {
     id: { type: 'string' },
-    productId: { type: 'string' },
+    productId: { type: ['string', 'null'] },
     productName: { type: 'string' },
     supplierQuoteItemId: { type: 'string' },
     quantity: { type: 'number' },

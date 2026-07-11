@@ -192,7 +192,10 @@ const getClientQuoteItemPricingContext = (item: QuoteItem) =>
 const priceClientQuoteItemsFromLocalMol = (items: QuoteItem[]): QuoteItem[] =>
   items.map((item) => {
     const unitPrice = getClientQuoteUnitSalePrice(item);
-    return unitPrice === item.unitPrice ? item : { ...item, unitPrice };
+    const productId = item.productId ?? '';
+    return unitPrice === item.unitPrice && productId === item.productId
+      ? item
+      : { ...item, productId, unitPrice };
   });
 
 const calculateClientQuotePricingTotals = (

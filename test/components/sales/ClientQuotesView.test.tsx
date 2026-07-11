@@ -785,6 +785,7 @@ describe('<ClientQuotesView /> edit action gating (#812 round 13)', () => {
         {
           ...quotes[0].items[0],
           quoteId: 'Q-LOCAL-MOL',
+          productId: null as unknown as string,
           unitPrice: 100,
           productMolPercentage: 0,
           supplierQuoteId: 'SQ-1',
@@ -814,6 +815,7 @@ describe('<ClientQuotesView /> edit action gating (#812 round 13)', () => {
     await waitFor(() => expect(onUpdateQuote).toHaveBeenCalledTimes(1));
     const updates = onUpdateQuote.mock.calls[0][1] as Partial<Quote>;
     expect(updates.status).toBe('offer');
+    expect(updates.items?.[0]?.productId).toBe('');
     expect(updates.items?.[0]?.unitPrice).toBe(80);
     expect(staleQuote.items[0].unitPrice).toBe(100);
   });

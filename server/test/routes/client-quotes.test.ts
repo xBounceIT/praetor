@@ -906,6 +906,48 @@ describe('PUT /api/sales/client-quotes/:id supplier-item forward sync (#779)', (
     expect(replaced[0].unitPrice).toBe(50);
   });
 
+  test('converts an hourly product cost before deriving a day-line unit price', async () => {
+    setupDraftQuote();
+    cqFindItemSnapshotsForQuoteMock.mockResolvedValue([
+      {
+        id: 'qi-day',
+        productId: 'p-1',
+        quantity: 1,
+        productCost: 10,
+        productMolPercentage: 0,
+        supplierQuoteId: null,
+        supplierQuoteItemId: null,
+        supplierQuoteSupplierName: null,
+        supplierQuoteUnitPrice: null,
+        unitType: 'days',
+      },
+    ]);
+
+    const res = await putStatus({
+      items: [
+        {
+          id: 'qi-day',
+          productId: 'p-1',
+          productName: 'Consulting day',
+          supplierQuoteItemId: null,
+          quantity: 1,
+          unitPrice: 10,
+          productCost: 10,
+          productMolPercentage: 0,
+          supplierQuoteUnitPrice: null,
+          discount: 0,
+          unitType: 'days',
+          durationMonths: 1,
+          durationUnit: 'months',
+        },
+      ],
+    });
+
+    expect(res.statusCode).toBe(200);
+    const replaced = cqReplaceItemsMock.mock.calls[0][1] as Array<Record<string, unknown>>;
+    expect(replaced[0].unitPrice).toBe(80);
+  });
+
   test('persists an edited local MOL on a retained supplier-sourced line', async () => {
     setupDraftQuote();
     cqFindItemSnapshotsForQuoteMock.mockResolvedValue([
