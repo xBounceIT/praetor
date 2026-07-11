@@ -16,6 +16,7 @@ import type { Product } from '../../types';
 import { formatInsertDate } from '../../utils/date';
 import {
   calcProductSalePrice,
+  formatDecimal,
   formatMolPercentage,
   MOL_PERCENTAGE_DECIMALS,
   parseNumberInputValue,
@@ -688,8 +689,6 @@ const useInternalListingController = ({
         type: 'merge',
         patch: {
           typeError: t('crm:internalListing.typeDeleteBlocked', {
-            productCount: type.productCount,
-            categoryCount: type.categoryCount,
             name: type.name,
           }),
         },
@@ -1172,55 +1171,52 @@ const InternalListingTypesTable: React.FC<{ controller: InternalListingControlle
         id: 'actions',
         disableSorting: true,
         disableFiltering: true,
-        cell: ({ row: type }) => <InternalListingTypeActions controller={controller} type={type} />,
+        cell: ({ row: type }) => renderInternalListingTypeActions(controller, type),
       },
     ]}
   />
 );
 
-const InternalListingTypeActions: React.FC<{
-  controller: InternalListingController;
-  type: InternalProductType;
-}> = ({ controller, type }) => {
+const renderInternalListingTypeActions = (
+  controller: InternalListingController,
+  type: InternalProductType,
+) => {
   const isDeleteBlocked = type.productCount > 0 || type.categoryCount > 0;
   const deleteBlockedMessage = controller.t('crm:internalListing.typeDeleteBlocked', {
-    productCount: type.productCount,
-    categoryCount: type.categoryCount,
     name: type.name,
   });
 
-  return (
-    <div className="flex items-center gap-1">
-      <InternalListingIconAction
-        icon="fa-pen"
-        label={controller.t('common:buttons.edit')}
-        onClick={() => controller.handleEditType(type)}
-      />
-      <InternalListingIconAction
-        icon="fa-trash"
-        label={controller.t('common:buttons.delete')}
-        onClick={() => controller.handleDeleteType(type)}
-        disabled={isDeleteBlocked}
-        disabledTooltip={deleteBlockedMessage}
-        danger
-      />
-    </div>
-  );
+  return renderInternalListingEditDeleteActions({
+    controller,
+    deleteDisabled: isDeleteBlocked,
+    deleteDisabledTooltip: deleteBlockedMessage,
+    onDelete: () => controller.handleDeleteType(type),
+    onEdit: () => controller.handleEditType(type),
+  });
 };
 
-const InternalListingIconAction: React.FC<{
+const renderInternalListingIconAction = ({
+  danger = false,
+  disabled = false,
+  disabledTooltip,
+  icon,
+  label,
+  onClick,
+}: {
   danger?: boolean;
   disabled?: boolean;
   disabledTooltip?: string;
   icon: string;
   label: string;
   onClick: () => void;
-}> = ({ danger = false, disabled = false, disabledTooltip, icon, label, onClick }) => (
+}) => (
   <Tooltip disabled={!disabled || !disabledTooltip}>
     <TooltipTrigger asChild>
       <span className="inline-flex">
-        <button
+        <Button
           type="button"
+          variant="ghost"
+          size="icon-xs"
           onClick={onClick}
           disabled={disabled}
           aria-label={label}
@@ -1232,12 +1228,42 @@ const InternalListingIconAction: React.FC<{
                 : 'text-zinc-400 hover:text-praetor hover:bg-zinc-100'
           }`}
         >
-          <i className={`fa-solid ${icon}`}></i>
-        </button>
+          <i className={`fa-solid ${icon}`} aria-hidden="true"></i>
+        </Button>
       </span>
     </TooltipTrigger>
     <TooltipContent>{disabled ? disabledTooltip : label}</TooltipContent>
   </Tooltip>
+);
+
+const renderInternalListingEditDeleteActions = ({
+  controller,
+  deleteDisabled,
+  deleteDisabledTooltip,
+  onDelete,
+  onEdit,
+}: {
+  controller: InternalListingController;
+  deleteDisabled: boolean;
+  deleteDisabledTooltip: string;
+  onDelete: () => void;
+  onEdit: () => void;
+}) => (
+  <div className="flex items-center gap-1">
+    {renderInternalListingIconAction({
+      icon: 'fa-pen',
+      label: controller.t('common:buttons.edit'),
+      onClick: onEdit,
+    })}
+    {renderInternalListingIconAction({
+      icon: 'fa-trash',
+      label: controller.t('common:buttons.delete'),
+      onClick: onDelete,
+      disabled: deleteDisabled,
+      disabledTooltip: deleteDisabledTooltip,
+      danger: true,
+    })}
+  </div>
 );
 
 const InternalListingCategoriesModal: React.FC<{ controller: InternalListingController }> = ({
@@ -1349,40 +1375,28 @@ const InternalListingCategoriesTable: React.FC<{ controller: InternalListingCont
         id: 'actions',
         disableSorting: true,
         disableFiltering: true,
-        cell: ({ row: category }) => (
-          <InternalListingCategoryActions controller={controller} category={category} />
-        ),
+        cell: ({ row: category }) => renderInternalListingCategoryActions(controller, category),
       },
     ]}
   />
 );
 
-const InternalListingCategoryActions: React.FC<{
-  category: InternalProductCategory;
-  controller: InternalListingController;
-}> = ({ category, controller }) => {
+const renderInternalListingCategoryActions = (
+  controller: InternalListingController,
+  category: InternalProductCategory,
+) => {
   const deleteBlockedMessage = controller.t(
     'crm:internalListing.deleteCategoryWithLinkedProducts',
-    { count: category.productCount, name: category.name },
+    { name: category.name },
   );
 
-  return (
-    <div className="flex items-center gap-1">
-      <InternalListingIconAction
-        icon="fa-pen"
-        label={controller.t('common:buttons.edit')}
-        onClick={() => controller.handleEditCategory(category)}
-      />
-      <InternalListingIconAction
-        icon="fa-trash"
-        label={controller.t('common:buttons.delete')}
-        onClick={() => controller.handleDeleteCategory(category)}
-        disabled={category.hasLinkedProducts}
-        disabledTooltip={deleteBlockedMessage}
-        danger
-      />
-    </div>
-  );
+  return renderInternalListingEditDeleteActions({
+    controller,
+    deleteDisabled: category.hasLinkedProducts,
+    deleteDisabledTooltip: deleteBlockedMessage,
+    onDelete: () => controller.handleDeleteCategory(category),
+    onEdit: () => controller.handleEditCategory(category),
+  });
 };
 
 const InternalListingSubcategoriesModal: React.FC<{ controller: InternalListingController }> = ({
@@ -1500,40 +1514,29 @@ const InternalListingSubcategoriesTable: React.FC<{ controller: InternalListingC
         id: 'actions',
         disableSorting: true,
         disableFiltering: true,
-        cell: ({ row: subcategory }) => (
-          <InternalListingSubcategoryActions controller={controller} subcategory={subcategory} />
-        ),
+        cell: ({ row: subcategory }) =>
+          renderInternalListingSubcategoryActions(controller, subcategory),
       },
     ]}
   />
 );
 
-const InternalListingSubcategoryActions: React.FC<{
-  controller: InternalListingController;
-  subcategory: InternalProductSubcategory;
-}> = ({ controller, subcategory }) => {
+const renderInternalListingSubcategoryActions = (
+  controller: InternalListingController,
+  subcategory: InternalProductSubcategory,
+) => {
   const deleteBlockedMessage = controller.t(
     'crm:internalListing.deleteSubcategoryWithLinkedProducts',
-    { count: subcategory.productCount, name: subcategory.name },
+    { name: subcategory.name },
   );
 
-  return (
-    <div className="flex items-center gap-1">
-      <InternalListingIconAction
-        icon="fa-pen"
-        label={controller.t('common:buttons.edit')}
-        onClick={() => controller.handleEditSubcategory(subcategory)}
-      />
-      <InternalListingIconAction
-        icon="fa-trash"
-        label={controller.t('common:buttons.delete')}
-        onClick={() => controller.handleDeleteSubcategory(subcategory)}
-        disabled={subcategory.hasLinkedProducts}
-        disabledTooltip={deleteBlockedMessage}
-        danger
-      />
-    </div>
-  );
+  return renderInternalListingEditDeleteActions({
+    controller,
+    deleteDisabled: subcategory.hasLinkedProducts,
+    deleteDisabledTooltip: deleteBlockedMessage,
+    onDelete: () => controller.handleDeleteSubcategory(subcategory),
+    onEdit: () => controller.handleEditSubcategory(subcategory),
+  });
 };
 
 const InternalListingProductModal: React.FC<{ controller: InternalListingController }> = ({
@@ -1675,9 +1678,10 @@ const InternalListingTextField: React.FC<{
 
 const InternalListingFieldHeader: React.FC<{
   children: React.ReactNode;
+  manageLabel: string;
   onClick?: () => void;
   manageDisabled?: boolean;
-}> = ({ children, manageDisabled = false, onClick }) => (
+}> = ({ children, manageLabel, manageDisabled = false, onClick }) => (
   <div className="flex min-h-6 items-center justify-between gap-2">
     <FieldLabel>{children}</FieldLabel>
     {onClick && (
@@ -1690,7 +1694,7 @@ const InternalListingFieldHeader: React.FC<{
         className="gap-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"
       >
         <i className="fa-solid fa-gear" aria-hidden="true"></i>
-        Manage
+        {manageLabel}
       </Button>
     )}
   </div>
@@ -1703,7 +1707,10 @@ const InternalListingTypeSelect: React.FC<{ controller: InternalListingControlle
 
   return (
     <div className="space-y-1.5">
-      <InternalListingFieldHeader onClick={handleOpenManageTypes}>
+      <InternalListingFieldHeader
+        manageLabel={controller.t('common:buttons.manage')}
+        onClick={handleOpenManageTypes}
+      >
         {controller.t('crm:internalListing.type')} <RequiredMark />
       </InternalListingFieldHeader>
       <SelectControl
@@ -1729,7 +1736,10 @@ const InternalListingCategorySelect: React.FC<{ controller: InternalListingContr
 
   return (
     <div className="space-y-1.5">
-      <InternalListingFieldHeader onClick={handleOpenManageCategories}>
+      <InternalListingFieldHeader
+        manageLabel={controller.t('common:buttons.manage')}
+        onClick={handleOpenManageCategories}
+      >
         {controller.t('crm:internalListing.category')}
       </InternalListingFieldHeader>
       <SelectControl
@@ -1767,6 +1777,7 @@ const InternalListingSubcategorySelect: React.FC<{ controller: InternalListingCo
   return (
     <div className="space-y-1.5">
       <InternalListingFieldHeader
+        manageLabel={controller.t('common:buttons.manage')}
         onClick={handleOpenManageSubcategories}
         manageDisabled={!controller.formData.category}
       >
@@ -1832,7 +1843,7 @@ const InternalListingProductPricingSection: React.FC<{ controller: InternalListi
           label={controller.t('crm:internalListing.salePriceCalculated')}
           value={
             controller.pricing
-              ? `${calcProductSalePrice(controller.pricing.cost, controller.pricing.mol).toFixed(2)} ${
+              ? `${formatDecimal(calcProductSalePrice(controller.pricing.cost, controller.pricing.mol))} ${
                   controller.currency
                 }`
               : '--'
@@ -1843,7 +1854,7 @@ const InternalListingProductPricingSection: React.FC<{ controller: InternalListi
           label={controller.t('crm:internalListing.marginCalculated')}
           value={
             controller.pricing
-              ? `${calcMargine(controller.pricing.cost, controller.pricing.mol).toFixed(2)} ${
+              ? `${formatDecimal(calcMargine(controller.pricing.cost, controller.pricing.mol))} ${
                   controller.currency
                 }`
               : '--'
@@ -2010,7 +2021,7 @@ const getInternalListingProductColumns = (controller: InternalListingController)
     align: 'right' as const,
     className: 'px-6 py-5 whitespace-nowrap text-right',
     accessorFn: (row: Product) => Number(row.costo),
-    filterFormat: (value: unknown) => Number(value).toFixed(2),
+    filterFormat: (value: unknown) => formatDecimal(Number(value)),
     cell: ({ row: product }: { row: Product }) => (
       <InternalListingCurrencyCell
         controller={controller}
@@ -2024,7 +2035,7 @@ const getInternalListingProductColumns = (controller: InternalListingController)
     align: 'right' as const,
     className: 'px-6 py-5 whitespace-nowrap text-right',
     accessorKey: 'molPercentage' as const,
-    filterFormat: (value: unknown) => Number(value).toFixed(MOL_PERCENTAGE_DECIMALS),
+    filterFormat: (value: unknown) => formatDecimal(Number(value), MOL_PERCENTAGE_DECIMALS),
     cell: ({ row: product }: { row: Product }) => (
       <span className="text-sm font-semibold text-zinc-500">
         {formatMolPercentage(Number(product.molPercentage))}
@@ -2038,7 +2049,7 @@ const getInternalListingProductColumns = (controller: InternalListingController)
     id: 'salePrice',
     accessorFn: (row: Product) =>
       calcProductSalePrice(Number(row.costo), Number(row.molPercentage)),
-    filterFormat: (value: unknown) => Number(value).toFixed(2),
+    filterFormat: (value: unknown) => formatDecimal(Number(value)),
     cell: ({ row: product, value }: { row: Product; value: unknown }) => (
       <InternalListingCurrencyCell controller={controller} product={product} value={value} />
     ),
@@ -2049,10 +2060,10 @@ const getInternalListingProductColumns = (controller: InternalListingController)
     className: 'px-6 py-5 whitespace-nowrap text-right',
     id: 'margin',
     accessorFn: (row: Product) => calcMargine(Number(row.costo), Number(row.molPercentage)),
-    filterFormat: (value: unknown) => Number(value).toFixed(2),
+    filterFormat: (value: unknown) => formatDecimal(Number(value)),
     cell: ({ value }: { value: unknown }) => (
       <span className="text-sm font-semibold text-emerald-600">
-        {Number(value).toFixed(2)} {controller.currency}
+        {formatDecimal(Number(value))} {controller.currency}
       </span>
     ),
   },
@@ -2081,9 +2092,8 @@ const getInternalListingProductColumns = (controller: InternalListingController)
     align: 'right' as const,
     disableSorting: true,
     disableFiltering: true,
-    cell: ({ row: product }: { row: Product }) => (
-      <InternalListingProductActions controller={controller} product={product} />
-    ),
+    cell: ({ row: product }: { row: Product }) =>
+      renderInternalListingProductActions(controller, product),
     className: 'px-8 py-5',
   },
 ];
@@ -2098,7 +2108,7 @@ const InternalListingCurrencyCell: React.FC<{
 
   return (
     <span className="text-sm font-semibold text-zinc-700">
-      {Number(value).toFixed(2)} {controller.currency} /{' '}
+      {formatDecimal(Number(value))} {controller.currency} /{' '}
       {costUnit === 'hours'
         ? controller.t('crm:internalListing.hour')
         : controller.t('crm:internalListing.unit')}
@@ -2106,16 +2116,18 @@ const InternalListingCurrencyCell: React.FC<{
   );
 };
 
-const InternalListingProductActions: React.FC<{
-  controller: InternalListingController;
-  product: Product;
-}> = ({ controller, product }) => (
+const renderInternalListingProductActions = (
+  controller: InternalListingController,
+  product: Product,
+) => (
   <div className="flex justify-end gap-2">
     <Tooltip>
       <TooltipTrigger asChild>
         <span className="inline-flex">
-          <button
+          <Button
             type="button"
+            variant="ghost"
+            size="icon-sm"
             onClick={(event) => {
               event.stopPropagation();
               controller.onUpdateProduct(product.id, { isDisabled: !product.isDisabled });
@@ -2131,8 +2143,11 @@ const InternalListingProductActions: React.FC<{
                 : 'text-amber-700 hover:text-amber-600 hover:bg-amber-50'
             }`}
           >
-            <i className={`fa-solid ${product.isDisabled ? 'fa-rotate-left' : 'fa-ban'}`}></i>
-          </button>
+            <i
+              className={`fa-solid ${product.isDisabled ? 'fa-rotate-left' : 'fa-ban'}`}
+              aria-hidden="true"
+            ></i>
+          </Button>
         </span>
       </TooltipTrigger>
       <TooltipContent>
@@ -2144,8 +2159,10 @@ const InternalListingProductActions: React.FC<{
     <Tooltip>
       <TooltipTrigger asChild>
         <span className="inline-flex">
-          <button
+          <Button
             type="button"
+            variant="ghost"
+            size="icon-sm"
             onClick={(event) => {
               event.stopPropagation();
               controller.confirmDelete(product);
@@ -2153,8 +2170,8 @@ const InternalListingProductActions: React.FC<{
             aria-label={controller.t('common:buttons.delete')}
             className="p-2 text-red-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
           >
-            <i className="fa-solid fa-trash-can"></i>
-          </button>
+            <i className="fa-solid fa-trash-can" aria-hidden="true"></i>
+          </Button>
         </span>
       </TooltipTrigger>
       <TooltipContent>{controller.t('crm:internalListing.deleteProductTooltip')}</TooltipContent>

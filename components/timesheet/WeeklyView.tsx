@@ -19,6 +19,7 @@ import type { Client, Project, ProjectTask, TimeEntry, TimeEntryLocation } from 
 import { downloadCsv } from '../../utils/csv';
 import { dateOnlyStringToLocalDate, getLocalDateString } from '../../utils/date';
 import { isItalianHoliday } from '../../utils/holidays';
+import { formatDecimal } from '../../utils/numbers';
 import { toastError } from '../../utils/toast';
 import { filterTrackerEntrySelectableCatalogs } from '../../utils/trackerCatalogs';
 import Calendar from '../shared/Calendar';
@@ -112,7 +113,7 @@ const WeeklyDayCellInputs: React.FC<{
 }> = ({ rowKey, day, cell, baseCell, notePlaceholder, onUpdate }) => (
   <div className="flex flex-col gap-2">
     <ValidatedNumberInput
-      placeholder="0.0"
+      placeholder="0,0"
       disabled={day.isForbidden}
       value={cell.duration}
       onValueChange={(value) => onUpdate(rowKey, day.dateStr, { duration: value }, baseCell)}
@@ -679,9 +680,8 @@ const useWeeklyController = ({
   const weeklyGoal = dailyGoal * 5;
 
   const handleExportToCsv = () => {
-    const formatHours = (hours: number) => (hours > 0 ? hours.toFixed(2) : '');
-    const sumDayValues = (values: string[]) =>
-      values.reduce((sum, v) => sum + (parseFloat(v) || 0), 0);
+    const formatHours = (hours: number) => (hours > 0 ? formatDecimal(hours) : '');
+    const sumDayValues = (values: number[]) => values.reduce((sum, value) => sum + value, 0);
 
     const headerRow = [
       '',
@@ -693,11 +693,11 @@ const useWeeklyController = ({
     const joinLabel = (clientName: string, projectName: string, taskName: string) =>
       [clientName, projectName, taskName].filter(Boolean).join(' · ');
 
-    const formRowValues = visibleWeekDays.map((day) => {
+    const formRowHours = visibleWeekDays.map((day) => {
       const cell = getCellValue(FORM_ROW_KEY, day.dateStr);
-      return formatHours(parseDuration(cell.duration));
+      return parseDuration(cell.duration);
     });
-    const formRowTotal = sumDayValues(formRowValues);
+    const formRowTotal = sumDayValues(formRowHours);
     if (formRowTotal > 0) {
       const label =
         joinLabel(
@@ -705,18 +705,18 @@ const useWeeklyController = ({
           formSelectionLabels.projectName,
           formSelectionLabels.taskName,
         ) || t('weekly.newEntry');
-      rows.push([label, ...formRowValues, formatHours(formRowTotal)]);
+      rows.push([label, ...formRowHours.map(formatHours), formatHours(formRowTotal)]);
     }
 
     for (const row of entryRows) {
-      const dayValues = visibleWeekDays.map((day) => {
+      const dayHours = visibleWeekDays.map((day) => {
         const cell = getCellValue(row.key, day.dateStr, row.baseDays);
-        return formatHours(parseDuration(cell.duration));
+        return parseDuration(cell.duration);
       });
-      const rowTotal = sumDayValues(dayValues);
+      const rowTotal = sumDayValues(dayHours);
       rows.push([
         joinLabel(row.clientName, row.projectName, row.taskName),
-        ...dayValues,
+        ...dayHours.map(formatHours),
         formatHours(rowTotal),
       ]);
     }
@@ -833,12 +833,12 @@ const WeeklyGridToolbar: React.FC<{ controller: WeeklyController }> = ({ control
     <div className="flex flex-wrap items-baseline gap-x-6 gap-y-1">
       <WeeklyTotalMetric
         label={controller.t('weekly.weekTotal')}
-        value={`${controller.weekTotal.toFixed(2)} h`}
+        value={`${formatDecimal(controller.weekTotal)} h`}
         isOverGoal={controller.weekTotal > controller.weeklyGoal}
       />
       <WeeklyTotalMetric
         label={controller.t('weekly.monthTotal')}
-        value={`${controller.monthTotal.toFixed(2)} h`}
+        value={`${formatDecimal(controller.monthTotal)} h`}
       />
     </div>
     <WeeklyGridActions controller={controller} />
@@ -1114,7 +1114,7 @@ const WeeklyTotalsFooter: React.FC<{ controller: WeeklyController }> = ({ contro
                 : 'text-praetor',
             )}
           >
-            {controller.dayTotals[day.dateStr].toFixed(1)}
+            {formatDecimal(controller.dayTotals[day.dateStr], 1)}
           </p>
         </TableCell>
       ))}

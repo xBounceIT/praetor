@@ -13,6 +13,7 @@ import { addDaysToDateOnly, formatDateOnlyForLocale, getLocalDateString } from '
 import {
   calcProductSalePrice,
   durationValueToMonths,
+  formatDecimal,
   getDurationDisplayValue,
   getEffectiveDurationMonths,
   normalizeDurationUnit,
@@ -549,10 +550,10 @@ const useClientsInvoicesController = ({
         headerClassName: 'min-w-[8rem]',
         cell: ({ row }: { row: Invoice }) => (
           <span className="font-bold text-foreground">
-            {(row.total ?? 0).toFixed(2)} {currency}
+            {formatDecimal(row.total ?? 0)} {currency}
           </span>
         ),
-        filterFormat: (value: unknown) => (value as number).toFixed(2),
+        filterFormat: (value: unknown) => formatDecimal(value as number),
       },
       {
         header: t('accounting:clientsInvoices.amountPaid'),
@@ -560,10 +561,10 @@ const useClientsInvoicesController = ({
         accessorFn: (row: Invoice) => row.amountPaid,
         cell: ({ row }: { row: Invoice }) => (
           <span className="font-bold text-emerald-600">
-            {(row.amountPaid ?? 0).toFixed(2)} {currency}
+            {formatDecimal(row.amountPaid ?? 0)} {currency}
           </span>
         ),
-        filterFormat: (value: unknown) => (value as number).toFixed(2),
+        filterFormat: (value: unknown) => formatDecimal(value as number),
       },
       {
         header: t('accounting:clientsInvoices.balance'),
@@ -573,11 +574,11 @@ const useClientsInvoicesController = ({
           const balance = row.total - row.amountPaid;
           return (
             <span className={`font-bold ${balance > 0 ? 'text-red-500' : 'text-emerald-600'}`}>
-              {balance.toFixed(2)} {currency}
+              {formatDecimal(balance)} {currency}
             </span>
           );
         },
-        filterFormat: (value: unknown) => (value as number).toFixed(2),
+        filterFormat: (value: unknown) => formatDecimal(value as number),
       },
       {
         header: t('accounting:clientsInvoices.status'),
@@ -1191,7 +1192,7 @@ const InvoiceItemTotalField: React.FC<{
       {controller.t('common:labels.total')}
     </FieldLabel>
     <div className="flex min-h-[42px] items-center justify-end whitespace-nowrap px-3 py-2 text-sm font-semibold text-foreground">
-      {getLineTotal(item).toFixed(2)} {controller.currency}
+      {formatDecimal(getLineTotal(item))} {controller.currency}
     </div>
   </div>
 );

@@ -147,7 +147,7 @@ describe('<ClientOffersView /> list', () => {
     render(<ClientOffersView {...baseProps} />);
     expect(screen.getByText('5/14/2026')).toBeInTheDocument();
     // MOL column shows the margin percentage with two decimals (issue #780).
-    expect(screen.getByText('33.33%')).toBeInTheDocument();
+    expect(screen.getByText('33,33%')).toBeInTheDocument();
     expect(screen.getByText('crm:paymentTerms.30gg')).toBeInTheDocument();
   });
 
@@ -172,9 +172,9 @@ describe('<ClientOffersView /> list', () => {
     });
     render(<ClientOffersView {...baseProps} offers={[durationOffer]} />);
     // Subtotal (revenue) = 100 × 2 × 3 = 600 (would be 200 without duration).
-    expect(screen.getAllByText('600.00 EUR').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('600,00 EUR').length).toBeGreaterThan(0);
     // Margin = 600 − (60 × 2 × 3 = 360) = 240, which only holds when both scale by duration.
-    expect(screen.getAllByText('240.00 EUR').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('240,00 EUR').length).toBeGreaterThan(0);
   });
 
   test('a years duration prices off the canonical months, matching the months equivalent (issue #757)', () => {
@@ -201,9 +201,9 @@ describe('<ClientOffersView /> list', () => {
     });
     render(<ClientOffersView {...baseProps} offers={[yearsOffer]} />);
     // Subtotal (revenue) = 100 × 2 × 24 = 4800.
-    expect(screen.getAllByText('4800.00 EUR').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('4.800,00 EUR').length).toBeGreaterThan(0);
     // Margin = 4800 − (60 × 2 × 24 = 2880) = 1920.
-    expect(screen.getAllByText('1920.00 EUR').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('1.920,00 EUR').length).toBeGreaterThan(0);
   });
 
   test('renders fixed discounts as equivalent percentages in offer rows', () => {
@@ -217,7 +217,7 @@ describe('<ClientOffersView /> list', () => {
 
     expect(screen.getByText('15%')).toBeInTheDocument();
     expect(screen.queryByText('15 EUR')).not.toBeInTheDocument();
-    expect(screen.getByText('-15.00 EUR')).toBeInTheDocument();
+    expect(screen.getByText('-15,00 EUR')).toBeInTheDocument();
   });
 
   test('sorts the global discount column by equivalent percentage', async () => {
@@ -352,6 +352,23 @@ describe('<ClientOffersView /> terminal status revert action', () => {
   });
 });
 
+describe('<ClientOffersView /> sent status revert action', () => {
+  test('reverts a valid sent offer to draft through the normal update callback', async () => {
+    const user = userEvent.setup();
+    const onUpdateOffer = mock(() => Promise.resolve());
+    render(<ClientOffersView {...baseProps} offers={[globexSent]} onUpdateOffer={onUpdateOffer} />);
+
+    await user.click(screen.getByRole('button', { name: 'table.rowActions' }));
+    await user.click(
+      await screen.findByRole('button', { name: 'sales:clientOffers.revertToDraft' }),
+    );
+
+    await waitFor(() =>
+      expect(onUpdateOffer).toHaveBeenCalledWith('O-GLOBEX-SENT', { status: 'draft' }),
+    );
+  });
+});
+
 describe('<ClientOffersView /> discount summary', () => {
   test('labels a fixed global discount with the equivalent percentage', () => {
     const fixedDiscountOffer = buildOffer({
@@ -366,7 +383,7 @@ describe('<ClientOffersView /> discount summary', () => {
 
     expect(screen.getByText('sales:clientOffers.editOffer')).toBeInTheDocument();
     expect(screen.getByText('sales:clientOffers.discountAmount (15%)')).toBeInTheDocument();
-    expect(screen.getAllByText('-15.00 EUR').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('-15,00 EUR').length).toBeGreaterThan(0);
     expect(
       screen.queryByText('sales:clientOffers.discountAmount (15 EUR)'),
     ).not.toBeInTheDocument();
@@ -386,7 +403,7 @@ describe('<ClientOffersView /> discount summary', () => {
 
     expect(screen.getByText('sales:clientOffers.discountAmount (50%)')).toBeInTheDocument();
     expect(
-      screen.queryByText('sales:clientOffers.discountAmount (66.67%)'),
+      screen.queryByText('sales:clientOffers.discountAmount (66,67%)'),
     ).not.toBeInTheDocument();
   });
 });
@@ -626,7 +643,7 @@ describe('<ClientOffersView /> supplier-quote item labels', () => {
     );
     fireEvent.click(screen.getByText('O-OLD-SOURCE'));
 
-    expect(screen.getAllByText('Acme Supplies · Widget (60.00)').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Acme Supplies · Widget (60,00)').length).toBeGreaterThan(0);
   });
 });
 
@@ -720,10 +737,10 @@ describe('<ClientOffersView /> MOL precision (issue #780)', () => {
     fireEvent.click(screen.getByText('O-MOL'));
     await screen.findByRole('dialog');
 
-    // formatDecimals={2}: the MOL inputs (mobile + desktop layouts) show 12.34, not the
-    // pre-fix rounded 12.3 that silently dropped the second decimal.
-    expect(screen.queryAllByDisplayValue('12.34').length).toBeGreaterThan(0);
-    expect(screen.queryAllByDisplayValue('12.3')).toHaveLength(0);
+    // formatDecimals={2}: the MOL inputs (mobile + desktop layouts) show 12,34, not the
+    // pre-fix rounded 12,3 that silently dropped the second decimal.
+    expect(screen.queryAllByDisplayValue('12,34').length).toBeGreaterThan(0);
+    expect(screen.queryAllByDisplayValue('12,3')).toHaveLength(0);
   });
 });
 
@@ -794,10 +811,12 @@ describe('<ClientOffersView /> expired-offer handling (issue #779)', () => {
   test('status action buttons are disabled on an expired sent offer', async () => {
     // Row actions live behind the StandardTable overflow menu ("table.rowActions").
     const user = userEvent.setup();
+    const onUpdateOffer = mock(() => Promise.resolve());
     render(
       <ClientOffersView
         {...baseProps}
         offers={[buildOffer({ id: 'O-PAST', status: 'sent', expirationDate: '2000-01-01' })]}
+        onUpdateOffer={onUpdateOffer}
       />,
     );
     await user.click(screen.getByRole('button', { name: 'table.rowActions' }));
@@ -809,6 +828,12 @@ describe('<ClientOffersView /> expired-offer handling (issue #779)', () => {
     const denyIcon = document.querySelector('.fa-xmark');
     expect(denyIcon).not.toBeNull();
     expect(denyIcon?.closest('button')).toBeDisabled();
+    const revertButton = screen.getByRole('button', {
+      name: 'sales:clientOffers.revertToDraft',
+    });
+    expect(revertButton).toBeDisabled();
+    await user.click(revertButton);
+    expect(onUpdateOffer).not.toHaveBeenCalled();
   });
 
   test('submitting an expired offer extends ONLY the expiration date', async () => {

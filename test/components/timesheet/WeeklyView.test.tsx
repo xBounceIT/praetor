@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, spyOn, test } from 'bun:test';
 import { fireEvent, screen, waitFor } from '@testing-library/react';
 import type { Client, Project, ProjectTask, TimeEntry } from '../../../types';
 import { installI18nMock } from '../../helpers/i18n';
@@ -174,9 +174,52 @@ describe('<WeeklyView /> RBAC catalog scoping', () => {
 
     await waitFor(() => {
       const inputs = document.body.querySelectorAll<HTMLInputElement>('input[inputmode="decimal"]');
-      const prefilled = Array.from(inputs).some((input) => input.value === '3.5');
+      const prefilled = Array.from(inputs).some((input) => input.value === '3,5');
       expect(prefilled).toBe(true);
     });
+  });
+
+  test('exports localized hours without corrupting row totals', async () => {
+    const csvModule = await import('../../../utils/csv');
+    const downloadCsvSpy = spyOn(csvModule, 'downloadCsv').mockImplementation(() => () => {});
+
+    try {
+      // A fresh module instance ensures this test observes the CSV spy even when another test file
+      // imported WeeklyView first through Bun's shared module registry.
+      // @ts-expect-error -- query-suffixed specifier is intentionally unresolvable to tsc
+      const CsvWeeklyView = (await import('../../../components/timesheet/WeeklyView.tsx?csv-test'))
+        .default;
+      const entries: TimeEntry[] = [
+        {
+          id: 'entry-csv',
+          userId: 'user-a',
+          date: todayDateOnly(),
+          clientId: 'client-alpha',
+          clientName: 'Alpha Client',
+          projectId: 'project-alpha',
+          projectName: 'Alpha Project',
+          task: 'Alpha Task',
+          duration: 3.5,
+          hourlyCost: 0,
+          createdAt: 1700000000,
+          version: 1,
+          location: 'remote',
+        },
+      ];
+
+      render(<CsvWeeklyView entries={entries} {...alphaCatalog} {...sharedProps} />);
+      fireEvent.click(await screen.findByRole('button', { name: 'common:table.exportToCsv' }));
+
+      expect(downloadCsvSpy).toHaveBeenCalledTimes(1);
+      const rows = downloadCsvSpy.mock.calls[0]?.[0];
+      const entryRow = rows?.find((row) =>
+        row[0].includes('Alpha Client · Alpha Project · Alpha Task'),
+      );
+      expect(entryRow).toBeDefined();
+      expect(entryRow?.at(-1)).toBe('3,50');
+    } finally {
+      downloadCsvSpy.mockRestore();
+    }
   });
 
   test('keeps existing expired-project rows visible while new-entry selection uses active projects', async () => {
@@ -292,8 +335,8 @@ describe('<WeeklyView /> submit mutations', () => {
     );
 
     const durationInput = await waitFor(() => {
-      const input = findDurationInputWithValue('3.5');
-      if (!input) throw new Error('pre-filled 3.5 input not found');
+      const input = findDurationInputWithValue('3,5');
+      if (!input) throw new Error('pre-filled 3,5 input not found');
       return input;
     });
 
@@ -337,8 +380,8 @@ describe('<WeeklyView /> submit mutations', () => {
     );
 
     const durationInput = await waitFor(() => {
-      const input = findDurationInputWithValue('3.5');
-      if (!input) throw new Error('pre-filled 3.5 input not found');
+      const input = findDurationInputWithValue('3,5');
+      if (!input) throw new Error('pre-filled 3,5 input not found');
       return input;
     });
 
@@ -394,7 +437,7 @@ describe('<WeeklyView /> submit mutations', () => {
       document.body.querySelectorAll<HTMLInputElement>('input[inputmode="decimal"]'),
     ).find((i) => i.value === '' && !i.disabled && i !== prevInput);
     if (!emptyInput) throw new Error('no empty day-cell input available');
-    setDurationInput(emptyInput, '1.5');
+    setDurationInput(emptyInput, '1,5');
 
     clickSubmit();
 
@@ -468,8 +511,8 @@ describe('<WeeklyView /> submit mutations', () => {
     );
 
     const filledInput = await waitFor(() => {
-      const input = findDurationInputWithValue('3.5');
-      if (!input) throw new Error('pre-filled 3.5 input not found');
+      const input = findDurationInputWithValue('3,5');
+      if (!input) throw new Error('pre-filled 3,5 input not found');
       return input;
     });
 
@@ -480,7 +523,7 @@ describe('<WeeklyView /> submit mutations', () => {
     ).find((i) => i !== filledInput && i.value === '' && !i.disabled);
     if (!emptyInRow) throw new Error('no empty day cell in the phase 1 row');
 
-    setDurationInput(emptyInRow, '1.5');
+    setDurationInput(emptyInRow, '1,5');
     clickSubmit();
 
     await waitFor(() => {
@@ -514,7 +557,7 @@ describe('<WeeklyView /> submit mutations', () => {
     });
 
     const inputs = document.body.querySelectorAll<HTMLInputElement>('input[inputmode="decimal"]');
-    const prefilled = Array.from(inputs).some((i) => i.value === '3.5');
+    const prefilled = Array.from(inputs).some((i) => i.value === '3,5');
     expect(prefilled).toBe(false);
   });
 
@@ -537,8 +580,8 @@ describe('<WeeklyView /> submit mutations', () => {
     );
 
     const durationInput = await waitFor(() => {
-      const input = findDurationInputWithValue('3.5');
-      if (!input) throw new Error('pre-filled 3.5 input not found');
+      const input = findDurationInputWithValue('3,5');
+      if (!input) throw new Error('pre-filled 3,5 input not found');
       return input;
     });
 

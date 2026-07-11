@@ -26,6 +26,7 @@ import {
   ModalHeader,
   ModalTitle,
 } from '../shared/ModalLayout';
+import ValidatedNumberInput from '../shared/ValidatedNumberInput';
 import EntryCatalogSelector from './EntryCatalogSelector';
 import { CUSTOM_TASK_SENTINEL, useCatalogSelection } from './useCatalogSelection';
 
@@ -163,12 +164,6 @@ const EntryEditDialogContent: React.FC<ContentProps> = ({
 
   const allowCustomTask = canCreateCustomTask && selection.projectId !== '';
 
-  const handleDurationInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const rawValue = event.target.value;
-    if (rawValue !== '' && !/^[0-9]*([.,][0-9]*)?$/.test(rawValue)) return;
-    dispatch({ type: 'setDuration', duration: rawValue.replace(',', '.') });
-  };
-
   const clearTaskError = () => {
     dispatch({ type: 'clearError', field: 'task' });
   };
@@ -302,14 +297,11 @@ const EntryEditDialogContent: React.FC<ContentProps> = ({
                 <FieldLabel htmlFor="entry-edit-hours">
                   {t('entry.hours')} <RequiredMark />
                 </FieldLabel>
-                <Input
+                <ValidatedNumberInput
                   id="entry-edit-hours"
-                  type="text"
-                  inputMode="decimal"
-                  pattern="^[0-9]*([.,][0-9]*)?$"
                   value={duration}
-                  onChange={handleDurationInputChange}
-                  placeholder="0.0"
+                  onValueChange={(value) => dispatch({ type: 'setDuration', duration: value })}
+                  placeholder="0,0"
                   aria-invalid={durationInvalid}
                   className={cn(
                     'h-10 rounded-lg text-right tabular-nums',
