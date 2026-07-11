@@ -122,6 +122,8 @@
     "clientInformation": "Client Information",
     "productsServices": "Products / Services",
     "addProduct": "Add Product",
+    "reorderItem": "Reorder {{item}}, position {{position}} of {{total}}",
+    "reorderItemHint": "Drag to reorder. From the keyboard, use Up/Down or Home/End.",
     "globalDiscount": "Global Discount",
     "summary": "Summary",
     "expirationDateLabel": "Expiration Date",

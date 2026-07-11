@@ -1078,5 +1078,6 @@ describe('POST /api/sales/client-quotes/:id/versions/:versionId/restore - durati
     const replacedItems = cqReplaceItemsMock.mock.calls[0][1];
     expect(replacedItems[0].durationMonths).toBe(12);
     expect(replacedItems[0].durationUnit).toBe('years');
+    expect(replacedItems[0].position).toBe(0);
   });
 });

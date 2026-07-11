@@ -36,7 +36,7 @@ const quoteRow = (overrides: Record<number, unknown> = {}) => makeRow(QUOTE_BASE
 // id, quote_id, product_id, product_name, quantity, unit_price, product_cost,
 // product_mol_percentage, supplier_quote_id, supplier_quote_item_id,
 // supplier_quote_supplier_name, supplier_quote_unit_price, discount, note, unit_type,
-// duration_months, duration_unit, created_at
+// duration_months, duration_unit, created_at, position
 const ITEM_BASE: readonly unknown[] = [
   'qi-1',
   'cq-1',
@@ -56,6 +56,7 @@ const ITEM_BASE: readonly unknown[] = [
   1,
   'months',
   new Date('2026-04-01T00:00:00Z'),
+  0,
 ];
 const itemRow = (overrides: Record<number, unknown> = {}) => makeRow(ITEM_BASE, overrides);
 
@@ -86,10 +87,12 @@ describe('listAll', () => {
 });
 
 describe('listAllItems', () => {
-  test('returns mapped items in created_at order', async () => {
+  test('returns mapped items in persisted position order with deterministic fallbacks', async () => {
     exec.enqueue({ rows: [itemRow()] });
     const result = await clientQuotesRepo.listAllItems(testDb);
-    expect(exec.calls[0].sql.toLowerCase()).toContain('order by "quote_items"."created_at"');
+    expect(exec.calls[0].sql.toLowerCase()).toMatch(
+      /order by.*"quote_id" asc.*"position" asc.*"created_at" asc.*"id" asc/,
+    );
     expect(result[0].quantity).toBe(2);
     expect(result[0].productCost).toBe(5);
     expect(result[0].productMolPercentage).toBe(20);
@@ -370,11 +373,12 @@ describe('replaceItems', () => {
   test('issues DELETE then bulk INSERT and preserves order', async () => {
     exec.enqueue({ rows: [] });
     exec.enqueue({
-      rows: [itemRow({ 0: 'a' }), itemRow({ 0: 'b' })],
+      rows: [itemRow({ 0: 'b', 18: 1 }), itemRow({ 0: 'a', 18: 0 })],
     });
     const items: clientQuotesRepo.NewClientQuoteItem[] = [
       {
         id: 'a',
+        position: 0,
         productId: 'p-1',
         productName: 'A',
         quantity: 1,
@@ -393,6 +397,7 @@ describe('replaceItems', () => {
       },
       {
         id: 'b',
+        position: 1,
         productId: null,
         productName: 'B',
         quantity: 2,
@@ -467,12 +472,12 @@ describe('findItemsForQuote', () => {
     expect(result[0].id).toBe('qi-1');
   });
 
-  test('orders rows deterministically by created_at then id', async () => {
+  test('orders rows by persisted position before legacy tie-breakers', async () => {
     exec.enqueue({ rows: [] });
     await clientQuotesRepo.findItemsForQuote('cq-1', testDb);
     const sql = exec.calls[0].sql.toLowerCase();
     expect(sql).toContain('order by');
-    expect(sql).toMatch(/"created_at".*,.*"id"/);
+    expect(sql).toMatch(/"position" asc.*"created_at" asc.*"id" asc/);
   });
 });
 

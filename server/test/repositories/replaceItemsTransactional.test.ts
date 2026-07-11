@@ -253,6 +253,7 @@ describe('clientOffersRepo.replaceItems', () => {
 describe('clientQuotesRepo.replaceItems', () => {
   const newItem = {
     id: 'quote-item-new',
+    position: 0,
     productId: null,
     productName: 'Product',
     quantity: 1,

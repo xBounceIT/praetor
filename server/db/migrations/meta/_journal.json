@@ -694,6 +694,13 @@
       "when": 1783690619178,
       "tag": "0098_add_supplier_contacts",
       "breakpoints": true
+    },
+    {
+      "idx": 99,
+      "version": "7",
+      "when": 1783795833984,
+      "tag": "0099_stable_client_quote_item_order",
+      "breakpoints": true
     }
   ]
 }
