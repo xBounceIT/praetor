@@ -688,8 +688,6 @@ const useInternalListingController = ({
         type: 'merge',
         patch: {
           typeError: t('crm:internalListing.typeDeleteBlocked', {
-            productCount: type.productCount,
-            categoryCount: type.categoryCount,
             name: type.name,
           }),
         },
@@ -1184,8 +1182,6 @@ const renderInternalListingTypeActions = (
 ) => {
   const isDeleteBlocked = type.productCount > 0 || type.categoryCount > 0;
   const deleteBlockedMessage = controller.t('crm:internalListing.typeDeleteBlocked', {
-    productCount: type.productCount,
-    categoryCount: type.categoryCount,
     name: type.name,
   });
 
@@ -1390,7 +1386,7 @@ const renderInternalListingCategoryActions = (
 ) => {
   const deleteBlockedMessage = controller.t(
     'crm:internalListing.deleteCategoryWithLinkedProducts',
-    { count: category.productCount, name: category.name },
+    { name: category.name },
   );
 
   return renderInternalListingEditDeleteActions({
@@ -1530,7 +1526,7 @@ const renderInternalListingSubcategoryActions = (
 ) => {
   const deleteBlockedMessage = controller.t(
     'crm:internalListing.deleteSubcategoryWithLinkedProducts',
-    { count: subcategory.productCount, name: subcategory.name },
+    { name: subcategory.name },
   );
 
   return renderInternalListingEditDeleteActions({
