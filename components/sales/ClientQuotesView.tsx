@@ -48,6 +48,7 @@ import {
   type PricingTotals,
   parseDurationValueToMonths,
   parseNumberInputValue,
+  roundCurrency,
 } from '../../utils/numbers';
 import { getPaymentTermsOptions } from '../../utils/options';
 import { makeCostUpdater, makeMolUpdater } from '../../utils/pricingHandlers';
@@ -182,7 +183,7 @@ const supplierQuoteItemLabel = (quote: SupplierQuote, item: SupplierQuote['items
 // its list price: otherwise "Discount to us" is incorrectly surfaced as customer margin.
 const getClientQuoteUnitSalePrice = (item: QuoteItem): number => {
   const { unitCost, molPercentage } = getItemPricingContext(item);
-  return calcProductSalePrice(unitCost, molPercentage);
+  return roundCurrency(calcProductSalePrice(unitCost, molPercentage));
 };
 
 const getClientQuoteItemPricingContext = (item: QuoteItem) =>

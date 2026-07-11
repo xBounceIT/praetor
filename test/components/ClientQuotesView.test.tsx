@@ -482,6 +482,33 @@ describe('<ClientQuotesView /> supplier-quote pricing', () => {
     ).toBe(true);
     expect(within(dialog).queryAllByText('20,00 EUR')).toHaveLength(0);
   });
+
+  test('rounds the MOL-derived unit price before calculating line totals', async () => {
+    const quote = buildQuote({
+      id: 'Q-ROUNDED-MOL',
+      items: [
+        {
+          id: 'qi-rounded-mol',
+          quoteId: 'Q-ROUNDED-MOL',
+          productId: 'prod-1',
+          productName: 'Managed Service',
+          quantity: 7,
+          unitPrice: 1230.77,
+          productMolPercentage: 35,
+          supplierQuoteId: 'SQ-ROUNDING',
+          supplierQuoteItemId: 'sqi-rounding',
+          supplierQuoteSupplierName: 'Acme Supplies',
+          supplierQuoteUnitPrice: 800,
+        },
+      ],
+    });
+
+    render(<ClientQuotesView {...baseProps} quotes={[quote]} supplierQuotes={[]} />);
+    fireEvent.click(screen.getByText('Q-ROUNDED-MOL'));
+    const dialog = await screen.findByRole('dialog');
+
+    expect(within(dialog).getAllByText('8.615,39 EUR').length).toBeGreaterThan(0);
+  });
 });
 
 describe('<ClientQuotesView /> supplier-quote item labels', () => {
