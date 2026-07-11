@@ -24,7 +24,13 @@ const OWNED_VIEW: SavedViewDto = {
   kind: 'table',
   scopeKey: 'people.directory',
   name: 'My Owned View',
-  config: { schemaVersion: 1, hiddenColIds: [], sortState: null, filterState: {} },
+  config: {
+    schemaVersion: 2,
+    hiddenColIds: [],
+    columnOrder: ['name', 'age'],
+    sortState: null,
+    filterState: {},
+  },
   access: 'owner',
   createdAt: 1,
   updatedAt: 1,
@@ -37,7 +43,13 @@ const READ_SHARED_VIEW: SavedViewDto = {
   kind: 'table',
   scopeKey: 'people.directory',
   name: 'Bob Shared View',
-  config: { schemaVersion: 1, hiddenColIds: ['age'], sortState: null, filterState: {} },
+  config: {
+    schemaVersion: 2,
+    hiddenColIds: ['age'],
+    columnOrder: ['age', 'name'],
+    sortState: null,
+    filterState: {},
+  },
   access: 'read',
   createdAt: 2,
   updatedAt: 2,
@@ -201,7 +213,9 @@ describe('<StandardTable /> server-backed sharing', () => {
     expect(body.kind).toBe('table');
     expect(body.scopeKey).toBe('people.directory');
     expect(body.name).toBe('Legacy View');
+    expect(body.config.schemaVersion).toBe(2);
     expect(body.config.hiddenColIds).toEqual(['age']);
+    expect(body.config.columnOrder).toEqual(['name', 'age']);
 
     await openCustomViews();
     expect(await screen.findByText('Legacy View')).toBeInTheDocument();
@@ -319,14 +333,15 @@ describe('<StandardTable /> server-backed sharing', () => {
     expect(screen.getByLabelText('views.duplicateView')).toBeInTheDocument();
   });
 
-  test('editing a view keeps its saved sort/filter (does not snapshot the live table)', async () => {
+  test('editing a view keeps its saved order/sort/filter', async () => {
     const sortedView: SavedViewDto = {
       ...OWNED_VIEW,
       id: 'sv-sorted',
       name: 'Sorted View',
       config: {
-        schemaVersion: 1,
+        schemaVersion: 2,
         hiddenColIds: [],
+        columnOrder: ['age', 'name'],
         sortState: { colId: 'name', px: 'asc' },
         filterState: {},
       },
@@ -350,10 +365,11 @@ describe('<StandardTable /> server-backed sharing', () => {
     await waitFor(() => expect(updateMock).toHaveBeenCalledTimes(1));
     const [, patch] = updateMock.mock.calls.at(-1) as unknown as [
       string,
-      { name: string; config: { sortState: unknown } },
+      { name: string; config: { columnOrder: unknown; sortState: unknown } },
     ];
     expect(patch.name).toBe('Renamed');
-    // The view's own sort is preserved — NOT overwritten with the live table's (unsorted) state.
+    // The view's own layout is preserved — not overwritten with the live table state.
+    expect(patch.config.columnOrder).toEqual(['age', 'name']);
     expect(patch.config.sortState).toEqual({ colId: 'name', px: 'asc' });
   });
 
@@ -412,6 +428,7 @@ describe('<StandardTable /> server-backed sharing', () => {
     expect(body.scopeKey).toBe('people.directory');
     expect(body.name).toBe('Bob Shared View');
     expect(body.config.hiddenColIds).toEqual(['age']);
+    expect(body.config.columnOrder).toEqual(['age', 'name']);
   });
 });
 

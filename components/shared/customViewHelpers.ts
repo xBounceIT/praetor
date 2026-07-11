@@ -5,6 +5,7 @@ export type CustomView = {
   id: string;
   name: string;
   hiddenColIds: string[];
+  columnOrder: string[];
   sortState: SortState;
   filterState: FilterState;
 };
@@ -71,12 +72,24 @@ export const generateViewId = (): string => {
 
 export const isValidImportedView = (
   v: unknown,
-): v is { name: string; hiddenColIds: string[]; sortState?: unknown; filterState?: unknown } => {
+): v is {
+  name: string;
+  hiddenColIds: string[];
+  columnOrder?: string[];
+  sortState?: unknown;
+  filterState?: unknown;
+} => {
   if (!v || typeof v !== 'object') return false;
   const obj = v as Record<string, unknown>;
   if (typeof obj.name !== 'string' || obj.name.trim() === '') return false;
   if (!Array.isArray(obj.hiddenColIds)) return false;
   if (!obj.hiddenColIds.every((id) => typeof id === 'string')) return false;
+  if (
+    obj.columnOrder !== undefined &&
+    (!Array.isArray(obj.columnOrder) || !obj.columnOrder.every((id) => typeof id === 'string'))
+  ) {
+    return false;
+  }
   return true;
 };
 
@@ -86,6 +99,7 @@ export const isValidStoredView = (
   id: string;
   name: string;
   hiddenColIds: string[];
+  columnOrder?: string[];
   sortState?: unknown;
   filterState?: unknown;
 } => {
@@ -95,7 +109,39 @@ export const isValidStoredView = (
   if (typeof obj.name !== 'string' || obj.name.trim() === '') return false;
   if (!Array.isArray(obj.hiddenColIds)) return false;
   if (!obj.hiddenColIds.every((id) => typeof id === 'string')) return false;
+  if (
+    obj.columnOrder !== undefined &&
+    (!Array.isArray(obj.columnOrder) || !obj.columnOrder.every((id) => typeof id === 'string'))
+  ) {
+    return false;
+  }
   return true;
+};
+
+export const parseColumnOrder = (raw: unknown): string[] => {
+  if (!Array.isArray(raw)) return [];
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const id of raw) {
+    if (typeof id !== 'string' || seen.has(id)) continue;
+    seen.add(id);
+    result.push(id);
+  }
+  return result;
+};
+
+export const normalizeColumnOrder = (
+  raw: unknown,
+  validColumnIds: ReadonlySet<string>,
+): string[] => {
+  const result = parseColumnOrder(raw).filter((id) => validColumnIds.has(id));
+  const seen = new Set(result);
+  for (const id of validColumnIds) {
+    if (seen.has(id)) continue;
+    seen.add(id);
+    result.push(id);
+  }
+  return result;
 };
 
 export const parseSortState = (raw: unknown): SortState => {
@@ -156,6 +202,7 @@ export const parseStoredViews = (raw: string | null): CustomView[] => {
       id: value.id,
       name: value.name,
       hiddenColIds: value.hiddenColIds,
+      columnOrder: parseColumnOrder(value.columnOrder),
       sortState: parseSortState(value.sortState),
       filterState: parseFilterState(value.filterState),
     });
@@ -171,7 +218,12 @@ export const computeViewApplication = (
   gearColIds: ReadonlySet<string>,
   allColIds: ReadonlySet<string>,
   columnAliases?: ViewApplicationColumnAliases,
-): { hiddenColIds: Set<string>; sortState: SortState; filterState: FilterState } => {
+): {
+  hiddenColIds: Set<string>;
+  columnOrder: string[];
+  sortState: SortState;
+  filterState: FilterState;
+} => {
   const hiddenColIds = new Set<string>();
   for (const id of view.hiddenColIds) {
     if (gearColIds.has(id)) {
@@ -221,7 +273,31 @@ export const computeViewApplication = (
       filterState[alias.columnId] = existingValues;
     }
   });
-  return { hiddenColIds, sortState, filterState };
+  return {
+    hiddenColIds,
+    columnOrder: normalizeColumnOrder(view.columnOrder, gearColIds),
+    sortState,
+    filterState,
+  };
+};
+
+export type DropPosition = 'before' | 'after';
+
+export const reorderRelative = <T>(
+  arr: T[],
+  fromIdx: number,
+  toIdx: number,
+  position: DropPosition,
+): T[] => {
+  if (fromIdx === toIdx) return arr;
+  if (fromIdx < 0 || toIdx < 0 || fromIdx >= arr.length || toIdx >= arr.length) return arr;
+  const next = [...arr];
+  const [moved] = next.splice(fromIdx, 1);
+  const adjustedTargetIdx = fromIdx < toIdx ? toIdx - 1 : toIdx;
+  const insertIdx = adjustedTargetIdx + (position === 'after' ? 1 : 0);
+  next.splice(insertIdx, 0, moved);
+  if (next.every((value, index) => value === arr[index])) return arr;
+  return next;
 };
 
 // Drop above the target. After splice removes the source, a forward move's

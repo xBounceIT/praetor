@@ -112,6 +112,32 @@ const clickMenuAction = (element: HTMLElement) => {
   act(() => fireEvent.click(element.closest('[role="menuitem"]') ?? element));
 };
 
+const getRenderedColumnIds = () =>
+  Array.from(document.querySelectorAll<HTMLElement>('thead [data-column-header-label]')).map(
+    (element) => element.dataset.columnHeaderLabel,
+  );
+
+const dragColumnAfter = (sourceHeader: string, targetHeader: string) => {
+  const dataTransfer = {
+    effectAllowed: 'none',
+    dropEffect: 'none',
+    setData: mock(() => {}),
+  };
+  const handle = screen.getByLabelText(`table.reorderColumnHandle: ${sourceHeader}`);
+  const target = screen.getByText(targetHeader).closest('th') as HTMLTableCellElement;
+  target.getBoundingClientRect = () => ({ left: -2, width: 1 }) as DOMRect;
+  act(() => {
+    fireEvent.dragStart(handle, { dataTransfer });
+  });
+  act(() => {
+    fireEvent.dragOver(target, { clientX: 10_000, dataTransfer });
+  });
+  expect(target.getAttribute('data-column-drop-position')).toBe('after');
+  act(() => {
+    fireEvent.drop(target, { clientX: 10_000, dataTransfer });
+  });
+};
+
 describe('<StandardTable />', () => {
   beforeEach(() => {
     localStorage.clear();
@@ -285,9 +311,10 @@ describe('<StandardTable />', () => {
     expect(content?.className).toContain('border-border');
   });
 
-  test('CSV export click invokes downloadCsv with rows and filename', () => {
+  test('CSV export follows the displayed column order', () => {
     render(<StandardTable<Row> title="People" data={sampleRows} columns={sampleColumns} />);
     expect(screen.getByRole('table').parentElement?.className).toContain('rounded-lg');
+    dragColumnAfter('Name', 'Age');
     const exportButton = screen.getByText('table.export');
     fireEvent.click(exportButton);
 
@@ -296,7 +323,7 @@ describe('<StandardTable />', () => {
     // First arg: rows array (header row + data rows)
     expect(Array.isArray(args[0])).toBe(true);
     const rows = args[0] as string[][];
-    expect(rows[0]).toEqual(['Name', 'Age']);
+    expect(rows[0]).toEqual(['Age', 'Name']);
     expect(rows.length).toBe(4); // header + 3 rows
     // Second arg: filename string
     expect(typeof args[1]).toBe('string');
@@ -424,6 +451,49 @@ describe('<StandardTable />', () => {
   });
 
   // ---------------------------------------------------------------------------
+  // Column ordering
+  // ---------------------------------------------------------------------------
+  test('drag and keyboard reorder headers and cells while actions stay fixed', () => {
+    const columns = [
+      ...sampleColumns,
+      {
+        id: 'actions',
+        header: 'Actions',
+        disableSorting: true,
+        disableFiltering: true,
+        sticky: 'right' as const,
+        cell: () => <button type="button">Edit</button>,
+      },
+    ];
+    render(<StandardTable<Row> title="Column Order" data={sampleRows} columns={columns} />);
+
+    expect(screen.getByLabelText('table.reorderColumnHandle: Name')).toBeInTheDocument();
+    expect(screen.getByLabelText('table.reorderColumnHandle: Age')).toBeInTheDocument();
+    expect(screen.queryByLabelText('table.reorderColumnHandle: Actions')).not.toBeInTheDocument();
+
+    dragColumnAfter('Name', 'Age');
+    expect(getRenderedColumnIds()).toEqual(['age', 'name', 'actions']);
+    const firstRowValues = Array.from(
+      screen.getAllByRole('row')[1].querySelectorAll<HTMLElement>('.standard-table-value-cell'),
+    ).map((cell) => cell.textContent);
+    expect(firstRowValues).toEqual(['30', 'Alice']);
+
+    const ageHandle = screen.getByLabelText('table.reorderColumnHandle: Age');
+    act(() => fireEvent.keyDown(ageHandle, { key: 'ArrowRight' }));
+    expect(getRenderedColumnIds()).toEqual(['name', 'age', 'actions']);
+  });
+
+  test('reset columns restores the definition order after a drag', async () => {
+    render(<StandardTable<Row> title="Reset Order" data={sampleRows} columns={sampleColumns} />);
+    dragColumnAfter('Name', 'Age');
+    expect(getRenderedColumnIds()).toEqual(['age', 'name']);
+
+    const user = await openColumnSettings();
+    await user.click(screen.getByText('table.resetColumns'));
+    expect(getRenderedColumnIds()).toEqual(['name', 'age']);
+  });
+
+  // ---------------------------------------------------------------------------
   // Sorting (via TanStack header sort handlers)
   // ---------------------------------------------------------------------------
   test('sorting ascending by name reorders the rendered rows', () => {
@@ -454,7 +524,8 @@ describe('<StandardTable />', () => {
     const sortIcon = sortButton.querySelector('svg.lucide-arrow-up-down');
 
     expect(sortButton.className).toContain('rounded-lg');
-    expect(sortButton.className).toContain('-ml-2');
+    expect(sortButton.className).not.toContain('-ml-2');
+    expect(screen.getByLabelText('table.reorderColumnHandle: Name').className).toContain('-ml-2');
     expect(sortButton.className).toContain('font-semibold');
     expect(sortButton.className).toContain('hover:bg-accent');
     expect(sortButton.className).toContain('hover:text-accent-foreground');
@@ -469,7 +540,10 @@ describe('<StandardTable />', () => {
       const sortButton = within(headerCell)
         .getAllByRole('button')
         .find((button) => button.textContent?.trim().startsWith(headerText)) as HTMLButtonElement;
-      expect(sortButton.className).toContain('-ml-2');
+      expect(sortButton.className).not.toContain('-ml-2');
+      expect(screen.getByLabelText(`table.reorderColumnHandle: ${headerText}`).className).toContain(
+        '-ml-2',
+      );
     }
   });
 
@@ -580,12 +654,12 @@ describe('<StandardTable />', () => {
       fireEvent.mouseUp(document);
     });
 
-    await waitFor(() => expect(Number.parseInt(nameHeader.style.width, 10)).toBe(112));
+    await waitFor(() => expect(Number.parseInt(nameHeader.style.width, 10)).toBe(140));
     await waitFor(() => {
       const saved = JSON.parse(
         localStorage.getItem('praetor_table_colwidths_clamped_drag') ?? '{}',
       );
-      expect(saved.name).toBe(112);
+      expect(saved.name).toBe(140);
     });
   });
 
@@ -628,14 +702,14 @@ describe('<StandardTable />', () => {
     );
 
     const firstHeader = screen.getByText('Ruolo').closest('th') as HTMLElement;
-    await waitFor(() => expect(Number.parseInt(firstHeader.style.width, 10)).toBe(119));
+    await waitFor(() => expect(Number.parseInt(firstHeader.style.width, 10)).toBe(147));
     const savedAfterFirstRender = localStorage.getItem('praetor_table_colwidths_remount_width');
 
     unmount();
     render(<StandardTable<Row> title="Remount Width" data={sampleRows} columns={columns} />);
 
     const secondHeader = screen.getByText('Ruolo').closest('th') as HTMLElement;
-    await waitFor(() => expect(Number.parseInt(secondHeader.style.width, 10)).toBe(119));
+    await waitFor(() => expect(Number.parseInt(secondHeader.style.width, 10)).toBe(147));
     expect(localStorage.getItem('praetor_table_colwidths_remount_width')).toBe(
       savedAfterFirstRender,
     );
@@ -1419,6 +1493,7 @@ describe('<StandardTable />', () => {
 
   test('saving a custom view persists it to localStorage and marks it active', async () => {
     render(<StandardTable<Row> title="People" data={sampleRows} columns={sampleColumns} />);
+    dragColumnAfter('Name', 'Age');
     await openCustomViews();
     clickMenuItemByText('buttons.add');
 
@@ -1431,6 +1506,7 @@ describe('<StandardTable />', () => {
     const parsed = JSON.parse(stored as string);
     expect(parsed.length).toBe(1);
     expect(parsed[0].name).toBe('My View');
+    expect(parsed[0].columnOrder).toEqual(['age', 'name']);
 
     const activeId = localStorage.getItem('praetor_table_activeview_people');
     expect(activeId).toBe(parsed[0].id);
@@ -1462,6 +1538,34 @@ describe('<StandardTable />', () => {
     expect(actionsRow.className).not.toContain('grid');
     expect(addItem.className).toContain('flex-1');
     expect(importItem.className).toContain('flex-1');
+  });
+
+  test('loading a stored view restores and normalizes its column order', () => {
+    const stored = [
+      {
+        id: 'ordered-view',
+        name: 'Ordered',
+        hiddenColIds: [],
+        columnOrder: ['age', 'ghost', 'age'],
+        sortState: null,
+        filterState: {},
+      },
+    ];
+    localStorage.setItem('praetor_table_customviews_columnload', JSON.stringify(stored));
+    localStorage.setItem('praetor_table_activeview_columnload', 'ordered-view');
+
+    render(<StandardTable<Row> title="ColumnLoad" data={sampleRows} columns={sampleColumns} />);
+
+    expect(getRenderedColumnIds()).toEqual(['age', 'name']);
+    expect(localStorage.getItem('praetor_table_activeview_columnload')).toBe('ordered-view');
+
+    act(() =>
+      fireEvent.keyDown(screen.getByLabelText('table.reorderColumnHandle: Age'), {
+        key: 'ArrowRight',
+      }),
+    );
+    expect(getRenderedColumnIds()).toEqual(['name', 'age']);
+    expect(localStorage.getItem('praetor_table_activeview_columnload')).toBeNull();
   });
 
   test('loading a stored view at mount applies sortState to the table', () => {
@@ -1637,6 +1741,7 @@ describe('<StandardTable />', () => {
         id: 'vexp',
         name: 'Exportable',
         hiddenColIds: ['age'],
+        columnOrder: ['age', 'name'],
         sortState: { colId: 'name', px: 'asc' },
         filterState: { name: ['Alice'] },
       },
@@ -1655,6 +1760,7 @@ describe('<StandardTable />', () => {
     const payload = JSON.parse(writeClipboardSpy.mock.calls[0][0] as string);
     expect(payload.name).toBe('Exportable');
     expect(payload.hiddenColIds).toEqual(['age']);
+    expect(payload.columnOrder).toEqual(['age', 'name']);
     expect(payload.sortState).toEqual({ colId: 'name', px: 'asc' });
     expect(payload.filterState).toEqual({ name: ['Alice'] });
   });
@@ -1676,6 +1782,7 @@ describe('<StandardTable />', () => {
     const importPayload = JSON.stringify({
       name: 'Imported',
       hiddenColIds: [],
+      columnOrder: ['age', 'name'],
       sortState: null,
       filterState: {},
     });
@@ -1687,6 +1794,7 @@ describe('<StandardTable />', () => {
     );
     expect(stored.length).toBe(1);
     expect(stored[0].name).toBe('Imported');
+    expect(stored[0].columnOrder).toEqual(['age', 'name']);
   });
 
   test('paste import surfaces an error for invalid JSON', async () => {

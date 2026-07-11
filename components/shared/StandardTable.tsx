@@ -1,6 +1,7 @@
 import {
   type ColumnDef,
   type ColumnFiltersState,
+  type ColumnOrderState,
   type ColumnSizingState,
   flexRender,
   functionalUpdate,
@@ -15,7 +16,7 @@ import {
   useReactTable,
   type VisibilityState,
 } from '@tanstack/react-table';
-import { ArrowDown, ArrowUp, ArrowUpDown, ZoomIn, ZoomOut } from 'lucide-react';
+import { ArrowDown, ArrowUp, ArrowUpDown, GripVertical, ZoomIn, ZoomOut } from 'lucide-react';
 import {
   Children,
   Fragment,
@@ -59,6 +60,7 @@ import CustomViewModal from './CustomViewModal';
 import {
   type CustomView,
   computeViewApplication,
+  type DropPosition,
   decodeLegacyFilterValue,
   type FilterState,
   filterStatesEqual,
@@ -67,10 +69,13 @@ import {
   isValidImportedView,
   type LegacyFilterColumnAlias,
   moveByDelta,
+  normalizeColumnOrder,
+  parseColumnOrder,
   parseFilterState,
   parseSortState,
   parseStoredViews,
   reorderDropAbove,
+  reorderRelative,
   type SortState,
 } from './customViewHelpers';
 import Modal from './Modal';
@@ -378,7 +383,7 @@ const getViewOrderStorageKey = (viewKey: string) => `praetor_table_vieworder_${s
 
 // Schema version stamped onto the server `config` payload. Mirrors the backend's
 // table-config validator so a future migration can detect and upgrade old payloads.
-const SERVER_VIEW_SCHEMA_VERSION = 1;
+const SERVER_VIEW_SCHEMA_VERSION = 2;
 
 // Per-view server metadata kept alongside the `CustomView[]` list so the shared
 // apply/dirty helpers stay untouched (they only read the `CustomView` fields) while
@@ -397,6 +402,7 @@ const serverViewToCustomView = (dto: SavedViewDto): CustomView => {
     id: dto.id,
     name: dto.name,
     hiddenColIds,
+    columnOrder: parseColumnOrder(config.columnOrder),
     sortState: parseSortState(config.sortState),
     filterState: parseFilterState(config.filterState),
   };
@@ -405,11 +411,13 @@ const serverViewToCustomView = (dto: SavedViewDto): CustomView => {
 // Build the opaque `config` payload persisted to the server from a `CustomView`.
 const customViewToConfig = (view: {
   hiddenColIds: string[];
+  columnOrder: string[];
   sortState: SortState;
   filterState: FilterState;
 }): Record<string, unknown> => ({
   schemaVersion: SERVER_VIEW_SCHEMA_VERSION,
   hiddenColIds: view.hiddenColIds,
+  columnOrder: view.columnOrder,
   sortState: view.sortState,
   filterState: view.filterState,
 });
@@ -474,24 +482,36 @@ const HEADER_SORT_ICON_WIDTH = 12;
 const HEADER_SORT_ICON_GAP = 4;
 const HEADER_FILTER_BUTTON_WIDTH = 24;
 const HEADER_CONTENT_GAP = 4;
+const HEADER_DRAG_HANDLE_WIDTH = 24;
+const HEADER_DRAG_HANDLE_GAP = 4;
 const ACTION_COLUMN_WIDTH = 64;
 const ACTION_MENU_CONTENT_CLASSNAME = 'w-max min-w-[9rem] max-w-[calc(100vw-2rem)] p-1';
 const ACTION_MENU_ITEMS_CLASSNAME = 'flex flex-col gap-0.5';
 const ACTION_MENU_BUTTON_CLASSNAME =
   'flex h-7 w-full items-center justify-start gap-2 rounded-sm px-2 text-xs font-medium whitespace-nowrap text-popover-foreground outline-hidden transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50';
+
+const getColumnDropPosition = (element: HTMLElement, clientX: number): DropPosition => {
+  const rect = element.getBoundingClientRect();
+  const pointerX = Number.isFinite(clientX) ? clientX : rect.left + rect.width;
+  return pointerX >= rect.left + rect.width / 2 ? 'after' : 'before';
+};
+
 type ViewModalState = { kind: 'create' } | { kind: 'edit'; view: CustomView } | null;
+type ColumnDropTarget = { columnId: string; position: DropPosition };
 type StateUpdate<T> = T | ((prev: T) => T);
 type TableViewApplication = ReturnType<typeof computeViewApplication>;
 type TableViewState = {
   sortState: SortState;
   filterState: FilterState;
   hiddenColIds: Set<string>;
+  columnOrder: ColumnOrderState;
   activeViewId: string | null;
 };
 type TableViewAction =
   | { type: 'set-active-view'; activeViewId: string | null }
   | { type: 'set-filter-state'; filterState: FilterState; activeViewId?: string | null }
   | { type: 'set-hidden-columns'; hiddenColIds: Set<string> }
+  | { type: 'set-column-order'; columnOrder: ColumnOrderState }
   | { type: 'set-sort-state'; sortState: SortState }
   | {
       type: 'apply-view';
@@ -512,12 +532,15 @@ const tableViewReducer = (state: TableViewState, action: TableViewAction): Table
       };
     case 'set-hidden-columns':
       return { ...state, hiddenColIds: action.hiddenColIds };
+    case 'set-column-order':
+      return { ...state, columnOrder: action.columnOrder };
     case 'set-sort-state':
       return { ...state, sortState: action.sortState };
     case 'apply-view':
       return {
         ...state,
         hiddenColIds: action.application.hiddenColIds,
+        columnOrder: action.application.columnOrder,
         sortState: action.application.sortState,
         filterState: action.application.filterState,
         activeViewId: action.activeViewId === undefined ? state.activeViewId : action.activeViewId,
@@ -585,6 +608,14 @@ const isTableActionColumn = <T,>(col: Column<T>) =>
   getColumnId(col) === 'actions' ||
   (col.sticky === 'right' && col.accessorKey == null && col.accessorFn == null);
 
+const getReorderableColumnIds = <T,>(columns: Column<T>[] | undefined) => {
+  const ids: string[] = [];
+  for (const column of columns ?? []) {
+    if (!column.hidden && !isTableActionColumn(column)) ids.push(getColumnId(column));
+  }
+  return ids;
+};
+
 const getViewApplicationForColumns = <T,>(view: CustomView, columns: Column<T>[] | undefined) => {
   const gearIds = new Set<string>();
   const allIds = new Set<string>();
@@ -627,6 +658,7 @@ const normalizeViewForColumns = <T,>(
   return {
     ...view,
     hiddenColIds: Array.from(application.hiddenColIds),
+    columnOrder: application.columnOrder,
     sortState: application.sortState,
     filterState: application.filterState,
   };
@@ -688,6 +720,8 @@ type StandardTableUiState = {
   modalState: ViewModalState;
   draggingViewId: string | null;
   dragOverViewId: string | null;
+  draggingColumnId: string | null;
+  columnDropTarget: ColumnDropTarget | null;
   copiedViewId: string | null;
   viewError: string | null;
   pasteModalOpen: boolean;
@@ -734,6 +768,8 @@ const createInitialStandardTableUiState = ({
   modalState: null,
   draggingViewId: null,
   dragOverViewId: null,
+  draggingColumnId: null,
+  columnDropTarget: null,
   copiedViewId: null,
   viewError: null,
   pasteModalOpen: false,
@@ -778,6 +814,7 @@ const createInitialTableViewState = <T,>({
     sortState: null,
     filterState: initialFilterState ?? {},
     hiddenColIds: new Set<string>(),
+    columnOrder: getReorderableColumnIds(columns),
     activeViewId,
   };
   if (!activeViewId || isServerBacked) return baseState;
@@ -798,6 +835,7 @@ const createInitialTableViewState = <T,>({
   return {
     ...baseState,
     hiddenColIds: application.hiddenColIds,
+    columnOrder: application.columnOrder,
     sortState: application.sortState,
     filterState: application.filterState,
   };
@@ -894,7 +932,7 @@ const useStandardTableController = <T extends object>({
       isServerBacked,
     }),
   );
-  const { sortState, filterState, hiddenColIds, activeViewId } = tableViewState;
+  const { sortState, filterState, hiddenColIds, columnOrder, activeViewId } = tableViewState;
   const filterStateRef = useRef(filterState);
   filterStateRef.current = filterState;
 
@@ -930,6 +968,8 @@ const useStandardTableController = <T extends object>({
     modalState,
     draggingViewId,
     dragOverViewId,
+    draggingColumnId,
+    columnDropTarget,
     copiedViewId,
     viewError,
     pasteModalOpen,
@@ -1003,6 +1043,10 @@ const useStandardTableController = <T extends object>({
   );
   const setDragOverViewId = useCallback(
     (update: StateUpdate<string | null>) => setTableUiField('dragOverViewId', update),
+    [setTableUiField],
+  );
+  const setColumnDropTarget = useCallback(
+    (update: StateUpdate<ColumnDropTarget | null>) => setTableUiField('columnDropTarget', update),
     [setTableUiField],
   );
   const setCopiedViewId = useCallback(
@@ -1169,7 +1213,7 @@ const useStandardTableController = <T extends object>({
               kind: 'table',
               scopeKey: key,
               name: view.name,
-              config: customViewToConfig(view),
+              config: customViewToConfig(normalizeViewForColumns(view, columnsRef.current)),
             });
             return { status: 'uploaded' as const, view, dto };
           } catch (err) {
@@ -1313,16 +1357,6 @@ const useStandardTableController = <T extends object>({
 
   const isRowActionColumn = useCallback(isTableActionColumn, []);
 
-  const visibleColumns = useMemo(
-    () =>
-      columns?.filter((col) => {
-        if (col.hidden) return false;
-        if (isRowActionColumn(col)) return true;
-        return !hiddenColIds.has(getColId(col));
-      }) ?? [],
-    [columns, hiddenColIds, getColId, isRowActionColumn],
-  );
-
   const getColumnMinWidth = useCallback(
     (col: Column<T>) => {
       const headerTextWidth = String(col.header).length * HEADER_TEXT_CHAR_WIDTH;
@@ -1344,6 +1378,8 @@ const useStandardTableController = <T extends object>({
             HEADER_SORT_ICON_GAP +
             HEADER_SORT_ICON_WIDTH +
             filterWidth +
+            HEADER_DRAG_HANDLE_GAP +
+            HEADER_DRAG_HANDLE_WIDTH +
             HEADER_CELL_HORIZONTAL_PADDING +
             HEADER_RESIZE_GUTTER_WIDTH,
         ),
@@ -1385,6 +1421,16 @@ const useStandardTableController = <T extends object>({
   const gearColumns = useMemo(
     () => columns?.filter((col) => !col.hidden && !isRowActionColumn(col)) ?? [],
     [columns, isRowActionColumn],
+  );
+
+  const reorderableColumnIds = useMemo(() => getReorderableColumnIds(columns), [columns]);
+  const reorderableColumnIdSet = useMemo(
+    () => new Set(reorderableColumnIds),
+    [reorderableColumnIds],
+  );
+  const normalizedColumnOrder = useMemo(
+    () => normalizeColumnOrder(columnOrder, reorderableColumnIdSet),
+    [columnOrder, reorderableColumnIdSet],
   );
 
   const modalColumns = useMemo(
@@ -1451,6 +1497,7 @@ const useStandardTableController = <T extends object>({
       id: '',
       name: '',
       hiddenColIds: ids,
+      columnOrder: normalizedColumnOrder,
       sortState: null,
       filterState: {},
     }).hiddenColIds;
@@ -1692,6 +1739,24 @@ const useStandardTableController = <T extends object>({
     [columnVisibility, gearColumns, getColId, title],
   );
 
+  const onColumnOrderChange = useCallback(
+    (updater: Updater<ColumnOrderState>) => {
+      const next = normalizeColumnOrder(
+        functionalUpdate(updater, normalizedColumnOrder),
+        reorderableColumnIdSet,
+      );
+      if (
+        next.length === normalizedColumnOrder.length &&
+        next.every((id, index) => id === normalizedColumnOrder[index])
+      ) {
+        return;
+      }
+      dispatchTableView({ type: 'set-column-order', columnOrder: next });
+      updateActiveViewId(null);
+    },
+    [normalizedColumnOrder, reorderableColumnIdSet, updateActiveViewId],
+  );
+
   const onColumnSizingChange = useCallback(
     (updater: Updater<ColumnSizingState>) => {
       setColumnSizing((prev) => {
@@ -1709,6 +1774,7 @@ const useStandardTableController = <T extends object>({
     onColumnFiltersChange,
     onPaginationChange,
     onColumnVisibilityChange,
+    onColumnOrderChange,
     onColumnSizingChange,
     columnResizeMode: 'onChange',
     enableColumnResizing: true,
@@ -1717,6 +1783,7 @@ const useStandardTableController = <T extends object>({
       columnFilters,
       pagination,
       columnVisibility,
+      columnOrder: normalizedColumnOrder,
       columnSizing: clampedColumnSizing,
     },
     getCoreRowModel: getCoreRowModel(),
@@ -1725,6 +1792,10 @@ const useStandardTableController = <T extends object>({
     getPaginationRowModel: getPaginationRowModel(),
   });
 
+  const visibleColumns = table
+    .getVisibleLeafColumns()
+    .map((column) => colsById.get(column.id))
+    .filter((column): column is Column<T> => column !== undefined);
   const processedRows = shouldRenderTable ? table.getPrePaginationRowModel().rows : [];
   const totalItems = shouldRenderTable ? processedRows.length : externalTotalCount || 0;
   const totalPages = shouldRenderTable ? table.getPageCount() : Math.ceil(totalItems / rowsPerPage);
@@ -1936,8 +2007,44 @@ const useStandardTableController = <T extends object>({
     downloadCsv(rows, `${slugify(title)}_${getLocalDateString()}.csv`);
   };
 
+  const reorderColumn = useCallback(
+    (fromId: string, toId: string, position: DropPosition) => {
+      if (fromId === toId) return;
+      table.setColumnOrder((current) => {
+        const order = normalizeColumnOrder(current, reorderableColumnIdSet);
+        return reorderRelative(order, order.indexOf(fromId), order.indexOf(toId), position);
+      });
+    },
+    [reorderableColumnIdSet, table],
+  );
+
+  const moveColumnByDelta = useCallback(
+    (columnId: string, delta: number) => {
+      table.setColumnOrder((current) => {
+        const order = normalizeColumnOrder(current, reorderableColumnIdSet);
+        return moveByDelta(order, order.indexOf(columnId), delta);
+      });
+    },
+    [reorderableColumnIdSet, table],
+  );
+
+  const beginColumnDrag = useCallback((columnId: string) => {
+    dispatchTableUi({
+      type: 'patch',
+      values: { draggingColumnId: columnId, columnDropTarget: null },
+    });
+  }, []);
+
+  const clearColumnDragState = useCallback(() => {
+    dispatchTableUi({
+      type: 'patch',
+      values: { draggingColumnId: null, columnDropTarget: null },
+    });
+  }, []);
+
   const resetColumnVisibility = () => {
     table.setColumnVisibility({});
+    table.setColumnOrder(reorderableColumnIds);
   };
 
   const applyView = (view: CustomView) => {
@@ -1967,10 +2074,10 @@ const useStandardTableController = <T extends object>({
     const hidden = normalizeHiddenColIdsForCurrentColumns(hiddenColIds);
     const editingView = modalState?.kind === 'edit' ? modalState.view : null;
     const editingId = editingView?.id ?? null;
-    // The modal only edits name + visible columns. When editing an existing view, keep THAT view's
-    // own sort/filter rather than snapshotting the live table state — otherwise a rename or column
-    // tweak (reachable by shared write recipients) would silently overwrite the saved preset's
-    // sort/filter for everyone. A brand-new view still snapshots the current table state.
+    // The modal only edits name + visible columns. When editing an existing view, keep that view's
+    // own order/sort/filter rather than snapshotting the live table state. A brand-new view instead
+    // snapshots the current table state, including the order chosen through the header drag handles.
+    const savedColumnOrder = editingView ? editingView.columnOrder : normalizedColumnOrder;
     const savedSortState = editingView ? editingView.sortState : sortState;
     const savedFilterState = editingView ? editingView.filterState : filterState;
 
@@ -1983,6 +2090,7 @@ const useStandardTableController = <T extends object>({
                   ...v,
                   name,
                   hiddenColIds: hidden,
+                  columnOrder: savedColumnOrder,
                   sortState: savedSortState,
                   filterState: savedFilterState,
                 }
@@ -1997,6 +2105,7 @@ const useStandardTableController = <T extends object>({
           id: generateViewId(),
           name,
           hiddenColIds: hidden,
+          columnOrder: normalizedColumnOrder,
           sortState,
           filterState,
         };
@@ -2011,6 +2120,7 @@ const useStandardTableController = <T extends object>({
     if (!viewKey || viewBusy) return;
     const config = customViewToConfig({
       hiddenColIds: hidden,
+      columnOrder: savedColumnOrder,
       sortState: savedSortState,
       filterState: savedFilterState,
     });
@@ -2077,7 +2187,7 @@ const useStandardTableController = <T extends object>({
   // read recipient get an editable view of their own.
   const duplicateView = async (view: CustomView) => {
     if (!isServerBacked || !viewKey || viewBusy) return;
-    const config = customViewToConfig(view);
+    const config = customViewToConfig(normalizeViewForCurrentColumns(view));
     setViewBusy(true);
     try {
       const dto = await viewsApi.create({
@@ -2120,6 +2230,7 @@ const useStandardTableController = <T extends object>({
     const payload = {
       name: view.name,
       hiddenColIds: view.hiddenColIds,
+      columnOrder: view.columnOrder,
       sortState: view.sortState,
       filterState: view.filterState,
     };
@@ -2148,6 +2259,7 @@ const useStandardTableController = <T extends object>({
       id: generateViewId(),
       name: parsed.name,
       hiddenColIds: parsed.hiddenColIds,
+      columnOrder: parseColumnOrder(parsed.columnOrder),
       sortState: parseSortState(parsed.sortState),
       filterState: parseFilterState(parsed.filterState),
     };
@@ -2293,6 +2405,13 @@ const useStandardTableController = <T extends object>({
     activeView,
     table,
     colsById,
+    draggingColumnId,
+    columnDropTarget,
+    beginColumnDrag,
+    setColumnDropTarget,
+    clearColumnDragState,
+    reorderColumn,
+    moveColumnByDelta,
     resetColumnVisibility,
     viewsSubmenuOpen,
     setViewsSubmenuOpen,
@@ -3053,6 +3172,11 @@ const StandardTableHeaderCell = <T extends object>({
     updateFilterSearch,
     clearFilterSearch,
     resetFilterPage,
+    draggingColumnId,
+    columnDropTarget,
+    setColumnDropTarget,
+    clearColumnDragState,
+    reorderColumn,
   } = controller;
   const col = colsById.get(header.column.id);
   if (!col) return null;
@@ -3071,6 +3195,10 @@ const StandardTableHeaderCell = <T extends object>({
   const isResizing = header.column.getIsResizing();
   const stickyBorderClass = isStickyRightColumn && !isActionColumn ? 'border-l border-border' : '';
   const resizeHandler = header.getResizeHandler();
+  const dropPosition =
+    columnDropTarget?.columnId === colId && draggingColumnId !== colId
+      ? columnDropTarget.position
+      : null;
 
   return (
     <Fragment>
@@ -3084,9 +3212,39 @@ const StandardTableHeaderCell = <T extends object>({
       <TableHead
         style={{ width: colWidth, minWidth: minColumnWidth }}
         aria-label={isActionColumn ? col.header : undefined}
+        data-column-drop-position={dropPosition ?? undefined}
+        onDragOver={(event) => {
+          if (!draggingColumnId || draggingColumnId === colId || isActionColumn) return;
+          event.preventDefault();
+          event.stopPropagation();
+          event.dataTransfer.dropEffect = 'move';
+          const position = getColumnDropPosition(event.currentTarget, event.clientX);
+          setColumnDropTarget((current) =>
+            current?.columnId === colId && current.position === position
+              ? current
+              : { columnId: colId, position },
+          );
+        }}
+        onDragLeave={(event) => {
+          const nextTarget = event.relatedTarget;
+          if (nextTarget instanceof Node && event.currentTarget.contains(nextTarget)) return;
+          if (columnDropTarget?.columnId === colId) setColumnDropTarget(null);
+        }}
+        onDrop={(event) => {
+          if (!draggingColumnId || draggingColumnId === colId || isActionColumn) return;
+          event.preventDefault();
+          event.stopPropagation();
+          const position = getColumnDropPosition(event.currentTarget, event.clientX);
+          reorderColumn(draggingColumnId, colId, position);
+          clearColumnDragState();
+        }}
         className={`relative group h-10 border-border ${
           isLastColumn ? 'pl-3 pr-2' : 'px-3'
-        } whitespace-nowrap ${
+        } whitespace-nowrap ${dropPosition === 'before' ? 'before:pointer-events-none before:absolute before:inset-y-0 before:left-0 before:z-30 before:w-0.5 before:bg-primary' : ''} ${
+          dropPosition === 'after'
+            ? 'after:pointer-events-none after:absolute after:inset-y-0 after:right-0 after:z-30 after:w-0.5 after:bg-primary'
+            : ''
+        } ${
           effectiveAlign === 'right'
             ? 'text-right'
             : effectiveAlign === 'center'
@@ -3165,6 +3323,52 @@ const StandardTableActionHeader = <T extends object>({
   </div>
 );
 
+const StandardTableColumnDragHandle = <T extends object>({
+  controller,
+  columnId,
+  columnName,
+}: {
+  controller: StandardTableController<T>;
+  columnId: string;
+  columnName: string;
+}) => {
+  const { t, beginColumnDrag, clearColumnDragState, moveColumnByDelta } = controller;
+  const label = `${t('table.reorderColumnHandle')}: ${columnName}`;
+
+  return (
+    <button
+      type="button"
+      draggable
+      data-column-drag-handle={columnId}
+      title={label}
+      aria-label={label}
+      aria-keyshortcuts="ArrowLeft ArrowRight"
+      onClick={(event) => event.stopPropagation()}
+      onKeyDown={(event) => {
+        if (event.key === 'ArrowLeft') {
+          event.preventDefault();
+          event.stopPropagation();
+          moveColumnByDelta(columnId, -1);
+        } else if (event.key === 'ArrowRight') {
+          event.preventDefault();
+          event.stopPropagation();
+          moveColumnByDelta(columnId, 1);
+        }
+      }}
+      onDragStart={(event) => {
+        event.stopPropagation();
+        event.dataTransfer.effectAllowed = 'move';
+        event.dataTransfer.setData('text/plain', columnId);
+        beginColumnDrag(columnId);
+      }}
+      onDragEnd={clearColumnDragState}
+      className="flex size-6 shrink-0 -ml-2 cursor-grab items-center justify-center rounded-sm text-muted-foreground outline-none hover:bg-accent hover:text-accent-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 active:cursor-grabbing"
+    >
+      <GripVertical className="size-3" aria-hidden="true" />
+    </button>
+  );
+};
+
 const StandardTableSortableHeader = <T extends object>({
   controller,
   header,
@@ -3189,11 +3393,16 @@ const StandardTableSortableHeader = <T extends object>({
   onResetPage: () => void;
 }) => (
   <div data-column-header-content={colId} className="inline-flex w-max items-center gap-1">
+    <StandardTableColumnDragHandle
+      controller={controller}
+      columnId={colId}
+      columnName={col.header}
+    />
     <button
       type="button"
       disabled={!header.column.getCanSort()}
       onClick={header.column.getToggleSortingHandler()}
-      className="inline-flex shrink-0 items-center gap-1 rounded-lg px-2 py-1 -ml-2 text-sm font-semibold text-foreground outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-100"
+      className="inline-flex shrink-0 items-center gap-1 rounded-lg px-2 py-1 text-sm font-semibold text-foreground outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-100"
     >
       <span className="whitespace-nowrap" data-column-header-label={colId}>
         {header.isPlaceholder
