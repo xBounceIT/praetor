@@ -641,6 +641,51 @@ describe('<ClientQuotesView /> edit action gating (#812 round 13)', () => {
     });
   };
 
+  test('reprices items from local MOL when promoting a sent quote to offer', async () => {
+    const user = userEvent.setup();
+    const onUpdateQuote = mock((_id: string, _updates: Partial<Quote>) => Promise.resolve());
+
+    const staleQuote: Quote = {
+      ...quotes[0],
+      id: 'Q-LOCAL-MOL',
+      status: 'sent',
+      items: [
+        {
+          ...quotes[0].items[0],
+          quoteId: 'Q-LOCAL-MOL',
+          unitPrice: 100,
+          productMolPercentage: 0,
+          supplierQuoteId: 'SQ-1',
+          supplierQuoteItemId: 'SQI-1',
+          supplierQuoteSupplierName: 'Supplier',
+          supplierQuoteUnitPrice: 80,
+        },
+      ],
+    };
+
+    render(
+      <ClientQuotesView
+        quotes={[staleQuote]}
+        clients={clients}
+        products={[]}
+        supplierQuotes={[]}
+        currency="EUR"
+        onAddQuote={mock(() => Promise.resolve())}
+        onUpdateQuote={onUpdateQuote}
+        onDeleteQuote={mock(() => Promise.resolve())}
+      />,
+    );
+
+    await openRowActions(user);
+    await user.click(await screen.findByRole('button', { name: 'sales:clientQuotes.markAsOffer' }));
+
+    await waitFor(() => expect(onUpdateQuote).toHaveBeenCalledTimes(1));
+    const updates = onUpdateQuote.mock.calls[0][1] as Partial<Quote>;
+    expect(updates.status).toBe('offer');
+    expect(updates.items?.[0]?.unitPrice).toBe(80);
+    expect(staleQuote.items[0].unitPrice).toBe(100);
+  });
+
   test('keeps the edit action enabled on an expired quote without an offer (extend-date recovery)', async () => {
     // The row click opens such quotes read-only-except-expiration so the date can be extended out
     // of `expired`; the edit action must gate on the same canOpenQuoteModal predicate, not

@@ -1510,7 +1510,10 @@ const useClientQuotesController = ({
                       onClick={(e) => {
                         e.stopPropagation();
                         if (isCreateOfferDisabled) return;
-                        onCreateOffer(row);
+                        onCreateOffer({
+                          ...row,
+                          items: priceClientQuoteItemsFromLocalMol(row.items),
+                        });
                       }}
                       disabled={isCreateOfferDisabled}
                       aria-label={createOfferTitle}
@@ -1562,7 +1565,10 @@ const useClientQuotesController = ({
                       onClick={(e) => {
                         e.stopPropagation();
                         if (history || supplierExpired) return;
-                        handleStatusUpdate(row.id, { status: 'offer' });
+                        handleStatusUpdate(row.id, {
+                          status: 'offer',
+                          items: priceClientQuoteItemsFromLocalMol(row.items),
+                        });
                       }}
                       disabled={history || supplierExpired}
                       aria-label={t('sales:clientQuotes.markAsOffer')}
