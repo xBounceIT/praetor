@@ -130,16 +130,16 @@ const dragColumnAfter = (sourceHeader: string, targetHeader: string) => {
   };
   const handle = screen.getByLabelText(`table.reorderColumnHandle: ${sourceHeader}`);
   const target = screen.getByText(targetHeader).closest('th') as HTMLTableCellElement;
-  target.getBoundingClientRect = () => ({ left: -2, width: 1 }) as DOMRect;
+  target.getBoundingClientRect = () => ({ left: 0, width: 100 }) as DOMRect;
   act(() => {
     fireEvent.dragStart(handle, { dataTransfer });
   });
   act(() => {
-    fireEvent.dragOver(target, { clientX: 10_000, dataTransfer });
+    fireEvent.dragOver(target, { clientX: 1, dataTransfer });
   });
   expect(target.getAttribute('data-column-drop-position')).toBe('after');
   act(() => {
-    fireEvent.drop(target, { clientX: 10_000, dataTransfer });
+    fireEvent.drop(target, { clientX: 1, dataTransfer });
   });
 };
 
@@ -154,10 +154,11 @@ const dragCustomViewColumnAfter = (sourceId: string, targetId: string) => {
   );
   const target = document.querySelector<HTMLElement>(`[data-custom-view-column-id="${targetId}"]`);
   if (!handle || !target) throw new Error('Missing custom view column drag target');
-  target.getBoundingClientRect = () => ({ top: -2, height: 1 }) as DOMRect;
+  target.getBoundingClientRect = () => ({ top: 0, height: 100 }) as DOMRect;
   act(() => fireEvent.dragStart(handle, { dataTransfer }));
-  act(() => fireEvent.dragOver(target, { clientY: 10_000, dataTransfer }));
-  act(() => fireEvent.drop(target, { clientY: 10_000, dataTransfer }));
+  // Entering the next row should reorder immediately; reaching its lower half is unnecessary.
+  act(() => fireEvent.dragOver(target, { clientY: 1, dataTransfer }));
+  act(() => fireEvent.drop(target, { clientY: 1, dataTransfer }));
 };
 
 describe('<StandardTable />', () => {

@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import {
   type CustomView,
   type DropPosition,
+  getDirectionalDropPosition,
   moveByDelta,
   normalizeColumnOrder,
   reorderRelative,
@@ -45,12 +46,6 @@ type ColumnDragState = {
 const EMPTY_COLUMN_DRAG_STATE: ColumnDragState = {
   draggingColumnId: null,
   dropTarget: null,
-};
-
-const getDropPosition = (element: HTMLElement, clientY: number): DropPosition => {
-  const rect = element.getBoundingClientRect();
-  const pointerY = Number.isFinite(clientY) ? clientY : rect.top + rect.height;
-  return pointerY >= rect.top + rect.height / 2 ? 'after' : 'before';
 };
 
 // Initial state is computed once when the modal mounts. The parent passes a
@@ -185,7 +180,11 @@ const CustomViewModal: React.FC<CustomViewModalProps> = ({
                         }
                         event.preventDefault();
                         event.dataTransfer.dropEffect = 'move';
-                        const position = getDropPosition(event.currentTarget, event.clientY);
+                        const position = getDirectionalDropPosition(
+                          columnOrder,
+                          columnDragState.draggingColumnId,
+                          col.id,
+                        );
                         setColumnDragState((current) =>
                           current.dropTarget?.columnId === col.id &&
                           current.dropTarget.position === position
@@ -211,7 +210,11 @@ const CustomViewModal: React.FC<CustomViewModalProps> = ({
                         const { draggingColumnId } = columnDragState;
                         if (!draggingColumnId || draggingColumnId === col.id) return;
                         event.preventDefault();
-                        const position = getDropPosition(event.currentTarget, event.clientY);
+                        const position = getDirectionalDropPosition(
+                          columnOrder,
+                          draggingColumnId,
+                          col.id,
+                        );
                         reorderColumn(draggingColumnId, col.id, position);
                         setColumnDragState(EMPTY_COLUMN_DRAG_STATE);
                       }}

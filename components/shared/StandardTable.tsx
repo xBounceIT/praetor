@@ -65,6 +65,7 @@ import {
   type FilterState,
   filterStatesEqual,
   generateViewId,
+  getDirectionalDropPosition,
   IMPORT_PAYLOAD_MAX_BYTES,
   isValidImportedView,
   type LegacyFilterColumnAlias,
@@ -489,12 +490,6 @@ const ACTION_MENU_CONTENT_CLASSNAME = 'w-max min-w-[9rem] max-w-[calc(100vw-2rem
 const ACTION_MENU_ITEMS_CLASSNAME = 'flex flex-col gap-0.5';
 const ACTION_MENU_BUTTON_CLASSNAME =
   'flex h-7 w-full items-center justify-start gap-2 rounded-sm px-2 text-xs font-medium whitespace-nowrap text-popover-foreground outline-hidden transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50';
-
-const getColumnDropPosition = (element: HTMLElement, clientX: number): DropPosition => {
-  const rect = element.getBoundingClientRect();
-  const pointerX = Number.isFinite(clientX) ? clientX : rect.left + rect.width;
-  return pointerX >= rect.left + rect.width / 2 ? 'after' : 'before';
-};
 
 type ViewModalState = { kind: 'create' } | { kind: 'edit'; view: CustomView } | null;
 type ColumnDropTarget = { columnId: string; position: DropPosition };
@@ -3186,6 +3181,7 @@ const StandardTableHeaderCell = <T extends object>({
     setColumnDropTarget,
     clearColumnDragState,
     reorderColumn,
+    normalizedColumnOrder,
   } = controller;
   const col = colsById.get(header.column.id);
   if (!col) return null;
@@ -3227,7 +3223,11 @@ const StandardTableHeaderCell = <T extends object>({
           event.preventDefault();
           event.stopPropagation();
           event.dataTransfer.dropEffect = 'move';
-          const position = getColumnDropPosition(event.currentTarget, event.clientX);
+          const position = getDirectionalDropPosition(
+            normalizedColumnOrder,
+            draggingColumnId,
+            colId,
+          );
           setColumnDropTarget((current) =>
             current?.columnId === colId && current.position === position
               ? current
@@ -3243,7 +3243,11 @@ const StandardTableHeaderCell = <T extends object>({
           if (!draggingColumnId || draggingColumnId === colId || isActionColumn) return;
           event.preventDefault();
           event.stopPropagation();
-          const position = getColumnDropPosition(event.currentTarget, event.clientX);
+          const position = getDirectionalDropPosition(
+            normalizedColumnOrder,
+            draggingColumnId,
+            colId,
+          );
           reorderColumn(draggingColumnId, colId, position);
           clearColumnDragState();
         }}

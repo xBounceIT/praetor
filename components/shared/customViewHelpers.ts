@@ -283,6 +283,13 @@ export const computeViewApplication = (
 
 export type DropPosition = 'before' | 'after';
 
+export const getDirectionalDropPosition = (
+  columnOrder: string[],
+  draggingColumnId: string,
+  targetColumnId: string,
+): DropPosition =>
+  columnOrder.indexOf(draggingColumnId) < columnOrder.indexOf(targetColumnId) ? 'after' : 'before';
+
 export const reorderRelative = <T>(
   arr: T[],
   fromIdx: number,

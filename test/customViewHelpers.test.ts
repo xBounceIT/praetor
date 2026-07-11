@@ -5,6 +5,7 @@ import {
   decodeLegacyFilterValue,
   filterStatesEqual,
   generateViewId,
+  getDirectionalDropPosition,
   IMPORT_PAYLOAD_MAX_BYTES,
   isValidImportedView,
   isValidStoredView,
@@ -418,6 +419,14 @@ describe('reorderRelative', () => {
     const order = ['A', 'B', 'C'];
     reorderRelative(order, 0, 2, 'after');
     expect(order).toEqual(['A', 'B', 'C']);
+  });
+});
+
+describe('getDirectionalDropPosition', () => {
+  test('uses movement direction instead of requiring the far half of the target', () => {
+    const order = ['A', 'B', 'C'];
+    expect(getDirectionalDropPosition(order, 'A', 'B')).toBe('after');
+    expect(getDirectionalDropPosition(order, 'C', 'B')).toBe('before');
   });
 });
 
