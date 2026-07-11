@@ -1,10 +1,8 @@
-import { GripVertical } from 'lucide-react';
 import type React from 'react';
 import { useCallback, useMemo, useReducer, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { LinkedRecordBanner } from '@/components/shared/LinkedRecordBanner';
 import { Button } from '@/components/ui/button';
-import DocumentLineItemsScrollArea from '@/components/ui/document-line-items-scroll-area';
 import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -34,6 +32,7 @@ import {
   normalizeDateOnlyString,
 } from '../../utils/date';
 import { getLinkedFieldStatus } from '../../utils/fieldStatus';
+import { createLineItemIndexResolver } from '../../utils/lineItemIndex';
 import {
   calcProductSalePrice,
   calculatePricingTotals,
@@ -144,22 +143,6 @@ const EMPTY_PRICING_TOTALS: PricingTotals = {
   totalCost: 0,
   margin: 0,
   marginPercentage: 0,
-};
-
-const moveQuoteItem = (items: QuoteItem[], fromIndex: number, toIndex: number): QuoteItem[] => {
-  if (
-    fromIndex === toIndex ||
-    fromIndex < 0 ||
-    toIndex < 0 ||
-    fromIndex >= items.length ||
-    toIndex >= items.length
-  ) {
-    return items;
-  }
-  const reordered = [...items];
-  const [movedItem] = reordered.splice(fromIndex, 1);
-  reordered.splice(toIndex, 0, movedItem);
-  return reordered;
 };
 
 const getDefaultFormData = (): Partial<Quote> => ({
@@ -441,7 +424,6 @@ const useClientQuotesController = ({
 
   const [formData, setFormData] = useState<Partial<Quote>>(() => getDefaultFormData());
   const [previewVersion, setPreviewVersion] = useState<QuoteVersion | null>(null);
-  const [draggedItemId, setDraggedItemId] = useState<string | null>(null);
   // Expired quotes are read-only EXCEPT their expiration date, which stays editable so the user can
   // revalidate the quote (issue #779). Other read-only reasons (offer/accepted/denied) lock all.
   const isEditingExpired = Boolean(editingQuote && isQuoteExpired(editingQuote));
@@ -898,66 +880,6 @@ const useClientQuotesController = ({
     newItems.splice(index, 1);
     setFormData((prev) => ({ ...prev, items: newItems }));
   };
-
-  const moveProductRow = useCallback(
-    (fromIndex: number, toIndex: number) => {
-      if (isReadOnly || fromIndex === toIndex) return;
-      setFormData((prev) => {
-        const items = prev.items || [];
-        const reordered = moveQuoteItem(items, fromIndex, toIndex);
-        return reordered === items ? prev : { ...prev, items: reordered };
-      });
-    },
-    [isReadOnly],
-  );
-
-  const handleProductRowDragStart = useCallback(
-    (itemId: string, event: React.DragEvent<HTMLButtonElement>) => {
-      if (isReadOnly) return;
-      event.dataTransfer.effectAllowed = 'move';
-      event.dataTransfer.setData('text/plain', itemId);
-      setDraggedItemId(itemId);
-    },
-    [isReadOnly],
-  );
-
-  const handleProductRowDrop = useCallback(
-    (targetItemId: string, event: React.DragEvent<HTMLDivElement>) => {
-      event.preventDefault();
-      if (!isReadOnly && draggedItemId && draggedItemId !== targetItemId) {
-        setFormData((prev) => {
-          const items = prev.items || [];
-          const fromIndex = items.findIndex((item) => item.id === draggedItemId);
-          const toIndex = items.findIndex((item) => item.id === targetItemId);
-          const reordered = moveQuoteItem(items, fromIndex, toIndex);
-          return reordered === items ? prev : { ...prev, items: reordered };
-        });
-      }
-      setDraggedItemId(null);
-    },
-    [draggedItemId, isReadOnly],
-  );
-
-  const handleProductRowDragEnd = useCallback(() => {
-    setDraggedItemId(null);
-  }, []);
-
-  const handleProductRowKeyDown = useCallback(
-    (index: number, event: React.KeyboardEvent<HTMLButtonElement>) => {
-      if (isReadOnly) return;
-      const lastIndex = (formData.items?.length ?? 0) - 1;
-      let targetIndex = index;
-      if (event.key === 'ArrowUp') targetIndex = Math.max(0, index - 1);
-      else if (event.key === 'ArrowDown') targetIndex = Math.min(lastIndex, index + 1);
-      else if (event.key === 'Home') targetIndex = 0;
-      else if (event.key === 'End') targetIndex = lastIndex;
-      else return;
-
-      event.preventDefault();
-      moveProductRow(index, targetIndex);
-    },
-    [formData.items?.length, isReadOnly, moveProductRow],
-  );
 
   const updateProductRow = (index: number, field: keyof QuoteItem, value: string | number) => {
     if (isReadOnly) return;
@@ -1839,11 +1761,6 @@ const useClientQuotesController = ({
     handleClientChangeReprice,
     addProductRow,
     removeProductRow,
-    draggedItemId,
-    handleProductRowDragStart,
-    handleProductRowDrop,
-    handleProductRowDragEnd,
-    handleProductRowKeyDown,
     updateProductRow,
     activeClients,
     activeProductOptions,
@@ -2238,94 +2155,240 @@ const ClientQuoteExpirationField: React.FC<{ controller: ClientQuotesController 
   );
 };
 
+const getClientQuoteItemRevenue = (item: QuoteItem) =>
+  getClientQuoteItemPricingContext(item).netRevenue;
+
+const getClientQuoteItemMargin = (item: QuoteItem) =>
+  getClientQuoteItemPricingContext(item).lineMargin;
 const ClientQuoteItemsSection: React.FC<{ controller: ClientQuotesController }> = ({
   controller,
 }) => {
-  const { t, errors, formData, readOnlyStatus, statusLabel, addProductRow, isReadOnly } =
-    controller;
-  const items = formData.items || [];
+  const { t, errors, formData, addProductRow, isReadOnly, currency } = controller;
+  const items = formData.items;
+  const getIndex = useMemo(() => createLineItemIndexResolver(items), [items]);
+  const getLine = (item: QuoteItem) => getClientQuoteLineContext(controller, item, getIndex(item));
+  const columns: Column<QuoteItem>[] = [
+    {
+      id: 'supplierQuote',
+      header: t('sales:clientQuotes.supplierQuoteColumn'),
+      accessorFn: (item) =>
+        controller.getSupplierQuoteItemDisplayValue(item.supplierQuoteItemId) || '',
+      cell: ({ row }) => {
+        const index = getIndex(row);
+        const line = getLine(row);
+        return (
+          <div className="relative flex min-w-[240px] items-center gap-1">
+            {line.supplierDataStale && line.linkedSupplierRef && (
+              <StaleSupplierDataButton
+                onClick={() =>
+                  line.linkedSupplierRef &&
+                  controller.refreshLineFromSupplier(index, line.linkedSupplierRef.item)
+                }
+              />
+            )}
+            <ClientQuoteSupplierPicker
+              controller={controller}
+              item={row}
+              index={index}
+              line={line}
+              floating
+              className="min-w-0 flex-1"
+              buttonClassName="h-9 w-full"
+            />
+          </div>
+        );
+      },
+    },
+    {
+      id: 'product',
+      header: t('sales:clientQuotes.productsServices'),
+      accessorFn: (item) =>
+        controller.products.find((product) => product.id === item.productId)?.name ||
+        item.productName ||
+        '',
+      cell: ({ row }) => {
+        const index = getIndex(row);
+        return (
+          <div className="relative flex min-w-[220px] items-center gap-1">
+            <ClientQuoteProductPicker
+              controller={controller}
+              item={row}
+              index={index}
+              line={getLine(row)}
+              floating
+              className="min-w-0 flex-1"
+              buttonClassName="h-9 w-full"
+            />
+          </div>
+        );
+      },
+    },
+    {
+      id: 'quantity',
+      header: t('sales:clientQuotes.qty'),
+      accessorKey: 'quantity',
+      align: 'center',
+      cell: ({ row }) => {
+        const index = getIndex(row);
+        return (
+          <div className="min-w-[150px]">
+            <ClientQuoteQuantityEditor
+              controller={controller}
+              item={row}
+              index={index}
+              line={getLine(row)}
+              compact
+            />
+          </div>
+        );
+      },
+    },
+    {
+      id: 'duration',
+      header: t('sales:clientQuotes.durationColumn', { defaultValue: 'Duration' }),
+      accessorFn: (item) => getItemPricingContext(item).durationMonths,
+      align: 'center',
+      cell: ({ row }) => {
+        const index = getIndex(row);
+        return (
+          <div className="min-w-[150px]">
+            <ClientQuoteDurationEditor
+              controller={controller}
+              index={index}
+              line={getLine(row)}
+              compact
+            />
+          </div>
+        );
+      },
+    },
+    {
+      id: 'cost',
+      header: t('crm:internalListing.cost'),
+      accessorFn: (item) => getItemPricingContext(item).unitCost,
+      align: 'right',
+      cell: ({ row }) => (
+        <div className="min-w-[130px]">
+          <ClientQuoteCostEditor controller={controller} line={getLine(row)} compact />
+        </div>
+      ),
+    },
+    {
+      id: 'mol',
+      header: t('sales:clientQuotes.molLabel', { defaultValue: 'MOL' }),
+      accessorFn: (item) => getItemPricingContext(item).molPercentage,
+      align: 'center',
+      cell: ({ row }) => (
+        <div className="flex min-w-[100px] items-center gap-1">
+          <ClientQuoteMolEditor controller={controller} line={getLine(row)} compact />
+        </div>
+      ),
+    },
+    {
+      id: 'totalCost',
+      header: t('sales:clientQuotes.totalCost', { defaultValue: 'Total cost' }),
+      accessorFn: (item) => getItemPricingContext(item).lineCost,
+      align: 'right',
+      cell: ({ row }) => (
+        <span className="font-semibold tabular-nums">
+          {getItemPricingContext(row).lineCost.toFixed(2)} {currency}
+        </span>
+      ),
+    },
+    {
+      id: 'discount',
+      header: t('common:labels.discount'),
+      accessorFn: (item) => item.discount ?? 0,
+      align: 'center',
+      cell: ({ row }) => (
+        <div className="min-w-[110px]">
+          <ClientQuoteDiscountEditor
+            controller={controller}
+            item={row}
+            index={getIndex(row)}
+            compact
+          />
+        </div>
+      ),
+    },
+    {
+      id: 'margin',
+      header: t('sales:clientQuotes.marginLabel'),
+      accessorFn: getClientQuoteItemMargin,
+      align: 'right',
+      cell: ({ row }) => (
+        <span className="font-semibold text-emerald-600 tabular-nums">
+          {getClientQuoteItemMargin(row).toFixed(2)} {currency}
+        </span>
+      ),
+    },
+    {
+      id: 'revenue',
+      header: t('sales:clientQuotes.revenue'),
+      accessorFn: getClientQuoteItemRevenue,
+      align: 'right',
+      cell: ({ row }) => (
+        <span className="font-semibold tabular-nums">
+          {getClientQuoteItemRevenue(row).toFixed(2)} {currency}
+        </span>
+      ),
+    },
+    {
+      id: 'note',
+      header: t('common:labels.notes'),
+      accessorFn: (item) => item.note || '',
+      cell: ({ row }) => (
+        <div className="min-w-[220px]">
+          <ClientQuoteItemNote controller={controller} item={row} index={getIndex(row)} />
+        </div>
+      ),
+    },
+    {
+      id: 'actions',
+      header: t('common:labels.actions'),
+      align: 'right',
+      cell: ({ row }) => (
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          onClick={() => controller.setProductRowToDelete(getIndex(row))}
+          disabled={controller.isReadOnly}
+          className="text-muted-foreground hover:text-destructive"
+        >
+          <i className="fa-solid fa-trash-can" aria-hidden="true"></i>
+          <span className="sr-only">{t('common:buttons.delete')}</span>
+        </Button>
+      ),
+    },
+  ];
 
   return (
     <div className="space-y-2 border-t border-border pt-4">
-      <div className="flex justify-between items-center">
-        <ClientQuoteSectionHeading
-          label={t('sales:clientQuotes.productsServices')}
-          description={t('sales:fieldInfo.productsServices', {
-            defaultValue: 'Products and services for this quote',
-          })}
-          status={readOnlyStatus}
-          statusLabel={statusLabel}
-        />
-        <Button type="button" size="sm" onClick={addProductRow} disabled={isReadOnly}>
-          <i className="fa-solid fa-plus text-[10px]" aria-hidden="true"></i>
-          {t('sales:clientQuotes.addProduct')}
-        </Button>
-      </div>
-      {errors.items && (
-        <p className="text-red-500 text-[10px] font-bold ml-1 -mt-2">{errors.items}</p>
-      )}
-      {items.length > 0 ? (
-        <DocumentLineItemsScrollArea aria-label={t('sales:clientQuotes.productsServices')}>
-          <ClientQuoteItemsColumnHeader controller={controller} />
-          <div className="space-y-3">
-            {items.map((item, index) => (
-              <ClientQuoteItemRow key={item.id} controller={controller} item={item} index={index} />
-            ))}
+      {errors.items && <p className="ml-1 text-[10px] font-bold text-red-500">{errors.items}</p>}
+      <StandardTable<QuoteItem>
+        title={t('sales:clientQuotes.productsServices')}
+        persistenceKey="sales.clientQuotes.items"
+        data={items ?? []}
+        columns={columns}
+        defaultRowsPerPage={5}
+        minBodyRows={0}
+        tableContainerClassName="overflow-x-auto"
+        emptyState={
+          <div className="py-8 text-sm text-muted-foreground">
+            {t('sales:clientQuotes.noProductsAdded')}
           </div>
-        </DocumentLineItemsScrollArea>
-      ) : (
-        <div className="rounded-md border border-dashed border-border py-8 text-center text-sm text-muted-foreground">
-          {t('sales:clientQuotes.noProductsAdded')}
-        </div>
-      )}
+        }
+        headerAction={
+          <Button type="button" size="sm" onClick={addProductRow} disabled={isReadOnly}>
+            <i className="fa-solid fa-plus text-[10px]" aria-hidden="true"></i>
+            {t('sales:clientQuotes.addProduct')}
+          </Button>
+        }
+      />
     </div>
   );
 };
-
-const ClientQuoteItemsColumnHeader: React.FC<{ controller: ClientQuotesController }> = ({
-  controller,
-}) => {
-  const { t } = controller;
-
-  return (
-    <div className="hidden lg:flex gap-2 px-3 mb-1 items-center">
-      <div className="flex-1 min-w-0 grid grid-cols-17 gap-2">
-        <div className="col-span-3 text-[10px] font-black text-zinc-400 uppercase tracking-wider ml-1">
-          {t('sales:clientQuotes.supplierQuoteColumn')}
-        </div>
-        <div className="col-span-3 text-[10px] font-black text-zinc-400 uppercase tracking-wider">
-          {t('sales:clientQuotes.productsServices')}
-        </div>
-        <div className="col-span-2 text-[10px] font-black text-zinc-400 uppercase tracking-wider text-center">
-          {t('sales:clientQuotes.qty')}
-        </div>
-        <div className="col-span-2 text-[10px] font-black text-zinc-400 uppercase tracking-wider text-center whitespace-nowrap">
-          {t('sales:clientQuotes.durationColumn', { defaultValue: 'Duration' })}
-        </div>
-        <div className="col-span-2 text-[10px] font-black text-zinc-400 uppercase tracking-wider text-center">
-          {t('crm:internalListing.cost')}
-        </div>
-        <div className="col-span-1 text-[10px] font-black text-zinc-400 uppercase tracking-wider text-center whitespace-nowrap">
-          MOL
-        </div>
-        <div className="col-span-1 text-[10px] font-black text-zinc-400 uppercase tracking-wider text-center whitespace-nowrap">
-          {t('sales:clientQuotes.totalCost', { defaultValue: 'Total cost' })}
-        </div>
-        <div className="col-span-1 text-[10px] font-black text-zinc-400 uppercase tracking-wider text-center">
-          {t('common:labels.discount')}
-        </div>
-        <div className="col-span-1 text-[10px] font-black text-zinc-400 uppercase tracking-wider text-center">
-          {t('sales:clientQuotes.marginLabel')}
-        </div>
-        <div className="col-span-1 text-[10px] font-black text-zinc-400 uppercase tracking-wider text-center">
-          {t('sales:clientQuotes.revenue')}
-        </div>
-      </div>
-      <div className="w-10 shrink-0"></div>
-    </div>
-  );
-};
-
 const getClientQuoteLineContext = (
   controller: ClientQuotesController,
   item: QuoteItem,
@@ -2406,337 +2469,6 @@ const getClientQuoteLineContext = (
 };
 
 type ClientQuoteLineContext = ReturnType<typeof getClientQuoteLineContext>;
-
-const ClientQuoteItemRow: React.FC<{
-  controller: ClientQuotesController;
-  item: QuoteItem;
-  index: number;
-}> = ({ controller, item, index }) => {
-  const line = getClientQuoteLineContext(controller, item, index);
-  const {
-    t,
-    formData,
-    isReadOnly,
-    draggedItemId,
-    handleProductRowDragStart,
-    handleProductRowDrop,
-    handleProductRowDragEnd,
-    handleProductRowKeyDown,
-  } = controller;
-  const canReorder = !isReadOnly && (formData.items?.length ?? 0) > 1;
-  const isDragging = draggedItemId === item.id;
-
-  return (
-    <div
-      data-quote-item-id={item.id}
-      onDragOver={(event) => {
-        if (!draggedItemId) return;
-        event.preventDefault();
-        event.dataTransfer.dropEffect = 'move';
-      }}
-      onDrop={(event) => handleProductRowDrop(item.id, event)}
-      className={`space-y-3 rounded-md border border-border bg-muted/30 p-3 transition-[opacity,box-shadow] ${isDragging ? 'opacity-60 ring-2 ring-primary/40' : ''}`}
-    >
-      {canReorder && (
-        <div className="-mt-1 flex justify-end">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                draggable
-                aria-label={t('sales:clientQuotes.reorderItem', {
-                  item: item.productName,
-                  position: index + 1,
-                  total: formData.items?.length ?? 0,
-                })}
-                aria-keyshortcuts="ArrowUp ArrowDown Home End"
-                onDragStart={(event) => handleProductRowDragStart(item.id, event)}
-                onDragEnd={handleProductRowDragEnd}
-                onKeyDown={(event) => handleProductRowKeyDown(index, event)}
-                className="cursor-grab text-muted-foreground active:cursor-grabbing"
-              >
-                <GripVertical className="size-4" aria-hidden="true" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>{t('sales:clientQuotes.reorderItemHint')}</TooltipContent>
-          </Tooltip>
-        </div>
-      )}
-      <ClientQuoteItemMobileLinks controller={controller} item={item} index={index} line={line} />
-      <ClientQuoteItemMobileMetrics controller={controller} item={item} index={index} line={line} />
-      <ClientQuoteItemDesktopRow controller={controller} item={item} index={index} line={line} />
-      <ClientQuoteItemNote controller={controller} item={item} index={index} />
-    </div>
-  );
-};
-
-const ClientQuoteItemMobileLinks: React.FC<{
-  controller: ClientQuotesController;
-  item: QuoteItem;
-  index: number;
-  line: ClientQuoteLineContext;
-}> = ({ controller, item, index, line }) => {
-  const { t, readOnlyStatus, statusLabel } = controller;
-  const linkedSupplierRef = line.linkedSupplierRef;
-
-  return (
-    <div className="lg:hidden flex items-start gap-3">
-      <div className="grid flex-1 min-w-0 grid-cols-1 md:grid-cols-2 gap-3">
-        <div className="min-w-0">
-          <ClientQuoteLineLabel
-            label={t('sales:clientQuotes.supplierQuoteColumn')}
-            description={t('sales:fieldInfo.supplierQuote', {
-              defaultValue: 'Link this item to a supplier quote for cost tracking',
-            })}
-            status={readOnlyStatus}
-            statusLabel={statusLabel}
-          >
-            {line.supplierDataStale && linkedSupplierRef && (
-              <StaleSupplierDataButton
-                onClick={() => controller.refreshLineFromSupplier(index, linkedSupplierRef.item)}
-                className="ml-auto"
-              />
-            )}
-          </ClientQuoteLineLabel>
-          <div className="flex items-center gap-1">
-            <ClientQuoteSupplierPicker
-              controller={controller}
-              item={item}
-              index={index}
-              line={line}
-              className="min-w-0 flex-1"
-              buttonClassName="w-full px-3 py-2 bg-white border border-zinc-200 rounded-lg text-sm"
-            />
-          </div>
-        </div>
-        <div className="min-w-0">
-          <ClientQuoteLineLabel
-            label={t('sales:clientQuotes.productsServices')}
-            description={t('sales:fieldInfo.product', {
-              defaultValue: 'Select a product or service for this line item',
-            })}
-            status={line.linkedFieldStatus}
-            statusLabel={statusLabel}
-          />
-          <div className="flex items-center gap-1">
-            <ClientQuoteProductPicker
-              controller={controller}
-              item={item}
-              index={index}
-              line={line}
-              className="min-w-0 flex-1"
-              buttonClassName="w-full px-3 py-2 bg-white border border-zinc-200 rounded-lg text-sm"
-            />
-          </div>
-        </div>
-      </div>
-      <ClientQuoteDeleteLineButton controller={controller} index={index} className="mt-5" />
-    </div>
-  );
-};
-
-const ClientQuoteItemMobileMetrics: React.FC<{
-  controller: ClientQuotesController;
-  item: QuoteItem;
-  index: number;
-  line: ClientQuoteLineContext;
-}> = ({ controller, item, index, line }) => {
-  const { t, currency, readOnlyStatus, statusLabel } = controller;
-
-  return (
-    <div className="grid grid-cols-2 gap-3 md:grid-cols-8 lg:hidden">
-      <div>
-        <ClientQuoteLineLabel
-          label={t('sales:clientQuotes.qty')}
-          description={t('sales:fieldInfo.qty', { defaultValue: 'Quantity of items or hours' })}
-          status={line.linkedFieldStatus}
-          statusLabel={statusLabel}
-        />
-        <ClientQuoteQuantityEditor controller={controller} item={item} index={index} line={line} />
-      </div>
-      <div>
-        <ClientQuoteLineLabel
-          label={t('sales:clientQuotes.durationColumn', { defaultValue: 'Duration' })}
-          description={t('sales:fieldInfo.duration', {
-            defaultValue: 'Number of months the service runs',
-          })}
-          status={readOnlyStatus}
-          statusLabel={statusLabel}
-        />
-        <ClientQuoteDurationEditor controller={controller} index={index} line={line} />
-      </div>
-      <ClientQuoteInputPanel
-        label={t('crm:internalListing.cost')}
-        description={t('sales:fieldInfo.cost', { defaultValue: 'Unit cost for this item' })}
-        status={line.linkedFieldStatus}
-        statusLabel={statusLabel}
-      >
-        <ClientQuoteCostEditor controller={controller} line={line} />
-      </ClientQuoteInputPanel>
-      <ClientQuoteInputPanel
-        label="MOL (%)"
-        description={t('sales:fieldInfo.mol', {
-          defaultValue: 'Margin overhead loading percentage',
-        })}
-        status={readOnlyStatus}
-        statusLabel={statusLabel}
-      >
-        <ClientQuoteMolEditor controller={controller} line={line} />
-      </ClientQuoteInputPanel>
-      <ClientQuoteValuePanel
-        label={t('sales:clientQuotes.totalCost', { defaultValue: 'Total cost' })}
-        value={`${formatDecimal(line.lineCost)} ${currency}`}
-        valueClassName="text-xs font-bold text-zinc-700 whitespace-nowrap"
-      />
-      <ClientQuoteInputPanel
-        label={t('common:labels.discount')}
-        description={t('sales:fieldInfo.discount', {
-          defaultValue: 'Percentage discount applied to this line',
-        })}
-        status={readOnlyStatus}
-        statusLabel={statusLabel}
-      >
-        <ClientQuoteDiscountEditor controller={controller} item={item} index={index} />
-      </ClientQuoteInputPanel>
-      <ClientQuoteValuePanel
-        label={t('sales:clientQuotes.marginLabel')}
-        value={`${formatDecimal(line.lineMargin)} ${currency}`}
-        valueClassName="text-xs font-bold text-emerald-600 whitespace-nowrap"
-      />
-      <ClientQuoteValuePanel
-        label={t('sales:clientQuotes.revenue')}
-        value={`${formatDecimal(line.lineSalePrice)} ${currency}`}
-        valueClassName="text-sm font-semibold whitespace-nowrap text-zinc-800"
-        className="col-span-2 md:col-span-1"
-      />
-    </div>
-  );
-};
-
-const ClientQuoteItemDesktopRow: React.FC<{
-  controller: ClientQuotesController;
-  item: QuoteItem;
-  index: number;
-  line: ClientQuoteLineContext;
-}> = ({ controller, item, index, line }) => {
-  const { currency } = controller;
-  const linkedSupplierRef = line.linkedSupplierRef;
-
-  return (
-    <div className="hidden lg:flex gap-2 items-center pt-5">
-      <div className="flex-1 min-w-0 grid grid-cols-17 gap-2 items-center">
-        <div className="relative col-span-3 min-w-0">
-          {line.supplierDataStale && linkedSupplierRef && (
-            <StaleSupplierDataButton
-              onClick={() => controller.refreshLineFromSupplier(index, linkedSupplierRef.item)}
-              className="lg:absolute lg:left-0 lg:-top-1 lg:z-10 lg:-translate-y-full h-6 px-2 text-[10px]"
-            />
-          )}
-          <ClientQuoteSupplierPicker
-            controller={controller}
-            item={item}
-            index={index}
-            line={line}
-            floating
-            className="w-full min-w-0"
-            buttonClassName="w-full px-3 py-2 bg-white border border-zinc-200 rounded-lg text-sm"
-          />
-        </div>
-        <div className="relative col-span-3 min-w-0">
-          <ClientQuoteProductPicker
-            controller={controller}
-            item={item}
-            index={index}
-            line={line}
-            floating
-            className="w-full min-w-0"
-            buttonClassName="w-full px-3 py-2 bg-white border border-zinc-200 rounded-lg text-sm"
-          />
-        </div>
-        <div className="col-span-2">
-          <ClientQuoteQuantityEditor
-            controller={controller}
-            item={item}
-            index={index}
-            line={line}
-            compact
-          />
-        </div>
-        <div className="col-span-2 flex items-center justify-center gap-1">
-          <ClientQuoteDurationEditor controller={controller} index={index} line={line} compact />
-        </div>
-        <div className="relative col-span-2 flex flex-col items-center justify-center gap-1">
-          {line.isLinkedToSupplierQuote && (
-            <div className="absolute right-0.5 -top-1 z-10 -translate-y-full">
-              <SupplierQuoteCostHint />
-            </div>
-          )}
-          <ClientQuoteCostEditor controller={controller} line={line} compact />
-        </div>
-        <div className="col-span-1 flex items-center justify-center gap-1">
-          <ClientQuoteMolEditor controller={controller} line={line} compact />
-        </div>
-        <ClientQuoteDesktopAmount value={`${formatDecimal(line.lineCost)} ${currency}`} />
-        <div className="col-span-1 flex items-center justify-center">
-          <ClientQuoteDiscountEditor controller={controller} item={item} index={index} compact />
-        </div>
-        <ClientQuoteDesktopAmount
-          value={`${formatDecimal(line.lineMargin)} ${currency}`}
-          className="text-emerald-600"
-        />
-        <ClientQuoteDesktopAmount
-          value={`${formatDecimal(line.lineSalePrice)} ${currency}`}
-          className="font-semibold text-zinc-800"
-        />
-      </div>
-      <ClientQuoteDeleteLineButton controller={controller} index={index} />
-    </div>
-  );
-};
-
-const ClientQuoteLineLabel: React.FC<{
-  label: React.ReactNode;
-  description: string;
-  status: string;
-  statusLabel: string;
-  children?: React.ReactNode;
-}> = ({ label, description, status, statusLabel, children }) => (
-  <div className="mb-1 text-[10px] font-black text-zinc-400 uppercase tracking-wider flex items-center gap-1">
-    {label}
-    <FieldTooltip description={description} status={status} statusLabel={statusLabel} />
-    {children}
-  </div>
-);
-
-const ClientQuoteInputPanel: React.FC<{
-  label: React.ReactNode;
-  description: string;
-  status: string;
-  statusLabel: string;
-  children: React.ReactNode;
-}> = ({ label, description, status, statusLabel, children }) => (
-  <div className="rounded-lg border border-zinc-200 bg-white px-3 py-2 space-y-1">
-    <div className="text-[10px] font-black text-zinc-400 uppercase tracking-wider flex items-center gap-1">
-      {label}
-      <FieldTooltip description={description} status={status} statusLabel={statusLabel} />
-    </div>
-    {children}
-  </div>
-);
-
-const ClientQuoteValuePanel: React.FC<{
-  label: React.ReactNode;
-  value: string;
-  valueClassName: string;
-  className?: string;
-}> = ({ label, value, valueClassName, className = '' }) => (
-  <div className={`rounded-lg border border-zinc-200 bg-white px-3 py-2 space-y-1 ${className}`}>
-    <div className="text-[10px] font-black text-zinc-400 uppercase tracking-wider">{label}</div>
-    <div className={valueClassName}>{value}</div>
-  </div>
-);
 
 const ClientQuoteSupplierPicker: React.FC<{
   controller: ClientQuotesController;
@@ -2993,37 +2725,6 @@ const ClientQuoteDiscountEditor: React.FC<{
     <span className="shrink-0 text-[9px] font-semibold text-zinc-400">%</span>
   </div>
 );
-
-const ClientQuoteDesktopAmount: React.FC<{ value: string; className?: string }> = ({
-  value,
-  className = 'text-zinc-700',
-}) => (
-  <div className="col-span-1 flex items-center justify-center">
-    <span className={`text-xs font-bold whitespace-nowrap ${className}`}>{value}</span>
-  </div>
-);
-
-const ClientQuoteDeleteLineButton: React.FC<{
-  controller: ClientQuotesController;
-  index: number;
-  className?: string;
-}> = ({ controller, index, className = '' }) => {
-  const { t, isReadOnly, setProductRowToDelete } = controller;
-
-  return (
-    <Button
-      type="button"
-      variant="ghost"
-      size="icon-sm"
-      onClick={() => setProductRowToDelete(index)}
-      disabled={isReadOnly}
-      className={`${className} shrink-0 text-muted-foreground hover:text-destructive`}
-    >
-      <i className="fa-solid fa-trash-can" aria-hidden="true"></i>
-      <span className="sr-only">{t('common:buttons.delete')}</span>
-    </Button>
-  );
-};
 
 const ClientQuoteItemNote: React.FC<{
   controller: ClientQuotesController;

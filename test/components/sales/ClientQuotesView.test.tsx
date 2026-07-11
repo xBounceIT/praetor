@@ -6,7 +6,7 @@ import type { Client, Quote, SupplierQuote } from '../../../types';
 import { installI18nMock } from '../../helpers/i18n';
 import { LineDeleteConfirmStub } from '../../helpers/lineItemDeleteConfirm';
 import { render } from '../../helpers/render';
-import { rowDeleteButtons } from '../../helpers/rowDeleteButtons';
+import { openRowDeleteButton, rowDeleteButtons } from '../../helpers/rowDeleteButtons';
 import {
   expectSourceContainsAll,
   expectSourceOmitsAll,
@@ -1077,7 +1077,7 @@ describe('<ClientQuotesView /> line-item delete confirmation', () => {
     expect(rowDeletes.length).toBeGreaterThan(0);
 
     // Clicking the trash icon must NOT remove the row immediately — it opens a confirmation.
-    fireEvent.click(rowDeletes[0]);
+    fireEvent.click(await openRowDeleteButton(dialog));
     const confirmUi = await findLineDeleteConfirm();
     expect(
       within(confirmUi).getByText('sales:clientQuotes.removeProductTitle'),
@@ -1094,7 +1094,7 @@ describe('<ClientQuotesView /> line-item delete confirmation', () => {
     const dialog = await openEditor();
     const rowDeletes = rowDeleteButtons(dialog);
 
-    fireEvent.click(rowDeletes[0]);
+    fireEvent.click(await openRowDeleteButton(dialog));
     clickLineDeleteCancel(await findLineDeleteConfirm());
 
     await waitFor(() => {

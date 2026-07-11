@@ -11,7 +11,7 @@ import type {
 } from '../../../types';
 import { LineDeleteConfirmStub } from '../../helpers/lineItemDeleteConfirm';
 import { render } from '../../helpers/render';
-import { rowDeleteButtons } from '../../helpers/rowDeleteButtons';
+import { openRowDeleteButton, rowDeleteButtons } from '../../helpers/rowDeleteButtons';
 import {
   expectSourceContainsAll,
   expectSourceOmitsAll,
@@ -334,17 +334,15 @@ describe('<ClientsOrdersView />', () => {
     ]);
   });
 
-  test('product rows align modal controls to the native shadcn control height', async () => {
+  test('product rows use StandardTable while preserving native control heights', async () => {
     const source = await readComponentSource('accounting/ClientsOrdersView.tsx');
 
     expectSourceContainsAll(source, [
-      // lg:pt-5 quick-view gutter lives on the row flex (with the trash button), not the grid, so
-      // the delete button stays vertically aligned with the inputs.
-      'className="flex items-start gap-2 lg:items-center lg:pt-5"',
-      'className="grid flex-1 grid-cols-1 gap-2 lg:grid-cols-15 lg:items-center"',
-      'className="min-w-0 space-y-1 lg:col-span-2 lg:space-y-0"',
-      'className="flex h-9 items-center rounded-md border border-border bg-background px-3"',
-      // Quantity and duration controls both center their compact value input + unit selector.
+      '<StandardTable<ClientsOrderItem>',
+      'persistenceKey="accounting.clientOrders.items"',
+      'defaultRowsPerPage={5}',
+      'minBodyRows={0}',
+      'className="min-w-[220px]"',
       'className="flex h-9 items-center justify-center gap-1"',
       'className="flex h-9 items-center justify-end whitespace-nowrap px-3 text-sm font-bold text-foreground"',
     ]);
@@ -583,9 +581,7 @@ describe('<ClientsOrdersView /> draft-from-offer editability', () => {
     // auto-created supplier order — both controls are locked (so the user can't reach an
     // edit path the backend always rejects with 409) even though the draft is editable.
     expect(isDisabled(within(dialog).getByRole('button', { name: /Consulting/ }))).toBe(true);
-    expect(isDisabled(within(dialog).getByRole('button', { name: 'common:buttons.delete' }))).toBe(
-      true,
-    );
+    expect(isDisabled(await openRowDeleteButton(dialog))).toBe(true);
   });
 
   test('a product-less supplier line shows its name read-only, not an empty selector (issue #783)', async () => {
@@ -623,9 +619,7 @@ describe('<ClientsOrdersView /> draft-from-offer editability', () => {
     expect(
       isDisabled(within(dialog).getByRole('button', { name: 'sales:clientQuotes.selectProduct' })),
     ).toBe(false);
-    expect(isDisabled(within(dialog).getByRole('button', { name: 'common:buttons.delete' }))).toBe(
-      false,
-    );
+    expect(isDisabled(await openRowDeleteButton(dialog))).toBe(false);
   });
 });
 
@@ -839,7 +833,7 @@ describe('<ClientsOrdersView /> line-item delete confirmation', () => {
     const rowDeletes = rowDeleteButtons(dialog);
     expect(rowDeletes.length).toBeGreaterThan(0);
 
-    fireEvent.click(rowDeletes[0]);
+    fireEvent.click(await openRowDeleteButton(dialog));
     const confirmUi = await screen.findByTestId('line-delete-confirm');
     expect(within(confirmUi).getByTestId('line-delete-title')).toHaveTextContent(
       'accounting:clientsOrders.removeProductTitle',
@@ -856,7 +850,7 @@ describe('<ClientsOrdersView /> line-item delete confirmation', () => {
     const dialog = await openEditor();
     const rowDeletes = rowDeleteButtons(dialog);
 
-    fireEvent.click(rowDeletes[0]);
+    fireEvent.click(await openRowDeleteButton(dialog));
     fireEvent.click(await screen.findByTestId('line-delete-cancel'));
 
     await waitFor(() => {

@@ -322,6 +322,60 @@ describe('<StandardTable />', () => {
     expect(localStorage.getItem('praetor_table_rows_people')).toBe('20');
   });
 
+  test('persistenceKey isolates rows, widths, and saved views while migrating its legacy font', async () => {
+    const keyedView = [
+      {
+        id: 'keyed-view',
+        name: 'Oldest first',
+        hiddenColIds: [],
+        sortState: { colId: 'age', px: 'desc' },
+        filterState: {},
+      },
+    ];
+    localStorage.setItem('praetor_table_rows_articoli', '50');
+    localStorage.setItem('praetor_table_rows_client_quote_items', '5');
+    localStorage.setItem('praetor_table_fontsize_articoli', 'xs');
+    localStorage.setItem('praetor_table_fontsize_client_quote_items', 'base');
+    localStorage.setItem('praetor_table_colwidths_articoli', JSON.stringify({ name: 112 }));
+    localStorage.setItem(
+      'praetor_table_colwidths_client_quote_items',
+      JSON.stringify({ name: 220 }),
+    );
+    localStorage.setItem('praetor_table_customviews_client_quote_items', JSON.stringify(keyedView));
+    localStorage.setItem('praetor_table_activeview_client_quote_items', 'keyed-view');
+
+    const user = userEvent.setup();
+    const { unmount } = render(
+      <StandardTable<Row>
+        title="Articoli"
+        persistenceKey="client.quote.items"
+        data={sampleRows}
+        columns={sampleColumns}
+      />,
+    );
+
+    const trigger = screen.getByRole('combobox');
+    expect(trigger.textContent).toContain('5');
+    const rows = screen.getAllByRole('row');
+    expect(rows[1]).toHaveTextContent('Charlie');
+    expect(rows[1].className).toContain('text-base');
+    expect((screen.getByText('Name').closest('th') as HTMLTableCellElement).style.width).toBe(
+      '220px',
+    );
+
+    await user.click(trigger);
+    await user.click(screen.getByRole('option', { name: '20' }));
+    unmount();
+
+    expect(localStorage.getItem('praetor_table_rows_client_quote_items')).toBe('20');
+    expect(localStorage.getItem('praetor_table_rows_articoli')).toBe('50');
+    expect(localStorage.getItem('praetor_table_fontsize_articoli')).toBe('xs');
+    expect(localStorage.getItem(TABLE_FONT_SIZE_STORAGE_KEY)).toBe('base');
+    expect(localStorage.getItem('praetor_table_colwidths_articoli')).toBe(
+      JSON.stringify({ name: 112 }),
+    );
+  });
+
   test('rows-per-page select menu uses the scoped shadcn dark theme', async () => {
     localStorage.setItem(THEME_STORAGE_KEY, 'dark');
     const user = userEvent.setup();

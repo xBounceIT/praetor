@@ -5,7 +5,7 @@ import type { Client, ClientOffer, Product, SupplierQuote } from '../../../types
 import { installI18nMock } from '../../helpers/i18n';
 import { LineDeleteConfirmStub } from '../../helpers/lineItemDeleteConfirm';
 import { render } from '../../helpers/render';
-import { rowDeleteButtons } from '../../helpers/rowDeleteButtons';
+import { openRowDeleteButton, rowDeleteButtons } from '../../helpers/rowDeleteButtons';
 import {
   expectSourceContainsAll,
   expectSourceOmitsAll,
@@ -830,7 +830,7 @@ describe('<ClientOffersView /> line-item delete confirmation', () => {
     const rowDeletes = rowDeleteButtons(dialog);
     expect(rowDeletes.length).toBeGreaterThan(0);
 
-    fireEvent.click(rowDeletes[0]);
+    fireEvent.click(await openRowDeleteButton(dialog));
     const confirmUi = await screen.findByTestId('line-delete-confirm');
     expect(within(confirmUi).getByTestId('line-delete-title')).toHaveTextContent(
       'sales:clientOffers.removeProductTitle',
@@ -847,7 +847,7 @@ describe('<ClientOffersView /> line-item delete confirmation', () => {
     const dialog = await openEditor();
     const rowDeletes = rowDeleteButtons(dialog);
 
-    fireEvent.click(rowDeletes[0]);
+    fireEvent.click(await openRowDeleteButton(dialog));
     fireEvent.click(await screen.findByTestId('line-delete-cancel'));
 
     await waitFor(() => {

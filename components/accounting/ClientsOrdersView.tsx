@@ -4,7 +4,6 @@ import { useCallback, useMemo, useReducer } from 'react';
 import { useTranslation } from 'react-i18next';
 import { LinkedRecordBanner } from '@/components/shared/LinkedRecordBanner';
 import { Button } from '@/components/ui/button';
-import DocumentLineItemsScrollArea from '@/components/ui/document-line-items-scroll-area';
 import { Field, FieldError, FieldLabel } from '@/components/ui/field';
 import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -25,6 +24,7 @@ import {
   formatInsertDateTime,
   getLocalDateString,
 } from '../../utils/date';
+import { createLineItemIndexResolver } from '../../utils/lineItemIndex';
 import {
   calcProductSalePrice,
   calculatePricingTotals,
@@ -63,7 +63,7 @@ import {
 } from '../shared/ModalLayout';
 import QuickViewLinkButton from '../shared/QuickViewLinkButton';
 import SelectControl from '../shared/SelectControl';
-import StandardTable from '../shared/StandardTable';
+import StandardTable, { type Column } from '../shared/StandardTable';
 import StatusBadge, { type StatusType } from '../shared/StatusBadge';
 import SupplierQuoteCostHint from '../shared/SupplierQuoteCostHint';
 import { TABLE_ROW_ACTION_BUTTON_CLASSNAME } from '../shared/tableControlStyles';
@@ -1210,144 +1210,180 @@ const OrderDetailsSection: React.FC<{ controller: ClientsOrdersController }> = (
   </div>
 );
 
-const OrderItemsSection: React.FC<{ controller: ClientsOrdersController }> = ({ controller }) => (
-  <div className="space-y-4">
-    <div className="flex items-center justify-between">
-      <OrderSectionTitle>{controller.t('sales:clientQuotes.productsServices')}</OrderSectionTitle>
-      <Button
-        type="button"
-        size="sm"
-        onClick={controller.addProductRow}
-        disabled={controller.isReadOnly}
-      >
-        <i className="fa-solid fa-plus text-[10px]" aria-hidden="true"></i>
-        {controller.t('sales:clientQuotes.addProduct')}
-      </Button>
-    </div>
-    <FieldError className="-mt-2 text-xs">{controller.errors.items}</FieldError>
-    {controller.formData.items && controller.formData.items.length > 0 ? (
-      <DocumentLineItemsScrollArea aria-label={controller.t('sales:clientQuotes.productsServices')}>
-        <OrderItemsHeader controller={controller} />
-        <div className="space-y-3">
-          {controller.formData.items.map((item, index) => (
-            <OrderItemRow key={item.id} controller={controller} item={item} index={index} />
-          ))}
-        </div>
-      </DocumentLineItemsScrollArea>
-    ) : (
-      <div className="rounded-md border border-dashed border-border py-8 text-center text-sm text-muted-foreground">
-        {controller.t('sales:clientQuotes.noProductsAdded')}
-      </div>
-    )}
-  </div>
-);
+const getClientsOrderItemPricing = (item: ClientsOrderItem) =>
+  getItemPricingContext(item, DEFAULT_UNIT_TYPE);
 
-const OrderItemsHeader: React.FC<{ controller: ClientsOrdersController }> = ({ controller }) => {
-  if (!controller.formData.items || controller.formData.items.length === 0) return null;
-  return (
-    <div className="mb-1 hidden items-center gap-2 px-3 lg:flex">
-      <div className="grid flex-1 grid-cols-15 gap-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-        <div className="col-span-2">
-          {controller.t('accounting:clientsOrders.supplierOrderColumn', {
-            defaultValue: 'Supplier Order',
-          })}
-        </div>
-        <div className="col-span-2">{controller.t('sales:clientQuotes.productsServices')}</div>
-        <div className="col-span-2 text-center">{controller.t('sales:clientQuotes.qty')}</div>
-        <div className="col-span-2 whitespace-nowrap text-center">
-          {controller.t('sales:clientQuotes.durationColumn', { defaultValue: 'Duration' })}
-        </div>
-        <div className="col-span-1 text-center">{controller.t('crm:internalListing.cost')}</div>
-        <div className="col-span-1 text-center">
-          {controller.t('sales:clientQuotes.molLabel', { defaultValue: 'MOL' })}
-        </div>
-        <div className="col-span-1 whitespace-nowrap text-center">
-          {controller.t('sales:clientQuotes.totalCost', { defaultValue: 'Total cost' })}
-        </div>
-        <div className="col-span-1 text-center">{controller.t('common:labels.discount')}</div>
-        <div className="col-span-1 text-center">
-          {controller.t('sales:clientQuotes.marginLabel')}
-        </div>
-        <div className="col-span-2 pr-2 text-right">
-          {controller.t('crm:internalListing.salePrice')}
-        </div>
-      </div>
-      <div className="w-8 shrink-0"></div>
-    </div>
-  );
-};
+const getClientsOrderItemRevenue = (item: ClientsOrderItem) =>
+  getClientsOrderItemPricing(item).netRevenue;
 
-const OrderItemRow: React.FC<{
-  controller: ClientsOrdersController;
-  item: ClientsOrderItem;
-  index: number;
-}> = ({ controller, item, index }) => {
-  const product = controller.products.find((candidate) => candidate.id === item.productId);
-  const {
-    unitCost,
-    molPercentage,
-    lineCost,
-    netRevenue: lineSalePrice,
-    lineMargin: margin,
-  } = getItemPricingContext(item, DEFAULT_UNIT_TYPE);
-  const durationUnit = normalizeDurationUnit(item.durationUnit);
-  const durationValue = getDurationDisplayValue(item);
+const getClientsOrderItemMargin = (item: ClientsOrderItem) =>
+  getClientsOrderItemPricing(item).lineMargin;
+const OrderItemsSection: React.FC<{ controller: ClientsOrdersController }> = ({ controller }) => {
+  const items = controller.formData.items;
+  const getIndex = useMemo(() => createLineItemIndexResolver(items), [items]);
 
-  return (
-    <div className="space-y-3 rounded-md border border-border bg-muted/30 p-3">
-      <div className="flex items-start gap-2 lg:items-center lg:pt-5">
-        <div className="grid flex-1 grid-cols-1 gap-2 lg:grid-cols-15 lg:items-center">
-          <OrderItemSupplierField controller={controller} item={item} />
-          <OrderItemProductField controller={controller} item={item} index={index} />
+  const columns: Column<ClientsOrderItem>[] = [
+    {
+      id: 'supplierOrder',
+      header: controller.t('accounting:clientsOrders.supplierOrderColumn', {
+        defaultValue: 'Supplier Order',
+      }),
+      accessorFn: (item) =>
+        item.supplierSaleId
+          ? `${item.supplierSaleSupplierName ?? ''} ${item.supplierSaleId}`.trim()
+          : '',
+      cell: ({ row }) => (
+        <div className="min-w-[220px]">
+          <OrderItemSupplierField controller={controller} item={row} />
+        </div>
+      ),
+    },
+    {
+      id: 'product',
+      header: controller.t('sales:clientQuotes.productsServices'),
+      accessorFn: (item) =>
+        controller.products.find((product) => product.id === item.productId)?.name ||
+        item.productName ||
+        '',
+      cell: ({ row }) => (
+        <div className="min-w-[220px]">
+          <OrderItemProductField controller={controller} item={row} index={getIndex(row)} />
+        </div>
+      ),
+    },
+    {
+      id: 'quantity',
+      header: controller.t('sales:clientQuotes.qty'),
+      accessorKey: 'quantity',
+      align: 'center',
+      cell: ({ row }) => (
+        <div className="min-w-[150px]">
           <OrderItemQuantityField
             controller={controller}
-            item={item}
-            index={index}
-            isSupply={product?.type === 'supply'}
-          />
-          <OrderItemDurationField
-            controller={controller}
-            index={index}
-            durationUnit={durationUnit}
-            durationValue={durationValue}
-          />
-          <OrderItemCostField
-            controller={controller}
-            item={item}
-            index={index}
-            unitCost={unitCost}
-          />
-          <OrderItemMolField controller={controller} index={index} molPercentage={molPercentage} />
-          <OrderItemAmountField
-            label={controller.t('sales:clientQuotes.totalCost', { defaultValue: 'Total cost' })}
-            value={lineCost}
-            currency={controller.currency}
-            className="lg:col-span-1"
-          />
-          <OrderItemDiscountField controller={controller} item={item} index={index} />
-          <OrderItemAmountField
-            label={controller.t('sales:clientQuotes.marginLabel')}
-            value={margin}
-            currency={controller.currency}
-            className="lg:col-span-1"
-            valueClassName="text-emerald-600"
-          />
-          <OrderItemAmountField
-            label={controller.t('crm:internalListing.salePrice')}
-            value={lineSalePrice}
-            currency={controller.currency}
-            className="lg:col-span-2"
-            align="right"
+            item={row}
+            index={getIndex(row)}
+            isSupply={
+              controller.products.find((product) => product.id === row.productId)?.type === 'supply'
+            }
           />
         </div>
+      ),
+    },
+    {
+      id: 'duration',
+      header: controller.t('sales:clientQuotes.durationColumn', { defaultValue: 'Duration' }),
+      accessorFn: (item) => getClientsOrderItemPricing(item).durationMonths,
+      align: 'center',
+      cell: ({ row }) => (
+        <div className="min-w-[150px]">
+          <OrderItemDurationField
+            controller={controller}
+            index={getIndex(row)}
+            durationUnit={normalizeDurationUnit(row.durationUnit)}
+            durationValue={getDurationDisplayValue(row)}
+          />
+        </div>
+      ),
+    },
+    {
+      id: 'cost',
+      header: controller.t('crm:internalListing.cost'),
+      accessorFn: (item) => getClientsOrderItemPricing(item).unitCost,
+      align: 'right',
+      cell: ({ row }) => (
+        <div className="min-w-[130px]">
+          <OrderItemCostField
+            controller={controller}
+            item={row}
+            index={getIndex(row)}
+            unitCost={getClientsOrderItemPricing(row).unitCost}
+          />
+        </div>
+      ),
+    },
+    {
+      id: 'mol',
+      header: controller.t('sales:clientQuotes.molLabel', { defaultValue: 'MOL' }),
+      accessorFn: (item) => getClientsOrderItemPricing(item).molPercentage,
+      align: 'center',
+      cell: ({ row }) => (
+        <div className="min-w-[100px]">
+          <OrderItemMolField
+            controller={controller}
+            index={getIndex(row)}
+            molPercentage={getClientsOrderItemPricing(row).molPercentage}
+          />
+        </div>
+      ),
+    },
+    {
+      id: 'totalCost',
+      header: controller.t('sales:clientQuotes.totalCost', { defaultValue: 'Total cost' }),
+      accessorFn: (item) => getClientsOrderItemPricing(item).lineCost,
+      align: 'right',
+      cell: ({ row }) => (
+        <OrderItemAmountField
+          label={controller.t('sales:clientQuotes.totalCost', { defaultValue: 'Total cost' })}
+          value={getClientsOrderItemPricing(row).lineCost}
+          currency={controller.currency}
+          className="min-w-[110px]"
+        />
+      ),
+    },
+    {
+      id: 'discount',
+      header: controller.t('common:labels.discount'),
+      accessorFn: (item) => item.discount ?? 0,
+      align: 'center',
+      cell: ({ row }) => (
+        <div className="min-w-[110px]">
+          <OrderItemDiscountField controller={controller} item={row} index={getIndex(row)} />
+        </div>
+      ),
+    },
+    {
+      id: 'margin',
+      header: controller.t('sales:clientQuotes.marginLabel'),
+      accessorFn: getClientsOrderItemMargin,
+      align: 'right',
+      cell: ({ row }) => (
+        <OrderItemAmountField
+          label={controller.t('sales:clientQuotes.marginLabel')}
+          value={getClientsOrderItemMargin(row)}
+          currency={controller.currency}
+          className="min-w-[110px]"
+          valueClassName="text-emerald-600"
+        />
+      ),
+    },
+    {
+      id: 'salePrice',
+      header: controller.t('crm:internalListing.salePrice'),
+      accessorFn: getClientsOrderItemRevenue,
+      align: 'right',
+      cell: ({ row }) => (
+        <OrderItemAmountField
+          label={controller.t('crm:internalListing.salePrice')}
+          value={getClientsOrderItemRevenue(row)}
+          currency={controller.currency}
+          className="min-w-[120px]"
+          align="right"
+        />
+      ),
+    },
+    {
+      id: 'actions',
+      header: controller.t('common:labels.actions'),
+      align: 'right',
+      cell: ({ row }) => (
         <Button
           type="button"
           variant="ghost"
           size="icon-sm"
-          onClick={() => controller.setProductRowToDelete(index)}
-          disabled={controller.isReadOnly || Boolean(item.supplierSaleId)}
+          onClick={() => controller.setProductRowToDelete(getIndex(row))}
+          disabled={controller.isReadOnly || Boolean(row.supplierSaleId)}
           title={
-            item.supplierSaleId
+            row.supplierSaleId
               ? controller.t('accounting:clientsOrders.supplierOrderLineLocked', {
                   defaultValue:
                     'This line is linked to a supplier order and cannot be removed here.',
@@ -1359,11 +1395,41 @@ const OrderItemRow: React.FC<{
           <i className="fa-solid fa-trash-can" aria-hidden="true"></i>
           <span className="sr-only">{controller.t('common:buttons.delete')}</span>
         </Button>
-      </div>
+      ),
+    },
+  ];
+
+  return (
+    <div className="space-y-2">
+      <FieldError className="text-xs">{controller.errors.items}</FieldError>
+      <StandardTable<ClientsOrderItem>
+        title={controller.t('sales:clientQuotes.productsServices')}
+        persistenceKey="accounting.clientOrders.items"
+        data={items ?? []}
+        columns={columns}
+        defaultRowsPerPage={5}
+        minBodyRows={0}
+        tableContainerClassName="overflow-x-auto"
+        emptyState={
+          <div className="py-8 text-sm text-muted-foreground">
+            {controller.t('sales:clientQuotes.noProductsAdded')}
+          </div>
+        }
+        headerAction={
+          <Button
+            type="button"
+            size="sm"
+            onClick={controller.addProductRow}
+            disabled={controller.isReadOnly}
+          >
+            <i className="fa-solid fa-plus text-[10px]" aria-hidden="true"></i>
+            {controller.t('sales:clientQuotes.addProduct')}
+          </Button>
+        }
+      />
     </div>
   );
 };
-
 const OrderItemSupplierField: React.FC<{
   controller: ClientsOrdersController;
   item: ClientsOrderItem;

@@ -871,6 +871,11 @@ const createInitialTableViewState = <T,>({
 
 export type StandardTableProps<T extends object = object> = {
   title: string;
+  /**
+   * Stable identity used for local table preferences and saved views. Defaults to `title` for
+   * backward compatibility. Use this when multiple tables share the same translated title.
+   */
+  persistenceKey?: string;
   totalCount?: number;
   totalLabel?: string;
   headerExtras?: ReactNode;
@@ -915,6 +920,7 @@ export type StandardTableProps<T extends object = object> = {
 
 const useStandardTableController = <T extends object>({
   title,
+  persistenceKey,
   totalCount: externalTotalCount,
   totalLabel,
   headerExtras,
@@ -939,6 +945,7 @@ const useStandardTableController = <T extends object>({
   viewKey,
 }: StandardTableProps<T>) => {
   const { t } = useTranslation('common');
+  const storageIdentity = persistenceKey ?? title;
   const isServerBacked = viewKey != null;
   const tableContainerRef = useRef<HTMLDivElement | null>(null);
 
@@ -953,7 +960,7 @@ const useStandardTableController = <T extends object>({
     suppressSavedView || (initialFilterState != null && Object.keys(initialFilterState).length > 0);
   const [tableViewState, dispatchTableView] = useReducer(tableViewReducer, null, () =>
     createInitialTableViewState({
-      title,
+      title: storageIdentity,
       columns,
       initialFilterState,
       skipSavedView,
@@ -966,7 +973,7 @@ const useStandardTableController = <T extends object>({
 
   const [tableUiState, dispatchTableUi] = useReducer(
     standardTableUiReducer,
-    { title, defaultRowsPerPage, isServerBacked, viewKey },
+    { title: storageIdentity, defaultRowsPerPage, isServerBacked, viewKey },
     createInitialStandardTableUiState,
   );
   const setTableUiField = useCallback(
@@ -1132,7 +1139,7 @@ const useStandardTableController = <T extends object>({
     if (isFontSize(saved)) {
       applyFontSize(saved);
     } else if (saved === null) {
-      const legacyValue = readLegacyFontSize(title);
+      const legacyValue = readLegacyFontSize(storageIdentity);
       if (legacyValue) persistFontSize(legacyValue);
     }
 
@@ -1140,7 +1147,7 @@ const useStandardTableController = <T extends object>({
       window.removeEventListener(FONT_SIZE_CHANGE_EVENT, handleFontSizeChange);
       window.removeEventListener('storage', handleFontSizeStorageChange);
     };
-  }, [setFontSize, title]);
+  }, [setFontSize, storageIdentity]);
 
   // Upsert a view's ownership/permission metadata from a server response (server-backed only).
   const rememberServerViewMeta = useCallback(
@@ -1173,7 +1180,10 @@ const useStandardTableController = <T extends object>({
     [setGearOpen, setViewsSubmenuOpen],
   );
 
-  const storageKey = useMemo(() => getStorageKey(title, STORAGE_SUFFIX.rows), [title]);
+  const storageKey = useMemo(
+    () => getStorageKey(storageIdentity, STORAGE_SUFFIX.rows),
+    [storageIdentity],
+  );
 
   const updateCustomViews = useCallback(
     (updater: (prev: CustomView[]) => CustomView[]) => {
@@ -1184,7 +1194,7 @@ const useStandardTableController = <T extends object>({
         if (next !== prev && !isServerBacked && typeof window !== 'undefined') {
           try {
             localStorage.setItem(
-              getStorageKey(title, STORAGE_SUFFIX.customViews),
+              getStorageKey(storageIdentity, STORAGE_SUFFIX.customViews),
               JSON.stringify(next),
             );
           } catch {}
@@ -1198,20 +1208,20 @@ const useStandardTableController = <T extends object>({
         return next;
       });
     },
-    [title, isServerBacked, setCustomViews, viewKey],
+    [storageIdentity, isServerBacked, setCustomViews, viewKey],
   );
 
   const updateActiveViewId = useCallback(
     (id: string | null) => {
       dispatchTableView({ type: 'set-active-view', activeViewId: id });
       if (typeof window === 'undefined') return;
-      const key = getStorageKey(title, STORAGE_SUFFIX.activeView);
+      const key = getStorageKey(storageIdentity, STORAGE_SUFFIX.activeView);
       try {
         if (id) localStorage.setItem(key, id);
         else localStorage.removeItem(key);
       } catch {}
     },
-    [title],
+    [storageIdentity],
   );
 
   // Tracks the in-flight list request so a remount / viewKey change aborts the old one
@@ -1243,7 +1253,7 @@ const useStandardTableController = <T extends object>({
       const currentColumns = columnsRef.current;
       if (!currentColumns) return false;
       const sentinelKey = `praetor_table_viewsmigrated_${slugify(key)}`;
-      const legacyKey = getStorageKey(title, STORAGE_SUFFIX.customViews);
+      const legacyKey = getStorageKey(storageIdentity, STORAGE_SUFFIX.customViews);
       let state: string | null = null;
       try {
         state = localStorage.getItem(sentinelKey);
@@ -1322,7 +1332,7 @@ const useStandardTableController = <T extends object>({
 
       return uploaded;
     },
-    [title, updateActiveViewId],
+    [storageIdentity, updateActiveViewId],
   );
 
   // Server-backed mode: load own + shared views on mount (and on viewKey change / retry).
@@ -1418,11 +1428,11 @@ const useStandardTableController = <T extends object>({
     if (viewsAppliedOnceRef.current) {
       if (typeof window !== 'undefined') {
         try {
-          localStorage.removeItem(getStorageKey(title, STORAGE_SUFFIX.activeView));
+          localStorage.removeItem(getStorageKey(storageIdentity, STORAGE_SUFFIX.activeView));
         } catch {}
       }
     }
-  }, [initialFilterState, suppressSavedView, title]);
+  }, [initialFilterState, suppressSavedView, storageIdentity]);
 
   const getColId = useCallback(getColumnId, []);
 
@@ -1541,14 +1551,14 @@ const useStandardTableController = <T extends object>({
         activeViewId: nextActiveViewId,
       });
       if (nextActiveViewId !== undefined && typeof window !== 'undefined') {
-        const key = getStorageKey(title, STORAGE_SUFFIX.activeView);
+        const key = getStorageKey(storageIdentity, STORAGE_SUFFIX.activeView);
         try {
           if (nextActiveViewId) localStorage.setItem(key, nextActiveViewId);
           else localStorage.removeItem(key);
         } catch {}
       }
     },
-    [columns, title],
+    [columns, storageIdentity],
   );
 
   useEffect(
@@ -1587,10 +1597,10 @@ const useStandardTableController = <T extends object>({
   useEffect(() => {
     if (typeof window === 'undefined') return;
     localStorage.setItem(
-      getStorageKey(title, STORAGE_SUFFIX.colWidths),
+      getStorageKey(storageIdentity, STORAGE_SUFFIX.colWidths),
       JSON.stringify(clampedColumnSizing),
     );
-  }, [clampedColumnSizing, title]);
+  }, [clampedColumnSizing, storageIdentity]);
 
   const getValue = useCallback((row: T, col: Column<T>) => {
     if (col.accessorFn) return col.accessorFn(row);
@@ -1772,11 +1782,11 @@ const useStandardTableController = <T extends object>({
       setCurrentPage(1);
       if (typeof window !== 'undefined') {
         try {
-          localStorage.removeItem(getStorageKey(title, STORAGE_SUFFIX.activeView));
+          localStorage.removeItem(getStorageKey(storageIdentity, STORAGE_SUFFIX.activeView));
         } catch {}
       }
     },
-    [columnFilters, setCurrentPage, title],
+    [columnFilters, setCurrentPage, storageIdentity],
   );
 
   const onPaginationChange = useCallback(
@@ -1808,11 +1818,11 @@ const useStandardTableController = <T extends object>({
       });
       if (typeof window !== 'undefined') {
         try {
-          localStorage.removeItem(getStorageKey(title, STORAGE_SUFFIX.activeView));
+          localStorage.removeItem(getStorageKey(storageIdentity, STORAGE_SUFFIX.activeView));
         } catch {}
       }
     },
-    [columnVisibility, gearColumns, getColId, title],
+    [columnVisibility, gearColumns, getColId, storageIdentity],
   );
 
   const onColumnOrderChange = useCallback(

@@ -3,7 +3,6 @@ import { useCallback, useMemo, useReducer } from 'react';
 import { useTranslation } from 'react-i18next';
 import { LinkedRecordBanner } from '@/components/shared/LinkedRecordBanner';
 import { Button } from '@/components/ui/button';
-import DocumentLineItemsScrollArea from '@/components/ui/document-line-items-scroll-area';
 import { Field, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -17,6 +16,7 @@ import type {
   SupplierSaleOrderItem,
 } from '../../types';
 import { formatInsertDateTime } from '../../utils/date';
+import { createLineItemIndexResolver } from '../../utils/lineItemIndex';
 import {
   durationValueToMonths,
   formatDecimal,
@@ -40,7 +40,7 @@ import {
   ModalTitle,
 } from '../shared/ModalLayout';
 import SelectControl from '../shared/SelectControl';
-import StandardTable from '../shared/StandardTable';
+import StandardTable, { type Column } from '../shared/StandardTable';
 import StatusBadge, { type StatusType } from '../shared/StatusBadge';
 import { TABLE_ROW_ACTION_BUTTON_CLASSNAME } from '../shared/tableControlStyles';
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
@@ -917,180 +917,147 @@ const SupplierOrderDetailsSection: React.FC<{ controller: SupplierOrdersControll
   </div>
 );
 
+const getSupplierOrderItemLineTotal = (item: SupplierSaleOrderItem) => {
+  const subtotal =
+    Number(item.quantity || 0) * Number(item.unitPrice || 0) * getEffectiveDurationMonths(item);
+  return subtotal - (subtotal * Number(item.discount || 0)) / 100;
+};
 const SupplierOrderItemsSection: React.FC<{ controller: SupplierOrdersController }> = ({
   controller,
-}) => (
-  <div className="space-y-4">
-    <div className="flex items-center justify-between">
-      <SupplierOrderSectionTitle>
-        {controller.t('accounting:supplierOrders.items')}
-      </SupplierOrderSectionTitle>
-    </div>
-    {(controller.formData.items || []).length > 0 ? (
-      <DocumentLineItemsScrollArea aria-label={controller.t('accounting:supplierOrders.items')}>
-        <SupplierOrderItemsHeader controller={controller} />
-        <div className="space-y-3">
-          {controller.formData.items?.map((item, index) => (
-            <SupplierOrderItemRow key={item.id} controller={controller} item={item} index={index} />
-          ))}
-        </div>
-      </DocumentLineItemsScrollArea>
-    ) : (
-      <div className="rounded-md border border-dashed border-border py-8 text-center text-sm text-muted-foreground">
-        {controller.t('accounting:supplierOrders.noItemsAdded')}
-      </div>
-    )}
-  </div>
-);
-
-const SupplierOrderItemsHeader: React.FC<{ controller: SupplierOrdersController }> = ({
-  controller,
 }) => {
-  if ((controller.formData.items || []).length === 0) return null;
+  const items = controller.formData.items;
+  const getIndex = useMemo(() => createLineItemIndexResolver(items), [items]);
+
+  const columns: Column<SupplierSaleOrderItem>[] = [
+    {
+      id: 'product',
+      header: controller.t('crm:quotes.productsServices'),
+      accessorFn: (item) => item.productName || '',
+      cell: ({ row }) => (
+        <div className="min-w-[220px]">
+          <SupplierOrderItemProductField controller={controller} item={row} index={getIndex(row)} />
+        </div>
+      ),
+    },
+    {
+      id: 'quantity',
+      header: controller.t('common:labels.quantity'),
+      accessorKey: 'quantity',
+      align: 'center',
+      cell: ({ row }) => (
+        <div className="min-w-[120px]">
+          <SupplierOrderItemQuantityField
+            controller={controller}
+            item={row}
+            index={getIndex(row)}
+          />
+        </div>
+      ),
+    },
+    {
+      id: 'unitPrice',
+      header: `${controller.t('crm:internalListing.salePrice')} (${controller.currency})`,
+      accessorKey: 'unitPrice',
+      align: 'right',
+      cell: ({ row }) => (
+        <div className="min-w-[140px]">
+          <SupplierOrderItemPriceField controller={controller} item={row} index={getIndex(row)} />
+        </div>
+      ),
+    },
+    {
+      id: 'discount',
+      header: controller.t('accounting:supplierOrders.discount'),
+      accessorFn: (item) => item.discount || 0,
+      align: 'center',
+      cell: ({ row }) => (
+        <div className="min-w-[110px]">
+          <SupplierOrderItemDiscountField
+            controller={controller}
+            item={row}
+            index={getIndex(row)}
+          />
+        </div>
+      ),
+    },
+    {
+      id: 'duration',
+      header: controller.t('accounting:supplierOrders.durationColumn', {
+        defaultValue: 'Duration',
+      }),
+      accessorFn: (item) => getEffectiveDurationMonths(item),
+      align: 'center',
+      cell: ({ row }) => (
+        <div className="min-w-[150px]">
+          <SupplierOrderItemDurationField
+            controller={controller}
+            index={getIndex(row)}
+            durationUnit={normalizeDurationUnit(row.durationUnit)}
+            durationValue={getDurationDisplayValue(row)}
+          />
+        </div>
+      ),
+    },
+    {
+      id: 'notes',
+      header: controller.t('accounting:supplierOrders.notes'),
+      accessorFn: (item) => item.note || '',
+      cell: ({ row }) => (
+        <div className="min-w-[220px]">
+          <SupplierOrderItemNoteField controller={controller} item={row} index={getIndex(row)} />
+        </div>
+      ),
+    },
+    {
+      id: 'total',
+      header: controller.t('common:labels.total'),
+      accessorFn: getSupplierOrderItemLineTotal,
+      align: 'right',
+      cell: ({ row }) => (
+        <SupplierOrderItemTotalField
+          controller={controller}
+          lineTotal={getSupplierOrderItemLineTotal(row)}
+          className="min-w-[120px]"
+        />
+      ),
+    },
+    {
+      id: 'actions',
+      header: controller.t('common:labels.actions'),
+      align: 'right',
+      cell: ({ row }) => (
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          onClick={() => controller.removeItem(getIndex(row))}
+          disabled={controller.isReadOnly}
+          className="text-muted-foreground hover:text-destructive"
+        >
+          <i className="fa-solid fa-trash-can" aria-hidden="true"></i>
+          <span className="sr-only">{controller.t('common:buttons.delete')}</span>
+        </Button>
+      ),
+    },
+  ];
+
   return (
-    <div className="mb-1 hidden items-center gap-2 px-3 lg:flex">
-      <div className="grid flex-1 grid-cols-12 gap-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-        <div className="col-span-2 ml-1">{controller.t('crm:quotes.productsServices')}</div>
-        <div className="col-span-1">{controller.t('common:labels.quantity')}</div>
-        <div className="col-span-2">
-          {controller.t('crm:internalListing.salePrice')} ({controller.currency})
+    <StandardTable<SupplierSaleOrderItem>
+      title={controller.t('accounting:supplierOrders.items')}
+      persistenceKey="accounting.supplierOrders.items"
+      data={items ?? []}
+      columns={columns}
+      defaultRowsPerPage={5}
+      minBodyRows={0}
+      tableContainerClassName="overflow-x-auto"
+      emptyState={
+        <div className="py-8 text-sm text-muted-foreground">
+          {controller.t('accounting:supplierOrders.noItemsAdded')}
         </div>
-        <div className="col-span-1">{controller.t('accounting:supplierOrders.discount')}</div>
-        <div className="col-span-2">
-          {controller.t('accounting:supplierOrders.durationColumn', {
-            defaultValue: 'Duration',
-          })}
-        </div>
-        <div className="col-span-2">{controller.t('accounting:supplierOrders.notes')}</div>
-        <div className="col-span-2 pr-2 text-right">{controller.t('common:labels.total')}</div>
-      </div>
-      <div className="w-8 shrink-0"></div>
-    </div>
+      }
+    />
   );
 };
-
-const SupplierOrderItemRow: React.FC<{
-  controller: SupplierOrdersController;
-  item: SupplierSaleOrderItem;
-  index: number;
-}> = ({ controller, item, index }) => {
-  const durationUnit = normalizeDurationUnit(item.durationUnit);
-  const durationValue = getDurationDisplayValue(item);
-  const lineSubtotal =
-    Number(item.quantity ?? 0) * Number(item.unitPrice ?? 0) * getEffectiveDurationMonths(item);
-  const lineDiscount = (lineSubtotal * Number(item.discount ?? 0)) / 100;
-  const lineTotal = lineSubtotal - lineDiscount;
-
-  return (
-    <div className="space-y-3 rounded-md border border-border bg-muted/30 p-3">
-      <SupplierOrderItemMobileFields
-        controller={controller}
-        item={item}
-        index={index}
-        durationUnit={durationUnit}
-        durationValue={durationValue}
-        lineTotal={lineTotal}
-      />
-      <SupplierOrderItemDesktopFields
-        controller={controller}
-        item={item}
-        index={index}
-        durationUnit={durationUnit}
-        durationValue={durationValue}
-        lineTotal={lineTotal}
-      />
-    </div>
-  );
-};
-
-const SupplierOrderItemMobileFields: React.FC<{
-  controller: SupplierOrdersController;
-  item: SupplierSaleOrderItem;
-  index: number;
-  durationUnit: DurationUnit;
-  durationValue: number;
-  lineTotal: number;
-}> = ({ controller, item, index, durationUnit, durationValue, lineTotal }) => (
-  <div className="space-y-2 lg:hidden">
-    <SupplierOrderItemProductField controller={controller} item={item} index={index} />
-    <div className="grid grid-cols-2 gap-2">
-      <SupplierOrderItemQuantityField controller={controller} item={item} index={index} />
-      <SupplierOrderItemPriceField controller={controller} item={item} index={index} />
-      <SupplierOrderItemDiscountField controller={controller} item={item} index={index} />
-      <SupplierOrderItemDurationField
-        controller={controller}
-        index={index}
-        durationUnit={durationUnit}
-        durationValue={durationValue}
-      />
-      <SupplierOrderItemTotalField controller={controller} lineTotal={lineTotal} />
-    </div>
-    <SupplierOrderItemNoteField controller={controller} item={item} index={index} />
-    <SupplierOrderItemDeleteButton controller={controller} index={index} align="right" />
-  </div>
-);
-
-const SupplierOrderItemDesktopFields: React.FC<{
-  controller: SupplierOrdersController;
-  item: SupplierSaleOrderItem;
-  index: number;
-  durationUnit: DurationUnit;
-  durationValue: number;
-  lineTotal: number;
-}> = ({ controller, item, index, durationUnit, durationValue, lineTotal }) => (
-  <div className="hidden items-start gap-2 lg:flex">
-    <div className="grid flex-1 grid-cols-12 gap-2">
-      <SupplierOrderItemProductField
-        controller={controller}
-        item={item}
-        index={index}
-        className="min-w-0 lg:col-span-2"
-      />
-      <SupplierOrderItemQuantityField
-        controller={controller}
-        item={item}
-        index={index}
-        className="lg:col-span-1"
-        inputClassName="font-medium"
-      />
-      <SupplierOrderItemPriceField
-        controller={controller}
-        item={item}
-        index={index}
-        className="lg:col-span-2"
-        inputClassName="font-medium"
-      />
-      <SupplierOrderItemDiscountField
-        controller={controller}
-        item={item}
-        index={index}
-        className="lg:col-span-1"
-        inputClassName="font-medium"
-      />
-      <SupplierOrderItemDurationField
-        controller={controller}
-        index={index}
-        durationUnit={durationUnit}
-        durationValue={durationValue}
-        className="flex items-center gap-1 lg:col-span-2"
-        inputClassName="font-medium"
-      />
-      <SupplierOrderItemNoteField
-        controller={controller}
-        item={item}
-        index={index}
-        className="lg:col-span-2"
-      />
-      <SupplierOrderItemTotalField
-        controller={controller}
-        lineTotal={lineTotal}
-        className="flex items-center justify-end whitespace-nowrap px-3 py-2 text-sm font-semibold text-foreground lg:col-span-2"
-      />
-    </div>
-    <SupplierOrderItemDeleteButton controller={controller} index={index} />
-  </div>
-);
-
 const SupplierOrderItemProductField: React.FC<{
   controller: SupplierOrdersController;
   item: SupplierSaleOrderItem;
@@ -1251,26 +1218,6 @@ const SupplierOrderItemTotalField: React.FC<{
     <div className="flex items-center justify-end whitespace-nowrap px-3 py-2 text-sm font-semibold text-foreground">
       {formatDecimal(lineTotal)} {controller.currency}
     </div>
-  </div>
-);
-
-const SupplierOrderItemDeleteButton: React.FC<{
-  controller: SupplierOrdersController;
-  index: number;
-  align?: 'right' | 'inline';
-}> = ({ controller, index, align = 'inline' }) => (
-  <div className={align === 'right' ? 'flex justify-end' : undefined}>
-    <Button
-      type="button"
-      variant="ghost"
-      size="icon-sm"
-      onClick={() => controller.removeItem(index)}
-      disabled={controller.isReadOnly}
-      className="shrink-0 text-muted-foreground hover:text-destructive"
-    >
-      <i className="fa-solid fa-trash-can" aria-hidden="true"></i>
-      <span className="sr-only">{controller.t('common:buttons.delete')}</span>
-    </Button>
   </div>
 );
 

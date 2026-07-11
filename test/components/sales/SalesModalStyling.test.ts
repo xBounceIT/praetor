@@ -115,15 +115,30 @@ describe('sales modal styling', () => {
     expectSourceOmitsAll(source, ['rounded-2xl bg-white', '<button']);
   });
 
-  // Regression: the desktop line's `pt-5` quick-view gutter must sit on the row flex (which also
-  // holds the trash button), not the inner grid — else the sibling delete button floats above the row.
   test.each([
-    ['client quotes', 'sales/ClientQuotesView.tsx'],
-    ['client offers', 'sales/ClientOffersView.tsx'],
-  ])('%s desktop line row shares the quick-view gutter with the delete button', async (_name, path) => {
+    [
+      'client quotes',
+      'sales/ClientQuotesView.tsx',
+      'sales.clientQuotes.items',
+      '<StandardTable<QuoteItem>',
+    ],
+    [
+      'client offers',
+      'sales/ClientOffersView.tsx',
+      'sales.clientOffers.items',
+      '<StandardTable<ClientOfferItem>',
+    ],
+  ])('%s item editor uses the shared StandardTable layout', async (_name, path, persistenceKey, tableMarker) => {
     const source = await readComponentSource(path);
 
     expectSourceContainsAll(source, [
+      tableMarker,
+      `persistenceKey="${persistenceKey}"`,
+      'defaultRowsPerPage={5}',
+      'minBodyRows={0}',
+      'tableContainerClassName="overflow-x-auto"',
+    ]);
+    expectSourceOmitsAll(source, [
       'className="hidden lg:flex gap-2 items-center pt-5"',
       'className="flex-1 min-w-0 grid grid-cols-17 gap-2 items-center"',
     ]);
