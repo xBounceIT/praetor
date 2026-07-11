@@ -292,7 +292,12 @@ const supplierQuotesViewReducer = (
       const current = items[action.index];
       if (!current) return state;
       const isListPriceUpdate = action.field === 'listPrice';
-      const isBlankListPrice = isListPriceUpdate && action.value === '';
+      const parsedListPrice = isListPriceUpdate
+        ? parseNumberInputValue(String(action.value), Number.NaN)
+        : undefined;
+      const hasValidListPrice =
+        typeof parsedListPrice === 'number' && Number.isFinite(parsedListPrice);
+      const isBlankListPrice = isListPriceUpdate && !hasValidListPrice;
       let blankListPriceItemIds = state.blankListPriceItemIds;
       if (isListPriceUpdate) {
         const nextBlankListPriceItemIds = new Set(blankListPriceItemIds);
@@ -301,7 +306,9 @@ const supplierQuotesViewReducer = (
         blankListPriceItemIds = nextBlankListPriceItemIds;
       }
       const normalizedValue = isListPriceUpdate
-        ? parseNumberInputValue(String(action.value))
+        ? hasValidListPrice
+          ? parsedListPrice
+          : 0
         : action.value;
       const next = { ...current, [action.field]: normalizedValue };
       // Prezzo listino / Sconto a noi edits re-derive the whole line at the persisted DB scale in

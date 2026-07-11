@@ -351,6 +351,17 @@ describe('<SupplierQuotesView /> required list price', () => {
       Date.now = originalDateNow;
     }
   });
+
+  test.each(['.', ','])('rejects a separator-only list price (%s)', (separator) => {
+    const onAddQuote = mock((_data: Partial<SupplierQuote>) => Promise.resolve(draft));
+    render(<SupplierQuotesView {...baseProps} quotes={[]} onAddQuote={onAddQuote} />);
+
+    fillNewQuoteForm('Globex Corp', separator);
+    fireEvent.submit(screen.getByText('common:buttons.save').closest('form') as HTMLFormElement);
+
+    expect(onAddQuote).not.toHaveBeenCalled();
+    expect(screen.getByText('sales:supplierQuotes.errors.listPriceRequired')).toBeInTheDocument();
+  });
 });
 
 // The customer link used to be optional (issue #759); issue #777 makes it mandatory.
