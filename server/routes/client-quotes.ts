@@ -18,6 +18,7 @@ import { isPastLocalDate } from '../utils/date.ts';
 import { getUniqueViolation } from '../utils/db-errors.ts';
 import { replyDocumentCodeCollision } from '../utils/document-code-replies.ts';
 import { type DurationUnit, effectiveDurationMonths } from '../utils/duration-unit.ts';
+import { roundCurrency } from '../utils/invoice-math.ts';
 import { normalizeNullableString } from '../utils/normalize.ts';
 import { generatePrefixedId, ITEM_ID_PREFIXES } from '../utils/order-ids.ts';
 import {
@@ -276,6 +277,15 @@ const calculateQuoteTotals = (
   return { total, subtotal };
 };
 
+const calculateUnitPriceFromMol = (unitCost: number, molPercentage: number | null): number => {
+  const mol = Number(molPercentage ?? 0);
+  const unitPrice = mol >= 100 ? unitCost : unitCost / (1 - mol / 100);
+  return roundCurrency(unitPrice);
+};
+
+const productCostInLineUnit = (productCost: number, unitType: UnitType | undefined): number =>
+  unitType === 'days' ? productCost * 8 : productCost;
+
 const resolveQuoteItemSnapshots = async (
   items: IncomingQuoteItem[],
   existingItemsById?: Map<string, IncomingQuoteItem & QuoteItemSnapshot>,
@@ -329,9 +339,18 @@ const resolveQuoteItemSnapshots = async (
         (item.productMolPercentage === null ||
           item.productMolPercentage === (existingItem.productMolPercentage ?? null));
       if (existingItem && isUnchanged) {
+        const supplierQuoteUnitPrice =
+          item.supplierQuoteUnitPrice ?? existingItem.supplierQuoteUnitPrice ?? null;
+        const effectiveUnitCost = normalizedSupplierQuoteItemId
+          ? (supplierQuoteUnitPrice ?? 0)
+          : productCostInLineUnit(existingItem.productCost, item.unitType);
         resolvedItems.push({
           ...item,
           supplierQuoteItemId: normalizedSupplierQuoteItemId,
+          unitPrice: calculateUnitPriceFromMol(
+            effectiveUnitCost,
+            existingItem.productMolPercentage ?? null,
+          ),
           productCost: existingItem.productCost,
           productMolPercentage: existingItem.productMolPercentage ?? null,
           supplierQuoteId: existingItem.supplierQuoteId ?? null,
@@ -339,8 +358,7 @@ const resolveQuoteItemSnapshots = async (
           // Client-authoritative for an existing link (issue #779 bidirectional sync): a cost
           // edit on a supplier-sourced line lands here, and is then pushed back onto the
           // supplier item after the write. Absent → keep the stored snapshot.
-          supplierQuoteUnitPrice:
-            item.supplierQuoteUnitPrice ?? existingItem.supplierQuoteUnitPrice ?? null,
+          supplierQuoteUnitPrice,
         });
         continue;
       }
@@ -411,19 +429,25 @@ const resolveQuoteItemSnapshots = async (
       throw new Error(`items productId "${resolvedProductId}" is invalid`);
     }
 
-    const allowManualProductSnapshot = !normalizedSupplierQuoteItemId;
+    const allowManualProductCost = !normalizedSupplierQuoteItemId;
+    const productCost =
+      allowManualProductCost && item.productCost !== null
+        ? item.productCost
+        : (productSnapshot?.productCost ?? 0);
+    const productMolPercentage =
+      item.productMolPercentage != null
+        ? item.productMolPercentage
+        : (productSnapshot?.productMolPercentage ?? null);
+    const effectiveUnitCost = normalizedSupplierQuoteItemId
+      ? (supplierQuoteUnitPrice ?? 0)
+      : productCostInLineUnit(productCost, item.unitType);
     resolvedItems.push({
       ...item,
       productId: resolvedProductId,
       supplierQuoteItemId: normalizedSupplierQuoteItemId,
-      productCost:
-        allowManualProductSnapshot && item.productCost !== null
-          ? item.productCost
-          : (productSnapshot?.productCost ?? 0),
-      productMolPercentage:
-        allowManualProductSnapshot && item.productMolPercentage !== null
-          ? item.productMolPercentage
-          : (productSnapshot?.productMolPercentage ?? null),
+      unitPrice: calculateUnitPriceFromMol(effectiveUnitCost, productMolPercentage),
+      productCost,
+      productMolPercentage,
       supplierQuoteId,
       supplierQuoteSupplierName,
       supplierQuoteUnitPrice,
@@ -446,7 +470,7 @@ const quoteItemSchema = {
   properties: {
     id: { type: 'string' },
     quoteId: { type: 'string' },
-    productId: { type: 'string' },
+    productId: { type: ['string', 'null'] },
     productName: { type: 'string' },
     quantity: { type: 'number' },
     unitPrice: { type: 'number' },
@@ -526,7 +550,7 @@ const quoteItemBodySchema = {
   type: 'object',
   properties: {
     id: { type: 'string' },
-    productId: { type: 'string' },
+    productId: { type: ['string', 'null'] },
     productName: { type: 'string' },
     supplierQuoteItemId: { type: 'string' },
     quantity: { type: 'number' },
