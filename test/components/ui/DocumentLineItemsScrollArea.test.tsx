@@ -16,4 +16,20 @@ describe('<DocumentLineItemsScrollArea />', () => {
     expect(scrollArea).toHaveClass('overflow-x-auto', 'overscroll-x-contain');
     expect(scrollArea.firstElementChild).toHaveClass('min-w-0', 'lg:min-w-[76rem]');
   });
+
+  test('allows wider document types to override the shared desktop minimum', () => {
+    render(
+      <DocumentLineItemsScrollArea
+        aria-label="Wide document items"
+        contentClassName="lg:min-w-[88rem]"
+      >
+        <div>Header and rows</div>
+      </DocumentLineItemsScrollArea>,
+    );
+
+    const content = screen.getByRole('region', { name: 'Wide document items' }).firstElementChild;
+
+    expect(content).toHaveClass('min-w-0', 'lg:min-w-[88rem]');
+    expect(content).not.toHaveClass('lg:min-w-[76rem]');
+  });
 });

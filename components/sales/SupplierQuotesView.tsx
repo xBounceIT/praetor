@@ -1496,6 +1496,7 @@ const SupplierQuoteItemsSection: React.FC<{ controller: SupplierQuotesController
     {(controller.formData.items || []).length > 0 ? (
       <DocumentLineItemsScrollArea
         aria-label={controller.t('sales:supplierQuotes.items', { defaultValue: 'Items' })}
+        contentClassName="lg:min-w-[88rem]"
       >
         <SupplierQuoteItemsHeader controller={controller} />
         <div className="space-y-3">

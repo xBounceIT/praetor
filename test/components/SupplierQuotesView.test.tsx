@@ -661,6 +661,10 @@ describe('<SupplierQuotesView /> compact line-item numeric columns', () => {
     expect((source.match(/className=\{wrapperClassName\}/g) ?? []).length).toBeGreaterThanOrEqual(
       2,
     );
+    // Supplier quote rows need more room than the shared document default because quantity has
+    // two 4rem-min controls plus the separator. The wider content scrolls instead of spilling into
+    // the adjacent duration column at compact desktop widths.
+    expectSourceContainsAll(source, ['contentClassName="lg:min-w-[88rem]"']);
     // The old evenly-split 12-col grid that wasted horizontal space is gone from both rows.
     expectSourceOmitsAll(source, ['grid grid-cols-12 gap-3']);
   });
