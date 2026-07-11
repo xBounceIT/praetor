@@ -2050,11 +2050,14 @@ describe('<StandardTable />', () => {
     render(<StandardTable<Row> title="Fonts" data={sampleRows} columns={sampleColumns} />);
     const decrease = screen.getByLabelText('table.decreaseFont');
     const increase = screen.getByLabelText('table.increaseFont');
+    const firstDataRow = screen.getByText('Alice').closest('tr');
+    expect(firstDataRow).toHaveAttribute('data-standard-table-font-size', 'sm');
     expect((decrease as HTMLButtonElement).disabled).toBe(false);
     expect((increase as HTMLButtonElement).disabled).toBe(false);
 
     // Step down to 'xs' → decrease should disable.
     act(() => fireEvent.click(decrease));
+    expect(firstDataRow).toHaveAttribute('data-standard-table-font-size', 'xs');
     expect((decrease as HTMLButtonElement).disabled).toBe(true);
     expect(localStorage.getItem(TABLE_FONT_SIZE_STORAGE_KEY)).toBe('xs');
     expect(localStorage.getItem('praetor_table_fontsize_fonts')).toBeNull();
@@ -2064,8 +2067,20 @@ describe('<StandardTable />', () => {
       fireEvent.click(increase);
       fireEvent.click(increase);
     });
+    expect(firstDataRow).toHaveAttribute('data-standard-table-font-size', 'base');
     expect((increase as HTMLButtonElement).disabled).toBe(true);
     expect(localStorage.getItem(TABLE_FONT_SIZE_STORAGE_KEY)).toBe('base');
+  });
+
+  test('font sizes define matching row, cell, and inline-control densities', async () => {
+    const css = await Bun.file(new URL('../../src/index.css', import.meta.url)).text();
+
+    expect(css).toContain('tr[data-standard-table-font-size="xs"]');
+    expect(css).toContain('tr[data-standard-table-font-size="sm"]');
+    expect(css).toContain('tr[data-standard-table-font-size="base"]');
+    expect(css).toContain('tr[data-standard-table-font-size] > td');
+    expect(css).toContain('[data-slot="input"]');
+    expect(css).toContain('--standard-table-control-height');
   });
 
   test('shares font size with mounted tables and tables rendered later', () => {

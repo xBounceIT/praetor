@@ -3787,6 +3787,7 @@ const StandardTableDataRowElement = <T extends object>({
   const {
     disabledRow,
     onRowClick,
+    fontSize,
     fontSizeClass,
     rowClassName,
     hasTrailingSpacer,
@@ -3798,6 +3799,7 @@ const StandardTableDataRowElement = <T extends object>({
   return (
     <TableRow
       {...rowProps}
+      data-standard-table-font-size={fontSize}
       onClick={(event) => {
         rowProps.onClick?.(event);
         if (!event.defaultPrevented && !disabledRow?.(row)) onRowClick?.(row);
