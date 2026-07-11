@@ -1,5 +1,11 @@
 import { afterEach, describe, expect, mock, test } from 'bun:test';
-import { screen } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import type {
+  InternalProductCategory,
+  InternalProductSubcategory,
+  InternalProductType,
+} from '../../../services/api/products';
 import type { Product } from '../../../types';
 import { installI18nMock } from '../../helpers/i18n';
 import { render } from '../../helpers/render';
@@ -8,12 +14,16 @@ installI18nMock();
 
 // InternalListingView loads product types / categories on mount; stub the API so
 // the view renders without real network calls.
+let productTypes: InternalProductType[] = [];
+let categories: InternalProductCategory[] = [];
+let subcategories: InternalProductSubcategory[] = [];
+
 mock.module('../../../services/api', () => ({
   default: {
     products: {
-      listProductTypes: () => Promise.resolve([]),
-      listInternalCategories: () => Promise.resolve([]),
-      listInternalSubcategories: () => Promise.resolve([]),
+      listProductTypes: () => Promise.resolve(productTypes),
+      listInternalCategories: () => Promise.resolve(categories),
+      listInternalSubcategories: () => Promise.resolve(subcategories),
     },
   },
 }));
@@ -55,6 +65,9 @@ const products: Product[] = [
 ];
 
 afterEach(() => {
+  productTypes = [];
+  categories = [];
+  subcategories = [];
   document.body.style.overflow = '';
   // StandardTable persists saved views / active view per table title; clear so
   // state set in one test can't leak into the next.
@@ -71,6 +84,7 @@ describe('<InternalListingView /> productFilterId', () => {
     render(<InternalListingView {...baseProps} products={products} />);
     expect(screen.getByText('Solar Panel')).toBeInTheDocument();
     expect(screen.getByText('Wind Turbine')).toBeInTheDocument();
+    expect(screen.getAllByLabelText('table.rowActions')).toHaveLength(products.length);
   });
 
   test("pre-filters the table to the linked product's code (visible Codice column)", () => {
@@ -159,5 +173,126 @@ describe('<InternalListingView /> productFilterId', () => {
     expect(
       screen.getByRole('button', { name: /table\.filters .*productCode/i }),
     ).toBeInTheDocument();
+  });
+});
+
+describe('<InternalListingView /> managed catalog values', () => {
+  test('localizes Manage and exposes edit/delete actions for types, categories, and subcategories', async () => {
+    productTypes = [
+      {
+        id: 'type-consulting',
+        name: 'consulting',
+        costUnit: 'hours',
+        productCount: 0,
+        categoryCount: 0,
+      },
+      {
+        id: 'type-supply',
+        name: 'supply',
+        costUnit: 'unit',
+        productCount: 0,
+        categoryCount: 0,
+      },
+    ];
+    categories = [
+      {
+        id: 'category-governance',
+        name: 'Governance',
+        type: 'supply',
+        costUnit: 'unit',
+        productCount: 0,
+        hasLinkedProducts: false,
+      },
+      {
+        id: 'category-operations',
+        name: 'Operations',
+        type: 'supply',
+        costUnit: 'unit',
+        productCount: 0,
+        hasLinkedProducts: false,
+      },
+    ];
+    subcategories = [
+      { name: 'Network', productCount: 0, hasLinkedProducts: false },
+      { name: 'Security', productCount: 0, hasLinkedProducts: false },
+    ];
+
+    const onDeleteProductType = mock((_id: string) => Promise.resolve());
+    const onDeleteInternalCategory = mock((_id: string) => Promise.resolve());
+    const onDeleteInternalSubcategory = mock((_name: string, _type: string, _category: string) =>
+      Promise.resolve(),
+    );
+    const user = userEvent.setup();
+
+    render(
+      <InternalListingView
+        {...baseProps}
+        products={[]}
+        onDeleteProductType={onDeleteProductType}
+        onDeleteInternalCategory={onDeleteInternalCategory}
+        onDeleteInternalSubcategory={onDeleteInternalSubcategory}
+      />,
+    );
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'crm:internalListing.addProduct' }));
+
+    const typeSelect = await screen.findByRole('combobox');
+    await waitFor(() => expect(typeSelect).toHaveTextContent('Consulting'));
+    fireEvent.click(typeSelect);
+    fireEvent.click(await screen.findByRole('option', { name: 'Supply' }));
+    await screen.findByText('Governance');
+
+    expect(screen.getAllByRole('button', { name: 'common:buttons.manage' })).toHaveLength(3);
+
+    const openActionsFor = async (name: string) => {
+      let actionButton: HTMLElement | null = null;
+      await waitFor(() => {
+        const row = screen
+          .getAllByText(name)
+          .map((element) => element.closest('tr'))
+          .find((element): element is HTMLTableRowElement => element !== null);
+        expect(row).toBeDefined();
+        actionButton = within(row as HTMLTableRowElement).getByRole('button', {
+          name: 'table.rowActions',
+        });
+      });
+      if (!actionButton) throw new Error('Missing row actions for ' + name);
+      fireEvent.pointerDown(actionButton, { button: 0, ctrlKey: false });
+    };
+    const deleteCurrentValue = async () => {
+      expect(
+        await screen.findByRole('button', { name: 'common:buttons.edit' }),
+      ).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'common:buttons.delete' }));
+    };
+
+    const closeTopModal = () => {
+      const closeButtons = screen.getAllByRole('button', { name: 'Close' });
+      fireEvent.click(closeButtons.at(-1) as HTMLElement);
+    };
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'common:buttons.manage' })[0]);
+    await openActionsFor('Consulting');
+    await deleteCurrentValue();
+    await waitFor(() => expect(onDeleteProductType).toHaveBeenCalledWith('type-consulting'));
+    closeTopModal();
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'common:buttons.manage' })[1]);
+    await openActionsFor('Operations');
+    await deleteCurrentValue();
+    await waitFor(() =>
+      expect(onDeleteInternalCategory).toHaveBeenCalledWith('category-operations'),
+    );
+    closeTopModal();
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'common:buttons.manage' })[2]);
+    await openActionsFor('Security');
+    await deleteCurrentValue();
+    await waitFor(() =>
+      expect(onDeleteInternalSubcategory).toHaveBeenCalledWith('Security', 'supply', 'Governance'),
+    );
   });
 });
