@@ -142,6 +142,36 @@ const buildPrimaryFields = (contacts: suppliersRepo.SupplierContact[]) => {
   };
 };
 
+type LegacyContactPatch = {
+  contactName?: string | null;
+  email?: string | null;
+  phone?: string | null;
+};
+
+const mergeLegacyPrimaryContact = (
+  contacts: suppliersRepo.SupplierContact[],
+  patch: LegacyContactPatch,
+): suppliersRepo.SupplierContact[] => {
+  const remainingContacts =
+    Object.hasOwn(patch, 'contactName') && patch.contactName === null
+      ? contacts.slice(1)
+      : contacts;
+  const [primary, ...otherContacts] = remainingContacts;
+  if (!primary) return [];
+
+  return [
+    {
+      ...primary,
+      ...(Object.hasOwn(patch, 'contactName') && patch.contactName !== null
+        ? { fullName: patch.contactName }
+        : {}),
+      ...(Object.hasOwn(patch, 'email') ? { email: patch.email ?? undefined } : {}),
+      ...(Object.hasOwn(patch, 'phone') ? { phone: patch.phone ?? undefined } : {}),
+    },
+    ...otherContacts,
+  ];
+};
+
 export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.addHook('onRequest', authenticateToken);
 
@@ -307,6 +337,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
       const hasContacts = Object.hasOwn(body, 'contacts');
+      const hasContactName = Object.hasOwn(body, 'contactName');
+      const hasEmail = Object.hasOwn(body, 'email');
+      const hasPhone = Object.hasOwn(body, 'phone');
+      const hasLegacyContactPatch = hasContactName || hasEmail || hasPhone;
       const contactsResult = parseContacts(hasContacts ? contacts : undefined);
       if (!contactsResult.ok) return badRequest(reply, contactsResult.message);
 
@@ -366,9 +400,34 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         patch.email = primary.email;
         patch.phone = primary.phone;
       } else {
-        if (Object.hasOwn(body, 'contactName')) patch.contactName = contactNameResult.value;
-        if (Object.hasOwn(body, 'email')) patch.email = emailResult.value;
-        if (Object.hasOwn(body, 'phone')) patch.phone = phoneResult.value;
+        if (hasContactName) patch.contactName = contactNameResult.value;
+        if (hasEmail) patch.email = emailResult.value;
+        if (hasPhone) patch.phone = phoneResult.value;
+
+        if (hasLegacyContactPatch) {
+          const current = await suppliersRepo.findById(idResult.value);
+          if (!current) {
+            return replyError(request, reply, {
+              statusCode: 404,
+              message: 'Supplier not found',
+              action: 'supplier.update.not_found',
+              entityType: 'supplier',
+              entityId: idResult.value,
+            });
+          }
+
+          if (current.contacts.length > 0) {
+            const nextContacts = mergeLegacyPrimaryContact(current.contacts, {
+              ...(hasContactName ? { contactName: contactNameResult.value } : {}),
+              ...(hasEmail ? { email: emailResult.value } : {}),
+              ...(hasPhone ? { phone: phoneResult.value } : {}),
+            });
+            patch.contacts = nextContacts;
+            if (nextContacts.length > 0) {
+              Object.assign(patch, buildPrimaryFields(nextContacts));
+            }
+          }
+        }
       }
       if (Object.hasOwn(body, 'address')) patch.address = addressResult.value;
       if (vatNumberValue !== undefined) patch.vatNumber = vatNumberValue;
@@ -392,9 +451,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         Object.hasOwn(body, 'isDisabled') ? 'isDisabled' : null,
         Object.hasOwn(body, 'supplierCode') ? 'supplierCode' : null,
         hasContacts ? 'contacts' : null,
-        !hasContacts && Object.hasOwn(body, 'contactName') ? 'contactName' : null,
-        !hasContacts && Object.hasOwn(body, 'email') ? 'email' : null,
-        !hasContacts && Object.hasOwn(body, 'phone') ? 'phone' : null,
+        !hasContacts && hasContactName ? 'contactName' : null,
+        !hasContacts && hasEmail ? 'email' : null,
+        !hasContacts && hasPhone ? 'phone' : null,
         Object.hasOwn(body, 'address') ? 'address' : null,
         Object.hasOwn(body, 'vatNumber') ? 'vatNumber' : null,
         Object.hasOwn(body, 'taxCode') ? 'taxCode' : null,
