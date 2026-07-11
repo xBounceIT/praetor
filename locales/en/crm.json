@@ -211,7 +211,7 @@
     "typeNameRequired": "Type name is required",
     "noTypes": "No types found. Create your first product type.",
     "deleteTypeWithProducts": "Type '{{name}}' has {{productCount}} product(s) and {{categoryCount}} category(s). Are you sure you want to delete it?",
-    "typeDeleteBlocked": "Type '{{name}}' cannot be deleted while {{productCount}} product(s) and {{categoryCount}} category(s) still use it.",
+    "typeDeleteBlocked": "Type '{{name}}' cannot be deleted because it is still in use.",
     "editProductTooltip": "Edit Product",
     "disableProduct": "Disable Product",
     "enableProduct": "Enable Product",
@@ -255,9 +255,9 @@
     "products": "products",
     "costUnit": "Cost Unit",
     "deleteCategoryWithProducts": "Category '{{name}}' has {{count}} product(s). Are you sure you want to delete it? Products will become uncategorized.",
-    "deleteCategoryWithLinkedProducts": "Cannot delete category '{{name}}'. It has {{count}} product(s) linked to transactions (offers, orders, invoices). Remove the products from transactions first.",
+    "deleteCategoryWithLinkedProducts": "Category '{{name}}' cannot be deleted because it is still in use.",
     "deleteSubcategoryWithProducts": "Subcategory '{{name}}' has {{count}} product(s). Are you sure you want to delete it? Products will lose their subcategory.",
-    "deleteSubcategoryWithLinkedProducts": "Cannot delete subcategory '{{name}}'. It has {{count}} product(s) linked to transactions (offers, orders, invoices). Remove the products from transactions first."
+    "deleteSubcategoryWithLinkedProducts": "Subcategory '{{name}}' cannot be deleted because it is still in use."
   },
   "sales": {
     "title": "Sales",
