@@ -22,6 +22,7 @@ const { useState } = await import('react');
 const { decodeLegacyFilterValue } = await import('../../components/shared/customViewHelpers');
 const StandardTable = (await import('../../components/shared/StandardTable')).default;
 const Modal = (await import('../../components/shared/Modal')).default;
+const QuickViewLinkButton = (await import('../../components/shared/QuickViewLinkButton')).default;
 const StatusBadge = (await import('../../components/shared/StatusBadge')).default;
 
 const countPaddingRows = (container: HTMLElement) =>
@@ -1179,6 +1180,39 @@ describe('<StandardTable />', () => {
     expect(screen.getByTestId('send-action-1')).toBeInTheDocument();
     expect(screen.getByText('Send Alice')).toBeInTheDocument();
     expect(screen.getByTestId('send-action-1').className).toContain('text-popover-foreground');
+  });
+
+  test('row action menus preserve quick-view links and disabled shortcuts', async () => {
+    const user = userEvent.setup();
+    const cols = [
+      ...sampleColumns,
+      {
+        id: 'actions',
+        header: 'Actions',
+        sticky: 'right' as const,
+        cell: ({ row }: { row: Row }) => (
+          <QuickViewLinkButton
+            href={row.id === '1' ? '#/people/1' : null}
+            label={`Open ${row.name}`}
+            disabledLabel={`Cannot open ${row.name}`}
+          />
+        ),
+      },
+    ];
+
+    render(<StandardTable<Row> title="People" data={sampleRows.slice(0, 2)} columns={cols} />);
+
+    const triggers = screen.getAllByLabelText('table.rowActions');
+    await user.click(triggers[0]);
+    const link = screen.getByRole('link', { name: 'Open Alice' });
+    expect(link).toHaveAttribute('href', '#/people/1');
+    expect(link).toHaveAttribute('target', '_blank');
+    expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+    expect(link.closest('button')).toBeNull();
+
+    await user.keyboard('{Escape}');
+    await user.click(screen.getAllByLabelText('table.rowActions')[1]);
+    expect(screen.getByRole('button', { name: 'Cannot open Bob' })).toBeDisabled();
   });
 
   test('row action trigger is hidden when the action cell has no items', async () => {

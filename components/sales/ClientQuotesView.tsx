@@ -2190,8 +2190,6 @@ const ClientQuoteItemsSection: React.FC<{ controller: ClientQuotesController }> 
               controller={controller}
               item={row}
               index={index}
-              line={line}
-              floating
               className="min-w-0 flex-1"
               buttonClassName="h-9 w-full"
             />
@@ -2214,8 +2212,6 @@ const ClientQuoteItemsSection: React.FC<{ controller: ClientQuotesController }> 
               controller={controller}
               item={row}
               index={index}
-              line={getLine(row)}
-              floating
               className="min-w-0 flex-1"
               buttonClassName="h-9 w-full"
             />
@@ -2279,7 +2275,7 @@ const ClientQuoteItemsSection: React.FC<{ controller: ClientQuotesController }> 
       accessorFn: (item) => getItemPricingContext(item).molPercentage,
       align: 'center',
       cell: ({ row }) => (
-        <div className="flex min-w-[100px] items-center gap-1">
+        <div className="flex min-w-[100px] items-center justify-center gap-1">
           <ClientQuoteMolEditor controller={controller} line={getLine(row)} compact />
         </div>
       ),
@@ -2347,19 +2343,38 @@ const ClientQuoteItemsSection: React.FC<{ controller: ClientQuotesController }> 
       id: 'actions',
       header: t('common:labels.actions'),
       align: 'right',
-      cell: ({ row }) => (
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-sm"
-          onClick={() => controller.setProductRowToDelete(getIndex(row))}
-          disabled={controller.isReadOnly}
-          className="text-muted-foreground hover:text-destructive"
-        >
-          <i className="fa-solid fa-trash-can" aria-hidden="true"></i>
-          <span className="sr-only">{t('common:buttons.delete')}</span>
-        </Button>
-      ),
+      cell: ({ row }) => {
+        const line = getLine(row);
+        return (
+          <>
+            {controller.canViewSupplierQuotes && (
+              <QuickViewLinkButton
+                href={line.supplierQuoteHref}
+                label={t('sales:clientQuotes.openSupplierQuoteInNewTab')}
+                disabledLabel={t('sales:clientQuotes.supplierQuoteShortcutUnavailable')}
+              />
+            )}
+            {controller.canViewInternalListing && (
+              <QuickViewLinkButton
+                href={line.productHref}
+                label={t('sales:clientQuotes.openProductInNewTab')}
+                disabledLabel={t('sales:clientQuotes.productShortcutUnavailable')}
+              />
+            )}
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => controller.setProductRowToDelete(getIndex(row))}
+              disabled={controller.isReadOnly}
+              className="text-muted-foreground hover:text-destructive"
+            >
+              <i className="fa-solid fa-trash-can" aria-hidden="true"></i>
+              <span className="sr-only">{t('common:buttons.delete')}</span>
+            </Button>
+          </>
+        );
+      },
     },
   ];
 
@@ -2474,49 +2489,36 @@ const ClientQuoteSupplierPicker: React.FC<{
   controller: ClientQuotesController;
   item: QuoteItem;
   index: number;
-  line: ClientQuoteLineContext;
   className: string;
   buttonClassName: string;
-  floating?: boolean;
-}> = ({ controller, item, index, line, className, buttonClassName, floating }) => {
+}> = ({ controller, item, index, className, buttonClassName }) => {
   const {
     t,
     supplierQuoteItemOptions,
     isReadOnly,
-    canViewSupplierQuotes,
     updateProductRow,
     getSupplierQuoteItemDisplayValue,
   } = controller;
 
   return (
-    <>
-      {canViewSupplierQuotes && (
-        <QuickViewLinkButton
-          href={line.supplierQuoteHref}
-          label={t('sales:clientQuotes.openSupplierQuoteInNewTab')}
-          disabledLabel={t('sales:clientQuotes.supplierQuoteShortcutUnavailable')}
-          floating={floating}
-        />
-      )}
-      <SelectControl
-        options={[
-          { id: 'none', name: t('sales:clientQuotes.noSupplierQuote') },
-          ...supplierQuoteItemOptions,
-        ]}
-        value={item.supplierQuoteItemId || 'none'}
-        onChange={(val) =>
-          updateProductRow(index, 'supplierQuoteItemId', val === 'none' ? '' : (val as string))
-        }
-        placeholder={t('sales:clientQuotes.selectSupplierQuote')}
-        displayValue={getSupplierQuoteItemDisplayValue(item.supplierQuoteItemId)}
-        displayValueIsPlaceholder={!item.supplierQuoteItemId}
-        valueClassName="font-medium"
-        searchable={true}
-        disabled={isReadOnly}
-        className={className}
-        buttonClassName={buttonClassName}
-      />
-    </>
+    <SelectControl
+      options={[
+        { id: 'none', name: t('sales:clientQuotes.noSupplierQuote') },
+        ...supplierQuoteItemOptions,
+      ]}
+      value={item.supplierQuoteItemId || 'none'}
+      onChange={(val) =>
+        updateProductRow(index, 'supplierQuoteItemId', val === 'none' ? '' : (val as string))
+      }
+      placeholder={t('sales:clientQuotes.selectSupplierQuote')}
+      displayValue={getSupplierQuoteItemDisplayValue(item.supplierQuoteItemId)}
+      displayValueIsPlaceholder={!item.supplierQuoteItemId}
+      valueClassName="font-medium"
+      searchable={true}
+      disabled={isReadOnly}
+      className={className}
+      buttonClassName={buttonClassName}
+    />
   );
 };
 
@@ -2524,43 +2526,25 @@ const ClientQuoteProductPicker: React.FC<{
   controller: ClientQuotesController;
   item: QuoteItem;
   index: number;
-  line: ClientQuoteLineContext;
   className: string;
   buttonClassName: string;
-  floating?: boolean;
-}> = ({ controller, item, index, line, className, buttonClassName, floating }) => {
-  const {
-    t,
-    activeProductOptions,
-    canViewInternalListing,
-    isReadOnly,
-    isLinkedProductMissing,
-    updateProductSelection,
-  } = controller;
+}> = ({ controller, item, index, className, buttonClassName }) => {
+  const { t, activeProductOptions, isReadOnly, isLinkedProductMissing, updateProductSelection } =
+    controller;
 
   return (
-    <>
-      {canViewInternalListing && (
-        <QuickViewLinkButton
-          href={line.productHref}
-          label={t('sales:clientQuotes.openProductInNewTab')}
-          disabledLabel={t('sales:clientQuotes.productShortcutUnavailable')}
-          floating={floating}
-        />
-      )}
-      <ProductSelectOrFallback
-        item={item}
-        index={index}
-        options={activeProductOptions}
-        isProductMissing={isLinkedProductMissing(item)}
-        isReadOnly={isReadOnly}
-        ariaLabel={t('sales:clientQuotes.selectProduct', { defaultValue: 'Select product' })}
-        placeholder={t('sales:clientQuotes.selectProduct')}
-        onProductChange={updateProductSelection}
-        className={className}
-        buttonClassName={buttonClassName}
-      />
-    </>
+    <ProductSelectOrFallback
+      item={item}
+      index={index}
+      options={activeProductOptions}
+      isProductMissing={isLinkedProductMissing(item)}
+      isReadOnly={isReadOnly}
+      ariaLabel={t('sales:clientQuotes.selectProduct', { defaultValue: 'Select product' })}
+      placeholder={t('sales:clientQuotes.selectProduct')}
+      onProductChange={updateProductSelection}
+      className={className}
+      buttonClassName={buttonClassName}
+    />
   );
 };
 
@@ -2655,7 +2639,7 @@ const ClientQuoteCostEditor: React.FC<{
   const isLinkedToSupplierQuote = line.isLinkedToSupplierQuote;
 
   return (
-    <div className="flex items-center gap-1 w-full">
+    <div className="flex w-full items-center justify-end gap-1">
       <ValidatedNumberInput
         value={line.cost}
         formatDecimals={2}
@@ -2663,7 +2647,7 @@ const ClientQuoteCostEditor: React.FC<{
         disabled={isReadOnly || line.supplierLineLocked}
         className={
           compact
-            ? 'w-full text-sm px-1 py-2 bg-white border border-zinc-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed'
+            ? 'w-full max-w-[5rem] flex-none text-sm px-1 py-2 bg-white border border-zinc-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed'
             : 'w-full text-sm p-2 bg-white border border-zinc-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed'
         }
       />
@@ -2689,7 +2673,7 @@ const ClientQuoteMolEditor: React.FC<{
         disabled={isReadOnly}
         className={
           compact
-            ? 'w-full text-sm px-1 py-2 bg-white border border-zinc-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed'
+            ? 'w-full max-w-[5rem] flex-none text-sm px-1 py-2 bg-white border border-zinc-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed'
             : 'w-full text-sm p-2 bg-white border border-zinc-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed'
         }
       />
@@ -2718,7 +2702,7 @@ const ClientQuoteDiscountEditor: React.FC<{
       disabled={controller.isReadOnly}
       className={
         compact
-          ? 'w-full text-sm px-1 py-2 bg-white border border-zinc-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed'
+          ? 'w-full max-w-[5rem] flex-none text-sm px-1 py-2 bg-white border border-zinc-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed'
           : 'w-full text-sm p-2 bg-white border border-zinc-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed'
       }
     />

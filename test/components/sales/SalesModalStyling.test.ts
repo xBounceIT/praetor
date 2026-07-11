@@ -1,4 +1,4 @@
-import { describe, test } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 import {
   expectSourceContainsAll,
   expectSourceOmitsAll,
@@ -137,11 +137,18 @@ describe('sales modal styling', () => {
       'defaultRowsPerPage={5}',
       'minBodyRows={0}',
       'tableContainerClassName="overflow-x-auto"',
+      "id: 'actions'",
+      'controller.canViewSupplierQuotes',
+      'href={line.supplierQuoteHref}',
+      'controller.canViewInternalListing',
+      'href={line.productHref}',
     ]);
     expectSourceOmitsAll(source, [
       'className="hidden lg:flex gap-2 items-center pt-5"',
       'className="flex-1 min-w-0 grid grid-cols-17 gap-2 items-center"',
+      'floating',
     ]);
+    expect((source.match(/max-w-\[5rem\] flex-none/g) ?? []).length).toBeGreaterThanOrEqual(3);
     expectSourceOmitsAll(source, ['grid grid-cols-17 gap-2 items-center pt-5']);
   });
 });

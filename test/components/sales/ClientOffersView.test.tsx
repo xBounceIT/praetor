@@ -487,7 +487,8 @@ describe('<ClientOffersView /> quick-view shortcuts', () => {
     ],
   });
 
-  test('opens the referenced supplier quote and product on their pre-filtered pages', () => {
+  test('opens the referenced supplier quote and product from the row actions menu', async () => {
+    const user = userEvent.setup();
     render(
       <ClientOffersView
         {...baseProps}
@@ -496,10 +497,12 @@ describe('<ClientOffersView /> quick-view shortcuts', () => {
         supplierQuotes={[linkedSupplierQuote]}
       />,
     );
-    // Clicking the row opens the edit dialog that hosts the line-item shortcuts.
+    // Clicking the row opens the edit dialog; shortcuts live in the line's actions menu.
     fireEvent.click(screen.getByText('O-SHORTCUT'));
+    const dialog = await screen.findByRole('dialog');
+    await user.click(within(dialog).getByLabelText('table.rowActions'));
 
-    const supplierLinks = screen.getAllByRole('link', {
+    const supplierLinks = await screen.findAllByRole('link', {
       name: 'sales:clientQuotes.openSupplierQuoteInNewTab',
     });
     expect(supplierLinks.length).toBeGreaterThan(0);
@@ -517,13 +520,20 @@ describe('<ClientOffersView /> quick-view shortcuts', () => {
       expect(link).toHaveAttribute('target', '_blank');
     }
 
-    // The desktop grid floats its shortcut above the field (the `floating` variant);
-    // both selectors render so at least one of each is the absolute-positioned copy.
-    expect(supplierLinks.some((link) => link.className.includes('absolute'))).toBe(true);
-    expect(productLinks.some((link) => link.className.includes('absolute'))).toBe(true);
+    expect(
+      supplierLinks.every((link) =>
+        Boolean(link.closest('[data-standard-table-action-menu="true"]')),
+      ),
+    ).toBe(true);
+    expect(
+      productLinks.every((link) =>
+        Boolean(link.closest('[data-standard-table-action-menu="true"]')),
+      ),
+    ).toBe(true);
   });
 
-  test('hides each shortcut when the user cannot access the referenced view', () => {
+  test('hides each shortcut when the user cannot access the referenced view', async () => {
+    const user = userEvent.setup();
     render(
       <ClientOffersView
         {...baseProps}
@@ -535,6 +545,8 @@ describe('<ClientOffersView /> quick-view shortcuts', () => {
       />,
     );
     fireEvent.click(screen.getByText('O-SHORTCUT'));
+    const dialog = await screen.findByRole('dialog');
+    await user.click(within(dialog).getByLabelText('table.rowActions'));
 
     // No access → hidden entirely (no active link and no disabled placeholder).
     expect(
@@ -553,11 +565,14 @@ describe('<ClientOffersView /> quick-view shortcuts', () => {
     ).toHaveLength(0);
   });
 
-  test('keeps the shortcut visible but disabled when the line references nothing', () => {
+  test('keeps the shortcut visible but disabled when the line references nothing', async () => {
+    const user = userEvent.setup();
     // Base offer line: productId 'p-1' (not in the empty products list) and no
     // supplier-quote link → both shortcuts render disabled, never as active links.
     render(<ClientOffersView {...baseProps} offers={[acmeDraft]} />);
     fireEvent.click(screen.getByText('O-ACME-DRAFT'));
+    const dialog = await screen.findByRole('dialog');
+    await user.click(within(dialog).getByLabelText('table.rowActions'));
 
     expect(
       screen.queryAllByRole('link', { name: 'sales:clientQuotes.openProductInNewTab' }),

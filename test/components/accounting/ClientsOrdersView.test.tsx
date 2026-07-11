@@ -343,6 +343,7 @@ describe('<ClientsOrdersView />', () => {
       'defaultRowsPerPage={5}',
       'minBodyRows={0}',
       'className="min-w-[220px]"',
+      "const compactInputClass = 'h-9 max-w-[5rem] flex-none text-center font-medium';",
       'className="flex h-9 items-center justify-center gap-1"',
       'className="flex h-9 items-center justify-end whitespace-nowrap px-3 text-sm font-bold text-foreground"',
     ]);

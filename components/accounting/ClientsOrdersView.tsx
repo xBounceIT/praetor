@@ -90,7 +90,7 @@ export interface ClientsOrdersViewProps {
 
 const DEFAULT_UNIT_TYPE: SupplierUnitType = 'hours';
 
-const compactInputClass = 'h-9 text-center font-medium';
+const compactInputClass = 'h-9 max-w-[5rem] flex-none text-center font-medium';
 const EMPTY_SUPPLIER_ORDERS: SupplierSaleOrder[] = [];
 
 const convertHourlyToUnit = (hourlyPrice: number, unitType: SupplierUnitType | undefined) =>

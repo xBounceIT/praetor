@@ -131,6 +131,14 @@ const getNodeText = (node: ReactNode): string => {
   return '';
 };
 
+const isQuickViewActionElement = (element: ReturnType<typeof getElementLike>): boolean =>
+  Boolean(
+    element &&
+      Object.hasOwn(element.props, 'href') &&
+      typeof element.props.label === 'string' &&
+      typeof element.props.disabledLabel === 'string',
+  );
+
 const findActionNode = (node: ReactNode): ReactNode | null => {
   if (node === null || node === undefined || typeof node === 'boolean') return null;
   if (typeof node === 'string' || typeof node === 'number') return null;
@@ -143,9 +151,18 @@ const findActionNode = (node: ReactNode): ReactNode | null => {
   }
   const element = getElementLike(node);
   if (!element) return null;
+  if (element.props.asChild === true) {
+    for (const child of Children.toArray(element.props.children as ReactNode)) {
+      const actionNode = findActionNode(child);
+      if (actionNode) return actionNode;
+    }
+  }
   if (
+    isQuickViewActionElement(element) ||
     (typeof element.type === 'string' && element.type === 'button') ||
+    (typeof element.type === 'string' && element.type === 'a') ||
     element.props.type === 'button' ||
+    typeof element.props.href === 'string' ||
     typeof element.props.onClick === 'function'
   ) {
     return node;
@@ -192,6 +209,8 @@ const hasActionMenuItems = (node: ReactNode): boolean => {
 
     const props = element.props as {
       children?: ReactNode | (() => ReactNode);
+      disabledLabel?: ReactNode;
+      href?: unknown;
       label?: ReactNode;
       onClick?: unknown;
       type?: unknown;
@@ -200,8 +219,11 @@ const hasActionMenuItems = (node: ReactNode): boolean => {
     if (props.label !== undefined && typeof props.children === 'function') return true;
 
     if (
+      isQuickViewActionElement(element) ||
       (typeof element.type === 'string' && element.type === 'button') ||
+      (typeof element.type === 'string' && element.type === 'a') ||
       props.type === 'button' ||
+      typeof props.href === 'string' ||
       typeof props.onClick === 'function'
     ) {
       return true;
@@ -1954,12 +1976,18 @@ const useStandardTableController = <T extends object>({
   const renderActionMenuButton = (node: ReactNode, label: ReactNode, key: number) => {
     const labelText = getNodeText(label);
     const element = getElementLike(node);
+    const isQuickViewAction = isQuickViewActionElement(element);
+    const isAnchorElement =
+      element &&
+      ((typeof element.type === 'string' && element.type === 'a') ||
+        typeof element.props.href === 'string');
     const isButtonElement =
       element &&
-      ((typeof element.type === 'string' && element.type === 'button') ||
+      (isQuickViewAction ||
+        (typeof element.type === 'string' && element.type === 'button') ||
         element.props.type === 'button' ||
         typeof element.props.onClick === 'function');
-    if (!isButtonElement) {
+    if (!(isAnchorElement || isButtonElement)) {
       return (
         <div
           key={key}
@@ -1971,16 +1999,60 @@ const useStandardTableController = <T extends object>({
       );
     }
 
-    const props = element.props as React.ButtonHTMLAttributes<HTMLButtonElement> & {
+    const props = element.props as {
+      'aria-disabled'?: boolean | 'false' | 'true';
+      'aria-label'?: string;
       children?: ReactNode;
+      disabled?: boolean;
+      disabledLabel?: ReactNode;
+      href?: string;
+      label?: ReactNode;
+      onClick?: (event: React.MouseEvent<HTMLElement>) => void;
+      rel?: string;
+      target?: string;
+      title?: string;
       'data-testid'?: string;
     };
-    const explicitLabel = props['aria-label'] ?? props.title;
+    const quickViewLabel = props.href ? props.label : props.disabledLabel;
+    const explicitLabel = props['aria-label'] ?? props.title ?? quickViewLabel;
     const testId = props['data-testid'];
     const text =
       labelText ||
       (typeof explicitLabel === 'string' ? explicitLabel : getNodeText(explicitLabel)) ||
       getNodeText(props.children);
+    const closeMenus = () => {
+      setOpenActionMenuRowId(null);
+      setOpenContextMenuRowId(null);
+    };
+    const actionIcon = isQuickViewAction ? (
+      <i className="fa-solid fa-up-right-from-square" aria-hidden="true"></i>
+    ) : (
+      props.children
+    );
+
+    if (isAnchorElement && props.href) {
+      return (
+        <a
+          key={key}
+          href={props.href}
+          target={props.target ?? (isQuickViewAction ? '_blank' : undefined)}
+          rel={props.rel ?? (isQuickViewAction ? 'noopener noreferrer' : undefined)}
+          aria-label={typeof explicitLabel === 'string' ? explicitLabel : undefined}
+          data-testid={testId}
+          className={ACTION_MENU_BUTTON_CLASSNAME}
+          onClick={(event) => {
+            event.stopPropagation();
+            closeMenus();
+            props.onClick?.(event);
+          }}
+        >
+          <span className={`w-3.5 shrink-0 text-center ${getActionIconClassName(actionIcon)}`}>
+            {actionIcon}
+          </span>
+          {text && <span className="whitespace-nowrap">{text}</span>}
+        </a>
+      );
+    }
 
     return (
       <button
@@ -1988,17 +2060,21 @@ const useStandardTableController = <T extends object>({
         type="button"
         aria-label={typeof explicitLabel === 'string' ? explicitLabel : undefined}
         data-testid={testId}
-        disabled={props.disabled}
+        disabled={
+          props.disabled ||
+          props['aria-disabled'] === true ||
+          props['aria-disabled'] === 'true' ||
+          (isQuickViewAction && !props.href)
+        }
         className={ACTION_MENU_BUTTON_CLASSNAME}
         onClick={(event) => {
           event.stopPropagation();
-          setOpenActionMenuRowId(null);
-          setOpenContextMenuRowId(null);
+          closeMenus();
           props.onClick?.(event);
         }}
       >
-        <span className={`w-3.5 shrink-0 text-center ${getActionIconClassName(props.children)}`}>
-          {props.children}
+        <span className={`w-3.5 shrink-0 text-center ${getActionIconClassName(actionIcon)}`}>
+          {actionIcon}
         </span>
         {text && <span className="whitespace-nowrap">{text}</span>}
       </button>
@@ -2050,8 +2126,11 @@ const useStandardTableController = <T extends object>({
       }
 
       if (
+        isQuickViewActionElement(element) ||
         (typeof element.type === 'string' && element.type === 'button') ||
+        (typeof element.type === 'string' && element.type === 'a') ||
         (props as { type?: unknown }).type === 'button' ||
+        typeof (props as { href?: unknown }).href === 'string' ||
         typeof (props as { onClick?: unknown }).onClick === 'function'
       ) {
         items.push(renderActionMenuButton(current, undefined, items.length));
