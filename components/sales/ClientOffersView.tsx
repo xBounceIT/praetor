@@ -1557,14 +1557,16 @@ const ClientOfferModalAlerts: React.FC<{ controller: ClientOffersController }> =
 
 const ClientOfferSectionHeading: React.FC<{
   label: React.ReactNode;
-  description: string;
-  status: string;
-  statusLabel: string;
+  description?: string;
+  status?: string;
+  statusLabel?: string;
 }> = ({ label, description, status, statusLabel }) => (
   <h4 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-primary">
     <span className="size-1.5 rounded-full bg-primary"></span>
     {label}
-    <FieldTooltip description={description} status={status} statusLabel={statusLabel} />
+    {description && status && statusLabel && (
+      <FieldTooltip description={description} status={status} statusLabel={statusLabel} />
+    )}
   </h4>
 );
 
@@ -1947,10 +1949,21 @@ const ClientOfferItemsSection: React.FC<{ controller: ClientOffersController }> 
 
   return (
     <div className="space-y-2">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <ClientOfferSectionHeading
+          label={t('sales:clientOffers.items', { defaultValue: 'Items' })}
+        />
+        <Button type="button" size="sm" onClick={addItem} disabled={isReadOnly}>
+          <i className="fa-solid fa-plus text-[10px]" aria-hidden="true"></i>
+          {t('sales:clientOffers.addItem', { defaultValue: 'Add item' })}
+        </Button>
+      </div>
       {errors.items && <p className="ml-1 text-[10px] font-bold text-red-500">{errors.items}</p>}
       <StandardTable<ClientOfferItem>
         title={t('sales:clientOffers.items', { defaultValue: 'Items' })}
         persistenceKey="sales.clientOffers.items"
+        showHeaderTitle={false}
+        showColumnSettings={false}
         data={items ?? []}
         columns={columns}
         defaultRowsPerPage={5}
@@ -1960,12 +1973,6 @@ const ClientOfferItemsSection: React.FC<{ controller: ClientOffersController }> 
           <div className="py-8 text-sm text-muted-foreground">
             {t('sales:clientOffers.noItemsAdded', { defaultValue: 'No items added yet' })}
           </div>
-        }
-        headerAction={
-          <Button type="button" size="sm" onClick={addItem} disabled={isReadOnly}>
-            <i className="fa-solid fa-plus text-[10px]" aria-hidden="true"></i>
-            {t('sales:clientOffers.addItem', { defaultValue: 'Add item' })}
-          </Button>
         }
       />
     </div>

@@ -121,19 +121,27 @@ describe('sales modal styling', () => {
       'sales/ClientQuotesView.tsx',
       'sales.clientQuotes.items',
       '<StandardTable<QuoteItem>',
+      '<ClientQuoteSectionHeading label=',
+      'onClick={addProductRow}',
     ],
     [
       'client offers',
       'sales/ClientOffersView.tsx',
       'sales.clientOffers.items',
       '<StandardTable<ClientOfferItem>',
+      '<ClientOfferSectionHeading',
+      'onClick={addItem}',
     ],
-  ])('%s item editor uses the shared StandardTable layout', async (_name, path, persistenceKey, tableMarker) => {
+  ])('%s item editor uses the shared StandardTable layout', async (_name, path, persistenceKey, tableMarker, sectionMarker, addActionMarker) => {
     const source = await readComponentSource(path);
 
     expectSourceContainsAll(source, [
       tableMarker,
+      sectionMarker,
+      addActionMarker,
       `persistenceKey="${persistenceKey}"`,
+      'showHeaderTitle={false}',
+      'showColumnSettings={false}',
       'defaultRowsPerPage={5}',
       'minBodyRows={0}',
       'tableContainerClassName="overflow-x-auto"',
@@ -150,5 +158,18 @@ describe('sales modal styling', () => {
     ]);
     expect((source.match(/max-w-\[5rem\] flex-none/g) ?? []).length).toBeGreaterThanOrEqual(3);
     expectSourceOmitsAll(source, ['grid grid-cols-17 gap-2 items-center pt-5']);
+  });
+
+  test('supplier quote items restore the modal section heading and hide column settings', async () => {
+    const source = await readComponentSource('sales/SupplierQuotesView.tsx');
+
+    expectSourceContainsAll(source, [
+      '<SupplierQuoteSectionTitle>',
+      '<StandardTable<SupplierQuoteItem>',
+      'persistenceKey="sales.supplierQuotes.items"',
+      'showHeaderTitle={false}',
+      'showColumnSettings={false}',
+      '<Button type="button" size="sm" onClick={controller.addItem}>',
+    ]);
   });
 });

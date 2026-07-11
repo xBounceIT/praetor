@@ -1042,20 +1042,27 @@ const SupplierOrderItemsSection: React.FC<{ controller: SupplierOrdersController
   ];
 
   return (
-    <StandardTable<SupplierSaleOrderItem>
-      title={controller.t('accounting:supplierOrders.items')}
-      persistenceKey="accounting.supplierOrders.items"
-      data={items ?? []}
-      columns={columns}
-      defaultRowsPerPage={5}
-      minBodyRows={0}
-      tableContainerClassName="overflow-x-auto"
-      emptyState={
-        <div className="py-8 text-sm text-muted-foreground">
-          {controller.t('accounting:supplierOrders.noItemsAdded')}
-        </div>
-      }
-    />
+    <div className="space-y-2">
+      <SupplierOrderSectionTitle>
+        {controller.t('accounting:supplierOrders.items')}
+      </SupplierOrderSectionTitle>
+      <StandardTable<SupplierSaleOrderItem>
+        title={controller.t('accounting:supplierOrders.items')}
+        persistenceKey="accounting.supplierOrders.items"
+        showHeaderTitle={false}
+        showColumnSettings={false}
+        data={items ?? []}
+        columns={columns}
+        defaultRowsPerPage={5}
+        minBodyRows={0}
+        tableContainerClassName="overflow-x-auto"
+        emptyState={
+          <div className="py-8 text-sm text-muted-foreground">
+            {controller.t('accounting:supplierOrders.noItemsAdded')}
+          </div>
+        }
+      />
+    </div>
   );
 };
 const SupplierOrderItemProductField: React.FC<{

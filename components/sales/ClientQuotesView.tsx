@@ -1944,14 +1944,16 @@ const ClientQuoteModalAlerts: React.FC<{ controller: ClientQuotesController }> =
 
 const ClientQuoteSectionHeading: React.FC<{
   label: React.ReactNode;
-  description: string;
-  status: string;
-  statusLabel: string;
+  description?: string;
+  status?: string;
+  statusLabel?: string;
 }> = ({ label, description, status, statusLabel }) => (
   <h4 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-primary">
     <span className="size-1.5 rounded-full bg-primary"></span>
     {label}
-    <FieldTooltip description={description} status={status} statusLabel={statusLabel} />
+    {description && status && statusLabel && (
+      <FieldTooltip description={description} status={status} statusLabel={statusLabel} />
+    )}
   </h4>
 );
 
@@ -2380,10 +2382,19 @@ const ClientQuoteItemsSection: React.FC<{ controller: ClientQuotesController }> 
 
   return (
     <div className="space-y-2 border-t border-border pt-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <ClientQuoteSectionHeading label={t('sales:clientQuotes.productsServices')} />
+        <Button type="button" size="sm" onClick={addProductRow} disabled={isReadOnly}>
+          <i className="fa-solid fa-plus text-[10px]" aria-hidden="true"></i>
+          {t('sales:clientQuotes.addProduct')}
+        </Button>
+      </div>
       {errors.items && <p className="ml-1 text-[10px] font-bold text-red-500">{errors.items}</p>}
       <StandardTable<QuoteItem>
         title={t('sales:clientQuotes.productsServices')}
         persistenceKey="sales.clientQuotes.items"
+        showHeaderTitle={false}
+        showColumnSettings={false}
         data={items ?? []}
         columns={columns}
         defaultRowsPerPage={5}
@@ -2393,12 +2404,6 @@ const ClientQuoteItemsSection: React.FC<{ controller: ClientQuotesController }> 
           <div className="py-8 text-sm text-muted-foreground">
             {t('sales:clientQuotes.noProductsAdded')}
           </div>
-        }
-        headerAction={
-          <Button type="button" size="sm" onClick={addProductRow} disabled={isReadOnly}>
-            <i className="fa-solid fa-plus text-[10px]" aria-hidden="true"></i>
-            {t('sales:clientQuotes.addProduct')}
-          </Button>
         }
       />
     </div>

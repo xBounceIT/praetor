@@ -1663,12 +1663,25 @@ const SupplierQuoteItemsSection: React.FC<{ controller: SupplierQuotesController
 
   return (
     <div className="space-y-2">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <SupplierQuoteSectionTitle>
+          {controller.t('sales:supplierQuotes.items', { defaultValue: 'Items' })}
+        </SupplierQuoteSectionTitle>
+        {!controller.isReadOnly && (
+          <Button type="button" size="sm" onClick={controller.addItem}>
+            <i className="fa-solid fa-plus text-[10px]" aria-hidden="true"></i>
+            {controller.t('sales:supplierQuotes.addItem', { defaultValue: 'Add item' })}
+          </Button>
+        )}
+      </div>
       {controller.errors.items && (
         <p className="ml-1 text-[10px] font-bold text-red-500">{controller.errors.items}</p>
       )}
       <StandardTable<SupplierQuoteItem>
         title={controller.t('sales:supplierQuotes.items', { defaultValue: 'Items' })}
         persistenceKey="sales.supplierQuotes.items"
+        showHeaderTitle={false}
+        showColumnSettings={false}
         data={items ?? []}
         columns={columns}
         defaultRowsPerPage={5}
@@ -1680,14 +1693,6 @@ const SupplierQuoteItemsSection: React.FC<{ controller: SupplierQuotesController
               defaultValue: 'No items added yet',
             })}
           </div>
-        }
-        headerAction={
-          !controller.isReadOnly ? (
-            <Button type="button" size="sm" onClick={controller.addItem}>
-              <i className="fa-solid fa-plus text-[10px]" aria-hidden="true"></i>
-              {controller.t('sales:supplierQuotes.addItem', { defaultValue: 'Add item' })}
-            </Button>
-          ) : undefined
         }
       />
     </div>

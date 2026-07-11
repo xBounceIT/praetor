@@ -1401,10 +1401,24 @@ const OrderItemsSection: React.FC<{ controller: ClientsOrdersController }> = ({ 
 
   return (
     <div className="space-y-2">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <OrderSectionTitle>{controller.t('sales:clientQuotes.productsServices')}</OrderSectionTitle>
+        <Button
+          type="button"
+          size="sm"
+          onClick={controller.addProductRow}
+          disabled={controller.isReadOnly}
+        >
+          <i className="fa-solid fa-plus text-[10px]" aria-hidden="true"></i>
+          {controller.t('sales:clientQuotes.addProduct')}
+        </Button>
+      </div>
       <FieldError className="text-xs">{controller.errors.items}</FieldError>
       <StandardTable<ClientsOrderItem>
         title={controller.t('sales:clientQuotes.productsServices')}
         persistenceKey="accounting.clientOrders.items"
+        showHeaderTitle={false}
+        showColumnSettings={false}
         data={items ?? []}
         columns={columns}
         defaultRowsPerPage={5}
@@ -1414,17 +1428,6 @@ const OrderItemsSection: React.FC<{ controller: ClientsOrdersController }> = ({ 
           <div className="py-8 text-sm text-muted-foreground">
             {controller.t('sales:clientQuotes.noProductsAdded')}
           </div>
-        }
-        headerAction={
-          <Button
-            type="button"
-            size="sm"
-            onClick={controller.addProductRow}
-            disabled={controller.isReadOnly}
-          >
-            <i className="fa-solid fa-plus text-[10px]" aria-hidden="true"></i>
-            {controller.t('sales:clientQuotes.addProduct')}
-          </Button>
         }
       />
     </div>

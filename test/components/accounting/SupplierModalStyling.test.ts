@@ -29,6 +29,10 @@ describe('supplier accounting modal styling', () => {
       'id="supplier-order-notes"',
       "summary', { defaultValue: 'Summary' })",
       '<DeleteConfirmModal',
+      '<SupplierOrderSectionTitle>',
+      '<StandardTable<SupplierSaleOrderItem>',
+      'showHeaderTitle={false}',
+      'showColumnSettings={false}',
     ]);
     expectSourceOmitsAll(source, ['rounded-2xl bg-white', '<textarea']);
     expectSourceContainsAll(versionsSource, [

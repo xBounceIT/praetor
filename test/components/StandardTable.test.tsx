@@ -438,6 +438,23 @@ describe('<StandardTable />', () => {
     expect(screen.getByText(/3\s+users/)).toBeInTheDocument();
   });
 
+  test('can hide its title and column settings while keeping the remaining toolbar', () => {
+    render(
+      <StandardTable<Row>
+        title="People"
+        data={sampleRows}
+        columns={sampleColumns}
+        showHeaderTitle={false}
+        showColumnSettings={false}
+      />,
+    );
+
+    expect(screen.queryByRole('heading', { name: 'People' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'table.columnSettings' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'table.exportToCsv' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'table.decreaseFont' })).toBeInTheDocument();
+  });
+
   test('disabled row receives disabled styling', () => {
     render(
       <StandardTable<Row>
