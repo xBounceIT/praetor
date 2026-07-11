@@ -2393,7 +2393,6 @@ const ClientQuoteItemsSection: React.FC<{ controller: ClientQuotesController }> 
       <StandardTable<QuoteItem>
         title={t('sales:clientQuotes.productsServices')}
         persistenceKey="sales.clientQuotes.items"
-        showHeaderTitle={false}
         showColumnSettings={false}
         data={items ?? []}
         columns={columns}

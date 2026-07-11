@@ -902,8 +902,6 @@ export type StandardTableProps<T extends object = object> = {
   totalLabel?: string;
   headerExtras?: ReactNode;
   headerAction?: ReactNode;
-  /** Whether to render the built-in title and total badge. Defaults to true. */
-  showHeaderTitle?: boolean;
   /** Whether to render column visibility and saved-view controls. Defaults to true. */
   showColumnSettings?: boolean;
   containerClassName?: string;
@@ -951,7 +949,6 @@ const useStandardTableController = <T extends object>({
   totalLabel,
   headerExtras,
   headerAction,
-  showHeaderTitle = true,
   showColumnSettings = true,
   containerClassName,
   tableContainerClassName,
@@ -2559,7 +2556,6 @@ const useStandardTableController = <T extends object>({
     totalLabel,
     headerExtras,
     headerAction,
-    showHeaderTitle,
     showColumnSettings,
     containerClassName,
     tableContainerClassName,
@@ -2690,32 +2686,19 @@ const StandardTableHeader = <T extends object>({
 }: {
   controller: StandardTableController<T>;
 }) => {
-  const {
-    t,
-    title,
-    totalItems,
-    totalLabel,
-    headerExtras,
-    headerAction,
-    showHeaderTitle,
-    data,
-    columns,
-  } = controller;
+  const { t, title, totalItems, totalLabel, headerExtras, headerAction, data, columns } =
+    controller;
 
   return (
-    <div
-      className={`flex flex-wrap items-center gap-3 ${showHeaderTitle ? 'justify-between' : 'justify-end'}`}
-    >
-      {showHeaderTitle && (
-        <div className="flex items-center gap-3">
-          <h4 className="text-sm font-medium text-muted-foreground">{title}</h4>
-          {typeof totalItems === 'number' && (
-            <span className="inline-flex items-center rounded-md border border-border bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
-              {totalItems} {totalLabel || t('table.total')}
-            </span>
-          )}
-        </div>
-      )}
+    <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex items-center gap-3">
+        <h4 className="text-sm font-medium text-muted-foreground">{title}</h4>
+        {typeof totalItems === 'number' && (
+          <span className="inline-flex items-center rounded-md border border-border bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+            {totalItems} {totalLabel || t('table.total')}
+          </span>
+        )}
+      </div>
       <div className="flex flex-wrap items-center justify-end gap-2">
         {headerExtras}
         {headerAction}

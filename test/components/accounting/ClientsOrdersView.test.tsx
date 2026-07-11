@@ -342,7 +342,6 @@ describe('<ClientsOrdersView />', () => {
       'persistenceKey="accounting.clientOrders.items"',
       '<OrderSectionTitle>',
       'onClick={controller.addProductRow}',
-      'showHeaderTitle={false}',
       'showColumnSettings={false}',
       'defaultRowsPerPage={5}',
       'minBodyRows={0}',

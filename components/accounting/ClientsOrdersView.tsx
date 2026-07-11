@@ -1417,7 +1417,6 @@ const OrderItemsSection: React.FC<{ controller: ClientsOrdersController }> = ({ 
       <StandardTable<ClientsOrderItem>
         title={controller.t('sales:clientQuotes.productsServices')}
         persistenceKey="accounting.clientOrders.items"
-        showHeaderTitle={false}
         showColumnSettings={false}
         data={items ?? []}
         columns={columns}

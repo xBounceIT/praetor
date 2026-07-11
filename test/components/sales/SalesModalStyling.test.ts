@@ -140,7 +140,6 @@ describe('sales modal styling', () => {
       sectionMarker,
       addActionMarker,
       `persistenceKey="${persistenceKey}"`,
-      'showHeaderTitle={false}',
       'showColumnSettings={false}',
       'defaultRowsPerPage={5}',
       'minBodyRows={0}',
@@ -167,7 +166,6 @@ describe('sales modal styling', () => {
       '<SupplierQuoteSectionTitle>',
       '<StandardTable<SupplierQuoteItem>',
       'persistenceKey="sales.supplierQuotes.items"',
-      'showHeaderTitle={false}',
       'showColumnSettings={false}',
       '<Button type="button" size="sm" onClick={controller.addItem}>',
     ]);

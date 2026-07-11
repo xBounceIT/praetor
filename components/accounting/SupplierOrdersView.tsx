@@ -1049,7 +1049,6 @@ const SupplierOrderItemsSection: React.FC<{ controller: SupplierOrdersController
       <StandardTable<SupplierSaleOrderItem>
         title={controller.t('accounting:supplierOrders.items')}
         persistenceKey="accounting.supplierOrders.items"
-        showHeaderTitle={false}
         showColumnSettings={false}
         data={items ?? []}
         columns={columns}

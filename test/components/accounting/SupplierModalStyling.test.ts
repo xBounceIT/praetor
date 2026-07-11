@@ -31,7 +31,6 @@ describe('supplier accounting modal styling', () => {
       '<DeleteConfirmModal',
       '<SupplierOrderSectionTitle>',
       '<StandardTable<SupplierSaleOrderItem>',
-      'showHeaderTitle={false}',
       'showColumnSettings={false}',
     ]);
     expectSourceOmitsAll(source, ['rounded-2xl bg-white', '<textarea']);
