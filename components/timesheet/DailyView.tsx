@@ -1,6 +1,6 @@
 import { Save } from 'lucide-react';
 import type React from 'react';
-import { useCallback, useMemo, useReducer, useRef } from 'react';
+import { useMemo, useReducer, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Client, Project, ProjectTask, TimeEntry, TimeEntryLocation } from '../../types';
 import { getLocalDateString } from '../../utils/date';
@@ -14,6 +14,7 @@ import TaskFormModal, {
 import CustomRepeatModal from '../shared/CustomRepeatModal';
 import DateField from '../shared/DateField';
 import SelectControl from '../shared/SelectControl';
+import ValidatedNumberInput from '../shared/ValidatedNumberInput';
 import { Button } from '../ui/button';
 import { Field, FieldLabel, RequiredMark } from '../ui/field';
 import { Input } from '../ui/input';
@@ -300,12 +301,6 @@ const DailyView: React.FC<DailyViewProps> = ({
     defaultLocation,
   });
 
-  const handleDurationInputChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
-    const rawValue = event.target.value;
-    if (rawValue !== '' && !/^[0-9]*([.,][0-9]*)?$/.test(rawValue)) return;
-    dispatchForm({ type: 'setDuration', duration: rawValue.replace(',', '.') });
-  }, []);
-
   const hasValidDuration = parseFloat(duration) > 0;
 
   if (loadedSelectedDateRef.current !== selectedDate) {
@@ -409,19 +404,16 @@ const DailyView: React.FC<DailyViewProps> = ({
         <FieldLabel htmlFor="daily-entry-hours">
           {t('entry.hours')} <RequiredMark />
         </FieldLabel>
-        <Input
+        <ValidatedNumberInput
           id="daily-entry-hours"
-          type="text"
-          inputMode="decimal"
-          pattern="^[0-9]*([.,][0-9]*)?$"
           value={duration}
-          onChange={handleDurationInputChange}
-          placeholder="0.0"
+          onValueChange={(value) => dispatchForm({ type: 'setDuration', duration: value })}
+          placeholder="0,0"
           className="h-9 min-h-9 max-h-9 rounded-lg py-2"
         />
       </Field>
     ),
-    [duration, handleDurationInputChange, t],
+    [duration, t],
   );
 
   return (

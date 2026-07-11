@@ -137,6 +137,7 @@ import {
   type ModuleScopedStateKey,
 } from './utils/moduleScopedState';
 import { normalizeCurrency } from './utils/normalizeCurrency';
+import { formatDecimal } from './utils/numbers';
 import {
   ADMIN_ROLE_ID,
   buildPermission,
@@ -659,7 +660,7 @@ const TrackerActivityTable: React.FC<{
           <span
             className={`text-lg font-black transition-colors ${dailyTotal > dailyGoal ? 'text-destructive' : 'text-praetor'}`}
           >
-            {dailyTotal.toFixed(2)} h
+            {formatDecimal(dailyTotal)} h
           </span>
         </div>
       ) : undefined,
@@ -734,7 +735,7 @@ const TrackerActivityTable: React.FC<{
         accessorKey: 'duration',
         cell: ({ row }) => (
           <span className="font-black text-zinc-900">
-            {row.isPlaceholder && row.duration === 0 ? '--' : row.duration.toFixed(2)}
+            {row.isPlaceholder && row.duration === 0 ? '--' : formatDecimal(row.duration)}
           </span>
         ),
       },

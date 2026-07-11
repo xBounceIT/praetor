@@ -33,6 +33,7 @@ import type {
   ProjectRuleRecipientOptions,
 } from '../../types';
 import SelectControl from '../shared/SelectControl';
+import ValidatedNumberInput from '../shared/ValidatedNumberInput';
 import {
   getAvailableProjectRuleFields,
   getAvailableProjectRuleValueFields,
@@ -628,12 +629,11 @@ const ProjectRuleConditionsEditor: React.FC<{
                       </SelectContent>
                     </Select>
                   ) : (
-                    <Input
+                    <ValidatedNumberInput
                       id={`project-rule-value-${index}`}
-                      type="number"
-                      step="any"
                       value={condition.value}
-                      onChange={(event) => onUpdateCondition(index, { value: event.target.value })}
+                      onValueChange={(value) => onUpdateCondition(index, { value })}
+                      allowNegative
                       disabled={submitting}
                       aria-invalid={!!valueError}
                       placeholder={t('projects:detail.rules.form.valuePlaceholder')}

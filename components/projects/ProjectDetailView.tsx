@@ -60,6 +60,7 @@ import type {
 } from '../../types';
 import { LEGACY_PROJECT_STATUS } from '../../types';
 import { formatInsertDate } from '../../utils/date';
+import { formatNumber } from '../../utils/numbers';
 import { hasPermission, hasScopedActionPermission } from '../../utils/permissions';
 import DateField from '../shared/DateField';
 import DeleteConfirmModal from '../shared/DeleteConfirmModal';
@@ -67,6 +68,7 @@ import SelectControl from '../shared/SelectControl';
 import StatusBadge from '../shared/StatusBadge';
 import Toggle from '../shared/Toggle';
 import UserAssignmentModal from '../shared/UserAssignmentModal';
+import ValidatedNumberInput from '../shared/ValidatedNumberInput';
 import DashboardControls from './DashboardControls';
 import DashboardGrid, { DashboardItem } from './DashboardGrid';
 import type { DashboardWidgetDef } from './dashboardLayout';
@@ -110,6 +112,7 @@ const DASHBOARD_WIDGETS: readonly DashboardWidgetDef[] = [
 ];
 
 const formatOrderId = (id: string) => `#${id.replace('co-', '')}`;
+const formatOneDecimal = (value: number) => formatNumber(value, { maximumFractionDigits: 1 });
 
 const tipoOptions = [
   { id: 'attivo', name: 'projects:projects.tipoValues.attivo' },
@@ -1652,16 +1655,15 @@ const ProjectDetailRevenueField: React.FC<{ controller: ProjectDetailController 
       <FieldLabel htmlFor="detail-revenue">
         {`${t('projects:projects.projectRevenue')} (${currency})`}
       </FieldLabel>
-      <Input
+      <ValidatedNumberInput
         id="detail-revenue"
-        type="number"
         min="0"
-        step="0.01"
-        placeholder="0.00"
+        placeholder="0,00"
         disabled={!canUpdateProjects}
-        value={revenueSource === 'manual' ? revenue : displayedRevenue.toFixed(2)}
+        value={revenueSource === 'manual' ? revenue : displayedRevenue}
+        formatDecimals={2}
         readOnly={revenueSource !== 'manual'}
-        onChange={(e) => setRevenue(e.target.value)}
+        onValueChange={setRevenue}
       />
       {revenueHintBySource[revenueSource] && (
         <p className="text-xs text-muted-foreground">{revenueHintBySource[revenueSource]}</p>
@@ -2057,7 +2059,6 @@ const ProjectKpiDashboardItems: React.FC<{ controller: ProjectDetailController }
 }) => {
   const {
     t,
-    i18n,
     currency,
     widgetPermitted,
     entriesLoading,
@@ -2082,7 +2083,7 @@ const ProjectKpiDashboardItems: React.FC<{ controller: ProjectDetailController }
           unavailable={entriesError !== null}
           value={
             <>
-              {totalHours.toLocaleString(i18n.language, { maximumFractionDigits: 1 })}
+              {formatNumber(totalHours, { maximumFractionDigits: 1 })}
               <span className="ml-1 text-base font-medium text-muted-foreground">h</span>
             </>
           }
@@ -2104,7 +2105,7 @@ const ProjectKpiDashboardItems: React.FC<{ controller: ProjectDetailController }
             value={
               <>
                 <span className="mr-1 text-base font-medium text-muted-foreground">{currency}</span>
-                {totalCost.toLocaleString(i18n.language, {
+                {formatNumber(totalCost, {
                   maximumFractionDigits: 2,
                   minimumFractionDigits: 2,
                 })}
@@ -2113,7 +2114,7 @@ const ProjectKpiDashboardItems: React.FC<{ controller: ProjectDetailController }
             subtitle={
               totalHours > 0
                 ? t('projects:detail.kpi.totalCostSubtitle', {
-                    rate: (totalCost / totalHours).toLocaleString(i18n.language, {
+                    rate: formatNumber(totalCost / totalHours, {
                       maximumFractionDigits: 2,
                     }),
                     currency,
@@ -2156,7 +2157,7 @@ const ProjectKpiDashboardItems: React.FC<{ controller: ProjectDetailController }
             subtitle={
               displayedRevenue > 0
                 ? t('projects:detail.kpi.budgetUsedSubtitle', {
-                    budget: displayedRevenue.toLocaleString(i18n.language, {
+                    budget: formatNumber(displayedRevenue, {
                       maximumFractionDigits: 0,
                     }),
                     currency,
@@ -2300,8 +2301,7 @@ const ProjectTimelineDashboardItem: React.FC<{ controller: ProjectDetailControll
 const ProjectHoursByUserDashboardItem: React.FC<{ controller: ProjectDetailController }> = ({
   controller,
 }) => {
-  const { t, i18n, entriesLoading, entriesError, hoursByUserTask, userTaskChartConfig } =
-    controller;
+  const { t, entriesLoading, entriesError, hoursByUserTask, userTaskChartConfig } = controller;
 
   return (
     <DashboardItem id="hoursByUser" title={t('projects:detail.charts.hoursByUser')}>
@@ -2335,13 +2335,7 @@ const ProjectHoursByUserDashboardItem: React.FC<{ controller: ProjectDetailContr
                 <YAxis tickLine={false} axisLine={false} width={36} />
                 <ChartTooltip
                   isAnimationActive={false}
-                  content={
-                    <UserTaskTooltip
-                      series={hoursByUserTask.series}
-                      language={i18n.language}
-                      t={t}
-                    />
-                  }
+                  content={<UserTaskTooltip series={hoursByUserTask.series} t={t} />}
                   cursor={false}
                   position={{ y: 0 }}
                 />
@@ -2366,7 +2360,7 @@ const ProjectHoursByUserDashboardItem: React.FC<{ controller: ProjectDetailContr
 const ProjectHoursByTaskDashboardItem: React.FC<{ controller: ProjectDetailController }> = ({
   controller,
 }) => {
-  const { t, i18n, entriesLoading, entriesError, hoursByTask, taskChartConfig } = controller;
+  const { t, entriesLoading, entriesError, hoursByTask, taskChartConfig } = controller;
 
   return (
     <DashboardItem id="hoursByTask" title={t('projects:detail.charts.hoursByTask')}>
@@ -2396,7 +2390,7 @@ const ProjectHoursByTaskDashboardItem: React.FC<{ controller: ProjectDetailContr
                 <YAxis tickLine={false} axisLine={false} width={36} />
                 <ChartTooltip
                   isAnimationActive={false}
-                  content={<TaskEffortTooltip language={i18n.language} t={t} />}
+                  content={<TaskEffortTooltip t={t} />}
                   cursor={false}
                   position={{ y: 0 }}
                 />
@@ -2437,7 +2431,7 @@ const ProjectHoursByTaskDashboardItem: React.FC<{ controller: ProjectDetailContr
                           textAnchor="middle"
                           className="fill-foreground text-xs"
                         >
-                          {row.hours.toLocaleString(i18n.language, { maximumFractionDigits: 1 })}
+                          {formatNumber(row.hours, { maximumFractionDigits: 1 })}
                         </text>
                       );
                     }}
@@ -2536,9 +2530,7 @@ const ProjectCostVsRevenueDashboardItem: React.FC<{ controller: ProjectDetailCon
                         (Math.max(dataMax, canShowRevenueLine ? displayedRevenue : 0) * 1.08) / 100,
                       ) * 100,
                   ]}
-                  tickFormatter={(v: number) =>
-                    v.toLocaleString(i18n.language, { maximumFractionDigits: 0 })
-                  }
+                  tickFormatter={(v: number) => formatNumber(v, { maximumFractionDigits: 0 })}
                 />
                 <ChartTooltip
                   isAnimationActive={false}
@@ -2562,7 +2554,7 @@ const ProjectCostVsRevenueDashboardItem: React.FC<{ controller: ProjectDetailCon
                           </div>
                           <span className="font-mono font-medium tabular-nums text-foreground">
                             {typeof value === 'number'
-                              ? `${value.toLocaleString(i18n.language, { maximumFractionDigits: 0 })} ${currency}`
+                              ? `${formatNumber(value, { maximumFractionDigits: 0 })} ${currency}`
                               : String(value)}
                           </span>
                         </div>
@@ -2594,7 +2586,7 @@ const ProjectCostVsRevenueDashboardItem: React.FC<{ controller: ProjectDetailCon
                     strokeDasharray="4 4"
                     strokeWidth={1.5}
                     label={{
-                      value: `${t('projects:detail.charts.revenueLabel')} · ${displayedRevenue.toLocaleString(i18n.language, { maximumFractionDigits: 0 })} ${currency}`,
+                      value: `${t('projects:detail.charts.revenueLabel')} · ${formatNumber(displayedRevenue, { maximumFractionDigits: 0 })} ${currency}`,
                       position: 'insideTopRight',
                       fill: 'var(--color-revenue)',
                       fontSize: 11,
@@ -2619,8 +2611,7 @@ const ProjectCostVsRevenueDashboardItem: React.FC<{ controller: ProjectDetailCon
 const ProjectMonthlyActivityDashboardItem: React.FC<{ controller: ProjectDetailController }> = ({
   controller,
 }) => {
-  const { t, i18n, entriesLoading, entriesError, monthlyActivity, activityChartConfig } =
-    controller;
+  const { t, entriesLoading, entriesError, monthlyActivity, activityChartConfig } = controller;
 
   return (
     <DashboardItem id="monthlyActivity" title={t('projects:detail.charts.monthlyActivity')}>
@@ -2666,7 +2657,7 @@ const ProjectMonthlyActivityDashboardItem: React.FC<{ controller: ProjectDetailC
                     formatter={(value: unknown) => {
                       const n = typeof value === 'number' ? value : Number(value);
                       return Number.isFinite(n) && n > 0
-                        ? n.toLocaleString(i18n.language, { maximumFractionDigits: 1 })
+                        ? formatNumber(n, { maximumFractionDigits: 1 })
                         : '';
                     }}
                   />
@@ -2679,7 +2670,7 @@ const ProjectMonthlyActivityDashboardItem: React.FC<{ controller: ProjectDetailC
                     strokeWidth={2}
                     strokeOpacity={0.7}
                     label={{
-                      value: `${t('projects:detail.charts.avgMonthlyLabel')} · ${monthlyActivity.avg.toLocaleString(i18n.language, { maximumFractionDigits: 1 })} h`,
+                      value: `${t('projects:detail.charts.avgMonthlyLabel')} · ${formatNumber(monthlyActivity.avg, { maximumFractionDigits: 1 })} h`,
                       position: 'insideTopRight',
                       fill: 'var(--foreground)',
                       fontSize: 11,
@@ -2886,20 +2877,18 @@ const TaskEffortTooltip: React.FC<{
   payload?: Array<{
     payload?: { task: string; hours: number; expected: number; over: number };
   }>;
-  language: string;
   t: (key: string, opts?: Record<string, unknown>) => string;
-}> = ({ active, payload, language, t }) => {
+}> = ({ active, payload, t }) => {
   if (!active || !payload?.length) return null;
   const row = payload[0]?.payload;
   if (!row) return null;
-  const fmt = (n: number) => n.toLocaleString(language, { maximumFractionDigits: 1 });
   return (
     <div className="grid min-w-[11rem] gap-1.5 rounded-lg border border-border/50 bg-background px-3 py-2 text-xs shadow-xl">
       <div className="font-medium text-foreground">{row.task}</div>
       <div className="flex items-center justify-between gap-4">
         <span className="text-muted-foreground">{t('projects:detail.charts.loggedLabel')}</span>
         <span className="font-mono font-medium tabular-nums text-foreground">
-          {fmt(row.hours)} h
+          {formatOneDecimal(row.hours)} h
         </span>
       </div>
       <div className="flex items-center justify-between gap-4">
@@ -2907,14 +2896,14 @@ const TaskEffortTooltip: React.FC<{
           {t('projects:detail.charts.totalEffortLabel')}
         </span>
         <span className="font-mono font-medium tabular-nums text-foreground">
-          {row.expected > 0 ? `${fmt(row.expected)} h` : '—'}
+          {row.expected > 0 ? `${formatOneDecimal(row.expected)} h` : '—'}
         </span>
       </div>
       {row.over > 0 && (
         <div className="flex items-center justify-between gap-4">
           <span className="text-destructive">{t('projects:detail.charts.overBudgetLabel')}</span>
           <span className="font-mono font-medium tabular-nums text-destructive">
-            +{fmt(row.over)} h
+            +{formatOneDecimal(row.over)} h
           </span>
         </div>
       )}
@@ -2933,9 +2922,8 @@ const UserTaskTooltip: React.FC<{
     payload?: { userName?: string };
   }>;
   series: ReadonlyArray<{ seriesKey: string; name: string; color: string }>;
-  language: string;
   t: (key: string, opts?: Record<string, unknown>) => string;
-}> = ({ active, payload, series, language, t }) => {
+}> = ({ active, payload, series, t }) => {
   if (!active || !payload?.length) return null;
   const userName = payload[0]?.payload?.userName;
   const meta = new Map(series.map((s) => [s.seriesKey, s]));
@@ -2956,7 +2944,6 @@ const UserTaskTooltip: React.FC<{
   );
   if (rows.length === 0) return null;
   const total = rows.reduce((s, r) => s + r.value, 0);
-  const fmt = (n: number) => n.toLocaleString(language, { maximumFractionDigits: 1 });
   return (
     <div className="grid min-w-[11rem] gap-1.5 rounded-lg border border-border/50 bg-background px-3 py-2 text-xs shadow-xl">
       {userName && <div className="font-medium text-foreground">{userName}</div>}
@@ -2969,13 +2956,15 @@ const UserTaskTooltip: React.FC<{
           />
           <span className="flex-1 truncate text-muted-foreground">{r.name}</span>
           <span className="font-mono font-medium tabular-nums text-foreground">
-            {fmt(r.value)} h
+            {formatOneDecimal(r.value)} h
           </span>
         </div>
       ))}
       <div className="mt-0.5 flex items-center justify-between gap-4 border-t border-border/50 pt-1">
         <span className="text-muted-foreground">{t('projects:detail.charts.totalLabel')}</span>
-        <span className="font-mono font-medium tabular-nums text-foreground">{fmt(total)} h</span>
+        <span className="font-mono font-medium tabular-nums text-foreground">
+          {formatOneDecimal(total)} h
+        </span>
       </div>
     </div>
   );

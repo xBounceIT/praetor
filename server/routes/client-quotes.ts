@@ -45,6 +45,7 @@ import {
   optionalDurationMonths,
   optionalDurationUnit,
   optionalLocalizedNonNegativeNumber,
+  optionalLocalizedPercentage,
   optionalNonEmptyString,
   parseDateString,
   parseLocalizedNonNegativeNumber,
@@ -160,10 +161,7 @@ const normalizeQuoteItems = (
       `items[${i}].unitPrice`,
     );
     if (!unitPriceResult.ok) return { ok: false, message: unitPriceResult.message };
-    const itemDiscountResult = optionalLocalizedNonNegativeNumber(
-      item.discount,
-      `items[${i}].discount`,
-    );
+    const itemDiscountResult = optionalLocalizedPercentage(item.discount, `items[${i}].discount`);
     if (!itemDiscountResult.ok) return { ok: false, message: itemDiscountResult.message };
     const productCostResult = optionalLocalizedNonNegativeNumber(
       item.productCost,
@@ -458,7 +456,7 @@ const quoteItemSchema = {
     supplierQuoteItemId: { type: ['string', 'null'] },
     supplierQuoteSupplierName: { type: ['string', 'null'] },
     supplierQuoteUnitPrice: { type: ['number', 'null'] },
-    discount: { type: 'number' },
+    discount: { type: 'number', minimum: 0, maximum: 100 },
     note: { type: ['string', 'null'] },
     unitType: { type: 'string', enum: ['hours', 'days', 'unit'] },
     durationMonths: { type: 'number' },
@@ -544,7 +542,7 @@ const quoteItemBodySchema = {
     // link's quantity/cost edits survive the save and push onto the supplier item.
     supplierQuoteBaseQuantity: { type: ['number', 'null'] },
     supplierQuoteBaseUnitPrice: { type: ['number', 'null'] },
-    discount: { type: 'number' },
+    discount: { type: 'number', minimum: 0, maximum: 100 },
     note: { type: 'string' },
     unitType: { type: 'string', enum: ['hours', 'days', 'unit'] },
     durationMonths: { type: 'number' },

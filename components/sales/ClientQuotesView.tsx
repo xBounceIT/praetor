@@ -37,8 +37,10 @@ import {
   calculatePricingTotals,
   convertUnitPrice,
   durationValueToMonths,
+  formatDecimal,
   formatDiscountValue,
   formatMolPercentage,
+  formatNumber,
   getDurationDisplayValue,
   getItemPricingContext,
   MOL_PERCENTAGE_DECIMALS,
@@ -64,6 +66,7 @@ import {
   buildSupplierQuoteItemIndex,
   isSupplierLineLocked,
   isSupplierLineStale,
+  pickedSupplierLineFields,
   refreshedSupplierLineFields,
 } from '../../utils/supplierLineSync';
 import { toastError } from '../../utils/toast';
@@ -83,7 +86,7 @@ import {
   ModalTitle,
 } from '../shared/ModalLayout';
 import QuickViewLinkButton from '../shared/QuickViewLinkButton';
-import SelectControl from '../shared/SelectControl';
+import SelectControl, { type Option } from '../shared/SelectControl';
 import StaleSupplierDataButton from '../shared/StaleSupplierDataButton';
 import StandardTable, { type Column } from '../shared/StandardTable';
 import StatusBadge, { type StatusType } from '../shared/StatusBadge';
@@ -172,7 +175,7 @@ const quoteToFormData = (quote: Quote): Partial<Quote> => ({
 // One label shape for a supplier-quote line item, shared by the picker options and the
 // display-value lookup so the two can never drift.
 const supplierQuoteItemLabel = (quote: SupplierQuote, item: SupplierQuote['items'][number]) =>
-  `${quote.supplierName} · ${item.productName} (${item.unitPrice.toFixed(2)})`;
+  `[${quote.id}] ${quote.supplierName} · ${item.productName} (${formatDecimal(item.unitPrice)})`;
 
 // A client quote line's MOL snapshot is authoritative for its sale price. In particular, a
 // supplier-sourced line starts from the supplier's NET cost (`supplierQuoteUnitPrice`), not from
@@ -181,6 +184,9 @@ const getClientQuoteUnitSalePrice = (item: QuoteItem): number => {
   const { unitCost, molPercentage } = getItemPricingContext(item);
   return calcProductSalePrice(unitCost, molPercentage);
 };
+
+const getClientQuoteItemPricingContext = (item: QuoteItem) =>
+  getItemPricingContext({ ...item, unitPrice: getClientQuoteUnitSalePrice(item) });
 
 const priceClientQuoteItemsFromLocalMol = (items: QuoteItem[]): QuoteItem[] =>
   items.map((item) => {
@@ -476,13 +482,13 @@ const useClientQuotesController = ({
   const formatDiscountPercentage = useCallback(
     (quote: Quote) => {
       if (quote.discountType !== 'currency') {
-        return `${quote.discount}%`;
+        return `${formatNumber(quote.discount, { maximumFractionDigits: 20 })}%`;
       }
 
       const { discountAmount, subtotal } = quotePricingMap.get(quote.id) ?? EMPTY_PRICING_TOTALS;
       if (subtotal <= 0) return '0%';
 
-      return `${Number(((discountAmount / subtotal) * 100).toFixed(1))}%`;
+      return `${formatNumber((discountAmount / subtotal) * 100, { maximumFractionDigits: 1 })}%`;
     },
     [quotePricingMap],
   );
@@ -956,18 +962,12 @@ const useClientQuotesController = ({
           newItems[index].productCost = netCost;
           newItems[index].productMolPercentage = null;
         }
-        // Same math as the refresh chip: refreshedSupplierLineFields recomputes the sale price
-        // from the picked cost and the line MOL, converting FROM the supplier item's own unit
-        // (#812 round 14) — the picked cost is priced in that unit, so converting from a
-        // hardcoded 'hours' multiplied a days-priced item by 8 on initial selection.
-        const refreshed = refreshedSupplierLineFields(newItems[index], selectedQuoteItem);
-        newItems[index].quantity = refreshed.quantity;
-        newItems[index].supplierQuoteUnitPrice = refreshed.supplierQuoteUnitPrice;
-        // Pick-time baseline: lets the server tell a deliberate pre-save edit (pushed onto the
-        // supplier item) from an untouched stale snapshot (server values win).
-        newItems[index].supplierQuoteBaseQuantity = refreshed.supplierQuoteBaseQuantity;
-        newItems[index].supplierQuoteBaseUnitPrice = refreshed.supplierQuoteBaseUnitPrice;
-        newItems[index].unitPrice = refreshed.unitPrice;
+        // Pull quantity, cost, sale price, and duration from the supplier item. The helper also
+        // stamps the pick-time quantity/cost baseline used by the server's genuine-edit check.
+        Object.assign(
+          newItems[index],
+          pickedSupplierLineFields(newItems[index], selectedQuoteItem),
+        );
       } else {
         // Supplier quote item not found - clear supplier quote and revert
         newItems[index].supplierQuoteItemId = null;
@@ -1027,31 +1027,27 @@ const useClientQuotesController = ({
     [supplierQuotes, today],
   );
 
+  const usedSupplierQuoteItemIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const item of formData.items || []) {
+      if (item.supplierQuoteItemId) ids.add(item.supplierQuoteItemId);
+    }
+    return ids;
+  }, [formData.items]);
+
   const supplierQuoteItemOptions = useMemo(() => {
-    const options: Array<{
-      id: string;
-      name: string;
-      quoteId: string;
-      productId?: string;
-      unitPrice: number;
-      unitType?: SupplierUnitType;
-      quantity: number;
-    }> = [];
+    const options: Option[] = [];
     for (const quote of sourceableSupplierQuotes) {
       for (const item of quote.items) {
         options.push({
           id: item.id,
           name: supplierQuoteItemLabel(quote, item),
-          quoteId: quote.id,
-          productId: item.productId,
-          unitPrice: item.unitPrice,
-          unitType: item.unitType,
-          quantity: item.quantity,
+          disabled: usedSupplierQuoteItemIds.has(item.id),
         });
       }
     }
     return options;
-  }, [sourceableSupplierQuotes]);
+  }, [sourceableSupplierQuotes, usedSupplierQuoteItemIds]);
 
   // item-id → its CURRENT supplier quote + item, across ALL supplier quotes (not just the
   // selectable ones), for the bidirectional-sync affordances (#779): lock detection
@@ -1193,7 +1189,7 @@ const useClientQuotesController = ({
           <span
             className={`text-sm font-semibold whitespace-nowrap ${history ? 'text-zinc-400' : 'text-zinc-700'}`}
           >
-            {subtotal.toFixed(2)} {currency}
+            {formatDecimal(subtotal)} {currency}
           </span>
         );
       },
@@ -1239,7 +1235,7 @@ const useClientQuotesController = ({
           <span
             className={`text-sm font-semibold whitespace-nowrap ${history ? 'text-amber-300' : 'text-amber-600'}`}
           >
-            -{discountAmount.toFixed(2)} {currency}
+            -{formatDecimal(discountAmount)} {currency}
           </span>
         );
       },
@@ -1258,7 +1254,7 @@ const useClientQuotesController = ({
           <span
             className={`text-sm font-bold whitespace-nowrap ${history ? 'text-zinc-400' : 'text-zinc-700'}`}
           >
-            {total.toFixed(2)} {currency}
+            {formatDecimal(total)} {currency}
           </span>
         );
       },
@@ -1277,7 +1273,7 @@ const useClientQuotesController = ({
           <span
             className={`text-sm font-bold whitespace-nowrap ${history ? 'text-zinc-400' : 'text-emerald-600'}`}
           >
-            {margin.toFixed(2)} {currency}
+            {formatDecimal(margin)} {currency}
           </span>
         );
       },
@@ -2203,7 +2199,7 @@ const ClientQuoteItemsColumnHeader: React.FC<{ controller: ClientQuotesControlle
 
   return (
     <div className="hidden lg:flex gap-2 px-3 mb-1 items-center">
-      <div className="flex-1 min-w-0 grid grid-cols-16 gap-2">
+      <div className="flex-1 min-w-0 grid grid-cols-17 gap-2">
         <div className="col-span-3 text-[10px] font-black text-zinc-400 uppercase tracking-wider ml-1">
           {t('sales:clientQuotes.supplierQuoteColumn')}
         </div>
@@ -2224,6 +2220,9 @@ const ClientQuoteItemsColumnHeader: React.FC<{ controller: ClientQuotesControlle
         </div>
         <div className="col-span-1 text-[10px] font-black text-zinc-400 uppercase tracking-wider text-center whitespace-nowrap">
           {t('sales:clientQuotes.totalCost', { defaultValue: 'Total cost' })}
+        </div>
+        <div className="col-span-1 text-[10px] font-black text-zinc-400 uppercase tracking-wider text-center">
+          {t('common:labels.discount')}
         </div>
         <div className="col-span-1 text-[10px] font-black text-zinc-400 uppercase tracking-wider text-center">
           {t('sales:clientQuotes.marginLabel')}
@@ -2258,16 +2257,13 @@ const getClientQuoteLineContext = (
     unitCost: cost,
     molPercentage,
     lineCost,
-    quantity,
-    durationMonths,
-  } = getItemPricingContext(item);
+    netRevenue: lineSalePrice,
+    lineMargin,
+  } = getClientQuoteItemPricingContext(item);
   const durationUnit = normalizeDurationUnit(item.durationUnit);
   const durationValue = getDurationDisplayValue(item);
   const product = products.find((p) => p.id === item.productId);
   const isSupply = product?.type === 'supply';
-  const unitSalePrice = getClientQuoteUnitSalePrice(item);
-  const lineSalePrice = unitSalePrice * quantity * durationMonths;
-  const lineMargin = lineSalePrice - lineCost;
   const isLinkedToSupplierQuote = Boolean(item.supplierQuoteItemId);
   const linkedSupplierRef = item.supplierQuoteItemId
     ? supplierQuoteItemIndex.get(item.supplierQuoteItemId)
@@ -2412,7 +2408,7 @@ const ClientQuoteItemMobileMetrics: React.FC<{
   const { t, currency, readOnlyStatus, statusLabel } = controller;
 
   return (
-    <div className="grid grid-cols-2 gap-3 md:grid-cols-7 lg:hidden">
+    <div className="grid grid-cols-2 gap-3 md:grid-cols-8 lg:hidden">
       <div>
         <ClientQuoteLineLabel
           label={t('sales:clientQuotes.qty')}
@@ -2453,17 +2449,27 @@ const ClientQuoteItemMobileMetrics: React.FC<{
       </ClientQuoteInputPanel>
       <ClientQuoteValuePanel
         label={t('sales:clientQuotes.totalCost', { defaultValue: 'Total cost' })}
-        value={`${line.lineCost.toFixed(2)} ${currency}`}
+        value={`${formatDecimal(line.lineCost)} ${currency}`}
         valueClassName="text-xs font-bold text-zinc-700 whitespace-nowrap"
       />
+      <ClientQuoteInputPanel
+        label={t('common:labels.discount')}
+        description={t('sales:fieldInfo.discount', {
+          defaultValue: 'Percentage discount applied to this line',
+        })}
+        status={readOnlyStatus}
+        statusLabel={statusLabel}
+      >
+        <ClientQuoteDiscountEditor controller={controller} item={item} index={index} />
+      </ClientQuoteInputPanel>
       <ClientQuoteValuePanel
         label={t('sales:clientQuotes.marginLabel')}
-        value={`${line.lineMargin.toFixed(2)} ${currency}`}
+        value={`${formatDecimal(line.lineMargin)} ${currency}`}
         valueClassName="text-xs font-bold text-emerald-600 whitespace-nowrap"
       />
       <ClientQuoteValuePanel
         label={t('sales:clientQuotes.revenue')}
-        value={`${line.lineSalePrice.toFixed(2)} ${currency}`}
+        value={`${formatDecimal(line.lineSalePrice)} ${currency}`}
         valueClassName="text-sm font-semibold whitespace-nowrap text-zinc-800"
         className="col-span-2 md:col-span-1"
       />
@@ -2482,7 +2488,7 @@ const ClientQuoteItemDesktopRow: React.FC<{
 
   return (
     <div className="hidden lg:flex gap-2 items-center pt-5">
-      <div className="flex-1 min-w-0 grid grid-cols-16 gap-2 items-center">
+      <div className="flex-1 min-w-0 grid grid-cols-17 gap-2 items-center">
         <div className="relative col-span-3 min-w-0">
           {line.supplierDataStale && linkedSupplierRef && (
             <StaleSupplierDataButton
@@ -2534,13 +2540,16 @@ const ClientQuoteItemDesktopRow: React.FC<{
         <div className="col-span-1 flex items-center justify-center gap-1">
           <ClientQuoteMolEditor controller={controller} line={line} compact />
         </div>
-        <ClientQuoteDesktopAmount value={`${line.lineCost.toFixed(2)} ${currency}`} />
+        <ClientQuoteDesktopAmount value={`${formatDecimal(line.lineCost)} ${currency}`} />
+        <div className="col-span-1 flex items-center justify-center">
+          <ClientQuoteDiscountEditor controller={controller} item={item} index={index} compact />
+        </div>
         <ClientQuoteDesktopAmount
-          value={`${line.lineMargin.toFixed(2)} ${currency}`}
+          value={`${formatDecimal(line.lineMargin)} ${currency}`}
           className="text-emerald-600"
         />
         <ClientQuoteDesktopAmount
-          value={`${line.lineSalePrice.toFixed(2)} ${currency}`}
+          value={`${formatDecimal(line.lineSalePrice)} ${currency}`}
           className="font-semibold text-zinc-800"
         />
       </div>
@@ -2622,7 +2631,7 @@ const ClientQuoteSupplierPicker: React.FC<{
       <SelectControl
         options={[
           { id: 'none', name: t('sales:clientQuotes.noSupplierQuote') },
-          ...supplierQuoteItemOptions.map((o) => ({ id: o.id, name: o.name })),
+          ...supplierQuoteItemOptions,
         ]}
         value={item.supplierQuoteItemId || 'none'}
         onChange={(val) =>
@@ -2818,6 +2827,34 @@ const ClientQuoteMolEditor: React.FC<{
     </>
   );
 };
+
+const ClientQuoteDiscountEditor: React.FC<{
+  controller: ClientQuotesController;
+  item: QuoteItem;
+  index: number;
+  compact?: boolean;
+}> = ({ controller, item, index, compact }) => (
+  <div className="flex w-full items-center justify-center gap-1">
+    <ValidatedNumberInput
+      value={item.discount ?? 0}
+      min={0}
+      max={100}
+      step="0.01"
+      formatDecimals={2}
+      aria-label={controller.t('common:labels.discount')}
+      onValueChange={(value) =>
+        controller.updateProductRow(index, 'discount', parseNumberInputValue(value) ?? 0)
+      }
+      disabled={controller.isReadOnly}
+      className={
+        compact
+          ? 'w-full text-sm px-1 py-2 bg-white border border-zinc-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed'
+          : 'w-full text-sm p-2 bg-white border border-zinc-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed'
+      }
+    />
+    <span className="shrink-0 text-[9px] font-semibold text-zinc-400">%</span>
+  </div>
+);
 
 const ClientQuoteDesktopAmount: React.FC<{ value: string; className?: string }> = ({
   value,

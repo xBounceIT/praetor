@@ -4,14 +4,17 @@ import {
   calculatePricingTotals,
   convertUnitPrice,
   durationValueToMonths,
+  formatDecimal,
   formatDiscountValue,
   formatMolPercentage,
+  formatNumber,
   getDurationDisplayValue,
   getEffectiveCost,
   getEffectiveDurationMonths,
   getEffectiveMol,
   getItemPricingContext,
   normalizeDurationUnit,
+  normalizeLocalizedNumber,
   type PricingItem,
   parseDurationValueToMonths,
   parseNumberInputValue,
@@ -37,6 +40,29 @@ describe('parseNumberInputValue', () => {
 
   test('parses negative numbers', () => {
     expect(parseNumberInputValue('-3.14')).toBe(-3.14);
+  });
+});
+
+describe('localized number formatting', () => {
+  test('parses comma decimals and Italian thousands separators', () => {
+    expect(parseNumberInputValue('12,5')).toBe(12.5);
+    expect(parseNumberInputValue('1.234,56')).toBe(1234.56);
+    expect(normalizeLocalizedNumber('1.234,56')).toBe('1234.56');
+  });
+
+  test('uses commas for decimals and dots only for thousands', () => {
+    expect(formatDecimal(1234.5)).toBe('1.234,50');
+    expect(formatNumber(1234567.89, { maximumFractionDigits: 2 })).toBe('1.234.567,89');
+  });
+
+  test('never exposes NaN or Infinity in the UI', () => {
+    expect(formatDecimal(Number.NaN)).toBe('0,00');
+    expect(formatDecimal(Number.POSITIVE_INFINITY)).toBe('0,00');
+  });
+
+  test('does not expose negative zero after rounding or calculations', () => {
+    expect(formatDecimal(-0)).toBe('0,00');
+    expect(formatNumber(-0, { maximumFractionDigits: 0 })).toBe('0');
   });
 });
 
@@ -233,6 +259,7 @@ describe('parseDurationValueToMonths', () => {
     expect(parseDurationValueToMonths('2.5', 'years')).toBe(30);
     // Fractional months round to the nearest whole month (the canonical integer column).
     expect(parseDurationValueToMonths('1.5', 'months')).toBe(2);
+    expect(parseDurationValueToMonths('1,5', 'years')).toBe(18);
   });
 });
 
@@ -302,6 +329,24 @@ describe('getItemPricingContext', () => {
     expect(ctx.lineCost).toBe(150);
   });
 
+  test('reports discount-adjusted line revenue and margin', () => {
+    const item: PricingItem = {
+      unitPrice: 100,
+      quantity: 2,
+      productCost: 30,
+      discount: 10,
+      durationMonths: 3,
+    };
+
+    const ctx = getItemPricingContext(item);
+    expect(ctx.grossRevenue).toBe(600);
+    expect(ctx.discountPercentage).toBe(10);
+    expect(ctx.lineDiscount).toBe(60);
+    expect(ctx.netRevenue).toBe(540);
+    expect(ctx.lineCost).toBe(180);
+    expect(ctx.lineMargin).toBe(360);
+  });
+
   test('reports MOL via getEffectiveMol', () => {
     const item: PricingItem = { productCost: 50, productMolPercentage: 30 };
     expect(getItemPricingContext(item).molPercentage).toBe(30);
@@ -323,6 +368,15 @@ describe('calculatePricingTotals', () => {
   test('applies a per-line percentage discount', () => {
     const items: PricingItem[] = [{ unitPrice: 100, quantity: 1, discount: 10 }];
     expect(calculatePricingTotals(items, 0).subtotal).toBe(90);
+  });
+
+  test('allows a 100% line discount without making revenue negative', () => {
+    const items: PricingItem[] = [{ unitPrice: 100, quantity: 1, productCost: 40, discount: 100 }];
+    const totals = calculatePricingTotals(items, 0);
+    expect(totals.subtotal).toBe(0);
+    expect(totals.total).toBe(0);
+    expect(totals.totalCost).toBe(40);
+    expect(totals.margin).toBe(-40);
   });
 
   test('multiplies both revenue and cost by durationMonths (issue #757)', () => {
@@ -535,19 +589,19 @@ describe('formatDiscountValue', () => {
 
 describe('formatMolPercentage', () => {
   test('always renders two decimals with a "%" suffix (issue #780)', () => {
-    expect(formatMolPercentage(33.33)).toBe('33.33%');
+    expect(formatMolPercentage(33.33)).toBe('33,33%');
     // One-significant-decimal and whole numbers pad to two decimals.
-    expect(formatMolPercentage(12.5)).toBe('12.50%');
-    expect(formatMolPercentage(40)).toBe('40.00%');
+    expect(formatMolPercentage(12.5)).toBe('12,50%');
+    expect(formatMolPercentage(40)).toBe('40,00%');
   });
 
   test('renders zero and negative margins', () => {
-    expect(formatMolPercentage(0)).toBe('0.00%');
-    expect(formatMolPercentage(-15.5)).toBe('-15.50%');
+    expect(formatMolPercentage(0)).toBe('0,00%');
+    expect(formatMolPercentage(-15.5)).toBe('-15,50%');
   });
 
   test('coerces a missing value to 0.00%', () => {
-    expect(formatMolPercentage(undefined as unknown as number)).toBe('0.00%');
-    expect(formatMolPercentage(Number.NaN)).toBe('0.00%');
+    expect(formatMolPercentage(undefined as unknown as number)).toBe('0,00%');
+    expect(formatMolPercentage(Number.NaN)).toBe('0,00%');
   });
 });

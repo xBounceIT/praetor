@@ -129,9 +129,9 @@ describe('<SupplierQuoteAttachmentsSection />', () => {
     );
     await waitFor(() => expect(screen.getByText('first.xlsx')).toBeInTheDocument());
     expect(screen.getByText('second.pdf')).toBeInTheDocument();
-    // 2048 bytes => 2.0 KB; 5242880 bytes => 5.0 MB
-    expect(screen.getByText(/2\.0 KB/)).toBeInTheDocument();
-    expect(screen.getByText(/5\.0 MB/)).toBeInTheDocument();
+    // 2048 bytes => 2,0 KB; 5242880 bytes => 5,0 MB
+    expect(screen.getByText(/2,0 KB/)).toBeInTheDocument();
+    expect(screen.getByText(/5,0 MB/)).toBeInTheDocument();
   });
 
   test('hides upload zone and delete buttons when read-only', async () => {

@@ -230,6 +230,22 @@ export function optionalLocalizedNonNegativeNumber(
 }
 
 /**
+ * Validate an optional percentage in the inclusive 0–100 range. Used for customer-document
+ * line discounts so every stage of the quote → offer → order chain enforces the same rule.
+ */
+export function optionalLocalizedPercentage(
+  value: unknown,
+  fieldName: string = 'value',
+): { ok: true; value: number | null } | { ok: false; message: string } {
+  const result = optionalLocalizedNonNegativeNumber(value, fieldName);
+  if (!result.ok) return result;
+  if (result.value !== null && result.value > 100) {
+    return { ok: false, message: `${fieldName} must be between 0 and 100` };
+  }
+  return result;
+}
+
+/**
  * Parse a positive number (> 0)
  */
 export function parsePositiveNumber(

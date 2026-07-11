@@ -23,6 +23,8 @@ A customer or supplier cannot be deleted while any related financial document (q
 
 The catalog contains products, categories, units, and pricing logic. Catalog data feeds quotes, offers, and accounting documents.
 
+In the create or edit product form, the **Manage** button above the **Type**, **Category**, and **Subcategory** fields opens the corresponding list of values. From there you can add or rename a value and delete it when existing links do not protect it.
+
 Update the listing when costs, margins, or sales conditions change so new documents start from reliable data.
 
 ## Jobs and tasks

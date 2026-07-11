@@ -98,6 +98,9 @@ describe('<SupplierQuotesView /> create with staged attachments (issue #781)', (
 
     // At least one line item is required.
     fireEvent.click(screen.getByText('sales:supplierQuotes.addItem'));
+    fireEvent.change(screen.getAllByPlaceholderText('0,00')[0], {
+      target: { value: '100' },
+    });
 
     // Stage a file before the quote exists.
     const file = xlsx();

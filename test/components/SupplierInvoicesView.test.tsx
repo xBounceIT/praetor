@@ -61,8 +61,8 @@ describe('<SupplierInvoicesView /> line item duration (issue #776/#775)', () => 
     fireEvent.click(screen.getByText('SINV-DUR'));
     // Line total = unitPrice 100 × quantity 2 × durationMonths 3 = 600.00
     // (without the duration multiplier it would be 200.00).
-    expect(screen.getAllByText('600.00 EUR').length).toBeGreaterThan(0);
-    expect(screen.queryByText('200.00 EUR')).not.toBeInTheDocument();
+    expect(screen.getAllByText('600,00 EUR').length).toBeGreaterThan(0);
+    expect(screen.queryByText('200,00 EUR')).not.toBeInTheDocument();
   });
 
   test('renders the Durata column and an editable duration reflecting the stored value', () => {

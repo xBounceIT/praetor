@@ -18,6 +18,7 @@ import type {
 import { formatInsertDateTime } from '../../utils/date';
 import {
   durationValueToMonths,
+  formatDecimal,
   formatDiscountValue,
   getDurationDisplayValue,
   getEffectiveDurationMonths,
@@ -490,11 +491,11 @@ const useSupplierOrdersController = ({
             <span
               className={`text-sm font-bold ${isMuted ? 'text-muted-foreground' : 'text-foreground'}`}
             >
-              {total.toFixed(2)} {currency}
+              {formatDecimal(total)} {currency}
             </span>
           );
         },
-        filterFormat: (value: unknown) => (value as number).toFixed(2),
+        filterFormat: (value: unknown) => formatDecimal(value as number),
       },
       {
         header: t('accounting:supplierOrders.paymentTerms'),
@@ -1245,7 +1246,7 @@ const SupplierOrderItemTotalField: React.FC<{
       {controller.t('common:labels.total')}
     </FieldLabel>
     <div className="flex items-center justify-end whitespace-nowrap px-3 py-2 text-sm font-semibold text-foreground">
-      {lineTotal.toFixed(2)} {controller.currency}
+      {formatDecimal(lineTotal)} {controller.currency}
     </div>
   </div>
 );

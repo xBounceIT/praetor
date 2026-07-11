@@ -215,9 +215,9 @@ describe('<ClientsOrdersView />', () => {
     );
 
     // Subtotal (revenue) = 100 × 2 × 3 = 600 (would be 200 without duration).
-    expect(screen.getAllByText('600.00 EUR').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('600,00 EUR').length).toBeGreaterThan(0);
     // Margin = 600 − (60 × 2 × 3 = 360) = 240, only correct when both scale by duration.
-    expect(screen.getAllByText('240.00 EUR').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('240,00 EUR').length).toBeGreaterThan(0);
   });
 
   test('a years duration prices off the canonical months, matching the months equivalent (issue #757)', () => {
@@ -261,9 +261,9 @@ describe('<ClientsOrdersView />', () => {
     );
 
     // Subtotal (revenue) = 100 × 2 × 24 = 4800.
-    expect(screen.getAllByText('4800.00 EUR').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('4.800,00 EUR').length).toBeGreaterThan(0);
     // Margin = 4800 − (60 × 2 × 24 = 2880) = 1920.
-    expect(screen.getAllByText('1920.00 EUR').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('1.920,00 EUR').length).toBeGreaterThan(0);
   });
 
   test('MOL line input keeps two decimals instead of rounding to one (issue #780)', async () => {
@@ -305,10 +305,10 @@ describe('<ClientsOrdersView />', () => {
     fireEvent.click(screen.getByText('Helios Energy Services').closest('tr') as HTMLElement);
     await screen.findByRole('dialog');
 
-    // The MOL input must preserve both decimals (12.34). The pre-fix formatDecimals={1}
-    // rounded the displayed value to a single decimal (12.3), silently dropping precision.
-    expect(screen.queryAllByDisplayValue('12.34').length).toBeGreaterThan(0);
-    expect(screen.queryAllByDisplayValue('12.3')).toHaveLength(0);
+    // The MOL input must preserve both decimals (12,34). The pre-fix formatDecimals={1}
+    // rounded the displayed value to a single decimal (12,3), silently dropping precision.
+    expect(screen.queryAllByDisplayValue('12,34').length).toBeGreaterThan(0);
+    expect(screen.queryAllByDisplayValue('12,3')).toHaveLength(0);
   });
 
   test('edit modal uses the shared shadcn modal layout and form primitives', async () => {
@@ -341,7 +341,7 @@ describe('<ClientsOrdersView />', () => {
       // lg:pt-5 quick-view gutter lives on the row flex (with the trash button), not the grid, so
       // the delete button stays vertically aligned with the inputs.
       'className="flex items-start gap-2 lg:items-center lg:pt-5"',
-      'className="grid flex-1 grid-cols-1 gap-2 lg:grid-cols-14 lg:items-center"',
+      'className="grid flex-1 grid-cols-1 gap-2 lg:grid-cols-15 lg:items-center"',
       'className="min-w-0 space-y-1 lg:col-span-2 lg:space-y-0"',
       'className="flex h-9 items-center rounded-md border border-border bg-background px-3"',
       // Quantity and duration controls both center their compact value input + unit selector.
@@ -477,6 +477,11 @@ describe('<ClientsOrdersView /> draft-from-offer editability', () => {
       ),
     ).toBe(true);
     expect(within(dialog).getByText('accounting:clientsOrders.readOnlyStatus')).toBeInTheDocument();
+    const lineDiscountInputs = within(dialog)
+      .getAllByRole('textbox', { name: 'common:labels.discount' })
+      .filter((input): input is HTMLInputElement => input instanceof HTMLInputElement);
+    expect(lineDiscountInputs.length).toBeGreaterThan(0);
+    expect(lineDiscountInputs.every((input) => input.disabled)).toBe(true);
   });
 
   test('a historical version preview stays fully read-only for a confirmed order', async () => {
@@ -511,6 +516,26 @@ describe('<ClientsOrdersView /> draft-from-offer editability', () => {
     expect(
       within(dialog).queryByRole('button', { name: 'accounting:clientsOrders.updateOrder' }),
     ).toBeNull();
+  });
+
+  test('edits a line discount, shows net values, and submits it', async () => {
+    const { dialog, onUpdate } = await openModal(draftLinkedOrder);
+
+    const lineDiscountInputs = within(dialog)
+      .getAllByRole('textbox', { name: 'common:labels.discount' })
+      .filter((input): input is HTMLInputElement => input instanceof HTMLInputElement);
+    expect(lineDiscountInputs.length).toBeGreaterThan(0);
+    fireEvent.change(lineDiscountInputs[0], { target: { value: '150' } });
+    expect(lineDiscountInputs[0]).toHaveValue('100,00');
+    fireEvent.change(lineDiscountInputs[0], { target: { value: '25' } });
+    expect(within(dialog).getAllByText('3.000,00 EUR').length).toBeGreaterThan(0);
+    expect(within(dialog).getAllByText('600,00 EUR').length).toBeGreaterThan(0);
+
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: 'accounting:clientsOrders.updateOrder' }),
+    );
+    await waitFor(() => expect(onUpdate).toHaveBeenCalledTimes(1));
+    expect(onUpdate.mock.calls[0][1].items?.[0].discount).toBe(25);
   });
 
   test('submitting an edited draft-from-offer order calls onUpdateClientsOrder', async () => {
@@ -736,6 +761,15 @@ describe('<ClientsOrdersView /> supplier-order quick-view shortcut', () => {
     expect(links.some((link) => link.className.includes('lg:absolute'))).toBe(true);
   });
 
+  test('keeps the line discount editable when the line is linked to a supplier order', async () => {
+    const dialog = await openModal();
+    const lineDiscountInputs = within(dialog)
+      .getAllByRole('textbox', { name: 'common:labels.discount' })
+      .filter((input): input is HTMLInputElement => input instanceof HTMLInputElement);
+
+    expect(lineDiscountInputs.length).toBeGreaterThan(0);
+    expect(lineDiscountInputs.every((input) => !input.disabled)).toBe(true);
+  });
   test('hides the supplier-order shortcut entirely without supplier-orders access', async () => {
     const dialog = await openModal({ canViewSupplierOrders: false });
     expect(

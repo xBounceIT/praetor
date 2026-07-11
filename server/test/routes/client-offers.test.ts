@@ -484,6 +484,39 @@ describe('PUT /api/sales/client-offers/:id expired rules (issue #779)', () => {
     expect(coUpdateMock).not.toHaveBeenCalled();
   });
 
+  test('200 reverts a valid sent offer to draft with snapshot and audit', async () => {
+    coFindExistingMock.mockResolvedValue(gate({ status: 'sent', deliveryDate: '2026-05-14' }));
+    coFindFullForSnapshotMock.mockResolvedValue({
+      offer: updatedOffer({ status: 'sent', deliveryDate: '2026-05-14' }),
+      items: [],
+    });
+    coUpdateMock.mockResolvedValue(updatedOffer({ status: 'draft', deliveryDate: '2026-05-14' }));
+
+    const res = await putOffer({ status: 'draft' });
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body)).toMatchObject({
+      status: 'draft',
+      effectiveStatus: 'draft',
+      deliveryDate: '2026-05-14',
+    });
+    expect(coUpdateMock).toHaveBeenCalledWith(
+      'off-1',
+      expect.objectContaining({ status: 'draft' }),
+      expect.anything(),
+    );
+    expect(ovInsertMock).toHaveBeenCalledWith(
+      expect.objectContaining({ offerId: 'off-1', reason: 'update' }),
+      expect.anything(),
+    );
+    expect(logAuditMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'client_offer.updated',
+        details: expect.objectContaining({ fromValue: 'sent', toValue: 'draft' }),
+      }),
+    );
+  });
+
   test('200 a valid sent offer can renew its expiration date (date carved out of the lock)', async () => {
     coFindExistingMock.mockResolvedValue(gate({ status: 'sent' }));
     coUpdateMock.mockResolvedValue(updatedOffer({ status: 'sent', expirationDate: '2999-12-31' }));
@@ -496,7 +529,7 @@ describe('PUT /api/sales/client-offers/:id expired rules (issue #779)', () => {
   test('200 accepting an offer auto-creates the linked draft client order', async () => {
     coFindExistingMock.mockResolvedValue(gate({ status: 'sent' }));
     coUpdateMock.mockResolvedValue(updatedOffer({ status: 'accepted' }));
-    coFindItemsForOfferMock.mockResolvedValue([storedOfferItem()]);
+    coFindItemsForOfferMock.mockResolvedValue([storedOfferItem({ discount: 12.5 })]);
 
     const res = await putOffer({ status: 'accepted' });
 
@@ -531,6 +564,7 @@ describe('PUT /api/sales/client-offers/:id expired rules (issue #779)', () => {
       unitPrice: 100,
       productCost: 50,
       supplierQuoteId: null,
+      discount: 12.5,
       durationMonths: 1,
       durationUnit: 'months',
     });
@@ -841,6 +875,24 @@ describe('client-offers supplier-link resolution + forward sync (#779)', () => {
     sqFindItemsByIdsMock.mockResolvedValue([SUPPLIER_ITEM]);
     sqFindFullForSnapshotMock.mockResolvedValue({ quote: { id: 'sq-9' }, items: [SUPPLIER_ITEM] });
   };
+
+  test('PUT: accepts the inclusive 100% line-discount boundary', async () => {
+    setupDraftOffer();
+    coFindItemsForOfferMock.mockResolvedValue([]);
+
+    const res = await putOffer({ items: [lineItem(5, 80, { discount: 100 })] });
+
+    expect(res.statusCode).toBe(200);
+    const inserted = coReplaceItemsMock.mock.calls[0][1] as Array<Record<string, unknown>>;
+    expect(inserted[0].discount).toBe(100);
+  });
+
+  test('PUT: rejects a line discount above 100%', async () => {
+    const res = await putOffer({ items: [lineItem(5, 80, { discount: 100.01 })] });
+
+    expect(res.statusCode).toBe(400);
+    expect(coReplaceItemsMock).not.toHaveBeenCalled();
+  });
 
   test('PUT: a FRESH link stores server-resolved supplier values and never pushes', async () => {
     setupDraftOffer();

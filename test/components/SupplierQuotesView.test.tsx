@@ -162,7 +162,7 @@ describe('<SupplierQuotesView /> supplier pricing chain', () => {
     fireEvent.click(screen.getByText('SQ-DRAFT'));
 
     // List price starts at 100 (formatted to 2 decimals); there is one input per layout.
-    const listPriceInputs = screen.getAllByDisplayValue('100.00');
+    const listPriceInputs = screen.getAllByDisplayValue('100,00');
     fireEvent.change(listPriceInputs[0], { target: { value: '200' } });
     // Discount starts at 0; qty shows "1", so "0" uniquely matches the discount inputs.
     const discountInputs = screen.getAllByDisplayValue('0');
@@ -206,8 +206,8 @@ describe('<SupplierQuotesView /> supplier pricing chain', () => {
     // A list price with >2 decimals must be rounded to the persisted scale (NUMERIC(_,2)) before
     // deriving the net cost, exactly as the server does — otherwise the UI would show/submit a net
     // cost the server would not store.
-    const listPriceInputs = screen.getAllByDisplayValue('100.00');
-    fireEvent.change(listPriceInputs[0], { target: { value: '10.005' } });
+    const listPriceInputs = screen.getAllByDisplayValue('100,00');
+    fireEvent.change(listPriceInputs[0], { target: { value: '10,005' } });
     const discountInputs = screen.getAllByDisplayValue('0');
     fireEvent.change(discountInputs[0], { target: { value: '10' } });
 
@@ -246,7 +246,7 @@ describe('<SupplierQuotesView /> summary discount line', () => {
     // Discount row label renders only when the aggregate discount is > 0.
     expect(screen.getByText('sales:supplierQuotes.discountAmount')).toBeInTheDocument();
     // Subtotale = gross 500, Sconto = 75, Totale = net 425.
-    expect(screen.getByText('-75.00 EUR')).toBeInTheDocument();
+    expect(screen.getByText('-75,00 EUR')).toBeInTheDocument();
   });
 
   test('omits the discount line when no line has a discount', () => {
@@ -280,7 +280,7 @@ describe('<SupplierQuotesView /> deep-link filter', () => {
 // Opens the New-quote dialog and fills every required field (supplier, code, one line item).
 // Pass a customer name to also pick it from the Customer combobox. The caller must render with
 // `quotes={[]}` so the supplier/customer names are unambiguous (no table rows behind the modal).
-const fillNewQuoteForm = (customerName?: string) => {
+const fillNewQuoteForm = (customerName?: string, listPrice: string | null = '100') => {
   fireEvent.click(screen.getByText('sales:supplierQuotes.addQuote'));
   fireEvent.click(document.getElementById('supplier-quote-supplier') as HTMLElement);
   fireEvent.click(screen.getByText('Acme Supplies'));
@@ -292,7 +292,77 @@ const fillNewQuoteForm = (customerName?: string) => {
     target: { value: 'SQ-NEW' },
   });
   fireEvent.click(screen.getByText('sales:supplierQuotes.addItem'));
+  if (listPrice !== null) {
+    fireEvent.change(screen.getAllByPlaceholderText('0,00')[0], {
+      target: { value: listPrice },
+    });
+  }
 };
+
+describe('<SupplierQuotesView /> required list price', () => {
+  test('keeps new-item prices empty with the 0,00 placeholder and blocks save until entered', async () => {
+    const onAddQuote = mock((_data: Partial<SupplierQuote>) => Promise.resolve(draft));
+    render(<SupplierQuotesView {...baseProps} quotes={[]} onAddQuote={onAddQuote} />);
+
+    fillNewQuoteForm('Globex Corp', null);
+
+    const listPriceInputs = screen.getAllByPlaceholderText('0,00');
+    expect(listPriceInputs.length).toBeGreaterThan(0);
+    for (const input of listPriceInputs) {
+      expect(input).toHaveValue('');
+      expect(input).toHaveAttribute('aria-required', 'true');
+      expect(input).not.toHaveAttribute('required');
+    }
+
+    const saveButton = screen.getByText('common:buttons.save');
+    fireEvent.submit(saveButton.closest('form') as HTMLFormElement);
+
+    expect(onAddQuote).not.toHaveBeenCalled();
+    expect(screen.getByText('sales:supplierQuotes.errors.listPriceRequired')).toBeInTheDocument();
+
+    fireEvent.change(listPriceInputs[0], { target: { value: '125' } });
+    expect(
+      screen.queryByText('sales:supplierQuotes.errors.listPriceRequired'),
+    ).not.toBeInTheDocument();
+    fireEvent.click(saveButton);
+
+    await waitFor(() => expect(onAddQuote).toHaveBeenCalledTimes(1));
+    const payload = onAddQuote.mock.calls[0]?.[0] as Partial<SupplierQuote>;
+    expect(payload.items?.[0]?.listPrice).toBe(125);
+  });
+
+  test('tracks rapidly added blank prices independently even when Date.now is unchanged', () => {
+    const originalDateNow = Date.now;
+    Date.now = () => 1_700_000_000_000;
+    try {
+      const onAddQuote = mock((_data: Partial<SupplierQuote>) => Promise.resolve(draft));
+      render(<SupplierQuotesView {...baseProps} quotes={[]} onAddQuote={onAddQuote} />);
+
+      fillNewQuoteForm('Globex Corp', null);
+      fireEvent.click(screen.getByText('sales:supplierQuotes.addItem'));
+
+      const listPriceInputs = screen.getAllByPlaceholderText('0,00');
+      fireEvent.submit(screen.getByText('common:buttons.save').closest('form') as HTMLFormElement);
+      fireEvent.change(listPriceInputs[0], { target: { value: '125' } });
+
+      expect(onAddQuote).not.toHaveBeenCalled();
+      expect(screen.getByText('sales:supplierQuotes.errors.listPriceRequired')).toBeInTheDocument();
+    } finally {
+      Date.now = originalDateNow;
+    }
+  });
+
+  test.each(['.', ','])('rejects a separator-only list price (%s)', (separator) => {
+    const onAddQuote = mock((_data: Partial<SupplierQuote>) => Promise.resolve(draft));
+    render(<SupplierQuotesView {...baseProps} quotes={[]} onAddQuote={onAddQuote} />);
+
+    fillNewQuoteForm('Globex Corp', separator);
+    fireEvent.submit(screen.getByText('common:buttons.save').closest('form') as HTMLFormElement);
+
+    expect(onAddQuote).not.toHaveBeenCalled();
+    expect(screen.getByText('sales:supplierQuotes.errors.listPriceRequired')).toBeInTheDocument();
+  });
+});
 
 // The customer link used to be optional (issue #759); issue #777 makes it mandatory.
 describe('<SupplierQuotesView /> mandatory customer association (issue #777)', () => {
@@ -448,8 +518,8 @@ describe('<SupplierQuotesView /> line item duration (issue #776)', () => {
     render(<SupplierQuotesView {...baseProps} quotes={[daysLineQuote]} />);
     // Total column = unitPrice 100 × quantity 2 × durationMonths 3 = 600.00
     // (without the duration multiplier it would be 200.00).
-    expect(screen.getAllByText('600.00 EUR').length).toBeGreaterThan(0);
-    expect(screen.queryByText('200.00 EUR')).not.toBeInTheDocument();
+    expect(screen.getAllByText('600,00 EUR').length).toBeGreaterThan(0);
+    expect(screen.queryByText('200,00 EUR')).not.toBeInTheDocument();
   });
 
   test('renders an editable duration for a unit-measured line (duration applies to every type)', () => {
@@ -487,8 +557,8 @@ describe('<SupplierQuotesView /> line item duration (issue #776)', () => {
     render(<SupplierQuotesView {...baseProps} quotes={[naQuote]} />);
     fireEvent.click(screen.getByText('SQ-DUR-NA'));
     // 2 × 100 × 1 (na) = 200.00 — not 600.00, even though durationMonths is 3.
-    expect(screen.getAllByText('200.00 EUR').length).toBeGreaterThan(0);
-    expect(screen.queryByText('600.00 EUR')).not.toBeInTheDocument();
+    expect(screen.getAllByText('200,00 EUR').length).toBeGreaterThan(0);
+    expect(screen.queryByText('600,00 EUR')).not.toBeInTheDocument();
     // The value input is disabled while the unit is N/A; the selector stays usable.
     const durationInputs = screen
       .getAllByPlaceholderText('sales:supplierQuotes.durationColumn')

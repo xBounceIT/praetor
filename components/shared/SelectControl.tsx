@@ -29,6 +29,7 @@ export interface Option {
   id: string;
   name: string;
   badge?: string;
+  disabled?: boolean;
 }
 
 export interface SelectControlProps {
@@ -83,6 +84,14 @@ const isInsideModalDialog = (element: HTMLElement | null) =>
 const getSingleSelectedOption = (options: Option[], value: string | string[]) => {
   if (Array.isArray(value)) return undefined;
   return options.find((option) => option.id === value);
+};
+
+const getEnabledOptionIds = (options: Option[]) => {
+  const ids: string[] = [];
+  for (const option of options) {
+    if (!option.disabled) ids.push(option.id);
+  }
+  return ids;
 };
 
 const getMultiButtonLabel = ({
@@ -229,7 +238,11 @@ const PlainSelectControl = ({
       <Select
         disabled={disabled}
         value={selectValue}
-        onValueChange={(next) => onChange(fromSelectValue(next))}
+        onValueChange={(next) => {
+          const nextValue = fromSelectValue(next);
+          if (options.find((option) => option.id === nextValue)?.disabled) return;
+          onChange(nextValue);
+        }}
       >
         <SelectTrigger id={id} className={cn(baseTriggerClassName, buttonClassName)}>
           {displayValue ? (
@@ -245,7 +258,11 @@ const PlainSelectControl = ({
         <SelectContent>
           <SelectGroup>
             {options.map((option) => (
-              <SelectItem key={option.id || EMPTY_VALUE_SENTINEL} value={toSelectValue(option.id)}>
+              <SelectItem
+                key={option.id || EMPTY_VALUE_SENTINEL}
+                value={toSelectValue(option.id)}
+                disabled={option.disabled}
+              >
                 <span className="flex items-center gap-2 min-w-0 flex-1">
                   <span className="truncate">{option.name}</span>
                   {option.badge && (
@@ -324,8 +341,12 @@ const SearchableSelectControl = ({
     }, []);
   }, [options, searchTerm, searchableOptions]);
 
-  const handleSelect = (id: string) => {
+  const handleSelect = (option: Option) => {
     if (disabled) return;
+
+    const { id } = option;
+    const canRemoveDisabledOption = isMulti && Array.isArray(value) && value.includes(id);
+    if (option.disabled && !canRemoveDisabledOption) return;
 
     if (isMulti) {
       const currentValues = Array.isArray(value) ? value : [];
@@ -389,7 +410,7 @@ const SearchableSelectControl = ({
                       className="flex size-3 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
                       onClick={(event) => {
                         event.stopPropagation();
-                        handleSelect(option.id);
+                        handleSelect(option);
                       }}
                     >
                       <XIcon className="size-3" />
@@ -429,7 +450,7 @@ const SearchableSelectControl = ({
                       variant="secondary"
                       size="xs"
                       className="flex-1"
-                      onClick={() => onChange(options.map((option) => option.id))}
+                      onClick={() => onChange(getEnabledOptionIds(options))}
                     >
                       {t('select.selectAll')}
                     </Button>
@@ -450,7 +471,8 @@ const SearchableSelectControl = ({
                     <CommandItem
                       key={option.id || EMPTY_VALUE_SENTINEL}
                       value={option.name}
-                      onSelect={() => handleSelect(option.id)}
+                      disabled={option.disabled}
+                      onSelect={() => handleSelect(option)}
                     >
                       <span className="flex items-center gap-2 min-w-0 flex-1">
                         <span className="truncate">{option.name}</span>

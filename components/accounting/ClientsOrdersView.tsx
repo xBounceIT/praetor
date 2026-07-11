@@ -29,6 +29,7 @@ import {
   calculatePricingTotals,
   convertUnitPrice,
   durationValueToMonths,
+  formatDecimal,
   formatDiscountValue,
   formatMolPercentage,
   getDurationDisplayValue,
@@ -203,7 +204,7 @@ const PricingCell: React.FC<PricingCellProps> = ({
       className={`text-sm ${bold ? 'font-bold' : 'font-semibold'} whitespace-nowrap ${isHistory ? 'text-muted-foreground' : colorClass}`}
     >
       {prefix}
-      {value.toFixed(2)} {currency}
+      {formatDecimal(value)} {currency}
     </span>
   );
 };
@@ -747,7 +748,7 @@ const useClientsOrdersController = ({
             currency={currency}
           />
         ),
-        filterFormat: (val: unknown) => (val as number).toFixed(2),
+        filterFormat: (val: unknown) => formatDecimal(val as number),
       },
       {
         header: t('accounting:clientsOrders.paymentTermsColumn'),
@@ -1242,7 +1243,7 @@ const OrderItemsHeader: React.FC<{ controller: ClientsOrdersController }> = ({ c
   if (!controller.formData.items || controller.formData.items.length === 0) return null;
   return (
     <div className="mb-1 hidden items-center gap-2 px-3 lg:flex">
-      <div className="grid flex-1 grid-cols-14 gap-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+      <div className="grid flex-1 grid-cols-15 gap-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
         <div className="col-span-2">
           {controller.t('accounting:clientsOrders.supplierOrderColumn', {
             defaultValue: 'Supplier Order',
@@ -1260,6 +1261,7 @@ const OrderItemsHeader: React.FC<{ controller: ClientsOrdersController }> = ({ c
         <div className="col-span-1 whitespace-nowrap text-center">
           {controller.t('sales:clientQuotes.totalCost', { defaultValue: 'Total cost' })}
         </div>
+        <div className="col-span-1 text-center">{controller.t('common:labels.discount')}</div>
         <div className="col-span-1 text-center">
           {controller.t('sales:clientQuotes.marginLabel')}
         </div>
@@ -1278,19 +1280,20 @@ const OrderItemRow: React.FC<{
   index: number;
 }> = ({ controller, item, index }) => {
   const product = controller.products.find((candidate) => candidate.id === item.productId);
-  const { unitCost, molPercentage, lineCost, quantity, durationMonths } = getItemPricingContext(
-    item,
-    DEFAULT_UNIT_TYPE,
-  );
+  const {
+    unitCost,
+    molPercentage,
+    lineCost,
+    netRevenue: lineSalePrice,
+    lineMargin: margin,
+  } = getItemPricingContext(item, DEFAULT_UNIT_TYPE);
   const durationUnit = normalizeDurationUnit(item.durationUnit);
   const durationValue = getDurationDisplayValue(item);
-  const lineSalePrice = Number(item.unitPrice || 0) * quantity * durationMonths;
-  const margin = lineSalePrice - lineCost;
 
   return (
     <div className="space-y-3 rounded-md border border-border bg-muted/30 p-3">
       <div className="flex items-start gap-2 lg:items-center lg:pt-5">
-        <div className="grid flex-1 grid-cols-1 gap-2 lg:grid-cols-14 lg:items-center">
+        <div className="grid flex-1 grid-cols-1 gap-2 lg:grid-cols-15 lg:items-center">
           <OrderItemSupplierField controller={controller} item={item} />
           <OrderItemProductField controller={controller} item={item} index={index} />
           <OrderItemQuantityField
@@ -1318,6 +1321,7 @@ const OrderItemRow: React.FC<{
             currency={controller.currency}
             className="lg:col-span-1"
           />
+          <OrderItemDiscountField controller={controller} item={item} index={index} />
           <OrderItemAmountField
             label={controller.t('sales:clientQuotes.marginLabel')}
             value={margin}
@@ -1579,6 +1583,34 @@ const OrderItemMolField: React.FC<{
   </div>
 );
 
+const OrderItemDiscountField: React.FC<{
+  controller: ClientsOrdersController;
+  item: ClientsOrderItem;
+  index: number;
+}> = ({ controller, item, index }) => (
+  <div className="space-y-1 lg:col-span-1 lg:space-y-0">
+    <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
+      {controller.t('common:labels.discount')}
+    </FieldLabel>
+    <div className="flex h-9 items-center justify-center gap-1">
+      <ValidatedNumberInput
+        value={item.discount ?? 0}
+        min={0}
+        max={100}
+        step="0.01"
+        formatDecimals={2}
+        aria-label={controller.t('common:labels.discount')}
+        onValueChange={(value) =>
+          controller.updateProductRow(index, 'discount', parseNumberInputValue(value) ?? 0)
+        }
+        disabled={controller.isReadOnly}
+        className={compactInputClass}
+      />
+      <span className="shrink-0 text-[9px] font-medium text-muted-foreground">%</span>
+    </div>
+  </div>
+);
+
 const OrderItemAmountField: React.FC<{
   label: string;
   value: number;
@@ -1596,7 +1628,7 @@ const OrderItemAmountField: React.FC<{
 }) => {
   const valueLabel = (
     <span className={`text-xs font-bold ${valueClassName}`}>
-      {value.toFixed(2)} {currency}
+      {formatDecimal(value)} {currency}
     </span>
   );
 

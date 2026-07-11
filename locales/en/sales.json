@@ -5,6 +5,7 @@
     "product": "Select a product or service for this line item",
     "qty": "Quantity of items or hours",
     "cost": "Unit cost for this item",
+    "discount": "Percentage discount applied to this line",
     "duration": "Number of months the service runs: multiplies the line cost and revenue",
     "mol": "Margin overhead loading percentage",
     "notes": "Additional notes for the entire document",
@@ -369,6 +370,7 @@
       "clientRequired": "Customer is required",
       "quoteCodeRequired": "Quote Code is required",
       "itemsRequired": "At least one item is required",
+      "listPriceRequired": "List price is required for every item",
       "expirationExtendInvalid": "Set an expiration date of today or later to revalidate the supplier quote"
     },
     "durationColumn": "Duration",

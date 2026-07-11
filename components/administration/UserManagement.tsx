@@ -2092,7 +2092,7 @@ const UserEditCostField: React.FC<{ controller: UserManagementController }> = ({
           controller.dispatch({ type: 'set', values: { editCostPerHour: value } })
         }
         className="h-9 flex-1 border-0 bg-transparent px-3 py-1 text-sm font-medium shadow-none outline-none focus-visible:ring-0"
-        placeholder="0.00"
+        placeholder="0,00"
       />
     </div>
   </Field>

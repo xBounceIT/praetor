@@ -6,6 +6,7 @@ import type {
 } from 'recharts';
 
 import { cn } from '@/lib/utils';
+import { formatNumber } from '@/utils/numbers';
 
 // Format: { THEME_NAME: CSS_SELECTOR }
 const THEMES = { light: '', dark: '.dark' } as const;
@@ -299,7 +300,7 @@ const ChartTooltipContentBody = React.memo(function ChartTooltipContentBody({
                     {item.value != null && (
                       <span className="font-mono font-medium text-foreground tabular-nums">
                         {typeof item.value === 'number'
-                          ? item.value.toLocaleString()
+                          ? formatNumber(item.value, { maximumFractionDigits: 20 })
                           : String(item.value)}
                       </span>
                     )}

@@ -35,7 +35,9 @@ import {
   calculatePricingTotals,
   convertUnitPrice,
   durationValueToMonths,
+  formatDecimal,
   formatMolPercentage,
+  formatNumber,
   getDurationDisplayValue,
   getItemPricingContext,
   MOL_PERCENTAGE_DECIMALS,
@@ -56,6 +58,7 @@ import {
   buildSupplierQuoteItemIndex,
   isSupplierLineLocked,
   isSupplierLineStale,
+  pickedSupplierLineFields,
   refreshedSupplierLineFields,
 } from '../../utils/supplierLineSync';
 import { toastError } from '../../utils/toast';
@@ -128,7 +131,7 @@ const getDefaultFormData = (): Partial<ClientOffer> => ({
 const formatPercentageLabelValue = (value: number): string => {
   const rounded = Math.round(value * 100) / 100;
   if (Number.isInteger(rounded)) return String(rounded);
-  return rounded.toFixed(2).replace(/0+$/, '').replace(/\.$/, '');
+  return formatNumber(rounded, { maximumFractionDigits: 2 });
 };
 
 const getDiscountPercentageValue = (
@@ -267,7 +270,7 @@ const EMPTY_PRICING_TOTALS: PricingTotals = {
 // One label shape for a supplier-quote line item, shared by the picker options and the
 // display-value lookup so the two can never drift.
 const supplierQuoteItemLabel = (quote: SupplierQuote, item: SupplierQuote['items'][number]) =>
-  `${quote.supplierName} · ${item.productName} (${item.unitPrice.toFixed(2)})`;
+  `${quote.supplierName} · ${item.productName} (${formatDecimal(item.unitPrice)})`;
 
 const useClientOffersController = ({
   offers,
@@ -668,7 +671,7 @@ const useClientOffersController = ({
         const { subtotal } = offerPricingMap.get(row.id) ?? EMPTY_PRICING_TOTALS;
         return (
           <span className="text-sm font-semibold text-zinc-700 whitespace-nowrap">
-            {subtotal.toFixed(2)} {currency}
+            {formatDecimal(subtotal)} {currency}
           </span>
         );
       },
@@ -711,7 +714,7 @@ const useClientOffersController = ({
         }
         return (
           <span className="text-sm font-semibold text-amber-600 whitespace-nowrap">
-            -{discountAmount.toFixed(2)} {currency}
+            -{formatDecimal(discountAmount)} {currency}
           </span>
         );
       },
@@ -727,7 +730,7 @@ const useClientOffersController = ({
         const { total } = offerPricingMap.get(row.id) ?? EMPTY_PRICING_TOTALS;
         return (
           <span className="text-sm font-bold text-zinc-700 whitespace-nowrap">
-            {total.toFixed(2)} {currency}
+            {formatDecimal(total)} {currency}
           </span>
         );
       },
@@ -743,7 +746,7 @@ const useClientOffersController = ({
         const { margin } = offerPricingMap.get(row.id) ?? EMPTY_PRICING_TOTALS;
         return (
           <span className="text-sm font-bold text-emerald-600 whitespace-nowrap">
-            {margin.toFixed(2)} {currency}
+            {formatDecimal(margin)} {currency}
           </span>
         );
       },
@@ -949,6 +952,41 @@ const useClientOffersController = ({
                       : t('sales:clientOffers.markDenied', { defaultValue: 'Mark as denied' })}
                   </TooltipContent>
                 </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="inline-flex">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-sm"
+                        aria-label={t('sales:clientOffers.revertToDraft', {
+                          defaultValue: 'Revert to Draft',
+                        })}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (expired) return;
+                          handleStatusUpdate(row.id, { status: 'draft' });
+                        }}
+                        disabled={expired}
+                        className={`text-emerald-700 hover:text-emerald-700 hover:bg-emerald-50 ${expired ? 'cursor-not-allowed opacity-50' : ''}`}
+                      >
+                        <RotateCcw className="size-4" aria-hidden="true" />
+                        <span className="sr-only">
+                          {t('sales:clientOffers.revertToDraft', {
+                            defaultValue: 'Revert to Draft',
+                          })}
+                        </span>
+                      </Button>
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    {expired
+                      ? expiredTitle
+                      : t('sales:clientOffers.revertToDraft', {
+                          defaultValue: 'Revert to Draft',
+                        })}
+                  </TooltipContent>
+                </Tooltip>
               </>
             )}
             {row.status === 'accepted' && !hasOrder && onCreateClientsOrder && (
@@ -1067,6 +1105,7 @@ const useClientOffersController = ({
       unitPrice: 0,
       productCost: 0,
       productMolPercentage: null,
+      discount: 0,
       supplierQuoteId: null,
       supplierQuoteItemId: null,
       supplierQuoteSupplierName: null,
@@ -1155,18 +1194,9 @@ const useClientOffersController = ({
             current.productCost = netCost;
             current.productMolPercentage = null;
           }
-          // Same math as the refresh chip: refreshedSupplierLineFields recomputes the sale price
-          // from the picked cost and the line MOL, converting FROM the supplier item's own unit
-          // (#812 round 14) — the picked cost is priced in that unit, so converting from a
-          // hardcoded 'hours' multiplied a days-priced item by 8 on initial selection.
-          const refreshed = refreshedSupplierLineFields(current, selectedQuoteItem);
-          current.quantity = refreshed.quantity;
-          current.supplierQuoteUnitPrice = refreshed.supplierQuoteUnitPrice;
-          // Pick-time baseline: lets the server tell a deliberate pre-save edit (pushed onto the
-          // supplier item) from an untouched stale snapshot (server values win).
-          current.supplierQuoteBaseQuantity = refreshed.supplierQuoteBaseQuantity;
-          current.supplierQuoteBaseUnitPrice = refreshed.supplierQuoteBaseUnitPrice;
-          current.unitPrice = refreshed.unitPrice;
+          // Pull quantity, cost, sale price, and duration from the supplier item. The helper also
+          // stamps the pick-time quantity/cost baseline used by the server's genuine-edit check.
+          Object.assign(current, pickedSupplierLineFields(current, selectedQuoteItem));
         }
       }
 
@@ -1260,6 +1290,7 @@ const useClientOffersController = ({
         ...item,
         unitPrice: Number(item.unitPrice ?? 0),
         productCost: Number(item.productCost ?? 0),
+        discount: item.discount ?? 0,
         durationMonths: Number(item.durationMonths ?? 1) || 1,
         durationUnit: normalizeDurationUnit(item.durationUnit),
       })),
@@ -1736,7 +1767,7 @@ const ClientOfferItemsColumnHeader: React.FC<{ controller: ClientOffersControlle
 
   return (
     <div className="hidden lg:flex gap-2 px-3 mb-1 items-center">
-      <div className="flex-1 min-w-0 grid grid-cols-16 gap-2">
+      <div className="flex-1 min-w-0 grid grid-cols-17 gap-2">
         <div className="col-span-3 text-[10px] font-black text-zinc-400 uppercase tracking-wider ml-1">
           {t('sales:clientQuotes.supplierQuoteColumn')}
         </div>
@@ -1757,6 +1788,9 @@ const ClientOfferItemsColumnHeader: React.FC<{ controller: ClientOffersControlle
         </div>
         <div className="col-span-1 text-[10px] font-black text-zinc-400 uppercase tracking-wider text-center whitespace-nowrap">
           {t('sales:clientQuotes.totalCost', { defaultValue: 'Total cost' })}
+        </div>
+        <div className="col-span-1 text-[10px] font-black text-zinc-400 uppercase tracking-wider text-center">
+          {t('common:labels.discount')}
         </div>
         <div className="col-span-1 text-[10px] font-black text-zinc-400 uppercase tracking-wider text-center">
           {t('sales:clientQuotes.marginLabel')}
@@ -1791,16 +1825,13 @@ const getClientOfferLineContext = (
     unitCost: cost,
     molPercentage,
     lineCost,
-    quantity,
-    durationMonths,
+    netRevenue: lineSalePrice,
+    lineMargin,
   } = getItemPricingContext(item);
   const durationUnit = normalizeDurationUnit(item.durationUnit);
   const durationValue = getDurationDisplayValue(item);
   const product = products.find((p) => p.id === item.productId);
   const isSupply = product?.type === 'supply';
-  const unitSalePrice = Number(item.unitPrice || 0);
-  const lineSalePrice = unitSalePrice * quantity * durationMonths;
-  const lineMargin = lineSalePrice - lineCost;
   const isLinkedToSupplierQuote = Boolean(item.supplierQuoteItemId);
   const linkedSupplierRef = item.supplierQuoteItemId
     ? supplierQuoteItemIndex.get(item.supplierQuoteItemId)
@@ -1945,7 +1976,7 @@ const ClientOfferItemMobileMetrics: React.FC<{
   const { t, currency, readOnlyStatus, statusLabel } = controller;
 
   return (
-    <div className="grid grid-cols-2 gap-3 md:grid-cols-7 lg:hidden">
+    <div className="grid grid-cols-2 gap-3 md:grid-cols-8 lg:hidden">
       <div>
         <ClientOfferLineLabel
           label={t('sales:clientOffers.qty', { defaultValue: 'Qty' })}
@@ -1986,17 +2017,27 @@ const ClientOfferItemMobileMetrics: React.FC<{
       </ClientOfferInputPanel>
       <ClientOfferValuePanel
         label={t('sales:clientQuotes.totalCost', { defaultValue: 'Total cost' })}
-        value={`${line.lineCost.toFixed(2)} ${currency}`}
+        value={`${formatDecimal(line.lineCost)} ${currency}`}
         valueClassName="text-xs font-bold text-zinc-700 whitespace-nowrap"
       />
+      <ClientOfferInputPanel
+        label={t('common:labels.discount')}
+        description={t('sales:fieldInfo.discount', {
+          defaultValue: 'Percentage discount applied to this line',
+        })}
+        status={readOnlyStatus}
+        statusLabel={statusLabel}
+      >
+        <ClientOfferDiscountEditor controller={controller} item={item} index={index} />
+      </ClientOfferInputPanel>
       <ClientOfferValuePanel
         label={t('sales:clientQuotes.marginLabel')}
-        value={`${line.lineMargin.toFixed(2)} ${currency}`}
+        value={`${formatDecimal(line.lineMargin)} ${currency}`}
         valueClassName="text-xs font-bold text-emerald-600 whitespace-nowrap"
       />
       <ClientOfferValuePanel
         label={t('sales:clientQuotes.revenue')}
-        value={`${line.lineSalePrice.toFixed(2)} ${currency}`}
+        value={`${formatDecimal(line.lineSalePrice)} ${currency}`}
         valueClassName="text-sm font-semibold whitespace-nowrap text-zinc-800"
         className="col-span-2 md:col-span-1"
       />
@@ -2015,7 +2056,7 @@ const ClientOfferItemDesktopRow: React.FC<{
 
   return (
     <div className="hidden lg:flex gap-2 items-center pt-5">
-      <div className="flex-1 min-w-0 grid grid-cols-16 gap-2 items-center">
+      <div className="flex-1 min-w-0 grid grid-cols-17 gap-2 items-center">
         <div className="relative col-span-3 min-w-0">
           {line.supplierDataStale && linkedSupplierRef && (
             <StaleSupplierDataButton
@@ -2067,13 +2108,16 @@ const ClientOfferItemDesktopRow: React.FC<{
         <div className="col-span-1 flex items-center justify-center gap-1">
           <ClientOfferMolEditor controller={controller} line={line} compact />
         </div>
-        <ClientOfferDesktopAmount value={`${line.lineCost.toFixed(2)} ${currency}`} />
+        <ClientOfferDesktopAmount value={`${formatDecimal(line.lineCost)} ${currency}`} />
+        <div className="col-span-1 flex items-center justify-center">
+          <ClientOfferDiscountEditor controller={controller} item={item} index={index} compact />
+        </div>
         <ClientOfferDesktopAmount
-          value={`${line.lineMargin.toFixed(2)} ${currency}`}
+          value={`${formatDecimal(line.lineMargin)} ${currency}`}
           className="text-emerald-600"
         />
         <ClientOfferDesktopAmount
-          value={`${line.lineSalePrice.toFixed(2)} ${currency}`}
+          value={`${formatDecimal(line.lineSalePrice)} ${currency}`}
           className="font-semibold text-zinc-800"
         />
       </div>
@@ -2345,6 +2389,34 @@ const ClientOfferMolEditor: React.FC<{
     </>
   );
 };
+
+const ClientOfferDiscountEditor: React.FC<{
+  controller: ClientOffersController;
+  item: ClientOfferItem;
+  index: number;
+  compact?: boolean;
+}> = ({ controller, item, index, compact }) => (
+  <div className="flex w-full items-center justify-center gap-1">
+    <ValidatedNumberInput
+      value={item.discount ?? 0}
+      min={0}
+      max={100}
+      step="0.01"
+      formatDecimals={2}
+      aria-label={controller.t('common:labels.discount')}
+      onValueChange={(value) =>
+        controller.updateItem(index, 'discount', parseNumberInputValue(value) ?? 0)
+      }
+      disabled={controller.isReadOnly}
+      className={
+        compact
+          ? 'w-full text-sm px-1 py-2 bg-white border border-zinc-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed'
+          : 'w-full text-sm p-2 bg-white border border-zinc-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed'
+      }
+    />
+    <span className="shrink-0 text-[9px] font-semibold text-zinc-400">%</span>
+  </div>
+);
 
 const ClientOfferDesktopAmount: React.FC<{ value: string; className?: string }> = ({
   value,
