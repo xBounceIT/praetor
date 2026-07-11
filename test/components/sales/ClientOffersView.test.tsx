@@ -352,6 +352,23 @@ describe('<ClientOffersView /> terminal status revert action', () => {
   });
 });
 
+describe('<ClientOffersView /> sent status revert action', () => {
+  test('reverts a valid sent offer to draft through the normal update callback', async () => {
+    const user = userEvent.setup();
+    const onUpdateOffer = mock(() => Promise.resolve());
+    render(<ClientOffersView {...baseProps} offers={[globexSent]} onUpdateOffer={onUpdateOffer} />);
+
+    await user.click(screen.getByRole('button', { name: 'table.rowActions' }));
+    await user.click(
+      await screen.findByRole('button', { name: 'sales:clientOffers.revertToDraft' }),
+    );
+
+    await waitFor(() =>
+      expect(onUpdateOffer).toHaveBeenCalledWith('O-GLOBEX-SENT', { status: 'draft' }),
+    );
+  });
+});
+
 describe('<ClientOffersView /> discount summary', () => {
   test('labels a fixed global discount with the equivalent percentage', () => {
     const fixedDiscountOffer = buildOffer({
@@ -794,10 +811,12 @@ describe('<ClientOffersView /> expired-offer handling (issue #779)', () => {
   test('status action buttons are disabled on an expired sent offer', async () => {
     // Row actions live behind the StandardTable overflow menu ("table.rowActions").
     const user = userEvent.setup();
+    const onUpdateOffer = mock(() => Promise.resolve());
     render(
       <ClientOffersView
         {...baseProps}
         offers={[buildOffer({ id: 'O-PAST', status: 'sent', expirationDate: '2000-01-01' })]}
+        onUpdateOffer={onUpdateOffer}
       />,
     );
     await user.click(screen.getByRole('button', { name: 'table.rowActions' }));
@@ -809,6 +828,12 @@ describe('<ClientOffersView /> expired-offer handling (issue #779)', () => {
     const denyIcon = document.querySelector('.fa-xmark');
     expect(denyIcon).not.toBeNull();
     expect(denyIcon?.closest('button')).toBeDisabled();
+    const revertButton = screen.getByRole('button', {
+      name: 'sales:clientOffers.revertToDraft',
+    });
+    expect(revertButton).toBeDisabled();
+    await user.click(revertButton);
+    expect(onUpdateOffer).not.toHaveBeenCalled();
   });
 
   test('submitting an expired offer extends ONLY the expiration date', async () => {
