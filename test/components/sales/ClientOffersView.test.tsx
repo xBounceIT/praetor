@@ -727,6 +727,80 @@ describe('<ClientOffersView /> MOL precision (issue #780)', () => {
   });
 });
 
+describe('<ClientOffersView /> line discounts', () => {
+  test('defaults added lines to 0% and includes zero in the payload', async () => {
+    const onUpdateOffer = mock((_id: string, _updates: Partial<ClientOffer>) => Promise.resolve());
+    render(<ClientOffersView {...baseProps} offers={[acmeDraft]} onUpdateOffer={onUpdateOffer} />);
+
+    fireEvent.click(screen.getByText('O-ACME-DRAFT'));
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'sales:clientOffers.addItem' }));
+
+    const lineDiscountInputs = within(dialog)
+      .getAllByRole('textbox', { name: 'common:labels.discount' })
+      .filter((input): input is HTMLInputElement => input instanceof HTMLInputElement);
+    expect(lineDiscountInputs.length).toBeGreaterThan(1);
+    expect(lineDiscountInputs.every((input) => input.value === '0.00')).toBe(true);
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'common:buttons.update' }));
+    await waitFor(() => expect(onUpdateOffer).toHaveBeenCalledTimes(1));
+    expect(onUpdateOffer.mock.calls[0][1].items?.map((item) => item.discount)).toEqual([0, 0]);
+  });
+
+  test('edits a supplier-linked line discount, shows net values, and submits it', async () => {
+    const onUpdateOffer = mock((_id: string, _updates: Partial<ClientOffer>) => Promise.resolve());
+    const supplierLinkedOffer = buildOffer({
+      id: 'O-SUPPLIER-LINE-DISCOUNT',
+      items: [
+        {
+          ...acmeDraft.items[0],
+          offerId: 'O-SUPPLIER-LINE-DISCOUNT',
+          supplierQuoteId: 'SQ-1',
+          supplierQuoteItemId: 'SQI-1',
+          supplierQuoteUnitPrice: 50,
+        },
+      ],
+    });
+    render(
+      <ClientOffersView
+        {...baseProps}
+        offers={[supplierLinkedOffer]}
+        onUpdateOffer={onUpdateOffer}
+      />,
+    );
+
+    fireEvent.click(screen.getByText('O-SUPPLIER-LINE-DISCOUNT'));
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getAllByText('common:labels.discount').length).toBeGreaterThan(0);
+
+    const lineDiscountInputs = within(dialog)
+      .getAllByRole('textbox', { name: 'common:labels.discount' })
+      .filter((input): input is HTMLInputElement => input instanceof HTMLInputElement);
+    expect(lineDiscountInputs.length).toBeGreaterThan(0);
+    fireEvent.change(lineDiscountInputs[0], { target: { value: '150' } });
+    expect(lineDiscountInputs[0]).toHaveValue('100.00');
+    fireEvent.change(lineDiscountInputs[0], { target: { value: '10' } });
+    expect(within(dialog).getAllByText('90.00 EUR').length).toBeGreaterThan(0);
+    expect(within(dialog).getAllByText('40.00 EUR').length).toBeGreaterThan(0);
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'common:buttons.update' }));
+    await waitFor(() => expect(onUpdateOffer).toHaveBeenCalledTimes(1));
+    expect(onUpdateOffer.mock.calls[0][1].items?.[0].discount).toBe(10);
+  });
+
+  test('keeps the line discount visible but disabled on terminal offers', async () => {
+    render(<ClientOffersView {...baseProps} offers={[terminalAccepted]} />);
+    fireEvent.click(screen.getByText('O-ACME-ACCEPTED'));
+    const dialog = await screen.findByRole('dialog');
+
+    const lineDiscountInputs = within(dialog)
+      .getAllByRole('textbox', { name: 'common:labels.discount' })
+      .filter((input): input is HTMLInputElement => input instanceof HTMLInputElement);
+    expect(lineDiscountInputs.length).toBeGreaterThan(0);
+    expect(lineDiscountInputs.every((input) => input.disabled)).toBe(true);
+  });
+});
+
 describe('<ClientOffersView /> line-item delete confirmation', () => {
   const openEditor = async () => {
     render(<ClientOffersView {...baseProps} offers={[acmeDraft]} />);

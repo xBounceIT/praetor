@@ -233,7 +233,7 @@ const SAMPLE_ITEM = {
   supplierQuoteItemId: null,
   supplierQuoteSupplierName: null,
   supplierQuoteUnitPrice: null,
-  discount: 0,
+  discount: 12.5,
   note: null,
   unitType: 'hours' as const,
   durationMonths: 1,

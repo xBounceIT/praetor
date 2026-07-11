@@ -1054,6 +1054,23 @@ describe('POST /api/sales/client-quotes supplier sync on create (user report aft
     });
   };
 
+  test('accepts the inclusive 100% line-discount boundary', async () => {
+    setupCreate();
+
+    const res = await postQuote([freshLine({ discount: 100 }), freshLine()]);
+
+    expect(res.statusCode).toBe(201);
+    const inserted = cqInsertItemsMock.mock.calls[0][1] as Array<Record<string, unknown>>;
+    expect(inserted[0].discount).toBe(100);
+  });
+
+  test('rejects a line discount above 100%', async () => {
+    const res = await postQuote([freshLine({ discount: 100.01 })]);
+
+    expect(res.statusCode).toBe(400);
+    expect(cqCreateMock).not.toHaveBeenCalled();
+  });
+
   test('a create-form cost/quantity edit away from the pick-time baseline is kept and pushed', async () => {
     setupCreate();
 

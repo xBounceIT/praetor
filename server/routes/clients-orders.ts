@@ -28,6 +28,7 @@ import {
   optionalDurationMonths,
   optionalDurationUnit,
   optionalLocalizedNonNegativeNumber,
+  optionalLocalizedPercentage,
   optionalNonEmptyString,
   parseLocalizedNonNegativeNumber,
   parseLocalizedPositiveNumber,
@@ -62,7 +63,7 @@ const clientOrderItemSchema = {
     supplierSaleSupplierName: { type: ['string', 'null'] },
     unitType: { type: 'string', enum: ['hours', 'days', 'unit'] },
     note: { type: ['string', 'null'] },
-    discount: { type: 'number' },
+    discount: { type: 'number', minimum: 0, maximum: 100 },
     durationMonths: { type: 'number' },
     durationUnit: { type: 'string', enum: ['months', 'years', 'na'] },
   },
@@ -137,7 +138,7 @@ const clientOrderItemBodySchema = {
     supplierSaleItemId: { type: ['string', 'null'] },
     supplierSaleSupplierName: { type: ['string', 'null'] },
     unitType: { type: 'string', enum: ['hours', 'days', 'unit'] },
-    discount: { type: 'number' },
+    discount: { type: 'number', minimum: 0, maximum: 100 },
     note: { type: ['string', 'null'] },
     durationMonths: { type: 'number' },
     durationUnit: { type: 'string', enum: ['months', 'years', 'na'] },
@@ -245,10 +246,7 @@ const normalizeIncomingItems = (
       badRequest(reply, unitPriceResult.message);
       return null;
     }
-    const itemDiscountResult = optionalLocalizedNonNegativeNumber(
-      item.discount,
-      `items[${i}].discount`,
-    );
+    const itemDiscountResult = optionalLocalizedPercentage(item.discount, `items[${i}].discount`);
     if (!itemDiscountResult.ok) {
       badRequest(reply, itemDiscountResult.message);
       return null;

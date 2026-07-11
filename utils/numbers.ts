@@ -136,6 +136,11 @@ export interface ItemPricingContext {
   quantity: number;
   durationMonths: number;
   lineCost: number;
+  discountPercentage: number;
+  grossRevenue: number;
+  lineDiscount: number;
+  netRevenue: number;
+  lineMargin: number;
 }
 
 export const getItemPricingContext = (
@@ -148,7 +153,24 @@ export const getItemPricingContext = (
   const quantity = Number(item.quantity || 0);
   const durationMonths = getEffectiveDurationMonths(item);
   const lineCost = unitCost * quantity * durationMonths;
-  return { baseCost, unitCost, molPercentage, quantity, durationMonths, lineCost };
+  const discountPercentage = Math.min(100, Math.max(0, Number(item.discount || 0)));
+  const grossRevenue = Number(item.unitPrice || 0) * quantity * durationMonths;
+  const lineDiscount = (grossRevenue * discountPercentage) / 100;
+  const netRevenue = grossRevenue - lineDiscount;
+  const lineMargin = netRevenue - lineCost;
+  return {
+    baseCost,
+    unitCost,
+    molPercentage,
+    quantity,
+    durationMonths,
+    lineCost,
+    discountPercentage,
+    grossRevenue,
+    lineDiscount,
+    netRevenue,
+    lineMargin,
+  };
 };
 
 export interface PricingTotals {
@@ -170,13 +192,9 @@ export const calculatePricingTotals = (
   let totalCost = 0;
 
   items.forEach((item) => {
-    const durationMonths = getEffectiveDurationMonths(item);
-    const lineSubtotal = Number(item.quantity || 0) * Number(item.unitPrice || 0) * durationMonths;
-    const lineDiscount = (lineSubtotal * (item.discount || 0)) / 100;
-    subtotal += lineSubtotal - lineDiscount;
-
-    totalCost +=
-      Number(item.quantity || 0) * getEffectiveUnitCost(item, defaultUnitType) * durationMonths;
+    const line = getItemPricingContext(item, defaultUnitType);
+    subtotal += line.netRevenue;
+    totalCost += line.lineCost;
   });
 
   const discountAmount =
