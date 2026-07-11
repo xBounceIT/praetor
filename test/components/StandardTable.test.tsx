@@ -117,6 +117,11 @@ const getRenderedColumnIds = () =>
     (element) => element.dataset.columnHeaderLabel,
   );
 
+const getCustomViewColumnIds = () =>
+  Array.from(document.querySelectorAll<HTMLElement>('[data-custom-view-column-id]')).map(
+    (element) => element.dataset.customViewColumnId,
+  );
+
 const dragColumnAfter = (sourceHeader: string, targetHeader: string) => {
   const dataTransfer = {
     effectAllowed: 'none',
@@ -136,6 +141,23 @@ const dragColumnAfter = (sourceHeader: string, targetHeader: string) => {
   act(() => {
     fireEvent.drop(target, { clientX: 10_000, dataTransfer });
   });
+};
+
+const dragCustomViewColumnAfter = (sourceId: string, targetId: string) => {
+  const dataTransfer = {
+    effectAllowed: 'none',
+    dropEffect: 'none',
+    setData: mock(() => {}),
+  };
+  const handle = document.querySelector<HTMLElement>(
+    `[data-custom-view-column-drag-handle="${sourceId}"]`,
+  );
+  const target = document.querySelector<HTMLElement>(`[data-custom-view-column-id="${targetId}"]`);
+  if (!handle || !target) throw new Error('Missing custom view column drag target');
+  target.getBoundingClientRect = () => ({ top: -2, height: 1 }) as DOMRect;
+  act(() => fireEvent.dragStart(handle, { dataTransfer }));
+  act(() => fireEvent.dragOver(target, { clientY: 10_000, dataTransfer }));
+  act(() => fireEvent.drop(target, { clientY: 10_000, dataTransfer }));
 };
 
 describe('<StandardTable />', () => {
@@ -1491,11 +1513,23 @@ describe('<StandardTable />', () => {
     expect(screen.getAllByText('Age').length).toBe(2);
   });
 
-  test('saving a custom view persists it to localStorage and marks it active', async () => {
+  test('custom view modal reorders columns by drag and keyboard and saves the order', async () => {
     render(<StandardTable<Row> title="People" data={sampleRows} columns={sampleColumns} />);
-    dragColumnAfter('Name', 'Age');
     await openCustomViews();
     clickMenuItemByText('buttons.add');
+
+    expect(getCustomViewColumnIds()).toEqual(['name', 'age']);
+    dragCustomViewColumnAfter('name', 'age');
+    expect(getCustomViewColumnIds()).toEqual(['age', 'name']);
+
+    const nameHandle = document.querySelector<HTMLElement>(
+      '[data-custom-view-column-drag-handle="name"]',
+    );
+    if (!nameHandle) throw new Error('Missing custom view column keyboard handle');
+    act(() => fireEvent.keyDown(nameHandle, { key: 'ArrowUp' }));
+    expect(getCustomViewColumnIds()).toEqual(['name', 'age']);
+    act(() => fireEvent.keyDown(nameHandle, { key: 'ArrowDown' }));
+    expect(getCustomViewColumnIds()).toEqual(['age', 'name']);
 
     const input = screen.getByPlaceholderText('table.viewNamePlaceholder') as HTMLInputElement;
     act(() => fireEvent.change(input, { target: { value: 'My View' } }));
@@ -1510,6 +1544,7 @@ describe('<StandardTable />', () => {
 
     const activeId = localStorage.getItem('praetor_table_activeview_people');
     expect(activeId).toBe(parsed[0].id);
+    expect(getRenderedColumnIds()).toEqual(['age', 'name']);
   });
 
   test('custom view modal opened from the shadcn columns menu is immediately keyboard-ready', async () => {

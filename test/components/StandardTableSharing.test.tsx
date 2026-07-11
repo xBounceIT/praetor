@@ -333,7 +333,7 @@ describe('<StandardTable /> server-backed sharing', () => {
     expect(screen.getByLabelText('views.duplicateView')).toBeInTheDocument();
   });
 
-  test('editing a view keeps its saved order/sort/filter', async () => {
+  test('editing a view changes its saved order while keeping sort/filter', async () => {
     const sortedView: SavedViewDto = {
       ...OWNED_VIEW,
       id: 'sv-sorted',
@@ -354,12 +354,17 @@ describe('<StandardTable /> server-backed sharing', () => {
     await openCustomViews();
     await screen.findByText('Sorted View');
 
-    // Open the edit modal (the live table is unsorted), change ONLY the name, and save.
+    // Open the edit modal while the live table remains in its own state, then change the saved order.
     act(() => fireEvent.click(screen.getByLabelText('table.renameView')));
     const nameInput = (await screen.findByPlaceholderText(
       'table.viewNamePlaceholder',
     )) as HTMLInputElement;
     act(() => fireEvent.change(nameInput, { target: { value: 'Renamed' } }));
+    const nameHandle = document.querySelector<HTMLElement>(
+      '[data-custom-view-column-drag-handle="name"]',
+    );
+    if (!nameHandle) throw new Error('Missing custom view column keyboard handle');
+    act(() => fireEvent.keyDown(nameHandle, { key: 'ArrowUp' }));
     act(() => fireEvent.click(screen.getByText('table.save')));
 
     await waitFor(() => expect(updateMock).toHaveBeenCalledTimes(1));
@@ -368,8 +373,7 @@ describe('<StandardTable /> server-backed sharing', () => {
       { name: string; config: { columnOrder: unknown; sortState: unknown } },
     ];
     expect(patch.name).toBe('Renamed');
-    // The view's own layout is preserved — not overwritten with the live table state.
-    expect(patch.config.columnOrder).toEqual(['age', 'name']);
+    expect(patch.config.columnOrder).toEqual(['name', 'age']);
     expect(patch.config.sortState).toEqual({ colId: 'name', px: 'asc' });
   });
 

@@ -2070,16 +2070,24 @@ const useStandardTableController = <T extends object>({
 
   // Legacy mode is synchronous (localStorage). Server mode persists optimistically and
   // reverts on failure. Returns a promise so the modal can stay closed only after success.
-  const saveView = async ({ name, hiddenColIds }: { name: string; hiddenColIds: string[] }) => {
+  const saveView = async ({
+    name,
+    hiddenColIds,
+    columnOrder: requestedColumnOrder,
+  }: Pick<CustomView, 'name' | 'hiddenColIds' | 'columnOrder'>) => {
     const hidden = normalizeHiddenColIdsForCurrentColumns(hiddenColIds);
+    const savedColumnOrder = normalizeColumnOrder(requestedColumnOrder, reorderableColumnIdSet);
     const editingView = modalState?.kind === 'edit' ? modalState.view : null;
     const editingId = editingView?.id ?? null;
-    // The modal only edits name + visible columns. When editing an existing view, keep that view's
-    // own order/sort/filter rather than snapshotting the live table state. A brand-new view instead
-    // snapshots the current table state, including the order chosen through the header drag handles.
-    const savedColumnOrder = editingView ? editingView.columnOrder : normalizedColumnOrder;
+    // The modal edits name, visibility, and order. Keep the view's own sort/filter when editing
+    // rather than snapshotting the live table state; a new view snapshots the current state.
     const savedSortState = editingView ? editingView.sortState : sortState;
     const savedFilterState = editingView ? editingView.filterState : filterState;
+
+    const applySavedColumnLayout = () => {
+      dispatchTableView({ type: 'set-hidden-columns', hiddenColIds: new Set(hidden) });
+      dispatchTableView({ type: 'set-column-order', columnOrder: savedColumnOrder });
+    };
 
     if (!isServerBacked) {
       if (editingId) {
@@ -2098,20 +2106,20 @@ const useStandardTableController = <T extends object>({
           ),
         );
         if (activeViewId === editingId) {
-          dispatchTableView({ type: 'set-hidden-columns', hiddenColIds: new Set(hidden) });
+          applySavedColumnLayout();
         }
       } else {
         const newView: CustomView = {
           id: generateViewId(),
           name,
           hiddenColIds: hidden,
-          columnOrder: normalizedColumnOrder,
+          columnOrder: savedColumnOrder,
           sortState,
           filterState,
         };
         updateCustomViews((prev) => [...prev, newView]);
         updateActiveViewId(newView.id);
-        dispatchTableView({ type: 'set-hidden-columns', hiddenColIds: new Set(hidden) });
+        applySavedColumnLayout();
       }
       setModalState(null);
       return;
@@ -2132,7 +2140,7 @@ const useStandardTableController = <T extends object>({
         updateCustomViews((prev) => prev.map((v) => (v.id === editingId ? updated : v)));
         rememberServerViewMeta(dto);
         if (activeViewId === editingId) {
-          dispatchTableView({ type: 'set-hidden-columns', hiddenColIds: new Set(hidden) });
+          applySavedColumnLayout();
         }
       } else {
         const dto = await viewsApi.create({ kind: 'table', scopeKey: viewKey, name, config });
@@ -2140,7 +2148,7 @@ const useStandardTableController = <T extends object>({
         updateCustomViews((prev) => [...prev, created]);
         rememberServerViewMeta(dto);
         updateActiveViewId(created.id);
-        dispatchTableView({ type: 'set-hidden-columns', hiddenColIds: new Set(hidden) });
+        applySavedColumnLayout();
       }
       setModalState(null);
     } catch (err) {
@@ -2467,6 +2475,7 @@ const useStandardTableController = <T extends object>({
     saveView,
     modalColumns,
     hiddenColIds,
+    normalizedColumnOrder,
     shareModalView,
     pasteModalOpen,
     closePasteModal,
@@ -3796,7 +3805,8 @@ const StandardTableCustomViewModal = <T extends object>({
 }: {
   controller: StandardTableController<T>;
 }) => {
-  const { modalState, setModalState, saveView, modalColumns, hiddenColIds } = controller;
+  const { modalState, setModalState, saveView, modalColumns, hiddenColIds, normalizedColumnOrder } =
+    controller;
 
   return (
     <CustomViewModal
@@ -3814,6 +3824,7 @@ const StandardTableCustomViewModal = <T extends object>({
       }}
       columns={modalColumns}
       initialHiddenColIds={hiddenColIds}
+      initialColumnOrder={normalizedColumnOrder}
       editingView={modalState?.kind === 'edit' ? modalState.view : undefined}
     />
   );
