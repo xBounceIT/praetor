@@ -411,17 +411,17 @@ const resolveQuoteItemSnapshots = async (
       throw new Error(`items productId "${resolvedProductId}" is invalid`);
     }
 
-    const allowManualProductSnapshot = !normalizedSupplierQuoteItemId;
+    const allowManualProductCost = !normalizedSupplierQuoteItemId;
     resolvedItems.push({
       ...item,
       productId: resolvedProductId,
       supplierQuoteItemId: normalizedSupplierQuoteItemId,
       productCost:
-        allowManualProductSnapshot && item.productCost !== null
+        allowManualProductCost && item.productCost !== null
           ? item.productCost
           : (productSnapshot?.productCost ?? 0),
       productMolPercentage:
-        allowManualProductSnapshot && item.productMolPercentage !== null
+        item.productMolPercentage != null
           ? item.productMolPercentage
           : (productSnapshot?.productMolPercentage ?? null),
       supplierQuoteId,

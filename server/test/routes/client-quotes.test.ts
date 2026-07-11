@@ -904,6 +904,36 @@ describe('PUT /api/sales/client-quotes/:id supplier-item forward sync (#779)', (
     expect(sqSyncItemPricingMock).not.toHaveBeenCalled();
   });
 
+  test('persists an edited local MOL on a retained supplier-sourced line', async () => {
+    setupDraftQuote();
+    cqFindItemSnapshotsForQuoteMock.mockResolvedValue([
+      { ...EXISTING_SNAP, productId: null, productMolPercentage: 20 },
+    ]);
+    sqGetQuoteItemSnapshotsMock.mockResolvedValue(
+      new Map([
+        [
+          'sqi-9',
+          {
+            supplierQuoteId: 'sq-9',
+            supplierName: 'Acme',
+            productId: null,
+            unitPrice: 50,
+            netCost: 50,
+            sourceable: true,
+          },
+        ],
+      ]),
+    );
+
+    const res = await putStatus({
+      items: [lineItem(2, 50, { productId: null, productMolPercentage: 35 })],
+    });
+
+    expect(res.statusCode).toBe(200);
+    const replaced = cqReplaceItemsMock.mock.calls[0][1] as Array<Record<string, unknown>>;
+    expect(replaced[0].productMolPercentage).toBe(35);
+  });
+
   test('re-saving a STALE snapshot does not revert direct supplier-side edits', async () => {
     // The line still stores cost 40 from before the supplier raised the item to 50; a
     // notes-only style re-save resends the stored values unchanged — NOT a client edit.
@@ -1062,6 +1092,16 @@ describe('POST /api/sales/client-quotes supplier sync on create (user report aft
     expect(res.statusCode).toBe(201);
     const inserted = cqInsertItemsMock.mock.calls[0][1] as Array<Record<string, unknown>>;
     expect(inserted[0].discount).toBe(100);
+  });
+
+  test('persists the client-quote local MOL on a supplier-sourced line', async () => {
+    setupCreate();
+
+    const res = await postQuote([freshLine({ productMolPercentage: 35 })]);
+
+    expect(res.statusCode).toBe(201);
+    const inserted = cqInsertItemsMock.mock.calls[0][1] as Array<Record<string, unknown>>;
+    expect(inserted[0].productMolPercentage).toBe(35);
   });
 
   test('rejects a line discount above 100%', async () => {
