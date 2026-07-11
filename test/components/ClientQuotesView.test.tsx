@@ -473,7 +473,9 @@ describe('<ClientQuotesView /> supplier-quote item labels', () => {
     );
     fireEvent.click(screen.getByText('Q-OLD-SOURCE'));
 
-    expect(screen.getAllByText('Acme Supplies · Solar Panel (60.00)').length).toBeGreaterThan(0);
+    expect(
+      screen.getAllByText('[SQ-OLD] Acme Supplies · Solar Panel (60.00)').length,
+    ).toBeGreaterThan(0);
   });
 });
 describe('<ClientQuotesView /> supplier-quote item availability', () => {
@@ -495,8 +497,8 @@ describe('<ClientQuotesView /> supplier-quote item availability', () => {
     ],
   };
   const emptySupplierLabel = 'sales:clientQuotes.noSupplierQuote';
-  const firstSupplierItemLabel = 'Acme Supplies · Solar Panel (60.00)';
-  const secondSupplierItemLabel = 'Acme Supplies · Battery (40.00)';
+  const firstSupplierItemLabel = '[SQ-1] Acme Supplies · Solar Panel (60.00)';
+  const secondSupplierItemLabel = '[SQ-1] Acme Supplies · Battery (40.00)';
 
   const getOpenSupplierItem = (label: string) => {
     const option = Array.from(

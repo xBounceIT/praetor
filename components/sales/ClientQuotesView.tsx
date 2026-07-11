@@ -172,7 +172,7 @@ const quoteToFormData = (quote: Quote): Partial<Quote> => ({
 // One label shape for a supplier-quote line item, shared by the picker options and the
 // display-value lookup so the two can never drift.
 const supplierQuoteItemLabel = (quote: SupplierQuote, item: SupplierQuote['items'][number]) =>
-  `${quote.supplierName} · ${item.productName} (${item.unitPrice.toFixed(2)})`;
+  `[${quote.id}] ${quote.supplierName} · ${item.productName} (${item.unitPrice.toFixed(2)})`;
 
 const isQuoteCodeConflictError = (err: unknown) =>
   err instanceof ApiError && err.status === 409 && err.message === 'Quote ID already exists';
