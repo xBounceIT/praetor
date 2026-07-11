@@ -122,6 +122,8 @@
     "clientInformation": "Informazioni Cliente",
     "productsServices": "Prodotti / Servizi",
     "addProduct": "Aggiungi Prodotto",
+    "reorderItem": "Riordina {{item}}, posizione {{position}} di {{total}}",
+    "reorderItemHint": "Trascina per riordinare. Da tastiera usa le frecce Su/Giù oppure Inizio/Fine.",
     "globalDiscount": "Sconto Globale",
     "summary": "Riepilogo",
     "expirationDateLabel": "Data Scadenza",

@@ -202,7 +202,15 @@ export const listAll = async (exec: DbExecutor = db): Promise<ClientQuote[]> => 
 };
 
 export const listAllItems = async (exec: DbExecutor = db): Promise<ClientQuoteItem[]> => {
-  const rows = await exec.select().from(quoteItems).orderBy(quoteItems.createdAt);
+  const rows = await exec
+    .select()
+    .from(quoteItems)
+    .orderBy(
+      asc(quoteItems.quoteId),
+      asc(quoteItems.position),
+      asc(quoteItems.createdAt),
+      asc(quoteItems.id),
+    );
   return rows.map(mapItem);
 };
 
@@ -442,7 +450,7 @@ export const findItemsForQuote = async (
     .select()
     .from(quoteItems)
     .where(eq(quoteItems.quoteId, quoteId))
-    .orderBy(asc(quoteItems.createdAt), asc(quoteItems.id));
+    .orderBy(asc(quoteItems.position), asc(quoteItems.createdAt), asc(quoteItems.id));
   return rows.map(mapItem);
 };
 
@@ -598,6 +606,7 @@ export const restoreSnapshotQuote = async (
 
 export type NewClientQuoteItem = {
   id: string;
+  position: number;
   productId: string | null;
   productName: string;
   quantity: number;
@@ -627,6 +636,7 @@ export const insertItems = async (
       items.map((item) => ({
         id: item.id,
         quoteId,
+        position: item.position,
         productId: item.productId,
         productName: item.productName,
         quantity: numericForDb(item.quantity),
@@ -645,7 +655,7 @@ export const insertItems = async (
       })),
     )
     .returning();
-  return rows.map(mapItem);
+  return rows.sort((left, right) => left.position - right.position).map(mapItem);
 };
 
 export const replaceItems = async (

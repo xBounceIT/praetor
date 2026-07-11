@@ -106,9 +106,13 @@ export const quoteItems = pgTable(
     // Pricing always uses `durationMonths`; this only controls how the value is shown/entered.
     durationUnit: text('duration_unit').notNull().default('months'),
     createdAt: timestamp('created_at').default(sql`CURRENT_TIMESTAMP`),
+    // Stable, user-controlled line order. This must not be derived from created_at: quote edits
+    // replace the line rows and would otherwise reshuffle them after every save.
+    position: integer('position').notNull().default(0),
   },
   (table) => [
     index('idx_quote_items_quote_id').on(table.quoteId),
+    index('idx_quote_items_quote_position').on(table.quoteId, table.position),
     // Partial index for the #779 line-sourcing reverse lookups: supplierQuotesRepo's
     // chosenClientQuoteId EXISTS probe and clientQuotesRepo's earliest-sourced-expiration JOIN both
     // correlate on supplier_quote_id, which was otherwise unindexed (sequential scan per probe).

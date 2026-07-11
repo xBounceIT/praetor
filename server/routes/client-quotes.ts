@@ -614,8 +614,9 @@ const quoteUpdateBodySchema = {
 } as const;
 
 const buildItemsForInsert = (items: ResolvedQuoteItem[]): clientQuotesRepo.NewClientQuoteItem[] =>
-  items.map((item) => ({
+  items.map((item, position) => ({
     id: generatePrefixedId(ITEM_ID_PREFIXES.clientQuoteItem),
+    position,
     productId: item.productId || null,
     productName: item.productName,
     quantity: item.quantity,
@@ -1961,9 +1962,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           }
 
           const snapshotItems: clientQuotesRepo.NewClientQuoteItem[] = version.snapshot.items.map(
-            ({ quoteId: _q, ...rest }) => ({
+            ({ quoteId: _q, ...rest }, position) => ({
               ...rest,
               id: generatePrefixedId(ITEM_ID_PREFIXES.clientQuoteItem),
+              position,
               // `productId: ''` slips through the snapshot when sourced from a supplier quote;
               // the `quote_items` row needs NULL there.
               productId: rest.productId || null,

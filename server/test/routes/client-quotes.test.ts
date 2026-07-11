@@ -1052,6 +1052,8 @@ describe('PUT /api/sales/client-quotes/:id supplier-item forward sync (#779)', (
       items: [lineItem(2, 50), lineItem(5, 50, { id: 'qi-2' })],
     });
     expect(res.statusCode).toBe(200);
+    const replacedItems = cqReplaceItemsMock.mock.calls[0][1] as Array<Record<string, unknown>>;
+    expect(replacedItems.map((item) => item.position)).toEqual([0, 1]);
     expect(sqSyncItemPricingMock).not.toHaveBeenCalled();
   });
 });

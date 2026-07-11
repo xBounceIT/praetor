@@ -445,6 +445,81 @@ describe('<ClientQuotesView />', () => {
     expect(screen.getByRole('dialog')).toBeInTheDocument();
   });
 
+  test('reorders quote items by drag and keyboard, then submits the new order', async () => {
+    const reorderQuote: Quote = {
+      ...quotes[0],
+      id: 'Q-ORDER',
+      items: [
+        {
+          ...quotes[0].items[0],
+          id: 'item-first',
+          quoteId: 'Q-ORDER',
+          productName: 'First service',
+        },
+        {
+          ...quotes[0].items[0],
+          id: 'item-second',
+          quoteId: 'Q-ORDER',
+          productName: 'Second service',
+        },
+      ],
+    };
+    const onUpdateQuote = mock((_id: string, _updates: Partial<Quote>) => Promise.resolve());
+
+    render(
+      <ClientQuotesView
+        quotes={[reorderQuote]}
+        clients={clients}
+        products={[]}
+        supplierQuotes={[]}
+        communicationChannels={communicationChannels}
+        currency="EUR"
+        onAddQuote={mock(() => Promise.resolve())}
+        onUpdateQuote={onUpdateQuote}
+        onDeleteQuote={mock(() => Promise.resolve())}
+      />,
+    );
+
+    fireEvent.click(screen.getByText('Q-ORDER'));
+    const dialog = await screen.findByRole('dialog');
+    const handles = within(dialog).getAllByRole('button', {
+      name: 'sales:clientQuotes.reorderItem',
+    });
+    expect(handles).toHaveLength(2);
+    const secondRow = handles[1].closest('[data-quote-item-id]');
+    expect(secondRow).not.toBeNull();
+    const dataTransfer = {
+      effectAllowed: 'none',
+      dropEffect: 'none',
+      setData: mock(() => {}),
+      getData: mock(() => ''),
+    };
+
+    fireEvent.dragStart(handles[0], { dataTransfer });
+    fireEvent.drop(secondRow as HTMLElement, { dataTransfer });
+    const itemOrder = () =>
+      Array.from(dialog.querySelectorAll<HTMLElement>('[data-quote-item-id]')).map(
+        (row) => row.dataset.quoteItemId,
+      );
+    expect(itemOrder()).toEqual(['item-second', 'item-first']);
+
+    fireEvent.keyDown(
+      within(dialog).getAllByRole('button', { name: 'sales:clientQuotes.reorderItem' })[0],
+      { key: 'ArrowDown' },
+    );
+    expect(itemOrder()).toEqual(['item-first', 'item-second']);
+    fireEvent.keyDown(
+      within(dialog).getAllByRole('button', { name: 'sales:clientQuotes.reorderItem' })[0],
+      { key: 'End' },
+    );
+    expect(itemOrder()).toEqual(['item-second', 'item-first']);
+    fireEvent.click(within(dialog).getByRole('button', { name: 'sales:clientQuotes.updateQuote' }));
+
+    await waitFor(() => expect(onUpdateQuote).toHaveBeenCalledTimes(1));
+    const submitted = onUpdateQuote.mock.calls[0][1] as Partial<Quote>;
+    expect(submitted.items?.map((item) => item.id)).toEqual(['item-second', 'item-first']);
+  });
+
   test('scales line totals by a line item duration in the quote list (issue #757)', () => {
     const durationQuote: Quote = {
       id: 'Q-DUR',
