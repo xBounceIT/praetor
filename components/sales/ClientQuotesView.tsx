@@ -2717,7 +2717,8 @@ const ClientQuoteQuantityEditor: React.FC<{
         step="0.01"
         min="0"
         required
-        placeholder={t('sales:clientQuotes.qty')}
+        placeholder="0,00"
+        aria-label={t('sales:clientQuotes.qty')}
         value={item.quantity}
         onValueChange={(value) => {
           const parsed = parseFloat(value);
@@ -2759,7 +2760,8 @@ const ClientQuoteDurationEditor: React.FC<{
       <ValidatedNumberInput
         step="1"
         min="1"
-        placeholder={t('sales:clientQuotes.durationColumn', { defaultValue: 'Duration' })}
+        placeholder="0"
+        aria-label={t('sales:clientQuotes.durationColumn', { defaultValue: 'Duration' })}
         value={line.durationValue}
         onValueChange={(value) => handleDurationValueChange(index, value)}
         disabled={isReadOnly || line.durationUnit === 'na'}
@@ -2800,7 +2802,8 @@ const ClientQuoteCostEditor: React.FC<{
     <div className="flex w-full items-center justify-end gap-1">
       <ValidatedNumberInput
         value={line.cost}
-        placeholder={controller.t('crm:internalListing.cost')}
+        placeholder="0,00"
+        aria-label={controller.t('crm:internalListing.cost')}
         formatDecimals={2}
         onValueChange={line.handleCostChange}
         disabled={isReadOnly || line.supplierLineLocked}
@@ -2827,7 +2830,8 @@ const ClientQuoteMolEditor: React.FC<{
     <>
       <ValidatedNumberInput
         value={line.molPercentage}
-        placeholder={controller.t('sales:clientQuotes.molLabel', { defaultValue: 'MOL' })}
+        placeholder="0,00"
+        aria-label={controller.t('sales:clientQuotes.molLabel', { defaultValue: 'MOL' })}
         formatDecimals={MOL_PERCENTAGE_DECIMALS}
         onValueChange={line.handleMolChange}
         disabled={isReadOnly}
@@ -2851,7 +2855,7 @@ const ClientQuoteDiscountEditor: React.FC<{
   <div className="flex w-full items-center justify-end gap-1">
     <ValidatedNumberInput
       value={item.discount}
-      placeholder={controller.t('common:labels.discount')}
+      placeholder="0,00"
       min={0}
       max={100}
       step="0.01"

@@ -775,10 +775,11 @@ describe('<ClientOffersView /> line discounts', () => {
     expect(lineDiscountInputs.every((input) => input.value === '')).toBe(true);
 
     const quantityInputs = within(dialog)
-      .getAllByPlaceholderText('sales:clientOffers.qty')
+      .getAllByRole('textbox', { name: 'sales:clientOffers.qty' })
       .filter((input): input is HTMLInputElement => input instanceof HTMLInputElement);
     const blankQuantity = quantityInputs.find((input) => input.value === '');
     expect(blankQuantity).toBeDefined();
+    expect(blankQuantity).toHaveAttribute('placeholder', '0,00');
     fireEvent.change(blankQuantity as HTMLInputElement, { target: { value: '1' } });
 
     fireEvent.click(within(dialog).getByRole('button', { name: 'common:buttons.update' }));

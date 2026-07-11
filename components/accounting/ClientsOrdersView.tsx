@@ -1551,7 +1551,8 @@ const OrderItemQuantityField: React.FC<{
         step="0.01"
         min="0"
         required
-        placeholder="Qty"
+        placeholder="0,00"
+        aria-label={controller.t('sales:clientQuotes.qty')}
         value={item.quantity}
         onValueChange={(value) => {
           const parsed = parseFloat(value);
@@ -1591,7 +1592,8 @@ const OrderItemDurationField: React.FC<{
       <ValidatedNumberInput
         step="1"
         min="1"
-        placeholder={controller.t('sales:clientQuotes.durationColumn', {
+        placeholder="0"
+        aria-label={controller.t('sales:clientQuotes.durationColumn', {
           defaultValue: 'Duration',
         })}
         value={durationValue}
@@ -1623,7 +1625,8 @@ const OrderItemCostField: React.FC<{
     <div className="flex h-9 items-center justify-end gap-1">
       <ValidatedNumberInput
         value={unitCost}
-        placeholder={controller.t('crm:internalListing.cost')}
+        placeholder="0,00"
+        aria-label={controller.t('crm:internalListing.cost')}
         formatDecimals={2}
         onValueChange={(value) => {
           if (!controller.isReadOnly) {
@@ -1657,7 +1660,8 @@ const OrderItemMolField: React.FC<{
     <div className="flex h-9 items-center justify-end gap-1">
       <ValidatedNumberInput
         value={molPercentage}
-        placeholder={controller.t('sales:clientQuotes.molLabel', { defaultValue: 'MOL' })}
+        placeholder="0,00"
+        aria-label={controller.t('sales:clientQuotes.molLabel', { defaultValue: 'MOL' })}
         formatDecimals={MOL_PERCENTAGE_DECIMALS}
         onValueChange={(value) => {
           if (!controller.isReadOnly) {
@@ -1686,7 +1690,7 @@ const OrderItemDiscountField: React.FC<{
     <div className="flex h-9 items-center justify-end gap-1">
       <ValidatedNumberInput
         value={item.discount}
-        placeholder={controller.t('common:labels.discount')}
+        placeholder="0,00"
         min={0}
         max={100}
         step="0.01"

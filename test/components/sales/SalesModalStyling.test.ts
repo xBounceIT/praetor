@@ -159,7 +159,8 @@ describe('sales modal styling', () => {
     expect((source.match(/max-w-\[5rem\] flex-none/g) ?? []).length).toBeGreaterThanOrEqual(3);
     expect((source.match(/outline-none text-right/g) ?? []).length).toBeGreaterThanOrEqual(5);
     expect((source.match(/minWidth: 174/g) ?? []).length).toBeGreaterThanOrEqual(2);
-    expect((source.match(/placeholder=\{controller\.t/g) ?? []).length).toBeGreaterThanOrEqual(3);
+    expect((source.match(/placeholder="0,00"/g) ?? []).length).toBeGreaterThanOrEqual(4);
+    expect(source).toContain('placeholder="0"');
     expect(source).toContain('quantity: Number.NaN');
     expect(source).toContain('getDurationInputValue(item)');
     expect(source).toContain('value={item.discount}');

@@ -1799,7 +1799,8 @@ const SupplierQuoteQuantityInput: React.FC<{
       <ValidatedNumberInput
         value={context.item.quantity}
         required
-        placeholder={context.controller.t('sales:supplierQuotes.qty', { defaultValue: 'Qty' })}
+        placeholder="0,00"
+        aria-label={context.controller.t('sales:supplierQuotes.qty', { defaultValue: 'Qty' })}
         onValueChange={(value) =>
           context.controller.updateItem(
             context.index,
@@ -1847,7 +1848,8 @@ const SupplierQuoteDurationInput: React.FC<{
       <ValidatedNumberInput
         step="1"
         min="1"
-        placeholder={context.controller.t('sales:supplierQuotes.durationColumn', {
+        placeholder="0"
+        aria-label={context.controller.t('sales:supplierQuotes.durationColumn', {
           defaultValue: 'Duration',
         })}
         value={context.durationValue}
@@ -1882,7 +1884,8 @@ const SupplierQuoteListPriceInput: React.FC<{
         value={context.isListPriceBlank ? '' : context.itemListPrice}
         formatDecimals={2}
         aria-required="true"
-        placeholder={context.controller.t('sales:supplierQuotes.listPrice', {
+        placeholder="0,00"
+        aria-label={context.controller.t('sales:supplierQuotes.listPrice', {
           defaultValue: 'List Price',
         })}
         onValueChange={(value) => context.controller.updateItem(context.index, 'listPrice', value)}
@@ -1907,7 +1910,8 @@ const SupplierQuoteDiscountInput: React.FC<{
     <div className="flex items-center gap-1">
       <ValidatedNumberInput
         value={context.itemDiscountPercent}
-        placeholder={context.controller.t('sales:supplierQuotes.discountToUs', {
+        placeholder="0,00"
+        aria-label={context.controller.t('sales:supplierQuotes.discountToUs', {
           defaultValue: 'Discount to Us',
         })}
         min={0}

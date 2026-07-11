@@ -2148,7 +2148,8 @@ const ClientOfferQuantityEditor: React.FC<{
         step="0.01"
         min="0"
         required
-        placeholder={t('sales:clientOffers.qty', { defaultValue: 'Qty' })}
+        placeholder="0,00"
+        aria-label={t('sales:clientOffers.qty', { defaultValue: 'Qty' })}
         value={item.quantity}
         onValueChange={(value) =>
           updateItem(index, 'quantity', parseNumberInputValue(value, Number.NaN))
@@ -2185,7 +2186,8 @@ const ClientOfferDurationEditor: React.FC<{
       <ValidatedNumberInput
         step="1"
         min="1"
-        placeholder={t('sales:clientOffers.durationColumn', { defaultValue: 'Duration' })}
+        placeholder="0"
+        aria-label={t('sales:clientOffers.durationColumn', { defaultValue: 'Duration' })}
         value={line.durationValue}
         onValueChange={(value) => handleDurationValueChange(index, value)}
         disabled={isReadOnly || line.durationUnit === 'na'}
@@ -2226,7 +2228,8 @@ const ClientOfferCostEditor: React.FC<{
     <div className="flex w-full items-center justify-end gap-1">
       <ValidatedNumberInput
         value={line.cost}
-        placeholder={controller.t('crm:internalListing.cost')}
+        placeholder="0,00"
+        aria-label={controller.t('crm:internalListing.cost')}
         formatDecimals={2}
         onValueChange={line.handleCostChange}
         disabled={isReadOnly || line.supplierLineLocked}
@@ -2253,7 +2256,8 @@ const ClientOfferMolEditor: React.FC<{
     <>
       <ValidatedNumberInput
         value={line.molPercentage}
-        placeholder={controller.t('sales:clientQuotes.molLabel', { defaultValue: 'MOL' })}
+        placeholder="0,00"
+        aria-label={controller.t('sales:clientQuotes.molLabel', { defaultValue: 'MOL' })}
         formatDecimals={MOL_PERCENTAGE_DECIMALS}
         onValueChange={line.handleMolChange}
         disabled={isReadOnly}
@@ -2277,7 +2281,7 @@ const ClientOfferDiscountEditor: React.FC<{
   <div className="flex w-full items-center justify-end gap-1">
     <ValidatedNumberInput
       value={item.discount}
-      placeholder={controller.t('common:labels.discount')}
+      placeholder="0,00"
       min={0}
       max={100}
       step="0.01"

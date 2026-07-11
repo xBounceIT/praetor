@@ -246,10 +246,11 @@ describe('<ClientQuotesView />', () => {
     expect(screen.getAllByText('sales:clientQuotes.durationColumn').length).toBeGreaterThan(0);
     // ...and the new row leaves duration empty so only its text placeholder is visible.
     const durationInputs = screen
-      .getAllByPlaceholderText('sales:clientQuotes.durationColumn')
+      .getAllByRole('textbox', { name: 'sales:clientQuotes.durationColumn' })
       .filter((el): el is HTMLInputElement => el instanceof HTMLInputElement);
     expect(durationInputs.length).toBeGreaterThan(0);
     expect(durationInputs[0].value).toBe('');
+    expect(durationInputs[0]).toHaveAttribute('placeholder', '0');
   });
 
   test('edits a per-line discount and submits net revenue and margin', async () => {
@@ -356,7 +357,7 @@ describe('<ClientQuotesView />', () => {
 
     await waitFor(() => {
       const durationInputs = screen
-        .getAllByPlaceholderText('sales:clientQuotes.durationColumn')
+        .getAllByRole('textbox', { name: 'sales:clientQuotes.durationColumn' })
         .filter((element): element is HTMLInputElement => element instanceof HTMLInputElement);
       expect(durationInputs.length).toBeGreaterThan(0);
       expect(durationInputs.every((input) => input.value === '2')).toBe(true);
@@ -615,7 +616,7 @@ describe('<ClientQuotesView />', () => {
     // The Durata cell is an editable input (not N/A), showing the stored 6 months for the unit line.
     expect(screen.queryAllByText('common:labels.notApplicable')).toHaveLength(0);
     const durationInputs = screen
-      .getAllByPlaceholderText('sales:clientQuotes.durationColumn')
+      .getAllByRole('textbox', { name: 'sales:clientQuotes.durationColumn' })
       .filter((el): el is HTMLInputElement => el instanceof HTMLInputElement);
     expect(durationInputs.length).toBeGreaterThan(0);
     expect(durationInputs.some((el) => el.value === '6')).toBe(true);
@@ -666,7 +667,7 @@ describe('<ClientQuotesView />', () => {
 
     // Selecting N/A disables the numeric duration input beside the unit selector (issue #775).
     const durationInputs = screen
-      .getAllByPlaceholderText('sales:clientQuotes.durationColumn')
+      .getAllByRole('textbox', { name: 'sales:clientQuotes.durationColumn' })
       .filter((el): el is HTMLInputElement => el instanceof HTMLInputElement);
     expect(durationInputs.length).toBeGreaterThan(0);
     expect(durationInputs.every((el) => el.disabled)).toBe(true);

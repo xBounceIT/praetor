@@ -1106,7 +1106,8 @@ const SupplierOrderItemQuantityField: React.FC<{
     <ValidatedNumberInput
       value={item.quantity}
       required
-      placeholder={controller.t('common:labels.quantity')}
+      placeholder="0,00"
+      aria-label={controller.t('common:labels.quantity')}
       disabled={controller.isReadOnly}
       onValueChange={(value) =>
         controller.updateItem(index, 'quantity', value === '' ? Number.NaN : Number(value))
@@ -1130,7 +1131,8 @@ const SupplierOrderItemPriceField: React.FC<{
     <ValidatedNumberInput
       value={item.unitPrice}
       required
-      placeholder={controller.t('crm:internalListing.salePrice')}
+      placeholder="0,00"
+      aria-label={controller.t('crm:internalListing.salePrice')}
       formatDecimals={2}
       disabled={controller.isReadOnly}
       onValueChange={(value) =>
@@ -1154,7 +1156,8 @@ const SupplierOrderItemDiscountField: React.FC<{
     </FieldLabel>
     <ValidatedNumberInput
       value={item.discount}
-      placeholder={controller.t('accounting:supplierOrders.discount')}
+      placeholder="0,00"
+      aria-label={controller.t('accounting:supplierOrders.discount')}
       formatDecimals={2}
       disabled={controller.isReadOnly}
       onValueChange={(value) =>
@@ -1190,7 +1193,8 @@ const SupplierOrderItemDurationField: React.FC<{
       <ValidatedNumberInput
         step="1"
         min="1"
-        placeholder={controller.t('accounting:supplierOrders.durationColumn', {
+        placeholder="0"
+        aria-label={controller.t('accounting:supplierOrders.durationColumn', {
           defaultValue: 'Duration',
         })}
         value={durationValue}

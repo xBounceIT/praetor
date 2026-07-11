@@ -297,25 +297,30 @@ const fillNewQuoteForm = (
   });
   fireEvent.click(screen.getByText('sales:supplierQuotes.addItem'));
   if (quantity !== null) {
-    fireEvent.change(screen.getAllByPlaceholderText('sales:supplierQuotes.qty')[0], {
+    fireEvent.change(screen.getAllByRole('textbox', { name: 'sales:supplierQuotes.qty' })[0], {
       target: { value: quantity },
     });
   }
   if (listPrice !== null) {
-    fireEvent.change(screen.getAllByPlaceholderText('sales:supplierQuotes.listPrice')[0], {
-      target: { value: listPrice },
-    });
+    fireEvent.change(
+      screen.getAllByRole('textbox', { name: 'sales:supplierQuotes.listPrice' })[0],
+      {
+        target: { value: listPrice },
+      },
+    );
   }
 };
 
 describe('<SupplierQuotesView /> required list price', () => {
-  test('keeps new-item prices empty with a text placeholder and blocks save until entered', async () => {
+  test('keeps new-item prices empty with a numeric placeholder and blocks save until entered', async () => {
     const onAddQuote = mock((_data: Partial<SupplierQuote>) => Promise.resolve(draft));
     render(<SupplierQuotesView {...baseProps} quotes={[]} onAddQuote={onAddQuote} />);
 
     fillNewQuoteForm('Globex Corp', null);
 
-    const listPriceInputs = screen.getAllByPlaceholderText('sales:supplierQuotes.listPrice');
+    const listPriceInputs = screen.getAllByRole('textbox', {
+      name: 'sales:supplierQuotes.listPrice',
+    });
     expect(listPriceInputs.length).toBeGreaterThan(0);
     for (const input of listPriceInputs) {
       expect(input).toHaveValue('');
@@ -350,7 +355,9 @@ describe('<SupplierQuotesView /> required list price', () => {
       fillNewQuoteForm('Globex Corp', null);
       fireEvent.click(screen.getByText('sales:supplierQuotes.addItem'));
 
-      const listPriceInputs = screen.getAllByPlaceholderText('sales:supplierQuotes.listPrice');
+      const listPriceInputs = screen.getAllByRole('textbox', {
+        name: 'sales:supplierQuotes.listPrice',
+      });
       fireEvent.submit(screen.getByText('common:buttons.save').closest('form') as HTMLFormElement);
       fireEvent.change(listPriceInputs[0], { target: { value: '125' } });
 
@@ -372,17 +379,34 @@ describe('<SupplierQuotesView /> required list price', () => {
     expect(screen.getByText('sales:supplierQuotes.errors.listPriceRequired')).toBeInTheDocument();
   });
 
-  test('shows only text placeholders for every numeric value on a new line', () => {
+  test('shows only format-appropriate numeric placeholders on a new line', () => {
     render(<SupplierQuotesView {...baseProps} quotes={[]} />);
 
     fillNewQuoteForm('Globex Corp', null, null);
 
-    expect(screen.getAllByPlaceholderText('sales:supplierQuotes.qty')[0]).toHaveValue('');
-    expect(screen.getAllByPlaceholderText('sales:supplierQuotes.durationColumn')[0]).toHaveValue(
-      '',
+    expect(screen.getAllByRole('textbox', { name: 'sales:supplierQuotes.qty' })[0]).toHaveValue('');
+    expect(screen.getAllByRole('textbox', { name: 'sales:supplierQuotes.qty' })[0]).toHaveAttribute(
+      'placeholder',
+      '0,00',
     );
-    expect(screen.getAllByPlaceholderText('sales:supplierQuotes.listPrice')[0]).toHaveValue('');
-    expect(screen.getAllByPlaceholderText('sales:supplierQuotes.discountToUs')[0]).toHaveValue('');
+    expect(
+      screen.getAllByRole('textbox', { name: 'sales:supplierQuotes.durationColumn' })[0],
+    ).toHaveValue('');
+    expect(
+      screen.getAllByRole('textbox', { name: 'sales:supplierQuotes.durationColumn' })[0],
+    ).toHaveAttribute('placeholder', '0');
+    expect(
+      screen.getAllByRole('textbox', { name: 'sales:supplierQuotes.listPrice' })[0],
+    ).toHaveValue('');
+    expect(
+      screen.getAllByRole('textbox', { name: 'sales:supplierQuotes.listPrice' })[0],
+    ).toHaveAttribute('placeholder', '0,00');
+    expect(
+      screen.getAllByRole('textbox', { name: 'sales:supplierQuotes.discountToUs' })[0],
+    ).toHaveValue('');
+    expect(
+      screen.getAllByRole('textbox', { name: 'sales:supplierQuotes.discountToUs' })[0],
+    ).toHaveAttribute('placeholder', '0,00');
   });
 });
 
@@ -530,7 +554,7 @@ describe('<SupplierQuotesView /> line item duration (issue #776)', () => {
     expect(screen.getAllByText('sales:supplierQuotes.durationColumn').length).toBeGreaterThan(0);
     // ...and the row carries a duration input reflecting the stored value (3 months).
     const durationInputs = screen
-      .getAllByPlaceholderText('sales:supplierQuotes.durationColumn')
+      .getAllByRole('textbox', { name: 'sales:supplierQuotes.durationColumn' })
       .filter((el): el is HTMLInputElement => el instanceof HTMLInputElement);
     expect(durationInputs.length).toBeGreaterThan(0);
     expect(durationInputs[0].value).toBe('3');
@@ -551,7 +575,7 @@ describe('<SupplierQuotesView /> line item duration (issue #776)', () => {
     fireEvent.click(screen.getByText('SQ-DRAFT'));
     expect(screen.queryAllByText('common:labels.notApplicable')).toHaveLength(0);
     const durationInputs = screen
-      .getAllByPlaceholderText('sales:supplierQuotes.durationColumn')
+      .getAllByRole('textbox', { name: 'sales:supplierQuotes.durationColumn' })
       .filter((el): el is HTMLInputElement => el instanceof HTMLInputElement);
     expect(durationInputs.length).toBeGreaterThan(0);
   });
@@ -583,7 +607,7 @@ describe('<SupplierQuotesView /> line item duration (issue #776)', () => {
     expect(screen.queryByText('600,00 EUR')).not.toBeInTheDocument();
     // The value input is disabled while the unit is N/A; the selector stays usable.
     const durationInputs = screen
-      .getAllByPlaceholderText('sales:supplierQuotes.durationColumn')
+      .getAllByRole('textbox', { name: 'sales:supplierQuotes.durationColumn' })
       .filter((el): el is HTMLInputElement => el instanceof HTMLInputElement);
     expect(durationInputs.length).toBeGreaterThan(0);
     expect(durationInputs.every((el) => el.disabled)).toBe(true);
@@ -615,7 +639,7 @@ describe('<SupplierQuotesView /> line item duration (issue #776)', () => {
     fireEvent.click(screen.getByText('SQ-DUR-EDIT'));
 
     const durationInputs = screen
-      .getAllByPlaceholderText('sales:supplierQuotes.durationColumn')
+      .getAllByRole('textbox', { name: 'sales:supplierQuotes.durationColumn' })
       .filter((el): el is HTMLInputElement => el instanceof HTMLInputElement);
     fireEvent.change(durationInputs[0], { target: { value: '4' } });
 
