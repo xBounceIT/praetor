@@ -30,6 +30,8 @@ const countPaddingRows = (container: HTMLElement) =>
 type Row = { id: string; name: string; age: number };
 type ContactRow = Row & { email: string; phone: string };
 
+const TABLE_FONT_SIZE_STORAGE_KEY = 'praetor_table_fontsize';
+
 const sampleRows: Row[] = [
   { id: '1', name: 'Alice', age: 30 },
   { id: '2', name: 'Bob', age: 25 },
@@ -1756,13 +1758,136 @@ describe('<StandardTable />', () => {
     // Step down to 'xs' → decrease should disable.
     act(() => fireEvent.click(decrease));
     expect((decrease as HTMLButtonElement).disabled).toBe(true);
-    expect(localStorage.getItem('praetor_table_fontsize_fonts')).toBe('xs');
+    expect(localStorage.getItem(TABLE_FONT_SIZE_STORAGE_KEY)).toBe('xs');
+    expect(localStorage.getItem('praetor_table_fontsize_fonts')).toBeNull();
 
     // Step up twice → 'base' → increase should disable.
-    act(() => fireEvent.click(increase));
-    act(() => fireEvent.click(increase));
+    act(() => {
+      fireEvent.click(increase);
+      fireEvent.click(increase);
+    });
     expect((increase as HTMLButtonElement).disabled).toBe(true);
-    expect(localStorage.getItem('praetor_table_fontsize_fonts')).toBe('base');
+    expect(localStorage.getItem(TABLE_FONT_SIZE_STORAGE_KEY)).toBe('base');
+  });
+
+  test('shares font size with mounted tables and tables rendered later', () => {
+    const { unmount } = render(
+      <div>
+        <section data-testid="first-table">
+          <StandardTable<Row> title="First" data={sampleRows} columns={sampleColumns} />
+        </section>
+        <section data-testid="second-table">
+          <StandardTable<Row> title="Second" data={sampleRows} columns={sampleColumns} />
+        </section>
+      </div>,
+    );
+
+    const firstTable = within(screen.getByTestId('first-table'));
+    const secondTable = within(screen.getByTestId('second-table'));
+    act(() => fireEvent.click(firstTable.getByLabelText('table.decreaseFont')));
+
+    expect(firstTable.getByText('Alice').closest('tr')?.className).toContain('text-xs');
+    expect(secondTable.getByText('Alice').closest('tr')?.className).toContain('text-xs');
+    expect(secondTable.getByLabelText('table.decreaseFont')).toBeDisabled();
+    expect(localStorage.getItem(TABLE_FONT_SIZE_STORAGE_KEY)).toBe('xs');
+
+    unmount();
+    render(<StandardTable<Row> title="Third" data={sampleRows} columns={sampleColumns} />);
+    expect(screen.getByText('Alice').closest('tr')?.className).toContain('text-xs');
+    expect(screen.getByLabelText('table.decreaseFont')).toBeDisabled();
+  });
+
+  test('uses valid global font sizes and falls back for invalid values', () => {
+    localStorage.setItem(TABLE_FONT_SIZE_STORAGE_KEY, 'invalid');
+    localStorage.setItem('praetor_table_fontsize_invalid_font', 'xs');
+    const { unmount } = render(
+      <StandardTable<Row> title="Invalid Font" data={sampleRows} columns={sampleColumns} />,
+    );
+    expect(screen.getByText('Alice').closest('tr')?.className).toContain('text-sm');
+    expect(localStorage.getItem(TABLE_FONT_SIZE_STORAGE_KEY)).toBe('invalid');
+
+    unmount();
+    localStorage.setItem(TABLE_FONT_SIZE_STORAGE_KEY, 'base');
+    localStorage.setItem('praetor_table_fontsize_saved_font', 'xs');
+    render(<StandardTable<Row> title="Saved Font" data={sampleRows} columns={sampleColumns} />);
+    expect(screen.getByText('Alice').closest('tr')?.className).toContain('text-base');
+    expect(screen.getByLabelText('table.increaseFont')).toBeDisabled();
+  });
+
+  test('migrates the first valid legacy size and syncs tables that are already mounted', () => {
+    const { rerender } = render(
+      <div>
+        <section key="first" data-testid="first-legacy-table">
+          <StandardTable<Row> title="First Legacy" data={sampleRows} columns={sampleColumns} />
+        </section>
+      </div>,
+    );
+    expect(localStorage.getItem(TABLE_FONT_SIZE_STORAGE_KEY)).toBeNull();
+
+    localStorage.setItem('praetor_table_fontsize_second_legacy', 'base');
+    rerender(
+      <div>
+        <section key="first" data-testid="first-legacy-table">
+          <StandardTable<Row> title="First Legacy" data={sampleRows} columns={sampleColumns} />
+        </section>
+        <section key="second" data-testid="second-legacy-table">
+          <StandardTable<Row> title="Second Legacy" data={sampleRows} columns={sampleColumns} />
+        </section>
+      </div>,
+    );
+
+    const firstTable = within(screen.getByTestId('first-legacy-table'));
+    const secondTable = within(screen.getByTestId('second-legacy-table'));
+    expect(firstTable.getByText('Alice').closest('tr')?.className).toContain('text-base');
+    expect(secondTable.getByText('Alice').closest('tr')?.className).toContain('text-base');
+    expect(localStorage.getItem(TABLE_FONT_SIZE_STORAGE_KEY)).toBe('base');
+
+    localStorage.setItem('praetor_table_fontsize_third_legacy', 'xs');
+    rerender(
+      <div>
+        <section key="first" data-testid="first-legacy-table">
+          <StandardTable<Row> title="First Legacy" data={sampleRows} columns={sampleColumns} />
+        </section>
+        <section key="second" data-testid="second-legacy-table">
+          <StandardTable<Row> title="Second Legacy" data={sampleRows} columns={sampleColumns} />
+        </section>
+        <section key="third" data-testid="third-legacy-table">
+          <StandardTable<Row> title="Third Legacy" data={sampleRows} columns={sampleColumns} />
+        </section>
+      </div>,
+    );
+
+    const thirdTable = within(screen.getByTestId('third-legacy-table'));
+    expect(thirdTable.getByText('Alice').closest('tr')?.className).toContain('text-base');
+    expect(localStorage.getItem(TABLE_FONT_SIZE_STORAGE_KEY)).toBe('base');
+    expect(localStorage.getItem('praetor_table_fontsize_second_legacy')).toBe('base');
+    expect(localStorage.getItem('praetor_table_fontsize_third_legacy')).toBe('xs');
+  });
+
+  test('syncs localStorage events and ignores sessionStorage events', () => {
+    render(<StandardTable<Row> title="Storage Sync" data={sampleRows} columns={sampleColumns} />);
+
+    act(() => {
+      window.dispatchEvent(
+        new StorageEvent('storage', {
+          key: TABLE_FONT_SIZE_STORAGE_KEY,
+          newValue: 'base',
+          storageArea: localStorage,
+        }),
+      );
+    });
+    expect(screen.getByText('Alice').closest('tr')?.className).toContain('text-base');
+
+    act(() => {
+      window.dispatchEvent(
+        new StorageEvent('storage', {
+          key: TABLE_FONT_SIZE_STORAGE_KEY,
+          newValue: 'xs',
+          storageArea: sessionStorage,
+        }),
+      );
+    });
+    expect(screen.getByText('Alice').closest('tr')?.className).toContain('text-base');
   });
 
   test('cell double-click invokes onCellDoubleClick with the row', () => {
