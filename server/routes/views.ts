@@ -170,6 +170,7 @@ const isValidWidgetState = (v: unknown): boolean => {
 
 const isValidTableConfig = (config: Record<string, unknown>): boolean =>
   isStringArray(config.hiddenColIds) &&
+  (config.columnOrder === undefined || isStringArray(config.columnOrder)) &&
   isValidSortState(config.sortState) &&
   isValidFilterState(config.filterState);
 

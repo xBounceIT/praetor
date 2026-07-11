@@ -95,7 +95,13 @@ const HAPPY_USER = {
   sessionVersion: 1,
 };
 
-const TABLE_CONFIG = { hiddenColIds: ['col-x'], sortState: null, filterState: {} };
+const TABLE_CONFIG = {
+  schemaVersion: 2,
+  hiddenColIds: ['col-x'],
+  columnOrder: ['col-y', 'col-x'],
+  sortState: null,
+  filterState: {},
+};
 
 const OWNED_VIEW = {
   id: 'sv-1',
@@ -214,6 +220,48 @@ describe('POST /api/views', () => {
     expect(logAuditMock).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'saved_view.created', entityType: 'saved_view' }),
     );
+  });
+
+  test('201 accepts a legacy table config without columnOrder', async () => {
+    const legacyConfig = { hiddenColIds: [], sortState: null, filterState: {} };
+    createMock.mockResolvedValue({ ...OWNED_VIEW, config: legacyConfig });
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/views',
+      headers: authHeader(),
+      payload: {
+        kind: 'table',
+        scopeKey: 'projects.directory',
+        name: 'Legacy',
+        config: legacyConfig,
+      },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(createMock).toHaveBeenCalledWith(expect.objectContaining({ config: legacyConfig }));
+  });
+
+  test('400 when columnOrder is not an array of strings', async () => {
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/views',
+      headers: authHeader(),
+      payload: {
+        kind: 'table',
+        scopeKey: 'projects.directory',
+        name: 'Bad Order',
+        config: {
+          hiddenColIds: [],
+          columnOrder: ['name', 1],
+          sortState: null,
+          filterState: {},
+        },
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(createMock).not.toHaveBeenCalled();
   });
 
   test('400 when the config is not a valid table payload', async () => {

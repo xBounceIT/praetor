@@ -5,14 +5,18 @@ import {
   decodeLegacyFilterValue,
   filterStatesEqual,
   generateViewId,
+  getDirectionalDropPosition,
   IMPORT_PAYLOAD_MAX_BYTES,
   isValidImportedView,
   isValidStoredView,
   moveByDelta,
+  normalizeColumnOrder,
+  parseColumnOrder,
   parseFilterState,
   parseSortState,
   parseStoredViews,
   reorderDropAbove,
+  reorderRelative,
 } from '../components/shared/customViewHelpers';
 
 const view = (overrides: Partial<CustomView> = {}): CustomView => ({
@@ -22,6 +26,7 @@ const view = (overrides: Partial<CustomView> = {}): CustomView => ({
   sortState: null,
   filterState: {},
   ...overrides,
+  columnOrder: overrides.columnOrder ?? [],
 });
 
 describe('generateViewId', () => {
@@ -53,6 +58,7 @@ describe('isValidImportedView', () => {
       isValidImportedView({
         name: 'X',
         hiddenColIds: ['a', 'b'],
+        columnOrder: ['b', 'a'],
         sortState: { colId: 'a', px: 'asc' },
         filterState: { a: ['1'] },
       }),
@@ -80,6 +86,11 @@ describe('isValidImportedView', () => {
     expect(isValidImportedView({ name: 'X', hiddenColIds: [1, 2] })).toBe(false);
     expect(isValidImportedView({ name: 'X', hiddenColIds: ['a', null] })).toBe(false);
   });
+
+  test('rejects a mistyped optional column order', () => {
+    expect(isValidImportedView({ name: 'X', hiddenColIds: [], columnOrder: 'a' })).toBe(false);
+    expect(isValidImportedView({ name: 'X', hiddenColIds: [], columnOrder: ['a', 1] })).toBe(false);
+  });
 });
 
 describe('isValidStoredView', () => {
@@ -91,6 +102,28 @@ describe('isValidStoredView', () => {
     expect(isValidStoredView({ name: 'X', hiddenColIds: [] })).toBe(false);
     expect(isValidStoredView({ id: '', name: 'X', hiddenColIds: [] })).toBe(false);
     expect(isValidStoredView({ id: 42, name: 'X', hiddenColIds: [] })).toBe(false);
+  });
+
+  test('accepts a string column order and rejects invalid entries', () => {
+    expect(
+      isValidStoredView({ id: 'a', name: 'X', hiddenColIds: [], columnOrder: ['b', 'a'] }),
+    ).toBe(true);
+    expect(isValidStoredView({ id: 'a', name: 'X', hiddenColIds: [], columnOrder: [null] })).toBe(
+      false,
+    );
+  });
+});
+
+describe('column order parsing and normalization', () => {
+  test('parses only unique string ids', () => {
+    expect(parseColumnOrder(['age', 'name', 'age', 3])).toEqual(['age', 'name']);
+    expect(parseColumnOrder('age')).toEqual([]);
+  });
+
+  test('drops unknown ids and appends newly available columns in definition order', () => {
+    expect(
+      normalizeColumnOrder(['age', 'ghost', 'age'], new Set(['name', 'age', 'email'])),
+    ).toEqual(['age', 'name', 'email']);
   });
 });
 
@@ -171,7 +204,13 @@ describe('parseStoredViews', () => {
 
   test('drops invalid entries and normalizes valid ones', () => {
     const stored = JSON.stringify([
-      { id: 'a', name: 'View A', hiddenColIds: ['x'], sortState: { colId: 'x', px: 'asc' } },
+      {
+        id: 'a',
+        name: 'View A',
+        hiddenColIds: ['x'],
+        columnOrder: ['y', 'x', 'y'],
+        sortState: { colId: 'x', px: 'asc' },
+      },
       { id: '', name: 'broken', hiddenColIds: [] },
       { name: 'no-id', hiddenColIds: [] },
       {
@@ -189,6 +228,7 @@ describe('parseStoredViews', () => {
         id: 'a',
         name: 'View A',
         hiddenColIds: ['x'],
+        columnOrder: ['y', 'x'],
         sortState: { colId: 'x', px: 'asc' },
         filterState: {},
       },
@@ -196,6 +236,7 @@ describe('parseStoredViews', () => {
         id: 'b',
         name: 'View B',
         hiddenColIds: ['y'],
+        columnOrder: [],
         sortState: null,
         filterState: { y: ['1', '2'] },
       },
@@ -206,6 +247,27 @@ describe('parseStoredViews', () => {
 describe('computeViewApplication', () => {
   const gear = new Set(['name', 'amount']);
   const all = new Set(['name', 'amount', 'status']); // status is filter-only (not in gear)
+
+  test('normalizes saved order against reorderable columns', () => {
+    const result = computeViewApplication(
+      view({ columnOrder: ['amount', 'ghost', 'amount'] }),
+      gear,
+      all,
+    );
+    expect(result.columnOrder).toEqual(['amount', 'name']);
+  });
+
+  test('uses a narrower reorderable set without disabling visibility for pinned columns', () => {
+    const result = computeViewApplication(
+      view({ hiddenColIds: ['amount'], columnOrder: ['amount', 'name'] }),
+      gear,
+      all,
+      undefined,
+      new Set(['name']),
+    );
+    expect(result.hiddenColIds).toEqual(new Set(['amount']));
+    expect(result.columnOrder).toEqual(['name']);
+  });
 
   test('hides only gear-visible columns', () => {
     const result = computeViewApplication(
@@ -347,6 +409,36 @@ describe('reorderDropAbove', () => {
     const arr = ['A', 'B', 'C'];
     reorderDropAbove(arr, 0, 2);
     expect(arr).toEqual(['A', 'B', 'C']);
+  });
+});
+
+describe('reorderRelative', () => {
+  test('inserts before or after the target in either direction', () => {
+    expect(reorderRelative(['A', 'B', 'C'], 0, 2, 'after')).toEqual(['B', 'C', 'A']);
+    expect(reorderRelative(['A', 'B', 'C'], 2, 0, 'before')).toEqual(['C', 'A', 'B']);
+    expect(reorderRelative(['A', 'B', 'C'], 0, 2, 'before')).toEqual(['B', 'A', 'C']);
+    expect(reorderRelative(['A', 'B', 'C'], 2, 0, 'after')).toEqual(['A', 'C', 'B']);
+  });
+
+  test('returns the original reference for a no-op or invalid indexes', () => {
+    const order = ['A', 'B', 'C'];
+    expect(reorderRelative(order, 1, 1, 'before')).toBe(order);
+    expect(reorderRelative(order, 0, 1, 'before')).toBe(order);
+    expect(reorderRelative(order, -1, 1, 'after')).toBe(order);
+  });
+
+  test('does not mutate the original array', () => {
+    const order = ['A', 'B', 'C'];
+    reorderRelative(order, 0, 2, 'after');
+    expect(order).toEqual(['A', 'B', 'C']);
+  });
+});
+
+describe('getDirectionalDropPosition', () => {
+  test('uses movement direction instead of requiring the far half of the target', () => {
+    const order = ['A', 'B', 'C'];
+    expect(getDirectionalDropPosition(order, 'A', 'B')).toBe('after');
+    expect(getDirectionalDropPosition(order, 'C', 'B')).toBe('before');
   });
 });
 

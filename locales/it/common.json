@@ -277,6 +277,7 @@
     "deleteView": "Elimina vista",
     "renameView": "Rinomina / modifica",
     "reorderViewHandle": "Trascina per riordinare",
+    "reorderColumnHandle": "Trascina per riordinare la colonna",
     "selectAllCols": "Seleziona tutti",
     "deselectAllCols": "Deseleziona tutti",
     "empty": "N/A"
