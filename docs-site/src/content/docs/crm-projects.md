@@ -13,6 +13,8 @@ Evita duplicati: prima di creare una nuova anagrafica, cerca se il cliente o for
 
 Nelle tabelle anagrafiche, i riferimenti di contatto sono consultabili in colonne dedicate. Per i fornitori trovi referente, email e telefono separati, come nell'elenco clienti, così puoi ordinare, filtrare e leggere ogni dato senza aprire la scheda.
 
+Nelle schede di clienti e fornitori puoi aggiungere più contatti, ciascuno con nome obbligatorio e ruolo, email e telefono facoltativi. Il primo contatto dell'elenco è quello principale e alimenta le colonne referente, email e telefono dell'anagrafica; eliminandolo, il contatto successivo diventa principale. Puoi anche lasciare l'elenco vuoto.
+
 Nei preventivi clienti e fornitori il campo **Canale di Comunicazione** è obbligatorio e indica il canale usato per comunicare o negoziare il preventivo. Lo stesso canale è visibile nelle tabelle dei preventivi. Le opzioni sono condivise tra i due moduli: chi ha permessi di gestione sui preventivi può usare il pulsante **Gestisci** con icona a ingranaggio sopra il campo per aggiungere, rinominare o rimuovere i canali disponibili. I canali già usati da preventivi esistenti non possono essere eliminati.
 
 ### Eliminazione protetta

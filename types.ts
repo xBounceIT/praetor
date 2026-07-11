@@ -1072,11 +1072,19 @@ export interface Invoice {
   updatedAt: number;
 }
 
+export interface SupplierContact {
+  fullName: string;
+  role?: string;
+  email?: string;
+  phone?: string;
+}
+
 export interface Supplier {
   id: string;
   name: string;
   isDisabled?: boolean;
   supplierCode?: string;
+  contacts?: SupplierContact[];
   contactName?: string;
   email?: string;
   phone?: string;

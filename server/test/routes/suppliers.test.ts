@@ -34,6 +34,7 @@ const userHasRoleMock = mock();
 const getRolePermissionsMock = mock();
 
 const listAllMock = mock();
+const findByIdMock = mock();
 const createMock = mock();
 const updateMock = mock();
 const deleteByIdMock = mock();
@@ -59,6 +60,7 @@ beforeAll(async () => {
   mock.module('../../repositories/suppliersRepo.ts', () => ({
     ...suppliersRepoSnap,
     listAll: listAllMock,
+    findById: findByIdMock,
     create: createMock,
     update: updateMock,
     deleteById: deleteByIdMock,
@@ -106,6 +108,7 @@ const SAMPLE_SUPPLIER = {
   name: 'ACME',
   isDisabled: false,
   supplierCode: 'ACM',
+  contacts: [{ fullName: 'Jane', role: 'Buyer', email: 'jane@acme.test', phone: '+1-555-0100' }],
   contactName: 'Jane',
   email: 'jane@acme.test',
   phone: '+1-555-0100',
@@ -122,6 +125,7 @@ const allMocks = [
   userHasRoleMock,
   getRolePermissionsMock,
   listAllMock,
+  findByIdMock,
   createMock,
   updateMock,
   deleteByIdMock,
@@ -135,6 +139,7 @@ beforeEach(async () => {
   findAuthUserByIdMock.mockResolvedValue(HAPPY_USER);
   userHasRoleMock.mockResolvedValue(true);
   getRolePermissionsMock.mockResolvedValue(ALL_PERMS);
+  findByIdMock.mockResolvedValue(SAMPLE_SUPPLIER);
   logAuditMock.mockImplementation(async () => undefined);
 
   testApp = await buildRouteTestApp(routePlugin, '/api/suppliers');
@@ -201,6 +206,81 @@ describe('POST /api/suppliers', () => {
         entityType: 'supplier',
       }),
     );
+  });
+  test('201 stores multiple contacts and mirrors the first contact into legacy fields', async () => {
+    createMock.mockImplementation(async (input: Record<string, unknown>) => ({
+      ...SAMPLE_SUPPLIER,
+      ...input,
+    }));
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/suppliers',
+      headers: authHeader(),
+      payload: {
+        name: 'ACME',
+        vatNumber: 'IT123',
+        contactName: 'Stale legacy name',
+        email: 'stale@example.test',
+        phone: '999',
+        contacts: [
+          {
+            fullName: ' Jane ',
+            role: ' Buyer ',
+            email: ' jane@acme.test ',
+            phone: ' +1-555-0100 ',
+          },
+          { fullName: 'Bob' },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(201);
+    const input = createMock.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(input.contacts).toEqual([
+      {
+        fullName: 'Jane',
+        role: 'Buyer',
+        email: 'jane@acme.test',
+        phone: '+1-555-0100',
+      },
+      { fullName: 'Bob', role: undefined, email: undefined, phone: undefined },
+    ]);
+    expect(input.contactName).toBe('Jane');
+    expect(input.email).toBe('jane@acme.test');
+    expect(input.phone).toBe('+1-555-0100');
+  });
+
+  test('400 rejects a contact without a full name', async () => {
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/suppliers',
+      headers: authHeader(),
+      payload: {
+        name: 'ACME',
+        vatNumber: 'IT123',
+        contacts: [{ fullName: '   ', phone: '123' }],
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(createMock).not.toHaveBeenCalled();
+  });
+
+  test('400 rejects an invalid contact email', async () => {
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/suppliers',
+      headers: authHeader(),
+      payload: {
+        name: 'ACME',
+        vatNumber: 'IT123',
+        contacts: [{ fullName: 'Jane', email: 'not-an-email' }],
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(createMock).not.toHaveBeenCalled();
   });
 
   test('201 generates unique ids for same-millisecond supplier creates', async () => {
@@ -414,6 +494,7 @@ describe('PUT /api/suppliers/:id', () => {
   });
 
   test('200 clearing one field leaves others untouched (only the listed field is in the patch)', async () => {
+    findByIdMock.mockResolvedValue({ ...SAMPLE_SUPPLIER, contacts: [] });
     updateMock.mockResolvedValue({ ...SAMPLE_SUPPLIER, email: null });
 
     const res = await testApp.inject({
@@ -426,6 +507,130 @@ describe('PUT /api/suppliers/:id', () => {
     expect(res.statusCode).toBe(200);
     const patch = updateMock.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(patch).toEqual({ email: null });
+  });
+  test('200 keeps the primary contact JSON in sync for legacy alias updates', async () => {
+    updateMock.mockResolvedValue({
+      ...SAMPLE_SUPPLIER,
+      contacts: [{ ...SAMPLE_SUPPLIER.contacts[0], email: 'new@example.test' }],
+      email: 'new@example.test',
+    });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/suppliers/s-1',
+      headers: authHeader(),
+      payload: { email: ' new@example.test ' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(findByIdMock).toHaveBeenCalledWith('s-1');
+    expect(updateMock).toHaveBeenCalledWith('s-1', {
+      contacts: [
+        {
+          fullName: 'Jane',
+          role: 'Buyer',
+          email: 'new@example.test',
+          phone: '+1-555-0100',
+        },
+      ],
+      contactName: 'Jane',
+      email: 'new@example.test',
+      phone: '+1-555-0100',
+    });
+  });
+
+  test('200 clearing the legacy contact name promotes the next contact', async () => {
+    findByIdMock.mockResolvedValue({
+      ...SAMPLE_SUPPLIER,
+      contacts: [
+        SAMPLE_SUPPLIER.contacts[0],
+        { fullName: 'Bob', role: 'Support', email: 'bob@example.test' },
+      ],
+    });
+    updateMock.mockResolvedValue({
+      ...SAMPLE_SUPPLIER,
+      contacts: [{ fullName: 'Bob', role: 'Support', email: 'bob@example.test' }],
+      contactName: 'Bob',
+      email: 'bob@example.test',
+      phone: null,
+    });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/suppliers/s-1',
+      headers: authHeader(),
+      payload: { contactName: '' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(updateMock).toHaveBeenCalledWith('s-1', {
+      contacts: [{ fullName: 'Bob', role: 'Support', email: 'bob@example.test' }],
+      contactName: 'Bob',
+      email: 'bob@example.test',
+      phone: null,
+    });
+  });
+  test('200 updates multiple contacts and derives the legacy aliases', async () => {
+    updateMock.mockResolvedValue(SAMPLE_SUPPLIER);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/suppliers/s-1',
+      headers: authHeader(),
+      payload: {
+        contactName: 'Stale legacy name',
+        email: 'stale@example.test',
+        phone: '999',
+        contacts: [
+          { fullName: ' Alice ', email: ' alice@example.test ', phone: ' 123 ' },
+          { fullName: 'Bob', role: 'Support' },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(updateMock).toHaveBeenCalledWith(
+      's-1',
+      expect.objectContaining({
+        contacts: [
+          {
+            fullName: 'Alice',
+            role: undefined,
+            email: 'alice@example.test',
+            phone: '123',
+          },
+          { fullName: 'Bob', role: 'Support', email: undefined, phone: undefined },
+        ],
+        contactName: 'Alice',
+        email: 'alice@example.test',
+        phone: '123',
+      }),
+    );
+  });
+
+  test('200 an empty contacts array clears every legacy contact alias', async () => {
+    updateMock.mockResolvedValue({
+      ...SAMPLE_SUPPLIER,
+      contacts: [],
+      contactName: null,
+      email: null,
+      phone: null,
+    });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/suppliers/s-1',
+      headers: authHeader(),
+      payload: { contacts: [] },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(updateMock).toHaveBeenCalledWith('s-1', {
+      contacts: [],
+      contactName: null,
+      email: null,
+      phone: null,
+    });
   });
 
   test('200 name="" is treated as "no change" (NOT NULL column)', async () => {

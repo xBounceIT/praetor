@@ -20,6 +20,7 @@ import type {
   ResaleCategory,
   ResaleOrderOption,
   RoleSummary,
+  Supplier,
   SupplierInvoice,
   SupplierInvoiceItem,
   SupplierQuote,
@@ -84,20 +85,33 @@ const normalizePricingItemFields = <T extends PricingItemBase>(item: T): T => ({
   discount: Number(item.discount || 0),
 });
 
+type NormalizedContact = {
+  fullName: string;
+  role?: string;
+  email?: string;
+  phone?: string;
+};
+
+const normalizeContacts = (value: unknown): NormalizedContact[] | undefined => {
+  if (!Array.isArray(value)) return undefined;
+
+  return value.reduce<NormalizedContact[]>((contacts, raw) => {
+    if (!raw || typeof raw !== 'object') return contacts;
+    const contact = raw as Record<string, unknown>;
+    const normalizedContact = {
+      fullName: typeof contact.fullName === 'string' ? contact.fullName.trim() : '',
+      role: typeof contact.role === 'string' ? contact.role.trim() || undefined : undefined,
+      email: typeof contact.email === 'string' ? contact.email.trim() || undefined : undefined,
+      phone: typeof contact.phone === 'string' ? contact.phone.trim() || undefined : undefined,
+    };
+    if (normalizedContact.fullName) contacts.push(normalizedContact);
+    return contacts;
+  }, []);
+};
+
 export const normalizeClient = (c: Client): Client => ({
   ...c,
-  contacts: Array.isArray(c.contacts)
-    ? c.contacts.reduce<Client['contacts']>((contacts, contact) => {
-        const normalizedContact = {
-          fullName: typeof contact.fullName === 'string' ? contact.fullName.trim() : '',
-          role: typeof contact.role === 'string' ? contact.role.trim() || undefined : undefined,
-          email: typeof contact.email === 'string' ? contact.email.trim() || undefined : undefined,
-          phone: typeof contact.phone === 'string' ? contact.phone.trim() || undefined : undefined,
-        };
-        if (normalizedContact.fullName.length > 0) contacts?.push(normalizedContact);
-        return contacts;
-      }, [])
-    : undefined,
+  contacts: normalizeContacts(c.contacts),
   contactName: c.contactName ?? undefined,
   clientCode: c.clientCode ?? undefined,
   email: c.email ?? undefined,
@@ -119,6 +133,19 @@ export const normalizeClient = (c: Client): Client => ({
   officeCountRange: c.officeCountRange ?? undefined,
   vatNumber: c.vatNumber ?? undefined,
   taxCode: c.taxCode ?? undefined,
+});
+
+export const normalizeSupplier = (supplier: Supplier): Supplier => ({
+  ...supplier,
+  contacts: normalizeContacts(supplier.contacts),
+  contactName: supplier.contactName ?? undefined,
+  email: supplier.email ?? undefined,
+  phone: supplier.phone ?? undefined,
+  address: supplier.address ?? undefined,
+  vatNumber: supplier.vatNumber ?? undefined,
+  taxCode: supplier.taxCode ?? undefined,
+  paymentTerms: supplier.paymentTerms ?? undefined,
+  notes: supplier.notes ?? undefined,
 });
 
 const normalizeTrimmedString = (value: unknown): string =>

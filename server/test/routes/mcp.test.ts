@@ -369,6 +369,7 @@ describe('/api/mcp', () => {
     const toolsBody = parseMcpBody(toolsRes.body);
     const toolNames = toolsBody.result.tools.map((tool: { name: string }) => tool.name);
     expect(toolNames).toContain('praetor_list_clients');
+    expect(toolNames).toContain('praetor_list_suppliers');
     expect(toolNames).toContain('praetor_get_users_hierarchy');
     expect(toolNames).toContain('praetor_list_quotes');
     expect(toolNames).toContain('praetor_list_offers');
@@ -392,6 +393,47 @@ describe('/api/mcp', () => {
       { id: 'c1', name: 'Client One', description: null },
     ]);
     expect(clientsListMock).toHaveBeenCalledWith({ canViewAllClients: false, userId: 'u1' });
+  });
+
+  test('returns multiple supplier contacts through the supplier list tool', async () => {
+    currentPermissions = ['crm.suppliers.view'];
+    suppliersListAllMock.mockResolvedValue([
+      {
+        id: 's1',
+        name: 'Supplier One',
+        contacts: [
+          {
+            fullName: 'Jane Doe',
+            role: 'Buyer',
+            email: 'jane@supplier.test',
+            phone: '123',
+          },
+          { fullName: 'Bob Smith', role: 'Support' },
+        ],
+        contactName: 'Jane Doe',
+        email: 'jane@supplier.test',
+        phone: '123',
+      },
+    ]);
+
+    const suppliersRes = await rpc({
+      jsonrpc: '2.0',
+      id: 4,
+      method: 'tools/call',
+      params: { name: 'praetor_list_suppliers', arguments: {} },
+    });
+
+    expect(suppliersRes.statusCode).toBe(200);
+    const suppliersBody = parseMcpBody(suppliersRes.body);
+    expect(suppliersBody.result.structuredContent.suppliers[0].contacts).toEqual([
+      {
+        fullName: 'Jane Doe',
+        role: 'Buyer',
+        email: 'jane@supplier.test',
+        phone: '123',
+      },
+      { fullName: 'Bob Smith', role: 'Support' },
+    ]);
   });
 
   test('lists permission-scoped quotes, offers, orders, and invoices', async () => {

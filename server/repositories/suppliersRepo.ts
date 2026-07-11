@@ -2,11 +2,19 @@ import { eq } from 'drizzle-orm';
 import { type DbExecutor, db } from '../db/drizzle.ts';
 import { suppliers } from '../db/schema/suppliers.ts';
 
+export type SupplierContact = {
+  fullName: string;
+  role?: string;
+  email?: string;
+  phone?: string;
+};
+
 export type Supplier = {
   id: string;
   name: string;
   isDisabled: boolean;
   supplierCode: string | null;
+  contacts: SupplierContact[];
   contactName: string | null;
   email: string | null;
   phone: string | null;
@@ -18,21 +26,52 @@ export type Supplier = {
   createdAt: number | undefined;
 };
 
-const mapRow = (row: typeof suppliers.$inferSelect): Supplier => ({
-  id: row.id,
-  name: row.name,
-  isDisabled: row.isDisabled ?? false,
-  supplierCode: row.supplierCode,
-  contactName: row.contactName,
-  email: row.email,
-  phone: row.phone,
-  address: row.address,
-  vatNumber: row.vatNumber,
-  taxCode: row.taxCode,
-  paymentTerms: row.paymentTerms,
-  notes: row.notes,
-  createdAt: row.createdAt ? row.createdAt.getTime() : undefined,
-});
+const parseContactsFromDb = (value: unknown): SupplierContact[] => {
+  if (!Array.isArray(value)) return [];
+  const contacts: SupplierContact[] = [];
+  for (const raw of value) {
+    if (!raw || typeof raw !== 'object') continue;
+    const item = raw as Record<string, unknown>;
+    const fullName =
+      typeof item.fullName === 'string'
+        ? item.fullName.trim()
+        : typeof item.name === 'string'
+          ? item.name.trim()
+          : '';
+    if (!fullName) continue;
+    const role = typeof item.role === 'string' ? item.role.trim() : '';
+    const email = typeof item.email === 'string' ? item.email.trim() : '';
+    const phone = typeof item.phone === 'string' ? item.phone.trim() : '';
+    contacts.push({
+      fullName,
+      role: role || undefined,
+      email: email || undefined,
+      phone: phone || undefined,
+    });
+  }
+  return contacts;
+};
+
+const mapRow = (row: typeof suppliers.$inferSelect): Supplier => {
+  const contacts = parseContactsFromDb(row.contacts);
+  const primary = contacts[0] ?? null;
+  return {
+    id: row.id,
+    name: row.name,
+    isDisabled: row.isDisabled ?? false,
+    supplierCode: row.supplierCode,
+    contacts,
+    contactName: primary ? primary.fullName : row.contactName,
+    email: primary ? (primary.email ?? null) : row.email,
+    phone: primary ? (primary.phone ?? null) : row.phone,
+    address: row.address,
+    vatNumber: row.vatNumber,
+    taxCode: row.taxCode,
+    paymentTerms: row.paymentTerms,
+    notes: row.notes,
+    createdAt: row.createdAt ? row.createdAt.getTime() : undefined,
+  };
+};
 
 export const listAll = async (exec: DbExecutor = db): Promise<Supplier[]> => {
   const rows = await exec.select().from(suppliers).orderBy(suppliers.name);
@@ -65,6 +104,7 @@ export type NewSupplier = {
   id: string;
   name: string;
   supplierCode: string | null;
+  contacts: SupplierContact[];
   contactName: string | null;
   email: string | null;
   phone: string | null;
@@ -84,6 +124,7 @@ export const create = async (input: NewSupplier, exec: DbExecutor = db): Promise
       name: input.name,
       isDisabled: false,
       supplierCode: input.supplierCode,
+      contacts: input.contacts,
       contactName: input.contactName,
       email: input.email,
       phone: input.phone,
@@ -102,6 +143,7 @@ export type SupplierUpdate = {
   name?: string;
   isDisabled?: boolean;
   supplierCode?: string | null;
+  contacts?: SupplierContact[];
   contactName?: string | null;
   email?: string | null;
   phone?: string | null;
@@ -121,6 +163,7 @@ export const update = async (
   if (patch.name !== undefined) set.name = patch.name;
   if (patch.isDisabled !== undefined) set.isDisabled = patch.isDisabled;
   if (patch.supplierCode !== undefined) set.supplierCode = patch.supplierCode;
+  if (patch.contacts !== undefined) set.contacts = patch.contacts;
   if (patch.contactName !== undefined) set.contactName = patch.contactName;
   if (patch.email !== undefined) set.email = patch.email;
   if (patch.phone !== undefined) set.phone = patch.phone;

@@ -303,7 +303,8 @@ describe('<ClientQuotesView />', () => {
     expect(onUpdateQuote.mock.calls[0][1].items?.[0].discount).toBe(10);
   });
 
-  test('inherits duration and its unit when selecting a supplier quote item', () => {
+  test('inherits duration and its unit when selecting a supplier quote item', async () => {
+    const user = userEvent.setup();
     const supplierQuote: SupplierQuote = {
       id: 'SQ-DURATION',
       supplierId: 'supplier-1',
@@ -342,23 +343,25 @@ describe('<ClientQuotesView />', () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'sales:clientQuotes.createNewQuote' }));
-    fireEvent.click(screen.getByText('sales:clientQuotes.addProduct'));
-    fireEvent.click(
+    await user.click(screen.getByRole('button', { name: 'sales:clientQuotes.createNewQuote' }));
+    await user.click(screen.getByText('sales:clientQuotes.addProduct'));
+    await user.click(
       screen.getAllByRole('button', { name: 'sales:clientQuotes.noSupplierQuote' })[0],
     );
-    fireEvent.click(
-      screen.getByRole('option', {
+    await user.click(
+      await screen.findByRole('option', {
         name: /Acme Supplies · Managed Service \(120,00\)$/,
       }),
     );
 
-    const durationInputs = screen
-      .getAllByPlaceholderText('sales:clientQuotes.durationColumn')
-      .filter((element): element is HTMLInputElement => element instanceof HTMLInputElement);
-    expect(durationInputs.length).toBeGreaterThan(0);
-    expect(durationInputs.every((input) => input.value === '2')).toBe(true);
-    expect(screen.getAllByText('sales:clientQuotes.years').length).toBeGreaterThan(0);
+    await waitFor(() => {
+      const durationInputs = screen
+        .getAllByPlaceholderText('sales:clientQuotes.durationColumn')
+        .filter((element): element is HTMLInputElement => element instanceof HTMLInputElement);
+      expect(durationInputs.length).toBeGreaterThan(0);
+      expect(durationInputs.every((input) => input.value === '2')).toBe(true);
+      expect(screen.getAllByText('sales:clientQuotes.years').length).toBeGreaterThan(0);
+    });
   });
   test('defaults a new quote to the first communication channel and shows inline management', () => {
     render(
