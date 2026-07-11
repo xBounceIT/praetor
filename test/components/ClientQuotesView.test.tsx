@@ -473,6 +473,121 @@ describe('<ClientQuotesView /> supplier-quote item labels', () => {
     );
     fireEvent.click(screen.getByText('Q-OLD-SOURCE'));
 
-    expect(screen.getAllByText('Acme Supplies · Solar Panel (60.00)').length).toBeGreaterThan(0);
+    expect(
+      screen.getAllByText('[SQ-OLD] Acme Supplies · Solar Panel (60.00)').length,
+    ).toBeGreaterThan(0);
+  });
+});
+describe('<ClientQuotesView /> supplier-quote item availability', () => {
+  const sourceableSupplierQuote: SupplierQuote = {
+    ...supplierQuote,
+    status: 'draft',
+    items: [
+      supplierQuote.items[0],
+      {
+        id: 'sqi-2',
+        quoteId: 'SQ-1',
+        productName: 'Battery',
+        quantity: 1,
+        listPrice: 40,
+        discountPercent: 0,
+        unitPrice: 40,
+        unitType: 'unit',
+      },
+    ],
+  };
+  const emptySupplierLabel = 'sales:clientQuotes.noSupplierQuote';
+  const firstSupplierItemLabel = '[SQ-1] Acme Supplies · Solar Panel (60.00)';
+  const secondSupplierItemLabel = '[SQ-1] Acme Supplies · Battery (40.00)';
+
+  const getOpenSupplierItem = (label: string) => {
+    const option = Array.from(
+      document.querySelectorAll<HTMLElement>('[data-slot="command-item"]'),
+    ).find((item) => item.textContent?.includes(label));
+    if (!option) throw new Error(`Supplier item option not found: ${label}`);
+    return option;
+  };
+
+  test('disables used items in other create rows and re-enables them after unlinking', () => {
+    render(
+      <ClientQuotesView {...baseProps} quotes={[]} supplierQuotes={[sourceableSupplierQuote]} />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'sales:clientQuotes.createNewQuote' }));
+    fireEvent.click(screen.getByText('sales:clientQuotes.addProduct'));
+    fireEvent.click(screen.getByText('sales:clientQuotes.addProduct'));
+
+    const initialPickers = screen.getAllByRole('button', { name: emptySupplierLabel });
+    expect(initialPickers).toHaveLength(4);
+
+    fireEvent.click(initialPickers[0]);
+    fireEvent.click(getOpenSupplierItem(firstSupplierItemLabel));
+
+    const secondRowPickers = screen.getAllByRole('button', { name: emptySupplierLabel });
+    expect(secondRowPickers).toHaveLength(2);
+    fireEvent.click(secondRowPickers[0]);
+
+    const usedOption = getOpenSupplierItem(firstSupplierItemLabel);
+    expect(usedOption).toHaveAttribute('data-disabled', 'true');
+    expect(usedOption).toHaveClass('data-[disabled=true]:opacity-50');
+
+    const unusedOption = getOpenSupplierItem(secondSupplierItemLabel);
+    expect(unusedOption).toHaveAttribute('data-disabled', 'false');
+    fireEvent.click(unusedOption);
+
+    expect(screen.queryAllByRole('button', { name: emptySupplierLabel })).toHaveLength(0);
+
+    fireEvent.click(screen.getAllByRole('button', { name: firstSupplierItemLabel })[0]);
+    fireEvent.click(getOpenSupplierItem(emptySupplierLabel));
+
+    const unlinkedRowPickers = screen.getAllByRole('button', { name: emptySupplierLabel });
+    expect(unlinkedRowPickers).toHaveLength(2);
+    fireEvent.click(unlinkedRowPickers[0]);
+
+    expect(getOpenSupplierItem(firstSupplierItemLabel)).toHaveAttribute('data-disabled', 'false');
+  });
+
+  test('marks items already used by a draft as disabled while editing', async () => {
+    const draftQuote = buildQuote({
+      id: 'Q-SUPPLIER-AVAILABILITY',
+      items: [
+        {
+          id: 'qi-linked',
+          quoteId: 'Q-SUPPLIER-AVAILABILITY',
+          productId: 'prod-1',
+          productName: 'Solar Panel',
+          quantity: 1,
+          unitPrice: 80,
+          supplierQuoteId: 'SQ-1',
+          supplierQuoteItemId: 'sqi-1',
+          supplierQuoteSupplierName: 'Acme Supplies',
+          supplierQuoteUnitPrice: 60,
+        },
+        {
+          id: 'qi-empty',
+          quoteId: 'Q-SUPPLIER-AVAILABILITY',
+          productId: 'prod-1',
+          productName: 'Solar Panel',
+          quantity: 1,
+          unitPrice: 80,
+        },
+      ],
+    });
+
+    render(
+      <ClientQuotesView
+        {...baseProps}
+        quotes={[draftQuote]}
+        supplierQuotes={[sourceableSupplierQuote]}
+      />,
+    );
+
+    fireEvent.click(screen.getByText('Q-SUPPLIER-AVAILABILITY'));
+    await screen.findByRole('dialog');
+
+    fireEvent.click(screen.getAllByRole('button', { name: emptySupplierLabel })[0]);
+
+    expect(getOpenSupplierItem(firstSupplierItemLabel)).toHaveAttribute('data-disabled', 'true');
+    expect(getOpenSupplierItem(secondSupplierItemLabel)).toHaveAttribute('data-disabled', 'false');
   });
 });

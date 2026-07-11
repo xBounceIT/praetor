@@ -83,7 +83,7 @@ import {
   ModalTitle,
 } from '../shared/ModalLayout';
 import QuickViewLinkButton from '../shared/QuickViewLinkButton';
-import SelectControl from '../shared/SelectControl';
+import SelectControl, { type Option } from '../shared/SelectControl';
 import StaleSupplierDataButton from '../shared/StaleSupplierDataButton';
 import StandardTable, { type Column } from '../shared/StandardTable';
 import StatusBadge, { type StatusType } from '../shared/StatusBadge';
@@ -172,7 +172,7 @@ const quoteToFormData = (quote: Quote): Partial<Quote> => ({
 // One label shape for a supplier-quote line item, shared by the picker options and the
 // display-value lookup so the two can never drift.
 const supplierQuoteItemLabel = (quote: SupplierQuote, item: SupplierQuote['items'][number]) =>
-  `${quote.supplierName} · ${item.productName} (${item.unitPrice.toFixed(2)})`;
+  `[${quote.id}] ${quote.supplierName} · ${item.productName} (${item.unitPrice.toFixed(2)})`;
 
 const isQuoteCodeConflictError = (err: unknown) =>
   err instanceof ApiError && err.status === 409 && err.message === 'Quote ID already exists';
@@ -1003,31 +1003,27 @@ const useClientQuotesController = ({
     [supplierQuotes, today],
   );
 
+  const usedSupplierQuoteItemIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const item of formData.items || []) {
+      if (item.supplierQuoteItemId) ids.add(item.supplierQuoteItemId);
+    }
+    return ids;
+  }, [formData.items]);
+
   const supplierQuoteItemOptions = useMemo(() => {
-    const options: Array<{
-      id: string;
-      name: string;
-      quoteId: string;
-      productId?: string;
-      unitPrice: number;
-      unitType?: SupplierUnitType;
-      quantity: number;
-    }> = [];
+    const options: Option[] = [];
     for (const quote of sourceableSupplierQuotes) {
       for (const item of quote.items) {
         options.push({
           id: item.id,
           name: supplierQuoteItemLabel(quote, item),
-          quoteId: quote.id,
-          productId: item.productId,
-          unitPrice: item.unitPrice,
-          unitType: item.unitType,
-          quantity: item.quantity,
+          disabled: usedSupplierQuoteItemIds.has(item.id),
         });
       }
     }
     return options;
-  }, [sourceableSupplierQuotes]);
+  }, [sourceableSupplierQuotes, usedSupplierQuoteItemIds]);
 
   // item-id → its CURRENT supplier quote + item, across ALL supplier quotes (not just the
   // selectable ones), for the bidirectional-sync affordances (#779): lock detection
@@ -2592,7 +2588,7 @@ const ClientQuoteSupplierPicker: React.FC<{
       <SelectControl
         options={[
           { id: 'none', name: t('sales:clientQuotes.noSupplierQuote') },
-          ...supplierQuoteItemOptions.map((o) => ({ id: o.id, name: o.name })),
+          ...supplierQuoteItemOptions,
         ]}
         value={item.supplierQuoteItemId || 'none'}
         onChange={(val) =>
