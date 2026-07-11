@@ -272,4 +272,70 @@ describe('<SelectControl />', () => {
 
     expect(screen.getByText('select.noOptions')).toBeInTheDocument();
   });
+  test('plain select greys out disabled options and does not select them', () => {
+    const onChange = mock((_value: string | string[]) => {});
+    const disabledOptions = [options[0], { ...options[1], disabled: true }];
+
+    render(<SelectControl options={disabledOptions} value="a" onChange={onChange} />);
+    fireEvent.click(screen.getByRole('combobox'));
+
+    const disabledOption = screen.getByRole('option', { name: 'Banana' });
+    expect(disabledOption).toHaveAttribute('data-disabled');
+    expect(disabledOption).toHaveClass('data-[disabled]:opacity-50');
+
+    fireEvent.click(disabledOption);
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  test('searchable combobox greys out disabled options and keeps enabled options selectable', () => {
+    const onChange = mock((_value: string | string[]) => {});
+    const disabledOptions = [options[0], { ...options[1], disabled: true }];
+
+    render(<SelectControl options={disabledOptions} value="" onChange={onChange} searchable />);
+    fireEvent.click(screen.getByRole('button'));
+
+    const disabledOption = screen.getByText('Banana').closest('[data-slot="command-item"]');
+    expect(disabledOption).not.toBeNull();
+    expect(disabledOption).toHaveAttribute('data-disabled', 'true');
+    expect(disabledOption).toHaveClass('data-[disabled=true]:opacity-50');
+
+    fireEvent.click(disabledOption as HTMLElement);
+    expect(onChange).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByText('Apple'));
+    expect(onChange).toHaveBeenCalledWith('a');
+  });
+
+  test('multi-select all excludes disabled options', () => {
+    const onChange = mock((_value: string | string[]) => {});
+    const disabledOptions = [options[0], { ...options[1], disabled: true }, options[2]];
+
+    render(
+      <SelectControl options={disabledOptions} value={[]} onChange={onChange} searchable isMulti />,
+    );
+    fireEvent.click(screen.getByRole('button'));
+    fireEvent.click(screen.getByRole('button', { name: 'select.selectAll' }));
+
+    expect(onChange).toHaveBeenCalledWith(['a', 'c']);
+  });
+  test('multi-select can remove a selected option that later becomes disabled', () => {
+    const onChange = mock((_value: string | string[]) => {});
+    const disabledOptions = [options[0], { ...options[1], disabled: true }];
+
+    render(
+      <SelectControl
+        options={disabledOptions}
+        value={['a', 'b']}
+        onChange={onChange}
+        searchable
+        isMulti
+      />,
+    );
+
+    const removeControl = screen.getByText('Banana').nextElementSibling;
+    expect(removeControl).not.toBeNull();
+    fireEvent.click(removeControl as HTMLElement);
+
+    expect(onChange).toHaveBeenCalledWith(['a']);
+  });
 });

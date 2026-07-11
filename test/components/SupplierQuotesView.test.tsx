@@ -280,7 +280,7 @@ describe('<SupplierQuotesView /> deep-link filter', () => {
 // Opens the New-quote dialog and fills every required field (supplier, code, one line item).
 // Pass a customer name to also pick it from the Customer combobox. The caller must render with
 // `quotes={[]}` so the supplier/customer names are unambiguous (no table rows behind the modal).
-const fillNewQuoteForm = (customerName?: string) => {
+const fillNewQuoteForm = (customerName?: string, listPrice: string | null = '100') => {
   fireEvent.click(screen.getByText('sales:supplierQuotes.addQuote'));
   fireEvent.click(document.getElementById('supplier-quote-supplier') as HTMLElement);
   fireEvent.click(screen.getByText('Acme Supplies'));
@@ -292,7 +292,77 @@ const fillNewQuoteForm = (customerName?: string) => {
     target: { value: 'SQ-NEW' },
   });
   fireEvent.click(screen.getByText('sales:supplierQuotes.addItem'));
+  if (listPrice !== null) {
+    fireEvent.change(screen.getAllByPlaceholderText('0,00')[0], {
+      target: { value: listPrice },
+    });
+  }
 };
+
+describe('<SupplierQuotesView /> required list price', () => {
+  test('keeps new-item prices empty with the 0,00 placeholder and blocks save until entered', async () => {
+    const onAddQuote = mock((_data: Partial<SupplierQuote>) => Promise.resolve(draft));
+    render(<SupplierQuotesView {...baseProps} quotes={[]} onAddQuote={onAddQuote} />);
+
+    fillNewQuoteForm('Globex Corp', null);
+
+    const listPriceInputs = screen.getAllByPlaceholderText('0,00');
+    expect(listPriceInputs.length).toBeGreaterThan(0);
+    for (const input of listPriceInputs) {
+      expect(input).toHaveValue('');
+      expect(input).toHaveAttribute('aria-required', 'true');
+      expect(input).not.toHaveAttribute('required');
+    }
+
+    const saveButton = screen.getByText('common:buttons.save');
+    fireEvent.submit(saveButton.closest('form') as HTMLFormElement);
+
+    expect(onAddQuote).not.toHaveBeenCalled();
+    expect(screen.getByText('sales:supplierQuotes.errors.listPriceRequired')).toBeInTheDocument();
+
+    fireEvent.change(listPriceInputs[0], { target: { value: '125' } });
+    expect(
+      screen.queryByText('sales:supplierQuotes.errors.listPriceRequired'),
+    ).not.toBeInTheDocument();
+    fireEvent.click(saveButton);
+
+    await waitFor(() => expect(onAddQuote).toHaveBeenCalledTimes(1));
+    const payload = onAddQuote.mock.calls[0]?.[0] as Partial<SupplierQuote>;
+    expect(payload.items?.[0]?.listPrice).toBe(125);
+  });
+
+  test('tracks rapidly added blank prices independently even when Date.now is unchanged', () => {
+    const originalDateNow = Date.now;
+    Date.now = () => 1_700_000_000_000;
+    try {
+      const onAddQuote = mock((_data: Partial<SupplierQuote>) => Promise.resolve(draft));
+      render(<SupplierQuotesView {...baseProps} quotes={[]} onAddQuote={onAddQuote} />);
+
+      fillNewQuoteForm('Globex Corp', null);
+      fireEvent.click(screen.getByText('sales:supplierQuotes.addItem'));
+
+      const listPriceInputs = screen.getAllByPlaceholderText('0,00');
+      fireEvent.submit(screen.getByText('common:buttons.save').closest('form') as HTMLFormElement);
+      fireEvent.change(listPriceInputs[0], { target: { value: '125' } });
+
+      expect(onAddQuote).not.toHaveBeenCalled();
+      expect(screen.getByText('sales:supplierQuotes.errors.listPriceRequired')).toBeInTheDocument();
+    } finally {
+      Date.now = originalDateNow;
+    }
+  });
+
+  test.each(['.', ','])('rejects a separator-only list price (%s)', (separator) => {
+    const onAddQuote = mock((_data: Partial<SupplierQuote>) => Promise.resolve(draft));
+    render(<SupplierQuotesView {...baseProps} quotes={[]} onAddQuote={onAddQuote} />);
+
+    fillNewQuoteForm('Globex Corp', separator);
+    fireEvent.submit(screen.getByText('common:buttons.save').closest('form') as HTMLFormElement);
+
+    expect(onAddQuote).not.toHaveBeenCalled();
+    expect(screen.getByText('sales:supplierQuotes.errors.listPriceRequired')).toBeInTheDocument();
+  });
+});
 
 // The customer link used to be optional (issue #759); issue #777 makes it mandatory.
 describe('<SupplierQuotesView /> mandatory customer association (issue #777)', () => {

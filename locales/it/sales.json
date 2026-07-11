@@ -369,6 +369,7 @@
       "clientRequired": "Il cliente è obbligatorio",
       "quoteCodeRequired": "Il codice preventivo è obbligatorio",
       "itemsRequired": "Almeno un articolo è obbligatorio",
+      "listPriceRequired": "Il prezzo di listino è obbligatorio per ogni articolo",
       "expirationExtendInvalid": "Imposta una data di scadenza odierna o successiva per riconvalidare il preventivo fornitore"
     },
     "durationColumn": "Durata",
