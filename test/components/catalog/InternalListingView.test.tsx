@@ -177,7 +177,9 @@ describe('<InternalListingView /> productFilterId', () => {
 });
 
 describe('<InternalListingView /> managed catalog values', () => {
-  test('localizes Manage and exposes edit/delete actions for types, categories, and subcategories', async () => {
+  const setupManagedCatalogValues = async (
+    overrides: Partial<Parameters<typeof InternalListingView>[0]> = {},
+  ) => {
     productTypes = [
       {
         id: 'type-consulting',
@@ -217,22 +219,9 @@ describe('<InternalListingView /> managed catalog values', () => {
       { name: 'Security', productCount: 0, hasLinkedProducts: false },
     ];
 
-    const onDeleteProductType = mock((_id: string) => Promise.resolve());
-    const onDeleteInternalCategory = mock((_id: string) => Promise.resolve());
-    const onDeleteInternalSubcategory = mock((_name: string, _type: string, _category: string) =>
-      Promise.resolve(),
-    );
     const user = userEvent.setup();
 
-    render(
-      <InternalListingView
-        {...baseProps}
-        products={[]}
-        onDeleteProductType={onDeleteProductType}
-        onDeleteInternalCategory={onDeleteInternalCategory}
-        onDeleteInternalSubcategory={onDeleteInternalSubcategory}
-      />,
-    );
+    render(<InternalListingView {...baseProps} {...overrides} products={[]} />);
     await act(async () => {
       await Promise.resolve();
     });
@@ -245,52 +234,68 @@ describe('<InternalListingView /> managed catalog values', () => {
     fireEvent.click(await screen.findByRole('option', { name: 'Supply' }));
     await screen.findByText('Governance');
 
-    expect(screen.getAllByRole('button', { name: 'common:buttons.manage' })).toHaveLength(3);
+    const manageButtons = screen.getAllByRole('button', { name: 'common:buttons.manage' });
+    expect(manageButtons).toHaveLength(3);
 
-    const openActionsFor = async (name: string) => {
-      let actionButton: HTMLElement | null = null;
-      await waitFor(() => {
-        const row = screen
-          .getAllByText(name)
-          .map((element) => element.closest('tr'))
-          .find((element): element is HTMLTableRowElement => element !== null);
-        expect(row).toBeDefined();
-        actionButton = within(row as HTMLTableRowElement).getByRole('button', {
-          name: 'table.rowActions',
-        });
+    return { manageButtons, user };
+  };
+
+  const openActionsFor = async (name: string) => {
+    let actionButton: HTMLElement | null = null;
+    await waitFor(() => {
+      const row = screen
+        .getAllByText(name)
+        .map((element) => element.closest('tr'))
+        .find((element): element is HTMLTableRowElement => element !== null);
+      expect(row).toBeDefined();
+      actionButton = within(row as HTMLTableRowElement).getByRole('button', {
+        name: 'table.rowActions',
       });
-      if (!actionButton) throw new Error('Missing row actions for ' + name);
-      fireEvent.pointerDown(actionButton, { button: 0, ctrlKey: false });
-    };
-    const deleteCurrentValue = async () => {
-      expect(
-        await screen.findByRole('button', { name: 'common:buttons.edit' }),
-      ).toBeInTheDocument();
-      await user.click(screen.getByRole('button', { name: 'common:buttons.delete' }));
-    };
+    });
+    if (!actionButton) throw new Error('Missing row actions for ' + name);
+    fireEvent.pointerDown(actionButton, { button: 0, ctrlKey: false });
+  };
 
-    const closeTopModal = () => {
-      const closeButtons = screen.getAllByRole('button', { name: 'Close' });
-      fireEvent.click(closeButtons.at(-1) as HTMLElement);
-    };
+  const deleteCurrentValue = async (user: ReturnType<typeof userEvent.setup>) => {
+    expect(await screen.findByRole('button', { name: 'common:buttons.edit' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'common:buttons.delete' }));
+  };
 
-    fireEvent.click(screen.getAllByRole('button', { name: 'common:buttons.manage' })[0]);
+  test('localizes Manage and exposes type edit/delete actions', async () => {
+    const onDeleteProductType = mock((_id: string) => Promise.resolve());
+    const { manageButtons, user } = await setupManagedCatalogValues({ onDeleteProductType });
+
+    fireEvent.click(manageButtons[0]);
     await openActionsFor('Consulting');
-    await deleteCurrentValue();
+    await deleteCurrentValue(user);
     await waitFor(() => expect(onDeleteProductType).toHaveBeenCalledWith('type-consulting'));
-    closeTopModal();
+  });
 
-    fireEvent.click(screen.getAllByRole('button', { name: 'common:buttons.manage' })[1]);
+  test('exposes category edit/delete actions', async () => {
+    const onDeleteInternalCategory = mock((_id: string) => Promise.resolve());
+    const { manageButtons, user } = await setupManagedCatalogValues({
+      onDeleteInternalCategory,
+    });
+
+    fireEvent.click(manageButtons[1]);
     await openActionsFor('Operations');
-    await deleteCurrentValue();
+    await deleteCurrentValue(user);
     await waitFor(() =>
       expect(onDeleteInternalCategory).toHaveBeenCalledWith('category-operations'),
     );
-    closeTopModal();
+  });
 
-    fireEvent.click(screen.getAllByRole('button', { name: 'common:buttons.manage' })[2]);
+  test('exposes subcategory edit/delete actions', async () => {
+    const onDeleteInternalSubcategory = mock((_name: string, _type: string, _category: string) =>
+      Promise.resolve(),
+    );
+    const { manageButtons, user } = await setupManagedCatalogValues({
+      onDeleteInternalSubcategory,
+    });
+
+    fireEvent.click(manageButtons[2]);
     await openActionsFor('Security');
-    await deleteCurrentValue();
+    await deleteCurrentValue(user);
     await waitFor(() =>
       expect(onDeleteInternalSubcategory).toHaveBeenCalledWith('Security', 'supply', 'Governance'),
     );
