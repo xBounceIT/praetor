@@ -37,6 +37,7 @@ import type {
 } from '../../types';
 import { DEFAULT_PROJECT_STATUS, LEGACY_PROJECT_STATUS } from '../../types';
 import { formatDateOnlyForLocale, formatInsertDate } from '../../utils/date';
+import { formatNumber } from '../../utils/numbers';
 import { buildPermission, hasPermission, hasScopedActionPermission } from '../../utils/permissions';
 import DateField from '../shared/DateField';
 import DeleteConfirmModal from '../shared/DeleteConfirmModal';
@@ -55,6 +56,7 @@ import StandardTable, { type Column } from '../shared/StandardTable';
 import StatusBadge from '../shared/StatusBadge';
 import { TABLE_CONTROL_BUTTON_CLASSNAME } from '../shared/tableControlStyles';
 import UserAssignmentModal from '../shared/UserAssignmentModal';
+import ValidatedNumberInput from '../shared/ValidatedNumberInput';
 import { ProjectStatusInfoTooltip } from './ProjectStatusInfoTooltip';
 import { getProjectStatusBadgeType, projectStatusOptions } from './projectStatusUi';
 import type { RecurringConfig } from './TaskFormModal';
@@ -114,6 +116,12 @@ const parseDraftNumber = (value: string, fallback = 0) => {
   const parsed = Number.parseFloat(value);
   return Number.isFinite(parsed) ? parsed : fallback;
 };
+
+const formatDraftNumber = (value: number, minimumFractionDigits = 0) =>
+  formatNumber(value, {
+    minimumFractionDigits,
+    maximumFractionDigits: 2,
+  });
 
 export type AddProjectFormInput = {
   name: string;
@@ -678,12 +686,6 @@ const useProjectsController = ({
   const displayedRevenue = revenueBySource[revenueSource];
   const persistedRevenue = revenueSource === 'manual' && revenue ? parseFloat(revenue) : undefined;
 
-  const formatDraftNumber = (value: number, minimumFractionDigits = 0) =>
-    value.toLocaleString(i18n.language, {
-      minimumFractionDigits,
-      maximumFractionDigits: 2,
-    });
-
   const managingProject = projects.find((p) => p.id === managingProjectId);
   const assignableUsers = users.filter(
     (u) => !u.hasTopManagerRole && !u.isAdminOnly && !u.isDisabled,
@@ -771,17 +773,12 @@ const useProjectsController = ({
       accessorKey: 'duration',
       disableFiltering: true,
       cell: ({ row }) => (
-        <Input
-          type="number"
+        <ValidatedNumberInput
           min="0"
-          step="any"
           required
           value={row.duration}
           placeholder="1"
-          onKeyDown={(e) => {
-            if (['e', 'E', '+', '-'].includes(e.key)) e.preventDefault();
-          }}
-          onChange={(e) => updateDraftTask(row._id, 'duration', e.target.value)}
+          onValueChange={(value) => updateDraftTask(row._id, 'duration', value)}
           className="h-8 min-w-[80px] text-xs"
         />
       ),
@@ -806,14 +803,12 @@ const useProjectsController = ({
       accessorKey: 'revenue',
       disableFiltering: true,
       cell: ({ row }) => (
-        <Input
-          type="number"
+        <ValidatedNumberInput
           min="0"
-          step="0.01"
           required
           value={row.revenue}
-          placeholder="0.00"
-          onChange={(e) => updateDraftTask(row._id, 'revenue', e.target.value)}
+          placeholder="0,00"
+          onValueChange={(value) => updateDraftTask(row._id, 'revenue', value)}
           className="h-8 min-w-[80px] text-xs"
         />
       ),
@@ -1458,19 +1453,16 @@ const ProjectOfferRevenueFields: React.FC<{ controller: ProjectsController }> = 
       <FieldLabel htmlFor="project-revenue">
         {`${controller.t('projects:projects.projectRevenue')} (${controller.currency})`}
       </FieldLabel>
-      <Input
+      <ValidatedNumberInput
         id="project-revenue"
-        type="number"
         min="0"
-        step="0.01"
-        placeholder="0.00"
+        placeholder="0,00"
         value={
-          controller.revenueSource === 'manual'
-            ? controller.revenue
-            : controller.displayedRevenue.toFixed(2)
+          controller.revenueSource === 'manual' ? controller.revenue : controller.displayedRevenue
         }
+        formatDecimals={2}
         readOnly={controller.revenueSource !== 'manual'}
-        onChange={(event) => controller.dispatch({ type: 'setRevenue', value: event.target.value })}
+        onValueChange={(value) => controller.dispatch({ type: 'setRevenue', value })}
       />
       {controller.revenueHintBySource[controller.revenueSource] && (
         <FieldDescription className="text-xs">

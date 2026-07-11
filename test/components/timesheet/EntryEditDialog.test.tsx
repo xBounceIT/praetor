@@ -89,10 +89,10 @@ describe('<EntryEditDialog />', () => {
     // Hours input shows the original duration; notes input shows the original notes.
     const hoursInput = document.getElementById('entry-edit-hours') as HTMLInputElement;
     const notesInput = document.getElementById('entry-edit-notes') as HTMLInputElement;
-    expect(hoursInput.value).toBe('2.5');
+    expect(hoursInput.value).toBe('2,5');
     expect(notesInput.value).toBe('initial notes');
 
-    fireEvent.change(hoursInput, { target: { value: '3.25' } });
+    fireEvent.change(hoursInput, { target: { value: '3,25' } });
     fireEvent.change(notesInput, { target: { value: 'updated notes' } });
 
     fireEvent.submit(hoursInput.closest('form') as HTMLFormElement);

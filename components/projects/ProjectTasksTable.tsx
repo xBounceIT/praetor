@@ -8,9 +8,11 @@ import { useBillingFrequencyOptions, useBillingTypeOptions } from '@/hooks/useBi
 import { DEFAULT_BILLING_FREQUENCY, DEFAULT_BILLING_TYPE } from '@/utils/billing';
 import { tasksApi } from '../../services/api';
 import type { BillingFrequency, ProjectTask, StoredBillingType } from '../../types';
+import { formatNumber } from '../../utils/numbers';
 import SelectControl from '../shared/SelectControl';
 import StandardTable, { type Column } from '../shared/StandardTable';
 import { TABLE_CONTROL_BUTTON_CLASSNAME } from '../shared/tableControlStyles';
+import ValidatedNumberInput from '../shared/ValidatedNumberInput';
 
 export interface ProjectTasksTableProps {
   projectId: string;
@@ -55,8 +57,8 @@ const ProjectTaskAddButton: React.FC<{
   </Button>
 );
 
-const formatNumber = (value: number, minimumFractionDigits = 0) =>
-  value.toLocaleString(undefined, {
+const formatTaskNumber = (value: number, minimumFractionDigits = 0) =>
+  formatNumber(value, {
     minimumFractionDigits,
     maximumFractionDigits: 2,
   });
@@ -174,17 +176,12 @@ const useProjectTaskColumns = ({
         accessorKey: 'duration',
         disableFiltering: true,
         cell: ({ row }) => (
-          <Input
-            type="number"
+          <ValidatedNumberInput
             min="0"
-            step="any"
             disabled={!canUpdate}
             value={getTaskFieldValue(row.id, 'duration', String(row.duration ?? 1))}
             placeholder="1"
-            onKeyDown={(e) => {
-              if (['e', 'E', '+', '-'].includes(e.key)) e.preventDefault();
-            }}
-            onChange={(e) => setTaskFieldValue(row.id, 'duration', e.target.value)}
+            onValueChange={(value) => setTaskFieldValue(row.id, 'duration', value)}
             onBlur={() => commitTaskField(row, 'duration', (v) => (v ? parseFloat(v) : 1))}
             className="h-8 min-w-[80px] text-xs"
           />
@@ -200,7 +197,7 @@ const useProjectTaskColumns = ({
             parseTaskNumber(row, 'monthlyEffort', 0) * parseTaskNumber(row, 'duration', 1);
           return (
             <output className="flex h-8 min-w-[90px] items-center rounded-md border border-input bg-muted/40 px-3 text-xs text-muted-foreground tabular-nums">
-              {formatNumber(totalEffort)}h
+              {formatTaskNumber(totalEffort)}h
             </output>
           );
         },
@@ -211,14 +208,12 @@ const useProjectTaskColumns = ({
         accessorKey: 'revenue',
         disableFiltering: true,
         cell: ({ row }) => (
-          <Input
-            type="number"
+          <ValidatedNumberInput
             min="0"
-            step="0.01"
             disabled={!canUpdate}
             value={getTaskFieldValue(row.id, 'revenue', String(row.revenue ?? ''))}
-            placeholder="0.00"
-            onChange={(e) => setTaskFieldValue(row.id, 'revenue', e.target.value)}
+            placeholder="0,00"
+            onValueChange={(value) => setTaskFieldValue(row.id, 'revenue', value)}
             onBlur={() => commitTaskField(row, 'revenue', (v) => (v ? parseFloat(v) : 0))}
             className="h-8 min-w-[80px] text-xs"
           />
@@ -235,7 +230,7 @@ const useProjectTaskColumns = ({
           return (
             <output className="flex h-8 min-w-[110px] items-center rounded-md border border-input bg-muted/40 px-3 text-xs text-muted-foreground tabular-nums">
               {currency}
-              {formatNumber(totalRevenue, 2)}
+              {formatTaskNumber(totalRevenue, 2)}
             </output>
           );
         },

@@ -12,7 +12,9 @@ describe('<ValidatedNumberInput />', () => {
     const input = getInput(container);
     expect(input.type).toBe('text');
     expect(input.inputMode).toBe('decimal');
-    expect(input.getAttribute('pattern')).toBe('^[0-9]*([.,][0-9]*)?$');
+    expect(input.getAttribute('pattern')).toBe(
+      '^(?:[0-9]{1,3}(?:\\.[0-9]{3})*|[0-9]*)(?:,[0-9]*)?$',
+    );
   });
 
   test('displays a numeric value when not focused', () => {
@@ -26,7 +28,7 @@ describe('<ValidatedNumberInput />', () => {
       <ValidatedNumberInput value={3.5} onValueChange={() => {}} formatDecimals={2} />,
     );
     const input = getInput(container);
-    expect(input.value).toBe('3.50');
+    expect(input.value).toBe('3,50');
   });
 
   test('formatDecimals: empty string yields empty display', () => {
@@ -64,13 +66,56 @@ describe('<ValidatedNumberInput />', () => {
     expect(onValueChange).toHaveBeenLastCalledWith('12');
   });
 
-  test('comma is normalized to dot in onValueChange', () => {
+  test('comma stays visible and is normalized to dot in onValueChange', () => {
     const onValueChange = mock((_v: string) => {});
     const { container } = render(<ValidatedNumberInput value="" onValueChange={onValueChange} />);
+
     const input = getInput(container);
     fireEvent.focus(input);
     fireEvent.change(input, { target: { value: '1,5' } });
     expect(onValueChange).toHaveBeenCalledWith('1.5');
+    expect(input.value).toBe('1,5');
+  });
+
+  test('accepts dots only as Italian thousands separators', () => {
+    const onValueChange = mock((_v: string) => {});
+    const { container } = render(<ValidatedNumberInput value="" onValueChange={onValueChange} />);
+    const input = getInput(container);
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: '1.234,56' } });
+    expect(onValueChange).toHaveBeenCalledWith('1234.56');
+    expect(input.value).toBe('1.234,56');
+    fireEvent.change(input, { target: { value: '1.234' } });
+    expect(onValueChange).toHaveBeenLastCalledWith('1234');
+    expect(input.value).toBe('1.234');
+  });
+
+  test('accepts localized negative values only when explicitly enabled', () => {
+    const onValueChange = mock((_v: string) => {});
+    const { container } = render(
+      <ValidatedNumberInput value="" onValueChange={onValueChange} allowNegative />,
+    );
+    const input = getInput(container);
+
+    fireEvent.focus(input);
+    expect(fireEvent.keyDown(input, { key: '-' })).toBe(true);
+    fireEvent.change(input, { target: { value: '-1.234,5' } });
+
+    expect(onValueChange).toHaveBeenLastCalledWith('-1234.5');
+    expect(input.value).toBe('-1.234,5');
+    expect(input.getAttribute('pattern')).toBe(
+      '^-?(?:[0-9]{1,3}(?:\\.[0-9]{3})*|[0-9]*)(?:,[0-9]*)?$',
+    );
+  });
+
+  test('continues to reject negative values by default', () => {
+    const onValueChange = mock((_v: string) => {});
+    const { container } = render(<ValidatedNumberInput value="" onValueChange={onValueChange} />);
+    const input = getInput(container);
+
+    expect(fireEvent.keyDown(input, { key: '-' })).toBe(false);
+    fireEvent.change(input, { target: { value: '-1,5' } });
+    expect(onValueChange).not.toHaveBeenCalled();
   });
 
   test('invalid characters in input are rejected (no onValueChange)', () => {
@@ -126,17 +171,17 @@ describe('<ValidatedNumberInput />', () => {
     const { container } = render(<ValidatedNumberInput value="" onValueChange={() => {}} />);
     const input = getInput(container);
     // Set value first to ensure currentTarget.value already has a decimal
-    input.value = '1.5';
-    const evt = fireEvent.keyDown(input, { key: '.' });
+    input.value = '1,5';
+    const evt = fireEvent.keyDown(input, { key: ',' });
     expect(evt).toBe(false); // prevented
   });
 
-  test('keyDown: first decimal separator is allowed', () => {
+  test('keyDown: comma is the only allowed decimal separator', () => {
     const { container } = render(<ValidatedNumberInput value="" onValueChange={() => {}} />);
     const input = getInput(container);
     input.value = '1';
-    const evt = fireEvent.keyDown(input, { key: '.' });
-    expect(evt).toBe(true);
+    expect(fireEvent.keyDown(input, { key: ',' })).toBe(true);
+    expect(fireEvent.keyDown(input, { key: '.' })).toBe(false);
   });
 
   test('focus initializes internal value from current value and calls onFocus', () => {
@@ -164,7 +209,7 @@ describe('<ValidatedNumberInput />', () => {
     fireEvent.focus(input);
     fireEvent.blur(input);
     expect(onBlur).toHaveBeenCalledTimes(1);
-    expect(input.value).toBe('9.0');
+    expect(input.value).toBe('9,0');
   });
 
   test('max: a value above the max is clamped before onValueChange', () => {
@@ -208,16 +253,17 @@ describe('<ValidatedNumberInput />', () => {
     );
     const input = getInput(container);
     fireEvent.focus(input);
-    fireEvent.change(input, { target: { value: '12.' } });
+    fireEvent.change(input, { target: { value: '12,' } });
     expect(onValueChange).toHaveBeenLastCalledWith('12.');
+    expect(input.value).toBe('12,');
   });
 
   test('forwards extra props to the underlying input (placeholder, name)', () => {
     const { container } = render(
-      <ValidatedNumberInput value="" onValueChange={() => {}} placeholder="0.00" name="amount" />,
+      <ValidatedNumberInput value="" onValueChange={() => {}} placeholder="0,00" name="amount" />,
     );
     const input = getInput(container);
-    expect(input.placeholder).toBe('0.00');
+    expect(input.placeholder).toBe('0,00');
     expect(input.name).toBe('amount');
   });
 });

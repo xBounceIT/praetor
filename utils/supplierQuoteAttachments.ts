@@ -3,6 +3,7 @@
 // create-flow staging component (SupplierQuoteAttachmentsStaging, which buffers files until the
 // quote is saved) import these, so the allowed types, size cap, and display formatting stay in
 // lockstep with each other and with the server-side guard in server/routes/supplier-quotes.ts.
+import { formatDecimal } from './numbers';
 
 const ALLOWED_ATTACHMENT_EXTENSIONS = new Set(['xlsx', 'pdf', 'docx']);
 const ATTACHMENT_MAX_FILE_SIZE = 10 * 1024 * 1024;
@@ -27,7 +28,7 @@ export const formatAttachmentFileSize = (bytes: number): string => {
     unitIndex += 1;
   }
   const decimals = unitIndex === 0 ? 0 : 1;
-  return `${value.toFixed(decimals)} ${units[unitIndex]}`;
+  return `${formatDecimal(value, decimals)} ${units[unitIndex]}`;
 };
 
 /** Size is checked before type so an oversized file reports `tooLarge` regardless of extension. */

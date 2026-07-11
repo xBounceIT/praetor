@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ApiError } from '../../../services/api/client';
-import type { Client, Quote } from '../../../types';
+import type { Client, Quote, SupplierQuote } from '../../../types';
 import { installI18nMock } from '../../helpers/i18n';
 import { LineDeleteConfirmStub } from '../../helpers/lineItemDeleteConfirm';
 import { render } from '../../helpers/render';
@@ -203,8 +203,26 @@ describe('<ClientQuotesView />', () => {
     ]);
     expect(screen.getAllByText('Email').length).toBeGreaterThan(0);
     // MOL column shows the margin percentage with two decimals (issue #780).
-    expect(screen.getByText('33.33%')).toBeInTheDocument();
-    expect(screen.getByText('12.5%')).toBeInTheDocument();
+    expect(screen.getByText('33,33%')).toBeInTheDocument();
+    expect(screen.getByText('12,5%')).toBeInTheDocument();
+  });
+
+  test('formats a fractional percentage discount with a comma', () => {
+    render(
+      <ClientQuotesView
+        quotes={[{ ...quotes[0], id: 'Q-DECIMAL', discount: 10.5 }]}
+        clients={clients}
+        products={[]}
+        supplierQuotes={[]}
+        currency="EUR"
+        onAddQuote={mock(() => Promise.resolve())}
+        onUpdateQuote={mock(() => Promise.resolve())}
+        onDeleteQuote={mock(() => Promise.resolve())}
+      />,
+    );
+
+    expect(screen.getByText('10,5%')).toBeInTheDocument();
+    expect(screen.queryByText('10.5%')).not.toBeInTheDocument();
   });
 
   test('exposes a Durata column and per-row duration input in the create dialog (issue #757)', () => {
@@ -275,16 +293,73 @@ describe('<ClientQuotesView />', () => {
       .filter((input): input is HTMLInputElement => input instanceof HTMLInputElement);
     expect(lineDiscountInputs.length).toBeGreaterThan(0);
     fireEvent.change(lineDiscountInputs[0], { target: { value: '150' } });
-    expect(lineDiscountInputs[0]).toHaveValue('100.00');
+    expect(lineDiscountInputs[0]).toHaveValue('100,00');
     fireEvent.change(lineDiscountInputs[0], { target: { value: '10' } });
-    expect(within(dialog).getAllByText('180.00 EUR').length).toBeGreaterThan(0);
-    expect(within(dialog).getAllByText('60.00 EUR').length).toBeGreaterThan(0);
+    expect(within(dialog).getAllByText('180,00 EUR').length).toBeGreaterThan(0);
+    expect(within(dialog).getAllByText('60,00 EUR').length).toBeGreaterThan(0);
 
     fireEvent.click(within(dialog).getByRole('button', { name: 'sales:clientQuotes.updateQuote' }));
     await waitFor(() => expect(onUpdateQuote).toHaveBeenCalledTimes(1));
     expect(onUpdateQuote.mock.calls[0][1].items?.[0].discount).toBe(10);
   });
 
+  test('inherits duration and its unit when selecting a supplier quote item', () => {
+    const supplierQuote: SupplierQuote = {
+      id: 'SQ-DURATION',
+      supplierId: 'supplier-1',
+      supplierName: 'Acme Supplies',
+      items: [
+        {
+          id: 'sqi-duration',
+          quoteId: 'SQ-DURATION',
+          productName: 'Managed Service',
+          quantity: 1,
+          listPrice: 120,
+          discountPercent: 0,
+          unitPrice: 120,
+          unitType: 'unit',
+          durationMonths: 24,
+          durationUnit: 'years',
+        },
+      ],
+      paymentTerms: 'immediate',
+      status: 'draft',
+      expirationDate: STABLE_FUTURE_EXPIRATION_DATE,
+      createdAt: Date.UTC(2026, 4, 14),
+      updatedAt: Date.UTC(2026, 4, 14),
+    };
+
+    render(
+      <ClientQuotesView
+        quotes={[]}
+        clients={clients}
+        products={[]}
+        supplierQuotes={[supplierQuote]}
+        currency="EUR"
+        onAddQuote={mock(() => Promise.resolve())}
+        onUpdateQuote={mock(() => Promise.resolve())}
+        onDeleteQuote={mock(() => Promise.resolve())}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'sales:clientQuotes.createNewQuote' }));
+    fireEvent.click(screen.getByText('sales:clientQuotes.addProduct'));
+    fireEvent.click(
+      screen.getAllByRole('button', { name: 'sales:clientQuotes.noSupplierQuote' })[0],
+    );
+    fireEvent.click(
+      screen.getByRole('option', {
+        name: /Acme Supplies · Managed Service \(120,00\)$/,
+      }),
+    );
+
+    const durationInputs = screen
+      .getAllByPlaceholderText('sales:clientQuotes.durationColumn')
+      .filter((element): element is HTMLInputElement => element instanceof HTMLInputElement);
+    expect(durationInputs.length).toBeGreaterThan(0);
+    expect(durationInputs.every((input) => input.value === '2')).toBe(true);
+    expect(screen.getAllByText('sales:clientQuotes.years').length).toBeGreaterThan(0);
+  });
   test('defaults a new quote to the first communication channel and shows inline management', () => {
     render(
       <ClientQuotesView
@@ -409,10 +484,10 @@ describe('<ClientQuotesView />', () => {
 
     // Subtotal (revenue) = unitPrice 100 × quantity 2 × durationMonths 3 = 600.00
     // (without the duration multiplier it would be 200.00).
-    expect(screen.getAllByText('600.00 EUR').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('600,00 EUR').length).toBeGreaterThan(0);
     // Margin = revenue 600 − cost (60 × 2 × 3 = 360) = 240.00, which only holds when BOTH
     // revenue and cost are scaled by duration.
-    expect(screen.getAllByText('240.00 EUR').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('240,00 EUR').length).toBeGreaterThan(0);
   });
 
   test('shows an editable duration field for "unit"-measured lines (always usable)', async () => {
@@ -563,9 +638,9 @@ describe('<ClientQuotesView />', () => {
     );
 
     // Subtotal (revenue) = 100 × 2 × 24 = 4800.00 — identical to a 24-month item.
-    expect(screen.getAllByText('4800.00 EUR').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('4.800,00 EUR').length).toBeGreaterThan(0);
     // Margin = 4800 − (60 × 2 × 24 = 2880) = 1920.00.
-    expect(screen.getAllByText('1920.00 EUR').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('1.920,00 EUR').length).toBeGreaterThan(0);
   });
 
   test('MOL line input keeps two decimals instead of rounding to one (issue #780)', async () => {
@@ -610,10 +685,10 @@ describe('<ClientQuotesView />', () => {
     fireEvent.click(screen.getByText('Q-MOL'));
     await screen.findByRole('dialog');
 
-    // formatDecimals={2}: the MOL inputs (mobile + desktop layouts) show 12.34, not the
-    // pre-fix rounded 12.3 that silently dropped the second decimal.
-    expect(screen.queryAllByDisplayValue('12.34').length).toBeGreaterThan(0);
-    expect(screen.queryAllByDisplayValue('12.3')).toHaveLength(0);
+    // formatDecimals={2}: the MOL inputs (mobile + desktop layouts) show 12,34, not the
+    // pre-fix rounded 12,3 that silently dropped the second decimal.
+    expect(screen.queryAllByDisplayValue('12,34').length).toBeGreaterThan(0);
+    expect(screen.queryAllByDisplayValue('12,3')).toHaveLength(0);
   });
 
   test('the read-only banner renders dark-mode-compatible amber, not a light slab (issue #768)', async () => {

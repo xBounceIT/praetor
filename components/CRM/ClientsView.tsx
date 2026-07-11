@@ -15,6 +15,7 @@ import type {
   ClientProfileOptionsByCategory,
 } from '../../types';
 import { formatInsertDate } from '../../utils/date';
+import { formatNumber } from '../../utils/numbers';
 import { hasScopedActionPermission } from '../../utils/permissions';
 import DeleteConfirmModal from '../shared/DeleteConfirmModal';
 import HeaderAddButton from '../shared/HeaderAddButton';
@@ -861,13 +862,6 @@ const useClientsController = ({
   );
 
   const columns = useMemo<Column<Client>[]>(() => {
-    const eurFormatter = new Intl.NumberFormat(language, {
-      style: 'currency',
-      currency: 'EUR',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 2,
-    });
-
     return [
       {
         header: t('crm:clients.tableHeaders.name'),
@@ -1002,7 +996,12 @@ const useClientsController = ({
           }
           return (
             <span className="text-xs font-semibold text-zinc-700 whitespace-nowrap">
-              {eurFormatter.format(value)}
+              {formatNumber(value, {
+                style: 'currency',
+                currency: 'EUR',
+                minimumFractionDigits: 0,
+                maximumFractionDigits: 2,
+              })}
             </span>
           );
         },
@@ -1018,7 +1017,12 @@ const useClientsController = ({
           }
           return (
             <span className="text-xs font-semibold text-emerald-700 whitespace-nowrap">
-              {eurFormatter.format(value)}
+              {formatNumber(value, {
+                style: 'currency',
+                currency: 'EUR',
+                minimumFractionDigits: 0,
+                maximumFractionDigits: 2,
+              })}
             </span>
           );
         },

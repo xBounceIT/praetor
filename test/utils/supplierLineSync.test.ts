@@ -4,6 +4,7 @@ import {
   buildSupplierQuoteItemIndex,
   isSupplierLineLocked,
   isSupplierLineStale,
+  pickedSupplierLineFields,
   refreshedSupplierLineFields,
 } from '../../utils/supplierLineSync';
 
@@ -178,5 +179,17 @@ describe('refreshedSupplierLineFields', () => {
       supplierItem({ unitType: 'days', unitPrice: 80 }),
     );
     expect(fields.unitPrice).toBe(10);
+  });
+});
+
+describe('pickedSupplierLineFields', () => {
+  test('inherits the supplier duration value and display unit on initial selection', () => {
+    const fields = pickedSupplierLineFields(
+      { productMolPercentage: 20, unitType: 'hours' },
+      supplierItem({ durationMonths: 24, durationUnit: 'years' }),
+    );
+
+    expect(fields.durationMonths).toBe(24);
+    expect(fields.durationUnit).toBe('years');
   });
 });

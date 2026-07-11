@@ -28,8 +28,8 @@ describe('getAttachmentExtension', () => {
 describe('formatAttachmentFileSize', () => {
   test('scales through byte units', () => {
     expect(formatAttachmentFileSize(512)).toBe('512 B');
-    expect(formatAttachmentFileSize(2048)).toBe('2.0 KB');
-    expect(formatAttachmentFileSize(5 * 1024 * 1024)).toBe('5.0 MB');
+    expect(formatAttachmentFileSize(2048)).toBe('2,0 KB');
+    expect(formatAttachmentFileSize(5 * 1024 * 1024)).toBe('5,0 MB');
   });
 
   test('guards non-finite and non-positive inputs', () => {

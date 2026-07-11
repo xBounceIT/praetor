@@ -140,9 +140,9 @@ describe('<RilView />', () => {
     expect(screen.queryByText('ril.entriesLoaded')).toBeNull();
     expect(screen.getByLabelText('ril.summary.workedDays')).toHaveTextContent('20');
     expect(screen.getByLabelText('ril.summary.lunchWindow')).toHaveTextContent('13:00-14:00');
-    expect(screen.getByLabelText('ril.summary.extraHours')).toHaveTextContent('0.0');
-    expect(screen.getByLabelText('ril.summary.totalHours')).toHaveTextContent('160.0');
-    expect(screen.getByLabelText('ril.summary.totalPicap')).toHaveTextContent('160.00');
+    expect(screen.getByLabelText('ril.summary.extraHours')).toHaveTextContent('0,0');
+    expect(screen.getByLabelText('ril.summary.totalHours')).toHaveTextContent('160,0');
+    expect(screen.getByLabelText('ril.summary.totalPicap')).toHaveTextContent('160,00');
     expect(screen.getByLabelText('ril.summary.title')).toHaveClass('xl:sticky', 'xl:top-24');
     expect(screen.getByLabelText('ril.summary.title').closest('section')?.className).toContain(
       'xl:grid-cols-[minmax(0,1fr)_15rem]',

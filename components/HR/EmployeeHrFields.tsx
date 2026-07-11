@@ -14,6 +14,7 @@ import { Textarea } from '@/components/ui/textarea';
 import type { ResponsibleUserOption } from '../../types';
 import DateField from '../shared/DateField';
 import SelectControl, { type Option } from '../shared/SelectControl';
+import ValidatedNumberInput from '../shared/ValidatedNumberInput';
 import {
   CONTRACT_TYPE_OPTIONS,
   EMPLOYMENT_STATUS_OPTIONS,
@@ -379,15 +380,13 @@ const EmployeeHrFields: React.FC<EmployeeHrFieldsProps> = ({
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium text-muted-foreground">
                   {currency}
                 </span>
-                <Input
+                <ValidatedNumberInput
                   id={`${prefix}-cost`}
-                  type="number"
-                  step="0.01"
                   min="0"
                   value={formData.costPerHour}
-                  onChange={(e) => setField('costPerHour', e.target.value)}
+                  onValueChange={(value) => setField('costPerHour', value)}
                   className="pl-8"
-                  placeholder="0.00"
+                  placeholder="0,00"
                   disabled={!canUpdateCosts}
                 />
               </div>

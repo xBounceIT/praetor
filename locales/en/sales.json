@@ -370,6 +370,7 @@
       "clientRequired": "Customer is required",
       "quoteCodeRequired": "Quote Code is required",
       "itemsRequired": "At least one item is required",
+      "listPriceRequired": "List price is required for every item",
       "expirationExtendInvalid": "Set an expiration date of today or later to revalidate the supplier quote"
     },
     "durationColumn": "Duration",

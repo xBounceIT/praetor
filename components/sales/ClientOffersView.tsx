@@ -35,7 +35,9 @@ import {
   calculatePricingTotals,
   convertUnitPrice,
   durationValueToMonths,
+  formatDecimal,
   formatMolPercentage,
+  formatNumber,
   getDurationDisplayValue,
   getItemPricingContext,
   MOL_PERCENTAGE_DECIMALS,
@@ -56,6 +58,7 @@ import {
   buildSupplierQuoteItemIndex,
   isSupplierLineLocked,
   isSupplierLineStale,
+  pickedSupplierLineFields,
   refreshedSupplierLineFields,
 } from '../../utils/supplierLineSync';
 import { toastError } from '../../utils/toast';
@@ -128,7 +131,7 @@ const getDefaultFormData = (): Partial<ClientOffer> => ({
 const formatPercentageLabelValue = (value: number): string => {
   const rounded = Math.round(value * 100) / 100;
   if (Number.isInteger(rounded)) return String(rounded);
-  return rounded.toFixed(2).replace(/0+$/, '').replace(/\.$/, '');
+  return formatNumber(rounded, { maximumFractionDigits: 2 });
 };
 
 const getDiscountPercentageValue = (
@@ -267,7 +270,7 @@ const EMPTY_PRICING_TOTALS: PricingTotals = {
 // One label shape for a supplier-quote line item, shared by the picker options and the
 // display-value lookup so the two can never drift.
 const supplierQuoteItemLabel = (quote: SupplierQuote, item: SupplierQuote['items'][number]) =>
-  `${quote.supplierName} · ${item.productName} (${item.unitPrice.toFixed(2)})`;
+  `${quote.supplierName} · ${item.productName} (${formatDecimal(item.unitPrice)})`;
 
 const useClientOffersController = ({
   offers,
@@ -668,7 +671,7 @@ const useClientOffersController = ({
         const { subtotal } = offerPricingMap.get(row.id) ?? EMPTY_PRICING_TOTALS;
         return (
           <span className="text-sm font-semibold text-zinc-700 whitespace-nowrap">
-            {subtotal.toFixed(2)} {currency}
+            {formatDecimal(subtotal)} {currency}
           </span>
         );
       },
@@ -711,7 +714,7 @@ const useClientOffersController = ({
         }
         return (
           <span className="text-sm font-semibold text-amber-600 whitespace-nowrap">
-            -{discountAmount.toFixed(2)} {currency}
+            -{formatDecimal(discountAmount)} {currency}
           </span>
         );
       },
@@ -727,7 +730,7 @@ const useClientOffersController = ({
         const { total } = offerPricingMap.get(row.id) ?? EMPTY_PRICING_TOTALS;
         return (
           <span className="text-sm font-bold text-zinc-700 whitespace-nowrap">
-            {total.toFixed(2)} {currency}
+            {formatDecimal(total)} {currency}
           </span>
         );
       },
@@ -743,7 +746,7 @@ const useClientOffersController = ({
         const { margin } = offerPricingMap.get(row.id) ?? EMPTY_PRICING_TOTALS;
         return (
           <span className="text-sm font-bold text-emerald-600 whitespace-nowrap">
-            {margin.toFixed(2)} {currency}
+            {formatDecimal(margin)} {currency}
           </span>
         );
       },
@@ -1156,18 +1159,9 @@ const useClientOffersController = ({
             current.productCost = netCost;
             current.productMolPercentage = null;
           }
-          // Same math as the refresh chip: refreshedSupplierLineFields recomputes the sale price
-          // from the picked cost and the line MOL, converting FROM the supplier item's own unit
-          // (#812 round 14) — the picked cost is priced in that unit, so converting from a
-          // hardcoded 'hours' multiplied a days-priced item by 8 on initial selection.
-          const refreshed = refreshedSupplierLineFields(current, selectedQuoteItem);
-          current.quantity = refreshed.quantity;
-          current.supplierQuoteUnitPrice = refreshed.supplierQuoteUnitPrice;
-          // Pick-time baseline: lets the server tell a deliberate pre-save edit (pushed onto the
-          // supplier item) from an untouched stale snapshot (server values win).
-          current.supplierQuoteBaseQuantity = refreshed.supplierQuoteBaseQuantity;
-          current.supplierQuoteBaseUnitPrice = refreshed.supplierQuoteBaseUnitPrice;
-          current.unitPrice = refreshed.unitPrice;
+          // Pull quantity, cost, sale price, and duration from the supplier item. The helper also
+          // stamps the pick-time quantity/cost baseline used by the server's genuine-edit check.
+          Object.assign(current, pickedSupplierLineFields(current, selectedQuoteItem));
         }
       }
 
@@ -1988,7 +1982,7 @@ const ClientOfferItemMobileMetrics: React.FC<{
       </ClientOfferInputPanel>
       <ClientOfferValuePanel
         label={t('sales:clientQuotes.totalCost', { defaultValue: 'Total cost' })}
-        value={`${line.lineCost.toFixed(2)} ${currency}`}
+        value={`${formatDecimal(line.lineCost)} ${currency}`}
         valueClassName="text-xs font-bold text-zinc-700 whitespace-nowrap"
       />
       <ClientOfferInputPanel
@@ -2003,12 +1997,12 @@ const ClientOfferItemMobileMetrics: React.FC<{
       </ClientOfferInputPanel>
       <ClientOfferValuePanel
         label={t('sales:clientQuotes.marginLabel')}
-        value={`${line.lineMargin.toFixed(2)} ${currency}`}
+        value={`${formatDecimal(line.lineMargin)} ${currency}`}
         valueClassName="text-xs font-bold text-emerald-600 whitespace-nowrap"
       />
       <ClientOfferValuePanel
         label={t('sales:clientQuotes.revenue')}
-        value={`${line.lineSalePrice.toFixed(2)} ${currency}`}
+        value={`${formatDecimal(line.lineSalePrice)} ${currency}`}
         valueClassName="text-sm font-semibold whitespace-nowrap text-zinc-800"
         className="col-span-2 md:col-span-1"
       />
@@ -2079,16 +2073,16 @@ const ClientOfferItemDesktopRow: React.FC<{
         <div className="col-span-1 flex items-center justify-center gap-1">
           <ClientOfferMolEditor controller={controller} line={line} compact />
         </div>
-        <ClientOfferDesktopAmount value={`${line.lineCost.toFixed(2)} ${currency}`} />
+        <ClientOfferDesktopAmount value={`${formatDecimal(line.lineCost)} ${currency}`} />
         <div className="col-span-1 flex items-center justify-center">
           <ClientOfferDiscountEditor controller={controller} item={item} index={index} compact />
         </div>
         <ClientOfferDesktopAmount
-          value={`${line.lineMargin.toFixed(2)} ${currency}`}
+          value={`${formatDecimal(line.lineMargin)} ${currency}`}
           className="text-emerald-600"
         />
         <ClientOfferDesktopAmount
-          value={`${line.lineSalePrice.toFixed(2)} ${currency}`}
+          value={`${formatDecimal(line.lineSalePrice)} ${currency}`}
           className="font-semibold text-zinc-800"
         />
       </div>

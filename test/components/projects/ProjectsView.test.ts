@@ -232,7 +232,7 @@ describe('ProjectsView create-form validation', () => {
     ).text();
     expect(source).toContain("header: t('projects:projects.duration')");
     expect(source).toContain(
-      "onChange={(e) => updateDraftTask(row._id, 'duration', e.target.value)}",
+      "onValueChange={(value) => updateDraftTask(row._id, 'duration', value)}",
     );
     expect(source).toContain("header: t('projects:projects.expectedEffort')");
     expect(source).toContain(
