@@ -33,6 +33,8 @@ describe('supplier accounting modal styling', () => {
       '<StandardTable<SupplierSaleOrderItem>',
       'allowColumnHiding={false}',
       "inputClassName = 'text-right'",
+      'minWidth: 244',
+      'minWidth: 174',
     ]);
     expectSourceOmitsAll(source, [
       'rounded-2xl bg-white',

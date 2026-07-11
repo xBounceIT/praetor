@@ -1228,6 +1228,7 @@ const OrderItemsSection: React.FC<{ controller: ClientsOrdersController }> = ({ 
       header: controller.t('accounting:clientsOrders.supplierOrderColumn', {
         defaultValue: 'Supplier Order',
       }),
+      minWidth: 244,
       accessorFn: (item) =>
         item.supplierSaleId
           ? `${item.supplierSaleSupplierName ?? ''} ${item.supplierSaleId}`.trim()
@@ -1241,6 +1242,7 @@ const OrderItemsSection: React.FC<{ controller: ClientsOrdersController }> = ({ 
     {
       id: 'product',
       header: controller.t('sales:clientQuotes.productsServices'),
+      minWidth: 244,
       accessorFn: (item) =>
         controller.products.find((product) => product.id === item.productId)?.name ||
         item.productName ||
@@ -1254,6 +1256,7 @@ const OrderItemsSection: React.FC<{ controller: ClientsOrdersController }> = ({ 
     {
       id: 'quantity',
       header: controller.t('sales:clientQuotes.qty'),
+      minWidth: 174,
       accessorKey: 'quantity',
       align: 'right',
       cell: ({ row }) => (
@@ -1272,6 +1275,7 @@ const OrderItemsSection: React.FC<{ controller: ClientsOrdersController }> = ({ 
     {
       id: 'duration',
       header: controller.t('sales:clientQuotes.durationColumn', { defaultValue: 'Duration' }),
+      minWidth: 174,
       accessorFn: (item) => getClientsOrderItemPricing(item).durationMonths,
       align: 'right',
       cell: ({ row }) => (

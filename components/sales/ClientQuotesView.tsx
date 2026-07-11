@@ -2292,6 +2292,7 @@ const ClientQuoteItemsSection: React.FC<{ controller: ClientQuotesController }> 
     {
       id: 'supplierQuote',
       header: t('sales:clientQuotes.supplierQuoteColumn'),
+      minWidth: 264,
       accessorFn: (item) =>
         controller.getSupplierQuoteItemDisplayValue(item.supplierQuoteItemId) || '',
       cell: ({ row }) => {
@@ -2322,6 +2323,7 @@ const ClientQuoteItemsSection: React.FC<{ controller: ClientQuotesController }> 
     {
       id: 'product',
       header: t('sales:clientQuotes.productsServices'),
+      minWidth: 244,
       accessorFn: (item) =>
         controller.products.find((product) => product.id === item.productId)?.name ||
         item.productName ||
@@ -2344,6 +2346,7 @@ const ClientQuoteItemsSection: React.FC<{ controller: ClientQuotesController }> 
     {
       id: 'quantity',
       header: t('sales:clientQuotes.qty'),
+      minWidth: 174,
       accessorKey: 'quantity',
       align: 'right',
       cell: ({ row }) => {
@@ -2364,6 +2367,7 @@ const ClientQuoteItemsSection: React.FC<{ controller: ClientQuotesController }> 
     {
       id: 'duration',
       header: t('sales:clientQuotes.durationColumn', { defaultValue: 'Duration' }),
+      minWidth: 174,
       accessorFn: (item) => getItemPricingContext(item).durationMonths,
       align: 'right',
       cell: ({ row }) => {

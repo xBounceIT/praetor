@@ -349,7 +349,9 @@ describe('<ClientsOrdersView />', () => {
       "const compactInputClass = 'h-9 max-w-[5rem] flex-none text-right font-medium';",
       'className="flex h-9 items-center justify-end gap-1"',
       'className="flex h-9 items-center justify-end whitespace-nowrap px-3 text-sm font-bold text-foreground"',
+      'minWidth: 244',
     ]);
+    expect((source.match(/minWidth: 174/g) ?? []).length).toBeGreaterThanOrEqual(2);
     expect(source).not.toContain('showColumnSettings={false}');
   });
 

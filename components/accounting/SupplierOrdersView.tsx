@@ -932,6 +932,7 @@ const SupplierOrderItemsSection: React.FC<{ controller: SupplierOrdersController
     {
       id: 'product',
       header: controller.t('crm:quotes.productsServices'),
+      minWidth: 244,
       accessorFn: (item) => item.productName || '',
       cell: ({ row }) => (
         <div className="min-w-[220px]">
@@ -985,6 +986,7 @@ const SupplierOrderItemsSection: React.FC<{ controller: SupplierOrdersController
       header: controller.t('accounting:supplierOrders.durationColumn', {
         defaultValue: 'Duration',
       }),
+      minWidth: 174,
       accessorFn: (item) => getEffectiveDurationMonths(item),
       align: 'right',
       cell: ({ row }) => (

@@ -824,6 +824,29 @@ describe('<StandardTable />', () => {
     expect(screen.getByText('Ruolo').className).not.toContain('truncate');
   });
 
+  test('explicit column minimum preserves controls wider than the header', async () => {
+    localStorage.setItem(
+      'praetor_table_colwidths_control_minimum',
+      JSON.stringify({ duration: 80 }),
+    );
+    const columns = [
+      {
+        header: 'Duration',
+        accessorKey: 'age' as const,
+        id: 'duration',
+        minWidth: 174,
+      },
+    ];
+
+    render(<StandardTable<Row> title="Control Minimum" data={sampleRows} columns={columns} />);
+
+    const headerCell = screen.getByText('Duration').closest('th') as HTMLElement;
+    const bodyCell = screen.getByText('30').closest('td') as HTMLElement;
+    await waitFor(() => expect(Number.parseInt(headerCell.style.width, 10)).toBe(174));
+    expect(Number.parseInt(headerCell.style.minWidth, 10)).toBe(174);
+    expect(Number.parseInt(bodyCell.style.minWidth, 10)).toBe(174);
+  });
+
   test('stored widths below minimum are clamped once and do not widen on remount', async () => {
     localStorage.setItem('praetor_table_colwidths_remount_width', JSON.stringify({ role: 32 }));
     const columns = [{ header: 'Ruolo', accessorKey: 'name' as const, id: 'role' }];

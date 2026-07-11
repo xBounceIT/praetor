@@ -1547,6 +1547,7 @@ const SupplierQuoteItemsSection: React.FC<{ controller: SupplierQuotesController
     {
       id: 'product',
       header: controller.t('sales:supplierQuotes.product', { defaultValue: 'Product' }),
+      minWidth: 244,
       accessorFn: (item) => item.productName || '',
       cell: ({ row }) => (
         <SupplierQuoteProductInput context={getContext(row)} className="min-w-[220px]" />
@@ -1595,6 +1596,7 @@ const SupplierQuoteItemsSection: React.FC<{ controller: SupplierQuotesController
     {
       id: 'quantity',
       header: controller.t('sales:supplierQuotes.qty', { defaultValue: 'Qty' }),
+      minWidth: 174,
       accessorKey: 'quantity',
       align: 'right',
       cell: ({ row }) => (
@@ -1608,6 +1610,7 @@ const SupplierQuoteItemsSection: React.FC<{ controller: SupplierQuotesController
     {
       id: 'duration',
       header: controller.t('sales:supplierQuotes.durationColumn', { defaultValue: 'Duration' }),
+      minWidth: 174,
       accessorFn: (item) => getEffectiveDurationMonths(item),
       align: 'right',
       cell: ({ row }) => (

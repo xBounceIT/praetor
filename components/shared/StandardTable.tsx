@@ -593,6 +593,8 @@ const tableViewReducer = (state: TableViewState, action: TableViewAction): Table
 
 export type Column<T> = {
   header: string;
+  /** Minimum rendered column width, including the table cell's horizontal padding. */
+  minWidth?: number;
   accessorKey?: keyof T;
   accessorFn?: (row: T) => string | number | boolean | null | undefined;
   cell?: (info: {
@@ -1471,6 +1473,7 @@ const useStandardTableController = <T extends object>({
       if (isRowActionColumn(col)) {
         return Math.max(
           ACTION_COLUMN_WIDTH,
+          col.minWidth ?? 0,
           Math.ceil(headerTextWidth + HEADER_CELL_HORIZONTAL_PADDING),
         );
       }
@@ -1480,6 +1483,7 @@ const useStandardTableController = <T extends object>({
         : HEADER_CONTENT_GAP + HEADER_FILTER_BUTTON_WIDTH;
       return Math.max(
         DEFAULT_MIN_COL_WIDTH,
+        col.minWidth ?? 0,
         Math.ceil(
           headerTextWidth +
             HEADER_SORT_BUTTON_HORIZONTAL_PADDING +

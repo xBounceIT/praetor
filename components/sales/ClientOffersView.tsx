@@ -1740,6 +1740,7 @@ const ClientOfferItemsSection: React.FC<{ controller: ClientOffersController }> 
     {
       id: 'supplierQuote',
       header: t('sales:clientQuotes.supplierQuoteColumn'),
+      minWidth: 264,
       accessorFn: (item) =>
         controller.getSupplierQuoteItemDisplayValue(item.supplierQuoteItemId) || '',
       cell: ({ row }) => {
@@ -1769,6 +1770,7 @@ const ClientOfferItemsSection: React.FC<{ controller: ClientOffersController }> 
     {
       id: 'product',
       header: t('sales:clientOffers.product', { defaultValue: 'Product' }),
+      minWidth: 244,
       accessorFn: (item) =>
         controller.products.find((product) => product.id === item.productId)?.name ||
         item.productName ||
@@ -1791,6 +1793,7 @@ const ClientOfferItemsSection: React.FC<{ controller: ClientOffersController }> 
     {
       id: 'quantity',
       header: t('sales:clientOffers.qty', { defaultValue: 'Qty' }),
+      minWidth: 174,
       accessorKey: 'quantity',
       align: 'right',
       cell: ({ row }) => {
@@ -1811,6 +1814,7 @@ const ClientOfferItemsSection: React.FC<{ controller: ClientOffersController }> 
     {
       id: 'duration',
       header: t('sales:clientOffers.durationColumn', { defaultValue: 'Duration' }),
+      minWidth: 174,
       accessorFn: (item) => getItemPricingContext(item).durationMonths,
       align: 'right',
       cell: ({ row }) => {
