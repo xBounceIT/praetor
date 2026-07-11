@@ -329,6 +329,24 @@ describe('getItemPricingContext', () => {
     expect(ctx.lineCost).toBe(150);
   });
 
+  test('reports discount-adjusted line revenue and margin', () => {
+    const item: PricingItem = {
+      unitPrice: 100,
+      quantity: 2,
+      productCost: 30,
+      discount: 10,
+      durationMonths: 3,
+    };
+
+    const ctx = getItemPricingContext(item);
+    expect(ctx.grossRevenue).toBe(600);
+    expect(ctx.discountPercentage).toBe(10);
+    expect(ctx.lineDiscount).toBe(60);
+    expect(ctx.netRevenue).toBe(540);
+    expect(ctx.lineCost).toBe(180);
+    expect(ctx.lineMargin).toBe(360);
+  });
+
   test('reports MOL via getEffectiveMol', () => {
     const item: PricingItem = { productCost: 50, productMolPercentage: 30 };
     expect(getItemPricingContext(item).molPercentage).toBe(30);
@@ -350,6 +368,15 @@ describe('calculatePricingTotals', () => {
   test('applies a per-line percentage discount', () => {
     const items: PricingItem[] = [{ unitPrice: 100, quantity: 1, discount: 10 }];
     expect(calculatePricingTotals(items, 0).subtotal).toBe(90);
+  });
+
+  test('allows a 100% line discount without making revenue negative', () => {
+    const items: PricingItem[] = [{ unitPrice: 100, quantity: 1, productCost: 40, discount: 100 }];
+    const totals = calculatePricingTotals(items, 0);
+    expect(totals.subtotal).toBe(0);
+    expect(totals.total).toBe(0);
+    expect(totals.totalCost).toBe(40);
+    expect(totals.margin).toBe(-40);
   });
 
   test('multiplies both revenue and cost by durationMonths (issue #757)', () => {

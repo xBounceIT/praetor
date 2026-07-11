@@ -125,8 +125,8 @@ describe('sales modal styling', () => {
 
     expectSourceContainsAll(source, [
       'className="hidden lg:flex gap-2 items-center pt-5"',
-      'className="flex-1 min-w-0 grid grid-cols-16 gap-2 items-center"',
+      'className="flex-1 min-w-0 grid grid-cols-17 gap-2 items-center"',
     ]);
-    expectSourceOmitsAll(source, ['grid grid-cols-16 gap-2 items-center pt-5']);
+    expectSourceOmitsAll(source, ['grid grid-cols-17 gap-2 items-center pt-5']);
   });
 });

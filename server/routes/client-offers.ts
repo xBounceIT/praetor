@@ -49,6 +49,7 @@ import {
   optionalDurationMonths,
   optionalDurationUnit,
   optionalLocalizedNonNegativeNumber,
+  optionalLocalizedPercentage,
   optionalNonEmptyString,
   parseDateString,
   parseLocalizedNonNegativeNumber,
@@ -111,7 +112,7 @@ const offerItemSchema = {
     supplierQuoteUnitPrice: { type: ['number', 'null'] },
     unitType: { type: 'string', enum: ['hours', 'days', 'unit'] },
     note: { type: ['string', 'null'] },
-    discount: { type: 'number' },
+    discount: { type: 'number', minimum: 0, maximum: 100 },
     durationMonths: { type: 'number' },
     durationUnit: { type: 'string', enum: ['months', 'years', 'na'] },
   },
@@ -204,7 +205,7 @@ const offerItemBodySchema = {
     supplierQuoteBaseQuantity: { type: ['number', 'null'] },
     supplierQuoteBaseUnitPrice: { type: ['number', 'null'] },
     unitType: { type: 'string', enum: ['hours', 'days', 'unit'] },
-    discount: { type: 'number' },
+    discount: { type: 'number', minimum: 0, maximum: 100 },
     note: { type: 'string' },
     durationMonths: { type: 'number' },
     durationUnit: { type: 'string', enum: ['months', 'years', 'na'] },
@@ -355,10 +356,7 @@ const normalizeItems = (
       badRequest(reply, supplierQuoteBaseUnitPriceResult.message);
       return null;
     }
-    const itemDiscountResult = optionalLocalizedNonNegativeNumber(
-      item.discount,
-      `items[${i}].discount`,
-    );
+    const itemDiscountResult = optionalLocalizedPercentage(item.discount, `items[${i}].discount`);
     if (!itemDiscountResult.ok) {
       badRequest(reply, itemDiscountResult.message);
       return null;

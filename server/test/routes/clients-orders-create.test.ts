@@ -260,6 +260,62 @@ afterEach(async () => {
 const authHeader = () => ({ authorization: `Bearer ${signToken({ userId: 'u1' })}` });
 
 describe('POST /api/clients-orders product-less supplier lines (issue #783)', () => {
+  test('201 accepts the inclusive 100% line-discount boundary', async () => {
+    coCreateMock.mockImplementation((input: Record<string, unknown>) =>
+      Promise.resolve({ ...CREATED_ORDER, id: input.id }),
+    );
+    coInsertItemsMock.mockImplementation((orderId: string) =>
+      Promise.resolve([insertedItem({ orderId, discount: 100 })]),
+    );
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/clients-orders',
+      headers: authHeader(),
+      payload: {
+        clientId: 'c1',
+        clientName: 'Acme',
+        items: [
+          {
+            productId: 'p-1',
+            productName: 'Service',
+            quantity: 1,
+            unitPrice: 100,
+            discount: 100,
+          },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(201);
+    const inserted = coInsertItemsMock.mock.calls[0][1] as Array<Record<string, unknown>>;
+    expect(inserted[0].discount).toBe(100);
+  });
+
+  test('400 rejects a line discount above 100%', async () => {
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/clients-orders',
+      headers: authHeader(),
+      payload: {
+        clientId: 'c1',
+        clientName: 'Acme',
+        items: [
+          {
+            productId: 'p-1',
+            productName: 'Service',
+            quantity: 1,
+            unitPrice: 100,
+            discount: 100.01,
+          },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(coCreateMock).not.toHaveBeenCalled();
+  });
+
   test('201 auto-generates an order id when the create payload omits it', async () => {
     coCreateMock.mockImplementation((input: Record<string, unknown>) =>
       Promise.resolve({ ...CREATED_ORDER, id: input.id }),

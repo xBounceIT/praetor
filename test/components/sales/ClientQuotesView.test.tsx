@@ -252,6 +252,57 @@ describe('<ClientQuotesView />', () => {
     expect(durationInputs[0].value).toBe('1');
   });
 
+  test('edits a per-line discount and submits net revenue and margin', async () => {
+    const onUpdateQuote = mock((_id: string, _updates: Partial<Quote>) => Promise.resolve());
+    const quote = {
+      ...quotes[0],
+      id: 'Q-LINE-DISCOUNT',
+      discount: 0,
+      items: [
+        {
+          ...quotes[0].items[0],
+          quoteId: 'Q-LINE-DISCOUNT',
+          supplierQuoteId: 'SQ-1',
+          supplierQuoteItemId: 'SQI-1',
+          supplierQuoteUnitPrice: 60,
+          discount: 0,
+        },
+      ],
+    };
+
+    render(
+      <ClientQuotesView
+        quotes={[quote]}
+        clients={clients}
+        products={[]}
+        supplierQuotes={[]}
+        communicationChannels={communicationChannels}
+        currency="EUR"
+        onAddQuote={mock(() => Promise.resolve())}
+        onUpdateQuote={onUpdateQuote}
+        onDeleteQuote={mock(() => Promise.resolve())}
+      />,
+    );
+
+    fireEvent.click(screen.getByText('Q-LINE-DISCOUNT'));
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getAllByText('common:labels.discount').length).toBeGreaterThan(0);
+
+    const lineDiscountInputs = within(dialog)
+      .getAllByRole('textbox', { name: 'common:labels.discount' })
+      .filter((input): input is HTMLInputElement => input instanceof HTMLInputElement);
+    expect(lineDiscountInputs.length).toBeGreaterThan(0);
+    fireEvent.change(lineDiscountInputs[0], { target: { value: '150' } });
+    expect(lineDiscountInputs[0]).toHaveValue('100,00');
+    fireEvent.change(lineDiscountInputs[0], { target: { value: '10' } });
+    expect(within(dialog).getAllByText('180,00 EUR').length).toBeGreaterThan(0);
+    expect(within(dialog).getAllByText('60,00 EUR').length).toBeGreaterThan(0);
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'sales:clientQuotes.updateQuote' }));
+    await waitFor(() => expect(onUpdateQuote).toHaveBeenCalledTimes(1));
+    expect(onUpdateQuote.mock.calls[0][1].items?.[0].discount).toBe(10);
+  });
+
   test('inherits duration and its unit when selecting a supplier quote item', () => {
     const supplierQuote: SupplierQuote = {
       id: 'SQ-DURATION',
@@ -298,7 +349,7 @@ describe('<ClientQuotesView />', () => {
     );
     fireEvent.click(
       screen.getByRole('option', {
-        name: /Acme Supplies · Managed Service \(120\.00\)$/,
+        name: /Acme Supplies · Managed Service \(120,00\)$/,
       }),
     );
 
@@ -309,7 +360,6 @@ describe('<ClientQuotesView />', () => {
     expect(durationInputs.every((input) => input.value === '2')).toBe(true);
     expect(screen.getAllByText('sales:clientQuotes.years').length).toBeGreaterThan(0);
   });
-
   test('defaults a new quote to the first communication channel and shows inline management', () => {
     render(
       <ClientQuotesView
@@ -659,7 +709,13 @@ describe('<ClientQuotesView />', () => {
     );
 
     fireEvent.click(screen.getByText('Q-ACCEPTED'));
-    await screen.findByRole('dialog');
+    const dialog = await screen.findByRole('dialog');
+
+    const lineDiscountInputs = within(dialog)
+      .getAllByRole('textbox', { name: 'common:labels.discount' })
+      .filter((input): input is HTMLInputElement => input instanceof HTMLInputElement);
+    expect(lineDiscountInputs.length).toBeGreaterThan(0);
+    expect(lineDiscountInputs.every((input) => input.disabled)).toBe(true);
 
     const label = screen.getByText('sales:clientQuotes.readOnlyBecauseFinal');
     // The label carries an explicit dark-mode color so it stays legible on the dark dialog.

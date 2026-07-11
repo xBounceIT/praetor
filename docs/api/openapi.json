@@ -3,7 +3,7 @@
   "info": {
     "title": "Praetor API",
     "description": "Praetor API documentation",
-    "version": "0.8.2"
+    "version": "0.8.3"
   },
   "components": {
     "securitySchemes": {
@@ -30518,7 +30518,9 @@
                               ]
                             },
                             "discount": {
-                              "type": "number"
+                              "type": "number",
+                              "minimum": 0,
+                              "maximum": 100
                             },
                             "note": {
                               "type": [
@@ -30824,7 +30826,9 @@
                           ]
                         },
                         "discount": {
-                          "type": "number"
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 100
                         },
                         "note": {
                           "type": "string"
@@ -31020,7 +31024,9 @@
                             ]
                           },
                           "discount": {
-                            "type": "number"
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 100
                           },
                           "note": {
                             "type": [
@@ -31306,7 +31312,9 @@
                           ]
                         },
                         "discount": {
-                          "type": "number"
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 100
                         },
                         "note": {
                           "type": "string"
@@ -31505,7 +31513,9 @@
                             ]
                           },
                           "discount": {
-                            "type": "number"
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 100
                           },
                           "note": {
                             "type": [
@@ -32440,7 +32450,9 @@
                             ]
                           },
                           "discount": {
-                            "type": "number"
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 100
                           },
                           "note": {
                             "type": [
@@ -32810,7 +32822,9 @@
                               ]
                             },
                             "discount": {
-                              "type": "number"
+                              "type": "number",
+                              "minimum": 0,
+                              "maximum": 100
                             },
                             "durationMonths": {
                               "type": "number"
@@ -33149,7 +33163,9 @@
                           ]
                         },
                         "discount": {
-                          "type": "number"
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 100
                         },
                         "note": {
                           "type": "string"
@@ -33365,7 +33381,9 @@
                             ]
                           },
                           "discount": {
-                            "type": "number"
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 100
                           },
                           "durationMonths": {
                             "type": "number"
@@ -33681,7 +33699,9 @@
                           ]
                         },
                         "discount": {
-                          "type": "number"
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 100
                         },
                         "note": {
                           "type": "string"
@@ -33900,7 +33920,9 @@
                             ]
                           },
                           "discount": {
-                            "type": "number"
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 100
                           },
                           "durationMonths": {
                             "type": "number"
@@ -34448,7 +34470,9 @@
                             ]
                           },
                           "discount": {
-                            "type": "number"
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 100
                           },
                           "durationMonths": {
                             "type": "number"
@@ -35268,7 +35292,9 @@
                             ]
                           },
                           "discount": {
-                            "type": "number"
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 100
                           },
                           "durationMonths": {
                             "type": "number"
@@ -36956,7 +36982,9 @@
                               ]
                             },
                             "discount": {
-                              "type": "number"
+                              "type": "number",
+                              "minimum": 0,
+                              "maximum": 100
                             },
                             "durationMonths": {
                               "type": "number"
@@ -37285,7 +37313,9 @@
                           ]
                         },
                         "discount": {
-                          "type": "number"
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 100
                         },
                         "note": {
                           "type": [
@@ -37493,7 +37523,9 @@
                             ]
                           },
                           "discount": {
-                            "type": "number"
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 100
                           },
                           "durationMonths": {
                             "type": "number"
@@ -37799,7 +37831,9 @@
                           ]
                         },
                         "discount": {
-                          "type": "number"
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 100
                         },
                         "note": {
                           "type": [
@@ -38015,7 +38049,9 @@
                             ]
                           },
                           "discount": {
-                            "type": "number"
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 100
                           },
                           "durationMonths": {
                             "type": "number"
@@ -38963,7 +38999,9 @@
                             ]
                           },
                           "discount": {
-                            "type": "number"
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 100
                           },
                           "durationMonths": {
                             "type": "number"
