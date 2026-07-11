@@ -949,6 +949,41 @@ const useClientOffersController = ({
                       : t('sales:clientOffers.markDenied', { defaultValue: 'Mark as denied' })}
                   </TooltipContent>
                 </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="inline-flex">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-sm"
+                        aria-label={t('sales:clientOffers.revertToDraft', {
+                          defaultValue: 'Revert to Draft',
+                        })}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (expired) return;
+                          handleStatusUpdate(row.id, { status: 'draft' });
+                        }}
+                        disabled={expired}
+                        className={`text-emerald-700 hover:text-emerald-700 hover:bg-emerald-50 ${expired ? 'cursor-not-allowed opacity-50' : ''}`}
+                      >
+                        <RotateCcw className="size-4" aria-hidden="true" />
+                        <span className="sr-only">
+                          {t('sales:clientOffers.revertToDraft', {
+                            defaultValue: 'Revert to Draft',
+                          })}
+                        </span>
+                      </Button>
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    {expired
+                      ? expiredTitle
+                      : t('sales:clientOffers.revertToDraft', {
+                          defaultValue: 'Revert to Draft',
+                        })}
+                  </TooltipContent>
+                </Tooltip>
               </>
             )}
             {row.status === 'accepted' && !hasOrder && onCreateClientsOrder && (

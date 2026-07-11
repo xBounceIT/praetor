@@ -484,6 +484,39 @@ describe('PUT /api/sales/client-offers/:id expired rules (issue #779)', () => {
     expect(coUpdateMock).not.toHaveBeenCalled();
   });
 
+  test('200 reverts a valid sent offer to draft with snapshot and audit', async () => {
+    coFindExistingMock.mockResolvedValue(gate({ status: 'sent', deliveryDate: '2026-05-14' }));
+    coFindFullForSnapshotMock.mockResolvedValue({
+      offer: updatedOffer({ status: 'sent', deliveryDate: '2026-05-14' }),
+      items: [],
+    });
+    coUpdateMock.mockResolvedValue(updatedOffer({ status: 'draft', deliveryDate: '2026-05-14' }));
+
+    const res = await putOffer({ status: 'draft' });
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body)).toMatchObject({
+      status: 'draft',
+      effectiveStatus: 'draft',
+      deliveryDate: '2026-05-14',
+    });
+    expect(coUpdateMock).toHaveBeenCalledWith(
+      'off-1',
+      expect.objectContaining({ status: 'draft' }),
+      expect.anything(),
+    );
+    expect(ovInsertMock).toHaveBeenCalledWith(
+      expect.objectContaining({ offerId: 'off-1', reason: 'update' }),
+      expect.anything(),
+    );
+    expect(logAuditMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'client_offer.updated',
+        details: expect.objectContaining({ fromValue: 'sent', toValue: 'draft' }),
+      }),
+    );
+  });
+
   test('200 a valid sent offer can renew its expiration date (date carved out of the lock)', async () => {
     coFindExistingMock.mockResolvedValue(gate({ status: 'sent' }));
     coUpdateMock.mockResolvedValue(updatedOffer({ status: 'sent', expirationDate: '2999-12-31' }));
