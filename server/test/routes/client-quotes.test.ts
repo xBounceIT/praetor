@@ -1764,6 +1764,132 @@ describe('client quote candidate-family create and update', () => {
     });
   });
 
+  test('rejects candidate edits when every active variant is expired', async () => {
+    cqFindCurrentMock.mockResolvedValue(gate({ status: 'sent', expirationDate: '2000-01-01' }));
+    qcListForQuoteMock.mockResolvedValue([
+      activeCandidate({ expirationDate: '2000-01-01' }),
+      activeCandidate({ id: 'qc-b', name: 'Variante B', expirationDate: '2000-02-01' }),
+    ]);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/sales/client-quotes/q-1',
+      headers: authHeader(),
+      payload: {
+        clientId: 'c1',
+        clientName: 'Client',
+        status: 'sent',
+        candidates: [
+          {
+            id: 'qc-local',
+            name: 'Variante A',
+            items: [freshLine()],
+            expirationDate: '2999-12-31',
+            communicationChannelId: 'qcc_email',
+          },
+          {
+            id: 'qc-b',
+            name: 'Variante B',
+            items: [freshLine()],
+            expirationDate: '2999-12-31',
+            communicationChannelId: 'qcc_email',
+          },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(JSON.parse(res.body).error).toContain('Expired quotes are read-only');
+    expect(cqUpdateMock).not.toHaveBeenCalled();
+  });
+
+  test('allows candidate edits while at least one active variant is still valid', async () => {
+    setupCreate();
+    const expiredCandidate = activeCandidate({ expirationDate: '2000-01-01' });
+    const validCandidate = activeCandidate({
+      id: 'qc-b',
+      name: 'Variante B',
+      position: 1,
+      expirationDate: '2999-12-31',
+    });
+    const quote = updatedQuote({ id: 'q-1', status: 'draft', expirationDate: '2000-01-01' });
+    cqFindCurrentMock.mockResolvedValue(gate({ status: 'draft', expirationDate: '2000-01-01' }));
+    cqLockCurrentByIdMock.mockResolvedValue(
+      gate({ status: 'draft', expirationDate: '2000-01-01' }),
+    );
+    cqUpdateMock.mockResolvedValue(quote);
+    cqFindByIdMock.mockResolvedValue(quote);
+    qcListForQuoteMock.mockResolvedValue([expiredCandidate, validCandidate]);
+    qcUpdateMock.mockImplementation(
+      async (_quoteId: string, _candidateId: string, input: Record<string, unknown>) => input,
+    );
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/sales/client-quotes/q-1',
+      headers: authHeader(),
+      payload: {
+        clientId: 'c1',
+        clientName: 'Client',
+        status: 'draft',
+        candidates: [
+          {
+            id: 'qc-local',
+            name: 'Variante A',
+            items: [freshLine()],
+            expirationDate: '2000-01-01',
+            communicationChannelId: 'qcc_email',
+          },
+          {
+            id: 'qc-b',
+            name: 'Variante B',
+            items: [freshLine()],
+            expirationDate: '2999-12-31',
+            communicationChannelId: 'qcc_email',
+          },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(cqUpdateMock).toHaveBeenCalled();
+  });
+
+  test('rejects a candidate save when the family expires while waiting for its lock', async () => {
+    setupCreate();
+    const validCandidate = activeCandidate({ expirationDate: '2999-12-31' });
+    const expiredCandidate = activeCandidate({ expirationDate: '2000-01-01' });
+    cqFindCurrentMock.mockResolvedValue(gate({ status: 'sent' }));
+    cqLockCurrentByIdMock.mockResolvedValue(gate({ status: 'sent' }));
+    qcListForQuoteMock
+      .mockResolvedValueOnce([validCandidate])
+      .mockResolvedValueOnce([expiredCandidate]);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/sales/client-quotes/q-1',
+      headers: authHeader(),
+      payload: {
+        clientId: 'c1',
+        clientName: 'Client',
+        status: 'sent',
+        candidates: [
+          {
+            id: 'qc-local',
+            name: 'Variante A',
+            items: [freshLine()],
+            expirationDate: '2999-12-31',
+            communicationChannelId: 'qcc_email',
+          },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(JSON.parse(res.body).error).toContain('Expired quotes are read-only');
+    expect(cqUpdateMock).not.toHaveBeenCalled();
+  });
+
   test('keeps a retained candidate supplier snapshot isolated when the source is no longer pickable', async () => {
     setupCreate();
     const existingCandidate = activeCandidate();

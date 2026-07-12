@@ -3,6 +3,7 @@ import * as clientOffersRepo from '../repositories/clientOffersRepo.ts';
 import * as clientQuotesRepo from '../repositories/clientQuotesRepo.ts';
 import * as quoteCandidatesRepo from '../repositories/quoteCandidatesRepo.ts';
 import * as quoteVersionsRepo from '../repositories/quoteVersionsRepo.ts';
+import { effectiveQuoteStatusFromDate } from '../utils/quote-status.ts';
 
 export class QuotePromotionRollbackError extends Error {
   constructor(
@@ -18,6 +19,7 @@ type RollbackQuotePromotionInput = {
   quoteId: string;
   offerId: string;
   createdByUserId: string | null;
+  rejectExpiredOffer?: boolean;
 };
 
 export const rollbackQuotePromotion = async (
@@ -47,6 +49,15 @@ export const rollbackQuotePromotion = async (
     throw new QuotePromotionRollbackError(
       'Cannot roll back a quote whose linked offer is no longer a candidate draft',
       'linked_offer_not_draft',
+    );
+  }
+  if (
+    input.rejectExpiredOffer &&
+    effectiveQuoteStatusFromDate(offer.status, offer.expirationDate) === 'expired'
+  ) {
+    throw new QuotePromotionRollbackError(
+      'Expired offers are read-only and cannot be deleted; extend the expiration date instead',
+      'expired_read_only',
     );
   }
   if (await clientOffersRepo.findLinkedSaleId(input.offerId, tx)) {

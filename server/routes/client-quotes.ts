@@ -127,6 +127,19 @@ const indexExistingQuoteItems = (
     ]),
   );
 
+const isCandidateFamilyExpired = (
+  candidates: quoteCandidatesRepo.QuoteCandidate[],
+  fallbackExpired: boolean,
+): boolean => {
+  const activeCandidates = candidates.filter((candidate) => candidate.state === 'active');
+  return activeCandidates.length > 0
+    ? activeCandidates.every(
+        (candidate) =>
+          typeof candidate.expirationDate === 'string' && isPastLocalDate(candidate.expirationDate),
+      )
+    : fallbackExpired;
+};
+
 class LinkedOfferRollbackError extends Error {
   constructor(
     message: string,
@@ -968,6 +981,20 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     return true;
   };
 
+  const replyExpiredQuoteReadOnly = (
+    quoteId: string,
+    request: FastifyRequest,
+    reply: FastifyReply,
+  ) =>
+    replyError(request, reply, {
+      statusCode: 409,
+      message: 'Expired quotes are read-only; extend the expiration date instead',
+      action: 'client_quote.update.conflict',
+      entityType: 'client_quote',
+      entityId: quoteId,
+      details: { secondaryLabel: 'expired_read_only', fromValue: 'expired' },
+    });
+
   // Distinct supplier quotes a set of lines sources (issue #779 follow-up). Structurally typed so
   // it serves resolved/normalized request lines AND stored/version-snapshot items alike. LEGACY
   // rows can carry only supplierQuoteItemId (null denormalized supplierQuoteId) — the repo's
@@ -1553,6 +1580,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           quoteCandidatesRepo.listForQuote(idResult.value),
           clientQuotesRepo.findItemSnapshotsForQuote(idResult.value),
         ]);
+        if (isCandidateFamilyExpired(existingCandidates, currentEffective === 'expired')) {
+          return replyExpiredQuoteReadOnly(idResult.value, request, reply);
+        }
         const existingItemsById = indexExistingQuoteItems(existingSnapshots);
         const preparedCandidates: PreparedCandidate[] = [];
         const names = new Set<string>();
@@ -1677,6 +1707,19 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               };
             }
             const lockedCandidates = await quoteCandidatesRepo.listForQuote(idResult.value, tx);
+            if (
+              isCandidateFamilyExpired(
+                lockedCandidates,
+                effectiveQuoteStatusFromDate(lockedCurrent.status, lockedCurrent.expirationDate) ===
+                  'expired',
+              )
+            ) {
+              return {
+                kind: 'conflict' as const,
+                message: 'Expired quotes are read-only; extend the expiration date instead',
+                secondaryLabel: 'expired_read_only',
+              };
+            }
             const lockedActiveIds = new Set(
               lockedCandidates
                 .filter((candidate) => candidate.state === 'active')
@@ -1860,14 +1903,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       // write is how a quote leaves `expired` (issue #779). Mirrors the frontend (form locked but the
       // date editable) and the supplier-quote rule; status changes are handled by the freeze below.
       if (currentEffective === 'expired' && hasNonExpirationContentUpdate) {
-        return replyError(request, reply, {
-          statusCode: 409,
-          message: 'Expired quotes are read-only; extend the expiration date instead',
-          action: 'client_quote.update.conflict',
-          entityType: 'client_quote',
-          entityId: idResult.value,
-          details: { secondaryLabel: 'expired_read_only', fromValue: 'expired' },
-        });
+        return replyExpiredQuoteReadOnly(idResult.value, request, reply);
       }
 
       let nextIdValue: string | undefined;

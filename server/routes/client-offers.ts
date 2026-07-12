@@ -1507,6 +1507,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                 quoteId: linkedQuoteId,
                 offerId: idResult.value,
                 createdByUserId: request.user?.id ?? null,
+                rejectExpiredOffer: true,
               },
               tx,
             ),

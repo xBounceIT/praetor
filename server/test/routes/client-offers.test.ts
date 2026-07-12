@@ -1289,6 +1289,24 @@ describe('DELETE /api/sales/client-offers/:id expired guard (#812 round 25)', ()
     );
   });
 
+  test('409 deleting an expired candidate-linked offer does not roll the family back', async () => {
+    getRolePermissionsMock.mockResolvedValue(['sales.client_offers.delete']);
+    const expiredCandidateOffer = gate({
+      linkedQuoteCandidateId: 'qc-a',
+      expirationDate: '2000-01-01',
+    });
+    coFindExistingMock.mockResolvedValue(expiredCandidateOffer);
+    coLockExistingByIdMock.mockResolvedValue(expiredCandidateOffer);
+    cqLockCurrentByIdMock.mockResolvedValue({ status: 'offer' });
+
+    const res = await deleteOffer();
+
+    expect(res.statusCode).toBe(409);
+    expect(JSON.parse(res.body).error).toContain('Expired offers are read-only');
+    expect(coDeleteByIdMock).not.toHaveBeenCalled();
+    expect(qcReactivateAllMock).not.toHaveBeenCalled();
+  });
+
   test('409 candidate rollback rechecks linked orders after locking the offer', async () => {
     getRolePermissionsMock.mockResolvedValue(['sales.client_offers.delete']);
     const candidateOffer = gate({ linkedQuoteCandidateId: 'qc-a' });
