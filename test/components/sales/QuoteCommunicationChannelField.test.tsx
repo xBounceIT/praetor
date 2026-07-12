@@ -63,6 +63,37 @@ describe('<QuoteCommunicationChannelField />', () => {
     });
   });
 
+  test('opens icon choices from a compact button and closes after selection', async () => {
+    const user = userEvent.setup();
+    renderField();
+
+    await user.click(screen.getByRole('button', { name: 'common:buttons.manage' }));
+
+    const iconButton = screen.getByRole('button', {
+      name: 'communicationChannels.icon: communicationChannels.icons.comments',
+    });
+    expect(iconButton.querySelector('.fa-comments')).not.toBeNull();
+    expect(
+      screen.queryByRole('radio', { name: 'communicationChannels.icons.video' }),
+    ).not.toBeInTheDocument();
+
+    await user.click(iconButton);
+    const videoOption = screen.getByRole('radio', {
+      name: 'communicationChannels.icons.video',
+    });
+    expect(videoOption.closest('[data-slot="popover-content"]')).toHaveClass('z-[100]');
+    await user.click(videoOption);
+
+    expect(
+      screen.queryByRole('radio', { name: 'communicationChannels.icons.video' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('button', {
+        name: 'communicationChannels.icon: communicationChannels.icons.video',
+      }),
+    ).toBeInTheDocument();
+  });
+
   test('renders refreshed dropdown options after manage actions update the channel list', () => {
     const { rerender } = renderField();
 
@@ -131,6 +162,11 @@ describe('<QuoteCommunicationChannelField />', () => {
       'Phone',
     );
     expect(screen.getByRole('button', { name: 'common:buttons.save' })).toBeInTheDocument();
+    await user.click(
+      screen.getByRole('button', {
+        name: 'communicationChannels.icon: communicationChannels.icons.comments',
+      }),
+    );
     await user.click(screen.getByLabelText('communicationChannels.icons.video'));
     await user.click(screen.getByRole('button', { name: 'common:buttons.save' }));
 

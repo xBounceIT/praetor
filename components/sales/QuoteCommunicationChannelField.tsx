@@ -1,9 +1,16 @@
 import type React from 'react';
-import { useMemo, useReducer } from 'react';
+import { useMemo, useReducer, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { FieldError, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
+import {
+  Popover,
+  PopoverContent,
+  PopoverHeader,
+  PopoverTitle,
+  PopoverTrigger,
+} from '@/components/ui/popover';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import type {
   QuoteCommunicationChannel,
@@ -56,39 +63,56 @@ const ChannelIconPicker: React.FC<{
   onChange: (value: QuoteCommunicationChannelIcon) => void;
 }> = ({ value, onChange }) => {
   const { t } = useTranslation('sales');
+  const [isOpen, setIsOpen] = useState(false);
+  const valueLabel = t(`communicationChannels.icons.${value}`);
 
   return (
-    <div className="space-y-2">
-      <FieldLabel id="communication-channel-icon-label">
-        {t('communicationChannels.icon')}
-      </FieldLabel>
-      <ToggleGroup
-        type="single"
-        value={value}
-        onValueChange={(nextValue) => {
-          if (nextValue) onChange(nextValue as QuoteCommunicationChannelIcon);
-        }}
-        variant="outline"
-        spacing={1}
-        aria-labelledby="communication-channel-icon-label"
-        className="flex-wrap"
-      >
-        {QUOTE_COMMUNICATION_CHANNEL_ICON_OPTIONS.map((option) => {
-          const label = t(`communicationChannels.icons.${option.value}`);
-          return (
-            <ToggleGroupItem
-              key={option.value}
-              value={option.value}
-              aria-label={label}
-              title={label}
-              className="size-9 px-0"
-            >
-              <i className={option.className} aria-hidden="true"></i>
-            </ToggleGroupItem>
-          );
-        })}
-      </ToggleGroup>
-    </div>
+    <Popover open={isOpen} onOpenChange={setIsOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          aria-label={`${t('communicationChannels.icon')}: ${valueLabel}`}
+          title={`${t('communicationChannels.icon')}: ${valueLabel}`}
+        >
+          <ChannelIcon icon={value} />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="z-[100] w-auto space-y-2 p-3">
+        <PopoverHeader>
+          <PopoverTitle>{t('communicationChannels.icon')}</PopoverTitle>
+        </PopoverHeader>
+        <ToggleGroup
+          type="single"
+          value={value}
+          onValueChange={(nextValue) => {
+            if (!nextValue) return;
+            onChange(nextValue as QuoteCommunicationChannelIcon);
+            setIsOpen(false);
+          }}
+          variant="outline"
+          spacing={1}
+          aria-label={t('communicationChannels.icon')}
+          className="grid grid-cols-3"
+        >
+          {QUOTE_COMMUNICATION_CHANNEL_ICON_OPTIONS.map((option) => {
+            const label = t(`communicationChannels.icons.${option.value}`);
+            return (
+              <ToggleGroupItem
+                key={option.value}
+                value={option.value}
+                aria-label={label}
+                title={label}
+                className="size-9 px-0"
+              >
+                <i className={option.className} aria-hidden="true"></i>
+              </ToggleGroupItem>
+            );
+          })}
+        </ToggleGroup>
+      </PopoverContent>
+    </Popover>
   );
 };
 
@@ -387,7 +411,7 @@ const QuoteCommunicationChannelField: React.FC<QuoteCommunicationChannelFieldPro
           </ModalHeader>
           <ModalBody className="space-y-6">
             <div className="space-y-3">
-              <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
+              <div className="grid grid-cols-[minmax(0,1fr)_auto_auto] gap-3">
                 <Input
                   value={channelName}
                   onChange={(event) =>
@@ -395,16 +419,16 @@ const QuoteCommunicationChannelField: React.FC<QuoteCommunicationChannelFieldPro
                   }
                   placeholder={t('sales:communicationChannels.namePlaceholder')}
                 />
+                <ChannelIconPicker
+                  value={channelIcon}
+                  onChange={(nextIcon) =>
+                    dispatchManager({ type: 'setChannelIcon', value: nextIcon })
+                  }
+                />
                 <Button type="button" onClick={handleSave} disabled={isSaving}>
                   {editingChannel ? t('common:buttons.save') : t('common:buttons.add')}
                 </Button>
               </div>
-              <ChannelIconPicker
-                value={channelIcon}
-                onChange={(nextIcon) =>
-                  dispatchManager({ type: 'setChannelIcon', value: nextIcon })
-                }
-              />
             </div>
 
             {managerError && <p className="text-sm font-medium text-destructive">{managerError}</p>}
