@@ -3536,14 +3536,18 @@ const AppContentView: React.FC<{ controller: AppContentController }> = ({ contro
   return <AuthenticatedAppShell controller={controller} />;
 };
 
-const AppLoadingScreen: React.FC = () => (
-  <div className="min-h-screen bg-zinc-100 flex items-center justify-center">
-    <div className="text-center">
-      <i className="fa-solid fa-circle-notch fa-spin text-4xl text-praetor mb-4"></i>
-      <p className="text-zinc-600 font-medium">Loading…</p>
+const AppLoadingScreen: React.FC = () => {
+  const { t } = useTranslation('common');
+
+  return (
+    <div className="min-h-screen bg-zinc-100 flex items-center justify-center">
+      <div className="text-center">
+        <i className="fa-solid fa-circle-notch fa-spin text-4xl text-praetor mb-4"></i>
+        <p className="text-zinc-600 font-medium">{t('common:states.loading')}</p>
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 const TechnicalDocsRoute: React.FC<{
   controller: AppContentController;
@@ -3662,14 +3666,18 @@ const AuthenticatedRouteContent: React.FC<{
   );
 };
 
-const ModulePendingScreen: React.FC = () => (
-  <div className="flex h-[calc(100vh-180px)] min-h-[420px] items-center justify-center rounded-lg border border-border bg-card text-card-foreground shadow-sm">
-    <div className="text-center">
-      <i className="fa-solid fa-circle-notch fa-spin text-3xl text-primary mb-3" />
-      <p className="text-sm font-medium text-muted-foreground">Loading…</p>
+const ModulePendingScreen: React.FC = () => {
+  const { t } = useTranslation('common');
+
+  return (
+    <div className="flex h-[calc(100vh-180px)] min-h-[420px] items-center justify-center rounded-lg border border-border bg-card text-card-foreground shadow-sm">
+      <div className="text-center">
+        <i className="fa-solid fa-circle-notch fa-spin text-3xl text-primary mb-3" />
+        <p className="text-sm font-medium text-muted-foreground">{t('common:states.loading')}</p>
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 const ModuleFailureBanner: React.FC<{ failures: string[] }> = ({ failures }) => {
   if (failures.length === 0) return null;
