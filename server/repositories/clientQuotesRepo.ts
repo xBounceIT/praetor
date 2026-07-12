@@ -35,6 +35,7 @@ export type ClientQuote = {
 export type ClientQuoteItem = {
   id: string;
   quoteId: string;
+  candidateId: string;
   productId: string;
   productName: string;
   quantity: number;
@@ -176,6 +177,7 @@ const mapQuote = (row: ClientQuoteSelectRow): ClientQuote => ({
 const mapItem = (row: typeof quoteItems.$inferSelect): ClientQuoteItem => ({
   id: row.id,
   quoteId: row.quoteId,
+  candidateId: row.candidateId,
   productId: row.productId ?? '',
   productName: row.productName,
   quantity: parseDbNumber(row.quantity, 0),
@@ -201,12 +203,22 @@ export const listAll = async (exec: DbExecutor = db): Promise<ClientQuote[]> => 
   return rows.map(mapQuote);
 };
 
+export const findById = async (id: string, exec: DbExecutor = db): Promise<ClientQuote | null> => {
+  const rows = await exec
+    .select(QUOTE_LIST_PROJECTION)
+    .from(quotes)
+    .where(eq(quotes.id, id))
+    .limit(1);
+  return rows[0] ? mapQuote(rows[0]) : null;
+};
+
 export const listAllItems = async (exec: DbExecutor = db): Promise<ClientQuoteItem[]> => {
   const rows = await exec
     .select()
     .from(quoteItems)
     .orderBy(
       asc(quoteItems.quoteId),
+      asc(quoteItems.candidateId),
       asc(quoteItems.position),
       asc(quoteItems.createdAt),
       asc(quoteItems.id),
@@ -442,6 +454,18 @@ export const findItemTotals = async (
   }));
 };
 
+export const findItemsForCandidate = async (
+  candidateId: string,
+  exec: DbExecutor = db,
+): Promise<ClientQuoteItem[]> => {
+  const rows = await exec
+    .select()
+    .from(quoteItems)
+    .where(eq(quoteItems.candidateId, candidateId))
+    .orderBy(asc(quoteItems.position), asc(quoteItems.createdAt), asc(quoteItems.id));
+  return rows.map(mapItem);
+};
+
 export const findItemsForQuote = async (
   quoteId: string,
   exec: DbExecutor = db,
@@ -628,6 +652,7 @@ export const insertItems = async (
   quoteId: string,
   items: NewClientQuoteItem[],
   exec: DbExecutor = db,
+  candidateId: string = quoteId,
 ): Promise<ClientQuoteItem[]> => {
   if (items.length === 0) return [];
   const rows = await exec
@@ -636,6 +661,7 @@ export const insertItems = async (
       items.map((item) => ({
         id: item.id,
         quoteId,
+        candidateId,
         position: item.position,
         productId: item.productId,
         productName: item.productName,
@@ -662,10 +688,11 @@ export const replaceItems = async (
   quoteId: string,
   items: NewClientQuoteItem[],
   exec: DbExecutor = db,
+  candidateId: string = quoteId,
 ): Promise<ClientQuoteItem[]> =>
   runAtomically(exec, async (tx) => {
-    await tx.delete(quoteItems).where(eq(quoteItems.quoteId, quoteId));
-    return insertItems(quoteId, items, tx);
+    await tx.delete(quoteItems).where(eq(quoteItems.candidateId, candidateId));
+    return insertItems(quoteId, items, tx, candidateId);
   });
 
 export const deleteById = async (id: string, exec: DbExecutor = db): Promise<boolean> => {

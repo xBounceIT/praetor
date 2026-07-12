@@ -1,6 +1,5 @@
 import { sql } from 'drizzle-orm';
 import { check, index, jsonb, pgTable, timestamp, varchar } from 'drizzle-orm/pg-core';
-import type { ClientQuote, ClientQuoteItem } from '../../repositories/clientQuotesRepo.ts';
 import { quotes } from './quotes.ts';
 import { users } from './users.ts';
 
@@ -12,19 +11,79 @@ import { users } from './users.ts';
 // stored on the quote row, but we still record it in the snapshot so the historical record is
 // complete (e.g. for audits and forward-migration tools). Older snapshots predate this field
 // and may have it as `undefined`; readers must tolerate both `undefined` and `string | null`.
-export interface QuoteVersionSnapshot {
-  schemaVersion: 1;
-  quote: Omit<
-    ClientQuote,
-    'linkedOfferId' | 'communicationChannelId' | 'communicationChannelName'
-  > & {
-    linkedOfferId?: string | null;
-    communicationChannelId?: string;
-    communicationChannelName?: string;
-  };
-  items: ClientQuoteItem[];
+export interface SnapshotQuote {
+  id: string;
+  linkedOfferId?: string | null;
+  clientId: string;
+  clientName: string;
+  paymentTerms: string | null;
+  discount: number;
+  discountType: 'percentage' | 'currency';
+  status: string;
+  expirationDate: string | null;
+  communicationChannelId?: string;
+  communicationChannelName?: string;
+  notes: string | null;
+  createdAt: number;
+  updatedAt: number;
+  linkedSupplierQuoteId: string | null;
+  linkedSupplierQuoteExpiration: string | null;
 }
 
+export interface LegacySnapshotQuoteItem {
+  id: string;
+  quoteId: string;
+  candidateId?: string;
+  productId: string;
+  productName: string;
+  quantity: number;
+  unitPrice: number;
+  productCost: number;
+  productMolPercentage: number | null;
+  supplierQuoteId: string | null;
+  supplierQuoteItemId: string | null;
+  supplierQuoteSupplierName: string | null;
+  supplierQuoteUnitPrice: number | null;
+  discount: number;
+  note: string | null;
+  unitType: 'hours' | 'days' | 'unit';
+  durationMonths: number;
+  durationUnit: 'months' | 'years' | 'na';
+}
+
+export type SnapshotQuoteItem = LegacySnapshotQuoteItem & { candidateId: string };
+export interface LegacyQuoteVersionSnapshot {
+  schemaVersion: 1;
+  quote: SnapshotQuote;
+  items: LegacySnapshotQuoteItem[];
+}
+
+export interface SnapshotQuoteCandidate {
+  id: string;
+  quoteId: string;
+  name: string;
+  position: number;
+  state: 'active' | 'selected' | 'discarded';
+  paymentTerms: string;
+  discount: number;
+  discountType: 'percentage' | 'currency';
+  expirationDate: string;
+  communicationChannelId: string;
+  communicationChannelName: string;
+  notes: string | null;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface QuoteVersionSnapshotV2 {
+  schemaVersion: 2;
+  quote: SnapshotQuote;
+  candidates: SnapshotQuoteCandidate[];
+  items: SnapshotQuoteItem[];
+}
+
+export type QuoteVersionSnapshot = LegacyQuoteVersionSnapshot | QuoteVersionSnapshotV2;
+export type NormalizedQuoteVersionSnapshot = QuoteVersionSnapshotV2;
 export const quoteVersions = pgTable(
   'quote_versions',
   {

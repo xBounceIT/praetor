@@ -1,5 +1,4 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
-import { addMonthsToDateOnly, getLocalDateString } from '../../utils/date';
 import { ApiErrorStub } from '../helpers/apiErrorStub';
 import { clearSpyStateAfterAll } from '../helpers/mockCleanup.ts';
 
@@ -13,6 +12,13 @@ const apiMocks = {
       Promise.resolve({ id, ...(updates as object) }),
   ),
   quotesDelete: mock((_id: string): Promise<void> => Promise.resolve()),
+  quotesPromote: mock(
+    (_id: string, _candidateId: string): Promise<unknown> =>
+      Promise.resolve({ quote: { id: 'q-1' }, offer: { id: 'of-1' } }),
+  ),
+  quotesRollbackPromotion: mock(
+    (_id: string): Promise<unknown> => Promise.resolve({ id: 'q-1', status: 'draft' }),
+  ),
   clientOffersList: mock((): Promise<unknown[]> => Promise.resolve([])),
   clientOffersCreate: mock(
     (data: unknown): Promise<unknown> => Promise.resolve({ id: 'of-new', ...(data as object) }),
@@ -51,6 +57,8 @@ mock.module('../../services/api', () => ({
       list: () => apiMocks.quotesList(),
       create: (data: unknown) => apiMocks.quotesCreate(data),
       update: (id: string, updates: unknown) => apiMocks.quotesUpdate(id, updates),
+      promote: (id: string, candidateId: string) => apiMocks.quotesPromote(id, candidateId),
+      rollbackPromotion: (id: string) => apiMocks.quotesRollbackPromotion(id),
       delete: (id: string) => apiMocks.quotesDelete(id),
     },
     clientOffers: {
@@ -87,6 +95,7 @@ type QuoteLike = {
   expirationDate?: string;
   linkedOfferId?: string;
   linkedSupplierQuoteId?: string | null;
+  candidates?: Array<{ id: string; state: string }>;
   items?: Array<{ supplierQuoteItemId?: string | null }>;
   clientId?: string;
 };
@@ -543,27 +552,6 @@ describe('makeQuoteHandlers', () => {
     expect(refreshSupplierQuoteFlow).not.toHaveBeenCalled();
   });
 
-  test('createClientOfferFromQuote refreshes supplier quotes when the source quote sources one', async () => {
-    apiMocks.clientOffersCreate.mockImplementation((data: unknown) =>
-      Promise.resolve({ ...(data as object), id: 'of-new' }),
-    );
-    const refreshSupplierQuoteFlow = mock(() => Promise.resolve());
-    const ctx = buildHandlers({ refreshSupplierQuoteFlow });
-    ctx.quotes.setter([{ id: 'q1', clientId: 'c1' }] as never);
-
-    await ctx.handlers.createClientOfferFromQuote({
-      id: 'q1',
-      clientId: 'c1',
-      clientName: 'Acme',
-      paymentTerms: '30',
-      discount: 0,
-      expirationDate: '2999-12-31',
-      notes: '',
-      items: sourced,
-    } as never);
-    expect(refreshSupplierQuoteFlow).toHaveBeenCalledTimes(1);
-  });
-
   test('deleteQuote removes from list', async () => {
     apiMocks.quotesDelete.mockImplementation(() => Promise.resolve());
     const ctx = buildHandlers();
@@ -657,18 +645,49 @@ describe('makeQuoteHandlers', () => {
     expect(ctx.clientOffers.get()).toEqual([{ id: 'of-1' }]);
   });
 
-  test('deleteClientOffer removes offer and unlinks affected quotes', async () => {
+  test('deleteClientOffer reloads the server-side candidate rollback state', async () => {
     apiMocks.clientOffersDelete.mockImplementation(() => Promise.resolve());
+    apiMocks.quotesList.mockImplementation(() =>
+      Promise.resolve([
+        {
+          id: 'q1',
+          status: 'draft',
+          candidates: [
+            { id: 'qc-a', state: 'active' },
+            { id: 'qc-b', state: 'active' },
+          ],
+        },
+        { id: 'q2', linkedOfferId: 'of-2' },
+      ]),
+    );
+    apiMocks.clientOffersList.mockImplementation(() => Promise.resolve([{ id: 'of-2' }]));
+    apiMocks.clientsOrdersList.mockImplementation(() => Promise.resolve([]));
     const ctx = buildHandlers();
     ctx.clientOffers.setter([{ id: 'of-1' }, { id: 'of-2' }] as never);
     ctx.quotes.setter([
-      { id: 'q1', linkedOfferId: 'of-1' },
+      {
+        id: 'q1',
+        status: 'offer',
+        linkedOfferId: 'of-1',
+        candidates: [
+          { id: 'qc-a', state: 'selected' },
+          { id: 'qc-b', state: 'discarded' },
+        ],
+      },
       { id: 'q2', linkedOfferId: 'of-2' },
     ] as never);
 
     await ctx.handlers.deleteClientOffer('of-1');
+
     expect(ctx.clientOffers.get()).toEqual([{ id: 'of-2' }]);
-    expect(ctx.quotes.get()[0].linkedOfferId).toBeUndefined();
+    expect(ctx.quotes.get()[0]).toEqual({
+      id: 'q1',
+      status: 'draft',
+      candidates: [
+        { id: 'qc-a', state: 'active' },
+        { id: 'qc-b', state: 'active' },
+      ],
+    });
     expect(ctx.quotes.get()[1].linkedOfferId).toBe('of-2');
   });
 
@@ -678,94 +697,6 @@ describe('makeQuoteHandlers', () => {
     const restore = silenceConsole();
     try {
       await expect(ctx.handlers.deleteClientOffer('of-1')).rejects.toThrow('boom');
-    } finally {
-      restore();
-    }
-  });
-
-  test('createClientOfferFromQuote creates offer, links quote, switches view', async () => {
-    apiMocks.clientOffersCreate.mockImplementation((data: unknown) =>
-      Promise.resolve({ ...(data as object), id: 'of-new' }),
-    );
-    const ctx = buildHandlers();
-    ctx.quotes.setter([{ id: 'q1', clientId: 'c1' }] as never);
-
-    const quote = {
-      id: 'q1',
-      clientId: 'c1',
-      clientName: 'Acme',
-      paymentTerms: '30',
-      discount: 5,
-      // Far future: a past date would trigger the fresh-validity-window branch instead.
-      expirationDate: '2999-12-31',
-      notes: 'note',
-      items: [{ id: 'orig-1', productId: 'p1', quantity: 1, unitPrice: 10 }],
-    };
-
-    await ctx.handlers.createClientOfferFromQuote(quote as never);
-
-    expect(apiMocks.clientOffersCreate).toHaveBeenCalled();
-    const callArg = apiMocks.clientOffersCreate.mock.calls[0][0] as Record<string, unknown>;
-    expect(callArg.id).toBeUndefined();
-    expect(callArg.linkedQuoteId).toBe('q1');
-    expect(callArg.status).toBe('draft');
-    const items = callArg.items as Array<Record<string, unknown>>;
-    expect(items[0].offerId).toBe('');
-    // ID is replaced with a temp id, not the original.
-    expect(items[0].id).not.toBe('orig-1');
-
-    expect(ctx.clientOffers.get()[0].id).toBe('of-new');
-    expect(ctx.quotes.get()[0].linkedOfferId).toBe('of-new');
-    expect(ctx.setActiveView).toHaveBeenCalledWith('sales/client-offers');
-    expect(ctx.notifyClientOfferCreated).toHaveBeenCalledWith('of-new');
-    // A still-valid source date is copied verbatim.
-    const payload = apiMocks.clientOffersCreate.mock.calls[0][0] as Record<string, unknown>;
-    expect(payload.expirationDate).toBe('2999-12-31');
-  });
-
-  test('createClientOfferFromQuote refreshes a dead validity window instead of copying it', async () => {
-    apiMocks.clientOffersCreate.mockImplementation((data: unknown) =>
-      Promise.resolve({ ...(data as object), id: 'of-new' }),
-    );
-    const ctx = buildHandlers();
-    ctx.quotes.setter([{ id: 'q1', clientId: 'c1' }] as never);
-
-    await ctx.handlers.createClientOfferFromQuote({
-      id: 'q1',
-      clientId: 'c1',
-      clientName: 'Acme',
-      paymentTerms: '30',
-      discount: 0,
-      // Long past — e.g. an accepted quote converted months later (terminal quotes never expire).
-      expirationDate: '2000-01-01',
-      notes: '',
-      items: [],
-    } as never);
-
-    const payload = apiMocks.clientOffersCreate.mock.calls[0][0] as Record<string, unknown>;
-    // Copying the dead date would mint a born-expired, immediately read-only offer (#779);
-    // the conversion mints the standard one-month window instead.
-    expect(payload.expirationDate).toBe(addMonthsToDateOnly(getLocalDateString(), 1));
-  });
-
-  test('createClientOfferFromQuote toasts on api error', async () => {
-    apiMocks.clientOffersCreate.mockImplementation(() => Promise.reject(new Error('boom')));
-    const ctx = buildHandlers();
-    const restore = silenceConsole();
-    try {
-      await ctx.handlers.createClientOfferFromQuote({
-        id: 'q1',
-        clientId: 'c1',
-        clientName: 'Acme',
-        paymentTerms: '30',
-        discount: 0,
-        expirationDate: '2999-12-31',
-        notes: '',
-        items: [],
-      } as never);
-      expect(ctx.setActiveView).not.toHaveBeenCalled();
-      expect(toastErrorMock).toHaveBeenCalledTimes(1);
-      expect(toastErrorMock.mock.calls[0][0]).toBe('boom');
     } finally {
       restore();
     }
@@ -926,5 +857,29 @@ describe('makeQuoteHandlers', () => {
     } finally {
       restore();
     }
+  });
+
+  test('promoteQuoteCandidate calls the dedicated API, refreshes the flow and notifies', async () => {
+    apiMocks.quotesPromote.mockImplementation(() =>
+      Promise.resolve({ quote: { id: 'q-1' }, offer: { id: 'of-1' } }),
+    );
+    apiMocks.quotesList.mockImplementation(() => Promise.resolve([{ id: 'q-1', status: 'offer' }]));
+    apiMocks.clientOffersList.mockImplementation(() => Promise.resolve([{ id: 'of-1' }]));
+    const ctx = buildHandlers();
+
+    await ctx.handlers.promoteQuoteCandidate('q-1', 'candidate-b');
+
+    expect(apiMocks.quotesPromote).toHaveBeenCalledWith('q-1', 'candidate-b');
+    expect(ctx.notifyClientOfferCreated).toHaveBeenCalledWith('of-1');
+    expect(ctx.refreshSupplierQuoteFlow).toHaveBeenCalled();
+  });
+
+  test('rollbackQuotePromotion reactivates the family through the dedicated API', async () => {
+    const ctx = buildHandlers();
+
+    await ctx.handlers.rollbackQuotePromotion('q-1');
+
+    expect(apiMocks.quotesRollbackPromotion).toHaveBeenCalledWith('q-1');
+    expect(ctx.refreshSupplierQuoteFlow).toHaveBeenCalled();
   });
 });

@@ -3157,7 +3157,8 @@ const useAppContentController = () => {
   const handleUpdateClientOffer = quoteHandlers.updateClientOffer;
   const handleRevertClientOfferToDraft = quoteHandlers.revertClientOfferToDraft;
   const handleDeleteClientOffer = quoteHandlers.deleteClientOffer;
-  const handleCreateClientOfferFromQuote = quoteHandlers.createClientOfferFromQuote;
+  const handlePromoteQuoteCandidate = quoteHandlers.promoteQuoteCandidate;
+  const handleRollbackQuotePromotion = quoteHandlers.rollbackQuotePromotion;
   const handleUpdateClientsOrder = quoteHandlers.updateClientsOrder;
   const handleDeleteClientsOrder = quoteHandlers.deleteClientsOrder;
   const handleCreateClientsOrderFromOffer = quoteHandlers.createClientsOrderFromOffer;
@@ -3480,7 +3481,8 @@ const useAppContentController = () => {
     handleUpdateClientOffer,
     handleRevertClientOfferToDraft,
     handleDeleteClientOffer,
-    handleCreateClientOfferFromQuote,
+    handlePromoteQuoteCandidate,
+    handleRollbackQuotePromotion,
     handleUpdateClientsOrder,
     handleDeleteClientsOrder,
     handleCreateClientsOrderFromOffer,
@@ -3908,7 +3910,8 @@ const SalesRoutes: React.FC<{ controller: AuthenticatedAppContentController }> =
     clients,
     currentUser,
     generalSettings,
-    handleCreateClientOfferFromQuote,
+    handlePromoteQuoteCandidate,
+    handleRollbackQuotePromotion,
     handleCreateClientsOrderFromOffer,
     handleCreateQuoteCommunicationChannel,
     handleCreateSupplierOrderFromQuote,
@@ -3987,7 +3990,8 @@ const SalesRoutes: React.FC<{ controller: AuthenticatedAppContentController }> =
               }
             }}
             onDeleteQuote={handleDeleteQuote}
-            onCreateOffer={handleCreateClientOfferFromQuote}
+            onPromoteCandidate={handlePromoteQuoteCandidate}
+            onRollbackPromotion={handleRollbackQuotePromotion}
             offers={clientOffers}
             onViewOffer={(offerId) => {
               setClientQuoteFilterId(null);

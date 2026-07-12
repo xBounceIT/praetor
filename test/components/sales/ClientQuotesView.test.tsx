@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ApiError } from '../../../services/api/client';
-import type { Client, Quote, SupplierQuote } from '../../../types';
+import type { Client, Quote, QuoteMutation, SupplierQuote } from '../../../types';
 import { installI18nMock } from '../../helpers/i18n';
 import { LineDeleteConfirmStub } from '../../helpers/lineItemDeleteConfirm';
 import { render } from '../../helpers/render';
@@ -191,6 +191,7 @@ describe('<ClientQuotesView />', () => {
       'sales:clientQuotes.quoteCodeColumn',
       'crm:clients.tableHeaders.insertDate',
       'sales:clientQuotes.clientColumn',
+      'sales:clientQuotes.candidates.column',
       'sales:clientQuotes.subtotal',
       'sales:clientQuotes.discountPercentColumn',
       'common:labels.discount',
@@ -256,7 +257,7 @@ describe('<ClientQuotesView />', () => {
   });
 
   test('edits a per-line discount and submits net revenue and margin', async () => {
-    const onUpdateQuote = mock((_id: string, _updates: Partial<Quote>) => Promise.resolve());
+    const onUpdateQuote = mock((_id: string, _updates: QuoteMutation) => Promise.resolve());
     const quote = {
       ...quotes[0],
       id: 'Q-LINE-DISCOUNT',
@@ -307,7 +308,7 @@ describe('<ClientQuotesView />', () => {
   });
 
   test('submits a blank duration without persisting an empty years unit', async () => {
-    const onUpdateQuote = mock((_id: string, _updates: Partial<Quote>) => Promise.resolve());
+    const onUpdateQuote = mock((_id: string, _updates: QuoteMutation) => Promise.resolve());
     const blankDurationQuote: Quote = {
       ...quotes[0],
       id: 'Q-BLANK-DURATION',
@@ -511,7 +512,7 @@ describe('<ClientQuotesView />', () => {
         },
       ],
     };
-    const onUpdateQuote = mock((_id: string, _updates: Partial<Quote>) => Promise.resolve());
+    const onUpdateQuote = mock((_id: string, _updates: QuoteMutation) => Promise.resolve());
 
     render(
       <ClientQuotesView
@@ -898,9 +899,9 @@ describe('<ClientQuotesView /> edit action gating (#812 round 13)', () => {
     });
   };
 
-  test('reprices items from local MOL when promoting a sent quote to offer', async () => {
+  test('promotes the selected candidate of a sent quote through the dedicated action', async () => {
     const user = userEvent.setup();
-    const onUpdateQuote = mock((_id: string, _updates: Partial<Quote>) => Promise.resolve());
+    const onPromoteCandidate = mock((_quoteId: string, _candidateId: string) => Promise.resolve());
 
     const staleQuote: Quote = {
       ...quotes[0],
@@ -920,6 +921,24 @@ describe('<ClientQuotesView /> edit action gating (#812 round 13)', () => {
         },
       ],
     };
+    staleQuote.candidates = [
+      {
+        id: 'candidate-a',
+        quoteId: staleQuote.id,
+        name: 'Variante A',
+        position: 0,
+        state: 'active',
+        items: staleQuote.items.map((item) => ({ ...item, candidateId: 'candidate-a' })),
+        paymentTerms: staleQuote.paymentTerms,
+        discount: staleQuote.discount,
+        discountType: staleQuote.discountType,
+        expirationDate: staleQuote.expirationDate,
+        communicationChannelId: staleQuote.communicationChannelId,
+        notes: staleQuote.notes,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      },
+    ];
 
     render(
       <ClientQuotesView
@@ -929,22 +948,27 @@ describe('<ClientQuotesView /> edit action gating (#812 round 13)', () => {
         supplierQuotes={[]}
         currency="EUR"
         onAddQuote={mock(() => Promise.resolve())}
-        onUpdateQuote={onUpdateQuote}
+        onUpdateQuote={mock(() => Promise.resolve())}
         onDeleteQuote={mock(() => Promise.resolve())}
+        onPromoteCandidate={onPromoteCandidate}
       />,
     );
 
     await openRowActions(user);
-    await user.click(await screen.findByRole('button', { name: 'sales:clientQuotes.markAsOffer' }));
+    await user.click(
+      await screen.findByRole('button', { name: 'sales:clientQuotes.candidates.chooseTitle' }),
+    );
+    const comparisonDialog = await screen.findByRole('dialog');
+    expect(within(comparisonDialog).getByText('sales:clientQuotes.molLabel')).toBeInTheDocument();
+    expect(within(comparisonDialog).getByText('-11,11%')).toBeInTheDocument();
+    await user.click(
+      await screen.findByRole('button', { name: 'sales:clientQuotes.candidates.promote' }),
+    );
 
-    await waitFor(() => expect(onUpdateQuote).toHaveBeenCalledTimes(1));
-    const updates = onUpdateQuote.mock.calls[0][1] as Partial<Quote>;
-    expect(updates.status).toBe('offer');
-    expect(updates.items?.[0]?.productId).toBe('');
-    expect(updates.items?.[0]?.unitPrice).toBe(80);
-    expect(staleQuote.items[0].unitPrice).toBe(100);
+    await waitFor(() =>
+      expect(onPromoteCandidate).toHaveBeenCalledWith('Q-LOCAL-MOL', 'candidate-a'),
+    );
   });
-
   test('keeps the edit action enabled on an expired quote without an offer (extend-date recovery)', async () => {
     // The row click opens such quotes read-only-except-expiration so the date can be extended out
     // of `expired`; the edit action must gate on the same canOpenQuoteModal predicate, not
@@ -974,9 +998,9 @@ describe('<ClientQuotesView /> edit action gating (#812 round 13)', () => {
     expect(within(dialog).getByText('sales:clientQuotes.readOnlyBecauseOffer')).toBeTruthy();
   });
 
-  test('enables back-to-draft for an offer quote whose linked offer is still draft', async () => {
+  test('uses candidate rollback for an offer quote whose linked offer is still draft', async () => {
     const user = userEvent.setup();
-    const onUpdateQuote = mock(() => Promise.resolve());
+    const onRollbackPromotion = mock(() => Promise.resolve());
     render(
       <ClientQuotesView
         quotes={[
@@ -986,6 +1010,7 @@ describe('<ClientQuotesView /> edit action gating (#812 round 13)', () => {
             status: 'offer',
             expirationDate: '2099-12-31',
             linkedOfferId: 'off-1',
+            selectedCandidateId: 'qc-selected',
           },
         ]}
         clients={clients}
@@ -993,7 +1018,8 @@ describe('<ClientQuotesView /> edit action gating (#812 round 13)', () => {
         supplierQuotes={[]}
         currency="EUR"
         onAddQuote={mock(() => Promise.resolve())}
-        onUpdateQuote={onUpdateQuote}
+        onUpdateQuote={mock(() => Promise.resolve())}
+        onRollbackPromotion={onRollbackPromotion}
         onDeleteQuote={mock(() => Promise.resolve())}
         quoteOfferStatuses={{ 'Q-OFFERED': 'draft' }}
       />,
@@ -1004,7 +1030,7 @@ describe('<ClientQuotesView /> edit action gating (#812 round 13)', () => {
     expect(restore).not.toBeDisabled();
     await user.click(restore);
     await waitFor(() => {
-      expect(onUpdateQuote).toHaveBeenCalledWith('Q-OFFERED', { status: 'draft' });
+      expect(onRollbackPromotion).toHaveBeenCalledWith('Q-OFFERED');
     });
   });
 
@@ -1019,6 +1045,7 @@ describe('<ClientQuotesView /> edit action gating (#812 round 13)', () => {
             status: 'offer',
             expirationDate: '2099-12-31',
             linkedOfferId: 'off-1',
+            selectedCandidateId: 'qc-selected',
           },
         ]}
         clients={clients}
@@ -1050,6 +1077,7 @@ describe('<ClientQuotesView /> edit action gating (#812 round 13)', () => {
             status: 'offer',
             effectiveStatus: 'expired',
             linkedOfferId: 'off-1',
+            selectedCandidateId: 'qc-selected',
           },
         ]}
         clients={clients}
@@ -1148,6 +1176,64 @@ describe('<ClientQuotesView /> line-item delete confirmation', () => {
       expect(screen.queryByText('sales:clientQuotes.removeProductTitle')).not.toBeInTheDocument();
     });
     expect(rowDeleteButtons(dialog)).toHaveLength(rowDeletes.length);
+  });
+
+  test('chooses the first unused default variant name after renames', async () => {
+    const user = userEvent.setup();
+    render(
+      <ClientQuotesView
+        quotes={[]}
+        clients={clients}
+        products={[]}
+        supplierQuotes={[]}
+        communicationChannels={communicationChannels}
+        currency="EUR"
+        onAddQuote={mock(() => Promise.resolve())}
+        onUpdateQuote={mock(() => Promise.resolve())}
+        onDeleteQuote={mock(() => Promise.resolve())}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'sales:clientQuotes.createNewQuote' }));
+    await user.click(screen.getByRole('button', { name: 'sales:clientQuotes.candidates.addMenu' }));
+    await user.click(screen.getByRole('menuitem', { name: 'sales:clientQuotes.candidates.add' }));
+    const nameInput = screen.getByLabelText('sales:clientQuotes.candidates.name');
+    await user.clear(nameInput);
+    await user.type(nameInput, 'Variante C');
+    await user.click(screen.getByRole('tab', { name: /Variante A/ }));
+    await user.click(screen.getByRole('button', { name: 'sales:clientQuotes.candidates.addMenu' }));
+    await user.click(screen.getByRole('menuitem', { name: 'sales:clientQuotes.candidates.add' }));
+
+    expect(screen.getByRole('tab', { name: /Variante B/ })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /Variante C/ })).toBeInTheDocument();
+  });
+
+  test('starts with Variante A and can add and rename candidate tabs', async () => {
+    const user = userEvent.setup();
+    render(
+      <ClientQuotesView
+        quotes={[]}
+        clients={clients}
+        products={[]}
+        supplierQuotes={[]}
+        communicationChannels={communicationChannels}
+        currency="EUR"
+        onAddQuote={mock(() => Promise.resolve())}
+        onUpdateQuote={mock(() => Promise.resolve())}
+        onDeleteQuote={mock(() => Promise.resolve())}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'sales:clientQuotes.createNewQuote' }));
+    expect(screen.getByText('Variante A')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'sales:clientQuotes.candidates.addMenu' }));
+    await user.click(screen.getByRole('menuitem', { name: 'sales:clientQuotes.candidates.add' }));
+    expect(screen.getByText('Variante B')).toBeInTheDocument();
+
+    const nameInput = screen.getByLabelText('sales:clientQuotes.candidates.name');
+    await user.clear(nameInput);
+    await user.type(nameInput, 'Premium');
+    expect(screen.getByRole('tab', { name: /Premium/ })).toBeInTheDocument();
   });
 });
 

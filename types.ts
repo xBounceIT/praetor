@@ -647,6 +647,7 @@ export interface Product {
 export interface QuoteItem {
   id: string;
   quoteId: string;
+  candidateId?: string;
   productId: string;
   productName: string;
   quantity: number;
@@ -670,11 +671,35 @@ export interface QuoteItem {
   durationUnit?: DurationUnit; // display unit: 'months' (default), 'years', or 'na' (N/A, no duration)
 }
 
+export type QuoteCandidateState = 'active' | 'selected' | 'discarded';
+
+export interface QuoteCandidate {
+  id: string;
+  quoteId: string;
+  name: string;
+  position: number;
+  state: QuoteCandidateState;
+  items: QuoteItem[];
+  paymentTerms: Quote['paymentTerms'];
+  discount: number;
+  discountType: DiscountType;
+  expirationDate: string;
+  communicationChannelId?: string;
+  communicationChannelName?: string;
+  isExpired?: boolean;
+  linkedSupplierQuoteExpired?: boolean;
+  notes?: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
 export interface Quote {
   id: string;
   clientId: string;
   clientName: string;
   items: QuoteItem[];
+  candidates?: QuoteCandidate[];
+  selectedCandidateId?: string | null;
   paymentTerms:
     | 'immediate'
     | '15gg'
@@ -707,13 +732,31 @@ export interface Quote {
   updatedAt: number;
 }
 
+export type QuoteCandidateMutation = Pick<
+  QuoteCandidate,
+  | 'name'
+  | 'items'
+  | 'paymentTerms'
+  | 'discount'
+  | 'discountType'
+  | 'expirationDate'
+  | 'communicationChannelId'
+  | 'notes'
+> & { id?: string };
+
+export type QuoteMutation = Partial<Omit<Quote, 'candidates'>> & {
+  candidates?: QuoteCandidateMutation[];
+};
+
 export type QuoteVersionReason = 'update' | 'restore';
 
 export interface QuoteVersionSnapshot {
-  schemaVersion: 1;
+  schemaVersion: 2;
   quote: Omit<
     Quote,
     | 'items'
+    | 'candidates'
+    | 'selectedCandidateId'
     | 'isExpired'
     | 'linkedOfferId'
     | 'effectiveStatus'
@@ -725,6 +768,7 @@ export interface QuoteVersionSnapshot {
     communicationChannelId?: string;
     communicationChannelName?: string;
   };
+  candidates: Array<Omit<QuoteCandidate, 'items' | 'isExpired' | 'linkedSupplierQuoteExpired'>>;
   items: QuoteItem[];
 }
 
@@ -768,6 +812,7 @@ export interface ClientOfferItem {
 export interface ClientOffer {
   id: string;
   linkedQuoteId: string;
+  linkedQuoteCandidateId?: string | null;
   clientId: string;
   clientName: string;
   items: ClientOfferItem[];

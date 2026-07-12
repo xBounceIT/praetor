@@ -101,7 +101,8 @@ const sourcingRankOrderBy = sql`
 const sourcingCandidatePredicate = sql`(
     EXISTS (
       SELECT 1 FROM quote_items qi
-      WHERE qi.quote_id = cq.id AND (
+      JOIN quote_candidates qcand ON qcand.id = qi.candidate_id
+      WHERE qi.quote_id = cq.id AND qcand.state <> 'discarded' AND (
         qi.supplier_quote_id = ${outerSupplierQuoteId}
         OR qi.supplier_quote_item_id IN (
           SELECT sqi.id FROM supplier_quote_items sqi WHERE sqi.quote_id = ${outerSupplierQuoteId}

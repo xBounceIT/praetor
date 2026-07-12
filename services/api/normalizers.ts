@@ -388,13 +388,59 @@ export const normalizeQuoteItem = (item: QuoteItem): QuoteItem => ({
   note: item.note || '',
 });
 
-export const normalizeQuote = (q: Quote): Quote => ({
-  ...q,
-  discount: Number(q.discount || 0),
-  communicationChannelId: q.communicationChannelId ?? '',
-  communicationChannelName: q.communicationChannelName ?? '',
-  items: (q.items || []).map(normalizeQuoteItem),
-});
+export const normalizeQuote = (q: Quote): Quote => {
+  const sourceCandidates =
+    q.candidates && q.candidates.length > 0
+      ? q.candidates
+      : [
+          {
+            id: q.id,
+            quoteId: q.id,
+            name: 'Variante A',
+            position: 0,
+            state: q.linkedOfferId ? ('selected' as const) : ('active' as const),
+            items: q.items || [],
+            paymentTerms: q.paymentTerms,
+            discount: q.discount,
+            discountType: q.discountType,
+            expirationDate: q.expirationDate,
+            communicationChannelId: q.communicationChannelId,
+            communicationChannelName: q.communicationChannelName,
+            notes: q.notes,
+            createdAt: q.createdAt,
+            updatedAt: q.updatedAt,
+          },
+        ];
+  const candidates = sourceCandidates.map((candidate) => ({
+    ...candidate,
+    discount: Number(candidate.discount || 0),
+    communicationChannelId: candidate.communicationChannelId ?? '',
+    communicationChannelName: candidate.communicationChannelName ?? '',
+    items: (candidate.items || []).map((item) =>
+      normalizeQuoteItem({ ...item, candidateId: item.candidateId ?? candidate.id }),
+    ),
+  }));
+  const primary =
+    candidates.find((candidate) => candidate.state === 'selected') ??
+    candidates.find((candidate) => candidate.state === 'active') ??
+    candidates[0];
+  return {
+    ...q,
+    paymentTerms: primary.paymentTerms,
+    discount: primary.discount,
+    discountType: primary.discountType,
+    expirationDate: primary.expirationDate,
+    communicationChannelId: primary.communicationChannelId ?? '',
+    communicationChannelName: primary.communicationChannelName ?? '',
+    notes: primary.notes,
+    items: primary.items,
+    candidates,
+    selectedCandidateId:
+      q.selectedCandidateId ??
+      candidates.find((candidate) => candidate.state === 'selected')?.id ??
+      null,
+  };
+};
 
 export const normalizeClientOfferItem = (item: ClientOfferItem): ClientOfferItem => ({
   ...normalizePricingItemFields(item),

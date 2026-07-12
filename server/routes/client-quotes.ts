@@ -5,14 +5,20 @@ import * as clientOffersRepo from '../repositories/clientOffersRepo.ts';
 import * as clientQuotesRepo from '../repositories/clientQuotesRepo.ts';
 import * as clientsRepo from '../repositories/clientsRepo.ts';
 import * as productsRepo from '../repositories/productsRepo.ts';
+import * as quoteCandidatesRepo from '../repositories/quoteCandidatesRepo.ts';
 import * as quoteCommunicationChannelsRepo from '../repositories/quoteCommunicationChannelsRepo.ts';
 import * as quoteVersionsRepo from '../repositories/quoteVersionsRepo.ts';
 import * as supplierQuotesRepo from '../repositories/supplierQuotesRepo.ts';
+import { clientOfferSchema } from '../schemas/clientOffers.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import {
   allocateDocumentCode,
   reserveDocumentCodeCounterFromCode,
 } from '../services/documentCodes.ts';
+import {
+  QuotePromotionRollbackError,
+  rollbackQuotePromotion,
+} from '../services/quotePromotionRollback.ts';
 import { logAudit } from '../utils/audit.ts';
 import { isPastLocalDate } from '../utils/date.ts';
 import { getUniqueViolation } from '../utils/db-errors.ts';
@@ -470,6 +476,7 @@ const quoteItemSchema = {
   properties: {
     id: { type: 'string' },
     quoteId: { type: 'string' },
+    candidateId: { type: 'string' },
     productId: { type: ['string', 'null'] },
     productName: { type: 'string' },
     quantity: { type: 'number' },
@@ -489,6 +496,7 @@ const quoteItemSchema = {
   required: [
     'id',
     'quoteId',
+    'candidateId',
     'productId',
     'productName',
     'quantity',
@@ -496,6 +504,30 @@ const quoteItemSchema = {
     'productCost',
     'discount',
   ],
+} as const;
+
+const quoteCandidateSchema = {
+  type: 'object',
+  properties: {
+    id: { type: 'string' },
+    quoteId: { type: 'string' },
+    name: { type: 'string' },
+    position: { type: 'number' },
+    state: { type: 'string', enum: ['active', 'selected', 'discarded'] },
+    paymentTerms: { type: 'string' },
+    discount: { type: 'number' },
+    discountType: { type: 'string', enum: ['percentage', 'currency'] },
+    expirationDate: { type: 'string', format: 'date' },
+    communicationChannelId: { type: 'string' },
+    communicationChannelName: { type: 'string' },
+    notes: { type: ['string', 'null'] },
+    createdAt: { type: 'number' },
+    updatedAt: { type: 'number' },
+    items: { type: 'array', items: quoteItemSchema },
+    isExpired: { type: 'boolean' },
+    linkedSupplierQuoteExpired: { type: 'boolean' },
+  },
+  required: ['id', 'quoteId', 'name', 'position', 'state', 'items', 'expirationDate'],
 } as const;
 
 const quoteSchema = {
@@ -516,6 +548,8 @@ const quoteSchema = {
     createdAt: { type: 'number' },
     updatedAt: { type: 'number' },
     items: { type: 'array', items: quoteItemSchema },
+    candidates: { type: 'array', items: quoteCandidateSchema },
+    selectedCandidateId: { type: ['string', 'null'] },
     isExpired: { type: 'boolean' },
     // Issue #779: the effective status folds in the derived `expired` overlay.
     // `linkedSupplierQuoteExpired` is true when any supplier quote the lines SOURCE is past its
@@ -540,6 +574,7 @@ const quoteSchema = {
     'createdAt',
     'updatedAt',
     'items',
+    'candidates',
     'isExpired',
     'effectiveStatus',
     'linkedSupplierQuoteExpired',
@@ -578,6 +613,22 @@ const quoteItemBodySchema = {
   required: ['productId', 'productName', 'quantity', 'unitPrice', 'unitType'],
 } as const;
 
+const quoteCandidateBodySchema = {
+  type: 'object',
+  properties: {
+    id: { type: 'string' },
+    name: { type: 'string' },
+    items: { type: 'array', items: quoteItemBodySchema },
+    paymentTerms: { type: 'string' },
+    discount: { type: 'number' },
+    discountType: { type: 'string', enum: ['percentage', 'currency'] },
+    expirationDate: { type: 'string', format: 'date' },
+    communicationChannelId: { type: 'string' },
+    notes: { type: 'string' },
+  },
+  required: ['name', 'items', 'expirationDate', 'communicationChannelId'],
+} as const;
+
 const quoteCreateBodySchema = {
   type: 'object',
   properties: {
@@ -585,6 +636,7 @@ const quoteCreateBodySchema = {
     clientId: { type: 'string' },
     clientName: { type: 'string' },
     items: { type: 'array', items: quoteItemBodySchema },
+    candidates: { type: 'array', items: quoteCandidateBodySchema },
     paymentTerms: { type: 'string' },
     discount: { type: 'number' },
     discountType: { type: 'string', enum: ['percentage', 'currency'] },
@@ -593,7 +645,7 @@ const quoteCreateBodySchema = {
     communicationChannelId: { type: 'string' },
     notes: { type: 'string' },
   },
-  required: ['clientId', 'clientName', 'items', 'expirationDate', 'communicationChannelId'],
+  required: ['clientId', 'clientName', 'candidates'],
 } as const;
 
 const quoteUpdateBodySchema = {
@@ -603,6 +655,7 @@ const quoteUpdateBodySchema = {
     clientId: { type: 'string' },
     clientName: { type: 'string' },
     items: { type: 'array', items: quoteItemBodySchema },
+    candidates: { type: 'array', items: quoteCandidateBodySchema },
     paymentTerms: { type: 'string' },
     discount: { type: 'number' },
     discountType: { type: 'string', enum: ['percentage', 'currency'] },
@@ -677,6 +730,92 @@ const buildOfferItemsFromQuoteItems = (
     durationUnit: item.durationUnit,
   }));
 
+type PreparedCandidate = {
+  id?: string;
+  name: string;
+  paymentTerms: string;
+  discount: number;
+  discountType: 'percentage' | 'currency';
+  expirationDate: string;
+  communicationChannelId: string;
+  notes: string | null;
+  items: ResolvedQuoteItem[];
+};
+
+const prepareCandidateBody = async (
+  raw: unknown,
+  index: number,
+  reply: FastifyReply,
+): Promise<PreparedCandidate | null> => {
+  if (!raw || typeof raw !== 'object') {
+    badRequest(reply, 'candidates[' + index + '] must be an object');
+    return null;
+  }
+  const candidate = raw as Record<string, unknown>;
+  const nameResult = requireNonEmptyString(candidate.name, 'candidates[' + index + '].name');
+  if (!nameResult.ok) {
+    badRequest(reply, nameResult.message);
+    return null;
+  }
+  if (!Array.isArray(candidate.items) || candidate.items.length === 0) {
+    badRequest(reply, 'candidates[' + index + '].items must be a non-empty array');
+    return null;
+  }
+  const itemResult = normalizeQuoteItems(candidate.items);
+  if (!itemResult.ok) {
+    badRequest(reply, itemResult.message);
+    return null;
+  }
+  const expirationResult = parseDateString(
+    candidate.expirationDate,
+    'candidates[' + index + '].expirationDate',
+  );
+  if (!expirationResult.ok) {
+    badRequest(reply, expirationResult.message);
+    return null;
+  }
+  const channel = await resolveCommunicationChannel(candidate.communicationChannelId, reply, {
+    required: true,
+  });
+  if (!channel) return null;
+  const discountResult = optionalLocalizedNonNegativeNumber(
+    candidate.discount,
+    'candidates[' + index + '].discount',
+  );
+  if (!discountResult.ok) {
+    badRequest(reply, discountResult.message);
+    return null;
+  }
+  const discount = discountResult.value ?? 0;
+  const discountType = candidate.discountType === 'currency' ? 'currency' : 'percentage';
+  let resolvedItems: ResolvedQuoteItem[];
+  try {
+    resolvedItems = await resolveQuoteItemSnapshots(itemResult.items);
+  } catch (error) {
+    badRequest(reply, (error as Error).message);
+    return null;
+  }
+  const totals = calculateQuoteTotals(resolvedItems, discount, discountType);
+  if (!Number.isFinite(totals.total) || totals.total <= 0) {
+    badRequest(reply, 'candidates[' + index + '].total must be greater than 0');
+    return null;
+  }
+  return {
+    id: typeof candidate.id === 'string' && candidate.id.trim() ? candidate.id.trim() : undefined,
+    name: nameResult.value,
+    paymentTerms:
+      typeof candidate.paymentTerms === 'string' && candidate.paymentTerms
+        ? candidate.paymentTerms
+        : 'immediate',
+    discount,
+    discountType,
+    expirationDate: expirationResult.value,
+    communicationChannelId: channel.id,
+    notes: typeof candidate.notes === 'string' ? candidate.notes : null,
+    items: resolvedItems,
+  };
+};
+
 export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.addHook('onRequest', authenticateToken);
 
@@ -693,9 +832,32 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     sourcedExpiration: string | null,
   ) => {
     const effectiveStatus = effectiveQuoteStatusFromDate(quote.status, quote.expirationDate);
+    const normalizedItems = items.map((item) => ({
+      ...item,
+      candidateId: item.candidateId || item.quoteId,
+    }));
+    const fallbackCandidate = {
+      id: quote.id,
+      quoteId: quote.id,
+      name: 'Variante A',
+      position: 0,
+      state: quote.status === 'offer' ? ('selected' as const) : ('active' as const),
+      paymentTerms: quote.paymentTerms ?? 'immediate',
+      discount: quote.discount,
+      discountType: quote.discountType,
+      expirationDate: quote.expirationDate,
+      communicationChannelId: quote.communicationChannelId,
+      communicationChannelName: quote.communicationChannelName,
+      notes: quote.notes,
+      createdAt: quote.createdAt,
+      updatedAt: quote.updatedAt,
+      items: normalizedItems,
+    };
     return {
       ...quote,
-      items,
+      items: normalizedItems,
+      candidates: [fallbackCandidate],
+      selectedCandidateId: quote.status === 'offer' ? quote.id : null,
       // `isExpired` is retained for backward compatibility (existing consumers); it derives from
       // the effective status so terminal accepted/denied never report expired (issue #779).
       // Prefer `effectiveStatus` in new code.
@@ -710,37 +872,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         !!sourcedExpiration &&
         isPastLocalDate(sourcedExpiration),
     };
-  };
-
-  const createDraftOfferFromQuote = async (
-    quote: clientQuotesRepo.ClientQuote,
-    items: clientQuotesRepo.ClientQuoteItem[],
-    tx: DbExecutor,
-  ): Promise<string> => {
-    if (!quote.expirationDate) {
-      throw new Error('Cannot create an offer from a quote without an expiration date');
-    }
-    const offerId = await allocateDocumentCode('client_offer', {
-      exec: tx,
-      sourceCode: quote.id,
-    });
-    const offer = await clientOffersRepo.create(
-      {
-        id: offerId,
-        linkedQuoteId: quote.id,
-        clientId: quote.clientId,
-        clientName: quote.clientName,
-        paymentTerms: quote.paymentTerms ?? 'immediate',
-        discount: quote.discount,
-        discountType: quote.discountType,
-        status: 'draft',
-        expirationDate: quote.expirationDate,
-        notes: quote.notes,
-      },
-      tx,
-    );
-    await clientOffersRepo.insertItems(offer.id, buildOfferItemsFromQuoteItems(items), tx);
-    return offer.id;
   };
 
   const deleteDraftLinkedOfferForRollback = async (
@@ -816,18 +947,100 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     return Array.from(ids);
   };
 
+  const loadFamilyResponse = async (quoteId: string, exec?: DbExecutor) => {
+    const [quote, candidates, familyItems] = await Promise.all([
+      clientQuotesRepo.findById(quoteId, exec),
+      quoteCandidatesRepo.listForQuote(quoteId, exec),
+      clientQuotesRepo.findItemsForQuote(quoteId, exec),
+    ]);
+    if (!quote) return null;
+    const itemsByCandidate = new Map<string, clientQuotesRepo.ClientQuoteItem[]>();
+    for (const item of familyItems) {
+      const items = itemsByCandidate.get(item.candidateId);
+      if (items) items.push(item);
+      else itemsByCandidate.set(item.candidateId, [item]);
+    }
+    const supplierIdsByCandidate = new Map<string, Set<string>>();
+    const itemOnlyCandidateIds = new Map<string, Set<string>>();
+    for (const item of familyItems) {
+      if (item.supplierQuoteId) {
+        const supplierIds = supplierIdsByCandidate.get(item.candidateId);
+        if (supplierIds) supplierIds.add(item.supplierQuoteId);
+        else supplierIdsByCandidate.set(item.candidateId, new Set([item.supplierQuoteId]));
+      } else if (item.supplierQuoteItemId) {
+        const candidateIds = itemOnlyCandidateIds.get(item.supplierQuoteItemId);
+        if (candidateIds) candidateIds.add(item.candidateId);
+        else itemOnlyCandidateIds.set(item.supplierQuoteItemId, new Set([item.candidateId]));
+      }
+    }
+    if (itemOnlyCandidateIds.size > 0) {
+      const snapshots = await supplierQuotesRepo.getQuoteItemSnapshots(
+        Array.from(itemOnlyCandidateIds.keys()),
+        exec,
+      );
+      for (const [itemId, candidateIds] of itemOnlyCandidateIds) {
+        const supplierQuoteId = snapshots.get(itemId)?.supplierQuoteId;
+        if (!supplierQuoteId) continue;
+        for (const candidateId of candidateIds) {
+          const supplierIds = supplierIdsByCandidate.get(candidateId);
+          if (supplierIds) supplierIds.add(supplierQuoteId);
+          else supplierIdsByCandidate.set(candidateId, new Set([supplierQuoteId]));
+        }
+      }
+    }
+    const blockingExpirations = await supplierQuotesRepo.findBlockingExpirationsByIds(
+      Array.from(
+        new Set(Array.from(supplierIdsByCandidate.values()).flatMap((ids) => Array.from(ids))),
+      ),
+      exec,
+    );
+    const enrichedCandidates = candidates.map((candidate) => {
+      const supplierIds = supplierIdsByCandidate.get(candidate.id) ?? new Set<string>();
+      return {
+        ...candidate,
+        items: itemsByCandidate.get(candidate.id) ?? [],
+        isExpired: isPastLocalDate(candidate.expirationDate),
+        linkedSupplierQuoteExpired: Array.from(supplierIds).some((supplierId) => {
+          const expiration = blockingExpirations.get(supplierId);
+          return Boolean(expiration && isPastLocalDate(expiration));
+        }),
+      };
+    });
+    const selected = enrichedCandidates.find((candidate) => candidate.state === 'selected');
+    const primary =
+      selected ??
+      enrichedCandidates.find((candidate) => candidate.state === 'active') ??
+      enrichedCandidates[0];
+    const active = enrichedCandidates.filter((candidate) => candidate.state === 'active');
+    const allActiveExpired = active.length > 0 && active.every((candidate) => candidate.isExpired);
+    const response = buildQuoteResponse(quote, primary?.items ?? [], null);
+    return {
+      ...response,
+      candidates: enrichedCandidates,
+      selectedCandidateId: selected?.id ?? null,
+      isExpired: allActiveExpired,
+      effectiveStatus:
+        allActiveExpired && quote.status !== 'offer' && !isTerminalQuoteStatus(quote.status)
+          ? 'expired'
+          : response.effectiveStatus,
+    };
+  };
+
   const snapshotPreState = async (
     quoteId: string,
     reason: quoteVersionsRepo.QuoteVersionReason,
     request: FastifyRequest,
     tx: DbExecutor,
   ) => {
-    const pre = await clientQuotesRepo.findFullForSnapshot(quoteId, tx);
+    const [pre, candidates] = await Promise.all([
+      clientQuotesRepo.findFullForSnapshot(quoteId, tx),
+      quoteCandidatesRepo.listForQuote(quoteId, tx),
+    ]);
     if (!pre) return;
     await quoteVersionsRepo.insert(
       {
         quoteId,
-        snapshot: quoteVersionsRepo.buildSnapshot(pre.quote, pre.items),
+        snapshot: quoteVersionsRepo.buildSnapshot(pre.quote, pre.items, candidates),
         reason,
         createdByUserId: request.user?.id ?? null,
       },
@@ -876,9 +1089,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       },
     },
     async (_request: FastifyRequest, _reply: FastifyReply) => {
-      const [quotes, items] = await Promise.all([
+      const [quotes, items, candidates] = await Promise.all([
         clientQuotesRepo.listAll(),
         clientQuotesRepo.listAllItems(),
+        quoteCandidatesRepo.listAll(),
       ]);
 
       const itemsByQuote = new Map<string, clientQuotesRepo.ClientQuoteItem[]>();
@@ -886,6 +1100,21 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         const list = itemsByQuote.get(item.quoteId);
         if (list) list.push(item);
         else itemsByQuote.set(item.quoteId, [item]);
+      }
+
+      const itemsByCandidate = new Map<string, clientQuotesRepo.ClientQuoteItem[]>();
+      for (const item of items) {
+        const candidateId = item.candidateId || item.quoteId;
+        const list = itemsByCandidate.get(candidateId);
+        if (list) list.push(item);
+        else itemsByCandidate.set(candidateId, [item]);
+      }
+
+      const candidatesByQuote = new Map<string, quoteCandidatesRepo.QuoteCandidate[]>();
+      for (const candidate of candidates) {
+        const list = candidatesByQuote.get(candidate.quoteId);
+        if (list) list.push(candidate);
+        else candidatesByQuote.set(candidate.quoteId, [candidate]);
       }
 
       // One batched status-aware read for every sourced supplier quote in the list (#812 round
@@ -910,14 +1139,53 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         items.map(resolvedSourcedId).filter((id): id is string => id !== null),
       );
       return quotes.map((quote) => {
-        const quoteItems = itemsByQuote.get(quote.id) ?? [];
+        const familyCandidates = candidatesByQuote.get(quote.id) ?? [];
+        const selectedCandidate = familyCandidates.find(
+          (candidate) => candidate.state === 'selected',
+        );
+        const primaryCandidate =
+          selectedCandidate ??
+          familyCandidates.find((candidate) => candidate.state === 'active') ??
+          familyCandidates[0];
+        const quoteItems = primaryCandidate
+          ? (itemsByCandidate.get(primaryCandidate.id) ?? itemsByQuote.get(quote.id) ?? [])
+          : (itemsByQuote.get(quote.id) ?? []);
+        const enrichedCandidates = familyCandidates.map((candidate) => {
+          const candidateItems = itemsByCandidate.get(candidate.id) ?? [];
+          const supplierExpired = candidateItems.some((item) => {
+            const sourcedId = resolvedSourcedId(item);
+            const date = sourcedId ? blockingExpirations.get(sourcedId) : undefined;
+            return Boolean(date && isPastLocalDate(date));
+          });
+          return {
+            ...candidate,
+            items: candidateItems,
+            isExpired: isPastLocalDate(candidate.expirationDate),
+            linkedSupplierQuoteExpired: supplierExpired,
+          };
+        });
+        const activeCandidates = enrichedCandidates.filter(
+          (candidate) => candidate.state === 'active',
+        );
+        const allActiveExpired =
+          activeCandidates.length > 0 && activeCandidates.every((candidate) => candidate.isExpired);
         let earliest: string | null = null;
         for (const item of quoteItems) {
           const sourcedId = resolvedSourcedId(item);
           const date = sourcedId ? blockingExpirations.get(sourcedId) : undefined;
           if (date && (!earliest || date < earliest)) earliest = date;
         }
-        return buildQuoteResponse(quote, quoteItems, earliest);
+        const response = buildQuoteResponse(quote, quoteItems, earliest);
+        return {
+          ...response,
+          candidates: enrichedCandidates,
+          selectedCandidateId: selectedCandidate?.id ?? null,
+          isExpired: allActiveExpired,
+          effectiveStatus:
+            allActiveExpired && quote.status !== 'offer' && !isTerminalQuoteStatus(quote.status)
+              ? 'expired'
+              : response.effectiveStatus,
+        };
       });
     },
   );
@@ -942,26 +1210,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         id: nextId,
         clientId,
         clientName,
-        items,
-        paymentTerms,
-        discount,
-        discountType,
+        candidates,
         status,
-        expirationDate,
-        communicationChannelId,
-        notes,
       } = request.body as {
         id?: unknown;
         clientId: unknown;
         clientName: unknown;
-        items: unknown;
-        paymentTerms: unknown;
-        discount: unknown;
-        discountType: unknown;
-        status: unknown;
-        expirationDate: unknown;
-        communicationChannelId: unknown;
-        notes: unknown;
+        candidates: unknown;
+        status?: unknown;
       };
 
       const nextIdResult = optionalNonEmptyString(nextId, 'id');
@@ -973,52 +1229,22 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const clientNameResult = requireNonEmptyString(clientName, 'clientName');
       if (!clientNameResult.ok) return badRequest(reply, clientNameResult.message);
 
-      if (!Array.isArray(items) || items.length === 0) {
-        return badRequest(reply, 'Items must be a non-empty array');
+      if (!Array.isArray(candidates) || candidates.length === 0) {
+        return badRequest(reply, 'Candidates must be a non-empty array');
+      }
+      const preparedCandidates: PreparedCandidate[] = [];
+      const normalizedNames = new Set<string>();
+      for (let index = 0; index < candidates.length; index++) {
+        const prepared = await prepareCandidateBody(candidates[index], index, reply);
+        if (!prepared) return;
+        const normalizedName = prepared.name.toLocaleLowerCase();
+        if (normalizedNames.has(normalizedName)) {
+          return badRequest(reply, 'Candidate names must be unique within a quote');
+        }
+        normalizedNames.add(normalizedName);
+        preparedCandidates.push(prepared);
       }
 
-      const itemsResult = normalizeQuoteItems(items);
-      if (!itemsResult.ok) return badRequest(reply, itemsResult.message);
-      const normalizedItems = itemsResult.items;
-
-      const expirationDateResult = parseDateString(expirationDate, 'expirationDate');
-      if (!expirationDateResult.ok) return badRequest(reply, expirationDateResult.message);
-
-      const communicationChannel = await resolveCommunicationChannel(
-        communicationChannelId,
-        reply,
-        {
-          required: true,
-        },
-      );
-      if (!communicationChannel) return;
-
-      const discountResult = optionalLocalizedNonNegativeNumber(discount, 'discount');
-      if (!discountResult.ok) return badRequest(reply, discountResult.message);
-      const discountValue = discountResult.value || 0;
-      const discountTypeValue = discountType === 'currency' ? 'currency' : 'percentage';
-
-      let resolvedItems: ResolvedQuoteItem[];
-      try {
-        resolvedItems = await resolveQuoteItemSnapshots(normalizedItems);
-      } catch (err) {
-        return badRequest(reply, (err as Error).message);
-      }
-
-      const totals = calculateQuoteTotals(resolvedItems, discountValue, discountTypeValue);
-      if (!Number.isFinite(totals.total) || totals.total <= 0) {
-        return badRequest(reply, 'Total must be greater than 0');
-      }
-
-      // The supplier quotes this quote sources via its lines (issue #779 follow-up): the earliest
-      // of their expirations drives the progression guard and the response's expired indicator.
-      const sourcedExpiration = await supplierQuotesRepo.findEarliestExpirationByIds(
-        await sourcedSupplierQuoteIds(resolvedItems),
-      );
-
-      // Strict write-path status parse (issue #779): canonical + known legacy spellings pass (the
-      // request schema doesn't constrain status); anything else is a 400 — flooring it to draft
-      // would hide the caller's mistake behind a silent demotion.
       let initialStatus: QuotePipelineStatus = 'draft';
       if (typeof status === 'string' && status) {
         const parsedStatus = parseQuoteStatusInput(status);
@@ -1027,21 +1253,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         }
         initialStatus = parsedStatus;
       }
-      // A quote created directly in sent/offer/accepted must respect the expired-supplier guard.
-      if (
-        await blockIfSourcedSupplierExpired(
-          initialStatus,
-          sourcedExpiration,
-          nextIdResult.value ?? 'auto',
-          request,
-          reply,
-        )
-      ) {
-        return;
+      if (initialStatus === 'offer' || initialStatus === 'accepted') {
+        return badRequest(reply, 'Use the candidate promotion endpoint to create an offer');
       }
+      if (initialStatus !== 'draft') {
+        return badRequest(reply, 'New candidate families must start in draft status');
+      }
+      const primaryCandidate = preparedCandidates[0];
 
       try {
-        const { quote, createdItems, syncAudits } = await withDbTransaction(async (tx) => {
+        const { quote } = await withDbTransaction(async (tx) => {
           let quoteId: string;
           if (nextIdResult.value) {
             await reserveDocumentCodeCounterFromCode('client_quote', nextIdResult.value, tx);
@@ -1054,59 +1275,83 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               id: quoteId,
               clientId: clientIdResult.value,
               clientName: clientNameResult.value,
-              paymentTerms:
-                typeof paymentTerms === 'string' && paymentTerms ? paymentTerms : 'immediate',
-              discount: discountValue,
-              discountType: discountTypeValue,
+              paymentTerms: primaryCandidate.paymentTerms,
+              discount: primaryCandidate.discount,
+              discountType: primaryCandidate.discountType,
               status: initialStatus,
-              expirationDate: expirationDateResult.value,
-              communicationChannelId: communicationChannel.id,
-              notes: (notes as string | null | undefined) ?? null,
+              expirationDate: primaryCandidate.expirationDate,
+              communicationChannelId: primaryCandidate.communicationChannelId,
+              notes: primaryCandidate.notes,
               // The supplier↔client link is line-sourced now (issue #779 follow-up); the vestigial
               // header column is never populated.
               linkedSupplierQuoteId: null,
             },
             tx,
           );
-          const [items, audits] = await Promise.all([
-            clientQuotesRepo.insertItems(created.id, buildItemsForInsert(resolvedItems), tx),
-            syncSupplierItemsFromClientLines(request, 'client_quote.create', resolvedItems, [], tx),
-          ]);
-          const linkedOfferId =
-            initialStatus === 'offer' ? await createDraftOfferFromQuote(created, items, tx) : null;
-          return {
-            quote: linkedOfferId ? { ...created, linkedOfferId } : created,
-            createdItems: items,
-            syncAudits: audits,
-          };
+          await quoteCandidatesRepo.insert(
+            {
+              id: created.id,
+              quoteId: created.id,
+              name: primaryCandidate.name,
+              position: 0,
+              state: 'active',
+              paymentTerms: created.paymentTerms ?? 'immediate',
+              discount: created.discount,
+              discountType: created.discountType,
+              expirationDate: created.expirationDate ?? primaryCandidate.expirationDate,
+              communicationChannelId: created.communicationChannelId,
+              notes: created.notes,
+            },
+            tx,
+          );
+          await clientQuotesRepo.insertItems(
+            created.id,
+            buildItemsForInsert(primaryCandidate.items),
+            tx,
+          );
+          for (let index = 1; index < preparedCandidates.length; index++) {
+            const input = preparedCandidates[index];
+            const candidateId = generatePrefixedId('qc');
+            await quoteCandidatesRepo.insert(
+              {
+                id: candidateId,
+                quoteId: created.id,
+                name: input.name,
+                position: index,
+                state: 'active',
+                paymentTerms: input.paymentTerms,
+                discount: input.discount,
+                discountType: input.discountType,
+                expirationDate: input.expirationDate,
+                communicationChannelId: input.communicationChannelId,
+                notes: input.notes,
+              },
+              tx,
+            );
+            await clientQuotesRepo.insertItems(
+              created.id,
+              buildItemsForInsert(input.items),
+              tx,
+              candidateId,
+            );
+          }
+          return { quote: created };
         });
 
-        await Promise.all([
-          logSupplierItemSyncAudits(request, syncAudits),
-          logAudit({
-            request,
-            action: 'client_quote.created',
-            entityType: 'client_quote',
-            entityId: quote.id,
-            details: {
-              targetLabel: quote.id,
-              secondaryLabel: clientNameResult.value,
-              changedFields: ['communicationChannelId'],
-              toValue: communicationChannel.name,
-            },
-          }),
-        ]);
-        return reply.code(201).send(buildQuoteResponse(quote, createdItems, sourcedExpiration));
+        await logAudit({
+          request,
+          action: 'client_quote.created',
+          entityType: 'client_quote',
+          entityId: quote.id,
+          details: {
+            targetLabel: quote.id,
+            secondaryLabel: clientNameResult.value,
+            changedFields: ['communicationChannelId'],
+            toValue: primaryCandidate.communicationChannelId,
+          },
+        });
+        return reply.code(201).send(await loadFamilyResponse(quote.id));
       } catch (err) {
-        // The client→supplier item sync refuses to write frozen/order-locked supplier quotes or
-        // to run without the supplier-quote update grant; the tx rolled back, so the quote was
-        // rejected together with the supplier write (issue #779).
-        if (err instanceof SupplierItemSyncError) {
-          return replySupplierItemSyncError(request, reply, err, {
-            entityType: 'client_quote',
-            entityId: nextIdResult.value ?? 'auto',
-          });
-        }
         const codeCollision = replyDocumentCodeCollision(
           request,
           reply,
@@ -1159,6 +1404,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         clientId,
         clientName,
         items,
+        candidates,
         paymentTerms,
         discount,
         discountType,
@@ -1171,6 +1417,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         clientId: unknown;
         clientName: unknown;
         items: unknown;
+        candidates?: unknown;
         paymentTerms: unknown;
         discount: unknown;
         discountType: unknown;
@@ -1218,6 +1465,243 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const currentEffective = effectiveQuoteStatusFromDate(current.status, current.expirationDate);
       const existingDiscount = current.discount;
       const existingDiscountType = current.discountType;
+
+      if (candidates !== undefined) {
+        if (!Array.isArray(candidates) || candidates.length === 0) {
+          return badRequest(reply, 'Candidates must be a non-empty array');
+        }
+        if (
+          linkedOfferId ||
+          normalizeQuoteStatus(currentStatus) === 'offer' ||
+          isTerminalQuoteStatus(currentStatus)
+        ) {
+          return replyError(request, reply, {
+            statusCode: 409,
+            message: 'Candidate families are read-only after promotion or finalization',
+            action: 'client_quote.update.conflict',
+            entityType: 'client_quote',
+            entityId: idResult.value,
+            details: { secondaryLabel: 'candidate_family_read_only' },
+          });
+        }
+        if (status === 'offer' || status === 'accepted') {
+          return badRequest(reply, 'Use the candidate promotion endpoint to create an offer');
+        }
+        const preparedCandidates: PreparedCandidate[] = [];
+        const names = new Set<string>();
+        for (let index = 0; index < candidates.length; index++) {
+          const prepared = await prepareCandidateBody(candidates[index], index, reply);
+          if (!prepared) return;
+          const normalizedName = prepared.name.toLocaleLowerCase();
+          if (names.has(normalizedName)) {
+            return badRequest(reply, 'Candidate names must be unique within a quote');
+          }
+          names.add(normalizedName);
+          preparedCandidates.push(prepared);
+        }
+        const existingCandidates = await quoteCandidatesRepo.listForQuote(idResult.value);
+        const existingActiveIds = new Set(
+          existingCandidates
+            .filter((candidate) => candidate.state === 'active')
+            .map((candidate) => candidate.id),
+        );
+        const foreignCandidate = preparedCandidates.find(
+          (candidate) => candidate.id && !existingActiveIds.has(candidate.id),
+        );
+        if (foreignCandidate) {
+          return badRequest(
+            reply,
+            `Candidate "${foreignCandidate.id}" does not belong to this quote family`,
+          );
+        }
+        const submittedExistingIds = preparedCandidates
+          .map((candidate) => candidate.id)
+          .filter((candidateId): candidateId is string => Boolean(candidateId));
+        if (currentStatus !== 'draft') {
+          const submittedSet = new Set(submittedExistingIds);
+          if (
+            submittedSet.size !== existingActiveIds.size ||
+            Array.from(existingActiveIds).some((candidateId) => !submittedSet.has(candidateId))
+          ) {
+            return replyError(request, reply, {
+              statusCode: 409,
+              message: 'Candidates can only be added or removed while the quote is in draft status',
+              action: 'client_quote.update.conflict',
+              entityType: 'client_quote',
+              entityId: idResult.value,
+              details: { secondaryLabel: 'candidate_composition_locked' },
+            });
+          }
+        }
+        const clientIdValue = requireNonEmptyString(clientId, 'clientId');
+        if (!clientIdValue.ok) return badRequest(reply, clientIdValue.message);
+        const clientNameValue = requireNonEmptyString(clientName, 'clientName');
+        if (!clientNameValue.ok) return badRequest(reply, clientNameValue.message);
+        let requestedStatus = currentStatus;
+        if (status !== undefined) {
+          if (typeof status !== 'string' || !status) {
+            return badRequest(reply, 'status must be one of draft, sent, offer, accepted, denied');
+          }
+          const parsedStatus = parseQuoteStatusInput(status);
+          if (parsedStatus === null) {
+            return badRequest(reply, 'status must be one of draft, sent, offer, accepted, denied');
+          }
+          if (parsedStatus === 'offer' || parsedStatus === 'accepted') {
+            return badRequest(reply, 'Use the candidate promotion endpoint to create an offer');
+          }
+          requestedStatus = parsedStatus;
+        }
+        if (
+          requestedStatus !== currentStatus &&
+          !canTransitionClientQuote(currentStatus, requestedStatus)
+        ) {
+          return replyError(request, reply, {
+            statusCode: 409,
+            message: 'This status transition is not allowed',
+            action: 'client_quote.update.conflict',
+            entityType: 'client_quote',
+            entityId: idResult.value,
+            details: {
+              secondaryLabel: 'invalid_transition',
+              fromValue: currentStatus,
+              toValue: requestedStatus,
+            },
+          });
+        }
+        const familyResult = await withDbTransaction(async (tx) => {
+          // Serialize family edits with promotion/restore, which lock the same parent first. Without
+          // this recheck, an edit that passed preflight before promotion could resume afterwards and
+          // overwrite the promoted parent/candidates.
+          const lockedCurrent = await clientQuotesRepo.lockCurrentById(idResult.value, tx);
+          if (!lockedCurrent) return { kind: 'not_found' as const };
+          if (normalizeQuoteStatus(lockedCurrent.status) !== normalizeQuoteStatus(currentStatus)) {
+            return {
+              kind: 'conflict' as const,
+              message: 'The quote changed while its candidates were being saved',
+              secondaryLabel: 'candidate_family_changed',
+            };
+          }
+          const lockedCandidates = await quoteCandidatesRepo.listForQuote(idResult.value, tx);
+          const lockedActiveIds = new Set(
+            lockedCandidates
+              .filter((candidate) => candidate.state === 'active')
+              .map((candidate) => candidate.id),
+          );
+          if (
+            lockedActiveIds.size !== existingActiveIds.size ||
+            Array.from(existingActiveIds).some((candidateId) => !lockedActiveIds.has(candidateId))
+          ) {
+            return {
+              kind: 'conflict' as const,
+              message: 'The candidate family changed while it was being saved',
+              secondaryLabel: 'candidate_family_changed',
+            };
+          }
+
+          await snapshotPreState(idResult.value, 'update', request, tx);
+          const first = preparedCandidates[0];
+          const parent = await clientQuotesRepo.update(
+            idResult.value,
+            {
+              clientId: clientIdValue.value,
+              clientName: clientNameValue.value,
+              paymentTerms: first.paymentTerms,
+              discount: first.discount,
+              discountType: first.discountType,
+              status: requestedStatus,
+              expirationDate: first.expirationDate,
+              communicationChannelId: first.communicationChannelId,
+              notes: first.notes,
+            },
+            tx,
+          );
+          if (!parent) return { kind: 'not_found' as const };
+          const retainedIds: string[] = [];
+          for (let index = 0; index < preparedCandidates.length; index++) {
+            const input = preparedCandidates[index];
+            const candidateId =
+              input.id && lockedActiveIds.has(input.id) ? input.id : generatePrefixedId('qc');
+            const candidate = lockedActiveIds.has(candidateId)
+              ? await quoteCandidatesRepo.update(
+                  idResult.value,
+                  candidateId,
+                  {
+                    name: input.name,
+                    position: index,
+                    paymentTerms: input.paymentTerms,
+                    discount: input.discount,
+                    discountType: input.discountType,
+                    expirationDate: input.expirationDate,
+                    communicationChannelId: input.communicationChannelId,
+                    notes: input.notes,
+                  },
+                  tx,
+                )
+              : await quoteCandidatesRepo.insert(
+                  {
+                    id: candidateId,
+                    quoteId: idResult.value,
+                    name: input.name,
+                    position: index,
+                    state: 'active',
+                    paymentTerms: input.paymentTerms,
+                    discount: input.discount,
+                    discountType: input.discountType,
+                    expirationDate: input.expirationDate,
+                    communicationChannelId: input.communicationChannelId,
+                    notes: input.notes,
+                  },
+                  tx,
+                );
+            if (!candidate) throw new Error('Candidate disappeared during update');
+            retainedIds.push(candidateId);
+            await clientQuotesRepo.replaceItems(
+              idResult.value,
+              buildItemsForInsert(input.items),
+              tx,
+              candidateId,
+            );
+          }
+          if (currentStatus === 'draft') {
+            await quoteCandidatesRepo.deleteMissingActive(idResult.value, retainedIds, tx);
+          }
+          return { kind: 'success' as const, parent };
+        });
+        if (familyResult.kind === 'conflict') {
+          return replyError(request, reply, {
+            statusCode: 409,
+            message: familyResult.message,
+            action: 'client_quote.update.conflict',
+            entityType: 'client_quote',
+            entityId: idResult.value,
+            details: { secondaryLabel: familyResult.secondaryLabel },
+          });
+        }
+        if (familyResult.kind === 'not_found') {
+          return replyError(request, reply, {
+            statusCode: 404,
+            message: 'Quote not found',
+            action: 'client_quote.update.not_found',
+            entityType: 'client_quote',
+            entityId: idResult.value,
+          });
+        }
+        const didStatusChange =
+          normalizeQuoteStatus(requestedStatus) !== normalizeQuoteStatus(currentStatus);
+        await logAudit({
+          request,
+          action: 'client_quote.updated',
+          entityType: 'client_quote',
+          entityId: familyResult.parent.id,
+          details: {
+            targetLabel: familyResult.parent.id,
+            secondaryLabel: familyResult.parent.clientName,
+            fromValue: didStatusChange ? String(currentStatus) : undefined,
+            toValue: didStatusChange ? String(requestedStatus) : undefined,
+          },
+        });
+        return loadFamilyResponse(familyResult.parent.id);
+      }
       // Terminal (accepted/denied) quotes are frozen — only an id rename is allowed (issue #779;
       // replaces the legacy `confirmed` literal). This guard blocks content/date edits; the
       // status-change freeze is enforced in the statusChanged block below. Mirrors the frontend,
@@ -1314,6 +1798,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       // normalizeQuoteStatus's draft floor would instead silently demote the quote. `targetStatus`
       // is `const` so its non-null narrowing flows into the `statusChanged` block below (`null`
       // means no status field in the body).
+      if (status === 'offer' || status === 'accepted') {
+        return badRequest(reply, 'Use the candidate promotion endpoint to create an offer');
+      }
       const targetStatus =
         status === undefined
           ? null
@@ -1333,13 +1820,19 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         targetStatus === 'draft' &&
         nextIdValue === undefined &&
         !hasNonStatusOrIdUpdates;
+      if (isLinkedOfferRollback) {
+        return badRequest(
+          reply,
+          'Use the promotion rollback endpoint to return this quote to draft',
+        );
+      }
       const isLinkedOfferStatusNoOp =
         Boolean(linkedOfferId) &&
         targetStatus !== null &&
         !statusChanged &&
         nextIdValue === undefined &&
         !hasNonStatusOrIdUpdates;
-      if (linkedOfferId && !isIdOnlyUpdate && !isLinkedOfferRollback && !isLinkedOfferStatusNoOp) {
+      if (linkedOfferId && !isIdOnlyUpdate && !isLinkedOfferStatusNoOp) {
         return replyError(request, reply, {
           statusCode: 409,
           message: 'Quotes become read-only once an offer exists',
@@ -1555,13 +2048,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                 tx,
               )
             : await clientQuotesRepo.findItemsForQuote(quote.id, tx);
-          let linkedOfferIdForResponse: string | null | undefined;
-          if (statusChanged && targetStatus === 'offer') {
-            linkedOfferIdForResponse = await createDraftOfferFromQuote(quote, items, tx);
-          } else if (isLinkedOfferRollback && linkedOfferId) {
-            await deleteDraftLinkedOfferForRollback(linkedOfferId, tx);
-            linkedOfferIdForResponse = null;
-          }
           // Bidirectional sync (issue #779): push GENUINE client-side edits of supplier-sourced
           // line fields (quantity, unit cost) onto the referenced supplier quote items,
           // atomically with the quote write. The audit entries are logged after commit.
@@ -1574,14 +2060,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                 tx,
               )
             : [];
-          return {
-            quote:
-              linkedOfferIdForResponse !== undefined
-                ? { ...quote, linkedOfferId: linkedOfferIdForResponse }
-                : quote,
-            items,
-            syncAudits,
-          };
+          return { quote, items, syncAudits };
         });
       } catch (err) {
         // The client→supplier item sync refuses to write frozen/order-locked supplier quotes or
@@ -1677,6 +2156,301 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
   // ---------------------------------------------------------------------------------------
   // Version history
+  // Promote one active candidate and archive its siblings.
+  fastify.post(
+    '/:id/promote',
+    {
+      onRequest: [requirePermission('sales.client_quotes.update')],
+      schema: {
+        tags: ['client-quotes'],
+        summary: 'Promote a quote candidate to a customer offer',
+        params: idParamSchema,
+        body: {
+          type: 'object',
+          properties: { candidateId: { type: 'string' } },
+          required: ['candidateId'],
+        },
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              quote: quoteSchema,
+              offer: clientOfferSchema,
+            },
+            required: ['quote', 'offer'],
+          },
+          ...standardErrorResponses,
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { id } = request.params as { id: string };
+      const { candidateId } = request.body as { candidateId: string };
+      const idResult = requireNonEmptyString(id, 'id');
+      if (!idResult.ok) return badRequest(reply, idResult.message);
+      const candidateIdResult = requireNonEmptyString(candidateId, 'candidateId');
+      if (!candidateIdResult.ok) return badRequest(reply, candidateIdResult.message);
+      const [quote, candidate] = await Promise.all([
+        clientQuotesRepo.findById(idResult.value),
+        quoteCandidatesRepo.findById(idResult.value, candidateIdResult.value),
+      ]);
+      if (!quote || !candidate) {
+        return replyError(request, reply, {
+          statusCode: 404,
+          message: 'Quote or candidate not found',
+          action: 'client_quote.promote.not_found',
+          entityType: 'client_quote',
+          entityId: idResult.value,
+        });
+      }
+      if (normalizeQuoteStatus(quote.status) !== 'sent' || candidate.state !== 'active') {
+        return replyError(request, reply, {
+          statusCode: 409,
+          message: 'Only an active candidate of a sent quote can be promoted',
+          action: 'client_quote.promote.conflict',
+          entityType: 'client_quote',
+          entityId: idResult.value,
+          details: { secondaryLabel: 'candidate_not_promotable' },
+        });
+      }
+      if (isPastLocalDate(candidate.expirationDate)) {
+        return replyError(request, reply, {
+          statusCode: 409,
+          message: 'The selected candidate has expired',
+          action: 'client_quote.promote.conflict',
+          entityType: 'client_quote',
+          entityId: idResult.value,
+          details: { secondaryLabel: 'candidate_expired' },
+        });
+      }
+      const candidateItems = await clientQuotesRepo.findItemsForCandidate(candidate.id);
+      const sourcedExpiration = await supplierQuotesRepo.findEarliestExpirationByIds(
+        await sourcedSupplierQuoteIds(candidateItems),
+      );
+      if (sourcedExpiration && isPastLocalDate(sourcedExpiration)) {
+        return replyError(request, reply, {
+          statusCode: 409,
+          message: 'A supplier quote sourced by the selected candidate has expired',
+          action: 'client_quote.promote.conflict',
+          entityType: 'client_quote',
+          entityId: idResult.value,
+          details: { secondaryLabel: 'linked_supplier_quote_expired' },
+        });
+      }
+      try {
+        const result = await withDbTransaction(async (tx) => {
+          const [lockedQuote, lockedCandidate] = await Promise.all([
+            clientQuotesRepo.lockCurrentById(idResult.value, tx),
+            quoteCandidatesRepo.lockById(idResult.value, candidate.id, tx),
+          ]);
+          if (!lockedQuote || !lockedCandidate) throw new Error('Quote candidate disappeared');
+          const currentQuote = await clientQuotesRepo.findById(idResult.value, tx);
+          if (!currentQuote) throw new Error('Quote candidate disappeared');
+          if (
+            normalizeQuoteStatus(lockedQuote.status) !== 'sent' ||
+            lockedCandidate.state !== 'active'
+          ) {
+            throw new LinkedOfferRollbackError(
+              'Candidate is no longer promotable',
+              'candidate_not_promotable',
+            );
+          }
+          if (isPastLocalDate(lockedCandidate.expirationDate)) {
+            throw new LinkedOfferRollbackError(
+              'The selected candidate has expired',
+              'candidate_expired',
+            );
+          }
+          const items = await clientQuotesRepo.findItemsForCandidate(lockedCandidate.id, tx);
+          const lockedSourcedExpiration = await supplierQuotesRepo.findEarliestExpirationByIds(
+            await sourcedSupplierQuoteIds(items, tx),
+            tx,
+          );
+          if (lockedSourcedExpiration && isPastLocalDate(lockedSourcedExpiration)) {
+            throw new LinkedOfferRollbackError(
+              'A supplier quote sourced by the selected candidate has expired',
+              'linked_supplier_quote_expired',
+            );
+          }
+          await snapshotPreState(idResult.value, 'update', request, tx);
+          const supplierItemIds = Array.from(
+            new Set(
+              items
+                .map((item) => item.supplierQuoteItemId)
+                .filter((itemId): itemId is string => Boolean(itemId)),
+            ),
+          );
+          const liveSupplierItems = await supplierQuotesRepo.findItemsByIds(supplierItemIds, tx);
+          const promotionBaselines: PreviousClientLine[] = liveSupplierItems.map((item) => ({
+            supplierQuoteItemId: item.id,
+            quantity: item.quantity,
+            supplierQuoteUnitPrice: item.unitPrice,
+          }));
+          const syncAudits = await syncSupplierItemsFromClientLines(
+            request,
+            'client_quote.promote',
+            items,
+            promotionBaselines,
+            tx,
+          );
+          const offerId = await allocateDocumentCode('client_offer', {
+            exec: tx,
+            sourceCode: currentQuote.id,
+          });
+          const offer = await clientOffersRepo.create(
+            {
+              id: offerId,
+              linkedQuoteId: currentQuote.id,
+              linkedQuoteCandidateId: lockedCandidate.id,
+              clientId: currentQuote.clientId,
+              clientName: currentQuote.clientName,
+              paymentTerms: lockedCandidate.paymentTerms,
+              discount: lockedCandidate.discount,
+              discountType: lockedCandidate.discountType,
+              status: 'draft',
+              expirationDate: lockedCandidate.expirationDate,
+              notes: lockedCandidate.notes,
+            },
+            tx,
+          );
+          const offerItems = await clientOffersRepo.insertItems(
+            offer.id,
+            buildOfferItemsFromQuoteItems(items),
+            tx,
+          );
+          await quoteCandidatesRepo.markPromoted(currentQuote.id, lockedCandidate.id, tx);
+          await clientQuotesRepo.update(
+            currentQuote.id,
+            {
+              status: 'offer',
+              paymentTerms: lockedCandidate.paymentTerms,
+              discount: lockedCandidate.discount,
+              discountType: lockedCandidate.discountType,
+              expirationDate: lockedCandidate.expirationDate,
+              communicationChannelId: lockedCandidate.communicationChannelId,
+              notes: lockedCandidate.notes,
+            },
+            tx,
+          );
+          return {
+            offer: {
+              ...offer,
+              items: offerItems,
+              effectiveStatus: effectiveQuoteStatusFromDate(offer.status, offer.expirationDate),
+            },
+            promotedCandidateName: lockedCandidate.name,
+            syncAudits,
+          };
+        });
+        await Promise.all([
+          logSupplierItemSyncAudits(request, result.syncAudits),
+          logAudit({
+            request,
+            action: 'client_quote.candidate_promoted',
+            entityType: 'client_quote',
+            entityId: idResult.value,
+            details: {
+              targetLabel: idResult.value,
+              secondaryLabel: result.promotedCandidateName,
+              toValue: result.offer.id,
+            },
+          }),
+        ]);
+        const family = await loadFamilyResponse(idResult.value);
+        return { quote: family, offer: result.offer };
+      } catch (error) {
+        if (error instanceof SupplierItemSyncError) {
+          return replySupplierItemSyncError(request, reply, error, {
+            entityType: 'client_quote',
+            entityId: idResult.value,
+          });
+        }
+        if (error instanceof LinkedOfferRollbackError) {
+          return replyError(request, reply, {
+            statusCode: 409,
+            message: error.message,
+            action: 'client_quote.promote.conflict',
+            entityType: 'client_quote',
+            entityId: idResult.value,
+            details: { secondaryLabel: error.secondaryLabel },
+          });
+        }
+        const conflict = await replyAutoOfferUniqueViolation(
+          request,
+          reply,
+          getUniqueViolation(error),
+          {
+            action: 'client_quote.promote.conflict',
+            quoteId: idResult.value,
+          },
+        );
+        if (conflict) return conflict;
+        throw error;
+      }
+    },
+  );
+
+  // Roll back a draft offer and reactivate every archived candidate.
+  fastify.post(
+    '/:id/promotion/rollback',
+    {
+      onRequest: [requirePermission('sales.client_quotes.update')],
+      schema: {
+        tags: ['client-quotes'],
+        summary: 'Roll back a promoted candidate while the offer is still draft',
+        params: idParamSchema,
+        response: { 200: quoteSchema, ...standardErrorResponses },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { id } = request.params as { id: string };
+      const idResult = requireNonEmptyString(id, 'id');
+      if (!idResult.ok) return badRequest(reply, idResult.message);
+      const offerId = await clientQuotesRepo.findLinkedOfferId(idResult.value);
+      if (!offerId) {
+        return replyError(request, reply, {
+          statusCode: 409,
+          message: 'This quote has no linked offer to roll back',
+          action: 'client_quote.promotion_rollback.conflict',
+          entityType: 'client_quote',
+          entityId: idResult.value,
+        });
+      }
+      try {
+        await withDbTransaction((tx) =>
+          rollbackQuotePromotion(
+            {
+              quoteId: idResult.value,
+              offerId,
+              createdByUserId: request.user?.id ?? null,
+            },
+            tx,
+          ),
+        );
+        await logAudit({
+          request,
+          action: 'client_quote.candidate_promotion_rolled_back',
+          entityType: 'client_quote',
+          entityId: idResult.value,
+          details: { targetLabel: idResult.value, fromValue: offerId, toValue: 'draft' },
+        });
+        return loadFamilyResponse(idResult.value);
+      } catch (error) {
+        if (error instanceof QuotePromotionRollbackError) {
+          return replyError(request, reply, {
+            statusCode: 409,
+            message: error.message,
+            action: 'client_quote.promotion_rollback.conflict',
+            entityType: 'client_quote',
+            entityId: idResult.value,
+            details: { secondaryLabel: error.secondaryLabel },
+          });
+        }
+        throw error;
+      }
+    },
+  );
+
   // ---------------------------------------------------------------------------------------
 
   const versionParamSchema = {
@@ -1893,19 +2667,85 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               secondaryLabel: 'snapshot_reference_missing',
             };
           }
-          const snapshotExpirationDate = version.snapshot.quote.expirationDate;
-          if (!snapshotExpirationDate) {
+          const rawSnapshotCandidates = version.snapshot.candidates;
+          if (rawSnapshotCandidates.length === 0) {
             return {
               ok: false,
               statusCode: 409,
-              message: 'Snapshot expiration date is missing',
+              message: 'Snapshot candidate family is empty',
               action: 'client_quote.restore.conflict',
-              secondaryLabel: 'snapshot_expiration_missing',
+              secondaryLabel: 'snapshot_candidates_missing',
             };
           }
+          const defaultChannel = rawSnapshotCandidates.some(
+            (candidate) => !candidate.communicationChannelId,
+          )
+            ? await quoteCommunicationChannelsRepo.findDefault(tx)
+            : null;
+          const snapshotCandidates = rawSnapshotCandidates.map((candidate) => ({
+            ...candidate,
+            communicationChannelId: candidate.communicationChannelId || defaultChannel?.id || '',
+          }));
+          const primarySnapshotCandidate = snapshotCandidates[0];
+          const snapshotCandidateIds = new Set(snapshotCandidates.map((candidate) => candidate.id));
+          const orphanSnapshotItem = version.snapshot.items.find(
+            (item) => !snapshotCandidateIds.has(item.candidateId),
+          );
+          if (orphanSnapshotItem) {
+            return {
+              ok: false,
+              statusCode: 409,
+              message: `Snapshot item "${orphanSnapshotItem.id}" has no matching candidate`,
+              action: 'client_quote.restore.conflict',
+              secondaryLabel: 'snapshot_candidate_mismatch',
+            };
+          }
+          const snapshotItemsByCandidate = new Map<string, typeof version.snapshot.items>();
+          for (const item of version.snapshot.items) {
+            const items = snapshotItemsByCandidate.get(item.candidateId);
+            if (items) items.push(item);
+            else snapshotItemsByCandidate.set(item.candidateId, [item]);
+          }
+          const invalidCandidate = snapshotCandidates.find(
+            (candidate) => !candidate.expirationDate || !candidate.communicationChannelId,
+          );
+          if (invalidCandidate) {
+            return {
+              ok: false,
+              statusCode: 409,
+              message: `Snapshot candidate "${invalidCandidate.name}" is incomplete`,
+              action: 'client_quote.restore.conflict',
+              secondaryLabel: 'snapshot_candidate_invalid',
+            };
+          }
+          const channelIds = Array.from(
+            new Set(snapshotCandidates.map((candidate) => candidate.communicationChannelId)),
+          );
+          const channels = await Promise.all(
+            channelIds.map((channelId) => quoteCommunicationChannelsRepo.findById(channelId, tx)),
+          );
+          if (channels.some((channel) => !channel)) {
+            return {
+              ok: false,
+              statusCode: 409,
+              message: 'A candidate communication channel is no longer available',
+              action: 'client_quote.restore.conflict',
+              secondaryLabel: 'communication_channel_missing',
+            };
+          }
+          const snapshotExpirationDate = primarySnapshotCandidate.expirationDate;
           // Legacy snapshots may hold quoted/confirmed/received/etc.; fold to the canonical set so
           // the tightened CHECK (migration 0083) doesn't reject the restore write (issue #779).
           const restoredStatus = normalizeQuoteStatus(version.snapshot.quote.status);
+          if (restoredStatus === 'offer' || restoredStatus === 'accepted') {
+            return {
+              ok: false,
+              statusCode: 409,
+              message: 'Use candidate promotion to recreate an offer from a historical quote',
+              action: 'client_quote.restore.conflict',
+              secondaryLabel: 'candidate_promotion_required',
+            };
+          }
           if (linkedOfferId && restoredStatus !== 'draft') {
             return {
               ok: false,
@@ -1920,11 +2760,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           // PUT guard blocks (issue #779 follow-up). The restore REPLACES the lines with the
           // snapshot's (which carry the supplier sourcing), so the guard must read the SNAPSHOT's
           // earliest sourced expiration, not the pre-restore lines'.
-          if (
-            restoredStatus === 'sent' ||
-            restoredStatus === 'offer' ||
-            restoredStatus === 'accepted'
-          ) {
+          if (restoredStatus === 'sent') {
             // Only a progressed target can be blocked, so resolve the snapshot's earliest sourced
             // expiration lazily (avoids a supplier_quotes read inside the lock for draft/denied
             // restores). Reuses the same line→sourced-ids extraction as the create/update guards.
@@ -1943,36 +2779,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               };
             }
           }
-          const snapshotCommunicationChannelId =
-            typeof version.snapshot.quote.communicationChannelId === 'string' &&
-            version.snapshot.quote.communicationChannelId.length > 0
-              ? version.snapshot.quote.communicationChannelId
-              : null;
-          const restoreCommunicationChannel = snapshotCommunicationChannelId
-            ? await quoteCommunicationChannelsRepo.findById(snapshotCommunicationChannelId, tx)
-            : await quoteCommunicationChannelsRepo.findDefault(tx);
-          if (!restoreCommunicationChannel) {
-            return {
-              ok: false,
-              statusCode: 409,
-              message: 'No communication channel is available for restore',
-              action: 'client_quote.restore.conflict',
-              secondaryLabel: 'communication_channel_missing',
-            };
-          }
-
-          const snapshotItems: clientQuotesRepo.NewClientQuoteItem[] = version.snapshot.items.map(
-            ({ quoteId: _q, ...rest }, position) => ({
-              ...rest,
-              id: generatePrefixedId(ITEM_ID_PREFIXES.clientQuoteItem),
-              position,
-              // `productId: ''` slips through the snapshot when sourced from a supplier quote;
-              // the `quote_items` row needs NULL there.
-              productId: rest.productId || null,
-            }),
-          );
-
           // Drop draft sales inside the tx - historical line items may not line up with the
+
           // current draft sale's row references, but if the snapshot/update later fails the
           // rollback must take the deletes with it (otherwise users lose draft orders for
           // an unchanged quote).
@@ -1981,19 +2789,23 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             clientQuotesRepo.deleteDraftSalesForQuote(idResult.value, tx),
             snapshotPreState(idResult.value, 'restore', request, tx),
           ]);
+          if (linkedOfferId) {
+            await deleteDraftLinkedOfferForRollback(linkedOfferId, tx);
+          }
+          await quoteCandidatesRepo.deleteAllForQuote(idResult.value, tx);
 
           const quote = await clientQuotesRepo.restoreSnapshotQuote(
             idResult.value,
             {
               clientId: version.snapshot.quote.clientId,
               clientName: version.snapshot.quote.clientName,
-              paymentTerms: version.snapshot.quote.paymentTerms ?? 'immediate',
-              discount: version.snapshot.quote.discount,
-              discountType: version.snapshot.quote.discountType,
+              paymentTerms: primarySnapshotCandidate.paymentTerms,
+              discount: primarySnapshotCandidate.discount,
+              discountType: primarySnapshotCandidate.discountType,
               status: restoredStatus,
               expirationDate: snapshotExpirationDate,
-              communicationChannelId: restoreCommunicationChannel.id,
-              notes: version.snapshot.quote.notes,
+              communicationChannelId: primarySnapshotCandidate.communicationChannelId,
+              notes: primarySnapshotCandidate.notes,
             },
             tx,
           );
@@ -2005,22 +2817,43 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               action: 'client_quote.restore.not_found',
             };
           }
-          const items = await clientQuotesRepo.replaceItems(quote.id, snapshotItems, tx);
-          let linkedOfferIdForResponse: string | null | undefined;
-          if (restoredStatus === 'offer') {
-            linkedOfferIdForResponse = await createDraftOfferFromQuote(quote, items, tx);
-          } else if (linkedOfferId && restoredStatus === 'draft') {
-            await deleteDraftLinkedOfferForRollback(linkedOfferId, tx);
-            linkedOfferIdForResponse = null;
+          const restoredItems: clientQuotesRepo.ClientQuoteItem[] = [];
+          for (
+            let candidateIndex = 0;
+            candidateIndex < snapshotCandidates.length;
+            candidateIndex++
+          ) {
+            const snapshotCandidate = snapshotCandidates[candidateIndex];
+            const candidateId = candidateIndex === 0 ? quote.id : generatePrefixedId('qc');
+            await quoteCandidatesRepo.insert(
+              {
+                id: candidateId,
+                quoteId: quote.id,
+                name: snapshotCandidate.name,
+                position: candidateIndex,
+                state: 'active',
+                paymentTerms: snapshotCandidate.paymentTerms,
+                discount: snapshotCandidate.discount,
+                discountType: snapshotCandidate.discountType,
+                expirationDate: snapshotCandidate.expirationDate,
+                communicationChannelId: snapshotCandidate.communicationChannelId,
+                notes: snapshotCandidate.notes,
+              },
+              tx,
+            );
+            const candidateItems = (snapshotItemsByCandidate.get(snapshotCandidate.id) ?? []).map(
+              ({ quoteId: _quoteId, candidateId: _candidateId, ...item }, position) => ({
+                ...item,
+                id: generatePrefixedId(ITEM_ID_PREFIXES.clientQuoteItem),
+                position,
+                productId: item.productId || null,
+              }),
+            );
+            restoredItems.push(
+              ...(await clientQuotesRepo.insertItems(quote.id, candidateItems, tx, candidateId)),
+            );
           }
-          return {
-            ok: true,
-            quote:
-              linkedOfferIdForResponse !== undefined
-                ? { ...quote, linkedOfferId: linkedOfferIdForResponse }
-                : quote,
-            items,
-          };
+          return { ok: true, quote, items: restoredItems };
         });
       } catch (err) {
         const codeCollision = replyDocumentCodeCollision(
@@ -2076,13 +2909,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       // Status-aware response flag (#812 round 11): resolve the restored lines' blocking
       // expiration the same way the guards do (terminal-frozen sourced quotes excluded).
-      return buildQuoteResponse(
-        restored.quote,
-        restored.items,
-        await supplierQuotesRepo.findEarliestExpirationByIds(
-          await sourcedSupplierQuoteIds(restored.items),
-        ),
-      );
+      return loadFamilyResponse(restored.quote.id);
     },
   );
 

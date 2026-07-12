@@ -6,9 +6,9 @@ import type {
   ClientsOrder,
   Invoice,
   Quote,
+  QuoteMutation,
   View,
 } from '../../types';
-import { addMonthsToDateOnly, getLocalDateString, isDateOnlyBeforeToday } from '../../utils/date';
 import { sourcesSupplierQuote } from '../../utils/supplierLineSync';
 import { makeTempId } from '../../utils/tempId';
 import { toastError } from '../../utils/toast';
@@ -108,7 +108,7 @@ export const makeQuoteHandlers = (deps: QuoteHandlersDeps) => {
     }
   };
 
-  const addQuote = async (quoteData: Partial<Quote>) => {
+  const addQuote = async (quoteData: QuoteMutation) => {
     try {
       const quote = await api.quotes.create(quoteData);
       setQuotes((prev) => [quote, ...prev]);
@@ -121,7 +121,7 @@ export const makeQuoteHandlers = (deps: QuoteHandlersDeps) => {
     }
   };
 
-  const updateQuote = async (id: string, updates: Partial<Quote>) => {
+  const updateQuote = async (id: string, updates: QuoteMutation) => {
     try {
       // Captured before the await: the response reflects the post-save lines, but a quote that
       // STOPPED sourcing a supplier quote also needs a refresh (the now-unsourced supplier quote
@@ -159,6 +159,29 @@ export const makeQuoteHandlers = (deps: QuoteHandlersDeps) => {
       }
     } catch (err) {
       console.error('Failed to update quote:', err);
+      throw err;
+    }
+  };
+
+  const promoteQuoteCandidate = async (quoteId: string, candidateId: string) => {
+    try {
+      const result = await api.quotes.promote(quoteId, candidateId);
+      await Promise.all([refreshClientQuoteFlow(), refreshLinkedSupplierQuotes()]);
+      notifyClientOfferCreated?.(result.offer.id);
+      return result;
+    } catch (err) {
+      console.error('Failed to promote quote candidate:', err);
+      throw err;
+    }
+  };
+
+  const rollbackQuotePromotion = async (quoteId: string) => {
+    try {
+      const quote = await api.quotes.rollbackPromotion(quoteId);
+      await Promise.all([refreshClientQuoteFlow(), refreshLinkedSupplierQuotes()]);
+      return quote;
+    } catch (err) {
+      console.error('Failed to roll back quote promotion:', err);
       throw err;
     }
   };
@@ -250,61 +273,18 @@ export const makeQuoteHandlers = (deps: QuoteHandlersDeps) => {
       const linkedQuote = getQuotes().find((q) => q.linkedOfferId === id);
       const offer = getClientOffers().find((o) => o.id === id);
       await api.clientOffers.delete(id);
-      setClientOffers((prev) => prev.filter((entry) => entry.id !== id));
-      setQuotes((prev) =>
-        prev.map((quote) =>
-          quote.linkedOfferId === id ? { ...quote, linkedOfferId: undefined } : quote,
-        ),
-      );
-      if (sourcesSupplierQuote(linkedQuote) || sourcesSupplierQuote(offer)) {
-        await refreshLinkedSupplierQuotes();
-      }
+      // Candidate-linked offer deletion performs a server-side promotion rollback: the parent
+      // returns to draft and every selected/discarded candidate becomes active. Refresh the whole
+      // flow so local state receives those changes instead of merely clearing linkedOfferId.
+      await Promise.all([
+        refreshClientQuoteFlow(),
+        sourcesSupplierQuote(linkedQuote) || sourcesSupplierQuote(offer)
+          ? refreshLinkedSupplierQuotes()
+          : Promise.resolve(),
+      ]);
     } catch (err) {
       console.error('Failed to delete client offer:', err);
       throw err;
-    }
-  };
-
-  const createClientOfferFromQuote = async (quote: Quote) => {
-    try {
-      // A stale source-quote date would mint a born-expired, immediately read-only offer
-      // (accepted quotes never expire, so their date can be long past — #779). A new offer is a
-      // fresh commercial document: give it the standard one-month validity window instead.
-      const expirationDate =
-        !quote.expirationDate || isDateOnlyBeforeToday(quote.expirationDate)
-          ? addMonthsToDateOnly(getLocalDateString(), 1)
-          : quote.expirationDate;
-      const offer = await api.clientOffers.create({
-        linkedQuoteId: quote.id,
-        clientId: quote.clientId,
-        clientName: quote.clientName,
-        paymentTerms: quote.paymentTerms,
-        discount: quote.discount,
-        status: 'draft',
-        expirationDate,
-        notes: quote.notes,
-        items: quote.items.map((item) => ({
-          ...item,
-          id: makeTempId(),
-          offerId: '',
-        })),
-      });
-      setClientOffers((prev) => [offer, ...prev]);
-      setQuotes((prev) =>
-        prev.map((entry) =>
-          entry.id === quote.id ? { ...entry, linkedOfferId: offer.id } : entry,
-        ),
-      );
-      setActiveView('sales/client-offers');
-      notifyClientOfferCreated?.(offer.id);
-      // The new offer takes over a sourced supplier quote's derived status (accepted → 'offer',
-      // #779 offer chain) — without a refresh the supplier table keeps the stale badge.
-      if (sourcesSupplierQuote(quote)) {
-        await refreshLinkedSupplierQuotes();
-      }
-    } catch (err) {
-      console.error('Failed to create offer from quote:', err);
-      toastError((err as Error).message || 'Failed to create offer from quote');
     }
   };
 
@@ -367,11 +347,12 @@ export const makeQuoteHandlers = (deps: QuoteHandlersDeps) => {
     refreshClientOrderFlow,
     addQuote,
     updateQuote,
+    promoteQuoteCandidate,
+    rollbackQuotePromotion,
     deleteQuote,
     updateClientOffer,
     revertClientOfferToDraft,
     deleteClientOffer,
-    createClientOfferFromQuote,
     updateClientsOrder,
     deleteClientsOrder,
     createClientsOrderFromOffer,

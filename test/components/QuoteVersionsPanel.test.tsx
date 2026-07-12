@@ -90,7 +90,7 @@ const VERSION_ROW_RESTORE = {
 const FULL_VERSION = {
   ...VERSION_ROW_UPDATE,
   snapshot: {
-    schemaVersion: 1 as const,
+    schemaVersion: 2 as const,
     quote: {
       id: 'cq-1',
       clientId: 'c-1',
@@ -104,6 +104,24 @@ const FULL_VERSION = {
       createdAt: 0,
       updatedAt: 0,
     },
+    candidates: [
+      {
+        id: 'q-1',
+        quoteId: 'q-1',
+        name: 'Variante A',
+        position: 0,
+        state: 'active' as const,
+        paymentTerms: 'immediate' as const,
+        discount: 0,
+        discountType: 'percentage' as const,
+        expirationDate: '2026-02-01',
+        communicationChannelId: 'qcc_email',
+        communicationChannelName: 'Email',
+        notes: undefined,
+        createdAt: 1_700_000_000_000,
+        updatedAt: 1_700_000_000_000,
+      },
+    ],
     items: [],
   },
 };

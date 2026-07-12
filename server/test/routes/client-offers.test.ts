@@ -7,6 +7,8 @@ import * as realClientsOrdersRepo from '../../repositories/clientsOrdersRepo.ts'
 import * as realClientsRepo from '../../repositories/clientsRepo.ts';
 import * as realOfferVersionsRepo from '../../repositories/offerVersionsRepo.ts';
 import * as realProductsRepo from '../../repositories/productsRepo.ts';
+import * as realQuoteCandidatesRepo from '../../repositories/quoteCandidatesRepo.ts';
+import * as realQuoteVersionsRepo from '../../repositories/quoteVersionsRepo.ts';
 import * as realRolesRepo from '../../repositories/rolesRepo.ts';
 import * as realSupplierQuotesRepo from '../../repositories/supplierQuotesRepo.ts';
 import * as realSupplierQuoteVersionsRepo from '../../repositories/supplierQuoteVersionsRepo.ts';
@@ -33,6 +35,8 @@ const permissionsSnap = { ...realPermissions };
 const clientsRepoSnap = { ...realClientsRepo };
 const clientOffersRepoSnap = { ...realClientOffersRepo };
 const clientQuotesRepoSnap = { ...realClientQuotesRepo };
+const quoteCandidatesRepoSnap = { ...realQuoteCandidatesRepo };
+const quoteVersionsRepoSnap = { ...realQuoteVersionsRepo };
 const clientsOrdersRepoSnap = { ...realClientsOrdersRepo };
 const productsRepoSnap = { ...realProductsRepo };
 const offerVersionsRepoSnap = { ...realOfferVersionsRepo };
@@ -48,6 +52,7 @@ const userHasRoleMock = mock();
 const getRolePermissionsMock = mock();
 
 const coFindExistingMock = mock();
+const coLockExistingByIdMock = mock();
 const coFindFullForSnapshotMock = mock();
 const coFindItemsForOfferMock = mock();
 const coFindIdConflictMock = mock();
@@ -74,9 +79,16 @@ const generateClientOrderIdMock = mock();
 const generateSupplierOrderIdMock = mock();
 const allocateDocumentCodeMock = mock();
 
+const qcListForQuoteMock = mock();
+const qcReactivateAllMock = mock();
+const qvInsertMock = mock();
+const qvBuildSnapshotMock = mock();
+
 const cqFindStatusAndClientNameMock = mock();
 const cqFindItemSnapshotsForQuoteMock = mock();
 const cqLockCurrentByIdMock = mock();
+const cqFindFullForSnapshotMock = mock();
+const cqUpdateMock = mock();
 
 const sqGetQuoteItemSnapshotsMock = mock();
 const sqFindByIdMock = mock();
@@ -116,6 +128,7 @@ beforeAll(async () => {
   mock.module('../../repositories/clientOffersRepo.ts', () => ({
     ...clientOffersRepoSnap,
     findExisting: coFindExistingMock,
+    lockExistingById: coLockExistingByIdMock,
     findFullForSnapshot: coFindFullForSnapshotMock,
     findItemsForOffer: coFindItemsForOfferMock,
     findIdConflict: coFindIdConflictMock,
@@ -134,6 +147,18 @@ beforeAll(async () => {
     findStatusAndClientName: cqFindStatusAndClientNameMock,
     findItemSnapshotsForQuote: cqFindItemSnapshotsForQuoteMock,
     lockCurrentById: cqLockCurrentByIdMock,
+    findFullForSnapshot: cqFindFullForSnapshotMock,
+    update: cqUpdateMock,
+  }));
+  mock.module('../../repositories/quoteCandidatesRepo.ts', () => ({
+    ...quoteCandidatesRepoSnap,
+    listForQuote: qcListForQuoteMock,
+    reactivateAll: qcReactivateAllMock,
+  }));
+  mock.module('../../repositories/quoteVersionsRepo.ts', () => ({
+    ...quoteVersionsRepoSnap,
+    insert: qvInsertMock,
+    buildSnapshot: qvBuildSnapshotMock,
   }));
   mock.module('../../repositories/clientsOrdersRepo.ts', () => ({
     ...clientsOrdersRepoSnap,
@@ -195,6 +220,8 @@ afterAll(() => {
   mock.module('../../repositories/clientsRepo.ts', () => clientsRepoSnap);
   mock.module('../../repositories/clientOffersRepo.ts', () => clientOffersRepoSnap);
   mock.module('../../repositories/clientQuotesRepo.ts', () => clientQuotesRepoSnap);
+  mock.module('../../repositories/quoteCandidatesRepo.ts', () => quoteCandidatesRepoSnap);
+  mock.module('../../repositories/quoteVersionsRepo.ts', () => quoteVersionsRepoSnap);
   mock.module('../../repositories/clientsOrdersRepo.ts', () => clientsOrdersRepoSnap);
   mock.module('../../repositories/supplierQuotesRepo.ts', () => supplierQuotesRepoSnap);
   mock.module('../../utils/order-ids.ts', () => orderIdsSnap);
@@ -232,6 +259,7 @@ const gate = (over: Partial<ReturnType<typeof baseGate>> = {}) => ({ ...baseGate
 const baseGate = () => ({
   id: 'off-1',
   linkedQuoteId: 'q-1',
+  linkedQuoteCandidateId: null as string | null,
   clientId: 'c1',
   clientName: 'Client',
   status: 'draft',
@@ -285,6 +313,7 @@ const allMocks = [
   userHasRoleMock,
   getRolePermissionsMock,
   coFindExistingMock,
+  coLockExistingByIdMock,
   coFindFullForSnapshotMock,
   coFindItemsForOfferMock,
   coFindIdConflictMock,
@@ -294,6 +323,8 @@ const allMocks = [
   coCreateMock,
   coInsertItemsMock,
   coFindExistingForQuoteMock,
+  coFindLinkedSaleIdMock,
+  coDeleteByIdMock,
   clientOrderFindExistingForOfferMock,
   clientOrderCreateMock,
   clientOrderInsertItemsMock,
@@ -306,9 +337,15 @@ const allMocks = [
   generateClientOrderIdMock,
   generateSupplierOrderIdMock,
   allocateDocumentCodeMock,
+  qcListForQuoteMock,
+  qcReactivateAllMock,
+  qvInsertMock,
+  qvBuildSnapshotMock,
   cqFindStatusAndClientNameMock,
   cqFindItemSnapshotsForQuoteMock,
   cqLockCurrentByIdMock,
+  cqFindFullForSnapshotMock,
+  cqUpdateMock,
   sqGetQuoteItemSnapshotsMock,
   sqFindByIdMock,
   sqFindItemsForQuoteMock,
@@ -334,6 +371,15 @@ beforeEach(async () => {
   resetWithDbTransactionMock();
   logAuditMock.mockImplementation(async () => undefined);
   ovBuildSnapshotMock.mockImplementation((offer, items) => ({ schemaVersion: 1, offer, items }));
+  qcListForQuoteMock.mockResolvedValue([]);
+  qcReactivateAllMock.mockResolvedValue(undefined);
+  qvInsertMock.mockResolvedValue(undefined);
+  qvBuildSnapshotMock.mockImplementation((quote, items, candidates) => ({
+    schemaVersion: 2,
+    quote,
+    candidates,
+    items,
+  }));
 
   // Sensible defaults; individual tests override what they care about.
   coFindFullForSnapshotMock.mockResolvedValue({ offer: updatedOffer(), items: [] });
@@ -1175,11 +1221,9 @@ describe('DELETE /api/sales/client-offers/:id expired guard (#812 round 25)', ()
   test('409 when a draft offer is effectively expired (read-only model)', async () => {
     getRolePermissionsMock.mockResolvedValue(['sales.client_offers.delete']);
     coFindLinkedSaleIdMock.mockResolvedValue(null);
-    coFindStatusAndClientNameMock.mockResolvedValue({
-      status: 'draft',
-      clientName: 'Client',
-      expirationDate: '2000-01-01',
-    });
+    const expiredOffer = gate({ status: 'draft', expirationDate: '2000-01-01' });
+    coFindExistingMock.mockResolvedValue(expiredOffer);
+    coLockExistingByIdMock.mockResolvedValue(expiredOffer);
 
     const res = await deleteOffer();
     expect(res.statusCode).toBe(409);
@@ -1189,13 +1233,75 @@ describe('DELETE /api/sales/client-offers/:id expired guard (#812 round 25)', ()
   test('204 deletes a live draft offer', async () => {
     getRolePermissionsMock.mockResolvedValue(['sales.client_offers.delete']);
     coFindLinkedSaleIdMock.mockResolvedValue(null);
-    coFindStatusAndClientNameMock.mockResolvedValue({
-      status: 'draft',
-      clientName: 'Client',
-      expirationDate: '2999-12-31',
-    });
+    coFindExistingMock.mockResolvedValue(gate({ status: 'draft', expirationDate: '2999-12-31' }));
+    coLockExistingByIdMock.mockResolvedValue(
+      gate({ status: 'draft', expirationDate: '2999-12-31' }),
+    );
+    coDeleteByIdMock.mockResolvedValue(true);
 
     const res = await deleteOffer();
     expect(res.statusCode).toBe(204);
+  });
+
+  test('204 deleting a candidate-linked draft offer rolls the quote family back atomically', async () => {
+    getRolePermissionsMock.mockResolvedValue(['sales.client_offers.delete']);
+    const candidateOffer = gate({ linkedQuoteCandidateId: 'qc-a' });
+    const selectedCandidate = {
+      id: 'qc-a',
+      quoteId: 'q-1',
+      name: 'Variante A',
+      position: 0,
+      state: 'selected',
+      paymentTerms: '60gg',
+      discount: 5,
+      discountType: 'percentage',
+      expirationDate: '2999-12-31',
+      communicationChannelId: 'qcc_email',
+      communicationChannelName: 'Email',
+      notes: 'winner',
+      createdAt: 1_700_000_000_000,
+      updatedAt: 1_700_000_000_000,
+    };
+    coFindExistingMock.mockResolvedValue(candidateOffer);
+    coLockExistingByIdMock.mockResolvedValue(candidateOffer);
+    coFindLinkedSaleIdMock.mockResolvedValue(null);
+    cqLockCurrentByIdMock.mockResolvedValue({ status: 'offer' });
+    cqFindFullForSnapshotMock.mockResolvedValue({
+      quote: { id: 'q-1', status: 'offer' },
+      items: [],
+    });
+    qcListForQuoteMock.mockResolvedValue([selectedCandidate]);
+    cqUpdateMock.mockResolvedValue({ id: 'q-1', status: 'draft' });
+    coDeleteByIdMock.mockResolvedValue(true);
+
+    const res = await deleteOffer();
+
+    expect(res.statusCode).toBe(204);
+    expect(qvInsertMock).toHaveBeenCalledWith(
+      expect.objectContaining({ quoteId: 'q-1', reason: 'update', createdByUserId: 'u1' }),
+      expect.anything(),
+    );
+    expect(qcReactivateAllMock).toHaveBeenCalledWith('q-1', expect.anything());
+    expect(cqUpdateMock).toHaveBeenCalledWith(
+      'q-1',
+      expect.objectContaining({ status: 'draft', paymentTerms: '60gg' }),
+      expect.anything(),
+    );
+  });
+
+  test('409 candidate rollback rechecks linked orders after locking the offer', async () => {
+    getRolePermissionsMock.mockResolvedValue(['sales.client_offers.delete']);
+    const candidateOffer = gate({ linkedQuoteCandidateId: 'qc-a' });
+    coFindExistingMock.mockResolvedValue(candidateOffer);
+    coLockExistingByIdMock.mockResolvedValue(candidateOffer);
+    cqLockCurrentByIdMock.mockResolvedValue({ status: 'offer' });
+    coFindLinkedSaleIdMock.mockResolvedValue('order-1');
+
+    const res = await deleteOffer();
+
+    expect(res.statusCode).toBe(409);
+    expect(JSON.parse(res.body).error).toContain('sale order');
+    expect(coDeleteByIdMock).not.toHaveBeenCalled();
+    expect(qcReactivateAllMock).not.toHaveBeenCalled();
   });
 });

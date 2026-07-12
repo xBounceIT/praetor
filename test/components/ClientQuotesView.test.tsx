@@ -2,7 +2,15 @@ import { afterEach, describe, expect, mock, test } from 'bun:test';
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ReactNode } from 'react';
-import type { Client, Product, Quote, SupplierQuote } from '../../types';
+import type {
+  Client,
+  Product,
+  Quote,
+  QuoteMutation,
+  QuoteVersion,
+  QuoteVersionRow,
+  SupplierQuote,
+} from '../../types';
 import { LineDeleteConfirmStub } from '../helpers/lineItemDeleteConfirm';
 import { render } from '../helpers/render';
 
@@ -30,11 +38,18 @@ mock.module('sonner', () => ({
 
 // QuoteVersionsPanel fetches version history on mount; stub the API so the modal
 // renders without a real network call.
+const listVersionsMock = mock(async (): Promise<QuoteVersionRow[]> => []);
+const getVersionMock = mock(async (): Promise<QuoteVersion> => {
+  throw new Error('not used');
+});
+const restoreVersionMock = mock(async (): Promise<Quote> => {
+  throw new Error('not used');
+});
 mock.module('../../services/api/clientQuotes', () => ({
   clientQuotesApi: {
-    listVersions: () => Promise.resolve([]),
-    getVersion: () => Promise.reject(new Error('not used')),
-    restoreVersion: () => Promise.reject(new Error('not used')),
+    listVersions: listVersionsMock,
+    getVersion: getVersionMock,
+    restoreVersion: restoreVersionMock,
   },
 }));
 
@@ -141,6 +156,86 @@ const openItemActions = async () => {
 afterEach(() => {
   // Modal locks body scroll while open; reset between tests.
   document.body.style.overflow = '';
+  listVersionsMock.mockReset();
+  listVersionsMock.mockResolvedValue([]);
+  getVersionMock.mockReset();
+  getVersionMock.mockRejectedValue(new Error('not used'));
+  restoreVersionMock.mockReset();
+  restoreVersionMock.mockRejectedValue(new Error('not used'));
+});
+
+describe('<ClientQuotesView /> candidate version previews', () => {
+  test('switches the candidate tabs to the historical family and restores the current family', async () => {
+    const currentCandidate = {
+      id: 'qc-current',
+      quoteId: 'Q-HISTORY',
+      name: 'Current variant',
+      position: 0,
+      state: 'active' as const,
+      items: [],
+      paymentTerms: 'immediate' as const,
+      discount: 0,
+      discountType: 'percentage' as const,
+      expirationDate: '2099-12-31',
+      communicationChannelId: 'qcc_email',
+      communicationChannelName: 'Email',
+      createdAt: 1_700_000_000_000,
+      updatedAt: 1_700_000_000_000,
+    };
+    const quote = buildQuote({ id: 'Q-HISTORY', candidates: [currentCandidate] });
+    listVersionsMock.mockResolvedValueOnce([
+      {
+        id: 'qv-1',
+        quoteId: 'Q-HISTORY',
+        reason: 'update' as const,
+        createdByUserId: 'u1',
+        createdAt: 1_700_000_001_000,
+      },
+    ]);
+    getVersionMock.mockResolvedValueOnce({
+      id: 'qv-1',
+      quoteId: 'Q-HISTORY',
+      reason: 'update' as const,
+      createdByUserId: 'u1',
+      createdAt: 1_700_000_001_000,
+      snapshot: {
+        schemaVersion: 2 as const,
+        quote,
+        candidates: [
+          { ...currentCandidate, id: 'qc-history-a', name: 'Historical A' },
+          { ...currentCandidate, id: 'qc-history-b', name: 'Historical B', position: 1 },
+        ],
+        items: [],
+      },
+    });
+
+    render(
+      <ClientQuotesView
+        {...baseProps}
+        communicationChannels={[
+          {
+            id: 'qcc_email',
+            name: 'Email',
+            clientQuoteCount: 0,
+            supplierQuoteCount: 0,
+            totalQuoteCount: 0,
+          },
+        ]}
+        quotes={[quote]}
+      />,
+    );
+    fireEvent.click(screen.getByText('Q-HISTORY'));
+    const reason = await screen.findByText('clientQuotes.versionHistory.reasonUpdate');
+    fireEvent.click(reason.closest('button') as HTMLButtonElement);
+
+    expect(await screen.findByRole('tab', { name: /Historical A/ })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /Historical B/ })).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole('button', { name: 'clientQuotes.versionHistory.backToCurrent' }),
+    );
+    expect(screen.getByRole('tab', { name: /Current variant/ })).toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: /Historical B/ })).not.toBeInTheDocument();
+  });
 });
 
 describe('<ClientQuotesView /> per-line quick-view links', () => {
@@ -161,7 +256,21 @@ describe('<ClientQuotesView /> per-line quick-view links', () => {
       ],
     });
 
-    render(<ClientQuotesView {...baseProps} quotes={[quote]} />);
+    render(
+      <ClientQuotesView
+        {...baseProps}
+        communicationChannels={[
+          {
+            id: 'qcc_email',
+            name: 'Email',
+            clientQuoteCount: 0,
+            supplierQuoteCount: 0,
+            totalQuoteCount: 0,
+          },
+        ]}
+        quotes={[quote]}
+      />,
+    );
     fireEvent.click(screen.getByText('Q-LINKED'));
     await openItemActions();
 
@@ -254,7 +363,21 @@ describe('<ClientQuotesView /> per-line quick-view links', () => {
       ],
     });
 
-    render(<ClientQuotesView {...baseProps} quotes={[quote]} />);
+    render(
+      <ClientQuotesView
+        {...baseProps}
+        communicationChannels={[
+          {
+            id: 'qcc_email',
+            name: 'Email',
+            clientQuoteCount: 0,
+            supplierQuoteCount: 0,
+            totalQuoteCount: 0,
+          },
+        ]}
+        quotes={[quote]}
+      />,
+    );
     fireEvent.click(screen.getByText('Q-STALE-PRODUCT'));
     await openItemActions();
 
@@ -283,7 +406,21 @@ describe('<ClientQuotesView /> per-line quick-view links', () => {
       ],
     });
 
-    render(<ClientQuotesView {...baseProps} quotes={[quote]} />);
+    render(
+      <ClientQuotesView
+        {...baseProps}
+        communicationChannels={[
+          {
+            id: 'qcc_email',
+            name: 'Email',
+            clientQuoteCount: 0,
+            supplierQuoteCount: 0,
+            totalQuoteCount: 0,
+          },
+        ]}
+        quotes={[quote]}
+      />,
+    );
     fireEvent.click(screen.getByText('Q-STALE-SQ'));
     await openItemActions();
 
@@ -309,7 +446,21 @@ describe('<ClientQuotesView /> per-line quick-view links', () => {
       ],
     });
 
-    render(<ClientQuotesView {...baseProps} quotes={[quote]} />);
+    render(
+      <ClientQuotesView
+        {...baseProps}
+        communicationChannels={[
+          {
+            id: 'qcc_email',
+            name: 'Email',
+            clientQuoteCount: 0,
+            supplierQuoteCount: 0,
+            totalQuoteCount: 0,
+          },
+        ]}
+        quotes={[quote]}
+      />,
+    );
     fireEvent.click(screen.getByText('Q-PRODUCT-ONLY'));
     await openItemActions();
 
@@ -335,7 +486,21 @@ describe('<ClientQuotesView /> per-line quick-view links', () => {
       ],
     });
 
-    render(<ClientQuotesView {...baseProps} quotes={[quote]} />);
+    render(
+      <ClientQuotesView
+        {...baseProps}
+        communicationChannels={[
+          {
+            id: 'qcc_email',
+            name: 'Email',
+            clientQuoteCount: 0,
+            supplierQuoteCount: 0,
+            totalQuoteCount: 0,
+          },
+        ]}
+        quotes={[quote]}
+      />,
+    );
     fireEvent.click(screen.getByText('Q-EMPTY'));
     await openItemActions();
 
@@ -387,7 +552,7 @@ describe('<ClientQuotesView /> expired-quote handling (issue #779)', () => {
   });
 
   test('submitting an expired quote extends ONLY the expiration date', async () => {
-    const onUpdateQuote = mock((_id: string, _updates: Partial<Quote>) => Promise.resolve());
+    const onUpdateQuote = mock((_id: string, _updates: QuoteMutation) => Promise.resolve());
     render(
       <ClientQuotesView {...baseProps} quotes={[expiredQuote()]} onUpdateQuote={onUpdateQuote} />,
     );
@@ -414,7 +579,7 @@ describe('<ClientQuotesView /> expired-quote handling (issue #779)', () => {
   test('submitting with a still-past expiration date is rejected client-side', async () => {
     // Revalidation requires a date from today onward — saving the old past date would close the
     // modal while the quote silently stays expired (#779 second-pass review).
-    const onUpdateQuote = mock((_id: string, _updates: Partial<Quote>) => Promise.resolve());
+    const onUpdateQuote = mock((_id: string, _updates: QuoteMutation) => Promise.resolve());
     render(
       <ClientQuotesView
         {...baseProps}
