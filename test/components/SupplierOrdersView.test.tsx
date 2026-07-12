@@ -71,7 +71,7 @@ describe('<SupplierOrdersView /> line item duration (issue #776)', () => {
     );
     // ...and the row carries a duration input reflecting the stored value (3 months).
     const durationInputs = screen
-      .getAllByPlaceholderText('accounting:supplierOrders.durationColumn')
+      .getAllByRole('textbox', { name: 'accounting:supplierOrders.durationColumn' })
       .filter((el): el is HTMLInputElement => el instanceof HTMLInputElement);
     expect(durationInputs.length).toBeGreaterThan(0);
     expect(durationInputs[0].value).toBe('3');
@@ -84,7 +84,7 @@ describe('<SupplierOrdersView /> line item duration (issue #776)', () => {
     fireEvent.click(screen.getByText('SO-DUR-SUBMIT'));
 
     const durationInputs = screen
-      .getAllByPlaceholderText('accounting:supplierOrders.durationColumn')
+      .getAllByRole('textbox', { name: 'accounting:supplierOrders.durationColumn' })
       .filter((el): el is HTMLInputElement => el instanceof HTMLInputElement);
     fireEvent.change(durationInputs[0], { target: { value: '4' } });
 
