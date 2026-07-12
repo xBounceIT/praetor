@@ -46,6 +46,12 @@ export const parseOptionalNumberInputValue = (value: string): number | undefined
   return Number.isNaN(parsed) ? undefined : parsed;
 };
 
+export const isFiniteNumber = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isFinite(value);
+
+export const isPositiveFiniteNumber = (value: unknown): value is number =>
+  isFiniteNumber(value) && value > 0;
+
 const numberFormatters = new Map<string, Intl.NumberFormat>();
 
 /** Format every user-visible number with Italian decimal and thousands separators. */

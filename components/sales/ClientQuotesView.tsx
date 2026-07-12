@@ -45,6 +45,7 @@ import {
   formatNumber,
   getDurationInputValue,
   getItemPricingContext,
+  isPositiveFiniteNumber,
   MOL_PERCENTAGE_DECIMALS,
   normalizeDurationUnit,
   type PricingTotals,
@@ -644,13 +645,7 @@ const useClientQuotesController = ({
           defaultValue: 'Each item must have a product or a linked supplier quote',
         });
       }
-      const invalidQuantity = formData.items.find(
-        (item) =>
-          item.quantity === undefined ||
-          item.quantity === null ||
-          Number.isNaN(item.quantity) ||
-          item.quantity <= 0,
-      );
+      const invalidQuantity = formData.items.find((item) => !isPositiveFiniteNumber(item.quantity));
       if (!newErrors.items && invalidQuantity) {
         newErrors.items = t('sales:clientQuotes.errors.quantityGreaterThanZero');
       }

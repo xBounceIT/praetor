@@ -869,3 +869,42 @@ describe('<ClientsOrdersView /> line-item delete confirmation', () => {
     expect(rowDeleteButtons(dialog)).toHaveLength(rowDeletes.length);
   });
 });
+
+describe('<ClientsOrdersView /> paginated item validation', () => {
+  test('blocks a quantity missing on a row outside the first page', async () => {
+    localStorage.clear();
+    const orderId = 'dm_so_paged_validation';
+    const items = Array.from({ length: 6 }, (_, index): ClientsOrder['items'][number] => ({
+      id: `paged-client-order-item-${index + 1}`,
+      orderId,
+      productId: `product-${index + 1}`,
+      productName: `Product ${index + 1}`,
+      quantity: index === 5 ? Number.NaN : 1,
+      unitPrice: 100,
+      productCost: 50,
+      productMolPercentage: 50,
+      unitType: 'unit',
+    }));
+    const onUpdateClientsOrder = mock((_id: string, _updates: Partial<ClientsOrder>) =>
+      Promise.resolve(),
+    );
+
+    render(
+      <ClientsOrdersView
+        orders={[{ ...orders[0], id: orderId, items }]}
+        clients={clients}
+        products={[]}
+        currency="EUR"
+        onUpdateClientsOrder={onUpdateClientsOrder}
+        onDeleteClientsOrder={mock(() => Promise.resolve())}
+      />,
+    );
+    fireEvent.click(screen.getByText(orderId));
+
+    await waitFor(() => expect(screen.getByText('1 / 2')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: 'accounting:clientsOrders.updateOrder' }));
+
+    expect(onUpdateClientsOrder).not.toHaveBeenCalled();
+    expect(screen.getByText('common:validation.positiveQuantityRequired')).toBeInTheDocument();
+  });
+});

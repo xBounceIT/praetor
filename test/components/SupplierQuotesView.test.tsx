@@ -759,3 +759,36 @@ describe('<SupplierQuotesView /> StandardTable line items', () => {
     expectSourceOmitsAll(source, ['grid grid-cols-16 gap-2', 'col-span-6']);
   });
 });
+
+describe('<SupplierQuotesView /> paginated item validation', () => {
+  test('blocks a quantity missing on a row outside the first page', async () => {
+    localStorage.clear();
+    const quoteId = 'SQ-PAGED-VALIDATION';
+    const items = Array.from({ length: 6 }, (_, index): SupplierQuote['items'][number] => ({
+      id: `paged-supplier-quote-item-${index + 1}`,
+      quoteId,
+      productName: `Product ${index + 1}`,
+      quantity: index === 5 ? Number.NaN : 1,
+      listPrice: 100,
+      discountPercent: 0,
+      unitPrice: 100,
+      unitType: 'unit',
+    }));
+    const onUpdateQuote = mock((_id: string, _updates: Partial<SupplierQuote>) => {});
+
+    render(
+      <SupplierQuotesView
+        {...baseProps}
+        quotes={[buildQuote({ id: quoteId, items })]}
+        onUpdateQuote={onUpdateQuote}
+      />,
+    );
+    fireEvent.click(screen.getByText(quoteId));
+
+    await waitFor(() => expect(screen.getByText('1 / 2')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: 'common:buttons.update' }));
+
+    expect(onUpdateQuote).not.toHaveBeenCalled();
+    expect(screen.getByText('common:validation.positiveQuantityRequired')).toBeInTheDocument();
+  });
+});

@@ -1035,3 +1035,37 @@ describe('<ClientOffersView /> expired-offer handling (issue #779)', () => {
     expect(document.getElementById('client-offer-expiration-date')).toBeDisabled();
   });
 });
+
+describe('<ClientOffersView /> paginated item validation', () => {
+  test('blocks a quantity missing on a row outside the first page', async () => {
+    localStorage.clear();
+    const offerId = 'O-PAGED-VALIDATION';
+    const items = Array.from({ length: 6 }, (_, index): ClientOffer['items'][number] => ({
+      id: `paged-offer-item-${index + 1}`,
+      offerId,
+      productId: `product-${index + 1}`,
+      productName: `Product ${index + 1}`,
+      quantity: index === 5 ? Number.NaN : 1,
+      unitPrice: 100,
+      productCost: 50,
+      productMolPercentage: 50,
+      unitType: 'unit',
+    }));
+    const onUpdateOffer = mock((_id: string, _updates: Partial<ClientOffer>) => {});
+
+    render(
+      <ClientOffersView
+        {...baseProps}
+        offers={[buildOffer({ id: offerId, items })]}
+        onUpdateOffer={onUpdateOffer}
+      />,
+    );
+    fireEvent.click(screen.getByText(offerId));
+
+    await waitFor(() => expect(screen.getByText('1 / 2')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: 'common:buttons.update' }));
+
+    expect(onUpdateOffer).not.toHaveBeenCalled();
+    expect(screen.getByText('common:validation.positiveQuantityRequired')).toBeInTheDocument();
+  });
+});

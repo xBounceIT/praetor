@@ -23,10 +23,13 @@ import {
   formatDiscountValue,
   getDurationInputValue,
   getEffectiveDurationMonths,
+  isFiniteNumber,
+  isPositiveFiniteNumber,
   normalizeDurationUnit,
   parseDurationValueToMonths,
 } from '../../utils/numbers';
 import { getPaymentTermsOptions } from '../../utils/options';
+import { toastError } from '../../utils/toast';
 import CostSummaryPanel from '../shared/CostSummaryPanel';
 import DeleteConfirmModal from '../shared/DeleteConfirmModal';
 import DurationUnitSelector from '../shared/DurationUnitSelector';
@@ -394,6 +397,16 @@ const useSupplierOrdersController = ({
       event.preventDefault();
       if (!editingOrder) return;
 
+      const items = formData.items || [];
+      if (items.some((item) => !isPositiveFiniteNumber(item.quantity))) {
+        toastError(t('common:validation.positiveQuantityRequired'));
+        return;
+      }
+      if (items.some((item) => !isFiniteNumber(item.unitPrice))) {
+        toastError(t('common:validation.unitPriceRequired'));
+        return;
+      }
+
       await onUpdateOrder(editingOrder.id, {
         ...formData,
         discount: Number(formData.discount ?? 0),
@@ -406,7 +419,7 @@ const useSupplierOrdersController = ({
 
       dispatch({ type: 'submitSuccess' });
     },
-    [editingOrder, formData, onUpdateOrder],
+    [editingOrder, formData, onUpdateOrder, t],
   );
 
   const totals = useMemo(

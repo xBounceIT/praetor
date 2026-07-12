@@ -99,6 +99,8 @@
     "invalidDate": "Inserisci una data valida",
     "invalidNumber": "Inserisci un numero valido",
     "validAmountRequired": "Inserisci un importo valido maggiore di 0",
+    "positiveQuantityRequired": "Inserisci una quantità maggiore di 0 per ogni articolo",
+    "unitPriceRequired": "Inserisci un prezzo unitario valido per ogni articolo",
     "minLength": "Lunghezza minima di {{min}} caratteri",
     "maxLength": "Lunghezza massima di {{max}} caratteri",
     "minValue": "Valore minimo di {{min}}",

@@ -37,6 +37,7 @@ import {
   formatDecimal,
   getDurationInputValue,
   getEffectiveDurationMonths,
+  isPositiveFiniteNumber,
   normalizeDurationUnit,
   parseDurationValueToMonths,
   parseNumberInputValue,
@@ -1043,6 +1044,8 @@ const useSupplierQuotesController = ({
       nextErrors.items = t('sales:supplierQuotes.errors.listPriceRequired', {
         defaultValue: 'List price is required for every item',
       });
+    } else if (formData.items.some((item) => !isPositiveFiniteNumber(item.quantity))) {
+      nextErrors.items = t('common:validation.positiveQuantityRequired');
     }
 
     if (Object.keys(nextErrors).length > 0) {

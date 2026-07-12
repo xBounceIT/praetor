@@ -14,6 +14,8 @@ import {
   getEffectiveDurationMonths,
   getEffectiveMol,
   getItemPricingContext,
+  isFiniteNumber,
+  isPositiveFiniteNumber,
   normalizeDurationUnit,
   normalizeLocalizedNumber,
   type PricingItem,
@@ -54,6 +56,20 @@ describe('parseOptionalNumberInputValue', () => {
   test('parses a real localized numeric value, including zero', () => {
     expect(parseOptionalNumberInputValue('12,5')).toBe(12.5);
     expect(parseOptionalNumberInputValue('0')).toBe(0);
+  });
+});
+
+describe('required numeric values', () => {
+  test('accepts only finite numbers and finite positive quantities', () => {
+    expect(isFiniteNumber(0)).toBe(true);
+    expect(isFiniteNumber(Number.NaN)).toBe(false);
+    expect(isFiniteNumber(Number.POSITIVE_INFINITY)).toBe(false);
+    expect(isFiniteNumber('1')).toBe(false);
+
+    expect(isPositiveFiniteNumber(1)).toBe(true);
+    expect(isPositiveFiniteNumber(0)).toBe(false);
+    expect(isPositiveFiniteNumber(-1)).toBe(false);
+    expect(isPositiveFiniteNumber(Number.NaN)).toBe(false);
   });
 });
 

@@ -35,6 +35,7 @@ import {
   formatMolPercentage,
   getDurationInputValue,
   getItemPricingContext,
+  isPositiveFiniteNumber,
   MOL_PERCENTAGE_DECIMALS,
   normalizeDurationUnit,
   type PricingTotals,
@@ -361,6 +362,8 @@ const useClientsOrdersController = ({
 
     if (!formData.items || formData.items.length === 0) {
       newErrors.items = t('sales:clientQuotes.errors.itemsRequired');
+    } else if (formData.items.some((item) => !isPositiveFiniteNumber(item.quantity))) {
+      newErrors.items = t('common:validation.positiveQuantityRequired');
     }
 
     if (Object.keys(newErrors).length > 0) {
