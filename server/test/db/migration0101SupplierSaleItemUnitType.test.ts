@@ -10,6 +10,20 @@ const readJournal = async () =>
 
 const readSeed = async () => Bun.file(new URL('../../db/seed.sql', import.meta.url)).text();
 
+const getInsertSelectBlock = (sql: string, table: string) => {
+  const match = sql.match(
+    new RegExp(
+      `INSERT INTO ${table}\\s*\\(([\\s\\S]*?)\\)\\s*SELECT([\\s\\S]*?)FROM\\s*\\([\\s\\S]*?\\) AS v\\(([^)]*)\\)`,
+    ),
+  );
+  if (!match) throw new Error(`Could not parse INSERT ... SELECT block for ${table}`);
+  return {
+    insertColumns: match[1].split(',').map((column) => column.trim()),
+    selectExpressions: match[2].split(',').map((expression) => expression.trim()),
+    aliasColumns: new Set(match[3].split(',').map((column) => column.trim())),
+  };
+};
+
 describe('migration 0101 supplier-sale item quantity unit', () => {
   test('adds a constrained column and backfills only unambiguous linked-quote units', async () => {
     const sql = await readMigration();
@@ -24,11 +38,33 @@ describe('migration 0101 supplier-sale item quantity unit', () => {
 
   test('keeps canonical demo supplier-order units explicit', async () => {
     const sql = await readSeed();
+    const supplierSaleItems = getInsertSelectBlock(sql, 'supplier_sale_items');
 
-    expect(sql).toMatch(/INSERT INTO supplier_sale_items \([\s\S]*?unit_type,[\s\S]*?\)/);
+    expect(supplierSaleItems.insertColumns).toContain('unit_type');
+    expect(supplierSaleItems.selectExpressions).toContain('v.unit_type');
+    expect(supplierSaleItems.aliasColumns).toContain('unit_type');
+    expect(supplierSaleItems.selectExpressions).toHaveLength(
+      supplierSaleItems.insertColumns.length,
+    );
     expect(sql).toContain("'dm_ssi_01', pg_temp.demo_document_code('supplier_order', 1)");
     expect(sql).toContain("4.00, 'unit', 960.00");
     expect(sql).toContain('unit_type = EXCLUDED.unit_type');
+  });
+
+  test('every seeded supplier line v.* reference exists in its VALUES alias', async () => {
+    const sql = await readSeed();
+
+    for (const table of ['supplier_quote_items', 'supplier_sale_items']) {
+      const block = getInsertSelectBlock(sql, table);
+      const referencedAliases = block.selectExpressions
+        .map((expression) => expression.match(/^v\.([a-z_]+)$/)?.[1])
+        .filter((column): column is string => Boolean(column));
+
+      expect(
+        referencedAliases.filter((column) => !block.aliasColumns.has(column)),
+        `${table} SELECT references undeclared v.* aliases`,
+      ).toEqual([]);
+    }
   });
 
   test('is registered after migration 0100', async () => {

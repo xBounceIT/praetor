@@ -963,7 +963,6 @@ INSERT INTO supplier_quote_items (
     product_id,
     product_name,
     quantity,
-    unit_type,
     unit_price,
     note
 )
@@ -973,7 +972,6 @@ SELECT
     p.id,
     p.name,
     v.quantity,
-    v.unit_type,
     v.unit_price,
     v.note
 FROM (
@@ -1093,6 +1091,7 @@ INSERT INTO supplier_sale_items (
     product_id,
     product_name,
     quantity,
+    unit_type,
     unit_price,
     discount,
     note
@@ -1103,6 +1102,7 @@ SELECT
     p.id,
     p.name,
     v.quantity,
+    v.unit_type,
     v.unit_price,
     v.discount,
     v.note
