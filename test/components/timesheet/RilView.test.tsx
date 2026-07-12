@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, mock, setSystemTime, test } from 'bun:test';
-import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import type { GeneralSettings, Project, TimeEntry, User } from '../../../types';
 import type { RilWorkbookInput } from '../../../utils/rilExport';
 import { installApiMock } from '../../helpers/api';
@@ -152,6 +152,29 @@ describe('<RilView />', () => {
     const lunchSummaryItem = screen.getByLabelText('ril.summary.lunchWindow').closest('div');
     expect(lunchSummaryItem?.querySelector('dt')?.className).toContain('whitespace-nowrap');
     expect(lunchSummaryItem?.querySelector('dd')?.className).toContain('whitespace-nowrap');
+  });
+
+  test('keeps the loading state visible until the RIL table is ready', async () => {
+    let resolveEntries!: (value: { entries: TimeEntry[]; nextCursor: null }) => void;
+    const pendingEntries = new Promise<{ entries: TimeEntry[]; nextCursor: null }>((resolve) => {
+      resolveEntries = resolve;
+    });
+    api.entries.listPage.mockImplementation(() => pendingEntries);
+
+    renderRilView();
+
+    expect(screen.getByRole('status', { name: 'ril.loading' })).toBeInTheDocument();
+    expect(screen.queryByText('ril.columns.day')).toBeNull();
+    expect(screen.queryByLabelText('ril.summary.title')).toBeNull();
+
+    await act(async () => {
+      resolveEntries({ entries: [], nextCursor: null });
+      await pendingEntries;
+    });
+
+    expect(await screen.findByText('ril.columns.day')).toBeInTheDocument();
+    expect(screen.queryByRole('status', { name: 'ril.loading' })).toBeNull();
+    expect(screen.getByLabelText('ril.summary.title')).toBeInTheDocument();
   });
 
   test('selecting month and year reloads and syncs the draft table', async () => {

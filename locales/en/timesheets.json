@@ -27,6 +27,7 @@
     "year": "Year",
     "reset": "Reset from timesheets",
     "exportExcel": "Export Excel",
+    "loading": "Loading RIL…",
     "loadFailed": "Failed to load RIL data",
     "exportFailed": "Failed to export RIL workbook",
     "missingTimes": "Add entrance and exit times for valid days before exporting: {{days}}",

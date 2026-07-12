@@ -176,6 +176,7 @@ type RilViewState = {
   monthKey: string;
   rows: RilRow[];
   isLoading: boolean;
+  loadedContext: string | null;
   isExporting: boolean;
   draftStatus: RilDraftStatus;
   error: string | null;
@@ -184,8 +185,8 @@ type RilViewState = {
 type RilViewAction =
   | { type: 'setMonthKey'; monthKey: string }
   | { type: 'loadStart' }
-  | { type: 'loadSuccess'; rows: RilRow[] }
-  | { type: 'loadError'; error: string; rows: RilRow[] }
+  | { type: 'loadSuccess'; context: string; rows: RilRow[] }
+  | { type: 'loadError'; context: string; error: string; rows: RilRow[] }
   | { type: 'setRows'; rows: RilRow[] }
   | { type: 'updateRows'; updater: (rows: RilRow[]) => RilRow[] }
   | { type: 'setError'; error: string }
@@ -196,13 +197,19 @@ type RilViewAction =
 const rilViewReducer = (state: RilViewState, action: RilViewAction): RilViewState => {
   switch (action.type) {
     case 'setMonthKey':
-      return { ...state, monthKey: action.monthKey };
+      return { ...state, monthKey: action.monthKey, isLoading: true, error: null };
     case 'loadStart':
       return { ...state, isLoading: true, error: null };
     case 'loadSuccess':
-      return { ...state, rows: action.rows, isLoading: false };
+      return { ...state, rows: action.rows, isLoading: false, loadedContext: action.context };
     case 'loadError':
-      return { ...state, rows: action.rows, isLoading: false, error: action.error };
+      return {
+        ...state,
+        rows: action.rows,
+        isLoading: false,
+        loadedContext: action.context,
+        error: action.error,
+      };
     case 'setRows':
       return { ...state, rows: action.rows };
     case 'updateRows':
@@ -230,12 +237,21 @@ const useRilController = ({
   const [state, dispatch] = useReducer(rilViewReducer, undefined, () => ({
     monthKey: getCurrentRilMonthKey(),
     rows: [],
-    isLoading: false,
+    isLoading: true,
+    loadedContext: null,
     isExporting: false,
     draftStatus: 'idle' as RilDraftStatus,
     error: null,
   }));
-  const { monthKey, rows, isLoading, isExporting, draftStatus, error } = state;
+  const {
+    monthKey,
+    rows,
+    isLoading: isLoadInFlight,
+    loadedContext,
+    isExporting,
+    draftStatus,
+    error,
+  } = state;
   const sourceEntriesRef = useRef<TimeEntry[]>([]);
   const projectCatalogRef = useRef<RilProjectReference[]>([]);
   const projectCatalogUserIdRef = useRef<string | null>(null);
@@ -269,6 +285,10 @@ const useRilController = ({
   const selectedUser = availableUsers.find((user) => user.id === effectiveUserId) ?? currentUser;
   const monthBounds = useMemo(() => getRilMonthBounds(normalizeMonthKey(monthKey)), [monthKey]);
   const draftMonthKey = monthBounds.monthKey;
+  const loadContext = `${effectiveUserId}::${draftMonthKey}`;
+  // A selected user or month can change before the loading effect starts. Treat rows as pending
+  // until the reducer confirms they belong to the exact context currently shown in the controls.
+  const isLoading = isLoadInFlight || loadedContext !== loadContext;
   const locale = getLocale(i18n.language);
   const defaultStartTime = settings.rilDefaultStartTime || DEFAULT_RIL_START_TIME;
   const defaultExitTime = settings.rilDefaultExitTime || DEFAULT_RIL_EXIT_TIME;
@@ -491,14 +511,14 @@ const useRilController = ({
         const baseRows = generateRows(nextEntries, nextProjects);
         if (draftResult.ok) {
           const merged = applyRilDraftToRows(baseRows, draftResult.draft?.rows, lunchBreakMinutes);
-          dispatch({ type: 'loadSuccess', rows: merged });
+          dispatch({ type: 'loadSuccess', context: loadContext, rows: merged });
           dispatch({
             type: 'setDraftStatus',
             draftStatus: draftResult.draft?.updatedAt ? 'saved' : 'idle',
           });
           draftSyncReadyRef.current = true;
         } else {
-          dispatch({ type: 'loadSuccess', rows: baseRows });
+          dispatch({ type: 'loadSuccess', context: loadContext, rows: baseRows });
           dispatch({ type: 'setDraftStatus', draftStatus: 'error' });
         }
       }
@@ -509,6 +529,7 @@ const useRilController = ({
         projectCatalogUserIdRef.current = null;
         dispatch({
           type: 'loadError',
+          context: loadContext,
           error: err instanceof Error ? err.message : 'Failed to load RIL data',
           rows: generateRows([], []),
         });
@@ -524,6 +545,7 @@ const useRilController = ({
     lunchBreakMinutes,
     enqueueDraftSave,
     getChangedDays,
+    loadContext,
   ]);
 
   useEffect(() => {
@@ -767,10 +789,27 @@ const RilViewLayout: React.FC<{ controller: RilController }> = ({ controller }) 
   <div className="space-y-6">
     <RilHeader controller={controller} />
     {controller.error && <RilErrorMessage message={controller.error} />}
-    <section className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_15rem]">
-      <RilDataTable controller={controller} />
-      <RilSummary controller={controller} />
-    </section>
+    {controller.isLoading ? (
+      <RilLoadingState controller={controller} />
+    ) : (
+      <section className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_15rem]">
+        <RilDataTable controller={controller} />
+        <RilSummary controller={controller} />
+      </section>
+    )}
+  </div>
+);
+
+const RilLoadingState: React.FC<{ controller: RilController }> = ({ controller }) => (
+  <div
+    role="status"
+    aria-label={controller.t('ril.loading')}
+    className="flex min-h-64 items-center justify-center rounded-md border border-border bg-card text-sm text-muted-foreground"
+  >
+    <span className="inline-flex items-center gap-2">
+      <Loader2 aria-hidden="true" className="size-4 animate-spin" />
+      {controller.t('ril.loading')}
+    </span>
   </div>
 );
 
