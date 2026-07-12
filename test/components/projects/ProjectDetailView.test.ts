@@ -157,6 +157,7 @@ describe('ProjectDetailView wiring', () => {
     expect(source).toContain('ProjectStatusInfoTooltip');
     expect(source).toContain('status,');
     expect(source).toContain('type={getProjectStatusBadgeType(project.status)}');
+    expect(source).toContain("icon={getProjectStatusIcon(project.status, 'size-[1em]')}");
   });
   test('requires a linked client order and keeps offer optional on save', async () => {
     const source = await readSource();

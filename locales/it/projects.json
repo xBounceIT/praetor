@@ -44,10 +44,10 @@
     "selectStatus": "Seleziona stato...",
     "statusHelpLabel": "Informazioni stato commessa",
     "statusValues": {
-      "da_fare": "DA FARE",
-      "in_corso": "In Corso",
-      "in_pausa": "In Pausa",
-      "terminato": "TERMINATO"
+      "da_fare": "Da fare",
+      "in_corso": "In corso",
+      "in_pausa": "In pausa",
+      "terminato": "Terminato"
     },
     "statusHelp": {
       "da_fare": "Commessa pianificata, ore inseribili.",
@@ -324,10 +324,10 @@
           "retainer": "Canone"
         },
         "status": {
-          "da_fare": "DA FARE",
-          "in_corso": "In Corso",
-          "in_pausa": "In Pausa",
-          "terminato": "TERMINATO"
+          "da_fare": "Da fare",
+          "in_corso": "In corso",
+          "in_pausa": "In pausa",
+          "terminato": "Terminato"
         }
       },
       "errors": {

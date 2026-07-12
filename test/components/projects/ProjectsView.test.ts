@@ -156,8 +156,10 @@ describe('ProjectsView create-form validation', () => {
     expect(source).toContain('status,');
     expect(source).toContain('accessorFn: (row) => formatProjectStatus(row.status)');
     expect(source).toContain('type={getProjectStatusBadgeType(row.status)}');
+    expect(source).toContain("icon={getProjectStatusIcon(row.status, 'size-[1em]')}");
     expect(statusUiSource).toContain('projects:projects.statusHelp');
     expect(statusUiSource).toContain("import { Info } from 'lucide-react'");
+    expect(statusUiSource).toContain('getProjectStatusIcon(status');
     const statusUtilsSource = await Bun.file(
       new URL('../../../components/projects/projectStatusUi.ts', import.meta.url),
     ).text();
@@ -183,18 +185,30 @@ describe('ProjectsView create-form validation', () => {
       expect(loc.projects.tipoValues.passivo).toBeTruthy();
       expect(loc.resales.columns.startDate).toBeTruthy();
       expect(loc.resales.columns.endDate).toBeTruthy();
-      expect(loc.projects.status).toBeTruthy();
-      expect(loc.projects.selectStatus).toBeTruthy();
-      expect(loc.projects.statusValues.da_fare).toBe('DA FARE');
-      expect(loc.projects.statusValues.in_corso).toBe('In Corso');
-      expect(loc.projects.statusValues.in_pausa).toBe('In Pausa');
-      expect(loc.projects.statusValues.terminato).toBe('TERMINATO');
-      expect(loc.projects.statusHelp.in_pausa).toBeTruthy();
       expect(loc.resales.tabs.activities).toBeTruthy();
       expect(loc.resales.selectResaleForActivities).toBeTruthy();
     }
     expect(en.resales.tabs.archive).toBe('Resales');
     expect(it.resales.tabs.archive).toBe('Rivendite');
+  });
+
+  test('normalizes project status labels in both locales and rule controls', async () => {
+    const en = await Bun.file(new URL('../../../locales/en/projects.json', import.meta.url)).json();
+    const it = await Bun.file(new URL('../../../locales/it/projects.json', import.meta.url)).json();
+    const expectedLabels = {
+      da_fare: 'Da fare',
+      in_corso: 'In corso',
+      in_pausa: 'In pausa',
+      terminato: 'Terminato',
+    };
+
+    for (const loc of [en, it]) {
+      expect(loc.projects.status).toBeTruthy();
+      expect(loc.projects.selectStatus).toBeTruthy();
+      expect(loc.projects.statusValues).toEqual(expectedLabels);
+      expect(loc.projects.statusHelp.in_pausa).toBeTruthy();
+      expect(loc.detail.rules.values.status).toEqual(expectedLabels);
+    }
   });
 
   test('revenue precedence: activity sum > manual, and read-only unless manual', async () => {

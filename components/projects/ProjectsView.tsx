@@ -58,7 +58,11 @@ import { TABLE_CONTROL_BUTTON_CLASSNAME } from '../shared/tableControlStyles';
 import UserAssignmentModal from '../shared/UserAssignmentModal';
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
 import { ProjectStatusInfoTooltip } from './ProjectStatusInfoTooltip';
-import { getProjectStatusBadgeType, projectStatusOptions } from './projectStatusUi';
+import {
+  getProjectStatusBadgeType,
+  getProjectStatusIcon,
+  translateProjectStatusOptions,
+} from './projectStatusUi';
 import type { RecurringConfig } from './TaskFormModal';
 import TasksView from './TasksView';
 
@@ -634,10 +638,7 @@ const useProjectsController = ({
   const formatTipo = (value: ProjectTipo | undefined) =>
     translatedTipoOptions.find((option) => option.id === value)?.name ?? '-';
 
-  const translatedStatusOptions = projectStatusOptions.map((option) => ({
-    id: option.id,
-    name: t(option.name),
-  }));
+  const translatedStatusOptions = translateProjectStatusOptions(t);
   const formatProjectStatus = (value: ProjectStatus | undefined) =>
     translatedStatusOptions.find((option) => option.id === (value ?? LEGACY_PROJECT_STATUS))
       ?.name ?? '-';
@@ -1033,6 +1034,7 @@ const useProjectsController = ({
             <StatusBadge
               type={getProjectStatusBadgeType(row.status)}
               label={formatProjectStatus(row.status)}
+              icon={getProjectStatusIcon(row.status, 'size-[1em]')}
             />
             {row.isDisabled && (
               <StatusBadge type="disabled" label={t('projects:projects.statusDisabled')} />
