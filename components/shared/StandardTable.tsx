@@ -917,6 +917,8 @@ export type StandardTableProps<T extends object = object> = {
   data?: T[];
   columns?: Column<T>[];
   defaultRowsPerPage?: number;
+  /** Move to the page containing a row appended after mount. Defaults to false. */
+  autoRevealNewRows?: boolean;
   /**
    * Minimum visible body rows. When the current page has fewer rows than this,
    * the body is padded with inert placeholder rows so the table footprint stays
@@ -964,6 +966,7 @@ const useStandardTableController = <T extends object>({
   data,
   columns,
   defaultRowsPerPage = 10,
+  autoRevealNewRows = false,
   minBodyRows = 4,
   getRowProps,
   rowClassName,
@@ -977,6 +980,7 @@ const useStandardTableController = <T extends object>({
   const storageIdentity = persistenceKey ?? title;
   const isServerBacked = viewKey != null;
   const tableContainerRef = useRef<HTMLDivElement | null>(null);
+  const previousDataLengthRef = useRef(data?.length ?? 0);
 
   // A programmatic filter (a quick-view deep link or a cross-view "view X"
   // navigation) must win over a persisted saved view, which would otherwise
@@ -1899,6 +1903,7 @@ const useStandardTableController = <T extends object>({
     onColumnSizingChange,
     columnResizeMode: 'onChange',
     enableColumnResizing: true,
+    autoResetPageIndex: !autoRevealNewRows,
     state: {
       sorting,
       columnFilters,
@@ -1921,6 +1926,22 @@ const useStandardTableController = <T extends object>({
   const totalItems = shouldRenderTable ? processedRows.length : externalTotalCount || 0;
   const totalPages = shouldRenderTable ? table.getPageCount() : Math.ceil(totalItems / rowsPerPage);
   const paginatedRows = shouldRenderTable ? table.getRowModel().rows : [];
+
+  useEffect(() => {
+    const nextDataLength = data?.length ?? 0;
+    const previousDataLength = previousDataLengthRef.current;
+    previousDataLengthRef.current = nextDataLength;
+
+    if (!autoRevealNewRows || !data || nextDataLength <= previousDataLength) return;
+    const appendedRow = data[nextDataLength - 1];
+    const visibleIndex = table
+      .getPrePaginationRowModel()
+      .rows.findIndex((row) => row.original === appendedRow);
+    if (visibleIndex >= 0) {
+      setCurrentPage(Math.floor(visibleIndex / rowsPerPage) + 1);
+    }
+  }, [autoRevealNewRows, data, rowsPerPage, setCurrentPage, table]);
+
   const hasTrailingActionColumn =
     visibleColumns.length > 0 && isRowActionColumn(visibleColumns[visibleColumns.length - 1]);
   const visibleDataColumnCount = visibleColumns.filter((col) => !isRowActionColumn(col)).length;

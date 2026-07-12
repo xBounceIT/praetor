@@ -2421,7 +2421,7 @@ const ClientQuoteItemsSection: React.FC<{ controller: ClientQuotesController }> 
       align: 'right',
       cell: ({ row }) => (
         <span className="font-semibold tabular-nums">
-          {getItemPricingContext(row).lineCost.toFixed(2)} {currency}
+          {formatDecimal(getItemPricingContext(row).lineCost)} {currency}
         </span>
       ),
     },
@@ -2448,7 +2448,7 @@ const ClientQuoteItemsSection: React.FC<{ controller: ClientQuotesController }> 
       align: 'right',
       cell: ({ row }) => (
         <span className="font-semibold text-emerald-600 tabular-nums">
-          {getClientQuoteItemMargin(row).toFixed(2)} {currency}
+          {formatDecimal(getClientQuoteItemMargin(row))} {currency}
         </span>
       ),
     },
@@ -2459,7 +2459,7 @@ const ClientQuoteItemsSection: React.FC<{ controller: ClientQuotesController }> 
       align: 'right',
       cell: ({ row }) => (
         <span className="font-semibold tabular-nums">
-          {getClientQuoteItemRevenue(row).toFixed(2)} {currency}
+          {formatDecimal(getClientQuoteItemRevenue(row))} {currency}
         </span>
       ),
     },
@@ -2541,6 +2541,7 @@ const ClientQuoteItemsSection: React.FC<{ controller: ClientQuotesController }> 
         data={items ?? []}
         columns={columns}
         defaultRowsPerPage={5}
+        autoRevealNewRows
         minBodyRows={0}
         tableContainerClassName="overflow-x-auto"
         emptyState={

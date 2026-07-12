@@ -1532,6 +1532,37 @@ describe('<StandardTable />', () => {
     expect(screen.getByText('User1')).toBeInTheDocument();
   });
 
+  test('reveals a newly appended row on its pagination page when requested', async () => {
+    const firstPage: Row[] = Array.from({ length: 5 }, (_, index) => ({
+      id: String(index + 1),
+      name: `User${index + 1}`,
+      age: 20 + index,
+    }));
+    const { rerender } = render(
+      <StandardTable<Row>
+        title="RevealNewRow"
+        data={firstPage}
+        columns={sampleColumns}
+        defaultRowsPerPage={5}
+        autoRevealNewRows
+      />,
+    );
+
+    expect(screen.queryByText('User6')).not.toBeInTheDocument();
+    rerender(
+      <StandardTable<Row>
+        title="RevealNewRow"
+        data={[...firstPage, { id: '6', name: 'User6', age: 25 }]}
+        columns={sampleColumns}
+        defaultRowsPerPage={5}
+        autoRevealNewRows
+      />,
+    );
+
+    await waitFor(() => expect(screen.getByText('User6')).toBeInTheDocument());
+    expect(screen.getByText('2 / 2')).toBeInTheDocument();
+  });
+
   test('changing rowsPerPage produces the new slice on page 1', async () => {
     const user = userEvent.setup();
     const many: Row[] = Array.from({ length: 30 }, (_, i) => ({

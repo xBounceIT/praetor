@@ -1876,7 +1876,7 @@ const ClientOfferItemsSection: React.FC<{ controller: ClientOffersController }> 
       align: 'right',
       cell: ({ row }) => (
         <span className="font-semibold tabular-nums">
-          {getItemPricingContext(row).lineCost.toFixed(2)} {currency}
+          {formatDecimal(getItemPricingContext(row).lineCost)} {currency}
         </span>
       ),
     },
@@ -1903,7 +1903,7 @@ const ClientOfferItemsSection: React.FC<{ controller: ClientOffersController }> 
       align: 'right',
       cell: ({ row }) => (
         <span className="font-semibold text-emerald-600 tabular-nums">
-          {getClientOfferItemMargin(row).toFixed(2)} {currency}
+          {formatDecimal(getClientOfferItemMargin(row))} {currency}
         </span>
       ),
     },
@@ -1914,7 +1914,7 @@ const ClientOfferItemsSection: React.FC<{ controller: ClientOffersController }> 
       align: 'right',
       cell: ({ row }) => (
         <span className="font-semibold tabular-nums">
-          {getClientOfferItemRevenue(row).toFixed(2)} {currency}
+          {formatDecimal(getClientOfferItemRevenue(row))} {currency}
         </span>
       ),
     },
@@ -1987,6 +1987,7 @@ const ClientOfferItemsSection: React.FC<{ controller: ClientOffersController }> 
         data={items ?? []}
         columns={columns}
         defaultRowsPerPage={5}
+        autoRevealNewRows
         minBodyRows={0}
         tableContainerClassName="overflow-x-auto"
         emptyState={

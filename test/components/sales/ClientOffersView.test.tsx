@@ -1069,3 +1069,30 @@ describe('<ClientOffersView /> paginated item validation', () => {
     expect(screen.getByText('common:validation.positiveQuantityRequired')).toBeInTheDocument();
   });
 });
+
+describe('<ClientOffersView /> localized line amounts', () => {
+  test('formats line cost, margin, and revenue with Italian separators', async () => {
+    const offerId = 'O-LOCALE-AMOUNTS';
+    const offer = buildOffer({
+      id: offerId,
+      items: [
+        {
+          ...buildOffer({}).items[0],
+          id: 'locale-offer-line',
+          offerId,
+          quantity: 1,
+          unitPrice: 2000,
+          productCost: 1234.5,
+          productMolPercentage: 38.275,
+        },
+      ],
+    });
+
+    render(<ClientOffersView {...baseProps} offers={[offer]} />);
+    fireEvent.click(screen.getByText(offerId));
+
+    await waitFor(() => expect(screen.getAllByText('1.234,50 EUR').length).toBeGreaterThan(0));
+    expect(screen.getAllByText('765,50 EUR').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('2.000,00 EUR').length).toBeGreaterThan(0);
+  });
+});

@@ -1442,6 +1442,7 @@ const OrderItemsSection: React.FC<{ controller: ClientsOrdersController }> = ({ 
         data={items ?? []}
         columns={columns}
         defaultRowsPerPage={5}
+        autoRevealNewRows
         minBodyRows={0}
         tableContainerClassName="overflow-x-auto"
         emptyState={
