@@ -452,7 +452,10 @@ describe('<Layout />', () => {
   test('active module expands when active view changes', () => {
     const { rerender } = renderLayout();
 
-    fireEvent.click(screen.getByRole('button', { name: 'modules.timesheets' }));
+    const inactiveModule = screen.getByRole('button', { name: 'modules.crm' });
+    fireEvent.click(inactiveModule);
+    fireEvent.click(inactiveModule);
+    expect(inactiveModule.getAttribute('data-state')).toBe('closed');
 
     rerender(
       <Layout

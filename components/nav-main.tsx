@@ -55,7 +55,11 @@ export function NavMain({ items, label, onViewChange }: NavMainProps) {
             onOpenChange={(isOpen) => {
               setOpenOverrides((current) => {
                 const next = new Map(current);
-                next.set(item.id, isOpen);
+                if (isOpen || item.isActive) {
+                  next.set(item.id, isOpen);
+                } else {
+                  next.delete(item.id);
+                }
                 return next;
               });
             }}
