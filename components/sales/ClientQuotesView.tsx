@@ -80,7 +80,6 @@ import DeleteConfirmModal from '../shared/DeleteConfirmModal';
 import DurationUnitSelector from '../shared/DurationUnitSelector';
 import FieldTooltip from '../shared/FieldTooltip';
 import HeaderAddButton from '../shared/HeaderAddButton';
-import LineItemNoteTextarea from '../shared/LineItemNoteTextarea';
 import {
   LINE_ITEM_NOTE_CELL_CLASSNAME,
   LINE_ITEM_NOTE_COLUMN_MIN_WIDTH,
@@ -2890,7 +2889,8 @@ const ClientQuoteItemNote: React.FC<{
 
   return (
     <Field>
-      <LineItemNoteTextarea
+      <Input
+        type="text"
         placeholder={t('form:placeholderNotes')}
         value={item.note || ''}
         onChange={(e) => updateProductRow(index, 'note', e.target.value)}

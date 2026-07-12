@@ -52,7 +52,6 @@ import DeleteConfirmModal from '../shared/DeleteConfirmModal';
 import DurationUnitSelector from '../shared/DurationUnitSelector';
 import FieldTooltip from '../shared/FieldTooltip';
 import HeaderAddButton from '../shared/HeaderAddButton';
-import LineItemNoteTextarea from '../shared/LineItemNoteTextarea';
 import {
   LINE_ITEM_NOTE_CELL_CLASSNAME,
   LINE_ITEM_NOTE_COLUMN_MIN_WIDTH,
@@ -1967,7 +1966,8 @@ const SupplierQuoteItemNoteField: React.FC<{ context: SupplierQuoteItemContext }
   context,
 }) => (
   <div>
-    <LineItemNoteTextarea
+    <Input
+      type="text"
       value={context.item.note || ''}
       disabled={context.controller.isReadOnly}
       onChange={(event) => context.controller.updateItem(context.index, 'note', event.target.value)}
