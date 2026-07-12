@@ -2573,4 +2573,50 @@ describe('DELETE /api/sales/client-quotes/:id expired guard (#812 round 25)', ()
     expect(JSON.parse(res.body).error).toContain('Expired quotes are read-only');
     expect(cqDeleteByIdMock).not.toHaveBeenCalled();
   });
+
+  test('204 when the primary candidate is expired but another active variant is valid', async () => {
+    cqFindLinkedOfferIdMock.mockResolvedValue(null);
+    cqFindStatusAndClientNameMock.mockResolvedValue({
+      status: 'draft',
+      clientName: 'Client',
+      expirationDate: '2000-01-01',
+    });
+    qcListForQuoteMock.mockResolvedValue([
+      { id: 'qc-a', state: 'active', expirationDate: '2000-01-01' },
+      { id: 'qc-b', state: 'active', expirationDate: '2999-12-31' },
+    ]);
+    cqDeleteByIdMock.mockResolvedValue(true);
+
+    const res = await testApp.inject({
+      method: 'DELETE',
+      url: '/api/sales/client-quotes/q-1',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(204);
+    expect(cqDeleteByIdMock).toHaveBeenCalledWith('q-1');
+  });
+
+  test('409 when every active candidate is expired even if the parent date is still valid', async () => {
+    cqFindLinkedOfferIdMock.mockResolvedValue(null);
+    cqFindStatusAndClientNameMock.mockResolvedValue({
+      status: 'draft',
+      clientName: 'Client',
+      expirationDate: '2999-12-31',
+    });
+    qcListForQuoteMock.mockResolvedValue([
+      { id: 'qc-a', state: 'active', expirationDate: '2000-01-01' },
+      { id: 'qc-b', state: 'active', expirationDate: '2000-02-01' },
+    ]);
+
+    const res = await testApp.inject({
+      method: 'DELETE',
+      url: '/api/sales/client-quotes/q-1',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(JSON.parse(res.body).error).toContain('Expired quotes are read-only');
+    expect(cqDeleteByIdMock).not.toHaveBeenCalled();
+  });
 });

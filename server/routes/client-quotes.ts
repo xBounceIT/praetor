@@ -702,6 +702,8 @@ const quoteCreateBodySchema = {
     communicationChannelId: { type: 'string' },
     notes: { type: 'string' },
   },
+  // Coordinated v2 contract: frontend and backend ship together, so the legacy flat create body is
+  // intentionally not maintained in parallel. `items` remains response/update compatibility only.
   required: ['clientId', 'clientName', 'candidates'],
 } as const;
 
@@ -3137,7 +3139,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         });
       }
 
-      const status = await clientQuotesRepo.findStatusAndClientName(idResult.value);
+      const [status, familyCandidates] = await Promise.all([
+        clientQuotesRepo.findStatusAndClientName(idResult.value),
+        quoteCandidatesRepo.listForQuote(idResult.value),
+      ]);
       if (!status) {
         return replyError(request, reply, {
           statusCode: 404,
@@ -3160,7 +3165,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       // Expired is read-only EVERYWHERE under #779 — the UI already disables deletion, and the
       // only exit is extending the expiration date. Derive it here too so a direct API caller
       // cannot delete what the model freezes (#812 round 25).
-      if (effectiveQuoteStatusFromDate(status.status, status.expirationDate) === 'expired') {
+      const familyIsExpired =
+        !isTerminalQuoteStatus(status.status) &&
+        isCandidateFamilyExpired(
+          familyCandidates,
+          effectiveQuoteStatusFromDate(status.status, status.expirationDate) === 'expired',
+        );
+      if (familyIsExpired) {
         return replyError(request, reply, {
           statusCode: 409,
           message:
