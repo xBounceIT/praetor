@@ -417,6 +417,7 @@ const QuoteCommunicationChannelField: React.FC<QuoteCommunicationChannelFieldPro
               minBodyRows={0}
               containerClassName="shadow-none border-border"
               tableContainerClassName="max-h-[35vh] overflow-y-auto"
+              actionMenuZIndex={100}
               emptyState={
                 <div className="px-3 py-6 text-center text-sm text-muted-foreground">
                   {t('sales:communicationChannels.noChannels')}

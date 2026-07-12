@@ -877,6 +877,7 @@ export type StandardTableProps<T extends object = object> = {
   headerAction?: ReactNode;
   containerClassName?: string;
   tableContainerClassName?: string;
+  actionMenuZIndex?: number;
   footer?: ReactNode;
   footerClassName?: string;
   children?: ReactNode;
@@ -921,6 +922,7 @@ const useStandardTableController = <T extends object>({
   headerAction,
   containerClassName,
   tableContainerClassName,
+  actionMenuZIndex,
   footer: externalFooter,
   footerClassName,
   children,
@@ -2466,6 +2468,7 @@ const useStandardTableController = <T extends object>({
     headerAction,
     containerClassName,
     tableContainerClassName,
+    actionMenuZIndex,
     externalFooter,
     footerClassName,
     children,
@@ -3591,6 +3594,7 @@ const StandardTableDataRow = <T extends object>({
     openActionMenuRowId,
     openContextMenuRowId,
     setOpenContextMenuRowId,
+    actionMenuZIndex,
   } = controller;
   const row = tableRow.original;
   const visibleCells = tableRow.getVisibleCells();
@@ -3642,6 +3646,7 @@ const StandardTableDataRow = <T extends object>({
           forceMount
           data-standard-table-action-menu="true"
           className={ACTION_MENU_CONTENT_CLASSNAME}
+          style={{ zIndex: actionMenuZIndex }}
           onClick={(event) => event.stopPropagation()}
           onDoubleClick={(event) => event.stopPropagation()}
         >
@@ -3758,6 +3763,7 @@ const StandardTableDataCell = <T extends object>({
     shouldAnchorTrailingActionColumn,
     getColumnMinWidth,
     setOpenActionMenuRowId,
+    actionMenuZIndex,
   } = controller;
   const colId = cell.column.id;
   const col = colsById.get(colId);
@@ -3838,6 +3844,7 @@ const StandardTableDataCell = <T extends object>({
                   align="end"
                   data-standard-table-action-menu="true"
                   className={ACTION_MENU_CONTENT_CLASSNAME}
+                  style={{ zIndex: actionMenuZIndex }}
                   onClick={(event) => event.stopPropagation()}
                   onDoubleClick={(event) => event.stopPropagation()}
                 >
