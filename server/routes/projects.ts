@@ -113,6 +113,16 @@ const projectOrderOptionSchema = {
   required: ['id', 'clientId', 'clientName', 'status', 'createdAt', 'updatedAt'],
 } as const;
 
+const rilProjectCatalogItemSchema = {
+  type: 'object',
+  properties: {
+    id: { type: 'string' },
+    name: { type: 'string' },
+    orderId: { type: ['string', 'null'] },
+  },
+  required: ['id', 'name', 'orderId'],
+} as const;
+
 const projectCreateBodySchema = {
   type: 'object',
   properties: {
@@ -168,6 +178,22 @@ const canAccessProject = makeAccessChecker(
   'projects.manage_all.view',
 );
 
+const canListProjectsForTargetUser = async (
+  request: FastifyRequest,
+  targetUserId: string,
+): Promise<boolean> => {
+  const actorId = request.user?.id;
+  if (!actorId) return false;
+  if (
+    targetUserId === actorId ||
+    hasPermission(request, 'projects.manage_all.view') ||
+    hasPermission(request, 'timesheets.tracker_all.view')
+  ) {
+    return true;
+  }
+  return workUnitsRepo.isUserManagedBy(actorId, targetUserId);
+};
+
 export default async function (fastify: FastifyInstance, _opts: unknown) {
   // GET / - List all projects
   fastify.get(
@@ -207,17 +233,52 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const targetUserId = targetUserIdResult.value;
       if (targetUserId) {
-        const canViewAllTimesheets = hasPermission(request, 'timesheets.tracker_all.view');
-        if (!canViewAll && !canViewAllTimesheets && targetUserId !== request.user.id) {
-          const allowed = await workUnitsRepo.isUserManagedBy(request.user.id, targetUserId);
-          if (!allowed) {
-            return reply.code(403).send({ message: 'Insufficient permissions' });
-          }
+        if (!(await canListProjectsForTargetUser(request, targetUserId))) {
+          return reply.code(403).send({ message: 'Insufficient permissions' });
         }
         return projectsRepo.listForUser(targetUserId);
       }
 
       return canViewAll ? projectsRepo.listAll() : projectsRepo.listForUser(request.user.id);
+    },
+  );
+
+  fastify.get(
+    '/ril-catalog',
+    {
+      onRequest: [
+        fastify.rateLimit(STANDARD_ROUTE_RATE_LIMIT),
+        authenticateToken,
+        requirePermission('timesheets.ril.view'),
+      ],
+      schema: {
+        tags: ['ril'],
+        summary: 'List the lightweight project catalog used for RIL order codes',
+        querystring: {
+          type: 'object',
+          properties: { userId: { type: 'string' } },
+          required: ['userId'],
+        },
+        response: {
+          200: { type: 'array', items: rilProjectCatalogItemSchema },
+          ...standardRateLimitedErrorResponses,
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      if (!assertAuthenticated(request, reply)) return;
+
+      const query = request.query as { userId?: unknown };
+      const targetUserIdResult = optionalNonEmptyString(query.userId, 'userId');
+      if (!targetUserIdResult.ok) return badRequest(reply, targetUserIdResult.message);
+      const targetUserId = targetUserIdResult.value;
+      if (!targetUserId) return badRequest(reply, 'userId is required');
+
+      if (!(await canListProjectsForTargetUser(request, targetUserId))) {
+        return reply.code(403).send({ message: 'Insufficient permissions' });
+      }
+
+      return projectsRepo.listRilCatalogForUser(targetUserId);
     },
   );
 

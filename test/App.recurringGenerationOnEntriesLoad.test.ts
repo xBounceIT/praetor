@@ -29,4 +29,19 @@ describe('App.tsx recurring generation after entries load (#620)', () => {
     const occurrences = caseBody.match(/void\s+generateRecurringEntries\(\)/g) ?? [];
     expect(occurrences.length).toBeGreaterThanOrEqual(2);
   });
+
+  test('awaits recurring generation before mounting a direct RIL load', () => {
+    expect(caseBody).toContain('const rilRecurringGeneration =');
+    expect(caseBody).toContain("activeView === 'timesheets/ril'");
+    expect(caseBody).toContain(
+      "hasPermission(permissions, buildPermission('timesheets.recurring', 'create'))",
+    );
+
+    const generationStart = caseBody.indexOf('const rilRecurringGeneration =');
+    const datasetsStart = caseBody.indexOf('failedDatasets = await loadDatasets');
+    const generationAwait = caseBody.indexOf('await rilRecurringGeneration;');
+
+    expect(generationStart).toBeLessThan(datasetsStart);
+    expect(generationAwait).toBeGreaterThan(datasetsStart);
+  });
 });

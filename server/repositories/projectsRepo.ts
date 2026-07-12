@@ -39,6 +39,8 @@ export type Project = {
   tipoConfirmed: boolean;
 };
 
+export type RilProjectCatalogItem = Pick<Project, 'id' | 'name' | 'orderId'>;
+
 const mapRow = (row: typeof projects.$inferSelect): Project => ({
   id: row.id,
   name: row.name,
@@ -135,6 +137,23 @@ export const listForUser = async (userId: string, exec: DbExecutor = db): Promis
   );
   return rows.map(mapRawRow);
 };
+
+/**
+ * Returns only the project fields used to derive RIL order codes. Keeping this query separate
+ * avoids the task billing subqueries and the full project payload required by project screens.
+ */
+export const listRilCatalogForUser = async (
+  userId: string,
+  exec: DbExecutor = db,
+): Promise<RilProjectCatalogItem[]> =>
+  executeRows<RilProjectCatalogItem>(
+    exec,
+    sql`SELECT p.id, p.name, p.order_id AS "orderId"
+          FROM projects p
+          INNER JOIN user_projects up ON p.id = up.project_id
+         WHERE up.user_id = ${userId}
+         ORDER BY p.name`,
+  );
 
 export const findById = async (id: string, exec: DbExecutor = db): Promise<Project | null> => {
   const rows = await executeRows<ProjectRawRow>(

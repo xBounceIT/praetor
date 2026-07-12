@@ -19,7 +19,7 @@ describe('App.tsx RIL module dataset permissions', () => {
     );
   });
 
-  test('RIL view permission loads users and projects used by the RIL page', () => {
+  test('RIL view permission authorizes users and project catalogs used by the RIL page', () => {
     expect(initializerFor('canListProjects')).toContain(
       "buildPermission('timesheets.ril', 'view')",
     );
@@ -34,6 +34,8 @@ describe('App.tsx RIL module dataset permissions', () => {
     const datasetStart = source.indexOf("dataset: 'entries'");
     expect(datasetStart).toBeGreaterThan(-1);
     const datasetEnd = source.indexOf('}', datasetStart);
-    expect(source.slice(datasetStart, datasetEnd)).toContain('enabled: canListEntries');
+    expect(source.slice(datasetStart, datasetEnd)).toContain(
+      'enabled: requirements.entries && canListEntries',
+    );
   });
 });

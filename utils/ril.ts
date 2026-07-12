@@ -1,8 +1,9 @@
-import type { Project, RilNoteOption, TimeEntry } from '../types';
+import type { Project, RilNoteOption, RilProjectReference, TimeEntry } from '../types';
 import { dateOnlyStringToLocalDate, getLocalDateString } from './date';
 import { isItalianHoliday } from './holidays';
 
 export type RilLocale = 'en' | 'it';
+type RilProjectCodeSource = Project | RilProjectReference;
 
 // Lowercase English weekday names, keyed by JS `Date.getDay()` (0=Sun..6=Sat). Used to look up
 // the per-weekday default "Trasferta" preference when generating rows.
@@ -25,7 +26,7 @@ export interface RilGenerationOptions {
   year: number;
   month: number;
   entries: TimeEntry[];
-  projects?: Project[];
+  projects?: RilProjectCodeSource[];
   defaultStartTime?: string;
   defaultExitTime?: string;
   lunchBreakMinutes?: number;
@@ -263,7 +264,10 @@ export const formatRilHoursAsDuration = (hours: number): string => {
 
 export const roundRilPicapHours = (hours: number): number => Math.round(hours * 4) / 4;
 
-const getProjectCode = (entry: TimeEntry, projectById: Map<string, Project>): string => {
+const getProjectCode = (
+  entry: TimeEntry,
+  projectById: Map<string, RilProjectCodeSource>,
+): string => {
   const project = projectById.get(entry.projectId);
   const orderId = project?.orderId?.trim();
   return orderId || entry.projectName || project?.name || '';
@@ -302,7 +306,9 @@ export const generateRilRows = ({
   weekdayTransferDefaults,
 }: RilGenerationOptions): RilRow[] => {
   const daysInMonth = new Date(year, month, 0).getDate();
-  const projectById = new Map(projects.map((project) => [project.id, project]));
+  const projectById = new Map<string, RilProjectCodeSource>(
+    projects.map((project) => [project.id, project]),
+  );
   const entriesByDate = new Map<string, TimeEntry[]>();
   const monthPrefix = `${year}-${String(month).padStart(2, '0')}`;
   const normalizedNoteOptions = normalizeRilNoteOptions(noteOptions);

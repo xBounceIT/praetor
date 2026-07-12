@@ -166,6 +166,7 @@ import {
 } from './utils/ril';
 import { sourcesSupplierQuote } from './utils/supplierLineSync';
 import { applyBrowserTheme, applyTheme, getTheme } from './utils/theme';
+import { getTimesheetLoadRequirements } from './utils/timesheetLoadRequirements';
 import { toastError } from './utils/toast';
 import {
   filterTrackerCatalogs,
@@ -1237,6 +1238,7 @@ const useAppContentController = () => {
   const entriesStreamTokenRef = useRef(0);
   // Bumped on navigation/auth reset so stale module-load completions cannot commit state.
   const moduleLoadTokenRef = useRef(0);
+  const loadedTimesheetsViewRef = useRef<string | null>(null);
   const [localState, dispatchLocalState] = useReducer(
     appLocalStateReducer,
     INITIAL_APP_LOCAL_STATE,
@@ -2022,7 +2024,12 @@ const useAppContentController = () => {
     if (!isRouteAccessible) return;
     const module = getModuleFromView(activeView);
     if (!module) return;
-    if (isModuleLoaded(module)) return;
+    if (
+      isModuleLoaded(module) &&
+      (module !== 'timesheets' || loadedTimesheetsViewRef.current === activeView)
+    ) {
+      return;
+    }
     const loadToken = ++moduleLoadTokenRef.current;
     const isCurrentModuleLoad = () =>
       moduleLoadTokenRef.current === loadToken && activeLoadModuleRef.current === module;
@@ -2308,6 +2315,7 @@ const useAppContentController = () => {
         switch (module) {
           case 'timesheets': {
             if (!canViewTimesheets) return;
+            const requirements = getTimesheetLoadRequirements(activeView);
             // Merge incoming entries with existing state so an in-flight
             // optimistic insert (handleAddEntry / handleAddBulkEntries) isn't
             // dropped when the pager finally resolves. Preserve `prev`'s
@@ -2410,12 +2418,20 @@ const useAppContentController = () => {
                 cursor = page.nextCursor;
               }
             };
+            // RIL owns its entry fetch, so it skips the global entries dataset below. Start
+            // recurring materialization alongside the remaining preload, then await it before
+            // RilView mounts and requests the selected month.
+            const rilRecurringGeneration =
+              activeView === 'timesheets/ril' &&
+              hasPermission(permissions, buildPermission('timesheets.recurring', 'create'))
+                ? generateRecurringEntries()
+                : null;
             failedDatasets = await loadDatasets(
               module,
               [
                 {
                   dataset: 'entries',
-                  enabled: canListEntries,
+                  enabled: requirements.entries && canListEntries,
                   load: () => api.entries.listPage({ limit: 500 }),
                   apply: (page) => {
                     const token = ++entriesStreamTokenRef.current;
@@ -2424,13 +2440,34 @@ const useAppContentController = () => {
                     if (page.nextCursor) void streamRemainingEntries(page.nextCursor, token);
                   },
                 },
-                listRequest('clients', canListClients, () => api.clients.list(), setClients),
-                listRequest('projects', canListProjects, () => api.projects.list(), setProjects),
-                listRequest('tasks', canListTasks, () => api.tasks.list(), setProjectTasks),
-                listRequest('users', canListUsers, () => api.users.list(), setUsers),
+                listRequest(
+                  'clients',
+                  requirements.clients && canListClients,
+                  () => api.clients.list(),
+                  setClients,
+                ),
+                listRequest(
+                  'projects',
+                  requirements.projects && canListProjects,
+                  () => api.projects.list(),
+                  setProjects,
+                ),
+                listRequest(
+                  'tasks',
+                  requirements.tasks && canListTasks,
+                  () => api.tasks.list(),
+                  setProjectTasks,
+                ),
+                listRequest(
+                  'users',
+                  requirements.users && canListUsers,
+                  () => api.users.list(),
+                  setUsers,
+                ),
               ],
               { shouldApply: isCurrentModuleLoad },
             );
+            if (rilRecurringGeneration) await rilRecurringGeneration;
             // Recurring generation fetches from the server independently of
             // local entries, so still run it when the initial entries fetch fails.
             if (failedDatasets.includes('entries')) {
@@ -2768,6 +2805,7 @@ const useAppContentController = () => {
         if (isCurrentModuleLoad()) {
           const uniqueFailures = Array.from(new Set(failedDatasets));
           recordFailures(module, uniqueFailures);
+          if (module === 'timesheets') loadedTimesheetsViewRef.current = activeView;
           markModuleLoaded(module);
         }
       }
@@ -2817,6 +2855,7 @@ const useAppContentController = () => {
   // Load target user assignments when the timesheet user switcher changes.
   useEffect(() => {
     if (!currentUser || !viewingUserId) return;
+    if (activeView !== 'timesheets/tracker') return;
 
     let isCancelled = false;
 
@@ -2890,7 +2929,7 @@ const useAppContentController = () => {
     return () => {
       isCancelled = true;
     };
-  }, [currentUser, viewingUserId, setViewingUserAssignmentState]);
+  }, [activeView, currentUser, viewingUserId, setViewingUserAssignmentState]);
 
   // Update viewingUserId when currentUser changes
   useEffect(() => {
@@ -3324,7 +3363,9 @@ const useAppContentController = () => {
     Boolean(
       activeModule &&
         activeModule !== 'settings' &&
-        (!loadedModules.has(activeModule) || isModuleLoading(activeModule)),
+        (!loadedModules.has(activeModule) ||
+          isModuleLoading(activeModule) ||
+          (activeModule === 'timesheets' && loadedTimesheetsViewRef.current !== activeView)),
     ) ||
     (activeView === 'reports/ai-reporting' && !hasLoadedGeneralSettings && !reportsSettingsFailed);
 
@@ -3751,7 +3792,6 @@ const TimesheetRoutes: React.FC<{ controller: AuthenticatedAppContentController 
           availableUsers={availableUsers}
           viewingUserId={viewingUserId}
           onViewUserChange={setViewingUserId}
-          projects={projects}
           settings={generalSettings}
           weekdayTransferDefaults={userSettings.rilWeekdayTransferDefaults}
         />
