@@ -26,6 +26,7 @@ export interface SidebarRouteItem {
 }
 
 export interface SidebarModuleItem {
+  id: string;
   title: string;
   icon: LucideIcon;
   isActive: boolean;
@@ -40,7 +41,7 @@ interface NavMainProps {
 
 export function NavMain({ items, label, onViewChange }: NavMainProps) {
   const { isMobile, setOpenMobile } = useSidebar();
-  const [openInactiveItems, setOpenInactiveItems] = useState(() => new Set<string>());
+  const [openOverrides, setOpenOverrides] = useState(() => new Map<string, boolean>());
 
   return (
     <SidebarGroup>
@@ -48,17 +49,16 @@ export function NavMain({ items, label, onViewChange }: NavMainProps) {
       <SidebarMenu>
         {items.map((item) => (
           <Collapsible
-            key={item.title}
+            key={item.id}
             asChild
-            open={item.isActive || openInactiveItems.has(item.title)}
+            open={openOverrides.get(item.id) ?? item.isActive}
             onOpenChange={(isOpen) => {
-              if (item.isActive) return;
-              setOpenInactiveItems((current) => {
-                const next = new Set(current);
-                if (isOpen) {
-                  next.add(item.title);
+              setOpenOverrides((current) => {
+                const next = new Map(current);
+                if (isOpen || item.isActive) {
+                  next.set(item.id, isOpen);
                 } else {
-                  next.delete(item.title);
+                  next.delete(item.id);
                 }
                 return next;
               });
