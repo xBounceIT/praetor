@@ -79,7 +79,7 @@ describe('<SupplierInvoicesView /> line item duration (issue #776/#775)', () => 
       screen.getAllByText('accounting:supplierInvoices.durationColumn').length,
     ).toBeGreaterThan(0);
     const durationInputs = screen
-      .getAllByPlaceholderText('accounting:supplierInvoices.durationColumn')
+      .getAllByPlaceholderText('0')
       .filter((el): el is HTMLInputElement => el instanceof HTMLInputElement);
     expect(durationInputs.length).toBeGreaterThan(0);
     expect(durationInputs[0].value).toBe('3');
@@ -98,7 +98,7 @@ describe('<SupplierInvoicesView /> line item duration (issue #776/#775)', () => 
     fireEvent.click(screen.getByText('SINV-DUR-SUBMIT'));
 
     const durationInputs = screen
-      .getAllByPlaceholderText('accounting:supplierInvoices.durationColumn')
+      .getAllByPlaceholderText('0')
       .filter((el): el is HTMLInputElement => el instanceof HTMLInputElement);
     fireEvent.change(durationInputs[0], { target: { value: '5' } });
 
@@ -132,6 +132,8 @@ describe('<SupplierInvoicesView /> line-item table', () => {
       "'h-9 max-w-[5rem] flex-none text-right font-medium'",
       'className="flex h-9 items-center justify-end gap-1"',
       'inputClassName = SUPPLIER_INVOICE_ITEM_NUMBER_INPUT_CLASSNAME',
+      'placeholder="0,00"',
+      'placeholder="0"',
     ]);
     expectSourceOmitsAll(source, ["inputClassName = 'min-w-0 text-center'"]);
   });

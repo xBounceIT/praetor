@@ -194,6 +194,8 @@ describe('ClientsInvoicesView modal styling', () => {
       "'h-9 max-w-[5rem] flex-none text-right font-medium'",
       'className="flex h-9 items-center justify-end gap-1"',
       'className={CLIENT_INVOICE_ITEM_NUMBER_INPUT_CLASSNAME}',
+      'placeholder="0,00"',
+      'placeholder="0"',
     ]);
     expectSourceOmitsAll(source, ['className="flex items-center justify-center gap-1"']);
   });
@@ -207,7 +209,7 @@ describe('ClientsInvoicesView modal styling', () => {
       "'durationMonths',",
       'parseDurationValueToMonths(value, unit)',
       // The input shows the display value in the chosen unit, with a months/years selector.
-      'getDurationDisplayValue(item)',
+      'getDurationInputValue(item)',
       '<DurationUnitSelector',
       // The taxable amount (and therefore subtotal/tax/total) multiplies by the line duration
       // via the shared clamp helper, which always works in canonical months.
@@ -373,6 +375,31 @@ describe('<ClientsInvoicesView /> line-item delete confirmation', () => {
 });
 
 describe('<ClientsInvoicesView /> new line identity', () => {
+  test('shows placeholders instead of numeric defaults on a new invoice line', async () => {
+    render(
+      <ClientsInvoicesView
+        invoices={[]}
+        clients={clients}
+        products={[]}
+        onAddInvoice={mock(() => {})}
+        onUpdateInvoice={mock(() => {})}
+        onDeleteInvoice={mock(() => {})}
+        currency="EUR"
+      />,
+    );
+    fireEvent.click(screen.getByText('accounting:clientsInvoices.addInvoice'));
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.click(within(dialog).getByText('accounting:clientsInvoices.addItem'));
+
+    await waitFor(() => {
+      const decimalInputs = within(dialog).getAllByPlaceholderText('0,00') as HTMLInputElement[];
+      expect(decimalInputs.length).toBeGreaterThanOrEqual(3);
+      expect(decimalInputs.every((input) => input.value === '')).toBe(true);
+      expect(within(dialog).getByPlaceholderText('0')).toHaveValue('');
+      expect(within(dialog).getByPlaceholderText('22,00')).toHaveValue('');
+    });
+  });
+
   test('keeps rapidly-added rows independently editable when the clock value is unchanged', async () => {
     const dateNowSpy = spyOn(Date, 'now').mockReturnValue(1_700_000_000_000);
     try {

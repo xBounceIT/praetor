@@ -18,7 +18,7 @@ import {
   calcProductSalePrice,
   durationValueToMonths,
   formatDecimal,
-  getDurationDisplayValue,
+  getDurationInputValue,
   getEffectiveDurationMonths,
   isPositiveFiniteNumber,
   normalizeDurationUnit,
@@ -67,13 +67,16 @@ const CLIENT_INVOICE_ITEM_NUMBER_INPUT_CLASSNAME =
 // `getEffectiveDurationMonths` clamps absent/invalid values to 1, so pre-duration invoices keep
 // their totals — matching the backend `computeInvoiceTotals`.
 const getLineTaxable = (item: InvoiceItem) =>
-  item.quantity *
-  item.unitPrice *
+  Number(item.quantity || 0) *
+  Number(item.unitPrice || 0) *
   getEffectiveDurationMonths(item) *
   (1 - Number(item.discount || 0) / 100);
 
+const getInvoiceItemTaxRate = (item: InvoiceItem) =>
+  item.taxRate ?? (isTemporaryLineItem(item) ? DEFAULT_TAX_RATE : 0);
+
 const getLineTotal = (item: InvoiceItem) =>
-  getLineTaxable(item) * (1 + Number(item.taxRate || 0) / 100);
+  getLineTaxable(item) * (1 + getInvoiceItemTaxRate(item) / 100);
 
 const normalizeUnitOfMeasure = (
   unitOfMeasure?: InvoiceItem['unitOfMeasure'],
@@ -314,7 +317,7 @@ const useClientsInvoicesController = ({
     items.forEach((item) => {
       const taxable = getLineTaxable(item);
       subtotal += taxable;
-      taxTotal += (taxable * Number(item.taxRate || 0)) / 100;
+      taxTotal += (taxable * getInvoiceItemTaxRate(item)) / 100;
     });
 
     const total = subtotal + taxTotal;
@@ -345,12 +348,7 @@ const useClientsInvoicesController = ({
       productId: undefined,
       description: '',
       unitOfMeasure: 'unit',
-      quantity: 1,
-      durationMonths: 1,
       durationUnit: 'months',
-      unitPrice: 0,
-      discount: 0,
-      taxRate: DEFAULT_TAX_RATE,
     };
 
     setFormData((prev) => ({
@@ -408,7 +406,11 @@ const useClientsInvoicesController = ({
   // months; 'years' multiplies by 12. Empty/invalid input falls back to 1 of the chosen unit.
   const handleDurationValueChange = (index: number, value: string) => {
     const unit = normalizeDurationUnit(formData.items?.[index]?.durationUnit);
-    updateItemRow(index, 'durationMonths', parseDurationValueToMonths(value, unit));
+    updateItemRow(
+      index,
+      'durationMonths',
+      value === '' ? undefined : parseDurationValueToMonths(value, unit),
+    );
   };
 
   // Switching months↔years keeps the displayed number and reinterprets it under the new unit
@@ -418,8 +420,11 @@ const useClientsInvoicesController = ({
     if (!item || normalizeDurationUnit(item.durationUnit) === newUnit) return;
     // 'N/A' marks the line as duration-less: reset to the neutral 1 month so it never multiplies
     // (issue #775). Months/years instead keeps the displayed number under the new unit.
+    const durationValue = getDurationInputValue(item);
     const durationMonths =
-      newUnit === 'na' ? 1 : durationValueToMonths(getDurationDisplayValue(item), newUnit);
+      newUnit === 'na' || durationValue === undefined
+        ? undefined
+        : durationValueToMonths(durationValue, newUnit);
     const nextItems = [...(formData.items || [])];
     nextItems[index] = {
       ...nextItems[index],
@@ -458,7 +463,7 @@ const useClientsInvoicesController = ({
         quantity: Number(item.quantity ?? 0),
         unitPrice: Number(item.unitPrice ?? 0),
         discount: Number(item.discount || 0),
-        taxRate: Number(item.taxRate || 0),
+        taxRate: getInvoiceItemTaxRate(item),
         durationMonths: Number(item.durationMonths ?? 1) || 1,
         durationUnit: normalizeDurationUnit(item.durationUnit),
       };
@@ -980,7 +985,7 @@ const InvoiceItemsSection: React.FC<{ controller: ClientsInvoicesController }> =
     {
       id: 'taxRate',
       header: controller.t('accounting:clientsInvoices.taxRate', { defaultValue: 'IVA %' }),
-      accessorFn: (item) => item.taxRate ?? DEFAULT_TAX_RATE,
+      accessorFn: getInvoiceItemTaxRate,
       align: 'right',
       cell: ({ row }) => (
         <div className="min-w-[110px]">
@@ -1102,13 +1107,14 @@ const InvoiceItemQuantityField: React.FC<{
         min="0"
         step="0.01"
         required
+        placeholder="0,00"
         value={item.quantity}
         onValueChange={(value) => {
           const parsed = parseFloat(value);
           controller.updateItemRow(
             index,
             'quantity',
-            value === '' || Number.isNaN(parsed) ? 0 : parsed,
+            value === '' || Number.isNaN(parsed) ? undefined : parsed,
           );
         }}
         className={CLIENT_INVOICE_ITEM_NUMBER_INPUT_CLASSNAME}
@@ -1128,7 +1134,7 @@ const InvoiceItemDurationField: React.FC<{
   index: number;
 }> = ({ controller, item, index }) => {
   const durationUnit = normalizeDurationUnit(item.durationUnit);
-  const durationValue = getDurationDisplayValue(item);
+  const durationValue = getDurationInputValue(item);
   return (
     <div className="space-y-1 lg:col-span-2">
       <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
@@ -1138,6 +1144,7 @@ const InvoiceItemDurationField: React.FC<{
         <ValidatedNumberInput
           min="1"
           step="1"
+          placeholder="0"
           value={durationValue}
           onValueChange={(value) => controller.handleDurationValueChange(index, value)}
           disabled={durationUnit === 'na'}
@@ -1147,7 +1154,7 @@ const InvoiceItemDurationField: React.FC<{
         <DurationUnitSelector
           value={durationUnit}
           onChange={(value) => controller.handleDurationUnitChange(index, value)}
-          count={durationValue}
+          count={durationValue ?? 0}
         />
       </div>
     </div>
@@ -1170,7 +1177,7 @@ const InvoiceItemPriceField: React.FC<{
       controller.updateItemRow(
         index,
         'unitPrice',
-        value === '' || Number.isNaN(parsed) ? 0 : parsed,
+        value === '' || Number.isNaN(parsed) ? undefined : parsed,
       );
     }}
   />
@@ -1184,7 +1191,7 @@ const InvoiceItemDiscountField: React.FC<{
   <InvoiceItemNumberField
     label={controller.t('common:labels.discount')}
     suffix="%"
-    value={item.discount || 0}
+    value={item.discount}
     max="100"
     className="lg:col-span-1"
     onValueChange={(value) => {
@@ -1192,7 +1199,7 @@ const InvoiceItemDiscountField: React.FC<{
       controller.updateItemRow(
         index,
         'discount',
-        value === '' || Number.isNaN(parsed) ? 0 : parsed,
+        value === '' || Number.isNaN(parsed) ? undefined : parsed,
       );
     }}
   />
@@ -1206,12 +1213,17 @@ const InvoiceItemTaxField: React.FC<{
   <InvoiceItemNumberField
     label={controller.t('accounting:clientsInvoices.taxRate', { defaultValue: 'IVA %' })}
     suffix="%"
-    value={item.taxRate ?? DEFAULT_TAX_RATE}
+    value={item.taxRate}
+    placeholder={`${DEFAULT_TAX_RATE},00`}
     max="100"
     className="lg:col-span-2"
     onValueChange={(value) => {
       const parsed = parseFloat(value);
-      controller.updateItemRow(index, 'taxRate', value === '' || Number.isNaN(parsed) ? 0 : parsed);
+      controller.updateItemRow(
+        index,
+        'taxRate',
+        value === '' || Number.isNaN(parsed) ? undefined : parsed,
+      );
     }}
   />
 );
@@ -1219,12 +1231,13 @@ const InvoiceItemTaxField: React.FC<{
 const InvoiceItemNumberField: React.FC<{
   label: string;
   suffix: string;
-  value: number | string;
+  value: number | string | undefined;
   onValueChange: (value: string) => void;
   className: string;
   required?: boolean;
   max?: string;
-}> = ({ label, suffix, value, onValueChange, className, required, max }) => (
+  placeholder?: string;
+}> = ({ label, suffix, value, onValueChange, className, required, max, placeholder = '0,00' }) => (
   <div className={`space-y-1 ${className}`}>
     <FieldLabel
       className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden"
@@ -1238,6 +1251,7 @@ const InvoiceItemNumberField: React.FC<{
         max={max}
         step="0.01"
         required={required}
+        placeholder={placeholder}
         value={value}
         formatDecimals={2}
         onValueChange={onValueChange}

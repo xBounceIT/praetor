@@ -23,7 +23,7 @@ import { createLineItemIndexResolver } from '../../utils/lineItemIndex';
 import {
   durationValueToMonths,
   formatDecimal,
-  getDurationDisplayValue,
+  getDurationInputValue,
   getEffectiveDurationMonths,
   isPositiveFiniteNumber,
   normalizeDurationUnit,
@@ -61,7 +61,7 @@ const SUPPLIER_INVOICE_ITEM_NUMBER_INPUT_CLASSNAME =
 
 const getSupplierInvoiceLineTotal = (item: SupplierInvoiceItem) => {
   const lineSubtotal =
-    Number(item.quantity ?? 0) * Number(item.unitPrice ?? 0) * getEffectiveDurationMonths(item);
+    Number(item.quantity || 0) * Number(item.unitPrice || 0) * getEffectiveDurationMonths(item);
   const lineDiscount = (lineSubtotal * Number(item.discount ?? 0)) / 100;
   return lineSubtotal - lineDiscount;
 };
@@ -125,7 +125,7 @@ type SupplierInvoicesAction =
       type: 'updateItem';
       index: number;
       field: keyof SupplierInvoiceItem;
-      value: string | number;
+      value: string | number | undefined;
       products: Product[];
     }
   | { type: 'removeItem'; index: number };
@@ -255,7 +255,7 @@ const useSupplierInvoicesController = ({
   }, [invoiceToDelete, onDeleteInvoice]);
 
   const updateItem = useCallback(
-    (index: number, field: keyof SupplierInvoiceItem, value: string | number) => {
+    (index: number, field: keyof SupplierInvoiceItem, value: string | number | undefined) => {
       dispatch({ type: 'updateItem', index, field, value, products });
     },
     [products],
@@ -271,7 +271,11 @@ const useSupplierInvoicesController = ({
   const handleDurationValueChange = useCallback(
     (index: number, value: string) => {
       const unit = normalizeDurationUnit(formData.items?.[index]?.durationUnit);
-      updateItem(index, 'durationMonths', parseDurationValueToMonths(value, unit));
+      updateItem(
+        index,
+        'durationMonths',
+        value === '' ? undefined : parseDurationValueToMonths(value, unit),
+      );
     },
     [formData.items, updateItem],
   );
@@ -283,8 +287,11 @@ const useSupplierInvoicesController = ({
       if (!item || normalizeDurationUnit(item.durationUnit) === newUnit) return;
       // 'na' (N/A) drops the multiplier to a single month — the value input is disabled and the line
       // never multiplies (issue #775). Recompute totals atomically so the summary stays in sync.
+      const durationValue = getDurationInputValue(item);
       const durationMonths =
-        newUnit === 'na' ? 1 : durationValueToMonths(getDurationDisplayValue(item), newUnit);
+        newUnit === 'na' || durationValue === undefined
+          ? undefined
+          : durationValueToMonths(durationValue, newUnit);
       const nextItems = items.map((current, i) =>
         i === index ? { ...current, durationUnit: newUnit, durationMonths } : current,
       );
@@ -783,7 +790,7 @@ const SupplierInvoiceItemsSection: React.FC<{ controller: SupplierInvoicesContro
             controller={controller}
             index={getIndex(row)}
             durationUnit={normalizeDurationUnit(row.durationUnit)}
-            durationValue={getDurationDisplayValue(row)}
+            durationValue={getDurationInputValue(row)}
           />
         </div>
       ),
@@ -898,8 +905,9 @@ const SupplierInvoiceItemQuantityField: React.FC<{
     <div className="flex h-9 items-center justify-end gap-1">
       <ValidatedNumberInput
         value={item.quantity}
+        placeholder="0,00"
         onValueChange={(value) =>
-          controller.updateItem(index, 'quantity', value === '' ? 0 : Number(value))
+          controller.updateItem(index, 'quantity', value === '' ? undefined : Number(value))
         }
         className={inputClassName}
       />
@@ -931,9 +939,10 @@ const SupplierInvoiceItemPriceField: React.FC<{
     <div className="flex h-9 items-center justify-end gap-1">
       <ValidatedNumberInput
         value={item.unitPrice}
+        placeholder="0,00"
         formatDecimals={2}
         onValueChange={(value) =>
-          controller.updateItem(index, 'unitPrice', value === '' ? 0 : Number(value))
+          controller.updateItem(index, 'unitPrice', value === '' ? undefined : Number(value))
         }
         className={inputClassName}
       />
@@ -963,10 +972,11 @@ const SupplierInvoiceItemDiscountField: React.FC<{
     </FieldLabel>
     <div className="flex h-9 items-center justify-end gap-1">
       <ValidatedNumberInput
-        value={item.discount || 0}
+        value={item.discount}
+        placeholder="0,00"
         formatDecimals={2}
         onValueChange={(value) =>
-          controller.updateItem(index, 'discount', value === '' ? 0 : Number(value))
+          controller.updateItem(index, 'discount', value === '' ? undefined : Number(value))
         }
         className={inputClassName}
       />
@@ -979,7 +989,7 @@ const SupplierInvoiceItemDurationField: React.FC<{
   controller: SupplierInvoicesController;
   index: number;
   durationUnit: DurationUnit;
-  durationValue: number;
+  durationValue?: number;
   className?: string;
   inputClassName?: string;
 }> = ({
@@ -1000,9 +1010,7 @@ const SupplierInvoiceItemDurationField: React.FC<{
       <ValidatedNumberInput
         step="1"
         min="1"
-        placeholder={controller.t('accounting:supplierInvoices.durationColumn', {
-          defaultValue: 'Duration',
-        })}
+        placeholder="0"
         value={durationValue}
         disabled={durationUnit === 'na'}
         onValueChange={(value) => controller.handleDurationValueChange(index, value)}
@@ -1012,7 +1020,7 @@ const SupplierInvoiceItemDurationField: React.FC<{
       <DurationUnitSelector
         value={durationUnit}
         onChange={(value) => controller.handleDurationUnitChange(index, value)}
-        count={durationValue}
+        count={durationValue ?? 0}
         i18nPrefix="accounting:supplierInvoices"
       />
     </div>
