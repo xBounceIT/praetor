@@ -32,7 +32,7 @@ An offer can be created only with **Choose the candidate to promote**; direct st
 
 If the linked offer is still **Draft** and has no orders, **Back to Draft** performs the promotion rollback: it deletes that offer, returns the family to Draft, and reactivates every candidate. Once the offer has progressed or has downstream documents, the quote family remains read-only.
 
-Each customer quote can contain one or more **candidate variants** sharing the document code, customer, and status. The form starts with **Variant A** and, while the quote is Draft, lets you add an empty variant, duplicate the current one, rename it, or remove it. Terms, channel, expiration, discounts, notes, and lines belong to each variant; the list shows the variant count and their total range.
+Each customer quote can contain one or more **candidate variants** sharing the document code, customer, and status. The form starts with **Variant A** and, while the quote is Draft, lets you add an empty variant, duplicate the current one, rename it, or remove it. Terms, channel, expiration, discounts, notes, and lines belong to each variant; the Variants column shows only the number of alternatives, while financial values remain in their dedicated columns.
 
 From **Sent**, use **Choose the candidate to promote** to compare total, margin, MOL, expiration, and line count. The selected variant creates the offer and remains marked as selected; the others become discarded and read-only. Expired variants, or variants sourcing expired supplier quotes, cannot be promoted. While the offer is still Draft and has no orders, rollback deletes the offer and reactivates every variant.
 

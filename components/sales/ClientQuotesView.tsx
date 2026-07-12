@@ -1603,36 +1603,14 @@ const useClientQuotesController = ({
       id: 'candidates',
       accessorFn: (row) => row.candidates?.length ?? 1,
       className: 'whitespace-nowrap',
-      cell: ({ row }) => {
-        const candidates = row.candidates?.length ? row.candidates : [];
-        const totals = candidates.map(
-          (candidate) =>
-            calculateClientQuotePricingTotals(
-              candidate.items,
-              candidate.discount,
-              candidate.discountType,
-            ).total,
-        );
-        const minimum = totals.length
-          ? Math.min(...totals)
-          : (quotePricingMap.get(row.id)?.total ?? 0);
-        const maximum = totals.length ? Math.max(...totals) : minimum;
-        return (
-          <div className="flex flex-col items-start gap-1">
-            <Badge variant="secondary">
-              {t('sales:clientQuotes.candidates.count', {
-                count: candidates.length || 1,
-                defaultValue: '{{count}} varianti',
-              })}
-            </Badge>
-            <span className="text-xs text-muted-foreground">
-              {minimum === maximum
-                ? formatDecimal(minimum) + ' ' + currency
-                : formatDecimal(minimum) + '–' + formatDecimal(maximum) + ' ' + currency}
-            </span>
-          </div>
-        );
-      },
+      cell: ({ row }) => (
+        <Badge variant="secondary">
+          {t('sales:clientQuotes.candidates.count', {
+            count: row.candidates?.length || 1,
+            defaultValue: '{{count}} varianti',
+          })}
+        </Badge>
+      ),
     },
     {
       header: t('sales:clientQuotes.subtotal', { defaultValue: 'Subtotal' }),

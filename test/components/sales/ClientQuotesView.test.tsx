@@ -204,6 +204,11 @@ describe('<ClientQuotesView />', () => {
       'sales:clientQuotes.statusColumn',
       'sales:clientQuotes.actionsColumn',
     ]);
+    const firstQuoteRow = screen.getByText('Q-001').closest('tr');
+    if (!firstQuoteRow) throw new Error('Expected Q-001 table row');
+    const variantCell = within(firstQuoteRow).getAllByRole('cell')[3];
+    expect(variantCell).toHaveTextContent('sales:clientQuotes.candidates.count');
+    expect(variantCell).not.toHaveTextContent('EUR');
     expect(screen.getAllByText('Email').length).toBeGreaterThan(0);
     // MOL column shows the margin percentage with two decimals (issue #780).
     expect(screen.getByText('33,33%')).toBeInTheDocument();
