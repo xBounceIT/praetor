@@ -31343,7 +31343,8 @@
                           "type": "string"
                         },
                         "name": {
-                          "type": "string"
+                          "type": "string",
+                          "maxLength": 100
                         },
                         "items": {
                           "type": "array",
@@ -32165,7 +32166,8 @@
                           "type": "string"
                         },
                         "name": {
-                          "type": "string"
+                          "type": "string",
+                          "maxLength": 100
                         },
                         "items": {
                           "type": "array",

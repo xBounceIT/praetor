@@ -18,6 +18,7 @@ import {
   restoreAuthMiddlewareMock,
 } from '../helpers/authMiddlewareMock.ts';
 import { buildRouteTestApp } from '../helpers/buildRouteTestApp.ts';
+import { makeDbError } from '../helpers/dbErrors.ts';
 import { signToken } from '../helpers/jwt.ts';
 import { makeWithDbTransactionMock } from '../helpers/withDbTransactionMock.ts';
 
@@ -52,6 +53,7 @@ const cqFindAnyLinkedSaleMock = mock();
 const cqFindFullForSnapshotMock = mock();
 const cqFindItemsForQuoteMock = mock();
 const cqFindIdConflictMock = mock();
+const cqRenameMock = mock();
 const cqUpdateMock = mock();
 const cqFindStatusAndClientNameMock = mock();
 const cqDeleteByIdMock = mock();
@@ -94,6 +96,7 @@ const sqvBuildSnapshotMock = mock();
 const qvInsertMock = mock();
 const qvBuildSnapshotMock = mock();
 const allocateDocumentCodeMock = mock();
+const reserveDocumentCodeCounterFromCodeMock = mock();
 
 const logAuditMock = mock(async () => undefined);
 const { withDbTransactionMock, resetWithDbTransactionMock } = makeWithDbTransactionMock();
@@ -126,6 +129,7 @@ beforeAll(async () => {
     findFullForSnapshot: cqFindFullForSnapshotMock,
     findItemsForQuote: cqFindItemsForQuoteMock,
     findIdConflict: cqFindIdConflictMock,
+    rename: cqRenameMock,
     update: cqUpdateMock,
     findStatusAndClientName: cqFindStatusAndClientNameMock,
     deleteById: cqDeleteByIdMock,
@@ -184,6 +188,7 @@ beforeAll(async () => {
   mock.module('../../services/documentCodes.ts', () => ({
     ...documentCodesSnap,
     allocateDocumentCode: allocateDocumentCodeMock,
+    reserveDocumentCodeCounterFromCode: reserveDocumentCodeCounterFromCodeMock,
   }));
   mock.module('../../utils/audit.ts', () => ({ ...auditSnap, logAudit: logAuditMock }));
   mock.module('../../db/drizzle.ts', () => ({
@@ -283,6 +288,7 @@ const allMocks = [
   cqFindFullForSnapshotMock,
   cqFindItemsForQuoteMock,
   cqFindIdConflictMock,
+  cqRenameMock,
   cqUpdateMock,
   cqReplaceItemsMock,
   cqFindItemSnapshotsForQuoteMock,
@@ -320,6 +326,7 @@ const allMocks = [
   qvInsertMock,
   qvBuildSnapshotMock,
   allocateDocumentCodeMock,
+  reserveDocumentCodeCounterFromCodeMock,
   logAuditMock,
 ];
 
@@ -337,6 +344,7 @@ beforeEach(async () => {
     if (moduleId === 'client_offer') return 'OFF-2999-0001';
     return `${moduleId}-generated`;
   });
+  reserveDocumentCodeCounterFromCodeMock.mockResolvedValue(undefined);
   qvBuildSnapshotMock.mockImplementation((quote, items) => ({ schemaVersion: 1, quote, items }));
   qcListAllMock.mockResolvedValue([]);
   qcListForQuoteMock.mockResolvedValue([]);
@@ -357,6 +365,7 @@ beforeEach(async () => {
   cqFindItemsForCandidateMock.mockResolvedValue([]);
   cqFindAnyLinkedSaleMock.mockResolvedValue(null);
   cqFindIdConflictMock.mockResolvedValue(false);
+  cqRenameMock.mockResolvedValue(null);
   cqFindFullForSnapshotMock.mockResolvedValue({ quote: updatedQuote(), items: [] });
   cqFindItemsForQuoteMock.mockResolvedValue([]);
   qvInsertMock.mockResolvedValue(undefined);
@@ -542,6 +551,46 @@ describe('PUT /api/sales/client-quotes/:id status rules (issue #779)', () => {
     const res = await putStatus({ expirationDate: '2027-01-01' });
     expect(res.statusCode).toBe(200);
     expect(cqUpdateMock).toHaveBeenCalled();
+  });
+
+  test('revalidating an expired family updates its primary candidate as well as the parent', async () => {
+    const expiredCandidate = {
+      id: 'qc-a',
+      quoteId: 'q-1',
+      name: 'Variante A',
+      position: 0,
+      state: 'active' as const,
+      paymentTerms: 'immediate',
+      discount: 0,
+      discountType: 'percentage' as const,
+      expirationDate: '2000-01-01',
+      communicationChannelId: 'qcc_email',
+      communicationChannelName: 'Email',
+      notes: null,
+      createdAt: 1_700_000_000_000,
+      updatedAt: 1_700_000_000_000,
+    };
+    const revalidatedCandidate = { ...expiredCandidate, expirationDate: '2027-01-01' };
+    const revalidatedQuote = updatedQuote({ status: 'sent', expirationDate: '2027-01-01' });
+    cqFindCurrentMock.mockResolvedValue(gate({ status: 'sent', expirationDate: '2000-01-01' }));
+    cqUpdateMock.mockResolvedValue(revalidatedQuote);
+    cqFindByIdMock.mockResolvedValue(revalidatedQuote);
+    qcListForQuoteMock
+      .mockResolvedValueOnce([expiredCandidate])
+      .mockResolvedValueOnce([expiredCandidate])
+      .mockResolvedValueOnce([revalidatedCandidate]);
+    qcUpdateMock.mockResolvedValue(revalidatedCandidate);
+
+    const res = await putStatus({ expirationDate: '2027-01-01' });
+
+    expect(res.statusCode).toBe(200);
+    expect(qcUpdateMock).toHaveBeenCalledWith(
+      'q-1',
+      'qc-a',
+      expect.objectContaining({ expirationDate: '2027-01-01' }),
+      expect.anything(),
+    );
+    expect(JSON.parse(res.body).candidates[0].expirationDate).toBe('2027-01-01');
   });
 
   test('409 blocks progression to sent while a SOURCED supplier quote is expired', async () => {
@@ -1506,6 +1555,22 @@ describe('client quote candidate-family create and update', () => {
     expect(cqCreateMock).not.toHaveBeenCalled();
   });
 
+  test('rejects candidate names longer than the database column before starting a write', async () => {
+    const res = await postQuote([freshLine()], {
+      candidates: [
+        {
+          name: 'V'.repeat(101),
+          items: [freshLine()],
+          expirationDate: '2999-12-31',
+          communicationChannelId: 'qcc_email',
+        },
+      ],
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(cqCreateMock).not.toHaveBeenCalled();
+  });
+
   test('rejects a supplied candidate id that belongs to another quote family', async () => {
     setupCreate();
     cqFindCurrentMock.mockResolvedValue(gate({ status: 'draft' }));
@@ -1604,6 +1669,150 @@ describe('client quote candidate-family create and update', () => {
       expect.objectContaining({ action: 'client_quote.updated', entityId: 'q-1' }),
     );
   });
+
+  test('keeps a retained candidate supplier snapshot isolated when the source is no longer pickable', async () => {
+    setupCreate();
+    const existingCandidate = activeCandidate();
+    const quote = updatedQuote({ id: 'q-1', status: 'sent' });
+    cqFindCurrentMock.mockResolvedValue(gate({ status: 'sent' }));
+    cqLockCurrentByIdMock.mockResolvedValue(gate({ status: 'sent' }));
+    cqUpdateMock.mockResolvedValue(quote);
+    cqFindByIdMock.mockResolvedValue(quote);
+    qcListForQuoteMock.mockResolvedValue([existingCandidate]);
+    qcUpdateMock.mockResolvedValue(existingCandidate);
+    cqFindItemSnapshotsForQuoteMock.mockResolvedValue([
+      {
+        id: 'qi-local',
+        productId: null,
+        quantity: 2,
+        productCost: 50,
+        productMolPercentage: null,
+        supplierQuoteId: 'sq-9',
+        supplierQuoteItemId: 'sqi-9',
+        supplierQuoteSupplierName: 'Acme',
+        supplierQuoteUnitPrice: 50,
+        unitType: 'hours',
+      },
+    ]);
+    sqGetQuoteItemSnapshotsMock.mockResolvedValue(
+      new Map([
+        [
+          'sqi-9',
+          {
+            supplierQuoteId: 'sq-9',
+            supplierName: 'Acme',
+            productId: null,
+            unitPrice: 80,
+            netCost: 80,
+            sourceable: false,
+          },
+        ],
+      ]),
+    );
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/sales/client-quotes/q-1',
+      headers: authHeader(),
+      payload: {
+        clientId: 'c1',
+        clientName: 'Client',
+        status: 'sent',
+        candidates: [
+          {
+            id: 'qc-local',
+            name: 'Variante A',
+            items: [freshLine({ id: 'qi-local' })],
+            expirationDate: '2999-12-31',
+            communicationChannelId: 'qcc_email',
+          },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const replaced = cqReplaceItemsMock.mock.calls[0][1] as Array<Record<string, unknown>>;
+    expect(replaced[0].supplierQuoteUnitPrice).toBe(50);
+    expect(sqSyncItemPricingMock).not.toHaveBeenCalled();
+  });
+
+  test('renames the parent code atomically when saving a candidate family', async () => {
+    setupCreate();
+    const existingCandidate = activeCandidate();
+    const currentQuote = updatedQuote({ id: 'q-1', status: 'draft' });
+    const renamedQuote = updatedQuote({ id: 'q-renamed', status: 'draft' });
+    cqFindCurrentMock.mockResolvedValue(gate({ status: 'draft' }));
+    cqLockCurrentByIdMock.mockResolvedValue(gate({ status: 'draft' }));
+    cqUpdateMock.mockResolvedValue(currentQuote);
+    cqRenameMock.mockResolvedValue(renamedQuote);
+    cqFindByIdMock.mockResolvedValue(renamedQuote);
+    qcListForQuoteMock.mockResolvedValue([existingCandidate]);
+    qcUpdateMock.mockResolvedValue(existingCandidate);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/sales/client-quotes/q-1',
+      headers: authHeader(),
+      payload: {
+        id: 'q-renamed',
+        clientId: 'c1',
+        clientName: 'Client',
+        status: 'draft',
+        candidates: [
+          {
+            id: 'qc-local',
+            name: 'Variante A',
+            items: [freshLine()],
+            expirationDate: '2999-12-31',
+            communicationChannelId: 'qcc_email',
+          },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(cqRenameMock).toHaveBeenCalledWith('q-1', 'q-renamed', expect.anything());
+    expect(reserveDocumentCodeCounterFromCodeMock).toHaveBeenCalledWith(
+      'client_quote',
+      'q-renamed',
+      expect.anything(),
+    );
+    expect(JSON.parse(res.body).id).toBe('q-renamed');
+  });
+
+  test('maps a concurrent candidate-name collision to a conflict instead of a server error', async () => {
+    setupCreate();
+    const existingCandidate = activeCandidate();
+    cqFindCurrentMock.mockResolvedValue(gate({ status: 'draft' }));
+    cqLockCurrentByIdMock.mockResolvedValue(gate({ status: 'draft' }));
+    cqUpdateMock.mockResolvedValue(updatedQuote({ id: 'q-1', status: 'draft' }));
+    qcListForQuoteMock.mockResolvedValue([existingCandidate]);
+    qcUpdateMock.mockRejectedValue(makeDbError('23505', 'idx_quote_candidates_quote_name_unique'));
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/sales/client-quotes/q-1',
+      headers: authHeader(),
+      payload: {
+        clientId: 'c1',
+        clientName: 'Client',
+        status: 'draft',
+        candidates: [
+          {
+            id: 'qc-local',
+            name: 'Variante A',
+            items: [freshLine()],
+            expirationDate: '2999-12-31',
+            communicationChannelId: 'qcc_email',
+          },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(JSON.parse(res.body).error).toContain('unique');
+  });
+
   test('rejects a candidate save that resumes after the family was promoted', async () => {
     setupCreate();
     const existingCandidate = activeCandidate();
@@ -1812,6 +2021,45 @@ describe('client quote candidate-family create and update', () => {
 });
 
 describe('GET /api/sales/client-quotes list (#812 round 11)', () => {
+  test('terminal families never expose the legacy expired flag', async () => {
+    getRolePermissionsMock.mockResolvedValue(['sales.client_quotes.view']);
+    cqListAllMock.mockResolvedValue([
+      updatedQuote({ id: 'q-denied', status: 'denied', expirationDate: '2000-01-01' }),
+    ]);
+    qcListAllMock.mockResolvedValue([
+      {
+        id: 'qc-denied',
+        quoteId: 'q-denied',
+        name: 'Variante A',
+        position: 0,
+        state: 'active',
+        paymentTerms: 'immediate',
+        discount: 0,
+        discountType: 'percentage',
+        expirationDate: '2000-01-01',
+        communicationChannelId: 'qcc_email',
+        communicationChannelName: 'Email',
+        notes: null,
+        createdAt: 1_700_000_000_000,
+        updatedAt: 1_700_000_000_000,
+      },
+    ]);
+    cqListAllItemsMock.mockResolvedValue([]);
+
+    const res = await testApp.inject({
+      method: 'GET',
+      url: '/api/sales/client-quotes',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body)[0]).toMatchObject({
+      status: 'denied',
+      effectiveStatus: 'denied',
+      isExpired: false,
+    });
+  });
+
   test('linkedSupplierQuoteExpired comes from the status-aware blocking map, not the raw projection', async () => {
     // q-1 sources a terminal-frozen supplier quote (excluded from the map) — its raw
     // linkedSupplierQuoteExpiration is past, but the flag must stay false so the UI does not

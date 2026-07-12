@@ -61,6 +61,7 @@ import {
 } from '../utils/validation.ts';
 
 const MAX_QUOTE_MOL_PERCENTAGE = 99.99;
+const MAX_CANDIDATE_NAME_LENGTH = 100;
 
 type IncomingQuoteItem = {
   id?: string;
@@ -97,6 +98,34 @@ type QuoteItemSnapshot = {
 };
 
 type ResolvedQuoteItem = IncomingQuoteItem & QuoteItemSnapshot;
+
+const indexExistingQuoteItems = (
+  snapshots: clientQuotesRepo.ExistingQuoteItemSnapshot[],
+): Map<string, IncomingQuoteItem & QuoteItemSnapshot> =>
+  new Map(
+    snapshots.map((snapshot) => [
+      snapshot.id,
+      {
+        id: snapshot.id,
+        productId: snapshot.productId,
+        productName: '',
+        quantity: snapshot.quantity,
+        unitPrice: 0,
+        discount: 0,
+        // These placeholders only support the cost/MOL retained-line comparison; duration and
+        // the remaining commercial fields always come from the submitted candidate line.
+        durationMonths: 1,
+        durationUnit: 'months' as const,
+        productCost: snapshot.productCost,
+        productMolPercentage: snapshot.productMolPercentage,
+        supplierQuoteId: snapshot.supplierQuoteId,
+        supplierQuoteItemId: snapshot.supplierQuoteItemId,
+        supplierQuoteSupplierName: snapshot.supplierQuoteSupplierName,
+        supplierQuoteUnitPrice: snapshot.supplierQuoteUnitPrice,
+        unitType: snapshot.unitType,
+      },
+    ]),
+  );
 
 class LinkedOfferRollbackError extends Error {
   constructor(
@@ -632,7 +661,7 @@ const quoteCandidateBodySchema = {
   type: 'object',
   properties: {
     id: { type: 'string' },
-    name: { type: 'string' },
+    name: { type: 'string', maxLength: MAX_CANDIDATE_NAME_LENGTH },
     items: { type: 'array', items: quoteItemBodySchema },
     paymentTerms: { type: 'string' },
     discount: { type: 'number' },
@@ -761,6 +790,7 @@ const prepareCandidateBody = async (
   raw: unknown,
   index: number,
   reply: FastifyReply,
+  existingItemsById?: Map<string, IncomingQuoteItem & QuoteItemSnapshot>,
 ): Promise<PreparedCandidate | null> => {
   if (!raw || typeof raw !== 'object') {
     badRequest(reply, 'candidates[' + index + '] must be an object');
@@ -805,7 +835,7 @@ const prepareCandidateBody = async (
   const discountType = candidate.discountType === 'currency' ? 'currency' : 'percentage';
   let resolvedItems: ResolvedQuoteItem[];
   try {
-    resolvedItems = await resolveQuoteItemSnapshots(itemResult.items);
+    resolvedItems = await resolveQuoteItemSnapshots(itemResult.items, existingItemsById);
   } catch (error) {
     badRequest(reply, (error as Error).message);
     return null;
@@ -1028,16 +1058,15 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       enrichedCandidates[0];
     const active = enrichedCandidates.filter((candidate) => candidate.state === 'active');
     const allActiveExpired = active.length > 0 && active.every((candidate) => candidate.isExpired);
+    const familyIsExpired = !isTerminalQuoteStatus(quote.status) && allActiveExpired;
     const response = buildQuoteResponse(quote, primary?.items ?? [], null);
     return {
       ...response,
       candidates: enrichedCandidates,
       selectedCandidateId: selected?.id ?? null,
-      isExpired: allActiveExpired,
+      isExpired: familyIsExpired,
       effectiveStatus:
-        allActiveExpired && quote.status !== 'offer' && !isTerminalQuoteStatus(quote.status)
-          ? 'expired'
-          : response.effectiveStatus,
+        familyIsExpired && quote.status !== 'offer' ? 'expired' : response.effectiveStatus,
     };
   };
 
@@ -1184,6 +1213,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         );
         const allActiveExpired =
           activeCandidates.length > 0 && activeCandidates.every((candidate) => candidate.isExpired);
+        const familyIsExpired = !isTerminalQuoteStatus(quote.status) && allActiveExpired;
         let earliest: string | null = null;
         for (const item of quoteItems) {
           const sourcedId = resolvedSourcedId(item);
@@ -1195,11 +1225,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           ...response,
           candidates: enrichedCandidates,
           selectedCandidateId: selectedCandidate?.id ?? null,
-          isExpired: allActiveExpired,
+          isExpired: familyIsExpired,
           effectiveStatus:
-            allActiveExpired && quote.status !== 'offer' && !isTerminalQuoteStatus(quote.status)
-              ? 'expired'
-              : response.effectiveStatus,
+            familyIsExpired && quote.status !== 'offer' ? 'expired' : response.effectiveStatus,
         };
       });
     },
@@ -1502,10 +1530,39 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         if (status === 'offer' || status === 'accepted') {
           return badRequest(reply, 'Use the candidate promotion endpoint to create an offer');
         }
+        let candidateFamilyId = idResult.value;
+        if (nextId !== undefined) {
+          const nextIdResult = requireNonEmptyString(nextId, 'id');
+          if (!nextIdResult.ok) return badRequest(reply, nextIdResult.message);
+          candidateFamilyId = nextIdResult.value;
+          if (
+            candidateFamilyId !== idResult.value &&
+            (await clientQuotesRepo.findIdConflict(candidateFamilyId, idResult.value))
+          ) {
+            return replyError(request, reply, {
+              statusCode: 409,
+              message: 'Quote ID already exists',
+              action: 'client_quote.update.conflict',
+              entityType: 'client_quote',
+              entityId: idResult.value,
+              details: { secondaryLabel: 'duplicate_id', toValue: candidateFamilyId },
+            });
+          }
+        }
+        const [existingCandidates, existingSnapshots] = await Promise.all([
+          quoteCandidatesRepo.listForQuote(idResult.value),
+          clientQuotesRepo.findItemSnapshotsForQuote(idResult.value),
+        ]);
+        const existingItemsById = indexExistingQuoteItems(existingSnapshots);
         const preparedCandidates: PreparedCandidate[] = [];
         const names = new Set<string>();
         for (let index = 0; index < candidates.length; index++) {
-          const prepared = await prepareCandidateBody(candidates[index], index, reply);
+          const prepared = await prepareCandidateBody(
+            candidates[index],
+            index,
+            reply,
+            existingItemsById,
+          );
           if (!prepared) return;
           const normalizedName = prepared.name.toLocaleLowerCase();
           if (names.has(normalizedName)) {
@@ -1514,7 +1571,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           names.add(normalizedName);
           preparedCandidates.push(prepared);
         }
-        const existingCandidates = await quoteCandidatesRepo.listForQuote(idResult.value);
         const existingActiveIds = new Set(
           existingCandidates
             .filter((candidate) => candidate.state === 'active')
@@ -1583,105 +1639,156 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             },
           });
         }
-        const familyResult = await withDbTransaction(async (tx) => {
-          // Serialize family edits with promotion/restore, which lock the same parent first. Without
-          // this recheck, an edit that passed preflight before promotion could resume afterwards and
-          // overwrite the promoted parent/candidates.
-          const lockedCurrent = await clientQuotesRepo.lockCurrentById(idResult.value, tx);
-          if (!lockedCurrent) return { kind: 'not_found' as const };
-          if (normalizeQuoteStatus(lockedCurrent.status) !== normalizeQuoteStatus(currentStatus)) {
-            return {
-              kind: 'conflict' as const,
-              message: 'The quote changed while its candidates were being saved',
-              secondaryLabel: 'candidate_family_changed',
-            };
-          }
-          const lockedCandidates = await quoteCandidatesRepo.listForQuote(idResult.value, tx);
-          const lockedActiveIds = new Set(
-            lockedCandidates
-              .filter((candidate) => candidate.state === 'active')
-              .map((candidate) => candidate.id),
-          );
-          if (
-            lockedActiveIds.size !== existingActiveIds.size ||
-            Array.from(existingActiveIds).some((candidateId) => !lockedActiveIds.has(candidateId))
-          ) {
-            return {
-              kind: 'conflict' as const,
-              message: 'The candidate family changed while it was being saved',
-              secondaryLabel: 'candidate_family_changed',
-            };
-          }
-
-          await snapshotPreState(idResult.value, 'update', request, tx);
-          const first = preparedCandidates[0];
-          const parent = await clientQuotesRepo.update(
-            idResult.value,
-            {
-              clientId: clientIdValue.value,
-              clientName: clientNameValue.value,
-              paymentTerms: first.paymentTerms,
-              discount: first.discount,
-              discountType: first.discountType,
-              status: requestedStatus,
-              expirationDate: first.expirationDate,
-              communicationChannelId: first.communicationChannelId,
-              notes: first.notes,
-            },
-            tx,
-          );
-          if (!parent) return { kind: 'not_found' as const };
-          const retainedIds: string[] = [];
-          for (let index = 0; index < preparedCandidates.length; index++) {
-            const input = preparedCandidates[index];
-            const candidateId =
-              input.id && lockedActiveIds.has(input.id) ? input.id : generatePrefixedId('qc');
-            const candidate = lockedActiveIds.has(candidateId)
-              ? await quoteCandidatesRepo.update(
-                  idResult.value,
-                  candidateId,
-                  {
-                    name: input.name,
-                    position: index,
-                    paymentTerms: input.paymentTerms,
-                    discount: input.discount,
-                    discountType: input.discountType,
-                    expirationDate: input.expirationDate,
-                    communicationChannelId: input.communicationChannelId,
-                    notes: input.notes,
-                  },
-                  tx,
-                )
-              : await quoteCandidatesRepo.insert(
-                  {
-                    id: candidateId,
-                    quoteId: idResult.value,
-                    name: input.name,
-                    position: index,
-                    state: 'active',
-                    paymentTerms: input.paymentTerms,
-                    discount: input.discount,
-                    discountType: input.discountType,
-                    expirationDate: input.expirationDate,
-                    communicationChannelId: input.communicationChannelId,
-                    notes: input.notes,
-                  },
-                  tx,
-                );
-            if (!candidate) throw new Error('Candidate disappeared during update');
-            retainedIds.push(candidateId);
-            await clientQuotesRepo.replaceItems(
-              idResult.value,
-              buildItemsForInsert(input.items),
-              tx,
-              candidateId,
+        type CandidateFamilySaveResult =
+          | { kind: 'not_found' }
+          | { kind: 'conflict'; message: string; secondaryLabel: string }
+          | { kind: 'success'; parent: clientQuotesRepo.ClientQuote };
+        let familyResult: CandidateFamilySaveResult;
+        try {
+          familyResult = await withDbTransaction(async (tx) => {
+            // Serialize family edits with promotion/restore, which lock the same parent first.
+            const lockedCurrent = await clientQuotesRepo.lockCurrentById(idResult.value, tx);
+            if (!lockedCurrent) return { kind: 'not_found' as const };
+            if (
+              normalizeQuoteStatus(lockedCurrent.status) !== normalizeQuoteStatus(currentStatus)
+            ) {
+              return {
+                kind: 'conflict' as const,
+                message: 'The quote changed while its candidates were being saved',
+                secondaryLabel: 'candidate_family_changed',
+              };
+            }
+            const lockedCandidates = await quoteCandidatesRepo.listForQuote(idResult.value, tx);
+            const lockedActiveIds = new Set(
+              lockedCandidates
+                .filter((candidate) => candidate.state === 'active')
+                .map((candidate) => candidate.id),
             );
+            if (
+              lockedActiveIds.size !== existingActiveIds.size ||
+              Array.from(existingActiveIds).some((candidateId) => !lockedActiveIds.has(candidateId))
+            ) {
+              return {
+                kind: 'conflict' as const,
+                message: 'The candidate family changed while it was being saved',
+                secondaryLabel: 'candidate_family_changed',
+              };
+            }
+
+            await snapshotPreState(idResult.value, 'update', request, tx);
+            const first = preparedCandidates[0];
+            const parent = await clientQuotesRepo.update(
+              idResult.value,
+              {
+                clientId: clientIdValue.value,
+                clientName: clientNameValue.value,
+                paymentTerms: first.paymentTerms,
+                discount: first.discount,
+                discountType: first.discountType,
+                status: requestedStatus,
+                expirationDate: first.expirationDate,
+                communicationChannelId: first.communicationChannelId,
+                notes: first.notes,
+              },
+              tx,
+            );
+            if (!parent) return { kind: 'not_found' as const };
+            const retainedIds: string[] = [];
+            for (let index = 0; index < preparedCandidates.length; index++) {
+              const input = preparedCandidates[index];
+              const candidateId =
+                input.id && lockedActiveIds.has(input.id) ? input.id : generatePrefixedId('qc');
+              const candidate = lockedActiveIds.has(candidateId)
+                ? await quoteCandidatesRepo.update(
+                    idResult.value,
+                    candidateId,
+                    {
+                      name: input.name,
+                      position: index,
+                      paymentTerms: input.paymentTerms,
+                      discount: input.discount,
+                      discountType: input.discountType,
+                      expirationDate: input.expirationDate,
+                      communicationChannelId: input.communicationChannelId,
+                      notes: input.notes,
+                    },
+                    tx,
+                  )
+                : await quoteCandidatesRepo.insert(
+                    {
+                      id: candidateId,
+                      quoteId: idResult.value,
+                      name: input.name,
+                      position: index,
+                      state: 'active',
+                      paymentTerms: input.paymentTerms,
+                      discount: input.discount,
+                      discountType: input.discountType,
+                      expirationDate: input.expirationDate,
+                      communicationChannelId: input.communicationChannelId,
+                      notes: input.notes,
+                    },
+                    tx,
+                  );
+              if (!candidate) throw new Error('Candidate disappeared during update');
+              retainedIds.push(candidateId);
+              await clientQuotesRepo.replaceItems(
+                idResult.value,
+                buildItemsForInsert(input.items),
+                tx,
+                candidateId,
+              );
+            }
+            if (currentStatus === 'draft') {
+              await quoteCandidatesRepo.deleteMissingActive(idResult.value, retainedIds, tx);
+            }
+            if (candidateFamilyId !== idResult.value) {
+              const renamedParent = await clientQuotesRepo.rename(
+                idResult.value,
+                candidateFamilyId,
+                tx,
+              );
+              if (!renamedParent) return { kind: 'not_found' as const };
+              await reserveDocumentCodeCounterFromCode('client_quote', candidateFamilyId, tx);
+              return { kind: 'success' as const, parent: renamedParent };
+            }
+            return { kind: 'success' as const, parent };
+          });
+        } catch (error) {
+          const codeCollision = replyDocumentCodeCollision(
+            request,
+            reply,
+            error,
+            'client_quote.update.conflict',
+            'client_quote',
+          );
+          if (codeCollision) return codeCollision;
+          const duplicate = getUniqueViolation(error);
+          if (duplicate?.constraint === 'idx_quote_candidates_quote_name_unique') {
+            return replyError(request, reply, {
+              statusCode: 409,
+              message: 'Candidate names must be unique within a quote',
+              action: 'client_quote.update.conflict',
+              entityType: 'client_quote',
+              entityId: idResult.value,
+              details: { secondaryLabel: 'duplicate_candidate_name' },
+            });
           }
-          if (currentStatus === 'draft') {
-            await quoteCandidatesRepo.deleteMissingActive(idResult.value, retainedIds, tx);
+          if (
+            duplicate &&
+            (duplicate.constraint === 'quotes_pkey' || duplicate.detail?.includes('(id)'))
+          ) {
+            return replyError(request, reply, {
+              statusCode: 409,
+              message: 'Quote ID already exists',
+              action: 'client_quote.update.conflict',
+              entityType: 'client_quote',
+              entityId: idResult.value,
+              details: { secondaryLabel: 'duplicate_id', toValue: candidateFamilyId },
+            });
           }
-          return { kind: 'success' as const, parent };
-        });
+          throw error;
+        }
         if (familyResult.kind === 'conflict') {
           return replyError(request, reply, {
             statusCode: 409,
@@ -1928,28 +2035,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         const incomingItems = itemsResult.items;
 
         const existingSnapshots = await clientQuotesRepo.findItemSnapshotsForQuote(idResult.value);
-        const existingItemsById = new Map<string, IncomingQuoteItem & QuoteItemSnapshot>();
-        for (const snap of existingSnapshots) {
-          existingItemsById.set(snap.id, {
-            id: snap.id,
-            productId: snap.productId,
-            productName: '',
-            quantity: snap.quantity,
-            unitPrice: 0,
-            discount: 0,
-            // Placeholder: this stub only feeds the cost/MOL "unchanged" comparison below;
-            // duration always comes from the incoming item, never from this snapshot.
-            durationMonths: 1,
-            durationUnit: 'months',
-            productCost: snap.productCost,
-            productMolPercentage: snap.productMolPercentage,
-            supplierQuoteId: snap.supplierQuoteId,
-            supplierQuoteItemId: snap.supplierQuoteItemId,
-            supplierQuoteSupplierName: snap.supplierQuoteSupplierName,
-            supplierQuoteUnitPrice: snap.supplierQuoteUnitPrice,
-            unitType: snap.unitType,
-          });
-        }
+        const existingItemsById = indexExistingQuoteItems(existingSnapshots);
         // Previous stored lines for the supplier-item sync's genuine-edit diff (issue #779) —
         // the snapshot shape structurally satisfies PreviousClientLine.
         previousSyncLines = existingSnapshots;
@@ -2056,6 +2142,31 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                   tx,
                 );
           if (!quote) return { quote: null, items: [], syncAudits: [] };
+          if (typeof expirationDateValue === 'string') {
+            const familyCandidates = await quoteCandidatesRepo.listForQuote(quote.id, tx);
+            const primaryCandidate =
+              familyCandidates.find((candidate) => candidate.state === 'selected') ??
+              familyCandidates.find((candidate) => candidate.state === 'active') ??
+              familyCandidates[0];
+            if (primaryCandidate && primaryCandidate.expirationDate !== expirationDateValue) {
+              const updatedCandidate = await quoteCandidatesRepo.update(
+                quote.id,
+                primaryCandidate.id,
+                {
+                  name: primaryCandidate.name,
+                  position: primaryCandidate.position,
+                  paymentTerms: primaryCandidate.paymentTerms,
+                  discount: primaryCandidate.discount,
+                  discountType: primaryCandidate.discountType,
+                  expirationDate: expirationDateValue,
+                  communicationChannelId: primaryCandidate.communicationChannelId,
+                  notes: primaryCandidate.notes,
+                },
+                tx,
+              );
+              if (!updatedCandidate) throw new Error('Primary quote candidate disappeared');
+            }
+          }
           const items = normalizedItems
             ? await clientQuotesRepo.replaceItems(
                 quote.id,
@@ -2157,6 +2268,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           toValue: didStatusChange ? String(nextStatus) : undefined,
         },
       });
+      if (typeof expirationDateValue === 'string') {
+        const familyResponse = await loadFamilyResponse(updatedQuoteId);
+        if (familyResponse) return familyResponse;
+      }
       // Items/status branches already hold the status-aware value (it fed the guard); a no-op
       // resend resolves it from the stored lines so the response flag never reads a raw MIN.
       const responseSourcedExpiration =
