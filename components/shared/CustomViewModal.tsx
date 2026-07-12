@@ -37,6 +37,7 @@ export interface CustomViewModalProps {
   initialHiddenColIds: Set<string>;
   initialColumnOrder: string[];
   editingView?: CustomView;
+  zIndex?: number;
 }
 
 type ColumnDragState = {
@@ -70,6 +71,7 @@ const CustomViewModal: React.FC<CustomViewModalProps> = ({
   initialHiddenColIds,
   initialColumnOrder,
   editingView,
+  zIndex,
 }) => {
   const { t } = useTranslation('common');
   const [name, setName] = useState(() => editingView?.name ?? '');
@@ -130,7 +132,7 @@ const CustomViewModal: React.FC<CustomViewModalProps> = ({
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} ariaLabel={null}>
+    <Modal isOpen={isOpen} onClose={onClose} ariaLabel={null} zIndex={zIndex}>
       {() => (
         <ModalContent size="md">
           <ModalHeader>

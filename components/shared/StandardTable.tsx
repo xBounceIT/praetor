@@ -19,11 +19,15 @@ import {
 import { ArrowDown, ArrowUp, ArrowUpDown, GripVertical, ZoomIn, ZoomOut } from 'lucide-react';
 import {
   Children,
+  type ComponentProps,
+  type CSSProperties,
+  createContext,
   Fragment,
   isValidElement,
   type ReactNode,
   type Ref,
   useCallback,
+  useContext,
   useEffect,
   useMemo,
   useReducer,
@@ -264,7 +268,7 @@ const HeaderFilter = <T,>({
           {hasFilter && <span className="sr-only">{selectedValues.length}</span>}
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent
+      <StandardTableDropdownMenuContent
         align="start"
         className="w-64"
         onClick={(event) => event.stopPropagation()}
@@ -323,7 +327,7 @@ const HeaderFilter = <T,>({
             </DropdownMenuItem>
           </>
         )}
-      </DropdownMenuContent>
+      </StandardTableDropdownMenuContent>
     </DropdownMenu>
   );
 };
@@ -370,7 +374,7 @@ const StandardTableToolbarButton = ({
         </Button>
       </span>
     </TooltipTrigger>
-    <TooltipContent side="bottom">{label}</TooltipContent>
+    <StandardTableTooltipContent side="bottom">{label}</StandardTableTooltipContent>
   </Tooltip>
 );
 
@@ -496,6 +500,48 @@ const ACTION_MENU_CONTENT_CLASSNAME = 'w-max min-w-[9rem] max-w-[calc(100vw-2rem
 const ACTION_MENU_ITEMS_CLASSNAME = 'flex flex-col gap-0.5';
 const ACTION_MENU_BUTTON_CLASSNAME =
   'flex h-7 w-full items-center justify-start gap-2 rounded-sm px-2 text-xs font-medium whitespace-nowrap text-popover-foreground outline-hidden transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50';
+
+const StandardTablePopupZIndexContext = createContext<number | undefined>(undefined);
+
+const useStandardTablePopupStyle = (style: CSSProperties | undefined) => {
+  const popupZIndex = useContext(StandardTablePopupZIndexContext);
+  return popupZIndex === undefined ? style : { ...style, zIndex: popupZIndex };
+};
+
+const StandardTableDropdownMenuContent = ({
+  style,
+  ...props
+}: ComponentProps<typeof DropdownMenuContent>) => (
+  <DropdownMenuContent {...props} style={useStandardTablePopupStyle(style)} />
+);
+
+const StandardTableDropdownMenuSubContent = ({
+  style,
+  ...props
+}: ComponentProps<typeof DropdownMenuSubContent>) => (
+  <DropdownMenuSubContent {...props} style={useStandardTablePopupStyle(style)} />
+);
+
+const StandardTableContextMenuContent = ({
+  style,
+  ...props
+}: ComponentProps<typeof ContextMenuContent>) => (
+  <ContextMenuContent {...props} style={useStandardTablePopupStyle(style)} />
+);
+
+const StandardTableSelectContent = ({ style, ...props }: ComponentProps<typeof SelectContent>) => (
+  <SelectContent {...props} style={useStandardTablePopupStyle(style)} />
+);
+
+const StandardTableTooltipContent = ({
+  style,
+  ...props
+}: ComponentProps<typeof TooltipContent>) => (
+  <TooltipContent {...props} style={useStandardTablePopupStyle(style)} />
+);
+
+const getNestedTableModalZIndex = (popupZIndex: number | undefined) =>
+  popupZIndex === undefined ? undefined : popupZIndex - 10;
 
 type ViewModalState = { kind: 'create' } | { kind: 'edit'; view: CustomView } | null;
 type ColumnDropTarget = { columnId: string; position: DropPosition };
@@ -877,7 +923,8 @@ export type StandardTableProps<T extends object = object> = {
   headerAction?: ReactNode;
   containerClassName?: string;
   tableContainerClassName?: string;
-  actionMenuZIndex?: number;
+  /** Stacking level for all portaled table menus, selects, tooltips, and nested view dialogs. */
+  popupZIndex?: number;
   footer?: ReactNode;
   footerClassName?: string;
   children?: ReactNode;
@@ -922,7 +969,7 @@ const useStandardTableController = <T extends object>({
   headerAction,
   containerClassName,
   tableContainerClassName,
-  actionMenuZIndex,
+  popupZIndex,
   footer: externalFooter,
   footerClassName,
   children,
@@ -2415,13 +2462,13 @@ const useStandardTableController = <T extends object>({
             >
               <SelectValue />
             </SelectTrigger>
-            <SelectContent>
+            <StandardTableSelectContent>
               {[5, 10, 20, 50].map((value) => (
                 <SelectItem key={value} value={String(value)}>
                   {value}
                 </SelectItem>
               ))}
-            </SelectContent>
+            </StandardTableSelectContent>
           </Select>
         </div>
 
@@ -2468,7 +2515,7 @@ const useStandardTableController = <T extends object>({
     headerAction,
     containerClassName,
     tableContainerClassName,
-    actionMenuZIndex,
+    popupZIndex,
     externalFooter,
     footerClassName,
     children,
@@ -2575,7 +2622,11 @@ type StandardTableRowInstance<T extends object> =
 
 const StandardTable = <T extends object>(props: StandardTableProps<T>) => {
   const controller = useStandardTableController(props);
-  return <StandardTableLayout controller={controller} />;
+  return (
+    <StandardTablePopupZIndexContext.Provider value={props.popupZIndex}>
+      <StandardTableLayout controller={controller} />
+    </StandardTablePopupZIndexContext.Provider>
+  );
 };
 
 const StandardTableLayout = <T extends object>({
@@ -2673,7 +2724,7 @@ const StandardTableColumnSettingsMenu = <T extends object>({
           <i className="fa-solid fa-chevron-down text-xs" aria-hidden="true"></i>
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-64">
+      <StandardTableDropdownMenuContent align="end" className="w-64">
         <DropdownMenuLabel
           className="truncate text-xs"
           title={activeView ? activeView.name : undefined}
@@ -2694,7 +2745,7 @@ const StandardTableColumnSettingsMenu = <T extends object>({
           <span>{t('table.resetColumns')}</span>
         </DropdownMenuItem>
         <StandardTableViewsSubmenu controller={controller} />
-      </DropdownMenuContent>
+      </StandardTableDropdownMenuContent>
     </DropdownMenu>
   );
 };
@@ -2768,7 +2819,7 @@ const StandardTableViewsSubmenu = <T extends object>({
           <span className="ml-auto text-xs text-muted-foreground">{customViews.length}</span>
         )}
       </DropdownMenuSubTrigger>
-      <DropdownMenuSubContent className="w-72">
+      <StandardTableDropdownMenuSubContent className="w-72">
         <DropdownMenuLabel className="text-xs">{t('table.customViews')}</DropdownMenuLabel>
         <DropdownMenuSeparator />
         {isServerBacked && viewsLoading && <StandardTableViewsLoading controller={controller} />}
@@ -2814,7 +2865,7 @@ const StandardTableViewsSubmenu = <T extends object>({
             {viewError}
           </div>
         )}
-      </DropdownMenuSubContent>
+      </StandardTableDropdownMenuSubContent>
     </DropdownMenuSub>
   );
 };
@@ -3079,7 +3130,9 @@ const StandardTableViewActions = ({
             <i className="fa-solid fa-clone text-[10px]" aria-hidden="true"></i>
           </DropdownMenuItem>
         </TooltipTrigger>
-        <TooltipContent side="bottom">{t('views.duplicateView')}</TooltipContent>
+        <StandardTableTooltipContent side="bottom">
+          {t('views.duplicateView')}
+        </StandardTableTooltipContent>
       </Tooltip>
     ) : (
       <DropdownMenuItem
@@ -3594,7 +3647,6 @@ const StandardTableDataRow = <T extends object>({
     openActionMenuRowId,
     openContextMenuRowId,
     setOpenContextMenuRowId,
-    actionMenuZIndex,
   } = controller;
   const row = tableRow.original;
   const visibleCells = tableRow.getVisibleCells();
@@ -3642,16 +3694,15 @@ const StandardTableDataRow = <T extends object>({
         {rowElement}
       </ContextMenuTrigger>
       {isContextMenuOpen && (
-        <ContextMenuContent
+        <StandardTableContextMenuContent
           forceMount
           data-standard-table-action-menu="true"
           className={ACTION_MENU_CONTENT_CLASSNAME}
-          style={{ zIndex: actionMenuZIndex }}
           onClick={(event) => event.stopPropagation()}
           onDoubleClick={(event) => event.stopPropagation()}
         >
           <div className={ACTION_MENU_ITEMS_CLASSNAME}>{rowActionMenuItems}</div>
-        </ContextMenuContent>
+        </StandardTableContextMenuContent>
       )}
     </ContextMenu>
   ) : (
@@ -3763,7 +3814,6 @@ const StandardTableDataCell = <T extends object>({
     shouldAnchorTrailingActionColumn,
     getColumnMinWidth,
     setOpenActionMenuRowId,
-    actionMenuZIndex,
   } = controller;
   const colId = cell.column.id;
   const col = colsById.get(colId);
@@ -3840,16 +3890,15 @@ const StandardTableDataCell = <T extends object>({
                 </Button>
               </DropdownMenuTrigger>
               {isActionMenuOpen && (
-                <DropdownMenuContent
+                <StandardTableDropdownMenuContent
                   align="end"
                   data-standard-table-action-menu="true"
                   className={ACTION_MENU_CONTENT_CLASSNAME}
-                  style={{ zIndex: actionMenuZIndex }}
                   onClick={(event) => event.stopPropagation()}
                   onDoubleClick={(event) => event.stopPropagation()}
                 >
                   <div className={ACTION_MENU_ITEMS_CLASSNAME}>{actionMenuItems}</div>
-                </DropdownMenuContent>
+                </StandardTableDropdownMenuContent>
               )}
             </DropdownMenu>
           ) : null
@@ -3920,6 +3969,7 @@ const StandardTableCustomViewModal = <T extends object>({
       initialHiddenColIds={hiddenColIds}
       initialColumnOrder={normalizedColumnOrder}
       editingView={modalState?.kind === 'edit' ? modalState.view : undefined}
+      zIndex={getNestedTableModalZIndex(controller.popupZIndex)}
     />
   );
 };
@@ -3937,6 +3987,8 @@ const StandardTableShareViewModal = <T extends object>({
       onClose={() => setShareModalView(null)}
       viewId={shareModalView?.id ?? ''}
       viewName={shareModalView?.name ?? ''}
+      zIndex={getNestedTableModalZIndex(controller.popupZIndex)}
+      popupZIndex={controller.popupZIndex}
     />
   );
 };
@@ -3958,7 +4010,12 @@ const StandardTablePasteViewModal = <T extends object>({
   } = controller;
 
   return (
-    <Modal isOpen={pasteModalOpen} onClose={closePasteModal} ariaLabel={null}>
+    <Modal
+      isOpen={pasteModalOpen}
+      onClose={closePasteModal}
+      ariaLabel={null}
+      zIndex={getNestedTableModalZIndex(controller.popupZIndex)}
+    >
       <ModalContent size="md">
         <ModalHeader>
           <ModalTitle>

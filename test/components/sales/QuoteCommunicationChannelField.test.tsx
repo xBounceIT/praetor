@@ -154,7 +154,7 @@ describe('<QuoteCommunicationChannelField />', () => {
     await user.click(customActions);
     const editAction = await screen.findByRole('button', { name: 'common:buttons.edit' });
     expect(editAction.closest('[data-standard-table-action-menu="true"]')).toHaveStyle({
-      zIndex: '100',
+      zIndex: '110',
     });
     await user.click(editAction);
 

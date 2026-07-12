@@ -336,6 +336,78 @@ describe('<StandardTable />', () => {
     expect(content?.className).toContain('border-border');
   });
 
+  test('popupZIndex raises every table portal and nested view modal above its parent', async () => {
+    const user = userEvent.setup();
+    const columns = [
+      ...sampleColumns,
+      {
+        id: 'actions',
+        header: 'Actions',
+        cell: ({ row }: { row: Row }) => (
+          <button type="button" data-testid={`popup-action-${row.id}`}>
+            Edit {row.name}
+          </button>
+        ),
+      },
+    ];
+
+    render(
+      <StandardTable<Row>
+        title="Popup layers"
+        data={sampleRows}
+        columns={columns}
+        popupZIndex={123}
+      />,
+    );
+
+    await user.click(screen.getByRole('combobox'));
+    expect(document.body.querySelector('[data-slot="select-content"]')).toHaveStyle({
+      zIndex: '123',
+    });
+    await user.keyboard('{Escape}');
+
+    await user.click(screen.getByRole('button', { name: 'table.filters Name' }));
+    expect(document.body.querySelector('[data-slot="dropdown-menu-content"]')).toHaveStyle({
+      zIndex: '123',
+    });
+    await user.keyboard('{Escape}');
+
+    await user.click(screen.getByRole('button', { name: 'table.columnSettings' }));
+    expect(document.body.querySelector('[data-slot="dropdown-menu-content"]')).toHaveStyle({
+      zIndex: '123',
+    });
+    await user.click(screen.getByText('table.customViews'));
+    expect(document.body.querySelector('[data-slot="dropdown-menu-sub-content"]')).toHaveStyle({
+      zIndex: '123',
+    });
+    clickMenuItemByText('buttons.add');
+    expect(screen.getByRole('dialog')).toHaveStyle({ zIndex: '114' });
+    await user.click(screen.getByRole('button', { name: 'table.cancel' }));
+
+    await user.click(screen.getAllByLabelText('table.rowActions')[0]);
+    expect(
+      screen.getByTestId('popup-action-1').closest('[data-standard-table-action-menu="true"]'),
+    ).toHaveStyle({ zIndex: '123' });
+    await user.keyboard('{Escape}');
+
+    act(() => {
+      fireEvent.contextMenu(screen.getAllByRole('row')[1], { clientX: 12, clientY: 24 });
+    });
+    expect(
+      (await screen.findByTestId('popup-action-1')).closest(
+        '[data-standard-table-action-menu="true"]',
+      ),
+    ).toHaveStyle({ zIndex: '123' });
+    await user.keyboard('{Escape}');
+
+    await user.hover(screen.getByRole('button', { name: 'table.exportToCsv' }));
+    await screen.findByRole('tooltip');
+    const tooltipContent = document.body.querySelector(
+      '[data-slot="tooltip-content"]',
+    ) as HTMLElement;
+    expect(tooltipContent.style.zIndex).toBe('123');
+  });
+
   test('CSV export follows the displayed column order', () => {
     render(<StandardTable<Row> title="People" data={sampleRows} columns={sampleColumns} />);
     expect(screen.getByRole('table').parentElement?.className).toContain('rounded-lg');
