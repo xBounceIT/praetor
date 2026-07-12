@@ -16,7 +16,9 @@ describe('App.tsx module-load cancellation', () => {
     expect(source).toContain('isModuleLoaded,');
     expect(effectBody).toContain('const loadToken = ++moduleLoadTokenRef.current;');
     expect(effectBody).toContain('activeLoadModuleRef.current === module');
-    expect(effectBody).toContain('if (isModuleLoaded(module)) return;');
+    expect(effectBody).toContain('isModuleLoaded(module) &&');
+    expect(effectBody).toContain("module !== 'timesheets'");
+    expect(effectBody).toContain('loadedTimesheetsViewRef.current === activeView');
     expect(effectBody).not.toContain('if (loadedModules.has(module)) return;');
     expect(effectBody).toContain('return cancelModuleLoad;');
     expect(effectBody).toContain('moduleLoadTokenRef.current += 1;');

@@ -39,6 +39,9 @@ const getRolePermissionsMock = mock();
 // projectsRepo mocks
 const listAllMock = mock();
 const listForUserMock = mock();
+const listRilCatalogForUserMock = mock(
+  async (): Promise<realProjectsRepo.RilProjectCatalogItem[]> => [],
+);
 const createMock = mock();
 const updateMock = mock();
 const findByIdMock = mock();
@@ -104,6 +107,7 @@ beforeAll(async () => {
     ...projectsRepoSnap,
     listAll: listAllMock,
     listForUser: listForUserMock,
+    listRilCatalogForUser: listRilCatalogForUserMock,
     create: createMock,
     update: updateMock,
     findById: findByIdMock,
@@ -228,6 +232,7 @@ const allMocks = [
   getRolePermissionsMock,
   listAllMock,
   listForUserMock,
+  listRilCatalogForUserMock,
   createMock,
   updateMock,
   findByIdMock,
@@ -394,6 +399,81 @@ describe('GET /api/projects', () => {
     });
 
     expect(res.statusCode).toBe(403);
+  });
+});
+
+describe('GET /api/projects/ril-catalog', () => {
+  test('200: returns the lightweight catalog for the current user', async () => {
+    getRolePermissionsMock.mockResolvedValue(['timesheets.ril.view']);
+    listRilCatalogForUserMock.mockResolvedValue([{ id: 'p-1', name: 'Website', orderId: 'ORD-1' }]);
+
+    const res = await testApp.inject({
+      method: 'GET',
+      url: '/api/projects/ril-catalog?userId=u1',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body) as unknown).toEqual([
+      { id: 'p-1', name: 'Website', orderId: 'ORD-1' },
+    ]);
+    expect(listRilCatalogForUserMock).toHaveBeenCalledWith('u1');
+    expect(listForUserMock).not.toHaveBeenCalled();
+  });
+
+  test('200: returns a managed user catalog after hierarchy validation', async () => {
+    getRolePermissionsMock.mockResolvedValue(['timesheets.ril.view']);
+    listRilCatalogForUserMock.mockResolvedValue([]);
+
+    const res = await testApp.inject({
+      method: 'GET',
+      url: '/api/projects/ril-catalog?userId=u2',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(isUserManagedByMock).toHaveBeenCalledWith('u1', 'u2');
+    expect(listRilCatalogForUserMock).toHaveBeenCalledWith('u2');
+  });
+
+  test('403: rejects an unmanaged user catalog', async () => {
+    getRolePermissionsMock.mockResolvedValue(['timesheets.ril.view']);
+    isUserManagedByMock.mockResolvedValue(false);
+
+    const res = await testApp.inject({
+      method: 'GET',
+      url: '/api/projects/ril-catalog?userId=u2',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(listRilCatalogForUserMock).not.toHaveBeenCalled();
+  });
+
+  test('400: requires an explicit user id', async () => {
+    getRolePermissionsMock.mockResolvedValue(['timesheets.ril.view']);
+
+    const res = await testApp.inject({
+      method: 'GET',
+      url: '/api/projects/ril-catalog',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(listRilCatalogForUserMock).not.toHaveBeenCalled();
+  });
+
+  test('403: requires RIL view permission', async () => {
+    getRolePermissionsMock.mockResolvedValue(['projects.manage.view']);
+
+    const res = await testApp.inject({
+      method: 'GET',
+      url: '/api/projects/ril-catalog?userId=u1',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(listRilCatalogForUserMock).not.toHaveBeenCalled();
   });
 });
 

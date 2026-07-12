@@ -124,6 +124,20 @@ describe('listForUser', () => {
   });
 });
 
+describe('listRilCatalogForUser', () => {
+  test('selects only RIL project-code fields without billing metadata', async () => {
+    exec.enqueue({ rows: [{ id: 'p-1', name: 'Alpha', orderId: 'ORD-1' }] });
+
+    const result = await projectsRepo.listRilCatalogForUser('u-1', testDb);
+
+    expect(result).toEqual([{ id: 'p-1', name: 'Alpha', orderId: 'ORD-1' }]);
+    expect(exec.calls[0].params).toContain('u-1');
+    expect(exec.calls[0].sql).toContain('INNER JOIN user_projects');
+    expect(exec.calls[0].sql).not.toContain('billing_type');
+    expect(exec.calls[0].sql).not.toContain('FROM tasks');
+  });
+});
+
 describe('listByIds', () => {
   test('returns a Map keyed by id and binds ids as one array parameter', async () => {
     exec.enqueue({ rows: [rawProjectRow] });

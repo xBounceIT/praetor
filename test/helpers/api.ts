@@ -32,6 +32,7 @@ export const installApiMock = () => {
     clients: { list: noopList, create: noop, update: noop, delete: noop },
     projects: {
       list: noopList,
+      listRilCatalog: noopList,
       listOrderOptions: noopList,
       create: noop,
       update: noop,

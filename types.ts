@@ -325,6 +325,11 @@ export interface Project {
   tipoConfirmed?: boolean;
 }
 
+/** Minimal project data needed to derive the order codes shown in a RIL sheet. */
+export type RilProjectReference = Pick<Project, 'id' | 'name'> & {
+  orderId: string | null;
+};
+
 export const RESALE_BILLING_FREQUENCIES = ['monthly', 'quarterly', 'annual', 'one_time'] as const;
 export type ResaleBillingFrequency = (typeof RESALE_BILLING_FREQUENCIES)[number];
 

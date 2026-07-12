@@ -22,7 +22,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import api from '../../services/api';
-import type { GeneralSettings, Project, TimeEntry, User } from '../../types';
+import type { GeneralSettings, RilProjectReference, TimeEntry, User } from '../../types';
 import { formatDecimal } from '../../utils/numbers';
 import {
   applyRilDraftToRows,
@@ -67,7 +67,6 @@ interface RilViewProps {
   availableUsers: User[];
   viewingUserId: string;
   onViewUserChange: (userId: string) => void;
-  projects: Project[];
   settings: Pick<
     GeneralSettings,
     | 'rilCompanyName'
@@ -224,7 +223,6 @@ const useRilController = ({
   availableUsers,
   viewingUserId,
   onViewUserChange,
-  projects,
   settings,
   weekdayTransferDefaults,
 }: RilViewProps) => {
@@ -239,7 +237,8 @@ const useRilController = ({
   }));
   const { monthKey, rows, isLoading, isExporting, draftStatus, error } = state;
   const sourceEntriesRef = useRef<TimeEntry[]>([]);
-  const projectCatalogRef = useRef<Project[]>([]);
+  const projectCatalogRef = useRef<RilProjectReference[]>([]);
+  const projectCatalogUserIdRef = useRef<string | null>(null);
   const loadTokenRef = useRef(0);
   // Mirror of the latest rows so the debounced save reads current state without re-arming on
   // every keystroke.
@@ -331,7 +330,7 @@ const useRilController = ({
   };
 
   const generateRows = useCallback(
-    (entries: TimeEntry[], catalogProjects: Project[]) =>
+    (entries: TimeEntry[], catalogProjects: RilProjectReference[]) =>
       generateRilRows({
         year: monthBounds.year,
         month: monthBounds.month,
@@ -476,14 +475,19 @@ const useRilController = ({
       })()
         .then((draft) => ({ ok: true as const, draft }))
         .catch(() => ({ ok: false as const, draft: null }));
+      const projectCatalogPromise =
+        projectCatalogUserIdRef.current === effectiveUserId
+          ? Promise.resolve(projectCatalogRef.current)
+          : api.projects.listRilCatalog(effectiveUserId);
       const [nextEntries, nextProjects, draftResult] = await Promise.all([
         entriesPromise,
-        api.projects.list({ userId: effectiveUserId }),
+        projectCatalogPromise,
         draftPromise,
       ]);
       if (loadTokenRef.current === token && nextEntries) {
         sourceEntriesRef.current = nextEntries;
         projectCatalogRef.current = nextProjects;
+        projectCatalogUserIdRef.current = effectiveUserId;
         const baseRows = generateRows(nextEntries, nextProjects);
         if (draftResult.ok) {
           const merged = applyRilDraftToRows(baseRows, draftResult.draft?.rows, lunchBreakMinutes);
@@ -501,7 +505,8 @@ const useRilController = ({
     } catch (err) {
       if (loadTokenRef.current === token) {
         sourceEntriesRef.current = [];
-        projectCatalogRef.current = projects;
+        projectCatalogRef.current = [];
+        projectCatalogUserIdRef.current = null;
         dispatch({
           type: 'loadError',
           error: err instanceof Error ? err.message : 'Failed to load RIL data',
@@ -517,7 +522,6 @@ const useRilController = ({
     monthBounds.toDate,
     draftMonthKey,
     lunchBreakMinutes,
-    projects,
     enqueueDraftSave,
     getChangedDays,
   ]);

@@ -64,7 +64,6 @@ const renderRilView = (settingsOverrides: Partial<GeneralSettings> = {}) =>
       availableUsers={[currentUser]}
       viewingUserId="u1"
       onViewUserChange={() => {}}
-      projects={projects}
       settings={{
         rilCompanyName: 'ACME',
         rilDefaultStartTime: '09:00',
@@ -83,14 +82,14 @@ const renderRilView = (settingsOverrides: Partial<GeneralSettings> = {}) =>
   );
 
 const mockProjectList = (value: Project[]) => {
-  api.projects.list.mockImplementation(() => Promise.resolve(value));
+  api.projects.listRilCatalog.mockImplementation(() => Promise.resolve(value));
 };
 
 describe('<RilView />', () => {
   beforeEach(() => {
     setSystemTime(new Date('2026-05-15T12:00:00Z'));
     api.entries.listPage.mockReset();
-    api.projects.list.mockReset();
+    api.projects.listRilCatalog.mockReset();
     mockProjectList(projects);
     api.entries.create.mockReset();
     api.entries.update.mockReset();
@@ -116,7 +115,7 @@ describe('<RilView />', () => {
         purpose: 'ril',
       }),
     );
-    expect(api.projects.list).toHaveBeenCalledWith({ userId: 'u1' });
+    expect(api.projects.listRilCatalog).toHaveBeenCalledWith('u1');
     expect(screen.getByText('ril.title')).toBeInTheDocument();
     expect(screen.queryByText('ril.tableTitle')).toBeNull();
     expect(screen.getByText('ril.columns.day')).toBeInTheDocument();
@@ -184,6 +183,7 @@ describe('<RilView />', () => {
         expect.objectContaining({ fromDate: '2025-06-01', toDate: '2025-06-30' }),
       ),
     );
+    expect(api.projects.listRilCatalog).toHaveBeenCalledTimes(1);
   });
 
   test('loads project catalog for the selected managed user', async () => {
@@ -211,7 +211,6 @@ describe('<RilView />', () => {
         availableUsers={[currentUser, managedUser]}
         viewingUserId="u2"
         onViewUserChange={() => {}}
-        projects={projects}
         settings={{
           rilCompanyName: 'ACME',
           rilDefaultStartTime: '09:00',
@@ -228,7 +227,7 @@ describe('<RilView />', () => {
       />,
     );
 
-    await waitFor(() => expect(api.projects.list).toHaveBeenCalledWith({ userId: 'u2' }));
+    await waitFor(() => expect(api.projects.listRilCatalog).toHaveBeenCalledWith('u2'));
     await waitFor(() =>
       expect(screen.getByRole('button', { name: /ril.exportExcel/ })).not.toBeDisabled(),
     );
@@ -840,7 +839,6 @@ describe('<RilView />', () => {
           availableUsers={[currentUser]}
           viewingUserId="u1"
           onViewUserChange={() => {}}
-          projects={projects}
           settings={{
             rilCompanyName: 'ACME',
             rilDefaultStartTime: '09:00',
