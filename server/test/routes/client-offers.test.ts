@@ -1049,6 +1049,70 @@ describe('client-offers supplier-link resolution + forward sync (#779)', () => {
     expect(sqSyncItemPricingMock).not.toHaveBeenCalled();
   });
 
+  test('POST: an accepted legacy single candidate can still create its first offer', async () => {
+    const legacyCandidate = {
+      id: 'q-1',
+      quoteId: 'q-1',
+      name: 'Variante A',
+      position: 0,
+      state: 'active',
+      expirationDate: '2999-12-31',
+    };
+    cqFindStatusAndClientNameMock.mockResolvedValue({ status: 'accepted', clientName: 'Client' });
+    cqLockCurrentByIdMock.mockResolvedValue({ status: 'accepted' });
+    qcListForQuoteMock.mockResolvedValue([legacyCandidate]);
+    coFindExistingForQuoteMock.mockResolvedValue(null);
+    coCreateMock.mockResolvedValue(updatedOffer());
+    coInsertItemsMock.mockResolvedValue([]);
+    sqGetQuoteItemSnapshotsMock.mockResolvedValue(SUPPLIER_SNAPSHOT);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/sales/client-offers',
+      headers: authHeader(),
+      payload: {
+        id: 'off-1',
+        linkedQuoteId: 'q-1',
+        clientId: 'c1',
+        clientName: 'Client',
+        expirationDate: '2999-12-31',
+        items: [lineItem(5, 80)],
+      },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(coCreateMock).toHaveBeenCalledWith(
+      expect.not.objectContaining({ linkedQuoteCandidateId: expect.anything() }),
+      expect.anything(),
+    );
+  });
+
+  test('POST: a new multi-candidate family cannot bypass candidate promotion', async () => {
+    cqFindStatusAndClientNameMock.mockResolvedValue({ status: 'accepted', clientName: 'Client' });
+    qcListForQuoteMock.mockResolvedValue([
+      { id: 'qc-a', quoteId: 'q-1', state: 'active' },
+      { id: 'qc-b', quoteId: 'q-1', state: 'active' },
+    ]);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/sales/client-offers',
+      headers: authHeader(),
+      payload: {
+        id: 'off-1',
+        linkedQuoteId: 'q-1',
+        clientId: 'c1',
+        clientName: 'Client',
+        expirationDate: '2999-12-31',
+        items: [lineItem(5, 80)],
+      },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(JSON.parse(res.body).error).toContain('candidate promotion');
+    expect(coCreateMock).not.toHaveBeenCalled();
+  });
+
   test('POST: blank offer id auto-generates from the centralized template', async () => {
     cqFindStatusAndClientNameMock.mockResolvedValue({ status: 'accepted', clientName: 'Client' });
     cqLockCurrentByIdMock.mockResolvedValue({ status: 'accepted' });

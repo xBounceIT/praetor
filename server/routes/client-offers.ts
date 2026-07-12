@@ -66,6 +66,18 @@ import {
 // Surfaced for both the gate-check inside the create-tx and the catch on the unique-index
 // violation; keep them identical so the error doesn't drift between paths.
 const LINKED_OFFER_CONFLICT = 'An offer already exists for this quote';
+
+const findLegacyAcceptedCandidate = (
+  quoteId: string,
+  quoteStatus: string,
+  candidates: quoteCandidatesRepo.QuoteCandidate[],
+) =>
+  normalizeQuoteStatus(quoteStatus) === 'accepted' &&
+  candidates.length === 1 &&
+  candidates[0].id === quoteId &&
+  candidates[0].state === 'active'
+    ? candidates[0]
+    : null;
 const TERMINAL_OFFER_STATUSES = new Set(['accepted', 'denied']);
 
 // Shared guard texts — the PUT and restore paths both raise these; keep them identical so the
@@ -606,7 +618,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         });
       }
       const familyCandidates = await quoteCandidatesRepo.listForQuote(linkedQuoteIdResult.value);
-      if (familyCandidates.length > 0) {
+      const legacyAcceptedCandidate = findLegacyAcceptedCandidate(
+        linkedQuoteIdResult.value,
+        sourceQuote.status,
+        familyCandidates,
+      );
+      if (familyCandidates.length > 0 && !legacyAcceptedCandidate) {
         return replyError(request, reply, {
           statusCode: 409,
           message: 'Use quote candidate promotion to create a customer offer',
@@ -713,6 +730,27 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               secondaryLabel: 'source_quote_not_accepted',
             };
           }
+          if (legacyAcceptedCandidate) {
+            const lockedCandidates = await quoteCandidatesRepo.listForQuote(
+              linkedQuoteIdResult.value,
+              tx,
+            );
+            if (
+              !findLegacyAcceptedCandidate(
+                linkedQuoteIdResult.value,
+                lockedQuote.status,
+                lockedCandidates,
+              )
+            ) {
+              return {
+                ok: false,
+                statusCode: 409,
+                message: 'Use quote candidate promotion to create a customer offer',
+                action: 'client_offer.create.conflict',
+                secondaryLabel: 'candidate_promotion_required',
+              };
+            }
+          }
           const existing = await clientOffersRepo.findExistingForQuote(
             linkedQuoteIdResult.value,
             tx,
@@ -754,6 +792,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             },
             tx,
           );
+          // A migrated accepted/no-offer quote follows the legacy conversion path. Deliberately do
+          // not attach linkedQuoteCandidateId: candidate rollback only applies to new promotions
+          // whose parent status is `offer`, while this legacy parent remains terminal `accepted`.
           // Bidirectional sync on CREATE too (user report after #812): a sourced line whose
           // quantity/cost was edited away from its pick-time baseline pushes the edit onto the
           // supplier item, atomically with the offer write. Conversion-inherited and
