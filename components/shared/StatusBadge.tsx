@@ -250,7 +250,7 @@ const StatusBadge: React.FC<StatusBadgeProps> = ({ type, label, className = '' }
   return (
     <span
       data-status-badge
-      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[10px] font-black uppercase tracking-wider transition-all duration-200 ${currentStyle.container} ${className}`}
+      className={`inline-flex items-center gap-[0.6em] rounded-[0.8em] border px-[1em] py-[0.4em] text-[10px] font-black uppercase tracking-wider transition-all duration-200 ${currentStyle.container} ${className}`}
     >
       {currentStyle.svgPath ? (
         <svg
