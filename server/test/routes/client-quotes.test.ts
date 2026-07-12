@@ -1697,6 +1697,13 @@ describe('client quote candidate-family create and update', () => {
     expect(inserted[0].unitPrice).toBe(76.92);
   });
 
+  test('rejects a line MOL that cannot produce a finite positive sale price', async () => {
+    const res = await postQuote([freshLine({ productMolPercentage: 100 })]);
+
+    expect(res.statusCode).toBe(400);
+    expect(cqCreateMock).not.toHaveBeenCalled();
+  });
+
   test('rejects a line discount above 100%', async () => {
     const res = await postQuote([freshLine({ discount: 100.01 })]);
 

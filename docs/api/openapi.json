@@ -31275,7 +31275,9 @@
                           "type": [
                             "number",
                             "null"
-                          ]
+                          ],
+                          "minimum": 0,
+                          "maximum": 99.99
                         },
                         "supplierQuoteUnitPrice": {
                           "type": [
@@ -31376,7 +31378,9 @@
                                 "type": [
                                   "number",
                                   "null"
-                                ]
+                                ],
+                                "minimum": 0,
+                                "maximum": 99.99
                               },
                               "supplierQuoteUnitPrice": {
                                 "type": [
@@ -32093,7 +32097,9 @@
                           "type": [
                             "number",
                             "null"
-                          ]
+                          ],
+                          "minimum": 0,
+                          "maximum": 99.99
                         },
                         "supplierQuoteUnitPrice": {
                           "type": [
@@ -32194,7 +32200,9 @@
                                 "type": [
                                   "number",
                                   "null"
-                                ]
+                                ],
+                                "minimum": 0,
+                                "maximum": 99.99
                               },
                               "supplierQuoteUnitPrice": {
                                 "type": [

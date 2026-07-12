@@ -775,7 +775,7 @@ describe('<ClientQuotesView />', () => {
     expect(screen.getAllByText('1.920,00 EUR').length).toBeGreaterThan(0);
   });
 
-  test('MOL line input keeps two decimals instead of rounding to one (issue #780)', async () => {
+  test('MOL line input keeps two decimals, stays below 100, and recalculates pricing', async () => {
     const twoDecimalMolQuote: Quote = {
       id: 'Q-MOL',
       clientId: 'client-1',
@@ -821,6 +821,21 @@ describe('<ClientQuotesView />', () => {
     // pre-fix rounded 12,3 that silently dropped the second decimal.
     expect(screen.queryAllByDisplayValue('12,34').length).toBeGreaterThan(0);
     expect(screen.queryAllByDisplayValue('12,3')).toHaveLength(0);
+
+    const molInput = screen.getAllByLabelText('sales:clientQuotes.molLabel')[0] as HTMLInputElement;
+    fireEvent.focus(molInput);
+    fireEvent.change(molInput, { target: { value: '118' } });
+
+    // A MOL of 100% or more has no finite sale price. The editor caps it at the highest value
+    // representable by numeric(5, 2), instead of accepting it and silently resetting margin to 0.
+    expect(molInput.value).toBe('99,99');
+
+    fireEvent.change(molInput, { target: { value: '25' } });
+    await waitFor(() => {
+      // Cost 60, MOL 25% => unit price 80; with quantity 2, revenue is 160 and margin is 40.
+      expect(screen.getAllByText('160,00 EUR').length).toBeGreaterThan(0);
+      expect(screen.getAllByText('40,00 EUR').length).toBeGreaterThan(0);
+    });
   });
 
   test('the read-only banner renders dark-mode-compatible amber, not a light slab (issue #768)', async () => {

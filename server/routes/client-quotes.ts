@@ -60,6 +60,8 @@ import {
   requireNonEmptyString,
 } from '../utils/validation.ts';
 
+const MAX_QUOTE_MOL_PERCENTAGE = 99.99;
+
 type IncomingQuoteItem = {
   id?: string;
   productId: string | null;
@@ -181,6 +183,15 @@ const normalizeQuoteItems = (
     );
     if (!productMolPercentageResult.ok) {
       return { ok: false, message: productMolPercentageResult.message };
+    }
+    if (
+      productMolPercentageResult.value !== null &&
+      productMolPercentageResult.value > MAX_QUOTE_MOL_PERCENTAGE
+    ) {
+      return {
+        ok: false,
+        message: `items[${i}].productMolPercentage must be between 0 and ${MAX_QUOTE_MOL_PERCENTAGE}`,
+      };
     }
     const supplierQuoteUnitPriceResult = optionalLocalizedNonNegativeNumber(
       item.supplierQuoteUnitPrice,
@@ -593,7 +604,11 @@ const quoteItemBodySchema = {
     productCost: { type: 'number' },
     // Nullable: Ajv's coerceTypes would otherwise fold a null into 0, which both lies about the
     // value and defeats the "unchanged line" snapshot comparison.
-    productMolPercentage: { type: ['number', 'null'] },
+    productMolPercentage: {
+      type: ['number', 'null'],
+      minimum: 0,
+      maximum: MAX_QUOTE_MOL_PERCENTAGE,
+    },
     // The line's live unit cost for supplier-sourced lines — client-authoritative on edits of an
     // existing link (issue #779 bidirectional sync).
     supplierQuoteUnitPrice: { type: ['number', 'null'] },

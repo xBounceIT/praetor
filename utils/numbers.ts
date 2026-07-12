@@ -2,6 +2,17 @@ import type { DiscountType, DurationUnit, SupplierUnitType } from '../types';
 
 const CURRENCY_DECIMAL_PLACES = 2;
 
+/**
+ * Display precision for MOL / margin percentages, aligned with the database's numeric(5, 2)
+ * scale and shared by editable fields and read-only labels.
+ */
+export const MOL_PERCENTAGE_DECIMALS = 2;
+
+/**
+ * Highest valid MOL: as a margin over revenue, 100% would make the sale-price denominator zero.
+ */
+export const MAX_MOL_PERCENTAGE = 99.99;
+
 export const NUMBER_LOCALE = 'it-IT';
 
 const MONTHS_PER_YEAR = 12;
@@ -314,14 +325,6 @@ export const formatDiscountValue = (
   discountType === 'currency'
     ? `${formatNumber(discount, { maximumFractionDigits: 20 })} ${currency}`
     : `${formatNumber(discount, { maximumFractionDigits: 20 })}%`;
-
-/**
- * Display precision (decimal places) for MOL / margin percentages. Single source of truth
- * shared by `formatMolPercentage` (read-only labels and list columns) and the editable MOL
- * `ValidatedNumberInput` fields in the quote/offer/order line editors, so the two can never
- * drift apart. Matches the `numeric(5, 2)` scale the value is stored at in the database.
- */
-export const MOL_PERCENTAGE_DECIMALS = 2;
 
 /**
  * Render a margin/MOL percentage for display with a fixed two decimals (e.g. "33,33%").

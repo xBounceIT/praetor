@@ -121,10 +121,11 @@ describe('makeMolUpdater', () => {
     expect(next).toBe(state);
   });
 
-  test('clamps MOL ≥ 100 by reusing cost as price (delegates to calcProductSalePrice)', () => {
+  test('clamps MOL at 99.99 and recalculates price instead of silently resetting margin', () => {
     const state: FormState = { items: [baseItem({ productCost: 50, productMolPercentage: 0 })] };
-    const next = makeMolUpdater<FormState>(0, '100')(state);
-    expect(next.items?.[0].unitPrice).toBe(50);
+    const next = makeMolUpdater<FormState>(0, '118')(state);
+    expect(next.items?.[0].productMolPercentage).toBe(99.99);
+    expect(next.items?.[0].unitPrice).toBeCloseTo(calcProductSalePrice(50, 99.99), 5);
   });
 
   test('preserves other items when updating one', () => {
