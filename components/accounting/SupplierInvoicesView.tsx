@@ -26,6 +26,7 @@ import {
   getDurationInputValue,
   getEffectiveDurationMonths,
   isPositiveFiniteNumber,
+  normalizeDurationForSubmit,
   normalizeDurationUnit,
   parseDurationValueToMonths,
 } from '../../utils/numbers';
@@ -315,10 +316,7 @@ const useSupplierInvoicesController = ({
           quantity: Number(item.quantity ?? 0),
           unitPrice: Number(item.unitPrice ?? 0),
           discount: Number(item.discount ?? 0),
-          // Duration applies to every line type (issue #775); 'na' is gated server-side, so submit
-          // the chosen value/unit verbatim.
-          durationMonths: Number(item.durationMonths ?? 1) || 1,
-          durationUnit: normalizeDurationUnit(item.durationUnit),
+          ...normalizeDurationForSubmit(item),
         })),
       });
 

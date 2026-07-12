@@ -109,6 +109,44 @@ describe('<SupplierInvoicesView /> line item duration (issue #776/#775)', () => 
     expect(updates.items?.[0]?.durationMonths).toBe(5);
     expect(updates.items?.[0]?.durationUnit).toBe('months');
   });
+
+  test('normalizes a blank years duration to the canonical month unit before saving', async () => {
+    const onUpdateInvoice = mock((_id: string, _updates: Partial<SupplierInvoice>) => {});
+    const invoice = buildInvoice({ id: 'SINV-BLANK-DURATION', status: 'draft' });
+    render(
+      <SupplierInvoicesView
+        {...baseProps}
+        invoices={[invoice]}
+        onUpdateInvoice={onUpdateInvoice}
+      />,
+    );
+    fireEvent.click(screen.getByText('SINV-BLANK-DURATION'));
+
+    const durationInput = screen
+      .getAllByPlaceholderText('0')
+      .find((element): element is HTMLInputElement => element instanceof HTMLInputElement);
+    if (!durationInput) throw new Error('Duration input not found');
+    fireEvent.change(durationInput, { target: { value: '' } });
+
+    const durationUnitButton = screen
+      .getAllByText('accounting:supplierInvoices.months')
+      .map((element) => element.closest('button'))
+      .find(Boolean);
+    if (!durationUnitButton) throw new Error('Duration unit button not found');
+    fireEvent.click(durationUnitButton);
+    const yearsOption = (await screen.findAllByText('accounting:supplierInvoices.years'))
+      .map((element) => element.closest('[data-slot="select-item"]'))
+      .find(Boolean);
+    if (!yearsOption) throw new Error('Years duration option not found');
+    fireEvent.click(yearsOption);
+    fireEvent.click(screen.getByText('common:buttons.update'));
+
+    expect(onUpdateInvoice).toHaveBeenCalledTimes(1);
+    const updates = onUpdateInvoice.mock.calls[0]?.[1];
+    expect(updates?.items?.[0]).toEqual(
+      expect.objectContaining({ durationMonths: undefined, durationUnit: 'months' }),
+    );
+  });
 });
 
 describe('<SupplierInvoicesView /> line-item table', () => {
