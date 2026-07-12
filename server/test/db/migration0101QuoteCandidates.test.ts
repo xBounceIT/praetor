@@ -1,10 +1,10 @@
 import { describe, expect, test } from 'bun:test';
 
 const migrationSql = await Bun.file(
-  new URL('../../db/migrations/0100_quote_candidates.sql', import.meta.url),
+  new URL('../../db/migrations/0101_quote_candidates.sql', import.meta.url),
 ).text();
 
-describe('migration 0100 quote candidates', () => {
+describe('migration 0101 quote candidates', () => {
   test('backfills one candidate per existing quote without changing the document code', () => {
     expect(migrationSql).toContain("'Variante A'");
     expect(migrationSql).toContain("THEN 'selected' ELSE 'active' END");

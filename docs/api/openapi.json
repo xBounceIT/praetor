@@ -30741,6 +30741,9 @@
                             "quoteId": {
                               "type": "string"
                             },
+                            "candidateId": {
+                              "type": "string"
+                            },
                             "productId": {
                               "type": [
                                 "null",
@@ -30823,6 +30826,7 @@
                           "required": [
                             "id",
                             "quoteId",
+                            "candidateId",
                             "productId",
                             "productName",
                             "quantity",
@@ -30831,6 +30835,196 @@
                             "discount"
                           ]
                         }
+                      },
+                      "candidates": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "quoteId": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            },
+                            "position": {
+                              "type": "number"
+                            },
+                            "state": {
+                              "type": "string",
+                              "enum": [
+                                "active",
+                                "selected",
+                                "discarded"
+                              ]
+                            },
+                            "paymentTerms": {
+                              "type": "string"
+                            },
+                            "discount": {
+                              "type": "number"
+                            },
+                            "discountType": {
+                              "type": "string",
+                              "enum": [
+                                "percentage",
+                                "currency"
+                              ]
+                            },
+                            "expirationDate": {
+                              "type": "string",
+                              "format": "date"
+                            },
+                            "communicationChannelId": {
+                              "type": "string"
+                            },
+                            "communicationChannelName": {
+                              "type": "string"
+                            },
+                            "notes": {
+                              "type": [
+                                "null",
+                                "string"
+                              ]
+                            },
+                            "createdAt": {
+                              "type": "number"
+                            },
+                            "updatedAt": {
+                              "type": "number"
+                            },
+                            "items": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "quoteId": {
+                                    "type": "string"
+                                  },
+                                  "candidateId": {
+                                    "type": "string"
+                                  },
+                                  "productId": {
+                                    "type": [
+                                      "null",
+                                      "string"
+                                    ]
+                                  },
+                                  "productName": {
+                                    "type": "string"
+                                  },
+                                  "quantity": {
+                                    "type": "number"
+                                  },
+                                  "unitPrice": {
+                                    "type": "number"
+                                  },
+                                  "productCost": {
+                                    "type": "number"
+                                  },
+                                  "productMolPercentage": {
+                                    "type": [
+                                      "null",
+                                      "number"
+                                    ]
+                                  },
+                                  "supplierQuoteId": {
+                                    "type": [
+                                      "null",
+                                      "string"
+                                    ]
+                                  },
+                                  "supplierQuoteItemId": {
+                                    "type": [
+                                      "null",
+                                      "string"
+                                    ]
+                                  },
+                                  "supplierQuoteSupplierName": {
+                                    "type": [
+                                      "null",
+                                      "string"
+                                    ]
+                                  },
+                                  "supplierQuoteUnitPrice": {
+                                    "type": [
+                                      "null",
+                                      "number"
+                                    ]
+                                  },
+                                  "discount": {
+                                    "type": "number",
+                                    "minimum": 0,
+                                    "maximum": 100
+                                  },
+                                  "note": {
+                                    "type": [
+                                      "null",
+                                      "string"
+                                    ]
+                                  },
+                                  "unitType": {
+                                    "type": "string",
+                                    "enum": [
+                                      "hours",
+                                      "days",
+                                      "unit"
+                                    ]
+                                  },
+                                  "durationMonths": {
+                                    "type": "number"
+                                  },
+                                  "durationUnit": {
+                                    "type": "string",
+                                    "enum": [
+                                      "months",
+                                      "years",
+                                      "na"
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "quoteId",
+                                  "candidateId",
+                                  "productId",
+                                  "productName",
+                                  "quantity",
+                                  "unitPrice",
+                                  "productCost",
+                                  "discount"
+                                ]
+                              }
+                            },
+                            "isExpired": {
+                              "type": "boolean"
+                            },
+                            "linkedSupplierQuoteExpired": {
+                              "type": "boolean"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "quoteId",
+                            "name",
+                            "position",
+                            "state",
+                            "items",
+                            "expirationDate"
+                          ]
+                        }
+                      },
+                      "selectedCandidateId": {
+                        "type": [
+                          "null",
+                          "string"
+                        ]
                       },
                       "isExpired": {
                         "type": "boolean"
@@ -30868,6 +31062,7 @@
                       "createdAt",
                       "updatedAt",
                       "items",
+                      "candidates",
                       "isExpired",
                       "effectiveStatus",
                       "linkedSupplierQuoteExpired"
@@ -31137,6 +31332,139 @@
                       ]
                     }
                   },
+                  "candidates": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "productId": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "productName": {
+                                "type": "string"
+                              },
+                              "supplierQuoteItemId": {
+                                "type": "string"
+                              },
+                              "quantity": {
+                                "type": "number"
+                              },
+                              "unitPrice": {
+                                "type": "number"
+                              },
+                              "productCost": {
+                                "type": "number"
+                              },
+                              "productMolPercentage": {
+                                "type": [
+                                  "number",
+                                  "null"
+                                ]
+                              },
+                              "supplierQuoteUnitPrice": {
+                                "type": [
+                                  "number",
+                                  "null"
+                                ]
+                              },
+                              "supplierQuoteBaseQuantity": {
+                                "type": [
+                                  "number",
+                                  "null"
+                                ]
+                              },
+                              "supplierQuoteBaseUnitPrice": {
+                                "type": [
+                                  "number",
+                                  "null"
+                                ]
+                              },
+                              "discount": {
+                                "type": "number",
+                                "minimum": 0,
+                                "maximum": 100
+                              },
+                              "note": {
+                                "type": "string"
+                              },
+                              "unitType": {
+                                "type": "string",
+                                "enum": [
+                                  "hours",
+                                  "days",
+                                  "unit"
+                                ]
+                              },
+                              "durationMonths": {
+                                "type": "number"
+                              },
+                              "durationUnit": {
+                                "type": "string",
+                                "enum": [
+                                  "months",
+                                  "years",
+                                  "na"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "productId",
+                              "productName",
+                              "quantity",
+                              "unitPrice",
+                              "unitType"
+                            ]
+                          }
+                        },
+                        "paymentTerms": {
+                          "type": "string"
+                        },
+                        "discount": {
+                          "type": "number"
+                        },
+                        "discountType": {
+                          "type": "string",
+                          "enum": [
+                            "percentage",
+                            "currency"
+                          ]
+                        },
+                        "expirationDate": {
+                          "type": "string",
+                          "format": "date"
+                        },
+                        "communicationChannelId": {
+                          "type": "string"
+                        },
+                        "notes": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "name",
+                        "items",
+                        "expirationDate",
+                        "communicationChannelId"
+                      ]
+                    }
+                  },
                   "paymentTerms": {
                     "type": "string"
                   },
@@ -31167,9 +31495,7 @@
                 "required": [
                   "clientId",
                   "clientName",
-                  "items",
-                  "expirationDate",
-                  "communicationChannelId"
+                  "candidates"
                 ]
               }
             }
@@ -31251,6 +31577,9 @@
                             "type": "string"
                           },
                           "quoteId": {
+                            "type": "string"
+                          },
+                          "candidateId": {
                             "type": "string"
                           },
                           "productId": {
@@ -31335,6 +31664,7 @@
                         "required": [
                           "id",
                           "quoteId",
+                          "candidateId",
                           "productId",
                           "productName",
                           "quantity",
@@ -31343,6 +31673,196 @@
                           "discount"
                         ]
                       }
+                    },
+                    "candidates": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "quoteId": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "position": {
+                            "type": "number"
+                          },
+                          "state": {
+                            "type": "string",
+                            "enum": [
+                              "active",
+                              "selected",
+                              "discarded"
+                            ]
+                          },
+                          "paymentTerms": {
+                            "type": "string"
+                          },
+                          "discount": {
+                            "type": "number"
+                          },
+                          "discountType": {
+                            "type": "string",
+                            "enum": [
+                              "percentage",
+                              "currency"
+                            ]
+                          },
+                          "expirationDate": {
+                            "type": "string",
+                            "format": "date"
+                          },
+                          "communicationChannelId": {
+                            "type": "string"
+                          },
+                          "communicationChannelName": {
+                            "type": "string"
+                          },
+                          "notes": {
+                            "type": [
+                              "null",
+                              "string"
+                            ]
+                          },
+                          "createdAt": {
+                            "type": "number"
+                          },
+                          "updatedAt": {
+                            "type": "number"
+                          },
+                          "items": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "quoteId": {
+                                  "type": "string"
+                                },
+                                "candidateId": {
+                                  "type": "string"
+                                },
+                                "productId": {
+                                  "type": [
+                                    "null",
+                                    "string"
+                                  ]
+                                },
+                                "productName": {
+                                  "type": "string"
+                                },
+                                "quantity": {
+                                  "type": "number"
+                                },
+                                "unitPrice": {
+                                  "type": "number"
+                                },
+                                "productCost": {
+                                  "type": "number"
+                                },
+                                "productMolPercentage": {
+                                  "type": [
+                                    "null",
+                                    "number"
+                                  ]
+                                },
+                                "supplierQuoteId": {
+                                  "type": [
+                                    "null",
+                                    "string"
+                                  ]
+                                },
+                                "supplierQuoteItemId": {
+                                  "type": [
+                                    "null",
+                                    "string"
+                                  ]
+                                },
+                                "supplierQuoteSupplierName": {
+                                  "type": [
+                                    "null",
+                                    "string"
+                                  ]
+                                },
+                                "supplierQuoteUnitPrice": {
+                                  "type": [
+                                    "null",
+                                    "number"
+                                  ]
+                                },
+                                "discount": {
+                                  "type": "number",
+                                  "minimum": 0,
+                                  "maximum": 100
+                                },
+                                "note": {
+                                  "type": [
+                                    "null",
+                                    "string"
+                                  ]
+                                },
+                                "unitType": {
+                                  "type": "string",
+                                  "enum": [
+                                    "hours",
+                                    "days",
+                                    "unit"
+                                  ]
+                                },
+                                "durationMonths": {
+                                  "type": "number"
+                                },
+                                "durationUnit": {
+                                  "type": "string",
+                                  "enum": [
+                                    "months",
+                                    "years",
+                                    "na"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "quoteId",
+                                "candidateId",
+                                "productId",
+                                "productName",
+                                "quantity",
+                                "unitPrice",
+                                "productCost",
+                                "discount"
+                              ]
+                            }
+                          },
+                          "isExpired": {
+                            "type": "boolean"
+                          },
+                          "linkedSupplierQuoteExpired": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "quoteId",
+                          "name",
+                          "position",
+                          "state",
+                          "items",
+                          "expirationDate"
+                        ]
+                      }
+                    },
+                    "selectedCandidateId": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
                     },
                     "isExpired": {
                       "type": "boolean"
@@ -31380,6 +31900,7 @@
                     "createdAt",
                     "updatedAt",
                     "items",
+                    "candidates",
                     "isExpired",
                     "effectiveStatus",
                     "linkedSupplierQuoteExpired"
@@ -31629,6 +32150,139 @@
                       ]
                     }
                   },
+                  "candidates": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "productId": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "productName": {
+                                "type": "string"
+                              },
+                              "supplierQuoteItemId": {
+                                "type": "string"
+                              },
+                              "quantity": {
+                                "type": "number"
+                              },
+                              "unitPrice": {
+                                "type": "number"
+                              },
+                              "productCost": {
+                                "type": "number"
+                              },
+                              "productMolPercentage": {
+                                "type": [
+                                  "number",
+                                  "null"
+                                ]
+                              },
+                              "supplierQuoteUnitPrice": {
+                                "type": [
+                                  "number",
+                                  "null"
+                                ]
+                              },
+                              "supplierQuoteBaseQuantity": {
+                                "type": [
+                                  "number",
+                                  "null"
+                                ]
+                              },
+                              "supplierQuoteBaseUnitPrice": {
+                                "type": [
+                                  "number",
+                                  "null"
+                                ]
+                              },
+                              "discount": {
+                                "type": "number",
+                                "minimum": 0,
+                                "maximum": 100
+                              },
+                              "note": {
+                                "type": "string"
+                              },
+                              "unitType": {
+                                "type": "string",
+                                "enum": [
+                                  "hours",
+                                  "days",
+                                  "unit"
+                                ]
+                              },
+                              "durationMonths": {
+                                "type": "number"
+                              },
+                              "durationUnit": {
+                                "type": "string",
+                                "enum": [
+                                  "months",
+                                  "years",
+                                  "na"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "productId",
+                              "productName",
+                              "quantity",
+                              "unitPrice",
+                              "unitType"
+                            ]
+                          }
+                        },
+                        "paymentTerms": {
+                          "type": "string"
+                        },
+                        "discount": {
+                          "type": "number"
+                        },
+                        "discountType": {
+                          "type": "string",
+                          "enum": [
+                            "percentage",
+                            "currency"
+                          ]
+                        },
+                        "expirationDate": {
+                          "type": "string",
+                          "format": "date"
+                        },
+                        "communicationChannelId": {
+                          "type": "string"
+                        },
+                        "notes": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "name",
+                        "items",
+                        "expirationDate",
+                        "communicationChannelId"
+                      ]
+                    }
+                  },
                   "paymentTerms": {
                     "type": "string"
                   },
@@ -31748,6 +32402,9 @@
                           "quoteId": {
                             "type": "string"
                           },
+                          "candidateId": {
+                            "type": "string"
+                          },
                           "productId": {
                             "type": [
                               "null",
@@ -31830,6 +32487,7 @@
                         "required": [
                           "id",
                           "quoteId",
+                          "candidateId",
                           "productId",
                           "productName",
                           "quantity",
@@ -31838,6 +32496,196 @@
                           "discount"
                         ]
                       }
+                    },
+                    "candidates": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "quoteId": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "position": {
+                            "type": "number"
+                          },
+                          "state": {
+                            "type": "string",
+                            "enum": [
+                              "active",
+                              "selected",
+                              "discarded"
+                            ]
+                          },
+                          "paymentTerms": {
+                            "type": "string"
+                          },
+                          "discount": {
+                            "type": "number"
+                          },
+                          "discountType": {
+                            "type": "string",
+                            "enum": [
+                              "percentage",
+                              "currency"
+                            ]
+                          },
+                          "expirationDate": {
+                            "type": "string",
+                            "format": "date"
+                          },
+                          "communicationChannelId": {
+                            "type": "string"
+                          },
+                          "communicationChannelName": {
+                            "type": "string"
+                          },
+                          "notes": {
+                            "type": [
+                              "null",
+                              "string"
+                            ]
+                          },
+                          "createdAt": {
+                            "type": "number"
+                          },
+                          "updatedAt": {
+                            "type": "number"
+                          },
+                          "items": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "quoteId": {
+                                  "type": "string"
+                                },
+                                "candidateId": {
+                                  "type": "string"
+                                },
+                                "productId": {
+                                  "type": [
+                                    "null",
+                                    "string"
+                                  ]
+                                },
+                                "productName": {
+                                  "type": "string"
+                                },
+                                "quantity": {
+                                  "type": "number"
+                                },
+                                "unitPrice": {
+                                  "type": "number"
+                                },
+                                "productCost": {
+                                  "type": "number"
+                                },
+                                "productMolPercentage": {
+                                  "type": [
+                                    "null",
+                                    "number"
+                                  ]
+                                },
+                                "supplierQuoteId": {
+                                  "type": [
+                                    "null",
+                                    "string"
+                                  ]
+                                },
+                                "supplierQuoteItemId": {
+                                  "type": [
+                                    "null",
+                                    "string"
+                                  ]
+                                },
+                                "supplierQuoteSupplierName": {
+                                  "type": [
+                                    "null",
+                                    "string"
+                                  ]
+                                },
+                                "supplierQuoteUnitPrice": {
+                                  "type": [
+                                    "null",
+                                    "number"
+                                  ]
+                                },
+                                "discount": {
+                                  "type": "number",
+                                  "minimum": 0,
+                                  "maximum": 100
+                                },
+                                "note": {
+                                  "type": [
+                                    "null",
+                                    "string"
+                                  ]
+                                },
+                                "unitType": {
+                                  "type": "string",
+                                  "enum": [
+                                    "hours",
+                                    "days",
+                                    "unit"
+                                  ]
+                                },
+                                "durationMonths": {
+                                  "type": "number"
+                                },
+                                "durationUnit": {
+                                  "type": "string",
+                                  "enum": [
+                                    "months",
+                                    "years",
+                                    "na"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "quoteId",
+                                "candidateId",
+                                "productId",
+                                "productName",
+                                "quantity",
+                                "unitPrice",
+                                "productCost",
+                                "discount"
+                              ]
+                            }
+                          },
+                          "isExpired": {
+                            "type": "boolean"
+                          },
+                          "linkedSupplierQuoteExpired": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "quoteId",
+                          "name",
+                          "position",
+                          "state",
+                          "items",
+                          "expirationDate"
+                        ]
+                      }
+                    },
+                    "selectedCandidateId": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
                     },
                     "isExpired": {
                       "type": "boolean"
@@ -31875,6 +32723,7 @@
                     "createdAt",
                     "updatedAt",
                     "items",
+                    "candidates",
                     "isExpired",
                     "effectiveStatus",
                     "linkedSupplierQuoteExpired"
@@ -32029,6 +32878,1379 @@
         "responses": {
           "204": {
             "description": "Default Response"
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/sales/client-quotes/{id}/promote": {
+      "post": {
+        "summary": "Promote a quote candidate to a customer offer",
+        "tags": [
+          "client-quotes"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "candidateId": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "candidateId"
+                ]
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "quote": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "linkedOfferId": {
+                          "type": [
+                            "null",
+                            "string"
+                          ]
+                        },
+                        "clientId": {
+                          "type": "string"
+                        },
+                        "clientName": {
+                          "type": "string"
+                        },
+                        "paymentTerms": {
+                          "type": [
+                            "null",
+                            "string"
+                          ]
+                        },
+                        "discount": {
+                          "type": "number"
+                        },
+                        "discountType": {
+                          "type": "string",
+                          "enum": [
+                            "percentage",
+                            "currency"
+                          ]
+                        },
+                        "status": {
+                          "type": "string"
+                        },
+                        "expirationDate": {
+                          "type": [
+                            "null",
+                            "string"
+                          ],
+                          "format": "date"
+                        },
+                        "communicationChannelId": {
+                          "type": "string"
+                        },
+                        "communicationChannelName": {
+                          "type": "string"
+                        },
+                        "notes": {
+                          "type": [
+                            "null",
+                            "string"
+                          ]
+                        },
+                        "createdAt": {
+                          "type": "number"
+                        },
+                        "updatedAt": {
+                          "type": "number"
+                        },
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "quoteId": {
+                                "type": "string"
+                              },
+                              "candidateId": {
+                                "type": "string"
+                              },
+                              "productId": {
+                                "type": [
+                                  "null",
+                                  "string"
+                                ]
+                              },
+                              "productName": {
+                                "type": "string"
+                              },
+                              "quantity": {
+                                "type": "number"
+                              },
+                              "unitPrice": {
+                                "type": "number"
+                              },
+                              "productCost": {
+                                "type": "number"
+                              },
+                              "productMolPercentage": {
+                                "type": [
+                                  "null",
+                                  "number"
+                                ]
+                              },
+                              "supplierQuoteId": {
+                                "type": [
+                                  "null",
+                                  "string"
+                                ]
+                              },
+                              "supplierQuoteItemId": {
+                                "type": [
+                                  "null",
+                                  "string"
+                                ]
+                              },
+                              "supplierQuoteSupplierName": {
+                                "type": [
+                                  "null",
+                                  "string"
+                                ]
+                              },
+                              "supplierQuoteUnitPrice": {
+                                "type": [
+                                  "null",
+                                  "number"
+                                ]
+                              },
+                              "discount": {
+                                "type": "number",
+                                "minimum": 0,
+                                "maximum": 100
+                              },
+                              "note": {
+                                "type": [
+                                  "null",
+                                  "string"
+                                ]
+                              },
+                              "unitType": {
+                                "type": "string",
+                                "enum": [
+                                  "hours",
+                                  "days",
+                                  "unit"
+                                ]
+                              },
+                              "durationMonths": {
+                                "type": "number"
+                              },
+                              "durationUnit": {
+                                "type": "string",
+                                "enum": [
+                                  "months",
+                                  "years",
+                                  "na"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "quoteId",
+                              "candidateId",
+                              "productId",
+                              "productName",
+                              "quantity",
+                              "unitPrice",
+                              "productCost",
+                              "discount"
+                            ]
+                          }
+                        },
+                        "candidates": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "quoteId": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "position": {
+                                "type": "number"
+                              },
+                              "state": {
+                                "type": "string",
+                                "enum": [
+                                  "active",
+                                  "selected",
+                                  "discarded"
+                                ]
+                              },
+                              "paymentTerms": {
+                                "type": "string"
+                              },
+                              "discount": {
+                                "type": "number"
+                              },
+                              "discountType": {
+                                "type": "string",
+                                "enum": [
+                                  "percentage",
+                                  "currency"
+                                ]
+                              },
+                              "expirationDate": {
+                                "type": "string",
+                                "format": "date"
+                              },
+                              "communicationChannelId": {
+                                "type": "string"
+                              },
+                              "communicationChannelName": {
+                                "type": "string"
+                              },
+                              "notes": {
+                                "type": [
+                                  "null",
+                                  "string"
+                                ]
+                              },
+                              "createdAt": {
+                                "type": "number"
+                              },
+                              "updatedAt": {
+                                "type": "number"
+                              },
+                              "items": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "id": {
+                                      "type": "string"
+                                    },
+                                    "quoteId": {
+                                      "type": "string"
+                                    },
+                                    "candidateId": {
+                                      "type": "string"
+                                    },
+                                    "productId": {
+                                      "type": [
+                                        "null",
+                                        "string"
+                                      ]
+                                    },
+                                    "productName": {
+                                      "type": "string"
+                                    },
+                                    "quantity": {
+                                      "type": "number"
+                                    },
+                                    "unitPrice": {
+                                      "type": "number"
+                                    },
+                                    "productCost": {
+                                      "type": "number"
+                                    },
+                                    "productMolPercentage": {
+                                      "type": [
+                                        "null",
+                                        "number"
+                                      ]
+                                    },
+                                    "supplierQuoteId": {
+                                      "type": [
+                                        "null",
+                                        "string"
+                                      ]
+                                    },
+                                    "supplierQuoteItemId": {
+                                      "type": [
+                                        "null",
+                                        "string"
+                                      ]
+                                    },
+                                    "supplierQuoteSupplierName": {
+                                      "type": [
+                                        "null",
+                                        "string"
+                                      ]
+                                    },
+                                    "supplierQuoteUnitPrice": {
+                                      "type": [
+                                        "null",
+                                        "number"
+                                      ]
+                                    },
+                                    "discount": {
+                                      "type": "number",
+                                      "minimum": 0,
+                                      "maximum": 100
+                                    },
+                                    "note": {
+                                      "type": [
+                                        "null",
+                                        "string"
+                                      ]
+                                    },
+                                    "unitType": {
+                                      "type": "string",
+                                      "enum": [
+                                        "hours",
+                                        "days",
+                                        "unit"
+                                      ]
+                                    },
+                                    "durationMonths": {
+                                      "type": "number"
+                                    },
+                                    "durationUnit": {
+                                      "type": "string",
+                                      "enum": [
+                                        "months",
+                                        "years",
+                                        "na"
+                                      ]
+                                    }
+                                  },
+                                  "required": [
+                                    "id",
+                                    "quoteId",
+                                    "candidateId",
+                                    "productId",
+                                    "productName",
+                                    "quantity",
+                                    "unitPrice",
+                                    "productCost",
+                                    "discount"
+                                  ]
+                                }
+                              },
+                              "isExpired": {
+                                "type": "boolean"
+                              },
+                              "linkedSupplierQuoteExpired": {
+                                "type": "boolean"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "quoteId",
+                              "name",
+                              "position",
+                              "state",
+                              "items",
+                              "expirationDate"
+                            ]
+                          }
+                        },
+                        "selectedCandidateId": {
+                          "type": [
+                            "null",
+                            "string"
+                          ]
+                        },
+                        "isExpired": {
+                          "type": "boolean"
+                        },
+                        "effectiveStatus": {
+                          "type": "string",
+                          "enum": [
+                            "draft",
+                            "sent",
+                            "offer",
+                            "accepted",
+                            "denied",
+                            "expired"
+                          ]
+                        },
+                        "linkedSupplierQuoteId": {
+                          "type": [
+                            "null",
+                            "string"
+                          ]
+                        },
+                        "linkedSupplierQuoteExpired": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "clientId",
+                        "clientName",
+                        "discount",
+                        "discountType",
+                        "status",
+                        "communicationChannelId",
+                        "communicationChannelName",
+                        "createdAt",
+                        "updatedAt",
+                        "items",
+                        "candidates",
+                        "isExpired",
+                        "effectiveStatus",
+                        "linkedSupplierQuoteExpired"
+                      ]
+                    },
+                    "offer": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "linkedQuoteId": {
+                          "type": "string"
+                        },
+                        "linkedQuoteCandidateId": {
+                          "type": [
+                            "null",
+                            "string"
+                          ]
+                        },
+                        "clientId": {
+                          "type": "string"
+                        },
+                        "clientName": {
+                          "type": "string"
+                        },
+                        "paymentTerms": {
+                          "type": [
+                            "null",
+                            "string"
+                          ]
+                        },
+                        "discount": {
+                          "type": "number"
+                        },
+                        "discountType": {
+                          "type": "string",
+                          "enum": [
+                            "percentage",
+                            "currency"
+                          ]
+                        },
+                        "status": {
+                          "type": "string"
+                        },
+                        "effectiveStatus": {
+                          "type": "string",
+                          "enum": [
+                            "draft",
+                            "sent",
+                            "accepted",
+                            "denied",
+                            "expired"
+                          ]
+                        },
+                        "deliveryDate": {
+                          "type": [
+                            "null",
+                            "string"
+                          ],
+                          "format": "date"
+                        },
+                        "expirationDate": {
+                          "type": [
+                            "null",
+                            "string"
+                          ],
+                          "format": "date"
+                        },
+                        "notes": {
+                          "type": [
+                            "null",
+                            "string"
+                          ]
+                        },
+                        "createdAt": {
+                          "type": "number"
+                        },
+                        "updatedAt": {
+                          "type": "number"
+                        },
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "offerId": {
+                                "type": "string"
+                              },
+                              "productId": {
+                                "type": [
+                                  "null",
+                                  "string"
+                                ]
+                              },
+                              "productName": {
+                                "type": "string"
+                              },
+                              "quantity": {
+                                "type": "number"
+                              },
+                              "unitPrice": {
+                                "type": "number"
+                              },
+                              "productCost": {
+                                "type": "number"
+                              },
+                              "productMolPercentage": {
+                                "type": [
+                                  "null",
+                                  "number"
+                                ]
+                              },
+                              "supplierQuoteId": {
+                                "type": [
+                                  "null",
+                                  "string"
+                                ]
+                              },
+                              "supplierQuoteItemId": {
+                                "type": [
+                                  "null",
+                                  "string"
+                                ]
+                              },
+                              "supplierQuoteSupplierName": {
+                                "type": [
+                                  "null",
+                                  "string"
+                                ]
+                              },
+                              "supplierQuoteUnitPrice": {
+                                "type": [
+                                  "null",
+                                  "number"
+                                ]
+                              },
+                              "unitType": {
+                                "type": "string",
+                                "enum": [
+                                  "hours",
+                                  "days",
+                                  "unit"
+                                ]
+                              },
+                              "note": {
+                                "type": [
+                                  "null",
+                                  "string"
+                                ]
+                              },
+                              "discount": {
+                                "type": "number",
+                                "minimum": 0,
+                                "maximum": 100
+                              },
+                              "durationMonths": {
+                                "type": "number"
+                              },
+                              "durationUnit": {
+                                "type": "string",
+                                "enum": [
+                                  "months",
+                                  "years",
+                                  "na"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "offerId",
+                              "productName",
+                              "quantity",
+                              "unitPrice",
+                              "productCost",
+                              "discount"
+                            ]
+                          }
+                        },
+                        "autoCreated": {
+                          "type": "object",
+                          "properties": {
+                            "clientOrder": {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "id"
+                              ]
+                            },
+                            "supplierOrders": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "supplierQuoteId": {
+                                    "type": "string"
+                                  },
+                                  "supplierName": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "supplierQuoteId",
+                                  "supplierName"
+                                ]
+                              }
+                            }
+                          },
+                          "required": [
+                            "clientOrder",
+                            "supplierOrders"
+                          ]
+                        },
+                        "warnings": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "linkedQuoteId",
+                        "clientId",
+                        "clientName",
+                        "discount",
+                        "discountType",
+                        "status",
+                        "effectiveStatus",
+                        "createdAt",
+                        "updatedAt",
+                        "items"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "quote",
+                    "offer"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/sales/client-quotes/{id}/promotion/rollback": {
+      "post": {
+        "summary": "Roll back a promoted candidate while the offer is still draft",
+        "tags": [
+          "client-quotes"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "linkedOfferId": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "clientId": {
+                      "type": "string"
+                    },
+                    "clientName": {
+                      "type": "string"
+                    },
+                    "paymentTerms": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "discount": {
+                      "type": "number"
+                    },
+                    "discountType": {
+                      "type": "string",
+                      "enum": [
+                        "percentage",
+                        "currency"
+                      ]
+                    },
+                    "status": {
+                      "type": "string"
+                    },
+                    "expirationDate": {
+                      "type": [
+                        "null",
+                        "string"
+                      ],
+                      "format": "date"
+                    },
+                    "communicationChannelId": {
+                      "type": "string"
+                    },
+                    "communicationChannelName": {
+                      "type": "string"
+                    },
+                    "notes": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "createdAt": {
+                      "type": "number"
+                    },
+                    "updatedAt": {
+                      "type": "number"
+                    },
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "quoteId": {
+                            "type": "string"
+                          },
+                          "candidateId": {
+                            "type": "string"
+                          },
+                          "productId": {
+                            "type": [
+                              "null",
+                              "string"
+                            ]
+                          },
+                          "productName": {
+                            "type": "string"
+                          },
+                          "quantity": {
+                            "type": "number"
+                          },
+                          "unitPrice": {
+                            "type": "number"
+                          },
+                          "productCost": {
+                            "type": "number"
+                          },
+                          "productMolPercentage": {
+                            "type": [
+                              "null",
+                              "number"
+                            ]
+                          },
+                          "supplierQuoteId": {
+                            "type": [
+                              "null",
+                              "string"
+                            ]
+                          },
+                          "supplierQuoteItemId": {
+                            "type": [
+                              "null",
+                              "string"
+                            ]
+                          },
+                          "supplierQuoteSupplierName": {
+                            "type": [
+                              "null",
+                              "string"
+                            ]
+                          },
+                          "supplierQuoteUnitPrice": {
+                            "type": [
+                              "null",
+                              "number"
+                            ]
+                          },
+                          "discount": {
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 100
+                          },
+                          "note": {
+                            "type": [
+                              "null",
+                              "string"
+                            ]
+                          },
+                          "unitType": {
+                            "type": "string",
+                            "enum": [
+                              "hours",
+                              "days",
+                              "unit"
+                            ]
+                          },
+                          "durationMonths": {
+                            "type": "number"
+                          },
+                          "durationUnit": {
+                            "type": "string",
+                            "enum": [
+                              "months",
+                              "years",
+                              "na"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "quoteId",
+                          "candidateId",
+                          "productId",
+                          "productName",
+                          "quantity",
+                          "unitPrice",
+                          "productCost",
+                          "discount"
+                        ]
+                      }
+                    },
+                    "candidates": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "quoteId": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "position": {
+                            "type": "number"
+                          },
+                          "state": {
+                            "type": "string",
+                            "enum": [
+                              "active",
+                              "selected",
+                              "discarded"
+                            ]
+                          },
+                          "paymentTerms": {
+                            "type": "string"
+                          },
+                          "discount": {
+                            "type": "number"
+                          },
+                          "discountType": {
+                            "type": "string",
+                            "enum": [
+                              "percentage",
+                              "currency"
+                            ]
+                          },
+                          "expirationDate": {
+                            "type": "string",
+                            "format": "date"
+                          },
+                          "communicationChannelId": {
+                            "type": "string"
+                          },
+                          "communicationChannelName": {
+                            "type": "string"
+                          },
+                          "notes": {
+                            "type": [
+                              "null",
+                              "string"
+                            ]
+                          },
+                          "createdAt": {
+                            "type": "number"
+                          },
+                          "updatedAt": {
+                            "type": "number"
+                          },
+                          "items": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "quoteId": {
+                                  "type": "string"
+                                },
+                                "candidateId": {
+                                  "type": "string"
+                                },
+                                "productId": {
+                                  "type": [
+                                    "null",
+                                    "string"
+                                  ]
+                                },
+                                "productName": {
+                                  "type": "string"
+                                },
+                                "quantity": {
+                                  "type": "number"
+                                },
+                                "unitPrice": {
+                                  "type": "number"
+                                },
+                                "productCost": {
+                                  "type": "number"
+                                },
+                                "productMolPercentage": {
+                                  "type": [
+                                    "null",
+                                    "number"
+                                  ]
+                                },
+                                "supplierQuoteId": {
+                                  "type": [
+                                    "null",
+                                    "string"
+                                  ]
+                                },
+                                "supplierQuoteItemId": {
+                                  "type": [
+                                    "null",
+                                    "string"
+                                  ]
+                                },
+                                "supplierQuoteSupplierName": {
+                                  "type": [
+                                    "null",
+                                    "string"
+                                  ]
+                                },
+                                "supplierQuoteUnitPrice": {
+                                  "type": [
+                                    "null",
+                                    "number"
+                                  ]
+                                },
+                                "discount": {
+                                  "type": "number",
+                                  "minimum": 0,
+                                  "maximum": 100
+                                },
+                                "note": {
+                                  "type": [
+                                    "null",
+                                    "string"
+                                  ]
+                                },
+                                "unitType": {
+                                  "type": "string",
+                                  "enum": [
+                                    "hours",
+                                    "days",
+                                    "unit"
+                                  ]
+                                },
+                                "durationMonths": {
+                                  "type": "number"
+                                },
+                                "durationUnit": {
+                                  "type": "string",
+                                  "enum": [
+                                    "months",
+                                    "years",
+                                    "na"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "quoteId",
+                                "candidateId",
+                                "productId",
+                                "productName",
+                                "quantity",
+                                "unitPrice",
+                                "productCost",
+                                "discount"
+                              ]
+                            }
+                          },
+                          "isExpired": {
+                            "type": "boolean"
+                          },
+                          "linkedSupplierQuoteExpired": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "quoteId",
+                          "name",
+                          "position",
+                          "state",
+                          "items",
+                          "expirationDate"
+                        ]
+                      }
+                    },
+                    "selectedCandidateId": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "isExpired": {
+                      "type": "boolean"
+                    },
+                    "effectiveStatus": {
+                      "type": "string",
+                      "enum": [
+                        "draft",
+                        "sent",
+                        "offer",
+                        "accepted",
+                        "denied",
+                        "expired"
+                      ]
+                    },
+                    "linkedSupplierQuoteId": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "linkedSupplierQuoteExpired": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "clientId",
+                    "clientName",
+                    "discount",
+                    "discountType",
+                    "status",
+                    "communicationChannelId",
+                    "communicationChannelName",
+                    "createdAt",
+                    "updatedAt",
+                    "items",
+                    "candidates",
+                    "isExpired",
+                    "effectiveStatus",
+                    "linkedSupplierQuoteExpired"
+                  ]
+                }
+              }
+            }
           },
           "400": {
             "description": "Default Response",
@@ -32688,6 +34910,9 @@
                           "quoteId": {
                             "type": "string"
                           },
+                          "candidateId": {
+                            "type": "string"
+                          },
                           "productId": {
                             "type": [
                               "null",
@@ -32770,6 +34995,7 @@
                         "required": [
                           "id",
                           "quoteId",
+                          "candidateId",
                           "productId",
                           "productName",
                           "quantity",
@@ -32778,6 +35004,196 @@
                           "discount"
                         ]
                       }
+                    },
+                    "candidates": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "quoteId": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "position": {
+                            "type": "number"
+                          },
+                          "state": {
+                            "type": "string",
+                            "enum": [
+                              "active",
+                              "selected",
+                              "discarded"
+                            ]
+                          },
+                          "paymentTerms": {
+                            "type": "string"
+                          },
+                          "discount": {
+                            "type": "number"
+                          },
+                          "discountType": {
+                            "type": "string",
+                            "enum": [
+                              "percentage",
+                              "currency"
+                            ]
+                          },
+                          "expirationDate": {
+                            "type": "string",
+                            "format": "date"
+                          },
+                          "communicationChannelId": {
+                            "type": "string"
+                          },
+                          "communicationChannelName": {
+                            "type": "string"
+                          },
+                          "notes": {
+                            "type": [
+                              "null",
+                              "string"
+                            ]
+                          },
+                          "createdAt": {
+                            "type": "number"
+                          },
+                          "updatedAt": {
+                            "type": "number"
+                          },
+                          "items": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "quoteId": {
+                                  "type": "string"
+                                },
+                                "candidateId": {
+                                  "type": "string"
+                                },
+                                "productId": {
+                                  "type": [
+                                    "null",
+                                    "string"
+                                  ]
+                                },
+                                "productName": {
+                                  "type": "string"
+                                },
+                                "quantity": {
+                                  "type": "number"
+                                },
+                                "unitPrice": {
+                                  "type": "number"
+                                },
+                                "productCost": {
+                                  "type": "number"
+                                },
+                                "productMolPercentage": {
+                                  "type": [
+                                    "null",
+                                    "number"
+                                  ]
+                                },
+                                "supplierQuoteId": {
+                                  "type": [
+                                    "null",
+                                    "string"
+                                  ]
+                                },
+                                "supplierQuoteItemId": {
+                                  "type": [
+                                    "null",
+                                    "string"
+                                  ]
+                                },
+                                "supplierQuoteSupplierName": {
+                                  "type": [
+                                    "null",
+                                    "string"
+                                  ]
+                                },
+                                "supplierQuoteUnitPrice": {
+                                  "type": [
+                                    "null",
+                                    "number"
+                                  ]
+                                },
+                                "discount": {
+                                  "type": "number",
+                                  "minimum": 0,
+                                  "maximum": 100
+                                },
+                                "note": {
+                                  "type": [
+                                    "null",
+                                    "string"
+                                  ]
+                                },
+                                "unitType": {
+                                  "type": "string",
+                                  "enum": [
+                                    "hours",
+                                    "days",
+                                    "unit"
+                                  ]
+                                },
+                                "durationMonths": {
+                                  "type": "number"
+                                },
+                                "durationUnit": {
+                                  "type": "string",
+                                  "enum": [
+                                    "months",
+                                    "years",
+                                    "na"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "quoteId",
+                                "candidateId",
+                                "productId",
+                                "productName",
+                                "quantity",
+                                "unitPrice",
+                                "productCost",
+                                "discount"
+                              ]
+                            }
+                          },
+                          "isExpired": {
+                            "type": "boolean"
+                          },
+                          "linkedSupplierQuoteExpired": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "quoteId",
+                          "name",
+                          "position",
+                          "state",
+                          "items",
+                          "expirationDate"
+                        ]
+                      }
+                    },
+                    "selectedCandidateId": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
                     },
                     "isExpired": {
                       "type": "boolean"
@@ -32815,6 +35231,7 @@
                     "createdAt",
                     "updatedAt",
                     "items",
+                    "candidates",
                     "isExpired",
                     "effectiveStatus",
                     "linkedSupplierQuoteExpired"
@@ -32973,6 +35390,12 @@
                       },
                       "linkedQuoteId": {
                         "type": "string"
+                      },
+                      "linkedQuoteCandidateId": {
+                        "type": [
+                          "null",
+                          "string"
+                        ]
                       },
                       "clientId": {
                         "type": "string"
@@ -33533,6 +35956,12 @@
                     "linkedQuoteId": {
                       "type": "string"
                     },
+                    "linkedQuoteCandidateId": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
                     "clientId": {
                       "type": "string"
                     },
@@ -34071,6 +36500,12 @@
                     },
                     "linkedQuoteId": {
                       "type": "string"
+                    },
+                    "linkedQuoteCandidateId": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
                     },
                     "clientId": {
                       "type": "string"
@@ -34621,6 +37056,12 @@
                     },
                     "linkedQuoteId": {
                       "type": "string"
+                    },
+                    "linkedQuoteCandidateId": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
                     },
                     "clientId": {
                       "type": "string"
@@ -35443,6 +37884,12 @@
                     },
                     "linkedQuoteId": {
                       "type": "string"
+                    },
+                    "linkedQuoteCandidateId": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
                     },
                     "clientId": {
                       "type": "string"

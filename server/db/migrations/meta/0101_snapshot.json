@@ -1,5 +1,5 @@
 {
-  "id": "35ae15a8-9747-4086-af91-62838ef9b8e2",
+  "id": "9bb3489e-8da3-40d2-9e8d-e54740cf9478",
   "prevId": "b4d7549f-9975-4267-aa30-e36ae6e48cc1",
   "version": "7",
   "dialect": "postgresql",
@@ -867,6 +867,12 @@
           "primaryKey": false,
           "notNull": false,
           "default": "CURRENT_TIMESTAMP"
+        },
+        "linked_quote_candidate_id": {
+          "name": "linked_quote_candidate_id",
+          "type": "varchar(100)",
+          "primaryKey": false,
+          "notNull": false
         }
       },
       "indexes": {
@@ -881,6 +887,22 @@
             }
           ],
           "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_customer_offers_linked_quote_candidate_id": {
+          "name": "idx_customer_offers_linked_quote_candidate_id",
+          "columns": [
+            {
+              "expression": "linked_quote_candidate_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"customer_offers\".\"linked_quote_candidate_id\" IS NOT NULL",
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -949,6 +971,15 @@
           "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
+        },
+        "customer_offers_linked_quote_candidate_id_quote_candidates_id_fk": {
+          "name": "customer_offers_linked_quote_candidate_id_quote_candidates_id_fk",
+          "tableFrom": "customer_offers",
+          "tableTo": "quote_candidates",
+          "columnsFrom": ["linked_quote_candidate_id"],
+          "columnsTo": ["id"],
+          "onDelete": "restrict",
+          "onUpdate": "cascade"
         }
       },
       "compositePrimaryKeys": {},
@@ -3486,6 +3517,191 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
+    "public.quote_candidates": {
+      "name": "quote_candidates",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "varchar(100)",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "quote_id": {
+          "name": "quote_id",
+          "type": "varchar(100)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "varchar(100)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "position": {
+          "name": "position",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "state": {
+          "name": "state",
+          "type": "varchar(20)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'active'"
+        },
+        "payment_terms": {
+          "name": "payment_terms",
+          "type": "varchar(20)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'immediate'"
+        },
+        "discount": {
+          "name": "discount",
+          "type": "numeric(15, 2)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'0'"
+        },
+        "discount_type": {
+          "name": "discount_type",
+          "type": "varchar(10)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'percentage'"
+        },
+        "expiration_date": {
+          "name": "expiration_date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "communication_channel_id": {
+          "name": "communication_channel_id",
+          "type": "varchar(50)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "notes": {
+          "name": "notes",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "CURRENT_TIMESTAMP"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "CURRENT_TIMESTAMP"
+        }
+      },
+      "indexes": {
+        "idx_quote_candidates_quote_id_position": {
+          "name": "idx_quote_candidates_quote_id_position",
+          "columns": [
+            {
+              "expression": "quote_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "position",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_quote_candidates_quote_name_unique": {
+          "name": "idx_quote_candidates_quote_name_unique",
+          "columns": [
+            {
+              "expression": "quote_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "lower(\"name\")",
+              "asc": true,
+              "isExpression": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_quote_candidates_one_selected": {
+          "name": "idx_quote_candidates_one_selected",
+          "columns": [
+            {
+              "expression": "quote_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"quote_candidates\".\"state\" = 'selected'",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "quote_candidates_quote_id_quotes_id_fk": {
+          "name": "quote_candidates_quote_id_quotes_id_fk",
+          "tableFrom": "quote_candidates",
+          "tableTo": "quotes",
+          "columnsFrom": ["quote_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "cascade"
+        },
+        "quote_candidates_communication_channel_id_quote_communication_channels_id_fk": {
+          "name": "quote_candidates_communication_channel_id_quote_communication_channels_id_fk",
+          "tableFrom": "quote_candidates",
+          "tableTo": "quote_communication_channels",
+          "columnsFrom": ["communication_channel_id"],
+          "columnsTo": ["id"],
+          "onDelete": "restrict",
+          "onUpdate": "cascade"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "quote_candidates_state_check": {
+          "name": "quote_candidates_state_check",
+          "value": "\"quote_candidates\".\"state\" IN ('active', 'selected', 'discarded')"
+        },
+        "chk_quote_candidates_discount_type": {
+          "name": "chk_quote_candidates_discount_type",
+          "value": "\"quote_candidates\".\"discount_type\" IN ('percentage', 'currency')"
+        }
+      },
+      "isRLSEnabled": false
+    },
     "public.quote_items": {
       "name": "quote_items",
       "schema": "",
@@ -3612,6 +3828,12 @@
           "primaryKey": false,
           "notNull": true,
           "default": 0
+        },
+        "candidate_id": {
+          "name": "candidate_id",
+          "type": "varchar(100)",
+          "primaryKey": false,
+          "notNull": true
         }
       },
       "indexes": {
@@ -3620,6 +3842,21 @@
           "columns": [
             {
               "expression": "quote_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_quote_items_candidate_id": {
+          "name": "idx_quote_items_candidate_id",
+          "columns": [
+            {
+              "expression": "candidate_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -3686,6 +3923,15 @@
           "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
+        },
+        "quote_items_candidate_id_quote_candidates_id_fk": {
+          "name": "quote_items_candidate_id_quote_candidates_id_fk",
+          "tableFrom": "quote_items",
+          "tableTo": "quote_candidates",
+          "columnsFrom": ["candidate_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "cascade"
         }
       },
       "compositePrimaryKeys": {},
@@ -7085,13 +7331,6 @@
           "notNull": true,
           "default": "'1'"
         },
-        "unit_type": {
-          "name": "unit_type",
-          "type": "varchar(10)",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'hours'"
-        },
         "unit_price": {
           "name": "unit_price",
           "type": "numeric(15, 2)",
@@ -7175,10 +7414,6 @@
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {
-        "chk_supplier_sale_items_unit_type": {
-          "name": "chk_supplier_sale_items_unit_type",
-          "value": "\"supplier_sale_items\".\"unit_type\" IN ('hours', 'days', 'unit')"
-        },
         "chk_supplier_sale_items_duration_months": {
           "name": "chk_supplier_sale_items_duration_months",
           "value": "\"supplier_sale_items\".\"duration_months\" >= 1"

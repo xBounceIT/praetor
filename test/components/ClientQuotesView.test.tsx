@@ -89,6 +89,18 @@ const product: Product = {
 
 const client: Client = { id: 'client-1', name: 'Helios Energy' };
 
+const communicationChannels = [
+  {
+    id: 'qcc_email',
+    name: 'Email',
+    icon: 'envelope' as const,
+    isDefault: true,
+    clientQuoteCount: 0,
+    supplierQuoteCount: 0,
+    totalQuoteCount: 0,
+  },
+];
+
 const supplierQuote: SupplierQuote = {
   id: 'SQ-1',
   supplierId: 'sup-1',
@@ -212,15 +224,7 @@ describe('<ClientQuotesView /> candidate version previews', () => {
     render(
       <ClientQuotesView
         {...baseProps}
-        communicationChannels={[
-          {
-            id: 'qcc_email',
-            name: 'Email',
-            clientQuoteCount: 0,
-            supplierQuoteCount: 0,
-            totalQuoteCount: 0,
-          },
-        ]}
+        communicationChannels={communicationChannels}
         quotes={[quote]}
       />,
     );
@@ -259,15 +263,7 @@ describe('<ClientQuotesView /> per-line quick-view links', () => {
     render(
       <ClientQuotesView
         {...baseProps}
-        communicationChannels={[
-          {
-            id: 'qcc_email',
-            name: 'Email',
-            clientQuoteCount: 0,
-            supplierQuoteCount: 0,
-            totalQuoteCount: 0,
-          },
-        ]}
+        communicationChannels={communicationChannels}
         quotes={[quote]}
       />,
     );
@@ -366,15 +362,7 @@ describe('<ClientQuotesView /> per-line quick-view links', () => {
     render(
       <ClientQuotesView
         {...baseProps}
-        communicationChannels={[
-          {
-            id: 'qcc_email',
-            name: 'Email',
-            clientQuoteCount: 0,
-            supplierQuoteCount: 0,
-            totalQuoteCount: 0,
-          },
-        ]}
+        communicationChannels={communicationChannels}
         quotes={[quote]}
       />,
     );
@@ -409,15 +397,7 @@ describe('<ClientQuotesView /> per-line quick-view links', () => {
     render(
       <ClientQuotesView
         {...baseProps}
-        communicationChannels={[
-          {
-            id: 'qcc_email',
-            name: 'Email',
-            clientQuoteCount: 0,
-            supplierQuoteCount: 0,
-            totalQuoteCount: 0,
-          },
-        ]}
+        communicationChannels={communicationChannels}
         quotes={[quote]}
       />,
     );
@@ -449,15 +429,7 @@ describe('<ClientQuotesView /> per-line quick-view links', () => {
     render(
       <ClientQuotesView
         {...baseProps}
-        communicationChannels={[
-          {
-            id: 'qcc_email',
-            name: 'Email',
-            clientQuoteCount: 0,
-            supplierQuoteCount: 0,
-            totalQuoteCount: 0,
-          },
-        ]}
+        communicationChannels={communicationChannels}
         quotes={[quote]}
       />,
     );
@@ -489,15 +461,7 @@ describe('<ClientQuotesView /> per-line quick-view links', () => {
     render(
       <ClientQuotesView
         {...baseProps}
-        communicationChannels={[
-          {
-            id: 'qcc_email',
-            name: 'Email',
-            clientQuoteCount: 0,
-            supplierQuoteCount: 0,
-            totalQuoteCount: 0,
-          },
-        ]}
+        communicationChannels={communicationChannels}
         quotes={[quote]}
       />,
     );
