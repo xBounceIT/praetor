@@ -60,6 +60,8 @@ export interface ClientsInvoicesViewProps {
 // Italian standard VAT rate, used as the per-line default.
 const DEFAULT_TAX_RATE = 22;
 const EMPTY_INVOICE_ITEMS: InvoiceItem[] = [];
+const CLIENT_INVOICE_ITEM_NUMBER_INPUT_CLASSNAME =
+  'h-9 max-w-[5rem] flex-none text-right font-medium';
 
 // Months the line's service runs (issue #757); multiplies the taxable amount. The shared
 // `getEffectiveDurationMonths` clamps absent/invalid values to 1, so pre-duration invoices keep
@@ -1095,7 +1097,7 @@ const InvoiceItemQuantityField: React.FC<{
     >
       {controller.t('common:labels.quantity')}
     </FieldLabel>
-    <div className="flex items-center justify-center gap-1">
+    <div className="flex h-9 items-center justify-end gap-1">
       <ValidatedNumberInput
         min="0"
         step="0.01"
@@ -1109,7 +1111,7 @@ const InvoiceItemQuantityField: React.FC<{
             value === '' || Number.isNaN(parsed) ? 0 : parsed,
           );
         }}
-        className="min-w-0 max-w-[5rem]"
+        className={CLIENT_INVOICE_ITEM_NUMBER_INPUT_CLASSNAME}
       />
       <span className="shrink-0 text-xs font-medium text-muted-foreground">/</span>
       <span className="shrink-0 text-xs font-medium text-muted-foreground">
@@ -1132,14 +1134,14 @@ const InvoiceItemDurationField: React.FC<{
       <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
         {controller.t('sales:clientQuotes.durationColumn', { defaultValue: 'Duration' })}
       </FieldLabel>
-      <div className="flex items-center justify-center gap-1">
+      <div className="flex h-9 items-center justify-end gap-1">
         <ValidatedNumberInput
           min="1"
           step="1"
           value={durationValue}
           onValueChange={(value) => controller.handleDurationValueChange(index, value)}
           disabled={durationUnit === 'na'}
-          className="min-w-0 max-w-[5rem]"
+          className={CLIENT_INVOICE_ITEM_NUMBER_INPUT_CLASSNAME}
         />
         <span className="shrink-0 text-xs font-medium text-muted-foreground">/</span>
         <DurationUnitSelector
@@ -1230,7 +1232,7 @@ const InvoiceItemNumberField: React.FC<{
     >
       {label}
     </FieldLabel>
-    <div className="flex items-center gap-1">
+    <div className="flex h-9 items-center justify-end gap-1">
       <ValidatedNumberInput
         min="0"
         max={max}
@@ -1239,7 +1241,7 @@ const InvoiceItemNumberField: React.FC<{
         value={value}
         formatDecimals={2}
         onValueChange={onValueChange}
-        className="min-w-0 font-medium"
+        className={CLIENT_INVOICE_ITEM_NUMBER_INPUT_CLASSNAME}
       />
       <span className="shrink-0 text-xs font-medium text-muted-foreground">{suffix}</span>
     </div>

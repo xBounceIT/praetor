@@ -56,6 +56,8 @@ const statusLabelMap: Record<string, string> = {
   cancelled: 'accounting:supplierInvoices.statusCancelled',
 };
 const EMPTY_SUPPLIER_INVOICE_ITEMS: SupplierInvoiceItem[] = [];
+const SUPPLIER_INVOICE_ITEM_NUMBER_INPUT_CLASSNAME =
+  'h-9 max-w-[5rem] flex-none text-right font-medium';
 
 const getSupplierInvoiceLineTotal = (item: SupplierInvoiceItem) => {
   const lineSubtotal =
@@ -737,7 +739,6 @@ const SupplierInvoiceItemsSection: React.FC<{ controller: SupplierInvoicesContro
             controller={controller}
             item={row}
             index={getIndex(row)}
-            inputClassName="min-w-0 font-medium"
           />
         </div>
       ),
@@ -749,12 +750,7 @@ const SupplierInvoiceItemsSection: React.FC<{ controller: SupplierInvoicesContro
       align: 'right',
       cell: ({ row }) => (
         <div className="min-w-[130px]">
-          <SupplierInvoiceItemPriceField
-            controller={controller}
-            item={row}
-            index={getIndex(row)}
-            inputClassName="min-w-0 font-medium"
-          />
+          <SupplierInvoiceItemPriceField controller={controller} item={row} index={getIndex(row)} />
         </div>
       ),
     },
@@ -769,7 +765,6 @@ const SupplierInvoiceItemsSection: React.FC<{ controller: SupplierInvoicesContro
             controller={controller}
             item={row}
             index={getIndex(row)}
-            inputClassName="min-w-0 font-medium"
           />
         </div>
       ),
@@ -789,7 +784,6 @@ const SupplierInvoiceItemsSection: React.FC<{ controller: SupplierInvoicesContro
             index={getIndex(row)}
             durationUnit={normalizeDurationUnit(row.durationUnit)}
             durationValue={getDurationDisplayValue(row)}
-            inputClassName="min-w-0 font-medium"
           />
         </div>
       ),
@@ -890,12 +884,18 @@ const SupplierInvoiceItemQuantityField: React.FC<{
   index: number;
   className?: string;
   inputClassName?: string;
-}> = ({ controller, item, index, className = 'space-y-1', inputClassName = 'text-center' }) => (
+}> = ({
+  controller,
+  item,
+  index,
+  className = 'space-y-1',
+  inputClassName = SUPPLIER_INVOICE_ITEM_NUMBER_INPUT_CLASSNAME,
+}) => (
   <div className={className}>
     <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
       {controller.t('common:labels.quantity')}
     </FieldLabel>
-    <div className="flex items-center gap-1">
+    <div className="flex h-9 items-center justify-end gap-1">
       <ValidatedNumberInput
         value={item.quantity}
         onValueChange={(value) =>
@@ -922,13 +922,13 @@ const SupplierInvoiceItemPriceField: React.FC<{
   item,
   index,
   className = 'space-y-1',
-  inputClassName = 'min-w-0 text-center',
+  inputClassName = SUPPLIER_INVOICE_ITEM_NUMBER_INPUT_CLASSNAME,
 }) => (
   <div className={className}>
     <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
       {controller.t('crm:internalListing.salePrice')}
     </FieldLabel>
-    <div className="flex items-center gap-1">
+    <div className="flex h-9 items-center justify-end gap-1">
       <ValidatedNumberInput
         value={item.unitPrice}
         formatDecimals={2}
@@ -955,13 +955,13 @@ const SupplierInvoiceItemDiscountField: React.FC<{
   item,
   index,
   className = 'space-y-1',
-  inputClassName = 'min-w-0 text-center',
+  inputClassName = SUPPLIER_INVOICE_ITEM_NUMBER_INPUT_CLASSNAME,
 }) => (
   <div className={className}>
     <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
       {controller.t('accounting:supplierOrders.discount')}
     </FieldLabel>
-    <div className="flex items-center gap-1">
+    <div className="flex h-9 items-center justify-end gap-1">
       <ValidatedNumberInput
         value={item.discount || 0}
         formatDecimals={2}
@@ -988,7 +988,7 @@ const SupplierInvoiceItemDurationField: React.FC<{
   durationUnit,
   durationValue,
   className = 'space-y-1',
-  inputClassName = 'min-w-0 text-center',
+  inputClassName = SUPPLIER_INVOICE_ITEM_NUMBER_INPUT_CLASSNAME,
 }) => (
   <div className={className}>
     <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
@@ -996,7 +996,7 @@ const SupplierInvoiceItemDurationField: React.FC<{
         defaultValue: 'Duration',
       })}
     </FieldLabel>
-    <div className="flex items-center gap-1">
+    <div className="flex h-9 items-center justify-end gap-1">
       <ValidatedNumberInput
         step="1"
         min="1"

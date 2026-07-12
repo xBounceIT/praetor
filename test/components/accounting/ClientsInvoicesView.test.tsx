@@ -187,6 +187,17 @@ describe('ClientsInvoicesView modal styling', () => {
     ]);
   });
 
+  test('right-aligns numeric invoice editors like the other document item tables', async () => {
+    const source = await readComponentSource('accounting/ClientsInvoicesView.tsx');
+
+    expectSourceContainsAll(source, [
+      "'h-9 max-w-[5rem] flex-none text-right font-medium'",
+      'className="flex h-9 items-center justify-end gap-1"',
+      'className={CLIENT_INVOICE_ITEM_NUMBER_INPUT_CLASSNAME}',
+    ]);
+    expectSourceOmitsAll(source, ['className="flex items-center justify-center gap-1"']);
+  });
+
   test('exposes a Durata column with a months/years unit selector and folds duration into the taxable line amount (issue #757)', async () => {
     const source = await readComponentSource('accounting/ClientsInvoicesView.tsx');
 

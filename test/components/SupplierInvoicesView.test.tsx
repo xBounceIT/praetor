@@ -125,6 +125,17 @@ describe('<SupplierInvoicesView /> line-item table', () => {
     expectSourceOmitsAll(source, ['<DocumentLineItemsScrollArea']);
   });
 
+  test('right-aligns numeric invoice editors like the other document item tables', async () => {
+    const source = await readComponentSource('accounting/SupplierInvoicesView.tsx');
+
+    expectSourceContainsAll(source, [
+      "'h-9 max-w-[5rem] flex-none text-right font-medium'",
+      'className="flex h-9 items-center justify-end gap-1"',
+      'inputClassName = SUPPLIER_INVOICE_ITEM_NUMBER_INPUT_CLASSNAME',
+    ]);
+    expectSourceOmitsAll(source, ["inputClassName = 'min-w-0 text-center'"]);
+  });
+
   test('keeps the delete action available from the StandardTable row menu', async () => {
     const invoice = buildInvoice({ id: 'SINV-DELETE', status: 'draft' });
     render(<SupplierInvoicesView {...baseProps} invoices={[invoice]} />);
