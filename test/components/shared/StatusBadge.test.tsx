@@ -52,4 +52,17 @@ describe('<StatusBadge /> dark-mode contrast', () => {
     expect(className).toContain('dark:text-');
     expect(className).toContain('dark:border-');
   });
+
+  test('renders a supplied domain icon instead of the default type icon', () => {
+    const { container } = render(
+      <StatusBadge
+        type="active"
+        label="In corso"
+        icon={<svg data-testid="project-status-icon" />}
+      />,
+    );
+
+    expect(container.querySelector('[data-testid="project-status-icon"]')).not.toBeNull();
+    expect(container.querySelector('.fa-check')).toBeNull();
+  });
 });

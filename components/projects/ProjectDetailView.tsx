@@ -75,7 +75,11 @@ import type { DashboardWidgetDef } from './dashboardLayout';
 import ProjectRules from './ProjectRules';
 import { ProjectStatusInfoTooltip } from './ProjectStatusInfoTooltip';
 import ProjectTasksTable from './ProjectTasksTable';
-import { getProjectStatusBadgeType, projectStatusOptions } from './projectStatusUi';
+import {
+  getProjectStatusBadgeType,
+  getProjectStatusIcon,
+  translateProjectStatusOptions,
+} from './projectStatusUi';
 import type { RecurringConfig } from './TaskFormModal';
 import { useDashboardLayout } from './useDashboardLayout';
 
@@ -841,10 +845,7 @@ const useProjectDetailController = ({
     id: o.id,
     name: t(o.name),
   }));
-  const translatedStatusOptions = projectStatusOptions.map((option) => ({
-    id: option.id,
-    name: t(option.name),
-  }));
+  const translatedStatusOptions = translateProjectStatusOptions(t);
 
   const projectTasks = useMemo(
     () => tasks.filter((t) => t.projectId === project.id),
@@ -1282,6 +1283,7 @@ const ProjectDetailHeader: React.FC<{ controller: ProjectDetailController }> = (
           <StatusBadge
             type={getProjectStatusBadgeType(project.status)}
             label={t(`projects:projects.statusValues.${projectStatus}`)}
+            icon={getProjectStatusIcon(project.status, 'size-[1em]')}
           />
           {project.isDisabled && (
             <StatusBadge type="disabled" label={t('projects:projects.statusDisabled')} />

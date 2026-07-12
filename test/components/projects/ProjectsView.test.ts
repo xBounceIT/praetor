@@ -156,8 +156,10 @@ describe('ProjectsView create-form validation', () => {
     expect(source).toContain('status,');
     expect(source).toContain('accessorFn: (row) => formatProjectStatus(row.status)');
     expect(source).toContain('type={getProjectStatusBadgeType(row.status)}');
+    expect(source).toContain("icon={getProjectStatusIcon(row.status, 'size-[1em]')}");
     expect(statusUiSource).toContain('projects:projects.statusHelp');
     expect(statusUiSource).toContain("import { Info } from 'lucide-react'");
+    expect(statusUiSource).toContain('getProjectStatusIcon(status');
     const statusUtilsSource = await Bun.file(
       new URL('../../../components/projects/projectStatusUi.ts', import.meta.url),
     ).text();
