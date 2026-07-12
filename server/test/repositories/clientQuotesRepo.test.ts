@@ -36,7 +36,7 @@ const quoteRow = (overrides: Record<number, unknown> = {}) => makeRow(QUOTE_BASE
 // id, quote_id, product_id, product_name, quantity, unit_price, product_cost,
 // product_mol_percentage, supplier_quote_id, supplier_quote_item_id,
 // supplier_quote_supplier_name, supplier_quote_unit_price, discount, note, unit_type,
-// duration_months, duration_unit, created_at, position
+// duration_months, duration_unit, created_at, position, candidate_id
 const ITEM_BASE: readonly unknown[] = [
   'qi-1',
   'cq-1',
@@ -57,6 +57,7 @@ const ITEM_BASE: readonly unknown[] = [
   'months',
   new Date('2026-04-01T00:00:00Z'),
   0,
+  null,
 ];
 const itemRow = (overrides: Record<number, unknown> = {}) => makeRow(ITEM_BASE, overrides);
 
@@ -98,6 +99,7 @@ describe('listAllItems', () => {
     expect(result[0].productMolPercentage).toBe(20);
     expect(result[0].durationMonths).toBe(1);
     expect(result[0].durationUnit).toBe('months');
+    expect(result[0].candidateId).toBe('cq-1');
   });
 
   test('maps a multi-month duration through to durationMonths', async () => {
@@ -418,6 +420,7 @@ describe('replaceItems', () => {
     const result = await clientQuotesRepo.replaceItems('cq-1', items, testDb);
     expect(exec.calls).toHaveLength(2);
     expect(exec.calls[0].sql.toLowerCase()).toContain('delete from "quote_items"');
+    expect(exec.calls[0].sql.toLowerCase()).toContain('"candidate_id" is null');
     expect(exec.calls[1].sql.toLowerCase()).toContain('insert into "quote_items"');
     expect(exec.calls[1].params).toContain('a');
     expect(exec.calls[1].params).toContain('b');
@@ -429,6 +432,17 @@ describe('replaceItems', () => {
     const result = await clientQuotesRepo.replaceItems('cq-1', [], testDb);
     expect(exec.calls).toHaveLength(1);
     expect(result).toEqual([]);
+  });
+});
+
+describe('findItemsForCandidate', () => {
+  test('includes expand-phase null rows for the quote default candidate', async () => {
+    exec.enqueue({ rows: [itemRow()] });
+
+    const result = await clientQuotesRepo.findItemsForCandidate('cq-1', 'cq-1', testDb);
+
+    expect(exec.calls[0].sql.toLowerCase()).toContain('"candidate_id" is null');
+    expect(result[0].candidateId).toBe('cq-1');
   });
 });
 

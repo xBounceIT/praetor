@@ -1956,6 +1956,65 @@ describe('client quote candidate-family create and update', () => {
     expect(sqSyncItemPricingMock).not.toHaveBeenCalled();
   });
 
+  test('keeps genuine supplier-linked edits local until a candidate is promoted', async () => {
+    setupCreate();
+    const existingCandidate = activeCandidate();
+    const quote = updatedQuote({ id: 'q-1', status: 'sent' });
+    cqFindCurrentMock.mockResolvedValue(gate({ status: 'sent' }));
+    cqLockCurrentByIdMock.mockResolvedValue(gate({ status: 'sent' }));
+    cqUpdateMock.mockResolvedValue(quote);
+    cqFindByIdMock.mockResolvedValue(quote);
+    qcListForQuoteMock.mockResolvedValue([existingCandidate]);
+    qcUpdateMock.mockResolvedValue(existingCandidate);
+    cqFindItemSnapshotsForQuoteMock.mockResolvedValue([
+      {
+        id: 'qi-local',
+        productId: null,
+        quantity: 2,
+        productCost: 50,
+        productMolPercentage: null,
+        supplierQuoteId: 'sq-9',
+        supplierQuoteItemId: 'sqi-9',
+        supplierQuoteSupplierName: 'Acme',
+        supplierQuoteUnitPrice: 50,
+        unitType: 'hours',
+      },
+    ]);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/sales/client-quotes/q-1',
+      headers: authHeader(),
+      payload: {
+        clientId: 'c1',
+        clientName: 'Client',
+        status: 'sent',
+        candidates: [
+          {
+            id: 'qc-local',
+            name: 'Variante A',
+            items: [
+              freshLine({
+                id: 'qi-local',
+                quantity: 3,
+                productCost: 70,
+                supplierQuoteUnitPrice: 70,
+              }),
+            ],
+            expirationDate: '2999-12-31',
+            communicationChannelId: 'qcc_email',
+          },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(cqReplaceItemsMock.mock.calls[0][1]).toEqual([
+      expect.objectContaining({ quantity: 3, unitPrice: 70, supplierQuoteUnitPrice: 70 }),
+    ]);
+    expect(sqSyncItemPricingMock).not.toHaveBeenCalled();
+  });
+
   test('renames the parent code atomically when saving a candidate family', async () => {
     setupCreate();
     const existingCandidate = activeCandidate();

@@ -3833,7 +3833,7 @@
           "name": "candidate_id",
           "type": "varchar(100)",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         }
       },
       "indexes": {

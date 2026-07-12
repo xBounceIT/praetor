@@ -1799,6 +1799,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                 tx,
                 candidateId,
               );
+              // Draft/sent candidates are intentionally isolated supplier snapshots. Do not push
+              // quantity or cost back to the source here: promotion synchronizes only the winner.
             }
             if (currentStatus === 'draft') {
               await quoteCandidatesRepo.deleteMissingActive(idResult.value, retainedIds, tx);
@@ -2407,7 +2409,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           details: { secondaryLabel: 'candidate_expired' },
         });
       }
-      const candidateItems = await clientQuotesRepo.findItemsForCandidate(candidate.id);
+      const candidateItems = await clientQuotesRepo.findItemsForCandidate(
+        idResult.value,
+        candidate.id,
+      );
       const sourcedExpiration = await supplierQuotesRepo.findEarliestExpirationByIds(
         await sourcedSupplierQuoteIds(candidateItems),
       );
@@ -2445,7 +2450,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               'candidate_expired',
             );
           }
-          const items = await clientQuotesRepo.findItemsForCandidate(lockedCandidate.id, tx);
+          const items = await clientQuotesRepo.findItemsForCandidate(
+            idResult.value,
+            lockedCandidate.id,
+            tx,
+          );
           const lockedSourcedExpiration = await supplierQuotesRepo.findEarliestExpirationByIds(
             await sourcedSupplierQuoteIds(items, tx),
             tx,

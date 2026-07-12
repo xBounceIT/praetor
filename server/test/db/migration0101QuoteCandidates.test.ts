@@ -10,15 +10,14 @@ describe('migration 0101 quote candidates', () => {
     expect(migrationSql).toContain("THEN 'selected' ELSE 'active' END");
   });
 
-  test('reattaches existing items and offers before enforcing foreign keys', () => {
+  test('reattaches existing items and offers while keeping the expand column nullable', () => {
     const itemBackfill = migrationSql.indexOf(
       'UPDATE "quote_items" SET "candidate_id" = "quote_id"',
     );
-    const itemNotNull = migrationSql.indexOf(
+    expect(itemBackfill).toBeGreaterThan(-1);
+    expect(migrationSql).not.toContain(
       'ALTER TABLE "quote_items" ALTER COLUMN "candidate_id" SET NOT NULL',
     );
-    expect(itemBackfill).toBeGreaterThan(-1);
-    expect(itemNotNull).toBeGreaterThan(itemBackfill);
     expect(migrationSql).toContain(
       'UPDATE "customer_offers" SET "linked_quote_candidate_id" = "linked_quote_id"',
     );

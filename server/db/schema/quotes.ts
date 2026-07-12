@@ -166,10 +166,13 @@ export const quoteItems = pgTable(
     // replace the line rows and would otherwise reshuffle them after every save.
     position: integer('position').notNull().default(0),
     // Appended in the physical migration and kept last in the Drizzle projection so legacy
-    // positional fixtures retain the pre-candidate column order.
-    candidateId: varchar('candidate_id', { length: 100 })
-      .notNull()
-      .references(() => quoteCandidates.id, { onDelete: 'cascade', onUpdate: 'cascade' }),
+    // positional fixtures retain the pre-candidate column order. Nullable during the expand phase
+    // so an older server can keep writing while the new release rolls out; repositories normalize
+    // legacy nulls to the quote's backfilled default candidate.
+    candidateId: varchar('candidate_id', { length: 100 }).references(() => quoteCandidates.id, {
+      onDelete: 'cascade',
+      onUpdate: 'cascade',
+    }),
   },
   (table) => [
     index('idx_quote_items_quote_id').on(table.quoteId),

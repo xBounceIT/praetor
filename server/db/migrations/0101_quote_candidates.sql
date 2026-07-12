@@ -32,7 +32,9 @@ SELECT
 FROM "quotes" q;--> statement-breakpoint
 UPDATE "quote_items" SET "candidate_id" = "quote_id";--> statement-breakpoint
 UPDATE "customer_offers" SET "linked_quote_candidate_id" = "linked_quote_id";--> statement-breakpoint
-ALTER TABLE "quote_items" ALTER COLUMN "candidate_id" SET NOT NULL;--> statement-breakpoint
+-- Expand phase: keep candidate_id nullable until every deployed writer supplies it. Existing rows
+-- are backfilled above; new code always writes it, while a previous server can continue inserting
+-- legacy rows during a rolling deployment. A later contract migration may enforce NOT NULL.
 ALTER TABLE "quote_candidates" ADD CONSTRAINT "quote_candidates_quote_id_quotes_id_fk" FOREIGN KEY ("quote_id") REFERENCES "public"."quotes"("id") ON DELETE cascade ON UPDATE cascade;--> statement-breakpoint
 ALTER TABLE "quote_candidates" ADD CONSTRAINT "quote_candidates_communication_channel_id_quote_communication_channels_id_fk" FOREIGN KEY ("communication_channel_id") REFERENCES "public"."quote_communication_channels"("id") ON DELETE restrict ON UPDATE cascade;--> statement-breakpoint
 CREATE INDEX "idx_quote_candidates_quote_id_position" ON "quote_candidates" USING btree ("quote_id","position");--> statement-breakpoint

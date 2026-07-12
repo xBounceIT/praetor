@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, ne, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, isNull, ne, or, sql } from 'drizzle-orm';
 import { type DbExecutor, db, runAtomically } from '../db/drizzle.ts';
 import { customerOffers } from '../db/schema/customerOffers.ts';
 import { quoteItems, quotes } from '../db/schema/quotes.ts';
@@ -177,7 +177,9 @@ const mapQuote = (row: ClientQuoteSelectRow): ClientQuote => ({
 const mapItem = (row: typeof quoteItems.$inferSelect): ClientQuoteItem => ({
   id: row.id,
   quoteId: row.quoteId,
-  candidateId: row.candidateId,
+  // Expand-phase compatibility: old writers may leave candidate_id null during a rolling deploy.
+  // The migration backfills the default candidate with the quote id, so that is the safe read view.
+  candidateId: row.candidateId ?? row.quoteId,
   productId: row.productId ?? '',
   productName: row.productName,
   quantity: parseDbNumber(row.quantity, 0),
@@ -194,6 +196,14 @@ const mapItem = (row: typeof quoteItems.$inferSelect): ClientQuoteItem => ({
   durationMonths: row.durationMonths ?? 1,
   durationUnit: normalizeDurationUnit(row.durationUnit),
 });
+
+const candidateItemsPredicate = (quoteId: string, candidateId: string) =>
+  candidateId === quoteId
+    ? or(
+        eq(quoteItems.candidateId, candidateId),
+        and(eq(quoteItems.quoteId, quoteId), isNull(quoteItems.candidateId)),
+      )
+    : eq(quoteItems.candidateId, candidateId);
 
 export const listAll = async (exec: DbExecutor = db): Promise<ClientQuote[]> => {
   const rows = await exec
@@ -455,13 +465,14 @@ export const findItemTotals = async (
 };
 
 export const findItemsForCandidate = async (
+  quoteId: string,
   candidateId: string,
   exec: DbExecutor = db,
 ): Promise<ClientQuoteItem[]> => {
   const rows = await exec
     .select()
     .from(quoteItems)
-    .where(eq(quoteItems.candidateId, candidateId))
+    .where(candidateItemsPredicate(quoteId, candidateId))
     .orderBy(asc(quoteItems.position), asc(quoteItems.createdAt), asc(quoteItems.id));
   return rows.map(mapItem);
 };
@@ -691,7 +702,7 @@ export const replaceItems = async (
   candidateId: string = quoteId,
 ): Promise<ClientQuoteItem[]> =>
   runAtomically(exec, async (tx) => {
-    await tx.delete(quoteItems).where(eq(quoteItems.candidateId, candidateId));
+    await tx.delete(quoteItems).where(candidateItemsPredicate(quoteId, candidateId));
     return insertItems(quoteId, items, tx, candidateId);
   });
 
