@@ -20,6 +20,7 @@ import {
   formatDecimal,
   getDurationInputValue,
   getEffectiveDurationMonths,
+  isFiniteNumber,
   isPositiveFiniteNumber,
   normalizeDurationUnit,
   parseDurationValueToMonths,
@@ -446,8 +447,15 @@ const useClientsInvoicesController = ({
       nextErrors.issueDate = t('accounting:clientsInvoices.issueDateRequired');
     }
     if (!formData.dueDate) nextErrors.dueDate = t('accounting:clientsInvoices.dueDateRequired');
-    if (!formData.items || formData.items.length === 0) {
+    const items = formData.items || [];
+    if (items.length === 0) {
       nextErrors.items = t('accounting:clientsInvoices.itemsRequired');
+    } else if (items.some((item) => !item.description.trim())) {
+      nextErrors.items = t('common:validation.required');
+    } else if (items.some((item) => !isPositiveFiniteNumber(item.quantity))) {
+      nextErrors.items = t('common:validation.positiveQuantityRequired');
+    } else if (items.some((item) => !isFiniteNumber(item.unitPrice) || item.unitPrice < 0)) {
+      nextErrors.items = t('common:validation.unitPriceRequired');
     }
 
     if (Object.keys(nextErrors).length > 0) {
@@ -455,7 +463,7 @@ const useClientsInvoicesController = ({
       return;
     }
 
-    const roundedItems = (formData.items || []).map((item) => {
+    const roundedItems = items.map((item) => {
       const unitOfMeasure = normalizeUnitOfMeasure(item.unitOfMeasure);
       return {
         ...item,

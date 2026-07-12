@@ -108,6 +108,47 @@ describe('<ClientsInvoicesView /> duration unit (issue #757)', () => {
   });
 });
 
+describe('<ClientsInvoicesView /> paginated item validation', () => {
+  test.each([
+    ['description', { description: '' }, 'common:validation.required'],
+    ['quantity', { quantity: undefined }, 'common:validation.positiveQuantityRequired'],
+    ['unit price', { unitPrice: undefined }, 'common:validation.unitPriceRequired'],
+  ])('rejects an invalid %s on an unmounted page', async (_field, invalidValues, errorKey) => {
+    const onUpdateInvoice = mock(() => {});
+    const invoice = buildInvoice('INV-PAGINATED', 'months');
+    invoice.items = Array.from({ length: 6 }, (_, index) => ({
+      ...invoice.items[0],
+      id: `item-${index + 1}`,
+      description: `Consulting ${index + 1}`,
+    }));
+    Object.assign(invoice.items[5], invalidValues);
+
+    render(
+      <ClientsInvoicesView
+        invoices={[invoice]}
+        clients={clients}
+        products={[]}
+        onAddInvoice={mock(() => {})}
+        onUpdateInvoice={onUpdateInvoice}
+        onDeleteInvoice={mock(() => {})}
+        currency="EUR"
+      />,
+    );
+    fireEvent.click(screen.getByText('Helios Energy Services').closest('tr') as HTMLElement);
+    const dialog = await screen.findByRole('dialog');
+    expect(
+      within(dialog).getAllByRole('textbox', { name: 'common:labels.description' }),
+    ).toHaveLength(5);
+
+    fireEvent.submit(
+      within(dialog).getByText('common:buttons.save').closest('form') as HTMLFormElement,
+    );
+
+    expect(onUpdateInvoice).not.toHaveBeenCalled();
+    expect(within(dialog).getByText(errorKey)).toBeInTheDocument();
+  });
+});
+
 describe('ClientsInvoicesView modal styling', () => {
   test('edit modal uses the shared shadcn modal layout and form primitives', async () => {
     const source = await readComponentSource('accounting/ClientsInvoicesView.tsx');
