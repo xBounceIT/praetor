@@ -18,6 +18,11 @@ describe('migration 0100 add quote communication channel icons', () => {
     expect(sql).toContain(`WHEN 'qcc_telefono' THEN 'phone'`);
     expect(sql).toContain(`WHEN 'qcc_whatsapp' THEN 'whatsapp'`);
     expect(sql).toContain(`"is_default" = true`);
+    expect(sql).toContain(`("id", "name") IN (`);
+    expect(sql).toContain(`('qcc_email', 'Email')`);
+    expect(sql).toContain(`('qcc_telefono', 'Telefono')`);
+    expect(sql).toContain(`('qcc_whatsapp', 'WhatsApp')`);
+    expect(sql).not.toContain(`WHERE "id" IN ('qcc_email', 'qcc_telefono', 'qcc_whatsapp')`);
   });
 
   test('is registered after migration 0099', async () => {

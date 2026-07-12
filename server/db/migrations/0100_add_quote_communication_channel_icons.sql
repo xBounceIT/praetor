@@ -9,4 +9,8 @@ SET
 		ELSE "icon"
 	END,
 	"is_default" = true
-WHERE "id" IN ('qcc_email', 'qcc_telefono', 'qcc_whatsapp');
+WHERE ("id", "name") IN (
+	('qcc_email', 'Email'),
+	('qcc_telefono', 'Telefono'),
+	('qcc_whatsapp', 'WhatsApp')
+);
