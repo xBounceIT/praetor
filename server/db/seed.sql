@@ -963,6 +963,7 @@ INSERT INTO supplier_quote_items (
     product_id,
     product_name,
     quantity,
+    unit_type,
     unit_price,
     note
 )
@@ -972,6 +973,7 @@ SELECT
     p.id,
     p.name,
     v.quantity,
+    v.unit_type,
     v.unit_price,
     v.note
 FROM (
@@ -1106,19 +1108,20 @@ SELECT
     v.note
 FROM (
     VALUES
-        ('dm_ssi_01', pg_temp.demo_document_code('supplier_order', 1), 'dm_prd_05', 4.00, 960.00, 0.00, 'Draft hardware procurement order'),
-        ('dm_ssi_02', pg_temp.demo_document_code('supplier_order', 2), 'dm_prd_08', 200.00, 118.00, 2.00, 'Linked print procurement order in sent status'),
-        ('dm_ssi_03', pg_temp.demo_document_code('supplier_order', 3), 'dm_prd_06', 80.00, 182.00, 0.00, 'Sent licensing order without invoice'),
-        ('dm_ssi_04', pg_temp.demo_document_code('supplier_order', 4), 'dm_prd_07', 1.00, 1410.00, 0.00, 'Sent security appliance order'),
-        ('dm_ssi_05', pg_temp.demo_document_code('supplier_order', 4), 'dm_prd_08', 40.00, 118.00, 0.00, 'Sent print materials order'),
-        ('dm_ssi_06', pg_temp.demo_document_code('supplier_order', 5), 'dm_prd_05', 2.00, 965.00, 0.00, 'Sent supplier hardware order')
-) AS v(id, sale_id, product_id, quantity, unit_price, discount, note)
+        ('dm_ssi_01', pg_temp.demo_document_code('supplier_order', 1), 'dm_prd_05', 4.00, 'unit', 960.00, 0.00, 'Draft hardware procurement order'),
+        ('dm_ssi_02', pg_temp.demo_document_code('supplier_order', 2), 'dm_prd_08', 200.00, 'unit', 118.00, 2.00, 'Linked print procurement order in sent status'),
+        ('dm_ssi_03', pg_temp.demo_document_code('supplier_order', 3), 'dm_prd_06', 80.00, 'unit', 182.00, 0.00, 'Sent licensing order without invoice'),
+        ('dm_ssi_04', pg_temp.demo_document_code('supplier_order', 4), 'dm_prd_07', 1.00, 'unit', 1410.00, 0.00, 'Sent security appliance order'),
+        ('dm_ssi_05', pg_temp.demo_document_code('supplier_order', 4), 'dm_prd_08', 40.00, 'unit', 118.00, 0.00, 'Sent print materials order'),
+        ('dm_ssi_06', pg_temp.demo_document_code('supplier_order', 5), 'dm_prd_05', 2.00, 'unit', 965.00, 0.00, 'Sent supplier hardware order')
+) AS v(id, sale_id, product_id, quantity, unit_type, unit_price, discount, note)
 JOIN products p ON p.id = v.product_id
 ON CONFLICT (id) DO UPDATE SET
     sale_id = EXCLUDED.sale_id,
     product_id = EXCLUDED.product_id,
     product_name = EXCLUDED.product_name,
     quantity = EXCLUDED.quantity,
+    unit_type = EXCLUDED.unit_type,
     unit_price = EXCLUDED.unit_price,
     discount = EXCLUDED.discount,
     note = EXCLUDED.note;

@@ -27,6 +27,7 @@ import type {
   SupplierQuoteItem,
   SupplierSaleOrder,
   SupplierSaleOrderItem,
+  SupplierUnitType,
   TimeEntry,
   User,
   UserAuthMethod,
@@ -52,6 +53,12 @@ import { normalizeSessionIdleTimeoutMinutes } from '../../utils/sessionTimeout';
 
 const nullableNumber = (value: unknown, fallback: number | null = null): number | null =>
   value === undefined || value === null ? fallback : Number(value);
+
+const normalizeSupplierUnitType = (value: unknown): SupplierUnitType => {
+  if (value === 'days') return 'days';
+  if (value === 'unit') return 'unit';
+  return 'hours';
+};
 
 type PricingItemBase = {
   quantity?: number;
@@ -554,6 +561,7 @@ export const normalizeSupplierSaleOrderItem = (
 ): SupplierSaleOrderItem => ({
   ...item,
   quantity: Number(item.quantity || 0),
+  unitType: normalizeSupplierUnitType(item.unitType),
   unitPrice: Number(item.unitPrice || 0),
   discount: Number(item.discount || 0),
   // Duration multiplies the line total (issue #776); defend the field the same way the other

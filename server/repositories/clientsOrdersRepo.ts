@@ -527,6 +527,7 @@ export type NewSupplierOrderItemForAutoCreate = {
   productId: string | null;
   productName: string;
   quantity: number;
+  unitType: UnitType;
   unitPrice: number;
   discount: number;
   note: string | null;
@@ -547,6 +548,7 @@ export const bulkInsertSupplierOrderItems = async (
       productId: item.productId,
       productName: item.productName,
       quantity: numericForDb(item.quantity),
+      unitType: item.unitType,
       unitPrice: numericForDb(item.unitPrice),
       discount: numericForDb(item.discount),
       note: item.note,

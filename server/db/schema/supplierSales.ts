@@ -9,6 +9,7 @@ import {
   timestamp,
   varchar,
 } from 'drizzle-orm/pg-core';
+import type { UnitType } from '../../utils/unit-type.ts';
 import { products } from './products.ts';
 import { supplierQuotes } from './supplierQuotes.ts';
 import { suppliers } from './suppliers.ts';
@@ -62,6 +63,7 @@ export const supplierSaleItems = pgTable(
     }),
     productName: varchar('product_name', { length: 255 }).notNull(),
     quantity: numeric('quantity', { precision: 10, scale: 2 }).notNull().default('1'),
+    unitType: varchar('unit_type', { length: 10 }).$type<UnitType>().notNull().default('hours'),
     unitPrice: numeric('unit_price', { precision: 15, scale: 2 }).notNull().default('0'),
     discount: numeric('discount', { precision: 5, scale: 2 }).default('0'),
     note: text('note'),
@@ -76,6 +78,7 @@ export const supplierSaleItems = pgTable(
   },
   (table) => [
     index('idx_supplier_sale_items_sale_id').on(table.saleId),
+    check('chk_supplier_sale_items_unit_type', sql`${table.unitType} IN ('hours', 'days', 'unit')`),
     check('chk_supplier_sale_items_duration_months', sql`${table.durationMonths} >= 1`),
     check(
       'chk_supplier_sale_items_duration_unit',

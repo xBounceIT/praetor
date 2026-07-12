@@ -708,6 +708,13 @@
       "when": 1783800130752,
       "tag": "0100_add_quote_communication_channel_icons",
       "breakpoints": true
+    },
+    {
+      "idx": 101,
+      "version": "7",
+      "when": 1783896900298,
+      "tag": "0101_add_supplier_sale_item_unit_type",
+      "breakpoints": true
     }
   ]
 }

@@ -1516,6 +1516,24 @@ describe('normalizeSupplierSaleOrderItem', () => {
     expect(result.note).toBe('');
   });
 
+  test('preserves valid quantity units and defaults missing or invalid units to hours', () => {
+    expect(
+      normalizeSupplierSaleOrderItem(
+        make<SupplierSaleOrderItem>(baseSupplierSaleOrderItem, { unitType: 'days' }),
+      ).unitType,
+    ).toBe('days');
+    expect(
+      normalizeSupplierSaleOrderItem(
+        make<SupplierSaleOrderItem>(baseSupplierSaleOrderItem, { unitType: undefined }),
+      ).unitType,
+    ).toBe('hours');
+    expect(
+      normalizeSupplierSaleOrderItem(
+        make<SupplierSaleOrderItem>(baseSupplierSaleOrderItem, { unitType: 'weeks' }),
+      ).unitType,
+    ).toBe('hours');
+  });
+
   test('coerces durationMonths and defaults a missing/invalid value to 1 (issue #776)', () => {
     expect(
       normalizeSupplierSaleOrderItem(

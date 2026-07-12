@@ -356,7 +356,7 @@
     "qty": "Quantity",
     "unitPrice": "Unit Price",
     "listPrice": "List Price",
-    "discountToUs": "Discount to Us (%)",
+    "discountToUs": "Discount to Us",
     "unitCost": "Unit Cost",
     "noItemsAdded": "No items added yet",
     "discount": "Discount %",

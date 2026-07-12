@@ -29,14 +29,15 @@ const ORDER_BASE: readonly unknown[] = [
 const orderRow = (overrides: Record<number, unknown> = {}) => makeRow(ORDER_BASE, overrides);
 
 // Column order in db/schema/supplierSales.ts (supplier_sale_items):
-//   [id, saleId, productId, productName, quantity, unitPrice, discount, note, createdAt,
-//    durationMonths, durationUnit]
+//   [id, saleId, productId, productName, quantity, unitType, unitPrice, discount, note,
+//    createdAt, durationMonths, durationUnit]
 const ITEM_BASE: readonly unknown[] = [
   'ssi-1',
   'so-1',
   null,
   'Widget',
   '1',
+  'days',
   '10',
   '0',
   null,
@@ -258,17 +259,24 @@ describe('listAllItems', () => {
     expect(result[0].id).toBe('ssi-1');
     expect(result[0].orderId).toBe('so-1');
     expect(result[0].quantity).toBe(1);
+    expect(result[0].unitType).toBe('days');
+  });
+
+  test('defaults an invalid legacy quantity unit to hours', async () => {
+    exec.enqueue({ rows: [itemRow({ 5: 'weeks' })] });
+    const result = await supplierOrdersRepo.listAllItems(testDb);
+    expect(result[0].unitType).toBe('hours');
   });
 
   test('maps the duration columns (issue #776)', async () => {
-    exec.enqueue({ rows: [itemRow({ 9: 18, 10: 'years' })] });
+    exec.enqueue({ rows: [itemRow({ 10: 18, 11: 'years' })] });
     const result = await supplierOrdersRepo.listAllItems(testDb);
     expect(result[0].durationMonths).toBe(18);
     expect(result[0].durationUnit).toBe('years');
   });
 
   test('defaults a null/legacy duration to one month (issue #776)', async () => {
-    exec.enqueue({ rows: [itemRow({ 9: null, 10: null })] });
+    exec.enqueue({ rows: [itemRow({ 10: null, 11: null })] });
     const result = await supplierOrdersRepo.listAllItems(testDb);
     expect(result[0].durationMonths).toBe(1);
     expect(result[0].durationUnit).toBe('months');

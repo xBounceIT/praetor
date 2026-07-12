@@ -1602,7 +1602,7 @@ const SupplierQuoteItemsSection: React.FC<{ controller: SupplierQuotesController
     {
       id: 'discountPercent',
       header: controller.t('sales:supplierQuotes.discountToUs', {
-        defaultValue: 'Discount to Us (%)',
+        defaultValue: 'Discount to Us',
       }),
       accessorFn: (item) => item.discountPercent ?? 0,
       align: 'right',

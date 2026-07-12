@@ -14,10 +14,12 @@ import type {
   SupplierOrderVersion,
   SupplierSaleOrder,
   SupplierSaleOrderItem,
+  SupplierUnitType,
 } from '../../types';
 import { formatInsertDateTime } from '../../utils/date';
 import { createLineItemIndexResolver } from '../../utils/lineItemIndex';
 import {
+  convertUnitPrice,
   durationValueToMonths,
   formatDecimal,
   formatDiscountValue,
@@ -53,6 +55,7 @@ import SelectControl from '../shared/SelectControl';
 import StandardTable, { type Column } from '../shared/StandardTable';
 import StatusBadge, { type StatusType } from '../shared/StatusBadge';
 import { TABLE_ROW_ACTION_BUTTON_CLASSNAME } from '../shared/tableControlStyles';
+import UnitTypeSelector from '../shared/UnitTypeSelector';
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
 import SupplierOrderVersionsPanel from './SupplierOrderVersionsPanel';
 
@@ -212,6 +215,8 @@ const supplierOrdersReducer = (
         if (product) {
           nextItem.productName = product.name;
           nextItem.unitPrice = Number(product.costo);
+          if (product.type === 'supply') nextItem.unitType = 'unit';
+          else nextItem.unitType ??= 'hours';
         }
       }
 
@@ -353,8 +358,25 @@ const useSupplierOrdersController = ({
     [isReadOnly],
   );
 
+  const handleUnitTypeChange = useCallback(
+    (index: number, newType: SupplierUnitType) => {
+      if (isReadOnly) return;
+      const item = formData.items?.[index];
+      if (!item) return;
+      const oldType = item.unitType || 'hours';
+      if (oldType === newType) return;
+      updateItem(index, 'unitType', newType);
+      updateItem(
+        index,
+        'unitPrice',
+        convertUnitPrice(Number(item.unitPrice) || 0, oldType, newType),
+      );
+    },
+    [formData.items, isReadOnly, updateItem],
+  );
+
   // Duration is carried over from the supplier quote (issue #776) and stays editable on the order.
-  // Orders have no unit-type concept, so it is a plain multiplier with a Mese/Anno selector.
+  // It is a plain multiplier for every quantity unit, with a Mese/Anno/N.D. selector.
   const handleDurationValueChange = useCallback(
     (index: number, value: string) => {
       if (isReadOnly) return;
@@ -412,6 +434,7 @@ const useSupplierOrdersController = ({
           ...item,
           unitPrice: Number(item.unitPrice) || 0,
           discount: item.discount === undefined ? undefined : Number(item.discount),
+          unitType: item.unitType || 'hours',
           ...normalizeDurationForSubmit(item),
         })),
       });
@@ -710,6 +733,7 @@ const useSupplierOrdersController = ({
     handleDelete,
     handleDurationUnitChange,
     handleDurationValueChange,
+    handleUnitTypeChange,
     handleSubmit,
     handleVersionPreview,
     handleVersionRestored,
@@ -723,6 +747,7 @@ const useSupplierOrdersController = ({
     patchForm,
     paymentTermsOptions,
     previewVersion,
+    products,
     productOptions,
     removeItem,
     supplierOptions,
@@ -975,7 +1000,7 @@ const SupplierOrderItemsSection: React.FC<{ controller: SupplierOrdersController
     {
       id: 'discountToUs',
       header: controller.t('sales:supplierQuotes.discountToUs', {
-        defaultValue: 'Discount to Us (%)',
+        defaultValue: 'Discount to Us',
       }),
       accessorFn: (item) => item.discount || 0,
       align: 'right',
@@ -1003,6 +1028,7 @@ const SupplierOrderItemsSection: React.FC<{ controller: SupplierOrdersController
     {
       id: 'quantity',
       header: controller.t('sales:supplierQuotes.qty', { defaultValue: 'Qty' }),
+      minWidth: 174,
       accessorKey: 'quantity',
       align: 'right',
       cell: ({ row }) => (
@@ -1133,17 +1159,30 @@ const SupplierOrderItemQuantityField: React.FC<{
     <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
       {controller.t('sales:supplierQuotes.qty', { defaultValue: 'Qty' })}
     </FieldLabel>
-    <ValidatedNumberInput
-      value={item.quantity}
-      required
-      placeholder="0,00"
-      aria-label={controller.t('sales:supplierQuotes.qty', { defaultValue: 'Qty' })}
-      disabled={controller.isReadOnly}
-      onValueChange={(value) =>
-        controller.updateItem(index, 'quantity', value === '' ? Number.NaN : Number(value))
-      }
-      className={inputClassName}
-    />
+    <div className="flex items-center justify-end gap-1">
+      <ValidatedNumberInput
+        value={item.quantity}
+        required
+        placeholder="0,00"
+        aria-label={controller.t('sales:supplierQuotes.qty', { defaultValue: 'Qty' })}
+        disabled={controller.isReadOnly}
+        onValueChange={(value) =>
+          controller.updateItem(index, 'quantity', value === '' ? Number.NaN : Number(value))
+        }
+        className={`min-w-[4rem] flex-1 ${inputClassName}`}
+      />
+      <span className="shrink-0 text-xs font-semibold text-muted-foreground">/</span>
+      <UnitTypeSelector
+        value={item.unitType || 'hours'}
+        onChange={(value) => controller.handleUnitTypeChange(index, value)}
+        isSupply={
+          controller.products.find((product) => product.id === item.productId)?.type === 'supply'
+        }
+        quantity={Number(item.quantity) || 0}
+        disabled={controller.isReadOnly}
+        i18nPrefix="sales:supplierQuotes"
+      />
+    </div>
   </div>
 );
 
@@ -1183,24 +1222,27 @@ const SupplierOrderItemDiscountField: React.FC<{
   <div className={className}>
     <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
       {controller.t('sales:supplierQuotes.discountToUs', {
-        defaultValue: 'Discount to Us (%)',
-      })}
-    </FieldLabel>
-    <ValidatedNumberInput
-      value={item.discount}
-      placeholder="0,00"
-      aria-label={controller.t('sales:supplierQuotes.discountToUs', {
         defaultValue: 'Discount to Us',
       })}
-      formatDecimals={2}
-      min={0}
-      max={100}
-      disabled={controller.isReadOnly}
-      onValueChange={(value) =>
-        controller.updateItem(index, 'discount', value === '' ? undefined : Number(value))
-      }
-      className={inputClassName}
-    />
+    </FieldLabel>
+    <div className="flex items-center justify-end gap-1">
+      <ValidatedNumberInput
+        value={item.discount}
+        placeholder="0,00"
+        aria-label={controller.t('sales:supplierQuotes.discountToUs', {
+          defaultValue: 'Discount to Us',
+        })}
+        formatDecimals={2}
+        min={0}
+        max={100}
+        disabled={controller.isReadOnly}
+        onValueChange={(value) =>
+          controller.updateItem(index, 'discount', value === '' ? undefined : Number(value))
+        }
+        className={`min-w-[4rem] flex-1 ${inputClassName}`}
+      />
+      <span className="shrink-0 text-xs font-semibold text-muted-foreground">%</span>
+    </div>
   </div>
 );
 

@@ -3,7 +3,7 @@
   "info": {
     "title": "Praetor API",
     "description": "Praetor API documentation",
-    "version": "0.8.3"
+    "version": "0.9.0"
   },
   "components": {
     "securitySchemes": {
@@ -44440,6 +44440,14 @@
                             "quantity": {
                               "type": "number"
                             },
+                            "unitType": {
+                              "type": "string",
+                              "enum": [
+                                "hours",
+                                "days",
+                                "unit"
+                              ]
+                            },
                             "unitPrice": {
                               "type": "number"
                             },
@@ -44469,6 +44477,7 @@
                             "orderId",
                             "productName",
                             "quantity",
+                            "unitType",
                             "unitPrice",
                             "discount"
                           ]
@@ -44679,6 +44688,14 @@
                         "quantity": {
                           "type": "number"
                         },
+                        "unitType": {
+                          "type": "string",
+                          "enum": [
+                            "hours",
+                            "days",
+                            "unit"
+                          ]
+                        },
                         "unitPrice": {
                           "type": "number"
                         },
@@ -44824,6 +44841,14 @@
                           "quantity": {
                             "type": "number"
                           },
+                          "unitType": {
+                            "type": "string",
+                            "enum": [
+                              "hours",
+                              "days",
+                              "unit"
+                            ]
+                          },
                           "unitPrice": {
                             "type": "number"
                           },
@@ -44853,6 +44878,7 @@
                           "orderId",
                           "productName",
                           "quantity",
+                          "unitType",
                           "unitPrice",
                           "discount"
                         ]
@@ -45040,6 +45066,14 @@
                         "quantity": {
                           "type": "number"
                         },
+                        "unitType": {
+                          "type": "string",
+                          "enum": [
+                            "hours",
+                            "days",
+                            "unit"
+                          ]
+                        },
                         "unitPrice": {
                           "type": "number"
                         },
@@ -45189,6 +45223,14 @@
                           "quantity": {
                             "type": "number"
                           },
+                          "unitType": {
+                            "type": "string",
+                            "enum": [
+                              "hours",
+                              "days",
+                              "unit"
+                            ]
+                          },
                           "unitPrice": {
                             "type": "number"
                           },
@@ -45218,6 +45260,7 @@
                           "orderId",
                           "productName",
                           "quantity",
+                          "unitType",
                           "unitPrice",
                           "discount"
                         ]
@@ -46048,6 +46091,14 @@
                           "quantity": {
                             "type": "number"
                           },
+                          "unitType": {
+                            "type": "string",
+                            "enum": [
+                              "hours",
+                              "days",
+                              "unit"
+                            ]
+                          },
                           "unitPrice": {
                             "type": "number"
                           },
@@ -46077,6 +46128,7 @@
                           "orderId",
                           "productName",
                           "quantity",
+                          "unitType",
                           "unitPrice",
                           "discount"
                         ]

@@ -117,6 +117,7 @@ const baseOrder: SupplierSaleOrder = {
       productId: 'product-1',
       productName: 'Firewall appliance',
       quantity: 2,
+      unitType: 'days',
       unitPrice: 1920,
     },
   ],
@@ -227,6 +228,7 @@ describe('<SupplierOrdersView /> item pricing columns', () => {
       'accounting:supplierOrders.notes',
       'common:labels.actions',
     ]);
+    expect(screen.getAllByText('sales:supplierQuotes.days').length).toBeGreaterThan(0);
   });
 
   test('caps discount to us at 100 percent', async () => {
@@ -237,6 +239,12 @@ describe('<SupplierOrdersView /> item pricing columns', () => {
     });
 
     const discountInput = screen.getByLabelText('sales:supplierQuotes.discountToUs');
+    const discountHeader = screen
+      .getAllByText('sales:supplierQuotes.discountToUs')
+      .find((element) => element.closest('th'))
+      ?.closest('th');
+    expect(discountHeader).not.toHaveTextContent('%');
+    expect(discountInput.parentElement).toHaveTextContent('%');
     await act(async () => {
       fireEvent.focus(discountInput);
       fireEvent.change(discountInput, { target: { value: '120' } });
