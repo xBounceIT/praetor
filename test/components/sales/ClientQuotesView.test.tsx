@@ -965,6 +965,7 @@ describe('<ClientQuotesView /> edit action gating (#812 round 13)', () => {
       await screen.findByRole('button', { name: 'sales:clientQuotes.candidates.chooseTitle' }),
     );
     const comparisonDialog = await screen.findByRole('dialog');
+    expect(comparisonDialog.querySelector('[data-slot="modal-content"]')).toHaveClass('max-w-6xl');
     expect(within(comparisonDialog).getByText('sales:clientQuotes.molLabel')).toBeInTheDocument();
     expect(within(comparisonDialog).getByText('-11,11%')).toBeInTheDocument();
     expect(within(comparisonDialog).getByText('sales:clientQuotes.notesLabel')).toBeInTheDocument();

@@ -2371,7 +2371,7 @@ const ClientQuotePromotionModal: React.FC<{ controller: ClientQuotesController }
   );
   return (
     <Modal isOpen onClose={() => setPromotionQuote(null)}>
-      <ModalContent size="lg">
+      <ModalContent size="6xl">
         <ModalHeader>
           <ModalTitle>
             {t('sales:clientQuotes.candidates.chooseTitle', {
