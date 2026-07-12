@@ -2418,6 +2418,14 @@ const useAppContentController = () => {
                 cursor = page.nextCursor;
               }
             };
+            // RIL owns its entry fetch, so it skips the global entries dataset below. Start
+            // recurring materialization alongside the remaining preload, then await it before
+            // RilView mounts and requests the selected month.
+            const rilRecurringGeneration =
+              activeView === 'timesheets/ril' &&
+              hasPermission(permissions, buildPermission('timesheets.recurring', 'create'))
+                ? generateRecurringEntries()
+                : null;
             failedDatasets = await loadDatasets(
               module,
               [
@@ -2459,6 +2467,7 @@ const useAppContentController = () => {
               ],
               { shouldApply: isCurrentModuleLoad },
             );
+            if (rilRecurringGeneration) await rilRecurringGeneration;
             // Recurring generation fetches from the server independently of
             // local entries, so still run it when the initial entries fetch fails.
             if (failedDatasets.includes('entries')) {
