@@ -52,4 +52,17 @@ describe('<StatusBadge /> dark-mode contrast', () => {
     expect(className).toContain('dark:text-');
     expect(className).toContain('dark:border-');
   });
+
+  test('uses font-relative spacing so the whole badge scales with its text', () => {
+    const { container } = render(<StatusBadge type="active" label="Active" />);
+    const badge = container.querySelector('[data-status-badge]');
+    const className = badge?.className ?? '';
+
+    expect(className).toContain('gap-[0.6em]');
+    expect(className).toContain('rounded-[0.8em]');
+    expect(className).toContain('px-[1em]');
+    expect(className).toContain('py-[0.4em]');
+    expect(className).toContain('text-[10px]');
+    expect(className).not.toMatch(/\b(?:gap-1\.5|rounded-lg|px-2\.5|py-1)\b/);
+  });
 });
