@@ -391,6 +391,7 @@ const Layout: React.FC<LayoutProps> = ({
 
       if (routes.length > 0) {
         items.push({
+          id: module.id,
           title: module.name,
           icon: module.icon,
           isActive: module.id === activeModuleId,

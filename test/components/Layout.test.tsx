@@ -127,6 +127,24 @@ describe('<Layout />', () => {
     expect(screen.getAllByText('routes.timeTracker').length).toBeGreaterThan(0);
   });
 
+  test('allows the active module to be collapsed and reopened', () => {
+    renderLayout();
+
+    const activeModule = screen.getByRole('button', { name: 'modules.timesheets' });
+    expect(activeModule.getAttribute('data-state')).toBe('open');
+    expect(screen.getByRole('button', { name: 'routes.timeTracker' })).toBeDefined();
+
+    fireEvent.click(activeModule);
+
+    expect(activeModule.getAttribute('data-state')).toBe('closed');
+    expect(screen.queryByRole('button', { name: 'routes.timeTracker' })).toBeNull();
+
+    fireEvent.click(activeModule);
+
+    expect(activeModule.getAttribute('data-state')).toBe('open');
+    expect(screen.getByRole('button', { name: 'routes.timeTracker' })).toBeDefined();
+  });
+
   test('main content is scoped to the selected shadcn theme', async () => {
     localStorage.setItem(THEME_STORAGE_KEY, 'dark');
     const { container } = renderLayout();
