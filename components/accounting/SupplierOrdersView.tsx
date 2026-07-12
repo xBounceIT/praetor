@@ -25,6 +25,7 @@ import {
   getEffectiveDurationMonths,
   isFiniteNumber,
   isPositiveFiniteNumber,
+  normalizeDurationForSubmit,
   normalizeDurationUnit,
   parseDurationValueToMonths,
 } from '../../utils/numbers';
@@ -414,6 +415,7 @@ const useSupplierOrdersController = ({
           ...item,
           unitPrice: Number(item.unitPrice) || 0,
           discount: item.discount === undefined ? undefined : Number(item.discount),
+          ...normalizeDurationForSubmit(item),
         })),
       });
 

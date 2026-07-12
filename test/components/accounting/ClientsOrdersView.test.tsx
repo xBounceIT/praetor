@@ -672,8 +672,8 @@ describe('<ClientsOrdersView /> product quick-view shortcut', () => {
       expect(link).toHaveAttribute('href', '#/catalog/internal-listing?filterId=product-1');
       expect(link).toHaveAttribute('target', '_blank');
     }
-    // The shortcut floats above the field on desktop (lg:absolute), matching quotes/offers.
-    expect(productLinks.some((link) => link.className.includes('lg:absolute'))).toBe(true);
+    // StandardTable clips overflowing value cells, so the shortcut stays inline inside the cell.
+    expect(productLinks.every((link) => !link.className.includes('lg:absolute'))).toBe(true);
   });
 
   test('hides the product shortcut entirely without internal-listing access', async () => {
@@ -761,8 +761,8 @@ describe('<ClientsOrdersView /> supplier-order quick-view shortcut', () => {
       expect(link).toHaveAttribute('href', '#/accounting/supplier-orders?filterId=ss-42');
       expect(link).toHaveAttribute('target', '_blank');
     }
-    // Floats above the field on desktop (lg:absolute), matching the product shortcut.
-    expect(links.some((link) => link.className.includes('lg:absolute'))).toBe(true);
+    // StandardTable clips overflowing value cells, so the shortcut stays inline inside the cell.
+    expect(links.every((link) => !link.className.includes('lg:absolute'))).toBe(true);
   });
 
   test('keeps the line discount editable when the line is linked to a supplier order', async () => {

@@ -47,6 +47,7 @@ import {
   getItemPricingContext,
   isPositiveFiniteNumber,
   MOL_PERCENTAGE_DECIMALS,
+  normalizeDurationForSubmit,
   normalizeDurationUnit,
   type PricingTotals,
   parseDurationValueToMonths,
@@ -671,8 +672,7 @@ const useClientQuotesController = ({
         ...item,
         unitPrice: getClientQuoteUnitSalePrice(item),
         discount: item.discount === undefined ? undefined : Number(item.discount),
-        durationMonths: item.durationMonths === undefined ? undefined : Number(item.durationMonths),
-        durationUnit: normalizeDurationUnit(item.durationUnit),
+        ...normalizeDurationForSubmit(item),
         productCost: item.productCost === undefined ? undefined : Number(item.productCost),
         productMolPercentage:
           item.productMolPercentage === undefined || item.productMolPercentage === null

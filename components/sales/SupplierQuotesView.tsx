@@ -38,6 +38,7 @@ import {
   getDurationInputValue,
   getEffectiveDurationMonths,
   isPositiveFiniteNumber,
+  normalizeDurationForSubmit,
   normalizeDurationUnit,
   parseDurationValueToMonths,
   parseNumberInputValue,
@@ -1064,10 +1065,9 @@ const useSupplierQuotesController = ({
           Number(item.listPrice ?? item.unitPrice ?? 0),
           Number(item.discountPercent ?? 0),
         ),
-        // Duration applies to every line type now (issue #775); 'na' is gated server-side via
-        // effectiveDurationMonths, so the chosen value/unit is submitted verbatim.
-        durationMonths: Number(item.durationMonths ?? 1) || 1,
-        durationUnit: normalizeDurationUnit(item.durationUnit),
+        // Duration applies to every line type now (issue #775). Blank values stay blank and use
+        // the canonical month unit; 'na' remains explicitly duration-less.
+        ...normalizeDurationForSubmit(item),
       })),
     };
     if (editingQuote) {

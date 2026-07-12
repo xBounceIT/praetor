@@ -304,6 +304,50 @@ describe('<ClientQuotesView />', () => {
     expect(onUpdateQuote.mock.calls[0][1].items?.[0].discount).toBe(10);
   });
 
+  test('submits a blank duration without persisting an empty years unit', async () => {
+    const onUpdateQuote = mock((_id: string, _updates: Partial<Quote>) => Promise.resolve());
+    const blankDurationQuote: Quote = {
+      ...quotes[0],
+      id: 'Q-BLANK-DURATION',
+      items: [
+        {
+          ...quotes[0].items[0],
+          quoteId: 'Q-BLANK-DURATION',
+          durationMonths: undefined,
+          durationUnit: 'years',
+        },
+      ],
+    };
+
+    render(
+      <ClientQuotesView
+        quotes={[blankDurationQuote]}
+        clients={clients}
+        products={[]}
+        supplierQuotes={[]}
+        communicationChannels={communicationChannels}
+        currency="EUR"
+        onAddQuote={mock(() => Promise.resolve())}
+        onUpdateQuote={onUpdateQuote}
+        onDeleteQuote={mock(() => Promise.resolve())}
+      />,
+    );
+
+    fireEvent.click(screen.getByText('Q-BLANK-DURATION'));
+    const dialog = await screen.findByRole('dialog');
+    const durationInputs = within(dialog)
+      .getAllByRole('textbox', { name: 'sales:clientQuotes.durationColumn' })
+      .filter((input): input is HTMLInputElement => input instanceof HTMLInputElement);
+    expect(durationInputs.some((input) => input.value === '')).toBe(true);
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'sales:clientQuotes.updateQuote' }));
+    await waitFor(() => expect(onUpdateQuote).toHaveBeenCalledTimes(1));
+    expect(onUpdateQuote.mock.calls[0][1].items?.[0]).toMatchObject({
+      durationMonths: undefined,
+      durationUnit: 'months',
+    });
+  });
+
   test('inherits duration and its unit when selecting a supplier quote item', async () => {
     const user = userEvent.setup();
     const supplierQuote: SupplierQuote = {

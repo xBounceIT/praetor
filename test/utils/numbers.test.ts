@@ -16,6 +16,7 @@ import {
   getItemPricingContext,
   isFiniteNumber,
   isPositiveFiniteNumber,
+  normalizeDurationForSubmit,
   normalizeDurationUnit,
   normalizeLocalizedNumber,
   type PricingItem,
@@ -266,6 +267,32 @@ describe('getDurationInputValue', () => {
   test('converts real stored durations into their selected display unit', () => {
     expect(getDurationInputValue({ durationMonths: 6, durationUnit: 'months' })).toBe(6);
     expect(getDurationInputValue({ durationMonths: 24, durationUnit: 'years' })).toBe(2);
+  });
+});
+
+describe('normalizeDurationForSubmit', () => {
+  test('keeps blank durations empty and normalizes their display unit to months', () => {
+    expect(normalizeDurationForSubmit({ durationUnit: 'years' })).toEqual({
+      durationMonths: undefined,
+      durationUnit: 'months',
+    });
+    expect(
+      normalizeDurationForSubmit({ durationMonths: Number.NaN, durationUnit: 'years' }),
+    ).toEqual({
+      durationMonths: undefined,
+      durationUnit: 'months',
+    });
+  });
+
+  test('preserves real and explicitly duration-less values', () => {
+    expect(normalizeDurationForSubmit({ durationMonths: 24, durationUnit: 'years' })).toEqual({
+      durationMonths: 24,
+      durationUnit: 'years',
+    });
+    expect(normalizeDurationForSubmit({ durationUnit: 'na' })).toEqual({
+      durationMonths: undefined,
+      durationUnit: 'na',
+    });
   });
 });
 

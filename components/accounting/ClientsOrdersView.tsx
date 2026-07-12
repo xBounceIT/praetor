@@ -37,6 +37,7 @@ import {
   getItemPricingContext,
   isPositiveFiniteNumber,
   MOL_PERCENTAGE_DECIMALS,
+  normalizeDurationForSubmit,
   normalizeDurationUnit,
   type PricingTotals,
   parseDurationValueToMonths,
@@ -376,8 +377,7 @@ const useClientsOrdersController = ({
         ...item,
         unitPrice: item.unitPrice,
         discount: item.discount === undefined ? undefined : Number(item.discount),
-        durationMonths: item.durationMonths === undefined ? undefined : Number(item.durationMonths),
-        durationUnit: normalizeDurationUnit(item.durationUnit),
+        ...normalizeDurationForSubmit(item),
         productCost: item.productCost === undefined ? undefined : Number(item.productCost),
         productMolPercentage:
           item.productMolPercentage === undefined || item.productMolPercentage === null
@@ -1492,7 +1492,6 @@ const OrderItemSupplierField: React.FC<{
               'accounting:clientsOrders.supplierOrderShortcutUnavailable',
               { defaultValue: 'No linked supplier order to open' },
             )}
-            floating
           />
         )}
       </div>
@@ -1532,7 +1531,6 @@ const OrderItemProductField: React.FC<{
             href={productHref}
             label={controller.t('sales:clientQuotes.openProductInNewTab')}
             disabledLabel={controller.t('sales:clientQuotes.productShortcutUnavailable')}
-            floating
           />
         )}
       </div>

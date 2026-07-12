@@ -175,6 +175,22 @@ export const getDurationInputValue = (item: PricingItem): number | undefined => 
   return normalizeDurationUnit(item.durationUnit) === 'years' ? months / MONTHS_PER_YEAR : months;
 };
 
+// Keep blank durations blank and pair them with the canonical default display unit. This avoids
+// persisting an empty "years" duration that the backend would normalize to one month (0.08 years).
+export const normalizeDurationForSubmit = (
+  item: PricingItem,
+): { durationMonths: number | undefined; durationUnit: DurationUnit } => {
+  const durationUnit = normalizeDurationUnit(item.durationUnit);
+  if (durationUnit === 'na') return { durationMonths: undefined, durationUnit };
+
+  const durationMonths = Number(item.durationMonths);
+  if (!Number.isFinite(durationMonths) || durationMonths <= 0) {
+    return { durationMonths: undefined, durationUnit: 'months' };
+  }
+
+  return { durationMonths, durationUnit };
+};
+
 // Parse a duration-input string (expressed in `unit`) into canonical whole months ≥ 1 (issue
 // #757). Empty/invalid input falls back to one of the chosen unit (1 month / 1 year). Shared by
 // the quote/offer/order/invoice line-item rows so the parse-and-clamp rule lives in one place.
