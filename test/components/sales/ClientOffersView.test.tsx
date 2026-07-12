@@ -1092,7 +1092,11 @@ describe('<ClientOffersView /> localized line amounts', () => {
     fireEvent.click(screen.getByText(offerId));
 
     await waitFor(() => expect(screen.getAllByText('1.234,50 EUR').length).toBeGreaterThan(0));
-    expect(screen.getAllByText('765,50 EUR').length).toBeGreaterThan(0);
+    const marginValues = screen.getAllByText('765,50 EUR');
+    expect(marginValues.length).toBeGreaterThan(0);
+    expect(
+      marginValues.some((value) => value.closest('td')?.className.includes('text-emerald-600')),
+    ).toBe(true);
     expect(screen.getAllByText('2.000,00 EUR').length).toBeGreaterThan(0);
   });
 });

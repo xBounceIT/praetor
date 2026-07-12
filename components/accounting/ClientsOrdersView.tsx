@@ -717,7 +717,7 @@ const useClientsOrdersController = ({
         header: t('accounting:clientsOrders.margin'),
         id: 'margin',
         accessorFn: (row: ClientsOrder) => orderPricingMap.get(row.id)?.margin ?? 0,
-        className: 'whitespace-nowrap',
+        className: 'whitespace-nowrap text-emerald-600',
         headerClassName: 'min-w-[8rem]',
         disableFiltering: true,
         cell: ({ row, value }: { row: ClientsOrder; value: unknown }) => (
@@ -1372,6 +1372,7 @@ const OrderItemsSection: React.FC<{ controller: ClientsOrdersController }> = ({ 
       header: controller.t('sales:clientQuotes.marginLabel'),
       accessorFn: getClientsOrderItemMargin,
       align: 'right',
+      className: 'text-emerald-600',
       cell: ({ row }) => (
         <OrderItemAmountField
           label={controller.t('sales:clientQuotes.marginLabel')}

@@ -751,7 +751,7 @@ const useClientOffersController = ({
       header: t('sales:clientOffers.margin', { defaultValue: 'Margin' }),
       id: 'margin',
       accessorFn: (row) => offerPricingMap.get(row.id)?.margin ?? 0,
-      className: 'whitespace-nowrap',
+      className: 'whitespace-nowrap text-emerald-600',
       headerClassName: 'min-w-[8rem]',
       disableFiltering: true,
       cell: ({ row }) => {
@@ -1905,6 +1905,7 @@ const ClientOfferItemsSection: React.FC<{ controller: ClientOffersController }> 
       header: t('sales:clientQuotes.marginLabel'),
       accessorFn: getClientOfferItemMargin,
       align: 'right',
+      className: 'text-emerald-600',
       cell: ({ row }) => (
         <span className="font-semibold text-emerald-600 tabular-nums">
           {formatDecimal(getClientOfferItemMargin(row))} {currency}

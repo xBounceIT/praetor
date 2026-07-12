@@ -128,6 +128,38 @@ describe('<ClientsOrdersView />', () => {
     }
   });
 
+  test('renders margin cells in emerald in both the list and item table', async () => {
+    render(
+      <ClientsOrdersView
+        orders={orders}
+        clients={clients}
+        products={[]}
+        currency="EUR"
+        onUpdateClientsOrder={mock(() => Promise.resolve())}
+        onDeleteClientsOrder={mock(() => Promise.resolve())}
+      />,
+    );
+
+    const listMarginHeader = screen.getByText('accounting:clientsOrders.margin').closest('th');
+    const listMarginIndex = Array.from(listMarginHeader?.parentElement?.children ?? []).indexOf(
+      listMarginHeader as Element,
+    );
+    const listRow = screen.getByText('Helios Energy Services').closest('tr');
+    expect(listRow?.children[listMarginIndex]?.className).toContain('text-emerald-600');
+
+    fireEvent.click(listRow as HTMLElement);
+    const dialog = await screen.findByRole('dialog');
+    const itemMarginHeader = within(dialog)
+      .getAllByText('sales:clientQuotes.marginLabel')
+      .map((label) => label.closest('th'))
+      .find((header): header is HTMLTableCellElement => header instanceof HTMLTableCellElement);
+    const itemMarginIndex = Array.from(itemMarginHeader?.parentElement?.children ?? []).indexOf(
+      itemMarginHeader as Element,
+    );
+    const itemRow = within(dialog).getAllByRole('row')[1];
+    expect(itemRow.children[itemMarginIndex]?.className).toContain('text-emerald-600');
+  });
+
   test('client column does not render item count below the client name', () => {
     render(
       <ClientsOrdersView

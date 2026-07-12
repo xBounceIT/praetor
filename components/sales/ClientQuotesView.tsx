@@ -1356,7 +1356,7 @@ const useClientQuotesController = ({
       header: t('sales:clientQuotes.marginLabel'),
       id: 'margin',
       accessorFn: (row) => quotePricingMap.get(row.id)?.margin ?? 0,
-      className: 'whitespace-nowrap',
+      className: 'whitespace-nowrap text-emerald-600',
       headerClassName: 'min-w-[8rem]',
       disableFiltering: true,
       cell: ({ row }) => {
@@ -2448,6 +2448,7 @@ const ClientQuoteItemsSection: React.FC<{ controller: ClientQuotesController }> 
       header: t('sales:clientQuotes.marginLabel'),
       accessorFn: getClientQuoteItemMargin,
       align: 'right',
+      className: 'text-emerald-600',
       cell: ({ row }) => (
         <span className="font-semibold text-emerald-600 tabular-nums">
           {formatDecimal(getClientQuoteItemMargin(row))} {currency}
