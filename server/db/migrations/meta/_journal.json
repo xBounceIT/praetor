@@ -715,6 +715,13 @@
       "when": 1783896900298,
       "tag": "0101_add_supplier_sale_item_unit_type",
       "breakpoints": true
+    },
+    {
+      "idx": 102,
+      "version": "7",
+      "when": 1783899428049,
+      "tag": "0102_backfill_legacy_supplier_order_pricing",
+      "breakpoints": true
     }
   ]
 }

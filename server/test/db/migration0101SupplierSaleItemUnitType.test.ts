@@ -72,7 +72,12 @@ describe('migration 0101 supplier-sale item quantity unit', () => {
       entries: Array<{ idx: number; tag: string }>;
     };
 
-    expect(journal.entries.at(-1)).toEqual(
+    const migrationIndex = journal.entries.findIndex(
+      ({ tag }) => tag === '0101_add_supplier_sale_item_unit_type',
+    );
+
+    expect(journal.entries[migrationIndex - 1]).toEqual(expect.objectContaining({ idx: 100 }));
+    expect(journal.entries[migrationIndex]).toEqual(
       expect.objectContaining({ idx: 101, tag: '0101_add_supplier_sale_item_unit_type' }),
     );
   });
