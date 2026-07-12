@@ -2,7 +2,6 @@ import type React from 'react';
 import { useCallback, useMemo, useReducer } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
-import DocumentLineItemsScrollArea from '@/components/ui/document-line-items-scroll-area';
 import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -11,11 +10,17 @@ import { useDocumentCodePreview } from '../../hooks/useDocumentCodePreview';
 import type { Client, DurationUnit, Invoice, InvoiceItem, Product } from '../../types';
 import { addDaysToDateOnly, formatDateOnlyForLocale, getLocalDateString } from '../../utils/date';
 import {
+  createLineItemIndexResolver,
+  createTemporaryLineItemId,
+  isTemporaryLineItem,
+} from '../../utils/lineItemIndex';
+import {
   calcProductSalePrice,
   durationValueToMonths,
   formatDecimal,
   getDurationDisplayValue,
   getEffectiveDurationMonths,
+  isPositiveFiniteNumber,
   normalizeDurationUnit,
   parseDurationValueToMonths,
 } from '../../utils/numbers';
@@ -36,7 +41,7 @@ import {
 } from '../shared/ModalLayout';
 import QuickViewLinkButton from '../shared/QuickViewLinkButton';
 import SelectControl from '../shared/SelectControl';
-import StandardTable from '../shared/StandardTable';
+import StandardTable, { type Column } from '../shared/StandardTable';
 import StatusBadge, { type StatusType } from '../shared/StatusBadge';
 import { TABLE_ROW_ACTION_BUTTON_CLASSNAME } from '../shared/tableControlStyles';
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
@@ -54,6 +59,7 @@ export interface ClientsInvoicesViewProps {
 
 // Italian standard VAT rate, used as the per-line default.
 const DEFAULT_TAX_RATE = 22;
+const EMPTY_INVOICE_ITEMS: InvoiceItem[] = [];
 
 // Months the line's service runs (issue #757); multiplies the taxable amount. The shared
 // `getEffectiveDurationMonths` clamps absent/invalid values to 1, so pre-duration invoices keep
@@ -333,7 +339,7 @@ const useClientsInvoicesController = ({
 
   const addItemRow = () => {
     const newItem: Partial<InvoiceItem> = {
-      id: `temp-${Date.now()}`,
+      id: createTemporaryLineItemId(),
       productId: undefined,
       description: '',
       unitOfMeasure: 'unit',
@@ -883,103 +889,161 @@ const InvoiceDateField: React.FC<{
 
 const InvoiceItemsSection: React.FC<{ controller: ClientsInvoicesController }> = ({
   controller,
-}) => (
-  <div className="space-y-4">
-    <div className="flex items-center justify-between">
-      <SectionTitle>{controller.t('accounting:clientsInvoices.items')}</SectionTitle>
-      <Button type="button" size="sm" onClick={controller.addItemRow}>
-        <i className="fa-solid fa-plus text-[10px]" aria-hidden="true"></i>
-        {controller.t('accounting:clientsInvoices.addItem')}
-      </Button>
-    </div>
-    <FieldError className="-mt-2 text-xs">{controller.errors.items}</FieldError>
-    {controller.formData.items && controller.formData.items.length > 0 ? (
-      <DocumentLineItemsScrollArea aria-label={controller.t('accounting:clientsInvoices.items')}>
-        <InvoiceItemsHeader controller={controller} />
-        <div className="space-y-3">
-          {controller.formData.items.map((item, index) => (
-            <InvoiceItemRow key={item.id} controller={controller} item={item} index={index} />
-          ))}
-        </div>
-      </DocumentLineItemsScrollArea>
-    ) : (
-      <div className="rounded-md border border-dashed border-border py-8 text-center text-sm text-muted-foreground">
-        {controller.t('accounting:clientsInvoices.noItems')}
-      </div>
-    )}
-  </div>
-);
-
-const InvoiceItemsHeader: React.FC<{ controller: ClientsInvoicesController }> = ({
-  controller,
 }) => {
-  if (!controller.formData.items || controller.formData.items.length === 0) return null;
+  const items = controller.formData.items || EMPTY_INVOICE_ITEMS;
+  const getIndex = useMemo(
+    () => createLineItemIndexResolver(controller.formData.items),
+    [controller.formData.items],
+  );
+  const columns: Column<InvoiceItem>[] = [
+    {
+      id: 'product',
+      header: controller.t('common:labels.product'),
+      minWidth: 244,
+      accessorFn: (item) =>
+        controller.activeProducts.find((product) => product.id === item.productId)?.name || '',
+      cell: ({ row }) => (
+        <div className="min-w-[220px]">
+          <InvoiceItemProductField controller={controller} item={row} index={getIndex(row)} />
+        </div>
+      ),
+    },
+    {
+      id: 'description',
+      header: controller.t('common:labels.description'),
+      minWidth: 244,
+      accessorKey: 'description',
+      cell: ({ row }) => {
+        const index = getIndex(row);
+        return (
+          <Input
+            id={`client-invoice-item-description-${index}`}
+            type="text"
+            required
+            aria-label={controller.t('common:labels.description')}
+            placeholder={controller.t('accounting:clientsInvoices.descriptionPlaceholder')}
+            value={row.description}
+            onChange={(event) => controller.updateItemRow(index, 'description', event.target.value)}
+            className="min-w-[220px]"
+          />
+        );
+      },
+    },
+    {
+      id: 'quantity',
+      header: controller.t('common:labels.quantity'),
+      minWidth: 174,
+      accessorKey: 'quantity',
+      align: 'right',
+      cell: ({ row }) => (
+        <div className="min-w-[150px]">
+          <InvoiceItemQuantityField controller={controller} item={row} index={getIndex(row)} />
+        </div>
+      ),
+    },
+    {
+      id: 'duration',
+      header: controller.t('sales:clientQuotes.durationColumn', { defaultValue: 'Duration' }),
+      minWidth: 174,
+      accessorFn: (item) => getEffectiveDurationMonths(item),
+      align: 'right',
+      cell: ({ row }) => (
+        <div className="min-w-[150px]">
+          <InvoiceItemDurationField controller={controller} item={row} index={getIndex(row)} />
+        </div>
+      ),
+    },
+    {
+      id: 'unitPrice',
+      header: controller.t('common:labels.price'),
+      accessorKey: 'unitPrice',
+      align: 'right',
+      cell: ({ row }) => (
+        <div className="min-w-[130px]">
+          <InvoiceItemPriceField controller={controller} item={row} index={getIndex(row)} />
+        </div>
+      ),
+    },
+    {
+      id: 'discount',
+      header: controller.t('common:labels.discount'),
+      accessorFn: (item) => item.discount || 0,
+      align: 'right',
+      cell: ({ row }) => (
+        <div className="min-w-[110px]">
+          <InvoiceItemDiscountField controller={controller} item={row} index={getIndex(row)} />
+        </div>
+      ),
+    },
+    {
+      id: 'taxRate',
+      header: controller.t('accounting:clientsInvoices.taxRate', { defaultValue: 'IVA %' }),
+      accessorFn: (item) => item.taxRate ?? DEFAULT_TAX_RATE,
+      align: 'right',
+      cell: ({ row }) => (
+        <div className="min-w-[110px]">
+          <InvoiceItemTaxField controller={controller} item={row} index={getIndex(row)} />
+        </div>
+      ),
+    },
+    {
+      id: 'total',
+      header: controller.t('common:labels.total'),
+      accessorFn: getLineTotal,
+      align: 'right',
+      cell: ({ row }) => <InvoiceItemTotalField controller={controller} item={row} />,
+    },
+    {
+      id: 'actions',
+      header: controller.t('common:labels.actions'),
+      align: 'right',
+      cell: ({ row }) => (
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          onClick={() => controller.setProductRowToDelete(getIndex(row))}
+          className="text-muted-foreground hover:text-destructive"
+        >
+          <i className="fa-solid fa-trash-can" aria-hidden="true"></i>
+          <span className="sr-only">{controller.t('common:buttons.delete')}</span>
+        </Button>
+      ),
+    },
+  ];
+
   return (
-    <div className="mb-1 hidden items-center gap-2 px-3 lg:flex">
-      <div className="grid flex-1 grid-cols-14 gap-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-        <div className="col-span-3">{controller.t('common:labels.product')}</div>
-        <div className="col-span-2">{controller.t('common:labels.quantity')}</div>
-        <div className="col-span-2 whitespace-nowrap">
-          {controller.t('sales:clientQuotes.durationColumn', { defaultValue: 'Duration' })}
-        </div>
-        <div className="col-span-2">{controller.t('common:labels.price')}</div>
-        <div className="col-span-1">{controller.t('common:labels.discount')}</div>
-        <div className="col-span-2">
-          {controller.t('accounting:clientsInvoices.taxRate', { defaultValue: 'IVA %' })}
-        </div>
-        <div className="col-span-2 pr-2 text-right">{controller.t('common:labels.total')}</div>
+    <div className="space-y-2">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <SectionTitle>{controller.t('accounting:clientsInvoices.items')}</SectionTitle>
+        <Button type="button" size="sm" onClick={controller.addItemRow}>
+          <i className="fa-solid fa-plus text-[10px]" aria-hidden="true"></i>
+          {controller.t('accounting:clientsInvoices.addItem')}
+        </Button>
       </div>
-      <div className="w-8 shrink-0"></div>
+      <FieldError className="text-xs">{controller.errors.items}</FieldError>
+      <StandardTable<InvoiceItem>
+        title={controller.t('accounting:clientsInvoices.items')}
+        persistenceKey="accounting.clientInvoices.items"
+        allowColumnHiding={false}
+        data={items}
+        columns={columns}
+        defaultRowsPerPage={5}
+        autoRevealNewRows
+        shouldBypassFilters={(item) =>
+          isTemporaryLineItem(item) || !isPositiveFiniteNumber(item.quantity)
+        }
+        minBodyRows={0}
+        tableContainerClassName="overflow-x-auto"
+        emptyState={
+          <div className="py-8 text-sm text-muted-foreground">
+            {controller.t('accounting:clientsInvoices.noItems')}
+          </div>
+        }
+      />
     </div>
   );
 };
-
-const InvoiceItemRow: React.FC<{
-  controller: ClientsInvoicesController;
-  item: InvoiceItem;
-  index: number;
-}> = ({ controller, item, index }) => (
-  <div className="space-y-3 rounded-md border border-border bg-muted/30 p-3">
-    <div className="flex items-start gap-2 lg:items-center lg:pt-5">
-      <div className="grid flex-1 grid-cols-1 gap-2 lg:grid-cols-14">
-        <InvoiceItemProductField controller={controller} item={item} index={index} />
-        <InvoiceItemQuantityField controller={controller} item={item} index={index} />
-        <InvoiceItemDurationField controller={controller} item={item} index={index} />
-        <InvoiceItemPriceField controller={controller} item={item} index={index} />
-        <InvoiceItemDiscountField controller={controller} item={item} index={index} />
-        <InvoiceItemTaxField controller={controller} item={item} index={index} />
-        <InvoiceItemTotalField controller={controller} item={item} />
-      </div>
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon-sm"
-        onClick={() => controller.setProductRowToDelete(index)}
-        className="text-muted-foreground hover:text-destructive"
-      >
-        <i className="fa-solid fa-trash-can" aria-hidden="true"></i>
-        <span className="sr-only">{controller.t('common:buttons.delete')}</span>
-      </Button>
-    </div>
-    <Field>
-      <FieldLabel
-        htmlFor={`client-invoice-item-description-${index}`}
-        className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground"
-        required
-      >
-        {controller.t('common:labels.description')}
-      </FieldLabel>
-      <Input
-        id={`client-invoice-item-description-${index}`}
-        type="text"
-        required
-        placeholder={controller.t('accounting:clientsInvoices.descriptionPlaceholder')}
-        value={item.description}
-        onChange={(event) => controller.updateItemRow(index, 'description', event.target.value)}
-      />
-    </Field>
-  </div>
-);
 
 const InvoiceItemProductField: React.FC<{
   controller: ClientsInvoicesController;
@@ -1012,7 +1076,6 @@ const InvoiceItemProductField: React.FC<{
             href={productHref}
             label={controller.t('sales:clientQuotes.openProductInNewTab')}
             disabledLabel={controller.t('sales:clientQuotes.productShortcutUnavailable')}
-            floating
           />
         )}
       </div>

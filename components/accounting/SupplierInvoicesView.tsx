@@ -2,7 +2,6 @@ import type React from 'react';
 import { useCallback, useMemo, useReducer } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
-import DocumentLineItemsScrollArea from '@/components/ui/document-line-items-scroll-area';
 import { Field, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -20,11 +19,13 @@ import {
   getLocalDateString,
   normalizeDateOnlyString,
 } from '../../utils/date';
+import { createLineItemIndexResolver } from '../../utils/lineItemIndex';
 import {
   durationValueToMonths,
   formatDecimal,
   getDurationDisplayValue,
   getEffectiveDurationMonths,
+  isPositiveFiniteNumber,
   normalizeDurationUnit,
   parseDurationValueToMonths,
 } from '../../utils/numbers';
@@ -42,7 +43,7 @@ import {
   ModalTitle,
 } from '../shared/ModalLayout';
 import SelectControl from '../shared/SelectControl';
-import StandardTable from '../shared/StandardTable';
+import StandardTable, { type Column } from '../shared/StandardTable';
 import StatusBadge, { type StatusType } from '../shared/StatusBadge';
 import { TABLE_ROW_ACTION_BUTTON_CLASSNAME } from '../shared/tableControlStyles';
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
@@ -54,6 +55,14 @@ const statusLabelMap: Record<string, string> = {
   overdue: 'accounting:supplierInvoices.statusOverdue',
   cancelled: 'accounting:supplierInvoices.statusCancelled',
 };
+const EMPTY_SUPPLIER_INVOICE_ITEMS: SupplierInvoiceItem[] = [];
+
+const getSupplierInvoiceLineTotal = (item: SupplierInvoiceItem) => {
+  const lineSubtotal =
+    Number(item.quantity ?? 0) * Number(item.unitPrice ?? 0) * getEffectiveDurationMonths(item);
+  const lineDiscount = (lineSubtotal * Number(item.discount ?? 0)) / 100;
+  return lineSubtotal - lineDiscount;
+};
 
 const getStatusOptions = (t: (key: string, options?: Record<string, unknown>) => string) =>
   Object.entries(statusLabelMap).map(([id, key]) => ({ id, name: t(key) }));
@@ -64,17 +73,8 @@ const getStatusLabel = (
 ) => t(statusLabelMap[status] ?? String(status));
 
 const calculateTotals = (items: SupplierInvoiceItem[]) => {
-  let subtotal = 0;
-
-  items.forEach((item) => {
-    // Duration multiplies the line total alongside quantity (issue #776); 'na' lines never multiply
-    // (getEffectiveDurationMonths returns 1).
-    const lineSubtotal =
-      Number(item.quantity ?? 0) * Number(item.unitPrice ?? 0) * getEffectiveDurationMonths(item);
-    const lineDiscount = (lineSubtotal * Number(item.discount ?? 0)) / 100;
-    const lineNet = lineSubtotal - lineDiscount;
-    subtotal += lineNet;
-  });
+  // Duration multiplies each line alongside quantity; 'na' lines use a neutral multiplier of 1.
+  const subtotal = items.reduce((sum, item) => sum + getSupplierInvoiceLineTotal(item), 0);
 
   return { subtotal, total: subtotal };
 };
@@ -689,186 +689,167 @@ const SupplierInvoiceDateField: React.FC<{
 
 const SupplierInvoiceItemsSection: React.FC<{ controller: SupplierInvoicesController }> = ({
   controller,
-}) => (
-  <div className="space-y-4">
-    <div className="flex items-center justify-between">
+}) => {
+  const items = controller.formData.items || EMPTY_SUPPLIER_INVOICE_ITEMS;
+  const getIndex = useMemo(
+    () => createLineItemIndexResolver(controller.formData.items),
+    [controller.formData.items],
+  );
+  const columns: Column<SupplierInvoiceItem>[] = [
+    {
+      id: 'product',
+      header: controller.t('crm:quotes.productsServices'),
+      minWidth: 244,
+      accessorFn: (item) =>
+        controller.productOptions.find((product) => product.id === item.productId)?.name || '',
+      cell: ({ row }) => (
+        <SupplierInvoiceItemProductField
+          controller={controller}
+          item={row}
+          index={getIndex(row)}
+          className="min-w-[220px]"
+        />
+      ),
+    },
+    {
+      id: 'description',
+      header: controller.t('common:labels.description'),
+      minWidth: 244,
+      accessorKey: 'description',
+      cell: ({ row }) => (
+        <SupplierInvoiceItemDescriptionField
+          controller={controller}
+          item={row}
+          index={getIndex(row)}
+          className="min-w-[220px]"
+        />
+      ),
+    },
+    {
+      id: 'quantity',
+      header: controller.t('common:labels.quantity'),
+      minWidth: 174,
+      accessorKey: 'quantity',
+      align: 'right',
+      cell: ({ row }) => (
+        <div className="min-w-[150px]">
+          <SupplierInvoiceItemQuantityField
+            controller={controller}
+            item={row}
+            index={getIndex(row)}
+            inputClassName="min-w-0 font-medium"
+          />
+        </div>
+      ),
+    },
+    {
+      id: 'unitPrice',
+      header: controller.t('crm:internalListing.salePrice'),
+      accessorKey: 'unitPrice',
+      align: 'right',
+      cell: ({ row }) => (
+        <div className="min-w-[130px]">
+          <SupplierInvoiceItemPriceField
+            controller={controller}
+            item={row}
+            index={getIndex(row)}
+            inputClassName="min-w-0 font-medium"
+          />
+        </div>
+      ),
+    },
+    {
+      id: 'discount',
+      header: controller.t('accounting:supplierOrders.discount'),
+      accessorFn: (item) => item.discount || 0,
+      align: 'right',
+      cell: ({ row }) => (
+        <div className="min-w-[110px]">
+          <SupplierInvoiceItemDiscountField
+            controller={controller}
+            item={row}
+            index={getIndex(row)}
+            inputClassName="min-w-0 font-medium"
+          />
+        </div>
+      ),
+    },
+    {
+      id: 'duration',
+      header: controller.t('accounting:supplierInvoices.durationColumn', {
+        defaultValue: 'Duration',
+      }),
+      minWidth: 174,
+      accessorFn: (item) => getEffectiveDurationMonths(item),
+      align: 'right',
+      cell: ({ row }) => (
+        <div className="min-w-[150px]">
+          <SupplierInvoiceItemDurationField
+            controller={controller}
+            index={getIndex(row)}
+            durationUnit={normalizeDurationUnit(row.durationUnit)}
+            durationValue={getDurationDisplayValue(row)}
+            inputClassName="min-w-0 font-medium"
+          />
+        </div>
+      ),
+    },
+    {
+      id: 'total',
+      header: controller.t('common:labels.total'),
+      accessorFn: getSupplierInvoiceLineTotal,
+      align: 'right',
+      cell: ({ row }) => (
+        <SupplierInvoiceItemTotalField
+          controller={controller}
+          lineTotal={getSupplierInvoiceLineTotal(row)}
+          className="min-w-[120px]"
+        />
+      ),
+    },
+    {
+      id: 'actions',
+      header: controller.t('common:labels.actions'),
+      align: 'right',
+      cell: ({ row }) => (
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          onClick={() => controller.removeItem(getIndex(row))}
+          className="shrink-0 text-muted-foreground hover:text-destructive"
+        >
+          <i className="fa-solid fa-trash-can" aria-hidden="true"></i>
+          <span className="sr-only">{controller.t('common:buttons.delete')}</span>
+        </Button>
+      ),
+    },
+  ];
+
+  return (
+    <div className="space-y-2">
       <SupplierInvoiceSectionTitle>
         {controller.t('accounting:supplierInvoices.items')}
       </SupplierInvoiceSectionTitle>
-    </div>
-    {(controller.formData.items || []).length > 0 ? (
-      <DocumentLineItemsScrollArea aria-label={controller.t('accounting:supplierInvoices.items')}>
-        <SupplierInvoiceItemsHeader controller={controller} />
-        <div className="space-y-3">
-          {controller.formData.items?.map((item, index) => (
-            <SupplierInvoiceItemRow
-              key={item.id}
-              controller={controller}
-              item={item}
-              index={index}
-            />
-          ))}
-        </div>
-      </DocumentLineItemsScrollArea>
-    ) : (
-      <div className="rounded-md border border-dashed border-border py-8 text-center text-sm text-muted-foreground">
-        {controller.t('accounting:supplierInvoices.noItems')}
-      </div>
-    )}
-  </div>
-);
-
-const SupplierInvoiceItemsHeader: React.FC<{ controller: SupplierInvoicesController }> = ({
-  controller,
-}) => {
-  if ((controller.formData.items || []).length === 0) return null;
-  return (
-    <div className="mb-1 hidden items-center gap-2 px-3 lg:flex">
-      <div className="grid flex-1 grid-cols-12 gap-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-        <div className="col-span-2 ml-1">{controller.t('crm:quotes.productsServices')}</div>
-        <div className="col-span-2">
-          {controller.t('accounting:supplierInvoices.descriptionPlaceholder')}
-        </div>
-        <div className="col-span-1">{controller.t('common:labels.quantity')}</div>
-        <div className="col-span-2">{controller.t('crm:internalListing.salePrice')}</div>
-        <div className="col-span-1">{controller.t('accounting:supplierOrders.discount')}</div>
-        <div className="col-span-2">
-          {controller.t('accounting:supplierInvoices.durationColumn', {
-            defaultValue: 'Duration',
-          })}
-        </div>
-        <div className="col-span-2 pr-2 text-right">{controller.t('common:labels.total')}</div>
-      </div>
-      <div className="w-8 shrink-0"></div>
-    </div>
-  );
-};
-
-const SupplierInvoiceItemRow: React.FC<{
-  controller: SupplierInvoicesController;
-  item: SupplierInvoiceItem;
-  index: number;
-}> = ({ controller, item, index }) => {
-  const durationUnit = normalizeDurationUnit(item.durationUnit);
-  const durationValue = getDurationDisplayValue(item);
-  const lineSubtotal =
-    Number(item.quantity ?? 0) * Number(item.unitPrice ?? 0) * getEffectiveDurationMonths(item);
-  const lineDiscount = (lineSubtotal * Number(item.discount ?? 0)) / 100;
-  const lineTotal = lineSubtotal - lineDiscount;
-
-  return (
-    <div className="space-y-3 rounded-md border border-border bg-muted/30 p-3">
-      <SupplierInvoiceItemMobileFields
-        controller={controller}
-        item={item}
-        index={index}
-        durationUnit={durationUnit}
-        durationValue={durationValue}
-        lineTotal={lineTotal}
-      />
-      <SupplierInvoiceItemDesktopFields
-        controller={controller}
-        item={item}
-        index={index}
-        durationUnit={durationUnit}
-        durationValue={durationValue}
-        lineTotal={lineTotal}
+      <StandardTable<SupplierInvoiceItem>
+        title={controller.t('accounting:supplierInvoices.items')}
+        persistenceKey="accounting.supplierInvoices.items"
+        allowColumnHiding={false}
+        data={items}
+        columns={columns}
+        defaultRowsPerPage={5}
+        minBodyRows={0}
+        shouldBypassFilters={(item) => !isPositiveFiniteNumber(item.quantity)}
+        tableContainerClassName="overflow-x-auto"
+        emptyState={
+          <div className="py-8 text-sm text-muted-foreground">
+            {controller.t('accounting:supplierInvoices.noItems')}
+          </div>
+        }
       />
     </div>
   );
 };
-
-const SupplierInvoiceItemMobileFields: React.FC<{
-  controller: SupplierInvoicesController;
-  item: SupplierInvoiceItem;
-  index: number;
-  durationUnit: DurationUnit;
-  durationValue: number;
-  lineTotal: number;
-}> = ({ controller, item, index, durationUnit, durationValue, lineTotal }) => (
-  <div className="space-y-2 lg:hidden">
-    <SupplierInvoiceItemProductField controller={controller} item={item} index={index} />
-    <SupplierInvoiceItemDescriptionField controller={controller} item={item} index={index} />
-    <div className="grid grid-cols-2 gap-2">
-      <SupplierInvoiceItemQuantityField controller={controller} item={item} index={index} />
-      <SupplierInvoiceItemPriceField controller={controller} item={item} index={index} />
-      <SupplierInvoiceItemDiscountField controller={controller} item={item} index={index} />
-      <SupplierInvoiceItemDurationField
-        controller={controller}
-        index={index}
-        durationUnit={durationUnit}
-        durationValue={durationValue}
-      />
-      <SupplierInvoiceItemTotalField
-        controller={controller}
-        lineTotal={lineTotal}
-        className="space-y-1"
-      />
-    </div>
-    <SupplierInvoiceItemDeleteButton controller={controller} index={index} align="right" />
-  </div>
-);
-
-const SupplierInvoiceItemDesktopFields: React.FC<{
-  controller: SupplierInvoicesController;
-  item: SupplierInvoiceItem;
-  index: number;
-  durationUnit: DurationUnit;
-  durationValue: number;
-  lineTotal: number;
-}> = ({ controller, item, index, durationUnit, durationValue, lineTotal }) => (
-  <div className="hidden items-start gap-2 lg:flex">
-    <div className="grid flex-1 grid-cols-12 gap-2">
-      <SupplierInvoiceItemProductField
-        controller={controller}
-        item={item}
-        index={index}
-        className="min-w-0 lg:col-span-2"
-      />
-      <SupplierInvoiceItemDescriptionField
-        controller={controller}
-        item={item}
-        index={index}
-        className="lg:col-span-2"
-      />
-      <SupplierInvoiceItemQuantityField
-        controller={controller}
-        item={item}
-        index={index}
-        className="lg:col-span-1"
-        inputClassName="min-w-0 font-medium"
-      />
-      <SupplierInvoiceItemPriceField
-        controller={controller}
-        item={item}
-        index={index}
-        className="lg:col-span-2"
-        inputClassName="min-w-0 font-medium"
-      />
-      <SupplierInvoiceItemDiscountField
-        controller={controller}
-        item={item}
-        index={index}
-        className="lg:col-span-1"
-        inputClassName="min-w-0 font-medium"
-      />
-      <SupplierInvoiceItemDurationField
-        controller={controller}
-        index={index}
-        durationUnit={durationUnit}
-        durationValue={durationValue}
-        className="lg:col-span-2"
-        inputClassName="min-w-0 font-medium"
-      />
-      <SupplierInvoiceItemTotalField
-        controller={controller}
-        lineTotal={lineTotal}
-        className="flex items-center justify-end whitespace-nowrap px-3 py-2 text-sm font-semibold text-foreground lg:col-span-2"
-      />
-    </div>
-    <SupplierInvoiceItemDeleteButton controller={controller} index={index} />
-  </div>
-);
 
 const SupplierInvoiceItemProductField: React.FC<{
   controller: SupplierInvoicesController;
@@ -1050,25 +1031,6 @@ const SupplierInvoiceItemTotalField: React.FC<{
     <div className="flex items-center justify-end whitespace-nowrap px-3 py-2 text-sm font-semibold text-foreground">
       {formatDecimal(lineTotal)} {controller.currency}
     </div>
-  </div>
-);
-
-const SupplierInvoiceItemDeleteButton: React.FC<{
-  controller: SupplierInvoicesController;
-  index: number;
-  align?: 'right' | 'inline';
-}> = ({ controller, index, align = 'inline' }) => (
-  <div className={align === 'right' ? 'flex justify-end' : undefined}>
-    <Button
-      type="button"
-      variant="ghost"
-      size="icon-sm"
-      onClick={() => controller.removeItem(index)}
-      className="shrink-0 text-muted-foreground hover:text-destructive"
-    >
-      <i className="fa-solid fa-trash-can" aria-hidden="true"></i>
-      <span className="sr-only">{controller.t('common:buttons.delete')}</span>
-    </Button>
   </div>
 );
 

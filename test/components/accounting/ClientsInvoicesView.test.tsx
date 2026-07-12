@@ -1,10 +1,10 @@
-import { afterEach, describe, expect, mock, test } from 'bun:test';
+import { afterEach, describe, expect, mock, spyOn, test } from 'bun:test';
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import type { Client, Invoice, Product } from '../../../types';
 import { installI18nMock } from '../../helpers/i18n';
 import { LineDeleteConfirmStub } from '../../helpers/lineItemDeleteConfirm';
 import { render } from '../../helpers/render';
-import { rowDeleteButtons } from '../../helpers/rowDeleteButtons';
+import { openRowDeleteButton, rowDeleteButtons } from '../../helpers/rowDeleteButtons';
 import {
   expectSourceContainsAll,
   expectSourceOmitsAll,
@@ -155,24 +155,25 @@ describe('ClientsInvoicesView modal styling', () => {
     ]);
   });
 
-  // Regression: the `lg:pt-5` quick-view gutter must sit on the row flex (with `lg:items-center`,
-  // alongside the trash button), not the inner grid — else the delete button misaligns above the inputs.
-  test('delete button shares the floated quick-view gutter so it stays aligned with the line', async () => {
+  test('renders invoice items through the shared StandardTable', async () => {
     const source = await readComponentSource('accounting/ClientsInvoicesView.tsx');
 
     expectSourceContainsAll(source, [
-      'className="flex items-start gap-2 lg:items-center lg:pt-5"',
-      'className="grid flex-1 grid-cols-1 gap-2 lg:grid-cols-14"',
+      "import StandardTable, { type Column } from '../shared/StandardTable';",
+      'const columns: Column<InvoiceItem>[]',
+      '<StandardTable<InvoiceItem>',
+      'persistenceKey="accounting.clientInvoices.items"',
+      'createLineItemIndexResolver(controller.formData.items)',
     ]);
-    expectSourceOmitsAll(source, ['lg:grid-cols-14 lg:pt-5']);
+    expectSourceOmitsAll(source, ['<DocumentLineItemsScrollArea']);
   });
 
   test('item rows render unit, currency, and percentage beside inputs instead of headers', async () => {
     const source = await readComponentSource('accounting/ClientsInvoicesView.tsx');
 
     expectSourceContainsAll(source, [
-      "{controller.t('common:labels.price')}</div>",
-      "{controller.t('common:labels.discount')}</div>",
+      "header: controller.t('common:labels.price')",
+      "header: controller.t('common:labels.discount')",
       '/',
       'suffix={controller.currency}',
       '<span className="shrink-0 text-xs font-medium text-muted-foreground">',
@@ -191,7 +192,7 @@ describe('ClientsInvoicesView modal styling', () => {
 
     expectSourceContainsAll(source, [
       // The Durata column header + per-row duration input wired through the shared value parser.
-      "{controller.t('sales:clientQuotes.durationColumn', { defaultValue: 'Duration' })}",
+      "header: controller.t('sales:clientQuotes.durationColumn', { defaultValue: 'Duration' })",
       "'durationMonths',",
       'parseDurationValueToMonths(value, unit)',
       // The input shows the display value in the chosen unit, with a months/years selector.
@@ -279,8 +280,8 @@ describe('<ClientsInvoicesView /> product quick-view shortcut', () => {
       expect(link).toHaveAttribute('href', '#/catalog/internal-listing?filterId=product-1');
       expect(link).toHaveAttribute('target', '_blank');
     }
-    // The shortcut floats above the field on desktop (lg:absolute), matching quotes/offers.
-    expect(productLinks.some((link) => link.className.includes('lg:absolute'))).toBe(true);
+    // StandardTable cells have no floating-field gutter, so the shortcut stays inline.
+    expect(productLinks.some((link) => link.className.includes('lg:absolute'))).toBe(false);
   });
 
   test('hides the product shortcut entirely without internal-listing access', async () => {
@@ -333,7 +334,7 @@ describe('<ClientsInvoicesView /> line-item delete confirmation', () => {
     expect(rowDeletes.length).toBeGreaterThan(0);
 
     // Clicking the trash icon must NOT remove the row immediately — it opens a confirmation.
-    fireEvent.click(rowDeletes[0]);
+    fireEvent.click(await openRowDeleteButton(dialog));
     const confirmUi = await screen.findByTestId('line-delete-confirm');
     expect(within(confirmUi).getByTestId('line-delete-title')).toHaveTextContent(
       'accounting:clientsInvoices.removeProductTitle',
@@ -350,12 +351,51 @@ describe('<ClientsInvoicesView /> line-item delete confirmation', () => {
     const dialog = await openEditor();
     const rowDeletes = rowDeleteButtons(dialog);
 
-    fireEvent.click(rowDeletes[0]);
+    fireEvent.click(await openRowDeleteButton(dialog));
     fireEvent.click(await screen.findByTestId('line-delete-cancel'));
 
     await waitFor(() => {
       expect(screen.queryByTestId('line-delete-confirm')).not.toBeInTheDocument();
     });
     expect(rowDeleteButtons(dialog)).toHaveLength(rowDeletes.length);
+  });
+});
+
+describe('<ClientsInvoicesView /> new line identity', () => {
+  test('keeps rapidly-added rows independently editable when the clock value is unchanged', async () => {
+    const dateNowSpy = spyOn(Date, 'now').mockReturnValue(1_700_000_000_000);
+    try {
+      render(
+        <ClientsInvoicesView
+          invoices={[]}
+          clients={clients}
+          products={[]}
+          onAddInvoice={mock(() => {})}
+          onUpdateInvoice={mock(() => {})}
+          onDeleteInvoice={mock(() => {})}
+          currency="EUR"
+        />,
+      );
+      fireEvent.click(screen.getByText('accounting:clientsInvoices.addInvoice'));
+      const dialog = await screen.findByRole('dialog');
+      const addItemButton = within(dialog).getByText('accounting:clientsInvoices.addItem');
+
+      fireEvent.click(addItemButton);
+      fireEvent.click(addItemButton);
+
+      const descriptionInputs = await waitFor(() => {
+        const inputs = within(dialog).getAllByPlaceholderText(
+          'accounting:clientsInvoices.descriptionPlaceholder',
+        ) as HTMLInputElement[];
+        expect(inputs).toHaveLength(2);
+        return inputs;
+      });
+      fireEvent.change(descriptionInputs[1], { target: { value: 'Second line' } });
+
+      expect(descriptionInputs[0].value).toBe('');
+      expect(descriptionInputs[1].value).toBe('Second line');
+    } finally {
+      dateNowSpy.mockRestore();
+    }
   });
 });

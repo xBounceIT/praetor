@@ -3,6 +3,12 @@ import { fireEvent, screen } from '@testing-library/react';
 import type { Product, Supplier, SupplierInvoice } from '../../types';
 import { installI18nMock } from '../helpers/i18n';
 import { render } from '../helpers/render';
+import { openRowDeleteButton } from '../helpers/rowDeleteButtons';
+import {
+  expectSourceContainsAll,
+  expectSourceOmitsAll,
+  readComponentSource,
+} from './modalStylingTestUtils';
 
 installI18nMock();
 
@@ -102,5 +108,31 @@ describe('<SupplierInvoicesView /> line item duration (issue #776/#775)', () => 
     const updates = onUpdateInvoice.mock.calls[0]?.[1] as Partial<SupplierInvoice>;
     expect(updates.items?.[0]?.durationMonths).toBe(5);
     expect(updates.items?.[0]?.durationUnit).toBe('months');
+  });
+});
+
+describe('<SupplierInvoicesView /> line-item table', () => {
+  test('renders supplier invoice items through the shared StandardTable', async () => {
+    const source = await readComponentSource('accounting/SupplierInvoicesView.tsx');
+
+    expectSourceContainsAll(source, [
+      "import StandardTable, { type Column } from '../shared/StandardTable';",
+      'const columns: Column<SupplierInvoiceItem>[]',
+      '<StandardTable<SupplierInvoiceItem>',
+      'persistenceKey="accounting.supplierInvoices.items"',
+      'createLineItemIndexResolver(controller.formData.items)',
+    ]);
+    expectSourceOmitsAll(source, ['<DocumentLineItemsScrollArea']);
+  });
+
+  test('keeps the delete action available from the StandardTable row menu', async () => {
+    const invoice = buildInvoice({ id: 'SINV-DELETE', status: 'draft' });
+    render(<SupplierInvoicesView {...baseProps} invoices={[invoice]} />);
+    fireEvent.click(screen.getByText('SINV-DELETE'));
+
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.click(await openRowDeleteButton(dialog));
+
+    expect(screen.queryByDisplayValue('Managed service')).not.toBeInTheDocument();
   });
 });
