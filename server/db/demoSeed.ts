@@ -1158,6 +1158,11 @@ const buildVerificationSteps = (
   { table: 'products', ids: demoIds.products, expected: DEMO_EXPECTED_COUNTS.products },
   { table: 'quotes', ids: demoIds.quotes, expected: DEMO_EXPECTED_COUNTS.quotes },
   {
+    table: 'quote_candidates',
+    ids: demoIds.quotes,
+    expected: DEMO_EXPECTED_COUNTS.quote_candidates,
+  },
+  {
     table: 'quote_items',
     ids: DEMO_ITEM_IDS.quoteItems,
     expected: DEMO_EXPECTED_COUNTS.quote_items,
