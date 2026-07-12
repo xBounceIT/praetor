@@ -166,7 +166,10 @@ export const autoCreateSupplierOrdersForClientOrder = async (
                 productId: item.productId,
                 productName: item.productName,
                 quantity: item.quantity,
-                unitPrice: item.unitPrice,
+                // supplier_sale_items stores the gross/list price plus its line discount. This
+                // preserves the same pricing chain shown on the originating supplier quote.
+                unitPrice: item.listPrice,
+                discount: item.discountPercent,
                 note: item.note,
                 durationMonths: item.durationMonths,
                 durationUnit: item.durationUnit,

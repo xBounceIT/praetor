@@ -25,6 +25,7 @@ import {
   optionalDurationUnit,
   optionalEnum,
   optionalLocalizedNonNegativeNumber,
+  optionalLocalizedPercentage,
   optionalNonEmptyString,
   parseLocalizedNonNegativeNumber,
   parseLocalizedPositiveNumber,
@@ -95,7 +96,7 @@ const itemBodySchema = {
     productName: { type: 'string' },
     quantity: { type: 'number' },
     unitPrice: { type: 'number' },
-    discount: { type: 'number' },
+    discount: { type: 'number', minimum: 0, maximum: 100 },
     note: { type: 'string' },
     durationMonths: { type: 'number' },
     durationUnit: { type: 'string', enum: ['months', 'years', 'na'] },
@@ -171,10 +172,7 @@ const normalizeItems = (
       badRequest(reply, unitPriceResult.message);
       return null;
     }
-    const discountResult = optionalLocalizedNonNegativeNumber(
-      item.discount,
-      `items[${i}].discount`,
-    );
+    const discountResult = optionalLocalizedPercentage(item.discount, `items[${i}].discount`);
     if (!discountResult.ok) {
       badRequest(reply, discountResult.message);
       return null;

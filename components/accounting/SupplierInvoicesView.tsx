@@ -23,6 +23,7 @@ import {
 import {
   durationValueToMonths,
   formatDecimal,
+  getDiscountedLineTotal,
   getDurationDisplayValue,
   getEffectiveDurationMonths,
   normalizeDurationUnit,
@@ -69,11 +70,7 @@ const calculateTotals = (items: SupplierInvoiceItem[]) => {
   items.forEach((item) => {
     // Duration multiplies the line total alongside quantity (issue #776); 'na' lines never multiply
     // (getEffectiveDurationMonths returns 1).
-    const lineSubtotal =
-      Number(item.quantity ?? 0) * Number(item.unitPrice ?? 0) * getEffectiveDurationMonths(item);
-    const lineDiscount = (lineSubtotal * Number(item.discount ?? 0)) / 100;
-    const lineNet = lineSubtotal - lineDiscount;
-    subtotal += lineNet;
+    subtotal += getDiscountedLineTotal(item);
   });
 
   return { subtotal, total: subtotal };
@@ -327,7 +324,7 @@ const useSupplierInvoicesController = ({
           Number(item.quantity ?? 0) *
           Number(item.unitPrice ?? 0) *
           getEffectiveDurationMonths(item);
-        return sum + (lineSubtotal * Number(item.discount ?? 0)) / 100;
+        return sum + lineSubtotal - getDiscountedLineTotal(item);
       }, 0),
     [formData.items],
   );
@@ -751,10 +748,7 @@ const SupplierInvoiceItemRow: React.FC<{
 }> = ({ controller, item, index }) => {
   const durationUnit = normalizeDurationUnit(item.durationUnit);
   const durationValue = getDurationDisplayValue(item);
-  const lineSubtotal =
-    Number(item.quantity ?? 0) * Number(item.unitPrice ?? 0) * getEffectiveDurationMonths(item);
-  const lineDiscount = (lineSubtotal * Number(item.discount ?? 0)) / 100;
-  const lineTotal = lineSubtotal - lineDiscount;
+  const lineTotal = getDiscountedLineTotal(item);
 
   return (
     <div className="space-y-3 rounded-md border border-border bg-muted/30 p-3">

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, mock, test } from 'bun:test';
-import { screen, within } from '@testing-library/react';
+import { act, fireEvent, screen, within } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import type { Product, Supplier, SupplierSaleOrder } from '../../../types';
 import { render } from '../../helpers/render';
@@ -198,5 +198,74 @@ describe('<SupplierOrdersView /> supplier-quote column', () => {
     renderView([orphanOrder]);
 
     expect(screen.getByText('accounting:supplierOrders.noQuoteLink')).toBeInTheDocument();
+  });
+});
+
+describe('<SupplierOrdersView /> item pricing columns', () => {
+  test('matches the supplier-quote pricing chain and keeps duration visible', async () => {
+    renderView([
+      {
+        ...baseOrder,
+        items: [{ ...baseOrder.items[0], unitPrice: 2_400, discount: 20, durationMonths: 12 }],
+      },
+    ]);
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('dm_ss_01'));
+      await Promise.resolve();
+    });
+
+    const headers = screen.getAllByRole('columnheader').map((header) => header.textContent ?? '');
+    expect(headers).toEqual([
+      'crm:quotes.productsServices',
+      'sales:supplierQuotes.listPrice',
+      'sales:supplierQuotes.discountToUs',
+      'sales:supplierQuotes.unitCost',
+      'sales:supplierQuotes.qty',
+      'accounting:supplierOrders.durationColumn',
+      'common:labels.total',
+      'accounting:supplierOrders.notes',
+      'common:labels.actions',
+    ]);
+  });
+
+  test('caps discount to us at 100 percent', async () => {
+    renderView([{ ...baseOrder, items: [{ ...baseOrder.items[0], discount: 20 }] }]);
+    await act(async () => {
+      fireEvent.click(screen.getByText('dm_ss_01'));
+      await Promise.resolve();
+    });
+
+    const discountInput = screen.getByLabelText('sales:supplierQuotes.discountToUs');
+    await act(async () => {
+      fireEvent.focus(discountInput);
+      fireEvent.change(discountInput, { target: { value: '120' } });
+    });
+    expect(discountInput).toHaveValue('100');
+  });
+
+  test('rounds unit cost before quantity multiplies the line total', async () => {
+    renderView([
+      {
+        ...baseOrder,
+        items: [
+          {
+            ...baseOrder.items[0],
+            quantity: 100,
+            unitPrice: 10.01,
+            discount: 10,
+            durationMonths: 1,
+          },
+        ],
+      },
+    ]);
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('dm_ss_01'));
+      await Promise.resolve();
+    });
+
+    expect(screen.getByText('9,01')).toBeInTheDocument();
+    expect(screen.getAllByText('901,00 EUR').length).toBeGreaterThan(0);
   });
 });

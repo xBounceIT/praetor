@@ -21,6 +21,8 @@ import {
   durationValueToMonths,
   formatDecimal,
   formatDiscountValue,
+  getDiscountedLineTotal,
+  getDiscountedUnitPrice,
   getDurationInputValue,
   getEffectiveDurationMonths,
   isFiniteNumber,
@@ -80,12 +82,7 @@ const calculateTotals = (
   items.forEach((item) => {
     // Duration multiplies the line total alongside quantity (issue #776), matching the supplier
     // quote the order was created from.
-    const durationMonths = getEffectiveDurationMonths(item);
-    const lineSubtotal =
-      (Number(item.quantity) || 0) * (Number(item.unitPrice) || 0) * durationMonths;
-    const lineDiscount = (lineSubtotal * Number(item.discount ?? 0)) / 100;
-    const lineNet = lineSubtotal - lineDiscount;
-    subtotal += lineNet;
+    subtotal += getDiscountedLineTotal(item);
   });
 
   const discountAmount =
@@ -944,11 +941,8 @@ const SupplierOrderDetailsSection: React.FC<{ controller: SupplierOrdersControll
   </div>
 );
 
-const getSupplierOrderItemLineTotal = (item: SupplierSaleOrderItem) => {
-  const subtotal =
-    Number(item.quantity || 0) * Number(item.unitPrice || 0) * getEffectiveDurationMonths(item);
-  return subtotal - (subtotal * Number(item.discount || 0)) / 100;
-};
+const getSupplierOrderItemLineTotal = (item: SupplierSaleOrderItem) => getDiscountedLineTotal(item);
+
 const SupplierOrderItemsSection: React.FC<{ controller: SupplierOrdersController }> = ({
   controller,
 }) => {
@@ -968,23 +962,8 @@ const SupplierOrderItemsSection: React.FC<{ controller: SupplierOrdersController
       ),
     },
     {
-      id: 'quantity',
-      header: controller.t('common:labels.quantity'),
-      accessorKey: 'quantity',
-      align: 'right',
-      cell: ({ row }) => (
-        <div className="min-w-[120px]">
-          <SupplierOrderItemQuantityField
-            controller={controller}
-            item={row}
-            index={getIndex(row)}
-          />
-        </div>
-      ),
-    },
-    {
-      id: 'unitPrice',
-      header: `${controller.t('crm:internalListing.salePrice')} (${controller.currency})`,
+      id: 'listPrice',
+      header: controller.t('sales:supplierQuotes.listPrice', { defaultValue: 'List Price' }),
       accessorKey: 'unitPrice',
       align: 'right',
       cell: ({ row }) => (
@@ -994,13 +973,41 @@ const SupplierOrderItemsSection: React.FC<{ controller: SupplierOrdersController
       ),
     },
     {
-      id: 'discount',
-      header: controller.t('accounting:supplierOrders.discount'),
+      id: 'discountToUs',
+      header: controller.t('sales:supplierQuotes.discountToUs', {
+        defaultValue: 'Discount to Us (%)',
+      }),
       accessorFn: (item) => item.discount || 0,
       align: 'right',
       cell: ({ row }) => (
-        <div className="min-w-[110px]">
+        <div className="min-w-[120px]">
           <SupplierOrderItemDiscountField
+            controller={controller}
+            item={row}
+            index={getIndex(row)}
+          />
+        </div>
+      ),
+    },
+    {
+      id: 'unitCost',
+      header: controller.t('sales:supplierQuotes.unitCost', { defaultValue: 'Unit Cost' }),
+      accessorFn: (item) => getDiscountedUnitPrice(item.unitPrice, item.discount),
+      align: 'right',
+      cell: ({ row }) => (
+        <div className="min-w-[110px]">
+          <SupplierOrderItemUnitCostField controller={controller} item={row} />
+        </div>
+      ),
+    },
+    {
+      id: 'quantity',
+      header: controller.t('sales:supplierQuotes.qty', { defaultValue: 'Qty' }),
+      accessorKey: 'quantity',
+      align: 'right',
+      cell: ({ row }) => (
+        <div className="min-w-[120px]">
+          <SupplierOrderItemQuantityField
             controller={controller}
             item={row}
             index={getIndex(row)}
@@ -1028,17 +1035,6 @@ const SupplierOrderItemsSection: React.FC<{ controller: SupplierOrdersController
       ),
     },
     {
-      id: 'notes',
-      header: controller.t('accounting:supplierOrders.notes'),
-      minWidth: LINE_ITEM_NOTE_COLUMN_MIN_WIDTH,
-      accessorFn: (item) => item.note || '',
-      cell: ({ row }) => (
-        <div className={LINE_ITEM_NOTE_CELL_CLASSNAME}>
-          <SupplierOrderItemNoteField controller={controller} item={row} index={getIndex(row)} />
-        </div>
-      ),
-    },
-    {
       id: 'total',
       header: controller.t('common:labels.total'),
       accessorFn: getSupplierOrderItemLineTotal,
@@ -1049,6 +1045,17 @@ const SupplierOrderItemsSection: React.FC<{ controller: SupplierOrdersController
           lineTotal={getSupplierOrderItemLineTotal(row)}
           className="min-w-[120px]"
         />
+      ),
+    },
+    {
+      id: 'notes',
+      header: controller.t('accounting:supplierOrders.notes'),
+      minWidth: LINE_ITEM_NOTE_COLUMN_MIN_WIDTH,
+      accessorFn: (item) => item.note || '',
+      cell: ({ row }) => (
+        <div className={LINE_ITEM_NOTE_CELL_CLASSNAME}>
+          <SupplierOrderItemNoteField controller={controller} item={row} index={getIndex(row)} />
+        </div>
       ),
     },
     {
@@ -1124,13 +1131,13 @@ const SupplierOrderItemQuantityField: React.FC<{
 }> = ({ controller, item, index, className = 'space-y-1', inputClassName = 'text-right' }) => (
   <div className={className}>
     <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
-      {controller.t('common:labels.quantity')}
+      {controller.t('sales:supplierQuotes.qty', { defaultValue: 'Qty' })}
     </FieldLabel>
     <ValidatedNumberInput
       value={item.quantity}
       required
       placeholder="0,00"
-      aria-label={controller.t('common:labels.quantity')}
+      aria-label={controller.t('sales:supplierQuotes.qty', { defaultValue: 'Qty' })}
       disabled={controller.isReadOnly}
       onValueChange={(value) =>
         controller.updateItem(index, 'quantity', value === '' ? Number.NaN : Number(value))
@@ -1149,13 +1156,13 @@ const SupplierOrderItemPriceField: React.FC<{
 }> = ({ controller, item, index, className = 'space-y-1', inputClassName = 'text-right' }) => (
   <div className={className}>
     <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
-      {controller.t('crm:internalListing.salePrice')}
+      {controller.t('sales:supplierQuotes.listPrice', { defaultValue: 'List Price' })}
     </FieldLabel>
     <ValidatedNumberInput
       value={item.unitPrice}
       required
       placeholder="0,00"
-      aria-label={controller.t('crm:internalListing.salePrice')}
+      aria-label={controller.t('sales:supplierQuotes.listPrice', { defaultValue: 'List Price' })}
       formatDecimals={2}
       disabled={controller.isReadOnly}
       onValueChange={(value) =>
@@ -1175,19 +1182,35 @@ const SupplierOrderItemDiscountField: React.FC<{
 }> = ({ controller, item, index, className = 'space-y-1', inputClassName = 'text-right' }) => (
   <div className={className}>
     <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
-      {controller.t('accounting:supplierOrders.discount')}
+      {controller.t('sales:supplierQuotes.discountToUs', {
+        defaultValue: 'Discount to Us (%)',
+      })}
     </FieldLabel>
     <ValidatedNumberInput
       value={item.discount}
       placeholder="0,00"
-      aria-label={controller.t('accounting:supplierOrders.discount')}
+      aria-label={controller.t('sales:supplierQuotes.discountToUs', {
+        defaultValue: 'Discount to Us',
+      })}
       formatDecimals={2}
+      min={0}
+      max={100}
       disabled={controller.isReadOnly}
       onValueChange={(value) =>
         controller.updateItem(index, 'discount', value === '' ? undefined : Number(value))
       }
       className={inputClassName}
     />
+  </div>
+);
+
+const SupplierOrderItemUnitCostField: React.FC<{
+  controller: SupplierOrdersController;
+  item: SupplierSaleOrderItem;
+}> = ({ controller, item }) => (
+  <div className="flex items-center justify-end gap-1.5 text-sm font-semibold text-foreground">
+    <span>{formatDecimal(getDiscountedUnitPrice(item.unitPrice, item.discount))}</span>
+    <span className="text-xs font-semibold text-muted-foreground">{controller.currency}</span>
   </div>
 );
 

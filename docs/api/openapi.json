@@ -44683,7 +44683,9 @@
                           "type": "number"
                         },
                         "discount": {
-                          "type": "number"
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 100
                         },
                         "note": {
                           "type": "string"
@@ -45042,7 +45044,9 @@
                           "type": "number"
                         },
                         "discount": {
-                          "type": "number"
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 100
                         },
                         "note": {
                           "type": "string"

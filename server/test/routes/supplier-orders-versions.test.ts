@@ -352,6 +352,40 @@ describe('POST /api/accounting/supplier-orders', () => {
       expect.anything(),
     );
   });
+
+  test('400 rejects a line discount to us above 100 percent', async () => {
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/accounting/supplier-orders',
+      headers: authHeader(),
+      payload: {
+        ...validBody,
+        items: [{ productName: 'Widget', quantity: 2, unitPrice: 100, discount: 100.01 }],
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(soInsertItemsMock).not.toHaveBeenCalled();
+  });
+
+  test('201 accepts the inclusive 100 percent line discount boundary', async () => {
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/accounting/supplier-orders',
+      headers: authHeader(),
+      payload: {
+        ...validBody,
+        items: [{ productName: 'Widget', quantity: 2, unitPrice: 100, discount: 100 }],
+      },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(soInsertItemsMock).toHaveBeenCalledWith(
+      'SORD-2999-0001',
+      [expect.objectContaining({ discount: 100 })],
+      expect.anything(),
+    );
+  });
 });
 
 describe('GET /api/accounting/supplier-orders/:id/versions', () => {
