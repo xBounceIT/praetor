@@ -1670,6 +1670,100 @@ describe('client quote candidate-family create and update', () => {
     );
   });
 
+  test('accepts null notes when sending an existing candidate family', async () => {
+    setupCreate();
+    const existingCandidate = activeCandidate();
+    const sentQuote = updatedQuote({ id: 'q-1', status: 'sent' });
+    cqFindCurrentMock.mockResolvedValue(gate({ status: 'draft' }));
+    cqLockCurrentByIdMock.mockResolvedValue(gate({ status: 'draft' }));
+    cqUpdateMock.mockResolvedValue(sentQuote);
+    cqFindByIdMock.mockResolvedValue(sentQuote);
+    qcListForQuoteMock.mockResolvedValue([existingCandidate]);
+    qcUpdateMock.mockResolvedValue(existingCandidate);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/sales/client-quotes/q-1',
+      headers: authHeader(),
+      payload: {
+        clientId: 'c1',
+        clientName: 'Client',
+        status: 'sent',
+        candidates: [
+          {
+            id: 'qc-local',
+            name: 'Variante A',
+            items: [freshLine()],
+            expirationDate: '2999-12-31',
+            communicationChannelId: 'qcc_email',
+            notes: null,
+          },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(cqUpdateMock).toHaveBeenCalled();
+  });
+
+  test('blocks sending a candidate family sourced from an expired supplier quote', async () => {
+    setupCreate();
+    cqFindCurrentMock.mockResolvedValue(gate({ status: 'draft' }));
+    qcListForQuoteMock.mockResolvedValue([activeCandidate()]);
+    sqFindEarliestExpirationByIdsMock.mockResolvedValue('2000-01-01');
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/sales/client-quotes/q-1',
+      headers: authHeader(),
+      payload: {
+        clientId: 'c1',
+        clientName: 'Client',
+        status: 'sent',
+        candidates: [
+          {
+            id: 'qc-local',
+            name: 'Variante A',
+            items: [freshLine()],
+            expirationDate: '2999-12-31',
+            communicationChannelId: 'qcc_email',
+          },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(JSON.parse(res.body).error).toContain('expired');
+    expect(sqFindEarliestExpirationByIdsMock).toHaveBeenCalledWith(['sq-9']);
+    expect(cqUpdateMock).not.toHaveBeenCalled();
+  });
+
+  test('returns the complete family after a status-only update', async () => {
+    const existingCandidate = activeCandidate();
+    const deniedQuote = updatedQuote({ id: 'q-1', status: 'denied' });
+    cqFindCurrentMock.mockResolvedValue(gate({ status: 'sent' }));
+    cqUpdateMock.mockResolvedValue(deniedQuote);
+    cqFindByIdMock.mockResolvedValue(deniedQuote);
+    qcListForQuoteMock.mockResolvedValue([existingCandidate]);
+    cqFindItemsForQuoteMock.mockResolvedValue([
+      {
+        ...freshLine({ id: 'qi-local' }),
+        quoteId: 'q-1',
+        candidateId: 'qc-local',
+        supplierQuoteId: 'sq-9',
+        position: 0,
+      },
+    ]);
+
+    const res = await putStatus({ status: 'denied' });
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body)).toMatchObject({
+      status: 'denied',
+      candidates: [{ id: 'qc-local', name: 'Variante A' }],
+    });
+  });
+
   test('keeps a retained candidate supplier snapshot isolated when the source is no longer pickable', async () => {
     setupCreate();
     const existingCandidate = activeCandidate();

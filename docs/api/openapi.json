@@ -31459,7 +31459,10 @@
                           "type": "string"
                         },
                         "notes": {
-                          "type": "string"
+                          "type": [
+                            "string",
+                            "null"
+                          ]
                         }
                       },
                       "required": [
@@ -32282,7 +32285,10 @@
                           "type": "string"
                         },
                         "notes": {
-                          "type": "string"
+                          "type": [
+                            "string",
+                            "null"
+                          ]
                         }
                       },
                       "required": [

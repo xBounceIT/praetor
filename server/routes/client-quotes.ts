@@ -668,7 +668,7 @@ const quoteCandidateBodySchema = {
     discountType: { type: 'string', enum: ['percentage', 'currency'] },
     expirationDate: { type: 'string', format: 'date' },
     communicationChannelId: { type: 'string' },
-    notes: { type: 'string' },
+    notes: { type: ['string', 'null'] },
   },
   required: ['name', 'items', 'expirationDate', 'communicationChannelId'],
 } as const;
@@ -1639,6 +1639,24 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             },
           });
         }
+        if (normalizeQuoteStatus(requestedStatus) === 'sent') {
+          const sourcedExpiration = await supplierQuotesRepo.findEarliestExpirationByIds(
+            await sourcedSupplierQuoteIds(
+              preparedCandidates.flatMap((candidate) => candidate.items),
+            ),
+          );
+          if (
+            await blockIfSourcedSupplierExpired(
+              requestedStatus,
+              sourcedExpiration,
+              idResult.value,
+              request,
+              reply,
+            )
+          ) {
+            return;
+          }
+        }
         type CandidateFamilySaveResult =
           | { kind: 'not_found' }
           | { kind: 'conflict'; message: string; secondaryLabel: string }
@@ -2268,9 +2286,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           toValue: didStatusChange ? String(nextStatus) : undefined,
         },
       });
-      if (typeof expirationDateValue === 'string') {
+      if (statusChanged || typeof expirationDateValue === 'string') {
         const familyResponse = await loadFamilyResponse(updatedQuoteId);
-        if (familyResponse) return familyResponse;
+        if (familyResponse?.candidates.length) return familyResponse;
       }
       // Items/status branches already hold the status-aware value (it fed the guard); a no-op
       // resend resolves it from the stored lines so the response flag never reads a raw MIN.
