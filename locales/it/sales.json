@@ -115,6 +115,7 @@
       "count": "{{count}} varianti",
       "count_one": "{{count}} variante",
       "count_other": "{{count}} varianti",
+      "notApplicable": "N/A",
       "name": "Nome variante",
       "nameRequired": "Ogni candidato deve avere un nome.",
       "nameUnique": "I nomi dei candidati devono essere univoci.",

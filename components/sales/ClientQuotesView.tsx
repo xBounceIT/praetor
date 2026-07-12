@@ -1603,14 +1603,19 @@ const useClientQuotesController = ({
       id: 'candidates',
       accessorFn: (row) => row.candidates?.length ?? 1,
       className: 'whitespace-nowrap',
-      cell: ({ row }) => (
-        <Badge variant="secondary">
-          {t('sales:clientQuotes.candidates.count', {
-            count: row.candidates?.length || 1,
-            defaultValue: '{{count}} varianti',
-          })}
-        </Badge>
-      ),
+      cell: ({ row }) => {
+        const candidateCount = row.candidates?.length || 1;
+        return (
+          <Badge variant="secondary">
+            {candidateCount > 1
+              ? t('sales:clientQuotes.candidates.count', {
+                  count: candidateCount,
+                  defaultValue: '{{count}} varianti',
+                })
+              : t('sales:clientQuotes.candidates.notApplicable', { defaultValue: 'N/A' })}
+          </Badge>
+        );
+      },
     },
     {
       header: t('sales:clientQuotes.subtotal', { defaultValue: 'Subtotal' }),
