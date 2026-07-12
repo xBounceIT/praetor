@@ -2226,6 +2226,9 @@ describe('<StandardTable />', () => {
     expect(css).toContain('tr[data-standard-table-font-size] > td');
     expect(css).toContain('[data-slot="input"]');
     expect(css).toContain('--standard-table-control-height');
+    expect(css).toMatch(
+      /\.standard-table-value-cell \[data-status-badge\]\s*{[^}]*font-size: 0\.714em/s,
+    );
   });
 
   test('shares font size with mounted tables and tables rendered later', () => {
