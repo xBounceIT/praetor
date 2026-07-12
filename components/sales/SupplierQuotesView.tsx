@@ -52,6 +52,11 @@ import DeleteConfirmModal from '../shared/DeleteConfirmModal';
 import DurationUnitSelector from '../shared/DurationUnitSelector';
 import FieldTooltip from '../shared/FieldTooltip';
 import HeaderAddButton from '../shared/HeaderAddButton';
+import LineItemNoteTextarea from '../shared/LineItemNoteTextarea';
+import {
+  LINE_ITEM_NOTE_CELL_CLASSNAME,
+  LINE_ITEM_NOTE_COLUMN_MIN_WIDTH,
+} from '../shared/lineItemNoteStyles';
 import Modal from '../shared/Modal';
 import {
   ModalBody,
@@ -1650,9 +1655,10 @@ const SupplierQuoteItemsSection: React.FC<{ controller: SupplierQuotesController
     {
       id: 'note',
       header: controller.t('common:labels.notes', { defaultValue: 'Notes' }),
+      minWidth: LINE_ITEM_NOTE_COLUMN_MIN_WIDTH,
       accessorFn: (item) => item.note || '',
       cell: ({ row }) => (
-        <div className="min-w-[220px]">
+        <div className={LINE_ITEM_NOTE_CELL_CLASSNAME}>
           <SupplierQuoteItemNoteField context={getContext(row)} />
         </div>
       ),
@@ -1961,8 +1967,7 @@ const SupplierQuoteItemNoteField: React.FC<{ context: SupplierQuoteItemContext }
   context,
 }) => (
   <div>
-    <Input
-      type="text"
+    <LineItemNoteTextarea
       value={context.item.note || ''}
       disabled={context.controller.isReadOnly}
       onChange={(event) => context.controller.updateItem(context.index, 'note', event.target.value)}

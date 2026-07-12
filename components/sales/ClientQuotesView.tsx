@@ -80,6 +80,11 @@ import DeleteConfirmModal from '../shared/DeleteConfirmModal';
 import DurationUnitSelector from '../shared/DurationUnitSelector';
 import FieldTooltip from '../shared/FieldTooltip';
 import HeaderAddButton from '../shared/HeaderAddButton';
+import LineItemNoteTextarea from '../shared/LineItemNoteTextarea';
+import {
+  LINE_ITEM_NOTE_CELL_CLASSNAME,
+  LINE_ITEM_NOTE_COLUMN_MIN_WIDTH,
+} from '../shared/lineItemNoteStyles';
 import Modal from '../shared/Modal';
 import {
   ModalBody,
@@ -2467,9 +2472,10 @@ const ClientQuoteItemsSection: React.FC<{ controller: ClientQuotesController }> 
     {
       id: 'note',
       header: t('common:labels.notes'),
+      minWidth: LINE_ITEM_NOTE_COLUMN_MIN_WIDTH,
       accessorFn: (item) => item.note || '',
       cell: ({ row }) => (
-        <div className="min-w-[220px]">
+        <div className={LINE_ITEM_NOTE_CELL_CLASSNAME}>
           <ClientQuoteItemNote controller={controller} item={row} index={getIndex(row)} />
         </div>
       ),
@@ -2884,8 +2890,7 @@ const ClientQuoteItemNote: React.FC<{
 
   return (
     <Field>
-      <Input
-        type="text"
+      <LineItemNoteTextarea
         placeholder={t('form:placeholderNotes')}
         value={item.note || ''}
         onChange={(e) => updateProductRow(index, 'note', e.target.value)}

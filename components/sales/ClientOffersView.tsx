@@ -70,6 +70,11 @@ import DeleteConfirmModal from '../shared/DeleteConfirmModal';
 import DurationUnitSelector from '../shared/DurationUnitSelector';
 import FieldTooltip from '../shared/FieldTooltip';
 import HeaderAddButton from '../shared/HeaderAddButton';
+import LineItemNoteTextarea from '../shared/LineItemNoteTextarea';
+import {
+  LINE_ITEM_NOTE_CELL_CLASSNAME,
+  LINE_ITEM_NOTE_COLUMN_MIN_WIDTH,
+} from '../shared/lineItemNoteStyles';
 import Modal from '../shared/Modal';
 import {
   ModalBody,
@@ -1914,9 +1919,10 @@ const ClientOfferItemsSection: React.FC<{ controller: ClientOffersController }> 
     {
       id: 'note',
       header: t('common:labels.notes'),
+      minWidth: LINE_ITEM_NOTE_COLUMN_MIN_WIDTH,
       accessorFn: (item) => item.note || '',
       cell: ({ row }) => (
-        <div className="min-w-[220px]">
+        <div className={LINE_ITEM_NOTE_CELL_CLASSNAME}>
           <ClientOfferItemNote controller={controller} item={row} index={getIndex(row)} />
         </div>
       ),
@@ -2309,8 +2315,7 @@ const ClientOfferItemNote: React.FC<{
   const { t, isReadOnly, updateItem } = controller;
 
   return (
-    <Input
-      type="text"
+    <LineItemNoteTextarea
       placeholder={t('form:placeholderNotes', { defaultValue: 'Optional notes...' })}
       value={item.note || ''}
       onChange={(event) => updateItem(index, 'note', event.target.value)}

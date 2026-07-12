@@ -4,7 +4,6 @@ import { useTranslation } from 'react-i18next';
 import { LinkedRecordBanner } from '@/components/shared/LinkedRecordBanner';
 import { Button } from '@/components/ui/button';
 import { Field, FieldLabel } from '@/components/ui/field';
-import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import type {
@@ -30,6 +29,11 @@ import { getPaymentTermsOptions } from '../../utils/options';
 import CostSummaryPanel from '../shared/CostSummaryPanel';
 import DeleteConfirmModal from '../shared/DeleteConfirmModal';
 import DurationUnitSelector from '../shared/DurationUnitSelector';
+import LineItemNoteTextarea from '../shared/LineItemNoteTextarea';
+import {
+  LINE_ITEM_NOTE_CELL_CLASSNAME,
+  LINE_ITEM_NOTE_COLUMN_MIN_WIDTH,
+} from '../shared/lineItemNoteStyles';
 import Modal from '../shared/Modal';
 import {
   ModalBody,
@@ -1011,9 +1015,10 @@ const SupplierOrderItemsSection: React.FC<{ controller: SupplierOrdersController
     {
       id: 'notes',
       header: controller.t('accounting:supplierOrders.notes'),
+      minWidth: LINE_ITEM_NOTE_COLUMN_MIN_WIDTH,
       accessorFn: (item) => item.note || '',
       cell: ({ row }) => (
-        <div className="min-w-[220px]">
+        <div className={LINE_ITEM_NOTE_CELL_CLASSNAME}>
           <SupplierOrderItemNoteField controller={controller} item={row} index={getIndex(row)} />
         </div>
       ),
@@ -1221,8 +1226,7 @@ const SupplierOrderItemNoteField: React.FC<{
   className?: string;
 }> = ({ controller, item, index, className }) => (
   <div className={className}>
-    <Input
-      type="text"
+    <LineItemNoteTextarea
       value={item.note || ''}
       disabled={controller.isReadOnly}
       placeholder={controller.t('accounting:supplierOrders.notes')}
