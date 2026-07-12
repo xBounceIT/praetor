@@ -106,6 +106,46 @@ describe('<ClientsInvoicesView /> duration unit (issue #757)', () => {
     // ...but pricing still multiplies by durationMonths (24), so the taxable total is unchanged.
     expect(within(dialog).getAllByText(TAXABLE_LINE_TOTAL).length).toBeGreaterThan(0);
   });
+
+  test('normalizes a blank years duration to the canonical month unit before saving', async () => {
+    const onUpdateInvoice = mock((_id: string, _data: Partial<Invoice>) => {});
+    const invoice = buildInvoice('INV-BLANK-DURATION', 'months');
+    render(
+      <ClientsInvoicesView
+        invoices={[invoice]}
+        clients={clients}
+        products={[]}
+        onAddInvoice={mock(() => {})}
+        onUpdateInvoice={onUpdateInvoice}
+        onDeleteInvoice={mock(() => {})}
+        currency="EUR"
+      />,
+    );
+    fireEvent.click(screen.getByText('Helios Energy Services').closest('tr') as HTMLElement);
+    const dialog = await screen.findByRole('dialog');
+
+    fireEvent.change(within(dialog).getByDisplayValue('24'), { target: { value: '' } });
+    const durationUnitButton = within(dialog)
+      .getAllByText('sales:clientQuotes.months')
+      .map((element) => element.closest('button'))
+      .find(Boolean);
+    if (!durationUnitButton) throw new Error('Duration unit button not found');
+    fireEvent.click(durationUnitButton);
+    const yearsOption = (await screen.findAllByText('sales:clientQuotes.years'))
+      .map((element) => element.closest('[data-slot="select-item"]'))
+      .find(Boolean);
+    if (!yearsOption) throw new Error('Years duration option not found');
+    fireEvent.click(yearsOption);
+    fireEvent.submit(
+      within(dialog).getByText('common:buttons.save').closest('form') as HTMLFormElement,
+    );
+
+    expect(onUpdateInvoice).toHaveBeenCalledTimes(1);
+    const submittedInvoice = onUpdateInvoice.mock.calls[0]?.[1];
+    expect(submittedInvoice?.items?.[0]).toEqual(
+      expect.objectContaining({ durationMonths: undefined, durationUnit: 'months' }),
+    );
+  });
 });
 
 describe('<ClientsInvoicesView /> paginated item validation', () => {
@@ -439,6 +479,14 @@ describe('<ClientsInvoicesView /> new line identity', () => {
       expect(within(dialog).getByPlaceholderText('0')).toHaveValue('');
       expect(within(dialog).getByPlaceholderText('22,00')).toHaveValue('');
     });
+  });
+
+  test('keeps the existing subtotal when a blank line is added', async () => {
+    const dialog = await openEditModal(buildInvoice('INV-BLANK-LINE', 'months'));
+    fireEvent.click(within(dialog).getByText('accounting:clientsInvoices.addItem'));
+
+    const subtotalLabel = within(dialog).getByText('accounting:clientsInvoices.subtotal');
+    expect(subtotalLabel.nextElementSibling).toHaveTextContent('7.200,00 EUR');
   });
 
   test('keeps rapidly-added rows independently editable when the clock value is unchanged', async () => {

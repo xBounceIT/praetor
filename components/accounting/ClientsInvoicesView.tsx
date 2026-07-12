@@ -22,6 +22,7 @@ import {
   getEffectiveDurationMonths,
   isFiniteNumber,
   isPositiveFiniteNumber,
+  normalizeDurationForSubmit,
   normalizeDurationUnit,
   parseDurationValueToMonths,
 } from '../../utils/numbers';
@@ -67,11 +68,11 @@ const CLIENT_INVOICE_ITEM_NUMBER_INPUT_CLASSNAME =
 // Months the line's service runs (issue #757); multiplies the taxable amount. The shared
 // `getEffectiveDurationMonths` clamps absent/invalid values to 1, so pre-duration invoices keep
 // their totals — matching the backend `computeInvoiceTotals`.
+const getLineGross = (item: InvoiceItem) =>
+  Number(item.quantity || 0) * Number(item.unitPrice || 0) * getEffectiveDurationMonths(item);
+
 const getLineTaxable = (item: InvoiceItem) =>
-  Number(item.quantity || 0) *
-  Number(item.unitPrice || 0) *
-  getEffectiveDurationMonths(item) *
-  (1 - Number(item.discount || 0) / 100);
+  getLineGross(item) * (1 - Number(item.discount || 0) / 100);
 
 const getInvoiceItemTaxRate = (item: InvoiceItem) =>
   item.taxRate ?? (isTemporaryLineItem(item) ? DEFAULT_TAX_RATE : 0);
@@ -472,8 +473,7 @@ const useClientsInvoicesController = ({
         unitPrice: Number(item.unitPrice ?? 0),
         discount: Number(item.discount || 0),
         taxRate: getInvoiceItemTaxRate(item),
-        durationMonths: Number(item.durationMonths ?? 1) || 1,
-        durationUnit: normalizeDurationUnit(item.durationUnit),
+        ...normalizeDurationForSubmit(item),
       };
     });
 
@@ -509,12 +509,7 @@ const useClientsInvoicesController = ({
 
   const { subtotal, taxTotal, total } = calculateTotals(formData.items || []);
   const totalDiscount = (formData.items || []).reduce(
-    (sum, item) =>
-      sum +
-      item.quantity *
-        item.unitPrice *
-        getEffectiveDurationMonths(item) *
-        (Number(item.discount || 0) / 100),
+    (sum, item) => sum + getLineGross(item) * (Number(item.discount || 0) / 100),
     0,
   );
   const grossSubtotal = subtotal + totalDiscount;
