@@ -33,7 +33,11 @@ import {
   normalizeDateOnlyString,
 } from '../../utils/date';
 import { getLinkedFieldStatus } from '../../utils/fieldStatus';
-import { createLineItemIndexResolver, createTemporaryLineItemId } from '../../utils/lineItemIndex';
+import {
+  createLineItemIndexResolver,
+  createTemporaryLineItemId,
+  isTemporaryLineItem,
+} from '../../utils/lineItemIndex';
 import {
   calcProductSalePrice,
   calculatePricingTotals,
@@ -2540,6 +2544,9 @@ const ClientQuoteItemsSection: React.FC<{ controller: ClientQuotesController }> 
         columns={columns}
         defaultRowsPerPage={5}
         autoRevealNewRows
+        shouldBypassFilters={(item) =>
+          isTemporaryLineItem(item) || !isPositiveFiniteNumber(item.quantity)
+        }
         minBodyRows={0}
         tableContainerClassName="overflow-x-auto"
         emptyState={

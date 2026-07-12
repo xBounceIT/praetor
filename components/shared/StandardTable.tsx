@@ -919,6 +919,8 @@ export type StandardTableProps<T extends object = object> = {
   defaultRowsPerPage?: number;
   /** Move to the page containing a row appended after mount. Defaults to false. */
   autoRevealNewRows?: boolean;
+  /** Keep matching rows visible regardless of active column filters. */
+  shouldBypassFilters?: (row: T) => boolean;
   /**
    * Minimum visible body rows. When the current page has fewer rows than this,
    * the body is padded with inert placeholder rows so the table footprint stays
@@ -967,6 +969,7 @@ const useStandardTableController = <T extends object>({
   columns,
   defaultRowsPerPage = 10,
   autoRevealNewRows = false,
+  shouldBypassFilters,
   minBodyRows = 4,
   getRowProps,
   rowClassName,
@@ -1715,6 +1718,7 @@ const useStandardTableController = <T extends object>({
             return 0;
           },
           filterFn: (row, columnId, selectedValues) => {
+            if (shouldBypassFilters?.(row.original)) return true;
             const selected =
               typeof selectedValues === 'string'
                 ? [selectedValues]
@@ -1757,6 +1761,7 @@ const useStandardTableController = <T extends object>({
       getValue,
       formatForFilter,
       isRowActionColumn,
+      shouldBypassFilters,
       sortState,
     ],
   );

@@ -1083,6 +1083,9 @@ const SupplierOrderItemsSection: React.FC<{ controller: SupplierOrdersController
         data={items ?? []}
         columns={columns}
         defaultRowsPerPage={5}
+        shouldBypassFilters={(item) =>
+          !isPositiveFiniteNumber(item.quantity) || !isFiniteNumber(item.unitPrice)
+        }
         minBodyRows={0}
         tableContainerClassName="overflow-x-auto"
         emptyState={

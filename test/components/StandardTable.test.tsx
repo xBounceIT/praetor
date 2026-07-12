@@ -910,6 +910,25 @@ describe('<StandardTable />', () => {
     });
   });
 
+  test('keeps bypassed rows visible while active filters still hide regular non-matches', () => {
+    const rows: Row[] = [...sampleRows, { id: 'temp-new', name: '', age: Number.NaN }];
+
+    render(
+      <StandardTable<Row>
+        title="Editable filtered rows"
+        data={rows}
+        columns={sampleColumns}
+        initialFilterState={{ name: ['Alice'] }}
+        shouldBypassFilters={(row) => row.id.startsWith('temp-')}
+      />,
+    );
+
+    const bodyRows = screen.getAllByRole('row').slice(1);
+    expect(bodyRows).toHaveLength(2);
+    expect(bodyRows.some((row) => row.textContent?.includes('Alice'))).toBe(true);
+    expect(bodyRows.some((row) => row.textContent?.includes('Bob'))).toBe(false);
+  });
+
   test('selected filter values match exact options instead of substrings', () => {
     type PaymentRow = { id: string; status: string };
     const rows: PaymentRow[] = [

@@ -24,7 +24,11 @@ import {
   formatInsertDateTime,
   getLocalDateString,
 } from '../../utils/date';
-import { createLineItemIndexResolver, createTemporaryLineItemId } from '../../utils/lineItemIndex';
+import {
+  createLineItemIndexResolver,
+  createTemporaryLineItemId,
+  isTemporaryLineItem,
+} from '../../utils/lineItemIndex';
 import {
   calcProductSalePrice,
   calculatePricingTotals,
@@ -1443,6 +1447,9 @@ const OrderItemsSection: React.FC<{ controller: ClientsOrdersController }> = ({ 
         columns={columns}
         defaultRowsPerPage={5}
         autoRevealNewRows
+        shouldBypassFilters={(item) =>
+          isTemporaryLineItem(item) || !isPositiveFiniteNumber(item.quantity)
+        }
         minBodyRows={0}
         tableContainerClassName="overflow-x-auto"
         emptyState={

@@ -1190,6 +1190,58 @@ describe('<ClientQuotesView /> localized line amounts', () => {
 });
 
 describe('<ClientQuotesView /> appended item visibility', () => {
+  test('keeps a newly added row visible under a persisted product filter', async () => {
+    localStorage.clear();
+    localStorage.setItem(
+      'praetor_table_customviews_sales_clientquotes_items',
+      JSON.stringify([
+        {
+          id: 'filtered-products',
+          name: 'Product 1 only',
+          hiddenColIds: [],
+          sortState: null,
+          filterState: { product: ['Product 1'] },
+        },
+      ]),
+    );
+    localStorage.setItem('praetor_table_activeview_sales_clientquotes_items', 'filtered-products');
+    const quoteId = 'Q-APPEND-FILTERED';
+    const items = Array.from({ length: 2 }, (_, index): Quote['items'][number] => ({
+      ...quotes[0].items[0],
+      id: `filtered-item-${index + 1}`,
+      quoteId,
+      productName: `Product ${index + 1}`,
+      quantity: 1,
+    }));
+    const quote: Quote = { ...quotes[0], id: quoteId, items };
+
+    render(
+      <ClientQuotesView
+        quotes={[quote]}
+        clients={clients}
+        products={[]}
+        supplierQuotes={[]}
+        communicationChannels={communicationChannels}
+        currency="EUR"
+        onAddQuote={mock(() => Promise.resolve())}
+        onUpdateQuote={mock(() => Promise.resolve())}
+        onDeleteQuote={mock(() => Promise.resolve())}
+      />,
+    );
+    fireEvent.click(screen.getByText(quoteId));
+    const dialog = await screen.findByRole('dialog');
+    await waitFor(() => expect(within(dialog).queryByText('Product 2')).not.toBeInTheDocument());
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'sales:clientQuotes.addProduct' }));
+
+    await waitFor(() => {
+      const quantityInputs = within(dialog).getAllByRole('textbox', {
+        name: 'sales:clientQuotes.qty',
+      });
+      expect(quantityInputs.some((input) => (input as HTMLInputElement).value === '')).toBe(true);
+    });
+  });
+
   test('moves to the page containing a sixth item immediately after adding it', async () => {
     localStorage.clear();
     const quoteId = 'Q-APPEND-PAGE';

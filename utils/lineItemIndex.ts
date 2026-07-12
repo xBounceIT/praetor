@@ -4,6 +4,8 @@ let temporaryLineItemSequence = 0;
  * Creates a unique client-side id for unsaved line items. randomUUID is preferred, while the
  * monotonic fallback prevents same-millisecond collisions in non-secure browser contexts.
  */
+export const isTemporaryLineItem = (item: { id: string }): boolean => item.id.startsWith('temp-');
+
 export const createTemporaryLineItemId = (prefix = 'temp'): string => {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
     try {

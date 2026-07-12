@@ -30,7 +30,11 @@ import {
   isDateOnlyBeforeToday,
   normalizeDateOnlyString,
 } from '../../utils/date';
-import { createLineItemIndexResolver, createTemporaryLineItemId } from '../../utils/lineItemIndex';
+import {
+  createLineItemIndexResolver,
+  createTemporaryLineItemId,
+  isTemporaryLineItem,
+} from '../../utils/lineItemIndex';
 import {
   convertUnitPrice,
   durationValueToMonths,
@@ -1709,6 +1713,9 @@ const SupplierQuoteItemsSection: React.FC<{ controller: SupplierQuotesController
         columns={columns}
         defaultRowsPerPage={5}
         autoRevealNewRows
+        shouldBypassFilters={(item) =>
+          isTemporaryLineItem(item) || !isPositiveFiniteNumber(item.quantity)
+        }
         minBodyRows={0}
         tableContainerClassName="overflow-x-auto"
         emptyState={
