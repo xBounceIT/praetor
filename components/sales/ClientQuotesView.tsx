@@ -2446,6 +2446,14 @@ const ClientQuotePromotionModal: React.FC<{ controller: ClientQuotesController }
                     </span>
                     <span className="text-right">{candidate.items.length}</span>
                   </div>
+                  <div className="mt-3 border-t border-border pt-3 text-sm">
+                    <div className="text-muted-foreground">
+                      {t('sales:clientQuotes.notesLabel', { defaultValue: 'Note' })}
+                    </div>
+                    <p className="mt-1 whitespace-pre-wrap break-words text-foreground">
+                      {candidate.notes?.trim() || '—'}
+                    </p>
+                  </div>
                 </button>
               );
             })}

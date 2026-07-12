@@ -939,7 +939,7 @@ describe('<ClientQuotesView /> edit action gating (#812 round 13)', () => {
         discountType: staleQuote.discountType,
         expirationDate: staleQuote.expirationDate,
         communicationChannelId: staleQuote.communicationChannelId,
-        notes: staleQuote.notes,
+        notes: 'Customer prefers annual billing.',
         createdAt: Date.now(),
         updatedAt: Date.now(),
       },
@@ -966,6 +966,10 @@ describe('<ClientQuotesView /> edit action gating (#812 round 13)', () => {
     const comparisonDialog = await screen.findByRole('dialog');
     expect(within(comparisonDialog).getByText('sales:clientQuotes.molLabel')).toBeInTheDocument();
     expect(within(comparisonDialog).getByText('-11,11%')).toBeInTheDocument();
+    expect(within(comparisonDialog).getByText('sales:clientQuotes.notesLabel')).toBeInTheDocument();
+    expect(
+      within(comparisonDialog).getByText('Customer prefers annual billing.'),
+    ).toBeInTheDocument();
     await user.click(
       await screen.findByRole('button', { name: 'sales:clientQuotes.candidates.promote' }),
     );
