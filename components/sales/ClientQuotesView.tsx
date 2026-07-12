@@ -11,7 +11,10 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { useDocumentCodePreview } from '../../hooks/useDocumentCodePreview';
 import { ApiError } from '../../services/api/client';
 import { normalizeQuoteItem } from '../../services/api/normalizers';
-import type { QuoteCommunicationChannel } from '../../services/api/quoteCommunicationChannels';
+import type {
+  QuoteCommunicationChannel,
+  QuoteCommunicationChannelIcon,
+} from '../../services/api/quoteCommunicationChannels';
 import type {
   Client,
   ClientOffer,
@@ -122,8 +125,14 @@ export interface ClientQuotesViewProps {
   supplierQuotes: SupplierQuote[];
   communicationChannels?: QuoteCommunicationChannel[];
   canManageCommunicationChannels?: boolean;
-  onCreateCommunicationChannel?: (data: { name: string }) => Promise<void>;
-  onUpdateCommunicationChannel?: (id: string, updates: { name: string }) => Promise<void>;
+  onCreateCommunicationChannel?: (data: {
+    name: string;
+    icon: QuoteCommunicationChannelIcon;
+  }) => Promise<void>;
+  onUpdateCommunicationChannel?: (
+    id: string,
+    updates: { name: string; icon: QuoteCommunicationChannelIcon },
+  ) => Promise<void>;
   onDeleteCommunicationChannel?: (id: string) => Promise<void>;
   onAddQuote: (quoteData: Partial<Quote>) => void | Promise<void>;
   onUpdateQuote: (id: string, updates: Partial<Quote>) => void | Promise<void>;

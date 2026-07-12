@@ -28,6 +28,7 @@ import { cn } from '@/lib/utils';
 export interface Option {
   id: string;
   name: string;
+  icon?: React.ReactNode;
   badge?: string;
   disabled?: boolean;
 }
@@ -146,10 +147,12 @@ const SelectLabel = ({
 };
 
 const TriggerLabel = ({
+  icon,
   isPlaceholder,
   label,
   valueClassName,
 }: {
+  icon?: React.ReactNode;
   isPlaceholder: boolean;
   label: string;
   valueClassName?: string;
@@ -159,7 +162,8 @@ const TriggerLabel = ({
   return (
     <Tooltip disabled={!tooltipLabel}>
       <TooltipTrigger asChild>
-        <span className="inline-flex min-w-0 flex-1">
+        <span className="inline-flex min-w-0 flex-1 items-center gap-2">
+          {icon}
           <span
             className={cn(
               'w-full truncate',
@@ -247,6 +251,7 @@ const PlainSelectControl = ({
         <SelectTrigger id={id} className={cn(baseTriggerClassName, buttonClassName)}>
           {displayValue ? (
             <TriggerLabel
+              icon={selectedOption?.icon}
               isPlaceholder={!hasSelection}
               label={labelText}
               valueClassName={valueClassName}
@@ -264,6 +269,7 @@ const PlainSelectControl = ({
                 disabled={option.disabled}
               >
                 <span className="flex items-center gap-2 min-w-0 flex-1">
+                  {option.icon}
                   <span className="truncate">{option.name}</span>
                   {option.badge && (
                     <span className="text-[10px] bg-praetor px-2 py-0.5 rounded text-white font-bold uppercase leading-none">
@@ -420,6 +426,7 @@ const SearchableSelectControl = ({
               </span>
             ) : (
               <TriggerLabel
+                icon={selectedOption?.icon}
                 isPlaceholder={isPlaceholder}
                 label={buttonLabel}
                 valueClassName={valueClassName}
@@ -475,6 +482,7 @@ const SearchableSelectControl = ({
                       onSelect={() => handleSelect(option)}
                     >
                       <span className="flex items-center gap-2 min-w-0 flex-1">
+                        {option.icon}
                         <span className="truncate">{option.name}</span>
                         {option.badge && (
                           <span className="text-[10px] bg-praetor px-2 py-0.5 rounded text-white font-bold uppercase leading-none">

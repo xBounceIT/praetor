@@ -53,6 +53,28 @@ describe('<SelectControl />', () => {
     expect(onChange).toHaveBeenCalledWith('a');
   });
 
+  test('plain select renders option icons in the selected value and menu', () => {
+    render(
+      <SelectControl
+        options={[
+          {
+            id: 'email',
+            name: 'Email',
+            icon: <i className="fa-solid fa-envelope" aria-hidden="true"></i>,
+          },
+        ]}
+        value="email"
+        onChange={() => {}}
+      />,
+    );
+
+    expect(screen.getByRole('combobox').querySelector('.fa-envelope')).not.toBeNull();
+    fireEvent.click(screen.getByRole('combobox'));
+    expect(
+      screen.getByRole('option', { name: 'Email' }).querySelector('.fa-envelope'),
+    ).not.toBeNull();
+  });
+
   test('plain select content renders above the shared modal layer', () => {
     render(<SelectControl options={options} value="b" onChange={() => {}} />);
 

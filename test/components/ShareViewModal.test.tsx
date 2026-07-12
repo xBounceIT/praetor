@@ -141,14 +141,18 @@ describe('<ShareViewModal />', () => {
 
   test('changing a recipient permission to write emits write', async () => {
     getSharesMock.mockImplementation(async () => [{ userId: 'u2', permission: 'read' }]);
-    renderModal();
+    renderModal({ zIndex: 100, popupZIndex: 110 });
 
     // Wait for the pre-shared recipient to render in the shared column.
     await screen.findByText('Bob Builder');
+    expect(screen.getByRole('dialog')).toHaveStyle({ zIndex: '101' });
 
     // Open the per-row permission Select and pick "write".
     const trigger = within(sharedRowFor('Bob Builder')).getByRole('combobox');
     fireEvent.click(trigger);
+    expect(document.body.querySelector('[data-slot="select-content"]')).toHaveStyle({
+      zIndex: '110',
+    });
     const writeOption = await waitFor(() => {
       const writeNode = Array.from(
         document.body.querySelectorAll<HTMLElement>('[role="option"]'),

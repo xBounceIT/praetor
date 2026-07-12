@@ -6,10 +6,28 @@ import { supplierQuotes } from '../db/schema/supplierQuotes.ts';
 import { parseDbNumber } from '../utils/parse.ts';
 
 export const DEFAULT_QUOTE_COMMUNICATION_CHANNEL_ID = 'qcc_email';
+export const QUOTE_COMMUNICATION_CHANNEL_ICONS = [
+  'comments',
+  'envelope',
+  'globe',
+  'phone',
+  'video',
+  'whatsapp',
+] as const;
+export type QuoteCommunicationChannelIcon = (typeof QUOTE_COMMUNICATION_CHANNEL_ICONS)[number];
+export const DEFAULT_CUSTOM_QUOTE_COMMUNICATION_CHANNEL_ICON: QuoteCommunicationChannelIcon =
+  'comments';
+export const isQuoteCommunicationChannelIcon = (
+  value: unknown,
+): value is QuoteCommunicationChannelIcon =>
+  typeof value === 'string' &&
+  (QUOTE_COMMUNICATION_CHANNEL_ICONS as readonly string[]).includes(value);
 
 export type QuoteCommunicationChannel = {
   id: string;
   name: string;
+  icon: QuoteCommunicationChannelIcon;
+  isDefault: boolean;
   createdAt: number;
   updatedAt: number;
   clientQuoteCount: number;
@@ -20,6 +38,8 @@ export type QuoteCommunicationChannel = {
 type ChannelRow = {
   id: string;
   name: string;
+  icon?: string | null;
+  isDefault?: boolean | null;
   createdAt?: string | number | Date | null;
   updatedAt?: string | number | Date | null;
   clientQuoteCount?: string | number | null;
@@ -32,12 +52,17 @@ const epochMs = (value: string | number | Date | null | undefined): number => {
   return Number.isFinite(timestamp) ? timestamp : 0;
 };
 
+const normalizeIcon = (icon: string | null | undefined): QuoteCommunicationChannelIcon =>
+  isQuoteCommunicationChannelIcon(icon) ? icon : DEFAULT_CUSTOM_QUOTE_COMMUNICATION_CHANNEL_ICON;
+
 const mapChannel = (row: ChannelRow): QuoteCommunicationChannel => {
   const clientQuoteCount = parseDbNumber(row.clientQuoteCount, 0);
   const supplierQuoteCount = parseDbNumber(row.supplierQuoteCount, 0);
   return {
     id: row.id,
     name: row.name,
+    icon: normalizeIcon(row.icon),
+    isDefault: Boolean(row.isDefault),
     createdAt: epochMs(row.createdAt),
     updatedAt: epochMs(row.updatedAt),
     clientQuoteCount,
@@ -54,6 +79,8 @@ export const listAllWithCounts = async (
     sql`SELECT
           c.id,
           c.name,
+          c.icon,
+          c.is_default AS "isDefault",
           c.created_at AS "createdAt",
           c.updated_at AS "updatedAt",
           COALESCE(q.count, 0) AS "clientQuoteCount",
@@ -85,13 +112,24 @@ export const listCore = async (
 export const findById = async (
   id: string,
   exec: DbExecutor = db,
-): Promise<{ id: string; name: string } | null> => {
+): Promise<{
+  id: string;
+  name: string;
+  icon: QuoteCommunicationChannelIcon;
+  isDefault: boolean;
+} | null> => {
   const rows = await exec
-    .select({ id: quoteCommunicationChannels.id, name: quoteCommunicationChannels.name })
+    .select({
+      id: quoteCommunicationChannels.id,
+      name: quoteCommunicationChannels.name,
+      icon: quoteCommunicationChannels.icon,
+      isDefault: quoteCommunicationChannels.isDefault,
+    })
     .from(quoteCommunicationChannels)
     .where(eq(quoteCommunicationChannels.id, id))
     .limit(1);
-  return rows[0] ?? null;
+  const row = rows[0];
+  return row ? { ...row, icon: normalizeIcon(row.icon) } : null;
 };
 
 export const findDefault = async (
@@ -121,21 +159,28 @@ export const existsByName = async (
 export const create = async (
   id: string,
   name: string,
+  icon: QuoteCommunicationChannelIcon,
   exec: DbExecutor = db,
 ): Promise<QuoteCommunicationChannel> => {
-  const [row] = await exec.insert(quoteCommunicationChannels).values({ id, name }).returning();
+  const [row] = await exec
+    .insert(quoteCommunicationChannels)
+    .values({ id, name, icon, isDefault: false })
+    .returning();
   return mapChannel(row);
 };
 
 export const update = async (
   id: string,
   name: string,
+  icon: QuoteCommunicationChannelIcon,
   exec: DbExecutor = db,
 ): Promise<QuoteCommunicationChannel | null> => {
   const [row] = await exec
     .update(quoteCommunicationChannels)
-    .set({ name, updatedAt: sql`CURRENT_TIMESTAMP` })
-    .where(eq(quoteCommunicationChannels.id, id))
+    .set({ name, icon, updatedAt: sql`CURRENT_TIMESTAMP` })
+    .where(
+      and(eq(quoteCommunicationChannels.id, id), eq(quoteCommunicationChannels.isDefault, false)),
+    )
     .returning();
   return row ? mapChannel(row) : null;
 };
@@ -171,6 +216,8 @@ export const countReferences = async (
 export const deleteById = async (id: string, exec: DbExecutor = db): Promise<boolean> => {
   const result = await exec
     .delete(quoteCommunicationChannels)
-    .where(eq(quoteCommunicationChannels.id, id));
+    .where(
+      and(eq(quoteCommunicationChannels.id, id), eq(quoteCommunicationChannels.isDefault, false)),
+    );
   return (result.rowCount ?? 0) > 0;
 };

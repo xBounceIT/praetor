@@ -24,6 +24,17 @@
     "manageTitle": "Manage Communication Channels",
     "name": "Channel",
     "namePlaceholder": "e.g. Video call",
+    "icon": "Icon",
+    "defaultValue": "Default",
+    "defaultLocked": "Default channels cannot be modified",
+    "icons": {
+      "comments": "Conversation",
+      "envelope": "Email",
+      "globe": "Web",
+      "phone": "Phone",
+      "video": "Video call",
+      "whatsapp": "WhatsApp"
+    },
     "usedByQuotes": "Used by quotes",
     "noChannels": "No communication channels found.",
     "errors": {

@@ -64,6 +64,8 @@ export interface ShareViewModalProps {
   viewId: string;
   viewName: string;
   onSaved?: () => void;
+  zIndex?: number;
+  popupZIndex?: number;
 }
 
 const isAbortError = (error: unknown) => error instanceof Error && error.name === 'AbortError';
@@ -280,6 +282,7 @@ const ShareReadyBody: React.FC<{
   onToggleShared: (userId: string) => void;
   onUnshareUser: (userId: string) => void;
   onSetPermission: (userId: string, permission: SavedViewPermission) => void;
+  popupZIndex?: number;
   onShareSelected: () => void;
   onUnshareSelected: () => void;
 }> = ({
@@ -293,6 +296,7 @@ const ShareReadyBody: React.FC<{
   onToggleShared,
   onUnshareUser,
   onSetPermission,
+  popupZIndex,
   onShareSelected,
   onUnshareSelected,
 }) => {
@@ -358,7 +362,7 @@ const ShareReadyBody: React.FC<{
           <SelectTrigger size="sm" className="w-28 shrink-0">
             <SelectValue />
           </SelectTrigger>
-          <SelectContent>
+          <SelectContent style={{ zIndex: popupZIndex }}>
             <SelectItem value="read">{t('views.permissionRead')}</SelectItem>
             <SelectItem value="write">{t('views.permissionWrite')}</SelectItem>
           </SelectContent>
@@ -446,6 +450,8 @@ const ShareViewModalSession: React.FC<ShareViewModalProps> = ({
   viewId,
   viewName,
   onSaved,
+  zIndex,
+  popupZIndex,
 }) => {
   const { t } = useTranslation('common');
   const currentUserId = useCurrentUserId();
@@ -612,7 +618,7 @@ const ShareViewModalSession: React.FC<ShareViewModalProps> = ({
   }, [candidates, candidateIds, shares, currentUserId, matchesSearch]);
 
   return (
-    <Modal isOpen={isOpen} onClose={handleClose} ariaLabel={null}>
+    <Modal isOpen={isOpen} onClose={handleClose} ariaLabel={null} zIndex={zIndex}>
       {() => (
         <ModalContent size="2xl" className="max-h-[85vh]">
           <ShareModalHeader viewName={viewName} isSaving={isSaving} onClose={handleClose} />
@@ -640,6 +646,7 @@ const ShareViewModalSession: React.FC<ShareViewModalProps> = ({
                 onToggleShared={toggleSharedSelection}
                 onUnshareUser={unshareUser}
                 onSetPermission={setPermission}
+                popupZIndex={popupZIndex}
                 onShareSelected={shareSelected}
                 onUnshareSelected={unshareSelected}
               />

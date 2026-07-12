@@ -29665,6 +29665,20 @@
                       "name": {
                         "type": "string"
                       },
+                      "icon": {
+                        "type": "string",
+                        "enum": [
+                          "comments",
+                          "envelope",
+                          "globe",
+                          "phone",
+                          "video",
+                          "whatsapp"
+                        ]
+                      },
+                      "isDefault": {
+                        "type": "boolean"
+                      },
                       "createdAt": {
                         "type": "number"
                       },
@@ -29684,6 +29698,8 @@
                     "required": [
                       "id",
                       "name",
+                      "icon",
+                      "isDefault",
                       "clientQuoteCount",
                       "supplierQuoteCount",
                       "totalQuoteCount"
@@ -29856,6 +29872,17 @@
                 "properties": {
                   "name": {
                     "type": "string"
+                  },
+                  "icon": {
+                    "type": "string",
+                    "enum": [
+                      "comments",
+                      "envelope",
+                      "globe",
+                      "phone",
+                      "video",
+                      "whatsapp"
+                    ]
                   }
                 },
                 "required": [
@@ -29879,6 +29906,20 @@
                     "name": {
                       "type": "string"
                     },
+                    "icon": {
+                      "type": "string",
+                      "enum": [
+                        "comments",
+                        "envelope",
+                        "globe",
+                        "phone",
+                        "video",
+                        "whatsapp"
+                      ]
+                    },
+                    "isDefault": {
+                      "type": "boolean"
+                    },
                     "createdAt": {
                       "type": "number"
                     },
@@ -29898,6 +29939,8 @@
                   "required": [
                     "id",
                     "name",
+                    "icon",
+                    "isDefault",
                     "clientQuoteCount",
                     "supplierQuoteCount",
                     "totalQuoteCount"
@@ -30050,6 +30093,17 @@
                 "properties": {
                   "name": {
                     "type": "string"
+                  },
+                  "icon": {
+                    "type": "string",
+                    "enum": [
+                      "comments",
+                      "envelope",
+                      "globe",
+                      "phone",
+                      "video",
+                      "whatsapp"
+                    ]
                   }
                 },
                 "required": [
@@ -30083,6 +30137,20 @@
                     "name": {
                       "type": "string"
                     },
+                    "icon": {
+                      "type": "string",
+                      "enum": [
+                        "comments",
+                        "envelope",
+                        "globe",
+                        "phone",
+                        "video",
+                        "whatsapp"
+                      ]
+                    },
+                    "isDefault": {
+                      "type": "boolean"
+                    },
                     "createdAt": {
                       "type": "number"
                     },
@@ -30102,6 +30170,8 @@
                   "required": [
                     "id",
                     "name",
+                    "icon",
+                    "isDefault",
                     "clientQuoteCount",
                     "supplierQuoteCount",
                     "totalQuoteCount"
@@ -30473,7 +30543,10 @@
                               "type": "string"
                             },
                             "productId": {
-                              "type": "string"
+                              "type": [
+                                "null",
+                                "string"
+                              ]
                             },
                             "productName": {
                               "type": "string"
@@ -30784,7 +30857,10 @@
                           "type": "string"
                         },
                         "productId": {
-                          "type": "string"
+                          "type": [
+                            "string",
+                            "null"
+                          ]
                         },
                         "productName": {
                           "type": "string"
@@ -30979,7 +31055,10 @@
                             "type": "string"
                           },
                           "productId": {
-                            "type": "string"
+                            "type": [
+                              "null",
+                              "string"
+                            ]
                           },
                           "productName": {
                             "type": "string"
@@ -31270,7 +31349,10 @@
                           "type": "string"
                         },
                         "productId": {
-                          "type": "string"
+                          "type": [
+                            "string",
+                            "null"
+                          ]
                         },
                         "productName": {
                           "type": "string"
@@ -31468,7 +31550,10 @@
                             "type": "string"
                           },
                           "productId": {
-                            "type": "string"
+                            "type": [
+                              "null",
+                              "string"
+                            ]
                           },
                           "productName": {
                             "type": "string"
@@ -32405,7 +32490,10 @@
                             "type": "string"
                           },
                           "productId": {
-                            "type": "string"
+                            "type": [
+                              "null",
+                              "string"
+                            ]
                           },
                           "productName": {
                             "type": "string"

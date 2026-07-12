@@ -15,7 +15,7 @@ In master-data tables, contact references are available in dedicated columns. Su
 
 Customer and supplier records can contain multiple contacts, each with a required name and optional role, email, and phone. The first contact is the primary contact and supplies the contact-person, email, and phone columns in the directory; when it is removed, the next contact becomes primary. The contact list may also be left empty.
 
-Client and supplier quotes require the **Communication Channel** field to record how the quote was communicated or negotiated. The same channel is visible in the quote tables. The options are shared by both quote modules: users with quote-management permissions can use the gear **Manage** button above the field to add, rename, or remove available channels. Channels already used by existing quotes cannot be deleted.
+Client and supplier quotes require the **Communication Channel** field to record how the quote was communicated or negotiated. The same channel is visible in the quote tables. The options are shared by both quote modules: users with quote-management permissions can use the gear **Manage** button above the field to add, rename, or remove available channels and choose an icon from the provided set. Email, Phone, and WhatsApp are default values with their own icons and cannot be modified or deleted. Custom channels already used by existing quotes cannot be deleted.
 
 ### Protected deletion
 

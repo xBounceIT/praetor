@@ -24,6 +24,17 @@
     "manageTitle": "Gestisci Canali di Comunicazione",
     "name": "Canale",
     "namePlaceholder": "es. Videochiamata",
+    "icon": "Icona",
+    "defaultValue": "Predefinito",
+    "defaultLocked": "Il canale predefinito non è modificabile",
+    "icons": {
+      "comments": "Conversazione",
+      "envelope": "Email",
+      "globe": "Web",
+      "phone": "Telefono",
+      "video": "Videochiamata",
+      "whatsapp": "WhatsApp"
+    },
     "usedByQuotes": "Usato nei preventivi",
     "noChannels": "Nessun canale di comunicazione trovato.",
     "errors": {

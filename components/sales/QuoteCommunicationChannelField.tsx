@@ -1,10 +1,21 @@
 import type React from 'react';
-import { useMemo, useReducer } from 'react';
+import { useMemo, useReducer, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { FieldError, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
-import type { QuoteCommunicationChannel } from '../../services/api/quoteCommunicationChannels';
+import {
+  Popover,
+  PopoverContent,
+  PopoverHeader,
+  PopoverTitle,
+  PopoverTrigger,
+} from '@/components/ui/popover';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import type {
+  QuoteCommunicationChannel,
+  QuoteCommunicationChannelIcon,
+} from '../../services/api/quoteCommunicationChannels';
 import Modal from '../shared/Modal';
 import {
   ModalBody,
@@ -15,6 +26,11 @@ import {
   ModalTitle,
 } from '../shared/ModalLayout';
 import SelectControl from '../shared/SelectControl';
+import StandardTable, { type Column } from '../shared/StandardTable';
+import {
+  getQuoteCommunicationChannelIconClass,
+  QUOTE_COMMUNICATION_CHANNEL_ICON_OPTIONS,
+} from './quoteCommunicationChannelIcons';
 
 interface QuoteCommunicationChannelFieldProps {
   id: string;
@@ -24,18 +40,87 @@ interface QuoteCommunicationChannelFieldProps {
   channels: QuoteCommunicationChannel[];
   canManage: boolean;
   onChange: (value: string) => void;
-  onCreate: (data: { name: string }) => Promise<void>;
-  onUpdate: (id: string, updates: { name: string }) => Promise<void>;
+  onCreate: (data: { name: string; icon: QuoteCommunicationChannelIcon }) => Promise<void>;
+  onUpdate: (
+    id: string,
+    updates: { name: string; icon: QuoteCommunicationChannelIcon },
+  ) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
 }
 
 const errorMessage = (error: unknown, fallback: string) =>
   error instanceof Error ? error.message : fallback;
 
+const ChannelIcon: React.FC<{ icon: QuoteCommunicationChannelIcon }> = ({ icon }) => (
+  <i
+    className={`${getQuoteCommunicationChannelIconClass(icon)} w-4 shrink-0 text-center text-muted-foreground`}
+    aria-hidden="true"
+  ></i>
+);
+
+const ChannelIconPicker: React.FC<{
+  value: QuoteCommunicationChannelIcon;
+  onChange: (value: QuoteCommunicationChannelIcon) => void;
+}> = ({ value, onChange }) => {
+  const { t } = useTranslation('sales');
+  const [isOpen, setIsOpen] = useState(false);
+  const valueLabel = t(`communicationChannels.icons.${value}`);
+
+  return (
+    <Popover open={isOpen} onOpenChange={setIsOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          aria-label={`${t('communicationChannels.icon')}: ${valueLabel}`}
+          title={`${t('communicationChannels.icon')}: ${valueLabel}`}
+        >
+          <ChannelIcon icon={value} />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="z-[100] w-auto space-y-2 p-3">
+        <PopoverHeader>
+          <PopoverTitle>{t('communicationChannels.icon')}</PopoverTitle>
+        </PopoverHeader>
+        <ToggleGroup
+          type="single"
+          value={value}
+          onValueChange={(nextValue) => {
+            if (!nextValue) return;
+            onChange(nextValue as QuoteCommunicationChannelIcon);
+            setIsOpen(false);
+          }}
+          variant="outline"
+          spacing={1}
+          aria-label={t('communicationChannels.icon')}
+          className="grid grid-cols-3"
+        >
+          {QUOTE_COMMUNICATION_CHANNEL_ICON_OPTIONS.map((option) => {
+            const label = t(`communicationChannels.icons.${option.value}`);
+            return (
+              <ToggleGroupItem
+                key={option.value}
+                value={option.value}
+                aria-label={label}
+                title={label}
+                className="size-9 px-0"
+              >
+                <i className={option.className} aria-hidden="true"></i>
+              </ToggleGroupItem>
+            );
+          })}
+        </ToggleGroup>
+      </PopoverContent>
+    </Popover>
+  );
+};
+
 interface ChannelManagerState {
   isManageOpen: boolean;
   editingChannel: QuoteCommunicationChannel | null;
   channelName: string;
+  channelIcon: QuoteCommunicationChannelIcon;
   managerError: string | null;
   isSaving: boolean;
   deletingId: string | null;
@@ -46,6 +131,7 @@ type ChannelManagerAction =
   | { type: 'closeManage' }
   | { type: 'editChannel'; channel: QuoteCommunicationChannel }
   | { type: 'setChannelName'; value: string }
+  | { type: 'setChannelIcon'; value: QuoteCommunicationChannelIcon }
   | { type: 'showError'; message: string }
   | { type: 'saveStarted' }
   | { type: 'saveSucceeded' }
@@ -58,6 +144,7 @@ const initialChannelManagerState: ChannelManagerState = {
   isManageOpen: false,
   editingChannel: null,
   channelName: '',
+  channelIcon: 'comments',
   managerError: null,
   isSaving: false,
   deletingId: null,
@@ -74,6 +161,7 @@ const channelManagerReducer = (
         isManageOpen: true,
         editingChannel: null,
         channelName: '',
+        channelIcon: 'comments',
         managerError: null,
       };
     case 'closeManage':
@@ -83,16 +171,25 @@ const channelManagerReducer = (
         ...state,
         editingChannel: action.channel,
         channelName: action.channel.name,
+        channelIcon: action.channel.icon,
         managerError: null,
       };
     case 'setChannelName':
       return { ...state, channelName: action.value };
+    case 'setChannelIcon':
+      return { ...state, channelIcon: action.value };
     case 'showError':
       return { ...state, managerError: action.message };
     case 'saveStarted':
       return { ...state, isSaving: true, managerError: null };
     case 'saveSucceeded':
-      return { ...state, isSaving: false, editingChannel: null, channelName: '' };
+      return {
+        ...state,
+        isSaving: false,
+        editingChannel: null,
+        channelName: '',
+        channelIcon: 'comments',
+      };
     case 'saveFailed':
       return { ...state, isSaving: false, managerError: action.message };
     case 'deleteStarted':
@@ -102,7 +199,7 @@ const channelManagerReducer = (
         ...state,
         deletingId: null,
         ...(state.editingChannel?.id === action.id
-          ? { editingChannel: null, channelName: '' }
+          ? { editingChannel: null, channelName: '', channelIcon: 'comments' as const }
           : {}),
       };
     case 'deleteFailed':
@@ -124,12 +221,17 @@ const QuoteCommunicationChannelField: React.FC<QuoteCommunicationChannelFieldPro
 }) => {
   const { t } = useTranslation(['sales', 'common']);
   const [
-    { isManageOpen, editingChannel, channelName, managerError, isSaving, deletingId },
+    { isManageOpen, editingChannel, channelName, channelIcon, managerError, isSaving, deletingId },
     dispatchManager,
   ] = useReducer(channelManagerReducer, initialChannelManagerState);
 
   const channelOptions = useMemo(
-    () => channels.map((channel) => ({ id: channel.id, name: channel.name })),
+    () =>
+      channels.map((channel) => ({
+        id: channel.id,
+        name: channel.name,
+        icon: <ChannelIcon icon={channel.icon} />,
+      })),
     [channels],
   );
 
@@ -150,9 +252,9 @@ const QuoteCommunicationChannelField: React.FC<QuoteCommunicationChannelFieldPro
     dispatchManager({ type: 'saveStarted' });
     try {
       if (editingChannel) {
-        await onUpdate(editingChannel.id, { name: trimmed });
+        await onUpdate(editingChannel.id, { name: trimmed, icon: channelIcon });
       } else {
-        await onCreate({ name: trimmed });
+        await onCreate({ name: trimmed, icon: channelIcon });
       }
       dispatchManager({ type: 'saveSucceeded' });
     } catch (err) {
@@ -164,6 +266,8 @@ const QuoteCommunicationChannelField: React.FC<QuoteCommunicationChannelFieldPro
   };
 
   const handleDelete = async (channel: QuoteCommunicationChannel) => {
+    if (channel.isDefault) return;
+
     if (channel.totalQuoteCount > 0) {
       dispatchManager({
         type: 'showError',
@@ -197,6 +301,70 @@ const QuoteCommunicationChannelField: React.FC<QuoteCommunicationChannelFieldPro
       });
     }
   };
+
+  const channelColumns: Column<QuoteCommunicationChannel>[] = [
+    {
+      header: t('sales:communicationChannels.name'),
+      accessorKey: 'name',
+      disableFiltering: true,
+      cell: ({ row: channel }) => (
+        <div className="flex items-center gap-2">
+          <ChannelIcon icon={channel.icon} />
+          <span>{channel.name}</span>
+          {channel.isDefault && (
+            <>
+              <span className="text-xs text-muted-foreground">
+                {t('sales:communicationChannels.defaultValue')}
+              </span>
+              <span role="img" aria-label={t('sales:communicationChannels.defaultLocked')}>
+                <i
+                  className="fa-solid fa-lock text-xs text-muted-foreground"
+                  aria-hidden="true"
+                ></i>
+              </span>
+            </>
+          )}
+        </div>
+      ),
+    },
+    {
+      header: t('sales:communicationChannels.usedByQuotes'),
+      accessorKey: 'totalQuoteCount',
+      disableFiltering: true,
+      align: 'right',
+      className: 'tabular-nums',
+    },
+    {
+      header: t('common:labels.actions'),
+      id: 'actions',
+      disableSorting: true,
+      disableFiltering: true,
+      cell: ({ row: channel }) =>
+        channel.isDefault ? null : (
+          <div className="flex items-center gap-1">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-xs"
+              aria-label={t('common:buttons.edit')}
+              onClick={() => dispatchManager({ type: 'editChannel', channel })}
+            >
+              <i className="fa-solid fa-pen text-[10px]" aria-hidden="true"></i>
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-xs"
+              aria-label={t('common:buttons.delete')}
+              onClick={() => void handleDelete(channel)}
+              disabled={deletingId === channel.id}
+            >
+              <i className="fa-solid fa-trash text-[10px]" aria-hidden="true"></i>
+            </Button>
+          </div>
+        ),
+    },
+  ];
 
   return (
     <>
@@ -242,76 +410,44 @@ const QuoteCommunicationChannelField: React.FC<QuoteCommunicationChannelFieldPro
             <ModalCloseButton onClick={() => dispatchManager({ type: 'closeManage' })} />
           </ModalHeader>
           <ModalBody className="space-y-6">
-            <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
-              <Input
-                value={channelName}
-                onChange={(event) =>
-                  dispatchManager({ type: 'setChannelName', value: event.target.value })
-                }
-                placeholder={t('sales:communicationChannels.namePlaceholder')}
-              />
-              <Button type="button" onClick={handleSave} disabled={isSaving}>
-                {editingChannel ? t('common:buttons.save') : t('common:buttons.add')}
-              </Button>
+            <div className="space-y-3">
+              <div className="grid grid-cols-[minmax(0,1fr)_auto_auto] gap-3">
+                <Input
+                  value={channelName}
+                  onChange={(event) =>
+                    dispatchManager({ type: 'setChannelName', value: event.target.value })
+                  }
+                  placeholder={t('sales:communicationChannels.namePlaceholder')}
+                />
+                <ChannelIconPicker
+                  value={channelIcon}
+                  onChange={(nextIcon) =>
+                    dispatchManager({ type: 'setChannelIcon', value: nextIcon })
+                  }
+                />
+                <Button type="button" onClick={handleSave} disabled={isSaving}>
+                  {editingChannel ? t('common:buttons.save') : t('common:buttons.add')}
+                </Button>
+              </div>
             </div>
 
             {managerError && <p className="text-sm font-medium text-destructive">{managerError}</p>}
 
-            <div className="overflow-hidden rounded-md border border-border">
-              <table className="w-full text-sm">
-                <thead className="bg-muted/50 text-left text-muted-foreground">
-                  <tr>
-                    <th className="px-3 py-2 font-medium">
-                      {t('sales:communicationChannels.name')}
-                    </th>
-                    <th className="px-3 py-2 text-right font-medium">
-                      {t('sales:communicationChannels.usedByQuotes')}
-                    </th>
-                    <th className="px-3 py-2 text-right font-medium">
-                      {t('common:labels.actions')}
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {channels.map((channel) => (
-                    <tr key={channel.id} className="border-t border-border">
-                      <td className="px-3 py-2">{channel.name}</td>
-                      <td className="px-3 py-2 text-right tabular-nums">
-                        {channel.totalQuoteCount}
-                      </td>
-                      <td className="px-3 py-2">
-                        <div className="flex justify-end gap-2">
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            onClick={() => dispatchManager({ type: 'editChannel', channel })}
-                          >
-                            {t('common:buttons.edit')}
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="destructive"
-                            size="sm"
-                            onClick={() => handleDelete(channel)}
-                            disabled={deletingId === channel.id}
-                          >
-                            {t('common:buttons.delete')}
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                  {channels.length === 0 && (
-                    <tr>
-                      <td className="px-3 py-6 text-center text-muted-foreground" colSpan={3}>
-                        {t('sales:communicationChannels.noChannels')}
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
+            <StandardTable<QuoteCommunicationChannel>
+              title={t('sales:communicationChannels.manageTitle')}
+              data={channels}
+              columns={channelColumns}
+              defaultRowsPerPage={5}
+              minBodyRows={0}
+              containerClassName="shadow-none border-border"
+              tableContainerClassName="max-h-[35vh] overflow-y-auto"
+              popupZIndex={110}
+              emptyState={
+                <div className="px-3 py-6 text-center text-sm text-muted-foreground">
+                  {t('sales:communicationChannels.noChannels')}
+                </div>
+              }
+            />
           </ModalBody>
           <ModalFooter>
             <Button
