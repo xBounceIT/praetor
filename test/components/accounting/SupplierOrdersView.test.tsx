@@ -276,4 +276,61 @@ describe('<SupplierOrdersView /> item pricing columns', () => {
     expect(screen.getByText('9,01')).toBeInTheDocument();
     expect(screen.getAllByText('901,00 EUR').length).toBeGreaterThan(0);
   });
+
+  test('converts a replacement product hourly cost into the retained day unit', async () => {
+    const onUpdateOrder = mock((_id: string, _updates: Partial<SupplierSaleOrder>) => {});
+    const products: Product[] = [
+      {
+        id: 'product-1',
+        name: 'Firewall appliance',
+        productCode: 'FW-1',
+        costo: 240,
+        molPercentage: 0,
+        costUnit: 'hours',
+        type: 'service',
+      },
+      {
+        id: 'product-2',
+        name: 'Daily consulting',
+        productCode: 'CONSULT',
+        costo: 100,
+        molPercentage: 0,
+        costUnit: 'hours',
+        type: 'service',
+      },
+    ];
+    render(
+      <SupplierOrdersView
+        orders={[baseOrder]}
+        suppliers={suppliers}
+        products={products}
+        orderIdsWithInvoices={new Set<string>()}
+        onUpdateOrder={onUpdateOrder}
+        onDeleteOrder={mock(() => Promise.resolve())}
+        currency="EUR"
+      />,
+    );
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('dm_ss_01'));
+      await Promise.resolve();
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /Firewall appliance/i }));
+      await Promise.resolve();
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByText('Daily consulting'));
+      await Promise.resolve();
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByText('common:buttons.update'));
+      await Promise.resolve();
+    });
+
+    const updates = onUpdateOrder.mock.calls[0]?.[1] as Partial<SupplierSaleOrder>;
+    expect(updates.items?.[0]).toEqual(
+      expect.objectContaining({ productId: 'product-2', unitPrice: 800, unitType: 'days' }),
+    );
+  });
 });

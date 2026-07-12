@@ -36,6 +36,9 @@ export const roundCurrency = (value: number): number => {
   return sign * shiftDecimal(cents, -CURRENCY_DECIMAL_PLACES);
 };
 
+export const getDiscountedUnitPrice = (unitPrice: number, discount: number): number =>
+  roundCurrency(unitPrice * (1 - discount / 100));
+
 export const computeInvoiceTotals = (
   items: ItemMath[],
 ): { subtotal: number; taxTotal: number; total: number } => {

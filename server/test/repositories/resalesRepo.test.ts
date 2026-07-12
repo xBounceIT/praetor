@@ -80,6 +80,14 @@ describe('computeSupplierOrderTotal', () => {
 
     expect(total).toBe(0);
   });
+
+  test('rounds the discounted unit price before multiplying quantity', () => {
+    const total = computeSupplierOrderTotal(makeOrder({}), [
+      makeItem({ quantity: 100, unitPrice: 10.01, discount: 10 }),
+    ]);
+
+    expect(total).toBe(901);
+  });
 });
 
 describe('listOrderOptions', () => {

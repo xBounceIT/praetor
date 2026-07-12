@@ -214,9 +214,14 @@ const supplierOrdersReducer = (
         const product = action.products.find((item) => item.id === action.value);
         if (product) {
           nextItem.productName = product.name;
-          nextItem.unitPrice = Number(product.costo);
-          if (product.type === 'supply') nextItem.unitType = 'unit';
-          else nextItem.unitType ??= 'hours';
+          if (product.type === 'supply') {
+            nextItem.unitPrice = Number(product.costo);
+            nextItem.unitType = 'unit';
+          } else {
+            const unitType = nextItem.unitType === 'days' ? 'days' : 'hours';
+            nextItem.unitPrice = convertUnitPrice(Number(product.costo), 'hours', unitType);
+            nextItem.unitType = unitType;
+          }
         }
       }
 
