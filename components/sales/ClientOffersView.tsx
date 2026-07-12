@@ -30,7 +30,7 @@ import {
   normalizeDateOnlyString,
 } from '../../utils/date';
 import { getLinkedFieldStatus } from '../../utils/fieldStatus';
-import { createLineItemIndexResolver } from '../../utils/lineItemIndex';
+import { createLineItemIndexResolver, createTemporaryLineItemId } from '../../utils/lineItemIndex';
 import {
   calcProductSalePrice,
   calculatePricingTotals,
@@ -1102,7 +1102,7 @@ const useClientOffersController = ({
   const addItem = () => {
     if (isReadOnly) return;
     const nextItem: ClientOfferItem = {
-      id: `tmp-${Date.now()}`,
+      id: createTemporaryLineItemId(),
       offerId: editingOffer?.id || '',
       productId: '',
       productName: '',

@@ -24,7 +24,7 @@ import {
   formatInsertDateTime,
   getLocalDateString,
 } from '../../utils/date';
-import { createLineItemIndexResolver } from '../../utils/lineItemIndex';
+import { createLineItemIndexResolver, createTemporaryLineItemId } from '../../utils/lineItemIndex';
 import {
   calcProductSalePrice,
   calculatePricingTotals,
@@ -448,7 +448,7 @@ const useClientsOrdersController = ({
 
   const addProductRow = () => {
     const newItem: Partial<ClientsOrderItem> = {
-      id: 'temp-' + Date.now(),
+      id: createTemporaryLineItemId(),
       productId: '',
       productName: '',
       quantity: Number.NaN,

@@ -33,7 +33,7 @@ import {
   normalizeDateOnlyString,
 } from '../../utils/date';
 import { getLinkedFieldStatus } from '../../utils/fieldStatus';
-import { createLineItemIndexResolver } from '../../utils/lineItemIndex';
+import { createLineItemIndexResolver, createTemporaryLineItemId } from '../../utils/lineItemIndex';
 import {
   calcProductSalePrice,
   calculatePricingTotals,
@@ -785,9 +785,7 @@ const useClientQuotesController = ({
             return {
               ...item,
               id:
-                shouldReprice && editingQuote
-                  ? `temp-reprice-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
-                  : item.id,
+                shouldReprice && editingQuote ? createTemporaryLineItemId('temp-reprice') : item.id,
               supplierQuoteId: null,
               supplierQuoteItemId: null,
               supplierQuoteSupplierName: null,
@@ -863,7 +861,7 @@ const useClientQuotesController = ({
   const addProductRow = () => {
     if (isReadOnly) return;
     const newItem: Partial<QuoteItem> = {
-      id: 'temp-' + Date.now(),
+      id: createTemporaryLineItemId(),
       productId: '',
       productName: '',
       quantity: Number.NaN,

@@ -30,7 +30,7 @@ import {
   isDateOnlyBeforeToday,
   normalizeDateOnlyString,
 } from '../../utils/date';
-import { createLineItemIndexResolver } from '../../utils/lineItemIndex';
+import { createLineItemIndexResolver, createTemporaryLineItemId } from '../../utils/lineItemIndex';
 import {
   convertUnitPrice,
   durationValueToMonths,
@@ -645,7 +645,7 @@ const useSupplierQuotesController = ({
     dispatch({
       type: 'addItem',
       item: {
-        id: `tmp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        id: createTemporaryLineItemId(),
         quoteId: editingQuote?.id || '',
         productName: '',
         quantity: Number.NaN,
