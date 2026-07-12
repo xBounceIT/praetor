@@ -168,6 +168,36 @@ const waitForSavedViewsLoad = async () => {
   await waitFor(() => expect(viewsListMock).toHaveBeenCalled());
 };
 
+const withSingleCandidate = (quote: Quote, candidateId: string): Quote => {
+  const items = quote.items.map((item) => ({
+    ...item,
+    quoteId: quote.id,
+    candidateId,
+  }));
+  return {
+    ...quote,
+    items,
+    candidates: [
+      {
+        id: candidateId,
+        quoteId: quote.id,
+        name: 'Variante A',
+        position: 0,
+        state: 'active',
+        items,
+        paymentTerms: quote.paymentTerms,
+        discount: quote.discount,
+        discountType: quote.discountType,
+        expirationDate: quote.expirationDate,
+        communicationChannelId: quote.communicationChannelId,
+        notes: quote.notes,
+        createdAt: quote.createdAt,
+        updatedAt: quote.updatedAt,
+      },
+    ],
+  };
+};
+
 describe('<ClientQuotesView />', () => {
   test('renders the quote list columns in the requested order with MOL next to margin', () => {
     const { container } = render(
@@ -919,6 +949,117 @@ describe('<ClientQuotesView /> edit action gating (#812 round 13)', () => {
       ).not.toBeNull();
     });
   };
+
+  test('keeps the one-time offer action for an accepted legacy quote without an offer', async () => {
+    const user = userEvent.setup();
+    const onCreateOfferFromLegacyQuote = mock((_quote: Quote) => {});
+    const legacyQuote = withSingleCandidate(
+      { ...quotes[0], id: 'Q-LEGACY-ACCEPTED', status: 'accepted' },
+      'Q-LEGACY-ACCEPTED',
+    );
+
+    render(
+      <ClientQuotesView
+        quotes={[legacyQuote]}
+        clients={clients}
+        products={[]}
+        supplierQuotes={[]}
+        currency="EUR"
+        onAddQuote={mock(() => Promise.resolve())}
+        onUpdateQuote={mock(() => Promise.resolve())}
+        onDeleteQuote={mock(() => Promise.resolve())}
+        onCreateOfferFromLegacyQuote={onCreateOfferFromLegacyQuote}
+      />,
+    );
+
+    await openRowActions(user);
+    await user.click(
+      await screen.findByRole('button', { name: 'sales:clientQuotes.convertToOffer' }),
+    );
+
+    expect(onCreateOfferFromLegacyQuote).toHaveBeenCalledTimes(1);
+    expect(onCreateOfferFromLegacyQuote.mock.calls[0][0].id).toBe('Q-LEGACY-ACCEPTED');
+  });
+
+  test('does not expose legacy conversion for a regular accepted candidate family', async () => {
+    const user = userEvent.setup();
+    const quote = withSingleCandidate(
+      { ...quotes[0], id: 'Q-CANDIDATE-ACCEPTED', status: 'accepted' },
+      'candidate-a',
+    );
+
+    render(
+      <ClientQuotesView
+        quotes={[quote]}
+        clients={clients}
+        products={[]}
+        supplierQuotes={[]}
+        currency="EUR"
+        onAddQuote={mock(() => Promise.resolve())}
+        onUpdateQuote={mock(() => Promise.resolve())}
+        onDeleteQuote={mock(() => Promise.resolve())}
+        onCreateOfferFromLegacyQuote={mock(() => {})}
+      />,
+    );
+
+    await openRowActions(user);
+    expect(
+      screen.queryByRole('button', { name: 'sales:clientQuotes.convertToOffer' }),
+    ).not.toBeInTheDocument();
+  });
+
+  test('keeps supplier-expired quote progression actions disabled', async () => {
+    const user = userEvent.setup();
+    const onUpdateQuote = mock((_id: string, _updates: QuoteMutation) => Promise.resolve());
+    const onPromoteCandidate = mock((_quoteId: string, _candidateId: string) => Promise.resolve());
+
+    const { rerender } = render(
+      <ClientQuotesView
+        quotes={[{ ...quotes[0], id: 'Q-BLOCKED-DRAFT', linkedSupplierQuoteExpired: true }]}
+        clients={clients}
+        products={[]}
+        supplierQuotes={[]}
+        currency="EUR"
+        onAddQuote={mock(() => Promise.resolve())}
+        onUpdateQuote={onUpdateQuote}
+        onDeleteQuote={mock(() => Promise.resolve())}
+        onPromoteCandidate={onPromoteCandidate}
+      />,
+    );
+
+    await openRowActions(user);
+    expect(
+      await screen.findByRole('button', { name: 'sales:clientQuotes.markAsSent' }),
+    ).toBeDisabled();
+
+    rerender(
+      <ClientQuotesView
+        quotes={[
+          {
+            ...quotes[0],
+            id: 'Q-BLOCKED-SENT',
+            status: 'sent',
+            linkedSupplierQuoteExpired: true,
+          },
+        ]}
+        clients={clients}
+        products={[]}
+        supplierQuotes={[]}
+        currency="EUR"
+        onAddQuote={mock(() => Promise.resolve())}
+        onUpdateQuote={onUpdateQuote}
+        onDeleteQuote={mock(() => Promise.resolve())}
+        onPromoteCandidate={onPromoteCandidate}
+      />,
+    );
+    expect(
+      await screen.findByRole('button', {
+        name: 'sales:clientQuotes.candidates.chooseTitle',
+      }),
+    ).toBeDisabled();
+    expect(onUpdateQuote).not.toHaveBeenCalled();
+    expect(onPromoteCandidate).not.toHaveBeenCalled();
+  });
 
   test('promotes the selected candidate of a sent quote through the dedicated action', async () => {
     const user = userEvent.setup();

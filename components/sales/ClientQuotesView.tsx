@@ -149,6 +149,7 @@ export interface ClientQuotesViewProps {
   onUpdateQuote: (id: string, updates: QuoteMutation) => void | Promise<void>;
   onQuoteRestored?: (quote: Quote) => void;
   onDeleteQuote: (id: string) => void | Promise<void>;
+  onCreateOfferFromLegacyQuote?: (quote: Quote) => void;
   onPromoteCandidate?: (quoteId: string, candidateId: string) => Promise<unknown>;
   onRollbackPromotion?: (quoteId: string) => Promise<unknown>;
   onViewOffer?: (offerId: string) => void;
@@ -325,6 +326,17 @@ const calculateClientQuotePricingTotals = (
     discountType,
   );
 
+const isLegacyAcceptedQuote = (quote: Quote) => {
+  const candidates = quote.candidates ?? [];
+  const candidate = candidates[0];
+  return (
+    normalizeQuoteStatus(quote.status) === 'accepted' &&
+    candidates.length === 1 &&
+    candidate.id === quote.id &&
+    candidate.state === 'active'
+  );
+};
+
 const isQuoteCodeConflictError = (err: unknown) =>
   err instanceof ApiError && err.status === 409 && err.message === 'Quote ID already exists';
 
@@ -414,6 +426,7 @@ const useClientQuotesController = ({
   onUpdateQuote,
   onQuoteRestored,
   onDeleteQuote,
+  onCreateOfferFromLegacyQuote,
   onPromoteCandidate,
   onRollbackPromotion,
   onViewOffer,
@@ -1841,6 +1854,7 @@ const useClientQuotesController = ({
         const history = isHistoryRow(row);
         // A linked, expired supplier quote blocks progression to sent/offer/accepted (#779).
         const supplierExpired = Boolean(row.linkedSupplierQuoteExpired);
+        const progressDisabled = history || supplierExpired;
         const progressBlockedTitle = t('sales:clientQuotes.linkedSupplierQuoteExpiredBlocks', {
           defaultValue:
             'The linked supplier quote has expired — extend it before progressing this quote.',
@@ -1927,6 +1941,35 @@ const useClientQuotesController = ({
                 </TooltipContent>
               </Tooltip>
             )}
+            {isLegacyAcceptedQuote(row) && !hasOffer && onCreateOfferFromLegacyQuote && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="inline-flex">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onCreateOfferFromLegacyQuote({
+                          ...row,
+                          items: priceClientQuoteItemsFromLocalMol(row.items),
+                        });
+                      }}
+                      aria-label={t('sales:clientQuotes.convertToOffer', {
+                        defaultValue: 'Convert to offer',
+                      })}
+                      className="p-2 rounded-lg transition-all text-zinc-400 hover:text-praetor hover:bg-zinc-100"
+                    >
+                      <i className="fa-solid fa-file-signature"></i>
+                    </button>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {t('sales:clientQuotes.convertToOffer', {
+                    defaultValue: 'Convert to offer',
+                  })}
+                </TooltipContent>
+              </Tooltip>
+            )}
             {row.status === 'draft' && (
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -1935,12 +1978,12 @@ const useClientQuotesController = ({
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
-                        if (history) return;
+                        if (progressDisabled) return;
                         handleStatusUpdate(row.id, { status: 'sent' });
                       }}
-                      disabled={history}
+                      disabled={progressDisabled}
                       aria-label={t('sales:clientQuotes.markAsSent')}
-                      className={`p-2 rounded-lg transition-all ${history || supplierExpired ? 'cursor-not-allowed opacity-50 text-blue-700' : 'text-blue-700 hover:text-blue-600 hover:bg-blue-50'}`}
+                      className={`p-2 rounded-lg transition-all ${progressDisabled ? 'cursor-not-allowed opacity-50 text-blue-700' : 'text-blue-700 hover:text-blue-600 hover:bg-blue-50'}`}
                     >
                       <i className="fa-solid fa-paper-plane"></i>
                     </button>
@@ -1965,14 +2008,14 @@ const useClientQuotesController = ({
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
-                        if (history) return;
+                        if (progressDisabled) return;
                         openPromotionDialog(row);
                       }}
-                      disabled={history}
+                      disabled={progressDisabled}
                       aria-label={t('sales:clientQuotes.candidates.chooseTitle', {
                         defaultValue: 'Scegli candidato',
                       })}
-                      className={`p-2 rounded-lg transition-all ${history || supplierExpired ? 'cursor-not-allowed opacity-50 text-indigo-700' : 'text-indigo-700 hover:text-indigo-600 hover:bg-indigo-50'}`}
+                      className={`p-2 rounded-lg transition-all ${progressDisabled ? 'cursor-not-allowed opacity-50 text-indigo-700' : 'text-indigo-700 hover:text-indigo-600 hover:bg-indigo-50'}`}
                     >
                       <i className="fa-solid fa-file-signature"></i>
                     </button>

@@ -9,6 +9,7 @@ import type {
   QuoteMutation,
   View,
 } from '../../types';
+import { addMonthsToDateOnly, getLocalDateString, isDateOnlyBeforeToday } from '../../utils/date';
 import { sourcesSupplierQuote } from '../../utils/supplierLineSync';
 import { makeTempId } from '../../utils/tempId';
 import { toastError } from '../../utils/toast';
@@ -288,6 +289,46 @@ export const makeQuoteHandlers = (deps: QuoteHandlersDeps) => {
     }
   };
 
+  const createClientOfferFromLegacyQuote = async (quote: Quote) => {
+    try {
+      // Accepted legacy quotes can predate candidate promotion and therefore have no generated
+      // offer. Keep their one-time conversion path until all such records have been migrated.
+      const expirationDate =
+        !quote.expirationDate || isDateOnlyBeforeToday(quote.expirationDate)
+          ? addMonthsToDateOnly(getLocalDateString(), 1)
+          : quote.expirationDate;
+      const offer = await api.clientOffers.create({
+        linkedQuoteId: quote.id,
+        clientId: quote.clientId,
+        clientName: quote.clientName,
+        paymentTerms: quote.paymentTerms,
+        discount: quote.discount,
+        status: 'draft',
+        expirationDate,
+        notes: quote.notes,
+        items: quote.items.map((item) => ({
+          ...item,
+          id: makeTempId(),
+          offerId: '',
+        })),
+      });
+      setClientOffers((prev) => [offer, ...prev]);
+      setQuotes((prev) =>
+        prev.map((entry) =>
+          entry.id === quote.id ? { ...entry, linkedOfferId: offer.id } : entry,
+        ),
+      );
+      setActiveView('sales/client-offers');
+      notifyClientOfferCreated?.(offer.id);
+      if (sourcesSupplierQuote(quote)) {
+        await refreshLinkedSupplierQuotes();
+      }
+    } catch (err) {
+      console.error('Failed to create offer from legacy quote:', err);
+      toastError((err as Error).message || 'Failed to create offer from legacy quote');
+    }
+  };
+
   const updateClientsOrder = async (id: string, updates: Partial<ClientsOrder>) => {
     try {
       await api.clientsOrders.update(id, updates);
@@ -353,6 +394,7 @@ export const makeQuoteHandlers = (deps: QuoteHandlersDeps) => {
     updateClientOffer,
     revertClientOfferToDraft,
     deleteClientOffer,
+    createClientOfferFromLegacyQuote,
     updateClientsOrder,
     deleteClientsOrder,
     createClientsOrderFromOffer,

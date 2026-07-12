@@ -874,6 +874,35 @@ describe('makeQuoteHandlers', () => {
     expect(ctx.refreshSupplierQuoteFlow).toHaveBeenCalled();
   });
 
+  test('createClientOfferFromLegacyQuote creates and links the missing first offer', async () => {
+    apiMocks.clientOffersCreate.mockImplementation((data: unknown) =>
+      Promise.resolve({ id: 'of-legacy', ...(data as object) }),
+    );
+    const quote = {
+      id: 'q-legacy',
+      status: 'accepted',
+      clientId: 'c1',
+      clientName: 'Acme',
+      paymentTerms: '30',
+      discount: 0,
+      expirationDate: '2099-12-31',
+      notes: 'Legacy accepted quote',
+      items: [{ id: 'item-1', quoteId: 'q-legacy', quantity: 1, unitPrice: 100 }],
+    };
+    const ctx = buildHandlers({ quotes: [quote] });
+
+    await ctx.handlers.createClientOfferFromLegacyQuote(quote as never);
+
+    expect(apiMocks.clientOffersCreate).toHaveBeenCalledTimes(1);
+    const payload = apiMocks.clientOffersCreate.mock.calls[0][0] as Record<string, unknown>;
+    expect(payload.linkedQuoteId).toBe('q-legacy');
+    expect(payload.status).toBe('draft');
+    expect(ctx.clientOffers.get()[0].id).toBe('of-legacy');
+    expect(ctx.quotes.get()[0].linkedOfferId).toBe('of-legacy');
+    expect(ctx.setActiveView).toHaveBeenCalledWith('sales/client-offers');
+    expect(ctx.notifyClientOfferCreated).toHaveBeenCalledWith('of-legacy');
+  });
+
   test('rollbackQuotePromotion reactivates the family through the dedicated API', async () => {
     const ctx = buildHandlers();
 
