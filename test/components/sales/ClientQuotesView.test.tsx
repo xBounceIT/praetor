@@ -6,7 +6,7 @@ import type { Client, Quote, SupplierQuote } from '../../../types';
 import { installI18nMock } from '../../helpers/i18n';
 import { LineDeleteConfirmStub } from '../../helpers/lineItemDeleteConfirm';
 import { render } from '../../helpers/render';
-import { rowDeleteButtons } from '../../helpers/rowDeleteButtons';
+import { openRowDeleteButton, rowDeleteButtons } from '../../helpers/rowDeleteButtons';
 import {
   expectSourceContainsAll,
   expectSourceOmitsAll,
@@ -244,12 +244,13 @@ describe('<ClientQuotesView />', () => {
 
     // The Durata column header renders once a line item exists...
     expect(screen.getAllByText('sales:clientQuotes.durationColumn').length).toBeGreaterThan(0);
-    // ...and the row carries a duration input defaulting to 1 month (one-off).
+    // ...and the new row leaves duration empty so only its text placeholder is visible.
     const durationInputs = screen
-      .getAllByPlaceholderText('sales:clientQuotes.durationColumn')
+      .getAllByRole('textbox', { name: 'sales:clientQuotes.durationColumn' })
       .filter((el): el is HTMLInputElement => el instanceof HTMLInputElement);
     expect(durationInputs.length).toBeGreaterThan(0);
-    expect(durationInputs[0].value).toBe('1');
+    expect(durationInputs[0].value).toBe('');
+    expect(durationInputs[0]).toHaveAttribute('placeholder', '0');
   });
 
   test('edits a per-line discount and submits net revenue and margin', async () => {
@@ -301,6 +302,50 @@ describe('<ClientQuotesView />', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: 'sales:clientQuotes.updateQuote' }));
     await waitFor(() => expect(onUpdateQuote).toHaveBeenCalledTimes(1));
     expect(onUpdateQuote.mock.calls[0][1].items?.[0].discount).toBe(10);
+  });
+
+  test('submits a blank duration without persisting an empty years unit', async () => {
+    const onUpdateQuote = mock((_id: string, _updates: Partial<Quote>) => Promise.resolve());
+    const blankDurationQuote: Quote = {
+      ...quotes[0],
+      id: 'Q-BLANK-DURATION',
+      items: [
+        {
+          ...quotes[0].items[0],
+          quoteId: 'Q-BLANK-DURATION',
+          durationMonths: undefined,
+          durationUnit: 'years',
+        },
+      ],
+    };
+
+    render(
+      <ClientQuotesView
+        quotes={[blankDurationQuote]}
+        clients={clients}
+        products={[]}
+        supplierQuotes={[]}
+        communicationChannels={communicationChannels}
+        currency="EUR"
+        onAddQuote={mock(() => Promise.resolve())}
+        onUpdateQuote={onUpdateQuote}
+        onDeleteQuote={mock(() => Promise.resolve())}
+      />,
+    );
+
+    fireEvent.click(screen.getByText('Q-BLANK-DURATION'));
+    const dialog = await screen.findByRole('dialog');
+    const durationInputs = within(dialog)
+      .getAllByRole('textbox', { name: 'sales:clientQuotes.durationColumn' })
+      .filter((input): input is HTMLInputElement => input instanceof HTMLInputElement);
+    expect(durationInputs.some((input) => input.value === '')).toBe(true);
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'sales:clientQuotes.updateQuote' }));
+    await waitFor(() => expect(onUpdateQuote).toHaveBeenCalledTimes(1));
+    expect(onUpdateQuote.mock.calls[0][1].items?.[0]).toMatchObject({
+      durationMonths: undefined,
+      durationUnit: 'months',
+    });
   });
 
   test('inherits duration and its unit when selecting a supplier quote item', async () => {
@@ -356,7 +401,7 @@ describe('<ClientQuotesView />', () => {
 
     await waitFor(() => {
       const durationInputs = screen
-        .getAllByPlaceholderText('sales:clientQuotes.durationColumn')
+        .getAllByRole('textbox', { name: 'sales:clientQuotes.durationColumn' })
         .filter((element): element is HTMLInputElement => element instanceof HTMLInputElement);
       expect(durationInputs.length).toBeGreaterThan(0);
       expect(durationInputs.every((input) => input.value === '2')).toBe(true);
@@ -615,7 +660,7 @@ describe('<ClientQuotesView />', () => {
     // The Durata cell is an editable input (not N/A), showing the stored 6 months for the unit line.
     expect(screen.queryAllByText('common:labels.notApplicable')).toHaveLength(0);
     const durationInputs = screen
-      .getAllByPlaceholderText('sales:clientQuotes.durationColumn')
+      .getAllByRole('textbox', { name: 'sales:clientQuotes.durationColumn' })
       .filter((el): el is HTMLInputElement => el instanceof HTMLInputElement);
     expect(durationInputs.length).toBeGreaterThan(0);
     expect(durationInputs.some((el) => el.value === '6')).toBe(true);
@@ -666,7 +711,7 @@ describe('<ClientQuotesView />', () => {
 
     // Selecting N/A disables the numeric duration input beside the unit selector (issue #775).
     const durationInputs = screen
-      .getAllByPlaceholderText('sales:clientQuotes.durationColumn')
+      .getAllByRole('textbox', { name: 'sales:clientQuotes.durationColumn' })
       .filter((el): el is HTMLInputElement => el instanceof HTMLInputElement);
     expect(durationInputs.length).toBeGreaterThan(0);
     expect(durationInputs.every((el) => el.disabled)).toBe(true);
@@ -1077,7 +1122,7 @@ describe('<ClientQuotesView /> line-item delete confirmation', () => {
     expect(rowDeletes.length).toBeGreaterThan(0);
 
     // Clicking the trash icon must NOT remove the row immediately — it opens a confirmation.
-    fireEvent.click(rowDeletes[0]);
+    fireEvent.click(await openRowDeleteButton(dialog));
     const confirmUi = await findLineDeleteConfirm();
     expect(
       within(confirmUi).getByText('sales:clientQuotes.removeProductTitle'),
@@ -1094,12 +1139,151 @@ describe('<ClientQuotesView /> line-item delete confirmation', () => {
     const dialog = await openEditor();
     const rowDeletes = rowDeleteButtons(dialog);
 
-    fireEvent.click(rowDeletes[0]);
+    fireEvent.click(await openRowDeleteButton(dialog));
     clickLineDeleteCancel(await findLineDeleteConfirm());
 
     await waitFor(() => {
       expect(screen.queryByText('sales:clientQuotes.removeProductTitle')).not.toBeInTheDocument();
     });
     expect(rowDeleteButtons(dialog)).toHaveLength(rowDeletes.length);
+  });
+});
+
+describe('<ClientQuotesView /> localized line amounts', () => {
+  test('formats line cost, margin, and revenue with Italian separators', async () => {
+    const quoteId = 'Q-LOCALE-AMOUNTS';
+    const quote: Quote = {
+      ...quotes[0],
+      id: quoteId,
+      items: [
+        {
+          ...quotes[0].items[0],
+          id: 'locale-line',
+          quoteId,
+          quantity: 1,
+          unitPrice: 2000,
+          productCost: 1234.5,
+          productMolPercentage: 38.275,
+        },
+      ],
+    };
+
+    render(
+      <ClientQuotesView
+        quotes={[quote]}
+        clients={clients}
+        products={[]}
+        supplierQuotes={[]}
+        communicationChannels={communicationChannels}
+        currency="EUR"
+        onAddQuote={mock(() => Promise.resolve())}
+        onUpdateQuote={mock(() => Promise.resolve())}
+        onDeleteQuote={mock(() => Promise.resolve())}
+      />,
+    );
+    fireEvent.click(screen.getByText(quoteId));
+
+    await waitFor(() => expect(screen.getAllByText('1.234,50 EUR').length).toBeGreaterThan(0));
+    const marginValues = screen.getAllByText('765,50 EUR');
+    expect(marginValues.length).toBeGreaterThan(0);
+    expect(
+      marginValues.some((value) => value.closest('td')?.className.includes('text-emerald-600')),
+    ).toBe(true);
+    expect(screen.getAllByText('2.000,00 EUR').length).toBeGreaterThan(0);
+  });
+});
+
+describe('<ClientQuotesView /> appended item visibility', () => {
+  test('keeps a newly added row visible under a persisted product filter', async () => {
+    localStorage.clear();
+    localStorage.setItem(
+      'praetor_table_customviews_sales_clientquotes_items',
+      JSON.stringify([
+        {
+          id: 'filtered-products',
+          name: 'Product 1 only',
+          hiddenColIds: [],
+          sortState: null,
+          filterState: { product: ['Product 1'] },
+        },
+      ]),
+    );
+    localStorage.setItem('praetor_table_activeview_sales_clientquotes_items', 'filtered-products');
+    const quoteId = 'Q-APPEND-FILTERED';
+    const items = Array.from({ length: 2 }, (_, index): Quote['items'][number] => ({
+      ...quotes[0].items[0],
+      id: `filtered-item-${index + 1}`,
+      quoteId,
+      productName: `Product ${index + 1}`,
+      quantity: 1,
+    }));
+    const quote: Quote = { ...quotes[0], id: quoteId, items };
+
+    render(
+      <ClientQuotesView
+        quotes={[quote]}
+        clients={clients}
+        products={[]}
+        supplierQuotes={[]}
+        communicationChannels={communicationChannels}
+        currency="EUR"
+        onAddQuote={mock(() => Promise.resolve())}
+        onUpdateQuote={mock(() => Promise.resolve())}
+        onDeleteQuote={mock(() => Promise.resolve())}
+      />,
+    );
+    fireEvent.click(screen.getByText(quoteId));
+    const dialog = await screen.findByRole('dialog');
+    await waitFor(() => expect(within(dialog).queryByText('Product 2')).not.toBeInTheDocument());
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'sales:clientQuotes.addProduct' }));
+
+    await waitFor(() => {
+      const quantityInputs = within(dialog).getAllByRole('textbox', {
+        name: 'sales:clientQuotes.qty',
+      });
+      expect(quantityInputs.some((input) => (input as HTMLInputElement).value === '')).toBe(true);
+    });
+  });
+
+  test('moves to the page containing a sixth item immediately after adding it', async () => {
+    localStorage.clear();
+    const quoteId = 'Q-APPEND-PAGE';
+    const items = Array.from({ length: 5 }, (_, index): Quote['items'][number] => ({
+      ...quotes[0].items[0],
+      id: `existing-item-${index + 1}`,
+      quoteId,
+      productName: `Product ${index + 1}`,
+      quantity: 1,
+    }));
+    const quote: Quote = { ...quotes[0], id: quoteId, items };
+
+    render(
+      <ClientQuotesView
+        quotes={[quote]}
+        clients={clients}
+        products={[]}
+        supplierQuotes={[]}
+        communicationChannels={communicationChannels}
+        currency="EUR"
+        onAddQuote={mock(() => Promise.resolve())}
+        onUpdateQuote={mock(() => Promise.resolve())}
+        onDeleteQuote={mock(() => Promise.resolve())}
+      />,
+    );
+    fireEvent.click(screen.getByText(quoteId));
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText('1 / 1')).toBeInTheDocument();
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'sales:clientQuotes.addProduct' }));
+
+    await waitFor(() => expect(within(dialog).getByText('2 / 2')).toBeInTheDocument());
+    await waitFor(() => {
+      const quantityInputs = within(dialog).getAllByRole('textbox', {
+        name: 'sales:clientQuotes.qty',
+      });
+      expect(quantityInputs).toHaveLength(1);
+      expect(quantityInputs[0]).toHaveValue('');
+    });
   });
 });

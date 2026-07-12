@@ -29,8 +29,21 @@ describe('supplier accounting modal styling', () => {
       'id="supplier-order-notes"',
       "summary', { defaultValue: 'Summary' })",
       '<DeleteConfirmModal',
+      '<SupplierOrderSectionTitle>',
+      '<StandardTable<SupplierSaleOrderItem>',
+      'allowColumnHiding={false}',
+      "inputClassName = 'text-right'",
+      'minWidth: 244',
+      'minWidth: 174',
+      'getDurationInputValue(item)',
+      'value={item.discount}',
+      "value === '' ? Number.NaN : Number(value)",
     ]);
-    expectSourceOmitsAll(source, ['rounded-2xl bg-white', '<textarea']);
+    expectSourceOmitsAll(source, [
+      'rounded-2xl bg-white',
+      '<textarea',
+      'showColumnSettings={false}',
+    ]);
     expectSourceContainsAll(versionsSource, [
       "import { VersionHistoryPanel } from '../shared/VersionHistoryPanel';",
       '<VersionHistoryPanel',

@@ -1,4 +1,4 @@
-import { describe, test } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 import {
   expectSourceContainsAll,
   expectSourceOmitsAll,
@@ -115,18 +115,78 @@ describe('sales modal styling', () => {
     expectSourceOmitsAll(source, ['rounded-2xl bg-white', '<button']);
   });
 
-  // Regression: the desktop line's `pt-5` quick-view gutter must sit on the row flex (which also
-  // holds the trash button), not the inner grid — else the sibling delete button floats above the row.
   test.each([
-    ['client quotes', 'sales/ClientQuotesView.tsx'],
-    ['client offers', 'sales/ClientOffersView.tsx'],
-  ])('%s desktop line row shares the quick-view gutter with the delete button', async (_name, path) => {
+    [
+      'client quotes',
+      'sales/ClientQuotesView.tsx',
+      'sales.clientQuotes.items',
+      '<StandardTable<QuoteItem>',
+      '<ClientQuoteSectionHeading label=',
+      'onClick={addProductRow}',
+    ],
+    [
+      'client offers',
+      'sales/ClientOffersView.tsx',
+      'sales.clientOffers.items',
+      '<StandardTable<ClientOfferItem>',
+      '<ClientOfferSectionHeading',
+      'onClick={addItem}',
+    ],
+  ])('%s item editor uses the shared StandardTable layout', async (_name, path, persistenceKey, tableMarker, sectionMarker, addActionMarker) => {
     const source = await readComponentSource(path);
 
     expectSourceContainsAll(source, [
+      tableMarker,
+      sectionMarker,
+      addActionMarker,
+      `persistenceKey="${persistenceKey}"`,
+      'allowColumnHiding={false}',
+      'defaultRowsPerPage={5}',
+      'minBodyRows={0}',
+      'tableContainerClassName="overflow-x-auto"',
+      "id: 'actions'",
+      'controller.canViewSupplierQuotes',
+      'href={line.supplierQuoteHref}',
+      'controller.canViewInternalListing',
+      'href={line.productHref}',
+    ]);
+    expectSourceOmitsAll(source, [
       'className="hidden lg:flex gap-2 items-center pt-5"',
       'className="flex-1 min-w-0 grid grid-cols-17 gap-2 items-center"',
+      'floating',
+      'showColumnSettings={false}',
     ]);
+    expect((source.match(/max-w-\[5rem\] flex-none/g) ?? []).length).toBeGreaterThanOrEqual(3);
+    expect((source.match(/outline-none text-right/g) ?? []).length).toBeGreaterThanOrEqual(5);
+    expect((source.match(/minWidth: 174/g) ?? []).length).toBeGreaterThanOrEqual(2);
+    expect((source.match(/placeholder="0,00"/g) ?? []).length).toBeGreaterThanOrEqual(4);
+    expect(source).toContain('placeholder="0"');
+    expect(source).toContain('quantity: Number.NaN');
+    expect(source).toContain('getDurationInputValue(item)');
+    expect(source).toContain('value={item.discount}');
+    expect(source).toContain('minWidth: 244');
+    expectSourceOmitsAll(source, ['outline-none text-center']);
     expectSourceOmitsAll(source, ['grid grid-cols-17 gap-2 items-center pt-5']);
+  });
+
+  test('supplier quote items restore the section heading and lock column visibility', async () => {
+    const source = await readComponentSource('sales/SupplierQuotesView.tsx');
+
+    expectSourceContainsAll(source, [
+      '<SupplierQuoteSectionTitle>',
+      '<StandardTable<SupplierQuoteItem>',
+      'persistenceKey="sales.supplierQuotes.items"',
+      'allowColumnHiding={false}',
+      '<Button type="button" size="sm" onClick={controller.addItem}>',
+      'className="flex min-w-[150px] items-center justify-end gap-1"',
+      'max-w-[5rem] text-right',
+      'minWidth: 244',
+      'quantity: Number.NaN',
+      'discountPercent: Number.NaN',
+      'getDurationInputValue(item)',
+      "defaultValue: 'List Price'",
+    ]);
+    expect((source.match(/minWidth: 174/g) ?? []).length).toBeGreaterThanOrEqual(2);
+    expectSourceOmitsAll(source, ['showColumnSettings={false}']);
   });
 });

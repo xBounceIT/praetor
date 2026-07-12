@@ -131,6 +131,14 @@ const getNodeText = (node: ReactNode): string => {
   return '';
 };
 
+const isQuickViewActionElement = (element: ReturnType<typeof getElementLike>): boolean =>
+  Boolean(
+    element &&
+      Object.hasOwn(element.props, 'href') &&
+      typeof element.props.label === 'string' &&
+      typeof element.props.disabledLabel === 'string',
+  );
+
 const findActionNode = (node: ReactNode): ReactNode | null => {
   if (node === null || node === undefined || typeof node === 'boolean') return null;
   if (typeof node === 'string' || typeof node === 'number') return null;
@@ -143,9 +151,18 @@ const findActionNode = (node: ReactNode): ReactNode | null => {
   }
   const element = getElementLike(node);
   if (!element) return null;
+  if (element.props.asChild === true) {
+    for (const child of Children.toArray(element.props.children as ReactNode)) {
+      const actionNode = findActionNode(child);
+      if (actionNode) return actionNode;
+    }
+  }
   if (
+    isQuickViewActionElement(element) ||
     (typeof element.type === 'string' && element.type === 'button') ||
+    (typeof element.type === 'string' && element.type === 'a') ||
     element.props.type === 'button' ||
+    typeof element.props.href === 'string' ||
     typeof element.props.onClick === 'function'
   ) {
     return node;
@@ -192,6 +209,8 @@ const hasActionMenuItems = (node: ReactNode): boolean => {
 
     const props = element.props as {
       children?: ReactNode | (() => ReactNode);
+      disabledLabel?: ReactNode;
+      href?: unknown;
       label?: ReactNode;
       onClick?: unknown;
       type?: unknown;
@@ -200,8 +219,11 @@ const hasActionMenuItems = (node: ReactNode): boolean => {
     if (props.label !== undefined && typeof props.children === 'function') return true;
 
     if (
+      isQuickViewActionElement(element) ||
       (typeof element.type === 'string' && element.type === 'button') ||
+      (typeof element.type === 'string' && element.type === 'a') ||
       props.type === 'button' ||
+      typeof props.href === 'string' ||
       typeof props.onClick === 'function'
     ) {
       return true;
@@ -571,6 +593,8 @@ const tableViewReducer = (state: TableViewState, action: TableViewAction): Table
 
 export type Column<T> = {
   header: string;
+  /** Minimum rendered column width, including the table cell's horizontal padding. */
+  minWidth?: number;
   accessorKey?: keyof T;
   accessorFn?: (row: T) => string | number | boolean | null | undefined;
   cell?: (info: {
@@ -871,10 +895,17 @@ const createInitialTableViewState = <T,>({
 
 export type StandardTableProps<T extends object = object> = {
   title: string;
+  /**
+   * Stable identity used for local table preferences and saved views. Defaults to `title` for
+   * backward compatibility. Use this when multiple tables share the same translated title.
+   */
+  persistenceKey?: string;
   totalCount?: number;
   totalLabel?: string;
   headerExtras?: ReactNode;
   headerAction?: ReactNode;
+  /** Whether users and saved views may hide columns. Defaults to true. */
+  allowColumnHiding?: boolean;
   containerClassName?: string;
   tableContainerClassName?: string;
   footer?: ReactNode;
@@ -886,12 +917,17 @@ export type StandardTableProps<T extends object = object> = {
   data?: T[];
   columns?: Column<T>[];
   defaultRowsPerPage?: number;
+  /** Move to the page containing a row appended after mount. Defaults to false. */
+  autoRevealNewRows?: boolean;
+  /** Keep matching rows visible regardless of active column filters. */
+  shouldBypassFilters?: (row: T) => boolean;
   /**
    * Minimum visible body rows. When the current page has fewer rows than this,
    * the body is padded with inert placeholder rows so the table footprint stays
    * stable across empty / sparse / full states. Defaults to 4.
    */
   minBodyRows?: number;
+  getRowProps?: (row: T) => React.ComponentProps<typeof TableRow>;
   rowClassName?: (row: T) => string;
   disabledRow?: (row: T) => boolean;
   onRowClick?: (row: T) => void;
@@ -915,10 +951,12 @@ export type StandardTableProps<T extends object = object> = {
 
 const useStandardTableController = <T extends object>({
   title,
+  persistenceKey,
   totalCount: externalTotalCount,
   totalLabel,
   headerExtras,
   headerAction,
+  allowColumnHiding = true,
   containerClassName,
   tableContainerClassName,
   footer: externalFooter,
@@ -930,7 +968,10 @@ const useStandardTableController = <T extends object>({
   data,
   columns,
   defaultRowsPerPage = 10,
+  autoRevealNewRows = false,
+  shouldBypassFilters,
   minBodyRows = 4,
+  getRowProps,
   rowClassName,
   disabledRow,
   onRowClick,
@@ -939,8 +980,10 @@ const useStandardTableController = <T extends object>({
   viewKey,
 }: StandardTableProps<T>) => {
   const { t } = useTranslation('common');
+  const storageIdentity = persistenceKey ?? title;
   const isServerBacked = viewKey != null;
   const tableContainerRef = useRef<HTMLDivElement | null>(null);
+  const previousDataLengthRef = useRef(data?.length ?? 0);
 
   // A programmatic filter (a quick-view deep link or a cross-view "view X"
   // navigation) must win over a persisted saved view, which would otherwise
@@ -953,7 +996,7 @@ const useStandardTableController = <T extends object>({
     suppressSavedView || (initialFilterState != null && Object.keys(initialFilterState).length > 0);
   const [tableViewState, dispatchTableView] = useReducer(tableViewReducer, null, () =>
     createInitialTableViewState({
-      title,
+      title: storageIdentity,
       columns,
       initialFilterState,
       skipSavedView,
@@ -966,7 +1009,7 @@ const useStandardTableController = <T extends object>({
 
   const [tableUiState, dispatchTableUi] = useReducer(
     standardTableUiReducer,
-    { title, defaultRowsPerPage, isServerBacked, viewKey },
+    { title: storageIdentity, defaultRowsPerPage, isServerBacked, viewKey },
     createInitialStandardTableUiState,
   );
   const setTableUiField = useCallback(
@@ -1132,7 +1175,7 @@ const useStandardTableController = <T extends object>({
     if (isFontSize(saved)) {
       applyFontSize(saved);
     } else if (saved === null) {
-      const legacyValue = readLegacyFontSize(title);
+      const legacyValue = readLegacyFontSize(storageIdentity);
       if (legacyValue) persistFontSize(legacyValue);
     }
 
@@ -1140,7 +1183,7 @@ const useStandardTableController = <T extends object>({
       window.removeEventListener(FONT_SIZE_CHANGE_EVENT, handleFontSizeChange);
       window.removeEventListener('storage', handleFontSizeStorageChange);
     };
-  }, [setFontSize, title]);
+  }, [setFontSize, storageIdentity]);
 
   // Upsert a view's ownership/permission metadata from a server response (server-backed only).
   const rememberServerViewMeta = useCallback(
@@ -1173,7 +1216,10 @@ const useStandardTableController = <T extends object>({
     [setGearOpen, setViewsSubmenuOpen],
   );
 
-  const storageKey = useMemo(() => getStorageKey(title, STORAGE_SUFFIX.rows), [title]);
+  const storageKey = useMemo(
+    () => getStorageKey(storageIdentity, STORAGE_SUFFIX.rows),
+    [storageIdentity],
+  );
 
   const updateCustomViews = useCallback(
     (updater: (prev: CustomView[]) => CustomView[]) => {
@@ -1184,7 +1230,7 @@ const useStandardTableController = <T extends object>({
         if (next !== prev && !isServerBacked && typeof window !== 'undefined') {
           try {
             localStorage.setItem(
-              getStorageKey(title, STORAGE_SUFFIX.customViews),
+              getStorageKey(storageIdentity, STORAGE_SUFFIX.customViews),
               JSON.stringify(next),
             );
           } catch {}
@@ -1198,20 +1244,20 @@ const useStandardTableController = <T extends object>({
         return next;
       });
     },
-    [title, isServerBacked, setCustomViews, viewKey],
+    [storageIdentity, isServerBacked, setCustomViews, viewKey],
   );
 
   const updateActiveViewId = useCallback(
     (id: string | null) => {
       dispatchTableView({ type: 'set-active-view', activeViewId: id });
       if (typeof window === 'undefined') return;
-      const key = getStorageKey(title, STORAGE_SUFFIX.activeView);
+      const key = getStorageKey(storageIdentity, STORAGE_SUFFIX.activeView);
       try {
         if (id) localStorage.setItem(key, id);
         else localStorage.removeItem(key);
       } catch {}
     },
-    [title],
+    [storageIdentity],
   );
 
   // Tracks the in-flight list request so a remount / viewKey change aborts the old one
@@ -1243,7 +1289,7 @@ const useStandardTableController = <T extends object>({
       const currentColumns = columnsRef.current;
       if (!currentColumns) return false;
       const sentinelKey = `praetor_table_viewsmigrated_${slugify(key)}`;
-      const legacyKey = getStorageKey(title, STORAGE_SUFFIX.customViews);
+      const legacyKey = getStorageKey(storageIdentity, STORAGE_SUFFIX.customViews);
       let state: string | null = null;
       try {
         state = localStorage.getItem(sentinelKey);
@@ -1322,7 +1368,7 @@ const useStandardTableController = <T extends object>({
 
       return uploaded;
     },
-    [title, updateActiveViewId],
+    [storageIdentity, updateActiveViewId],
   );
 
   // Server-backed mode: load own + shared views on mount (and on viewKey change / retry).
@@ -1418,11 +1464,11 @@ const useStandardTableController = <T extends object>({
     if (viewsAppliedOnceRef.current) {
       if (typeof window !== 'undefined') {
         try {
-          localStorage.removeItem(getStorageKey(title, STORAGE_SUFFIX.activeView));
+          localStorage.removeItem(getStorageKey(storageIdentity, STORAGE_SUFFIX.activeView));
         } catch {}
       }
     }
-  }, [initialFilterState, suppressSavedView, title]);
+  }, [initialFilterState, suppressSavedView, storageIdentity]);
 
   const getColId = useCallback(getColumnId, []);
 
@@ -1434,6 +1480,7 @@ const useStandardTableController = <T extends object>({
       if (isRowActionColumn(col)) {
         return Math.max(
           ACTION_COLUMN_WIDTH,
+          col.minWidth ?? 0,
           Math.ceil(headerTextWidth + HEADER_CELL_HORIZONTAL_PADDING),
         );
       }
@@ -1443,6 +1490,7 @@ const useStandardTableController = <T extends object>({
         : HEADER_CONTENT_GAP + HEADER_FILTER_BUTTON_WIDTH;
       return Math.max(
         DEFAULT_MIN_COL_WIDTH,
+        col.minWidth ?? 0,
         Math.ceil(
           headerTextWidth +
             HEADER_SORT_BUTTON_HORIZONTAL_PADDING +
@@ -1537,18 +1585,18 @@ const useStandardTableController = <T extends object>({
       const result = getViewApplicationForColumns(view, columns);
       dispatchTableView({
         type: 'apply-view',
-        application: result,
+        application: allowColumnHiding ? result : { ...result, hiddenColIds: new Set<string>() },
         activeViewId: nextActiveViewId,
       });
       if (nextActiveViewId !== undefined && typeof window !== 'undefined') {
-        const key = getStorageKey(title, STORAGE_SUFFIX.activeView);
+        const key = getStorageKey(storageIdentity, STORAGE_SUFFIX.activeView);
         try {
           if (nextActiveViewId) localStorage.setItem(key, nextActiveViewId);
           else localStorage.removeItem(key);
         } catch {}
       }
     },
-    [columns, title],
+    [allowColumnHiding, columns, storageIdentity],
   );
 
   useEffect(
@@ -1569,14 +1617,16 @@ const useStandardTableController = <T extends object>({
     normalizeViewForColumns(view, columns);
 
   const normalizeHiddenColIdsForCurrentColumns = (ids: string[]) =>
-    normalizeViewForCurrentColumns({
-      id: '',
-      name: '',
-      hiddenColIds: ids,
-      columnOrder: normalizedColumnOrder,
-      sortState: null,
-      filterState: {},
-    }).hiddenColIds;
+    allowColumnHiding
+      ? normalizeViewForCurrentColumns({
+          id: '',
+          name: '',
+          hiddenColIds: ids,
+          columnOrder: normalizedColumnOrder,
+          sortState: null,
+          filterState: {},
+        }).hiddenColIds
+      : [];
 
   const fontSizeClass = fontSize === 'xs' ? 'text-xs' : fontSize === 'sm' ? 'text-sm' : 'text-base';
 
@@ -1587,10 +1637,10 @@ const useStandardTableController = <T extends object>({
   useEffect(() => {
     if (typeof window === 'undefined') return;
     localStorage.setItem(
-      getStorageKey(title, STORAGE_SUFFIX.colWidths),
+      getStorageKey(storageIdentity, STORAGE_SUFFIX.colWidths),
       JSON.stringify(clampedColumnSizing),
     );
-  }, [clampedColumnSizing, title]);
+  }, [clampedColumnSizing, storageIdentity]);
 
   const getValue = useCallback((row: T, col: Column<T>) => {
     if (col.accessorFn) return col.accessorFn(row);
@@ -1644,7 +1694,7 @@ const useStandardTableController = <T extends object>({
           enableResizing: !isRowActionColumn(col),
           enableSorting: !col.disableSorting,
           enableColumnFilter: !col.disableFiltering,
-          enableHiding: !col.hidden && !isRowActionColumn(col),
+          enableHiding: allowColumnHiding && !col.hidden && !isRowActionColumn(col),
           sortingFn: (rowA, rowB) => {
             const legacySortColumnId =
               sortState?.colId === colId &&
@@ -1668,6 +1718,7 @@ const useStandardTableController = <T extends object>({
             return 0;
           },
           filterFn: (row, columnId, selectedValues) => {
+            if (shouldBypassFilters?.(row.original)) return true;
             const selected =
               typeof selectedValues === 'string'
                 ? [selectedValues]
@@ -1704,11 +1755,13 @@ const useStandardTableController = <T extends object>({
     [
       clampedColumnSizing,
       columns,
+      allowColumnHiding,
       getColId,
       getColumnMinWidth,
       getValue,
       formatForFilter,
       isRowActionColumn,
+      shouldBypassFilters,
       sortState,
     ],
   );
@@ -1734,10 +1787,10 @@ const useStandardTableController = <T extends object>({
         (columns ?? []).map((col) => {
           const colId = getColId(col);
           if (isRowActionColumn(col)) return [colId, true];
-          return [colId, !col.hidden && !hiddenColIds.has(colId)];
+          return [colId, !col.hidden && (!allowColumnHiding || !hiddenColIds.has(colId))];
         }),
       ) as VisibilityState,
-    [columns, getColId, hiddenColIds, isRowActionColumn],
+    [allowColumnHiding, columns, getColId, hiddenColIds, isRowActionColumn],
   );
 
   const onSortingChange = useCallback(
@@ -1772,11 +1825,11 @@ const useStandardTableController = <T extends object>({
       setCurrentPage(1);
       if (typeof window !== 'undefined') {
         try {
-          localStorage.removeItem(getStorageKey(title, STORAGE_SUFFIX.activeView));
+          localStorage.removeItem(getStorageKey(storageIdentity, STORAGE_SUFFIX.activeView));
         } catch {}
       }
     },
-    [columnFilters, setCurrentPage, title],
+    [columnFilters, setCurrentPage, storageIdentity],
   );
 
   const onPaginationChange = useCallback(
@@ -1795,6 +1848,7 @@ const useStandardTableController = <T extends object>({
 
   const onColumnVisibilityChange = useCallback(
     (updater: Updater<VisibilityState>) => {
+      if (!allowColumnHiding) return;
       const next = functionalUpdate(updater, columnVisibility);
       const nextHiddenColIds = new Set<string>();
       for (const col of gearColumns) {
@@ -1808,11 +1862,11 @@ const useStandardTableController = <T extends object>({
       });
       if (typeof window !== 'undefined') {
         try {
-          localStorage.removeItem(getStorageKey(title, STORAGE_SUFFIX.activeView));
+          localStorage.removeItem(getStorageKey(storageIdentity, STORAGE_SUFFIX.activeView));
         } catch {}
       }
     },
-    [columnVisibility, gearColumns, getColId, title],
+    [allowColumnHiding, columnVisibility, gearColumns, getColId, storageIdentity],
   );
 
   const onColumnOrderChange = useCallback(
@@ -1854,6 +1908,7 @@ const useStandardTableController = <T extends object>({
     onColumnSizingChange,
     columnResizeMode: 'onChange',
     enableColumnResizing: true,
+    autoResetPageIndex: !autoRevealNewRows,
     state: {
       sorting,
       columnFilters,
@@ -1876,6 +1931,22 @@ const useStandardTableController = <T extends object>({
   const totalItems = shouldRenderTable ? processedRows.length : externalTotalCount || 0;
   const totalPages = shouldRenderTable ? table.getPageCount() : Math.ceil(totalItems / rowsPerPage);
   const paginatedRows = shouldRenderTable ? table.getRowModel().rows : [];
+
+  useEffect(() => {
+    const nextDataLength = data?.length ?? 0;
+    const previousDataLength = previousDataLengthRef.current;
+    previousDataLengthRef.current = nextDataLength;
+
+    if (!autoRevealNewRows || !data || nextDataLength <= previousDataLength) return;
+    const appendedRow = data[nextDataLength - 1];
+    const visibleIndex = table
+      .getPrePaginationRowModel()
+      .rows.findIndex((row) => row.original === appendedRow);
+    if (visibleIndex >= 0) {
+      setCurrentPage(Math.floor(visibleIndex / rowsPerPage) + 1);
+    }
+  }, [autoRevealNewRows, data, rowsPerPage, setCurrentPage, table]);
+
   const hasTrailingActionColumn =
     visibleColumns.length > 0 && isRowActionColumn(visibleColumns[visibleColumns.length - 1]);
   const visibleDataColumnCount = visibleColumns.filter((col) => !isRowActionColumn(col)).length;
@@ -1944,12 +2015,18 @@ const useStandardTableController = <T extends object>({
   const renderActionMenuButton = (node: ReactNode, label: ReactNode, key: number) => {
     const labelText = getNodeText(label);
     const element = getElementLike(node);
+    const isQuickViewAction = isQuickViewActionElement(element);
+    const isAnchorElement =
+      element &&
+      ((typeof element.type === 'string' && element.type === 'a') ||
+        typeof element.props.href === 'string');
     const isButtonElement =
       element &&
-      ((typeof element.type === 'string' && element.type === 'button') ||
+      (isQuickViewAction ||
+        (typeof element.type === 'string' && element.type === 'button') ||
         element.props.type === 'button' ||
         typeof element.props.onClick === 'function');
-    if (!isButtonElement) {
+    if (!(isAnchorElement || isButtonElement)) {
       return (
         <div
           key={key}
@@ -1961,16 +2038,60 @@ const useStandardTableController = <T extends object>({
       );
     }
 
-    const props = element.props as React.ButtonHTMLAttributes<HTMLButtonElement> & {
+    const props = element.props as {
+      'aria-disabled'?: boolean | 'false' | 'true';
+      'aria-label'?: string;
       children?: ReactNode;
+      disabled?: boolean;
+      disabledLabel?: ReactNode;
+      href?: string;
+      label?: ReactNode;
+      onClick?: (event: React.MouseEvent<HTMLElement>) => void;
+      rel?: string;
+      target?: string;
+      title?: string;
       'data-testid'?: string;
     };
-    const explicitLabel = props['aria-label'] ?? props.title;
+    const quickViewLabel = props.href ? props.label : props.disabledLabel;
+    const explicitLabel = props['aria-label'] ?? props.title ?? quickViewLabel;
     const testId = props['data-testid'];
     const text =
       labelText ||
       (typeof explicitLabel === 'string' ? explicitLabel : getNodeText(explicitLabel)) ||
       getNodeText(props.children);
+    const closeMenus = () => {
+      setOpenActionMenuRowId(null);
+      setOpenContextMenuRowId(null);
+    };
+    const actionIcon = isQuickViewAction ? (
+      <i className="fa-solid fa-up-right-from-square" aria-hidden="true"></i>
+    ) : (
+      props.children
+    );
+
+    if (isAnchorElement && props.href) {
+      return (
+        <a
+          key={key}
+          href={props.href}
+          target={props.target ?? (isQuickViewAction ? '_blank' : undefined)}
+          rel={props.rel ?? (isQuickViewAction ? 'noopener noreferrer' : undefined)}
+          aria-label={typeof explicitLabel === 'string' ? explicitLabel : undefined}
+          data-testid={testId}
+          className={ACTION_MENU_BUTTON_CLASSNAME}
+          onClick={(event) => {
+            event.stopPropagation();
+            closeMenus();
+            props.onClick?.(event);
+          }}
+        >
+          <span className={`w-3.5 shrink-0 text-center ${getActionIconClassName(actionIcon)}`}>
+            {actionIcon}
+          </span>
+          {text && <span className="whitespace-nowrap">{text}</span>}
+        </a>
+      );
+    }
 
     return (
       <button
@@ -1978,17 +2099,21 @@ const useStandardTableController = <T extends object>({
         type="button"
         aria-label={typeof explicitLabel === 'string' ? explicitLabel : undefined}
         data-testid={testId}
-        disabled={props.disabled}
+        disabled={
+          props.disabled ||
+          props['aria-disabled'] === true ||
+          props['aria-disabled'] === 'true' ||
+          (isQuickViewAction && !props.href)
+        }
         className={ACTION_MENU_BUTTON_CLASSNAME}
         onClick={(event) => {
           event.stopPropagation();
-          setOpenActionMenuRowId(null);
-          setOpenContextMenuRowId(null);
+          closeMenus();
           props.onClick?.(event);
         }}
       >
-        <span className={`w-3.5 shrink-0 text-center ${getActionIconClassName(props.children)}`}>
-          {props.children}
+        <span className={`w-3.5 shrink-0 text-center ${getActionIconClassName(actionIcon)}`}>
+          {actionIcon}
         </span>
         {text && <span className="whitespace-nowrap">{text}</span>}
       </button>
@@ -2040,8 +2165,11 @@ const useStandardTableController = <T extends object>({
       }
 
       if (
+        isQuickViewActionElement(element) ||
         (typeof element.type === 'string' && element.type === 'button') ||
+        (typeof element.type === 'string' && element.type === 'a') ||
         (props as { type?: unknown }).type === 'button' ||
+        typeof (props as { href?: unknown }).href === 'string' ||
         typeof (props as { onClick?: unknown }).onClick === 'function'
       ) {
         items.push(renderActionMenuButton(current, undefined, items.length));
@@ -2464,6 +2592,7 @@ const useStandardTableController = <T extends object>({
     totalLabel,
     headerExtras,
     headerAction,
+    allowColumnHiding,
     containerClassName,
     tableContainerClassName,
     externalFooter,
@@ -2473,6 +2602,7 @@ const useStandardTableController = <T extends object>({
     loadingState,
     data,
     columns,
+    getRowProps,
     rowClassName,
     disabledRow,
     onRowClick,
@@ -2653,8 +2783,16 @@ const StandardTableColumnSettingsMenu = <T extends object>({
 }: {
   controller: StandardTableController<T>;
 }) => {
-  const { t, gearOpen, handleGearOpenChange, activeView, table, colsById, resetColumnVisibility } =
-    controller;
+  const {
+    t,
+    gearOpen,
+    handleGearOpenChange,
+    activeView,
+    table,
+    colsById,
+    resetColumnVisibility,
+    allowColumnHiding,
+  } = controller;
 
   return (
     <DropdownMenu open={gearOpen} onOpenChange={handleGearOpenChange}>
@@ -2678,8 +2816,12 @@ const StandardTableColumnSettingsMenu = <T extends object>({
           {activeView ? `${t('table.columns')} · ${activeView.name}` : t('table.columns')}
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
-        <StandardTableColumnVisibilityItems table={table} colsById={colsById} />
-        <DropdownMenuSeparator />
+        {allowColumnHiding && (
+          <>
+            <StandardTableColumnVisibilityItems table={table} colsById={colsById} />
+            <DropdownMenuSeparator />
+          </>
+        )}
         <DropdownMenuItem
           onSelect={(e) => {
             e.preventDefault();
@@ -3591,6 +3733,7 @@ const StandardTableDataRow = <T extends object>({
     openActionMenuRowId,
     openContextMenuRowId,
     setOpenContextMenuRowId,
+    getRowProps,
   } = controller;
   const row = tableRow.original;
   const visibleCells = tableRow.getVisibleCells();
@@ -3624,6 +3767,7 @@ const StandardTableDataRow = <T extends object>({
       rowActionContent={rowActionContent}
       rowActionMenuItems={rowActionMenuItems}
       isActionMenuOpen={isActionMenuOpen}
+      {...getRowProps?.(row)}
     />
   );
 
@@ -3673,6 +3817,7 @@ const StandardTableDataRowElement = <T extends object>({
   const {
     disabledRow,
     onRowClick,
+    fontSize,
     fontSizeClass,
     rowClassName,
     hasTrailingSpacer,
@@ -3684,6 +3829,7 @@ const StandardTableDataRowElement = <T extends object>({
   return (
     <TableRow
       {...rowProps}
+      data-standard-table-font-size={fontSize}
       onClick={(event) => {
         rowProps.onClick?.(event);
         if (!event.defaultPrevented && !disabledRow?.(row)) onRowClick?.(row);
@@ -3892,8 +4038,15 @@ const StandardTableCustomViewModal = <T extends object>({
 }: {
   controller: StandardTableController<T>;
 }) => {
-  const { modalState, setModalState, saveView, modalColumns, hiddenColIds, normalizedColumnOrder } =
-    controller;
+  const {
+    modalState,
+    setModalState,
+    saveView,
+    modalColumns,
+    hiddenColIds,
+    normalizedColumnOrder,
+    allowColumnHiding,
+  } = controller;
 
   return (
     <CustomViewModal
@@ -3910,8 +4063,9 @@ const StandardTableCustomViewModal = <T extends object>({
         void saveView(view);
       }}
       columns={modalColumns}
-      initialHiddenColIds={hiddenColIds}
+      initialHiddenColIds={allowColumnHiding ? hiddenColIds : new Set<string>()}
       initialColumnOrder={normalizedColumnOrder}
+      allowColumnHiding={allowColumnHiding}
       editingView={modalState?.kind === 'edit' ? modalState.view : undefined}
     />
   );

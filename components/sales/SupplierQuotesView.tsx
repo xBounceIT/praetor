@@ -3,7 +3,6 @@ import { useCallback, useMemo, useReducer } from 'react';
 import { useTranslation } from 'react-i18next';
 import { LinkedRecordBanner } from '@/components/shared/LinkedRecordBanner';
 import { Button } from '@/components/ui/button';
-import DocumentLineItemsScrollArea from '@/components/ui/document-line-items-scroll-area';
 import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -32,11 +31,18 @@ import {
   normalizeDateOnlyString,
 } from '../../utils/date';
 import {
+  createLineItemIndexResolver,
+  createTemporaryLineItemId,
+  isTemporaryLineItem,
+} from '../../utils/lineItemIndex';
+import {
   convertUnitPrice,
   durationValueToMonths,
   formatDecimal,
-  getDurationDisplayValue,
+  getDurationInputValue,
   getEffectiveDurationMonths,
+  isPositiveFiniteNumber,
+  normalizeDurationForSubmit,
   normalizeDurationUnit,
   parseDurationValueToMonths,
   parseNumberInputValue,
@@ -52,6 +58,10 @@ import DeleteConfirmModal from '../shared/DeleteConfirmModal';
 import DurationUnitSelector from '../shared/DurationUnitSelector';
 import FieldTooltip from '../shared/FieldTooltip';
 import HeaderAddButton from '../shared/HeaderAddButton';
+import {
+  LINE_ITEM_NOTE_CELL_CLASSNAME,
+  LINE_ITEM_NOTE_COLUMN_MIN_WIDTH,
+} from '../shared/lineItemNoteStyles';
 import Modal from '../shared/Modal';
 import {
   ModalBody,
@@ -110,8 +120,9 @@ const calculateTotals = (items: SupplierQuoteItem[]): TotalsBreakdown => {
     // Duration multiplies the line total alongside quantity (issue #776). Unit-measured lines
     // never carry a duration, so getEffectiveDurationMonths returns 1 for them.
     const durationMonths = getEffectiveDurationMonths(item);
-    grossListTotal += item.quantity * listPrice * durationMonths;
-    netTotal += item.quantity * item.unitPrice * durationMonths;
+    const quantity = Number(item.quantity) || 0;
+    grossListTotal += quantity * (Number(listPrice) || 0) * durationMonths;
+    netTotal += quantity * (Number(item.unitPrice) || 0) * durationMonths;
   });
   const subtotal = roundCurrency(grossListTotal);
   const total = roundCurrency(netTotal);
@@ -202,7 +213,12 @@ type SupplierQuotesViewAction =
   | { type: 'openEditModal'; quote: SupplierQuote; formData: Partial<SupplierQuote> }
   | { type: 'previewVersion'; version: SupplierQuoteVersion; formData: Partial<SupplierQuote> }
   | { type: 'restoreVersion'; quote: SupplierQuote; formData: Partial<SupplierQuote> }
-  | { type: 'updateItem'; index: number; field: keyof SupplierQuoteItem; value: string | number }
+  | {
+      type: 'updateItem';
+      index: number;
+      field: keyof SupplierQuoteItem;
+      value: string | number | undefined;
+    }
   | { type: 'addItem'; item: SupplierQuoteItem }
   | { type: 'removeItem'; index: number }
   | { type: 'setItem'; index: number; item: SupplierQuoteItem }
@@ -318,9 +334,10 @@ const supplierQuotesViewReducer = (
       // the same update, so the rounded list price/discount and the net cost — and every total that
       // reads them — stay in lockstep with what the server will store.
       if (action.field === 'listPrice' || action.field === 'discountPercent') {
+        const hasDiscount = Number.isFinite(Number(next.discountPercent));
         const pricing = deriveLinePricing(next.listPrice, next.discountPercent);
         next.listPrice = pricing.listPrice;
-        next.discountPercent = pricing.discountPercent;
+        next.discountPercent = hasDiscount ? pricing.discountPercent : Number.NaN;
         next.unitPrice = pricing.unitPrice;
       }
       items[action.index] = next;
@@ -620,7 +637,7 @@ const useSupplierQuotesController = ({
   );
 
   const updateItem = useCallback(
-    (index: number, field: keyof SupplierQuoteItem, value: string | number) => {
+    (index: number, field: keyof SupplierQuoteItem, value: string | number | undefined) => {
       if (isReadOnly) return;
       dispatch({ type: 'updateItem', index, field, value });
     },
@@ -632,15 +649,14 @@ const useSupplierQuotesController = ({
     dispatch({
       type: 'addItem',
       item: {
-        id: `tmp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        id: createTemporaryLineItemId(),
         quoteId: editingQuote?.id || '',
         productName: '',
-        quantity: 1,
+        quantity: Number.NaN,
         listPrice: 0,
-        discountPercent: 0,
+        discountPercent: Number.NaN,
         unitPrice: 0,
         unitType: 'unit' as const,
-        durationMonths: 1,
         durationUnit: 'months' as const,
         note: '',
       },
@@ -683,7 +699,11 @@ const useSupplierQuotesController = ({
   const handleDurationValueChange = (index: number, value: string) => {
     if (isReadOnly) return;
     const unit = normalizeDurationUnit(formData.items?.[index]?.durationUnit);
-    updateItem(index, 'durationMonths', parseDurationValueToMonths(value, unit));
+    updateItem(
+      index,
+      'durationMonths',
+      value === '' ? undefined : parseDurationValueToMonths(value, unit),
+    );
   };
 
   const handleDurationUnitChange = (index: number, newUnit: DurationUnit) => {
@@ -692,8 +712,11 @@ const useSupplierQuotesController = ({
     if (!item || normalizeDurationUnit(item.durationUnit) === newUnit) return;
     // Switching to 'na' (N/A) drops the multiplier to a single month — the value input is disabled
     // and the line never multiplies (issue #775). Other units convert the displayed value to months.
+    const durationValue = getDurationInputValue(item);
     const durationMonths =
-      newUnit === 'na' ? 1 : durationValueToMonths(getDurationDisplayValue(item), newUnit);
+      newUnit === 'na' || durationValue === undefined
+        ? undefined
+        : durationValueToMonths(durationValue, newUnit);
     dispatch({
       type: 'setItem',
       index,
@@ -1026,6 +1049,8 @@ const useSupplierQuotesController = ({
       nextErrors.items = t('sales:supplierQuotes.errors.listPriceRequired', {
         defaultValue: 'List price is required for every item',
       });
+    } else if (formData.items.some((item) => !isPositiveFiniteNumber(item.quantity))) {
+      nextErrors.items = t('common:validation.positiveQuantityRequired');
     }
 
     if (Object.keys(nextErrors).length > 0) {
@@ -1044,10 +1069,9 @@ const useSupplierQuotesController = ({
           Number(item.listPrice ?? item.unitPrice ?? 0),
           Number(item.discountPercent ?? 0),
         ),
-        // Duration applies to every line type now (issue #775); 'na' is gated server-side via
-        // effectiveDurationMonths, so the chosen value/unit is submitted verbatim.
-        durationMonths: Number(item.durationMonths ?? 1) || 1,
-        durationUnit: normalizeDurationUnit(item.durationUnit),
+        // Duration applies to every line type now (issue #775). Blank values stay blank and use
+        // the canonical month unit; 'na' remains explicitly duration-less.
+        ...normalizeDurationForSubmit(item),
       })),
     };
     if (editingQuote) {
@@ -1538,113 +1562,205 @@ const handleSupplierQuoteExpirationChange = (
 
 const SupplierQuoteItemsSection: React.FC<{ controller: SupplierQuotesController }> = ({
   controller,
-}) => (
-  <div className="space-y-4">
-    <div className="flex justify-between items-center">
-      <SupplierQuoteSectionTitle
-        description={controller.t('sales:fieldInfo.supplierItems', {
-          defaultValue: 'Line items for this quote',
-        })}
-        status={controller.readOnlyStatus}
-        statusLabel={controller.statusLabel}
-      >
-        {controller.t('sales:supplierQuotes.items', { defaultValue: 'Items' })}
-      </SupplierQuoteSectionTitle>
-      {!controller.isReadOnly && (
-        <Button type="button" size="sm" onClick={controller.addItem}>
-          <i className="fa-solid fa-plus text-[10px]" aria-hidden="true"></i>
-          {controller.t('sales:supplierQuotes.addItem', { defaultValue: 'Add item' })}
-        </Button>
-      )}
-    </div>
-    {controller.errors.items && (
-      <p className="text-red-500 text-[10px] font-bold ml-1 -mt-2">{controller.errors.items}</p>
-    )}
-    {(controller.formData.items || []).length > 0 ? (
-      <DocumentLineItemsScrollArea
-        aria-label={controller.t('sales:supplierQuotes.items', { defaultValue: 'Items' })}
-        contentClassName="lg:min-w-[88rem]"
-      >
-        <SupplierQuoteItemsHeader controller={controller} />
-        <div className="space-y-3">
-          {controller.formData.items?.map((item, index) => (
-            <SupplierQuoteItemRow key={item.id} controller={controller} item={item} index={index} />
-          ))}
-        </div>
-      </DocumentLineItemsScrollArea>
-    ) : (
-      <div className="rounded-md border border-dashed border-border py-8 text-center text-sm text-muted-foreground">
-        {controller.t('sales:supplierQuotes.noItemsAdded', { defaultValue: 'No items added yet' })}
-      </div>
-    )}
-  </div>
-);
-
-const SupplierQuoteItemsHeader: React.FC<{ controller: SupplierQuotesController }> = ({
-  controller,
 }) => {
-  if ((controller.formData.items || []).length === 0) return null;
+  const items = controller.formData.items;
+  const getIndex = useMemo(() => createLineItemIndexResolver(items), [items]);
+  const getContext = (item: SupplierQuoteItem) =>
+    getSupplierQuoteItemContext(controller, item, getIndex(item));
+  const columns: Column<SupplierQuoteItem>[] = [
+    {
+      id: 'product',
+      header: controller.t('sales:supplierQuotes.product', { defaultValue: 'Product' }),
+      minWidth: 244,
+      accessorFn: (item) => item.productName || '',
+      cell: ({ row }) => (
+        <SupplierQuoteProductInput context={getContext(row)} className="min-w-[220px]" />
+      ),
+    },
+    {
+      id: 'listPrice',
+      header: controller.t('sales:supplierQuotes.listPrice', { defaultValue: 'List Price' }),
+      accessorFn: (item) => item.listPrice ?? item.unitPrice ?? 0,
+      align: 'right',
+      cell: ({ row }) => (
+        <SupplierQuoteListPriceInput
+          context={getContext(row)}
+          className="flex min-w-[140px] items-center gap-1.5"
+          inputClassName={`${controller.itemInputClassName} flex-1 text-right`}
+        />
+      ),
+    },
+    {
+      id: 'discountPercent',
+      header: controller.t('sales:supplierQuotes.discountToUs', {
+        defaultValue: 'Discount to Us (%)',
+      }),
+      accessorFn: (item) => item.discountPercent ?? 0,
+      align: 'right',
+      cell: ({ row }) => (
+        <SupplierQuoteDiscountInput
+          context={getContext(row)}
+          className="flex min-w-[120px] items-center justify-end gap-1"
+          inputClassName={`${controller.itemInputClassName} max-w-[5rem] text-right`}
+        />
+      ),
+    },
+    {
+      id: 'unitCost',
+      header: controller.t('sales:supplierQuotes.unitCost', { defaultValue: 'Unit Cost' }),
+      accessorFn: (item) => item.unitPrice ?? 0,
+      align: 'right',
+      cell: ({ row }) => (
+        <SupplierQuoteUnitCostValue
+          context={getContext(row)}
+          className="flex min-w-[110px] items-center justify-end gap-1.5"
+        />
+      ),
+    },
+    {
+      id: 'quantity',
+      header: controller.t('sales:supplierQuotes.qty', { defaultValue: 'Qty' }),
+      minWidth: 174,
+      accessorKey: 'quantity',
+      align: 'right',
+      cell: ({ row }) => (
+        <SupplierQuoteQuantityInput
+          context={getContext(row)}
+          className="flex min-w-[150px] items-center justify-end gap-1"
+          inputClassName={`${controller.itemInputClassName} max-w-[5rem] text-right`}
+        />
+      ),
+    },
+    {
+      id: 'duration',
+      header: controller.t('sales:supplierQuotes.durationColumn', { defaultValue: 'Duration' }),
+      minWidth: 174,
+      accessorFn: (item) => getEffectiveDurationMonths(item),
+      align: 'right',
+      cell: ({ row }) => (
+        <SupplierQuoteDurationInput
+          context={getContext(row)}
+          className="flex min-w-[150px] items-center justify-end gap-1"
+          inputClassName="w-full max-w-[5rem] rounded-lg border border-zinc-200 bg-white px-1 py-2 text-right text-sm outline-none focus:ring-1 focus:ring-praetor disabled:cursor-not-allowed disabled:opacity-50"
+        />
+      ),
+    },
+    {
+      id: 'total',
+      header: controller.t('sales:supplierQuotes.total', { defaultValue: 'Total' }),
+      accessorFn: (item) =>
+        Number(item.quantity || 0) * Number(item.unitPrice || 0) * getEffectiveDurationMonths(item),
+      align: 'right',
+      cell: ({ row }) => (
+        <SupplierQuoteLineTotalValue
+          context={getContext(row)}
+          className="flex min-w-[110px] items-center justify-end"
+        />
+      ),
+    },
+    {
+      id: 'note',
+      header: controller.t('common:labels.notes', { defaultValue: 'Notes' }),
+      minWidth: LINE_ITEM_NOTE_COLUMN_MIN_WIDTH,
+      accessorFn: (item) => item.note || '',
+      cell: ({ row }) => (
+        <div className={LINE_ITEM_NOTE_CELL_CLASSNAME}>
+          <SupplierQuoteItemNoteField context={getContext(row)} />
+        </div>
+      ),
+    },
+    {
+      id: 'actions',
+      header: controller.t('common:labels.actions', { defaultValue: 'Actions' }),
+      align: 'right',
+      cell: ({ row }) => (
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          onClick={() => controller.removeItem(getContext(row).index)}
+          disabled={controller.isReadOnly}
+          className="text-muted-foreground hover:text-destructive"
+        >
+          <i className="fa-solid fa-trash-can" aria-hidden="true"></i>
+          <span className="sr-only">{controller.t('common:buttons.delete')}</span>
+        </Button>
+      ),
+    },
+  ];
 
   return (
-    <div className="hidden lg:flex gap-2 px-3 mb-1 items-center">
-      <div className="flex-1 min-w-0 grid grid-cols-16 gap-2">
-        <div className="col-span-6 text-[10px] font-black text-zinc-400 uppercase tracking-wider ml-1">
-          {controller.t('sales:supplierQuotes.product', { defaultValue: 'Product' })}
-        </div>
-        <div className="col-span-2 text-[10px] font-black text-zinc-400 uppercase tracking-wider ml-1">
-          {controller.t('sales:supplierQuotes.listPrice', { defaultValue: 'List Price' })}
-        </div>
-        <div className="col-span-2 text-[10px] font-black text-zinc-400 uppercase tracking-wider text-center">
-          {controller.t('sales:supplierQuotes.discountToUs', {
-            defaultValue: 'Discount to Us (%)',
-          })}
-        </div>
-        <div className="col-span-2 text-[10px] font-black text-zinc-400 uppercase tracking-wider text-center">
-          {controller.t('sales:supplierQuotes.unitCost', { defaultValue: 'Unit Cost' })}
-        </div>
-        <div className="col-span-2 text-[10px] font-black text-zinc-400 uppercase tracking-wider text-center">
-          {controller.t('sales:supplierQuotes.qty', { defaultValue: 'Qty' })}
-        </div>
-        <div className="col-span-2 text-[10px] font-black text-zinc-400 uppercase tracking-wider text-center">
-          {controller.t('sales:supplierQuotes.durationColumn', { defaultValue: 'Duration' })}
-        </div>
+    <div className="space-y-2">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <SupplierQuoteSectionTitle>
+          {controller.t('sales:supplierQuotes.items', { defaultValue: 'Items' })}
+        </SupplierQuoteSectionTitle>
+        {!controller.isReadOnly && (
+          <Button type="button" size="sm" onClick={controller.addItem}>
+            <i className="fa-solid fa-plus text-[10px]" aria-hidden="true"></i>
+            {controller.t('sales:supplierQuotes.addItem', { defaultValue: 'Add item' })}
+          </Button>
+        )}
       </div>
-      <div className="w-24 shrink-0 text-[10px] font-black text-zinc-400 uppercase tracking-wider text-right">
-        {controller.t('sales:supplierQuotes.total', { defaultValue: 'Total' })}
-      </div>
-      <div className="w-10 shrink-0" />
+      {controller.errors.items && (
+        <p className="ml-1 text-[10px] font-bold text-red-500">{controller.errors.items}</p>
+      )}
+      <StandardTable<SupplierQuoteItem>
+        title={controller.t('sales:supplierQuotes.items', { defaultValue: 'Items' })}
+        persistenceKey="sales.supplierQuotes.items"
+        allowColumnHiding={false}
+        data={items ?? []}
+        columns={columns}
+        defaultRowsPerPage={5}
+        autoRevealNewRows
+        shouldBypassFilters={(item) =>
+          isTemporaryLineItem(item) || !isPositiveFiniteNumber(item.quantity)
+        }
+        minBodyRows={0}
+        tableContainerClassName="overflow-x-auto"
+        emptyState={
+          <div className="py-8 text-sm text-muted-foreground">
+            {controller.t('sales:supplierQuotes.noItemsAdded', {
+              defaultValue: 'No items added yet',
+            })}
+          </div>
+        }
+      />
     </div>
   );
 };
-
-interface SupplierQuoteItemRowProps {
+interface SupplierQuoteItemContext {
   controller: SupplierQuotesController;
   item: SupplierQuoteItem;
   index: number;
-}
-
-interface SupplierQuoteItemContext extends SupplierQuoteItemRowProps {
   durationUnit: DurationUnit;
-  durationValue: number;
+  durationValue?: number;
   isSupply: boolean;
-  itemDiscountPercent: number;
+  itemDiscountPercent?: number;
   isListPriceBlank: boolean;
   itemListPrice: number;
   itemUnitCost: number;
   lineTotal: number;
 }
 
-const SupplierQuoteItemRow: React.FC<SupplierQuoteItemRowProps> = ({ controller, item, index }) => {
+const getSupplierQuoteItemContext = (
+  controller: SupplierQuotesController,
+  item: SupplierQuoteItem,
+  index: number,
+): SupplierQuoteItemContext => {
   const itemListPrice = item.listPrice ?? item.unitPrice ?? 0;
-  const itemDiscountPercent = item.discountPercent ?? 0;
+  const itemDiscountPercent = Number.isFinite(Number(item.discountPercent))
+    ? item.discountPercent
+    : undefined;
   const itemUnitCost = item.unitPrice ?? 0;
   const durationUnit = normalizeDurationUnit(item.durationUnit);
-  const durationValue = getDurationDisplayValue(item);
-  const lineTotal = item.quantity * itemUnitCost * getEffectiveDurationMonths(item);
+  const durationValue = getDurationInputValue(item);
+  const lineTotal = (Number(item.quantity) || 0) * itemUnitCost * getEffectiveDurationMonths(item);
   const itemProduct = item.productId
     ? controller.products.find((product) => product.id === item.productId)
     : undefined;
-  const context = {
+
+  return {
     controller,
     durationUnit,
     durationValue,
@@ -1657,116 +1773,7 @@ const SupplierQuoteItemRow: React.FC<SupplierQuoteItemRowProps> = ({ controller,
     itemUnitCost,
     lineTotal,
   };
-
-  return (
-    <div className="space-y-3 rounded-md border border-border bg-muted/30 p-3">
-      <SupplierQuoteItemMobileFields context={context} />
-      <SupplierQuoteItemMobileTotals context={context} />
-      <SupplierQuoteItemDesktopFields context={context} />
-      <SupplierQuoteItemNoteField context={context} />
-    </div>
-  );
 };
-
-const SupplierQuoteItemMobileFields: React.FC<{ context: SupplierQuoteItemContext }> = ({
-  context,
-}) => (
-  <div className="lg:hidden flex items-start gap-3">
-    <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-3">
-      <SupplierQuoteProductInput
-        context={context}
-        label={context.controller.t('sales:supplierQuotes.product', { defaultValue: 'Product' })}
-      />
-      <SupplierQuoteQuantityInput
-        context={context}
-        label={context.controller.t('sales:supplierQuotes.qty', { defaultValue: 'Qty' })}
-        className="flex items-center gap-1"
-        inputClassName={`${context.controller.itemInputClassName} text-center flex-1`}
-      />
-      <SupplierQuoteDurationInput
-        context={context}
-        label={context.controller.t('sales:supplierQuotes.durationColumn', {
-          defaultValue: 'Duration',
-        })}
-        inputClassName="w-full text-sm px-3 py-2 bg-white border border-zinc-200 rounded-lg focus:ring-2 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed flex-1"
-      />
-    </div>
-    <SupplierQuoteItemDeleteButton context={context} className="mt-5 shrink-0" />
-  </div>
-);
-
-const SupplierQuoteItemMobileTotals: React.FC<{ context: SupplierQuoteItemContext }> = ({
-  context,
-}) => (
-  <div className="grid grid-cols-2 gap-3 lg:hidden">
-    <SupplierQuoteListPriceInput
-      context={context}
-      label={context.controller.t('sales:supplierQuotes.listPrice', { defaultValue: 'List Price' })}
-      className="rounded-lg border border-zinc-200 bg-white px-3 py-2 space-y-1"
-      inputClassName="w-full text-sm p-2 bg-white border border-zinc-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
-    />
-    <SupplierQuoteDiscountInput
-      context={context}
-      label={context.controller.t('sales:supplierQuotes.discountToUs', {
-        defaultValue: 'Discount to Us (%)',
-      })}
-      className="rounded-lg border border-zinc-200 bg-white px-3 py-2 space-y-1"
-      inputClassName="w-full text-sm p-2 bg-white border border-zinc-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
-    />
-    <SupplierQuoteUnitCostValue
-      context={context}
-      label={context.controller.t('sales:supplierQuotes.unitCost', { defaultValue: 'Unit Cost' })}
-      className="rounded-lg border border-zinc-200 bg-white px-3 py-2 space-y-1"
-    />
-    <SupplierQuoteLineTotalValue
-      context={context}
-      label={context.controller.t('sales:supplierQuotes.total', { defaultValue: 'Total' })}
-      className="rounded-lg border border-zinc-200 bg-white px-3 py-2 space-y-1"
-    />
-  </div>
-);
-
-const SupplierQuoteItemDesktopFields: React.FC<{ context: SupplierQuoteItemContext }> = ({
-  context,
-}) => (
-  <div className="hidden lg:flex gap-2 items-center">
-    <div className="flex-1 min-w-0 grid grid-cols-16 gap-2 items-center">
-      <SupplierQuoteProductInput context={context} className="col-span-6" />
-      <SupplierQuoteListPriceInput
-        context={context}
-        className="col-span-2 flex items-center gap-1.5"
-        inputClassName={`${context.controller.itemInputClassName} flex-1 text-right`}
-      />
-      <SupplierQuoteDiscountInput
-        context={context}
-        className="col-span-2 flex items-center justify-center gap-1"
-        inputClassName={`${context.controller.itemInputClassName} text-center max-w-[5rem]`}
-      />
-      <SupplierQuoteUnitCostValue
-        context={context}
-        className="col-span-2 flex items-center justify-center gap-1.5"
-      />
-      <SupplierQuoteQuantityInput
-        context={context}
-        wrapperClassName="col-span-2"
-        className="flex items-center justify-center gap-1"
-        inputClassName={`${context.controller.itemInputClassName} text-center max-w-[5rem]`}
-      />
-      <SupplierQuoteDurationInput
-        context={context}
-        wrapperClassName="col-span-2"
-        className="flex items-center justify-center gap-1"
-        inputClassName="w-full max-w-[5rem] text-sm px-1 py-2 bg-white border border-zinc-200 rounded-lg focus:ring-1 focus:ring-praetor outline-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
-      />
-    </div>
-    <SupplierQuoteLineTotalValue
-      context={context}
-      className="w-24 shrink-0 flex items-center justify-end"
-    />
-    <SupplierQuoteItemDeleteButton context={context} className="shrink-0" />
-  </div>
-);
-
 const SupplierQuoteFieldLabel: React.FC<{ children?: React.ReactNode }> = ({ children }) =>
   children ? (
     <div className="mb-1 text-[10px] font-black text-zinc-400 uppercase tracking-wider">
@@ -1807,8 +1814,15 @@ const SupplierQuoteQuantityInput: React.FC<{
     <div className={className}>
       <ValidatedNumberInput
         value={context.item.quantity}
+        required
+        placeholder="0,00"
+        aria-label={context.controller.t('sales:supplierQuotes.qty', { defaultValue: 'Qty' })}
         onValueChange={(value) =>
-          context.controller.updateItem(context.index, 'quantity', parseNumberInputValue(value))
+          context.controller.updateItem(
+            context.index,
+            'quantity',
+            parseNumberInputValue(value, Number.NaN),
+          )
         }
         disabled={context.controller.isReadOnly}
         className={cn('min-w-[4rem]', inputClassName)}
@@ -1850,7 +1864,8 @@ const SupplierQuoteDurationInput: React.FC<{
       <ValidatedNumberInput
         step="1"
         min="1"
-        placeholder={context.controller.t('sales:supplierQuotes.durationColumn', {
+        placeholder="0"
+        aria-label={context.controller.t('sales:supplierQuotes.durationColumn', {
           defaultValue: 'Duration',
         })}
         value={context.durationValue}
@@ -1864,7 +1879,7 @@ const SupplierQuoteDurationInput: React.FC<{
       <DurationUnitSelector
         value={context.durationUnit}
         onChange={(value) => context.controller.handleDurationUnitChange(context.index, value)}
-        count={context.durationValue}
+        count={context.durationValue ?? 0}
         disabled={context.controller.isReadOnly}
         i18nPrefix="sales:supplierQuotes"
       />
@@ -1886,6 +1901,9 @@ const SupplierQuoteListPriceInput: React.FC<{
         formatDecimals={2}
         aria-required="true"
         placeholder="0,00"
+        aria-label={context.controller.t('sales:supplierQuotes.listPrice', {
+          defaultValue: 'List Price',
+        })}
         onValueChange={(value) => context.controller.updateItem(context.index, 'listPrice', value)}
         disabled={context.controller.isReadOnly}
         className={inputClassName}
@@ -1908,13 +1926,17 @@ const SupplierQuoteDiscountInput: React.FC<{
     <div className="flex items-center gap-1">
       <ValidatedNumberInput
         value={context.itemDiscountPercent}
+        placeholder="0,00"
+        aria-label={context.controller.t('sales:supplierQuotes.discountToUs', {
+          defaultValue: 'Discount to Us',
+        })}
         min={0}
         max={100}
         onValueChange={(value) =>
           context.controller.updateItem(
             context.index,
             'discountPercent',
-            parseNumberInputValue(value),
+            parseNumberInputValue(value, Number.NaN),
           )
         }
         disabled={context.controller.isReadOnly}
@@ -1949,23 +1971,6 @@ const SupplierQuoteLineTotalValue: React.FC<{
       {formatDecimal(context.lineTotal)} {context.controller.currency}
     </span>
   </div>
-);
-
-const SupplierQuoteItemDeleteButton: React.FC<{
-  context: SupplierQuoteItemContext;
-  className?: string;
-}> = ({ context, className }) => (
-  <Button
-    type="button"
-    variant="ghost"
-    size="icon-sm"
-    onClick={() => context.controller.removeItem(context.index)}
-    disabled={context.controller.isReadOnly}
-    className={`${className ?? ''} text-muted-foreground hover:text-destructive`}
-  >
-    <i className="fa-solid fa-trash-can" aria-hidden="true"></i>
-    <span className="sr-only">{context.controller.t('common:buttons.delete')}</span>
-  </Button>
 );
 
 const SupplierQuoteItemNoteField: React.FC<{ context: SupplierQuoteItemContext }> = ({

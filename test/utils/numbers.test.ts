@@ -9,15 +9,20 @@ import {
   formatMolPercentage,
   formatNumber,
   getDurationDisplayValue,
+  getDurationInputValue,
   getEffectiveCost,
   getEffectiveDurationMonths,
   getEffectiveMol,
   getItemPricingContext,
+  isFiniteNumber,
+  isPositiveFiniteNumber,
+  normalizeDurationForSubmit,
   normalizeDurationUnit,
   normalizeLocalizedNumber,
   type PricingItem,
   parseDurationValueToMonths,
   parseNumberInputValue,
+  parseOptionalNumberInputValue,
   roundCurrency,
 } from '../../utils/numbers';
 
@@ -40,6 +45,32 @@ describe('parseNumberInputValue', () => {
 
   test('parses negative numbers', () => {
     expect(parseNumberInputValue('-3.14')).toBe(-3.14);
+  });
+});
+
+describe('parseOptionalNumberInputValue', () => {
+  test('preserves empty and invalid input instead of defaulting it to zero', () => {
+    expect(parseOptionalNumberInputValue('')).toBeUndefined();
+    expect(parseOptionalNumberInputValue('abc')).toBeUndefined();
+  });
+
+  test('parses a real localized numeric value, including zero', () => {
+    expect(parseOptionalNumberInputValue('12,5')).toBe(12.5);
+    expect(parseOptionalNumberInputValue('0')).toBe(0);
+  });
+});
+
+describe('required numeric values', () => {
+  test('accepts only finite numbers and finite positive quantities', () => {
+    expect(isFiniteNumber(0)).toBe(true);
+    expect(isFiniteNumber(Number.NaN)).toBe(false);
+    expect(isFiniteNumber(Number.POSITIVE_INFINITY)).toBe(false);
+    expect(isFiniteNumber('1')).toBe(false);
+
+    expect(isPositiveFiniteNumber(1)).toBe(true);
+    expect(isPositiveFiniteNumber(0)).toBe(false);
+    expect(isPositiveFiniteNumber(-1)).toBe(false);
+    expect(isPositiveFiniteNumber(Number.NaN)).toBe(false);
   });
 });
 
@@ -223,6 +254,45 @@ describe('getDurationDisplayValue', () => {
   test("shows the neutral 1 for an 'N/A' line (issue #775)", () => {
     // 'na' never multiplies, so the (disabled) input reads 1 regardless of the stored months.
     expect(getDurationDisplayValue({ durationMonths: 6, durationUnit: 'na' })).toBe(1);
+  });
+});
+
+describe('getDurationInputValue', () => {
+  test('preserves an unfilled or invalid duration for placeholder-only inputs', () => {
+    expect(getDurationInputValue({ durationUnit: 'months' })).toBeUndefined();
+    expect(getDurationInputValue({ durationMonths: Number.NaN })).toBeUndefined();
+    expect(getDurationInputValue({ durationMonths: 0 })).toBeUndefined();
+  });
+
+  test('converts real stored durations into their selected display unit', () => {
+    expect(getDurationInputValue({ durationMonths: 6, durationUnit: 'months' })).toBe(6);
+    expect(getDurationInputValue({ durationMonths: 24, durationUnit: 'years' })).toBe(2);
+  });
+});
+
+describe('normalizeDurationForSubmit', () => {
+  test('keeps blank durations empty and normalizes their display unit to months', () => {
+    expect(normalizeDurationForSubmit({ durationUnit: 'years' })).toEqual({
+      durationMonths: undefined,
+      durationUnit: 'months',
+    });
+    expect(
+      normalizeDurationForSubmit({ durationMonths: Number.NaN, durationUnit: 'years' }),
+    ).toEqual({
+      durationMonths: undefined,
+      durationUnit: 'months',
+    });
+  });
+
+  test('preserves real and explicitly duration-less values', () => {
+    expect(normalizeDurationForSubmit({ durationMonths: 24, durationUnit: 'years' })).toEqual({
+      durationMonths: 24,
+      durationUnit: 'years',
+    });
+    expect(normalizeDurationForSubmit({ durationUnit: 'na' })).toEqual({
+      durationMonths: undefined,
+      durationUnit: 'na',
+    });
   });
 });
 

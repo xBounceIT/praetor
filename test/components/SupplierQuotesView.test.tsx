@@ -280,7 +280,11 @@ describe('<SupplierQuotesView /> deep-link filter', () => {
 // Opens the New-quote dialog and fills every required field (supplier, code, one line item).
 // Pass a customer name to also pick it from the Customer combobox. The caller must render with
 // `quotes={[]}` so the supplier/customer names are unambiguous (no table rows behind the modal).
-const fillNewQuoteForm = (customerName?: string, listPrice: string | null = '100') => {
+const fillNewQuoteForm = (
+  customerName?: string,
+  listPrice: string | null = '100',
+  quantity: string | null = '1',
+) => {
   fireEvent.click(screen.getByText('sales:supplierQuotes.addQuote'));
   fireEvent.click(document.getElementById('supplier-quote-supplier') as HTMLElement);
   fireEvent.click(screen.getByText('Acme Supplies'));
@@ -292,21 +296,31 @@ const fillNewQuoteForm = (customerName?: string, listPrice: string | null = '100
     target: { value: 'SQ-NEW' },
   });
   fireEvent.click(screen.getByText('sales:supplierQuotes.addItem'));
-  if (listPrice !== null) {
-    fireEvent.change(screen.getAllByPlaceholderText('0,00')[0], {
-      target: { value: listPrice },
+  if (quantity !== null) {
+    fireEvent.change(screen.getAllByRole('textbox', { name: 'sales:supplierQuotes.qty' })[0], {
+      target: { value: quantity },
     });
+  }
+  if (listPrice !== null) {
+    fireEvent.change(
+      screen.getAllByRole('textbox', { name: 'sales:supplierQuotes.listPrice' })[0],
+      {
+        target: { value: listPrice },
+      },
+    );
   }
 };
 
 describe('<SupplierQuotesView /> required list price', () => {
-  test('keeps new-item prices empty with the 0,00 placeholder and blocks save until entered', async () => {
+  test('keeps new-item prices empty with a numeric placeholder and blocks save until entered', async () => {
     const onAddQuote = mock((_data: Partial<SupplierQuote>) => Promise.resolve(draft));
     render(<SupplierQuotesView {...baseProps} quotes={[]} onAddQuote={onAddQuote} />);
 
     fillNewQuoteForm('Globex Corp', null);
 
-    const listPriceInputs = screen.getAllByPlaceholderText('0,00');
+    const listPriceInputs = screen.getAllByRole('textbox', {
+      name: 'sales:supplierQuotes.listPrice',
+    });
     expect(listPriceInputs.length).toBeGreaterThan(0);
     for (const input of listPriceInputs) {
       expect(input).toHaveValue('');
@@ -341,7 +355,9 @@ describe('<SupplierQuotesView /> required list price', () => {
       fillNewQuoteForm('Globex Corp', null);
       fireEvent.click(screen.getByText('sales:supplierQuotes.addItem'));
 
-      const listPriceInputs = screen.getAllByPlaceholderText('0,00');
+      const listPriceInputs = screen.getAllByRole('textbox', {
+        name: 'sales:supplierQuotes.listPrice',
+      });
       fireEvent.submit(screen.getByText('common:buttons.save').closest('form') as HTMLFormElement);
       fireEvent.change(listPriceInputs[0], { target: { value: '125' } });
 
@@ -361,6 +377,36 @@ describe('<SupplierQuotesView /> required list price', () => {
 
     expect(onAddQuote).not.toHaveBeenCalled();
     expect(screen.getByText('sales:supplierQuotes.errors.listPriceRequired')).toBeInTheDocument();
+  });
+
+  test('shows only format-appropriate numeric placeholders on a new line', () => {
+    render(<SupplierQuotesView {...baseProps} quotes={[]} />);
+
+    fillNewQuoteForm('Globex Corp', null, null);
+
+    expect(screen.getAllByRole('textbox', { name: 'sales:supplierQuotes.qty' })[0]).toHaveValue('');
+    expect(screen.getAllByRole('textbox', { name: 'sales:supplierQuotes.qty' })[0]).toHaveAttribute(
+      'placeholder',
+      '0,00',
+    );
+    expect(
+      screen.getAllByRole('textbox', { name: 'sales:supplierQuotes.durationColumn' })[0],
+    ).toHaveValue('');
+    expect(
+      screen.getAllByRole('textbox', { name: 'sales:supplierQuotes.durationColumn' })[0],
+    ).toHaveAttribute('placeholder', '0');
+    expect(
+      screen.getAllByRole('textbox', { name: 'sales:supplierQuotes.listPrice' })[0],
+    ).toHaveValue('');
+    expect(
+      screen.getAllByRole('textbox', { name: 'sales:supplierQuotes.listPrice' })[0],
+    ).toHaveAttribute('placeholder', '0,00');
+    expect(
+      screen.getAllByRole('textbox', { name: 'sales:supplierQuotes.discountToUs' })[0],
+    ).toHaveValue('');
+    expect(
+      screen.getAllByRole('textbox', { name: 'sales:supplierQuotes.discountToUs' })[0],
+    ).toHaveAttribute('placeholder', '0,00');
   });
 });
 
@@ -508,7 +554,7 @@ describe('<SupplierQuotesView /> line item duration (issue #776)', () => {
     expect(screen.getAllByText('sales:supplierQuotes.durationColumn').length).toBeGreaterThan(0);
     // ...and the row carries a duration input reflecting the stored value (3 months).
     const durationInputs = screen
-      .getAllByPlaceholderText('sales:supplierQuotes.durationColumn')
+      .getAllByRole('textbox', { name: 'sales:supplierQuotes.durationColumn' })
       .filter((el): el is HTMLInputElement => el instanceof HTMLInputElement);
     expect(durationInputs.length).toBeGreaterThan(0);
     expect(durationInputs[0].value).toBe('3');
@@ -529,7 +575,7 @@ describe('<SupplierQuotesView /> line item duration (issue #776)', () => {
     fireEvent.click(screen.getByText('SQ-DRAFT'));
     expect(screen.queryAllByText('common:labels.notApplicable')).toHaveLength(0);
     const durationInputs = screen
-      .getAllByPlaceholderText('sales:supplierQuotes.durationColumn')
+      .getAllByRole('textbox', { name: 'sales:supplierQuotes.durationColumn' })
       .filter((el): el is HTMLInputElement => el instanceof HTMLInputElement);
     expect(durationInputs.length).toBeGreaterThan(0);
   });
@@ -561,7 +607,7 @@ describe('<SupplierQuotesView /> line item duration (issue #776)', () => {
     expect(screen.queryByText('600,00 EUR')).not.toBeInTheDocument();
     // The value input is disabled while the unit is N/A; the selector stays usable.
     const durationInputs = screen
-      .getAllByPlaceholderText('sales:supplierQuotes.durationColumn')
+      .getAllByRole('textbox', { name: 'sales:supplierQuotes.durationColumn' })
       .filter((el): el is HTMLInputElement => el instanceof HTMLInputElement);
     expect(durationInputs.length).toBeGreaterThan(0);
     expect(durationInputs.every((el) => el.disabled)).toBe(true);
@@ -593,7 +639,7 @@ describe('<SupplierQuotesView /> line item duration (issue #776)', () => {
     fireEvent.click(screen.getByText('SQ-DUR-EDIT'));
 
     const durationInputs = screen
-      .getAllByPlaceholderText('sales:supplierQuotes.durationColumn')
+      .getAllByRole('textbox', { name: 'sales:supplierQuotes.durationColumn' })
       .filter((el): el is HTMLInputElement => el instanceof HTMLInputElement);
     fireEvent.change(durationInputs[0], { target: { value: '4' } });
 
@@ -690,52 +736,59 @@ describe('<SupplierQuotesView /> dark-mode banners (issue #768)', () => {
   });
 });
 
-describe('<SupplierQuotesView /> compact line-item numeric columns', () => {
-  test('discount/quantity inputs are width-capped and unit cost is content-sized', async () => {
+describe('<SupplierQuotesView /> StandardTable line items', () => {
+  test('keeps numeric editors compact and money values aligned', async () => {
     const source = await readComponentSource('sales/SupplierQuotesView.tsx');
-    // Quantity keeps the same 4rem minimum width as UnitTypeSelector in both renderings, while the
-    // desktop call site continues to cap it at 5rem.
+    expect((source.match(/max-w-\[5rem\]/g) ?? []).length).toBeGreaterThanOrEqual(3);
     expectSourceContainsAll(source, [
-      "className={cn('min-w-[4rem]', inputClassName)}",
-      'text-center max-w-[5rem]',
+      'flex min-w-[110px] items-center justify-end gap-1.5',
+      'flex-1 text-right',
     ]);
-    // The desktop "Sconto a noi (%)" and "Quantità" inputs are BOTH capped at max-w-[5rem] so the
-    // columns only have to fit values like "100" or "45.47" instead of stretching the cell. The cap
-    // sits directly after text-center (the duration input also uses max-w-[5rem], but not adjacent
-    // to text-center), so this regex matches exactly those two inputs. Assert both carry it —
-    // reverting either one alone would be a regression a single substring check would miss.
-    expect((source.match(/text-center max-w-\[5rem\]/g) ?? []).length).toBeGreaterThanOrEqual(2);
-    // "Costo unitario" and the discount column are centered under their centered headers; gap-1.5
-    // is unique to the unit-cost cell, sized to its content rather than spanning the column.
-    expectSourceContainsAll(source, ['flex items-center justify-center gap-1.5']);
-    // The old full-width unit-cost treatment is gone: the value no longer spans the cell right-aligned.
     expectSourceOmitsAll(source, ['flex-1 text-right text-sm font-semibold text-zinc-700']);
-    // The editable "Prezzo listino" input right-aligns its value so the amount sits beside the
-    // currency symbol like the other money figures; `flex-1 text-right` is unique to that input now.
-    expectSourceContainsAll(source, ['flex-1 text-right']);
   });
 
-  test('uses the compact 16-col grid with a widened product column', async () => {
+  test('uses the shared table with isolated preferences and explicit editor widths', async () => {
     const source = await readComponentSource('sales/SupplierQuotesView.tsx');
-    // Desktop line-item rows use the same tighter grid as ClientQuotesView (16 cols / gap-2)
-    // instead of the old evenly-split 12-col / gap-3 that left big gaps between the capped numeric
-    // inputs. Both the header row and the data row carry it → at least 2 occurrences.
-    expect((source.match(/grid grid-cols-16 gap-2/g) ?? []).length).toBeGreaterThanOrEqual(2);
-    // The product column is widened to col-span-6 (the five remaining columns stay col-span-2:
-    // 6 + 5×2 = 16) to soak up the reclaimed width — header + data row → at least 2 occurrences.
-    expect((source.match(/col-span-6/g) ?? []).length).toBeGreaterThanOrEqual(2);
-    // Quantity and duration apply their two-column span to the field wrapper, which is the direct
-    // grid child. Keeping col-span-2 on the nested flex row would leave each field in one column and
-    // make the fixed-width controls overlap at narrower desktop widths.
-    expect((source.match(/wrapperClassName="col-span-2"/g) ?? []).length).toBeGreaterThanOrEqual(2);
-    expect((source.match(/className=\{wrapperClassName\}/g) ?? []).length).toBeGreaterThanOrEqual(
-      2,
+    expectSourceContainsAll(source, [
+      '<StandardTable<SupplierQuoteItem>',
+      'persistenceKey="sales.supplierQuotes.items"',
+      'defaultRowsPerPage={5}',
+      'minBodyRows={0}',
+      'className="min-w-[220px]"',
+    ]);
+    expectSourceOmitsAll(source, ['grid grid-cols-16 gap-2', 'col-span-6']);
+  });
+});
+
+describe('<SupplierQuotesView /> paginated item validation', () => {
+  test('blocks a quantity missing on a row outside the first page', async () => {
+    localStorage.clear();
+    const quoteId = 'SQ-PAGED-VALIDATION';
+    const items = Array.from({ length: 6 }, (_, index): SupplierQuote['items'][number] => ({
+      id: `paged-supplier-quote-item-${index + 1}`,
+      quoteId,
+      productName: `Product ${index + 1}`,
+      quantity: index === 5 ? Number.NaN : 1,
+      listPrice: 100,
+      discountPercent: 0,
+      unitPrice: 100,
+      unitType: 'unit',
+    }));
+    const onUpdateQuote = mock((_id: string, _updates: Partial<SupplierQuote>) => {});
+
+    render(
+      <SupplierQuotesView
+        {...baseProps}
+        quotes={[buildQuote({ id: quoteId, items })]}
+        onUpdateQuote={onUpdateQuote}
+      />,
     );
-    // Supplier quote rows need more room than the shared document default because quantity has
-    // two 4rem-min controls plus the separator. The wider content scrolls instead of spilling into
-    // the adjacent duration column at compact desktop widths.
-    expectSourceContainsAll(source, ['contentClassName="lg:min-w-[88rem]"']);
-    // The old evenly-split 12-col grid that wasted horizontal space is gone from both rows.
-    expectSourceOmitsAll(source, ['grid grid-cols-12 gap-3']);
+    fireEvent.click(screen.getByText(quoteId));
+
+    await waitFor(() => expect(screen.getByText('1 / 2')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: 'common:buttons.update' }));
+
+    expect(onUpdateQuote).not.toHaveBeenCalled();
+    expect(screen.getByText('common:validation.positiveQuantityRequired')).toBeInTheDocument();
   });
 });

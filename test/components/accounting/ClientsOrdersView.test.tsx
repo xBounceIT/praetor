@@ -11,7 +11,7 @@ import type {
 } from '../../../types';
 import { LineDeleteConfirmStub } from '../../helpers/lineItemDeleteConfirm';
 import { render } from '../../helpers/render';
-import { rowDeleteButtons } from '../../helpers/rowDeleteButtons';
+import { openRowDeleteButton, rowDeleteButtons } from '../../helpers/rowDeleteButtons';
 import {
   expectSourceContainsAll,
   expectSourceOmitsAll,
@@ -126,6 +126,38 @@ describe('<ClientsOrdersView />', () => {
       expect(screen.queryByRole('button', { name: `table.filters ${header}` })).toBeNull();
       expect(screen.getByText(header).closest('th')?.querySelector('svg')).toBeInTheDocument();
     }
+  });
+
+  test('renders margin cells in emerald in both the list and item table', async () => {
+    render(
+      <ClientsOrdersView
+        orders={orders}
+        clients={clients}
+        products={[]}
+        currency="EUR"
+        onUpdateClientsOrder={mock(() => Promise.resolve())}
+        onDeleteClientsOrder={mock(() => Promise.resolve())}
+      />,
+    );
+
+    const listMarginHeader = screen.getByText('accounting:clientsOrders.margin').closest('th');
+    const listMarginIndex = Array.from(listMarginHeader?.parentElement?.children ?? []).indexOf(
+      listMarginHeader as Element,
+    );
+    const listRow = screen.getByText('Helios Energy Services').closest('tr');
+    expect(listRow?.children[listMarginIndex]?.className).toContain('text-emerald-600');
+
+    fireEvent.click(listRow as HTMLElement);
+    const dialog = await screen.findByRole('dialog');
+    const itemMarginHeader = within(dialog)
+      .getAllByText('sales:clientQuotes.marginLabel')
+      .map((label) => label.closest('th'))
+      .find((header): header is HTMLTableCellElement => header instanceof HTMLTableCellElement);
+    const itemMarginIndex = Array.from(itemMarginHeader?.parentElement?.children ?? []).indexOf(
+      itemMarginHeader as Element,
+    );
+    const itemRow = within(dialog).getAllByRole('row')[1];
+    expect(itemRow.children[itemMarginIndex]?.className).toContain('text-emerald-600');
   });
 
   test('client column does not render item count below the client name', () => {
@@ -334,20 +366,28 @@ describe('<ClientsOrdersView />', () => {
     ]);
   });
 
-  test('product rows align modal controls to the native shadcn control height', async () => {
+  test('product rows use StandardTable while preserving native control heights', async () => {
     const source = await readComponentSource('accounting/ClientsOrdersView.tsx');
 
     expectSourceContainsAll(source, [
-      // lg:pt-5 quick-view gutter lives on the row flex (with the trash button), not the grid, so
-      // the delete button stays vertically aligned with the inputs.
-      'className="flex items-start gap-2 lg:items-center lg:pt-5"',
-      'className="grid flex-1 grid-cols-1 gap-2 lg:grid-cols-15 lg:items-center"',
-      'className="min-w-0 space-y-1 lg:col-span-2 lg:space-y-0"',
-      'className="flex h-9 items-center rounded-md border border-border bg-background px-3"',
-      // Quantity and duration controls both center their compact value input + unit selector.
-      'className="flex h-9 items-center justify-center gap-1"',
+      '<StandardTable<ClientsOrderItem>',
+      'persistenceKey="accounting.clientOrders.items"',
+      '<OrderSectionTitle>',
+      'onClick={controller.addProductRow}',
+      'allowColumnHiding={false}',
+      'defaultRowsPerPage={5}',
+      'minBodyRows={0}',
+      'className="min-w-[220px]"',
+      "const compactInputClass = 'h-9 max-w-[5rem] flex-none text-right font-medium';",
+      'className="flex h-9 items-center justify-end gap-1"',
       'className="flex h-9 items-center justify-end whitespace-nowrap px-3 text-sm font-bold text-foreground"',
+      'minWidth: 244',
+      'quantity: Number.NaN',
+      'getDurationInputValue(item)',
+      'value={item.discount}',
     ]);
+    expect((source.match(/minWidth: 174/g) ?? []).length).toBeGreaterThanOrEqual(2);
+    expect(source).not.toContain('showColumnSettings={false}');
   });
 
   test('notes section header matches other modal section headers', async () => {
@@ -583,9 +623,7 @@ describe('<ClientsOrdersView /> draft-from-offer editability', () => {
     // auto-created supplier order — both controls are locked (so the user can't reach an
     // edit path the backend always rejects with 409) even though the draft is editable.
     expect(isDisabled(within(dialog).getByRole('button', { name: /Consulting/ }))).toBe(true);
-    expect(isDisabled(within(dialog).getByRole('button', { name: 'common:buttons.delete' }))).toBe(
-      true,
-    );
+    expect(isDisabled(await openRowDeleteButton(dialog))).toBe(true);
   });
 
   test('a product-less supplier line shows its name read-only, not an empty selector (issue #783)', async () => {
@@ -623,9 +661,7 @@ describe('<ClientsOrdersView /> draft-from-offer editability', () => {
     expect(
       isDisabled(within(dialog).getByRole('button', { name: 'sales:clientQuotes.selectProduct' })),
     ).toBe(false);
-    expect(isDisabled(within(dialog).getByRole('button', { name: 'common:buttons.delete' }))).toBe(
-      false,
-    );
+    expect(isDisabled(await openRowDeleteButton(dialog))).toBe(false);
   });
 });
 
@@ -668,8 +704,8 @@ describe('<ClientsOrdersView /> product quick-view shortcut', () => {
       expect(link).toHaveAttribute('href', '#/catalog/internal-listing?filterId=product-1');
       expect(link).toHaveAttribute('target', '_blank');
     }
-    // The shortcut floats above the field on desktop (lg:absolute), matching quotes/offers.
-    expect(productLinks.some((link) => link.className.includes('lg:absolute'))).toBe(true);
+    // StandardTable clips overflowing value cells, so the shortcut stays inline inside the cell.
+    expect(productLinks.every((link) => !link.className.includes('lg:absolute'))).toBe(true);
   });
 
   test('hides the product shortcut entirely without internal-listing access', async () => {
@@ -757,8 +793,8 @@ describe('<ClientsOrdersView /> supplier-order quick-view shortcut', () => {
       expect(link).toHaveAttribute('href', '#/accounting/supplier-orders?filterId=ss-42');
       expect(link).toHaveAttribute('target', '_blank');
     }
-    // Floats above the field on desktop (lg:absolute), matching the product shortcut.
-    expect(links.some((link) => link.className.includes('lg:absolute'))).toBe(true);
+    // StandardTable clips overflowing value cells, so the shortcut stays inline inside the cell.
+    expect(links.every((link) => !link.className.includes('lg:absolute'))).toBe(true);
   });
 
   test('keeps the line discount editable when the line is linked to a supplier order', async () => {
@@ -839,7 +875,7 @@ describe('<ClientsOrdersView /> line-item delete confirmation', () => {
     const rowDeletes = rowDeleteButtons(dialog);
     expect(rowDeletes.length).toBeGreaterThan(0);
 
-    fireEvent.click(rowDeletes[0]);
+    fireEvent.click(await openRowDeleteButton(dialog));
     const confirmUi = await screen.findByTestId('line-delete-confirm');
     expect(within(confirmUi).getByTestId('line-delete-title')).toHaveTextContent(
       'accounting:clientsOrders.removeProductTitle',
@@ -856,12 +892,51 @@ describe('<ClientsOrdersView /> line-item delete confirmation', () => {
     const dialog = await openEditor();
     const rowDeletes = rowDeleteButtons(dialog);
 
-    fireEvent.click(rowDeletes[0]);
+    fireEvent.click(await openRowDeleteButton(dialog));
     fireEvent.click(await screen.findByTestId('line-delete-cancel'));
 
     await waitFor(() => {
       expect(screen.queryByTestId('line-delete-confirm')).not.toBeInTheDocument();
     });
     expect(rowDeleteButtons(dialog)).toHaveLength(rowDeletes.length);
+  });
+});
+
+describe('<ClientsOrdersView /> paginated item validation', () => {
+  test('blocks a quantity missing on a row outside the first page', async () => {
+    localStorage.clear();
+    const orderId = 'dm_so_paged_validation';
+    const items = Array.from({ length: 6 }, (_, index): ClientsOrder['items'][number] => ({
+      id: `paged-client-order-item-${index + 1}`,
+      orderId,
+      productId: `product-${index + 1}`,
+      productName: `Product ${index + 1}`,
+      quantity: index === 5 ? Number.NaN : 1,
+      unitPrice: 100,
+      productCost: 50,
+      productMolPercentage: 50,
+      unitType: 'unit',
+    }));
+    const onUpdateClientsOrder = mock((_id: string, _updates: Partial<ClientsOrder>) =>
+      Promise.resolve(),
+    );
+
+    render(
+      <ClientsOrdersView
+        orders={[{ ...orders[0], id: orderId, items }]}
+        clients={clients}
+        products={[]}
+        currency="EUR"
+        onUpdateClientsOrder={onUpdateClientsOrder}
+        onDeleteClientsOrder={mock(() => Promise.resolve())}
+      />,
+    );
+    fireEvent.click(screen.getByText(orderId));
+
+    await waitFor(() => expect(screen.getByText('1 / 2')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: 'accounting:clientsOrders.updateOrder' }));
+
+    expect(onUpdateClientsOrder).not.toHaveBeenCalled();
+    expect(screen.getByText('common:validation.positiveQuantityRequired')).toBeInTheDocument();
   });
 });

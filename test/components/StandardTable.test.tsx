@@ -22,6 +22,7 @@ const { useState } = await import('react');
 const { decodeLegacyFilterValue } = await import('../../components/shared/customViewHelpers');
 const StandardTable = (await import('../../components/shared/StandardTable')).default;
 const Modal = (await import('../../components/shared/Modal')).default;
+const QuickViewLinkButton = (await import('../../components/shared/QuickViewLinkButton')).default;
 const StatusBadge = (await import('../../components/shared/StatusBadge')).default;
 
 const countPaddingRows = (container: HTMLElement) =>
@@ -322,6 +323,60 @@ describe('<StandardTable />', () => {
     expect(localStorage.getItem('praetor_table_rows_people')).toBe('20');
   });
 
+  test('persistenceKey isolates rows, widths, and saved views while migrating its legacy font', async () => {
+    const keyedView = [
+      {
+        id: 'keyed-view',
+        name: 'Oldest first',
+        hiddenColIds: [],
+        sortState: { colId: 'age', px: 'desc' },
+        filterState: {},
+      },
+    ];
+    localStorage.setItem('praetor_table_rows_articoli', '50');
+    localStorage.setItem('praetor_table_rows_client_quote_items', '5');
+    localStorage.setItem('praetor_table_fontsize_articoli', 'xs');
+    localStorage.setItem('praetor_table_fontsize_client_quote_items', 'base');
+    localStorage.setItem('praetor_table_colwidths_articoli', JSON.stringify({ name: 112 }));
+    localStorage.setItem(
+      'praetor_table_colwidths_client_quote_items',
+      JSON.stringify({ name: 220 }),
+    );
+    localStorage.setItem('praetor_table_customviews_client_quote_items', JSON.stringify(keyedView));
+    localStorage.setItem('praetor_table_activeview_client_quote_items', 'keyed-view');
+
+    const user = userEvent.setup();
+    const { unmount } = render(
+      <StandardTable<Row>
+        title="Articoli"
+        persistenceKey="client.quote.items"
+        data={sampleRows}
+        columns={sampleColumns}
+      />,
+    );
+
+    const trigger = screen.getByRole('combobox');
+    expect(trigger.textContent).toContain('5');
+    const rows = screen.getAllByRole('row');
+    expect(rows[1]).toHaveTextContent('Charlie');
+    expect(rows[1].className).toContain('text-base');
+    expect((screen.getByText('Name').closest('th') as HTMLTableCellElement).style.width).toBe(
+      '220px',
+    );
+
+    await user.click(trigger);
+    await user.click(screen.getByRole('option', { name: '20' }));
+    unmount();
+
+    expect(localStorage.getItem('praetor_table_rows_client_quote_items')).toBe('20');
+    expect(localStorage.getItem('praetor_table_rows_articoli')).toBe('50');
+    expect(localStorage.getItem('praetor_table_fontsize_articoli')).toBe('xs');
+    expect(localStorage.getItem(TABLE_FONT_SIZE_STORAGE_KEY)).toBe('base');
+    expect(localStorage.getItem('praetor_table_colwidths_articoli')).toBe(
+      JSON.stringify({ name: 112 }),
+    );
+  });
+
   test('rows-per-page select menu uses the scoped shadcn dark theme', async () => {
     localStorage.setItem(THEME_STORAGE_KEY, 'dark');
     const user = userEvent.setup();
@@ -381,6 +436,56 @@ describe('<StandardTable />', () => {
     );
     // With 3 rows, the header should show "3 users"
     expect(screen.getByText(/3\s+users/)).toBeInTheDocument();
+  });
+
+  test('keeps column ordering available when column hiding is disabled', async () => {
+    render(
+      <StandardTable<Row>
+        title="Fixed Columns"
+        data={sampleRows}
+        columns={sampleColumns}
+        allowColumnHiding={false}
+      />,
+    );
+
+    expect(document.querySelectorAll('[data-column-drag-handle]')).toHaveLength(2);
+    const user = await openColumnSettings();
+    expect(screen.queryAllByRole('menuitemcheckbox')).toHaveLength(0);
+    expect(screen.getByText('table.resetColumns')).toBeInTheDocument();
+
+    await user.click(screen.getByText('table.customViews'));
+    clickMenuItemByText('buttons.add');
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog.querySelector('[aria-pressed]')).toBeNull();
+    expect(dialog.querySelectorAll('[data-custom-view-column-drag-handle]')).toHaveLength(2);
+  });
+
+  test('ignores hidden columns from an active saved view when hiding is disabled', () => {
+    localStorage.setItem(
+      'praetor_table_customviews_fixed_columns',
+      JSON.stringify([
+        {
+          id: 'hidden-age',
+          name: 'Hidden age',
+          hiddenColIds: ['age'],
+          columnOrder: ['name', 'age'],
+          sortState: null,
+          filterState: {},
+        },
+      ]),
+    );
+    localStorage.setItem('praetor_table_activeview_fixed_columns', 'hidden-age');
+
+    render(
+      <StandardTable<Row>
+        title="Fixed Columns"
+        data={sampleRows}
+        columns={sampleColumns}
+        allowColumnHiding={false}
+      />,
+    );
+
+    expect(screen.getByText('Age')).toBeInTheDocument();
   });
 
   test('disabled row receives disabled styling', () => {
@@ -719,6 +824,29 @@ describe('<StandardTable />', () => {
     expect(screen.getByText('Ruolo').className).not.toContain('truncate');
   });
 
+  test('explicit column minimum preserves controls wider than the header', async () => {
+    localStorage.setItem(
+      'praetor_table_colwidths_control_minimum',
+      JSON.stringify({ duration: 80 }),
+    );
+    const columns = [
+      {
+        header: 'Duration',
+        accessorKey: 'age' as const,
+        id: 'duration',
+        minWidth: 174,
+      },
+    ];
+
+    render(<StandardTable<Row> title="Control Minimum" data={sampleRows} columns={columns} />);
+
+    const headerCell = screen.getByText('Duration').closest('th') as HTMLElement;
+    const bodyCell = screen.getByText('30').closest('td') as HTMLElement;
+    await waitFor(() => expect(Number.parseInt(headerCell.style.width, 10)).toBe(174));
+    expect(Number.parseInt(headerCell.style.minWidth, 10)).toBe(174);
+    expect(Number.parseInt(bodyCell.style.minWidth, 10)).toBe(174);
+  });
+
   test('stored widths below minimum are clamped once and do not widen on remount', async () => {
     localStorage.setItem('praetor_table_colwidths_remount_width', JSON.stringify({ role: 32 }));
     const columns = [{ header: 'Ruolo', accessorKey: 'name' as const, id: 'role' }];
@@ -780,6 +908,25 @@ describe('<StandardTable />', () => {
       expect(bodyText).not.toContain('Bob');
       expect(bodyText).not.toContain('Charlie');
     });
+  });
+
+  test('keeps bypassed rows visible while active filters still hide regular non-matches', () => {
+    const rows: Row[] = [...sampleRows, { id: 'temp-new', name: '', age: Number.NaN }];
+
+    render(
+      <StandardTable<Row>
+        title="Editable filtered rows"
+        data={rows}
+        columns={sampleColumns}
+        initialFilterState={{ name: ['Alice'] }}
+        shouldBypassFilters={(row) => row.id.startsWith('temp-')}
+      />,
+    );
+
+    const bodyRows = screen.getAllByRole('row').slice(1);
+    expect(bodyRows).toHaveLength(2);
+    expect(bodyRows.some((row) => row.textContent?.includes('Alice'))).toBe(true);
+    expect(bodyRows.some((row) => row.textContent?.includes('Bob'))).toBe(false);
   });
 
   test('selected filter values match exact options instead of substrings', () => {
@@ -1127,6 +1274,39 @@ describe('<StandardTable />', () => {
     expect(screen.getByTestId('send-action-1').className).toContain('text-popover-foreground');
   });
 
+  test('row action menus preserve quick-view links and disabled shortcuts', async () => {
+    const user = userEvent.setup();
+    const cols = [
+      ...sampleColumns,
+      {
+        id: 'actions',
+        header: 'Actions',
+        sticky: 'right' as const,
+        cell: ({ row }: { row: Row }) => (
+          <QuickViewLinkButton
+            href={row.id === '1' ? '#/people/1' : null}
+            label={`Open ${row.name}`}
+            disabledLabel={`Cannot open ${row.name}`}
+          />
+        ),
+      },
+    ];
+
+    render(<StandardTable<Row> title="People" data={sampleRows.slice(0, 2)} columns={cols} />);
+
+    const triggers = screen.getAllByLabelText('table.rowActions');
+    await user.click(triggers[0]);
+    const link = screen.getByRole('link', { name: 'Open Alice' });
+    expect(link).toHaveAttribute('href', '#/people/1');
+    expect(link).toHaveAttribute('target', '_blank');
+    expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+    expect(link.closest('button')).toBeNull();
+
+    await user.keyboard('{Escape}');
+    await user.click(screen.getAllByLabelText('table.rowActions')[1]);
+    expect(screen.getByRole('button', { name: 'Cannot open Bob' })).toBeDisabled();
+  });
+
   test('row action trigger is hidden when the action cell has no items', async () => {
     const user = userEvent.setup();
     const actionCell = mock(({ row }: { row: Row }) =>
@@ -1369,6 +1549,37 @@ describe('<StandardTable />', () => {
       fireEvent.click(screen.getByRole('button', { name: 'buttons.previous' }));
     });
     expect(screen.getByText('User1')).toBeInTheDocument();
+  });
+
+  test('reveals a newly appended row on its pagination page when requested', async () => {
+    const firstPage: Row[] = Array.from({ length: 5 }, (_, index) => ({
+      id: String(index + 1),
+      name: `User${index + 1}`,
+      age: 20 + index,
+    }));
+    const { rerender } = render(
+      <StandardTable<Row>
+        title="RevealNewRow"
+        data={firstPage}
+        columns={sampleColumns}
+        defaultRowsPerPage={5}
+        autoRevealNewRows
+      />,
+    );
+
+    expect(screen.queryByText('User6')).not.toBeInTheDocument();
+    rerender(
+      <StandardTable<Row>
+        title="RevealNewRow"
+        data={[...firstPage, { id: '6', name: 'User6', age: 25 }]}
+        columns={sampleColumns}
+        defaultRowsPerPage={5}
+        autoRevealNewRows
+      />,
+    );
+
+    await waitFor(() => expect(screen.getByText('User6')).toBeInTheDocument());
+    expect(screen.getByText('2 / 2')).toBeInTheDocument();
   });
 
   test('changing rowsPerPage produces the new slice on page 1', async () => {
@@ -1912,11 +2123,14 @@ describe('<StandardTable />', () => {
     render(<StandardTable<Row> title="Fonts" data={sampleRows} columns={sampleColumns} />);
     const decrease = screen.getByLabelText('table.decreaseFont');
     const increase = screen.getByLabelText('table.increaseFont');
+    const firstDataRow = screen.getByText('Alice').closest('tr');
+    expect(firstDataRow).toHaveAttribute('data-standard-table-font-size', 'sm');
     expect((decrease as HTMLButtonElement).disabled).toBe(false);
     expect((increase as HTMLButtonElement).disabled).toBe(false);
 
     // Step down to 'xs' → decrease should disable.
     act(() => fireEvent.click(decrease));
+    expect(firstDataRow).toHaveAttribute('data-standard-table-font-size', 'xs');
     expect((decrease as HTMLButtonElement).disabled).toBe(true);
     expect(localStorage.getItem(TABLE_FONT_SIZE_STORAGE_KEY)).toBe('xs');
     expect(localStorage.getItem('praetor_table_fontsize_fonts')).toBeNull();
@@ -1926,8 +2140,20 @@ describe('<StandardTable />', () => {
       fireEvent.click(increase);
       fireEvent.click(increase);
     });
+    expect(firstDataRow).toHaveAttribute('data-standard-table-font-size', 'base');
     expect((increase as HTMLButtonElement).disabled).toBe(true);
     expect(localStorage.getItem(TABLE_FONT_SIZE_STORAGE_KEY)).toBe('base');
+  });
+
+  test('font sizes define matching row, cell, and inline-control densities', async () => {
+    const css = await Bun.file(new URL('../../src/index.css', import.meta.url)).text();
+
+    expect(css).toContain('tr[data-standard-table-font-size="xs"]');
+    expect(css).toContain('tr[data-standard-table-font-size="sm"]');
+    expect(css).toContain('tr[data-standard-table-font-size="base"]');
+    expect(css).toContain('tr[data-standard-table-font-size] > td');
+    expect(css).toContain('[data-slot="input"]');
+    expect(css).toContain('--standard-table-control-height');
   });
 
   test('shares font size with mounted tables and tables rendered later', () => {
