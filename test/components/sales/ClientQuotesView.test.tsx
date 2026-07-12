@@ -955,7 +955,7 @@ describe('<ClientQuotesView /> edit action gating (#812 round 13)', () => {
     const onCreateOfferFromLegacyQuote = mock((_quote: Quote) => {});
     const legacyQuote = withSingleCandidate(
       { ...quotes[0], id: 'Q-LEGACY-ACCEPTED', status: 'accepted' },
-      'Q-LEGACY-ACCEPTED',
+      'Q-BEFORE-RENAME',
     );
 
     render(
@@ -981,12 +981,23 @@ describe('<ClientQuotesView /> edit action gating (#812 round 13)', () => {
     expect(onCreateOfferFromLegacyQuote.mock.calls[0][0].id).toBe('Q-LEGACY-ACCEPTED');
   });
 
-  test('does not expose legacy conversion for a regular accepted candidate family', async () => {
+  test('does not expose legacy conversion for an accepted multi-candidate family', async () => {
     const user = userEvent.setup();
     const quote = withSingleCandidate(
       { ...quotes[0], id: 'Q-CANDIDATE-ACCEPTED', status: 'accepted' },
       'candidate-a',
     );
+    const [firstCandidate] = quote.candidates ?? [];
+    if (!firstCandidate) throw new Error('Expected candidate fixture');
+    quote.candidates = [
+      firstCandidate,
+      {
+        ...firstCandidate,
+        id: 'candidate-b',
+        name: 'Variante B',
+        position: 1,
+      },
+    ];
 
     render(
       <ClientQuotesView

@@ -1051,7 +1051,8 @@ describe('client-offers supplier-link resolution + forward sync (#779)', () => {
 
   test('POST: an accepted legacy single candidate can still create its first offer', async () => {
     const legacyCandidate = {
-      id: 'q-1',
+      // The candidate PK keeps the original quote code after a quote rename; only quoteId cascades.
+      id: 'q-before-rename',
       quoteId: 'q-1',
       name: 'Variante A',
       position: 0,
@@ -1282,6 +1283,10 @@ describe('DELETE /api/sales/client-offers/:id expired guard (#812 round 25)', ()
       headers: authHeader(),
     });
 
+  beforeEach(() => {
+    cqFindStatusAndClientNameMock.mockResolvedValue({ status: 'offer', clientName: 'Client' });
+  });
+
   test('409 when a draft offer is effectively expired (read-only model)', async () => {
     getRolePermissionsMock.mockResolvedValue(['sales.client_offers.delete']);
     coFindLinkedSaleIdMock.mockResolvedValue(null);
@@ -1385,5 +1390,22 @@ describe('DELETE /api/sales/client-offers/:id expired guard (#812 round 25)', ()
     expect(JSON.parse(res.body).error).toContain('sale order');
     expect(coDeleteByIdMock).not.toHaveBeenCalled();
     expect(qcReactivateAllMock).not.toHaveBeenCalled();
+  });
+
+  test('204 deletes a migrated candidate-linked legacy offer without promotion rollback', async () => {
+    getRolePermissionsMock.mockResolvedValue(['sales.client_offers.delete']);
+    const legacyOffer = gate({ linkedQuoteCandidateId: 'q-before-rename' });
+    coFindExistingMock.mockResolvedValue(legacyOffer);
+    cqFindStatusAndClientNameMock.mockResolvedValue({ status: 'accepted', clientName: 'Client' });
+    coLockExistingByIdMock.mockResolvedValue(legacyOffer);
+    coFindLinkedSaleIdMock.mockResolvedValue(null);
+    coDeleteByIdMock.mockResolvedValue(true);
+
+    const res = await deleteOffer();
+
+    expect(res.statusCode).toBe(204);
+    expect(coDeleteByIdMock).toHaveBeenCalledWith('off-1', expect.anything());
+    expect(qcReactivateAllMock).not.toHaveBeenCalled();
+    expect(cqUpdateMock).not.toHaveBeenCalled();
   });
 });

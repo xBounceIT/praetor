@@ -332,7 +332,7 @@ const isLegacyAcceptedQuote = (quote: Quote) => {
   return (
     normalizeQuoteStatus(quote.status) === 'accepted' &&
     candidates.length === 1 &&
-    candidate.id === quote.id &&
+    candidate.quoteId === quote.id &&
     candidate.state === 'active'
   );
 };

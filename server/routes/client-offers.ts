@@ -74,7 +74,7 @@ const findLegacyAcceptedCandidate = (
 ) =>
   normalizeQuoteStatus(quoteStatus) === 'accepted' &&
   candidates.length === 1 &&
-  candidates[0].id === quoteId &&
+  candidates[0].quoteId === quoteId &&
   candidates[0].state === 'active'
     ? candidates[0]
     : null;
@@ -1540,7 +1540,18 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       const linkedQuoteId = offer.linkedQuoteId;
-      if (offer.linkedQuoteCandidateId && linkedQuoteId) {
+      const linkedQuote =
+        offer.linkedQuoteCandidateId && linkedQuoteId
+          ? await clientQuotesRepo.findStatusAndClientName(linkedQuoteId)
+          : null;
+      // Migration 0101 backfilled the candidate link on pre-existing offers too. Only a parent
+      // currently in `offer` represents the new promotion flow; accepted legacy parents must keep
+      // the ordinary draft-offer delete path.
+      const shouldRollbackCandidatePromotion =
+        offer.linkedQuoteCandidateId &&
+        linkedQuoteId &&
+        normalizeQuoteStatus(linkedQuote?.status ?? '') === 'offer';
+      if (shouldRollbackCandidatePromotion) {
         try {
           await withDbTransaction((tx) =>
             rollbackQuotePromotion(
