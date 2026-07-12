@@ -5,7 +5,7 @@ import type { Client, ClientOffer, Product, SupplierQuote } from '../../../types
 import { installI18nMock } from '../../helpers/i18n';
 import { LineDeleteConfirmStub } from '../../helpers/lineItemDeleteConfirm';
 import { render } from '../../helpers/render';
-import { rowDeleteButtons } from '../../helpers/rowDeleteButtons';
+import { openRowDeleteButton, rowDeleteButtons } from '../../helpers/rowDeleteButtons';
 import {
   expectSourceContainsAll,
   expectSourceOmitsAll,
@@ -487,7 +487,8 @@ describe('<ClientOffersView /> quick-view shortcuts', () => {
     ],
   });
 
-  test('opens the referenced supplier quote and product on their pre-filtered pages', () => {
+  test('opens the referenced supplier quote and product from the row actions menu', async () => {
+    const user = userEvent.setup();
     render(
       <ClientOffersView
         {...baseProps}
@@ -496,10 +497,12 @@ describe('<ClientOffersView /> quick-view shortcuts', () => {
         supplierQuotes={[linkedSupplierQuote]}
       />,
     );
-    // Clicking the row opens the edit dialog that hosts the line-item shortcuts.
+    // Clicking the row opens the edit dialog; shortcuts live in the line's actions menu.
     fireEvent.click(screen.getByText('O-SHORTCUT'));
+    const dialog = await screen.findByRole('dialog');
+    await user.click(within(dialog).getByLabelText('table.rowActions'));
 
-    const supplierLinks = screen.getAllByRole('link', {
+    const supplierLinks = await screen.findAllByRole('link', {
       name: 'sales:clientQuotes.openSupplierQuoteInNewTab',
     });
     expect(supplierLinks.length).toBeGreaterThan(0);
@@ -517,13 +520,20 @@ describe('<ClientOffersView /> quick-view shortcuts', () => {
       expect(link).toHaveAttribute('target', '_blank');
     }
 
-    // The desktop grid floats its shortcut above the field (the `floating` variant);
-    // both selectors render so at least one of each is the absolute-positioned copy.
-    expect(supplierLinks.some((link) => link.className.includes('absolute'))).toBe(true);
-    expect(productLinks.some((link) => link.className.includes('absolute'))).toBe(true);
+    expect(
+      supplierLinks.every((link) =>
+        Boolean(link.closest('[data-standard-table-action-menu="true"]')),
+      ),
+    ).toBe(true);
+    expect(
+      productLinks.every((link) =>
+        Boolean(link.closest('[data-standard-table-action-menu="true"]')),
+      ),
+    ).toBe(true);
   });
 
-  test('hides each shortcut when the user cannot access the referenced view', () => {
+  test('hides each shortcut when the user cannot access the referenced view', async () => {
+    const user = userEvent.setup();
     render(
       <ClientOffersView
         {...baseProps}
@@ -535,6 +545,8 @@ describe('<ClientOffersView /> quick-view shortcuts', () => {
       />,
     );
     fireEvent.click(screen.getByText('O-SHORTCUT'));
+    const dialog = await screen.findByRole('dialog');
+    await user.click(within(dialog).getByLabelText('table.rowActions'));
 
     // No access → hidden entirely (no active link and no disabled placeholder).
     expect(
@@ -553,11 +565,14 @@ describe('<ClientOffersView /> quick-view shortcuts', () => {
     ).toHaveLength(0);
   });
 
-  test('keeps the shortcut visible but disabled when the line references nothing', () => {
+  test('keeps the shortcut visible but disabled when the line references nothing', async () => {
+    const user = userEvent.setup();
     // Base offer line: productId 'p-1' (not in the empty products list) and no
     // supplier-quote link → both shortcuts render disabled, never as active links.
     render(<ClientOffersView {...baseProps} offers={[acmeDraft]} />);
     fireEvent.click(screen.getByText('O-ACME-DRAFT'));
+    const dialog = await screen.findByRole('dialog');
+    await user.click(within(dialog).getByLabelText('table.rowActions'));
 
     expect(
       screen.queryAllByRole('link', { name: 'sales:clientQuotes.openProductInNewTab' }),
@@ -745,7 +760,7 @@ describe('<ClientOffersView /> MOL precision (issue #780)', () => {
 });
 
 describe('<ClientOffersView /> line discounts', () => {
-  test('defaults added lines to 0% and includes zero in the payload', async () => {
+  test('leaves added-line discounts empty and does not inject zero into the payload', async () => {
     const onUpdateOffer = mock((_id: string, _updates: Partial<ClientOffer>) => Promise.resolve());
     render(<ClientOffersView {...baseProps} offers={[acmeDraft]} onUpdateOffer={onUpdateOffer} />);
 
@@ -757,11 +772,22 @@ describe('<ClientOffersView /> line discounts', () => {
       .getAllByRole('textbox', { name: 'common:labels.discount' })
       .filter((input): input is HTMLInputElement => input instanceof HTMLInputElement);
     expect(lineDiscountInputs.length).toBeGreaterThan(1);
-    expect(lineDiscountInputs.every((input) => input.value === '0,00')).toBe(true);
+    expect(lineDiscountInputs.every((input) => input.value === '')).toBe(true);
+
+    const quantityInputs = within(dialog)
+      .getAllByRole('textbox', { name: 'sales:clientOffers.qty' })
+      .filter((input): input is HTMLInputElement => input instanceof HTMLInputElement);
+    const blankQuantity = quantityInputs.find((input) => input.value === '');
+    expect(blankQuantity).toBeDefined();
+    expect(blankQuantity).toHaveAttribute('placeholder', '0,00');
+    fireEvent.change(blankQuantity as HTMLInputElement, { target: { value: '1' } });
 
     fireEvent.click(within(dialog).getByRole('button', { name: 'common:buttons.update' }));
     await waitFor(() => expect(onUpdateOffer).toHaveBeenCalledTimes(1));
-    expect(onUpdateOffer.mock.calls[0][1].items?.map((item) => item.discount)).toEqual([0, 0]);
+    expect(onUpdateOffer.mock.calls[0][1].items?.map((item) => item.discount)).toEqual([
+      undefined,
+      undefined,
+    ]);
   });
 
   test('edits a supplier-linked line discount, shows net values, and submits it', async () => {
@@ -830,7 +856,7 @@ describe('<ClientOffersView /> line-item delete confirmation', () => {
     const rowDeletes = rowDeleteButtons(dialog);
     expect(rowDeletes.length).toBeGreaterThan(0);
 
-    fireEvent.click(rowDeletes[0]);
+    fireEvent.click(await openRowDeleteButton(dialog));
     const confirmUi = await screen.findByTestId('line-delete-confirm');
     expect(within(confirmUi).getByTestId('line-delete-title')).toHaveTextContent(
       'sales:clientOffers.removeProductTitle',
@@ -847,7 +873,7 @@ describe('<ClientOffersView /> line-item delete confirmation', () => {
     const dialog = await openEditor();
     const rowDeletes = rowDeleteButtons(dialog);
 
-    fireEvent.click(rowDeletes[0]);
+    fireEvent.click(await openRowDeleteButton(dialog));
     fireEvent.click(await screen.findByTestId('line-delete-cancel'));
 
     await waitFor(() => {
@@ -1007,5 +1033,70 @@ describe('<ClientOffersView /> expired-offer handling (issue #779)', () => {
     // no-op "Update" click write needless version snapshots and audit rows.
     expect(screen.queryByRole('button', { name: 'common:buttons.update' })).toBeNull();
     expect(document.getElementById('client-offer-expiration-date')).toBeDisabled();
+  });
+});
+
+describe('<ClientOffersView /> paginated item validation', () => {
+  test('blocks a quantity missing on a row outside the first page', async () => {
+    localStorage.clear();
+    const offerId = 'O-PAGED-VALIDATION';
+    const items = Array.from({ length: 6 }, (_, index): ClientOffer['items'][number] => ({
+      id: `paged-offer-item-${index + 1}`,
+      offerId,
+      productId: `product-${index + 1}`,
+      productName: `Product ${index + 1}`,
+      quantity: index === 5 ? Number.NaN : 1,
+      unitPrice: 100,
+      productCost: 50,
+      productMolPercentage: 50,
+      unitType: 'unit',
+    }));
+    const onUpdateOffer = mock((_id: string, _updates: Partial<ClientOffer>) => {});
+
+    render(
+      <ClientOffersView
+        {...baseProps}
+        offers={[buildOffer({ id: offerId, items })]}
+        onUpdateOffer={onUpdateOffer}
+      />,
+    );
+    fireEvent.click(screen.getByText(offerId));
+
+    await waitFor(() => expect(screen.getByText('1 / 2')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: 'common:buttons.update' }));
+
+    expect(onUpdateOffer).not.toHaveBeenCalled();
+    expect(screen.getByText('common:validation.positiveQuantityRequired')).toBeInTheDocument();
+  });
+});
+
+describe('<ClientOffersView /> localized line amounts', () => {
+  test('formats line cost, margin, and revenue with Italian separators', async () => {
+    const offerId = 'O-LOCALE-AMOUNTS';
+    const offer = buildOffer({
+      id: offerId,
+      items: [
+        {
+          ...buildOffer({}).items[0],
+          id: 'locale-offer-line',
+          offerId,
+          quantity: 1,
+          unitPrice: 2000,
+          productCost: 1234.5,
+          productMolPercentage: 38.275,
+        },
+      ],
+    });
+
+    render(<ClientOffersView {...baseProps} offers={[offer]} />);
+    fireEvent.click(screen.getByText(offerId));
+
+    await waitFor(() => expect(screen.getAllByText('1.234,50 EUR').length).toBeGreaterThan(0));
+    const marginValues = screen.getAllByText('765,50 EUR');
+    expect(marginValues.length).toBeGreaterThan(0);
+    expect(
+      marginValues.some((value) => value.closest('td')?.className.includes('text-emerald-600')),
+    ).toBe(true);
+    expect(screen.getAllByText('2.000,00 EUR').length).toBeGreaterThan(0);
   });
 });

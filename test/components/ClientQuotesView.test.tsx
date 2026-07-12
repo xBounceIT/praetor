@@ -130,13 +130,21 @@ const PRODUCT_LINK = 'sales:clientQuotes.openProductInNewTab';
 const SUPPLIER_QUOTE_DISABLED = 'sales:clientQuotes.supplierQuoteShortcutUnavailable';
 const PRODUCT_DISABLED = 'sales:clientQuotes.productShortcutUnavailable';
 
+const openItemActions = async () => {
+  const user = userEvent.setup();
+  await user.click(screen.getByRole('button', { name: 'table.rowActions' }));
+  await waitFor(() => {
+    expect(document.body.querySelector('[data-standard-table-action-menu="true"]')).not.toBeNull();
+  });
+};
+
 afterEach(() => {
   // Modal locks body scroll while open; reset between tests.
   document.body.style.overflow = '';
 });
 
 describe('<ClientQuotesView /> per-line quick-view links', () => {
-  test('renders deep-link shortcuts to the referenced supplier quote and product', () => {
+  test('renders deep-link shortcuts to the referenced supplier quote and product', async () => {
     const quote = buildQuote({
       id: 'Q-LINKED',
       items: [
@@ -155,9 +163,9 @@ describe('<ClientQuotesView /> per-line quick-view links', () => {
 
     render(<ClientQuotesView {...baseProps} quotes={[quote]} />);
     fireEvent.click(screen.getByText('Q-LINKED'));
+    await openItemActions();
 
-    // Both responsive layouts (mobile + desktop) are in the DOM, so each shortcut
-    // renders twice. They must all point at the referenced record's filtered page.
+    // StandardTable exposes the shortcuts from the row action menu.
     const supplierLinks = screen.getAllByRole('link', { name: SUPPLIER_QUOTE_LINK });
     expect(supplierLinks.length).toBeGreaterThan(0);
     for (const link of supplierLinks) {
@@ -171,14 +179,9 @@ describe('<ClientQuotesView /> per-line quick-view links', () => {
       expect(link).toHaveAttribute('href', '#/catalog/internal-listing?filterId=prod-1');
       expect(link).toHaveAttribute('target', '_blank');
     }
-
-    // The desktop shortcut is no longer an inline column-eating button: it floats
-    // above its field's top-right corner (absolute), mirroring the "manage" affordance.
-    expect(supplierLinks.some((link) => link.className.includes('absolute'))).toBe(true);
-    expect(productLinks.some((link) => link.className.includes('absolute'))).toBe(true);
   });
 
-  test('hides the supplier-quote shortcut when the user cannot access that view', () => {
+  test('hides the supplier-quote shortcut when the user cannot access that view', async () => {
     const quote = buildQuote({
       id: 'Q-NO-SQ-PERM',
       items: [
@@ -197,6 +200,7 @@ describe('<ClientQuotesView /> per-line quick-view links', () => {
 
     render(<ClientQuotesView {...baseProps} quotes={[quote]} canViewSupplierQuotes={false} />);
     fireEvent.click(screen.getByText('Q-NO-SQ-PERM'));
+    await openItemActions();
 
     // The supplier-quote view is permission-gated: the shortcut is hidden entirely
     // (no link AND no disabled placeholder), while the still-accessible product
@@ -206,7 +210,7 @@ describe('<ClientQuotesView /> per-line quick-view links', () => {
     expect(screen.getAllByRole('link', { name: PRODUCT_LINK }).length).toBeGreaterThan(0);
   });
 
-  test('hides the product shortcut when the user cannot access the listing view', () => {
+  test('hides the product shortcut when the user cannot access the listing view', async () => {
     const quote = buildQuote({
       id: 'Q-NO-PROD-PERM',
       items: [
@@ -225,6 +229,7 @@ describe('<ClientQuotesView /> per-line quick-view links', () => {
 
     render(<ClientQuotesView {...baseProps} quotes={[quote]} canViewInternalListing={false} />);
     fireEvent.click(screen.getByText('Q-NO-PROD-PERM'));
+    await openItemActions();
 
     // No internal-listing access → the product shortcut is hidden entirely.
     expect(screen.queryAllByRole('link', { name: PRODUCT_LINK })).toHaveLength(0);
@@ -232,7 +237,7 @@ describe('<ClientQuotesView /> per-line quick-view links', () => {
     expect(screen.getAllByRole('link', { name: SUPPLIER_QUOTE_LINK }).length).toBeGreaterThan(0);
   });
 
-  test('disables (does not hide) the product shortcut when the linked product no longer exists', () => {
+  test('disables (does not hide) the product shortcut when the linked product no longer exists', async () => {
     const quote = buildQuote({
       id: 'Q-STALE-PRODUCT',
       items: [
@@ -251,6 +256,7 @@ describe('<ClientQuotesView /> per-line quick-view links', () => {
 
     render(<ClientQuotesView {...baseProps} quotes={[quote]} />);
     fireEvent.click(screen.getByText('Q-STALE-PRODUCT'));
+    await openItemActions();
 
     // A stale product id (hard-deleted) would dead-end on the full listing, so the
     // shortcut renders disabled (present but non-navigating) rather than as a link;
@@ -260,7 +266,7 @@ describe('<ClientQuotesView /> per-line quick-view links', () => {
     expect(screen.getAllByRole('link', { name: SUPPLIER_QUOTE_LINK }).length).toBeGreaterThan(0);
   });
 
-  test('disables the supplier-quote shortcut when the linked quote no longer exists', () => {
+  test('disables the supplier-quote shortcut when the linked quote no longer exists', async () => {
     const quote = buildQuote({
       id: 'Q-STALE-SQ',
       items: [
@@ -279,6 +285,7 @@ describe('<ClientQuotesView /> per-line quick-view links', () => {
 
     render(<ClientQuotesView {...baseProps} quotes={[quote]} />);
     fireEvent.click(screen.getByText('Q-STALE-SQ'));
+    await openItemActions();
 
     expect(screen.queryAllByRole('link', { name: SUPPLIER_QUOTE_LINK })).toHaveLength(0);
     expect(screen.getAllByRole('button', { name: SUPPLIER_QUOTE_DISABLED }).length).toBeGreaterThan(
@@ -287,7 +294,7 @@ describe('<ClientQuotesView /> per-line quick-view links', () => {
     expect(screen.getAllByRole('link', { name: PRODUCT_LINK }).length).toBeGreaterThan(0);
   });
 
-  test('disables the supplier-quote shortcut when the row has no supplier quote', () => {
+  test('disables the supplier-quote shortcut when the row has no supplier quote', async () => {
     const quote = buildQuote({
       id: 'Q-PRODUCT-ONLY',
       items: [
@@ -304,6 +311,7 @@ describe('<ClientQuotesView /> per-line quick-view links', () => {
 
     render(<ClientQuotesView {...baseProps} quotes={[quote]} />);
     fireEvent.click(screen.getByText('Q-PRODUCT-ONLY'));
+    await openItemActions();
 
     expect(screen.queryAllByRole('link', { name: SUPPLIER_QUOTE_LINK })).toHaveLength(0);
     expect(screen.getAllByRole('button', { name: SUPPLIER_QUOTE_DISABLED }).length).toBeGreaterThan(
@@ -312,7 +320,7 @@ describe('<ClientQuotesView /> per-line quick-view links', () => {
     expect(screen.getAllByRole('link', { name: PRODUCT_LINK }).length).toBeGreaterThan(0);
   });
 
-  test('renders both shortcuts disabled (not navigating) for an unreferenced row', () => {
+  test('renders both shortcuts disabled (not navigating) for an unreferenced row', async () => {
     const quote = buildQuote({
       id: 'Q-EMPTY',
       items: [
@@ -329,6 +337,7 @@ describe('<ClientQuotesView /> per-line quick-view links', () => {
 
     render(<ClientQuotesView {...baseProps} quotes={[quote]} />);
     fireEvent.click(screen.getByText('Q-EMPTY'));
+    await openItemActions();
 
     // Nothing to open on either field, but the shortcuts still occupy their slot —
     // both render as disabled placeholders, neither as an active link.
@@ -476,10 +485,7 @@ describe('<ClientQuotesView /> supplier-quote pricing', () => {
     const dialog = await screen.findByRole('dialog');
 
     expect(within(dialog).getAllByDisplayValue('0,00').length).toBeGreaterThan(0);
-    const marginLabels = within(dialog).getAllByText('sales:clientQuotes.marginLabel');
-    expect(
-      marginLabels.some((label) => label.parentElement?.textContent?.includes('0,00 EUR')),
-    ).toBe(true);
+    expect(within(dialog).getAllByText('0,00 EUR').length).toBeGreaterThan(0);
     expect(within(dialog).queryAllByText('20,00 EUR')).toHaveLength(0);
   });
 
@@ -600,13 +606,13 @@ describe('<ClientQuotesView /> supplier-quote item availability', () => {
     fireEvent.click(screen.getByText('sales:clientQuotes.addProduct'));
 
     const initialPickers = screen.getAllByRole('button', { name: emptySupplierLabel });
-    expect(initialPickers).toHaveLength(4);
+    expect(initialPickers).toHaveLength(2);
 
     fireEvent.click(initialPickers[0]);
     fireEvent.click(getOpenSupplierItem(firstSupplierItemLabel));
 
     const secondRowPickers = screen.getAllByRole('button', { name: emptySupplierLabel });
-    expect(secondRowPickers).toHaveLength(2);
+    expect(secondRowPickers).toHaveLength(1);
     fireEvent.click(secondRowPickers[0]);
 
     const usedOption = getOpenSupplierItem(firstSupplierItemLabel);
@@ -623,7 +629,7 @@ describe('<ClientQuotesView /> supplier-quote item availability', () => {
     fireEvent.click(getOpenSupplierItem(emptySupplierLabel));
 
     const unlinkedRowPickers = screen.getAllByRole('button', { name: emptySupplierLabel });
-    expect(unlinkedRowPickers).toHaveLength(2);
+    expect(unlinkedRowPickers).toHaveLength(1);
     fireEvent.click(unlinkedRowPickers[0]);
 
     expect(getOpenSupplierItem(firstSupplierItemLabel)).toHaveAttribute('data-disabled', 'false');

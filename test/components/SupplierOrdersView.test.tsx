@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, mock, test } from 'bun:test';
-import { fireEvent, screen } from '@testing-library/react';
+import { fireEvent, screen, waitFor } from '@testing-library/react';
 import type { Product, Supplier, SupplierSaleOrder } from '../../types';
 import { installI18nMock } from '../helpers/i18n';
 import { render } from '../helpers/render';
@@ -71,7 +71,7 @@ describe('<SupplierOrdersView /> line item duration (issue #776)', () => {
     );
     // ...and the row carries a duration input reflecting the stored value (3 months).
     const durationInputs = screen
-      .getAllByPlaceholderText('accounting:supplierOrders.durationColumn')
+      .getAllByRole('textbox', { name: 'accounting:supplierOrders.durationColumn' })
       .filter((el): el is HTMLInputElement => el instanceof HTMLInputElement);
     expect(durationInputs.length).toBeGreaterThan(0);
     expect(durationInputs[0].value).toBe('3');
@@ -84,7 +84,7 @@ describe('<SupplierOrdersView /> line item duration (issue #776)', () => {
     fireEvent.click(screen.getByText('SO-DUR-SUBMIT'));
 
     const durationInputs = screen
-      .getAllByPlaceholderText('accounting:supplierOrders.durationColumn')
+      .getAllByRole('textbox', { name: 'accounting:supplierOrders.durationColumn' })
       .filter((el): el is HTMLInputElement => el instanceof HTMLInputElement);
     fireEvent.change(durationInputs[0], { target: { value: '4' } });
 
@@ -94,5 +94,38 @@ describe('<SupplierOrdersView /> line item duration (issue #776)', () => {
     const updates = onUpdateOrder.mock.calls[0]?.[1] as Partial<SupplierSaleOrder>;
     expect(updates.items?.[0]?.durationMonths).toBe(4);
     expect(updates.items?.[0]?.durationUnit).toBe('months');
+  });
+});
+
+describe('<SupplierOrdersView /> paginated item validation', () => {
+  test('blocks a unit price missing on a row outside the first page', async () => {
+    localStorage.clear();
+    const orderId = 'SO-PAGED-VALIDATION';
+    const items = Array.from({ length: 6 }, (_, index): SupplierSaleOrder['items'][number] => ({
+      id: `paged-supplier-order-item-${index + 1}`,
+      orderId,
+      productId: '',
+      productName: `Product ${index + 1}`,
+      quantity: 1,
+      unitPrice: index === 5 ? Number.NaN : 100,
+      discount: 0,
+      durationMonths: 1,
+      durationUnit: 'months',
+    }));
+    const onUpdateOrder = mock((_id: string, _updates: Partial<SupplierSaleOrder>) => {});
+
+    render(
+      <SupplierOrdersView
+        {...baseProps}
+        orders={[buildOrder({ id: orderId, items })]}
+        onUpdateOrder={onUpdateOrder}
+      />,
+    );
+    fireEvent.click(screen.getByText(orderId));
+
+    await waitFor(() => expect(screen.getByText('1 / 2')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: 'common:buttons.update' }));
+
+    expect(onUpdateOrder).not.toHaveBeenCalled();
   });
 });

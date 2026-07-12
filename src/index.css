@@ -96,6 +96,59 @@ input[type="number"] {
   -moz-appearance: textfield;
 }
 
+/* StandardTable's text-size control also changes row density. Inline editors in
+   document tables otherwise keep their fixed h-9 sizing and prevent the row
+   from growing or shrinking with the selected font size. */
+tr[data-standard-table-font-size="xs"] {
+  --standard-table-control-height: 2rem;
+  --standard-table-icon-xs-size: 1.25rem;
+  --standard-table-icon-sm-size: 1.5rem;
+  --standard-table-cell-padding-y: 0.25rem;
+}
+
+tr[data-standard-table-font-size="sm"] {
+  --standard-table-control-height: 2.25rem;
+  --standard-table-icon-xs-size: 1.5rem;
+  --standard-table-icon-sm-size: 2rem;
+  --standard-table-cell-padding-y: 0.5rem;
+}
+
+tr[data-standard-table-font-size="base"] {
+  --standard-table-control-height: 2.5rem;
+  --standard-table-icon-xs-size: 1.75rem;
+  --standard-table-icon-sm-size: 2.25rem;
+  --standard-table-cell-padding-y: 0.75rem;
+}
+
+tr[data-standard-table-font-size] > td {
+  padding-top: var(--standard-table-cell-padding-y) !important;
+  padding-bottom: var(--standard-table-cell-padding-y) !important;
+  transition:
+    padding-top 150ms ease,
+    padding-bottom 150ms ease;
+}
+
+tr[data-standard-table-font-size] .h-9:not(.h-auto),
+tr[data-standard-table-font-size] :is([data-slot="input"], [data-slot="select-trigger"]),
+tr[data-standard-table-font-size] [data-slot="button"][data-size="default"]:not(.h-auto) {
+  height: var(--standard-table-control-height) !important;
+  min-height: var(--standard-table-control-height);
+  font-size: inherit !important;
+  transition:
+    height 150ms ease,
+    min-height 150ms ease;
+}
+
+tr[data-standard-table-font-size] [data-slot="button"][data-size="icon-xs"] {
+  width: var(--standard-table-icon-xs-size) !important;
+  height: var(--standard-table-icon-xs-size) !important;
+}
+
+tr[data-standard-table-font-size] [data-slot="button"][data-size="icon-sm"] {
+  width: var(--standard-table-icon-sm-size) !important;
+  height: var(--standard-table-icon-sm-size) !important;
+}
+
 /* Custom Horizontal Scrollbar for Financial Reports Graphs */
 .custom-horizontal-scrollbar {
   scrollbar-width: thin;

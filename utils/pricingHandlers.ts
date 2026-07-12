@@ -5,7 +5,7 @@ import {
   getEffectiveMol,
   getEffectiveUnitCost,
   type PricingItem,
-  parseNumberInputValue,
+  parseOptionalNumberInputValue,
 } from './numbers';
 
 export const makeCostUpdater =
@@ -18,11 +18,11 @@ export const makeCostUpdater =
     const items = prev.items || [];
     const cur = items[index];
     if (!cur) return prev;
-    const newCost = parseNumberInputValue(value);
+    const newCost = parseOptionalNumberInputValue(value);
     const curUnitCost = getEffectiveUnitCost(cur, defaultUnitType);
-    if (newCost === curUnitCost) return prev;
+    if (newCost === curUnitCost && value !== '') return prev;
     const curMol = getEffectiveMol(cur);
-    const newUnitPrice = calcProductSalePrice(newCost, curMol);
+    const newUnitPrice = calcProductSalePrice(newCost ?? 0, curMol);
     const updated = [...items];
     updated[index] = {
       ...cur,
@@ -32,9 +32,12 @@ export const makeCostUpdater =
       // assume it; storing hourly here pushed a ÷8 cost onto a days-priced supplier item, #812
       // round 19); product costs keep the canonical hourly basis.
       ...(cur.supplierQuoteItemId
-        ? { supplierQuoteUnitPrice: newCost }
+        ? { supplierQuoteUnitPrice: newCost ?? null }
         : {
-            productCost: convertUnitPrice(newCost, cur.unitType || defaultUnitType, 'hours'),
+            productCost:
+              newCost === undefined
+                ? undefined
+                : convertUnitPrice(newCost, cur.unitType || defaultUnitType, 'hours'),
           }),
     };
     return { ...prev, items: updated };
@@ -50,16 +53,16 @@ export const makeMolUpdater =
     const items = prev.items || [];
     const cur = items[index];
     if (!cur) return prev;
-    const newMol = parseNumberInputValue(value);
+    const newMol = parseOptionalNumberInputValue(value);
     const curMol = getEffectiveMol(cur);
-    if (newMol === curMol) return prev;
+    if (newMol === curMol && value !== '') return prev;
     const curCost = getEffectiveUnitCost(cur, defaultUnitType);
-    const newUnitPrice = calcProductSalePrice(curCost, newMol);
+    const newUnitPrice = calcProductSalePrice(curCost, newMol ?? 0);
     const updated = [...items];
     updated[index] = {
       ...cur,
       unitPrice: newUnitPrice,
-      productMolPercentage: newMol,
+      productMolPercentage: newMol ?? null,
     };
     return { ...prev, items: updated };
   };

@@ -38,6 +38,7 @@ export interface CustomViewModalProps {
   initialColumnOrder: string[];
   editingView?: CustomView;
   zIndex?: number;
+  allowColumnHiding?: boolean;
 }
 
 type ColumnDragState = {
@@ -72,10 +73,12 @@ const CustomViewModal: React.FC<CustomViewModalProps> = ({
   initialColumnOrder,
   editingView,
   zIndex,
+  allowColumnHiding = true,
 }) => {
   const { t } = useTranslation('common');
   const [name, setName] = useState(() => editingView?.name ?? '');
   const [hiddenColIds, setHiddenColIds] = useState<Set<string>>(() => {
+    if (!allowColumnHiding) return new Set();
     if (editingView) {
       // Drop hidden IDs that no longer match a current column; otherwise stale
       // IDs inflate hiddenColIds.size and can wrongly disable Save.
@@ -128,7 +131,11 @@ const CustomViewModal: React.FC<CustomViewModalProps> = ({
 
   const handleSave = () => {
     if (!canSave) return;
-    onSave({ name: trimmedName, hiddenColIds: Array.from(hiddenColIds), columnOrder });
+    onSave({
+      name: trimmedName,
+      hiddenColIds: allowColumnHiding ? Array.from(hiddenColIds) : [],
+      columnOrder,
+    });
   };
 
   return (
@@ -161,15 +168,17 @@ const CustomViewModal: React.FC<CustomViewModalProps> = ({
             <FieldSet>
               <div className="flex items-center justify-between">
                 <FieldLegend variant="label">{t('table.columns')}</FieldLegend>
-                <div className="flex items-center gap-3 text-[11px] font-semibold">
-                  <Button type="button" variant="link" size="xs" onClick={selectAll}>
-                    {t('table.selectAllCols')}
-                  </Button>
-                  <span className="text-zinc-300">|</span>
-                  <Button type="button" variant="link" size="xs" onClick={deselectAll}>
-                    {t('table.deselectAllCols')}
-                  </Button>
-                </div>
+                {allowColumnHiding && (
+                  <div className="flex items-center gap-3 text-[11px] font-semibold">
+                    <Button type="button" variant="link" size="xs" onClick={selectAll}>
+                      {t('table.selectAllCols')}
+                    </Button>
+                    <span className="text-zinc-300">|</span>
+                    <Button type="button" variant="link" size="xs" onClick={deselectAll}>
+                      {t('table.deselectAllCols')}
+                    </Button>
+                  </div>
+                )}
               </div>
               <div className="max-h-64 overflow-y-auto rounded-md border border-border p-1.5 space-y-0.5">
                 {orderedColumns.map((col) => {
@@ -273,28 +282,34 @@ const CustomViewModal: React.FC<CustomViewModalProps> = ({
                       ) : (
                         <span className="size-7 shrink-0" aria-hidden="true" />
                       )}
-                      <button
-                        type="button"
-                        aria-pressed={isVisible}
-                        className="flex min-w-0 flex-1 items-center gap-2 px-1 py-1.5 text-left outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
-                        onClick={() => toggleCol(col.id)}
-                      >
-                        <span
-                          aria-hidden="true"
-                          className={`flex size-3.5 items-center justify-center rounded border-2 transition-colors ${
-                            isVisible ? 'border-praetor bg-praetor text-white' : 'border-zinc-300'
-                          }`}
+                      {allowColumnHiding ? (
+                        <button
+                          type="button"
+                          aria-pressed={isVisible}
+                          className="flex min-w-0 flex-1 items-center gap-2 px-1 py-1.5 text-left outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                          onClick={() => toggleCol(col.id)}
                         >
-                          <i
-                            className={`fa-solid fa-check text-[8px] transition-transform ${
-                              isVisible ? 'scale-100' : 'scale-0'
+                          <span
+                            aria-hidden="true"
+                            className={`flex size-3.5 items-center justify-center rounded border-2 transition-colors ${
+                              isVisible ? 'border-praetor bg-praetor text-white' : 'border-zinc-300'
                             }`}
-                          ></i>
-                        </span>
-                        <span className="text-xs text-muted-foreground select-none">
+                          >
+                            <i
+                              className={`fa-solid fa-check text-[8px] transition-transform ${
+                                isVisible ? 'scale-100' : 'scale-0'
+                              }`}
+                            ></i>
+                          </span>
+                          <span className="text-xs text-muted-foreground select-none">
+                            {col.header}
+                          </span>
+                        </button>
+                      ) : (
+                        <span className="min-w-0 flex-1 px-1 py-1.5 text-xs text-muted-foreground">
                           {col.header}
                         </span>
-                      </button>
+                      )}
                     </div>
                   );
                 })}
