@@ -1495,6 +1495,7 @@ describe('<ClientQuotesView /> line-item delete confirmation', () => {
     expect(screen.getByTestId('quote-candidate-tabs-scroll')).toHaveClass(
       'overflow-x-auto',
       'overflow-y-hidden',
+      'pt-px',
     );
     const addVariantButton = screen.getByRole('button', {
       name: 'sales:clientQuotes.candidates.addMenu',

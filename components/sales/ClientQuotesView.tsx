@@ -2363,7 +2363,7 @@ const ClientQuoteCandidatesBar: React.FC<{ controller: ClientQuotesController }>
     <div className="space-y-1">
       <div
         data-testid="quote-candidate-tabs-scroll"
-        className="overflow-x-auto overflow-y-hidden border-b border-border"
+        className="overflow-x-auto overflow-y-hidden border-b border-border pt-px"
       >
         <Tabs
           value={activeCandidateId}
