@@ -65,29 +65,24 @@ export function VersionHistoryPanel<Row extends VersionHistoryPanelRow>({
               type="button"
               variant="ghost"
               aria-label={labels.title}
-              className={cn(
-                'h-auto w-full shrink-0 justify-start gap-2 rounded-none border-b border-border bg-muted/30 px-4 py-3 hover:bg-muted/60',
-                !isOpen && 'size-12 justify-center gap-1 border-b-0 p-0',
-              )}
+              className="h-12 w-full shrink-0 justify-start gap-0 overflow-hidden rounded-none border-b border-border bg-muted/30 p-0 hover:bg-muted/60 data-[state=closed]:border-b-0"
             >
-              <i
-                className={cn(
-                  'fa-solid text-[10px] text-muted-foreground',
-                  isOpen ? 'fa-chevron-left' : 'fa-chevron-right',
-                )}
-                aria-hidden="true"
-              ></i>
-              <i className="fa-solid fa-clock-rotate-left text-primary" aria-hidden="true"></i>
-              {isOpen && (
-                <>
-                  <span className="flex-1 text-left text-sm font-semibold text-foreground">
-                    {labels.title}
-                  </span>
-                  <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                    {rows.length}
-                  </span>
-                </>
-              )}
+              <span className="flex size-12 shrink-0 items-center justify-center gap-1">
+                <i
+                  className={cn(
+                    'fa-solid text-[10px] text-muted-foreground',
+                    isOpen ? 'fa-chevron-left' : 'fa-chevron-right',
+                  )}
+                  aria-hidden="true"
+                ></i>
+                <i className="fa-solid fa-clock-rotate-left text-primary" aria-hidden="true"></i>
+              </span>
+              <span className="min-w-0 flex-1 whitespace-nowrap text-left text-sm font-semibold text-foreground">
+                {labels.title}
+              </span>
+              <span className="mr-4 shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                {rows.length}
+              </span>
             </Button>
           </CollapsibleTrigger>
         </TooltipTrigger>
@@ -99,7 +94,7 @@ export function VersionHistoryPanel<Row extends VersionHistoryPanelRow>({
         forceMount
         aria-hidden={!isOpen}
         inert={!isOpen}
-        className="version-history-content min-h-0 flex-1"
+        className="version-history-content min-h-0"
       >
         <div className="flex h-full min-h-0 flex-col">
           <div className="flex-1 overflow-y-auto">

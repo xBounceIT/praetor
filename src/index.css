@@ -505,21 +505,27 @@ tr[data-standard-table-font-size] [data-slot="button"][data-size="icon-sm"] {
 }
 
 .version-history-content {
+  max-height: calc(90vh - 3rem);
   overflow: hidden;
 }
 
 .version-history-content[data-state="open"] {
-  animation: version-history-content-down 200ms ease-in-out 200ms both;
+  animation: version-history-content-down 200ms ease-in-out 200ms backwards;
 }
 
 .version-history-content[data-state="closed"] {
-  animation: version-history-content-up 200ms ease-in-out both;
+  animation: version-history-content-up 200ms ease-in-out forwards;
 }
 
 @media (prefers-reduced-motion: reduce) {
   .version-history-content[data-state="open"],
   .version-history-content[data-state="closed"] {
     animation: none;
+  }
+
+  .version-history-content[data-state="closed"] {
+    height: 0;
+    opacity: 0;
   }
 }
 
