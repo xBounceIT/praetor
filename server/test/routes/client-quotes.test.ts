@@ -2514,6 +2514,46 @@ describe('GET /api/sales/client-quotes list (#812 round 11)', () => {
     });
   });
 
+  test('promoted families leave expiry to the generated offer', async () => {
+    getRolePermissionsMock.mockResolvedValue(['sales.client_quotes.view']);
+    cqListAllMock.mockResolvedValue([
+      updatedQuote({ id: 'q-offer', status: 'offer', expirationDate: '2000-01-01' }),
+    ]);
+    qcListAllMock.mockResolvedValue([
+      {
+        id: 'qc-selected',
+        quoteId: 'q-offer',
+        name: 'Variante A',
+        position: 0,
+        state: 'selected',
+        paymentTerms: 'immediate',
+        discount: 0,
+        discountType: 'percentage',
+        expirationDate: '2000-01-01',
+        communicationChannelId: 'qcc_email',
+        communicationChannelName: 'Email',
+        notes: null,
+        createdAt: 1_700_000_000_000,
+        updatedAt: 1_700_000_000_000,
+      },
+    ]);
+    cqListAllItemsMock.mockResolvedValue([]);
+
+    const res = await testApp.inject({
+      method: 'GET',
+      url: '/api/sales/client-quotes',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body)[0]).toMatchObject({
+      status: 'offer',
+      effectiveStatus: 'offer',
+      isExpired: false,
+      candidates: [{ id: 'qc-selected', isExpired: true }],
+    });
+  });
+
   test('linkedSupplierQuoteExpired comes from the status-aware blocking map, not the raw projection', async () => {
     // q-1 sources a terminal-frozen supplier quote (excluded from the map) — its raw
     // linkedSupplierQuoteExpiration is past, but the flag must stay false so the UI does not

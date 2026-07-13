@@ -143,6 +143,28 @@ const isCandidateFamilyExpired = (
     : fallbackExpired;
 };
 
+const effectiveCandidateFamilyStatus = (
+  status: string,
+  expirationDate: string | null,
+  candidates: Array<{ state: string; expirationDate: string }>,
+) => {
+  const normalizedStatus = normalizeQuoteStatus(status);
+  if (isTerminalQuoteStatus(status)) return normalizedStatus;
+
+  const activeCandidates = candidates.filter((candidate) => candidate.state === 'active');
+  if (activeCandidates.length > 0) {
+    return activeCandidates.every((candidate) => isPastLocalDate(candidate.expirationDate))
+      ? 'expired'
+      : normalizedStatus;
+  }
+
+  // A promoted family has only selected/discarded candidates: its offer owns expiry from here.
+  if (candidates.some((candidate) => candidate.state === 'selected')) return normalizedStatus;
+
+  // Expand-phase fallback for legacy rows that have not received their candidate yet.
+  return effectiveQuoteStatusFromDate(status, expirationDate);
+};
+
 class LinkedOfferRollbackError extends Error {
   constructor(
     message: string,
@@ -1120,9 +1142,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       selected ??
       enrichedCandidates.find((candidate) => candidate.state === 'active') ??
       enrichedCandidates[0];
-    const active = enrichedCandidates.filter((candidate) => candidate.state === 'active');
-    const allActiveExpired = active.length > 0 && active.every((candidate) => candidate.isExpired);
-    const familyIsExpired = !isTerminalQuoteStatus(quote.status) && allActiveExpired;
+    const familyEffectiveStatus = effectiveCandidateFamilyStatus(
+      quote.status,
+      quote.expirationDate,
+      enrichedCandidates,
+    );
     const response = buildQuoteResponse(quote, primary?.items ?? [], null);
     return {
       ...response,
@@ -1133,9 +1157,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         enrichedCandidates,
         Array.from(blockingExpirations.values()).some((expiration) => isPastLocalDate(expiration)),
       ),
-      isExpired: familyIsExpired,
-      effectiveStatus:
-        familyIsExpired && quote.status !== 'offer' ? 'expired' : response.effectiveStatus,
+      isExpired: familyEffectiveStatus === 'expired',
+      effectiveStatus: familyEffectiveStatus,
     };
   };
 
@@ -1277,12 +1300,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             linkedSupplierQuoteExpired: supplierExpired,
           };
         });
-        const activeCandidates = enrichedCandidates.filter(
-          (candidate) => candidate.state === 'active',
+        const familyEffectiveStatus = effectiveCandidateFamilyStatus(
+          quote.status,
+          quote.expirationDate,
+          enrichedCandidates,
         );
-        const allActiveExpired =
-          activeCandidates.length > 0 && activeCandidates.every((candidate) => candidate.isExpired);
-        const familyIsExpired = !isTerminalQuoteStatus(quote.status) && allActiveExpired;
         const primarySupplierExpired = quoteItems.some((item) => {
           const sourcedId = resolvedSourcedId(item);
           const date = sourcedId ? blockingExpirations.get(sourcedId) : undefined;
@@ -1298,9 +1320,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             enrichedCandidates,
             primarySupplierExpired,
           ),
-          isExpired: familyIsExpired,
-          effectiveStatus:
-            familyIsExpired && quote.status !== 'offer' ? 'expired' : response.effectiveStatus,
+          isExpired: familyEffectiveStatus === 'expired',
+          effectiveStatus: familyEffectiveStatus,
         };
       });
     },
