@@ -846,7 +846,7 @@ describe('<ClientQuotesView />', () => {
     );
 
     fireEvent.click(screen.getByText('Q-MOL'));
-    await screen.findByRole('dialog');
+    const dialog = await screen.findByRole('dialog');
 
     // formatDecimals={2}: the MOL inputs (mobile + desktop layouts) show 12,34, not the
     // pre-fix rounded 12,3 that silently dropped the second decimal.
@@ -867,6 +867,45 @@ describe('<ClientQuotesView />', () => {
       expect(screen.getAllByText('160,00 EUR').length).toBeGreaterThan(0);
       expect(screen.getAllByText('40,00 EUR').length).toBeGreaterThan(0);
     });
+
+    expect(dialog).toBeInTheDocument();
+  });
+
+  test('automatically recalculates MOL when the sale price changes', async () => {
+    render(
+      <ClientQuotesView
+        quotes={[{ ...quotes[0], id: 'Q-AUTO-MOL', discount: 0 }]}
+        clients={clients}
+        products={[]}
+        supplierQuotes={[]}
+        currency="EUR"
+        onAddQuote={mock(() => Promise.resolve())}
+        onUpdateQuote={mock(() => Promise.resolve())}
+        onDeleteQuote={mock(() => Promise.resolve())}
+      />,
+    );
+
+    fireEvent.click(screen.getByText('Q-AUTO-MOL'));
+    const dialog = await screen.findByRole('dialog');
+    const salePriceInput = within(dialog).getAllByLabelText(
+      'crm:internalListing.salePrice',
+    )[0] as HTMLInputElement;
+    const molInput = within(dialog).getAllByLabelText(
+      'sales:clientQuotes.molLabel',
+    )[0] as HTMLInputElement;
+
+    fireEvent.focus(salePriceInput);
+    fireEvent.change(salePriceInput, { target: { value: '80' } });
+    await waitFor(() => {
+      // Cost 60, sale price 80 => MOL 25%; quantity 2 => revenue 160 and margin 40.
+      expect(molInput.value).toBe('25,00');
+      expect(within(dialog).getAllByText('160,00 EUR').length).toBeGreaterThan(0);
+      expect(within(dialog).getAllByText('40,00 EUR').length).toBeGreaterThan(0);
+    });
+
+    fireEvent.change(salePriceInput, { target: { value: '50' } });
+    await waitFor(() => expect(molInput.value).toBe('-20,00'));
+    expect(molInput.checkValidity()).toBe(true);
   });
 
   test('the read-only banner renders dark-mode-compatible amber, not a light slab (issue #768)', async () => {
@@ -1190,7 +1229,7 @@ describe('<ClientQuotesView /> edit action gating (#812 round 13)', () => {
     const comparisonDialog = await screen.findByRole('dialog');
     expect(comparisonDialog.querySelector('[data-slot="modal-content"]')).toHaveClass('max-w-6xl');
     expect(within(comparisonDialog).getByText('sales:clientQuotes.molLabel')).toBeInTheDocument();
-    expect(within(comparisonDialog).getByText('-11,11%')).toBeInTheDocument();
+    expect(within(comparisonDialog).getByText('11,11%')).toBeInTheDocument();
     expect(within(comparisonDialog).getByText('sales:clientQuotes.notesLabel')).toBeInTheDocument();
     expect(
       within(comparisonDialog).getByText('Customer prefers annual billing.'),

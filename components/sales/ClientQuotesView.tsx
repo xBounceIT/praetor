@@ -71,6 +71,7 @@ import {
   getItemPricingContext,
   isPositiveFiniteNumber,
   MAX_MOL_PERCENTAGE,
+  MIN_MOL_PERCENTAGE,
   MOL_PERCENTAGE_DECIMALS,
   normalizeDurationForSubmit,
   normalizeDurationUnit,
@@ -78,10 +79,9 @@ import {
   parseDurationValueToMonths,
   parseNumberInputValue,
   parseOptionalNumberInputValue,
-  roundCurrency,
 } from '../../utils/numbers';
 import { getPaymentTermsOptions } from '../../utils/options';
-import { makeCostUpdater, makeMolUpdater } from '../../utils/pricingHandlers';
+import { makeCostUpdater, makeMolUpdater, makeUnitPriceUpdater } from '../../utils/pricingHandlers';
 import {
   buildProductQuickViewHref,
   buildSupplierQuoteQuickViewHref,
@@ -301,37 +301,13 @@ const formDataIntoCandidate = (
 const supplierQuoteItemLabel = (quote: SupplierQuote, item: SupplierQuote['items'][number]) =>
   `[${quote.id}] ${quote.supplierName} · ${item.productName} (${formatDecimal(item.unitPrice)})`;
 
-// A client quote line's MOL snapshot is authoritative for its sale price. In particular, a
-// supplier-sourced line starts from the supplier's NET cost (`supplierQuoteUnitPrice`), not from
-// its list price: otherwise "Discount to us" is incorrectly surfaced as customer margin.
-const getClientQuoteUnitSalePrice = (item: QuoteItem): number => {
-  const { unitCost, molPercentage } = getItemPricingContext(item);
-  return roundCurrency(calcProductSalePrice(unitCost, molPercentage));
-};
-
-const getClientQuoteItemPricingContext = (item: QuoteItem) =>
-  getItemPricingContext({ ...item, unitPrice: getClientQuoteUnitSalePrice(item) });
-
-const priceClientQuoteItemsFromLocalMol = (items: QuoteItem[]): QuoteItem[] =>
-  items.map((item) => {
-    const unitPrice = getClientQuoteUnitSalePrice(item);
-    const productId = item.productId ?? '';
-    return unitPrice === item.unitPrice && productId === item.productId
-      ? item
-      : { ...item, productId, unitPrice };
-  });
+const getClientQuoteItemPricingContext = (item: QuoteItem) => getItemPricingContext(item);
 
 const calculateClientQuotePricingTotals = (
   items: QuoteItem[],
   globalDiscount: number,
   discountType: Quote['discountType'],
-): PricingTotals =>
-  calculatePricingTotals(
-    priceClientQuoteItemsFromLocalMol(items),
-    globalDiscount,
-    'hours',
-    discountType,
-  );
+): PricingTotals => calculatePricingTotals(items, globalDiscount, 'hours', discountType);
 
 const isLegacyAcceptedQuote = (quote: Quote) => {
   const candidates = quote.candidates ?? [];
@@ -1009,7 +985,7 @@ const useClientQuotesController = ({
     const serializeItems = (candidateItems: QuoteItem[]) =>
       candidateItems.map((item) => ({
         ...item,
-        unitPrice: getClientQuoteUnitSalePrice(item),
+        unitPrice: Number(item.unitPrice ?? 0),
         discount: item.discount === undefined ? undefined : Number(item.discount),
         ...normalizeDurationForSubmit(item),
         productCost: item.productCost === undefined ? undefined : Number(item.productCost),
@@ -1244,7 +1220,7 @@ const useClientQuotesController = ({
       quantity: Number.NaN,
       durationUnit: 'months',
       unitType: 'hours',
-      unitPrice: 0,
+      unitPrice: Number.NaN,
       productMolPercentage: null,
       // Supplier quote fields
       supplierQuoteId: null,
@@ -1533,8 +1509,8 @@ const useClientQuotesController = ({
       : t('sales:clientQuotes.noSupplierQuote');
   };
 
-  // Pulls the linked supplier item's current quantity/cost back into the line, mirroring the
-  // linking math: the sale price is recomputed from the refreshed cost and the line's MOL (#779).
+  // Pulls the linked supplier item's current quantity/cost back into the line. The customer sale
+  // price stays unchanged and MOL is derived again from that price and the refreshed cost (#779).
   const refreshLineFromSupplier = (index: number, source: SupplierQuote['items'][number]) => {
     if (isReadOnly) return;
     setFormData((prev) => {
@@ -1990,10 +1966,7 @@ const useClientQuotesController = ({
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
-                        onCreateOfferFromLegacyQuote({
-                          ...row,
-                          items: priceClientQuoteItemsFromLocalMol(row.items),
-                        });
+                        onCreateOfferFromLegacyQuote(row);
                       }}
                       aria-label={t('sales:clientQuotes.convertToOffer', {
                         defaultValue: 'Convert to offer',
@@ -3145,6 +3118,17 @@ const ClientQuoteItemsSection: React.FC<{ controller: ClientQuotesController }> 
       ),
     },
     {
+      id: 'unitPrice',
+      header: t('crm:internalListing.salePrice'),
+      accessorKey: 'unitPrice',
+      align: 'right',
+      cell: ({ row }) => (
+        <div className="min-w-[130px]">
+          <ClientQuoteSalePriceEditor controller={controller} line={getLine(row)} />
+        </div>
+      ),
+    },
+    {
       id: 'mol',
       header: t('sales:clientQuotes.molLabel', { defaultValue: 'MOL' }),
       accessorFn: (item) => getItemPricingContext(item).molPercentage,
@@ -3328,6 +3312,7 @@ const getClientQuoteLineContext = (
         ? Number(rawCost)
         : convertUnitPrice(Number(rawCost), 'hours', item.unitType || 'hours');
   const molPercentage = item.productMolPercentage ?? undefined;
+  const unitPrice = Number.isFinite(Number(item.unitPrice)) ? Number(item.unitPrice) : undefined;
   const durationUnit = normalizeDurationUnit(item.durationUnit);
   const durationValue = getDurationInputValue(item);
   const product = products.find((p) => p.id === item.productId);
@@ -3362,8 +3347,14 @@ const getClientQuoteLineContext = (
     setFormData(makeMolUpdater<Partial<Quote>>(index, value));
   };
 
+  const handleUnitPriceChange = (value: string) => {
+    if (isReadOnly) return;
+    setFormData(makeUnitPriceUpdater<Partial<Quote>>(index, value));
+  };
+
   return {
     cost,
+    unitPrice,
     molPercentage,
     lineCost,
     durationUnit,
@@ -3379,6 +3370,7 @@ const getClientQuoteLineContext = (
     productHref,
     linkedFieldStatus,
     handleCostChange,
+    handleUnitPriceChange,
     handleMolChange,
   };
 };
@@ -3577,8 +3569,9 @@ const ClientQuoteMolEditor: React.FC<{
       <ValidatedNumberInput
         value={line.molPercentage}
         placeholder="0,00"
-        min={0}
+        min={MIN_MOL_PERCENTAGE}
         max={MAX_MOL_PERCENTAGE}
+        allowNegative
         aria-label={controller.t('sales:clientQuotes.molLabel', { defaultValue: 'MOL' })}
         formatDecimals={MOL_PERCENTAGE_DECIMALS}
         onValueChange={line.handleMolChange}
@@ -3593,6 +3586,27 @@ const ClientQuoteMolEditor: React.FC<{
     </>
   );
 };
+
+const ClientQuoteSalePriceEditor: React.FC<{
+  controller: ClientQuotesController;
+  line: ClientQuoteLineContext;
+}> = ({ controller, line }) => (
+  <div className="flex w-full items-center justify-end gap-1">
+    <ValidatedNumberInput
+      value={line.unitPrice}
+      placeholder="0,00"
+      min={0}
+      aria-label={controller.t('crm:internalListing.salePrice')}
+      formatDecimals={2}
+      onValueChange={line.handleUnitPriceChange}
+      disabled={controller.isReadOnly}
+      className="w-full max-w-[5rem] flex-none border-border bg-background px-1 py-2 text-right text-sm text-foreground"
+    />
+    <span className="shrink-0 text-[9px] font-semibold text-muted-foreground">
+      {controller.currency}
+    </span>
+  </div>
+);
 
 const ClientQuoteDiscountEditor: React.FC<{
   controller: ClientQuotesController;

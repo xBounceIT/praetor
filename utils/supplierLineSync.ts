@@ -1,5 +1,6 @@
 import type { SupplierQuote, SupplierUnitType } from '../types';
 import {
+  calcProductMolPercentage,
   calcProductSalePrice,
   convertUnitPrice,
   getEffectiveDurationMonths,
@@ -92,35 +93,36 @@ export const isSupplierLineStale = (
 };
 
 // The fields the pick path and the refresh chip graft onto a line when pulling the supplier
-// item's current data, mirroring the linking math: the sale price is recomputed from the
-// refreshed cost and the line's own MOL, converted into the line's unit. The supplierQuoteBase*
+// item's current data. Refreshing an existing link preserves its sale price and derives the new
+// MOL from that price and the refreshed cost. The supplierQuoteBase*
 // pair records WHAT the user was shown at pick/refresh time — the server diffs the saved
 // quantity/cost against it to recognize a deliberate pre-save edit on a fresh link (pushed onto
 // the supplier item) versus an untouched stale snapshot (server values win).
 export const refreshedSupplierLineFields = (
-  line: { productMolPercentage?: number | string | null; unitType?: SupplierUnitType },
+  line: {
+    unitPrice?: number;
+    productMolPercentage?: number | string | null;
+    unitType?: SupplierUnitType;
+  },
   source: SupplierQuote['items'][number],
 ): {
   quantity: number;
   supplierQuoteUnitPrice: number;
   supplierQuoteBaseQuantity: number;
   supplierQuoteBaseUnitPrice: number;
-  unitPrice: number;
+  productMolPercentage: number | null;
 } => {
-  const mol = line.productMolPercentage ? Number(line.productMolPercentage) : 0;
+  const unitCost = convertUnitPrice(
+    source.unitPrice,
+    source.unitType || 'hours',
+    line.unitType || 'hours',
+  );
   return {
     quantity: source.quantity,
     supplierQuoteUnitPrice: source.unitPrice,
     supplierQuoteBaseQuantity: source.quantity,
     supplierQuoteBaseUnitPrice: source.unitPrice,
-    // Convert FROM the supplier item's own unit, not a hardcoded 'hours': source.unitPrice is
-    // priced in source.unitType. Assuming hours would multiply a days-priced item by 8 when the
-    // line is also in days (units match → no conversion), inflating the stored sale price.
-    unitPrice: convertUnitPrice(
-      calcProductSalePrice(source.unitPrice, mol),
-      source.unitType || 'hours',
-      line.unitType || 'hours',
-    ),
+    productMolPercentage: calcProductMolPercentage(unitCost, Number(line.unitPrice ?? 0)),
   };
 };
 
@@ -131,8 +133,20 @@ export const refreshedSupplierLineFields = (
 export const pickedSupplierLineFields = (
   line: { productMolPercentage?: number | string | null; unitType?: SupplierUnitType },
   source: SupplierQuote['items'][number],
-) => ({
-  ...refreshedSupplierLineFields(line, source),
-  durationMonths: getEffectiveDurationMonths(source),
-  durationUnit: normalizeDurationUnit(source.durationUnit),
-});
+) => {
+  const mol = line.productMolPercentage ? Number(line.productMolPercentage) : 0;
+  return {
+    quantity: source.quantity,
+    supplierQuoteUnitPrice: source.unitPrice,
+    supplierQuoteBaseQuantity: source.quantity,
+    supplierQuoteBaseUnitPrice: source.unitPrice,
+    // A new link has no user-authored sale price yet, so initialize it from the line/catalog MOL.
+    unitPrice: convertUnitPrice(
+      calcProductSalePrice(source.unitPrice, mol),
+      source.unitType || 'hours',
+      line.unitType || 'hours',
+    ),
+    durationMonths: getEffectiveDurationMonths(source),
+    durationUnit: normalizeDurationUnit(source.durationUnit),
+  };
+};

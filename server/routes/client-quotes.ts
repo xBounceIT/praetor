@@ -20,11 +20,14 @@ import {
   rollbackQuotePromotion,
 } from '../services/quotePromotionRollback.ts';
 import { logAudit } from '../utils/audit.ts';
+import {
+  calculateClientLineMol,
+  withCalculatedClientLineMol,
+} from '../utils/client-line-pricing.ts';
 import { isPastLocalDate } from '../utils/date.ts';
 import { getUniqueViolation } from '../utils/db-errors.ts';
 import { replyDocumentCodeCollision } from '../utils/document-code-replies.ts';
 import { type DurationUnit, effectiveDurationMonths } from '../utils/duration-unit.ts';
-import { roundCurrency } from '../utils/invoice-math.ts';
 import { normalizeNullableString } from '../utils/normalize.ts';
 import { generatePrefixedId, ITEM_ID_PREFIXES } from '../utils/order-ids.ts';
 import {
@@ -52,6 +55,7 @@ import {
   optionalDurationMonths,
   optionalDurationUnit,
   optionalLocalizedNonNegativeNumber,
+  optionalLocalizedNumber,
   optionalLocalizedPercentage,
   optionalNonEmptyString,
   parseDateString,
@@ -60,7 +64,6 @@ import {
   requireNonEmptyString,
 } from '../utils/validation.ts';
 
-const MAX_QUOTE_MOL_PERCENTAGE = 99.99;
 const MAX_CANDIDATE_NAME_LENGTH = 100;
 
 type IncomingQuoteItem = {
@@ -243,21 +246,12 @@ const normalizeQuoteItems = (
       `items[${i}].productCost`,
     );
     if (!productCostResult.ok) return { ok: false, message: productCostResult.message };
-    const productMolPercentageResult = optionalLocalizedNonNegativeNumber(
+    const productMolPercentageResult = optionalLocalizedNumber(
       item.productMolPercentage,
       `items[${i}].productMolPercentage`,
     );
     if (!productMolPercentageResult.ok) {
       return { ok: false, message: productMolPercentageResult.message };
-    }
-    if (
-      productMolPercentageResult.value !== null &&
-      productMolPercentageResult.value > MAX_QUOTE_MOL_PERCENTAGE
-    ) {
-      return {
-        ok: false,
-        message: `items[${i}].productMolPercentage must be between 0 and ${MAX_QUOTE_MOL_PERCENTAGE}`,
-      };
     }
     const supplierQuoteUnitPriceResult = optionalLocalizedNonNegativeNumber(
       item.supplierQuoteUnitPrice,
@@ -360,15 +354,6 @@ const calculateQuoteTotals = (
   return { total, subtotal };
 };
 
-const calculateUnitPriceFromMol = (unitCost: number, molPercentage: number | null): number => {
-  const mol = Number(molPercentage ?? 0);
-  const unitPrice = mol >= 100 ? unitCost : unitCost / (1 - mol / 100);
-  return roundCurrency(unitPrice);
-};
-
-const productCostInLineUnit = (productCost: number, unitType: UnitType | undefined): number =>
-  unitType === 'days' ? productCost * 8 : productCost;
-
 const resolveQuoteItemSnapshots = async (
   items: IncomingQuoteItem[],
   existingItemsById?: Map<string, IncomingQuoteItem & QuoteItemSnapshot>,
@@ -381,9 +366,7 @@ const resolveQuoteItemSnapshots = async (
       existingItem.productId !== item.productId ||
       normalizeNullableString(existingItem.supplierQuoteItemId) !==
         normalizeNullableString(item.supplierQuoteItemId) ||
-      (item.productCost !== null && item.productCost !== existingItem.productCost) ||
-      (item.productMolPercentage !== null &&
-        item.productMolPercentage !== (existingItem.productMolPercentage ?? null))
+      (item.productCost !== null && item.productCost !== existingItem.productCost)
     );
   });
 
@@ -418,31 +401,24 @@ const resolveQuoteItemSnapshots = async (
         existingItem.productId === item.productId &&
         normalizeNullableString(existingItem.supplierQuoteItemId) ===
           normalizedSupplierQuoteItemId &&
-        (item.productCost === null || item.productCost === existingItem.productCost) &&
-        (item.productMolPercentage === null ||
-          item.productMolPercentage === (existingItem.productMolPercentage ?? null));
+        (item.productCost === null || item.productCost === existingItem.productCost);
       if (existingItem && isUnchanged) {
         const supplierQuoteUnitPrice =
           item.supplierQuoteUnitPrice ?? existingItem.supplierQuoteUnitPrice ?? null;
-        const effectiveUnitCost = normalizedSupplierQuoteItemId
-          ? (supplierQuoteUnitPrice ?? 0)
-          : productCostInLineUnit(existingItem.productCost, item.unitType);
-        resolvedItems.push({
-          ...item,
-          supplierQuoteItemId: normalizedSupplierQuoteItemId,
-          unitPrice: calculateUnitPriceFromMol(
-            effectiveUnitCost,
-            existingItem.productMolPercentage ?? null,
-          ),
-          productCost: existingItem.productCost,
-          productMolPercentage: existingItem.productMolPercentage ?? null,
-          supplierQuoteId: existingItem.supplierQuoteId ?? null,
-          supplierQuoteSupplierName: existingItem.supplierQuoteSupplierName ?? null,
-          // Client-authoritative for an existing link (issue #779 bidirectional sync): a cost
-          // edit on a supplier-sourced line lands here, and is then pushed back onto the
-          // supplier item after the write. Absent → keep the stored snapshot.
-          supplierQuoteUnitPrice,
-        });
+        resolvedItems.push(
+          withCalculatedClientLineMol({
+            ...item,
+            supplierQuoteItemId: normalizedSupplierQuoteItemId,
+            productCost: existingItem.productCost,
+            productMolPercentage: existingItem.productMolPercentage ?? null,
+            supplierQuoteId: existingItem.supplierQuoteId ?? null,
+            supplierQuoteSupplierName: existingItem.supplierQuoteSupplierName ?? null,
+            // Client-authoritative for an existing link (issue #779 bidirectional sync): a cost
+            // edit on a supplier-sourced line lands here, and is then pushed back onto the
+            // supplier item after the write. Absent → keep the stored snapshot.
+            supplierQuoteUnitPrice,
+          }),
+        );
         continue;
       }
     }
@@ -517,24 +493,18 @@ const resolveQuoteItemSnapshots = async (
       allowManualProductCost && item.productCost !== null
         ? item.productCost
         : (productSnapshot?.productCost ?? 0);
-    const productMolPercentage =
-      item.productMolPercentage != null
-        ? item.productMolPercentage
-        : (productSnapshot?.productMolPercentage ?? null);
-    const effectiveUnitCost = normalizedSupplierQuoteItemId
-      ? (supplierQuoteUnitPrice ?? 0)
-      : productCostInLineUnit(productCost, item.unitType);
-    resolvedItems.push({
-      ...item,
-      productId: resolvedProductId,
-      supplierQuoteItemId: normalizedSupplierQuoteItemId,
-      unitPrice: calculateUnitPriceFromMol(effectiveUnitCost, productMolPercentage),
-      productCost,
-      productMolPercentage,
-      supplierQuoteId,
-      supplierQuoteSupplierName,
-      supplierQuoteUnitPrice,
-    });
+    resolvedItems.push(
+      withCalculatedClientLineMol({
+        ...item,
+        productId: resolvedProductId,
+        supplierQuoteItemId: normalizedSupplierQuoteItemId,
+        productCost,
+        productMolPercentage: item.productMolPercentage,
+        supplierQuoteId,
+        supplierQuoteSupplierName,
+        supplierQuoteUnitPrice,
+      }),
+    );
   }
 
   return resolvedItems;
@@ -668,12 +638,10 @@ const quoteItemBodySchema = {
     quantity: { type: 'number' },
     unitPrice: { type: 'number' },
     productCost: { type: 'number' },
-    // Nullable: Ajv's coerceTypes would otherwise fold a null into 0, which both lies about the
-    // value and defeats the "unchanged line" snapshot comparison.
+    // Nullable so Ajv does not fold an unavailable client snapshot into 0. The resolver replaces
+    // this request value with the MOL derived from the authoritative cost and sale price.
     productMolPercentage: {
       type: ['number', 'null'],
-      minimum: 0,
-      maximum: MAX_QUOTE_MOL_PERCENTAGE,
     },
     // The line's live unit cost for supplier-sourced lines — client-authoritative on edits of an
     // existing link (issue #779 bidirectional sync).
@@ -801,7 +769,7 @@ const buildOfferItemsFromQuoteItems = (
     quantity: item.quantity,
     unitPrice: item.unitPrice,
     productCost: item.productCost,
-    productMolPercentage: item.productMolPercentage,
+    productMolPercentage: calculateClientLineMol(item),
     discount: item.discount,
     note: item.note,
     supplierQuoteId: item.supplierQuoteId,
@@ -838,7 +806,8 @@ const isSameCandidateItem = (
   submitted.quantity === existing.quantity &&
   submitted.unitPrice === existing.unitPrice &&
   submitted.productCost === existing.productCost &&
-  sameNullableValue(submitted.productMolPercentage, existing.productMolPercentage) &&
+  // MOL is derived from the effective cost and unitPrice. Ignore a stale stored snapshot here so
+  // extending an expired candidate remains an expiration-only edit after this invariant changed.
   sameNullableValue(submitted.supplierQuoteId, existing.supplierQuoteId) &&
   sameNullableValue(submitted.supplierQuoteItemId, existing.supplierQuoteItemId) &&
   sameNullableValue(submitted.supplierQuoteSupplierName, existing.supplierQuoteSupplierName) &&
@@ -3273,6 +3242,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                   id: generatePrefixedId(ITEM_ID_PREFIXES.clientQuoteItem),
                   position,
                   productId: item.productId || null,
+                  productMolPercentage: calculateClientLineMol(item),
                 }));
                 return clientQuotesRepo.insertItems(quote.id, candidateItems, tx, candidateId);
               }),

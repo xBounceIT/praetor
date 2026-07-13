@@ -757,6 +757,17 @@ describe('<ClientOffersView /> MOL precision (issue #780)', () => {
     // pre-fix rounded 12,3 that silently dropped the second decimal.
     expect(screen.queryAllByDisplayValue('12,34').length).toBeGreaterThan(0);
     expect(screen.queryAllByDisplayValue('12,3')).toHaveLength(0);
+
+    const salePriceInput = screen.getAllByLabelText(
+      'crm:internalListing.salePrice',
+    )[0] as HTMLInputElement;
+    const molInput = screen.getAllByLabelText('sales:clientQuotes.molLabel')[0] as HTMLInputElement;
+    fireEvent.focus(salePriceInput);
+    fireEvent.change(salePriceInput, { target: { value: '80' } });
+    await waitFor(() => expect(molInput.value).toBe('37,50'));
+    fireEvent.change(salePriceInput, { target: { value: '40' } });
+    await waitFor(() => expect(molInput.value).toBe('-25,00'));
+    expect(molInput.checkValidity()).toBe(true);
   });
 });
 

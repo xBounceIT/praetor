@@ -130,15 +130,15 @@ describe('isSupplierLineStale', () => {
 });
 
 describe('refreshedSupplierLineFields', () => {
-  test('pulls quantity + cost and recomputes the sale price from the line MOL', () => {
+  test('pulls quantity + cost and recomputes MOL while preserving the sale price', () => {
     const fields = refreshedSupplierLineFields(
-      { productMolPercentage: 20, unitType: 'hours' },
+      { unitPrice: 100, productMolPercentage: 10, unitType: 'hours' },
       supplierItem(),
     );
     expect(fields.quantity).toBe(4);
     expect(fields.supplierQuoteUnitPrice).toBe(80);
-    // calcProductSalePrice(80, 20) = 80 / 0.8 = 100, hours→hours = identity.
-    expect(fields.unitPrice).toBe(100);
+    expect(fields.productMolPercentage).toBe(20);
+    expect(fields).not.toHaveProperty('unitPrice');
   });
 
   test('stamps the pick-time baseline alongside the live values (genuine-edit anchor)', () => {
@@ -155,30 +155,30 @@ describe('refreshedSupplierLineFields', () => {
     expect(fields.supplierQuoteBaseUnitPrice).toBe(fields.supplierQuoteUnitPrice);
   });
 
-  test("converts the sale price into the line's unit (hours→days = ×8)", () => {
+  test("converts the refreshed cost into the line's unit before deriving MOL", () => {
     const fields = refreshedSupplierLineFields(
-      { productMolPercentage: null, unitType: 'days' },
+      { unitPrice: 800, productMolPercentage: null, unitType: 'days' },
       supplierItem(),
     );
-    expect(fields.unitPrice).toBe(80 * 8);
+    expect(fields.productMolPercentage).toBe(20);
   });
 
   test('a days-priced source refreshed into a days line is NOT re-multiplied (#812)', () => {
     // The supplier item is already priced per day; treating it as hourly would ×8 it even though
     // the line is also in days. Units match → no conversion.
     const fields = refreshedSupplierLineFields(
-      { productMolPercentage: null, unitType: 'days' },
+      { unitPrice: 100, productMolPercentage: null, unitType: 'days' },
       supplierItem({ unitType: 'days', unitPrice: 80 }),
     );
-    expect(fields.unitPrice).toBe(80);
+    expect(fields.productMolPercentage).toBe(20);
   });
 
   test('converts FROM the source unit when units differ (days source → hours line = ÷8)', () => {
     const fields = refreshedSupplierLineFields(
-      { productMolPercentage: null, unitType: 'hours' },
+      { unitPrice: 20, productMolPercentage: null, unitType: 'hours' },
       supplierItem({ unitType: 'days', unitPrice: 80 }),
     );
-    expect(fields.unitPrice).toBe(10);
+    expect(fields.productMolPercentage).toBe(50);
   });
 });
 
@@ -191,5 +191,6 @@ describe('pickedSupplierLineFields', () => {
 
     expect(fields.durationMonths).toBe(24);
     expect(fields.durationUnit).toBe('years');
+    expect(fields.unitPrice).toBe(100);
   });
 });

@@ -41,6 +41,7 @@ import {
   getItemPricingContext,
   isPositiveFiniteNumber,
   MAX_MOL_PERCENTAGE,
+  MIN_MOL_PERCENTAGE,
   MOL_PERCENTAGE_DECIMALS,
   normalizeDurationForSubmit,
   normalizeDurationUnit,
@@ -50,7 +51,7 @@ import {
   parseOptionalNumberInputValue,
 } from '../../utils/numbers';
 import { getPaymentTermsOptions } from '../../utils/options';
-import { makeCostUpdater, makeMolUpdater } from '../../utils/pricingHandlers';
+import { makeCostUpdater, makeMolUpdater, makeUnitPriceUpdater } from '../../utils/pricingHandlers';
 import {
   buildProductQuickViewHref,
   buildSupplierOrderQuickViewHref,
@@ -459,7 +460,7 @@ const useClientsOrdersController = ({
       quantity: Number.NaN,
       durationUnit: 'months',
       unitType: DEFAULT_UNIT_TYPE,
-      unitPrice: 0,
+      unitPrice: Number.NaN,
       productMolPercentage: null,
     };
     setFormData((prev) => ({
@@ -1329,6 +1330,21 @@ const OrderItemsSection: React.FC<{ controller: ClientsOrdersController }> = ({ 
       ),
     },
     {
+      id: 'unitPrice',
+      header: controller.t('crm:internalListing.salePrice'),
+      accessorKey: 'unitPrice',
+      align: 'right',
+      cell: ({ row }) => (
+        <div className="min-w-[130px]">
+          <OrderItemSalePriceField
+            controller={controller}
+            index={getIndex(row)}
+            unitPrice={Number.isFinite(Number(row.unitPrice)) ? Number(row.unitPrice) : undefined}
+          />
+        </div>
+      ),
+    },
+    {
       id: 'mol',
       header: controller.t('sales:clientQuotes.molLabel', { defaultValue: 'MOL' }),
       accessorFn: (item) => getClientsOrderItemPricing(item).molPercentage,
@@ -1385,13 +1401,13 @@ const OrderItemsSection: React.FC<{ controller: ClientsOrdersController }> = ({ 
       ),
     },
     {
-      id: 'salePrice',
-      header: controller.t('crm:internalListing.salePrice'),
+      id: 'revenue',
+      header: controller.t('sales:clientQuotes.revenue'),
       accessorFn: getClientsOrderItemRevenue,
       align: 'right',
       cell: ({ row }) => (
         <OrderItemAmountField
-          label={controller.t('crm:internalListing.salePrice')}
+          label={controller.t('sales:clientQuotes.revenue')}
           value={getClientsOrderItemRevenue(row)}
           currency={controller.currency}
           className="min-w-[120px]"
@@ -1672,8 +1688,9 @@ const OrderItemMolField: React.FC<{
       <ValidatedNumberInput
         value={molPercentage}
         placeholder="0,00"
-        min={0}
+        min={MIN_MOL_PERCENTAGE}
         max={MAX_MOL_PERCENTAGE}
+        allowNegative
         aria-label={controller.t('sales:clientQuotes.molLabel', { defaultValue: 'MOL' })}
         formatDecimals={MOL_PERCENTAGE_DECIMALS}
         onValueChange={(value) => {
@@ -1687,6 +1704,39 @@ const OrderItemMolField: React.FC<{
         className={compactInputClass}
       />
       <span className="shrink-0 text-[9px] font-medium text-muted-foreground">%</span>
+    </div>
+  </div>
+);
+
+const OrderItemSalePriceField: React.FC<{
+  controller: ClientsOrdersController;
+  index: number;
+  unitPrice?: number;
+}> = ({ controller, index, unitPrice }) => (
+  <div className="space-y-1 lg:col-span-1 lg:space-y-0">
+    <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
+      {controller.t('crm:internalListing.salePrice')}
+    </FieldLabel>
+    <div className="flex h-9 items-center justify-end gap-1">
+      <ValidatedNumberInput
+        value={unitPrice}
+        placeholder="0,00"
+        min={0}
+        aria-label={controller.t('crm:internalListing.salePrice')}
+        formatDecimals={2}
+        onValueChange={(value) => {
+          if (!controller.isReadOnly) {
+            controller.setFormData(
+              makeUnitPriceUpdater<Partial<ClientsOrder>>(index, value, DEFAULT_UNIT_TYPE),
+            );
+          }
+        }}
+        disabled={controller.isReadOnly}
+        className={compactInputClass}
+      />
+      <span className="shrink-0 text-[9px] font-medium text-muted-foreground">
+        {controller.currency}
+      </span>
     </div>
   </div>
 );

@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { calcProductSalePrice, type PricingItem } from '../../utils/numbers';
-import { makeCostUpdater, makeMolUpdater } from '../../utils/pricingHandlers';
+import { makeCostUpdater, makeMolUpdater, makeUnitPriceUpdater } from '../../utils/pricingHandlers';
 
 type FormState = { items?: PricingItem[]; otherField?: string };
 
@@ -14,12 +14,13 @@ const baseItem = (overrides: Partial<PricingItem> = {}): PricingItem => ({
 });
 
 describe('makeCostUpdater', () => {
-  test('updates productCost (in hours) and unitPrice when cost changes', () => {
+  test('updates productCost and derives MOL while preserving the sale price', () => {
     const state: FormState = { items: [baseItem({ productCost: 50, productMolPercentage: 25 })] };
     const next = makeCostUpdater<FormState>(0, '80')(state);
     const updated = next.items?.[0];
     expect(updated?.productCost).toBe(80);
-    expect(updated?.unitPrice).toBeCloseTo(calcProductSalePrice(80, 25), 5);
+    expect(updated?.unitPrice).toBe(100);
+    expect(updated?.productMolPercentage).toBe(20);
   });
 
   test('returns the same reference when the cost is unchanged (no-op optimization)', () => {
@@ -54,6 +55,7 @@ describe('makeCostUpdater', () => {
     const state: FormState = { items: [baseItem({ unitType: 'days', productCost: 0 })] };
     const next = makeCostUpdater<FormState>(0, '80', 'hours')(state);
     expect(next.items?.[0].productCost).toBe(10);
+    expect(next.items?.[0].productMolPercentage).toBe(20);
   });
 
   test("writes supplierQuoteUnitPrice in the LINE's unit when item is linked to a quote", () => {
@@ -88,15 +90,46 @@ describe('makeCostUpdater', () => {
     };
     const next = makeCostUpdater<FormState>(0, '80')(state);
     expect(next.items?.[0].supplierQuoteUnitPrice).toBe(80);
-    // The sale price is recomputed from the entered per-day cost (MOL 0 → equal).
-    expect(next.items?.[0].unitPrice).toBe(80);
+    expect(next.items?.[0].unitPrice).toBe(100);
+    expect(next.items?.[0].productMolPercentage).toBe(20);
   });
 
-  test('keeps a cleared cost unfilled while calculations retain a safe zero price', () => {
+  test('keeps a cleared cost unfilled and clears MOL without overwriting the sale price', () => {
     const state: FormState = { items: [baseItem({ productCost: 50, productMolPercentage: 25 })] };
     const next = makeCostUpdater<FormState>(0, '')(state);
     expect(next.items?.[0].productCost).toBeUndefined();
-    expect(next.items?.[0].unitPrice).toBe(0);
+    expect(next.items?.[0].unitPrice).toBe(100);
+    expect(next.items?.[0].productMolPercentage).toBeNull();
+  });
+});
+
+describe('makeUnitPriceUpdater', () => {
+  test('updates sale price and automatically derives MOL from the current cost', () => {
+    const state: FormState = { items: [baseItem({ productCost: 60, productMolPercentage: 0 })] };
+    const next = makeUnitPriceUpdater<FormState>(0, '80')(state);
+    expect(next.items?.[0].unitPrice).toBe(80);
+    expect(next.items?.[0].productMolPercentage).toBe(25);
+  });
+
+  test('uses the line-unit cost for a day-priced product', () => {
+    const state: FormState = {
+      items: [baseItem({ productCost: 10, productMolPercentage: 0, unitType: 'days' })],
+    };
+    const next = makeUnitPriceUpdater<FormState>(0, '120')(state);
+    expect(next.items?.[0].productMolPercentage).toBe(33.33);
+  });
+
+  test('shows a negative MOL when the sale price is below cost', () => {
+    const state: FormState = { items: [baseItem({ productCost: 120 })] };
+    const next = makeUnitPriceUpdater<FormState>(0, '80')(state);
+    expect(next.items?.[0].productMolPercentage).toBe(-50);
+  });
+
+  test('clears the MOL when the sale price is cleared', () => {
+    const state: FormState = { items: [baseItem({ productMolPercentage: 50 })] };
+    const next = makeUnitPriceUpdater<FormState>(0, '')(state);
+    expect(next.items?.[0].unitPrice).toBeUndefined();
+    expect(next.items?.[0].productMolPercentage).toBeNull();
   });
 });
 

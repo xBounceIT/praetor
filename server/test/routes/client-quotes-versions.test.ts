@@ -544,6 +544,7 @@ describe('POST /api/sales/client-quotes/:id/versions/:versionId/restore', () => 
     expect(qcDeleteAllForQuoteMock).toHaveBeenCalledWith('q-1', TX_SENTINEL);
     expect(qcInsertMock).toHaveBeenCalled();
     expect(cqInsertItemsMock).toHaveBeenCalled();
+    expect(cqInsertItemsMock.mock.calls[0]?.[1]?.[0].productMolPercentage).toBe(50);
     // Atomically wrapped
     expect(withDbTransactionMock).toHaveBeenCalled();
     // Audit logged
