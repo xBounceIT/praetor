@@ -337,6 +337,9 @@ const isLegacyAcceptedQuote = (quote: Quote) => {
   );
 };
 
+const isCandidatePromotable = (candidate: QuoteCandidate) =>
+  candidate.state === 'active' && !candidate.isExpired && !candidate.linkedSupplierQuoteExpired;
+
 const isQuoteCodeConflictError = (err: unknown) =>
   err instanceof ApiError && err.status === 409 && err.message === 'Quote ID already exists';
 
@@ -794,12 +797,7 @@ const useClientQuotesController = ({
   };
 
   const openPromotionDialog = (quote: Quote) => {
-    const eligible = (quote.candidates || []).find(
-      (candidate) =>
-        candidate.state === 'active' &&
-        !candidate.isExpired &&
-        !candidate.linkedSupplierQuoteExpired,
-    );
+    const eligible = (quote.candidates || []).find(isCandidatePromotable);
     setPromotionQuote(quote);
     setPromotionCandidateId(eligible?.id ?? null);
   };
@@ -1854,7 +1852,14 @@ const useClientQuotesController = ({
         const history = isHistoryRow(row);
         // A linked, expired supplier quote blocks progression to sent/offer/accepted (#779).
         const supplierExpired = Boolean(row.linkedSupplierQuoteExpired);
-        const progressDisabled = history || supplierExpired;
+        const sendDisabled = history || supplierExpired;
+        const hasCandidateMetadata = Boolean(row.candidates?.length);
+        const hasPromotableCandidate = row.candidates?.some(isCandidatePromotable);
+        // Sending presents every active variant, so one blocked supplier source blocks the family.
+        // Promotion chooses exactly one winner, so the comparison must remain reachable whenever
+        // at least one candidate is eligible.
+        const promotionDisabled =
+          history || (hasCandidateMetadata ? !hasPromotableCandidate : supplierExpired);
         const progressBlockedTitle = t('sales:clientQuotes.linkedSupplierQuoteExpiredBlocks', {
           defaultValue:
             'The linked supplier quote has expired — extend it before progressing this quote.',
@@ -1978,12 +1983,12 @@ const useClientQuotesController = ({
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
-                        if (progressDisabled) return;
+                        if (sendDisabled) return;
                         handleStatusUpdate(row.id, { status: 'sent' });
                       }}
-                      disabled={progressDisabled}
+                      disabled={sendDisabled}
                       aria-label={t('sales:clientQuotes.markAsSent')}
-                      className={`p-2 rounded-lg transition-all ${progressDisabled ? 'cursor-not-allowed opacity-50 text-blue-700' : 'text-blue-700 hover:text-blue-600 hover:bg-blue-50'}`}
+                      className={`p-2 rounded-lg transition-all ${sendDisabled ? 'cursor-not-allowed opacity-50 text-blue-700' : 'text-blue-700 hover:text-blue-600 hover:bg-blue-50'}`}
                     >
                       <i className="fa-solid fa-paper-plane"></i>
                     </button>
@@ -2008,14 +2013,14 @@ const useClientQuotesController = ({
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
-                        if (progressDisabled) return;
+                        if (promotionDisabled) return;
                         openPromotionDialog(row);
                       }}
-                      disabled={progressDisabled}
+                      disabled={promotionDisabled}
                       aria-label={t('sales:clientQuotes.candidates.chooseTitle', {
                         defaultValue: 'Scegli candidato',
                       })}
-                      className={`p-2 rounded-lg transition-all ${progressDisabled ? 'cursor-not-allowed opacity-50 text-indigo-700' : 'text-indigo-700 hover:text-indigo-600 hover:bg-indigo-50'}`}
+                      className={`p-2 rounded-lg transition-all ${promotionDisabled ? 'cursor-not-allowed opacity-50 text-indigo-700' : 'text-indigo-700 hover:text-indigo-600 hover:bg-indigo-50'}`}
                     >
                       <i className="fa-solid fa-file-signature"></i>
                     </button>

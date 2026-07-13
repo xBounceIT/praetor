@@ -1072,6 +1072,61 @@ describe('<ClientQuotesView /> edit action gating (#812 round 13)', () => {
     expect(onPromoteCandidate).not.toHaveBeenCalled();
   });
 
+  test('opens candidate comparison when at least one variant remains promotable', async () => {
+    const user = userEvent.setup();
+    const quote = withSingleCandidate(
+      {
+        ...quotes[0],
+        id: 'Q-MIXED-SUPPLIER-EXPIRY',
+        status: 'sent',
+        linkedSupplierQuoteExpired: true,
+      },
+      'candidate-a',
+    );
+    const [firstCandidate] = quote.candidates ?? [];
+    if (!firstCandidate) throw new Error('Expected candidate fixture');
+    quote.candidates = [
+      {
+        ...firstCandidate,
+        linkedSupplierQuoteExpired: false,
+        isExpired: false,
+      },
+      {
+        ...firstCandidate,
+        id: 'candidate-b',
+        name: 'Variante B',
+        position: 1,
+        linkedSupplierQuoteExpired: true,
+        isExpired: false,
+      },
+    ];
+
+    render(
+      <ClientQuotesView
+        quotes={[quote]}
+        clients={clients}
+        products={[]}
+        supplierQuotes={[]}
+        currency="EUR"
+        onAddQuote={mock(() => Promise.resolve())}
+        onUpdateQuote={mock(() => Promise.resolve())}
+        onDeleteQuote={mock(() => Promise.resolve())}
+        onPromoteCandidate={mock(() => Promise.resolve())}
+      />,
+    );
+
+    await openRowActions(user);
+    const choose = await screen.findByRole('button', {
+      name: 'sales:clientQuotes.candidates.chooseTitle',
+    });
+    expect(choose).not.toBeDisabled();
+    await user.click(choose);
+
+    const comparisonDialog = await screen.findByRole('dialog');
+    expect(within(comparisonDialog).getByText('Variante A')).toBeInTheDocument();
+    expect(within(comparisonDialog).getByText('Variante B')).toBeInTheDocument();
+  });
+
   test('promotes the selected candidate of a sent quote through the dedicated action', async () => {
     const user = userEvent.setup();
     const onPromoteCandidate = mock((_quoteId: string, _candidateId: string) => Promise.resolve());
