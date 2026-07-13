@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "bun run docs:user && vite build",
+    "build": "bun run docs:user && vite build && bun scripts/verify-production-build.mjs dist",
     "preview": "vite preview",
     "i18n:check": "bun scripts/check-i18n-keys.mjs",
     "typecheck": "tsc -p server/tsconfig.json && tsc -p tsconfig.json",
