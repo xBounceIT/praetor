@@ -18,7 +18,6 @@ import {
   restoreAuthMiddlewareMock,
 } from '../helpers/authMiddlewareMock.ts';
 import { buildRouteTestApp } from '../helpers/buildRouteTestApp.ts';
-import { makeDbError } from '../helpers/dbErrors.ts';
 import { signToken } from '../helpers/jwt.ts';
 import { makeWithDbTransactionMock } from '../helpers/withDbTransactionMock.ts';
 
@@ -2130,7 +2129,10 @@ describe('client quote candidate-family create and update', () => {
     cqLockCurrentByIdMock.mockResolvedValue(gate({ status: 'draft' }));
     cqUpdateMock.mockResolvedValue(updatedQuote({ id: 'q-1', status: 'draft' }));
     qcListForQuoteMock.mockResolvedValue([existingCandidate]);
-    qcUpdateMock.mockRejectedValue(makeDbError('23505', 'idx_quote_candidates_quote_name_unique'));
+    qcUpdateMock.mockRejectedValue({
+      code: '23505',
+      constraint: 'idx_quote_candidates_quote_name_unique',
+    });
 
     const res = await testApp.inject({
       method: 'PUT',

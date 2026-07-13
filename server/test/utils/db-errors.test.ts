@@ -18,6 +18,11 @@ describe('getUniqueViolation', () => {
     expect(getUniqueViolation(err)).toBe(err);
   });
 
+  test('recognizes a structurally equivalent error from another pg module instance', () => {
+    const err = { code: '23505', constraint: 'example_unique' };
+    expect(getUniqueViolation(err) as unknown).toBe(err);
+  });
+
   test('returns null for unrelated SQLSTATE', () => {
     expect(getUniqueViolation(makeDbError('23503'))).toBeNull();
   });
