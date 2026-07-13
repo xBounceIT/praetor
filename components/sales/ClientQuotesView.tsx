@@ -2393,10 +2393,8 @@ const ClientQuoteCandidatesBar: React.FC<{ controller: ClientQuotesController }>
                   <ContextMenu key={candidate.id}>
                     <ContextMenuTrigger asChild>
                       <div
-                        className={`group -mb-px flex h-10 items-center rounded-t-lg border border-b-0 transition-colors ${
-                          isActive
-                            ? 'border-border border-t-2 border-t-primary bg-background shadow-sm'
-                            : 'border-transparent bg-muted/60 hover:bg-muted'
+                        className={`group -mb-px flex h-10 items-center rounded-t-lg border border-b-0 border-border transition-colors ${
+                          isActive ? 'bg-background' : 'bg-muted/60 hover:bg-muted'
                         }`}
                       >
                         {renamingCandidateId === candidate.id ? (
@@ -2521,7 +2519,7 @@ const ClientQuoteCandidatesBar: React.FC<{ controller: ClientQuotesController }>
                   variant="ghost"
                   disabled={!canEditComposition}
                   aria-label={t('sales:clientQuotes.candidates.addMenu')}
-                  className="mb-px rounded-t-lg rounded-b-none border border-transparent text-muted-foreground hover:border-border hover:bg-muted hover:text-foreground"
+                  className="mb-px"
                 >
                   <Plus aria-hidden="true" />
                 </Button>

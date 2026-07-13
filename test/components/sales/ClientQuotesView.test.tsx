@@ -1496,15 +1496,25 @@ describe('<ClientQuotesView /> line-item delete confirmation', () => {
       'overflow-x-auto',
       'overflow-y-hidden',
     );
-    await user.click(screen.getByRole('button', { name: 'sales:clientQuotes.candidates.addMenu' }));
+    const addVariantButton = screen.getByRole('button', {
+      name: 'sales:clientQuotes.candidates.addMenu',
+    });
+    expect(addVariantButton).toHaveAttribute('data-variant', 'ghost');
+    expect(addVariantButton).not.toHaveClass('border');
+    expect(addVariantButton).not.toHaveClass('rounded-t-lg');
+    await user.click(addVariantButton);
     expect(
       await screen.findByRole('menuitem', { name: 'sales:clientQuotes.candidates.duplicate' }),
     ).toBeInTheDocument();
     await user.click(screen.getByRole('menuitem', { name: 'sales:clientQuotes.candidates.add' }));
     expect(screen.getByText('Variante B')).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: /Variante B/ }).parentElement).toHaveClass(
-      'border-t-2',
-      'border-t-primary',
+    const activeTabFrame = screen.getByRole('tab', { name: /Variante B/ }).parentElement;
+    expect(activeTabFrame).toHaveClass('border-border');
+    expect(activeTabFrame).not.toHaveClass('border-t-2');
+    expect(activeTabFrame).not.toHaveClass('border-t-primary');
+    expect(activeTabFrame).not.toHaveClass('shadow-sm');
+    expect(screen.getByRole('tab', { name: /Variante A/ }).parentElement).toHaveClass(
+      'border-border',
     );
 
     const renameButtons = screen.getAllByRole('button', {
