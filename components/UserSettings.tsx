@@ -3,6 +3,7 @@ import {
   AlertCircle,
   CalendarDays,
   Check,
+  CircleHelp,
   Contrast,
   Globe,
   KeyRound,
@@ -60,6 +61,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { ApiError } from '@/services/api/client';
 import praetorFaviconUrl from '../praetor-favicon.png';
@@ -2208,58 +2210,76 @@ const McpSetupPromptField: React.FC<{ controller: UserSettingsController }> = ({
   </Field>
 );
 
-const McpTokenCreateForm: React.FC<{ controller: UserSettingsController }> = ({ controller }) => (
-  <form
-    onSubmit={controller.handleCreateMcpToken}
-    className="grid grid-cols-1 gap-3 md:grid-cols-[1fr_minmax(10rem,auto)_auto]"
-  >
-    <Field>
-      <FieldLabel htmlFor="mcp-token-name" required>
-        {controller.t('mcp.nameLabel')}
-      </FieldLabel>
-      <Input
-        id="mcp-token-name"
-        type="text"
-        value={controller.mcpTokenName}
-        onChange={(event) => controller.setMcpTokenName(event.target.value)}
-        placeholder={controller.t('mcp.namePlaceholder')}
-        maxLength={120}
-      />
-    </Field>
-    <Field>
-      <FieldLabel htmlFor="mcp-token-scope">{controller.t('mcp.scopeLabel')}</FieldLabel>
-      <Select
-        value={controller.mcpTokenScope}
-        onValueChange={(value) => controller.setMcpTokenScope(value as McpTokenScope)}
-      >
-        <SelectTrigger id="mcp-token-scope">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="full">{controller.t('mcp.scopeFull')}</SelectItem>
-          <SelectItem value="read_only">{controller.t('mcp.scopeReadOnly')}</SelectItem>
-        </SelectContent>
-      </Select>
-      <FieldDescription>
-        {controller.mcpTokenScope === 'read_only'
-          ? controller.t('mcp.scopeReadOnlyDescription')
-          : controller.t('mcp.scopeFullDescription')}
-      </FieldDescription>
-    </Field>
-    <Button
-      type="submit"
-      disabled={controller.isCreatingMcpToken || !controller.mcpTokenName.trim()}
-      className="self-end"
+const McpTokenCreateForm: React.FC<{ controller: UserSettingsController }> = ({ controller }) => {
+  const scopeDescription =
+    controller.mcpTokenScope === 'read_only'
+      ? controller.t('mcp.scopeReadOnlyDescription')
+      : controller.t('mcp.scopeFullDescription');
+
+  return (
+    <form
+      onSubmit={controller.handleCreateMcpToken}
+      className="grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,2fr)_minmax(10rem,1fr)_auto]"
     >
-      {controller.isCreatingMcpToken ? (
-        <i className="fa-solid fa-circle-notch fa-spin"></i>
-      ) : (
-        <McpIcon className="size-4" />
-      )}
-      {controller.t('mcp.create')}
-    </Button>
-  </form>
-);
+      <Field>
+        <FieldLabel htmlFor="mcp-token-name" className="min-h-6" required>
+          {controller.t('mcp.nameLabel')}
+        </FieldLabel>
+        <Input
+          id="mcp-token-name"
+          type="text"
+          value={controller.mcpTokenName}
+          onChange={(event) => controller.setMcpTokenName(event.target.value)}
+          placeholder={controller.t('mcp.namePlaceholder')}
+          maxLength={120}
+        />
+      </Field>
+      <Field>
+        <div className="flex items-center gap-1">
+          <FieldLabel htmlFor="mcp-token-scope">{controller.t('mcp.scopeLabel')}</FieldLabel>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-xs"
+                className="text-muted-foreground hover:text-foreground"
+                aria-label={scopeDescription}
+              >
+                <CircleHelp aria-hidden="true" className="size-3.5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>{scopeDescription}</TooltipContent>
+          </Tooltip>
+        </div>
+        <Select
+          value={controller.mcpTokenScope}
+          onValueChange={(value) => controller.setMcpTokenScope(value as McpTokenScope)}
+        >
+          <SelectTrigger id="mcp-token-scope">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="full">{controller.t('mcp.scopeFull')}</SelectItem>
+            <SelectItem value="read_only">{controller.t('mcp.scopeReadOnly')}</SelectItem>
+          </SelectContent>
+        </Select>
+      </Field>
+      <Button
+        type="submit"
+        disabled={controller.isCreatingMcpToken || !controller.mcpTokenName.trim()}
+        className="self-end"
+      >
+        {controller.isCreatingMcpToken ? (
+          <i className="fa-solid fa-circle-notch fa-spin"></i>
+        ) : (
+          <McpIcon className="size-4" />
+        )}
+        {controller.t('mcp.create')}
+      </Button>
+    </form>
+  );
+};
 
 const McpRawTokenNotice: React.FC<{ controller: UserSettingsController }> = ({ controller }) => {
   if (!controller.rawMcpToken) return null;
