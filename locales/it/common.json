@@ -260,7 +260,7 @@
     "resetColumns": "Ripristina colonne",
     "export": "Esporta",
     "exportToCsv": "Esporta in CSV",
-    "saveColumnOrder": "Salvare l'ordine?",
+    "saveColumnOrder": "Salvare la vista personalizzata?",
     "saveColumnOrderTip": "Vuoi salvare questo ordine in una nuova vista personalizzata?",
     "customViews": "Viste personalizzate",
     "addCustomView": "Aggiungi vista",

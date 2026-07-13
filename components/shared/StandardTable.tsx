@@ -2850,13 +2850,6 @@ const StandardTableToolbar = <T extends object>({
 
   return (
     <>
-      <StandardTableToolbarButton
-        label={t('table.exportToCsv')}
-        iconClass="fa-file-export"
-        onClick={handleExportToCsv}
-        disabled={processedRows.length === 0}
-        text={t('table.export')}
-      />
       {showSaveColumnOrderTip && (
         <StandardTableToolbarButton
           label={t('table.saveColumnOrderTip')}
@@ -2867,6 +2860,13 @@ const StandardTableToolbar = <T extends object>({
           text={t('table.saveColumnOrder')}
         />
       )}
+      <StandardTableToolbarButton
+        label={t('table.exportToCsv')}
+        iconClass="fa-file-export"
+        onClick={handleExportToCsv}
+        disabled={processedRows.length === 0}
+        text={t('table.export')}
+      />
       <StandardTableToolbarButton
         label={t('table.decreaseFont')}
         icon={<ZoomOut className="size-3.5" aria-hidden="true" />}

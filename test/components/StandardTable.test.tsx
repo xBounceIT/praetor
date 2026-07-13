@@ -696,7 +696,11 @@ describe('<StandardTable />', () => {
 
     dragColumnAfter('Name', 'Age');
     const saveOrderButton = screen.getByRole('button', { name: 'table.saveColumnOrderTip' });
+    const exportButton = screen.getByRole('button', { name: 'table.exportToCsv' });
     expect(saveOrderButton).toHaveTextContent('table.saveColumnOrder');
+    expect(saveOrderButton.closest('[data-slot="tooltip-trigger"]')?.nextElementSibling).toBe(
+      exportButton.closest('[data-slot="tooltip-trigger"]'),
+    );
 
     const user = userEvent.setup();
     await user.click(saveOrderButton);
