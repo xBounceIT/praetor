@@ -219,14 +219,15 @@ describe('linked-sale guards', () => {
 describe('findItemSnapshotsForQuote', () => {
   test('maps snapshot row fields with parsed numbers and unitType normalization', async () => {
     // Projected columns in order:
-    // id, productId, quantity, productCost, productMolPercentage, supplierQuoteId,
+    // id, candidateId, productId, quantity, productCost, productMolPercentage, supplierQuoteId,
     // supplierQuoteItemId, supplierQuoteSupplierName, supplierQuoteUnitPrice, unitType
     exec.enqueue({
-      rows: [['qi-1', 'p-1', '3', '5', '20', null, null, null, null, null]],
+      rows: [['qi-1', 'qc-1', 'p-1', '3', '5', '20', null, null, null, null, null]],
     });
     const result = await clientQuotesRepo.findItemSnapshotsForQuote('cq-1', testDb);
     expect(result[0]).toEqual({
       id: 'qi-1',
+      candidateId: 'qc-1',
       productId: 'p-1',
       quantity: 3,
       productCost: 5,

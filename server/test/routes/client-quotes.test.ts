@@ -1609,6 +1609,55 @@ describe('client quote candidate-family create and update', () => {
     expect(qcUpdateMock).not.toHaveBeenCalled();
   });
 
+  test('rejects a line id that belongs to a different candidate', async () => {
+    setupCreate();
+    cqFindCurrentMock.mockResolvedValue(gate({ status: 'draft' }));
+    qcListForQuoteMock.mockResolvedValue([
+      activeCandidate({ id: 'qc-a', name: 'Variante A' }),
+      activeCandidate({ id: 'qc-b', name: 'Variante B', position: 1 }),
+    ]);
+    cqFindItemSnapshotsForQuoteMock.mockResolvedValue([
+      {
+        id: 'qi-a',
+        candidateId: 'qc-a',
+        productId: null,
+        quantity: 2,
+        productCost: 50,
+        productMolPercentage: null,
+        supplierQuoteId: 'sq-9',
+        supplierQuoteItemId: 'sqi-9',
+        supplierQuoteSupplierName: 'Acme',
+        supplierQuoteUnitPrice: 50,
+        unitType: 'hours',
+      },
+    ]);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/sales/client-quotes/q-1',
+      headers: authHeader(),
+      payload: {
+        clientId: 'c1',
+        clientName: 'Client',
+        status: 'draft',
+        candidates: [
+          {
+            id: 'qc-b',
+            name: 'Variante B',
+            items: [freshLine({ id: 'qi-a' })],
+            expirationDate: '2999-12-31',
+            communicationChannelId: 'qcc_email',
+          },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body).error).toContain('does not belong to candidate');
+    expect(sqGetQuoteItemSnapshotsMock).not.toHaveBeenCalled();
+    expect(cqReplaceItemsMock).not.toHaveBeenCalled();
+  });
+
   test('returns supplier eligibility and records an audit after a candidate-family save', async () => {
     setupCreate();
     const existingCandidate = activeCandidate();
@@ -1903,6 +1952,7 @@ describe('client quote candidate-family create and update', () => {
     cqFindItemSnapshotsForQuoteMock.mockResolvedValue([
       {
         id: 'qi-local',
+        candidateId: 'qc-local',
         productId: null,
         quantity: 2,
         productCost: 50,
@@ -1969,6 +2019,7 @@ describe('client quote candidate-family create and update', () => {
     cqFindItemSnapshotsForQuoteMock.mockResolvedValue([
       {
         id: 'qi-local',
+        candidateId: 'qc-local',
         productId: null,
         quantity: 2,
         productCost: 50,

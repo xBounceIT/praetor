@@ -101,30 +101,33 @@ type ResolvedQuoteItem = IncomingQuoteItem & QuoteItemSnapshot;
 
 const indexExistingQuoteItems = (
   snapshots: clientQuotesRepo.ExistingQuoteItemSnapshot[],
+  candidateId?: string,
 ): Map<string, IncomingQuoteItem & QuoteItemSnapshot> =>
   new Map(
-    snapshots.map((snapshot) => [
-      snapshot.id,
-      {
-        id: snapshot.id,
-        productId: snapshot.productId,
-        productName: '',
-        quantity: snapshot.quantity,
-        unitPrice: 0,
-        discount: 0,
-        // These placeholders only support the cost/MOL retained-line comparison; duration and
-        // the remaining commercial fields always come from the submitted candidate line.
-        durationMonths: 1,
-        durationUnit: 'months' as const,
-        productCost: snapshot.productCost,
-        productMolPercentage: snapshot.productMolPercentage,
-        supplierQuoteId: snapshot.supplierQuoteId,
-        supplierQuoteItemId: snapshot.supplierQuoteItemId,
-        supplierQuoteSupplierName: snapshot.supplierQuoteSupplierName,
-        supplierQuoteUnitPrice: snapshot.supplierQuoteUnitPrice,
-        unitType: snapshot.unitType,
-      },
-    ]),
+    snapshots
+      .filter((snapshot) => candidateId === undefined || snapshot.candidateId === candidateId)
+      .map((snapshot) => [
+        snapshot.id,
+        {
+          id: snapshot.id,
+          productId: snapshot.productId,
+          productName: '',
+          quantity: snapshot.quantity,
+          unitPrice: 0,
+          discount: 0,
+          // These placeholders only support the cost/MOL retained-line comparison; duration and
+          // the remaining commercial fields always come from the submitted candidate line.
+          durationMonths: 1,
+          durationUnit: 'months' as const,
+          productCost: snapshot.productCost,
+          productMolPercentage: snapshot.productMolPercentage,
+          supplierQuoteId: snapshot.supplierQuoteId,
+          supplierQuoteItemId: snapshot.supplierQuoteItemId,
+          supplierQuoteSupplierName: snapshot.supplierQuoteSupplierName,
+          supplierQuoteUnitPrice: snapshot.supplierQuoteUnitPrice,
+          unitType: snapshot.unitType,
+        },
+      ]),
   );
 
 const isCandidateFamilyExpired = (
@@ -805,7 +808,7 @@ const prepareCandidateBody = async (
   raw: unknown,
   index: number,
   reply: FastifyReply,
-  existingItemsById?: Map<string, IncomingQuoteItem & QuoteItemSnapshot>,
+  existingSnapshots?: clientQuotesRepo.ExistingQuoteItemSnapshot[],
 ): Promise<PreparedCandidate | null> => {
   if (!raw || typeof raw !== 'object') {
     badRequest(reply, 'candidates[' + index + '] must be an object');
@@ -824,6 +827,19 @@ const prepareCandidateBody = async (
   const itemResult = normalizeQuoteItems(candidate.items);
   if (!itemResult.ok) {
     badRequest(reply, itemResult.message);
+    return null;
+  }
+  const candidateId =
+    typeof candidate.id === 'string' && candidate.id.trim() ? candidate.id.trim() : undefined;
+  const foreignItem = itemResult.items.find(
+    (item) =>
+      item.id &&
+      existingSnapshots?.some(
+        (snapshot) => snapshot.id === item.id && snapshot.candidateId !== candidateId,
+      ),
+  );
+  if (foreignItem) {
+    badRequest(reply, `items id "${foreignItem.id}" does not belong to candidate "${candidateId}"`);
     return null;
   }
   const expirationResult = parseDateString(
@@ -848,6 +864,10 @@ const prepareCandidateBody = async (
   }
   const discount = discountResult.value ?? 0;
   const discountType = candidate.discountType === 'currency' ? 'currency' : 'percentage';
+  const existingItemsById =
+    existingSnapshots && candidateId
+      ? indexExistingQuoteItems(existingSnapshots, candidateId)
+      : undefined;
   let resolvedItems: ResolvedQuoteItem[];
   try {
     resolvedItems = await resolveQuoteItemSnapshots(itemResult.items, existingItemsById);
@@ -861,7 +881,7 @@ const prepareCandidateBody = async (
     return null;
   }
   return {
-    id: typeof candidate.id === 'string' && candidate.id.trim() ? candidate.id.trim() : undefined,
+    id: candidateId,
     name: nameResult.value,
     paymentTerms:
       typeof candidate.paymentTerms === 'string' && candidate.paymentTerms
@@ -1609,7 +1629,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         if (isCandidateFamilyExpired(existingCandidates, currentEffective === 'expired')) {
           return replyExpiredQuoteReadOnly(idResult.value, request, reply);
         }
-        const existingItemsById = indexExistingQuoteItems(existingSnapshots);
         const preparedCandidates: PreparedCandidate[] = [];
         const names = new Set<string>();
         for (let index = 0; index < candidates.length; index++) {
@@ -1617,7 +1636,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             candidates[index],
             index,
             reply,
-            existingItemsById,
+            existingSnapshots,
           );
           if (!prepared) return;
           const normalizedName = prepared.name.toLocaleLowerCase();

@@ -416,6 +416,7 @@ export const findAnyLinkedSale = async (
 
 export type ExistingQuoteItemSnapshot = {
   id: string;
+  candidateId: string;
   productId: string | null;
   // The stored quantity — the supplier-item sync diffs the incoming line against it to tell a
   // genuine client edit from a stale-snapshot re-save (issue #779).
@@ -436,6 +437,7 @@ export const findItemSnapshotsForQuote = async (
   const rows = await exec
     .select({
       id: quoteItems.id,
+      candidateId: QUOTE_ITEM_PROJECTION.candidateId,
       productId: quoteItems.productId,
       quantity: quoteItems.quantity,
       productCost: quoteItems.productCost,
@@ -450,6 +452,7 @@ export const findItemSnapshotsForQuote = async (
     .where(eq(quoteItems.quoteId, quoteId));
   return rows.map((row) => ({
     id: row.id,
+    candidateId: row.candidateId,
     productId: row.productId,
     quantity: parseDbNumber(row.quantity, 0),
     productCost: parseDbNumber(row.productCost, 0),
