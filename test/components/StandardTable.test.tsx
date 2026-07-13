@@ -686,6 +686,96 @@ describe('<StandardTable />', () => {
     expect(getRenderedColumnIds()).toEqual(['name', 'age', 'actions']);
   });
 
+  test('offers to save a manually changed column order in a new custom view', async () => {
+    render(
+      <StandardTable<Row> title="Save Column Order" data={sampleRows} columns={sampleColumns} />,
+    );
+    expect(
+      screen.queryByRole('button', { name: 'table.saveColumnOrderTip' }),
+    ).not.toBeInTheDocument();
+
+    dragColumnAfter('Name', 'Age');
+    const saveOrderButton = screen.getByRole('button', { name: 'table.saveColumnOrderTip' });
+    const exportButton = screen.getByRole('button', { name: 'table.exportToCsv' });
+    expect(saveOrderButton).toHaveTextContent('table.saveColumnOrder');
+    expect(saveOrderButton.closest('[data-slot="tooltip-trigger"]')?.nextElementSibling).toBe(
+      exportButton.closest('[data-slot="tooltip-trigger"]'),
+    );
+
+    const user = userEvent.setup();
+    await user.click(saveOrderButton);
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+    expect(screen.getByText('table.addCustomView')).toBeInTheDocument();
+    expect(getCustomViewColumnIds()).toEqual(['age', 'name']);
+
+    await user.type(screen.getByPlaceholderText('table.viewNamePlaceholder'), 'Age first');
+    await user.click(screen.getByRole('button', { name: 'table.save' }));
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'table.saveColumnOrderTip' }),
+    ).not.toBeInTheDocument();
+    expect(
+      JSON.parse(localStorage.getItem('praetor_table_customviews_save_column_order') ?? '[]'),
+    ).toEqual([expect.objectContaining({ name: 'Age first', columnOrder: ['age', 'name'] })]);
+  });
+
+  test('hides the save-order suggestion when columns return to their starting order', () => {
+    render(
+      <StandardTable<Row>
+        title="Reverted Column Order"
+        data={sampleRows}
+        columns={sampleColumns}
+      />,
+    );
+
+    dragColumnAfter('Name', 'Age');
+    expect(screen.getByRole('button', { name: 'table.saveColumnOrderTip' })).toBeInTheDocument();
+
+    dragColumnAfter('Age', 'Name');
+    expect(
+      screen.queryByRole('button', { name: 'table.saveColumnOrderTip' }),
+    ).not.toBeInTheDocument();
+  });
+
+  test('reconciles the changed-order baseline when columns are added or removed', () => {
+    const rankColumn = {
+      header: 'Rank',
+      id: 'rank',
+      accessorFn: (row: Row) => row.age,
+    };
+    const { rerender } = render(
+      <StandardTable<Row> title="Dynamic Column Order" data={sampleRows} columns={sampleColumns} />,
+    );
+
+    dragColumnAfter('Name', 'Age');
+    rerender(
+      <StandardTable<Row>
+        title="Dynamic Column Order"
+        data={sampleRows}
+        columns={[...sampleColumns, rankColumn]}
+      />,
+    );
+    dragColumnAfter('Age', 'Name');
+    expect(
+      screen.queryByRole('button', { name: 'table.saveColumnOrderTip' }),
+    ).not.toBeInTheDocument();
+
+    dragColumnAfter('Name', 'Age');
+    expect(screen.getByRole('button', { name: 'table.saveColumnOrderTip' })).toBeInTheDocument();
+    rerender(
+      <StandardTable<Row>
+        title="Dynamic Column Order"
+        data={sampleRows}
+        columns={[sampleColumns[1], rankColumn]}
+      />,
+    );
+    expect(getRenderedColumnIds()).toEqual(['age', 'rank']);
+    expect(
+      screen.queryByRole('button', { name: 'table.saveColumnOrderTip' }),
+    ).not.toBeInTheDocument();
+  });
+
   test('reset columns restores the definition order after a drag', async () => {
     render(<StandardTable<Row> title="Reset Order" data={sampleRows} columns={sampleColumns} />);
     dragColumnAfter('Name', 'Age');
@@ -694,6 +784,9 @@ describe('<StandardTable />', () => {
     const user = await openColumnSettings();
     await user.click(screen.getByText('table.resetColumns'));
     expect(getRenderedColumnIds()).toEqual(['name', 'age']);
+    expect(
+      screen.queryByRole('button', { name: 'table.saveColumnOrderTip' }),
+    ).not.toBeInTheDocument();
   });
 
   // ---------------------------------------------------------------------------

@@ -169,6 +169,32 @@ describe('<StandardTable /> server-backed sharing', () => {
     expect(await screen.findByText('My Owned View')).toBeInTheDocument();
   });
 
+  test('disables the save-order suggestion while server views are loading', async () => {
+    let resolveList: ((views: SavedViewDto[]) => void) | undefined;
+    listMock.mockImplementationOnce(
+      () =>
+        new Promise<SavedViewDto[]>((resolve) => {
+          resolveList = resolve;
+        }),
+    );
+    renderTable({ viewKey: 'people.directory' });
+    await waitFor(() => expect(listMock).toHaveBeenCalledTimes(1));
+
+    fireEvent.keyDown(screen.getByLabelText('table.reorderColumnHandle: Name'), {
+      key: 'ArrowRight',
+    });
+    const saveOrderButton = screen.getByRole('button', { name: 'table.saveColumnOrderTip' });
+    expect(saveOrderButton).toBeDisabled();
+
+    if (!resolveList) throw new Error('View list request did not start');
+    act(() => resolveList?.([]));
+    await waitFor(() => expect(saveOrderButton).toBeEnabled());
+
+    const user = userEvent.setup();
+    await user.click(saveOrderButton);
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+  });
+
   test('keeps the persisted active view when the initial load fails (does not clear it)', async () => {
     localStorage.setItem('praetor_table_activeview_people', 'sv-keep');
     // The initial list fails (transient outage / 500).
