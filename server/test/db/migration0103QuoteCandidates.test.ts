@@ -1,10 +1,12 @@
 import { describe, expect, test } from 'bun:test';
 
 const migrationSql = await Bun.file(
-  new URL('../../db/migrations/0101_quote_candidates.sql', import.meta.url),
+  new URL('../../db/migrations/0103_quote_candidates.sql', import.meta.url),
 ).text();
+const readJournal = async () =>
+  Bun.file(new URL('../../db/migrations/meta/_journal.json', import.meta.url)).json();
 
-describe('migration 0101 quote candidates', () => {
+describe('migration 0103 quote candidates', () => {
   test('backfills one candidate per existing quote without changing the document code', () => {
     expect(migrationSql).toContain("'Variante A'");
     expect(migrationSql).toContain("THEN 'selected' ELSE 'active' END");
@@ -43,5 +45,21 @@ describe('migration 0101 quote candidates', () => {
   test('enforces unique names and one selected candidate per quote', () => {
     expect(migrationSql).toContain('CREATE UNIQUE INDEX "idx_quote_candidates_quote_name_unique"');
     expect(migrationSql).toContain('CREATE UNIQUE INDEX "idx_quote_candidates_one_selected"');
+  });
+
+  test('is registered after the supplier-order pricing migrations', async () => {
+    const journal = (await readJournal()) as {
+      entries: Array<{ idx: number; tag: string }>;
+    };
+    const migrationIndex = journal.entries.findIndex(
+      (entry) => entry.tag === '0103_quote_candidates',
+    );
+
+    expect(journal.entries[migrationIndex - 1]).toEqual(
+      expect.objectContaining({ idx: 102, tag: '0102_backfill_legacy_supplier_order_pricing' }),
+    );
+    expect(journal.entries[migrationIndex]).toEqual(
+      expect.objectContaining({ idx: 103, tag: '0103_quote_candidates' }),
+    );
   });
 });
