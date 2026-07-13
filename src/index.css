@@ -509,11 +509,11 @@ tr[data-standard-table-font-size] [data-slot="button"][data-size="icon-sm"] {
 }
 
 .version-history-content[data-state="open"] {
-  animation: version-history-content-down 180ms ease-out 200ms both;
+  animation: version-history-content-down 200ms ease-in-out 200ms both;
 }
 
 .version-history-content[data-state="closed"] {
-  animation: version-history-content-up 150ms ease-in both;
+  animation: version-history-content-up 200ms ease-in-out both;
 }
 
 @media (prefers-reduced-motion: reduce) {

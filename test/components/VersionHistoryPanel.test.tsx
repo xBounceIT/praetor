@@ -36,10 +36,10 @@ describe('<VersionHistoryPanel />', () => {
     const css = await Bun.file(new URL('../../src/index.css', import.meta.url)).text();
 
     expect(css).toMatch(
-      /\.version-history-content\[data-state="open"\]\s*{\s*animation: version-history-content-down 180ms ease-out 200ms both;/,
+      /\.version-history-content\[data-state="open"\]\s*{\s*animation: version-history-content-down 200ms ease-in-out 200ms both;/,
     );
     expect(css).toMatch(
-      /\.version-history-content\[data-state="closed"\]\s*{\s*animation: version-history-content-up 150ms ease-in both;/,
+      /\.version-history-content\[data-state="closed"\]\s*{\s*animation: version-history-content-up 200ms ease-in-out both;/,
     );
   });
 
@@ -55,8 +55,10 @@ describe('<VersionHistoryPanel />', () => {
     expect(panel).toHaveClass('delay-0');
     expect(trigger).toHaveAttribute('aria-expanded', 'true');
     expect(trigger).not.toHaveAttribute('title');
-    expect(trigger.firstElementChild).toHaveClass('fa-chevron-right');
+    expect(trigger.firstElementChild).toHaveClass('fa-chevron-left');
     expect(content).toHaveClass('version-history-content');
+    expect(content).toHaveAttribute('aria-hidden', 'false');
+    expect(content).not.toHaveAttribute('inert');
     expect(screen.getByText(labels.reasonUpdate)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: labels.restoreButton })).toBeInTheDocument();
 
@@ -67,10 +69,11 @@ describe('<VersionHistoryPanel />', () => {
     fireEvent.click(trigger);
 
     expect(panel).toHaveClass('w-12');
-    expect(panel).toHaveClass('delay-150');
+    expect(panel).toHaveClass('delay-200');
     expect(trigger).toHaveAttribute('aria-expanded', 'false');
-    expect(trigger.firstElementChild).toHaveClass('fa-chevron-left');
-    expect(screen.queryByText(labels.reasonUpdate)).not.toBeInTheDocument();
+    expect(trigger.firstElementChild).toHaveClass('fa-chevron-right');
+    expect(content).toHaveAttribute('aria-hidden', 'true');
+    expect(content).toHaveAttribute('inert');
     expect(screen.queryByRole('button', { name: labels.restoreButton })).not.toBeInTheDocument();
 
     fireEvent.click(trigger);
@@ -78,7 +81,9 @@ describe('<VersionHistoryPanel />', () => {
     expect(panel).toHaveClass('w-72');
     expect(panel).toHaveClass('delay-0');
     expect(trigger).toHaveAttribute('aria-expanded', 'true');
-    expect(trigger.firstElementChild).toHaveClass('fa-chevron-right');
+    expect(trigger.firstElementChild).toHaveClass('fa-chevron-left');
+    expect(content).toHaveAttribute('aria-hidden', 'false');
+    expect(content).not.toHaveAttribute('inert');
     expect(screen.getByText(labels.reasonUpdate)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: labels.restoreButton })).toBeInTheDocument();
   });

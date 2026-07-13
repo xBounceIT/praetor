@@ -54,8 +54,8 @@ export function VersionHistoryPanel<Row extends VersionHistoryPanelRow>({
       open={isOpen}
       onOpenChange={setIsOpen}
       className={cn(
-        'hidden max-h-[90vh] flex-shrink-0 flex-col overflow-hidden rounded-lg border border-border bg-background text-foreground shadow-lg transition-[width] duration-200 ease-out motion-reduce:transition-none animate-in fade-in slide-in-from-right 2xl:flex',
-        isOpen ? 'w-72 delay-0' : 'w-12 delay-150 motion-reduce:delay-0',
+        'hidden max-h-[90vh] flex-shrink-0 flex-col overflow-hidden rounded-lg border border-border bg-background text-foreground shadow-lg transition-[width] duration-200 ease-in-out motion-reduce:transition-none animate-in fade-in slide-in-from-right 2xl:flex',
+        isOpen ? 'w-72 delay-0' : 'w-12 delay-200 motion-reduce:delay-0',
       )}
     >
       <Tooltip>
@@ -73,7 +73,7 @@ export function VersionHistoryPanel<Row extends VersionHistoryPanelRow>({
               <i
                 className={cn(
                   'fa-solid text-[10px] text-muted-foreground',
-                  isOpen ? 'fa-chevron-right' : 'fa-chevron-left',
+                  isOpen ? 'fa-chevron-left' : 'fa-chevron-right',
                 )}
                 aria-hidden="true"
               ></i>
@@ -95,7 +95,12 @@ export function VersionHistoryPanel<Row extends VersionHistoryPanelRow>({
           {labels.title}
         </TooltipContent>
       </Tooltip>
-      <CollapsibleContent className="version-history-content min-h-0 flex-1">
+      <CollapsibleContent
+        forceMount
+        aria-hidden={!isOpen}
+        inert={!isOpen}
+        className="version-history-content min-h-0 flex-1"
+      >
         <div className="flex h-full min-h-0 flex-col">
           <div className="flex-1 overflow-y-auto">
             {isLoading && (
