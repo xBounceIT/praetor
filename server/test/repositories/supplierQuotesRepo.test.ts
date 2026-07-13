@@ -159,6 +159,16 @@ describe('listAll', () => {
       'coi.supplier_quote_item_id in (\n          select sqi.id from supplier_quote_items sqi where sqi.quote_id = "supplier_quotes"."id"',
     );
   });
+
+  test('expand-phase null candidate rows resolve through the quote default candidate', async () => {
+    exec.enqueue({ rows: [] });
+    await supplierQuotesRepo.listAll(testDb);
+    const sql = exec.calls[0].sql.toLowerCase();
+    expect(sql).toContain('qcand.id = coalesce(\n        qi.candidate_id');
+    expect(sql).toContain('from quote_candidates default_candidate');
+    expect(sql).toContain('default_candidate.quote_id = qi.quote_id');
+    expect(sql).toContain('order by default_candidate.position, default_candidate.id');
+  });
 });
 
 describe('listAllItems', () => {

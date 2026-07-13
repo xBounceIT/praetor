@@ -1,7 +1,7 @@
-import { and, asc, desc, eq, isNull, ne, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, getTableColumns, isNull, ne, or, sql } from 'drizzle-orm';
 import { type DbExecutor, db, runAtomically } from '../db/drizzle.ts';
 import { customerOffers } from '../db/schema/customerOffers.ts';
-import { quoteItems, quotes } from '../db/schema/quotes.ts';
+import { quoteCandidates, quoteItems, quotes } from '../db/schema/quotes.ts';
 import { sales } from '../db/schema/sales.ts';
 import { normalizeNullableDateOnly } from '../utils/date.ts';
 import { type DurationUnit, normalizeDurationUnit } from '../utils/duration-unit.ts';
@@ -74,6 +74,22 @@ const communicationChannelNameSubquery = sql<string>`(
   WHERE qcc.id = "quotes"."communication_channel_id"
   LIMIT 1
 )`;
+
+const defaultCandidateIdSubquery = (quoteId: string | typeof quoteItems.quoteId) => sql<string>`(
+  SELECT default_candidate.id
+  FROM quote_candidates default_candidate
+  WHERE default_candidate.quote_id = ${quoteId}
+  ORDER BY default_candidate.position, default_candidate.id
+  LIMIT 1
+)`;
+
+const QUOTE_ITEM_PROJECTION = {
+  ...getTableColumns(quoteItems),
+  candidateId: sql<string>`COALESCE(
+    ${quoteItems.candidateId},
+    ${defaultCandidateIdSubquery(quoteItems.quoteId)}
+  )`.as('candidate_id'),
+} as const;
 
 // The earliest expiration among the supplier quotes this client quote SOURCES via its product
 // lines (issue #779 follow-up: the 1:1 header link was removed). The route's progression guard and
@@ -198,12 +214,25 @@ const mapItem = (row: typeof quoteItems.$inferSelect): ClientQuoteItem => ({
 });
 
 const candidateItemsPredicate = (quoteId: string, candidateId: string) =>
-  candidateId === quoteId
-    ? or(
-        eq(quoteItems.candidateId, candidateId),
-        and(eq(quoteItems.quoteId, quoteId), isNull(quoteItems.candidateId)),
-      )
-    : eq(quoteItems.candidateId, candidateId);
+  or(
+    eq(quoteItems.candidateId, candidateId),
+    and(
+      eq(quoteItems.quoteId, quoteId),
+      isNull(quoteItems.candidateId),
+      sql`${candidateId} = ${defaultCandidateIdSubquery(quoteId)}`,
+    ),
+  );
+
+const resolvePrimaryCandidateId = async (quoteId: string, exec: DbExecutor): Promise<string> => {
+  const rows = await exec
+    .select({ id: quoteCandidates.id })
+    .from(quoteCandidates)
+    .where(and(eq(quoteCandidates.quoteId, quoteId), ne(quoteCandidates.state, 'discarded')))
+    .orderBy(asc(quoteCandidates.position), asc(quoteCandidates.id))
+    .limit(1);
+  if (!rows[0]) throw new Error(`No active quote candidate found for ${quoteId}`);
+  return rows[0].id;
+};
 
 export const listAll = async (exec: DbExecutor = db): Promise<ClientQuote[]> => {
   const rows = await exec
@@ -224,7 +253,7 @@ export const findById = async (id: string, exec: DbExecutor = db): Promise<Clien
 
 export const listAllItems = async (exec: DbExecutor = db): Promise<ClientQuoteItem[]> => {
   const rows = await exec
-    .select()
+    .select(QUOTE_ITEM_PROJECTION)
     .from(quoteItems)
     .orderBy(
       asc(quoteItems.quoteId),
@@ -470,11 +499,11 @@ export const findItemsForCandidate = async (
   exec: DbExecutor = db,
 ): Promise<ClientQuoteItem[]> => {
   const rows = await exec
-    .select()
+    .select(QUOTE_ITEM_PROJECTION)
     .from(quoteItems)
     .where(candidateItemsPredicate(quoteId, candidateId))
     .orderBy(asc(quoteItems.position), asc(quoteItems.createdAt), asc(quoteItems.id));
-  return rows.map(mapItem);
+  return rows.map((row) => mapItem({ ...row, candidateId: row.candidateId ?? candidateId }));
 };
 
 export const findItemsForQuote = async (
@@ -482,7 +511,7 @@ export const findItemsForQuote = async (
   exec: DbExecutor = db,
 ): Promise<ClientQuoteItem[]> => {
   const rows = await exec
-    .select()
+    .select(QUOTE_ITEM_PROJECTION)
     .from(quoteItems)
     .where(eq(quoteItems.quoteId, quoteId))
     .orderBy(asc(quoteItems.position), asc(quoteItems.createdAt), asc(quoteItems.id));
@@ -663,16 +692,17 @@ export const insertItems = async (
   quoteId: string,
   items: NewClientQuoteItem[],
   exec: DbExecutor = db,
-  candidateId: string = quoteId,
+  candidateId?: string,
 ): Promise<ClientQuoteItem[]> => {
   if (items.length === 0) return [];
+  const resolvedCandidateId = candidateId ?? (await resolvePrimaryCandidateId(quoteId, exec));
   const rows = await exec
     .insert(quoteItems)
     .values(
       items.map((item) => ({
         id: item.id,
         quoteId,
-        candidateId,
+        candidateId: resolvedCandidateId,
         position: item.position,
         productId: item.productId,
         productName: item.productName,
@@ -699,11 +729,12 @@ export const replaceItems = async (
   quoteId: string,
   items: NewClientQuoteItem[],
   exec: DbExecutor = db,
-  candidateId: string = quoteId,
+  candidateId?: string,
 ): Promise<ClientQuoteItem[]> =>
   runAtomically(exec, async (tx) => {
-    await tx.delete(quoteItems).where(candidateItemsPredicate(quoteId, candidateId));
-    return insertItems(quoteId, items, tx, candidateId);
+    const resolvedCandidateId = candidateId ?? (await resolvePrimaryCandidateId(quoteId, tx));
+    await tx.delete(quoteItems).where(candidateItemsPredicate(quoteId, resolvedCandidateId));
+    return insertItems(quoteId, items, tx, resolvedCandidateId);
   });
 
 export const deleteById = async (id: string, exec: DbExecutor = db): Promise<boolean> => {
