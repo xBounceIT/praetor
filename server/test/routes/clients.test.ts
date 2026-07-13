@@ -823,9 +823,9 @@ describe('POST /api/clients/bulk', () => {
     expect(createClientMock).not.toHaveBeenCalled();
   });
 
-  test('fails every row sharing a batch identifier and reports existing identifier conflicts', async () => {
+  test('matches client codes case-sensitively and fiscal codes case-insensitively', async () => {
     findExistingIdentifiersMock.mockResolvedValue({
-      clientCodes: new Set(['existing']),
+      clientCodes: new Set(['EXISTING']),
       fiscalCodes: new Set(['it-existing']),
     });
     const response = await testApp.inject({
@@ -845,16 +845,16 @@ describe('POST /api/clients/bulk', () => {
     const body = JSON.parse(response.body);
     expect(body.summary).toEqual({ total: 3, succeeded: 0, failed: 3 });
     expect(body.results[0].errors).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ field: 'clientCode', code: 'duplicate' }),
-        expect.objectContaining({ field: 'fiscalCode', code: 'duplicate' }),
-      ]),
+      expect.arrayContaining([expect.objectContaining({ field: 'fiscalCode', code: 'duplicate' })]),
+    );
+    expect(body.results[0].errors).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ field: 'clientCode' })]),
     );
     expect(body.results[1].errors).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ field: 'clientCode', code: 'duplicate' }),
-        expect.objectContaining({ field: 'fiscalCode', code: 'duplicate' }),
-      ]),
+      expect.arrayContaining([expect.objectContaining({ field: 'fiscalCode', code: 'duplicate' })]),
+    );
+    expect(body.results[1].errors).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ field: 'clientCode' })]),
     );
     expect(body.results[2].errors).toEqual(
       expect.arrayContaining([

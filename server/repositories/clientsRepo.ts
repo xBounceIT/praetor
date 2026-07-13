@@ -299,7 +299,7 @@ export const findByClientCode = async (
   excludeId: string | null,
   exec: DbExecutor = db,
 ): Promise<boolean> => {
-  const conditions = [sql`LOWER(${clients.clientCode}) = LOWER(${clientCode})`];
+  const conditions = [eq(clients.clientCode, clientCode)];
   if (excludeId) conditions.push(ne(clients.id, excludeId));
   const rows = await exec
     .select({ id: clients.id })
@@ -314,15 +314,15 @@ export const findExistingIdentifiers = async (
   fiscalCodes: string[],
   exec: DbExecutor = db,
 ): Promise<{ clientCodes: Set<string>; fiscalCodes: Set<string> }> => {
-  const normalizedClientCodes = [...new Set(clientCodes.map((value) => value.toLowerCase()))];
+  const uniqueClientCodes = [...new Set(clientCodes)];
   const normalizedFiscalCodes = [...new Set(fiscalCodes.map((value) => value.toLowerCase()))];
-  if (normalizedClientCodes.length === 0 && normalizedFiscalCodes.length === 0) {
+  if (uniqueClientCodes.length === 0 && normalizedFiscalCodes.length === 0) {
     return { clientCodes: new Set(), fiscalCodes: new Set() };
   }
 
   const conditions: SQL[] = [];
-  if (normalizedClientCodes.length > 0) {
-    conditions.push(sql`LOWER(client_code) = ANY(${sql.param(normalizedClientCodes)}::text[])`);
+  if (uniqueClientCodes.length > 0) {
+    conditions.push(sql`client_code = ANY(${sql.param(uniqueClientCodes)}::text[])`);
   }
   if (normalizedFiscalCodes.length > 0) {
     conditions.push(sql`LOWER(fiscal_code) = ANY(${sql.param(normalizedFiscalCodes)}::text[])`);
@@ -337,9 +337,7 @@ export const findExistingIdentifiers = async (
 
   return {
     clientCodes: new Set(
-      rows
-        .map((row) => row.client_code?.toLowerCase())
-        .filter((value): value is string => Boolean(value)),
+      rows.map((row) => row.client_code).filter((value): value is string => Boolean(value)),
     ),
     fiscalCodes: new Set(
       rows

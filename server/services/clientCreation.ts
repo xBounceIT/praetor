@@ -407,7 +407,7 @@ export const getClientIdentifierCandidates = (input: Record<string, unknown>) =>
     taxCode: trimmedString(input.taxCode),
   });
   return {
-    clientCode: clientCode?.toLowerCase() ?? null,
+    clientCode,
     fiscalCode: fiscalCode?.toLowerCase() ?? null,
   };
 };
