@@ -35,9 +35,7 @@ import WebhooksView from './components/administration/WebhooksView';
 import ClientsView from './components/CRM/ClientsView';
 import SuppliersView from './components/CRM/SuppliersView';
 import InternalListingView from './components/catalog/InternalListingView';
-import ApiDocsView from './components/docs/ApiDocsView';
 import DocsHubView from './components/docs/DocsHubView';
-import FrontendDocsView from './components/docs/FrontendDocsView';
 import ErrorBoundary from './components/ErrorBoundary';
 import ExternalEmployeesView from './components/HR/ExternalEmployeesView';
 import InternalEmployeesView from './components/HR/InternalEmployeesView';
@@ -48,6 +46,8 @@ import NotFound from './components/NotFound';
 // Lazy-load the detail view so the recharts bundle (~150kB) only ships when a user
 // actually navigates to a project detail page — keeps the initial app bundle slim.
 const ProjectDetailView = lazy(() => import('./components/projects/ProjectDetailView'));
+const ApiDocsView = lazy(() => import('./components/docs/ApiDocsView'));
+const FrontendDocsView = lazy(() => import('./components/docs/FrontendDocsView'));
 
 import ProjectsView, { type ProjectsViewTab } from './components/projects/ProjectsView';
 import ResalesView from './components/projects/ResalesView';
@@ -87,6 +87,7 @@ import {
 } from './hooks/handlers/taskHandlers';
 import { makeUserHandlers } from './hooks/handlers/userHandlers';
 import { useAuth } from './hooks/useAuth';
+import { useLatestRef } from './hooks/useLatestRef';
 import { listRequest, useModuleLoader } from './hooks/useModuleLoader';
 import api, { type McpTokenScope, type PersonalAccessToken, type Settings } from './services/api';
 import { decodeEntriesCursor } from './services/api/entries';
@@ -996,6 +997,7 @@ const TrackerView: React.FC<{
       );
       if (entry.isPlaceholder || task?.isRecurring) {
         // Show modal for recurring entries
+        // react-doctor-disable-next-line react-doctor/no-impure-state-updater -- This is an event handler, not a functional state updater.
         setPendingDeleteEntry(entry);
       } else {
         // Direct delete for normal entries
@@ -1431,11 +1433,9 @@ const useAppContentController = () => {
   // against stale filter IDs after async navigation: the setter clears
   // synchronously on view change, and handler factories read filter IDs via
   // refs so in-flight awaits still observe the latest value.
-  const activeViewRef = useRef<View | '404'>(activeView);
-  activeViewRef.current = activeView;
+  const activeViewRef = useLatestRef<View | '404'>(activeView);
   const currentUserRef = useRef<User | null>(null);
-  const viewingUserIdRef = useRef(viewingUserId);
-  viewingUserIdRef.current = viewingUserId;
+  const viewingUserIdRef = useLatestRef(viewingUserId);
   // Short-circuits hashchange events fired by our own writes. See
   // utils/programmaticHashTracker.ts for why this is a counter rather than a
   // single-value marker (issue #623). Also still prevents an infinite rewrite
@@ -1465,7 +1465,7 @@ const useAppContentController = () => {
         React.startTransition(() => setViewingUserId(currentUser.id));
       }
     },
-    [setSelectedProjectId, setViewingUserId],
+    [activeViewRef, setSelectedProjectId, setViewingUserId, viewingUserIdRef],
   );
   const setProjectsViewTab = useCallback(
     (tab: ProjectsViewTab) => setActiveView(tab === 'tasks' ? 'projects/tasks' : 'projects/manage'),
@@ -1477,22 +1477,12 @@ const useAppContentController = () => {
   // factories observe up-to-date state once promises resolve (a navigation can
   // clear `clientQuoteFilterId` mid-await, or a new project can land between
   // factory creation and a `clients.remove()` call, for example).
-  const clientQuoteFilterIdRef = useRef(clientQuoteFilterId);
-  const clientOfferFilterIdRef = useRef(clientOfferFilterId);
-  const supplierQuoteFilterIdRef = useRef(supplierQuoteFilterId);
-  const projectsRef = useRef(projects);
-  const quotesRef = useRef(quotes);
-  const clientOffersRef = useRef(clientOffers);
-  // Sync in render rather than a passive effect: an in-flight promise can
-  // resume between commit and useEffect (microtask vs effect-task), reading
-  // a stale ref. React allows writing to refs during render as long as the
-  // value is deterministic in the state.
-  clientQuoteFilterIdRef.current = clientQuoteFilterId;
-  clientOfferFilterIdRef.current = clientOfferFilterId;
-  supplierQuoteFilterIdRef.current = supplierQuoteFilterId;
-  projectsRef.current = projects;
-  quotesRef.current = quotes;
-  clientOffersRef.current = clientOffers;
+  const clientQuoteFilterIdRef = useLatestRef(clientQuoteFilterId);
+  const clientOfferFilterIdRef = useLatestRef(clientOfferFilterId);
+  const supplierQuoteFilterIdRef = useLatestRef(supplierQuoteFilterId);
+  const projectsRef = useLatestRef(projects);
+  const quotesRef = useLatestRef(quotes);
+  const clientOffersRef = useLatestRef(clientOffers);
 
   const clearAuthScopedAppState = useCallback(() => {
     // Bump cancellation tokens before any setter call so in-flight async
@@ -1610,9 +1600,11 @@ const useAppContentController = () => {
     },
   });
 
-  // Read by the hashchange listener (mounted once) so it sees the latest user
+  // Read by the hashchange listener (mounted once) so it sees the latest committed user
   // without the effect resubscribing — events fired during teardown are lost.
-  currentUserRef.current = currentUser;
+  useLayoutEffect(() => {
+    currentUserRef.current = currentUser;
+  }, [currentUser]);
 
   // The inactivity timer is global session state, so load its admin policy once per
   // authenticated session instead of depending on whichever module datasets happen to run.
@@ -1742,6 +1734,7 @@ const useAppContentController = () => {
       setSupplierOrders,
       setSupplierInvoices,
       setSupplierQuoteFilterId,
+      supplierQuoteFilterIdRef,
     ],
   );
 
@@ -1773,6 +1766,10 @@ const useAppContentController = () => {
       setClientOffers,
       setClientsOrders,
       setInvoices,
+      clientOfferFilterIdRef,
+      clientOffersRef,
+      clientQuoteFilterIdRef,
+      quotesRef,
       setClientQuoteFilterId,
       setClientOfferFilterId,
       notifyClientOfferCreated,
@@ -1791,7 +1788,7 @@ const useAppContentController = () => {
         setProjects,
         setProjectTasks,
       }),
-    [setClients, setProjects, setProjectTasks],
+    [projectsRef, setClients, setProjects, setProjectTasks],
   );
 
   const productHandlers = useMemo(() => makeProductHandlers({ setProducts }), [setProducts]);
@@ -1924,9 +1921,9 @@ const useAppContentController = () => {
 
     return hasViewAccess(currentUser.permissions, activeView as View);
   }, [activeView, currentUser, hasLoadedGeneralSettings, generalSettings.enableAiReporting]);
-  const activeLoadModuleRef = useRef<string | null>(null);
-  activeLoadModuleRef.current =
-    currentUser && isRouteAccessible ? getModuleFromView(activeView) : null;
+  const activeLoadModuleRef = useLatestRef(
+    currentUser && isRouteAccessible ? getModuleFromView(activeView) : null,
+  );
 
   // Redirect to 404 if route is not accessible
   useEffect(() => {
@@ -2815,6 +2812,7 @@ const useAppContentController = () => {
     return cancelModuleLoad;
   }, [
     activeView,
+    activeLoadModuleRef,
     currentUser,
     isRouteAccessible,
     isModuleLoaded,
@@ -3605,7 +3603,9 @@ const TechnicalDocsRoute: React.FC<{
         sessionIdleTimeoutMinutes={controller.generalSettings.sessionIdleTimeoutMinutes}
       />
     )}
-    {view === 'api' ? <ApiDocsView /> : <FrontendDocsView />}
+    <Suspense fallback={<AppLoadingScreen />}>
+      {view === 'api' ? <ApiDocsView /> : <FrontendDocsView />}
+    </Suspense>
   </>
 );
 
@@ -4684,6 +4684,7 @@ const SettingsAndReportsRoutes: React.FC<{
           <ReportsSettingsError message={tApp('reports:aiReporting.settingsFailedToLoad')} />
         ) : (
           <AiReportingView
+            key={`${currentUser.id}|${generalSettings.enableAiReporting ? 'enabled' : 'disabled'}`}
             currentUserId={currentUser.id}
             permissions={currentUser.permissions || []}
             enableAiReporting={generalSettings.enableAiReporting}

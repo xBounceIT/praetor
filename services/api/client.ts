@@ -3,11 +3,13 @@ const API_BASE = import.meta.env.VITE_API_URL || '/api';
 // Without this, a hung server (no TCP reset) leaves the UI on a spinner forever.
 const DEFAULT_TIMEOUT_MS = 30_000;
 
+// react-doctor-disable-next-line react-doctor/auth-token-in-web-storage -- Existing bearer-token API contract; cookie migration requires a coordinated server compatibility window.
 let authToken: string | null = localStorage.getItem('praetor_auth_token');
 
 export const setAuthToken = (token: string | null) => {
   authToken = token;
   if (token) {
+    // react-doctor-disable-next-line react-doctor/auth-token-in-web-storage -- Existing bearer-token API contract; cookie migration requires coordinated server support.
     localStorage.setItem('praetor_auth_token', token);
   } else {
     localStorage.removeItem('praetor_auth_token');

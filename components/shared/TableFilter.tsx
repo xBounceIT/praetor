@@ -25,6 +25,7 @@ const TableFilter: React.FC<TableFilterProps> = ({
 }) => {
   const { t } = useTranslation('common');
   const [searchTerm, setSearchTerm] = useState('');
+  const selectedValueSet = new Set(selectedValues);
 
   const displayLabel = useCallback((opt: string) => (opt === '' ? t('table.empty') : opt), [t]);
 
@@ -35,7 +36,7 @@ const TableFilter: React.FC<TableFilterProps> = ({
   }, [options, searchTerm, displayLabel]);
 
   const handleCheckboxChange = (value: string) => {
-    const newSelected = selectedValues.includes(value)
+    const newSelected = selectedValueSet.has(value)
       ? selectedValues.filter((v) => v !== value)
       : [...selectedValues, value];
     onFilterChange(newSelected);
@@ -48,15 +49,16 @@ const TableFilter: React.FC<TableFilterProps> = ({
       onFilterChange(newSelected);
     } else {
       // Deselect all visible options
-      const newSelected = selectedValues.filter((val) => !filteredOptions.includes(val));
+      const filteredOptionSet = new Set(filteredOptions);
+      const newSelected = selectedValues.filter((val) => !filteredOptionSet.has(val));
       onFilterChange(newSelected);
     }
   };
 
   const isAllSelected =
-    filteredOptions.length > 0 && filteredOptions.every((opt) => selectedValues.includes(opt));
+    filteredOptions.length > 0 && filteredOptions.every((opt) => selectedValueSet.has(opt));
   const isIndeterminate =
-    !isAllSelected && filteredOptions.some((opt) => selectedValues.includes(opt));
+    !isAllSelected && filteredOptions.some((opt) => selectedValueSet.has(opt));
 
   return (
     <div className="w-56 bg-white rounded-2xl shadow-xl border border-zinc-200 flex flex-col text-left font-normal animate-in fade-in zoom-in-95 duration-200">
@@ -135,7 +137,7 @@ const TableFilter: React.FC<TableFilterProps> = ({
             >
               <Checkbox
                 size="sm"
-                checked={selectedValues.includes(opt)}
+                checked={selectedValueSet.has(opt)}
                 onChange={() => handleCheckboxChange(opt)}
               />
               <Tooltip>

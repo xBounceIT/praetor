@@ -1,6 +1,10 @@
 import { describe, expect, test } from 'bun:test';
+import { Workbook } from 'exceljs';
 import { applyRilDraftToRows, generateRilRows } from '../../utils/ril';
 import { buildRilWorkbook } from '../../utils/rilExport';
+
+const buildTestRilWorkbook = (input: Parameters<typeof buildRilWorkbook>[0]) =>
+  buildRilWorkbook(input, new Workbook());
 
 describe('RIL Excel export', () => {
   test('builds a Prospetto Presenze workbook with header, day grid, legend, and summary', () => {
@@ -27,7 +31,7 @@ describe('RIL Excel export', () => {
       ],
     });
 
-    const workbook = buildRilWorkbook({
+    const workbook = buildTestRilWorkbook({
       rows,
       employeeName: 'User Name',
       companyName: 'ACME',
@@ -121,7 +125,7 @@ describe('RIL Excel export', () => {
         : row,
     );
 
-    const workbook = buildRilWorkbook({
+    const workbook = buildTestRilWorkbook({
       rows,
       employeeName: 'User Name',
       companyName: 'ACME',
@@ -157,7 +161,7 @@ describe('RIL Excel export', () => {
         : row,
     );
 
-    const workbook = buildRilWorkbook({
+    const workbook = buildTestRilWorkbook({
       rows,
       employeeName: 'User Name',
       companyName: 'ACME',
@@ -200,7 +204,7 @@ describe('RIL Excel export', () => {
       60,
     );
 
-    const workbook = buildRilWorkbook({
+    const workbook = buildTestRilWorkbook({
       rows,
       employeeName: 'User Name',
       companyName: 'ACME',

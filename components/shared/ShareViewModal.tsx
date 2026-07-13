@@ -11,6 +11,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useCurrentUserId } from '../../contexts/useCurrentUserId';
+import { useLatestRef } from '../../hooks/useLatestRef';
 import {
   type SavedViewPermission,
   type ViewDirectoryUser,
@@ -457,8 +458,7 @@ const ShareViewModalSession: React.FC<ShareViewModalProps> = ({
   const currentUserId = useCurrentUserId();
   const [state, dispatch] = useReducer(shareViewModalReducer, undefined, createShareViewModalState);
   const loadAbortControllerRef = useRef<AbortController | null>(null);
-  const tRef = useRef(t);
-  tRef.current = t;
+  const tRef = useLatestRef(t);
   const {
     directory,
     shares,
@@ -498,7 +498,7 @@ const ShareViewModalSession: React.FC<ShareViewModalProps> = ({
         loadAbortControllerRef.current = null;
       }
     }
-  }, [viewId]);
+  }, [tRef, viewId]);
 
   useEffect(() => {
     load();

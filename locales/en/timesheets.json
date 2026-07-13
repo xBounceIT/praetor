@@ -122,6 +122,8 @@
   },
   "calendar": {
     "today": "Today",
+    "previousMonth": "Previous month",
+    "nextMonth": "Next month",
     "target": "Target",
     "overLimit": "Over limit",
     "dailyGoal": "Daily Goal",

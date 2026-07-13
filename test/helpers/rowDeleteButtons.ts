@@ -1,4 +1,4 @@
-import { waitFor, within } from '@testing-library/react';
+import { act, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 /** Returns direct delete buttons or StandardTable row-action triggers inside an edit dialog. */
@@ -20,7 +20,7 @@ export const openRowDeleteButton = async (dialog: HTMLElement, index = 0) => {
   const trigger = triggers[index];
   if (!trigger) throw new Error(`Row action trigger ${index} not found`);
   if (trigger.querySelector('.fa-trash-can')) return trigger as HTMLButtonElement;
-  await userEvent.setup().click(trigger);
+  await act(async () => userEvent.setup().click(trigger));
 
   let deleteButton: HTMLButtonElement | null = null;
   await waitFor(() => {

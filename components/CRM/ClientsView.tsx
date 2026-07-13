@@ -1,5 +1,5 @@
 import type React from 'react';
-import { useCallback, useEffect, useMemo, useReducer } from 'react';
+import { useCallback, useEffect, useId, useMemo, useReducer } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Field, FieldError, FieldLabel, RequiredMark } from '@/components/ui/field';
@@ -1467,13 +1467,15 @@ const ClientTextField: React.FC<{
   type = 'text',
   value,
 }) => {
+  const inputId = useId();
   const error = controller.errors[errorKey];
   return (
     <div className="space-y-1.5">
-      <label className="text-xs font-bold text-muted-foreground ml-1">
+      <FieldLabel htmlFor={inputId} className="text-xs font-bold text-muted-foreground ml-1">
         {label} {required && <RequiredMark />}
-      </label>
+      </FieldLabel>
       <Input
+        id={inputId}
         type={type}
         value={value ?? String(controller.formData[field] ?? '')}
         onChange={(event) => {
@@ -1507,10 +1509,14 @@ const ClientIdentifyingSection: React.FC<{ controller: ClientsController }> = ({
         required
       />
       <div className="space-y-1.5">
-        <label className="text-xs font-bold text-muted-foreground ml-1">
+        <FieldLabel
+          htmlFor="client-identifying-type"
+          className="text-xs font-bold text-muted-foreground ml-1"
+        >
           {controller.t('crm:clients.clientType')}
-        </label>
+        </FieldLabel>
         <SelectControl
+          id="client-identifying-type"
           options={controller.typeOptions}
           value={controller.formData.type || 'company'}
           onChange={(value) =>
@@ -1693,20 +1699,24 @@ const ClientContactDraftField: React.FC<{
   required?: boolean;
   error?: string | null;
   type?: string;
-}> = ({ label, value, placeholder, onChange, required, error, type = 'text' }) => (
-  <div className="space-y-1.5">
-    <label className="text-xs font-bold text-muted-foreground ml-1">
-      {label} {required && <RequiredMark />}
-    </label>
-    <Input
-      type={type}
-      value={value}
-      onChange={(event) => onChange(event.target.value)}
-      placeholder={placeholder}
-      aria-invalid={Boolean(error)}
-    />
-  </div>
-);
+}> = ({ label, value, placeholder, onChange, required, error, type = 'text' }) => {
+  const inputId = useId();
+  return (
+    <div className="space-y-1.5">
+      <FieldLabel htmlFor={inputId} className="text-xs font-bold text-muted-foreground ml-1">
+        {label} {required && <RequiredMark />}
+      </FieldLabel>
+      <Input
+        id={inputId}
+        type={type}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={placeholder}
+        aria-invalid={Boolean(error)}
+      />
+    </div>
+  );
+};
 
 const ClientFiscalSection: React.FC<{ controller: ClientsController }> = ({ controller }) => (
   <div className="space-y-4">
@@ -1760,10 +1770,14 @@ const ClientCompanyProfileSection: React.FC<{ controller: ClientsController }> =
         options={controller.officeCountRangeOptions}
       />
       <div className="col-span-full space-y-1.5">
-        <label className="text-xs font-bold text-muted-foreground ml-1">
+        <FieldLabel
+          htmlFor="client-profile-description"
+          className="text-xs font-bold text-muted-foreground ml-1"
+        >
           {controller.t('crm:clients.description')}
-        </label>
+        </FieldLabel>
         <Textarea
+          id="client-profile-description"
           rows={3}
           value={controller.formData.description ?? ''}
           onChange={(event) =>
@@ -1788,7 +1802,12 @@ const ClientProfileSelectField: React.FC<{
 }> = ({ controller, field, label, options }) => (
   <div className="space-y-1.5">
     <div className="flex items-end justify-between ml-1 min-h-5">
-      <label className="text-xs font-bold text-muted-foreground">{label}</label>
+      <FieldLabel
+        htmlFor={`client-profile-${field}`}
+        className="text-xs font-bold text-muted-foreground"
+      >
+        {label}
+      </FieldLabel>
       {controller.canUpdateClients && (
         <Button
           type="button"
@@ -1802,6 +1821,7 @@ const ClientProfileSelectField: React.FC<{
       )}
     </div>
     <SelectControl
+      id={`client-profile-${field}`}
       options={options}
       value={(controller.formData[field] as string | undefined) || ''}
       onChange={(value) =>

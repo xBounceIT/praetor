@@ -63,6 +63,8 @@ type CalendarHeaderProps = {
   isMonthPickerOpen: boolean;
   isYearPickerOpen: boolean;
   todayLabel: string;
+  previousMonthLabel: string;
+  nextMonthLabel: string;
   onToggleMonthPicker: () => void;
   onToggleYearPicker: () => void;
   onSelectMonth: (month: number) => void;
@@ -82,6 +84,8 @@ const CalendarHeader: React.FC<CalendarHeaderProps> = ({
   isMonthPickerOpen,
   isYearPickerOpen,
   todayLabel,
+  previousMonthLabel,
+  nextMonthLabel,
   onToggleMonthPicker,
   onToggleYearPicker,
   onSelectMonth,
@@ -165,6 +169,7 @@ const CalendarHeader: React.FC<CalendarHeaderProps> = ({
     <div className="flex gap-1">
       <button
         type="button"
+        aria-label={previousMonthLabel}
         onClick={onPrevMonth}
         className={`hover:bg-muted rounded-lg text-muted-foreground transition-colors ${
           isCompact ? 'p-1' : 'p-1.5'
@@ -183,6 +188,7 @@ const CalendarHeader: React.FC<CalendarHeaderProps> = ({
       </button>
       <button
         type="button"
+        aria-label={nextMonthLabel}
         onClick={onNextMonth}
         className={`hover:bg-muted rounded-lg text-muted-foreground transition-colors ${
           isCompact ? 'p-1' : 'p-1.5'
@@ -426,6 +432,8 @@ const Calendar: React.FC<CalendarProps> = ({
         isMonthPickerOpen={isMonthPickerOpen}
         isYearPickerOpen={isYearPickerOpen}
         todayLabel={t('calendar.today')}
+        previousMonthLabel={t('calendar.previousMonth')}
+        nextMonthLabel={t('calendar.nextMonth')}
         onToggleMonthPicker={toggleMonthPicker}
         onToggleYearPicker={toggleYearPicker}
         onSelectMonth={selectMonth}

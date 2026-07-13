@@ -1,5 +1,6 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { getErrorMessage } from '../utils/errors';
+import { useLatestRef } from './useLatestRef';
 
 export type ModuleLoadErrors = Partial<Record<string, string[]>>;
 
@@ -25,8 +26,7 @@ export function useModuleLoader() {
   const [loadedModules, setLoadedModules] = useState<Set<string>>(new Set());
   const [moduleLoadErrors, setModuleLoadErrors] = useState<ModuleLoadErrors>({});
   const [loadingModules, setLoadingModules] = useState<Set<string>>(new Set());
-  const loadedModulesRef = useRef(loadedModules);
-  loadedModulesRef.current = loadedModules;
+  const loadedModulesRef = useLatestRef(loadedModules);
 
   const loadDatasets = useCallback(
     async (
@@ -139,9 +139,12 @@ export function useModuleLoader() {
     setLoadingModules(new Set());
   }, []);
 
-  const isModuleLoaded = useCallback((moduleName: string) => {
-    return loadedModulesRef.current.has(moduleName);
-  }, []);
+  const isModuleLoaded = useCallback(
+    (moduleName: string) => {
+      return loadedModulesRef.current.has(moduleName);
+    },
+    [loadedModulesRef],
+  );
 
   const isModuleLoading = useCallback(
     (moduleName: string) => loadingModules.has(moduleName),

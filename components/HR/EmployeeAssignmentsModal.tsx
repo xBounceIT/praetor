@@ -1,5 +1,5 @@
 import type React from 'react';
-import { useEffect, useMemo, useReducer, useRef } from 'react';
+import { useEffect, useMemo, useReducer, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { usersApi } from '../../services/api';
 import type { Client, Project, ProjectTask, User } from '../../types';
@@ -246,71 +246,78 @@ const AssignmentColumn: React.FC<{
   emptyMessage,
   onSearchChange,
   onToggle,
-}) => (
-  <div className="space-y-3">
-    <div className="sticky top-0 bg-card z-10 pb-2 border-b border-border mb-2">
-      <div className="flex items-center justify-between py-2">
-        <h4 className="font-semibold text-foreground text-sm uppercase tracking-wider">{title}</h4>
-        <span className="text-xs font-bold bg-muted text-muted-foreground px-2 py-0.5 rounded-full">
-          {count}
-        </span>
+}) => {
+  const selectedIdSet = new Set(selectedIds);
+  return (
+    <div className="space-y-3">
+      <div className="sticky top-0 bg-card z-10 pb-2 border-b border-border mb-2">
+        <div className="flex items-center justify-between py-2">
+          <h4 className="font-semibold text-foreground text-sm uppercase tracking-wider">
+            {title}
+          </h4>
+          <span className="text-xs font-bold bg-muted text-muted-foreground px-2 py-0.5 rounded-full">
+            {count}
+          </span>
+        </div>
+        <input
+          type="text"
+          placeholder={searchLabel}
+          aria-label={searchLabel}
+          value={searchValue}
+          onChange={(event) => onSearchChange(event.target.value)}
+          className="w-full px-3 py-1.5 text-sm border border-border bg-background text-foreground rounded-lg focus:ring-2 focus:ring-praetor outline-none placeholder:text-muted-foreground"
+        />
       </div>
-      <input
-        type="text"
-        placeholder={searchLabel}
-        aria-label={searchLabel}
-        value={searchValue}
-        onChange={(event) => onSearchChange(event.target.value)}
-        className="w-full px-3 py-1.5 text-sm border border-border bg-background text-foreground rounded-lg focus:ring-2 focus:ring-praetor outline-none placeholder:text-muted-foreground"
-      />
-    </div>
-    <div className="space-y-2">
-      {items.map((item) => {
-        const selected = selectedIds.includes(item.id);
-        return (
-          <label
-            key={item.id}
-            className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
-              selected
-                ? 'bg-accent border-border shadow-sm'
-                : 'bg-card border-border hover:border-input'
-            }`}
-          >
-            <div className="relative flex items-center justify-center shrink-0">
-              <input
-                type="checkbox"
-                checked={selected}
-                onChange={() => onToggle(item.id)}
-                aria-label={item.name}
-                className="sr-only peer"
-              />
-              <div className="size-5 rounded-full border-2 border-border relative transition-all peer-checked:bg-praetor peer-checked:border-praetor bg-background shadow-sm flex items-center justify-center">
-                <div
-                  className={`size-2 rounded-full transition-all duration-200 ${
-                    selected ? 'bg-white scale-100 opacity-100' : 'bg-zinc-200 scale-0 opacity-0'
-                  }`}
-                ></div>
-              </div>
-            </div>
-            <span
-              className={`text-sm font-semibold ${
-                selected ? 'text-foreground' : 'text-muted-foreground'
+      <div className="space-y-2">
+        {items.map((item) => {
+          const selected = selectedIdSet.has(item.id);
+          return (
+            <label
+              key={item.id}
+              className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
+                selected
+                  ? 'bg-accent border-border shadow-sm'
+                  : 'bg-card border-border hover:border-input'
               }`}
             >
-              {item.name}
-              {item.subtitle && (
-                <span className="block text-[10px] font-normal text-muted-foreground">
-                  {item.subtitle}
-                </span>
-              )}
-            </span>
-          </label>
-        );
-      })}
-      {items.length === 0 && <p className="text-xs text-muted-foreground italic">{emptyMessage}</p>}
+              <div className="relative flex items-center justify-center shrink-0">
+                <input
+                  type="checkbox"
+                  checked={selected}
+                  onChange={() => onToggle(item.id)}
+                  aria-label={item.name}
+                  className="sr-only peer"
+                />
+                <div className="size-5 rounded-full border-2 border-border relative transition-all peer-checked:bg-praetor peer-checked:border-praetor bg-background shadow-sm flex items-center justify-center">
+                  <div
+                    className={`size-2 rounded-full transition-all duration-200 ${
+                      selected ? 'bg-white scale-100 opacity-100' : 'bg-zinc-200 scale-0 opacity-0'
+                    }`}
+                  ></div>
+                </div>
+              </div>
+              <span
+                className={`text-sm font-semibold ${
+                  selected ? 'text-foreground' : 'text-muted-foreground'
+                }`}
+              >
+                {item.name}
+                {item.subtitle && (
+                  <span className="block text-[10px] font-normal text-muted-foreground">
+                    {item.subtitle}
+                  </span>
+                )}
+              </span>
+            </label>
+          );
+        })}
+        {items.length === 0 && (
+          <p className="text-xs text-muted-foreground italic">{emptyMessage}</p>
+        )}
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 const EmployeeAssignmentsHeader: React.FC<{
   title: string;
@@ -614,10 +621,10 @@ const EmployeeAssignmentsModal: React.FC<EmployeeAssignmentsModalProps> = ({
     loadFailed,
   } = state;
   const modalSessionKey = isOpen && user ? user.id : 'closed';
-  const activeModalSessionKeyRef = useRef(modalSessionKey);
+  const [activeModalSessionKey, setActiveModalSessionKey] = useState(modalSessionKey);
 
-  if (activeModalSessionKeyRef.current !== modalSessionKey) {
-    activeModalSessionKeyRef.current = modalSessionKey;
+  if (activeModalSessionKey !== modalSessionKey) {
+    setActiveModalSessionKey(modalSessionKey);
     dispatch({ type: 'resetSession', isLoadingAssignments: modalSessionKey !== 'closed' });
   }
 

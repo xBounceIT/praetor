@@ -1,8 +1,9 @@
-import { afterAll, afterEach, beforeEach, describe, expect, mock, spyOn, test } from 'bun:test';
+import { afterAll, afterEach, beforeEach, describe, expect, mock, spyOn } from 'bun:test';
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { THEME_STORAGE_KEY } from '../../utils/theme';
 import { installI18nMock } from '../helpers/i18n';
+import { settleComponentTasks, reactTest as test } from '../helpers/reactTest';
 import { render } from '../helpers/render';
 
 installI18nMock();
@@ -82,15 +83,15 @@ const clickSortHeader = (headerText: string) => {
 
 const openHeaderFilter = async (columnHeader: string) => {
   const user = userEvent.setup();
-  await user.click(screen.getByRole('button', { name: `table.filters ${columnHeader}` }));
+  await act(async () =>
+    user.click(screen.getByRole('button', { name: `table.filters ${columnHeader}` })),
+  );
   return user;
 };
 
 const selectFilterValue = async (columnHeader: string, value: string) => {
   const user = await openHeaderFilter(columnHeader);
-  act(() => {
-    fireEvent.click(screen.getByRole('menuitemcheckbox', { name: value }));
-  });
+  await act(async () => fireEvent.click(screen.getByRole('menuitemcheckbox', { name: value })));
   return user;
 };
 
@@ -1090,7 +1091,11 @@ describe('<StandardTable />', () => {
     const tbody = container.querySelector('tbody') as HTMLElement;
     expect(tbody.textContent).not.toContain('Bob');
     await openHeaderFilter('Name');
-    clickMenuItemByText('table.clearFilter');
+    await act(async () =>
+      fireEvent.click(
+        screen.getByText('table.clearFilter').closest('[role="menuitem"]') as Element,
+      ),
+    );
     expect(tbody.textContent).toContain('Bob');
     expect(tbody.textContent).toContain('Charlie');
   });
@@ -2084,6 +2089,13 @@ describe('<StandardTable />', () => {
       },
     ];
     localStorage.setItem('praetor_table_customviews_exporttest', JSON.stringify(seeded));
+    let finishClipboardWrite: ((ok: boolean) => void) | undefined;
+    writeClipboardSpy.mockImplementationOnce(
+      () =>
+        new Promise<boolean>((resolve) => {
+          finishClipboardWrite = resolve;
+        }),
+    );
 
     render(<StandardTable<Row> title="ExportTest" data={sampleRows} columns={sampleColumns} />);
     await openCustomViews();
@@ -2091,7 +2103,9 @@ describe('<StandardTable />', () => {
     const exportBtns = screen.getAllByLabelText('table.exportView');
     await act(async () => {
       fireEvent.click(exportBtns[0].closest('[role="menuitem"]') ?? exportBtns[0]);
-      await Promise.resolve();
+      if (!finishClipboardWrite) throw new Error('Clipboard write did not start');
+      finishClipboardWrite(true);
+      await settleComponentTasks();
     });
     expect(writeClipboardSpy).toHaveBeenCalled();
     const payload = JSON.parse(writeClipboardSpy.mock.calls[0][0] as string);
@@ -2103,6 +2117,14 @@ describe('<StandardTable />', () => {
   });
 
   test('importing via paste modal adds a new view to localStorage', async () => {
+    let finishClipboardRead: (() => void) | undefined;
+    readClipboardSpy.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishClipboardRead = () => resolve({ ok: false, reason: 'unavailable' });
+        }),
+    );
+
     render(<StandardTable<Row> title="ImportTest" data={sampleRows} columns={sampleColumns} />);
     await openCustomViews();
 
@@ -2111,7 +2133,9 @@ describe('<StandardTable />', () => {
       fireEvent.click(
         screen.getByText('buttons.import').closest('[role="menuitem"]') as HTMLElement,
       );
-      await Promise.resolve();
+      if (!finishClipboardRead) throw new Error('Clipboard read did not start');
+      finishClipboardRead();
+      await settleComponentTasks();
     });
     const textarea = screen.getByPlaceholderText(
       'table.pasteViewPlaceholder',
@@ -2123,8 +2147,12 @@ describe('<StandardTable />', () => {
       sortState: null,
       filterState: {},
     });
-    act(() => fireEvent.change(textarea, { target: { value: importPayload } }));
-    act(() => fireEvent.click(screen.getByText('table.importView')));
+    await act(async () => {
+      fireEvent.change(textarea, { target: { value: importPayload } });
+      fireEvent.click(screen.getByText('table.importView'));
+      await settleComponentTasks();
+    });
+    expect(textarea).not.toBeInTheDocument();
 
     const stored = JSON.parse(
       localStorage.getItem('praetor_table_customviews_importtest') as string,
@@ -2142,13 +2170,16 @@ describe('<StandardTable />', () => {
       fireEvent.click(
         screen.getByText('buttons.import').closest('[role="menuitem"]') as HTMLElement,
       );
-      await Promise.resolve();
+      await settleComponentTasks();
     });
     const textarea = screen.getByPlaceholderText(
       'table.pasteViewPlaceholder',
     ) as HTMLTextAreaElement;
-    act(() => fireEvent.change(textarea, { target: { value: 'not-json{' } }));
-    act(() => fireEvent.click(screen.getByText('table.importView')));
+    await act(async () => {
+      fireEvent.change(textarea, { target: { value: 'not-json{' } });
+      fireEvent.click(screen.getByText('table.importView'));
+      await settleComponentTasks();
+    });
 
     const alert = screen.getByRole('alert');
     expect(alert.textContent).toContain('table.viewImportFailed');

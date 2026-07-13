@@ -43,7 +43,6 @@ import {
   type RilRow,
   roundRilPicapHours,
 } from '../../utils/ril';
-import { downloadRilWorkbook } from '../../utils/rilExport';
 
 const EMPTY_SELECT_VALUE = '__empty__';
 const RIL_CODE_OPTIONS = [
@@ -700,6 +699,7 @@ const useRilController = ({
 
     dispatch({ type: 'exportStart' });
     try {
+      const { downloadRilWorkbook } = await import('../../utils/rilExport');
       await downloadRilWorkbook({
         rows,
         employeeName: selectedUser.name,

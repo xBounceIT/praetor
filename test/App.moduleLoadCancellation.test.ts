@@ -12,7 +12,7 @@ describe('App.tsx module-load cancellation', () => {
     const effectBody = source.slice(start, end);
 
     expect(source).toContain('const moduleLoadTokenRef = useRef(0);');
-    expect(source).toContain('const activeLoadModuleRef = useRef<string | null>(null);');
+    expect(source).toContain('const activeLoadModuleRef = useLatestRef(');
     expect(source).toContain('isModuleLoaded,');
     expect(effectBody).toContain('const loadToken = ++moduleLoadTokenRef.current;');
     expect(effectBody).toContain('activeLoadModuleRef.current === module');

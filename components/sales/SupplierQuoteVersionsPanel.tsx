@@ -1,6 +1,7 @@
 import type React from 'react';
-import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
+import { useCallback, useEffect, useReducer, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useLatestRef } from '../../hooks/useLatestRef';
 import { supplierQuotesApi } from '../../services/api/supplierQuotes';
 import type { SupplierQuote, SupplierQuoteVersion, SupplierQuoteVersionRow } from '../../types';
 import { asyncRowsReducer, createInitialAsyncRowsState } from '../shared/asyncRowsState';
@@ -25,8 +26,7 @@ const SupplierQuoteVersionsPanel: React.FC<SupplierQuoteVersionsPanelProps> = ({
   disabled,
 }) => {
   const { t, i18n } = useTranslation('sales');
-  const tRef = useRef(t);
-  tRef.current = t;
+  const tRef = useLatestRef(t);
   const [historyState, dispatchHistory] = useReducer(
     asyncRowsReducer<SupplierQuoteVersionRow>,
     createInitialAsyncRowsState<SupplierQuoteVersionRow>(),
@@ -45,7 +45,7 @@ const SupplierQuoteVersionsPanel: React.FC<SupplierQuoteVersionsPanelProps> = ({
         error: tRef.current('supplierQuotes.versionHistory.loadFailed'),
       });
     }
-  }, [quoteId]);
+  }, [quoteId, tRef]);
 
   useEffect(() => {
     reload();

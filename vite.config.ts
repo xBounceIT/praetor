@@ -9,6 +9,7 @@ import pkg from './package.json' with { type: 'json' };
 import { getBuildDate } from './scripts/build-date.ts';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const normalizedRootDir = __dirname.replaceAll('\\', '/');
 
 const docsFrontendDir = path.resolve(__dirname, 'docs', 'frontend');
 const docsUserDir = path.resolve(__dirname, 'docs-site', 'dist');
@@ -83,6 +84,28 @@ export default defineConfig(({ mode }) => {
         '@': path.resolve(__dirname, '.'),
       },
       preserveSymlinks,
+    },
+    build: {
+      rolldownOptions: {
+        output: {
+          codeSplitting: {
+            minSize: 20 * 1024,
+            maxSize: 450 * 1024,
+            groups: [
+              {
+                name: 'vendor',
+                test: /node_modules[\\/]/,
+                priority: 20,
+              },
+              {
+                name: 'application',
+                test: (moduleId) => moduleId.replaceAll('\\', '/').startsWith(normalizedRootDir),
+                priority: 10,
+              },
+            ],
+          },
+        },
+      },
     },
   };
 });

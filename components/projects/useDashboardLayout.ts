@@ -7,6 +7,7 @@ import {
   useRef,
   useState,
 } from 'react';
+import { useLatestRef } from '../../hooks/useLatestRef';
 import { ApiError } from '../../services/api/client';
 import { type SavedViewDto, viewsApi } from '../../services/api/views';
 import {
@@ -257,13 +258,11 @@ export const useDashboardLayout = (
   // permitted-card set is re-derived, but the server library is keyed only by
   // `scopeKey` — capture `widgets` in a ref so normalization reads the live set
   // without making it a fetch dependency (which would re-load on every render).
-  const widgetsRef = useRef(widgets);
-  widgetsRef.current = widgets;
+  const widgetsRef = useLatestRef(widgets);
 
   // Live refs so the async load reconcile reads fresh values without making them
   // fetch dependencies (which would re-load the library on every render).
-  const activeViewIdRef = useRef(activeViewId);
-  activeViewIdRef.current = activeViewId;
+  const activeViewIdRef = useLatestRef(activeViewId);
   const persistGlobalLayout = useCallback(
     (next: DashboardLayout) => writeLS(globalLayoutKey, JSON.stringify(next)),
     [globalLayoutKey],
@@ -290,7 +289,7 @@ export const useDashboardLayout = (
         return;
       }
     },
-    [persistActiveView],
+    [activeViewIdRef, persistActiveView],
   );
 
   // One-time, best-effort migration of legacy localStorage dashboard views (the pre-server
@@ -366,7 +365,7 @@ export const useDashboardLayout = (
       }
       return uploaded;
     },
-    [persistActiveView],
+    [activeViewIdRef, persistActiveView, widgetsRef],
   );
 
   // Load the server view library for this scope. Guarded by a per-call token so a
@@ -406,7 +405,7 @@ export const useDashboardLayout = (
         dispatchViewLibrary({ type: 'load-error' });
       }
     }
-  }, [currentUserId, scopeKey, reconcileAfterLoad, migrateLegacyDashboardViews]);
+  }, [currentUserId, migrateLegacyDashboardViews, reconcileAfterLoad, scopeKey, widgetsRef]);
 
   // Initial load + reload whenever the scope or viewer changes. The list is
   // intentionally NOT a function of `widgets`: the permission-filtered def set
@@ -423,6 +422,7 @@ export const useDashboardLayout = (
   // Set this project's override layer + which view it's on (or null = custom).
   const applyOverride = useCallback(
     (next: DashboardLayout, viewId: string | null) => {
+      // react-doctor-disable-next-line react-doctor/no-impure-state-updater -- Event callback deliberately persists the same state transition; no updater callback is involved.
       setOverride(next);
       persistOverride(next);
       setActiveViewId(viewId);
@@ -503,7 +503,7 @@ export const useDashboardLayout = (
         dispatchViewLibrary({ type: 'saving', saving: false });
       }
     },
-    [editing, draft, effectiveLayout, scopeKey, applyOverride],
+    [applyOverride, draft, editing, effectiveLayout, scopeKey, widgetsRef],
   );
 
   // Apply a saved view as this project's override. Sync (no server call): re-
@@ -516,7 +516,7 @@ export const useDashboardLayout = (
       dispatchEditSession({ type: 'close' });
       applyOverride(parseServerViewConfig({ layout: view.layout }, widgetsRef.current), view.id);
     },
-    [views, applyOverride],
+    [applyOverride, views, widgetsRef],
   );
 
   // Owner-only. Optimistic remove + rollback on failure. A 403 (ownership lost
@@ -601,7 +601,7 @@ export const useDashboardLayout = (
         return false;
       }
     },
-    [views, editing, draft, effectiveLayout, applyOverride, reloadViews],
+    [applyOverride, draft, editing, effectiveLayout, reloadViews, views, widgetsRef],
   );
 
   // Any access level → fork the view's layout into a NEW view owned by the caller.
@@ -636,7 +636,7 @@ export const useDashboardLayout = (
         dispatchViewLibrary({ type: 'saving', saving: false });
       }
     },
-    [views, scopeKey, applyOverride],
+    [applyOverride, scopeKey, views, widgetsRef],
   );
 
   // Drop this project's override so it follows the shared global default again.

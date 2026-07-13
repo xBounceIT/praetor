@@ -15,6 +15,8 @@ mock.module('react-i18next', () => ({
 const SupplierQuoteAttachmentsStaging = (
   await import('../../components/sales/SupplierQuoteAttachmentsStaging')
 ).default;
+type StagedSupplierQuoteAttachment =
+  import('../../components/sales/SupplierQuoteAttachmentsStaging').StagedSupplierQuoteAttachment;
 
 const xlsx = (name = 'quote.xlsx'): File =>
   new File(['data'], name, {
@@ -22,9 +24,10 @@ const xlsx = (name = 'quote.xlsx'): File =>
   });
 
 const fileInput = () => document.querySelector('input[type="file"]') as HTMLInputElement;
+const staged = (id: string, file: File): StagedSupplierQuoteAttachment => ({ id, file });
 
 const baseProps = {
-  files: [] as File[],
+  files: [] as StagedSupplierQuoteAttachment[],
   onAdd: () => {},
   onRemove: () => {},
   readOnlyStatus: 'Editable',
@@ -81,7 +84,7 @@ describe('<SupplierQuoteAttachmentsStaging />', () => {
     render(
       <SupplierQuoteAttachmentsStaging
         {...baseProps}
-        files={[xlsx('first.xlsx'), xlsx('second.pdf')]}
+        files={[staged('first', xlsx('first.xlsx')), staged('second', xlsx('second.pdf'))]}
         onRemove={onRemove}
       />,
     );
@@ -89,6 +92,22 @@ describe('<SupplierQuoteAttachmentsStaging />', () => {
     expect(screen.getByText('first.xlsx')).toBeInTheDocument();
     expect(screen.getByText('second.pdf')).toBeInTheDocument();
 
+    fireEvent.click(screen.getAllByLabelText('Remove')[1]);
+    expect(onRemove).toHaveBeenCalledWith(1);
+  });
+
+  test('keeps duplicate file selections as independently keyed rows', () => {
+    const onRemove = mock((_index: number) => {});
+    const duplicate = xlsx('duplicate.xlsx');
+    render(
+      <SupplierQuoteAttachmentsStaging
+        {...baseProps}
+        files={[staged('duplicate-1', duplicate), staged('duplicate-2', duplicate)]}
+        onRemove={onRemove}
+      />,
+    );
+
+    expect(screen.getAllByText('duplicate.xlsx')).toHaveLength(2);
     fireEvent.click(screen.getAllByLabelText('Remove')[1]);
     expect(onRemove).toHaveBeenCalledWith(1);
   });
@@ -102,7 +121,7 @@ describe('<SupplierQuoteAttachmentsStaging />', () => {
       <SupplierQuoteAttachmentsStaging
         {...baseProps}
         disabled
-        files={[xlsx('first.xlsx')]}
+        files={[staged('first', xlsx('first.xlsx'))]}
         onAdd={onAdd}
         onRemove={onRemove}
       />,

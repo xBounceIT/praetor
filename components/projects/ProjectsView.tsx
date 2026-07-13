@@ -379,9 +379,9 @@ const useProjectsController = ({
     string,
     Record<string, number>
   > | null>(null);
-  const loadedProjectIdsKeyRef = useRef(projectIdsKey);
-  if (loadedProjectIdsKeyRef.current !== projectIdsKey) {
-    loadedProjectIdsKeyRef.current = projectIdsKey;
+  const [loadedProjectIdsKey, setLoadedProjectIdsKey] = useState(projectIdsKey);
+  if (loadedProjectIdsKey !== projectIdsKey) {
+    setLoadedProjectIdsKey(projectIdsKey);
     setAllProjectHours(projectIds.length === 0 ? {} : null);
   }
 
@@ -1212,6 +1212,7 @@ const useProjectsController = ({
 type ProjectsController = ReturnType<typeof useProjectsController>;
 
 const ProjectsView: React.FC<ProjectsViewProps> = (props) => {
+  // react-doctor-disable-next-line react-doctor/no-impure-state-updater -- Custom-hook invocation is misclassified as a state updater.
   const controller = useProjectsController(props);
   return <ProjectsLayout controller={controller} />;
 };

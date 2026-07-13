@@ -1,6 +1,6 @@
 import { ArrowUp, CalendarDays } from 'lucide-react';
 import type React from 'react';
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -41,13 +41,13 @@ const DatePickerButton: React.FC<DatePickerButtonProps> = ({
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [hours, setHours] = useState(0);
   const [minutes, setMinutes] = useState(0);
-  const loadedValueKeyRef = useRef<string | null>(null);
+  const [loadedValueKey, setLoadedValueKey] = useState<string | null>(null);
   const valueKey = value
     ? `${getLocalDateString(value)}T${value.getHours()}:${value.getMinutes()}`
     : '';
 
-  if (loadedValueKeyRef.current !== valueKey) {
-    loadedValueKeyRef.current = valueKey;
+  if (loadedValueKey !== valueKey) {
+    setLoadedValueKey(valueKey);
     if (value) {
       setSelectedDate(getLocalDateString(value));
       setHours(value.getHours());
@@ -68,6 +68,7 @@ const DatePickerButton: React.FC<DatePickerButtonProps> = ({
   };
 
   const handleDateSelect = (dateStr: string) => {
+    // react-doctor-disable-next-line react-doctor/no-impure-state-updater -- This is a selection event handler, not a functional state updater.
     setSelectedDate(dateStr);
   };
 

@@ -1,6 +1,6 @@
 import { Eye, EyeOff } from 'lucide-react';
 import type React from 'react';
-import { useCallback, useEffect, useMemo, useReducer, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useReducer, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -331,10 +331,10 @@ const useWeeklyController = ({
     [weekDays, hideWeekend],
   );
 
-  const pendingEditsWeekKeyRef = useRef(currentWeekStartKey);
+  const [pendingEditsWeekKey, setPendingEditsWeekKey] = useState(currentWeekStartKey);
 
-  if (pendingEditsWeekKeyRef.current !== currentWeekStartKey) {
-    pendingEditsWeekKeyRef.current = currentWeekStartKey;
+  if (pendingEditsWeekKey !== currentWeekStartKey) {
+    setPendingEditsWeekKey(currentWeekStartKey);
     setPendingEdits({});
   }
 
@@ -348,6 +348,7 @@ const useWeeklyController = ({
     const projectById = new Map(projects.map((p) => [p.id, p]));
     const taskKey = (projectId: string, name: string) => `${projectId}|${name}`;
     const taskSet = new Set(projectTasks.map((task) => taskKey(task.projectId, task.name)));
+    const weekDateSet = new Set(weekDates);
     const comboKey = (cid: string, pid: string, task: string) => `${cid}|${pid}|${task}`;
 
     const scopedEntries = userEntries.filter(
@@ -358,7 +359,7 @@ const useWeeklyController = ({
     );
 
     const scopedInWeek = scopedEntries
-      .filter((entry) => weekDates.includes(entry.date))
+      .filter((entry) => weekDateSet.has(entry.date))
       .sort((a, b) => {
         if (a.date !== b.date) return a.date < b.date ? -1 : 1;
         if (a.createdAt !== b.createdAt) return a.createdAt - b.createdAt;
@@ -771,6 +772,7 @@ const useWeeklyController = ({
 type WeeklyController = ReturnType<typeof useWeeklyController>;
 
 const WeeklyView: React.FC<WeeklyViewProps> = (props) => {
+  // react-doctor-disable-next-line react-doctor/no-impure-state-updater -- Custom-hook invocation is misclassified as a state updater.
   const controller = useWeeklyController(props);
   return <WeeklyViewLayout controller={controller} />;
 };

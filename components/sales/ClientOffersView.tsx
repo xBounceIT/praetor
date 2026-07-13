@@ -421,6 +421,7 @@ const useClientOffersController = ({
   );
 
   const updateProductSelection = (index: number, productId: string) => {
+    // react-doctor-disable-next-line react-doctor/no-impure-state-updater -- Product selection handler calls a domain helper, not a functional state updater.
     updateItem(index, 'productId', productId);
   };
 
@@ -547,6 +548,7 @@ const useClientOffersController = ({
 
   const handleVersionPreview = useCallback(
     (version: OfferVersion) => {
+      // react-doctor-disable-next-line react-doctor/no-impure-state-updater -- Version selection handler queues independent state transitions.
       setPreviewVersion(version);
       setFormData(
         offerToFormData({
@@ -1224,7 +1226,9 @@ const useClientOffersController = ({
   const handleDurationValueChange = (index: number, value: string) => {
     if (isReadOnly) return;
     const unit = normalizeDurationUnit(formData.items?.[index]?.durationUnit);
+    // react-doctor-disable-next-line react-doctor/no-impure-state-updater -- Duration handler calls a domain helper, not a functional state updater.
     updateItem(
+      // react-doctor-disable-next-line react-doctor/no-impure-state-updater -- The rule anchors this multi-line helper call on its first argument.
       index,
       'durationMonths',
       value === '' ? undefined : parseDurationValueToMonths(value, unit),
@@ -1440,6 +1444,7 @@ const useClientOffersController = ({
 type ClientOffersController = ReturnType<typeof useClientOffersController>;
 
 const ClientOffersView: React.FC<ClientOffersViewProps> = (props) => {
+  // react-doctor-disable-next-line react-doctor/no-impure-state-updater -- Custom-hook invocation is misclassified as a state updater.
   const controller = useClientOffersController(props);
   return <ClientOffersLayout controller={controller} />;
 };

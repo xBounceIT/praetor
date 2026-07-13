@@ -1,6 +1,7 @@
 import type React from 'react';
-import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
+import { useCallback, useEffect, useReducer, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useLatestRef } from '../../hooks/useLatestRef';
 import { supplierQuotesApi } from '../../services/api/supplierQuotes';
 import type { SupplierQuoteAttachment } from '../../types';
 import { formatInsertDateTime } from '../../utils/date';
@@ -64,8 +65,7 @@ const SupplierQuoteAttachmentsSection: React.FC<SupplierQuoteAttachmentsSectionP
   statusLabel,
 }) => {
   const { t, i18n } = useTranslation(['sales', 'common']);
-  const tRef = useRef(t);
-  tRef.current = t;
+  const tRef = useLatestRef(t);
   const [attachmentState, dispatchAttachments] = useReducer(attachmentReducer, {
     attachments: [],
     isLoading: true,
@@ -88,7 +88,7 @@ const SupplierQuoteAttachmentsSection: React.FC<SupplierQuoteAttachmentsSectionP
         }),
       });
     }
-  }, [quoteId]);
+  }, [quoteId, tRef]);
 
   useEffect(() => {
     reload();

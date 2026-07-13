@@ -1,11 +1,12 @@
 import type React from 'react';
-import { useCallback, useEffect, useMemo, useReducer, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useReducer } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { FieldLabel, RequiredMark } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useLatestRef } from '../../hooks/useLatestRef';
 import api from '../../services/api';
 import type {
   InternalProductCategory,
@@ -246,8 +247,7 @@ const useInternalListingController = ({
   // Mirror of formData for stable useCallback closures that previously read the
   // latest value via setFormData((prev) => ...). Keeps callback identities stable
   // while still observing the newest form data.
-  const formDataRef = useRef(formData);
-  formDataRef.current = formData;
+  const formDataRef = useLatestRef(formData);
 
   const defaultProductType = productTypes[0];
   const defaultTypeName = defaultProductType?.name || '';
@@ -318,7 +318,7 @@ const useInternalListingController = ({
         patch: { category: firstCategory.name, subcategory: '' },
       });
     },
-    [],
+    [formDataRef],
   );
 
   const openAddModal = () => {

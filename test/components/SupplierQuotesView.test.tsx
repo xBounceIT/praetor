@@ -1,7 +1,8 @@
-import { afterEach, describe, expect, mock, test } from 'bun:test';
-import { fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { afterEach, describe, expect, mock, spyOn } from 'bun:test';
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import type { Client, Product, Supplier, SupplierQuote } from '../../types';
 import { installI18nMock } from '../helpers/i18n';
+import { reactTest as test } from '../helpers/reactTest';
 import { render } from '../helpers/render';
 import {
   expectSourceContainsAll,
@@ -10,6 +11,10 @@ import {
 } from './modalStylingTestUtils';
 
 installI18nMock();
+
+const supplierQuotesModule = await import('../../services/api/supplierQuotes');
+spyOn(supplierQuotesModule.supplierQuotesApi, 'listAttachments').mockResolvedValue([]);
+spyOn(supplierQuotesModule.supplierQuotesApi, 'listVersions').mockResolvedValue([]);
 
 const SupplierQuotesView = (await import('../../components/sales/SupplierQuotesView')).default;
 
@@ -76,6 +81,13 @@ const baseProps = {
   currency: 'EUR',
 };
 
+const openQuote = async (id: string) => {
+  await act(async () => {
+    fireEvent.click(screen.getByText(id));
+    await Promise.resolve();
+  });
+};
+
 afterEach(() => {
   // Modal sets body.style.overflow='hidden'; reset defensively even though we mock it.
   document.body.style.overflow = '';
@@ -101,9 +113,9 @@ describe('<SupplierQuotesView /> list columns', () => {
 });
 
 describe('<SupplierQuotesView /> read-only gating', () => {
-  test('clicking a draft row opens the modal in editable mode', () => {
+  test('clicking a draft row opens the modal in editable mode', async () => {
     render(<SupplierQuotesView {...baseProps} />);
-    fireEvent.click(screen.getByText('SQ-DRAFT'));
+    await openQuote('SQ-DRAFT');
     // Edit modal title and Update submit button are rendered.
     expect(screen.getByText('sales:supplierQuotes.editQuote')).toBeInTheDocument();
     expect(screen.getByText('common:buttons.update')).toBeInTheDocument();
@@ -112,33 +124,33 @@ describe('<SupplierQuotesView /> read-only gating', () => {
     expect(screen.queryByText('sales:supplierQuotes.readOnlyLinked')).not.toBeInTheDocument();
   });
 
-  test('clicking a sent row opens the modal in read-only mode', () => {
+  test('clicking a sent row opens the modal in read-only mode', async () => {
     render(<SupplierQuotesView {...baseProps} />);
-    fireEvent.click(screen.getByText('SQ-SENT'));
+    await openQuote('SQ-SENT');
     expect(screen.getByText('sales:supplierQuotes.viewQuote')).toBeInTheDocument();
     expect(screen.queryByText('common:buttons.update')).not.toBeInTheDocument();
     expect(screen.getByText('sales:supplierQuotes.readOnlyStatus')).toBeInTheDocument();
   });
 
-  test('clicking an accepted row (without linked order) opens the modal in read-only mode', () => {
+  test('clicking an accepted row (without linked order) opens the modal in read-only mode', async () => {
     render(<SupplierQuotesView {...baseProps} />);
-    fireEvent.click(screen.getByText('SQ-ACCEPTED'));
+    await openQuote('SQ-ACCEPTED');
     expect(screen.getByText('sales:supplierQuotes.viewQuote')).toBeInTheDocument();
     expect(screen.queryByText('common:buttons.update')).not.toBeInTheDocument();
     expect(screen.getByText('sales:supplierQuotes.readOnlyStatus')).toBeInTheDocument();
   });
 
-  test('clicking a denied row opens the modal in read-only mode', () => {
+  test('clicking a denied row opens the modal in read-only mode', async () => {
     render(<SupplierQuotesView {...baseProps} />);
-    fireEvent.click(screen.getByText('SQ-DENIED'));
+    await openQuote('SQ-DENIED');
     expect(screen.getByText('sales:supplierQuotes.viewQuote')).toBeInTheDocument();
     expect(screen.queryByText('common:buttons.update')).not.toBeInTheDocument();
     expect(screen.getByText('sales:supplierQuotes.readOnlyStatus')).toBeInTheDocument();
   });
 
-  test('clicking an accepted row with a linked order shows the linked-order banner', () => {
+  test('clicking an accepted row with a linked order shows the linked-order banner', async () => {
     render(<SupplierQuotesView {...baseProps} />);
-    fireEvent.click(screen.getByText('SQ-ACCEPTED-ORDER'));
+    await openQuote('SQ-ACCEPTED-ORDER');
     expect(screen.getByText('sales:supplierQuotes.viewQuote')).toBeInTheDocument();
     expect(screen.queryByText('common:buttons.update')).not.toBeInTheDocument();
     // Linked-order copy wins over the generic non-draft copy.
@@ -148,9 +160,9 @@ describe('<SupplierQuotesView /> read-only gating', () => {
 });
 
 describe('<SupplierQuotesView /> supplier pricing chain', () => {
-  test('renders the list-price, discount, and unit-cost columns on a draft quote', () => {
+  test('renders the list-price, discount, and unit-cost columns on a draft quote', async () => {
     render(<SupplierQuotesView {...baseProps} />);
-    fireEvent.click(screen.getByText('SQ-DRAFT'));
+    await act(async () => fireEvent.click(screen.getByText('SQ-DRAFT')));
     expect(screen.getAllByText('sales:supplierQuotes.listPrice').length).toBeGreaterThan(0);
     expect(screen.getAllByText('sales:supplierQuotes.discountToUs').length).toBeGreaterThan(0);
     expect(screen.getAllByText('sales:supplierQuotes.unitCost').length).toBeGreaterThan(0);
@@ -159,7 +171,7 @@ describe('<SupplierQuotesView /> supplier pricing chain', () => {
   test('editing list price and discount recomputes the net unit cost in the submit payload', async () => {
     const onUpdateQuote = mock((_id: string, _updates: Partial<SupplierQuote>) => {});
     render(<SupplierQuotesView {...baseProps} onUpdateQuote={onUpdateQuote} />);
-    fireEvent.click(screen.getByText('SQ-DRAFT'));
+    await act(async () => fireEvent.click(screen.getByText('SQ-DRAFT')));
 
     // List price starts at 100 (formatted to 2 decimals); there is one input per layout.
     const listPriceInputs = screen.getAllByDisplayValue('100,00');
@@ -168,7 +180,7 @@ describe('<SupplierQuotesView /> supplier pricing chain', () => {
     const discountInputs = screen.getAllByDisplayValue('0');
     fireEvent.change(discountInputs[0], { target: { value: '10' } });
 
-    fireEvent.click(screen.getByText('common:buttons.update'));
+    await act(async () => fireEvent.click(screen.getByText('common:buttons.update')));
 
     expect(onUpdateQuote).toHaveBeenCalledTimes(1);
     const updates = onUpdateQuote.mock.calls[0]?.[1] as Partial<SupplierQuote>;
@@ -179,16 +191,16 @@ describe('<SupplierQuotesView /> supplier pricing chain', () => {
     expect(item?.unitPrice).toBe(180);
   });
 
-  test('clamps a discount typed above 100% to 100 so the net cost never goes negative', () => {
+  test('clamps a discount typed above 100% to 100 so the net cost never goes negative', async () => {
     const onUpdateQuote = mock((_id: string, _updates: Partial<SupplierQuote>) => {});
     render(<SupplierQuotesView {...baseProps} onUpdateQuote={onUpdateQuote} />);
-    fireEvent.click(screen.getByText('SQ-DRAFT'));
+    await act(async () => fireEvent.click(screen.getByText('SQ-DRAFT')));
 
     // SQ-DRAFT starts at listPrice 100, discount 0; "0" uniquely matches the discount inputs.
     const discountInputs = screen.getAllByDisplayValue('0');
     fireEvent.change(discountInputs[0], { target: { value: '150' } });
 
-    fireEvent.click(screen.getByText('common:buttons.update'));
+    await act(async () => fireEvent.click(screen.getByText('common:buttons.update')));
 
     expect(onUpdateQuote).toHaveBeenCalledTimes(1);
     const updates = onUpdateQuote.mock.calls[0]?.[1] as Partial<SupplierQuote>;
@@ -198,10 +210,10 @@ describe('<SupplierQuotesView /> supplier pricing chain', () => {
     expect(item?.unitPrice).toBe(0);
   });
 
-  test('rounds list price/discount to DB scale so the submitted net cost matches the server', () => {
+  test('rounds list price/discount to DB scale so the submitted net cost matches the server', async () => {
     const onUpdateQuote = mock((_id: string, _updates: Partial<SupplierQuote>) => {});
     render(<SupplierQuotesView {...baseProps} onUpdateQuote={onUpdateQuote} />);
-    fireEvent.click(screen.getByText('SQ-DRAFT'));
+    await act(async () => fireEvent.click(screen.getByText('SQ-DRAFT')));
 
     // A list price with >2 decimals must be rounded to the persisted scale (NUMERIC(_,2)) before
     // deriving the net cost, exactly as the server does — otherwise the UI would show/submit a net
@@ -211,7 +223,7 @@ describe('<SupplierQuotesView /> supplier pricing chain', () => {
     const discountInputs = screen.getAllByDisplayValue('0');
     fireEvent.change(discountInputs[0], { target: { value: '10' } });
 
-    fireEvent.click(screen.getByText('common:buttons.update'));
+    await act(async () => fireEvent.click(screen.getByText('common:buttons.update')));
 
     const updates = onUpdateQuote.mock.calls[0]?.[1] as Partial<SupplierQuote>;
     const item = updates.items?.[0];
@@ -240,19 +252,19 @@ describe('<SupplierQuotesView /> summary discount line', () => {
     ],
   });
 
-  test('shows the Sconto a noi line in the Riepilogo when a line has a discount', () => {
+  test('shows the Sconto a noi line in the Riepilogo when a line has a discount', async () => {
     render(<SupplierQuotesView {...baseProps} quotes={[discountedQuote]} />);
-    fireEvent.click(screen.getByText('SQ-DISCOUNT'));
+    await openQuote('SQ-DISCOUNT');
     // Discount row label renders only when the aggregate discount is > 0.
     expect(screen.getByText('sales:supplierQuotes.discountAmount')).toBeInTheDocument();
     // Subtotale = gross 500, Sconto = 75, Totale = net 425.
     expect(screen.getByText('-75,00 EUR')).toBeInTheDocument();
   });
 
-  test('omits the discount line when no line has a discount', () => {
+  test('omits the discount line when no line has a discount', async () => {
     render(<SupplierQuotesView {...baseProps} />);
     // SQ-DRAFT: listPrice 100, discount 0 → gross == net, no discount.
-    fireEvent.click(screen.getByText('SQ-DRAFT'));
+    await openQuote('SQ-DRAFT');
     expect(screen.queryByText('sales:supplierQuotes.discountAmount')).not.toBeInTheDocument();
   });
 });
@@ -368,16 +380,18 @@ describe('<SupplierQuotesView /> required list price', () => {
     }
   });
 
-  test.each(['.', ','])('rejects a separator-only list price (%s)', (separator) => {
-    const onAddQuote = mock((_data: Partial<SupplierQuote>) => Promise.resolve(draft));
-    render(<SupplierQuotesView {...baseProps} quotes={[]} onAddQuote={onAddQuote} />);
+  for (const separator of ['.', ',']) {
+    test(`rejects a separator-only list price (${separator})`, () => {
+      const onAddQuote = mock((_data: Partial<SupplierQuote>) => Promise.resolve(draft));
+      render(<SupplierQuotesView {...baseProps} quotes={[]} onAddQuote={onAddQuote} />);
 
-    fillNewQuoteForm('Globex Corp', separator);
-    fireEvent.submit(screen.getByText('common:buttons.save').closest('form') as HTMLFormElement);
+      fillNewQuoteForm('Globex Corp', separator);
+      fireEvent.submit(screen.getByText('common:buttons.save').closest('form') as HTMLFormElement);
 
-    expect(onAddQuote).not.toHaveBeenCalled();
-    expect(screen.getByText('sales:supplierQuotes.errors.listPriceRequired')).toBeInTheDocument();
-  });
+      expect(onAddQuote).not.toHaveBeenCalled();
+      expect(screen.getByText('sales:supplierQuotes.errors.listPriceRequired')).toBeInTheDocument();
+    });
+  }
 
   test('shows only format-appropriate numeric placeholders on a new line', () => {
     render(<SupplierQuotesView {...baseProps} quotes={[]} />);
@@ -429,7 +443,7 @@ describe('<SupplierQuotesView /> mandatory customer association (issue #777)', (
     expect(trigger?.textContent).not.toContain('sales:supplierQuotes.noClient');
   });
 
-  test('blocks updating an existing client-less draft until a customer is chosen', () => {
+  test('blocks updating an existing client-less draft until a customer is chosen', async () => {
     // A draft created while the link was optional (clientId null) must now name a customer to save.
     const clientless = buildQuote({
       id: 'SQ-NO-CLIENT',
@@ -441,7 +455,7 @@ describe('<SupplierQuotesView /> mandatory customer association (issue #777)', (
     render(
       <SupplierQuotesView {...baseProps} quotes={[clientless]} onUpdateQuote={onUpdateQuote} />,
     );
-    fireEvent.click(screen.getByText('SQ-NO-CLIENT'));
+    await openQuote('SQ-NO-CLIENT');
 
     // Supplier, code, and items are all valid — only the customer is missing.
     fireEvent.click(screen.getByText('common:buttons.update'));
@@ -493,7 +507,7 @@ describe('<SupplierQuotesView /> linked customer display', () => {
     expect(within(row as HTMLElement).getByText('Globex Corp')).toBeInTheDocument();
   });
 
-  test('pre-selects the linked customer when editing a quote', () => {
+  test('pre-selects the linked customer when editing a quote', async () => {
     const withClient = buildQuote({
       id: 'SQ-EDIT-CLIENT',
       status: 'draft',
@@ -501,7 +515,7 @@ describe('<SupplierQuotesView /> linked customer display', () => {
       clientName: 'Initech',
     });
     render(<SupplierQuotesView {...baseProps} quotes={[withClient]} />);
-    fireEvent.click(screen.getByText('SQ-EDIT-CLIENT'));
+    await openQuote('SQ-EDIT-CLIENT');
     expect(screen.getByText('sales:supplierQuotes.editQuote')).toBeInTheDocument();
     // The customer select trigger reflects the linked client's name (scoped by id; the list row
     // behind the modal also renders "Initech").
@@ -509,7 +523,7 @@ describe('<SupplierQuotesView /> linked customer display', () => {
     expect(trigger?.textContent).toContain('Initech');
   });
 
-  test('shows the stored customer name when the linked client is absent from the options', () => {
+  test('shows the stored customer name when the linked client is absent from the options', async () => {
     // The /clients list is user-scoped and does not include the linked client; the select must
     // still surface the quote's stored clientName rather than the empty placeholder.
     const withScopedOutClient = buildQuote({
@@ -519,7 +533,7 @@ describe('<SupplierQuotesView /> linked customer display', () => {
       clientName: 'Hidden Customer',
     });
     render(<SupplierQuotesView {...baseProps} quotes={[withScopedOutClient]} />);
-    fireEvent.click(screen.getByText('SQ-SCOPED-CLIENT'));
+    await openQuote('SQ-SCOPED-CLIENT');
     const trigger = document.getElementById('supplier-quote-client');
     expect(trigger?.textContent).toContain('Hidden Customer');
     expect(trigger?.textContent).not.toContain('sales:supplierQuotes.selectClient');
@@ -547,9 +561,9 @@ describe('<SupplierQuotesView /> line item duration (issue #776)', () => {
     ],
   });
 
-  test('renders the Durata column and an editable duration for a time-based line', () => {
+  test('renders the Durata column and an editable duration for a time-based line', async () => {
     render(<SupplierQuotesView {...baseProps} quotes={[daysLineQuote]} />);
-    fireEvent.click(screen.getByText('SQ-DURATION'));
+    await openQuote('SQ-DURATION');
     // The Durata column header renders once a line item exists...
     expect(screen.getAllByText('sales:supplierQuotes.durationColumn').length).toBeGreaterThan(0);
     // ...and the row carries a duration input reflecting the stored value (3 months).
@@ -568,11 +582,11 @@ describe('<SupplierQuotesView /> line item duration (issue #776)', () => {
     expect(screen.queryByText('200,00 EUR')).not.toBeInTheDocument();
   });
 
-  test('renders an editable duration for a unit-measured line (duration applies to every type)', () => {
+  test('renders an editable duration for a unit-measured line (duration applies to every type)', async () => {
     // SQ-DRAFT's sample item is unitType "unit". Under the new model duration applies to every line
     // type (issue #775) — the cell shows the editable value + selector, not a static N/A.
     render(<SupplierQuotesView {...baseProps} />);
-    fireEvent.click(screen.getByText('SQ-DRAFT'));
+    await openQuote('SQ-DRAFT');
     expect(screen.queryAllByText('common:labels.notApplicable')).toHaveLength(0);
     const durationInputs = screen
       .getAllByRole('textbox', { name: 'sales:supplierQuotes.durationColumn' })
@@ -580,7 +594,7 @@ describe('<SupplierQuotesView /> line item duration (issue #776)', () => {
     expect(durationInputs.length).toBeGreaterThan(0);
   });
 
-  test('treats a line with durationUnit "na" as no-duration (x1) and disables its value input', () => {
+  test('treats a line with durationUnit "na" as no-duration (x1) and disables its value input', async () => {
     const naQuote = buildQuote({
       id: 'SQ-DUR-NA',
       status: 'draft',
@@ -601,7 +615,7 @@ describe('<SupplierQuotesView /> line item duration (issue #776)', () => {
       ],
     });
     render(<SupplierQuotesView {...baseProps} quotes={[naQuote]} />);
-    fireEvent.click(screen.getByText('SQ-DUR-NA'));
+    await act(async () => fireEvent.click(screen.getByText('SQ-DUR-NA')));
     // 2 × 100 × 1 (na) = 200.00 — not 600.00, even though durationMonths is 3.
     expect(screen.getAllByText('200,00 EUR').length).toBeGreaterThan(0);
     expect(screen.queryByText('600,00 EUR')).not.toBeInTheDocument();
@@ -613,7 +627,7 @@ describe('<SupplierQuotesView /> line item duration (issue #776)', () => {
     expect(durationInputs.every((el) => el.disabled)).toBe(true);
   });
 
-  test('editing the duration updates the submitted multiplier', () => {
+  test('editing the duration updates the submitted multiplier', async () => {
     const onUpdateQuote = mock((_id: string, _updates: Partial<SupplierQuote>) => {});
     const editableQuote = buildQuote({
       id: 'SQ-DUR-EDIT',
@@ -636,14 +650,14 @@ describe('<SupplierQuotesView /> line item duration (issue #776)', () => {
     render(
       <SupplierQuotesView {...baseProps} quotes={[editableQuote]} onUpdateQuote={onUpdateQuote} />,
     );
-    fireEvent.click(screen.getByText('SQ-DUR-EDIT'));
+    await act(async () => fireEvent.click(screen.getByText('SQ-DUR-EDIT')));
 
     const durationInputs = screen
       .getAllByRole('textbox', { name: 'sales:supplierQuotes.durationColumn' })
       .filter((el): el is HTMLInputElement => el instanceof HTMLInputElement);
     fireEvent.change(durationInputs[0], { target: { value: '4' } });
 
-    fireEvent.click(screen.getByText('common:buttons.update'));
+    await act(async () => fireEvent.click(screen.getByText('common:buttons.update')));
 
     expect(onUpdateQuote).toHaveBeenCalledTimes(1);
     const updates = onUpdateQuote.mock.calls[0]?.[1] as Partial<SupplierQuote>;
@@ -651,7 +665,7 @@ describe('<SupplierQuotesView /> line item duration (issue #776)', () => {
     expect(updates.items?.[0]?.durationUnit).toBe('months');
   });
 
-  test("submits each line's stored duration verbatim (no unit-line coercion)", () => {
+  test("submits each line's stored duration verbatim (no unit-line coercion)", async () => {
     const onUpdateQuote = mock((_id: string, _updates: Partial<SupplierQuote>) => {});
     const mixedQuote = buildQuote({
       id: 'SQ-DUR-MIX',
@@ -688,8 +702,8 @@ describe('<SupplierQuotesView /> line item duration (issue #776)', () => {
     render(
       <SupplierQuotesView {...baseProps} quotes={[mixedQuote]} onUpdateQuote={onUpdateQuote} />,
     );
-    fireEvent.click(screen.getByText('SQ-DUR-MIX'));
-    fireEvent.click(screen.getByText('common:buttons.update'));
+    await act(async () => fireEvent.click(screen.getByText('SQ-DUR-MIX')));
+    await act(async () => fireEvent.click(screen.getByText('common:buttons.update')));
 
     expect(onUpdateQuote).toHaveBeenCalledTimes(1);
     const updates = onUpdateQuote.mock.calls[0]?.[1] as Partial<SupplierQuote>;

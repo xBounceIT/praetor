@@ -1,7 +1,8 @@
-import { afterEach, describe, expect, mock, test } from 'bun:test';
-import { fireEvent, screen } from '@testing-library/react';
+import { afterEach, describe, expect, mock } from 'bun:test';
+import { act, fireEvent, screen } from '@testing-library/react';
 import type { Product, Supplier, SupplierInvoice } from '../../types';
 import { installI18nMock } from '../helpers/i18n';
+import { reactTest as test } from '../helpers/reactTest';
 import { render } from '../helpers/render';
 import { openRowDeleteButton } from '../helpers/rowDeleteButtons';
 import {
@@ -85,7 +86,7 @@ describe('<SupplierInvoicesView /> line item duration (issue #776/#775)', () => 
     expect(durationInputs[0].value).toBe('3');
   });
 
-  test('editing the duration updates the submitted multiplier', () => {
+  test('editing the duration updates the submitted multiplier', async () => {
     const onUpdateInvoice = mock((_id: string, _updates: Partial<SupplierInvoice>) => {});
     const invoice = buildInvoice({ id: 'SINV-DUR-SUBMIT', status: 'draft' });
     render(
@@ -102,7 +103,9 @@ describe('<SupplierInvoicesView /> line item duration (issue #776/#775)', () => 
       .filter((el): el is HTMLInputElement => el instanceof HTMLInputElement);
     fireEvent.change(durationInputs[0], { target: { value: '5' } });
 
-    fireEvent.click(screen.getByText('common:buttons.update'));
+    await act(async () => {
+      fireEvent.click(screen.getByText('common:buttons.update'));
+    });
 
     expect(onUpdateInvoice).toHaveBeenCalledTimes(1);
     const updates = onUpdateInvoice.mock.calls[0]?.[1] as Partial<SupplierInvoice>;
@@ -120,7 +123,7 @@ describe('<SupplierInvoicesView /> line item duration (issue #776/#775)', () => 
         onUpdateInvoice={onUpdateInvoice}
       />,
     );
-    fireEvent.click(screen.getByText('SINV-BLANK-DURATION'));
+    await act(async () => fireEvent.click(screen.getByText('SINV-BLANK-DURATION')));
 
     const durationInput = screen
       .getAllByPlaceholderText('0')
@@ -133,13 +136,13 @@ describe('<SupplierInvoicesView /> line item duration (issue #776/#775)', () => 
       .map((element) => element.closest('button'))
       .find(Boolean);
     if (!durationUnitButton) throw new Error('Duration unit button not found');
-    fireEvent.click(durationUnitButton);
+    await act(async () => fireEvent.click(durationUnitButton));
     const yearsOption = (await screen.findAllByText('accounting:supplierInvoices.years'))
       .map((element) => element.closest('[data-slot="select-item"]'))
       .find(Boolean);
     if (!yearsOption) throw new Error('Years duration option not found');
-    fireEvent.click(yearsOption);
-    fireEvent.click(screen.getByText('common:buttons.update'));
+    await act(async () => fireEvent.click(yearsOption));
+    await act(async () => fireEvent.click(screen.getByText('common:buttons.update')));
 
     expect(onUpdateInvoice).toHaveBeenCalledTimes(1);
     const updates = onUpdateInvoice.mock.calls[0]?.[1];
@@ -203,10 +206,11 @@ describe('<SupplierInvoicesView /> line-item table', () => {
   test('keeps the delete action available from the StandardTable row menu', async () => {
     const invoice = buildInvoice({ id: 'SINV-DELETE', status: 'draft' });
     render(<SupplierInvoicesView {...baseProps} invoices={[invoice]} />);
-    fireEvent.click(screen.getByText('SINV-DELETE'));
+    await act(async () => fireEvent.click(screen.getByText('SINV-DELETE')));
 
     const dialog = await screen.findByRole('dialog');
-    fireEvent.click(await openRowDeleteButton(dialog));
+    const deleteButton = await openRowDeleteButton(dialog);
+    await act(async () => fireEvent.click(deleteButton));
 
     expect(screen.queryByDisplayValue('Managed service')).not.toBeInTheDocument();
   });

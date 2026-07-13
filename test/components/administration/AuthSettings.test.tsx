@@ -1,5 +1,5 @@
-import { afterAll, beforeEach, describe, expect, mock, test } from 'bun:test';
-import { fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { afterAll, beforeEach, describe, expect, mock } from 'bun:test';
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import type { ComponentProps } from 'react';
 import type {
   LdapConfig,
@@ -12,6 +12,7 @@ import type {
 } from '../../../types';
 import { installI18nMock } from '../../helpers/i18n';
 import { clearSpyStateAfterAll } from '../../helpers/mockCleanup.ts';
+import { settleComponentTasks, reactTest as test } from '../../helpers/reactTest';
 import { render } from '../../helpers/render';
 
 installI18nMock();
@@ -871,7 +872,10 @@ describe('<AuthSettings />', () => {
     renderAuthSettings({ onSaveSsoProvider });
 
     const form = fillMinimalOidcProvider();
-    fireEvent.submit(form);
+    await act(async () => {
+      fireEvent.submit(form);
+      await settleComponentTasks();
+    });
 
     await waitFor(() => expect(onSaveSsoProvider).toHaveBeenCalledTimes(1));
 
@@ -886,8 +890,11 @@ describe('<AuthSettings />', () => {
   describe('masked secret guard (issue #601)', () => {
     const MASKED = '********';
 
-    const editSamlProvider = (provider: SsoProvider) => {
-      fireEvent.click(screen.getByRole('button', { name: 'admin.tabs.saml' }));
+    const editSamlProvider = async (provider: SsoProvider) => {
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'admin.tabs.saml' }));
+        await settleComponentTasks();
+      });
       const editButton = screen
         .getByText(provider.name)
         .closest('div.p-4')
@@ -900,7 +907,7 @@ describe('<AuthSettings />', () => {
       return form;
     };
 
-    test('SAML masked metadataXml/idpCert/privateKey render as a "Secret stored" badge instead of a textarea pre-filled with the mask', () => {
+    test('SAML masked metadataXml/idpCert/privateKey render as a "Secret stored" badge instead of a textarea pre-filled with the mask', async () => {
       const provider = buildProvider('saml', {
         id: 'saml-stored',
         name: 'SAML Stored',
@@ -912,7 +919,7 @@ describe('<AuthSettings />', () => {
         privateKey: MASKED,
       });
       renderAuthSettings({ ssoProviders: [provider] });
-      const form = editSamlProvider(provider);
+      const form = await editSamlProvider(provider);
 
       expect(within(form).queryAllByText('admin.sso.metadataXmlStored')).toHaveLength(1);
       expect(within(form).queryAllByText('admin.sso.idpCertStored')).toHaveLength(1);
@@ -940,9 +947,12 @@ describe('<AuthSettings />', () => {
         ...next,
       }));
       renderAuthSettings({ ssoProviders: [provider], onSaveSsoProvider });
-      const form = editSamlProvider(provider);
+      const form = await editSamlProvider(provider);
 
-      fireEvent.submit(form);
+      await act(async () => {
+        fireEvent.submit(form);
+        await settleComponentTasks();
+      });
 
       await waitFor(() => expect(onSaveSsoProvider).toHaveBeenCalledTimes(1));
       const submitted = onSaveSsoProvider.mock.calls[0]?.[0] as Partial<SsoProvider>;
@@ -969,7 +979,7 @@ describe('<AuthSettings />', () => {
         ...next,
       }));
       renderAuthSettings({ ssoProviders: [provider], onSaveSsoProvider });
-      const form = editSamlProvider(provider);
+      const form = await editSamlProvider(provider);
 
       const idpCertBlock = within(form).getByText('admin.sso.idpCertStored').closest('div')
         ?.parentElement as HTMLElement;
@@ -983,7 +993,10 @@ describe('<AuthSettings />', () => {
       expect(idpCertTextarea.value).toBe('');
 
       fireEvent.change(idpCertTextarea, { target: { value: 'NEW-CERT-PEM' } });
-      fireEvent.submit(form);
+      await act(async () => {
+        fireEvent.submit(form);
+        await settleComponentTasks();
+      });
 
       await waitFor(() => expect(onSaveSsoProvider).toHaveBeenCalledTimes(1));
       const submitted = onSaveSsoProvider.mock.calls[0]?.[0] as Partial<SsoProvider>;
@@ -993,7 +1006,7 @@ describe('<AuthSettings />', () => {
       expect(submitted.privateKey).toBe(MASKED);
     });
 
-    test('"Keep stored value" restores the mask after entering Replace mode so the admin can back out', () => {
+    test('"Keep stored value" restores the mask after entering Replace mode so the admin can back out', async () => {
       const provider = buildProvider('saml', {
         id: 'saml-stored',
         name: 'SAML Stored',
@@ -1005,7 +1018,7 @@ describe('<AuthSettings />', () => {
         privateKey: MASKED,
       });
       renderAuthSettings({ ssoProviders: [provider] });
-      const form = editSamlProvider(provider);
+      const form = await editSamlProvider(provider);
 
       const idpCertBlock = within(form).getByText('admin.sso.idpCertStored').closest('div')
         ?.parentElement as HTMLElement;

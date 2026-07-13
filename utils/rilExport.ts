@@ -1,5 +1,4 @@
-import type { Cell } from 'exceljs';
-import { Workbook } from 'exceljs';
+import type { Cell, Workbook } from 'exceljs';
 import type { RilRow } from './ril';
 import {
   calculateRilTotals,
@@ -109,8 +108,7 @@ const normalizeRows = (rows: RilRow[]): RilRow[] => {
   });
 };
 
-export const buildRilWorkbook = (input: RilWorkbookInput): Workbook => {
-  const workbook = new Workbook();
+export const buildRilWorkbook = (input: RilWorkbookInput, workbook: Workbook): Workbook => {
   workbook.creator = 'Praetor';
   workbook.created = new Date();
   const worksheet = workbook.addWorksheet('Prospetto Presenze', {
@@ -274,7 +272,8 @@ export const buildRilWorkbook = (input: RilWorkbookInput): Workbook => {
 };
 
 const writeRilWorkbookBuffer = async (input: RilWorkbookInput) => {
-  const workbook = buildRilWorkbook(input);
+  const { createExcelWorkbook } = await import('./excelJsBrowser');
+  const workbook = buildRilWorkbook(input, await createExcelWorkbook());
   return workbook.xlsx.writeBuffer();
 };
 

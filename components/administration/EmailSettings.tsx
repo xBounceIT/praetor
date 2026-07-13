@@ -1,6 +1,6 @@
 import { Check, FlaskConical, Loader2, Save, Send, Server } from 'lucide-react';
 import type React from 'react';
-import { useCallback, useReducer, useRef } from 'react';
+import { useCallback, useReducer, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import {
@@ -126,7 +126,8 @@ const SmtpConfigurationCard: React.FC<{
   isSaved: boolean;
   hasChanges: boolean;
   smtpPasswordReplace: ReturnType<typeof useSecretReplaceState>;
-  fromEmailManuallyEdited: React.MutableRefObject<boolean>;
+  fromEmailManuallyEdited: boolean;
+  markFromEmailManuallyEdited: () => void;
   setFormData: EmailSettingsUpdater;
   setErrors: EmailSettingsErrorsUpdater;
 }> = ({
@@ -137,6 +138,7 @@ const SmtpConfigurationCard: React.FC<{
   hasChanges,
   smtpPasswordReplace,
   fromEmailManuallyEdited,
+  markFromEmailManuallyEdited,
   setFormData,
   setErrors,
 }) => {
@@ -259,9 +261,9 @@ const SmtpConfigurationCard: React.FC<{
                 setFormData((prev) => ({
                   ...prev,
                   smtpUser,
-                  ...(fromEmailManuallyEdited.current ? {} : { fromEmail: smtpUser }),
+                  ...(fromEmailManuallyEdited ? {} : { fromEmail: smtpUser }),
                 }));
-                if (!fromEmailManuallyEdited.current && errors.fromEmail) {
+                if (!fromEmailManuallyEdited && errors.fromEmail) {
                   setErrors((prev) => ({ ...prev, fromEmail: '' }));
                 }
               }}
@@ -312,7 +314,7 @@ const SmtpConfigurationCard: React.FC<{
               type="email"
               value={formData.fromEmail}
               onChange={(e) => {
-                fromEmailManuallyEdited.current = true;
+                markFromEmailManuallyEdited();
                 setFormData((prev) => ({ ...prev, fromEmail: e.target.value }));
                 if (errors.fromEmail) setErrors((prev) => ({ ...prev, fromEmail: '' }));
               }}
@@ -533,7 +535,7 @@ const EmailSettings: React.FC<EmailSettingsProps> = ({ config, onSave, onTestEma
   const setTestErrors = useCallback((update: StateUpdate<Record<string, string>>) => {
     dispatchState({ type: 'setTestErrors', update });
   }, []);
-  const loadedConfigRef = useRef<EmailConfig | null>(null);
+  const [loadedConfig, setLoadedConfig] = useState<EmailConfig | null>(null);
   const smtpPasswordReplace = useSecretReplaceState(
     formData.smtpPassword,
     (smtpPassword) => setFormData((prev) => ({ ...prev, smtpPassword })),
@@ -542,12 +544,15 @@ const EmailSettings: React.FC<EmailSettingsProps> = ({ config, onSave, onTestEma
   // Lock the From Email auto-fill once the admin has supplied a value (either by
   // typing into the field or by loading a saved config that already has one).
   // Mirrors the username/firstName-surname pattern in UserManagement.
-  const fromEmailManuallyEdited = useRef<boolean>(Boolean(config?.fromEmail));
+  const [fromEmailManuallyEdited, setFromEmailManuallyEdited] = useState(
+    Boolean(config?.fromEmail),
+  );
 
-  if (loadedConfigRef.current !== config) {
-    loadedConfigRef.current = config;
+  if (loadedConfig !== config) {
+    // react-doctor-disable-next-line react-doctor/no-impure-state-updater -- React-supported prop snapshot adjustment; no updater callback is involved.
+    setLoadedConfig(config);
     dispatchState({ type: 'loadConfig', config });
-    fromEmailManuallyEdited.current = Boolean(config.fromEmail);
+    setFromEmailManuallyEdited(Boolean(config.fromEmail));
   }
 
   const hasChanges = JSON.stringify(formData) !== JSON.stringify(originalConfig);
@@ -672,6 +677,7 @@ const EmailSettings: React.FC<EmailSettingsProps> = ({ config, onSave, onTestEma
           hasChanges={hasChanges}
           smtpPasswordReplace={smtpPasswordReplace}
           fromEmailManuallyEdited={fromEmailManuallyEdited}
+          markFromEmailManuallyEdited={() => setFromEmailManuallyEdited(true)}
           setFormData={setFormData}
           setErrors={setErrors}
         />

@@ -688,6 +688,7 @@ const useClientQuotesController = ({
   const openEditModal = useCallback(
     (quote: Quote) => {
       dispatch({ type: 'openEditModal', quote });
+      // react-doctor-disable-next-line react-doctor/no-impure-state-updater -- Modal event handler calls a form helper, not a functional state updater.
       applyQuoteToCandidateForm(quote);
       setPreviewVersion(null);
     },
@@ -703,7 +704,9 @@ const useClientQuotesController = ({
     const nextDrafts = currentCandidateDrafts();
     const next = nextDrafts.find((candidate) => candidate.id === candidateId);
     if (!next) return;
+    // react-doctor-disable-next-line react-doctor/no-impure-state-updater -- Candidate selection handler queues independent state transitions.
     setCandidateDrafts(nextDrafts);
+    // react-doctor-disable-next-line react-doctor/no-impure-state-updater -- Candidate selection handler queues independent state transitions.
     setActiveCandidateId(candidateId);
     setFormData(
       candidateToFormData(
@@ -798,6 +801,7 @@ const useClientQuotesController = ({
 
   const openPromotionDialog = (quote: Quote) => {
     const eligible = (quote.candidates || []).find(isCandidatePromotable);
+    // react-doctor-disable-next-line react-doctor/no-impure-state-updater -- Dialog event handler queues independent state transitions.
     setPromotionQuote(quote);
     setPromotionCandidateId(eligible?.id ?? null);
   };
@@ -828,6 +832,13 @@ const useClientQuotesController = ({
   const handleVersionPreview = useCallback(
     (version: QuoteVersion) => {
       const quoteId = editingQuote?.id ?? version.snapshot.quote.id;
+      const itemsByCandidateId = new Map<string, QuoteItem[]>();
+      for (const item of version.snapshot.items) {
+        if (!item.candidateId) continue;
+        const candidateItems = itemsByCandidateId.get(item.candidateId) ?? [];
+        candidateItems.push(item);
+        itemsByCandidateId.set(item.candidateId, candidateItems);
+      }
       const candidates = version.snapshot.candidates.map((candidate) => ({
         ...candidate,
         quoteId,
@@ -835,9 +846,9 @@ const useClientQuotesController = ({
           candidate.communicationChannelId || communicationChannels[0]?.id || '',
         communicationChannelName:
           candidate.communicationChannelName || communicationChannels[0]?.name || '',
-        items: version.snapshot.items
-          .filter((item) => item.candidateId === candidate.id)
-          .map((item) => normalizeQuoteItem({ ...item, quoteId })),
+        items: (itemsByCandidateId.get(candidate.id) ?? []).map((item) =>
+          normalizeQuoteItem({ ...item, quoteId }),
+        ),
       }));
       const previewQuote = normalizeQuote({
         ...version.snapshot.quote,
@@ -845,7 +856,9 @@ const useClientQuotesController = ({
         items: [],
         candidates,
       });
+      // react-doctor-disable-next-line react-doctor/no-impure-state-updater -- Version selection handler queues independent state transitions.
       setPreviewVersion(version);
+      // react-doctor-disable-next-line react-doctor/no-impure-state-updater -- Version selection handler calls a form helper, not an updater callback.
       applyQuoteToCandidateForm(previewQuote);
     },
     [applyQuoteToCandidateForm, communicationChannels, editingQuote],
@@ -859,6 +872,7 @@ const useClientQuotesController = ({
   const handleVersionRestored = useCallback(
     (updated: Quote) => {
       dispatch({ type: 'setEditingQuote', quote: updated });
+      // react-doctor-disable-next-line react-doctor/no-impure-state-updater -- Restore callback calls a form helper, not a functional state updater.
       applyQuoteToCandidateForm(updated);
       setPreviewVersion(null);
       onQuoteRestored?.(updated);
@@ -1170,6 +1184,7 @@ const useClientQuotesController = ({
       return;
     }
 
+    // react-doctor-disable-next-line react-doctor/no-impure-state-updater -- Client-change handler calls a domain helper, not a functional state updater.
     applyClientChange(clientId, nextClientName, true);
     if (errors.clientId) {
       setErrors((prev) => {
@@ -1257,6 +1272,7 @@ const useClientQuotesController = ({
       if (isReadOnly) return;
       event.dataTransfer.effectAllowed = 'move';
       event.dataTransfer.setData('text/plain', itemId);
+      // react-doctor-disable-next-line react-doctor/no-impure-state-updater -- Drag event handler queues one state transition.
       setDraggedItemId(itemId);
     },
     [isReadOnly],
@@ -1295,6 +1311,7 @@ const useClientQuotesController = ({
       else return;
 
       event.preventDefault();
+      // react-doctor-disable-next-line react-doctor/no-impure-state-updater -- Drop event handler calls a row-move helper, not an updater callback.
       moveProductRow(index, targetIndex);
     },
     [formData.items?.length, isReadOnly, moveProductRow],
@@ -1517,6 +1534,7 @@ const useClientQuotesController = ({
     Boolean(item.supplierQuoteItemId && (!item.productId || !activeProductIds.has(item.productId)));
 
   const updateProductSelection = (index: number, productId: string) => {
+    // react-doctor-disable-next-line react-doctor/no-impure-state-updater -- Product selection handler calls a domain helper, not a functional state updater.
     updateProductRow(index, 'productId', productId);
   };
 
@@ -1541,7 +1559,9 @@ const useClientQuotesController = ({
   const handleDurationValueChange = (index: number, value: string) => {
     if (isReadOnly) return;
     const unit = normalizeDurationUnit(formData.items?.[index]?.durationUnit);
+    // react-doctor-disable-next-line react-doctor/no-impure-state-updater -- Duration handler calls a domain helper, not a functional state updater.
     updateProductRow(
+      // react-doctor-disable-next-line react-doctor/no-impure-state-updater -- The rule anchors this multi-line helper call on its first argument.
       index,
       'durationMonths',
       value === '' ? undefined : parseDurationValueToMonths(value, unit),
@@ -2227,6 +2247,7 @@ const useClientQuotesController = ({
 type ClientQuotesController = ReturnType<typeof useClientQuotesController>;
 
 const ClientQuotesView: React.FC<ClientQuotesViewProps> = (props) => {
+  // react-doctor-disable-next-line react-doctor/no-impure-state-updater -- Custom-hook invocation is misclassified as a state updater.
   const controller = useClientQuotesController(props);
   return <ClientQuotesLayout controller={controller} />;
 };

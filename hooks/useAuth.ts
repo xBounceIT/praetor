@@ -118,6 +118,7 @@ export function useAuth(opts: UseAuthOptions = {}) {
       // currentUser see the cleaned auth-scoped state in the same render batch - otherwise
       // a login or role-switch can briefly resurface the previous session's data.
       onLoginRef.current?.(user);
+      // react-doctor-disable-next-line react-doctor/no-impure-state-updater -- Async login callback queues state after external cleanup; it is not an updater function.
       setCurrentUser(user);
       await loadUserSettings();
     },

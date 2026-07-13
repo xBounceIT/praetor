@@ -13,6 +13,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { useLatestRef } from '../../hooks/useLatestRef';
 import {
   bottom,
   DASHBOARD_COLS,
@@ -95,20 +96,21 @@ const DashboardGrid: React.FC<DashboardGridProps> = ({
 }) => {
   const { t } = useTranslation(['projects']);
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const observerRef = useRef<ResizeObserver | null>(null);
+  const [containerElement, setContainerElement] = useState<HTMLDivElement | null>(null);
   const [width, setWidth] = useState(0);
   const [drag, setDrag] = useState<DragState | null>(null);
-  const editingSessionRef = useRef(0);
-  const previousEditingRef = useRef(editing);
-  if (previousEditingRef.current !== editing) {
-    previousEditingRef.current = editing;
-    if (!editing) editingSessionRef.current += 1;
+  const [editingState, setEditingState] = useState({ previousEditing: editing, session: 0 });
+  if (editingState.previousEditing !== editing) {
+    setEditingState({
+      previousEditing: editing,
+      session: editingState.session + (editing ? 0 : 1),
+    });
   }
-  const activeDrag = editing && drag?.editingSession === editingSessionRef.current ? drag : null;
+  const editingSession = editingState.session;
+  const activeDrag = editing && drag?.editingSession === editingSession ? drag : null;
   // Latest drag, readable from the window listeners so a fast pointerup commits
   // the most recent preview rather than the closure's stale one.
-  const dragRef = useRef<DragState | null>(null);
-  dragRef.current = activeDrag;
+  const dragRef = useLatestRef(activeDrag);
 
   // Resolve the <DashboardItem> children into a flat id→content list.
   const items = useMemo<ResolvedItem[]>(() => {
@@ -131,9 +133,16 @@ const DashboardGrid: React.FC<DashboardGridProps> = ({
   // responsive breakpoint and freeze the width.
   const setContainerEl = useCallback((el: HTMLDivElement | null) => {
     containerRef.current = el;
-    observerRef.current?.disconnect();
-    observerRef.current = null;
+    // react-doctor-disable-next-line react-doctor/no-impure-state-updater -- Callback ref synchronizes the observed DOM node; it is not a state updater callback.
+    setContainerElement(el);
+  }, []);
+
+  // react-doctor-disable-next-line react-doctor/no-derived-state-effect -- ResizeObserver measurements are external input, not render-derivable state.
+  useEffect(() => {
+    const el = containerElement;
     if (!el) return;
+
+    // react-doctor-disable-next-line react-doctor/no-derived-state -- Width is external ResizeObserver input and cannot be derived during render.
     setWidth(el.clientWidth);
     if (typeof ResizeObserver === 'undefined') return;
     // Ignore a notification that was already queued for an element we've since
@@ -142,8 +151,8 @@ const DashboardGrid: React.FC<DashboardGridProps> = ({
       if (containerRef.current === el) setWidth(el.clientWidth);
     });
     ro.observe(el);
-    observerRef.current = ro;
-  }, []);
+    return () => ro.disconnect();
+  }, [containerElement]);
 
   const cols = DASHBOARD_COLS;
   const singleColumn = width > 0 && width < SINGLE_COLUMN_BREAKPOINT;
@@ -153,8 +162,7 @@ const DashboardGrid: React.FC<DashboardGridProps> = ({
 
   // The window listeners read the live layout / grid units / callbacks from here
   // so they stay correct without re-subscribing on every pointer move.
-  const gridRef = useRef({ layout, unitX, unitY, defsById, onMove, onResize });
-  gridRef.current = { layout, unitX, unitY, defsById, onMove, onResize };
+  const gridRef = useLatestRef({ layout, unitX, unitY, defsById, onMove, onResize });
 
   const rectStyle = (s: DashboardWidgetState): React.CSSProperties => ({
     position: 'absolute',
@@ -193,7 +201,7 @@ const DashboardGrid: React.FC<DashboardGridProps> = ({
     setDrag({
       id,
       mode,
-      editingSession: editingSessionRef.current,
+      editingSession,
       pointerId: e.pointerId,
       startClientX: e.clientX,
       startClientY: e.clientY,

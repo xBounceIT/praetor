@@ -188,7 +188,7 @@ describe('ProjectDetailView wiring', () => {
     // that permission the fetch 403s and the KPI would show a misleading "0".
     const source = await readSource();
     expect(source).toMatch(
-      /loadedAssignedKeyRef\.current !== assignedLoadKey[\s\S]{0,160}setAssignedUserIds\(\[\]\)/,
+      /loadedAssignedKey !== assignedLoadKey[\s\S]{0,160}setAssignedUserIds\(\[\]\)/,
     );
     expect(source).toMatch(/if \(!canManageAssignments\) \{\s*return;\s*\}/);
     // The team-size card is gated via the predicate and placed via its grid item.

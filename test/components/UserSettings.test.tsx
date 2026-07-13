@@ -1,8 +1,9 @@
-import { beforeEach, describe, expect, mock, test } from 'bun:test';
+import { beforeEach, describe, expect, mock } from 'bun:test';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { PersonalAccessToken, Settings } from '../../services/api';
 import type { UserAuthMethod } from '../../types';
 import { installI18nMock } from '../helpers/i18n';
+import { settleComponentTasks, reactTest as test } from '../helpers/reactTest';
 
 installI18nMock();
 
@@ -277,7 +278,7 @@ describe('<UserSettings /> Security tab', () => {
       });
       await act(async () => {
         fireEvent.click(copyButton);
-        await new Promise<void>((resolve) => setTimeout(resolve, 0));
+        await settleComponentTasks();
       });
 
       expect(writeText).toHaveBeenCalledWith('praetor_pat_abc12345-secret');
@@ -357,7 +358,7 @@ describe('<UserSettings /> MCP tokens', () => {
   test('loads MCP tokens when the MCP tab opens', async () => {
     renderSettings();
 
-    fireEvent.click(screen.getByRole('button', { name: /mcp.title/ }));
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: /mcp.title/ })));
 
     await waitFor(() => expect(onListMcpTokens).toHaveBeenCalled());
     expect(await screen.findByText('Agent')).toBeInTheDocument();
@@ -367,7 +368,7 @@ describe('<UserSettings /> MCP tokens', () => {
   test('shows the MCP endpoint URL and agent setup prompt', async () => {
     renderSettings();
 
-    fireEvent.click(screen.getByRole('button', { name: /mcp.title/ }));
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: /mcp.title/ })));
 
     const endpointUrl = screen.getByLabelText('mcp.urlLabel') as HTMLInputElement;
     expect(endpointUrl.value).toContain('/api/mcp');
@@ -409,7 +410,7 @@ describe('<UserSettings /> MCP tokens', () => {
       const copyButton = await screen.findByRole('button', { name: /mcp.copyUrl/ });
       await act(async () => {
         fireEvent.click(copyButton);
-        await new Promise<void>((resolve) => setTimeout(resolve, 0));
+        await settleComponentTasks();
       });
 
       expect(execCommand).toHaveBeenCalledWith('copy');

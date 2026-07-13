@@ -388,13 +388,6 @@ const UserAssignmentModal: React.FC<UserAssignmentModalProps> = ({
   const initializedRef = useRef(false);
   const loadAbortControllerRef = useRef<AbortController | null>(null);
 
-  if (!isOpen && initializedRef.current) {
-    initializedRef.current = false;
-    loadAbortControllerRef.current?.abort();
-    loadAbortControllerRef.current = null;
-    if (isSaving) dispatch({ type: 'saveDone' });
-  }
-
   const load = useCallback(async () => {
     loadAbortControllerRef.current?.abort();
     const controller = new AbortController();
@@ -422,11 +415,19 @@ const UserAssignmentModal: React.FC<UserAssignmentModalProps> = ({
   }, [loadAssignedUserIds, loadErrorMessage]);
 
   useEffect(() => {
-    if (isOpen && !initializedRef.current) {
+    if (isOpen) {
+      if (initializedRef.current) return;
       initializedRef.current = true;
       load();
+      return;
     }
-  }, [isOpen, load]);
+
+    if (!initializedRef.current) return;
+    initializedRef.current = false;
+    loadAbortControllerRef.current?.abort();
+    loadAbortControllerRef.current = null;
+    if (isSaving) dispatch({ type: 'saveDone' });
+  }, [isOpen, isSaving, load]);
 
   useEffect(
     () => () => {
@@ -509,29 +510,33 @@ const UserAssignmentModal: React.FC<UserAssignmentModalProps> = ({
   }, [disabled, selectedAssignedIds]);
 
   const searchLower = userSearch.toLowerCase();
+  const assignedIdSet = useMemo(() => new Set(assignedUserIds), [assignedUserIds]);
+  const assignedOrderById = useMemo(
+    () => new Map(assignedUserIds.map((id, index) => [id, index])),
+    [assignedUserIds],
+  );
 
   const availableUsers = useMemo(
     () =>
       users.filter(
         (u) =>
-          !assignedUserIds.includes(u.id) &&
+          !assignedIdSet.has(u.id) &&
           (u.name.toLowerCase().includes(searchLower) ||
             u.username.toLowerCase().includes(searchLower)),
       ),
-    [users, assignedUserIds, searchLower],
+    [users, assignedIdSet, searchLower],
   );
 
   const assignedUsers = useMemo(() => {
-    const assignedSet = new Set(assignedUserIds);
     return users
       .filter(
         (u) =>
-          assignedSet.has(u.id) &&
+          assignedIdSet.has(u.id) &&
           (u.name.toLowerCase().includes(searchLower) ||
             u.username.toLowerCase().includes(searchLower)),
       )
-      .sort((a, b) => assignedUserIds.indexOf(a.id) - assignedUserIds.indexOf(b.id));
-  }, [users, assignedUserIds, searchLower]);
+      .sort((a, b) => (assignedOrderById.get(a.id) ?? 0) - (assignedOrderById.get(b.id) ?? 0));
+  }, [users, assignedIdSet, assignedOrderById, searchLower]);
 
   return (
     <Modal isOpen={isOpen} onClose={handleClose} ariaLabel={null}>

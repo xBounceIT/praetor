@@ -1,6 +1,6 @@
 import { ImageOff, Loader2, Save, Trash2, Upload } from 'lucide-react';
 import type React from 'react';
-import { useReducer, useRef } from 'react';
+import { useReducer, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -90,13 +90,13 @@ const BrandingSettings: React.FC<BrandingSettingsProps> = ({
   const { companyName, isSavingName, isUploading, isRemoving, failedLogoUrl } = state;
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Keep the local field in sync when branding is (re)loaded or changed elsewhere. The last-synced
-  // prop is tracked in a ref (not state) so adjusting the field happens during render off the prop
-  // change itself — no post-render effect copying prop→state. See react.dev "you-might-not-need-an-effect".
-  const lastSyncedNameRef = useRef(branding.companyName ?? '');
-  if (lastSyncedNameRef.current !== (branding.companyName ?? '')) {
-    lastSyncedNameRef.current = branding.companyName ?? '';
-    dispatch({ type: 'setCompanyName', value: branding.companyName ?? '' });
+  // Keep the local field in sync when branding is (re)loaded or changed elsewhere. React supports
+  // adjusting state during render when a prop snapshot changes, avoiding a stale effect render.
+  const brandingName = branding.companyName ?? '';
+  const [lastSyncedName, setLastSyncedName] = useState(brandingName);
+  if (lastSyncedName !== brandingName) {
+    setLastSyncedName(brandingName);
+    dispatch({ type: 'setCompanyName', value: brandingName });
   }
 
   const nameChanged = companyName.trim() !== (branding.companyName ?? '');

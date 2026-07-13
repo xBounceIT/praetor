@@ -102,33 +102,32 @@ type ResolvedQuoteItem = IncomingQuoteItem & QuoteItemSnapshot;
 const indexExistingQuoteItems = (
   snapshots: clientQuotesRepo.ExistingQuoteItemSnapshot[],
   candidateId?: string,
-): Map<string, IncomingQuoteItem & QuoteItemSnapshot> =>
-  new Map(
-    snapshots
-      .filter((snapshot) => candidateId === undefined || snapshot.candidateId === candidateId)
-      .map((snapshot) => [
-        snapshot.id,
-        {
-          id: snapshot.id,
-          productId: snapshot.productId,
-          productName: '',
-          quantity: snapshot.quantity,
-          unitPrice: 0,
-          discount: 0,
-          // These placeholders only support the cost/MOL retained-line comparison; duration and
-          // the remaining commercial fields always come from the submitted candidate line.
-          durationMonths: 1,
-          durationUnit: 'months' as const,
-          productCost: snapshot.productCost,
-          productMolPercentage: snapshot.productMolPercentage,
-          supplierQuoteId: snapshot.supplierQuoteId,
-          supplierQuoteItemId: snapshot.supplierQuoteItemId,
-          supplierQuoteSupplierName: snapshot.supplierQuoteSupplierName,
-          supplierQuoteUnitPrice: snapshot.supplierQuoteUnitPrice,
-          unitType: snapshot.unitType,
-        },
-      ]),
-  );
+): Map<string, IncomingQuoteItem & QuoteItemSnapshot> => {
+  const indexed = new Map<string, IncomingQuoteItem & QuoteItemSnapshot>();
+  for (const snapshot of snapshots) {
+    if (candidateId !== undefined && snapshot.candidateId !== candidateId) continue;
+    indexed.set(snapshot.id, {
+      id: snapshot.id,
+      productId: snapshot.productId,
+      productName: '',
+      quantity: snapshot.quantity,
+      unitPrice: 0,
+      discount: 0,
+      // These placeholders only support the cost/MOL retained-line comparison; duration and
+      // the remaining commercial fields always come from the submitted candidate line.
+      durationMonths: 1,
+      durationUnit: 'months',
+      productCost: snapshot.productCost,
+      productMolPercentage: snapshot.productMolPercentage,
+      supplierQuoteId: snapshot.supplierQuoteId,
+      supplierQuoteItemId: snapshot.supplierQuoteItemId,
+      supplierQuoteSupplierName: snapshot.supplierQuoteSupplierName,
+      supplierQuoteUnitPrice: snapshot.supplierQuoteUnitPrice,
+      unitType: snapshot.unitType,
+    });
+  }
+  return indexed;
+};
 
 const isCandidateFamilyExpired = (
   candidates: quoteCandidatesRepo.QuoteCandidate[],
@@ -875,11 +874,18 @@ const isExpirationOnlyCandidateFamilyUpdate = (args: {
     (candidate) => candidate.state === 'active',
   );
   if (existingActive.length !== args.submittedCandidates.length) return false;
+  const existingActiveById = new Map(existingActive.map((candidate) => [candidate.id, candidate]));
+  const existingItemsByCandidateId = new Map<string, clientQuotesRepo.ClientQuoteItem[]>();
+  for (const item of args.existingItems) {
+    const candidateItems = existingItemsByCandidateId.get(item.candidateId) ?? [];
+    candidateItems.push(item);
+    existingItemsByCandidateId.set(item.candidateId, candidateItems);
+  }
 
   let extended = false;
   for (let index = 0; index < args.submittedCandidates.length; index++) {
     const submitted = args.submittedCandidates[index];
-    const existing = existingActive.find((candidate) => candidate.id === submitted.id);
+    const existing = submitted.id ? existingActiveById.get(submitted.id) : undefined;
     if (
       !existing ||
       existing.position !== index ||
@@ -895,9 +901,7 @@ const isExpirationOnlyCandidateFamilyUpdate = (args: {
     }
     extended ||= submitted.expirationDate > existing.expirationDate;
 
-    const existingCandidateItems = args.existingItems.filter(
-      (item) => item.candidateId === existing.id,
-    );
+    const existingCandidateItems = existingItemsByCandidateId.get(existing.id) ?? [];
     if (
       existingCandidateItems.length !== submitted.items.length ||
       submitted.items.some(
@@ -1533,32 +1537,33 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             tx,
             primaryCandidateId,
           );
-          for (let index = 1; index < preparedCandidates.length; index++) {
-            const input = preparedCandidates[index];
-            const candidateId = generatePrefixedId('qc');
-            await quoteCandidatesRepo.insert(
-              {
-                id: candidateId,
-                quoteId: created.id,
-                name: input.name,
-                position: index,
-                state: 'active',
-                paymentTerms: input.paymentTerms,
-                discount: input.discount,
-                discountType: input.discountType,
-                expirationDate: input.expirationDate,
-                communicationChannelId: input.communicationChannelId,
-                notes: input.notes,
-              },
-              tx,
-            );
-            await clientQuotesRepo.insertItems(
-              created.id,
-              buildItemsForInsert(input.items),
-              tx,
-              candidateId,
-            );
-          }
+          await Promise.all(
+            preparedCandidates.slice(1).map(async (input, offset) => {
+              const candidateId = generatePrefixedId('qc');
+              await quoteCandidatesRepo.insert(
+                {
+                  id: candidateId,
+                  quoteId: created.id,
+                  name: input.name,
+                  position: offset + 1,
+                  state: 'active',
+                  paymentTerms: input.paymentTerms,
+                  discount: input.discount,
+                  discountType: input.discountType,
+                  expirationDate: input.expirationDate,
+                  communicationChannelId: input.communicationChannelId,
+                  notes: input.notes,
+                },
+                tx,
+              );
+              await clientQuotesRepo.insertItems(
+                created.id,
+                buildItemsForInsert(input.items),
+                tx,
+                candidateId,
+              );
+            }),
+          );
           return { quote: created };
         });
 
@@ -1751,11 +1756,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           names.add(normalizedName);
           preparedCandidates.push(prepared);
         }
-        const existingActiveIds = new Set(
-          existingCandidates
-            .filter((candidate) => candidate.state === 'active')
-            .map((candidate) => candidate.id),
-        );
+        const existingActiveIds = new Set<string>();
+        for (const candidate of existingCandidates) {
+          if (candidate.state === 'active') existingActiveIds.add(candidate.id);
+        }
         const foreignCandidate = preparedCandidates.find(
           (candidate) => candidate.id && !existingActiveIds.has(candidate.id),
         );
@@ -1858,11 +1862,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               };
             }
             const lockedCandidates = await quoteCandidatesRepo.listForQuote(idResult.value, tx);
-            const lockedActiveIds = new Set(
-              lockedCandidates
-                .filter((candidate) => candidate.state === 'active')
-                .map((candidate) => candidate.id),
-            );
+            const lockedActiveIds = new Set<string>();
+            for (const candidate of lockedCandidates) {
+              if (candidate.state === 'active') lockedActiveIds.add(candidate.id);
+            }
             if (
               lockedActiveIds.size !== existingActiveIds.size ||
               Array.from(existingActiveIds).some((candidateId) => !lockedActiveIds.has(candidateId))
@@ -1934,11 +1937,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                 tx,
               );
             }
-            const submittedNamesById = new Map(
-              preparedCandidates.flatMap((candidate) =>
-                candidate.id ? [[candidate.id, candidate.name] as const] : [],
-              ),
-            );
+            const submittedNamesById = new Map<string, string>();
+            for (const candidate of preparedCandidates) {
+              if (candidate.id) submittedNamesById.set(candidate.id, candidate.name);
+            }
+            const stageNameUpdates: Array<Promise<quoteCandidatesRepo.QuoteCandidate | null>> = [];
             for (const candidate of lockedCandidates) {
               const submittedName = submittedNamesById.get(candidate.id);
               if (
@@ -1948,70 +1951,76 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               ) {
                 continue;
               }
-              const staged = await quoteCandidatesRepo.update(
-                idResult.value,
-                candidate.id,
-                {
-                  name: generatePrefixedId('qc-stage'),
-                  position: candidate.position,
-                  paymentTerms: candidate.paymentTerms,
-                  discount: candidate.discount,
-                  discountType: candidate.discountType,
-                  expirationDate: candidate.expirationDate,
-                  communicationChannelId: candidate.communicationChannelId,
-                  notes: candidate.notes,
-                },
-                tx,
+              stageNameUpdates.push(
+                quoteCandidatesRepo.update(
+                  idResult.value,
+                  candidate.id,
+                  {
+                    name: generatePrefixedId('qc-stage'),
+                    position: candidate.position,
+                    paymentTerms: candidate.paymentTerms,
+                    discount: candidate.discount,
+                    discountType: candidate.discountType,
+                    expirationDate: candidate.expirationDate,
+                    communicationChannelId: candidate.communicationChannelId,
+                    notes: candidate.notes,
+                  },
+                  tx,
+                ),
               );
-              if (!staged) throw new Error('Candidate disappeared while staging names');
+            }
+            const stagedCandidates = await Promise.all(stageNameUpdates);
+            if (stagedCandidates.some((candidate) => !candidate)) {
+              throw new Error('Candidate disappeared while staging names');
             }
 
-            for (let index = 0; index < preparedCandidates.length; index++) {
-              const input = preparedCandidates[index];
-              const candidateId =
-                input.id && lockedActiveIds.has(input.id) ? input.id : generatePrefixedId('qc');
-              const candidate = lockedActiveIds.has(candidateId)
-                ? await quoteCandidatesRepo.update(
-                    idResult.value,
-                    candidateId,
-                    {
-                      name: input.name,
-                      position: index,
-                      paymentTerms: input.paymentTerms,
-                      discount: input.discount,
-                      discountType: input.discountType,
-                      expirationDate: input.expirationDate,
-                      communicationChannelId: input.communicationChannelId,
-                      notes: input.notes,
-                    },
-                    tx,
-                  )
-                : await quoteCandidatesRepo.insert(
-                    {
-                      id: candidateId,
-                      quoteId: idResult.value,
-                      name: input.name,
-                      position: index,
-                      state: 'active',
-                      paymentTerms: input.paymentTerms,
-                      discount: input.discount,
-                      discountType: input.discountType,
-                      expirationDate: input.expirationDate,
-                      communicationChannelId: input.communicationChannelId,
-                      notes: input.notes,
-                    },
-                    tx,
-                  );
-              if (!candidate) throw new Error('Candidate disappeared during update');
-              await clientQuotesRepo.replaceItems(
-                idResult.value,
-                buildItemsForInsert(input.items),
-                tx,
-                candidateId,
-              );
-              // Draft/sent candidates are intentionally isolated supplier snapshots. Do not push
-              // quantity or cost back to the source here: promotion synchronizes only the winner.
-            }
+            await Promise.all(
+              preparedCandidates.map(async (input, index) => {
+                const candidateId =
+                  input.id && lockedActiveIds.has(input.id) ? input.id : generatePrefixedId('qc');
+                const candidate = lockedActiveIds.has(candidateId)
+                  ? await quoteCandidatesRepo.update(
+                      idResult.value,
+                      candidateId,
+                      {
+                        name: input.name,
+                        position: index,
+                        paymentTerms: input.paymentTerms,
+                        discount: input.discount,
+                        discountType: input.discountType,
+                        expirationDate: input.expirationDate,
+                        communicationChannelId: input.communicationChannelId,
+                        notes: input.notes,
+                      },
+                      tx,
+                    )
+                  : await quoteCandidatesRepo.insert(
+                      {
+                        id: candidateId,
+                        quoteId: idResult.value,
+                        name: input.name,
+                        position: index,
+                        state: 'active',
+                        paymentTerms: input.paymentTerms,
+                        discount: input.discount,
+                        discountType: input.discountType,
+                        expirationDate: input.expirationDate,
+                        communicationChannelId: input.communicationChannelId,
+                        notes: input.notes,
+                      },
+                      tx,
+                    );
+                if (!candidate) throw new Error('Candidate disappeared during update');
+                await clientQuotesRepo.replaceItems(
+                  idResult.value,
+                  buildItemsForInsert(input.items),
+                  tx,
+                  candidateId,
+                );
+                // Draft/sent candidates are intentionally isolated supplier snapshots. Do not push
+                // quantity or cost back to the source here: promotion synchronizes only the winner.
+              }),
+            );
             if (candidateFamilyId !== idResult.value) {
               const renamedParent = await clientQuotesRepo.rename(
                 idResult.value,
@@ -2688,7 +2697,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               'linked_supplier_quote_expired',
             );
           }
-          await snapshotPreState(idResult.value, 'update', request, tx);
           const supplierItemIds = Array.from(
             new Set(
               items
@@ -2696,23 +2704,28 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                 .filter((itemId): itemId is string => Boolean(itemId)),
             ),
           );
-          const liveSupplierItems = await supplierQuotesRepo.findItemsByIds(supplierItemIds, tx);
+          const [, liveSupplierItems] = await Promise.all([
+            snapshotPreState(idResult.value, 'update', request, tx),
+            supplierQuotesRepo.findItemsByIds(supplierItemIds, tx),
+          ]);
           const promotionBaselines: PreviousClientLine[] = liveSupplierItems.map((item) => ({
             supplierQuoteItemId: item.id,
             quantity: item.quantity,
             supplierQuoteUnitPrice: item.unitPrice,
           }));
-          const syncAudits = await syncSupplierItemsFromClientLines(
-            request,
-            'client_quote.promote',
-            items,
-            promotionBaselines,
-            tx,
-          );
-          const offerId = await allocateDocumentCode('client_offer', {
-            exec: tx,
-            sourceCode: currentQuote.id,
-          });
+          const [syncAudits, offerId] = await Promise.all([
+            syncSupplierItemsFromClientLines(
+              request,
+              'client_quote.promote',
+              items,
+              promotionBaselines,
+              tx,
+            ),
+            allocateDocumentCode('client_offer', {
+              exec: tx,
+              sourceCode: currentQuote.id,
+            }),
+          ]);
           const offer = await clientOffersRepo.create(
             {
               id: offerId,
@@ -3233,42 +3246,38 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               action: 'client_quote.restore.not_found',
             };
           }
-          const restoredItems: clientQuotesRepo.ClientQuoteItem[] = [];
-          for (
-            let candidateIndex = 0;
-            candidateIndex < snapshotCandidates.length;
-            candidateIndex++
-          ) {
-            const snapshotCandidate = snapshotCandidates[candidateIndex];
-            const candidateId = candidateIndex === 0 ? quote.id : generatePrefixedId('qc');
-            await quoteCandidatesRepo.insert(
-              {
-                id: candidateId,
-                quoteId: quote.id,
-                name: snapshotCandidate.name,
-                position: candidateIndex,
-                state: 'active',
-                paymentTerms: snapshotCandidate.paymentTerms,
-                discount: snapshotCandidate.discount,
-                discountType: snapshotCandidate.discountType,
-                expirationDate: snapshotCandidate.expirationDate,
-                communicationChannelId: snapshotCandidate.communicationChannelId,
-                notes: snapshotCandidate.notes,
-              },
-              tx,
-            );
-            const candidateItems = (snapshotItemsByCandidate.get(snapshotCandidate.id) ?? []).map(
-              ({ quoteId: _quoteId, candidateId: _candidateId, ...item }, position) => ({
-                ...item,
-                id: generatePrefixedId(ITEM_ID_PREFIXES.clientQuoteItem),
-                position,
-                productId: item.productId || null,
+          const restoredItems = (
+            await Promise.all(
+              snapshotCandidates.map(async (snapshotCandidate, candidateIndex) => {
+                const candidateId = candidateIndex === 0 ? quote.id : generatePrefixedId('qc');
+                await quoteCandidatesRepo.insert(
+                  {
+                    id: candidateId,
+                    quoteId: quote.id,
+                    name: snapshotCandidate.name,
+                    position: candidateIndex,
+                    state: 'active',
+                    paymentTerms: snapshotCandidate.paymentTerms,
+                    discount: snapshotCandidate.discount,
+                    discountType: snapshotCandidate.discountType,
+                    expirationDate: snapshotCandidate.expirationDate,
+                    communicationChannelId: snapshotCandidate.communicationChannelId,
+                    notes: snapshotCandidate.notes,
+                  },
+                  tx,
+                );
+                const candidateItems = (
+                  snapshotItemsByCandidate.get(snapshotCandidate.id) ?? []
+                ).map(({ quoteId: _quoteId, candidateId: _candidateId, ...item }, position) => ({
+                  ...item,
+                  id: generatePrefixedId(ITEM_ID_PREFIXES.clientQuoteItem),
+                  position,
+                  productId: item.productId || null,
+                }));
+                return clientQuotesRepo.insertItems(quote.id, candidateItems, tx, candidateId);
               }),
-            );
-            restoredItems.push(
-              ...(await clientQuotesRepo.insertItems(quote.id, candidateItems, tx, candidateId)),
-            );
-          }
+            )
+          ).flat();
           return { ok: true, quote, items: restoredItems };
         });
       } catch (err) {
