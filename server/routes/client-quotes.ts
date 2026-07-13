@@ -934,6 +934,21 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     };
   };
 
+  const familyHasBlockingSupplier = (
+    quoteStatus: string,
+    candidates: Array<{ state: string; linkedSupplierQuoteExpired: boolean }>,
+    fallback = false,
+  ): boolean => {
+    if (isTerminalQuoteStatus(quoteStatus)) return false;
+    const selected = candidates.find((candidate) => candidate.state === 'selected');
+    const relevant = selected
+      ? [selected]
+      : candidates.filter((candidate) => candidate.state === 'active');
+    return relevant.length > 0
+      ? relevant.some((candidate) => candidate.linkedSupplierQuoteExpired)
+      : fallback;
+  };
+
   const deleteDraftLinkedOfferForRollback = async (
     offerId: string,
     tx: DbExecutor,
@@ -1093,6 +1108,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       ...response,
       candidates: enrichedCandidates,
       selectedCandidateId: selected?.id ?? null,
+      linkedSupplierQuoteExpired: familyHasBlockingSupplier(
+        quote.status,
+        enrichedCandidates,
+        Array.from(blockingExpirations.values()).some((expiration) => isPastLocalDate(expiration)),
+      ),
       isExpired: familyIsExpired,
       effectiveStatus:
         familyIsExpired && quote.status !== 'offer' ? 'expired' : response.effectiveStatus,
@@ -1243,17 +1263,21 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         const allActiveExpired =
           activeCandidates.length > 0 && activeCandidates.every((candidate) => candidate.isExpired);
         const familyIsExpired = !isTerminalQuoteStatus(quote.status) && allActiveExpired;
-        let earliest: string | null = null;
-        for (const item of quoteItems) {
+        const primarySupplierExpired = quoteItems.some((item) => {
           const sourcedId = resolvedSourcedId(item);
           const date = sourcedId ? blockingExpirations.get(sourcedId) : undefined;
-          if (date && (!earliest || date < earliest)) earliest = date;
-        }
-        const response = buildQuoteResponse(quote, quoteItems, earliest);
+          return Boolean(date && isPastLocalDate(date));
+        });
+        const response = buildQuoteResponse(quote, quoteItems, null);
         return {
           ...response,
           candidates: enrichedCandidates,
           selectedCandidateId: selectedCandidate?.id ?? null,
+          linkedSupplierQuoteExpired: familyHasBlockingSupplier(
+            quote.status,
+            enrichedCandidates,
+            primarySupplierExpired,
+          ),
           isExpired: familyIsExpired,
           effectiveStatus:
             familyIsExpired && quote.status !== 'offer' ? 'expired' : response.effectiveStatus,

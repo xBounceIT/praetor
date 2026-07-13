@@ -2388,6 +2388,71 @@ describe('GET /api/sales/client-quotes list (#812 round 11)', () => {
     expect(askedIds).toContain('sq-live');
   });
 
+  test('family supplier-expired flag includes every active candidate', async () => {
+    getRolePermissionsMock.mockResolvedValue(['sales.client_quotes.view']);
+    cqListAllMock.mockResolvedValue([updatedQuote({ id: 'q-family', status: 'draft' })]);
+    const candidate = (id: string, position: number) => ({
+      id,
+      quoteId: 'q-family',
+      name: `Variante ${position + 1}`,
+      position,
+      state: 'active',
+      paymentTerms: 'immediate',
+      discount: 0,
+      discountType: 'percentage',
+      expirationDate: '2999-12-31',
+      communicationChannelId: 'qcc_email',
+      communicationChannelName: 'Email',
+      notes: null,
+      createdAt: 1_700_000_000_000,
+      updatedAt: 1_700_000_000_000,
+    });
+    qcListAllMock.mockResolvedValue([candidate('qc-a', 0), candidate('qc-b', 1)]);
+    const item = (id: string, candidateId: string, supplierQuoteId: string | null) => ({
+      id,
+      quoteId: 'q-family',
+      candidateId,
+      productId: null,
+      productName: 'Service',
+      quantity: 1,
+      unitPrice: 100,
+      productCost: 50,
+      productMolPercentage: null,
+      discount: 0,
+      note: null,
+      supplierQuoteId,
+      supplierQuoteItemId: supplierQuoteId ? `${supplierQuoteId}-item` : null,
+      supplierQuoteSupplierName: supplierQuoteId ? 'Acme' : null,
+      supplierQuoteUnitPrice: supplierQuoteId ? 50 : null,
+      unitType: 'hours',
+      durationMonths: 1,
+      durationUnit: 'months',
+    });
+    cqListAllItemsMock.mockResolvedValue([
+      item('qi-a', 'qc-a', null),
+      item('qi-b', 'qc-b', 'sq-expired'),
+    ]);
+    sqFindBlockingExpirationsByIdsMock.mockResolvedValue(new Map([['sq-expired', '2000-01-01']]));
+
+    const res = await testApp.inject({
+      method: 'GET',
+      url: '/api/sales/client-quotes',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    const [family] = JSON.parse(res.body);
+    expect(family.linkedSupplierQuoteExpired).toBe(true);
+    expect(family.candidates.find((entry: { id: string }) => entry.id === 'qc-a')).toHaveProperty(
+      'linkedSupplierQuoteExpired',
+      false,
+    );
+    expect(family.candidates.find((entry: { id: string }) => entry.id === 'qc-b')).toHaveProperty(
+      'linkedSupplierQuoteExpired',
+      true,
+    );
+  });
+
   test('flags legacy item-only sourced rows too (#812 rounds 20-21)', async () => {
     // The stored line carries only supplierQuoteItemId — the list must resolve it to its supplier
     // quote (one batched lookup) so the flag matches what the update guard would block.

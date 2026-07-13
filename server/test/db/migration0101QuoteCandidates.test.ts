@@ -23,6 +23,14 @@ describe('migration 0101 quote candidates', () => {
     );
   });
 
+  test('creates and assigns a default candidate for inserts from legacy writers', () => {
+    expect(migrationSql).toContain('CREATE FUNCTION "ensure_legacy_quote_item_candidate"()');
+    expect(migrationSql).toContain('WHEN (NEW."candidate_id" IS NULL)');
+    expect(migrationSql).toContain("'qc_legacy_' || md5");
+    expect(migrationSql).toContain('NEW."candidate_id" := resolved_candidate_id');
+    expect(migrationSql).toContain('CREATE TRIGGER "quote_items_legacy_candidate_trigger"');
+  });
+
   test('enforces unique names and one selected candidate per quote', () => {
     expect(migrationSql).toContain('CREATE UNIQUE INDEX "idx_quote_candidates_quote_name_unique"');
     expect(migrationSql).toContain('CREATE UNIQUE INDEX "idx_quote_candidates_one_selected"');

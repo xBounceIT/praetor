@@ -43,4 +43,59 @@ CREATE UNIQUE INDEX "idx_quote_candidates_one_selected" ON "quote_candidates" US
 ALTER TABLE "customer_offers" ADD CONSTRAINT "customer_offers_linked_quote_candidate_id_quote_candidates_id_fk" FOREIGN KEY ("linked_quote_candidate_id") REFERENCES "public"."quote_candidates"("id") ON DELETE restrict ON UPDATE cascade;--> statement-breakpoint
 ALTER TABLE "quote_items" ADD CONSTRAINT "quote_items_candidate_id_quote_candidates_id_fk" FOREIGN KEY ("candidate_id") REFERENCES "public"."quote_candidates"("id") ON DELETE cascade ON UPDATE cascade;--> statement-breakpoint
 CREATE UNIQUE INDEX "idx_customer_offers_linked_quote_candidate_id" ON "customer_offers" USING btree ("linked_quote_candidate_id") WHERE "customer_offers"."linked_quote_candidate_id" IS NOT NULL;--> statement-breakpoint
-CREATE INDEX "idx_quote_items_candidate_id" ON "quote_items" USING btree ("candidate_id");
+CREATE INDEX "idx_quote_items_candidate_id" ON "quote_items" USING btree ("candidate_id");--> statement-breakpoint
+CREATE FUNCTION "ensure_legacy_quote_item_candidate"() RETURNS trigger AS $$
+DECLARE
+  resolved_candidate_id varchar(100);
+BEGIN
+  IF NEW."candidate_id" IS NULL THEN
+    INSERT INTO "quote_candidates" (
+      "id", "quote_id", "name", "position", "state", "payment_terms", "discount",
+      "discount_type", "expiration_date", "communication_channel_id", "notes", "created_at", "updated_at"
+    )
+    SELECT
+      'qc_legacy_' || md5(q."id" || ':' || COALESCE(q."created_at"::text, '')),
+      q."id", 'Variante A', 0, 'active', q."payment_terms", q."discount",
+      q."discount_type", q."expiration_date", q."communication_channel_id", q."notes",
+      q."created_at", q."updated_at"
+    FROM "quotes" q
+    WHERE q."id" = NEW."quote_id"
+      AND NOT EXISTS (
+        SELECT 1 FROM "quote_candidates" qc WHERE qc."quote_id" = NEW."quote_id"
+      )
+    ON CONFLICT DO NOTHING;
+
+    SELECT qc."id" INTO resolved_candidate_id
+    FROM "quote_candidates" qc
+    WHERE qc."quote_id" = NEW."quote_id"
+    ORDER BY qc."position", qc."id"
+    LIMIT 1;
+
+    IF resolved_candidate_id IS NULL THEN
+      RAISE EXCEPTION 'No quote candidate available for legacy quote item %', NEW."quote_id";
+    END IF;
+
+    UPDATE "quote_candidates" qc
+    SET
+      "payment_terms" = q."payment_terms",
+      "discount" = q."discount",
+      "discount_type" = q."discount_type",
+      "expiration_date" = q."expiration_date",
+      "communication_channel_id" = q."communication_channel_id",
+      "notes" = q."notes",
+      "updated_at" = q."updated_at"
+    FROM "quotes" q
+    WHERE qc."id" = resolved_candidate_id
+      AND qc."state" = 'active'
+      AND q."id" = NEW."quote_id";
+
+    NEW."candidate_id" := resolved_candidate_id;
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;--> statement-breakpoint
+CREATE TRIGGER "quote_items_legacy_candidate_trigger"
+BEFORE INSERT ON "quote_items"
+FOR EACH ROW
+WHEN (NEW."candidate_id" IS NULL)
+EXECUTE FUNCTION "ensure_legacy_quote_item_candidate"();
