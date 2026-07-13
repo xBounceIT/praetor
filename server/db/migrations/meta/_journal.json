@@ -722,6 +722,13 @@
       "when": 1783899428049,
       "tag": "0102_backfill_legacy_supplier_order_pricing",
       "breakpoints": true
+    },
+    {
+      "idx": 103,
+      "version": "7",
+      "when": 1783937301679,
+      "tag": "0103_quote_candidates",
+      "breakpoints": true
     }
   ]
 }

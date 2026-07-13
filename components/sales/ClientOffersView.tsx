@@ -46,6 +46,7 @@ import {
   getDurationInputValue,
   getItemPricingContext,
   isPositiveFiniteNumber,
+  MAX_MOL_PERCENTAGE,
   MOL_PERCENTAGE_DECIMALS,
   normalizeDurationForSubmit,
   normalizeDurationUnit,
@@ -2274,6 +2275,8 @@ const ClientOfferMolEditor: React.FC<{
       <ValidatedNumberInput
         value={line.molPercentage}
         placeholder="0,00"
+        min={0}
+        max={MAX_MOL_PERCENTAGE}
         aria-label={controller.t('sales:clientQuotes.molLabel', { defaultValue: 'MOL' })}
         formatDecimals={MOL_PERCENTAGE_DECIMALS}
         onValueChange={line.handleMolChange}

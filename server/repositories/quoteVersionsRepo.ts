@@ -1,6 +1,11 @@
 import { and, desc, eq } from 'drizzle-orm';
 import { type DbExecutor, db } from '../db/drizzle.ts';
-import { type QuoteVersionSnapshot, quoteVersions } from '../db/schema/quoteVersions.ts';
+import {
+  type NormalizedQuoteVersionSnapshot,
+  type QuoteVersionSnapshot,
+  quoteVersions,
+  type SnapshotQuoteCandidate,
+} from '../db/schema/quoteVersions.ts';
 import { generatePrefixedId } from '../utils/order-ids.ts';
 import type { ClientQuote, ClientQuoteItem } from './clientQuotesRepo.ts';
 
@@ -16,7 +21,7 @@ export type QuoteVersionRow = {
   createdAt: number;
 };
 
-export type QuoteVersion = QuoteVersionRow & { snapshot: QuoteVersionSnapshot };
+export type QuoteVersion = QuoteVersionRow & { snapshot: NormalizedQuoteVersionSnapshot };
 
 type QuoteVersionRowSelect = Pick<
   typeof quoteVersions.$inferSelect,
@@ -31,9 +36,51 @@ const mapRow = (row: QuoteVersionRowSelect): QuoteVersionRow => ({
   createdAt: row.createdAt?.getTime() ?? 0,
 });
 
+export const normalizeSnapshot = (
+  snapshot: QuoteVersionSnapshot,
+): NormalizedQuoteVersionSnapshot => {
+  if (snapshot.schemaVersion === 2) {
+    return {
+      ...snapshot,
+      candidates: snapshot.candidates.map((candidate) => ({ ...candidate })),
+      items: snapshot.items.map((item) => ({
+        ...item,
+        candidateId: item.candidateId || item.quoteId,
+      })),
+    };
+  }
+  const candidateId = snapshot.quote.id;
+  return {
+    schemaVersion: 2,
+    quote: snapshot.quote,
+    candidates: [
+      {
+        id: candidateId,
+        quoteId: snapshot.quote.id,
+        name: 'Variante A',
+        position: 0,
+        state: snapshot.quote.status === 'offer' ? 'selected' : 'active',
+        paymentTerms: snapshot.quote.paymentTerms ?? 'immediate',
+        discount: snapshot.quote.discount,
+        discountType: snapshot.quote.discountType,
+        expirationDate: snapshot.quote.expirationDate ?? '',
+        communicationChannelId: snapshot.quote.communicationChannelId ?? '',
+        communicationChannelName: snapshot.quote.communicationChannelName ?? '',
+        notes: snapshot.quote.notes,
+        createdAt: snapshot.quote.createdAt,
+        updatedAt: snapshot.quote.updatedAt,
+      },
+    ],
+    items: snapshot.items.map((item) => ({
+      ...item,
+      candidateId: item.candidateId || candidateId,
+    })),
+  };
+};
+
 const mapVersion = (row: typeof quoteVersions.$inferSelect): QuoteVersion => ({
   ...mapRow(row),
-  snapshot: row.snapshot,
+  snapshot: normalizeSnapshot(row.snapshot),
 });
 
 // Record `linkedOfferId` on the snapshot so the saved version is a complete historical record.
@@ -44,10 +91,23 @@ const mapVersion = (row: typeof quoteVersions.$inferSelect): QuoteVersion => ({
 export const buildSnapshot = (
   quote: ClientQuote,
   items: ClientQuoteItem[],
-): QuoteVersionSnapshot => {
-  return { schemaVersion: 1, quote, items };
+  candidates: SnapshotQuoteCandidate[] = [],
+): NormalizedQuoteVersionSnapshot => {
+  const normalizedItems = items.map((item) => ({
+    ...item,
+    candidateId: item.candidateId || item.quoteId,
+  }));
+  const normalizedCandidates =
+    candidates.length > 0
+      ? candidates.map((candidate) => ({ ...candidate }))
+      : normalizeSnapshot({ schemaVersion: 1, quote, items }).candidates;
+  return {
+    schemaVersion: 2,
+    quote,
+    candidates: normalizedCandidates,
+    items: normalizedItems,
+  };
 };
-
 export const listForQuote = async (
   quoteId: string,
   exec: DbExecutor = db,

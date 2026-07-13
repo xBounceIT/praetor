@@ -4,6 +4,7 @@ import {
   convertUnitPrice,
   getEffectiveMol,
   getEffectiveUnitCost,
+  MAX_MOL_PERCENTAGE,
   type PricingItem,
   parseOptionalNumberInputValue,
 } from './numbers';
@@ -53,7 +54,9 @@ export const makeMolUpdater =
     const items = prev.items || [];
     const cur = items[index];
     if (!cur) return prev;
-    const newMol = parseOptionalNumberInputValue(value);
+    const parsedMol = parseOptionalNumberInputValue(value);
+    const newMol =
+      parsedMol === undefined ? undefined : Math.min(MAX_MOL_PERCENTAGE, Math.max(0, parsedMol));
     const curMol = getEffectiveMol(cur);
     if (newMol === curMol && value !== '') return prev;
     const curCost = getEffectiveUnitCost(cur, defaultUnitType);

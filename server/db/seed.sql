@@ -650,9 +650,67 @@ ON CONFLICT (id) DO UPDATE SET
     created_at = EXCLUDED.created_at,
     updated_at = EXCLUDED.updated_at;
 
+INSERT INTO quote_candidates (
+    id,
+    quote_id,
+    name,
+    position,
+    state,
+    payment_terms,
+    discount,
+    discount_type,
+    expiration_date,
+    communication_channel_id,
+    notes,
+    created_at,
+    updated_at
+)
+SELECT
+    q.id,
+    q.id,
+    'Variante A',
+    0,
+    CASE
+        WHEN q.id IN (
+            pg_temp.demo_document_code('client_quote', 4),
+            pg_temp.demo_document_code('client_quote', 5),
+            pg_temp.demo_document_code('client_quote', 6),
+            pg_temp.demo_document_code('client_quote', 7),
+            pg_temp.demo_document_code('client_quote', 8)
+        ) THEN 'selected'
+        ELSE 'active'
+    END,
+    q.payment_terms,
+    q.discount,
+    q.discount_type,
+    q.expiration_date,
+    q.communication_channel_id,
+    q.notes,
+    q.created_at,
+    q.updated_at
+FROM quotes q
+WHERE q.id IN (
+    SELECT pg_temp.demo_document_code('client_quote', sequence_number)
+    FROM generate_series(1, 14) AS generated(sequence_number)
+)
+ON CONFLICT (id) DO UPDATE SET
+    quote_id = EXCLUDED.quote_id,
+    name = EXCLUDED.name,
+    position = EXCLUDED.position,
+    state = EXCLUDED.state,
+    payment_terms = EXCLUDED.payment_terms,
+    discount = EXCLUDED.discount,
+    discount_type = EXCLUDED.discount_type,
+    expiration_date = EXCLUDED.expiration_date,
+    communication_channel_id = EXCLUDED.communication_channel_id,
+    notes = EXCLUDED.notes,
+    created_at = EXCLUDED.created_at,
+    updated_at = EXCLUDED.updated_at;
+
 INSERT INTO quote_items (
     id,
     quote_id,
+    candidate_id,
     product_id,
     product_name,
     quantity,
@@ -664,6 +722,7 @@ INSERT INTO quote_items (
 )
 SELECT
     v.id,
+    v.quote_id,
     v.quote_id,
     p.id,
     p.name,
@@ -698,6 +757,7 @@ FROM (
 JOIN products p ON p.id = v.product_id
 ON CONFLICT (id) DO UPDATE SET
     quote_id = EXCLUDED.quote_id,
+    candidate_id = EXCLUDED.candidate_id,
     product_id = EXCLUDED.product_id,
     product_name = EXCLUDED.product_name,
     quantity = EXCLUDED.quantity,
@@ -710,6 +770,7 @@ ON CONFLICT (id) DO UPDATE SET
 INSERT INTO customer_offers (
     id,
     linked_quote_id,
+    linked_quote_candidate_id,
     client_id,
     client_name,
     payment_terms,
@@ -720,13 +781,14 @@ INSERT INTO customer_offers (
     created_at,
     updated_at
 ) VALUES
-    (pg_temp.demo_document_code('client_offer', 1), pg_temp.demo_document_code('client_quote', 4), 'dm_cli_01', 'Northwind Retail Italia S.p.A.', '30gg', 4.00, 'draft', CURRENT_DATE + INTERVAL '24 days', 'Editable draft offer created from an accepted quote.', CURRENT_TIMESTAMP - INTERVAL '90 days', CURRENT_TIMESTAMP - INTERVAL '88 days'),
-    (pg_temp.demo_document_code('client_offer', 2), pg_temp.demo_document_code('client_quote', 5), 'dm_cli_02', 'Helios Energy Services S.r.l.', '45gg', 1.50, 'sent', CURRENT_DATE + INTERVAL '22 days', 'Sent offer waiting for customer reply.', CURRENT_TIMESTAMP - INTERVAL '80 days', CURRENT_TIMESTAMP - INTERVAL '77 days'),
-    (pg_temp.demo_document_code('client_offer', 3), pg_temp.demo_document_code('client_quote', 6), 'dm_cli_01', 'Northwind Retail Italia S.p.A.', '30gg', 0.00, 'accepted', CURRENT_DATE + INTERVAL '18 days', 'Accepted offer converted into the confirmed delivery order that spawned the demo projects.', CURRENT_TIMESTAMP - INTERVAL '68 days', CURRENT_TIMESTAMP - INTERVAL '65 days'),
-    (pg_temp.demo_document_code('client_offer', 4), pg_temp.demo_document_code('client_quote', 7), 'dm_cli_03', 'Comune di Verona - Innovazione Digitale', '60gg', 2.50, 'accepted', CURRENT_DATE + INTERVAL '16 days', 'Accepted offer already converted into an order.', CURRENT_TIMESTAMP - INTERVAL '56 days', CURRENT_TIMESTAMP - INTERVAL '52 days'),
-    (pg_temp.demo_document_code('client_offer', 5), pg_temp.demo_document_code('client_quote', 8), 'dm_cli_04', 'Giulia Ferri', 'immediate', 0.00, 'denied', CURRENT_DATE + INTERVAL '8 days', 'Denied offer for historical state coverage.', CURRENT_TIMESTAMP - INTERVAL '46 days', CURRENT_TIMESTAMP - INTERVAL '43 days')
+    (pg_temp.demo_document_code('client_offer', 1), pg_temp.demo_document_code('client_quote', 4), pg_temp.demo_document_code('client_quote', 4), 'dm_cli_01', 'Northwind Retail Italia S.p.A.', '30gg', 4.00, 'draft', CURRENT_DATE + INTERVAL '24 days', 'Editable draft offer created from an accepted quote.', CURRENT_TIMESTAMP - INTERVAL '90 days', CURRENT_TIMESTAMP - INTERVAL '88 days'),
+    (pg_temp.demo_document_code('client_offer', 2), pg_temp.demo_document_code('client_quote', 5), pg_temp.demo_document_code('client_quote', 5), 'dm_cli_02', 'Helios Energy Services S.r.l.', '45gg', 1.50, 'sent', CURRENT_DATE + INTERVAL '22 days', 'Sent offer waiting for customer reply.', CURRENT_TIMESTAMP - INTERVAL '80 days', CURRENT_TIMESTAMP - INTERVAL '77 days'),
+    (pg_temp.demo_document_code('client_offer', 3), pg_temp.demo_document_code('client_quote', 6), pg_temp.demo_document_code('client_quote', 6), 'dm_cli_01', 'Northwind Retail Italia S.p.A.', '30gg', 0.00, 'accepted', CURRENT_DATE + INTERVAL '18 days', 'Accepted offer converted into the confirmed delivery order that spawned the demo projects.', CURRENT_TIMESTAMP - INTERVAL '68 days', CURRENT_TIMESTAMP - INTERVAL '65 days'),
+    (pg_temp.demo_document_code('client_offer', 4), pg_temp.demo_document_code('client_quote', 7), pg_temp.demo_document_code('client_quote', 7), 'dm_cli_03', 'Comune di Verona - Innovazione Digitale', '60gg', 2.50, 'accepted', CURRENT_DATE + INTERVAL '16 days', 'Accepted offer already converted into an order.', CURRENT_TIMESTAMP - INTERVAL '56 days', CURRENT_TIMESTAMP - INTERVAL '52 days'),
+    (pg_temp.demo_document_code('client_offer', 5), pg_temp.demo_document_code('client_quote', 8), pg_temp.demo_document_code('client_quote', 8), 'dm_cli_04', 'Giulia Ferri', 'immediate', 0.00, 'denied', CURRENT_DATE + INTERVAL '8 days', 'Denied offer for historical state coverage.', CURRENT_TIMESTAMP - INTERVAL '46 days', CURRENT_TIMESTAMP - INTERVAL '43 days')
 ON CONFLICT (id) DO UPDATE SET
     linked_quote_id = EXCLUDED.linked_quote_id,
+    linked_quote_candidate_id = EXCLUDED.linked_quote_candidate_id,
     client_id = EXCLUDED.client_id,
     client_name = EXCLUDED.client_name,
     payment_terms = EXCLUDED.payment_terms,

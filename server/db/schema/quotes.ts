@@ -72,6 +72,61 @@ export const quotes = pgTable(
   ],
 );
 
+export type QuoteCandidateState = 'active' | 'selected' | 'discarded';
+
+// Commercial alternatives that share the parent quote code, client and pipeline status.
+// Header columns still present on `quotes` are maintained as a compatibility projection of the
+// first active/selected candidate while callers migrate to this normalized shape.
+export const quoteCandidates = pgTable(
+  'quote_candidates',
+  {
+    id: varchar('id', { length: 100 }).primaryKey(),
+    quoteId: varchar('quote_id', { length: 100 })
+      .notNull()
+      .references(() => quotes.id, { onDelete: 'cascade', onUpdate: 'cascade' }),
+    name: varchar('name', { length: 100 }).notNull(),
+    position: integer('position').notNull().default(0),
+    state: varchar('state', { length: 20 })
+      .$type<QuoteCandidateState>()
+      .notNull()
+      .default('active'),
+    paymentTerms: varchar('payment_terms', { length: 20 }).notNull().default('immediate'),
+    discount: numeric('discount', { precision: 15, scale: 2 }).notNull().default('0'),
+    discountType: varchar('discount_type', { length: 10 })
+      .$type<'percentage' | 'currency'>()
+      .notNull()
+      .default('percentage'),
+    expirationDate: date('expiration_date', { mode: 'string' }).notNull(),
+    communicationChannelId: varchar('communication_channel_id', { length: 50 })
+      .notNull()
+      .references(() => quoteCommunicationChannels.id, {
+        onDelete: 'restrict',
+        onUpdate: 'cascade',
+      }),
+    notes: text('notes'),
+    createdAt: timestamp('created_at').default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: timestamp('updated_at').default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index('idx_quote_candidates_quote_id_position').on(table.quoteId, table.position),
+    uniqueIndex('idx_quote_candidates_quote_name_unique').on(
+      table.quoteId,
+      sql`lower(${table.name})`,
+    ),
+    uniqueIndex('idx_quote_candidates_one_selected')
+      .on(table.quoteId)
+      .where(sql`${table.state} = 'selected'`),
+    check(
+      'quote_candidates_state_check',
+      sql`${table.state} IN ('active', 'selected', 'discarded')`,
+    ),
+    check(
+      'chk_quote_candidates_discount_type',
+      sql`${table.discountType} IN ('percentage', 'currency')`,
+    ),
+  ],
+);
+
 // `product_id` is nullable: items can be sourced from a supplier_quote_item via
 // `supplier_quote_item_id` instead of pointing at a product. `supplier_quote_*` columns
 // track items copied from supplier quotes.
@@ -82,6 +137,7 @@ export const quoteItems = pgTable(
     quoteId: varchar('quote_id', { length: 100 })
       .notNull()
       .references(() => quotes.id, { onDelete: 'cascade', onUpdate: 'cascade' }),
+
     productId: varchar('product_id', { length: 50 }).references(() => products.id, {
       onDelete: 'restrict',
     }),
@@ -109,9 +165,18 @@ export const quoteItems = pgTable(
     // Stable, user-controlled line order. This must not be derived from created_at: quote edits
     // replace the line rows and would otherwise reshuffle them after every save.
     position: integer('position').notNull().default(0),
+    // Appended in the physical migration and kept last in the Drizzle projection so legacy
+    // positional fixtures retain the pre-candidate column order. Nullable during the expand phase
+    // so an older server can keep writing while the new release rolls out; repositories normalize
+    // legacy nulls to the quote's backfilled default candidate.
+    candidateId: varchar('candidate_id', { length: 100 }).references(() => quoteCandidates.id, {
+      onDelete: 'cascade',
+      onUpdate: 'cascade',
+    }),
   },
   (table) => [
     index('idx_quote_items_quote_id').on(table.quoteId),
+    index('idx_quote_items_candidate_id').on(table.candidateId),
     index('idx_quote_items_quote_position').on(table.quoteId, table.position),
     // Partial index for the #779 line-sourcing reverse lookups: supplierQuotesRepo's
     // chosenClientQuoteId EXISTS probe and clientQuotesRepo's earliest-sourced-expiration JOIN both

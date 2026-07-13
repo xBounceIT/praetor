@@ -152,7 +152,7 @@ const sourcingQuoteIdsFor = (supplierQuoteId: string): string[] =>
   ].filter((id): id is string => !!id);
 
 describe('seed.sql line-sourced supplier-quote linkage (#779 / PR #812)', () => {
-  test('client and supplier demo quotes seed the required communication channel', () => {
+  test('client, supplier, and candidate demo quotes seed the required communication channel', () => {
     const clientQuotes = parseInsertValuesBlocks(SEED_SQL, 'quotes');
     const supplierQuotes = parseInsertValuesBlocks(SEED_SQL, 'supplier_quotes');
     const channelConflictUpdates =
@@ -160,7 +160,7 @@ describe('seed.sql line-sourced supplier-quote linkage (#779 / PR #812)', () => 
 
     expect(clientQuotes.length).toBeGreaterThan(0);
     expect(supplierQuotes.length).toBeGreaterThan(0);
-    expect(channelConflictUpdates.length).toBe(2);
+    expect(channelConflictUpdates.length).toBe(3);
     for (const row of [...clientQuotes, ...supplierQuotes]) {
       expect(row.communication_channel_id).toBe('qcc_email');
     }

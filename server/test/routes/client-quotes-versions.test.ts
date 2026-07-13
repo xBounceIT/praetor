@@ -5,6 +5,7 @@ import * as realClientOffersRepo from '../../repositories/clientOffersRepo.ts';
 import * as realClientQuotesRepo from '../../repositories/clientQuotesRepo.ts';
 import * as realClientsRepo from '../../repositories/clientsRepo.ts';
 import * as realProductsRepo from '../../repositories/productsRepo.ts';
+import * as realQuoteCandidatesRepo from '../../repositories/quoteCandidatesRepo.ts';
 import * as realQuoteCommunicationChannelsRepo from '../../repositories/quoteCommunicationChannelsRepo.ts';
 import * as realQuoteVersionsRepo from '../../repositories/quoteVersionsRepo.ts';
 import * as realRolesRepo from '../../repositories/rolesRepo.ts';
@@ -28,6 +29,7 @@ const permissionsSnap = { ...realPermissions };
 const clientsRepoSnap = { ...realClientsRepo };
 const clientOffersRepoSnap = { ...realClientOffersRepo };
 const clientQuotesRepoSnap = { ...realClientQuotesRepo };
+const quoteCandidatesRepoSnap = { ...realQuoteCandidatesRepo };
 const productsRepoSnap = { ...realProductsRepo };
 const quoteCommunicationChannelsRepoSnap = { ...realQuoteCommunicationChannelsRepo };
 const quoteVersionsRepoSnap = { ...realQuoteVersionsRepo };
@@ -41,6 +43,7 @@ const userHasRoleMock = mock();
 const getRolePermissionsMock = mock();
 
 const cqExistsByIdMock = mock();
+const cqFindByIdMock = mock();
 const cqFindLinkedOfferIdMock = mock();
 const cqFindCurrentMock = mock();
 const cqLockCurrentByIdMock = mock();
@@ -58,6 +61,10 @@ const cqReplaceItemsMock = mock();
 const cqCreateMock = mock();
 const cqInsertItemsMock = mock();
 
+const qcInsertMock = mock();
+const qcListForQuoteMock = mock();
+const qcDeleteAllForQuoteMock = mock();
+
 const qccFindByIdMock = mock();
 const qccFindDefaultMock = mock();
 const coCreateMock = mock();
@@ -70,6 +77,7 @@ const clientsExistsByIdMock = mock();
 const productsGetSnapshotsMock = mock();
 const sqGetQuoteItemSnapshotsMock = mock();
 const sqFindEarliestExpirationByIdsMock = mock();
+const sqFindBlockingExpirationsByIdsMock = mock();
 
 const qvListForQuoteMock = mock();
 const qvFindByIdMock = mock();
@@ -104,6 +112,7 @@ beforeAll(async () => {
   mock.module('../../repositories/clientQuotesRepo.ts', () => ({
     ...clientQuotesRepoSnap,
     existsById: cqExistsByIdMock,
+    findById: cqFindByIdMock,
     findLinkedOfferId: cqFindLinkedOfferIdMock,
     findCurrent: cqFindCurrentMock,
     lockCurrentById: cqLockCurrentByIdMock,
@@ -120,6 +129,12 @@ beforeAll(async () => {
     replaceItems: cqReplaceItemsMock,
     create: cqCreateMock,
     insertItems: cqInsertItemsMock,
+  }));
+  mock.module('../../repositories/quoteCandidatesRepo.ts', () => ({
+    ...quoteCandidatesRepoSnap,
+    insert: qcInsertMock,
+    listForQuote: qcListForQuoteMock,
+    deleteAllForQuote: qcDeleteAllForQuoteMock,
   }));
   mock.module('../../repositories/clientOffersRepo.ts', () => ({
     ...clientOffersRepoSnap,
@@ -149,6 +164,7 @@ beforeAll(async () => {
     ...supplierQuotesRepoSnap,
     getQuoteItemSnapshots: sqGetQuoteItemSnapshotsMock,
     findEarliestExpirationByIds: sqFindEarliestExpirationByIdsMock,
+    findBlockingExpirationsByIds: sqFindBlockingExpirationsByIdsMock,
   }));
   mock.module('../../services/documentCodes.ts', () => ({
     ...documentCodesSnap,
@@ -172,6 +188,7 @@ afterAll(() => {
   mock.module('../../repositories/rolesRepo.ts', () => rolesRepoSnap);
   mock.module('../../utils/permissions.ts', () => permissionsSnap);
   mock.module('../../repositories/clientsRepo.ts', () => clientsRepoSnap);
+  mock.module('../../repositories/quoteCandidatesRepo.ts', () => quoteCandidatesRepoSnap);
   mock.module('../../repositories/clientOffersRepo.ts', () => clientOffersRepoSnap);
   mock.module('../../repositories/clientQuotesRepo.ts', () => clientQuotesRepoSnap);
   mock.module('../../repositories/productsRepo.ts', () => productsRepoSnap);
@@ -223,6 +240,7 @@ const SAMPLE_QUOTE = {
 const SAMPLE_ITEM = {
   id: 'qi-1',
   quoteId: 'q-1',
+  candidateId: 'q-1',
   productId: 'p-1',
   productName: 'Service',
   quantity: 2,
@@ -240,9 +258,27 @@ const SAMPLE_ITEM = {
   durationUnit: 'months' as const,
 };
 
+const SAMPLE_CANDIDATE = {
+  id: 'q-1',
+  quoteId: 'q-1',
+  name: 'Variante A',
+  position: 0,
+  state: 'active' as const,
+  paymentTerms: 'immediate',
+  discount: 0,
+  discountType: 'percentage' as const,
+  expirationDate: '2026-12-31',
+  communicationChannelId: 'qcc_email',
+  communicationChannelName: 'Email',
+  notes: null,
+  createdAt: 1_700_000_000_000,
+  updatedAt: 1_700_000_000_000,
+};
+
 const SAMPLE_SNAPSHOT = {
-  schemaVersion: 1 as const,
+  schemaVersion: 2 as const,
   quote: SAMPLE_QUOTE,
+  candidates: [SAMPLE_CANDIDATE],
   items: [SAMPLE_ITEM],
 };
 
@@ -261,6 +297,7 @@ const allMocks = [
   userHasRoleMock,
   getRolePermissionsMock,
   cqExistsByIdMock,
+  cqFindByIdMock,
   cqFindLinkedOfferIdMock,
   cqFindCurrentMock,
   cqLockCurrentByIdMock,
@@ -277,6 +314,9 @@ const allMocks = [
   cqReplaceItemsMock,
   cqCreateMock,
   cqInsertItemsMock,
+  qcInsertMock,
+  qcListForQuoteMock,
+  qcDeleteAllForQuoteMock,
   qccFindByIdMock,
   qccFindDefaultMock,
   coCreateMock,
@@ -288,6 +328,7 @@ const allMocks = [
   productsGetSnapshotsMock,
   sqGetQuoteItemSnapshotsMock,
   sqFindEarliestExpirationByIdsMock,
+  sqFindBlockingExpirationsByIdsMock,
   qvListForQuoteMock,
   qvFindByIdMock,
   qvInsertMock,
@@ -307,17 +348,27 @@ beforeEach(async () => {
   resetWithDbTransactionMock();
   logAuditMock.mockImplementation(async () => undefined);
   allocateDocumentCodeMock.mockResolvedValue('OFF-2999-0001');
-  qvBuildSnapshotMock.mockImplementation((quote, items) => ({
-    schemaVersion: 1,
+  qvBuildSnapshotMock.mockImplementation((quote, items, candidates) => ({
+    schemaVersion: 2,
     quote,
+    candidates,
     items,
   }));
+  qcInsertMock.mockImplementation((input: Record<string, unknown>) =>
+    Promise.resolve({ ...input, createdAt: 1_700_000_000_000, updatedAt: 1_700_000_000_000 }),
+  );
+  qcListForQuoteMock.mockResolvedValue([SAMPLE_CANDIDATE]);
+  qcDeleteAllForQuoteMock.mockResolvedValue(undefined);
+
   // Default safe values for repos that PUT calls but most tests don't care about.
+  cqFindByIdMock.mockResolvedValue(SAMPLE_QUOTE);
   cqFindItemsForQuoteMock.mockResolvedValue([SAMPLE_ITEM]);
+  cqInsertItemsMock.mockResolvedValue([SAMPLE_ITEM]);
   cqFindIdConflictMock.mockResolvedValue(false);
   cqFindAnyLinkedSaleMock.mockResolvedValue(null);
   // Product-only items resolve no supplier snapshots; default to an empty map.
   sqGetQuoteItemSnapshotsMock.mockResolvedValue(new Map());
+  sqFindBlockingExpirationsByIdsMock.mockResolvedValue(new Map());
   qccFindByIdMock.mockResolvedValue({ id: 'qcc_email', name: 'Email' });
   qccFindDefaultMock.mockResolvedValue({ id: 'qcc_email', name: 'Email' });
   // Restore's progression guard reads the SNAPSHOT's earliest sourced supplier-quote expiration;
@@ -490,7 +541,9 @@ describe('POST /api/sales/client-quotes/:id/versions/:versionId/restore', () => 
       expect.objectContaining({ notes: null }),
       TX_SENTINEL,
     );
-    expect(cqReplaceItemsMock).toHaveBeenCalled();
+    expect(qcDeleteAllForQuoteMock).toHaveBeenCalledWith('q-1', TX_SENTINEL);
+    expect(qcInsertMock).toHaveBeenCalled();
+    expect(cqInsertItemsMock).toHaveBeenCalled();
     // Atomically wrapped
     expect(withDbTransactionMock).toHaveBeenCalled();
     // Audit logged
@@ -563,13 +616,15 @@ describe('POST /api/sales/client-quotes/:id/versions/:versionId/restore', () => 
     expect(coDeleteByIdMock).not.toHaveBeenCalled();
   });
 
-  test('200 restoring an offer snapshot creates a linked draft offer', async () => {
+  test('409 when a snapshot item references a candidate outside the family', async () => {
     setupHappyPath();
     qvFindByIdMock.mockResolvedValue({
       ...SAMPLE_VERSION,
-      snapshot: { ...SAMPLE_SNAPSHOT, quote: { ...SAMPLE_QUOTE, status: 'offer' } },
+      snapshot: {
+        ...SAMPLE_SNAPSHOT,
+        items: [{ ...SAMPLE_ITEM, candidateId: 'qc-orphan' }],
+      },
     });
-    cqRestoreSnapshotQuoteMock.mockResolvedValue({ ...SAMPLE_QUOTE, status: 'offer' });
 
     const res = await testApp.inject({
       method: 'POST',
@@ -577,17 +632,27 @@ describe('POST /api/sales/client-quotes/:id/versions/:versionId/restore', () => 
       headers: authHeader(),
     });
 
-    expect(res.statusCode).toBe(200);
-    expect(JSON.parse(res.body).linkedOfferId).toBe('OFF-2999-0001');
-    expect(coCreateMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        id: 'OFF-2999-0001',
-        linkedQuoteId: 'q-1',
-        status: 'draft',
-      }),
-      TX_SENTINEL,
-    );
-    expect(coInsertItemsMock).toHaveBeenCalledWith('OFF-2999-0001', expect.any(Array), TX_SENTINEL);
+    expect(res.statusCode).toBe(409);
+    expect(JSON.parse(res.body).error).toContain('no matching candidate');
+    expect(qcDeleteAllForQuoteMock).not.toHaveBeenCalled();
+  });
+
+  test('409 restoring an offer snapshot cannot bypass candidate promotion', async () => {
+    setupHappyPath();
+    qvFindByIdMock.mockResolvedValue({
+      ...SAMPLE_VERSION,
+      snapshot: { ...SAMPLE_SNAPSHOT, quote: { ...SAMPLE_QUOTE, status: 'offer' } },
+    });
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/sales/client-quotes/q-1/versions/qv-1/restore',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(JSON.parse(res.body).error).toContain('candidate promotion');
+    expect(coCreateMock).not.toHaveBeenCalled();
   });
 
   test('409 when the quote is effectively expired (restore would rewrite frozen content)', async () => {
@@ -805,10 +870,10 @@ describe('POST /api/sales/client-quotes/:id/versions/:versionId/restore', () => 
     expect(res.statusCode).toBe(403);
   });
 
-  test('POST restore: replaceItems failure rolls back (no audit, no success)', async () => {
+  test('POST restore: candidate item insert failure rolls back (no audit, no success)', async () => {
     setupHappyPath();
     withDbTransactionMock.mockImplementation(async (cb) => cb(TX_SENTINEL));
-    cqReplaceItemsMock.mockRejectedValue(new Error('insert failed'));
+    cqInsertItemsMock.mockRejectedValue(new Error('insert failed'));
 
     const res = await testApp.inject({
       method: 'POST',
@@ -818,8 +883,10 @@ describe('POST /api/sales/client-quotes/:id/versions/:versionId/restore', () => 
 
     expect(res.statusCode).toBe(500);
     expect(withDbTransactionMock).toHaveBeenCalled();
-    expect(cqReplaceItemsMock).toHaveBeenCalled();
-    expect(cqReplaceItemsMock.mock.calls[0]?.at(-1)).toBe(TX_SENTINEL);
+    expect(qcDeleteAllForQuoteMock).toHaveBeenCalledWith('q-1', TX_SENTINEL);
+    expect(qcInsertMock).toHaveBeenCalled();
+    expect(cqInsertItemsMock).toHaveBeenCalled();
+    expect(cqInsertItemsMock.mock.calls[0]?.at(-2)).toBe(TX_SENTINEL);
     expect(logAuditMock).not.toHaveBeenCalled();
   });
 });
@@ -905,13 +972,8 @@ describe('PUT /api/sales/client-quotes/:id snapshots pre-update state', () => {
 // invoices validate/coerce duration the same way; invoices additionally fold it into their
 // server-authoritative totals.) Exercise the quote variant here.
 describe('POST /api/sales/client-quotes - duration handling (issue #757)', () => {
-  const createBody = (itemOverrides: Record<string, unknown> = {}) => ({
-    id: 'q-new',
-    clientId: 'c1',
-    clientName: 'Client',
-    expirationDate: '2026-12-31',
-    communicationChannelId: 'qcc_email',
-    items: [
+  const createBody = (itemOverrides: Record<string, unknown> = {}) => {
+    const items = [
       {
         productId: 'prod-1',
         productName: 'Service',
@@ -921,8 +983,21 @@ describe('POST /api/sales/client-quotes - duration handling (issue #757)', () =>
         unitType: 'hours',
         ...itemOverrides,
       },
-    ],
-  });
+    ];
+    return {
+      id: 'q-new',
+      clientId: 'c1',
+      clientName: 'Client',
+      candidates: [
+        {
+          name: 'Variante A',
+          expirationDate: '2026-12-31',
+          communicationChannelId: 'qcc_email',
+          items,
+        },
+      ],
+    };
+  };
 
   const setupCreateMocks = () => {
     productsGetSnapshotsMock.mockResolvedValue(
@@ -951,7 +1026,8 @@ describe('POST /api/sales/client-quotes - duration handling (issue #757)', () =>
 
   test('400 requires a communication channel on create', async () => {
     setupCreateMocks();
-    const { communicationChannelId: _omitted, ...payload } = createBody();
+    const payload = createBody();
+    delete (payload.candidates[0] as { communicationChannelId?: string }).communicationChannelId;
 
     const res = await testApp.inject({
       method: 'POST',
@@ -1044,7 +1120,7 @@ describe('POST /api/sales/client-quotes - duration handling (issue #757)', () =>
 });
 
 describe('POST /api/sales/client-quotes/:id/versions/:versionId/restore - duration round-trip', () => {
-  test('carries a non-default snapshot durationMonths through to replaceItems (issue #757)', async () => {
+  test('carries a non-default snapshot durationMonths through candidate insert (issue #757)', async () => {
     cqLockCurrentByIdMock.mockResolvedValue({
       status: 'draft',
       discount: 0,
@@ -1062,8 +1138,9 @@ describe('POST /api/sales/client-quotes/:id/versions/:versionId/restore - durati
     qvFindByIdMock.mockResolvedValue({
       ...SAMPLE_VERSION_ROW,
       snapshot: {
-        schemaVersion: 1,
+        schemaVersion: 2,
         quote: { ...SAMPLE_QUOTE },
+        candidates: [SAMPLE_CANDIDATE],
         items: [{ ...SAMPLE_ITEM, durationMonths: 12, durationUnit: 'years' }],
       },
     });
@@ -1075,7 +1152,7 @@ describe('POST /api/sales/client-quotes/:id/versions/:versionId/restore - durati
     });
 
     expect(res.statusCode).toBe(200);
-    const replacedItems = cqReplaceItemsMock.mock.calls[0][1];
+    const replacedItems = cqInsertItemsMock.mock.calls[0][1];
     expect(replacedItems[0].durationMonths).toBe(12);
     expect(replacedItems[0].durationUnit).toBe('years');
     expect(replacedItems[0].position).toBe(0);

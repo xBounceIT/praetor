@@ -54,12 +54,19 @@ describe('buildSnapshot', () => {
     };
     const items: Parameters<typeof quoteVersionsRepo.buildSnapshot>[1] = [];
     const snapshot = quoteVersionsRepo.buildSnapshot(quote, items);
-    expect(snapshot.schemaVersion).toBe(1);
-    expect(snapshot.items).toBe(items);
+    expect(snapshot.schemaVersion).toBe(2);
+    expect(snapshot.items).toEqual(items);
     expect(snapshot.quote.id).toBe('cq-1');
     expect(snapshot.quote.clientId).toBe('c-1');
     // linkedOfferId now round-trips through the snapshot for audit/portability.
     expect(snapshot.quote.linkedOfferId).toBe('co-1');
+    expect(snapshot.candidates).toHaveLength(1);
+    expect(snapshot.candidates[0]).toMatchObject({
+      id: 'cq-1',
+      quoteId: 'cq-1',
+      name: 'Variante A',
+      state: 'active',
+    });
   });
 
   test('null linkedOfferId round-trips faithfully', () => {
@@ -84,6 +91,56 @@ describe('buildSnapshot', () => {
     const snapshot = quoteVersionsRepo.buildSnapshot(quote, []);
     expect(snapshot.quote.linkedOfferId).toBeNull();
   });
+});
+
+test('normalizes a schema v1 snapshot as a one-candidate family', () => {
+  const normalized = quoteVersionsRepo.normalizeSnapshot({
+    schemaVersion: 1,
+    quote: {
+      id: 'cq-legacy',
+      linkedSupplierQuoteId: null,
+      linkedSupplierQuoteExpiration: null,
+      clientId: 'c-1',
+      clientName: 'Acme',
+      paymentTerms: 'net30',
+      discount: 0,
+      discountType: 'percentage',
+      status: 'sent',
+      expirationDate: '2026-06-01',
+      communicationChannelId: 'qcc_email',
+      communicationChannelName: 'Email',
+      notes: null,
+      createdAt: 10,
+      updatedAt: 20,
+    },
+    items: [
+      {
+        id: 'qi-legacy',
+        quoteId: 'cq-legacy',
+        candidateId: undefined,
+        productId: 'p-1',
+        productName: 'Service',
+        quantity: 1,
+        unitPrice: 100,
+        productCost: 50,
+        productMolPercentage: null,
+        supplierQuoteId: null,
+        supplierQuoteItemId: null,
+        supplierQuoteSupplierName: null,
+        supplierQuoteUnitPrice: null,
+        discount: 0,
+        note: null,
+        unitType: 'hours',
+        durationMonths: 1,
+        durationUnit: 'months',
+      },
+    ],
+  });
+
+  expect(normalized.schemaVersion).toBe(2);
+  expect(normalized.candidates).toHaveLength(1);
+  expect(normalized.candidates[0].id).toBe('cq-legacy');
+  expect(normalized.items[0].candidateId).toBe('cq-legacy');
 });
 
 describe('listForQuote', () => {
@@ -128,7 +185,7 @@ describe('findById', () => {
     expect(sql).toContain('limit $3');
     expect(exec.calls[0].params).toEqual(['cq-1', 'qv-1', 1]);
     expect(result?.id).toBe('qv-1');
-    expect(result?.snapshot.schemaVersion).toBe(1);
+    expect(result?.snapshot.schemaVersion).toBe(2);
   });
 
   test('returns null when no row matches the (quoteId, versionId) pair', async () => {

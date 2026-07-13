@@ -131,7 +131,9 @@ describe('listAll', () => {
     expect(sql).toContain('when co.expiration_date < current_date then 2');
     // Quote branch fallback for offer-less candidates still ranks the quote pipeline.
     expect(sql).toContain("when cq.status in ('sent', 'received') then 4");
-    expect(sql).toContain('when cq.expiration_date < current_date then 2');
+    expect(sql).toContain(
+      'when coalesce("sourcing_candidate"."expiration_date", cq.expiration_date) < current_date then 2',
+    );
   });
 
   test('offer-only sourced lines count as sourcing candidates (#812 round 16)', async () => {
@@ -152,11 +154,34 @@ describe('listAll', () => {
     exec.enqueue({ rows: [] });
     await supplierQuotesRepo.listAll(testDb);
     const sql = exec.calls[0].sql.toLowerCase();
+    expect(sql).toContain('qi.supplier_quote_item_id in (');
     expect(sql).toContain(
-      'qi.supplier_quote_item_id in (\n          select sqi.id from supplier_quote_items sqi where sqi.quote_id = "supplier_quotes"."id"',
+      'select sqi.id from supplier_quote_items sqi where sqi.quote_id = "supplier_quotes"."id"',
     );
     expect(sql).toContain(
       'coi.supplier_quote_item_id in (\n          select sqi.id from supplier_quote_items sqi where sqi.quote_id = "supplier_quotes"."id"',
+    );
+  });
+
+  test('expand-phase null candidate rows resolve through the quote default candidate', async () => {
+    exec.enqueue({ rows: [] });
+    await supplierQuotesRepo.listAll(testDb);
+    const sql = exec.calls[0].sql.toLowerCase();
+    expect(sql).toContain('qcand.id = coalesce(\n    qi.candidate_id');
+    expect(sql).toContain('from quote_candidates default_candidate');
+    expect(sql).toContain('default_candidate.quote_id = qi.quote_id');
+    expect(sql).toContain('order by default_candidate.position, default_candidate.id');
+  });
+
+  test('uses the sourcing candidates expiration instead of the mirrored parent date', async () => {
+    exec.enqueue({ rows: [] });
+    await supplierQuotesRepo.listAll(testDb);
+    const sql = exec.calls[0].sql.toLowerCase();
+
+    expect(sql).toContain('select max(qcand.expiration_date) as expiration_date');
+    expect(sql).toContain("qcand.state <> 'discarded'");
+    expect(sql).toContain(
+      'coalesce(\n  "sourcing_candidate"."expiration_date",\n  cq.expiration_date\n) as expiration_date',
     );
   });
 });

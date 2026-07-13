@@ -56,6 +56,18 @@ const cloneTables = (): Record<TableKey, ItemRow[]> => {
 };
 
 const fakeDb = {
+  select() {
+    return {
+      from: () => ({
+        where: () => ({
+          orderBy: () => ({
+            // Client quote replacement resolves the family's primary candidate before deleting.
+            limit: async () => [{ id: 'quote-candidate-primary' }],
+          }),
+        }),
+      }),
+    };
+  },
   delete(table: object) {
     return {
       where: async (_filter: unknown) => {

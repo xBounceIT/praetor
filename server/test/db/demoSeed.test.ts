@@ -104,6 +104,14 @@ const parsedAssignments = (table: string, targetColumn: string) =>
     })),
   );
 
+const insertStatement = (table: string) => {
+  const start = SEED_SQL.indexOf(`INSERT INTO ${table} (`);
+  if (start === -1) throw new Error(`Missing ${table} insert in seed.sql`);
+  const end = SEED_SQL.indexOf(';', start);
+  if (end === -1) throw new Error(`Unterminated ${table} insert in seed.sql`);
+  return SEED_SQL.slice(start, end + 1);
+};
+
 describe('selectDemoUserCleanupIds', () => {
   test('preserves canonical demo users so cascading user data survives demo reseed', () => {
     expect(
@@ -436,6 +444,37 @@ describe('assertNoDemoDocumentIdConflicts', () => {
       ...COMPATIBILITY_DEFAULTS.clients,
       ...buildDemoIds(2027).clients,
     ]);
+  });
+});
+
+describe('demo quote candidates stay in sync with the normalized quote schema', () => {
+  test('creates one default candidate per demo quote before inserting quote items', () => {
+    const candidateInsert = insertStatement('quote_candidates');
+
+    expect(SEED_SQL.indexOf('INSERT INTO quote_candidates (')).toBeLessThan(
+      SEED_SQL.indexOf('INSERT INTO quote_items ('),
+    );
+    expect(candidateInsert).toContain("'Variante A'");
+    expect(candidateInsert).toContain('generate_series(1, 14)');
+    expect(candidateInsert).toContain("THEN 'selected'");
+    expect(DEMO_EXPECTED_COUNTS.quote_candidates).toBe(DEMO_QUOTES.length);
+  });
+
+  test('assigns every demo quote item to its parent default candidate', () => {
+    const quoteItemsInsert = insertStatement('quote_items');
+
+    expect(quoteItemsInsert).toMatch(/id,\s+quote_id,\s+candidate_id,/);
+    expect(quoteItemsInsert).toMatch(/SELECT\s+v\.id,\s+v\.quote_id,\s+v\.quote_id,/);
+    expect(quoteItemsInsert).toContain('candidate_id = EXCLUDED.candidate_id');
+  });
+
+  test('links seeded offers to the selected candidate of their quote family', () => {
+    const offers = parseInsertValuesBlocks(SEED_SQL, 'customer_offers');
+
+    expect(offers).toHaveLength(DEMO_CUSTOMER_OFFERS.length);
+    for (const offer of offers) {
+      expect(offer.linked_quote_candidate_id).toBe(offer.linked_quote_id);
+    }
   });
 });
 

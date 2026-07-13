@@ -3,14 +3,22 @@ import type React from 'react';
 import { useCallback, useMemo, useReducer, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { LinkedRecordBanner } from '@/components/shared/LinkedRecordBanner';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useDocumentCodePreview } from '../../hooks/useDocumentCodePreview';
 import { ApiError } from '../../services/api/client';
-import { normalizeQuoteItem } from '../../services/api/normalizers';
+import { normalizeQuote, normalizeQuoteItem } from '../../services/api/normalizers';
 import type {
   QuoteCommunicationChannel,
   QuoteCommunicationChannelIcon,
@@ -21,7 +29,9 @@ import type {
   DurationUnit,
   Product,
   Quote,
+  QuoteCandidate,
   QuoteItem,
+  QuoteMutation,
   QuoteVersion,
   SupplierQuote,
   SupplierUnitType,
@@ -53,6 +63,7 @@ import {
   getDurationInputValue,
   getItemPricingContext,
   isPositiveFiniteNumber,
+  MAX_MOL_PERCENTAGE,
   MOL_PERCENTAGE_DECIMALS,
   normalizeDurationForSubmit,
   normalizeDurationUnit,
@@ -134,11 +145,13 @@ export interface ClientQuotesViewProps {
     updates: { name: string; icon: QuoteCommunicationChannelIcon },
   ) => Promise<void>;
   onDeleteCommunicationChannel?: (id: string) => Promise<void>;
-  onAddQuote: (quoteData: Partial<Quote>) => void | Promise<void>;
-  onUpdateQuote: (id: string, updates: Partial<Quote>) => void | Promise<void>;
+  onAddQuote: (quoteData: QuoteMutation) => void | Promise<void>;
+  onUpdateQuote: (id: string, updates: QuoteMutation) => void | Promise<void>;
   onQuoteRestored?: (quote: Quote) => void;
   onDeleteQuote: (id: string) => void | Promise<void>;
-  onCreateOffer?: (quote: Quote) => void;
+  onCreateOfferFromLegacyQuote?: (quote: Quote) => void;
+  onPromoteCandidate?: (quoteId: string, candidateId: string) => Promise<unknown>;
+  onRollbackPromotion?: (quoteId: string) => Promise<unknown>;
   onViewOffer?: (offerId: string) => void;
   quoteFilterId?: string | null;
   quoteIdsWithOffers?: Set<string>;
@@ -196,19 +209,84 @@ const getDefaultFormData = (): Partial<Quote> => ({
   notes: '',
 });
 
-const quoteToFormData = (quote: Quote): Partial<Quote> => ({
+const makeCandidateDraftId = () =>
+  'tmp_candidate_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+
+const candidateSuffix = (index: number): string => {
+  let value = index + 1;
+  let suffix = '';
+  while (value > 0) {
+    value -= 1;
+    suffix = String.fromCharCode(65 + (value % 26)) + suffix;
+    value = Math.floor(value / 26);
+  }
+  return suffix;
+};
+
+const nextCandidateName = (candidates: QuoteCandidate[]): string => {
+  const usedNames = new Set(
+    candidates.map((candidate) => candidate.name.trim().toLocaleLowerCase()),
+  );
+  for (let index = 0; ; index++) {
+    const name = `Variante ${candidateSuffix(index)}`;
+    if (!usedNames.has(name.toLocaleLowerCase())) return name;
+  }
+};
+
+const candidateToFormData = (
+  quote: Pick<Quote, 'id' | 'clientId' | 'clientName' | 'status'>,
+  candidate: QuoteCandidate,
+): Partial<Quote> => ({
   id: quote.id,
   clientId: quote.clientId,
   clientName: quote.clientName,
-  items: quote.items,
-  paymentTerms: quote.paymentTerms,
-  discount: quote.discount,
-  discountType: quote.discountType || 'percentage',
   status: quote.status,
-  expirationDate: quote.expirationDate ? normalizeDateOnlyString(quote.expirationDate) : '',
-  communicationChannelId: quote.communicationChannelId ?? '',
-  communicationChannelName: quote.communicationChannelName ?? '',
-  notes: quote.notes || '',
+  items: candidate.items,
+  paymentTerms: candidate.paymentTerms,
+  discount: candidate.discount,
+  discountType: candidate.discountType,
+  expirationDate: normalizeDateOnlyString(candidate.expirationDate),
+  communicationChannelId: candidate.communicationChannelId ?? '',
+  communicationChannelName: candidate.communicationChannelName ?? '',
+  notes: candidate.notes || '',
+});
+
+const quoteCandidatesForForm = (quote: Quote): QuoteCandidate[] =>
+  quote.candidates?.length
+    ? quote.candidates
+    : [
+        {
+          id: quote.id,
+          quoteId: quote.id,
+          name: 'Variante A',
+          position: 0,
+          state: quote.linkedOfferId ? 'selected' : 'active',
+          items: quote.items,
+          paymentTerms: quote.paymentTerms,
+          discount: quote.discount,
+          discountType: quote.discountType,
+          expirationDate: quote.expirationDate,
+          communicationChannelId: quote.communicationChannelId,
+          communicationChannelName: quote.communicationChannelName,
+          notes: quote.notes,
+          createdAt: quote.createdAt,
+          updatedAt: quote.updatedAt,
+        },
+      ];
+
+const formDataIntoCandidate = (
+  candidate: QuoteCandidate,
+  formData: Partial<Quote>,
+): QuoteCandidate => ({
+  ...candidate,
+  items: (formData.items || []).map((item) => ({ ...item, candidateId: candidate.id })),
+  paymentTerms: formData.paymentTerms || 'immediate',
+  discount: Number(formData.discount || 0),
+  discountType: formData.discountType || 'percentage',
+  expirationDate: formData.expirationDate || '',
+  communicationChannelId: formData.communicationChannelId || '',
+  communicationChannelName: formData.communicationChannelName || '',
+  notes: formData.notes || '',
 });
 
 // One label shape for a supplier-quote line item, shared by the picker options and the
@@ -247,6 +325,20 @@ const calculateClientQuotePricingTotals = (
     'hours',
     discountType,
   );
+
+const isLegacyAcceptedQuote = (quote: Quote) => {
+  const candidates = quote.candidates ?? [];
+  const candidate = candidates[0];
+  return (
+    normalizeQuoteStatus(quote.status) === 'accepted' &&
+    candidates.length === 1 &&
+    candidate.quoteId === quote.id &&
+    candidate.state === 'active'
+  );
+};
+
+const isCandidatePromotable = (candidate: QuoteCandidate) =>
+  candidate.state === 'active' && !candidate.isExpired && !candidate.linkedSupplierQuoteExpired;
 
 const isQuoteCodeConflictError = (err: unknown) =>
   err instanceof ApiError && err.status === 409 && err.message === 'Quote ID already exists';
@@ -337,7 +429,9 @@ const useClientQuotesController = ({
   onUpdateQuote,
   onQuoteRestored,
   onDeleteQuote,
-  onCreateOffer,
+  onCreateOfferFromLegacyQuote,
+  onPromoteCandidate,
+  onRollbackPromotion,
   onViewOffer,
   quoteFilterId,
   quoteIdsWithOffers,
@@ -389,6 +483,7 @@ const useClientQuotesController = ({
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [productRowToDelete, setProductRowToDelete] = useState<number | null>(null);
+  const [isCandidateDeleteConfirmOpen, setIsCandidateDeleteConfirmOpen] = useState(false);
 
   const getStatusLabel = useCallback(
     (status: string) => {
@@ -460,6 +555,11 @@ const useClientQuotesController = ({
   );
 
   const [formData, setFormData] = useState<Partial<Quote>>(() => getDefaultFormData());
+  const [candidateDrafts, setCandidateDrafts] = useState<QuoteCandidate[]>([]);
+  const [activeCandidateId, setActiveCandidateId] = useState<string | null>(null);
+  const [promotionQuote, setPromotionQuote] = useState<Quote | null>(null);
+  const [promotionCandidateId, setPromotionCandidateId] = useState<string | null>(null);
+  const [isPromoting, setIsPromoting] = useState(false);
   const [previewVersion, setPreviewVersion] = useState<QuoteVersion | null>(null);
   const [draggedItemId, setDraggedItemId] = useState<string | null>(null);
   // Expired quotes are read-only EXCEPT their expiration date, which stays editable so the user can
@@ -544,55 +644,226 @@ const useClientQuotesController = ({
 
   const openAddModal = () => {
     dispatch({ type: 'openAddModal' });
-    setFormData({
+    const defaults = {
       ...getDefaultFormData(),
       communicationChannelId: communicationChannels[0]?.id ?? '',
       communicationChannelName: communicationChannels[0]?.name ?? '',
-    });
+    };
+    const candidate: QuoteCandidate = {
+      id: makeCandidateDraftId(),
+      quoteId: '',
+      name: 'Variante A',
+      position: 0,
+      state: 'active',
+      items: [],
+      paymentTerms: 'immediate',
+      discount: 0,
+      discountType: 'percentage',
+      expirationDate: defaults.expirationDate || '',
+      communicationChannelId: defaults.communicationChannelId,
+      communicationChannelName: defaults.communicationChannelName,
+      notes: '',
+      createdAt: 0,
+      updatedAt: 0,
+    };
+    setCandidateDrafts([candidate]);
+    setActiveCandidateId(candidate.id);
+    setFormData(defaults);
     setErrors({});
     setPreviewVersion(null);
   };
 
-  const openEditModal = useCallback((quote: Quote) => {
-    dispatch({ type: 'openEditModal', quote });
-    setFormData(quoteToFormData(quote));
+  const applyQuoteToCandidateForm = useCallback((quote: Quote) => {
+    const candidates = quoteCandidatesForForm(quote);
+    const primary =
+      candidates.find((candidate) => candidate.state === 'selected') ??
+      candidates.find((candidate) => candidate.state === 'active') ??
+      candidates[0];
+    setCandidateDrafts(candidates);
+    setActiveCandidateId(primary.id);
+    setFormData(candidateToFormData(quote, primary));
     setErrors({});
-    setPreviewVersion(null);
   }, []);
+
+  const openEditModal = useCallback(
+    (quote: Quote) => {
+      dispatch({ type: 'openEditModal', quote });
+      applyQuoteToCandidateForm(quote);
+      setPreviewVersion(null);
+    },
+    [applyQuoteToCandidateForm],
+  );
+
+  const currentCandidateDrafts = () =>
+    candidateDrafts.map((candidate) =>
+      candidate.id === activeCandidateId ? formDataIntoCandidate(candidate, formData) : candidate,
+    );
+
+  const handleSelectCandidate = (candidateId: string) => {
+    const nextDrafts = currentCandidateDrafts();
+    const next = nextDrafts.find((candidate) => candidate.id === candidateId);
+    if (!next) return;
+    setCandidateDrafts(nextDrafts);
+    setActiveCandidateId(candidateId);
+    setFormData(
+      candidateToFormData(
+        {
+          id: formData.id || editingQuote?.id || '',
+          clientId: formData.clientId || editingQuote?.clientId || '',
+          clientName: formData.clientName || editingQuote?.clientName || '',
+          status: formData.status || editingQuote?.status || 'draft',
+        },
+        next,
+      ),
+    );
+    setErrors({});
+  };
+
+  const addCandidate = (duplicateCurrent: boolean) => {
+    const nextDrafts = currentCandidateDrafts();
+    const source =
+      nextDrafts.find((candidate) => candidate.id === activeCandidateId) ?? nextDrafts[0];
+    const nextIndex = nextDrafts.length;
+    const name = nextCandidateName(nextDrafts);
+    const candidate: QuoteCandidate = {
+      ...(duplicateCurrent && source
+        ? source
+        : {
+            ...source,
+            items: [],
+            paymentTerms: 'immediate',
+            discount: 0,
+            discountType: 'percentage',
+            expirationDate: addMonthsToDateOnly(getLocalDateString(), 1),
+            notes: '',
+          }),
+      id: makeCandidateDraftId(),
+      quoteId: editingQuote?.id || '',
+      name,
+      position: nextIndex,
+      state: 'active',
+      items: duplicateCurrent
+        ? (source?.items || []).map((item) => ({ ...item, id: makeCandidateDraftId() }))
+        : [],
+      createdAt: 0,
+      updatedAt: 0,
+    };
+    const updated = [...nextDrafts, candidate];
+    setCandidateDrafts(updated);
+    setActiveCandidateId(candidate.id);
+    setFormData(
+      candidateToFormData(
+        {
+          id: formData.id || editingQuote?.id || '',
+          clientId: formData.clientId || editingQuote?.clientId || '',
+          clientName: formData.clientName || editingQuote?.clientName || '',
+          status: formData.status || editingQuote?.status || 'draft',
+        },
+        candidate,
+      ),
+    );
+  };
+
+  const renameActiveCandidate = (name: string) => {
+    setCandidateDrafts((current) =>
+      current.map((candidate) =>
+        candidate.id === activeCandidateId ? { ...candidate, name } : candidate,
+      ),
+    );
+  };
+
+  const removeActiveCandidate = () => {
+    if (candidateDrafts.length <= 1 || !activeCandidateId) return;
+    const nextDrafts: QuoteCandidate[] = [];
+    for (const candidate of currentCandidateDrafts()) {
+      if (candidate.id !== activeCandidateId) {
+        nextDrafts.push({ ...candidate, position: nextDrafts.length });
+      }
+    }
+    const next = nextDrafts[0];
+    setCandidateDrafts(nextDrafts);
+    setActiveCandidateId(next.id);
+    setFormData(
+      candidateToFormData(
+        {
+          id: formData.id || editingQuote?.id || '',
+          clientId: formData.clientId || editingQuote?.clientId || '',
+          clientName: formData.clientName || editingQuote?.clientName || '',
+          status: formData.status || editingQuote?.status || 'draft',
+        },
+        next,
+      ),
+    );
+  };
+
+  const openPromotionDialog = (quote: Quote) => {
+    const eligible = (quote.candidates || []).find(isCandidatePromotable);
+    setPromotionQuote(quote);
+    setPromotionCandidateId(eligible?.id ?? null);
+  };
+
+  const confirmCandidatePromotion = async () => {
+    if (!promotionQuote || !promotionCandidateId || !onPromoteCandidate || isPromoting) return;
+    setIsPromoting(true);
+    try {
+      await onPromoteCandidate(promotionQuote.id, promotionCandidateId);
+      setPromotionQuote(null);
+      setPromotionCandidateId(null);
+    } catch (error) {
+      toastError((error as Error).message || t('sales:clientQuotes.failedToUpdateStatus'));
+    } finally {
+      setIsPromoting(false);
+    }
+  };
+
+  const rollbackCandidatePromotion = async (quoteId: string) => {
+    if (!onRollbackPromotion) return;
+    try {
+      await onRollbackPromotion(quoteId);
+    } catch (error) {
+      toastError((error as Error).message || t('sales:clientQuotes.failedToUpdateStatus'));
+    }
+  };
 
   const handleVersionPreview = useCallback(
     (version: QuoteVersion) => {
+      const quoteId = editingQuote?.id ?? version.snapshot.quote.id;
+      const candidates = version.snapshot.candidates.map((candidate) => ({
+        ...candidate,
+        quoteId,
+        communicationChannelId:
+          candidate.communicationChannelId || communicationChannels[0]?.id || '',
+        communicationChannelName:
+          candidate.communicationChannelName || communicationChannels[0]?.name || '',
+        items: version.snapshot.items
+          .filter((item) => item.candidateId === candidate.id)
+          .map((item) => normalizeQuoteItem({ ...item, quoteId })),
+      }));
+      const previewQuote = normalizeQuote({
+        ...version.snapshot.quote,
+        id: quoteId,
+        items: [],
+        candidates,
+      });
       setPreviewVersion(version);
-      setFormData(
-        quoteToFormData({
-          ...version.snapshot.quote,
-          id: editingQuote?.id ?? version.snapshot.quote.id,
-          items: version.snapshot.items.map(normalizeQuoteItem),
-          status: version.snapshot.quote.status as Quote['status'],
-          communicationChannelId:
-            version.snapshot.quote.communicationChannelId ?? communicationChannels[0]?.id ?? '',
-          communicationChannelName:
-            version.snapshot.quote.communicationChannelName ?? communicationChannels[0]?.name ?? '',
-        }),
-      );
-      setErrors({});
+      applyQuoteToCandidateForm(previewQuote);
     },
-    [communicationChannels, editingQuote],
+    [applyQuoteToCandidateForm, communicationChannels, editingQuote],
   );
 
   const handleClearPreview = useCallback(() => {
-    if (editingQuote) setFormData(quoteToFormData(editingQuote));
+    if (editingQuote) applyQuoteToCandidateForm(editingQuote);
     setPreviewVersion(null);
-  }, [editingQuote]);
+  }, [applyQuoteToCandidateForm, editingQuote]);
 
   const handleVersionRestored = useCallback(
     (updated: Quote) => {
       dispatch({ type: 'setEditingQuote', quote: updated });
-      setFormData(quoteToFormData(updated));
+      applyQuoteToCandidateForm(updated);
       setPreviewVersion(null);
       onQuoteRestored?.(updated);
     },
-    [onQuoteRestored],
+    [applyQuoteToCandidateForm, onQuoteRestored],
   );
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -675,13 +946,38 @@ const useClientQuotesController = ({
       }
     }
 
+    const pendingCandidateDrafts = currentCandidateDrafts();
+    const candidateNames = new Set<string>();
+    for (const candidate of pendingCandidateDrafts) {
+      const normalizedName = candidate.name.trim().toLocaleLowerCase();
+      if (!normalizedName) {
+        newErrors.candidates = t('sales:clientQuotes.candidates.nameRequired', {
+          defaultValue: 'Every candidate needs a name.',
+        });
+        break;
+      }
+      if (candidateNames.has(normalizedName)) {
+        newErrors.candidates = t('sales:clientQuotes.candidates.nameUnique', {
+          defaultValue: 'Candidate names must be unique.',
+        });
+        break;
+      }
+      candidateNames.add(normalizedName);
+      if (!candidate.items.length) {
+        newErrors.candidates = t('sales:clientQuotes.candidates.itemsRequired', {
+          defaultValue: 'Every candidate needs at least one line.',
+        });
+        break;
+      }
+    }
+
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
       return;
     }
 
-    const itemsWithSnapshots = (formData.items || []).map((item) => {
-      return {
+    const serializeItems = (candidateItems: QuoteItem[]) =>
+      candidateItems.map((item) => ({
         ...item,
         unitPrice: getClientQuoteUnitSalePrice(item),
         discount: item.discount === undefined ? undefined : Number(item.discount),
@@ -699,14 +995,33 @@ const useClientQuotesController = ({
           item.supplierQuoteUnitPrice === undefined || item.supplierQuoteUnitPrice === null
             ? null
             : Number(item.supplierQuoteUnitPrice),
-      };
-    });
+      }));
+    const itemsWithSnapshots = serializeItems(formData.items || []);
+    const candidatePayloads = pendingCandidateDrafts.map((candidate) => ({
+      ...(candidate.id.startsWith('tmp_candidate_') ? {} : { id: candidate.id }),
+      name: candidate.name,
+      paymentTerms: candidate.paymentTerms,
+      discount: candidate.discount,
+      discountType: candidate.discountType,
+      expirationDate: candidate.expirationDate,
+      communicationChannelId: candidate.communicationChannelId,
+      notes: candidate.notes,
+      items:
+        candidate.id === activeCandidateId ? itemsWithSnapshots : serializeItems(candidate.items),
+    }));
+    const primaryCandidate = candidatePayloads[0];
 
     const payload = {
       ...formData,
       id: formData.id?.trim() || undefined,
-      discount: formData.discount ? formData.discount : 0,
-      items: itemsWithSnapshots,
+      paymentTerms: primaryCandidate.paymentTerms,
+      discount: primaryCandidate.discount,
+      discountType: primaryCandidate.discountType,
+      expirationDate: primaryCandidate.expirationDate,
+      communicationChannelId: primaryCandidate.communicationChannelId,
+      notes: primaryCandidate.notes,
+      items: primaryCandidate.items,
+      candidates: candidatePayloads,
     };
 
     dispatch({ type: 'setIsSubmitting', value: true });
@@ -738,9 +1053,27 @@ const useClientQuotesController = ({
     dispatch({ type: 'confirmDelete', quote });
   }, []);
 
-  const handleStatusUpdate = async (id: string, updates: Partial<Quote>) => {
+  const handleStatusUpdate = async (id: string, updates: QuoteMutation) => {
     try {
-      await onUpdateQuote(id, updates);
+      const quote = quotes.find((entry) => entry.id === id);
+      if (updates.status === 'sent' && quote?.candidates?.length) {
+        await onUpdateQuote(id, {
+          id: quote.id,
+          clientId: quote.clientId,
+          clientName: quote.clientName,
+          status: updates.status,
+          candidates: quote.candidates,
+          items: quote.candidates[0].items,
+          paymentTerms: quote.candidates[0].paymentTerms,
+          discount: quote.candidates[0].discount,
+          discountType: quote.candidates[0].discountType,
+          expirationDate: quote.candidates[0].expirationDate,
+          communicationChannelId: quote.candidates[0].communicationChannelId,
+          notes: quote.candidates[0].notes,
+        });
+      } else {
+        await onUpdateQuote(id, updates);
+      }
     } catch (err) {
       toastError((err as Error).message || t('sales:clientQuotes.failedToUpdateStatus'));
     }
@@ -1278,6 +1611,25 @@ const useClientQuotesController = ({
       },
     },
     {
+      header: t('sales:clientQuotes.candidates.column', { defaultValue: 'Varianti' }),
+      id: 'candidates',
+      accessorFn: (row) => row.candidates?.length ?? 1,
+      className: 'whitespace-nowrap',
+      cell: ({ row }) => {
+        const candidateCount = row.candidates?.length || 1;
+        return (
+          <Badge variant="secondary">
+            {candidateCount > 1
+              ? t('sales:clientQuotes.candidates.count', {
+                  count: candidateCount,
+                  defaultValue: '{{count}} varianti',
+                })
+              : t('sales:clientQuotes.candidates.notApplicable', { defaultValue: 'N/A' })}
+          </Badge>
+        );
+      },
+    },
+    {
       header: t('sales:clientQuotes.subtotal', { defaultValue: 'Subtotal' }),
       id: 'subtotal',
       accessorFn: (row) => quotePricingMap.get(row.id)?.subtotal ?? 0,
@@ -1500,6 +1852,14 @@ const useClientQuotesController = ({
         const history = isHistoryRow(row);
         // A linked, expired supplier quote blocks progression to sent/offer/accepted (#779).
         const supplierExpired = Boolean(row.linkedSupplierQuoteExpired);
+        const sendDisabled = history || supplierExpired;
+        const hasCandidateMetadata = Boolean(row.candidates?.length);
+        const hasPromotableCandidate = row.candidates?.some(isCandidatePromotable);
+        // Sending presents every active variant, so one blocked supplier source blocks the family.
+        // Promotion chooses exactly one winner, so the comparison must remain reachable whenever
+        // at least one candidate is eligible.
+        const promotionDisabled =
+          history || (hasCandidateMetadata ? !hasPromotableCandidate : supplierExpired);
         const progressBlockedTitle = t('sales:clientQuotes.linkedSupplierQuoteExpiredBlocks', {
           defaultValue:
             'The linked supplier quote has expired — extend it before progressing this quote.',
@@ -1513,19 +1873,6 @@ const useClientQuotesController = ({
           : expired
             ? t('sales:clientQuotes.errors.expiredCannotDelete')
             : t('sales:clientQuotes.deleteQuote');
-
-        const isCreateOfferDisabled = history || hasOffer;
-        const createOfferTitle = hasOffer
-          ? t('sales:clientQuotes.offerAlreadyExists', {
-              defaultValue: 'An offer for this quote already exists.',
-            })
-          : history
-            ? t('sales:clientQuotes.historyActionsDisabled', {
-                defaultValue: 'History entries cannot be modified.',
-              })
-            : t('sales:clientQuotes.convertToOffer', {
-                defaultValue: 'Convert to offer',
-              });
 
         const canRestore = !hasOffer || offerStatus === 'draft';
         const canRollbackDraftOffer =
@@ -1599,7 +1946,7 @@ const useClientQuotesController = ({
                 </TooltipContent>
               </Tooltip>
             )}
-            {row.status === 'accepted' && onCreateOffer && (
+            {isLegacyAcceptedQuote(row) && !hasOffer && onCreateOfferFromLegacyQuote && (
               <Tooltip>
                 <TooltipTrigger asChild>
                   <span className="inline-flex">
@@ -1607,21 +1954,25 @@ const useClientQuotesController = ({
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
-                        if (isCreateOfferDisabled) return;
-                        onCreateOffer({
+                        onCreateOfferFromLegacyQuote({
                           ...row,
                           items: priceClientQuoteItemsFromLocalMol(row.items),
                         });
                       }}
-                      disabled={isCreateOfferDisabled}
-                      aria-label={createOfferTitle}
-                      className={`p-2 rounded-lg transition-all ${isCreateOfferDisabled ? 'cursor-not-allowed opacity-50 text-zinc-400' : 'text-zinc-400 hover:text-praetor hover:bg-zinc-100'}`}
+                      aria-label={t('sales:clientQuotes.convertToOffer', {
+                        defaultValue: 'Convert to offer',
+                      })}
+                      className="p-2 rounded-lg transition-all text-zinc-400 hover:text-praetor hover:bg-zinc-100"
                     >
                       <i className="fa-solid fa-file-signature"></i>
                     </button>
                   </span>
                 </TooltipTrigger>
-                <TooltipContent>{createOfferTitle}</TooltipContent>
+                <TooltipContent>
+                  {t('sales:clientQuotes.convertToOffer', {
+                    defaultValue: 'Convert to offer',
+                  })}
+                </TooltipContent>
               </Tooltip>
             )}
             {row.status === 'draft' && (
@@ -1632,12 +1983,12 @@ const useClientQuotesController = ({
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
-                        if (history || supplierExpired) return;
+                        if (sendDisabled) return;
                         handleStatusUpdate(row.id, { status: 'sent' });
                       }}
-                      disabled={history || supplierExpired}
+                      disabled={sendDisabled}
                       aria-label={t('sales:clientQuotes.markAsSent')}
-                      className={`p-2 rounded-lg transition-all ${history || supplierExpired ? 'cursor-not-allowed opacity-50 text-blue-700' : 'text-blue-700 hover:text-blue-600 hover:bg-blue-50'}`}
+                      className={`p-2 rounded-lg transition-all ${sendDisabled ? 'cursor-not-allowed opacity-50 text-blue-700' : 'text-blue-700 hover:text-blue-600 hover:bg-blue-50'}`}
                     >
                       <i className="fa-solid fa-paper-plane"></i>
                     </button>
@@ -1662,15 +2013,14 @@ const useClientQuotesController = ({
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
-                        if (history || supplierExpired) return;
-                        handleStatusUpdate(row.id, {
-                          status: 'offer',
-                          items: priceClientQuoteItemsFromLocalMol(row.items),
-                        });
+                        if (promotionDisabled) return;
+                        openPromotionDialog(row);
                       }}
-                      disabled={history || supplierExpired}
-                      aria-label={t('sales:clientQuotes.markAsOffer')}
-                      className={`p-2 rounded-lg transition-all ${history || supplierExpired ? 'cursor-not-allowed opacity-50 text-indigo-700' : 'text-indigo-700 hover:text-indigo-600 hover:bg-indigo-50'}`}
+                      disabled={promotionDisabled}
+                      aria-label={t('sales:clientQuotes.candidates.chooseTitle', {
+                        defaultValue: 'Scegli candidato',
+                      })}
+                      className={`p-2 rounded-lg transition-all ${promotionDisabled ? 'cursor-not-allowed opacity-50 text-indigo-700' : 'text-indigo-700 hover:text-indigo-600 hover:bg-indigo-50'}`}
                     >
                       <i className="fa-solid fa-file-signature"></i>
                     </button>
@@ -1683,43 +2033,15 @@ const useClientQuotesController = ({
                       })
                     : supplierExpired
                       ? progressBlockedTitle
-                      : t('sales:clientQuotes.markAsOffer')}
+                      : t('sales:clientQuotes.candidates.chooseTitle', {
+                          defaultValue: 'Scegli candidato',
+                        })}
                 </TooltipContent>
               </Tooltip>
             )}
-            {row.status === 'offer' && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span className="inline-flex">
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (history || supplierExpired) return;
-                        handleStatusUpdate(row.id, { status: 'accepted' });
-                      }}
-                      disabled={history || supplierExpired}
-                      aria-label={t('sales:clientQuotes.markAsAccepted')}
-                      className={`p-2 rounded-lg transition-all ${history || supplierExpired ? 'cursor-not-allowed opacity-50 text-emerald-700' : 'text-emerald-700 hover:text-emerald-600 hover:bg-emerald-50'}`}
-                    >
-                      <i className="fa-solid fa-check"></i>
-                    </button>
-                  </span>
-                </TooltipTrigger>
-                <TooltipContent>
-                  {history
-                    ? t('sales:clientQuotes.historyActionsDisabled', {
-                        defaultValue: 'History entries cannot be modified.',
-                      })
-                    : supplierExpired
-                      ? progressBlockedTitle
-                      : t('sales:clientQuotes.markAsAccepted')}
-                </TooltipContent>
-              </Tooltip>
-            )}
-            {/* "Mark as denied" is reachable from both sent and offer; one shared block keeps the
-                guard, label and tooltip in sync (it renders last in both states). */}
-            {(row.status === 'sent' || row.status === 'offer') && (
+            {/* A sent family can be rejected before a candidate is promoted. Once promoted,
+                acceptance/rejection belongs to the generated offer, not to the quote family. */}
+            {row.status === 'sent' && (
               <Tooltip>
                 <TooltipTrigger asChild>
                   <span className="inline-flex">
@@ -1781,7 +2103,11 @@ const useClientQuotesController = ({
                           if (restoreDisabled) return;
                           // Back-to-draft is allowed only from sent/offer (#779); the server
                           // enforces the same rule and rejects it from accepted/denied/expired.
-                          handleStatusUpdate(row.id, { status: 'draft' });
+                          if (row.status === 'offer' && row.selectedCandidateId) {
+                            rollbackCandidatePromotion(row.id);
+                          } else {
+                            handleStatusUpdate(row.id, { status: 'draft' });
+                          }
                         }}
                         disabled={restoreDisabled}
                         aria-label={restoreTitle}
@@ -1829,6 +2155,8 @@ const useClientQuotesController = ({
     setErrors,
     productRowToDelete,
     setProductRowToDelete,
+    isCandidateDeleteConfirmOpen,
+    setIsCandidateDeleteConfirmOpen,
     getStatusLabel,
     isQuoteExpired,
     isHistoryRow,
@@ -1878,6 +2206,20 @@ const useClientQuotesController = ({
     handleUnitTypeChange,
     handleDurationValueChange,
     handleDurationUnitChange,
+    candidateDrafts,
+    activeCandidateId,
+    handleSelectCandidate,
+    addCandidate,
+    renameActiveCandidate,
+    removeActiveCandidate,
+    promotionQuote,
+    setPromotionQuote,
+    promotionCandidateId,
+    setPromotionCandidateId,
+    isPromoting,
+    openPromotionDialog,
+    confirmCandidatePromotion,
+    rollbackCandidatePromotion,
     columns,
   };
 };
@@ -1893,6 +2235,7 @@ const ClientQuotesLayout: React.FC<{ controller: ClientQuotesController }> = ({ 
   <div className="space-y-8">
     <ClientQuoteFormModal controller={controller} />
     <ClientQuoteClientChangeModal controller={controller} />
+    <ClientQuotePromotionModal controller={controller} />
     <ClientQuoteDeleteDialogs controller={controller} />
     <ClientQuotesHeader controller={controller} />
     <ClientQuotesTable controller={controller} />
@@ -1919,6 +2262,7 @@ const ClientQuoteFormModal: React.FC<{ controller: ClientQuotesController }> = (
           <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
             <ClientQuoteModalHeader controller={controller} />
             <ModalBody className="flex-1 space-y-5">
+              <ClientQuoteCandidatesBar controller={controller} />
               <ClientQuoteModalAlerts controller={controller} />
               <ClientQuoteClientSection controller={controller} />
               <ClientQuoteItemsSection controller={controller} />
@@ -1938,6 +2282,252 @@ const ClientQuoteFormModal: React.FC<{ controller: ClientQuotesController }> = (
           />
         )}
       </div>
+    </Modal>
+  );
+};
+
+const ClientQuoteCandidatesBar: React.FC<{ controller: ClientQuotesController }> = ({
+  controller,
+}) => {
+  const {
+    t,
+    candidateDrafts,
+    activeCandidateId,
+    handleSelectCandidate,
+    addCandidate,
+    renameActiveCandidate,
+    setIsCandidateDeleteConfirmOpen,
+    editingQuote,
+    isReadOnly,
+    errors,
+  } = controller;
+  if (!candidateDrafts.length || !activeCandidateId) return null;
+  const activeCandidate = candidateDrafts.find((candidate) => candidate.id === activeCandidateId);
+  const canChangeComposition = !editingQuote || editingQuote.status === 'draft';
+  return (
+    <div className="space-y-3 rounded-lg border border-border bg-muted/30 p-3">
+      <div className="flex items-center gap-2 overflow-x-auto">
+        <Tabs
+          value={activeCandidateId}
+          onValueChange={handleSelectCandidate}
+          className="min-w-0 flex-1"
+        >
+          <TabsList className="h-auto min-w-max justify-start">
+            {candidateDrafts.map((candidate) => {
+              const totals = calculateClientQuotePricingTotals(
+                candidate.id === activeCandidateId
+                  ? controller.formData.items || []
+                  : candidate.items,
+                candidate.id === activeCandidateId
+                  ? Number(controller.formData.discount || 0)
+                  : candidate.discount,
+                candidate.id === activeCandidateId
+                  ? controller.formData.discountType || 'percentage'
+                  : candidate.discountType,
+              );
+              return (
+                <TabsTrigger
+                  key={candidate.id}
+                  value={candidate.id}
+                  className="min-w-36 gap-2 px-3"
+                >
+                  <span>{candidate.name}</span>
+                  <span className="text-xs text-muted-foreground">
+                    {formatDecimal(totals.total)}
+                  </span>
+                  {candidate.state === 'selected' && (
+                    <Badge>
+                      {t('sales:clientQuotes.candidates.selected', { defaultValue: 'Scelta' })}
+                    </Badge>
+                  )}
+                  {candidate.state === 'discarded' && (
+                    <Badge variant="secondary">
+                      {t('sales:clientQuotes.candidates.discarded', { defaultValue: 'Scartata' })}
+                    </Badge>
+                  )}
+                </TabsTrigger>
+              );
+            })}
+          </TabsList>
+        </Tabs>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={!canChangeComposition || isReadOnly}
+              aria-label={t('sales:clientQuotes.candidates.addMenu')}
+            >
+              <i className="fa-solid fa-plus" aria-hidden="true"></i>
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onSelect={() => addCandidate(false)}>
+              {t('sales:clientQuotes.candidates.add')}
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => addCandidate(true)}>
+              {t('sales:clientQuotes.candidates.duplicate')}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          disabled={!canChangeComposition || isReadOnly || candidateDrafts.length <= 1}
+          onClick={() => setIsCandidateDeleteConfirmOpen(true)}
+          className="text-destructive hover:text-destructive"
+        >
+          {t('common:buttons.delete', { defaultValue: 'Elimina' })}
+        </Button>
+      </div>
+      {activeCandidate && (
+        <Field>
+          <FieldLabel htmlFor="quote-candidate-name">
+            {t('sales:clientQuotes.candidates.name', { defaultValue: 'Nome variante' })}
+          </FieldLabel>
+          <Input
+            id="quote-candidate-name"
+            value={activeCandidate.name}
+            onChange={(event) => renameActiveCandidate(event.target.value)}
+            disabled={isReadOnly}
+            maxLength={100}
+          />
+          {errors.candidates && <FieldError>{errors.candidates}</FieldError>}
+        </Field>
+      )}
+    </div>
+  );
+};
+
+const ClientQuotePromotionModal: React.FC<{ controller: ClientQuotesController }> = ({
+  controller,
+}) => {
+  const {
+    t,
+    promotionQuote,
+    setPromotionQuote,
+    promotionCandidateId,
+    setPromotionCandidateId,
+    confirmCandidatePromotion,
+    isPromoting,
+    currency,
+  } = controller;
+  if (!promotionQuote) return null;
+  const activeCandidates = (promotionQuote.candidates || []).filter(
+    (candidate) => candidate.state === 'active',
+  );
+  return (
+    <Modal isOpen onClose={() => setPromotionQuote(null)}>
+      <ModalContent size="6xl">
+        <ModalHeader>
+          <ModalTitle>
+            {t('sales:clientQuotes.candidates.chooseTitle', {
+              defaultValue: 'Scegli il candidato da promuovere',
+            })}
+          </ModalTitle>
+          <ModalCloseButton onClick={() => setPromotionQuote(null)} />
+        </ModalHeader>
+        <ModalBody className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            {t('sales:clientQuotes.candidates.chooseDescription', {
+              count: Math.max(activeCandidates.length - 1, 0),
+              defaultValue:
+                'La variante scelta genererà una offerta; le altre {{count}} saranno archiviate.',
+            })}
+          </p>
+          <div className="grid gap-3 md:grid-cols-2">
+            {activeCandidates.map((candidate) => {
+              const totals = calculateClientQuotePricingTotals(
+                candidate.items,
+                candidate.discount,
+                candidate.discountType,
+              );
+              const blocked = candidate.isExpired || candidate.linkedSupplierQuoteExpired;
+              const selected = promotionCandidateId === candidate.id;
+              return (
+                <button
+                  key={candidate.id}
+                  type="button"
+                  disabled={blocked}
+                  onClick={() => setPromotionCandidateId(candidate.id)}
+                  className={
+                    'rounded-lg border p-4 text-left transition-colors ' +
+                    (selected ? 'border-primary bg-primary/5 ' : 'border-border bg-card ') +
+                    (blocked ? 'cursor-not-allowed opacity-50' : 'hover:border-primary/50')
+                  }
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-semibold text-foreground">{candidate.name}</span>
+                    {blocked && (
+                      <Badge variant="destructive">
+                        {candidate.isExpired
+                          ? t('sales:clientQuotes.statusExpired')
+                          : t('sales:clientQuotes.candidates.supplierExpired', {
+                              defaultValue: 'Fornitore scaduto',
+                            })}
+                      </Badge>
+                    )}
+                  </div>
+                  <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
+                    <span className="text-muted-foreground">
+                      {t('sales:clientQuotes.discountedTotalColumn')}
+                    </span>
+                    <strong className="text-right">
+                      {formatDecimal(totals.total)} {currency}
+                    </strong>
+                    <span className="text-muted-foreground">
+                      {t('sales:clientQuotes.marginLabel')}
+                    </span>
+                    <strong className="text-right">
+                      {formatDecimal(totals.margin)} {currency}
+                    </strong>
+                    <span className="text-muted-foreground">
+                      {t('sales:clientQuotes.molLabel', { defaultValue: 'MOL' })}
+                    </span>
+                    <strong className="text-right">
+                      {formatMolPercentage(totals.marginPercentage)}
+                    </strong>
+                    <span className="text-muted-foreground">
+                      {t('sales:clientQuotes.expirationColumn')}
+                    </span>
+                    <span className="text-right">
+                      {formatDateOnlyForLocale(candidate.expirationDate)}
+                    </span>
+                    <span className="text-muted-foreground">
+                      {t('sales:clientQuotes.candidates.lines', { defaultValue: 'Voci' })}
+                    </span>
+                    <span className="text-right">{candidate.items.length}</span>
+                  </div>
+                  <div className="mt-3 border-t border-border pt-3 text-sm">
+                    <div className="text-muted-foreground">
+                      {t('sales:clientQuotes.notesLabel', { defaultValue: 'Note' })}
+                    </div>
+                    <p className="mt-1 whitespace-pre-wrap break-words text-foreground">
+                      {candidate.notes?.trim() || '—'}
+                    </p>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </ModalBody>
+        <ModalFooter>
+          <Button type="button" variant="outline" onClick={() => setPromotionQuote(null)}>
+            {t('common:buttons.cancel')}
+          </Button>
+          <Button
+            type="button"
+            disabled={!promotionCandidateId || isPromoting}
+            onClick={confirmCandidatePromotion}
+          >
+            {isPromoting
+              ? t('common:buttons.saving')
+              : t('sales:clientQuotes.candidates.promote', { defaultValue: 'Promuovi a offerta' })}
+          </Button>
+        </ModalFooter>
+      </ModalContent>
     </Modal>
   );
 };
@@ -2847,6 +3437,8 @@ const ClientQuoteMolEditor: React.FC<{
       <ValidatedNumberInput
         value={line.molPercentage}
         placeholder="0,00"
+        min={0}
+        max={MAX_MOL_PERCENTAGE}
         aria-label={controller.t('sales:clientQuotes.molLabel', { defaultValue: 'MOL' })}
         formatDecimals={MOL_PERCENTAGE_DECIMALS}
         onValueChange={line.handleMolChange}
@@ -3115,7 +3707,10 @@ const ClientQuoteDeleteDialogs: React.FC<{ controller: ClientQuotesController }>
     quoteToDelete,
     productRowToDelete,
     setProductRowToDelete,
+    isCandidateDeleteConfirmOpen,
+    setIsCandidateDeleteConfirmOpen,
     removeProductRow,
+    removeActiveCandidate,
   } = controller;
 
   return (
@@ -3132,6 +3727,17 @@ const ClientQuoteDeleteDialogs: React.FC<{ controller: ClientQuotesController }>
         description={t('sales:clientQuotes.deleteConfirm', {
           clientName: quoteToDelete?.clientName,
         })}
+      />
+      <DeleteConfirmModal
+        isOpen={isCandidateDeleteConfirmOpen}
+        onClose={() => setIsCandidateDeleteConfirmOpen(false)}
+        onConfirm={() => {
+          removeActiveCandidate();
+          setIsCandidateDeleteConfirmOpen(false);
+        }}
+        title={t('sales:clientQuotes.candidates.removeTitle')}
+        description={t('sales:clientQuotes.candidates.removeConfirm')}
+        zIndex={70}
       />
       <DeleteConfirmModal
         isOpen={productRowToDelete !== null}

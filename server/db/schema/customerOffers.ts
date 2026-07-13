@@ -11,7 +11,7 @@ import {
   varchar,
 } from 'drizzle-orm/pg-core';
 import { clients } from './clients.ts';
-import { quotes } from './quotes.ts';
+import { quoteCandidates, quotes } from './quotes.ts';
 
 export const customerOffers = pgTable(
   'customer_offers',
@@ -20,6 +20,7 @@ export const customerOffers = pgTable(
     linkedQuoteId: varchar('linked_quote_id', { length: 100 })
       .notNull()
       .references(() => quotes.id, { onDelete: 'restrict', onUpdate: 'cascade' }),
+
     // RESTRICT (not CASCADE): deleting a client must not silently destroy customer offers
     // (financial documents). Callers must remove offers explicitly before deleting the client.
     clientId: varchar('client_id', { length: 50 })
@@ -38,9 +39,18 @@ export const customerOffers = pgTable(
     notes: text('notes'),
     createdAt: timestamp('created_at').default(sql`CURRENT_TIMESTAMP`),
     updatedAt: timestamp('updated_at').default(sql`CURRENT_TIMESTAMP`),
+    // The migration appends this column after the legacy offer fields; keeping it last preserves
+    // stable positional projections for existing readers and fixtures.
+    linkedQuoteCandidateId: varchar('linked_quote_candidate_id', { length: 100 }).references(
+      () => quoteCandidates.id,
+      { onDelete: 'restrict', onUpdate: 'cascade' },
+    ),
   },
   (table) => [
     uniqueIndex('idx_customer_offers_linked_quote_id').on(table.linkedQuoteId),
+    uniqueIndex('idx_customer_offers_linked_quote_candidate_id')
+      .on(table.linkedQuoteCandidateId)
+      .where(sql`${table.linkedQuoteCandidateId} IS NOT NULL`),
     index('idx_customer_offers_client_id').on(table.clientId),
     index('idx_customer_offers_status').on(table.status),
     index('idx_customer_offers_created_at').on(table.createdAt),

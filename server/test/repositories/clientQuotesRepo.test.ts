@@ -36,7 +36,7 @@ const quoteRow = (overrides: Record<number, unknown> = {}) => makeRow(QUOTE_BASE
 // id, quote_id, product_id, product_name, quantity, unit_price, product_cost,
 // product_mol_percentage, supplier_quote_id, supplier_quote_item_id,
 // supplier_quote_supplier_name, supplier_quote_unit_price, discount, note, unit_type,
-// duration_months, duration_unit, created_at, position
+// duration_months, duration_unit, created_at, position, candidate_id
 const ITEM_BASE: readonly unknown[] = [
   'qi-1',
   'cq-1',
@@ -57,6 +57,7 @@ const ITEM_BASE: readonly unknown[] = [
   'months',
   new Date('2026-04-01T00:00:00Z'),
   0,
+  null,
 ];
 const itemRow = (overrides: Record<number, unknown> = {}) => makeRow(ITEM_BASE, overrides);
 
@@ -98,6 +99,9 @@ describe('listAllItems', () => {
     expect(result[0].productMolPercentage).toBe(20);
     expect(result[0].durationMonths).toBe(1);
     expect(result[0].durationUnit).toBe('months');
+    expect(result[0].candidateId).toBe('cq-1');
+    expect(exec.calls[0].sql.toLowerCase()).toContain('coalesce');
+    expect(exec.calls[0].sql.toLowerCase()).toContain('from quote_candidates default_candidate');
   });
 
   test('maps a multi-month duration through to durationMonths', async () => {
@@ -215,14 +219,15 @@ describe('linked-sale guards', () => {
 describe('findItemSnapshotsForQuote', () => {
   test('maps snapshot row fields with parsed numbers and unitType normalization', async () => {
     // Projected columns in order:
-    // id, productId, quantity, productCost, productMolPercentage, supplierQuoteId,
+    // id, candidateId, productId, quantity, productCost, productMolPercentage, supplierQuoteId,
     // supplierQuoteItemId, supplierQuoteSupplierName, supplierQuoteUnitPrice, unitType
     exec.enqueue({
-      rows: [['qi-1', 'p-1', '3', '5', '20', null, null, null, null, null]],
+      rows: [['qi-1', 'qc-1', 'p-1', '3', '5', '20', null, null, null, null, null]],
     });
     const result = await clientQuotesRepo.findItemSnapshotsForQuote('cq-1', testDb);
     expect(result[0]).toEqual({
       id: 'qi-1',
+      candidateId: 'qc-1',
       productId: 'p-1',
       quantity: 3,
       productCost: 5,
@@ -298,6 +303,14 @@ describe('update', () => {
     expect(sql).not.toMatch(/set[^"]*"id"\s*=/);
   });
 
+  test('clears notes when the patch explicitly supplies null', async () => {
+    exec.enqueue({ rows: [quoteRow()] });
+    await clientQuotesRepo.update('cq-1', { notes: null }, testDb);
+    const sql = exec.calls[0].sql.toLowerCase();
+    expect(sql).not.toMatch(/"notes"\s*=\s*coalesce/);
+    expect(exec.calls[0].params).toContain(null);
+  });
+
   test('returns null when no row updated', async () => {
     exec.enqueue({ rows: [] });
     expect(await clientQuotesRepo.update('cq-x', { status: 'accepted' }, testDb)).toBeNull();
@@ -371,6 +384,7 @@ describe('restoreSnapshotQuote', () => {
 
 describe('replaceItems', () => {
   test('issues DELETE then bulk INSERT and preserves order', async () => {
+    exec.enqueue({ rows: [['cq-1']] });
     exec.enqueue({ rows: [] });
     exec.enqueue({
       rows: [itemRow({ 0: 'b', 18: 1 }), itemRow({ 0: 'a', 18: 0 })],
@@ -416,19 +430,80 @@ describe('replaceItems', () => {
       },
     ];
     const result = await clientQuotesRepo.replaceItems('cq-1', items, testDb);
-    expect(exec.calls).toHaveLength(2);
-    expect(exec.calls[0].sql.toLowerCase()).toContain('delete from "quote_items"');
-    expect(exec.calls[1].sql.toLowerCase()).toContain('insert into "quote_items"');
-    expect(exec.calls[1].params).toContain('a');
-    expect(exec.calls[1].params).toContain('b');
+    expect(exec.calls).toHaveLength(3);
+    expect(exec.calls[0].sql.toLowerCase()).toContain('from "quote_candidates"');
+    expect(exec.calls[1].sql.toLowerCase()).toContain('delete from "quote_items"');
+    expect(exec.calls[1].sql.toLowerCase()).toContain('"candidate_id" is null');
+    expect(exec.calls[2].sql.toLowerCase()).toContain('insert into "quote_items"');
+    expect(exec.calls[2].params).toContain('a');
+    expect(exec.calls[2].params).toContain('b');
     expect(result.map((i) => i.id)).toEqual(['a', 'b']);
   });
 
   test('with empty items skips the INSERT', async () => {
+    exec.enqueue({ rows: [['cq-1']] });
     exec.enqueue({ rows: [] });
     const result = await clientQuotesRepo.replaceItems('cq-1', [], testDb);
-    expect(exec.calls).toHaveLength(1);
+    expect(exec.calls).toHaveLength(2);
     expect(result).toEqual([]);
+  });
+
+  test('resolves the persisted default candidate id after a quote rename', async () => {
+    exec.enqueue({ rows: [['cq-before-rename']] });
+    exec.enqueue({ rows: [] });
+    exec.enqueue({ rows: [itemRow({ 1: 'cq-renamed', 19: 'cq-before-rename' })] });
+    const items: clientQuotesRepo.NewClientQuoteItem[] = [
+      {
+        id: 'qi-1',
+        position: 0,
+        productId: 'p-1',
+        productName: 'Widget',
+        quantity: 1,
+        unitPrice: 10,
+        productCost: 5,
+        productMolPercentage: 20,
+        discount: 0,
+        note: null,
+        supplierQuoteId: null,
+        supplierQuoteItemId: null,
+        supplierQuoteSupplierName: null,
+        supplierQuoteUnitPrice: null,
+        unitType: 'unit',
+        durationMonths: 1,
+        durationUnit: 'months',
+      },
+    ];
+
+    const result = await clientQuotesRepo.replaceItems('cq-renamed', items, testDb);
+
+    expect(exec.calls[0].params).toContain('cq-renamed');
+    expect(exec.calls[1].params).toContain('cq-before-rename');
+    expect(exec.calls[2].params).toContain('cq-before-rename');
+    expect(result[0].candidateId).toBe('cq-before-rename');
+  });
+});
+
+describe('findItemsForCandidate', () => {
+  test('includes expand-phase null rows for the quote default candidate', async () => {
+    exec.enqueue({ rows: [itemRow()] });
+
+    const result = await clientQuotesRepo.findItemsForCandidate('cq-1', 'cq-1', testDb);
+
+    expect(exec.calls[0].sql.toLowerCase()).toContain('"candidate_id" is null');
+    expect(result[0].candidateId).toBe('cq-1');
+  });
+
+  test('maps null rows to the renamed default candidate primary key', async () => {
+    exec.enqueue({ rows: [itemRow({ 1: 'cq-renamed', 19: null })] });
+
+    const result = await clientQuotesRepo.findItemsForCandidate(
+      'cq-renamed',
+      'cq-before-rename',
+      testDb,
+    );
+
+    expect(exec.calls[0].sql.toLowerCase()).toContain('from quote_candidates default_candidate');
+    expect(result[0].candidateId).toBe('cq-before-rename');
   });
 });
 

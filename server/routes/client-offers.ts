@@ -7,7 +7,9 @@ import * as clientsOrdersRepo from '../repositories/clientsOrdersRepo.ts';
 import * as clientsRepo from '../repositories/clientsRepo.ts';
 import * as offerVersionsRepo from '../repositories/offerVersionsRepo.ts';
 import * as productsRepo from '../repositories/productsRepo.ts';
+import * as quoteCandidatesRepo from '../repositories/quoteCandidatesRepo.ts';
 import * as supplierQuotesRepo from '../repositories/supplierQuotesRepo.ts';
+import { clientOfferSchema } from '../schemas/clientOffers.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import {
   autoCreateSupplierOrdersForClientOrder,
@@ -19,6 +21,10 @@ import {
   allocateDocumentCode,
   reserveDocumentCodeCounterFromCode,
 } from '../services/documentCodes.ts';
+import {
+  QuotePromotionRollbackError,
+  rollbackQuotePromotion,
+} from '../services/quotePromotionRollback.ts';
 import { logAudit } from '../utils/audit.ts';
 import { todayLocalDateOnly } from '../utils/date.ts';
 import { getUniqueViolation } from '../utils/db-errors.ts';
@@ -26,7 +32,7 @@ import { replyDocumentCodeCollision } from '../utils/document-code-replies.ts';
 import type { DurationUnit } from '../utils/duration-unit.ts';
 import { normalizeNullableNumber, normalizeNullableString } from '../utils/normalize.ts';
 import { generatePrefixedId, ITEM_ID_PREFIXES } from '../utils/order-ids.ts';
-import { ADMIN_ROLE_ID, TOP_MANAGER_ROLE_ID } from '../utils/permissions.ts';
+import { ADMIN_ROLE_ID, requestHasPermission, TOP_MANAGER_ROLE_ID } from '../utils/permissions.ts';
 import {
   effectiveQuoteStatusFromDate,
   normalizeQuoteStatus,
@@ -60,6 +66,18 @@ import {
 // Surfaced for both the gate-check inside the create-tx and the catch on the unique-index
 // violation; keep them identical so the error doesn't drift between paths.
 const LINKED_OFFER_CONFLICT = 'An offer already exists for this quote';
+
+const findLegacyAcceptedCandidate = (
+  quoteId: string,
+  quoteStatus: string,
+  candidates: quoteCandidatesRepo.QuoteCandidate[],
+) =>
+  normalizeQuoteStatus(quoteStatus) === 'accepted' &&
+  candidates.length === 1 &&
+  candidates[0].quoteId === quoteId &&
+  candidates[0].state === 'active'
+    ? candidates[0]
+    : null;
 const TERMINAL_OFFER_STATUSES = new Set(['accepted', 'denied']);
 
 // Shared guard texts — the PUT and restore paths both raise these; keep them identical so the
@@ -93,95 +111,6 @@ const idParamSchema = {
     id: { type: 'string' },
   },
   required: ['id'],
-} as const;
-
-const offerItemSchema = {
-  type: 'object',
-  properties: {
-    id: { type: 'string' },
-    offerId: { type: 'string' },
-    productId: { type: ['string', 'null'] },
-    productName: { type: 'string' },
-    quantity: { type: 'number' },
-    unitPrice: { type: 'number' },
-    productCost: { type: 'number' },
-    productMolPercentage: { type: ['number', 'null'] },
-    supplierQuoteId: { type: ['string', 'null'] },
-    supplierQuoteItemId: { type: ['string', 'null'] },
-    supplierQuoteSupplierName: { type: ['string', 'null'] },
-    supplierQuoteUnitPrice: { type: ['number', 'null'] },
-    unitType: { type: 'string', enum: ['hours', 'days', 'unit'] },
-    note: { type: ['string', 'null'] },
-    discount: { type: 'number', minimum: 0, maximum: 100 },
-    durationMonths: { type: 'number' },
-    durationUnit: { type: 'string', enum: ['months', 'years', 'na'] },
-  },
-  required: ['id', 'offerId', 'productName', 'quantity', 'unitPrice', 'productCost', 'discount'],
-} as const;
-
-const offerSchema = {
-  type: 'object',
-  properties: {
-    id: { type: 'string' },
-    linkedQuoteId: { type: 'string' },
-    clientId: { type: 'string' },
-    clientName: { type: 'string' },
-    paymentTerms: { type: ['string', 'null'] },
-    discount: { type: 'number' },
-    discountType: { type: 'string', enum: ['percentage', 'currency'] },
-    status: { type: 'string' },
-    // Derived (issue #779): `expired` overrides draft/sent once the expiration date has passed;
-    // accepted/denied are frozen and never expire.
-    effectiveStatus: {
-      type: 'string',
-      enum: ['draft', 'sent', 'accepted', 'denied', 'expired'],
-    },
-    deliveryDate: { type: ['string', 'null'], format: 'date' },
-    expirationDate: { type: ['string', 'null'], format: 'date' },
-    notes: { type: ['string', 'null'] },
-    createdAt: { type: 'number' },
-    updatedAt: { type: 'number' },
-    items: { type: 'array', items: offerItemSchema },
-    autoCreated: {
-      type: 'object',
-      properties: {
-        clientOrder: {
-          type: 'object',
-          properties: {
-            id: { type: 'string' },
-          },
-          required: ['id'],
-        },
-        supplierOrders: {
-          type: 'array',
-          items: {
-            type: 'object',
-            properties: {
-              id: { type: 'string' },
-              supplierQuoteId: { type: 'string' },
-              supplierName: { type: 'string' },
-            },
-            required: ['id', 'supplierQuoteId', 'supplierName'],
-          },
-        },
-      },
-      required: ['clientOrder', 'supplierOrders'],
-    },
-    warnings: { type: 'array', items: { type: 'string' } },
-  },
-  required: [
-    'id',
-    'linkedQuoteId',
-    'clientId',
-    'clientName',
-    'discount',
-    'discountType',
-    'status',
-    'effectiveStatus',
-    'createdAt',
-    'updatedAt',
-    'items',
-  ],
 } as const;
 
 const offerItemBodySchema = {
@@ -596,7 +525,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         tags: ['client-offers'],
         summary: 'List client offers',
         response: {
-          200: { type: 'array', items: offerSchema },
+          200: { type: 'array', items: clientOfferSchema },
           ...standardRateLimitedErrorResponses,
         },
       },
@@ -632,7 +561,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         summary: 'Create client offer',
         body: offerCreateBodySchema,
         response: {
-          201: offerSchema,
+          201: clientOfferSchema,
           ...standardErrorResponses,
         },
       },
@@ -688,6 +617,23 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           entityId: linkedQuoteIdResult.value,
         });
       }
+      const familyCandidates = await quoteCandidatesRepo.listForQuote(linkedQuoteIdResult.value);
+      const legacyAcceptedCandidate = findLegacyAcceptedCandidate(
+        linkedQuoteIdResult.value,
+        sourceQuote.status,
+        familyCandidates,
+      );
+      if (familyCandidates.length > 0 && !legacyAcceptedCandidate) {
+        return replyError(request, reply, {
+          statusCode: 409,
+          message: 'Use quote candidate promotion to create a customer offer',
+          action: 'client_offer.create.conflict',
+          entityType: 'client_quote',
+          entityId: linkedQuoteIdResult.value,
+          details: { secondaryLabel: 'candidate_promotion_required' },
+        });
+      }
+
       // Effective accepted: `accepted` is terminal/frozen, so this equals the normalized stored
       // status and also folds the legacy `confirmed` spelling (issue #779).
       if (normalizeQuoteStatus(sourceQuote.status) !== 'accepted') {
@@ -784,6 +730,27 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               secondaryLabel: 'source_quote_not_accepted',
             };
           }
+          if (legacyAcceptedCandidate) {
+            const lockedCandidates = await quoteCandidatesRepo.listForQuote(
+              linkedQuoteIdResult.value,
+              tx,
+            );
+            if (
+              !findLegacyAcceptedCandidate(
+                linkedQuoteIdResult.value,
+                lockedQuote.status,
+                lockedCandidates,
+              )
+            ) {
+              return {
+                ok: false,
+                statusCode: 409,
+                message: 'Use quote candidate promotion to create a customer offer',
+                action: 'client_offer.create.conflict',
+                secondaryLabel: 'candidate_promotion_required',
+              };
+            }
+          }
           const existing = await clientOffersRepo.findExistingForQuote(
             linkedQuoteIdResult.value,
             tx,
@@ -825,6 +792,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             },
             tx,
           );
+          // A migrated accepted/no-offer quote follows the legacy conversion path. The application
+          // payload omits linkedQuoteCandidateId; migration 0101's rolling-deploy trigger fills it
+          // for old and new legacy writers. The accepted parent keeps deletion on the legacy branch
+          // rather than treating this as a candidate-promotion rollback.
           // Bidirectional sync on CREATE too (user report after #812): a sourced line whose
           // quantity/cost was edited away from its pick-time baseline pushes the edit onto the
           // supplier item, atomically with the offer write. Conversion-inherited and
@@ -925,7 +896,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         params: idParamSchema,
         body: offerUpdateBodySchema,
         response: {
-          200: offerSchema,
+          200: clientOfferSchema,
           ...standardErrorResponses,
         },
       },
@@ -1459,7 +1430,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         params: idParamSchema,
         body: offerRevertToDraftBodySchema,
         response: {
-          200: offerSchema,
+          200: clientOfferSchema,
           ...standardErrorResponses,
         },
       },
@@ -1558,18 +1529,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
-      if (await clientOffersRepo.findLinkedSaleId(idResult.value)) {
-        return replyError(request, reply, {
-          statusCode: 409,
-          message: 'Cannot delete an offer once a sale order has been created from it',
-          action: 'client_offer.delete.conflict',
-          entityType: 'client_offer',
-          entityId: idResult.value,
-          details: { secondaryLabel: 'sale_order_exists' },
-        });
-      }
-
-      const offer = await clientOffersRepo.findStatusAndClientName(idResult.value);
+      const offer = await clientOffersRepo.findExisting(idResult.value);
       if (!offer) {
         return replyError(request, reply, {
           statusCode: 404,
@@ -1579,38 +1539,152 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           entityId: idResult.value,
         });
       }
-      if (offer.status !== 'draft') {
+
+      const linkedQuoteId = offer.linkedQuoteId;
+      const linkedQuote =
+        offer.linkedQuoteCandidateId && linkedQuoteId
+          ? await clientQuotesRepo.findStatusAndClientName(linkedQuoteId)
+          : null;
+      const linkedQuoteStatus = linkedQuote ? normalizeQuoteStatus(linkedQuote.status) : null;
+      // Migration 0101 backfilled the candidate link on pre-existing offers too. Only a parent
+      // currently in `offer` represents the new promotion flow; accepted legacy parents must keep
+      // the ordinary draft-offer delete path.
+      const shouldRollbackCandidatePromotion =
+        offer.linkedQuoteCandidateId && linkedQuoteId && linkedQuoteStatus === 'offer';
+      const legacyQuoteIdToReactivate =
+        offer.linkedQuoteCandidateId && linkedQuoteId && linkedQuoteStatus === 'accepted'
+          ? linkedQuoteId
+          : null;
+      if (
+        (shouldRollbackCandidatePromotion || legacyQuoteIdToReactivate) &&
+        !requestHasPermission(request, 'sales.client_quotes.update')
+      ) {
         return replyError(request, reply, {
-          statusCode: 409,
-          message: 'Only draft offers can be deleted',
-          action: 'client_offer.delete.conflict',
+          statusCode: 403,
+          message: 'Insufficient permissions',
+          action: 'client_offer.delete.denied',
           entityType: 'client_offer',
           entityId: idResult.value,
           details: {
-            targetLabel: idResult.value,
-            secondaryLabel: 'non_draft_status',
-            fromValue: offer.status,
+            secondaryLabel: 'quote_update_permission_required',
+            changedFields: ['sales.client_quotes.update'],
           },
         });
       }
-      // An expired DRAFT offer is read-only under #779 (the UI disables deletion and the only
-      // exit is extending the expiration date) — derive the effective status here too so a
-      // direct API caller cannot delete what the model freezes (#812 round 25).
-      if (effectiveQuoteStatusFromDate(offer.status, offer.expirationDate) === 'expired') {
-        return replyError(request, reply, {
-          statusCode: 409,
-          message:
-            'Expired offers are read-only and cannot be deleted; extend the expiration date instead',
-          action: 'client_offer.delete.conflict',
-          entityType: 'client_offer',
-          entityId: idResult.value,
-          details: {
-            targetLabel: idResult.value,
-            secondaryLabel: 'expired_read_only',
-          },
-        });
+      if (shouldRollbackCandidatePromotion) {
+        try {
+          await withDbTransaction((tx) =>
+            rollbackQuotePromotion(
+              {
+                quoteId: linkedQuoteId,
+                offerId: idResult.value,
+                createdByUserId: request.user?.id ?? null,
+                rejectExpiredOffer: true,
+              },
+              tx,
+            ),
+          );
+        } catch (error) {
+          if (error instanceof QuotePromotionRollbackError) {
+            return replyError(request, reply, {
+              statusCode: 409,
+              message: error.message,
+              action: 'client_offer.delete.conflict',
+              entityType: 'client_offer',
+              entityId: idResult.value,
+              details: { secondaryLabel: error.secondaryLabel },
+            });
+          }
+          throw error;
+        }
+        await Promise.all([
+          logAudit({
+            request,
+            action: 'client_offer.deleted',
+            entityType: 'client_offer',
+            entityId: idResult.value,
+            details: { targetLabel: idResult.value, secondaryLabel: offer.clientName ?? '' },
+          }),
+          logAudit({
+            request,
+            action: 'client_quote.candidate_promotion_rolled_back',
+            entityType: 'client_quote',
+            entityId: linkedQuoteId,
+            details: {
+              targetLabel: linkedQuoteId,
+              fromValue: idResult.value,
+              toValue: 'draft',
+            },
+          }),
+        ]);
+        return reply.code(204).send();
       }
 
+      type DeleteOutcome =
+        | { ok: true; clientName: string }
+        | {
+            ok: false;
+            statusCode: 404 | 409;
+            message: string;
+            secondaryLabel?: string;
+            fromValue?: string;
+          };
+      const result: DeleteOutcome = await withDbTransaction(async (tx) => {
+        const lockedOffer = await clientOffersRepo.lockExistingById(idResult.value, tx);
+        if (!lockedOffer) {
+          return { ok: false, statusCode: 404, message: 'Offer not found' };
+        }
+        if (lockedOffer.status !== 'draft') {
+          return {
+            ok: false,
+            statusCode: 409,
+            message: 'Only draft offers can be deleted',
+            secondaryLabel: 'non_draft_status',
+            fromValue: lockedOffer.status,
+          };
+        }
+        if (
+          effectiveQuoteStatusFromDate(lockedOffer.status, lockedOffer.expirationDate) === 'expired'
+        ) {
+          return {
+            ok: false,
+            statusCode: 409,
+            message:
+              'Expired offers are read-only and cannot be deleted; extend the expiration date instead',
+            secondaryLabel: 'expired_read_only',
+          };
+        }
+        if (await clientOffersRepo.findLinkedSaleId(idResult.value, tx)) {
+          return {
+            ok: false,
+            statusCode: 409,
+            message: 'Cannot delete an offer once a sale order has been created from it',
+            secondaryLabel: 'sale_order_exists',
+          };
+        }
+        await clientOffersRepo.deleteById(idResult.value, tx);
+        if (legacyQuoteIdToReactivate) {
+          await quoteCandidatesRepo.reactivateAll(legacyQuoteIdToReactivate, tx);
+        }
+        return { ok: true, clientName: lockedOffer.clientName };
+      });
+      if (!result.ok) {
+        return replyError(request, reply, {
+          statusCode: result.statusCode,
+          message: result.message,
+          action:
+            result.statusCode === 404
+              ? 'client_offer.delete.not_found'
+              : 'client_offer.delete.conflict',
+          entityType: 'client_offer',
+          entityId: idResult.value,
+          details: {
+            targetLabel: idResult.value,
+            secondaryLabel: result.secondaryLabel,
+            fromValue: result.fromValue,
+          },
+        });
+      }
       await logAudit({
         request,
         action: 'client_offer.deleted',
@@ -1618,10 +1692,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         entityId: idResult.value,
         details: {
           targetLabel: idResult.value,
-          secondaryLabel: offer.clientName ?? '',
+          secondaryLabel: result.clientName ?? '',
         },
       });
-      await clientOffersRepo.deleteById(idResult.value);
       return reply.code(204).send();
     },
   );
@@ -1740,7 +1813,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         summary: 'Restore a client offer to a prior version',
         params: versionParamSchema,
         response: {
-          200: offerSchema,
+          200: clientOfferSchema,
           ...standardErrorResponses,
         },
       },

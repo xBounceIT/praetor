@@ -1,7 +1,7 @@
-import { and, asc, desc, eq, ne, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, getTableColumns, isNull, ne, or, sql } from 'drizzle-orm';
 import { type DbExecutor, db, runAtomically } from '../db/drizzle.ts';
 import { customerOffers } from '../db/schema/customerOffers.ts';
-import { quoteItems, quotes } from '../db/schema/quotes.ts';
+import { quoteCandidates, quoteItems, quotes } from '../db/schema/quotes.ts';
 import { sales } from '../db/schema/sales.ts';
 import { normalizeNullableDateOnly } from '../utils/date.ts';
 import { type DurationUnit, normalizeDurationUnit } from '../utils/duration-unit.ts';
@@ -35,6 +35,7 @@ export type ClientQuote = {
 export type ClientQuoteItem = {
   id: string;
   quoteId: string;
+  candidateId: string;
   productId: string;
   productName: string;
   quantity: number;
@@ -73,6 +74,22 @@ const communicationChannelNameSubquery = sql<string>`(
   WHERE qcc.id = "quotes"."communication_channel_id"
   LIMIT 1
 )`;
+
+const defaultCandidateIdSubquery = (quoteId: string | typeof quoteItems.quoteId) => sql<string>`(
+  SELECT default_candidate.id
+  FROM quote_candidates default_candidate
+  WHERE default_candidate.quote_id = ${quoteId}
+  ORDER BY default_candidate.position, default_candidate.id
+  LIMIT 1
+)`;
+
+const QUOTE_ITEM_PROJECTION = {
+  ...getTableColumns(quoteItems),
+  candidateId: sql<string>`COALESCE(
+    ${quoteItems.candidateId},
+    ${defaultCandidateIdSubquery(quoteItems.quoteId)}
+  )`.as('candidate_id'),
+} as const;
 
 // The earliest expiration among the supplier quotes this client quote SOURCES via its product
 // lines (issue #779 follow-up: the 1:1 header link was removed). The route's progression guard and
@@ -176,6 +193,9 @@ const mapQuote = (row: ClientQuoteSelectRow): ClientQuote => ({
 const mapItem = (row: typeof quoteItems.$inferSelect): ClientQuoteItem => ({
   id: row.id,
   quoteId: row.quoteId,
+  // Expand-phase compatibility: old writers may leave candidate_id null during a rolling deploy.
+  // The migration backfills the default candidate with the quote id, so that is the safe read view.
+  candidateId: row.candidateId ?? row.quoteId,
   productId: row.productId ?? '',
   productName: row.productName,
   quantity: parseDbNumber(row.quantity, 0),
@@ -193,6 +213,27 @@ const mapItem = (row: typeof quoteItems.$inferSelect): ClientQuoteItem => ({
   durationUnit: normalizeDurationUnit(row.durationUnit),
 });
 
+const candidateItemsPredicate = (quoteId: string, candidateId: string) =>
+  or(
+    eq(quoteItems.candidateId, candidateId),
+    and(
+      eq(quoteItems.quoteId, quoteId),
+      isNull(quoteItems.candidateId),
+      sql`${candidateId} = ${defaultCandidateIdSubquery(quoteId)}`,
+    ),
+  );
+
+const resolvePrimaryCandidateId = async (quoteId: string, exec: DbExecutor): Promise<string> => {
+  const rows = await exec
+    .select({ id: quoteCandidates.id })
+    .from(quoteCandidates)
+    .where(and(eq(quoteCandidates.quoteId, quoteId), ne(quoteCandidates.state, 'discarded')))
+    .orderBy(asc(quoteCandidates.position), asc(quoteCandidates.id))
+    .limit(1);
+  if (!rows[0]) throw new Error(`No active quote candidate found for ${quoteId}`);
+  return rows[0].id;
+};
+
 export const listAll = async (exec: DbExecutor = db): Promise<ClientQuote[]> => {
   const rows = await exec
     .select(QUOTE_LIST_PROJECTION)
@@ -201,12 +242,22 @@ export const listAll = async (exec: DbExecutor = db): Promise<ClientQuote[]> => 
   return rows.map(mapQuote);
 };
 
+export const findById = async (id: string, exec: DbExecutor = db): Promise<ClientQuote | null> => {
+  const rows = await exec
+    .select(QUOTE_LIST_PROJECTION)
+    .from(quotes)
+    .where(eq(quotes.id, id))
+    .limit(1);
+  return rows[0] ? mapQuote(rows[0]) : null;
+};
+
 export const listAllItems = async (exec: DbExecutor = db): Promise<ClientQuoteItem[]> => {
   const rows = await exec
-    .select()
+    .select(QUOTE_ITEM_PROJECTION)
     .from(quoteItems)
     .orderBy(
       asc(quoteItems.quoteId),
+      asc(quoteItems.candidateId),
       asc(quoteItems.position),
       asc(quoteItems.createdAt),
       asc(quoteItems.id),
@@ -365,6 +416,7 @@ export const findAnyLinkedSale = async (
 
 export type ExistingQuoteItemSnapshot = {
   id: string;
+  candidateId: string;
   productId: string | null;
   // The stored quantity — the supplier-item sync diffs the incoming line against it to tell a
   // genuine client edit from a stale-snapshot re-save (issue #779).
@@ -385,6 +437,7 @@ export const findItemSnapshotsForQuote = async (
   const rows = await exec
     .select({
       id: quoteItems.id,
+      candidateId: QUOTE_ITEM_PROJECTION.candidateId,
       productId: quoteItems.productId,
       quantity: quoteItems.quantity,
       productCost: quoteItems.productCost,
@@ -399,6 +452,7 @@ export const findItemSnapshotsForQuote = async (
     .where(eq(quoteItems.quoteId, quoteId));
   return rows.map((row) => ({
     id: row.id,
+    candidateId: row.candidateId,
     productId: row.productId,
     quantity: parseDbNumber(row.quantity, 0),
     productCost: parseDbNumber(row.productCost, 0),
@@ -442,12 +496,25 @@ export const findItemTotals = async (
   }));
 };
 
+export const findItemsForCandidate = async (
+  quoteId: string,
+  candidateId: string,
+  exec: DbExecutor = db,
+): Promise<ClientQuoteItem[]> => {
+  const rows = await exec
+    .select(QUOTE_ITEM_PROJECTION)
+    .from(quoteItems)
+    .where(candidateItemsPredicate(quoteId, candidateId))
+    .orderBy(asc(quoteItems.position), asc(quoteItems.createdAt), asc(quoteItems.id));
+  return rows.map((row) => mapItem({ ...row, candidateId: row.candidateId ?? candidateId }));
+};
+
 export const findItemsForQuote = async (
   quoteId: string,
   exec: DbExecutor = db,
 ): Promise<ClientQuoteItem[]> => {
   const rows = await exec
-    .select()
+    .select(QUOTE_ITEM_PROJECTION)
     .from(quoteItems)
     .where(eq(quoteItems.quoteId, quoteId))
     .orderBy(asc(quoteItems.position), asc(quoteItems.createdAt), asc(quoteItems.id));
@@ -516,6 +583,7 @@ export type ClientQuoteUpdate = {
   status?: string | null;
   expirationDate?: string | null;
   communicationChannelId?: string | null;
+  // `undefined` leaves notes untouched; an explicit `null` clears them.
   notes?: string | null;
   // `undefined` leaves the link untouched; an explicit `null` clears it (direct write, not
   // COALESCE — the 1-to-1 supplier-quote link must be removable, mirroring supplierQuotes.clientId).
@@ -552,7 +620,7 @@ export const update = async (
       status: sql`COALESCE(${patch.status ?? null}, ${quotes.status})`,
       expirationDate: sql`COALESCE(${patch.expirationDate ?? null}::date, ${quotes.expirationDate})`,
       communicationChannelId: sql`COALESCE(${patch.communicationChannelId ?? null}, ${quotes.communicationChannelId})`,
-      notes: sql`COALESCE(${patch.notes ?? null}, ${quotes.notes})`,
+      notes: patch.notes === undefined ? sql`${quotes.notes}` : patch.notes,
       // Direct write (not COALESCE) so an explicit null clears the 1-to-1 link; `undefined` keeps it.
       linkedSupplierQuoteId:
         patch.linkedSupplierQuoteId === undefined
@@ -628,14 +696,17 @@ export const insertItems = async (
   quoteId: string,
   items: NewClientQuoteItem[],
   exec: DbExecutor = db,
+  candidateId?: string,
 ): Promise<ClientQuoteItem[]> => {
   if (items.length === 0) return [];
+  const resolvedCandidateId = candidateId ?? (await resolvePrimaryCandidateId(quoteId, exec));
   const rows = await exec
     .insert(quoteItems)
     .values(
       items.map((item) => ({
         id: item.id,
         quoteId,
+        candidateId: resolvedCandidateId,
         position: item.position,
         productId: item.productId,
         productName: item.productName,
@@ -662,10 +733,12 @@ export const replaceItems = async (
   quoteId: string,
   items: NewClientQuoteItem[],
   exec: DbExecutor = db,
+  candidateId?: string,
 ): Promise<ClientQuoteItem[]> =>
   runAtomically(exec, async (tx) => {
-    await tx.delete(quoteItems).where(eq(quoteItems.quoteId, quoteId));
-    return insertItems(quoteId, items, tx);
+    const resolvedCandidateId = candidateId ?? (await resolvePrimaryCandidateId(quoteId, tx));
+    await tx.delete(quoteItems).where(candidateItemsPredicate(quoteId, resolvedCandidateId));
+    return insertItems(quoteId, items, tx, resolvedCandidateId);
   });
 
 export const deleteById = async (id: string, exec: DbExecutor = db): Promise<boolean> => {

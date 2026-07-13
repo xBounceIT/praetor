@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ApiError } from '../../../services/api/client';
-import type { Client, Quote, SupplierQuote } from '../../../types';
+import type { Client, Quote, QuoteMutation, SupplierQuote } from '../../../types';
 import { installI18nMock } from '../../helpers/i18n';
 import { LineDeleteConfirmStub } from '../../helpers/lineItemDeleteConfirm';
 import { render } from '../../helpers/render';
@@ -168,6 +168,36 @@ const waitForSavedViewsLoad = async () => {
   await waitFor(() => expect(viewsListMock).toHaveBeenCalled());
 };
 
+const withSingleCandidate = (quote: Quote, candidateId: string): Quote => {
+  const items = quote.items.map((item) => ({
+    ...item,
+    quoteId: quote.id,
+    candidateId,
+  }));
+  return {
+    ...quote,
+    items,
+    candidates: [
+      {
+        id: candidateId,
+        quoteId: quote.id,
+        name: 'Variante A',
+        position: 0,
+        state: 'active',
+        items,
+        paymentTerms: quote.paymentTerms,
+        discount: quote.discount,
+        discountType: quote.discountType,
+        expirationDate: quote.expirationDate,
+        communicationChannelId: quote.communicationChannelId,
+        notes: quote.notes,
+        createdAt: quote.createdAt,
+        updatedAt: quote.updatedAt,
+      },
+    ],
+  };
+};
+
 describe('<ClientQuotesView />', () => {
   test('renders the quote list columns in the requested order with MOL next to margin', () => {
     const { container } = render(
@@ -191,6 +221,7 @@ describe('<ClientQuotesView />', () => {
       'sales:clientQuotes.quoteCodeColumn',
       'crm:clients.tableHeaders.insertDate',
       'sales:clientQuotes.clientColumn',
+      'sales:clientQuotes.candidates.column',
       'sales:clientQuotes.subtotal',
       'sales:clientQuotes.discountPercentColumn',
       'common:labels.discount',
@@ -203,6 +234,12 @@ describe('<ClientQuotesView />', () => {
       'sales:clientQuotes.statusColumn',
       'sales:clientQuotes.actionsColumn',
     ]);
+    const firstQuoteRow = screen.getByText('Q-001').closest('tr');
+    if (!firstQuoteRow) throw new Error('Expected Q-001 table row');
+    const variantCell = within(firstQuoteRow).getAllByRole('cell')[3];
+    expect(variantCell).toHaveTextContent('sales:clientQuotes.candidates.notApplicable');
+    expect(variantCell).not.toHaveTextContent('sales:clientQuotes.candidates.count');
+    expect(variantCell).not.toHaveTextContent('EUR');
     expect(screen.getAllByText('Email').length).toBeGreaterThan(0);
     // MOL column shows the margin percentage with two decimals (issue #780).
     expect(screen.getByText('33,33%')).toBeInTheDocument();
@@ -256,7 +293,7 @@ describe('<ClientQuotesView />', () => {
   });
 
   test('edits a per-line discount and submits net revenue and margin', async () => {
-    const onUpdateQuote = mock((_id: string, _updates: Partial<Quote>) => Promise.resolve());
+    const onUpdateQuote = mock((_id: string, _updates: QuoteMutation) => Promise.resolve());
     const quote = {
       ...quotes[0],
       id: 'Q-LINE-DISCOUNT',
@@ -307,7 +344,7 @@ describe('<ClientQuotesView />', () => {
   });
 
   test('submits a blank duration without persisting an empty years unit', async () => {
-    const onUpdateQuote = mock((_id: string, _updates: Partial<Quote>) => Promise.resolve());
+    const onUpdateQuote = mock((_id: string, _updates: QuoteMutation) => Promise.resolve());
     const blankDurationQuote: Quote = {
       ...quotes[0],
       id: 'Q-BLANK-DURATION',
@@ -511,7 +548,7 @@ describe('<ClientQuotesView />', () => {
         },
       ],
     };
-    const onUpdateQuote = mock((_id: string, _updates: Partial<Quote>) => Promise.resolve());
+    const onUpdateQuote = mock((_id: string, _updates: QuoteMutation) => Promise.resolve());
 
     render(
       <ClientQuotesView
@@ -768,7 +805,7 @@ describe('<ClientQuotesView />', () => {
     expect(screen.getAllByText('1.920,00 EUR').length).toBeGreaterThan(0);
   });
 
-  test('MOL line input keeps two decimals instead of rounding to one (issue #780)', async () => {
+  test('MOL line input keeps two decimals, stays below 100, and recalculates pricing', async () => {
     const twoDecimalMolQuote: Quote = {
       id: 'Q-MOL',
       clientId: 'client-1',
@@ -814,6 +851,21 @@ describe('<ClientQuotesView />', () => {
     // pre-fix rounded 12,3 that silently dropped the second decimal.
     expect(screen.queryAllByDisplayValue('12,34').length).toBeGreaterThan(0);
     expect(screen.queryAllByDisplayValue('12,3')).toHaveLength(0);
+
+    const molInput = screen.getAllByLabelText('sales:clientQuotes.molLabel')[0] as HTMLInputElement;
+    fireEvent.focus(molInput);
+    fireEvent.change(molInput, { target: { value: '118' } });
+
+    // A MOL of 100% or more has no finite sale price. The editor caps it at the highest value
+    // representable by numeric(5, 2), instead of accepting it and silently resetting margin to 0.
+    expect(molInput.value).toBe('99,99');
+
+    fireEvent.change(molInput, { target: { value: '25' } });
+    await waitFor(() => {
+      // Cost 60, MOL 25% => unit price 80; with quantity 2, revenue is 160 and margin is 40.
+      expect(screen.getAllByText('160,00 EUR').length).toBeGreaterThan(0);
+      expect(screen.getAllByText('40,00 EUR').length).toBeGreaterThan(0);
+    });
   });
 
   test('the read-only banner renders dark-mode-compatible amber, not a light slab (issue #768)', async () => {
@@ -898,9 +950,186 @@ describe('<ClientQuotesView /> edit action gating (#812 round 13)', () => {
     });
   };
 
-  test('reprices items from local MOL when promoting a sent quote to offer', async () => {
+  test('keeps the one-time offer action for an accepted legacy quote without an offer', async () => {
     const user = userEvent.setup();
-    const onUpdateQuote = mock((_id: string, _updates: Partial<Quote>) => Promise.resolve());
+    const onCreateOfferFromLegacyQuote = mock((_quote: Quote) => {});
+    const legacyQuote = withSingleCandidate(
+      { ...quotes[0], id: 'Q-LEGACY-ACCEPTED', status: 'accepted' },
+      'Q-BEFORE-RENAME',
+    );
+
+    render(
+      <ClientQuotesView
+        quotes={[legacyQuote]}
+        clients={clients}
+        products={[]}
+        supplierQuotes={[]}
+        currency="EUR"
+        onAddQuote={mock(() => Promise.resolve())}
+        onUpdateQuote={mock(() => Promise.resolve())}
+        onDeleteQuote={mock(() => Promise.resolve())}
+        onCreateOfferFromLegacyQuote={onCreateOfferFromLegacyQuote}
+      />,
+    );
+
+    await openRowActions(user);
+    await user.click(
+      await screen.findByRole('button', { name: 'sales:clientQuotes.convertToOffer' }),
+    );
+
+    expect(onCreateOfferFromLegacyQuote).toHaveBeenCalledTimes(1);
+    expect(onCreateOfferFromLegacyQuote.mock.calls[0][0].id).toBe('Q-LEGACY-ACCEPTED');
+  });
+
+  test('does not expose legacy conversion for an accepted multi-candidate family', async () => {
+    const user = userEvent.setup();
+    const quote = withSingleCandidate(
+      { ...quotes[0], id: 'Q-CANDIDATE-ACCEPTED', status: 'accepted' },
+      'candidate-a',
+    );
+    const [firstCandidate] = quote.candidates ?? [];
+    if (!firstCandidate) throw new Error('Expected candidate fixture');
+    quote.candidates = [
+      firstCandidate,
+      {
+        ...firstCandidate,
+        id: 'candidate-b',
+        name: 'Variante B',
+        position: 1,
+      },
+    ];
+
+    render(
+      <ClientQuotesView
+        quotes={[quote]}
+        clients={clients}
+        products={[]}
+        supplierQuotes={[]}
+        currency="EUR"
+        onAddQuote={mock(() => Promise.resolve())}
+        onUpdateQuote={mock(() => Promise.resolve())}
+        onDeleteQuote={mock(() => Promise.resolve())}
+        onCreateOfferFromLegacyQuote={mock(() => {})}
+      />,
+    );
+
+    await openRowActions(user);
+    expect(
+      screen.queryByRole('button', { name: 'sales:clientQuotes.convertToOffer' }),
+    ).not.toBeInTheDocument();
+  });
+
+  test('keeps supplier-expired quote progression actions disabled', async () => {
+    const user = userEvent.setup();
+    const onUpdateQuote = mock((_id: string, _updates: QuoteMutation) => Promise.resolve());
+    const onPromoteCandidate = mock((_quoteId: string, _candidateId: string) => Promise.resolve());
+
+    const { rerender } = render(
+      <ClientQuotesView
+        quotes={[{ ...quotes[0], id: 'Q-BLOCKED-DRAFT', linkedSupplierQuoteExpired: true }]}
+        clients={clients}
+        products={[]}
+        supplierQuotes={[]}
+        currency="EUR"
+        onAddQuote={mock(() => Promise.resolve())}
+        onUpdateQuote={onUpdateQuote}
+        onDeleteQuote={mock(() => Promise.resolve())}
+        onPromoteCandidate={onPromoteCandidate}
+      />,
+    );
+
+    await openRowActions(user);
+    expect(
+      await screen.findByRole('button', { name: 'sales:clientQuotes.markAsSent' }),
+    ).toBeDisabled();
+
+    rerender(
+      <ClientQuotesView
+        quotes={[
+          {
+            ...quotes[0],
+            id: 'Q-BLOCKED-SENT',
+            status: 'sent',
+            linkedSupplierQuoteExpired: true,
+          },
+        ]}
+        clients={clients}
+        products={[]}
+        supplierQuotes={[]}
+        currency="EUR"
+        onAddQuote={mock(() => Promise.resolve())}
+        onUpdateQuote={onUpdateQuote}
+        onDeleteQuote={mock(() => Promise.resolve())}
+        onPromoteCandidate={onPromoteCandidate}
+      />,
+    );
+    expect(
+      await screen.findByRole('button', {
+        name: 'sales:clientQuotes.candidates.chooseTitle',
+      }),
+    ).toBeDisabled();
+    expect(onUpdateQuote).not.toHaveBeenCalled();
+    expect(onPromoteCandidate).not.toHaveBeenCalled();
+  });
+
+  test('opens candidate comparison when at least one variant remains promotable', async () => {
+    const user = userEvent.setup();
+    const quote = withSingleCandidate(
+      {
+        ...quotes[0],
+        id: 'Q-MIXED-SUPPLIER-EXPIRY',
+        status: 'sent',
+        linkedSupplierQuoteExpired: true,
+      },
+      'candidate-a',
+    );
+    const [firstCandidate] = quote.candidates ?? [];
+    if (!firstCandidate) throw new Error('Expected candidate fixture');
+    quote.candidates = [
+      {
+        ...firstCandidate,
+        linkedSupplierQuoteExpired: false,
+        isExpired: false,
+      },
+      {
+        ...firstCandidate,
+        id: 'candidate-b',
+        name: 'Variante B',
+        position: 1,
+        linkedSupplierQuoteExpired: true,
+        isExpired: false,
+      },
+    ];
+
+    render(
+      <ClientQuotesView
+        quotes={[quote]}
+        clients={clients}
+        products={[]}
+        supplierQuotes={[]}
+        currency="EUR"
+        onAddQuote={mock(() => Promise.resolve())}
+        onUpdateQuote={mock(() => Promise.resolve())}
+        onDeleteQuote={mock(() => Promise.resolve())}
+        onPromoteCandidate={mock(() => Promise.resolve())}
+      />,
+    );
+
+    await openRowActions(user);
+    const choose = await screen.findByRole('button', {
+      name: 'sales:clientQuotes.candidates.chooseTitle',
+    });
+    expect(choose).not.toBeDisabled();
+    await user.click(choose);
+
+    const comparisonDialog = await screen.findByRole('dialog');
+    expect(within(comparisonDialog).getByText('Variante A')).toBeInTheDocument();
+    expect(within(comparisonDialog).getByText('Variante B')).toBeInTheDocument();
+  });
+
+  test('promotes the selected candidate of a sent quote through the dedicated action', async () => {
+    const user = userEvent.setup();
+    const onPromoteCandidate = mock((_quoteId: string, _candidateId: string) => Promise.resolve());
 
     const staleQuote: Quote = {
       ...quotes[0],
@@ -920,6 +1149,24 @@ describe('<ClientQuotesView /> edit action gating (#812 round 13)', () => {
         },
       ],
     };
+    staleQuote.candidates = [
+      {
+        id: 'candidate-a',
+        quoteId: staleQuote.id,
+        name: 'Variante A',
+        position: 0,
+        state: 'active',
+        items: staleQuote.items.map((item) => ({ ...item, candidateId: 'candidate-a' })),
+        paymentTerms: staleQuote.paymentTerms,
+        discount: staleQuote.discount,
+        discountType: staleQuote.discountType,
+        expirationDate: staleQuote.expirationDate,
+        communicationChannelId: staleQuote.communicationChannelId,
+        notes: 'Customer prefers annual billing.',
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      },
+    ];
 
     render(
       <ClientQuotesView
@@ -929,22 +1176,32 @@ describe('<ClientQuotesView /> edit action gating (#812 round 13)', () => {
         supplierQuotes={[]}
         currency="EUR"
         onAddQuote={mock(() => Promise.resolve())}
-        onUpdateQuote={onUpdateQuote}
+        onUpdateQuote={mock(() => Promise.resolve())}
         onDeleteQuote={mock(() => Promise.resolve())}
+        onPromoteCandidate={onPromoteCandidate}
       />,
     );
 
     await openRowActions(user);
-    await user.click(await screen.findByRole('button', { name: 'sales:clientQuotes.markAsOffer' }));
+    await user.click(
+      await screen.findByRole('button', { name: 'sales:clientQuotes.candidates.chooseTitle' }),
+    );
+    const comparisonDialog = await screen.findByRole('dialog');
+    expect(comparisonDialog.querySelector('[data-slot="modal-content"]')).toHaveClass('max-w-6xl');
+    expect(within(comparisonDialog).getByText('sales:clientQuotes.molLabel')).toBeInTheDocument();
+    expect(within(comparisonDialog).getByText('-11,11%')).toBeInTheDocument();
+    expect(within(comparisonDialog).getByText('sales:clientQuotes.notesLabel')).toBeInTheDocument();
+    expect(
+      within(comparisonDialog).getByText('Customer prefers annual billing.'),
+    ).toBeInTheDocument();
+    await user.click(
+      await screen.findByRole('button', { name: 'sales:clientQuotes.candidates.promote' }),
+    );
 
-    await waitFor(() => expect(onUpdateQuote).toHaveBeenCalledTimes(1));
-    const updates = onUpdateQuote.mock.calls[0][1] as Partial<Quote>;
-    expect(updates.status).toBe('offer');
-    expect(updates.items?.[0]?.productId).toBe('');
-    expect(updates.items?.[0]?.unitPrice).toBe(80);
-    expect(staleQuote.items[0].unitPrice).toBe(100);
+    await waitFor(() =>
+      expect(onPromoteCandidate).toHaveBeenCalledWith('Q-LOCAL-MOL', 'candidate-a'),
+    );
   });
-
   test('keeps the edit action enabled on an expired quote without an offer (extend-date recovery)', async () => {
     // The row click opens such quotes read-only-except-expiration so the date can be extended out
     // of `expired`; the edit action must gate on the same canOpenQuoteModal predicate, not
@@ -974,9 +1231,9 @@ describe('<ClientQuotesView /> edit action gating (#812 round 13)', () => {
     expect(within(dialog).getByText('sales:clientQuotes.readOnlyBecauseOffer')).toBeTruthy();
   });
 
-  test('enables back-to-draft for an offer quote whose linked offer is still draft', async () => {
+  test('uses candidate rollback for an offer quote whose linked offer is still draft', async () => {
     const user = userEvent.setup();
-    const onUpdateQuote = mock(() => Promise.resolve());
+    const onRollbackPromotion = mock(() => Promise.resolve());
     render(
       <ClientQuotesView
         quotes={[
@@ -986,6 +1243,7 @@ describe('<ClientQuotesView /> edit action gating (#812 round 13)', () => {
             status: 'offer',
             expirationDate: '2099-12-31',
             linkedOfferId: 'off-1',
+            selectedCandidateId: 'qc-selected',
           },
         ]}
         clients={clients}
@@ -993,7 +1251,8 @@ describe('<ClientQuotesView /> edit action gating (#812 round 13)', () => {
         supplierQuotes={[]}
         currency="EUR"
         onAddQuote={mock(() => Promise.resolve())}
-        onUpdateQuote={onUpdateQuote}
+        onUpdateQuote={mock(() => Promise.resolve())}
+        onRollbackPromotion={onRollbackPromotion}
         onDeleteQuote={mock(() => Promise.resolve())}
         quoteOfferStatuses={{ 'Q-OFFERED': 'draft' }}
       />,
@@ -1004,7 +1263,7 @@ describe('<ClientQuotesView /> edit action gating (#812 round 13)', () => {
     expect(restore).not.toBeDisabled();
     await user.click(restore);
     await waitFor(() => {
-      expect(onUpdateQuote).toHaveBeenCalledWith('Q-OFFERED', { status: 'draft' });
+      expect(onRollbackPromotion).toHaveBeenCalledWith('Q-OFFERED');
     });
   });
 
@@ -1019,6 +1278,7 @@ describe('<ClientQuotesView /> edit action gating (#812 round 13)', () => {
             status: 'offer',
             expirationDate: '2099-12-31',
             linkedOfferId: 'off-1',
+            selectedCandidateId: 'qc-selected',
           },
         ]}
         clients={clients}
@@ -1050,6 +1310,7 @@ describe('<ClientQuotesView /> edit action gating (#812 round 13)', () => {
             status: 'offer',
             effectiveStatus: 'expired',
             linkedOfferId: 'off-1',
+            selectedCandidateId: 'qc-selected',
           },
         ]}
         clients={clients}
@@ -1148,6 +1409,64 @@ describe('<ClientQuotesView /> line-item delete confirmation', () => {
       expect(screen.queryByText('sales:clientQuotes.removeProductTitle')).not.toBeInTheDocument();
     });
     expect(rowDeleteButtons(dialog)).toHaveLength(rowDeletes.length);
+  });
+
+  test('chooses the first unused default variant name after renames', async () => {
+    const user = userEvent.setup();
+    render(
+      <ClientQuotesView
+        quotes={[]}
+        clients={clients}
+        products={[]}
+        supplierQuotes={[]}
+        communicationChannels={communicationChannels}
+        currency="EUR"
+        onAddQuote={mock(() => Promise.resolve())}
+        onUpdateQuote={mock(() => Promise.resolve())}
+        onDeleteQuote={mock(() => Promise.resolve())}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'sales:clientQuotes.createNewQuote' }));
+    await user.click(screen.getByRole('button', { name: 'sales:clientQuotes.candidates.addMenu' }));
+    await user.click(screen.getByRole('menuitem', { name: 'sales:clientQuotes.candidates.add' }));
+    const nameInput = screen.getByLabelText('sales:clientQuotes.candidates.name');
+    await user.clear(nameInput);
+    await user.type(nameInput, 'Variante C');
+    await user.click(screen.getByRole('tab', { name: /Variante A/ }));
+    await user.click(screen.getByRole('button', { name: 'sales:clientQuotes.candidates.addMenu' }));
+    await user.click(screen.getByRole('menuitem', { name: 'sales:clientQuotes.candidates.add' }));
+
+    expect(screen.getByRole('tab', { name: /Variante B/ })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /Variante C/ })).toBeInTheDocument();
+  });
+
+  test('starts with Variante A and can add and rename candidate tabs', async () => {
+    const user = userEvent.setup();
+    render(
+      <ClientQuotesView
+        quotes={[]}
+        clients={clients}
+        products={[]}
+        supplierQuotes={[]}
+        communicationChannels={communicationChannels}
+        currency="EUR"
+        onAddQuote={mock(() => Promise.resolve())}
+        onUpdateQuote={mock(() => Promise.resolve())}
+        onDeleteQuote={mock(() => Promise.resolve())}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'sales:clientQuotes.createNewQuote' }));
+    expect(screen.getByText('Variante A')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'sales:clientQuotes.candidates.addMenu' }));
+    await user.click(screen.getByRole('menuitem', { name: 'sales:clientQuotes.candidates.add' }));
+    expect(screen.getByText('Variante B')).toBeInTheDocument();
+
+    const nameInput = screen.getByLabelText('sales:clientQuotes.candidates.name');
+    await user.clear(nameInput);
+    await user.type(nameInput, 'Premium');
+    expect(screen.getByRole('tab', { name: /Premium/ })).toBeInTheDocument();
   });
 });
 

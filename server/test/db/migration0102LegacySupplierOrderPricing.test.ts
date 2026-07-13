@@ -38,7 +38,17 @@ describe('migration 0102 legacy supplier-order pricing', () => {
       entries: Array<{ idx: number; tag: string }>;
     };
 
-    expect(journal.entries.at(-1)).toEqual(
+    const migrationIndex = journal.entries.findIndex(
+      (entry) => entry.tag === '0102_backfill_legacy_supplier_order_pricing',
+    );
+
+    expect(journal.entries[migrationIndex - 1]).toEqual(
+      expect.objectContaining({
+        idx: 101,
+        tag: '0101_add_supplier_sale_item_unit_type',
+      }),
+    );
+    expect(journal.entries[migrationIndex]).toEqual(
       expect.objectContaining({
         idx: 102,
         tag: '0102_backfill_legacy_supplier_order_pricing',

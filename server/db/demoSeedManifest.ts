@@ -626,6 +626,7 @@ export const DEMO_EXPECTED_COUNTS = {
   suppliers: DEMO_SUPPLIERS.length,
   products: DEMO_PRODUCTS.length,
   quotes: DEMO_QUOTES.length,
+  quote_candidates: DEMO_QUOTES.length,
   quote_items: DEMO_ITEM_IDS.quoteItems.length,
   customer_offers: DEMO_CUSTOMER_OFFERS.length,
   customer_offer_items: DEMO_ITEM_IDS.customerOfferItems.length,

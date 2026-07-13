@@ -11,6 +11,7 @@ import { normalizeUnitType, type UnitType } from '../utils/unit-type.ts';
 export type ClientOffer = {
   id: string;
   linkedQuoteId: string;
+  linkedQuoteCandidateId?: string | null;
   clientId: string;
   clientName: string;
   paymentTerms: string | null;
@@ -47,6 +48,7 @@ export type ClientOfferItem = {
 const mapOffer = (row: typeof customerOffers.$inferSelect): ClientOffer => ({
   id: row.id,
   linkedQuoteId: row.linkedQuoteId,
+  linkedQuoteCandidateId: row.linkedQuoteCandidateId,
   clientId: row.clientId,
   clientName: row.clientName,
   paymentTerms: row.paymentTerms,
@@ -116,6 +118,7 @@ export const findIdConflict = async (
 export type ExistingOffer = {
   id: string;
   linkedQuoteId: string | null;
+  linkedQuoteCandidateId: string | null;
   clientId: string;
   clientName: string;
   status: string;
@@ -135,6 +138,7 @@ export const findExisting = async (
     .select({
       id: customerOffers.id,
       linkedQuoteId: customerOffers.linkedQuoteId,
+      linkedQuoteCandidateId: customerOffers.linkedQuoteCandidateId,
       clientId: customerOffers.clientId,
       clientName: customerOffers.clientName,
       status: customerOffers.status,
@@ -155,6 +159,7 @@ export const lockExistingById = async (
     .select({
       id: customerOffers.id,
       linkedQuoteId: customerOffers.linkedQuoteId,
+      linkedQuoteCandidateId: customerOffers.linkedQuoteCandidateId,
       clientId: customerOffers.clientId,
       clientName: customerOffers.clientName,
       status: customerOffers.status,
@@ -253,6 +258,7 @@ export const findFullForSnapshot = async (
 export type NewClientOffer = {
   id: string;
   linkedQuoteId: string;
+  linkedQuoteCandidateId?: string | null;
   clientId: string;
   clientName: string;
   paymentTerms: string;
@@ -273,6 +279,7 @@ export const create = async (
     .values({
       id: input.id,
       linkedQuoteId: input.linkedQuoteId,
+      linkedQuoteCandidateId: input.linkedQuoteCandidateId ?? null,
       clientId: input.clientId,
       clientName: input.clientName,
       paymentTerms: input.paymentTerms,

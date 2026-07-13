@@ -1,0 +1,73 @@
+import { describe, expect, test } from 'bun:test';
+
+const migrationSql = await Bun.file(
+  new URL('../../db/migrations/0103_quote_candidates.sql', import.meta.url),
+).text();
+const readJournal = async () =>
+  Bun.file(new URL('../../db/migrations/meta/_journal.json', import.meta.url)).json();
+
+describe('migration 0103 quote candidates', () => {
+  test('backfills one candidate per existing quote without changing the document code', () => {
+    expect(migrationSql).toContain("'Variante A'");
+    expect(migrationSql).toContain("THEN 'selected' ELSE 'active' END");
+  });
+
+  test('reattaches existing items and offers while keeping the expand column nullable', () => {
+    const itemBackfill = migrationSql.indexOf(
+      'UPDATE "quote_items" SET "candidate_id" = "quote_id"',
+    );
+    expect(itemBackfill).toBeGreaterThan(-1);
+    expect(migrationSql).not.toContain(
+      'ALTER TABLE "quote_items" ALTER COLUMN "candidate_id" SET NOT NULL',
+    );
+    expect(migrationSql).toContain(
+      'UPDATE "customer_offers" SET "linked_quote_candidate_id" = "linked_quote_id"',
+    );
+  });
+
+  test('creates and assigns a default candidate for inserts from legacy writers', () => {
+    const quoteItemFunction = migrationSql.slice(
+      migrationSql.indexOf('CREATE FUNCTION "ensure_legacy_quote_item_candidate"()'),
+      migrationSql.indexOf('CREATE TRIGGER "quote_items_legacy_candidate_trigger"'),
+    );
+
+    expect(migrationSql).toContain('CREATE FUNCTION "ensure_legacy_quote_item_candidate"()');
+    expect(migrationSql).toContain('WHEN (NEW."candidate_id" IS NULL)');
+    expect(migrationSql).toContain("'qc_legacy_' || md5");
+    expect(migrationSql).toContain('NEW."candidate_id" := resolved_candidate_id');
+    expect(migrationSql).toContain('CREATE TRIGGER "quote_items_legacy_candidate_trigger"');
+    expect(quoteItemFunction).toContain(
+      `CASE qc."state" WHEN 'selected' THEN 0 WHEN 'active' THEN 1 ELSE 2 END`,
+    );
+  });
+
+  test('links offers inserted by legacy writers and selects their candidate', () => {
+    expect(migrationSql).toContain('CREATE FUNCTION "ensure_legacy_customer_offer_candidate"()');
+    expect(migrationSql).toContain('WHEN (NEW."linked_quote_candidate_id" IS NULL)');
+    expect(migrationSql).toContain('NEW."linked_quote_candidate_id" := resolved_candidate_id');
+    expect(migrationSql).toContain('SET "state" = \'discarded\'');
+    expect(migrationSql).toContain('"state" = \'selected\'');
+    expect(migrationSql).toContain('CREATE TRIGGER "customer_offers_legacy_candidate_trigger"');
+  });
+
+  test('enforces unique names and one selected candidate per quote', () => {
+    expect(migrationSql).toContain('CREATE UNIQUE INDEX "idx_quote_candidates_quote_name_unique"');
+    expect(migrationSql).toContain('CREATE UNIQUE INDEX "idx_quote_candidates_one_selected"');
+  });
+
+  test('is registered after the supplier-order pricing migrations', async () => {
+    const journal = (await readJournal()) as {
+      entries: Array<{ idx: number; tag: string }>;
+    };
+    const migrationIndex = journal.entries.findIndex(
+      (entry) => entry.tag === '0103_quote_candidates',
+    );
+
+    expect(journal.entries[migrationIndex - 1]).toEqual(
+      expect.objectContaining({ idx: 102, tag: '0102_backfill_legacy_supplier_order_pricing' }),
+    );
+    expect(journal.entries[migrationIndex]).toEqual(
+      expect.objectContaining({ idx: 103, tag: '0103_quote_candidates' }),
+    );
+  });
+});
