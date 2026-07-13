@@ -1404,9 +1404,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             },
             tx,
           );
+          const primaryCandidateId = generatePrefixedId('qc');
           await quoteCandidatesRepo.insert(
             {
-              id: created.id,
+              id: primaryCandidateId,
               quoteId: created.id,
               name: primaryCandidate.name,
               position: 0,
@@ -1424,6 +1425,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             created.id,
             buildItemsForInsert(primaryCandidate.items),
             tx,
+            primaryCandidateId,
           );
           for (let index = 1; index < preparedCandidates.length; index++) {
             const input = preparedCandidates[index];

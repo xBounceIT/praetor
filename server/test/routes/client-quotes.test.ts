@@ -1508,6 +1508,19 @@ describe('client quote candidate-family create and update', () => {
     });
   });
 
+  test('generates a collision-safe id for the primary candidate', async () => {
+    setupCreate();
+
+    const res = await postQuote([freshLine()]);
+
+    expect(res.statusCode).toBe(201);
+    const primaryCandidate = qcInsertMock.mock.calls[0][0] as { id: string; quoteId: string };
+    expect(primaryCandidate.quoteId).toBe('q-new');
+    expect(primaryCandidate.id).toStartWith('qc-');
+    expect(primaryCandidate.id).not.toBe(primaryCandidate.quoteId);
+    expect(cqInsertItemsMock.mock.calls[0][3]).toBe(primaryCandidate.id);
+  });
+
   test('uses the first nested candidate as the commercial source of truth', async () => {
     setupCreate();
     const res = await postQuote([freshLine()], {
