@@ -792,9 +792,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             },
             tx,
           );
-          // A migrated accepted/no-offer quote follows the legacy conversion path. Deliberately do
-          // not attach linkedQuoteCandidateId: candidate rollback only applies to new promotions
-          // whose parent status is `offer`, while this legacy parent remains terminal `accepted`.
+          // A migrated accepted/no-offer quote follows the legacy conversion path. The application
+          // payload omits linkedQuoteCandidateId; migration 0101's rolling-deploy trigger fills it
+          // for old and new legacy writers. The accepted parent keeps deletion on the legacy branch
+          // rather than treating this as a candidate-promotion rollback.
           // Bidirectional sync on CREATE too (user report after #812): a sourced line whose
           // quantity/cost was edited away from its pick-time baseline pushes the edit onto the
           // supplier item, atomically with the offer write. Conversion-inherited and

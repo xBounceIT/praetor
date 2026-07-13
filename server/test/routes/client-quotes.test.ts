@@ -1514,6 +1514,32 @@ describe('client quote candidate-family create and update', () => {
     updatedAt: 1_700_000_000_000,
     ...over,
   });
+  const installCandidateNameConstraint = (candidates: ReturnType<typeof activeCandidate>[]) => {
+    const names = new Map(candidates.map((candidate) => [candidate.id, candidate.name]));
+    qcDeleteMissingActiveMock.mockImplementation(
+      async (_quoteId: string, retainedIds: string[]) => {
+        const retained = new Set(retainedIds);
+        for (const candidateId of names.keys()) {
+          if (!retained.has(candidateId)) names.delete(candidateId);
+        }
+      },
+    );
+    qcUpdateMock.mockImplementation(
+      async (_quoteId: string, candidateId: string, input: Record<string, unknown>) => {
+        const nextName = String(input.name);
+        const collision = Array.from(names).some(
+          ([otherId, name]) =>
+            otherId !== candidateId && name.toLocaleLowerCase() === nextName.toLocaleLowerCase(),
+        );
+        if (collision) {
+          throw { code: '23505', constraint: 'idx_quote_candidates_quote_name_unique' };
+        }
+        names.set(candidateId, nextName);
+        return { ...candidates.find((candidate) => candidate.id === candidateId), ...input };
+      },
+    );
+    return names;
+  };
   const postQuote = (items: Array<Record<string, unknown>>, over: Record<string, unknown> = {}) =>
     testApp.inject({
       method: 'POST',
@@ -2229,6 +2255,90 @@ describe('client quote candidate-family create and update', () => {
       expect.anything(),
     );
     expect(JSON.parse(res.body).id).toBe('q-renamed');
+  });
+
+  test('stages existing names so two candidates can swap names atomically', async () => {
+    setupCreate();
+    const candidateA = activeCandidate();
+    const candidateB = activeCandidate({ id: 'qc-b', name: 'Variante B', position: 1 });
+    const currentQuote = updatedQuote({ id: 'q-1', status: 'draft' });
+    cqFindCurrentMock.mockResolvedValue(gate({ status: 'draft' }));
+    cqLockCurrentByIdMock.mockResolvedValue(gate({ status: 'draft' }));
+    cqUpdateMock.mockResolvedValue(currentQuote);
+    cqFindByIdMock.mockResolvedValue(currentQuote);
+    qcListForQuoteMock.mockResolvedValue([candidateA, candidateB]);
+    const names = installCandidateNameConstraint([candidateA, candidateB]);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/sales/client-quotes/q-1',
+      headers: authHeader(),
+      payload: {
+        clientId: 'c1',
+        clientName: 'Client',
+        status: 'draft',
+        candidates: [
+          {
+            id: 'qc-local',
+            name: 'Variante B',
+            items: [freshLine()],
+            expirationDate: '2999-12-31',
+            communicationChannelId: 'qcc_email',
+          },
+          {
+            id: 'qc-b',
+            name: 'Variante A',
+            items: [freshLine()],
+            expirationDate: '2999-12-31',
+            communicationChannelId: 'qcc_email',
+          },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(names).toEqual(
+      new Map([
+        ['qc-local', 'Variante B'],
+        ['qc-b', 'Variante A'],
+      ]),
+    );
+  });
+
+  test('deletes removed candidates before reusing one of their names', async () => {
+    setupCreate();
+    const candidateA = activeCandidate();
+    const candidateB = activeCandidate({ id: 'qc-b', name: 'Variante B', position: 1 });
+    const currentQuote = updatedQuote({ id: 'q-1', status: 'draft' });
+    cqFindCurrentMock.mockResolvedValue(gate({ status: 'draft' }));
+    cqLockCurrentByIdMock.mockResolvedValue(gate({ status: 'draft' }));
+    cqUpdateMock.mockResolvedValue(currentQuote);
+    cqFindByIdMock.mockResolvedValue(currentQuote);
+    qcListForQuoteMock.mockResolvedValue([candidateA, candidateB]);
+    const names = installCandidateNameConstraint([candidateA, candidateB]);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/sales/client-quotes/q-1',
+      headers: authHeader(),
+      payload: {
+        clientId: 'c1',
+        clientName: 'Client',
+        status: 'draft',
+        candidates: [
+          {
+            id: 'qc-local',
+            name: 'Variante B',
+            items: [freshLine()],
+            expirationDate: '2999-12-31',
+            communicationChannelId: 'qcc_email',
+          },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(names).toEqual(new Map([['qc-local', 'Variante B']]));
   });
 
   test('maps a concurrent candidate-name collision to a conflict instead of a server error', async () => {

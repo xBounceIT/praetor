@@ -1822,7 +1822,48 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               tx,
             );
             if (!parent) return { kind: 'not_found' as const };
-            const retainedIds: string[] = [];
+
+            // Apply the final candidate-name set without exposing intermediate uniqueness
+            // conflicts (for example A↔B swaps, or A taking the name of a removed B).
+            if (currentStatus === 'draft') {
+              await quoteCandidatesRepo.deleteMissingActive(
+                idResult.value,
+                submittedExistingIds,
+                tx,
+              );
+            }
+            const submittedNamesById = new Map(
+              preparedCandidates.flatMap((candidate) =>
+                candidate.id ? [[candidate.id, candidate.name] as const] : [],
+              ),
+            );
+            for (const candidate of lockedCandidates) {
+              const submittedName = submittedNamesById.get(candidate.id);
+              if (
+                candidate.state !== 'active' ||
+                !submittedName ||
+                candidate.name.toLocaleLowerCase() === submittedName.toLocaleLowerCase()
+              ) {
+                continue;
+              }
+              const staged = await quoteCandidatesRepo.update(
+                idResult.value,
+                candidate.id,
+                {
+                  name: generatePrefixedId('qc-stage'),
+                  position: candidate.position,
+                  paymentTerms: candidate.paymentTerms,
+                  discount: candidate.discount,
+                  discountType: candidate.discountType,
+                  expirationDate: candidate.expirationDate,
+                  communicationChannelId: candidate.communicationChannelId,
+                  notes: candidate.notes,
+                },
+                tx,
+              );
+              if (!staged) throw new Error('Candidate disappeared while staging names');
+            }
+
             for (let index = 0; index < preparedCandidates.length; index++) {
               const input = preparedCandidates[index];
               const candidateId =
@@ -1860,7 +1901,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                     tx,
                   );
               if (!candidate) throw new Error('Candidate disappeared during update');
-              retainedIds.push(candidateId);
               await clientQuotesRepo.replaceItems(
                 idResult.value,
                 buildItemsForInsert(input.items),
@@ -1869,9 +1909,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               );
               // Draft/sent candidates are intentionally isolated supplier snapshots. Do not push
               // quantity or cost back to the source here: promotion synchronizes only the winner.
-            }
-            if (currentStatus === 'draft') {
-              await quoteCandidatesRepo.deleteMissingActive(idResult.value, retainedIds, tx);
             }
             if (candidateFamilyId !== idResult.value) {
               const renamedParent = await clientQuotesRepo.rename(

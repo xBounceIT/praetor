@@ -31,6 +31,15 @@ describe('migration 0101 quote candidates', () => {
     expect(migrationSql).toContain('CREATE TRIGGER "quote_items_legacy_candidate_trigger"');
   });
 
+  test('links offers inserted by legacy writers and selects their candidate', () => {
+    expect(migrationSql).toContain('CREATE FUNCTION "ensure_legacy_customer_offer_candidate"()');
+    expect(migrationSql).toContain('WHEN (NEW."linked_quote_candidate_id" IS NULL)');
+    expect(migrationSql).toContain('NEW."linked_quote_candidate_id" := resolved_candidate_id');
+    expect(migrationSql).toContain('SET "state" = \'discarded\'');
+    expect(migrationSql).toContain('"state" = \'selected\'');
+    expect(migrationSql).toContain('CREATE TRIGGER "customer_offers_legacy_candidate_trigger"');
+  });
+
   test('enforces unique names and one selected candidate per quote', () => {
     expect(migrationSql).toContain('CREATE UNIQUE INDEX "idx_quote_candidates_quote_name_unique"');
     expect(migrationSql).toContain('CREATE UNIQUE INDEX "idx_quote_candidates_one_selected"');
