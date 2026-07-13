@@ -1,6 +1,7 @@
 import type React from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import type { Notification } from '../../types';
 
@@ -10,11 +11,16 @@ export interface NotificationBellProps {
   onMarkAsRead: (id: string) => void;
   onMarkAllAsRead: () => void;
   onDelete: (id: string) => void;
+  onOpenRilPreferences?: () => void;
 }
+
+const isRilPreferencesTip = (notification: Notification) =>
+  notification.type === 'tip' && notification.data?.tipId === 'ril_preferences';
 
 const getNotificationIconClass = (type: string) => {
   if (type === 'admin_password_warning') return 'fa-triangle-exclamation';
   if (type === 'project_rule_triggered') return 'fa-bell';
+  if (type === 'tip') return 'fa-lightbulb';
   return 'fa-folder-tree';
 };
 
@@ -24,6 +30,7 @@ const NotificationBell: React.FC<NotificationBellProps> = ({
   onMarkAsRead,
   onMarkAllAsRead,
   onDelete,
+  onOpenRilPreferences,
 }) => {
   const { t } = useTranslation('layout');
   const [isOpen, setIsOpen] = useState(false);
@@ -71,6 +78,12 @@ const NotificationBell: React.FC<NotificationBellProps> = ({
     onDelete(notificationId);
   };
 
+  const handleOpenRilPreferences = (notification: Notification) => {
+    if (!notification.isRead) onMarkAsRead(notification.id);
+    setIsOpen(false);
+    onOpenRilPreferences?.();
+  };
+
   const formatTimeAgo = useCallback(
     (timestamp: number) => {
       const diff = currentTime - timestamp;
@@ -102,6 +115,9 @@ const NotificationBell: React.FC<NotificationBellProps> = ({
         rule: notification.data?.ruleName ?? notification.title,
         project: notification.data?.projectName ?? '',
       });
+    }
+    if (isRilPreferencesTip(notification)) {
+      return t('notifications.rilPreferencesTipTitle');
     }
     // Fallback to the original title for unknown types
     return notification.title;
@@ -220,6 +236,25 @@ const NotificationBell: React.FC<NotificationBellProps> = ({
                       </TooltipContent>
                     </Tooltip>
                   </div>
+                  {isRilPreferencesTip(notification) && (
+                    <div className="ml-11 mt-2 space-y-2">
+                      <p className="text-xs leading-relaxed text-muted-foreground">
+                        {t('notifications.rilPreferencesTipMessage')}
+                      </p>
+                      {onOpenRilPreferences && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-7 text-xs"
+                          onClick={() => handleOpenRilPreferences(notification)}
+                        >
+                          <i className="fa-solid fa-arrow-right" aria-hidden="true" />
+                          {t('notifications.rilPreferencesTipAction')}
+                        </Button>
+                      )}
+                    </div>
+                  )}
                   {/* Expandable project list */}
                   {notification.type === 'new_projects' &&
                     notification.data?.projectNames &&

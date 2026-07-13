@@ -88,6 +88,8 @@ export interface UserSettingsProps {
   // Available RIL "Trasferta" values (from general settings). Empty hides the RIL tab — e.g. for
   // users without RIL access or when no options are configured.
   rilTransferOptions?: string[];
+  selectedTab?: UserSettingsTab;
+  onSelectedTabChange?: (tab: UserSettingsTab) => void;
   onUpdate: (updates: Partial<Settings>) => void;
   onUpdatePassword: (currentPassword: string, newPassword: string) => Promise<void>;
   // Takes the account password for step-up re-auth (a logged-in caller must re-confirm their
@@ -247,7 +249,7 @@ const RIL_WEEKDAY_KEYS: readonly RilWeekday[] = [
   'friday',
 ];
 
-type UserSettingsTab = 'profile' | 'appearance' | 'language' | 'security' | 'mcp' | 'ril';
+export type UserSettingsTab = 'profile' | 'appearance' | 'language' | 'security' | 'mcp' | 'ril';
 
 type TotpStatus = {
   enabled: boolean;
@@ -393,6 +395,8 @@ const useUserSettingsController = ({
   authProviderName = null,
   isLoading = false,
   rilTransferOptions = EMPTY_RIL_TRANSFER_OPTIONS,
+  selectedTab,
+  onSelectedTabChange,
   onUpdate,
   onUpdatePassword,
   onTotpSetup,
@@ -429,7 +433,7 @@ const useUserSettingsController = ({
     email,
     language,
     currentTheme,
-    activeTab,
+    activeTab: internalActiveTab,
     rilWeekdayTransferDefaults,
     isSaving,
     isSaved,
@@ -468,6 +472,7 @@ const useUserSettingsController = ({
     regenerateError,
     regeneratedBackupCodes,
   } = userSettingsState;
+  const activeTab = selectedTab ?? internalActiveTab;
   const setFullName = useCallback(
     (update: StateUpdate<string>) => setUserSettingsField('fullName', update),
     [setUserSettingsField],
@@ -944,10 +949,11 @@ const useUserSettingsController = ({
 
   const handleTabChange = useCallback(
     (tab: UserSettingsTab) => {
-      setActiveTab(tab);
+      if (selectedTab === undefined) setActiveTab(tab);
+      onSelectedTabChange?.(tab);
       if (tab === 'mcp') void loadMcpTokens();
     },
-    [loadMcpTokens, setActiveTab],
+    [loadMcpTokens, onSelectedTabChange, selectedTab, setActiveTab],
   );
 
   // Persist the per-weekday default optimistically (same UX as the language picker): apply

@@ -6,11 +6,11 @@
 
 -- Default users (password is 'password' for all, hashed with bcrypt cost 10)
 -- To generate: require('bcrypt').hashSync('password', 10)
-INSERT INTO users (id, name, username, password_hash, role, avatar_initials) VALUES
-    ('u1', 'Admin User', 'admin', '$2a$12$z5H7VrzTpLImYWSH3xufKufCiGB0n9CSlNMOrRBRIxq.6mvuVS7uy', 'admin', 'AD'),
-    ('u2', 'Manager User', 'manager', '$2a$12$z5H7VrzTpLImYWSH3xufKufCiGB0n9CSlNMOrRBRIxq.6mvuVS7uy', 'manager', 'MG'),
-    ('u3', 'Standard User', 'user', '$2a$12$z5H7VrzTpLImYWSH3xufKufCiGB0n9CSlNMOrRBRIxq.6mvuVS7uy', 'user', 'US'),
-    ('u9', 'Top Manager', 'topmanager', '$2a$12$z5H7VrzTpLImYWSH3xufKufCiGB0n9CSlNMOrRBRIxq.6mvuVS7uy', 'top_manager', 'TM')
+INSERT INTO users (id, name, username, password_hash, role, avatar_initials, first_login_at) VALUES
+    ('u1', 'Admin User', 'admin', '$2a$12$z5H7VrzTpLImYWSH3xufKufCiGB0n9CSlNMOrRBRIxq.6mvuVS7uy', 'admin', 'AD', NULL),
+    ('u2', 'Manager User', 'manager', '$2a$12$z5H7VrzTpLImYWSH3xufKufCiGB0n9CSlNMOrRBRIxq.6mvuVS7uy', 'manager', 'MG', NULL),
+    ('u3', 'Standard User', 'user', '$2a$12$z5H7VrzTpLImYWSH3xufKufCiGB0n9CSlNMOrRBRIxq.6mvuVS7uy', 'user', 'US', NULL),
+    ('u9', 'Top Manager', 'topmanager', '$2a$12$z5H7VrzTpLImYWSH3xufKufCiGB0n9CSlNMOrRBRIxq.6mvuVS7uy', 'top_manager', 'TM', NULL)
 ON CONFLICT DO NOTHING;
 
 -- Ensure default users have matching rows in user_roles

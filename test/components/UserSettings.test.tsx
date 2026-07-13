@@ -542,6 +542,30 @@ describe('<UserSettings /> RIL preferences tab', () => {
     expect(screen.getByRole('button', { name: /ril.title/ })).toBeInTheDocument();
   });
 
+  test('opens the controlled RIL tab directly for notification navigation', () => {
+    const onSelectedTabChange = mock(() => {});
+    render(
+      <UserSettings
+        settings={settings}
+        rilTransferOptions={rilTransferOptions}
+        selectedTab="ril"
+        onSelectedTabChange={onSelectedTabChange}
+        onUpdate={onUpdate}
+        onUpdatePassword={onUpdatePassword}
+        onListMcpTokens={onListMcpTokens}
+        onCreateMcpToken={onCreateMcpToken}
+        onRevokeMcpToken={onRevokeMcpToken}
+        onGetPersonalAccessToken={onGetPersonalAccessToken}
+        onRenewPersonalAccessToken={onRenewPersonalAccessToken}
+        {...totpProps}
+      />,
+    );
+
+    expect(document.getElementById('ril-transfer-monday')).not.toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /userProfile.title/ }));
+    expect(onSelectedTabChange).toHaveBeenCalledWith('profile');
+  });
+
   test('opening the RIL tab reveals a select for each Monday..Friday weekday', () => {
     renderRilSettings();
     fireEvent.click(screen.getByRole('button', { name: /ril.title/ }));

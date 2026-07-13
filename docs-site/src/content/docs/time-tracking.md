@@ -41,6 +41,8 @@ Quando modifichi manualmente una riga RIL e il risultato supera **8 ore** o cont
 
 Puoi impostare questi valori predefiniti per giorno in **Impostazioni → RIL**: scegli una Trasferta predefinita per ciascun giorno feriale (dal lunedì al venerdì) e Praetor precompila le righe corrispondenti quando genera il tuo prospetto RIL. L'elenco dei valori selezionabili proviene dalle opzioni Trasferta configurate dagli amministratori nelle impostazioni globali RIL.
 
+Al primo accesso, gli utenti che possono consultare il RIL ricevono una notifica **Suggerimento** che ricorda di configurare queste preferenze. Il pulsante **Configura preferenze** nella notifica apre direttamente la scheda **Impostazioni → RIL**; il suggerimento viene creato una sola volta per account.
+
 Nel prospetto, **Note** e **Trasferta** usano le opzioni configurate dagli amministratori nelle impostazioni globali RIL. **Cod** è selezionabile tra `TR` trasferta e `SD` sede disagiata.
 
 Prima dell'esportazione, ogni giorno feriale valido e ogni riga straordinaria lavorata deve avere **Entrata**, **Uscita** e **Trasferta** compilati. Il pulsante **Esporta Excel** crea un file `.xlsx` con un solo foglio, **Prospetto Presenze**, e colonne compatibili con il modello RIL: Giorno, Entrata, Uscita, Ore, PICAP, Reperib. Telef., Note, Trasferta, Cod e Commessa. Il foglio riporta in alto **Dipendente**, **Società** e **MESE**, seguiti dalla griglia dei giorni e, in fondo, dalla legenda dei codici (P, P2, M, F, TR, SD) e dai totali del mese: **Giorni Lavorati**, **Ore Extra**, **Totale Ore**, **Totale PICAP** e **Pausa Pranzo**.

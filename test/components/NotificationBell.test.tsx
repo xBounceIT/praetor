@@ -57,6 +57,7 @@ const baseProps = {
   onMarkAsRead: () => {},
   onMarkAllAsRead: () => {},
   onDelete: () => {},
+  onOpenRilPreferences: () => {},
 };
 
 const openDropdown = () =>
@@ -163,6 +164,41 @@ describe('<NotificationBell />', () => {
 
     expect(screen.getByText('notifications.projectRuleTriggered')).toBeInTheDocument();
     expect(container.querySelector('i.fa-bell')).not.toBeNull();
+  });
+
+  test('RIL tip renders localized guidance and opens preferences from its quick action', () => {
+    const onOpenRilPreferences = mock(() => {});
+    const onMarkAsRead = mock((_id: string) => {});
+    const tip: Notification = {
+      id: 'tip-ril-u1',
+      userId: 'u1',
+      type: 'tip',
+      title: 'Set up your RIL travel preferences',
+      message: 'Fallback message',
+      isRead: false,
+      createdAt: NOW,
+      data: { tipId: 'ril_preferences', destination: 'settings/ril' },
+    };
+
+    const { container } = render(
+      <NotificationBell
+        {...baseProps}
+        notifications={[tip]}
+        onMarkAsRead={onMarkAsRead}
+        onOpenRilPreferences={onOpenRilPreferences}
+      />,
+    );
+
+    openDropdown();
+    expect(screen.getByText('notifications.rilPreferencesTipTitle')).toBeInTheDocument();
+    expect(screen.getByText('notifications.rilPreferencesTipMessage')).toBeInTheDocument();
+    expect(container.querySelector('i.fa-lightbulb')).not.toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'notifications.rilPreferencesTipAction' }));
+
+    expect(onMarkAsRead).toHaveBeenCalledWith('tip-ril-u1');
+    expect(onOpenRilPreferences).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText('notifications.rilPreferencesTipTitle')).not.toBeInTheDocument();
   });
 
   test('clicking a single-project notification uses the singular translation key', () => {

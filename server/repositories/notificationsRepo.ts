@@ -31,15 +31,21 @@ export type NewNotificationForUsers = {
 // pre-#612 binary is in service.
 const LEGACY_ADMIN_PASSWORD_WARNING_NOTIFICATION_ID = 'admin-default-password-warning';
 export const ADMIN_PASSWORD_WARNING_TYPE = 'admin_password_warning';
+export const TIP_NOTIFICATION_TYPE = 'tip';
+export const RIL_PREFERENCES_TIP_ID = 'ril_preferences';
 
 // Short prefix so that `apw-${userId}` fits inside `notifications.id`'s varchar(50)
 // even when `userId` is a `u-<uuid>` (38 chars) — full id stays at 42 chars.
 export const adminPasswordWarningNotificationId = (userId: string): string => `apw-${userId}`;
+export const rilPreferencesTipNotificationId = (userId: string): string => `tip-ril-${userId}`;
 
 const ADMIN_PASSWORD_WARNING_TITLE = 'Change the default admin password';
 const ADMIN_PASSWORD_WARNING_MESSAGE =
   'The admin account is still using the default password. Change it from Settings as soon as possible.';
 const adminPasswordWarningData = { reason: 'default_admin_password' };
+const RIL_PREFERENCES_TIP_TITLE = 'Set up your RIL travel preferences';
+const RIL_PREFERENCES_TIP_MESSAGE =
+  'Choose the default travel value for each weekday so your RIL is pre-filled correctly.';
 
 const mapRow = (row: typeof notifications.$inferSelect): Notification => ({
   id: row.id,
@@ -135,6 +141,27 @@ export const createForUsers = async (
     })),
   );
   return uniqueUserIds.length;
+};
+
+export const createRilPreferencesTip = async (
+  userId: string,
+  exec: DbExecutor = db,
+): Promise<void> => {
+  await exec
+    .insert(notifications)
+    .values({
+      id: rilPreferencesTipNotificationId(userId),
+      userId,
+      type: TIP_NOTIFICATION_TYPE,
+      title: RIL_PREFERENCES_TIP_TITLE,
+      message: RIL_PREFERENCES_TIP_MESSAGE,
+      data: {
+        tipId: RIL_PREFERENCES_TIP_ID,
+        destination: 'settings/ril',
+      },
+      isRead: false,
+    })
+    .onConflictDoNothing({ target: notifications.id });
 };
 
 export const upsertAdminPasswordWarning = async (

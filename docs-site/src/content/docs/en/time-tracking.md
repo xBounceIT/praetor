@@ -41,6 +41,8 @@ When you manually edit a RIL row and it exceeds **8 hours** or contains work on 
 
 You can set those per-weekday defaults under **Settings → RIL**: pick a default Trasferta value for each weekday (Monday through Friday), and Praetor pre-fills the matching rows when it generates your own RIL sheet. The list of selectable values comes from the RIL Location options configured by administrators in RIL global settings.
 
+On their first sign-in, users who can view RIL receive a **Tip** notification reminding them to configure these preferences. The notification's **Set preferences** button opens **Settings → RIL** directly; the tip is created only once per account.
+
 In the statement, **Notes** and **Location** use the option lists configured by administrators in RIL global settings. **Code** can be selected from `TR` business trip and `SD` hardship office.
 
 Before export, every valid weekday and every worked overtime row must have **Start**, **End**, and **Location** filled in. The **Export Excel** button creates a one-sheet `.xlsx` workbook named **Prospetto Presenze** with the RIL columns: Giorno, Entrata, Uscita, Ore, PICAP, Reperib. Telef., Note, Trasferta, Cod, and Commessa. The sheet shows **Dipendente** (employee), **Società** (company), and **MESE** (month) at the top, followed by the day grid and, at the bottom, the code legend (P, P2, M, F, TR, SD) and the monthly totals: **Giorni Lavorati**, **Ore Extra**, **Totale Ore**, **Totale PICAP**, and **Pausa Pranzo**.

@@ -149,6 +149,35 @@ describe('createForUsers', () => {
   });
 });
 
+describe('createRilPreferencesTip', () => {
+  test('inserts one idempotent unread tip with the settings destination', async () => {
+    exec.enqueue({ rows: [], rowCount: 1 });
+
+    await notificationsRepo.createRilPreferencesTip('user-1', testDb);
+
+    expect(exec.calls[0].sql.toLowerCase()).toContain('on conflict');
+    expect(exec.calls[0].params).toContain(
+      notificationsRepo.rilPreferencesTipNotificationId('user-1'),
+    );
+    expect(exec.calls[0].params).toContain(notificationsRepo.TIP_NOTIFICATION_TYPE);
+    expect(exec.calls[0].params).toContain('user-1');
+    expect(exec.calls[0].params).toContain(false);
+    expect(exec.calls[0].params).toContain(
+      JSON.stringify({
+        tipId: notificationsRepo.RIL_PREFERENCES_TIP_ID,
+        destination: 'settings/ril',
+      }),
+    );
+  });
+
+  test('tip id fits notifications.id varchar(50) for generated user ids', () => {
+    const userId = 'u-00000000-0000-0000-0000-000000000000';
+    expect(notificationsRepo.rilPreferencesTipNotificationId(userId).length).toBeLessThanOrEqual(
+      50,
+    );
+  });
+});
+
 const LEGACY_ADMIN_WARNING_ID = 'admin-default-password-warning';
 
 describe('admin password warning helpers', () => {

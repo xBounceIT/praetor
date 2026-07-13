@@ -16,6 +16,21 @@ beforeEach(() => {
 // functions use the Drizzle query builder (rowMode: 'array' positional rows in projection
 // declaration order).
 
+describe('claimFirstLogin', () => {
+  test('claims a user only while first_login_at is null', async () => {
+    exec.enqueue({ rows: [['user-1']], rowCount: 1 });
+
+    expect(await usersRepo.claimFirstLogin('user-1', testDb)).toBe(true);
+    expect(exec.calls[0].sql.toLowerCase()).toContain('"first_login_at" is null');
+    expect(exec.calls[0].params).toContain('user-1');
+  });
+
+  test('returns false when another login already claimed the user', async () => {
+    exec.enqueue({ rows: [], rowCount: 0 });
+    expect(await usersRepo.claimFirstLogin('user-1', testDb)).toBe(false);
+  });
+});
+
 describe('getPasswordHash', () => {
   test('returns the hash when the row exists', async () => {
     exec.enqueue({ rows: [['$2b$10$abc']] });

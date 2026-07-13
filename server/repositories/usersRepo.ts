@@ -1,4 +1,4 @@
-import { eq, sql } from 'drizzle-orm';
+import { and, eq, isNull, sql } from 'drizzle-orm';
 import { type DbExecutor, db, executeRows, runAtomically } from '../db/drizzle.ts';
 import type {
   TotpBackupCode,
@@ -24,6 +24,21 @@ export const isTotpApplicable = (authMethod: AuthMethod): boolean =>
 export type ContractType = UserContractType;
 export type EmploymentStatus = UserEmploymentStatus;
 export type WorkLocation = UserWorkLocation;
+
+/**
+ * Atomically claims the user's first interactive login.
+ *
+ * The conditional UPDATE makes concurrent successful login requests safe: exactly one caller
+ * receives a row and may create first-login onboarding content.
+ */
+export const claimFirstLogin = async (userId: string, exec: DbExecutor = db): Promise<boolean> => {
+  const rows = await exec
+    .update(users)
+    .set({ firstLoginAt: sql`CURRENT_TIMESTAMP` })
+    .where(and(eq(users.id, userId), isNull(users.firstLoginAt)))
+    .returning({ id: users.id });
+  return rows.length > 0;
+};
 
 export type UserHrFields = {
   firstName?: string | null;

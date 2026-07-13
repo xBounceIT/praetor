@@ -65,7 +65,7 @@ import EntryEditDialog from './components/timesheet/EntryEditDialog';
 import RecurringManager from './components/timesheet/RecurringManager';
 import RilView from './components/timesheet/RilView';
 import WeeklyView from './components/timesheet/WeeklyView';
-import UserSettings from './components/UserSettings';
+import UserSettings, { type UserSettingsTab } from './components/UserSettings';
 import { Toaster } from './components/ui/sonner';
 import WorkUnitsView from './components/WorkUnitsView';
 import { CurrentUserIdProvider } from './contexts/CurrentUserContext';
@@ -268,6 +268,7 @@ const appModuleStateReducer = (
 
 type AppNavigationState = {
   activeView: View | '404';
+  userSettingsTab: UserSettingsTab;
   clientQuoteFilterId: string | null;
   clientOfferFilterId: string | null;
   supplierQuoteFilterId: string | null;
@@ -279,10 +280,15 @@ type AppNavigationState = {
 };
 
 type AppNavigationStringKey = 'viewingUserId';
-type AppNavigationNullableKey = Exclude<keyof AppNavigationState, 'activeView' | 'viewingUserId'>;
+type AppNavigationNullableKey = Exclude<
+  keyof AppNavigationState,
+  'activeView' | 'viewingUserId' | 'userSettingsTab'
+>;
 
 type AppNavigationAction =
   | { type: 'set-active-view'; activeView: View | '404' }
+  | { type: 'set-user-settings-tab'; tab: UserSettingsTab }
+  | { type: 'open-user-settings'; tab: UserSettingsTab }
   | {
       type: 'set-nullable';
       key: AppNavigationNullableKey;
@@ -344,6 +350,7 @@ const resolveInitialActiveView = (initialViewHash: ParsedViewHash): View | '404'
 
 const createInitialNavigationState = (initialViewHash: ParsedViewHash): AppNavigationState => ({
   activeView: resolveInitialActiveView(initialViewHash),
+  userSettingsTab: 'profile',
   clientQuoteFilterId: null,
   clientOfferFilterId: null,
   supplierQuoteFilterId:
@@ -364,6 +371,7 @@ const appNavigationReducer = (
   switch (action.type) {
     case 'set-active-view': {
       const next: AppNavigationState = { ...state, activeView: action.activeView };
+      if (action.activeView === 'settings') next.userSettingsTab = 'profile';
       if (
         action.activeView !== 'sales/client-quotes' &&
         action.activeView !== 'sales/client-offers'
@@ -396,6 +404,15 @@ const appNavigationReducer = (
       }
       return next;
     }
+    case 'set-user-settings-tab':
+      return Object.is(action.tab, state.userSettingsTab)
+        ? state
+        : { ...state, userSettingsTab: action.tab };
+    case 'open-user-settings':
+      return {
+        ...appNavigationReducer(state, { type: 'set-active-view', activeView: 'settings' }),
+        userSettingsTab: action.tab,
+      };
     case 'set-nullable': {
       const nextValue = resolveAppModuleStateAction(action.value, state[action.key]);
       return Object.is(nextValue, state[action.key])
@@ -1389,6 +1406,7 @@ const useAppContentController = () => {
   );
   const {
     activeView,
+    userSettingsTab,
     clientQuoteFilterId,
     clientOfferFilterId,
     supplierQuoteFilterId,
@@ -1426,6 +1444,12 @@ const useAppContentController = () => {
     (value) => dispatchNavigation({ type: 'set-string', key: 'viewingUserId', value }),
     [],
   );
+  const setUserSettingsTab = useCallback((tab: UserSettingsTab) => {
+    dispatchNavigation({ type: 'set-user-settings-tab', tab });
+  }, []);
+  const openRilPreferences = useCallback(() => {
+    dispatchNavigation({ type: 'open-user-settings', tab: 'ril' });
+  }, []);
 
   // Navigation-aware setter: clears any *FilterId state that isn't valid for
   // the destination view, batched in the SAME commit as the view change.
@@ -3406,6 +3430,7 @@ const useAppContentController = () => {
     notifications,
     unreadNotificationCount,
     activeView,
+    userSettingsTab,
     clientQuoteFilterId,
     clientOfferFilterId,
     supplierQuoteFilterId,
@@ -3421,6 +3446,8 @@ const useAppContentController = () => {
     setSelectedProjectId,
     setViewingUserId,
     setActiveView,
+    setUserSettingsTab,
+    openRilPreferences,
     setProjectsViewTab,
     currentUser,
     isLoading,
@@ -3647,6 +3674,7 @@ const AuthenticatedAppShell: React.FC<{ controller: AppContentController }> = ({
     hasLoadedGeneralSettings,
     isRouteAccessible,
     notifications,
+    openRilPreferences,
     roles,
     setActiveView,
     unreadNotificationCount,
@@ -3674,6 +3702,9 @@ const AuthenticatedAppShell: React.FC<{ controller: AppContentController }> = ({
         onMarkNotificationAsRead={handleMarkNotificationAsRead}
         onMarkAllNotificationsAsRead={handleMarkAllNotificationsAsRead}
         onDeleteNotification={handleDeleteNotification}
+        onOpenRilPreferences={
+          hasViewAccess(currentUser.permissions, 'timesheets/ril') ? openRilPreferences : undefined
+        }
       >
         <AuthenticatedRouteContent controller={controller} />
       </Layout>
@@ -4649,7 +4680,9 @@ const SettingsAndReportsRoutes: React.FC<{
     handleUpdateUserPassword,
     handleUpdateUserSettings,
     reportsSettingsFailed,
+    setUserSettingsTab,
     tApp,
+    userSettingsTab,
     userSettings,
   } = controller;
 
@@ -4665,6 +4698,8 @@ const SettingsAndReportsRoutes: React.FC<{
               ? generalSettings.rilTransferOptions
               : []
           }
+          selectedTab={userSettingsTab}
+          onSelectedTabChange={setUserSettingsTab}
           onUpdate={handleUpdateUserSettings}
           onUpdatePassword={handleUpdateUserPassword}
           onTotpSetup={(password: string) => api.auth.totpSetup(undefined, password)}

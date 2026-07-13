@@ -729,6 +729,13 @@
       "when": 1783937301679,
       "tag": "0103_quote_candidates",
       "breakpoints": true
+    },
+    {
+      "idx": 104,
+      "version": "7",
+      "when": 1783970699909,
+      "tag": "0104_add_first_login_tip",
+      "breakpoints": true
     }
   ]
 }
