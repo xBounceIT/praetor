@@ -69,6 +69,7 @@
     "cost": "Cost",
     "margin": "Margin",
     "discount": "Discount",
+    "totalDiscount": "Total discounts",
     "tax": "Tax",
     "paid": "Paid",
     "due": "Due",

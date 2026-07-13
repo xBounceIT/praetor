@@ -118,7 +118,7 @@ describe('<ClientsOrdersView />', () => {
 
     for (const header of [
       'accounting:clientsOrders.subtotal',
-      'common:labels.discount',
+      'common:labels.totalDiscount',
       'accounting:clientsOrders.margin',
       'sales:clientQuotes.totalCost',
       'accounting:clientsOrders.totalColumn',

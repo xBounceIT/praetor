@@ -69,6 +69,7 @@
     "cost": "Costo",
     "margin": "Margine",
     "discount": "Sconto",
+    "totalDiscount": "Totale sconti",
     "tax": "Tassa",
     "paid": "Pagato",
     "due": "Scaduto",

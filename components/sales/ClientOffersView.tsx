@@ -40,6 +40,7 @@ import {
   calculatePricingTotals,
   convertUnitPrice,
   durationValueToMonths,
+  EMPTY_PRICING_TOTALS,
   formatDecimal,
   formatMolPercentage,
   formatNumber,
@@ -267,17 +268,6 @@ const clientOffersViewReducer = (
     default:
       return state;
   }
-};
-
-// Fallback for a row whose pricing isn't in the memoized map (never happens at runtime since
-// the map is built from the same list the table renders, but keeps the lookups type-safe).
-const EMPTY_PRICING_TOTALS: PricingTotals = {
-  subtotal: 0,
-  discountAmount: 0,
-  total: 0,
-  totalCost: 0,
-  margin: 0,
-  marginPercentage: 0,
 };
 
 // One label shape for a supplier-quote line item, shared by the picker options and the
@@ -678,15 +668,15 @@ const useClientOffersController = ({
     {
       header: t('sales:clientOffers.subtotal', { defaultValue: 'Subtotal' }),
       id: 'subtotal',
-      accessorFn: (row) => offerPricingMap.get(row.id)?.subtotal ?? 0,
+      accessorFn: (row) => offerPricingMap.get(row.id)?.grossSubtotal ?? 0,
       className: 'whitespace-nowrap',
       headerClassName: 'min-w-[8rem]',
       disableFiltering: true,
       cell: ({ row }) => {
-        const { subtotal } = offerPricingMap.get(row.id) ?? EMPTY_PRICING_TOTALS;
+        const { grossSubtotal } = offerPricingMap.get(row.id) ?? EMPTY_PRICING_TOTALS;
         return (
           <span className="text-sm font-semibold text-zinc-700 whitespace-nowrap">
-            {formatDecimal(subtotal)} {currency}
+            {formatDecimal(grossSubtotal)} {currency}
           </span>
         );
       },
@@ -716,20 +706,21 @@ const useClientOffersController = ({
       },
     },
     {
-      header: t('common:labels.discount'),
+      header: t('common:labels.totalDiscount'),
+      // Keep the historical id so saved table views retain their column order and width.
       id: 'discountAmount',
-      accessorFn: (row) => offerPricingMap.get(row.id)?.discountAmount ?? 0,
+      accessorFn: (row) => offerPricingMap.get(row.id)?.totalDiscountAmount ?? 0,
       className: 'whitespace-nowrap',
       headerClassName: 'min-w-[8rem]',
       disableFiltering: true,
       cell: ({ row }) => {
-        const { discountAmount } = offerPricingMap.get(row.id) ?? EMPTY_PRICING_TOTALS;
-        if (discountAmount <= 0) {
+        const { totalDiscountAmount } = offerPricingMap.get(row.id) ?? EMPTY_PRICING_TOTALS;
+        if (totalDiscountAmount <= 0) {
           return <span className="text-sm font-semibold text-zinc-400">-</span>;
         }
         return (
           <span className="text-sm font-semibold text-amber-600 whitespace-nowrap">
-            -{formatDecimal(discountAmount)} {currency}
+            -{formatDecimal(totalDiscountAmount)} {currency}
           </span>
         );
       },
@@ -1340,15 +1331,12 @@ const useClientOffersController = ({
 
   const formTotals = useMemo(() => {
     const discountValue = Number.isNaN(formData.discount ?? 0) ? 0 : (formData.discount ?? 0);
-    return {
+    return calculatePricingTotals(
+      formData.items || [],
       discountValue,
-      ...calculatePricingTotals(
-        formData.items || [],
-        discountValue,
-        'hours',
-        formData.discountType || 'percentage',
-      ),
-    };
+      'hours',
+      formData.discountType || 'percentage',
+    );
   }, [formData.discount, formData.discountType, formData.items]);
 
   const handleDelete = async () => {
@@ -2390,7 +2378,7 @@ const ClientOfferSummaryPanel: React.FC<{ controller: ClientOffersController }> 
   controller,
 }) => {
   const { t, formData, setFormData, formTotals, currency, isReadOnly } = controller;
-  const { discountValue, subtotal, discountAmount, total, margin, marginPercentage } = formTotals;
+  const { grossSubtotal, totalDiscountAmount, total, margin, marginPercentage } = formTotals;
 
   return (
     <div className="space-y-2 md:w-1/3">
@@ -2400,7 +2388,7 @@ const ClientOfferSummaryPanel: React.FC<{ controller: ClientOffersController }> 
       </h4>
       <CostSummaryPanel
         currency={currency}
-        subtotal={subtotal}
+        subtotal={grossSubtotal}
         total={total}
         subtotalLabel={t('sales:clientOffers.subtotal', { defaultValue: 'Subtotal' })}
         totalLabel={t('sales:clientOffers.total', { defaultValue: 'Total' })}
@@ -2417,17 +2405,10 @@ const ClientOfferSummaryPanel: React.FC<{ controller: ClientOffersController }> 
           disabled: isReadOnly,
         }}
         discountRow={
-          discountAmount > 0
+          totalDiscountAmount > 0
             ? {
-                label: t('sales:clientOffers.discountAmount', {
-                  value: getDiscountPercentageLabelValue(
-                    discountValue,
-                    formData.discountType ?? 'percentage',
-                    subtotal,
-                    discountAmount,
-                  ),
-                }),
-                amount: discountAmount,
+                label: t('common:labels.totalDiscount'),
+                amount: totalDiscountAmount,
               }
             : undefined
         }
