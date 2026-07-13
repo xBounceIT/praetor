@@ -108,6 +108,42 @@ describe('<SuppliersView /> table contact columns', () => {
     expectSupplierValueCell(cells[5], '+39 06 7700 2002');
   });
 });
+
+describe('<SuppliersView /> supplier-order totals', () => {
+  test('uses rounded unit cost and duration like the supplier-order view', async () => {
+    renderSuppliersView({
+      supplierOrders: [
+        {
+          id: 'order-1',
+          supplierId: supplier.id,
+          supplierName: supplier.name,
+          paymentTerms: 'immediate',
+          discount: 12,
+          discountType: 'currency',
+          status: 'sent',
+          createdAt: 1,
+          updatedAt: 1,
+          items: [
+            {
+              id: 'item-1',
+              orderId: 'order-1',
+              productId: 'product-1',
+              productName: 'Service',
+              quantity: 100,
+              unitPrice: 10.01,
+              discount: 10,
+              durationMonths: 12,
+              durationUnit: 'months',
+            },
+          ],
+        },
+      ],
+    });
+
+    await waitFor(() => expect(screen.getByText('10.800,00 EUR')).toBeInTheDocument());
+  });
+});
+
 describe('<SuppliersView /> multiple contacts', () => {
   test('creates a supplier without requiring contacts or sending legacy aliases', async () => {
     const props = renderSuppliersView({

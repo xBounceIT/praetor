@@ -301,7 +301,9 @@ describe('supplier-order auto-creation flow', () => {
           productId: 'p-1',
           productName: 'A',
           quantity: 1,
+          unitType: 'days',
           unitPrice: 5,
+          discount: 20,
           note: null,
           durationMonths: 3,
           durationUnit: 'months',
@@ -311,7 +313,9 @@ describe('supplier-order auto-creation flow', () => {
           productId: 'p-2',
           productName: 'B',
           quantity: 2,
+          unitType: 'unit',
           unitPrice: 6,
+          discount: 100,
           note: 'n',
           durationMonths: 24,
           durationUnit: 'years',
@@ -327,6 +331,12 @@ describe('supplier-order auto-creation flow', () => {
     expect(exec.calls[0].params).toContain(3);
     expect(exec.calls[0].params).toContain(24);
     expect(exec.calls[0].params).toContain('years');
+    // Quantity units are carried from the supplier quote onto the order lines.
+    expect(exec.calls[0].params).toContain('days');
+    expect(exec.calls[0].params).toContain('unit');
+    // The originating supplier quote's Discount to Us is stored with each order line.
+    expect(exec.calls[0].params).toContain('20');
+    expect(exec.calls[0].params).toContain('100');
   });
 
   test('bulkInsertSupplierOrderItems is a no-op for empty items', async () => {

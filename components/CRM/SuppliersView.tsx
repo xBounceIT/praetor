@@ -5,14 +5,9 @@ import { Button } from '@/components/ui/button';
 import { Field, FieldError, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import type {
-  Supplier,
-  SupplierContact,
-  SupplierSaleOrder,
-  SupplierSaleOrderItem,
-} from '../../types';
+import type { Supplier, SupplierContact, SupplierSaleOrder } from '../../types';
 import { formatInsertDate } from '../../utils/date';
-import { formatDecimal } from '../../utils/numbers';
+import { formatDecimal, getDiscountedLineTotal } from '../../utils/numbers';
 import { hasScopedActionPermission } from '../../utils/permissions';
 import { toastError } from '../../utils/toast';
 import DeleteConfirmModal from '../shared/DeleteConfirmModal';
@@ -40,15 +35,13 @@ export interface SuppliersViewProps {
   permissions: string[];
 }
 
-const calculateOrderTotal = (items: SupplierSaleOrderItem[], discount: number): number => {
-  let subtotal = 0;
-  items.forEach((item) => {
-    const lineSubtotal = Number(item.quantity ?? 0) * Number(item.unitPrice ?? 0);
-    const lineDiscount = (lineSubtotal * Number(item.discount ?? 0)) / 100;
-    const lineNet = lineSubtotal - lineDiscount;
-    subtotal += lineNet;
-  });
-  const discountAmount = subtotal * (discount / 100);
+const calculateOrderTotal = (order: SupplierSaleOrder): number => {
+  const subtotal = order.items.reduce((sum, item) => sum + getDiscountedLineTotal(item), 0);
+  const discount = Number(order.discount) || 0;
+  const discountAmount =
+    order.discountType === 'currency'
+      ? Math.min(Math.max(discount, 0), subtotal)
+      : subtotal * (discount / 100);
   return subtotal - discountAmount;
 };
 
@@ -735,7 +728,7 @@ const SuppliersTable: React.FC<SuppliersTableProps> = ({
         accessorFn: (row: Supplier) =>
           supplierOrders
             .filter((order) => order.supplierId === row.id && order.status === 'sent')
-            .reduce((total, order) => total + calculateOrderTotal(order.items, order.discount), 0),
+            .reduce((total, order) => total + calculateOrderTotal(order), 0),
         align: 'right',
         cell: (info) => {
           const totalValue = info.value as number;

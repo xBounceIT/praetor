@@ -44639,6 +44639,14 @@
                             "quantity": {
                               "type": "number"
                             },
+                            "unitType": {
+                              "type": "string",
+                              "enum": [
+                                "hours",
+                                "days",
+                                "unit"
+                              ]
+                            },
                             "unitPrice": {
                               "type": "number"
                             },
@@ -44668,6 +44676,7 @@
                             "orderId",
                             "productName",
                             "quantity",
+                            "unitType",
                             "unitPrice",
                             "discount"
                           ]
@@ -44878,11 +44887,21 @@
                         "quantity": {
                           "type": "number"
                         },
+                        "unitType": {
+                          "type": "string",
+                          "enum": [
+                            "hours",
+                            "days",
+                            "unit"
+                          ]
+                        },
                         "unitPrice": {
                           "type": "number"
                         },
                         "discount": {
-                          "type": "number"
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 100
                         },
                         "note": {
                           "type": "string"
@@ -45021,6 +45040,14 @@
                           "quantity": {
                             "type": "number"
                           },
+                          "unitType": {
+                            "type": "string",
+                            "enum": [
+                              "hours",
+                              "days",
+                              "unit"
+                            ]
+                          },
                           "unitPrice": {
                             "type": "number"
                           },
@@ -45050,6 +45077,7 @@
                           "orderId",
                           "productName",
                           "quantity",
+                          "unitType",
                           "unitPrice",
                           "discount"
                         ]
@@ -45237,11 +45265,21 @@
                         "quantity": {
                           "type": "number"
                         },
+                        "unitType": {
+                          "type": "string",
+                          "enum": [
+                            "hours",
+                            "days",
+                            "unit"
+                          ]
+                        },
                         "unitPrice": {
                           "type": "number"
                         },
                         "discount": {
-                          "type": "number"
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 100
                         },
                         "note": {
                           "type": "string"
@@ -45384,6 +45422,14 @@
                           "quantity": {
                             "type": "number"
                           },
+                          "unitType": {
+                            "type": "string",
+                            "enum": [
+                              "hours",
+                              "days",
+                              "unit"
+                            ]
+                          },
                           "unitPrice": {
                             "type": "number"
                           },
@@ -45413,6 +45459,7 @@
                           "orderId",
                           "productName",
                           "quantity",
+                          "unitType",
                           "unitPrice",
                           "discount"
                         ]
@@ -46243,6 +46290,14 @@
                           "quantity": {
                             "type": "number"
                           },
+                          "unitType": {
+                            "type": "string",
+                            "enum": [
+                              "hours",
+                              "days",
+                              "unit"
+                            ]
+                          },
                           "unitPrice": {
                             "type": "number"
                           },
@@ -46272,6 +46327,7 @@
                           "orderId",
                           "productName",
                           "quantity",
+                          "unitType",
                           "unitPrice",
                           "discount"
                         ]

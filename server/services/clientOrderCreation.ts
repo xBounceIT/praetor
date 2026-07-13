@@ -5,6 +5,7 @@ import * as supplierQuotesRepo from '../repositories/supplierQuotesRepo.ts';
 import { logAudit } from '../utils/audit.ts';
 import { generatePrefixedId, ITEM_ID_PREFIXES } from '../utils/order-ids.ts';
 import { effectiveSupplierQuoteStatusFromDate } from '../utils/quote-status.ts';
+import { normalizeUnitType } from '../utils/unit-type.ts';
 import {
   allocateDocumentCode,
   compactDocumentCodeSources,
@@ -166,7 +167,11 @@ export const autoCreateSupplierOrdersForClientOrder = async (
                 productId: item.productId,
                 productName: item.productName,
                 quantity: item.quantity,
-                unitPrice: item.unitPrice,
+                unitType: normalizeUnitType(item.unitType),
+                // supplier_sale_items stores the gross/list price plus its line discount. This
+                // preserves the same pricing chain shown on the originating supplier quote.
+                unitPrice: item.listPrice,
+                discount: item.discountPercent,
                 note: item.note,
                 durationMonths: item.durationMonths,
                 durationUnit: item.durationUnit,

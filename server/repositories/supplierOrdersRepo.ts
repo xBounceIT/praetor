@@ -4,6 +4,7 @@ import { supplierInvoices } from '../db/schema/supplierInvoices.ts';
 import { supplierSaleItems, supplierSales } from '../db/schema/supplierSales.ts';
 import { type DurationUnit, normalizeDurationUnit } from '../utils/duration-unit.ts';
 import { numericForDb, parseDbNumber } from '../utils/parse.ts';
+import { normalizeUnitType, type UnitType } from '../utils/unit-type.ts';
 
 export type SupplierOrder = {
   id: string;
@@ -25,6 +26,7 @@ export type SupplierOrderItem = {
   productId: string | null;
   productName: string;
   quantity: number;
+  unitType: UnitType;
   unitPrice: number;
   discount: number;
   note: string | null;
@@ -52,6 +54,7 @@ const mapItem = (row: typeof supplierSaleItems.$inferSelect): SupplierOrderItem 
   productId: row.productId,
   productName: row.productName,
   quantity: parseDbNumber(row.quantity, 0),
+  unitType: normalizeUnitType(row.unitType),
   unitPrice: parseDbNumber(row.unitPrice, 0),
   discount: parseDbNumber(row.discount, 0),
   note: row.note,
@@ -336,6 +339,7 @@ export type NewSupplierOrderItem = {
   productId: string | null;
   productName: string;
   quantity: number;
+  unitType?: UnitType;
   unitPrice: number;
   discount: number;
   note: string | null;
@@ -358,6 +362,7 @@ export const insertItems = async (
         productId: item.productId,
         productName: item.productName,
         quantity: numericForDb(item.quantity),
+        unitType: normalizeUnitType(item.unitType),
         unitPrice: numericForDb(item.unitPrice),
         discount: numericForDb(item.discount),
         note: item.note,

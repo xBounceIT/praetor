@@ -126,6 +126,11 @@ export const makeSupplierQuoteHandlers = (deps: SupplierQuoteHandlersDeps) => {
           ...item,
           id: makeTempId(),
           orderId: '',
+          // Supplier orders store the gross/list price in `unitPrice` and apply their existing
+          // line discount field to derive the net unit cost. Preserve the quote's full pricing
+          // chain instead of flattening it to the already-discounted cost.
+          unitPrice: item.listPrice ?? item.unitPrice,
+          discount: item.discountPercent,
           // Free-text supplier lines without a linked product are valid;
           // the server canonicalizes missing productId to NULL.
           productId: item.productId ?? '',

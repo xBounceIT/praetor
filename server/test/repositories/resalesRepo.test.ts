@@ -21,6 +21,7 @@ const makeItem = (overrides: Partial<SupplierOrderItem>) =>
     productId: null,
     productName: 'Hardware',
     quantity: 1,
+    unitType: 'unit',
     unitPrice: 0,
     discount: 0,
     note: null,
@@ -49,6 +50,7 @@ const SUPPLIER_ORDER_ITEM_BASE: readonly unknown[] = [
   null,
   'License',
   '1',
+  'unit',
   '9',
   '0',
   null,
@@ -77,6 +79,14 @@ describe('computeSupplierOrderTotal', () => {
     );
 
     expect(total).toBe(0);
+  });
+
+  test('rounds the discounted unit price before multiplying quantity', () => {
+    const total = computeSupplierOrderTotal(makeOrder({}), [
+      makeItem({ quantity: 100, unitPrice: 10.01, discount: 10 }),
+    ]);
+
+    expect(total).toBe(901);
   });
 });
 

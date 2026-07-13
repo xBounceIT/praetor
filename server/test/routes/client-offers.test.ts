@@ -619,6 +619,9 @@ describe('PUT /api/sales/client-offers/:id expired rules (issue #779)', () => {
         productId: 'p-1',
         productName: 'Service',
         quantity: 2,
+        unitType: 'days',
+        listPrice: 62.5,
+        discountPercent: 20,
         unitPrice: 50,
         note: null,
         durationMonths: 1,
@@ -642,6 +645,11 @@ describe('PUT /api/sales/client-offers/:id expired rules (issue #779)', () => {
         supplierId: 'sup-1',
         supplierName: 'Supplier Co',
       }),
+      expect.anything(),
+    );
+    expect(clientOrderBulkInsertSupplierOrderItemsMock).toHaveBeenCalledWith(
+      'SORD-2999-0001',
+      [expect.objectContaining({ unitPrice: 62.5, discount: 20, unitType: 'days' })],
       expect.anything(),
     );
     expect(clientOrderLinkSaleItemsToSupplierOrderAndItemsMock).toHaveBeenCalledWith(

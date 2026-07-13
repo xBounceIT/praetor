@@ -103,4 +103,28 @@ describe('<SupplierInvoicesView /> line item duration (issue #776/#775)', () => 
     expect(updates.items?.[0]?.durationMonths).toBe(5);
     expect(updates.items?.[0]?.durationUnit).toBe('months');
   });
+
+  test('rounds discounted unit cost before quantity multiplies the line total', () => {
+    const invoice = buildInvoice({
+      id: 'SINV-ROUNDING',
+      items: [
+        {
+          id: 'sii-rounding',
+          invoiceId: 'SINV-ROUNDING',
+          productId: '',
+          description: 'Rounded service',
+          quantity: 100,
+          unitPrice: 10.01,
+          discount: 10,
+          durationMonths: 1,
+          durationUnit: 'months',
+        },
+      ],
+    });
+
+    render(<SupplierInvoicesView {...baseProps} invoices={[invoice]} />);
+    fireEvent.click(screen.getByText('SINV-ROUNDING'));
+
+    expect(screen.getAllByText('901,00 EUR').length).toBeGreaterThan(0);
+  });
 });

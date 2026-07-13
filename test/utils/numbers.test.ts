@@ -8,6 +8,7 @@ import {
   formatDiscountValue,
   formatMolPercentage,
   formatNumber,
+  getDiscountedUnitPrice,
   getDurationDisplayValue,
   getDurationInputValue,
   getEffectiveCost,
@@ -25,6 +26,17 @@ import {
   parseOptionalNumberInputValue,
   roundCurrency,
 } from '../../utils/numbers';
+
+describe('getDiscountedUnitPrice', () => {
+  test('rounds the discounted unit price before quantity and duration multiply it', () => {
+    expect(getDiscountedUnitPrice(10.01, 10)).toBe(9.01);
+  });
+
+  test('handles the inclusive percentage boundaries', () => {
+    expect(getDiscountedUnitPrice(10, 0)).toBe(10);
+    expect(getDiscountedUnitPrice(10, 100)).toBe(0);
+  });
+});
 
 describe('parseNumberInputValue', () => {
   test('parses a plain numeric string', () => {

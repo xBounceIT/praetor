@@ -11,7 +11,7 @@ import { supplierSales } from '../db/schema/supplierSales.ts';
 import type { SupplierOrder, SupplierOrderItem } from '../repositories/supplierOrdersRepo.ts';
 import * as supplierOrdersRepo from '../repositories/supplierOrdersRepo.ts';
 import { effectiveDurationMonths } from '../utils/duration-unit.ts';
-import { roundCurrency } from '../utils/invoice-math.ts';
+import { getDiscountedUnitPrice, roundCurrency } from '../utils/invoice-math.ts';
 import { numericForDb, parseDbNumber } from '../utils/parse.ts';
 
 const epochMs = (value: unknown): number => {
@@ -127,9 +127,11 @@ export const computeSupplierOrderTotal = (
 ): number => {
   const subtotal = items.reduce((sum, item) => {
     const duration = effectiveDurationMonths(item.durationUnit, item.durationMonths);
-    const lineSubtotal = Number(item.quantity || 0) * Number(item.unitPrice || 0) * duration;
-    const lineDiscount = (lineSubtotal * Number(item.discount || 0)) / 100;
-    return sum + lineSubtotal - lineDiscount;
+    const discountedUnitPrice = getDiscountedUnitPrice(
+      Number(item.unitPrice || 0),
+      Number(item.discount || 0),
+    );
+    return sum + Number(item.quantity || 0) * discountedUnitPrice * duration;
   }, 0);
 
   const discount = Number(order.discount || 0);

@@ -1214,7 +1214,12 @@ export interface SupplierSaleOrderItem {
   productId: string;
   productName: string;
   quantity: number;
+  // Unit used by quantity; carried from the supplier quote and editable while the order is draft.
+  unitType?: SupplierUnitType;
+  // Gross/list price. `discount` is the supplier's discount to us; their combination derives the
+  // net unit cost shown in the order and preserves the pricing chain copied from supplier quotes.
   unitPrice: number;
+  // Supplier discount to us, as an inclusive 0-100 percentage.
   discount?: number;
   note?: string;
   // Number of months the line runs (issue #776). Multiplies the line total alongside quantity;
