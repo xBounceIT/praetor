@@ -1,8 +1,13 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
-import { screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ComponentProps } from 'react';
-import type { Client, ClientProfileOption, ClientProfileOptionsByCategory } from '../../../types';
+import type {
+  BulkClientCreateResponse,
+  Client,
+  ClientProfileOption,
+  ClientProfileOptionsByCategory,
+} from '../../../types';
 import { installI18nMock } from '../../helpers/i18n';
 import { clearSpyStateAfterAll } from '../../helpers/mockCleanup.ts';
 import { render } from '../../helpers/render';
@@ -47,6 +52,10 @@ const renderClientsView = (overrides: Partial<ComponentProps<typeof ClientsView>
   const props: ComponentProps<typeof ClientsView> = {
     clients: [],
     onAddClient: mock(async () => {}),
+    onAddClientsBulk: mock(async () => ({
+      summary: { total: 0, succeeded: 0, failed: 0 },
+      results: [],
+    })),
     onUpdateClient: mock(async () => {}),
     onDeleteClient: mock(async () => {}),
     onCreateClientProfileOption: mock(async () => profileOption),
@@ -83,6 +92,321 @@ const submitClientForm = async (user: ReturnType<typeof userEvent.setup>) => {
   }
   await user.click(submitButton);
 };
+
+const openClientCreationMenu = async (user: ReturnType<typeof userEvent.setup>) => {
+  await user.click(screen.getByRole('button', { name: 'crm:clients.bulk.addOptions' }));
+};
+
+describe('<ClientsView /> bulk creation actions', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    listAllProfileOptions.mockClear();
+  });
+
+  test('renders an accessible split button with create permission', async () => {
+    const user = userEvent.setup();
+    renderClientsView();
+
+    expect(screen.getByRole('button', { name: 'crm:clients.addClient' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'crm:clients.bulk.addOptions' })).toBeInTheDocument();
+    await openClientCreationMenu(user);
+    expect(
+      screen.getByRole('menuitem', { name: 'crm:clients.bulk.addMultiple' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('menuitem', { name: 'crm:clients.bulk.importCsv' }),
+    ).toBeInTheDocument();
+  });
+
+  test('hides every creation action without create permission', () => {
+    renderClientsView({ permissions: ['crm.clients.view'] });
+    expect(screen.queryByRole('button', { name: 'crm:clients.addClient' })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'crm:clients.bulk.addOptions' }),
+    ).not.toBeInTheDocument();
+  });
+
+  test('opens a non-hideable horizontal table with add and remove row actions', async () => {
+    const user = userEvent.setup();
+    renderClientsView();
+    await openClientCreationMenu(user);
+    await user.click(screen.getByRole('menuitem', { name: 'crm:clients.bulk.addMultiple' }));
+
+    const dialog = await screen.findByRole('dialog', { name: 'crm:clients.bulk.title' });
+    const source = await readComponentSource('CRM/ClientBulkCreateDialogs.tsx');
+    expect(source).toContain('allowColumnHiding={false}');
+    expect(source).toContain("aria-label={t('crm:clients.bulk.removeRow')}");
+    expect(source).toContain('candidate._rowId !== row._rowId');
+    expect(
+      within(dialog).getAllByPlaceholderText('crm:clients.clientCodePlaceholder'),
+    ).toHaveLength(1);
+
+    await user.click(within(dialog).getByRole('button', { name: 'crm:clients.bulk.addRow' }));
+    expect(
+      within(dialog).getAllByPlaceholderText('crm:clients.clientCodePlaceholder'),
+    ).toHaveLength(2);
+  });
+
+  test('keeps only failed rows, displays cell errors, and closes after the retry succeeds', async () => {
+    const createdClient = {
+      id: 'c-created',
+      name: 'Alpha',
+      clientCode: 'CLI-1',
+      fiscalCode: 'IT1',
+      type: 'company' as const,
+      contacts: [],
+      isDisabled: false,
+      totalSentQuotes: 0,
+      totalAcceptedOrders: 0,
+    };
+    const createBulk = mock()
+      .mockResolvedValueOnce({
+        summary: { total: 2, succeeded: 1, failed: 1 },
+        results: [
+          { index: 0, success: true, client: createdClient },
+          {
+            index: 1,
+            success: false,
+            errors: [{ field: 'name', code: 'required', message: 'name is required' }],
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        summary: { total: 1, succeeded: 1, failed: 0 },
+        results: [{ index: 0, success: true, client: { ...createdClient, id: 'c-retried' } }],
+      });
+    const user = userEvent.setup();
+    renderClientsView({ onAddClientsBulk: createBulk });
+    await openClientCreationMenu(user);
+    await user.click(screen.getByRole('menuitem', { name: 'crm:clients.bulk.addMultiple' }));
+    const dialog = await screen.findByRole('dialog', { name: 'crm:clients.bulk.title' });
+    await user.click(within(dialog).getByRole('button', { name: 'crm:clients.bulk.addRow' }));
+
+    const codes = within(dialog).getAllByPlaceholderText('crm:clients.clientCodePlaceholder');
+    const names = within(dialog).getAllByPlaceholderText('crm:clients.namePlaceholder');
+    const fiscalCodes = within(dialog).getAllByPlaceholderText('crm:clients.fiscalCodePlaceholder');
+    fireEvent.change(codes[0], { target: { value: 'CLI-1' } });
+    fireEvent.change(names[0], { target: { value: 'Alpha' } });
+    fireEvent.change(fiscalCodes[0], { target: { value: 'IT1' } });
+    fireEvent.change(codes[1], { target: { value: 'CLI-2' } });
+    fireEvent.change(fiscalCodes[1], { target: { value: 'IT2' } });
+    await user.click(
+      within(dialog).getByRole('button', { name: 'crm:clients.bulk.createClients' }),
+    );
+
+    await waitFor(() => expect(createBulk).toHaveBeenCalledTimes(1));
+    expect(createBulk.mock.calls[0]?.[0]).toEqual([
+      expect.objectContaining({ clientCode: 'CLI-1', name: 'Alpha', fiscalCode: 'IT1' }),
+      expect.objectContaining({ clientCode: 'CLI-2', fiscalCode: 'IT2' }),
+    ]);
+    expect(
+      within(dialog).getAllByPlaceholderText('crm:clients.clientCodePlaceholder'),
+    ).toHaveLength(1);
+    expect(within(dialog).getByText('common:validation.required')).toBeInTheDocument();
+
+    fireEvent.change(within(dialog).getByPlaceholderText('crm:clients.namePlaceholder'), {
+      target: { value: 'Beta' },
+    });
+    await user.click(
+      within(dialog).getByRole('button', { name: 'crm:clients.bulk.createClients' }),
+    );
+    await waitFor(() => expect(createBulk).toHaveBeenCalledTimes(2));
+    await waitFor(() =>
+      expect(
+        screen.queryByRole('dialog', { name: 'crm:clients.bulk.title' }),
+      ).not.toBeInTheDocument(),
+    );
+  });
+
+  test('locks editable bulk rows while a request is in flight', async () => {
+    let resolveBulk: ((response: BulkClientCreateResponse) => void) | undefined;
+    const createBulk = mock(
+      () =>
+        new Promise<BulkClientCreateResponse>((resolve) => {
+          resolveBulk = resolve;
+        }),
+    );
+    const user = userEvent.setup();
+    renderClientsView({ onAddClientsBulk: createBulk });
+    await openClientCreationMenu(user);
+    await user.click(screen.getByRole('menuitem', { name: 'crm:clients.bulk.addMultiple' }));
+    const dialog = await screen.findByRole('dialog', { name: 'crm:clients.bulk.title' });
+    fireEvent.change(within(dialog).getByPlaceholderText('crm:clients.clientCodePlaceholder'), {
+      target: { value: 'CLI-1' },
+    });
+    fireEvent.change(within(dialog).getByPlaceholderText('crm:clients.namePlaceholder'), {
+      target: { value: 'Alpha' },
+    });
+    fireEvent.change(within(dialog).getByPlaceholderText('crm:clients.fiscalCodePlaceholder'), {
+      target: { value: 'IT1' },
+    });
+
+    await user.click(
+      within(dialog).getByRole('button', { name: 'crm:clients.bulk.createClients' }),
+    );
+    await waitFor(() => expect(createBulk).toHaveBeenCalledTimes(1));
+    expect(within(dialog).getByPlaceholderText('crm:clients.namePlaceholder')).toBeDisabled();
+    expect(within(dialog).getByRole('button', { name: 'crm:clients.bulk.addRow' })).toBeDisabled();
+
+    await act(async () => {
+      resolveBulk?.({
+        summary: { total: 1, succeeded: 0, failed: 1 },
+        results: [
+          {
+            index: 0,
+            success: false,
+            errors: [{ field: 'name', code: 'invalid', message: 'Invalid' }],
+          },
+        ],
+      });
+    });
+    await waitFor(() =>
+      expect(within(dialog).getByPlaceholderText('crm:clients.namePlaceholder')).toBeEnabled(),
+    );
+  });
+
+  test('CSV dialog always shows the import contract and header-only template action', async () => {
+    const user = userEvent.setup();
+    renderClientsView();
+    await openClientCreationMenu(user);
+    await user.click(screen.getByRole('menuitem', { name: 'crm:clients.bulk.importCsv' }));
+
+    const dialog = await screen.findByRole('dialog', { name: 'crm:clients.bulk.csv.title' });
+    const fileInput = within(dialog).getByLabelText('crm:clients.bulk.csv.fileLabel');
+    const browseButton = within(dialog).getByRole('button', {
+      name: 'crm:clients.bulk.csv.browseButton',
+    });
+    const openFilePicker = mock(() => undefined);
+    Object.defineProperty(fileInput, 'click', { value: openFilePicker });
+    expect(fileInput).toHaveClass('hidden');
+    expect(within(dialog).getByText('crm:clients.bulk.csv.noFileSelected')).toBeVisible();
+    expect(browseButton).toBeVisible();
+    fireEvent.click(browseButton);
+    expect(openFilePicker).toHaveBeenCalledTimes(1);
+    expect(within(dialog).getByText('crm:clients.bulk.csv.structureTitle')).toBeInTheDocument();
+    expect(within(dialog).getByText('clientCode')).toBeInTheDocument();
+    expect(within(dialog).getByText('fiscalCode')).toBeInTheDocument();
+    expect(
+      within(dialog).getByRole('button', { name: 'crm:clients.bulk.csv.downloadTemplate' }),
+    ).toBeInTheDocument();
+    expect(
+      within(dialog).getByRole('button', { name: 'crm:clients.bulk.csv.importButton' }),
+    ).toBeDisabled();
+  });
+
+  test('CSV import maps mixed server results back to source lines and blocks duplicate submission', async () => {
+    const createBulk = mock(
+      async (): Promise<BulkClientCreateResponse> => ({
+        summary: { total: 2, succeeded: 1, failed: 1 },
+        results: [
+          {
+            index: 0,
+            success: true as const,
+            client: { id: 'c1', name: 'Alpha', clientCode: 'CLI-1', fiscalCode: 'IT1' },
+          },
+          {
+            index: 1,
+            success: false as const,
+            errors: [{ field: 'fiscalCode', code: 'duplicate' as const, message: 'Duplicate' }],
+          },
+        ],
+      }),
+    );
+    const user = userEvent.setup();
+    renderClientsView({ onAddClientsBulk: createBulk });
+    await openClientCreationMenu(user);
+    await user.click(screen.getByRole('menuitem', { name: 'crm:clients.bulk.importCsv' }));
+    const dialog = await screen.findByRole('dialog', { name: 'crm:clients.bulk.csv.title' });
+    const fileInput = within(dialog).getByLabelText('crm:clients.bulk.csv.fileLabel');
+    const file = new File(
+      ['fiscalCode;name;clientCode\n', 'IT1;Alpha;CLI-1\n', 'IT2;Beta;CLI-2'],
+      'clients.csv',
+      { type: 'text/csv' },
+    );
+
+    fireEvent.change(fileInput, { target: { files: [file] } });
+    await screen.findByText('crm:clients.bulk.csv.readyTitle');
+    const importButton = within(dialog).getByRole('button', {
+      name: 'crm:clients.bulk.csv.importButton',
+    });
+    expect(importButton).toBeEnabled();
+    await user.click(importButton);
+
+    await waitFor(() => expect(createBulk).toHaveBeenCalledTimes(1));
+    expect(createBulk).toHaveBeenCalledWith([
+      { fiscalCode: 'IT1', name: 'Alpha', clientCode: 'CLI-1' },
+      { fiscalCode: 'IT2', name: 'Beta', clientCode: 'CLI-2' },
+    ]);
+    expect(within(dialog).getByText('crm:clients.bulk.csv.resultTitle')).toBeInTheDocument();
+    expect(within(dialog).getByText(/crm:clients.bulk.csv.rowLabel/)).toBeInTheDocument();
+    expect(importButton).toBeDisabled();
+  });
+
+  test('shows structural errors even when a CSV has no importable rows', async () => {
+    const user = userEvent.setup();
+    renderClientsView();
+    await openClientCreationMenu(user);
+    await user.click(screen.getByRole('menuitem', { name: 'crm:clients.bulk.importCsv' }));
+    const dialog = await screen.findByRole('dialog', { name: 'crm:clients.bulk.csv.title' });
+    const file = new File(
+      ['clientCode,name,fiscalCode\nCLI-1,Missing fiscal code'],
+      'invalid.csv',
+      { type: 'text/csv' },
+    );
+
+    fireEvent.change(within(dialog).getByLabelText('crm:clients.bulk.csv.fileLabel'), {
+      target: { files: [file] },
+    });
+
+    expect(
+      await within(dialog).findByText(/crm:clients.bulk.csv.errors.fieldMismatch/),
+    ).toBeInTheDocument();
+    expect(
+      within(dialog).getByRole('button', { name: 'crm:clients.bulk.csv.importButton' }),
+    ).toBeDisabled();
+  });
+
+  test('ignores a stale file read when a newer CSV selection finishes first', async () => {
+    let resolveFirstRead: ((source: string) => void) | undefined;
+    const firstFile = new File(['ignored'], 'first.csv', { type: 'text/csv' });
+    Object.defineProperty(firstFile, 'text', {
+      value: () =>
+        new Promise<string>((resolve) => {
+          resolveFirstRead = resolve;
+        }),
+    });
+    const secondFile = new File(['clientCode,name,fiscalCode\nCLI-2,Second,IT2'], 'second.csv', {
+      type: 'text/csv',
+    });
+    const createBulk = mock(
+      async (): Promise<BulkClientCreateResponse> => ({
+        summary: { total: 1, succeeded: 1, failed: 0 },
+        results: [{ index: 0, success: true, client: { id: 'c2', name: 'Second' } }],
+      }),
+    );
+    const user = userEvent.setup();
+    renderClientsView({ onAddClientsBulk: createBulk });
+    await openClientCreationMenu(user);
+    await user.click(screen.getByRole('menuitem', { name: 'crm:clients.bulk.importCsv' }));
+    const dialog = await screen.findByRole('dialog', { name: 'crm:clients.bulk.csv.title' });
+    const input = within(dialog).getByLabelText('crm:clients.bulk.csv.fileLabel');
+
+    fireEvent.change(input, { target: { files: [firstFile] } });
+    fireEvent.change(input, { target: { files: [secondFile] } });
+    await within(dialog).findByText('crm:clients.bulk.csv.readyTitle');
+    await act(async () => {
+      resolveFirstRead?.('clientCode,name,fiscalCode\nCLI-1,First,IT1');
+      await Promise.resolve();
+    });
+    await user.click(
+      within(dialog).getByRole('button', { name: 'crm:clients.bulk.csv.importButton' }),
+    );
+
+    expect(createBulk).toHaveBeenCalledWith([
+      { clientCode: 'CLI-2', name: 'Second', fiscalCode: 'IT2' },
+    ]);
+  });
+});
 
 describe('<ClientsView /> contact validation', () => {
   beforeEach(() => {

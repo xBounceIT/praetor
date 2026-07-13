@@ -1,6 +1,7 @@
-import { and, eq, ne, sql } from 'drizzle-orm';
+import { and, eq, ne, type SQL, sql } from 'drizzle-orm';
 import { type DbExecutor, db, executeRows } from '../db/drizzle.ts';
 import { clients } from '../db/schema/clients.ts';
+import { formatClientAddress } from '../utils/client-address.ts';
 import { getUniqueViolation } from '../utils/db-errors.ts';
 import { parseDbNumber } from '../utils/parse.ts';
 
@@ -81,29 +82,6 @@ const parseContactsFromDb = (value: unknown): ClientContact[] => {
   return contacts;
 };
 
-const formatAddress = ({
-  civicNumber,
-  line,
-  cap,
-  state,
-  province,
-  country,
-}: {
-  civicNumber: string | null;
-  line: string | null;
-  cap: string | null;
-  state: string | null;
-  province: string | null;
-  country: string | null;
-}) => {
-  const street = [line, civicNumber].filter(Boolean).join(' ').trim();
-  const locality = [cap, state].filter(Boolean).join(' ').trim();
-  const provinceChunk = province ? `(${province})` : '';
-  return [street, [locality, provinceChunk].filter(Boolean).join(' ').trim(), country]
-    .filter((chunk) => chunk && chunk.trim().length > 0)
-    .join(', ');
-};
-
 // Safely coerce a raw column value to `string | null`. Anything that is not a string
 // becomes null, which is preferable to the legacy `as string | null` casts that could
 // surface `undefined` or non-string DB types as the literal `"undefined"` downstream.
@@ -142,7 +120,7 @@ export const mapClientRow = (c: Record<string, unknown>): Client => {
 
   const address =
     stringOrNull(c.address) ||
-    formatAddress({
+    formatClientAddress({
       civicNumber: addressCivicNumber,
       line: addressLine,
       cap: addressCap,
@@ -329,6 +307,44 @@ export const findByClientCode = async (
     .where(and(...conditions))
     .limit(1);
   return rows.length > 0;
+};
+
+export const findExistingIdentifiers = async (
+  clientCodes: string[],
+  fiscalCodes: string[],
+  exec: DbExecutor = db,
+): Promise<{ clientCodes: Set<string>; fiscalCodes: Set<string> }> => {
+  const uniqueClientCodes = [...new Set(clientCodes)];
+  const normalizedFiscalCodes = [...new Set(fiscalCodes.map((value) => value.toLowerCase()))];
+  if (uniqueClientCodes.length === 0 && normalizedFiscalCodes.length === 0) {
+    return { clientCodes: new Set(), fiscalCodes: new Set() };
+  }
+
+  const conditions: SQL[] = [];
+  if (uniqueClientCodes.length > 0) {
+    conditions.push(sql`client_code = ANY(${sql.param(uniqueClientCodes)}::text[])`);
+  }
+  if (normalizedFiscalCodes.length > 0) {
+    conditions.push(sql`LOWER(fiscal_code) = ANY(${sql.param(normalizedFiscalCodes)}::text[])`);
+  }
+
+  const rows = await executeRows<{ client_code: string | null; fiscal_code: string | null }>(
+    exec,
+    sql`SELECT client_code, fiscal_code
+        FROM clients
+        WHERE ${sql.join(conditions, sql` OR `)}`,
+  );
+
+  return {
+    clientCodes: new Set(
+      rows.map((row) => row.client_code).filter((value): value is string => Boolean(value)),
+    ),
+    fiscalCodes: new Set(
+      rows
+        .map((row) => row.fiscal_code?.toLowerCase())
+        .filter((value): value is string => Boolean(value)),
+    ),
+  };
 };
 
 export type NewClient = {

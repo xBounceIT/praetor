@@ -58,6 +58,24 @@ describe('listByCategory', () => {
   });
 });
 
+describe('listValues', () => {
+  test('loads all canonical values in one lightweight query', async () => {
+    exec.enqueue({
+      rows: [
+        { category: 'sector', value: 'Technology' },
+        { category: 'revenue', value: '1-5M' },
+      ],
+    });
+
+    expect(await repo.listValues(testDb)).toEqual([
+      { category: 'sector', value: 'Technology' },
+      { category: 'revenue', value: '1-5M' },
+    ]);
+    expect(exec.calls).toHaveLength(1);
+    expect(exec.calls[0].sql.toLowerCase()).toContain('select category, value');
+  });
+});
+
 describe('findByCategoryAndId', () => {
   test('returns row when found', async () => {
     exec.enqueue({ rows: [['cpo-1', 'tech']] });

@@ -283,6 +283,57 @@ export interface ClientContact {
   phone?: string;
 }
 
+export interface BulkClientCreateInput {
+  clientCode?: string;
+  name?: string;
+  type?: string;
+  fiscalCode?: string;
+  contactName?: string;
+  contactRole?: string;
+  email?: string;
+  phone?: string;
+  website?: string;
+  addressCountry?: string;
+  addressState?: string;
+  addressCap?: string;
+  addressProvince?: string;
+  addressCivicNumber?: string;
+  addressLine?: string;
+  atecoCode?: string;
+  sector?: string;
+  numberOfEmployees?: string;
+  revenue?: string;
+  officeCountRange?: string;
+  description?: string;
+}
+
+export type BulkClientErrorCode =
+  | 'required'
+  | 'invalid'
+  | 'too_long'
+  | 'duplicate'
+  | 'unknown_option'
+  | 'creation_failed';
+
+export interface BulkClientError {
+  field?: keyof BulkClientCreateInput;
+  code: BulkClientErrorCode;
+  message: string;
+}
+
+export type BulkClientCreateResult =
+  | { index: number; success: true; client: Client }
+  | { index: number; success: false; errors: BulkClientError[] };
+
+export interface BulkClientCreateResponse {
+  summary: {
+    total: number;
+    succeeded: number;
+    failed: number;
+  };
+  results: BulkClientCreateResult[];
+}
+
 export type ClientProfileOptionCategory =
   | 'sector'
   | 'numberOfEmployees'

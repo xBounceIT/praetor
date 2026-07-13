@@ -1,6 +1,8 @@
 import type React from 'react';
 import api from '../../services/api';
 import type {
+  BulkClientCreateInput,
+  BulkClientCreateResponse,
   Client,
   ClientProfileOption,
   ClientProfileOptionCategory,
@@ -44,6 +46,22 @@ export const makeClientHandlers = (deps: ClientHandlersDeps) => {
       setClients((prev) => prev.map((c) => (c.id === id ? updated : c)));
     } catch (err) {
       console.error('Failed to update client:', err);
+      throw err;
+    }
+  };
+
+  const addBulk = async (
+    clientsToCreate: BulkClientCreateInput[],
+  ): Promise<BulkClientCreateResponse> => {
+    try {
+      const response = await api.clients.createBulk(clientsToCreate);
+      const created = response.results.flatMap((result) => (result.success ? [result.client] : []));
+      if (created.length > 0) {
+        setClients((prev) => [...prev, ...created]);
+      }
+      return response;
+    } catch (err) {
+      console.error('Failed to add clients in bulk:', err);
       throw err;
     }
   };
@@ -110,6 +128,7 @@ export const makeClientHandlers = (deps: ClientHandlersDeps) => {
 
   return {
     add,
+    addBulk,
     update,
     delete: remove,
     createProfileOption,

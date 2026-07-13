@@ -35,6 +35,7 @@ const getRolePermissionsMock = mock();
 const listClientsMock = mock();
 const findByFiscalCodeMock = mock();
 const findByClientCodeMock = mock();
+const findExistingIdentifiersMock = mock();
 const findContactsForUpdateMock = mock();
 const createClientMock = mock();
 const updateClientMock = mock();
@@ -42,6 +43,7 @@ const deleteClientByIdMock = mock();
 
 // clientProfileOptionsRepo
 const cpoListByCategoryMock = mock();
+const cpoListValuesMock = mock();
 const cpoFindByCategoryAndIdMock = mock();
 const cpoFindByCategoryAndValueMock = mock();
 const cpoGetNextSortOrderMock = mock();
@@ -80,6 +82,7 @@ beforeAll(async () => {
     list: listClientsMock,
     findByFiscalCode: findByFiscalCodeMock,
     findByClientCode: findByClientCodeMock,
+    findExistingIdentifiers: findExistingIdentifiersMock,
     findContactsForUpdate: findContactsForUpdateMock,
     create: createClientMock,
     update: updateClientMock,
@@ -88,6 +91,7 @@ beforeAll(async () => {
   mock.module('../../repositories/clientProfileOptionsRepo.ts', () => ({
     ...clientProfileOptionsRepoSnap,
     listByCategory: cpoListByCategoryMock,
+    listValues: cpoListValuesMock,
     findByCategoryAndId: cpoFindByCategoryAndIdMock,
     findByCategoryAndValue: cpoFindByCategoryAndValueMock,
     getNextSortOrder: cpoGetNextSortOrderMock,
@@ -196,11 +200,13 @@ const allMocks = [
   listClientsMock,
   findByFiscalCodeMock,
   findByClientCodeMock,
+  findExistingIdentifiersMock,
   findContactsForUpdateMock,
   createClientMock,
   updateClientMock,
   deleteClientByIdMock,
   cpoListByCategoryMock,
+  cpoListValuesMock,
   cpoFindByCategoryAndIdMock,
   cpoFindByCategoryAndValueMock,
   cpoGetNextSortOrderMock,
@@ -227,6 +233,12 @@ beforeEach(async () => {
   assignClientToUserMock.mockImplementation(async () => undefined);
   assignClientToTopManagersMock.mockImplementation(async () => undefined);
   isClientAssignedToUserMock.mockResolvedValue(true);
+  cpoListByCategoryMock.mockResolvedValue([]);
+  cpoListValuesMock.mockResolvedValue([]);
+  findExistingIdentifiersMock.mockResolvedValue({
+    clientCodes: new Set<string>(),
+    fiscalCodes: new Set<string>(),
+  });
 
   testApp = await buildRouteTestApp(routePlugin, '/api/clients');
 });
@@ -449,6 +461,37 @@ describe('POST /api/clients', () => {
     expect(createClientMock).toHaveBeenCalledTimes(1);
   });
 
+  test('preserves standalone email and phone without requiring a contact name', async () => {
+    findByFiscalCodeMock.mockResolvedValue(false);
+    findByClientCodeMock.mockResolvedValue(false);
+    createClientMock.mockImplementation(async (entry: Record<string, unknown>) => ({
+      ...SAMPLE_CLIENT,
+      ...entry,
+    }));
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/clients',
+      headers: authHeader(),
+      payload: {
+        ...validBody,
+        email: 'info@example.com',
+        phone: '+39 0200000000',
+      },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(createClientMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        contacts: [],
+        contactName: null,
+        email: 'info@example.com',
+        phone: '+39 0200000000',
+      }),
+      TX_SENTINEL,
+    );
+  });
+
   test('400 whitespace-only name (handler validation)', async () => {
     const res = await testApp.inject({
       method: 'POST',
@@ -575,6 +618,44 @@ describe('POST /api/clients', () => {
     expect(JSON.parse(res.body)).toEqual({ error: 'Client ID already exists' });
   });
 
+  test('canonicalizes configured profile values case-insensitively for single creation', async () => {
+    cpoListValuesMock.mockResolvedValue([{ category: 'sector', value: 'Technology' }]);
+    findByFiscalCodeMock.mockResolvedValue(false);
+    findByClientCodeMock.mockResolvedValue(false);
+    createClientMock.mockImplementation(async (entry: Record<string, unknown>) => ({
+      ...SAMPLE_CLIENT,
+      ...entry,
+    }));
+
+    const response = await testApp.inject({
+      method: 'POST',
+      url: '/api/clients',
+      headers: authHeader(),
+      payload: { ...validBody, sector: ' technology ' },
+    });
+
+    expect(response.statusCode).toBe(201);
+    expect(createClientMock).toHaveBeenCalledWith(
+      expect.objectContaining({ sector: 'Technology' }),
+      TX_SENTINEL,
+    );
+  });
+
+  test('rejects an unknown configured profile value for single creation', async () => {
+    const response = await testApp.inject({
+      method: 'POST',
+      url: '/api/clients',
+      headers: authHeader(),
+      payload: { ...validBody, sector: 'Unknown' },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(JSON.parse(response.body)).toEqual({
+      error: 'sector must match an existing client profile option',
+    });
+    expect(createClientMock).not.toHaveBeenCalled();
+  });
+
   test('401 missing token', async () => {
     const res = await testApp.inject({
       method: 'POST',
@@ -625,6 +706,253 @@ describe('POST /api/clients', () => {
     expect(createInvoked).toBe(true);
     // Audit log lives after the awaited transaction, so a failed txn must skip it.
     expect(logAuditMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('POST /api/clients/bulk', () => {
+  const validRows = [
+    { clientCode: 'CLI-1', name: 'Alpha', fiscalCode: 'IT001' },
+    { clientCode: 'CLI-2', name: 'Beta', fiscalCode: 'IT002' },
+  ];
+
+  const mockCreatedClients = () => {
+    createClientMock.mockImplementation(async (entry: Record<string, unknown>) => ({
+      ...SAMPLE_CLIENT,
+      ...entry,
+    }));
+  };
+
+  test('401 without a token and 403 without crm.clients.create', async () => {
+    const unauthorized = await testApp.inject({
+      method: 'POST',
+      url: '/api/clients/bulk',
+      payload: { clients: validRows },
+    });
+    expect(unauthorized.statusCode).toBe(401);
+
+    getRolePermissionsMock.mockResolvedValue(['crm.clients.view']);
+    const forbidden = await testApp.inject({
+      method: 'POST',
+      url: '/api/clients/bulk',
+      headers: authHeader(),
+      payload: { clients: validRows },
+    });
+    expect(forbidden.statusCode).toBe(403);
+  });
+
+  test('400 for an empty batch or more than 500 rows', async () => {
+    const empty = await testApp.inject({
+      method: 'POST',
+      url: '/api/clients/bulk',
+      headers: authHeader(),
+      payload: { clients: [] },
+    });
+    expect(empty.statusCode).toBe(400);
+
+    const overLimit = await testApp.inject({
+      method: 'POST',
+      url: '/api/clients/bulk',
+      headers: authHeader(),
+      payload: {
+        clients: Array.from({ length: 501 }, (_, index) => ({
+          ...validRows[0],
+          clientCode: `CLI-${index}`,
+        })),
+      },
+    });
+    expect(overLimit.statusCode).toBe(400);
+    expect(findExistingIdentifiersMock).not.toHaveBeenCalled();
+  });
+
+  test('normalizes values, creates one primary contact, composes the address, and canonicalizes profile values', async () => {
+    cpoListValuesMock.mockResolvedValue([{ category: 'sector', value: 'Technology' }]);
+    mockCreatedClients();
+
+    const response = await testApp.inject({
+      method: 'POST',
+      url: '/api/clients/bulk',
+      headers: authHeader(),
+      payload: {
+        clients: [
+          {
+            clientCode: ' CLI-1 ',
+            name: ' Alpha ',
+            fiscalCode: ' IT001 ',
+            type: '',
+            contactName: ' Mario Rossi ',
+            contactRole: ' Acquisti ',
+            email: ' mario@example.com ',
+            addressLine: ' Via Roma ',
+            addressCivicNumber: ' 1 ',
+            addressCap: ' 00100 ',
+            addressState: ' Roma ',
+            addressProvince: ' RM ',
+            addressCountry: ' Italia ',
+            sector: ' technology ',
+          },
+        ],
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(JSON.parse(response.body).summary).toEqual({ total: 1, succeeded: 1, failed: 0 });
+    expect(createClientMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        clientCode: 'CLI-1',
+        name: 'Alpha',
+        fiscalCode: 'IT001',
+        type: 'company',
+        sector: 'Technology',
+        contactName: 'Mario Rossi',
+        contacts: [
+          {
+            fullName: 'Mario Rossi',
+            role: 'Acquisti',
+            email: 'mario@example.com',
+            phone: undefined,
+          },
+        ],
+        address: 'Via Roma 1, 00100 Roma (RM), Italia',
+      }),
+      TX_SENTINEL,
+    );
+  });
+
+  test('returns all validation errors for a row, including contact and profile errors', async () => {
+    const response = await testApp.inject({
+      method: 'POST',
+      url: '/api/clients/bulk',
+      headers: authHeader(),
+      payload: {
+        clients: [
+          {
+            clientCode: 'bad code',
+            name: ' ',
+            fiscalCode: 'IT001',
+            type: 'other',
+            email: 'not-an-email',
+            phone: '123',
+            sector: 'Missing option',
+          },
+        ],
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = JSON.parse(response.body);
+    expect(body.summary).toEqual({ total: 1, succeeded: 0, failed: 1 });
+    expect(body.results[0].errors).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ field: 'clientCode' }),
+        expect.objectContaining({ field: 'name' }),
+        expect.objectContaining({ field: 'type' }),
+        expect.objectContaining({ field: 'email' }),
+        expect.objectContaining({ field: 'contactName', code: 'required' }),
+        expect.objectContaining({ field: 'sector', code: 'unknown_option' }),
+      ]),
+    );
+    expect(createClientMock).not.toHaveBeenCalled();
+  });
+
+  test('matches client codes case-sensitively and fiscal codes case-insensitively', async () => {
+    findExistingIdentifiersMock.mockResolvedValue({
+      clientCodes: new Set(['EXISTING']),
+      fiscalCodes: new Set(['it-existing']),
+    });
+    const response = await testApp.inject({
+      method: 'POST',
+      url: '/api/clients/bulk',
+      headers: authHeader(),
+      payload: {
+        clients: [
+          { clientCode: 'DUP', name: 'One', fiscalCode: 'DUP-FISCAL' },
+          { clientCode: 'dup', name: 'Two', fiscalCode: 'dup-fiscal' },
+          { clientCode: 'EXISTING', name: 'Three', fiscalCode: 'IT-EXISTING' },
+        ],
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = JSON.parse(response.body);
+    expect(body.summary).toEqual({ total: 3, succeeded: 0, failed: 3 });
+    expect(body.results[0].errors).toEqual(
+      expect.arrayContaining([expect.objectContaining({ field: 'fiscalCode', code: 'duplicate' })]),
+    );
+    expect(body.results[0].errors).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ field: 'clientCode' })]),
+    );
+    expect(body.results[1].errors).toEqual(
+      expect.arrayContaining([expect.objectContaining({ field: 'fiscalCode', code: 'duplicate' })]),
+    );
+    expect(body.results[1].errors).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ field: 'clientCode' })]),
+    );
+    expect(body.results[2].errors).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ field: 'clientCode', code: 'duplicate' }),
+        expect.objectContaining({ field: 'fiscalCode', code: 'duplicate' }),
+      ]),
+    );
+    expect(createClientMock).not.toHaveBeenCalled();
+  });
+
+  test('keeps input order, commits valid rows independently, and audits only successes', async () => {
+    mockCreatedClients();
+    assignClientToTopManagersMock
+      .mockImplementationOnce(async () => {
+        throw new Error('assignment failed');
+      })
+      .mockImplementation(async () => undefined);
+
+    const response = await testApp.inject({
+      method: 'POST',
+      url: '/api/clients/bulk',
+      headers: authHeader(),
+      payload: { clients: validRows },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = JSON.parse(response.body);
+    expect(body.summary).toEqual({ total: 2, succeeded: 1, failed: 1 });
+    expect(body.results).toEqual([
+      expect.objectContaining({ index: 0, success: false }),
+      expect.objectContaining({ index: 1, success: true }),
+    ]);
+    expect(withDbTransactionMock).toHaveBeenCalledTimes(2);
+    expect(assignClientToUserMock).toHaveBeenCalledTimes(2);
+    expect(assignClientToTopManagersMock).toHaveBeenCalledTimes(2);
+    expect(logAuditMock).toHaveBeenCalledTimes(1);
+    expect(logAuditMock).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'client.created' }),
+    );
+  });
+
+  test('bounds concurrent row transactions while preserving all results', async () => {
+    let activeCreates = 0;
+    let maxActiveCreates = 0;
+    createClientMock.mockImplementation(async (entry: Record<string, unknown>) => {
+      activeCreates += 1;
+      maxActiveCreates = Math.max(maxActiveCreates, activeCreates);
+      await Promise.resolve();
+      activeCreates -= 1;
+      return { ...SAMPLE_CLIENT, ...entry };
+    });
+    const clients = Array.from({ length: 12 }, (_, index) => ({
+      clientCode: `CLI-${index}`,
+      name: `Client ${index}`,
+      fiscalCode: `IT${index}`,
+    }));
+
+    const response = await testApp.inject({
+      method: 'POST',
+      url: '/api/clients/bulk',
+      headers: authHeader(),
+      payload: { clients },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(JSON.parse(response.body).summary).toEqual({ total: 12, succeeded: 12, failed: 0 });
+    expect(maxActiveCreates).toBe(10);
   });
 });
 

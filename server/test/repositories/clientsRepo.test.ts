@@ -302,14 +302,45 @@ describe('findByFiscalCode', () => {
 });
 
 describe('findByClientCode', () => {
-  test('respects excludeId parameter', async () => {
+  test('matches case-sensitively and respects excludeId', async () => {
     exec.enqueue({ rows: [] });
     await clientsRepo.findByClientCode('AC-1', 'c-1', testDb);
     const sql = exec.calls[0].sql.toLowerCase();
     expect(sql).toContain('"client_code"');
+    expect(sql).not.toContain('lower(');
     expect(sql).toMatch(/"id"\s*<>/);
     expect(exec.calls[0].params).toContain('AC-1');
     expect(exec.calls[0].params).toContain('c-1');
+  });
+});
+
+describe('findExistingIdentifiers', () => {
+  test('preserves client-code case and normalizes fiscal codes', async () => {
+    exec.enqueue({
+      rows: [{ client_code: 'CLI-ONE', fiscal_code: 'It001' }],
+    });
+
+    const result = await clientsRepo.findExistingIdentifiers(
+      ['CLI-ONE', 'cli-one'],
+      ['IT001'],
+      testDb,
+    );
+
+    expect(result.clientCodes).toEqual(new Set(['CLI-ONE']));
+    expect(result.fiscalCodes).toEqual(new Set(['it001']));
+    expect(exec.calls[0].sql.toLowerCase()).toContain('client_code = any');
+    expect(exec.calls[0].sql.toLowerCase()).not.toContain('lower(client_code)');
+    expect(exec.calls[0].sql.toLowerCase()).toContain('lower(fiscal_code)');
+    expect(exec.calls[0].params).toContainEqual(['CLI-ONE', 'cli-one']);
+    expect(exec.calls[0].params).toContainEqual(['it001']);
+  });
+
+  test('does not query when both identifier lists are empty', async () => {
+    expect(await clientsRepo.findExistingIdentifiers([], [], testDb)).toEqual({
+      clientCodes: new Set(),
+      fiscalCodes: new Set(),
+    });
+    expect(exec.calls).toHaveLength(0);
   });
 });
 
