@@ -482,6 +482,36 @@ tr[data-standard-table-font-size] [data-slot="button"][data-size="icon-sm"] {
   animation: sidebar-entry-up 100ms ease-in;
 }
 
+.version-history-content {
+  overflow: hidden;
+}
+
+.version-history-viewport {
+  display: grid;
+  grid-template-rows: 0fr;
+  overflow: hidden;
+  opacity: 0;
+  transition:
+    grid-template-rows 200ms ease-in-out,
+    opacity 200ms ease-in-out;
+}
+
+.version-history-content[data-state="open"] > .version-history-viewport {
+  grid-template-rows: 1fr;
+  opacity: 1;
+  transition-delay: 200ms;
+}
+
+.version-history-content[data-state="closed"] > .version-history-viewport {
+  transition-delay: 0ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .version-history-viewport {
+    transition: none;
+  }
+}
+
 .standard-table-value-cell :where(:not([data-status-badge], [data-status-badge] *)) {
   background-color: transparent !important;
   border-color: transparent !important;
