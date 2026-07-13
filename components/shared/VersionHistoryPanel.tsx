@@ -67,7 +67,7 @@ export function VersionHistoryPanel<Row extends VersionHistoryPanelRow>({
               aria-label={labels.title}
               className="h-12 w-full shrink-0 justify-start gap-0 overflow-hidden rounded-none border-b border-border bg-muted/30 p-0 hover:bg-muted/60 data-[state=closed]:border-b-0"
             >
-              <span className="flex size-12 shrink-0 items-center justify-center gap-1">
+              <span className="flex size-12 shrink-0 items-center justify-center gap-2">
                 <i
                   className={cn(
                     'fa-solid text-[10px] text-muted-foreground',

@@ -60,6 +60,7 @@ describe('<VersionHistoryPanel />', () => {
     expect(trigger).toHaveAttribute('aria-expanded', 'true');
     expect(trigger).not.toHaveAttribute('title');
     expect(trigger).toHaveClass('h-12', 'w-full');
+    expect(trigger.firstElementChild).toHaveClass('gap-2');
     expect(trigger.querySelector('.fa-chevron-left')).toBeInTheDocument();
     expect(content).toHaveClass('version-history-content');
     expect(content).not.toHaveClass('flex-1');
