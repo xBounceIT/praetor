@@ -36,14 +36,15 @@ describe('<VersionHistoryPanel />', () => {
     const css = await Bun.file(new URL('../../src/index.css', import.meta.url)).text();
 
     expect(css).toMatch(
-      /\.version-history-content\[data-state="open"\]\s*{\s*animation: version-history-content-down 200ms ease-in-out 200ms backwards;/,
+      /\.version-history-viewport\s*{[^}]*display: grid;[^}]*grid-template-rows: 0fr;[^}]*grid-template-rows 200ms ease-in-out,/s,
     );
     expect(css).toMatch(
-      /\.version-history-content\[data-state="closed"\]\s*{\s*animation: version-history-content-up 200ms ease-in-out forwards;/,
+      /\.version-history-content\[data-state="open"\] > \.version-history-viewport\s*{[^}]*grid-template-rows: 1fr;[^}]*transition-delay: 200ms;/s,
     );
     expect(css).toMatch(
-      /@media \(prefers-reduced-motion: reduce\)[\s\S]*\.version-history-content\[data-state="closed"\]\s*{[^}]*height: 0;[^}]*opacity: 0;/,
+      /\.version-history-content\[data-state="closed"\] > \.version-history-viewport\s*{\s*transition-delay: 0ms;/,
     );
+    expect(css).not.toContain('@keyframes version-history-content');
   });
 
   test('sequences width and height, reverses the arrow position, and uses a shadcn tooltip', async () => {
@@ -62,6 +63,14 @@ describe('<VersionHistoryPanel />', () => {
     expect(trigger.querySelector('.fa-chevron-left')).toBeInTheDocument();
     expect(content).toHaveClass('version-history-content');
     expect(content).not.toHaveClass('flex-1');
+    expect(content?.firstElementChild).toHaveClass('version-history-viewport');
+    expect(content?.firstElementChild?.firstElementChild).toHaveClass('min-h-0', 'overflow-hidden');
+    expect(content?.firstElementChild?.firstElementChild?.firstElementChild).toHaveClass(
+      'max-h-[calc(90vh-3rem)]',
+    );
+    expect(content?.firstElementChild?.firstElementChild?.firstElementChild).not.toHaveClass(
+      'h-full',
+    );
     expect(content).toHaveAttribute('aria-hidden', 'false');
     expect(content).not.toHaveAttribute('inert');
     expect(screen.getByText(labels.reasonUpdate)).toBeInTheDocument();
