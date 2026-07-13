@@ -66,6 +66,7 @@ import {
 // Surfaced for both the gate-check inside the create-tx and the catch on the unique-index
 // violation; keep them identical so the error doesn't drift between paths.
 const LINKED_OFFER_CONFLICT = 'An offer already exists for this quote';
+const requireQuoteUpdateForOfferRollback = requirePermission('sales.client_quotes.update');
 
 const findLegacyAcceptedCandidate = (
   quoteId: string,
@@ -1555,6 +1556,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         offer.linkedQuoteCandidateId && linkedQuoteId && linkedQuoteStatus === 'accepted'
           ? linkedQuoteId
           : null;
+      if (shouldRollbackCandidatePromotion || legacyQuoteIdToReactivate) {
+        await requireQuoteUpdateForOfferRollback(request, reply);
+        if (reply.sent) return;
+      }
       if (shouldRollbackCandidatePromotion) {
         try {
           await withDbTransaction((tx) =>

@@ -1312,8 +1312,23 @@ describe('DELETE /api/sales/client-offers/:id expired guard (#812 round 25)', ()
     expect(res.statusCode).toBe(204);
   });
 
-  test('204 deleting a candidate-linked draft offer rolls the quote family back atomically', async () => {
+  test('403 candidate rollback requires permission to update the linked quote', async () => {
     getRolePermissionsMock.mockResolvedValue(['sales.client_offers.delete']);
+    coFindExistingMock.mockResolvedValue(gate({ linkedQuoteCandidateId: 'qc-a' }));
+
+    const res = await deleteOffer();
+
+    expect(res.statusCode).toBe(403);
+    expect(coLockExistingByIdMock).not.toHaveBeenCalled();
+    expect(coDeleteByIdMock).not.toHaveBeenCalled();
+    expect(qcReactivateAllMock).not.toHaveBeenCalled();
+  });
+
+  test('204 deleting a candidate-linked draft offer rolls the quote family back atomically', async () => {
+    getRolePermissionsMock.mockResolvedValue([
+      'sales.client_offers.delete',
+      'sales.client_quotes.update',
+    ]);
     const candidateOffer = gate({ linkedQuoteCandidateId: 'qc-a' });
     const selectedCandidate = {
       id: 'qc-a',
@@ -1359,7 +1374,10 @@ describe('DELETE /api/sales/client-offers/:id expired guard (#812 round 25)', ()
   });
 
   test('409 deleting an expired candidate-linked offer does not roll the family back', async () => {
-    getRolePermissionsMock.mockResolvedValue(['sales.client_offers.delete']);
+    getRolePermissionsMock.mockResolvedValue([
+      'sales.client_offers.delete',
+      'sales.client_quotes.update',
+    ]);
     const expiredCandidateOffer = gate({
       linkedQuoteCandidateId: 'qc-a',
       expirationDate: '2000-01-01',
@@ -1377,7 +1395,10 @@ describe('DELETE /api/sales/client-offers/:id expired guard (#812 round 25)', ()
   });
 
   test('409 candidate rollback rechecks linked orders after locking the offer', async () => {
-    getRolePermissionsMock.mockResolvedValue(['sales.client_offers.delete']);
+    getRolePermissionsMock.mockResolvedValue([
+      'sales.client_offers.delete',
+      'sales.client_quotes.update',
+    ]);
     const candidateOffer = gate({ linkedQuoteCandidateId: 'qc-a' });
     coFindExistingMock.mockResolvedValue(candidateOffer);
     coLockExistingByIdMock.mockResolvedValue(candidateOffer);
@@ -1393,7 +1414,10 @@ describe('DELETE /api/sales/client-offers/:id expired guard (#812 round 25)', ()
   });
 
   test('204 deletes a migrated candidate-linked legacy offer without promotion rollback', async () => {
-    getRolePermissionsMock.mockResolvedValue(['sales.client_offers.delete']);
+    getRolePermissionsMock.mockResolvedValue([
+      'sales.client_offers.delete',
+      'sales.client_quotes.update',
+    ]);
     const legacyOffer = gate({ linkedQuoteCandidateId: 'q-before-rename' });
     coFindExistingMock.mockResolvedValue(legacyOffer);
     cqFindStatusAndClientNameMock.mockResolvedValue({ status: 'accepted', clientName: 'Client' });
