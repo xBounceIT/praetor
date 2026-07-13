@@ -454,6 +454,16 @@ describe('PUT /api/sales/client-quotes/:id status rules (issue #779)', () => {
     expect(body.linkedSupplierQuoteExpired).toBe(false);
   });
 
+  test('preserves notes when a flat update omits the field', async () => {
+    cqFindCurrentMock.mockResolvedValue(gate({ status: 'draft' }));
+    cqUpdateMock.mockResolvedValue(updatedQuote({ status: 'sent', notes: 'keep me' }));
+
+    const res = await putStatus({ status: 'sent' });
+
+    expect(res.statusCode).toBe(200);
+    expect(cqUpdateMock.mock.calls[0][1].notes).toBeUndefined();
+  });
+
   test('200 allows a no-op resend of the current status (draft → draft)', async () => {
     // The edit form resends the current status on every save — this must NOT trip the transition
     // rule (which would otherwise reject draft→draft as an invalid back-to-draft).
@@ -540,6 +550,16 @@ describe('PUT /api/sales/client-quotes/:id status rules (issue #779)', () => {
 
     const res = await putStatus({ status: 'accepted' });
     expect(res.statusCode).toBe(400);
+    expect(cqUpdateMock).not.toHaveBeenCalled();
+  });
+
+  test('400 legacy accepted aliases must use candidate promotion', async () => {
+    cqFindCurrentMock.mockResolvedValue(gate({ status: 'sent' }));
+
+    for (const status of ['confirmed', 'approved']) {
+      const res = await putStatus({ status });
+      expect(res.statusCode).toBe(400);
+    }
     expect(cqUpdateMock).not.toHaveBeenCalled();
   });
 

@@ -2023,15 +2023,15 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       // normalizeQuoteStatus's draft floor would instead silently demote the quote. `targetStatus`
       // is `const` so its non-null narrowing flows into the `statusChanged` block below (`null`
       // means no status field in the body).
-      if (status === 'offer' || status === 'accepted') {
-        return badRequest(reply, 'Use the candidate promotion endpoint to create an offer');
-      }
       const targetStatus =
         status === undefined
           ? null
           : parseQuoteStatusInput(typeof status === 'string' ? status : '');
       if (status !== undefined && targetStatus === null) {
         return badRequest(reply, 'status must be one of draft, sent, offer, accepted, denied');
+      }
+      if (targetStatus === 'offer' || targetStatus === 'accepted') {
+        return badRequest(reply, 'Use the candidate promotion endpoint to create an offer');
       }
       // Only enforce the status rules when the status ACTUALLY changes — the edit forms resend the
       // current status on every save, so a no-op resend (e.g. draft→draft, or re-saving an expired
@@ -2238,7 +2238,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                     status: targetStatus,
                     expirationDate: (expirationDateValue as string | null | undefined) ?? null,
                     communicationChannelId: communicationChannel?.id ?? null,
-                    notes: (notes as string | null | undefined) ?? null,
+                    notes: notes as string | null | undefined,
                     // The supplier↔client link is line-sourced now (issue #779 follow-up); leave
                     // the vestigial header column untouched (undefined ⇒ no write).
                   },
