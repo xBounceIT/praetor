@@ -440,6 +440,7 @@ describe('POST /api/clients-orders/:id/versions/:versionId/restore', () => {
       TX_SENTINEL,
     );
     expect(coReplaceItemsMock).toHaveBeenCalled();
+    expect(coReplaceItemsMock.mock.calls[0]?.[1]?.[0].productMolPercentage).toBe(50);
     // Atomically wrapped
     expect(withDbTransactionMock).toHaveBeenCalled();
     // Audit logged

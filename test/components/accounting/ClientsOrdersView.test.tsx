@@ -341,6 +341,17 @@ describe('<ClientsOrdersView />', () => {
     // rounded the displayed value to a single decimal (12,3), silently dropping precision.
     expect(screen.queryAllByDisplayValue('12,34').length).toBeGreaterThan(0);
     expect(screen.queryAllByDisplayValue('12,3')).toHaveLength(0);
+
+    const salePriceInput = screen.getAllByLabelText(
+      'crm:internalListing.salePrice',
+    )[0] as HTMLInputElement;
+    const molInput = screen.getAllByLabelText('sales:clientQuotes.molLabel')[0] as HTMLInputElement;
+    fireEvent.focus(salePriceInput);
+    fireEvent.change(salePriceInput, { target: { value: '1500' } });
+    await waitFor(() => expect(molInput.value).toBe('20,00'));
+    fireEvent.change(salePriceInput, { target: { value: '1000' } });
+    await waitFor(() => expect(molInput.value).toBe('-20,00'));
+    expect(molInput.checkValidity()).toBe(true);
   });
 
   test('edit modal uses the shared shadcn modal layout and form primitives', async () => {

@@ -13,6 +13,12 @@ export const MOL_PERCENTAGE_DECIMALS = 2;
  */
 export const MAX_MOL_PERCENTAGE = 99.99;
 
+/**
+ * Lowest MOL supported by the document snapshot columns (`numeric(5, 2)`). A negative MOL is
+ * meaningful: it makes a below-cost sale immediately visible instead of hiding the loss as 0%.
+ */
+export const MIN_MOL_PERCENTAGE = -999.99;
+
 export const NUMBER_LOCALE = 'it-IT';
 
 const MONTHS_PER_YEAR = 12;
@@ -102,6 +108,17 @@ export const calcProductSalePrice = (cost: number, molPercentage: number): numbe
   // Guard against ≥100% MOL (would produce ≤0 or negative denominator)
   if (molPercentage >= 100) return cost;
   return cost / (1 - molPercentage / 100);
+};
+
+/** Derive MOL as a percentage of revenue from a unit cost and a unit sale price. */
+export const calcProductMolPercentage = (cost: number, salePrice: number): number | null => {
+  if (!Number.isFinite(cost) || !Number.isFinite(salePrice) || cost < 0 || salePrice < 0) {
+    return null;
+  }
+  if (salePrice === 0) return cost === 0 ? 0 : null;
+
+  const mol = roundCurrency(((salePrice - cost) / salePrice) * 100);
+  return Math.min(MAX_MOL_PERCENTAGE, Math.max(MIN_MOL_PERCENTAGE, mol));
 };
 
 export interface PricingItem {

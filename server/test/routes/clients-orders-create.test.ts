@@ -762,8 +762,8 @@ describe('POST /api/clients-orders product-less supplier lines (issue #783)', ()
       supplierQuoteUnitPrice: unknown;
       supplierQuoteId: unknown;
     }>;
-    // productMolPercentage isn't derived, so its explicit null survives validation (not coerced).
-    expect(inserted[0].productMolPercentage).toBeNull();
+    // The stale/null snapshot is replaced from effective supplier cost 50 and sale price 100.
+    expect(inserted[0].productMolPercentage).toBe(50);
     // supplierQuoteId + supplierQuoteUnitPrice are stamped from the accepted-quote snapshot.
     expect(inserted[0].supplierQuoteId).toBe('sq-1');
     expect(inserted[0].supplierQuoteUnitPrice).toBe(50);

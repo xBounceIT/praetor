@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import {
+  calcProductMolPercentage,
   calcProductSalePrice,
   calculatePricingTotals,
   convertUnitPrice,
@@ -145,6 +146,25 @@ describe('calcProductSalePrice', () => {
 
   test('returns the cost when MOL exceeds 100% (would be negative)', () => {
     expect(calcProductSalePrice(100, 150)).toBe(100);
+  });
+});
+
+describe('calcProductMolPercentage', () => {
+  test('derives MOL as a percentage of the sale price and rounds it to snapshot precision', () => {
+    expect(calcProductMolPercentage(60, 80)).toBe(25);
+    expect(calcProductMolPercentage(100, 123.45)).toBe(19);
+  });
+
+  test('keeps below-cost sales visible as a negative MOL', () => {
+    expect(calcProductMolPercentage(120, 100)).toBe(-20);
+  });
+
+  test('returns null when a positive cost has no sale price', () => {
+    expect(calcProductMolPercentage(50, 0)).toBeNull();
+  });
+
+  test('returns null for an invalid negative cost', () => {
+    expect(calcProductMolPercentage(-10, 100)).toBeNull();
   });
 });
 

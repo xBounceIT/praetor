@@ -1,10 +1,12 @@
 import type { SupplierUnitType } from '../types';
 import {
+  calcProductMolPercentage,
   calcProductSalePrice,
   convertUnitPrice,
   getEffectiveMol,
   getEffectiveUnitCost,
   MAX_MOL_PERCENTAGE,
+  MIN_MOL_PERCENTAGE,
   type PricingItem,
   parseOptionalNumberInputValue,
 } from './numbers';
@@ -22,12 +24,12 @@ export const makeCostUpdater =
     const newCost = parseOptionalNumberInputValue(value);
     const curUnitCost = getEffectiveUnitCost(cur, defaultUnitType);
     if (newCost === curUnitCost && value !== '') return prev;
-    const curMol = getEffectiveMol(cur);
-    const newUnitPrice = calcProductSalePrice(newCost ?? 0, curMol);
+    const newMol =
+      newCost === undefined ? null : calcProductMolPercentage(newCost, Number(cur.unitPrice ?? 0));
     const updated = [...items];
     updated[index] = {
       ...cur,
-      unitPrice: newUnitPrice,
+      productMolPercentage: newMol,
       // The entered cost is in the LINE's unit. Supplier-sourced costs are stored in that same
       // unit (the supplier item's — the server snapshot, forward sync and staleness compare all
       // assume it; storing hourly here pushed a ÷8 cost onto a days-priced supplier item, #812
@@ -56,7 +58,9 @@ export const makeMolUpdater =
     if (!cur) return prev;
     const parsedMol = parseOptionalNumberInputValue(value);
     const newMol =
-      parsedMol === undefined ? undefined : Math.min(MAX_MOL_PERCENTAGE, Math.max(0, parsedMol));
+      parsedMol === undefined
+        ? undefined
+        : Math.min(MAX_MOL_PERCENTAGE, Math.max(MIN_MOL_PERCENTAGE, parsedMol));
     const curMol = getEffectiveMol(cur);
     if (newMol === curMol && value !== '') return prev;
     const curCost = getEffectiveUnitCost(cur, defaultUnitType);
@@ -66,6 +70,29 @@ export const makeMolUpdater =
       ...cur,
       unitPrice: newUnitPrice,
       productMolPercentage: newMol ?? null,
+    };
+    return { ...prev, items: updated };
+  };
+
+export const makeUnitPriceUpdater =
+  <T extends { items?: PricingItem[] }>(
+    index: number,
+    value: string,
+    defaultUnitType: SupplierUnitType = 'hours',
+  ) =>
+  (prev: T): T => {
+    const items = prev.items || [];
+    const cur = items[index];
+    if (!cur) return prev;
+    const newUnitPrice = parseOptionalNumberInputValue(value);
+    if (newUnitPrice === cur.unitPrice && value !== '') return prev;
+    const unitCost = getEffectiveUnitCost(cur, defaultUnitType);
+    const updated = [...items];
+    updated[index] = {
+      ...cur,
+      unitPrice: newUnitPrice,
+      productMolPercentage:
+        newUnitPrice === undefined ? null : calcProductMolPercentage(unitCost, newUnitPrice),
     };
     return { ...prev, items: updated };
   };

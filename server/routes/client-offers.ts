@@ -26,6 +26,10 @@ import {
   rollbackQuotePromotion,
 } from '../services/quotePromotionRollback.ts';
 import { logAudit } from '../utils/audit.ts';
+import {
+  calculateClientLineMol,
+  withCalculatedClientLineMol,
+} from '../utils/client-line-pricing.ts';
 import { todayLocalDateOnly } from '../utils/date.ts';
 import { getUniqueViolation } from '../utils/db-errors.ts';
 import { replyDocumentCodeCollision } from '../utils/document-code-replies.ts';
@@ -350,7 +354,7 @@ const resolveOfferItemSupplierLinks = async (
   const linkedIds = items
     .map((item) => item.supplierQuoteItemId)
     .filter((id): id is string => id !== null);
-  if (linkedIds.length === 0) return items;
+  if (linkedIds.length === 0) return items.map(withCalculatedClientLineMol);
   const snapshots = await supplierQuotesRepo.getQuoteItemSnapshots(linkedIds);
   const existingByLink = new Map<string, clientOffersRepo.ClientOfferItem>();
   for (const existing of existingItems ?? []) {
@@ -358,7 +362,7 @@ const resolveOfferItemSupplierLinks = async (
       existingByLink.set(existing.supplierQuoteItemId, existing);
     }
   }
-  return items.map((item) => {
+  const resolvedItems = items.map((item) => {
     if (!item.supplierQuoteItemId) return item;
     const snapshot = snapshots.get(item.supplierQuoteItemId);
     const existing = existingByLink.get(item.supplierQuoteItemId);
@@ -409,6 +413,7 @@ const resolveOfferItemSupplierLinks = async (
         : (freshEditedCost ?? snapshot.netCost),
     };
   });
+  return resolvedItems.map(withCalculatedClientLineMol);
 };
 
 // The linked quote's sourced supplier item ids (the conversion-inheritance exemption above).
@@ -454,7 +459,7 @@ const buildOrderItemsFromOfferItems = (
     quantity: item.quantity,
     unitPrice: item.unitPrice,
     productCost: item.productCost,
-    productMolPercentage: item.productMolPercentage,
+    productMolPercentage: calculateClientLineMol(item),
     discount: item.discount,
     note: item.note,
     supplierQuoteId: item.supplierQuoteId,
@@ -1924,6 +1929,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           ({ id: _itemId, offerId: _offerId, ...rest }) => ({
             ...rest,
             id: generatePrefixedId(ITEM_ID_PREFIXES.clientOfferItem),
+            productMolPercentage: calculateClientLineMol(rest),
           }),
         );
 

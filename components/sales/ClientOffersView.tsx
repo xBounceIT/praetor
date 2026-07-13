@@ -47,6 +47,7 @@ import {
   getItemPricingContext,
   isPositiveFiniteNumber,
   MAX_MOL_PERCENTAGE,
+  MIN_MOL_PERCENTAGE,
   MOL_PERCENTAGE_DECIMALS,
   normalizeDurationForSubmit,
   normalizeDurationUnit,
@@ -56,7 +57,7 @@ import {
   parseOptionalNumberInputValue,
 } from '../../utils/numbers';
 import { getPaymentTermsOptions } from '../../utils/options';
-import { makeCostUpdater, makeMolUpdater } from '../../utils/pricingHandlers';
+import { makeCostUpdater, makeMolUpdater, makeUnitPriceUpdater } from '../../utils/pricingHandlers';
 import {
   buildProductQuickViewHref,
   buildSupplierQuoteQuickViewHref,
@@ -384,8 +385,8 @@ const useClientOffersController = ({
       : t('sales:clientQuotes.noSupplierQuote');
   };
 
-  // Pulls the linked supplier item's current quantity/cost back into the line, mirroring the
-  // linking math: the sale price is recomputed from the refreshed cost and the line's MOL (#779).
+  // Pulls the linked supplier item's current quantity/cost back into the line. The customer sale
+  // price stays unchanged and MOL is derived again from that price and the refreshed cost (#779).
   const refreshLineFromSupplier = (index: number, source: SupplierQuote['items'][number]) => {
     if (isReadOnly) return;
     setFormData((prev) => {
@@ -1116,7 +1117,7 @@ const useClientOffersController = ({
       quantity: Number.NaN,
       durationUnit: 'months',
       unitType: 'hours',
-      unitPrice: 0,
+      unitPrice: Number.NaN,
       productMolPercentage: null,
       supplierQuoteId: null,
       supplierQuoteItemId: null,
@@ -1869,6 +1870,17 @@ const ClientOfferItemsSection: React.FC<{ controller: ClientOffersController }> 
       ),
     },
     {
+      id: 'unitPrice',
+      header: t('crm:internalListing.salePrice'),
+      accessorKey: 'unitPrice',
+      align: 'right',
+      cell: ({ row }) => (
+        <div className="min-w-[130px]">
+          <ClientOfferSalePriceEditor controller={controller} line={getLine(row)} />
+        </div>
+      ),
+    },
+    {
       id: 'mol',
       header: t('sales:clientQuotes.molLabel', { defaultValue: 'MOL' }),
       accessorFn: (item) => getItemPricingContext(item).molPercentage,
@@ -2039,6 +2051,7 @@ const getClientOfferLineContext = (
         ? Number(rawCost)
         : convertUnitPrice(Number(rawCost), 'hours', item.unitType || 'hours');
   const molPercentage = item.productMolPercentage ?? undefined;
+  const unitPrice = Number.isFinite(Number(item.unitPrice)) ? Number(item.unitPrice) : undefined;
   const durationUnit = normalizeDurationUnit(item.durationUnit);
   const durationValue = getDurationInputValue(item);
   const product = products.find((p) => p.id === item.productId);
@@ -2073,8 +2086,14 @@ const getClientOfferLineContext = (
     setFormData(makeMolUpdater<Partial<ClientOffer>>(index, value));
   };
 
+  const handleUnitPriceChange = (value: string) => {
+    if (isReadOnly) return;
+    setFormData(makeUnitPriceUpdater<Partial<ClientOffer>>(index, value));
+  };
+
   return {
     cost,
+    unitPrice,
     molPercentage,
     lineCost,
     durationUnit,
@@ -2090,6 +2109,7 @@ const getClientOfferLineContext = (
     productHref,
     linkedFieldStatus,
     handleCostChange,
+    handleUnitPriceChange,
     handleMolChange,
   };
 };
@@ -2280,8 +2300,9 @@ const ClientOfferMolEditor: React.FC<{
       <ValidatedNumberInput
         value={line.molPercentage}
         placeholder="0,00"
-        min={0}
+        min={MIN_MOL_PERCENTAGE}
         max={MAX_MOL_PERCENTAGE}
+        allowNegative
         aria-label={controller.t('sales:clientQuotes.molLabel', { defaultValue: 'MOL' })}
         formatDecimals={MOL_PERCENTAGE_DECIMALS}
         onValueChange={line.handleMolChange}
@@ -2296,6 +2317,27 @@ const ClientOfferMolEditor: React.FC<{
     </>
   );
 };
+
+const ClientOfferSalePriceEditor: React.FC<{
+  controller: ClientOffersController;
+  line: ClientOfferLineContext;
+}> = ({ controller, line }) => (
+  <div className="flex w-full items-center justify-end gap-1">
+    <ValidatedNumberInput
+      value={line.unitPrice}
+      placeholder="0,00"
+      min={0}
+      aria-label={controller.t('crm:internalListing.salePrice')}
+      formatDecimals={2}
+      onValueChange={line.handleUnitPriceChange}
+      disabled={controller.isReadOnly}
+      className="w-full max-w-[5rem] flex-none border-border bg-background px-1 py-2 text-right text-sm text-foreground"
+    />
+    <span className="shrink-0 text-[9px] font-semibold text-muted-foreground">
+      {controller.currency}
+    </span>
+  </div>
+);
 
 const ClientOfferDiscountEditor: React.FC<{
   controller: ClientOffersController;

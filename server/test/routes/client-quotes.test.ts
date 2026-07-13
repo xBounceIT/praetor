@@ -928,7 +928,7 @@ describe('POST /api/sales/client-quotes/:id promotion lifecycle', () => {
 
   test('promotes exactly the selected active candidate and archives its siblings atomically', async () => {
     const winningCandidate = candidate();
-    const winningItem = item();
+    const winningItem = { ...item(), productMolPercentage: 5 };
     cqFindByIdMock
       .mockResolvedValueOnce(updatedQuote({ status: 'sent' }))
       .mockResolvedValueOnce(updatedQuote({ status: 'offer', linkedOfferId: 'OFF-2999-0001' }));
@@ -963,6 +963,7 @@ describe('POST /api/sales/client-quotes/:id promotion lifecycle', () => {
       productName: 'Service',
       quantity: 2,
       unitPrice: 100,
+      productMolPercentage: 50,
       durationMonths: 12,
     });
     expect(qcMarkPromotedMock).toHaveBeenCalledWith('q-1', 'qc-a', expect.anything());
@@ -1341,10 +1342,26 @@ describe('PUT /api/sales/client-quotes/:id supplier-item forward sync (#779)', (
     expect(res.statusCode).toBe(200);
     expect(sqSyncItemPricingMock).not.toHaveBeenCalled();
     const replaced = cqReplaceItemsMock.mock.calls[0][1] as Array<Record<string, unknown>>;
-    expect(replaced[0].unitPrice).toBe(50);
+    expect(replaced[0].unitPrice).toBe(100);
+    expect(replaced[0].productMolPercentage).toBe(50);
   });
 
-  test('converts an hourly product cost before deriving a day-line unit price', async () => {
+  test('ignores a stale submitted MOL without reloading unchanged line snapshots', async () => {
+    setupDraftQuote();
+
+    const res = await putStatus({
+      items: [lineItem(2, 50, { productMolPercentage: 20 })],
+    });
+
+    expect(res.statusCode).toBe(200);
+    // The resolver may still invoke the repository's empty-input fast path, but it must not load
+    // the unchanged supplier item merely because the submitted derived MOL is stale.
+    expect(sqGetQuoteItemSnapshotsMock).not.toHaveBeenCalledWith(['sqi-9']);
+    const replaced = cqReplaceItemsMock.mock.calls[0][1] as Array<Record<string, unknown>>;
+    expect(replaced[0].productMolPercentage).toBe(50);
+  });
+
+  test('converts an hourly product cost before deriving a day-line MOL', async () => {
     setupDraftQuote();
     cqFindItemSnapshotsForQuoteMock.mockResolvedValue([
       {
@@ -1383,10 +1400,11 @@ describe('PUT /api/sales/client-quotes/:id supplier-item forward sync (#779)', (
 
     expect(res.statusCode).toBe(200);
     const replaced = cqReplaceItemsMock.mock.calls[0][1] as Array<Record<string, unknown>>;
-    expect(replaced[0].unitPrice).toBe(80);
+    expect(replaced[0].unitPrice).toBe(10);
+    expect(replaced[0].productMolPercentage).toBe(-700);
   });
 
-  test('persists an edited local MOL on a retained supplier-sourced line', async () => {
+  test('derives MOL from an edited sale price on a retained supplier-sourced line', async () => {
     setupDraftQuote();
     cqFindItemSnapshotsForQuoteMock.mockResolvedValue([
       { ...EXISTING_SNAP, productId: null, productMolPercentage: 20 },
@@ -1408,13 +1426,13 @@ describe('PUT /api/sales/client-quotes/:id supplier-item forward sync (#779)', (
     );
 
     const res = await putStatus({
-      items: [lineItem(2, 50, { productId: null, productMolPercentage: 35 })],
+      items: [lineItem(2, 50, { productId: null, unitPrice: 80, productMolPercentage: 35 })],
     });
 
     expect(res.statusCode).toBe(200);
     const replaced = cqReplaceItemsMock.mock.calls[0][1] as Array<Record<string, unknown>>;
-    expect(replaced[0].productMolPercentage).toBe(35);
-    expect(replaced[0].unitPrice).toBe(76.92);
+    expect(replaced[0].productMolPercentage).toBe(37.5);
+    expect(replaced[0].unitPrice).toBe(80);
   });
 
   test('re-saving a STALE snapshot does not revert direct supplier-side edits', async () => {
@@ -2356,7 +2374,12 @@ describe('client quote candidate-family create and update', () => {
 
     expect(res.statusCode).toBe(200);
     expect(cqReplaceItemsMock.mock.calls[0][1]).toEqual([
-      expect.objectContaining({ quantity: 3, unitPrice: 70, supplierQuoteUnitPrice: 70 }),
+      expect.objectContaining({
+        quantity: 3,
+        unitPrice: 100,
+        productMolPercentage: 30,
+        supplierQuoteUnitPrice: 70,
+      }),
     ]);
     expect(sqSyncItemPricingMock).not.toHaveBeenCalled();
   });
@@ -2607,22 +2630,24 @@ describe('client quote candidate-family create and update', () => {
     expect(inserted[0].discount).toBe(100);
   });
 
-  test('persists the client-quote local MOL on a supplier-sourced line', async () => {
+  test('derives the client-quote local MOL from cost and sale price', async () => {
     setupCreate();
 
     const res = await postQuote([freshLine({ productMolPercentage: 35 })]);
 
     expect(res.statusCode).toBe(201);
     const inserted = cqInsertItemsMock.mock.calls[0][1] as Array<Record<string, unknown>>;
-    expect(inserted[0].productMolPercentage).toBe(35);
-    expect(inserted[0].unitPrice).toBe(76.92);
+    expect(inserted[0].productMolPercentage).toBe(50);
+    expect(inserted[0].unitPrice).toBe(100);
   });
 
-  test('rejects a line MOL that cannot produce a finite positive sale price', async () => {
+  test('replaces a stale submitted MOL with the value derived from cost and sale price', async () => {
+    setupCreate();
     const res = await postQuote([freshLine({ productMolPercentage: 100 })]);
 
-    expect(res.statusCode).toBe(400);
-    expect(cqCreateMock).not.toHaveBeenCalled();
+    expect(res.statusCode).toBe(201);
+    const inserted = cqInsertItemsMock.mock.calls[0][1] as Array<Record<string, unknown>>;
+    expect(inserted[0].productMolPercentage).toBe(50);
   });
 
   test('rejects a line discount above 100%', async () => {

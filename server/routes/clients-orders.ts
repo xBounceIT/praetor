@@ -15,6 +15,10 @@ import {
 } from '../services/clientOrderCreation.ts';
 import { reserveDocumentCodeCounterFromCode } from '../services/documentCodes.ts';
 import { logAudit } from '../utils/audit.ts';
+import {
+  calculateClientLineMol,
+  withCalculatedClientLineMol,
+} from '../utils/client-line-pricing.ts';
 import { getForeignKeyViolation, getUniqueViolation } from '../utils/db-errors.ts';
 import { replyDocumentCodeCollision } from '../utils/document-code-replies.ts';
 import type { DurationUnit } from '../utils/duration-unit.ts';
@@ -307,7 +311,7 @@ const resolveSupplierQuoteRefs = async (
   const productlessItemIds = items.flatMap((item) =>
     item.productId === null && item.supplierQuoteItemId ? [item.supplierQuoteItemId] : [],
   );
-  if (productlessItemIds.length === 0) return items;
+  if (productlessItemIds.length === 0) return items.map(withCalculatedClientLineMol);
 
   const snapshots = await supplierQuotesRepo.getQuoteItemSnapshots(productlessItemIds);
   for (let i = 0; i < items.length; i++) {
@@ -334,7 +338,7 @@ const resolveSupplierQuoteRefs = async (
       supplierQuoteUnitPrice: snapshot.netCost,
     };
   }
-  return items;
+  return items.map(withCalculatedClientLineMol);
 };
 
 const buildItemsForInsert = (
@@ -404,9 +408,9 @@ const itemsMatch = (
   return true;
 };
 
-// Fingerprint covers every field that flows into the JSONB snapshot, so cost / MOL / note /
-// unit-type / supplier-source edits all flip the change flag. The looser `itemsMatch` above
-// only powers the source-linked rejection check and is intentionally untouched here.
+// Fingerprint covers every user-authored field that flows into the JSONB snapshot. MOL is omitted
+// because it is derived from cost + unitPrice; either source changing already flips the flag, while
+// an old stale/null MOL must not turn an otherwise no-op save into a new version.
 const snapshotItemFingerprint = (item: {
   id?: string | null;
   productId?: string | null;
@@ -435,7 +439,6 @@ const snapshotItemFingerprint = (item: {
     Number(item.quantity),
     Number(item.unitPrice),
     Number(item.productCost),
-    item.productMolPercentage == null ? '' : Number(item.productMolPercentage),
     item.discount == null ? 0 : Number(item.discount),
     normalizeNotesValue(item.note),
     item.unitType,
@@ -1522,6 +1525,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           id: generatePrefixedId(ITEM_ID_PREFIXES.saleItem),
           // Empty-string productIds slip through some snapshots; the DB column needs NULL.
           productId: rest.productId || null,
+          productMolPercentage: calculateClientLineMol(rest),
         }),
       );
 

@@ -569,7 +569,7 @@ describe('<ClientQuotesView /> expired-quote handling (issue #779)', () => {
 });
 
 describe('<ClientQuotesView /> supplier-quote pricing', () => {
-  test('uses the line-local MOL instead of the supplier discount to show the margin', async () => {
+  test('uses the persisted sale price and net supplier cost to show the margin', async () => {
     const discountedSupplierQuote: SupplierQuote = {
       ...supplierQuote,
       status: 'draft',
@@ -615,11 +615,10 @@ describe('<ClientQuotesView /> supplier-quote pricing', () => {
     const dialog = await screen.findByRole('dialog');
 
     expect(within(dialog).getAllByDisplayValue('0,00').length).toBeGreaterThan(0);
-    expect(within(dialog).getAllByText('0,00 EUR').length).toBeGreaterThan(0);
-    expect(within(dialog).queryAllByText('20,00 EUR')).toHaveLength(0);
+    expect(within(dialog).getAllByText('20,00 EUR').length).toBeGreaterThan(0);
   });
 
-  test('rounds the MOL-derived unit price before calculating line totals', async () => {
+  test('uses the persisted unit sale price when calculating line totals', async () => {
     const quote = buildQuote({
       id: 'Q-ROUNDED-MOL',
       items: [

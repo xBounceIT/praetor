@@ -609,6 +609,7 @@ describe('PUT /api/sales/client-offers/:id expired rules (issue #779)', () => {
       quantity: 2,
       unitPrice: 100,
       productCost: 50,
+      productMolPercentage: 50,
       supplierQuoteId: null,
       discount: 12.5,
       durationMonths: 1,
@@ -959,6 +960,7 @@ describe('client-offers supplier-link resolution + forward sync (#779)', () => {
     expect(inserted[0].supplierQuoteUnitPrice).toBe(50);
     expect(inserted[0].supplierQuoteId).toBe('sq-9');
     expect(inserted[0].supplierQuoteSupplierName).toBe('Snapshot Co');
+    expect(inserted[0].productMolPercentage).toBe(50);
     expect(sqSyncItemPricingMock).not.toHaveBeenCalled();
   });
 
