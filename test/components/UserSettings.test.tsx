@@ -1,9 +1,10 @@
 import { beforeEach, describe, expect, mock } from 'bun:test';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor } from '@testing-library/react';
 import type { PersonalAccessToken, Settings } from '../../services/api';
 import type { UserAuthMethod } from '../../types';
 import { installI18nMock } from '../helpers/i18n';
 import { settleComponentTasks, reactTest as test } from '../helpers/reactTest';
+import { render } from '../helpers/render';
 
 installI18nMock();
 
@@ -378,6 +379,48 @@ describe('<UserSettings /> MCP tokens', () => {
     expect(setupPrompt.value).toContain('MCP server URL:');
     expect(setupPrompt.value).toContain('<paste your Praetor MCP token here>');
     expect(setupPrompt.value).toContain('Do not send it in chat messages');
+  });
+
+  test('shows the scope description in a tooltip and gives the token name more room', async () => {
+    renderSettings();
+
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: /mcp.title/ })));
+
+    const nameInput = await screen.findByPlaceholderText('mcp.namePlaceholder');
+    expect(nameInput.closest('form')).toHaveClass(
+      'md:grid-cols-[minmax(0,2fr)_minmax(10rem,1fr)_auto]',
+    );
+    expect(screen.queryByText('mcp.scopeFullDescription')).not.toBeInTheDocument();
+
+    const scopeHelp = screen.getByRole('button', { name: 'mcp.scopeFullDescription' });
+    expect(scopeHelp).toBeInTheDocument();
+
+    fireEvent.click(document.getElementById('mcp-token-scope') as HTMLButtonElement);
+    fireEvent.click(screen.getByRole('option', { name: 'mcp.scopeReadOnly' }));
+    expect(screen.queryByText('mcp.scopeReadOnlyDescription')).not.toBeInTheDocument();
+
+    const readOnlyScopeHelp = screen.getByRole('button', {
+      name: 'mcp.scopeReadOnlyDescription',
+    });
+    fireEvent.focus(readOnlyScopeHelp);
+
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('mcp.scopeReadOnlyDescription');
+  });
+
+  test('opens the scope description when activated from touch input', async () => {
+    renderSettings();
+
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: /mcp.title/ })));
+
+    const scopeHelp = await screen.findByRole('button', { name: 'mcp.scopeFullDescription' });
+    fireEvent.pointerDown(scopeHelp, { pointerType: 'touch' });
+    fireEvent.click(scopeHelp);
+
+    await waitFor(() =>
+      expect(document.querySelector('[data-slot="popover-content"]')).toHaveTextContent(
+        'mcp.scopeFullDescription',
+      ),
+    );
   });
 
   test('creates a token and displays the raw token once', async () => {
