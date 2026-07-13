@@ -57,6 +57,7 @@ describe('<CostSummaryPanel />', () => {
     expect(container.textContent).toContain('100,50');
     expect(container.textContent).toContain('120,75');
     expect(container.textContent).toContain('5,25');
+    expect(screen.getByText('Discount')).toHaveClass('text-amber-600');
     expect(screen.getByText('(19,00%)')).toHaveClass('text-amber-600');
     expect(container.textContent).toContain('30,50');
     expect(container.textContent).toContain('90,25');

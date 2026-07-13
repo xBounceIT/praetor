@@ -102,7 +102,7 @@ const CostSummaryPanel: React.FC<CostSummaryPanelProps> = ({
         </div>
         {discountRow && discountRow.amount > 0 && (
           <div className="flex justify-between">
-            <span className="text-sm font-medium text-muted-foreground">
+            <span className="text-sm font-medium text-amber-600">
               {discountRow.label}
               {typeof discountRow.percentage === 'number' &&
                 Number.isFinite(discountRow.percentage) && (
