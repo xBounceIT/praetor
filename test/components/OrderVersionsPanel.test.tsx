@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import type { ClientsOrder, OrderVersion, OrderVersionRow } from '../../types';
 import { clearSpyStateAfterAll } from '../helpers/mockCleanup.ts';
+import { render } from '../helpers/render';
 
 // Stable `t` and `i18n` references so components that put `t` in useCallback dep arrays
 // (e.g. OrderVersionsPanel.reload) don't infinite-loop in tests. The shared installI18nMock

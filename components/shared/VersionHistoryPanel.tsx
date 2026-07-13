@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { formatInsertDateTime } from '@/utils/date';
 
@@ -53,42 +54,48 @@ export function VersionHistoryPanel<Row extends VersionHistoryPanelRow>({
       open={isOpen}
       onOpenChange={setIsOpen}
       className={cn(
-        'hidden max-h-[90vh] flex-shrink-0 flex-col overflow-hidden rounded-lg border border-border bg-background text-foreground shadow-lg transition-[width] duration-200 animate-in fade-in slide-in-from-right 2xl:flex',
-        isOpen ? 'w-72' : 'w-12',
+        'hidden max-h-[90vh] flex-shrink-0 flex-col overflow-hidden rounded-lg border border-border bg-background text-foreground shadow-lg transition-[width] duration-200 ease-out motion-reduce:transition-none animate-in fade-in slide-in-from-right 2xl:flex',
+        isOpen ? 'w-72 delay-0' : 'w-12 delay-150 motion-reduce:delay-0',
       )}
     >
-      <CollapsibleTrigger asChild>
-        <Button
-          type="button"
-          variant="ghost"
-          title={labels.title}
-          aria-label={labels.title}
-          className={cn(
-            'h-auto w-full shrink-0 justify-start gap-2 rounded-none border-b border-border bg-muted/30 px-4 py-3 hover:bg-muted/60',
-            !isOpen && 'size-12 justify-center gap-1 border-b-0 p-0',
-          )}
-        >
-          <i className="fa-solid fa-clock-rotate-left text-primary" aria-hidden="true"></i>
-          {isOpen && (
-            <>
-              <span className="flex-1 text-left text-sm font-semibold text-foreground">
-                {labels.title}
-              </span>
-              <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                {rows.length}
-              </span>
-            </>
-          )}
-          <i
-            className={cn(
-              'fa-solid text-[10px] text-muted-foreground',
-              isOpen ? 'fa-chevron-right' : 'fa-chevron-left',
-            )}
-            aria-hidden="true"
-          ></i>
-        </Button>
-      </CollapsibleTrigger>
-      <CollapsibleContent className="min-h-0 flex-1">
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <CollapsibleTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              aria-label={labels.title}
+              className={cn(
+                'h-auto w-full shrink-0 justify-start gap-2 rounded-none border-b border-border bg-muted/30 px-4 py-3 hover:bg-muted/60',
+                !isOpen && 'size-12 justify-center gap-1 border-b-0 p-0',
+              )}
+            >
+              <i
+                className={cn(
+                  'fa-solid text-[10px] text-muted-foreground',
+                  isOpen ? 'fa-chevron-right' : 'fa-chevron-left',
+                )}
+                aria-hidden="true"
+              ></i>
+              <i className="fa-solid fa-clock-rotate-left text-primary" aria-hidden="true"></i>
+              {isOpen && (
+                <>
+                  <span className="flex-1 text-left text-sm font-semibold text-foreground">
+                    {labels.title}
+                  </span>
+                  <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                    {rows.length}
+                  </span>
+                </>
+              )}
+            </Button>
+          </CollapsibleTrigger>
+        </TooltipTrigger>
+        <TooltipContent side="left" sideOffset={8}>
+          {labels.title}
+        </TooltipContent>
+      </Tooltip>
+      <CollapsibleContent className="version-history-content min-h-0 flex-1">
         <div className="flex h-full min-h-0 flex-col">
           <div className="flex-1 overflow-y-auto">
             {isLoading && (
