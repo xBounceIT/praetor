@@ -11,7 +11,7 @@ Praetor is an AI-enhanced ERP application for time tracking, project management,
 ### Frontend (root directory)
 ```bash
 bun run dev          # Start dev server (port 3000)
-bun run build        # Build user docs, then the production frontend
+bun run build        # Build user docs and the production frontend, then smoke-test login boot
 bun run preview      # Preview the production frontend build
 bun run typecheck    # Type-check backend and frontend
 bun run test         # Run backend and frontend unit tests
