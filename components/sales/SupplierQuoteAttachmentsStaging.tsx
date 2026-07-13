@@ -10,13 +10,18 @@ import FieldTooltip from '../shared/FieldTooltip';
 import AttachmentDropzone from './AttachmentDropzone';
 import AttachmentRow from './AttachmentRow';
 
+export type StagedSupplierQuoteAttachment = {
+  id: string;
+  file: File;
+};
+
 interface SupplierQuoteAttachmentsStagingProps {
   /**
    * Files queued for upload. The parent (SupplierQuotesView) owns this list so it can flush the
    * queue to the server right after the quote is created — a brand-new quote has no id yet, so the
    * files can't be uploaded immediately the way the persisted section does.
    */
-  files: File[];
+  files: StagedSupplierQuoteAttachment[];
   onAdd: (file: File) => void;
   onRemove: (index: number) => void;
   /**
@@ -108,10 +113,9 @@ const SupplierQuoteAttachmentsStaging: React.FC<SupplierQuoteAttachmentsStagingP
 
       {files.length > 0 && (
         <ul className="divide-y divide-zinc-100 rounded-xl border border-zinc-200 bg-white">
-          {files.map((file, index) => (
+          {files.map(({ id, file }, index) => (
             <AttachmentRow
-              // Staged files have no server id yet; name+size+position is stable enough here.
-              key={`${file.name}-${file.size}-${index}`}
+              key={id}
               fileName={file.name}
               meta={formatAttachmentFileSize(file.size)}
               actions={

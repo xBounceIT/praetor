@@ -53,6 +53,7 @@ describe('<ValidatedNumberInput />', () => {
         <ValidatedNumberInput
           value={v}
           onValueChange={(val) => {
+            // react-doctor-disable-next-line react-doctor/no-impure-state-updater -- Test harness event callback records both state and spy output.
             setV(val);
             onValueChange(val);
           }}

@@ -473,18 +473,29 @@ const useAuthSettingsController = ({
       dispatchAuthState({ type: 'setAcsUrlState', update }),
     [],
   );
-  const loadedLdapConfigRef = useRef<LdapConfig | null | undefined>(null);
-  const hasLoadedLdapConfigRef = useRef(false);
+  const [loadedLdapConfig, setLoadedLdapConfig] = useState<LdapConfig | null | undefined>(
+    undefined,
+  );
   const bindPasswordReplace = useSecretReplaceState(
     ldapForm.bindPassword,
     (bindPassword) => setLdapForm((prev) => ({ ...prev, bindPassword })),
     config,
   );
   const tlsCaFileInputRef = useRef<HTMLInputElement>(null);
+  const savedResetTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  if (!hasLoadedLdapConfigRef.current || loadedLdapConfigRef.current !== config) {
-    hasLoadedLdapConfigRef.current = true;
-    loadedLdapConfigRef.current = config;
+  useEffect(
+    () => () => {
+      if (savedResetTimeoutRef.current !== null) {
+        clearTimeout(savedResetTimeoutRef.current);
+      }
+    },
+    [],
+  );
+
+  if (loadedLdapConfig !== config) {
+    // react-doctor-disable-next-line react-doctor/no-impure-state-updater -- React-supported prop snapshot adjustment; no updater callback is involved.
+    setLoadedLdapConfig(config);
     setLdapForm(config || DEFAULT_LDAP_CONFIG);
   }
 
@@ -586,8 +597,14 @@ const useAuthSettingsController = ({
   );
 
   const showSaved = () => {
+    if (savedResetTimeoutRef.current !== null) {
+      clearTimeout(savedResetTimeoutRef.current);
+    }
     setIsSaved(true);
-    setTimeout(() => setIsSaved(false), 3000);
+    savedResetTimeoutRef.current = setTimeout(() => {
+      savedResetTimeoutRef.current = null;
+      setIsSaved(false);
+    }, 3000);
   };
 
   const isLdapDirty = JSON.stringify(ldapForm) !== JSON.stringify(config || DEFAULT_LDAP_CONFIG);
@@ -947,6 +964,7 @@ const useAuthSettingsController = ({
 type AuthSettingsController = ReturnType<typeof useAuthSettingsController>;
 
 const AuthSettings: React.FC<AuthSettingsProps> = (props) => {
+  // react-doctor-disable-next-line react-doctor/no-impure-state-updater -- Custom-hook invocation is misclassified as a state updater.
   const controller = useAuthSettingsController(props);
   return <AuthSettingsLayout controller={controller} />;
 };
@@ -2540,20 +2558,26 @@ const RoleMappings: React.FC<RoleMappingsProps> = ({
   onRemove,
   onChange,
 }) => {
-  const nextKeyRef = useRef(0);
-  const rowKeysRef = useRef<string[]>([]);
+  const [rowKeyState, setRowKeyState] = useState<{ keys: string[]; nextKey: number }>({
+    keys: [],
+    nextKey: 0,
+  });
 
-  while (rowKeysRef.current.length < mappings.length) {
-    rowKeysRef.current.push(`role-mapping-${nextKeyRef.current}`);
-    nextKeyRef.current += 1;
-  }
-
-  if (rowKeysRef.current.length > mappings.length) {
-    rowKeysRef.current.length = mappings.length;
+  if (rowKeyState.keys.length !== mappings.length) {
+    const nextKeys = rowKeyState.keys.slice(0, mappings.length);
+    let nextKey = rowKeyState.nextKey;
+    while (nextKeys.length < mappings.length) {
+      nextKeys.push(`role-mapping-${nextKey}`);
+      nextKey += 1;
+    }
+    setRowKeyState({ keys: nextKeys, nextKey });
   }
 
   const handleRemove = (index: number) => {
-    rowKeysRef.current.splice(index, 1);
+    setRowKeyState((current) => ({
+      ...current,
+      keys: current.keys.filter((_, keyIndex) => keyIndex !== index),
+    }));
     onRemove(index);
   };
 
@@ -2577,7 +2601,7 @@ const RoleMappings: React.FC<RoleMappingsProps> = ({
           <p className="text-xs text-muted-foreground italic">{noMappingsLabel}</p>
         ) : (
           mappings.map((mapping, index) => (
-            <div key={rowKeysRef.current[index]} className="flex gap-4 items-start">
+            <div key={rowKeyState.keys[index]} className="flex gap-4 items-start">
               <div className="flex-1">
                 <Input
                   type="text"

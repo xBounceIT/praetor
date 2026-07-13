@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, mock, test } from 'bun:test';
+import { afterEach, describe, expect, mock } from 'bun:test';
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type {
@@ -8,6 +8,7 @@ import type {
 } from '../../../services/api/products';
 import type { Product } from '../../../types';
 import { installI18nMock } from '../../helpers/i18n';
+import { reactTest as test } from '../../helpers/reactTest';
 import { render } from '../../helpers/render';
 
 installI18nMock();
@@ -80,15 +81,23 @@ const PRODUCTS_VIEWS_KEY = 'praetor_table_customviews_crm_internallisting_title'
 const PRODUCTS_ACTIVE_VIEW_KEY = 'praetor_table_activeview_crm_internallisting_title';
 
 describe('<InternalListingView /> productFilterId', () => {
-  test('shows every product when no filter is supplied', () => {
+  const settleCatalogLoad = async () => {
+    await act(async () => {
+      await Promise.resolve();
+    });
+  };
+
+  test('shows every product when no filter is supplied', async () => {
     render(<InternalListingView {...baseProps} products={products} />);
+    await settleCatalogLoad();
     expect(screen.getByText('Solar Panel')).toBeInTheDocument();
     expect(screen.getByText('Wind Turbine')).toBeInTheDocument();
     expect(screen.getAllByLabelText('table.rowActions')).toHaveLength(products.length);
   });
 
-  test("pre-filters the table to the linked product's code (visible Codice column)", () => {
+  test("pre-filters the table to the linked product's code (visible Codice column)", async () => {
     render(<InternalListingView {...baseProps} products={products} productFilterId="prod-2" />);
+    await settleCatalogLoad();
     // The deep-linked product (resolved to its code) is the only row shown, and
     // the filter lives on the visible "Codice" column so it stays clearable via
     // the native column-filter dropdown.
@@ -101,12 +110,13 @@ describe('<InternalListingView /> productFilterId', () => {
     ).toBeInTheDocument();
   });
 
-  test('falls back to the name column when the linked product has no code', () => {
+  test('falls back to the name column when the linked product has no code', async () => {
     const codeless: Product[] = [
       buildProduct({ id: 'prod-1', name: 'Solar Panel', productCode: 'SP-100' }),
       buildProduct({ id: 'prod-3', name: 'Codeless Widget', productCode: '' }),
     ];
     render(<InternalListingView {...baseProps} products={codeless} productFilterId="prod-3" />);
+    await settleCatalogLoad();
     expect(screen.getByText('Codeless Widget')).toBeInTheDocument();
     expect(screen.queryByText('Solar Panel')).not.toBeInTheDocument();
     // The fallback filter must also land on a VISIBLE column (the name column),
@@ -116,7 +126,7 @@ describe('<InternalListingView /> productFilterId', () => {
     ).toBeInTheDocument();
   });
 
-  test('overrides a persisted saved table view (deep-link filter wins)', () => {
+  test('overrides a persisted saved table view (deep-link filter wins)', async () => {
     // Regression (PR #766 review): a saved active view that filters to a
     // different product would otherwise overwrite the deep-link filter once
     // views hydrate after mount. The quick-view filter must win.
@@ -135,12 +145,13 @@ describe('<InternalListingView /> productFilterId', () => {
     localStorage.setItem(PRODUCTS_ACTIVE_VIEW_KEY, 'saved-1');
 
     render(<InternalListingView {...baseProps} products={products} productFilterId="prod-2" />);
+    await settleCatalogLoad();
     // The deep-linked product (WT-200) wins over the saved view's SP-100 filter.
     expect(screen.getByText('Wind Turbine')).toBeInTheDocument();
     expect(screen.queryByText('Solar Panel')).not.toBeInTheDocument();
   });
 
-  test('keeps the Code filter visible when products load after mount (cold open)', () => {
+  test('keeps the Code filter visible when products load after mount (cold open)', async () => {
     // Regression (PR #766 review): on a cold open `products` is empty on first
     // render, so the id->code filter can't resolve yet. A saved active view that
     // HIDES the Code column must not slip in before the filter materializes, or
@@ -163,8 +174,12 @@ describe('<InternalListingView /> productFilterId', () => {
     const { rerender } = render(
       <InternalListingView {...baseProps} products={[]} productFilterId="prod-2" />,
     );
+    await settleCatalogLoad();
     // Products arrive asynchronously (App finishes loading them).
-    rerender(<InternalListingView {...baseProps} products={products} productFilterId="prod-2" />);
+    await act(async () => {
+      rerender(<InternalListingView {...baseProps} products={products} productFilterId="prod-2" />);
+      await Promise.resolve();
+    });
 
     expect(screen.getByText('Wind Turbine')).toBeInTheDocument();
     expect(screen.queryByText('Solar Panel')).not.toBeInTheDocument();

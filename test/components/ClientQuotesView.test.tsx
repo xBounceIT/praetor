@@ -1,5 +1,5 @@
-import { afterEach, describe, expect, mock, test } from 'bun:test';
-import { fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { afterEach, describe, expect, mock } from 'bun:test';
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ReactNode } from 'react';
 import type {
@@ -12,6 +12,7 @@ import type {
   SupplierQuote,
 } from '../../types';
 import { LineDeleteConfirmStub } from '../helpers/lineItemDeleteConfirm';
+import { settleComponentTasks, reactTest as test } from '../helpers/reactTest';
 import { render } from '../helpers/render';
 
 // Stable `t`/`i18n`: opening the edit modal mounts QuoteVersionsPanel, whose `reload`
@@ -639,15 +640,19 @@ describe('<ClientQuotesView /> supplier-quote pricing', () => {
     });
 
     render(<ClientQuotesView {...baseProps} quotes={[quote]} supplierQuotes={[]} />);
-    fireEvent.click(screen.getByText('Q-ROUNDED-MOL'));
+    await act(async () => {
+      fireEvent.click(screen.getByText('Q-ROUNDED-MOL'));
+      await settleComponentTasks();
+    });
     const dialog = await screen.findByRole('dialog');
+    await screen.findByText('clientQuotes.versionHistory.empty');
 
     expect(within(dialog).getAllByText('8.615,39 EUR').length).toBeGreaterThan(0);
   });
 });
 
 describe('<ClientQuotesView /> supplier-quote item labels', () => {
-  test('an existing line keeps its label when the accepted supplier quote is past-dated', () => {
+  test('an existing line keeps its label when the accepted supplier quote is past-dated', async () => {
     // The picker hides past-dated accepted quotes from NEW sourcing (intentional, #154), but an
     // existing line's display label must resolve across ALL supplier quotes — the link is intact
     // and the server-side sourcing gate still accepts the item.
@@ -688,7 +693,10 @@ describe('<ClientQuotesView /> supplier-quote item labels', () => {
     render(
       <ClientQuotesView {...baseProps} quotes={[quote]} supplierQuotes={[pastDatedAccepted]} />,
     );
-    fireEvent.click(screen.getByText('Q-OLD-SOURCE'));
+    await act(async () => {
+      fireEvent.click(screen.getByText('Q-OLD-SOURCE'));
+      await settleComponentTasks();
+    });
 
     expect(
       screen.getAllByText('[SQ-OLD] Acme Supplies · Solar Panel (60,00)').length,

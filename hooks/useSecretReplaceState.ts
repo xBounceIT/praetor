@@ -26,6 +26,7 @@ export const useSecretReplaceState = (
   // window when resetDep flips back-to-back).
   const [resetDepSnapshot, setResetDepSnapshot] = useState(resetDep);
   if (resetDep !== resetDepSnapshot) {
+    // react-doctor-disable-next-line react-doctor/no-impure-state-updater -- React-supported prop snapshot adjustment; no updater callback is involved.
     setResetDepSnapshot(resetDep);
     setIsReplacing(false);
   }

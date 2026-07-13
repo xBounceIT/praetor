@@ -65,7 +65,7 @@ export interface ProjectRuleFormModalProps {
 type ProjectRuleFormState = {
   name: string;
   conditionLogic: ProjectRuleConditionLogic;
-  conditions: ProjectRuleCondition[];
+  conditions: ProjectRuleFormConditionRow[];
   actions: ProjectRuleFormActionRow[];
   isEnabled: boolean;
   errors: Record<string, string>;
@@ -80,6 +80,8 @@ type ProjectRuleFormActionRow = {
   recipientRoleIds: string[];
   webhookId: string;
 };
+
+type ProjectRuleFormConditionRow = ProjectRuleCondition & { uid: string };
 
 type ProjectRuleFormAction =
   | { type: 'setName'; name: string }
@@ -131,6 +133,12 @@ const normalizeConditionForForm = (condition: ProjectRuleCondition): ProjectRule
 const uniqueStrings = (values: readonly string[]) => Array.from(new Set(values));
 
 let actionRowCounter = 0;
+let conditionRowCounter = 0;
+
+const createConditionRow = (condition: ProjectRuleCondition): ProjectRuleFormConditionRow => {
+  conditionRowCounter += 1;
+  return { ...condition, uid: `project-rule-condition-${conditionRowCounter}` };
+};
 
 const createActionRow = (
   patch: Partial<Omit<ProjectRuleFormActionRow, 'uid'>> = {},
@@ -239,19 +247,23 @@ const buildActionConfigFromRows = (
 const conditionsForRule = (
   rule: ProjectRule | null | undefined,
   fallbackField: string,
-): ProjectRuleCondition[] => {
-  if (rule?.conditions?.length) return rule.conditions.map(normalizeConditionForForm);
+): ProjectRuleFormConditionRow[] => {
+  if (rule?.conditions?.length) {
+    return rule.conditions.map((condition) =>
+      createConditionRow(normalizeConditionForForm(condition)),
+    );
+  }
   if (rule) {
     return [
-      {
+      createConditionRow({
         field: rule.field,
         operator: rule.operator,
         value: rule.value,
         valueType: 'literal',
-      },
+      }),
     ];
   }
-  return fallbackField ? [defaultConditionForField(fallbackField)] : [];
+  return fallbackField ? [createConditionRow(defaultConditionForField(fallbackField))] : [];
 };
 
 const enumValueLabelKey = (field: string, value: string) => {
@@ -294,7 +306,10 @@ const projectRuleFormReducer = (
     case 'addCondition':
       return {
         ...state,
-        conditions: [...state.conditions, defaultConditionForField(action.field)],
+        conditions: [
+          ...state.conditions,
+          createConditionRow(defaultConditionForField(action.field)),
+        ],
       };
     case 'removeCondition':
       return {
@@ -360,7 +375,7 @@ type ProjectRuleOption = { id: string; name: string };
 
 const ProjectRuleConditionsEditor: React.FC<{
   conditionLogic: ProjectRuleConditionLogic;
-  conditions: ProjectRuleCondition[];
+  conditions: ProjectRuleFormConditionRow[];
   errors: Record<string, string>;
   submitting: boolean;
   availableFields: ReturnType<typeof getAvailableProjectRuleFields>;
@@ -474,10 +489,7 @@ const ProjectRuleConditionsEditor: React.FC<{
             const operatorError = errors[`operator-${index}`];
             const valueError = errors[`value-${index}`];
             return (
-              <div
-                key={`${condition.field}-${index}`}
-                className={`${CONDITION_GRID_CLASSNAME} p-3`}
-              >
+              <div key={condition.uid} className={`${CONDITION_GRID_CLASSNAME} p-3`}>
                 <Field data-invalid={!!fieldError}>
                   <FieldLabel
                     className="md:sr-only"

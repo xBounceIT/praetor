@@ -122,6 +122,8 @@
   },
   "calendar": {
     "today": "Oggi",
+    "previousMonth": "Mese precedente",
+    "nextMonth": "Mese successivo",
     "target": "Obiettivo",
     "overLimit": "Oltre il limite",
     "dailyGoal": "Obiettivo Giornaliero",

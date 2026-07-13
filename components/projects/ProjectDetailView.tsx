@@ -1,5 +1,5 @@
 import type React from 'react';
-import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useReducer, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { LinkedRecordBanner } from '@/components/shared/LinkedRecordBanner';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -477,19 +477,19 @@ const useProjectDetailController = ({
 
   const entriesLoadKey = `${project.id}|${canViewEntries ? '1' : '0'}`;
   const assignedLoadKey = `${project.id}|${canManageAssignments ? '1' : '0'}`;
-  const loadedEntriesKeyRef = useRef<string | null>(null);
-  const loadedAssignedKeyRef = useRef<string | null>(null);
+  const [loadedEntriesKey, setLoadedEntriesKey] = useState<string | null>(null);
+  const [loadedAssignedKey, setLoadedAssignedKey] = useState<string | null>(null);
 
-  if (loadedEntriesKeyRef.current !== entriesLoadKey) {
-    loadedEntriesKeyRef.current = entriesLoadKey;
+  if (loadedEntriesKey !== entriesLoadKey) {
+    setLoadedEntriesKey(entriesLoadKey);
     setEntries([]);
     setEntriesTruncated(false);
     setEntriesError(canViewEntries ? null : 'forbidden');
     setEntriesLoading(canViewEntries);
   }
 
-  if (loadedAssignedKeyRef.current !== assignedLoadKey) {
-    loadedAssignedKeyRef.current = assignedLoadKey;
+  if (loadedAssignedKey !== assignedLoadKey) {
+    setLoadedAssignedKey(assignedLoadKey);
     setAssignedUserIds([]);
     setAssignedLoading(canManageAssignments);
   }
@@ -1120,7 +1120,8 @@ const useProjectDetailController = ({
     return { totalDays, elapsedDays, remainingDays, pct, phase, start, end };
   }, [project.startDate, project.endDate]);
 
-  const assignedUsers = users.filter((u) => assignedUserIds.includes(u.id));
+  const assignedUserIdSet = new Set(assignedUserIds);
+  const assignedUsers = users.filter((u) => assignedUserIdSet.has(u.id));
   // Use the filtered list so the count and the avatar row always agree; an assigned-but-
   // missing-from-`users` id is invisible in the UI, so it shouldn't inflate the KPI.
   const teamSize = assignedUsers.length;
@@ -1238,6 +1239,7 @@ const useProjectDetailController = ({
 type ProjectDetailController = ReturnType<typeof useProjectDetailController>;
 
 const ProjectDetailView: React.FC<ProjectDetailViewProps> = (props) => {
+  // react-doctor-disable-next-line react-doctor/no-impure-state-updater -- Custom-hook invocation is misclassified as a state updater.
   const controller = useProjectDetailController(props);
   return <ProjectDetailLayout controller={controller} />;
 };

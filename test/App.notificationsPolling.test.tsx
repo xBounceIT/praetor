@@ -91,7 +91,10 @@ describe('App notifications polling cancellation (#618)', () => {
     resolveList = null;
 
     const { result, rerender } = renderHook(
-      ({ user }: { user: { id: string } | null }) => useNotificationsPolling(user),
+      ({ user }: { user: { id: string } | null }) => {
+        // react-doctor-disable-next-line react-doctor/no-impure-state-updater -- renderHook callback invokes the hook under test; it is not a state updater.
+        return useNotificationsPolling(user);
+      },
       { initialProps: { user: { id: 'u1' } as { id: string } | null } },
     );
 

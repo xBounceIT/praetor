@@ -18,3 +18,15 @@ describe('<AiReportingView /> dark-mode error banner (issue #768 follow-up)', ()
     expectSourceOmitsAll(source, ['border-red-200']);
   });
 });
+
+describe('<AiReportingView /> async cleanup', () => {
+  test('aborts streaming work and invalidates pending loads on unmount', async () => {
+    const source = await readComponentSource('reports/AiReportingView.tsx');
+
+    expectSourceContainsAll(source, [
+      'loadTokenRef.current += 1',
+      'sendRunIdRef.current += 1',
+      'abortRef.current?.abort()',
+    ]);
+  });
+});

@@ -1,6 +1,6 @@
 import { Save } from 'lucide-react';
 import type React from 'react';
-import { useMemo, useReducer, useRef } from 'react';
+import { useMemo, useReducer, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Client, Project, ProjectTask, TimeEntry, TimeEntryLocation } from '../../types';
 import { getLocalDateString } from '../../utils/date';
@@ -280,7 +280,7 @@ const DailyView: React.FC<DailyViewProps> = ({
     [clients, projects, projectTasks, permissions],
   );
 
-  const loadedSelectedDateRef = useRef<string | null>(null);
+  const [loadedSelectedDate, setLoadedSelectedDate] = useState<string | null>(null);
   const [form, dispatchForm] = useReducer(dailyEntryFormReducer, initialDailyEntryFormState);
   const {
     date,
@@ -303,8 +303,9 @@ const DailyView: React.FC<DailyViewProps> = ({
 
   const hasValidDuration = parseFloat(duration) > 0;
 
-  if (loadedSelectedDateRef.current !== selectedDate) {
-    loadedSelectedDateRef.current = selectedDate;
+  if (loadedSelectedDate !== selectedDate) {
+    // react-doctor-disable-next-line react-doctor/no-impure-state-updater -- React-supported prop snapshot adjustment; no updater callback is involved.
+    setLoadedSelectedDate(selectedDate);
     dispatchForm({ type: 'setDate', date: selectedDate || getLocalDateString() });
   }
 

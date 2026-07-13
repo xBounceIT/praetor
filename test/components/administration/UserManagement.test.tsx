@@ -1,11 +1,13 @@
-import { beforeEach, describe, expect, mock, test } from 'bun:test';
+import { beforeEach, describe, expect, mock, spyOn } from 'bun:test';
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ComponentProps } from 'react';
+import { viewsApi } from '../../../services/api/views';
 import type { User } from '../../../types';
 import { THEME_STORAGE_KEY } from '../../../utils/theme';
 import { installI18nMock } from '../../helpers/i18n';
 import { clearSpyStateAfterAll } from '../../helpers/mockCleanup.ts';
+import { reactTest as test } from '../../helpers/reactTest';
 import { render } from '../../helpers/render';
 import {
   expectSourceContainsAll,
@@ -37,6 +39,7 @@ mock.module('../../../utils/toast', () => ({
 }));
 
 clearSpyStateAfterAll();
+spyOn(viewsApi, 'list').mockResolvedValue([]);
 
 const UserManagement = (await import('../../../components/administration/UserManagement')).default;
 

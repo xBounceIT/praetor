@@ -1,5 +1,5 @@
 import type React from 'react';
-import { useCallback, useEffect, useMemo, useReducer, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useBillingFrequencyOptions, useBillingTypeOptions } from '../../hooks/useBillingOptions';
@@ -570,9 +570,9 @@ const TasksView: React.FC<TasksViewProps> = ({
 
   const projectIds = useMemo(() => projects.map((p) => p.id), [projects]);
   const projectIdsKey = useMemo(() => projectIds.join('\u0000'), [projectIds]);
-  const loadedProjectIdsKeyRef = useRef(projectIdsKey);
-  if (loadedProjectIdsKeyRef.current !== projectIdsKey) {
-    loadedProjectIdsKeyRef.current = projectIdsKey;
+  const [loadedProjectIdsKey, setLoadedProjectIdsKey] = useState(projectIdsKey);
+  if (loadedProjectIdsKey !== projectIdsKey) {
+    setLoadedProjectIdsKey(projectIdsKey);
     dispatch({ type: 'resetHours', hasProjects: projectIds.length > 0 });
   }
   const translatedBillingTypeOptions = useBillingTypeOptions();

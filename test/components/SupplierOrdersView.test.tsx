@@ -1,7 +1,8 @@
-import { afterEach, describe, expect, mock, test } from 'bun:test';
-import { fireEvent, screen, waitFor } from '@testing-library/react';
+import { afterEach, describe, expect, mock } from 'bun:test';
+import { act, fireEvent, screen, waitFor } from '@testing-library/react';
 import type { Product, Supplier, SupplierSaleOrder } from '../../types';
 import { installI18nMock } from '../helpers/i18n';
+import { reactTest as test } from '../helpers/reactTest';
 import { render } from '../helpers/render';
 
 installI18nMock();
@@ -77,7 +78,7 @@ describe('<SupplierOrdersView /> line item duration (issue #776)', () => {
     expect(durationInputs[0].value).toBe('3');
   });
 
-  test('editing the duration updates the submitted multiplier', () => {
+  test('editing the duration updates the submitted multiplier', async () => {
     const onUpdateOrder = mock((_id: string, _updates: Partial<SupplierSaleOrder>) => {});
     const order = buildOrder({ id: 'SO-DUR-SUBMIT', status: 'draft' });
     render(<SupplierOrdersView {...baseProps} orders={[order]} onUpdateOrder={onUpdateOrder} />);
@@ -88,7 +89,9 @@ describe('<SupplierOrdersView /> line item duration (issue #776)', () => {
       .filter((el): el is HTMLInputElement => el instanceof HTMLInputElement);
     fireEvent.change(durationInputs[0], { target: { value: '4' } });
 
-    fireEvent.click(screen.getByText('common:buttons.update'));
+    await act(async () => {
+      fireEvent.click(screen.getByText('common:buttons.update'));
+    });
 
     expect(onUpdateOrder).toHaveBeenCalledTimes(1);
     const updates = onUpdateOrder.mock.calls[0]?.[1] as Partial<SupplierSaleOrder>;

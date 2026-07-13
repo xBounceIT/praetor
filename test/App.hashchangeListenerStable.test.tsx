@@ -1,6 +1,7 @@
 import { afterAll, describe, expect, spyOn, test } from 'bun:test';
 import { act, renderHook } from '@testing-library/react';
 import { useEffect, useRef, useState } from 'react';
+import { useLatestRef } from '../hooks/useLatestRef';
 import type { User, View } from '../types';
 import { resolveHashChange, stripHashPrefix } from '../utils/hashCanonicalization';
 import {
@@ -24,11 +25,10 @@ const useHashSync = (initialView: View | '404', initialUser: Pick<User, 'id'> | 
   }
   const programmaticHashTracker = programmaticHashTrackerRef.current;
 
-  const activeViewRef = useRef<View | '404'>(activeView);
-  activeViewRef.current = activeView;
-  const currentUserRef = useRef(initialUser);
-  currentUserRef.current = initialUser;
+  const activeViewRef = useLatestRef<View | '404'>(activeView);
+  const currentUserRef = useLatestRef(initialUser);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the stable listener intentionally reads changing values through useLatestRef.
   useEffect(() => {
     const handleHashChange = () => {
       if (programmaticHashTracker.consumeIfPending()) return;

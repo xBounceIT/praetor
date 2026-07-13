@@ -23,4 +23,11 @@ describe('App loading spinner translations', () => {
     expect(component).toContain("t('common:states.loading')");
     expect(component).not.toContain('Loading…');
   });
+
+  test('technical documentation lazy chunks render inside a loading boundary', () => {
+    const component = getComponentSource('TechnicalDocsRoute', 'LoginRoute');
+
+    expect(component).toContain('<Suspense fallback={<AppLoadingScreen />}>');
+    expect(component).toContain("view === 'api' ? <ApiDocsView /> : <FrontendDocsView />");
+  });
 });

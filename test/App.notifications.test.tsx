@@ -84,7 +84,10 @@ const makeNotification = (id: string, isRead = false): Notification => ({
 describe('App handleDeleteNotification', () => {
   test('callback identity is stable across notifications updates', async () => {
     const { result, rerender } = renderHook(
-      ({ initial }: { initial: Notification[] }) => useNotificationsCallback(initial),
+      ({ initial }: { initial: Notification[] }) => {
+        // react-doctor-disable-next-line react-doctor/no-impure-state-updater -- renderHook callback invokes the hook under test; it is not a state updater.
+        return useNotificationsCallback(initial);
+      },
       { initialProps: { initial: [makeNotification('n1'), makeNotification('n2')] } },
     );
 

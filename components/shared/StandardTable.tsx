@@ -29,12 +29,15 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useReducer,
   useRef,
+  useState,
 } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useLatestRef } from '../../hooks/useLatestRef';
 import { ApiError } from '../../services/api/client';
 import { type SavedViewAccess, type SavedViewDto, viewsApi } from '../../services/api/views';
 import { readTextFromClipboard, writeTextToClipboard } from '../../utils/clipboard';
@@ -262,6 +265,7 @@ const HeaderFilter = <T,>({
 }: HeaderFilterProps<T>) => {
   if (!column.getCanFilter()) return null;
   const selectedValues = getSelectedFilterValues(column);
+  const selectedValueSet = new Set(selectedValues);
   const hasFilter = selectedValues.length > 0;
   const normalizedFilterSearch = filterSearch.trim().toLocaleLowerCase();
   const visibleOptions = normalizedFilterSearch
@@ -314,10 +318,10 @@ const HeaderFilter = <T,>({
             visibleOptions.map((option) => (
               <DropdownMenuCheckboxItem
                 key={option || '__empty__'}
-                checked={selectedValues.includes(option)}
+                checked={selectedValueSet.has(option)}
                 onSelect={(event) => {
                   event.preventDefault();
-                  const next = selectedValues.includes(option)
+                  const next = selectedValueSet.has(option)
                     ? selectedValues.filter((value) => value !== option)
                     : [...selectedValues, option];
                   column.setFilterValue(next.length > 0 ? next : undefined);
@@ -1053,8 +1057,7 @@ const useStandardTableController = <T extends object>({
     }),
   );
   const { sortState, filterState, hiddenColIds, columnOrder, activeViewId } = tableViewState;
-  const filterStateRef = useRef(filterState);
-  filterStateRef.current = filterState;
+  const filterStateRef = useLatestRef(filterState);
 
   const [tableUiState, dispatchTableUi] = useReducer(
     standardTableUiReducer,
@@ -1121,8 +1124,7 @@ const useStandardTableController = <T extends object>({
     (update: StateUpdate<FontSize>) => setTableUiField('fontSize', update),
     [setTableUiField],
   );
-  const fontSizeRef = useRef(fontSize);
-  fontSizeRef.current = fontSize;
+  const fontSizeRef = useLatestRef(fontSize);
   const setColumnSizing = useCallback(
     (update: StateUpdate<ColumnSizingState>) => setTableUiField('columnSizing', update),
     [setTableUiField],
@@ -1232,7 +1234,7 @@ const useStandardTableController = <T extends object>({
       window.removeEventListener(FONT_SIZE_CHANGE_EVENT, handleFontSizeChange);
       window.removeEventListener('storage', handleFontSizeStorageChange);
     };
-  }, [setFontSize, storageIdentity]);
+  }, [fontSizeRef, setFontSize, storageIdentity]);
 
   // Upsert a view's ownership/permission metadata from a server response (server-backed only).
   const rememberServerViewMeta = useCallback(
@@ -1247,10 +1249,8 @@ const useStandardTableController = <T extends object>({
   );
   // Read by the legacy-view migration so it can re-point a persisted active-view id (an old local
   // UUID) at the new server id after upload, without becoming a load-effect dependency.
-  const activeViewIdRef = useRef(activeViewId);
-  activeViewIdRef.current = activeViewId;
-  const columnsRef = useRef(columns);
-  columnsRef.current = columns;
+  const activeViewIdRef = useLatestRef(activeViewId);
+  const columnsRef = useLatestRef(columns);
   const hasResolvedColumns = columns !== undefined;
   const copiedTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const viewErrorTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1316,14 +1316,18 @@ const useStandardTableController = <T extends object>({
   const [viewsReloadToken, reloadViews] = useReducer((token: number) => token + 1, 0);
   const viewsLoadKey =
     isServerBacked && viewKey ? `${viewKey}|${viewsReloadToken}` : 'local-storage';
-  const loadedViewsKeyRef = useRef(viewsLoadKey);
+  const [loadedViewsKey, setLoadedViewsKey] = useState(viewsLoadKey);
 
-  if (loadedViewsKeyRef.current !== viewsLoadKey) {
-    loadedViewsKeyRef.current = viewsLoadKey;
-    viewsAppliedOnceRef.current = !isServerBacked;
+  if (loadedViewsKey !== viewsLoadKey) {
+    setLoadedViewsKey(viewsLoadKey);
     setViewsLoading(Boolean(isServerBacked && viewKey));
     setViewsLoadFailed(false);
   }
+
+  useLayoutEffect(() => {
+    void viewsLoadKey;
+    viewsAppliedOnceRef.current = !isServerBacked;
+  }, [isServerBacked, viewsLoadKey]);
 
   // One-time, best-effort migration of legacy localStorage views into the server store the first
   // time a table gains a `viewKey`. Without it, existing users would lose the custom views they
@@ -1417,7 +1421,7 @@ const useStandardTableController = <T extends object>({
 
       return uploaded;
     },
-    [storageIdentity, updateActiveViewId],
+    [activeViewIdRef, columnsRef, storageIdentity, updateActiveViewId],
   );
 
   // Server-backed mode: load own + shared views on mount (and on viewKey change / retry).
@@ -1479,6 +1483,8 @@ const useStandardTableController = <T extends object>({
     return () => controller.abort();
   }, [
     isServerBacked,
+    activeViewIdRef,
+    columnsRef,
     hasResolvedColumns,
     migrateLegacyViews,
     setCustomViews,
@@ -1517,7 +1523,7 @@ const useStandardTableController = <T extends object>({
         } catch {}
       }
     }
-  }, [initialFilterState, suppressSavedView, storageIdentity]);
+  }, [filterStateRef, initialFilterState, storageIdentity, suppressSavedView]);
 
   const getColId = useCallback(getColumnId, []);
 
@@ -2751,6 +2757,7 @@ type StandardTableRowInstance<T extends object> =
   StandardTableController<T>['paginatedRows'][number];
 
 const StandardTable = <T extends object>(props: StandardTableProps<T>) => {
+  // react-doctor-disable-next-line react-doctor/no-impure-state-updater -- Custom-hook invocation is misclassified as a state updater.
   const controller = useStandardTableController(props);
   return (
     <StandardTablePopupZIndexContext.Provider value={props.popupZIndex}>

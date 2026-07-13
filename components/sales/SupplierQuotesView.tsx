@@ -85,7 +85,9 @@ import {
   noopQuoteCommunicationChannelMutation,
 } from './quoteCommunicationChannelDefaults';
 import SupplierQuoteAttachmentsSection from './SupplierQuoteAttachmentsSection';
-import SupplierQuoteAttachmentsStaging from './SupplierQuoteAttachmentsStaging';
+import SupplierQuoteAttachmentsStaging, {
+  type StagedSupplierQuoteAttachment,
+} from './SupplierQuoteAttachmentsStaging';
 import SupplierQuoteVersionsPanel from './SupplierQuoteVersionsPanel';
 
 interface TotalsBreakdown {
@@ -188,8 +190,13 @@ interface SupplierQuotesViewState {
   blankListPriceItemIds: ReadonlySet<string>;
   // Files chosen while creating a new quote. A new quote has no id to upload against yet, so they
   // are buffered here and flushed to /attachments right after the quote is created.
-  stagedAttachments: File[];
+  stagedAttachments: StagedSupplierQuoteAttachment[];
 }
+
+const createStagedAttachment = (file: File): StagedSupplierQuoteAttachment => ({
+  id: createTemporaryLineItemId('staged-supplier-quote-attachment'),
+  file,
+});
 
 const getInitialSupplierQuotesState = (): SupplierQuotesViewState => ({
   editingQuote: null,
@@ -391,7 +398,10 @@ const supplierQuotesViewReducer = (
       return { ...state, formData: { ...state.formData, items } };
     }
     case 'addStagedAttachment':
-      return { ...state, stagedAttachments: [...state.stagedAttachments, action.file] };
+      return {
+        ...state,
+        stagedAttachments: [...state.stagedAttachments, createStagedAttachment(action.file)],
+      };
     case 'removeStagedAttachment':
       return {
         ...state,
@@ -1100,7 +1110,7 @@ const useSupplierQuotesController = ({
           // The quote now exists, so flush the files staged during creation to it.
           const { failed } = await uploadStagedAttachments(
             created.id,
-            stagedAttachments,
+            stagedAttachments.map(({ file }) => file),
             (quoteId, file) => supplierQuotesApi.uploadAttachment(quoteId, file),
           );
           if (failed.length > 0) {

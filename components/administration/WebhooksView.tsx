@@ -611,6 +611,7 @@ const WebhooksView: React.FC<WebhooksViewProps> = ({ permissions }) => {
       .list()
       .then((data) => {
         if (!isMountedRef.current) return;
+        // react-doctor-disable-next-line react-doctor/no-impure-state-updater -- Promise callback queues independent state updates; it is not an updater function.
         setWebhooks(data);
         setStatus('ready');
       })

@@ -1,5 +1,5 @@
 import type React from 'react';
-import { useCallback, useEffect, useMemo, useReducer, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import ReactMarkdown from 'react-markdown';
 import remarkBreaks from 'remark-breaks';
@@ -137,7 +137,6 @@ type AiReportingSetAction = {
 
 type AiReportingStateAction =
   | AiReportingSetAction
-  | ({ type: 'resetForReportingSession' } & AiReportingStateInit)
   | { type: 'syncLoadedActiveSession'; activeSessionId: string };
 
 const attemptSelectionReducer = (
@@ -201,8 +200,6 @@ const aiReportingStateReducer = (
   switch (action.type) {
     case 'set':
       return applyAiReportingFieldUpdate(state, action);
-    case 'resetForReportingSession':
-      return createAiReportingState(action);
     case 'syncLoadedActiveSession':
       return action.activeSessionId
         ? { ...state, isNewChat: false, hasNewText: false }
@@ -428,49 +425,19 @@ const useAiReportingController = ({
   const sendRunIdRef = useRef(0);
   const activeAssistantMessageIdRef = useRef('');
   const pendingEmptySessionIdRef = useRef('');
-  const pendingRetryAutoSelectGroupRef = useRef('');
+  const [pendingRetryAutoSelectGroupId, setPendingRetryAutoSelectGroupId] = useState('');
   const tableRefs = useRef<Record<string, HTMLTableElement | null>>({});
-  const reportingSessionKey = `${currentUserId}|${enableAiReporting ? 'enabled' : 'disabled'}`;
-  const loadedReportingSessionKeyRef = useRef(reportingSessionKey);
-  const loadedActiveSessionIdRef = useRef(activeSessionId);
-
-  if (loadedReportingSessionKeyRef.current !== reportingSessionKey) {
-    sendRunIdRef.current += 1;
-    abortRef.current?.abort();
-    abortRef.current = null;
-    activeAssistantMessageIdRef.current = '';
-    loadedReportingSessionKeyRef.current = reportingSessionKey;
-    loadedActiveSessionIdRef.current = '';
-    setSessions([]);
-    setActiveSessionId('');
-    setIsNewChat(false);
-    setMessages([]);
-    setDraft('');
-    setError('');
-    setIsLoadingSessions(Boolean(currentUserId && enableAiReporting));
-    setIsLoadingMessages(false);
-    setIsLoadingOlderMessages(false);
-    setIsSending(false);
-    setHasNewText(false);
-    setHasOlderMessages(false);
-    setExpandedThoughtMessageIds([]);
-    pendingEmptySessionIdRef.current = '';
+  const [loadedActiveSessionId, setLoadedActiveSessionId] = useState(activeSessionId);
+  if (loadedActiveSessionId !== activeSessionId) {
+    setLoadedActiveSessionId(activeSessionId);
     dispatchAttemptSelection({ type: 'reset' });
+    dispatchReportingState({ type: 'syncLoadedActiveSession', activeSessionId });
   }
 
-  if (loadedActiveSessionIdRef.current !== activeSessionId) {
-    pendingRetryAutoSelectGroupRef.current = '';
-    loadedActiveSessionIdRef.current = activeSessionId;
-    dispatchAttemptSelection({ type: 'reset' });
-    if (activeSessionId) {
-      setIsNewChat(false);
-      setHasNewText(false);
-    } else {
-      setMessages([]);
-      setHasOlderMessages(false);
-      setIsLoadingOlderMessages(false);
-    }
-  }
+  useEffect(() => {
+    void activeSessionId;
+    setPendingRetryAutoSelectGroupId('');
+  }, [activeSessionId]);
 
   const canSend =
     enableAiReporting &&
@@ -482,8 +449,7 @@ const useAiReportingController = ({
   const assistantAttemptGroups = useMemo(() => buildAssistantAttemptGroups(messages), [messages]);
   const selectedAttemptIndexByGroup = useMemo(() => {
     const next: Record<string, number> = {};
-    const pendingGroupId = pendingRetryAutoSelectGroupRef.current;
-    let autoSelectApplied = false;
+    const pendingGroupId = pendingRetryAutoSelectGroupId;
 
     for (const group of assistantAttemptGroups) {
       const maxIndex = group.assistantAttempts.length - 1;
@@ -491,14 +457,25 @@ const useAiReportingController = ({
       let index = Math.min(attemptSelectionByGroup[group.id] ?? 0, maxIndex);
       if (pendingGroupId && pendingGroupId === group.id) {
         index = maxIndex;
-        autoSelectApplied = true;
       }
       next[group.id] = index;
     }
 
-    if (autoSelectApplied) pendingRetryAutoSelectGroupRef.current = '';
     return next;
-  }, [assistantAttemptGroups, attemptSelectionByGroup]);
+  }, [assistantAttemptGroups, attemptSelectionByGroup, pendingRetryAutoSelectGroupId]);
+  useEffect(() => {
+    if (!pendingRetryAutoSelectGroupId) return;
+    const group = assistantAttemptGroups.find(
+      (candidate) => candidate.id === pendingRetryAutoSelectGroupId,
+    );
+    if (!group || group.assistantAttempts.length === 0) return;
+    dispatchAttemptSelection({
+      type: 'set',
+      groupId: group.id,
+      index: group.assistantAttempts.length - 1,
+    });
+    setPendingRetryAutoSelectGroupId('');
+  }, [assistantAttemptGroups, pendingRetryAutoSelectGroupId]);
   const assistantGroupByMessageId = useMemo(() => {
     const map: Record<string, string> = {};
     for (const group of assistantAttemptGroups) {
@@ -1345,7 +1322,7 @@ const useAiReportingController = ({
     if (!retryContent) return;
     const attemptGroupId = assistantGroupByMessageId[assistantMessageId];
     if (attemptGroupId) {
-      pendingRetryAutoSelectGroupRef.current = attemptGroupId;
+      setPendingRetryAutoSelectGroupId(attemptGroupId);
     }
     await sendMessage(retryContent, { retryInsertAfterGroupId: attemptGroupId });
   };
@@ -1364,6 +1341,16 @@ const useAiReportingController = ({
     }
     controller.abort();
   };
+
+  useEffect(
+    () => () => {
+      loadTokenRef.current += 1;
+      sendRunIdRef.current += 1;
+      abortRef.current?.abort();
+      abortRef.current = null;
+    },
+    [],
+  );
 
   const resolveTableMarkdown = useCallback((tableId: string): string | null => {
     const tableElement = tableRefs.current[tableId];
@@ -1523,6 +1510,7 @@ type AiReportingSetter<Key extends keyof AiReportingState> = (
 ) => void;
 
 const AiReportingView: React.FC<AiReportingViewProps> = (props) => {
+  // react-doctor-disable-next-line react-doctor/no-impure-state-updater -- Custom-hook invocation is misclassified as a state updater.
   const controller = useAiReportingController(props);
   return <AiReportingLayout controller={controller} />;
 };

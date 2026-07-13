@@ -479,7 +479,7 @@ const useUserManagementController = ({
         type: 'set',
         values: {
           assignments: data,
-          initialAssignments: JSON.parse(JSON.stringify(data)), // Deep clone for comparison
+          initialAssignments: structuredClone(data),
         },
       });
     } catch (err) {
@@ -1415,7 +1415,7 @@ const UserAuthMethodDialog: React.FC<{ controller: UserManagementController }> =
 
       <div className="space-y-4">
         <div className="space-y-2">
-          <label className="text-sm font-medium text-foreground">
+          <label htmlFor="user-auth-method" className="text-sm font-medium text-foreground">
             {controller.t('hr:workforce.authMethod.methodLabel')}
           </label>
           <Select
@@ -1431,7 +1431,7 @@ const UserAuthMethodDialog: React.FC<{ controller: UserManagementController }> =
               });
             }}
           >
-            <SelectTrigger className="w-full">
+            <SelectTrigger id="user-auth-method" className="w-full">
               <SelectValue />
             </SelectTrigger>
             <SelectContent position="popper" sideOffset={4}>
@@ -1448,7 +1448,7 @@ const UserAuthMethodDialog: React.FC<{ controller: UserManagementController }> =
 
         {controller.isSsoAuthMethodDraft && (
           <div className="space-y-2">
-            <label className="text-sm font-medium text-foreground">
+            <label htmlFor="user-auth-provider" className="text-sm font-medium text-foreground">
               {controller.t('hr:workforce.authMethod.providerLabel')}
             </label>
             <Select
@@ -1460,7 +1460,7 @@ const UserAuthMethodDialog: React.FC<{ controller: UserManagementController }> =
                 });
               }}
             >
-              <SelectTrigger className="w-full">
+              <SelectTrigger id="user-auth-provider" className="w-full">
                 <SelectValue
                   placeholder={controller.t('hr:workforce.authMethod.providerPlaceholder')}
                 />
@@ -2161,90 +2161,104 @@ const UserAssignmentsModal: React.FC<{ controller: UserManagementController }> =
 
 const UserAssignmentsBody: React.FC<{ controller: UserManagementController }> = ({
   controller,
-}) => (
-  <>
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-      <SelectControl
-        options={controller.clientFilterOptions}
-        value={controller.state.filterClientId}
-        onChange={(value) =>
-          controller.dispatch({ type: 'set', values: { filterClientId: value as string } })
-        }
-        placeholder={controller.t('hr:workforce.filterByClient')}
-        searchable={true}
-        buttonClassName="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm font-semibold text-foreground shadow-sm"
-      />
-      <SelectControl
-        options={controller.projectFilterOptions}
-        value={controller.state.filterProjectId}
-        onChange={(value) =>
-          controller.dispatch({ type: 'set', values: { filterProjectId: value as string } })
-        }
-        placeholder={controller.t('hr:workforce.filterByProject')}
-        searchable={true}
-        buttonClassName="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm font-semibold text-foreground shadow-sm"
-        disabled={controller.projectFilterOptions.length === 1}
-      />
-    </div>
-    <div
-      className={`grid grid-cols-1 ${
-        controller.canManageAssignments ? 'md:grid-cols-3' : 'md:grid-cols-2'
-      } gap-6`}
-    >
-      <UserAssignmentColumn
-        count={controller.state.assignments.clientIds.length}
-        empty={controller.t('hr:workforce.noClientsFound')}
-        items={controller.visibleClients.map((client) => ({
-          id: client.id,
-          name: client.name,
-          selected: controller.state.assignments.clientIds.includes(client.id),
-        }))}
-        onSearch={(value) => controller.dispatch({ type: 'set', values: { clientSearch: value } })}
-        onToggle={(id) => controller.toggleAssignment('client', id)}
-        placeholder={controller.t('hr:workforce.searchClients')}
-        searchValue={controller.state.clientSearch}
-        title={controller.t('hr:workforce.clients')}
-      />
-      <UserAssignmentColumn
-        count={controller.state.assignments.projectIds.length}
-        empty={controller.t('hr:workforce.noProjectsFound')}
-        items={controller.visibleProjects.map((project) => ({
-          id: project.id,
-          name: project.name,
-          selected: controller.state.assignments.projectIds.includes(project.id),
-          subtitle:
-            controller.clients.find((client) => client.id === project.clientId)?.name ||
-            controller.t('hr:workforce.unknownClient'),
-        }))}
-        onSearch={(value) => controller.dispatch({ type: 'set', values: { projectSearch: value } })}
-        onToggle={(id) => controller.toggleAssignment('project', id)}
-        placeholder={controller.t('hr:workforce.searchProjects')}
-        searchValue={controller.state.projectSearch}
-        title="Projects"
-      />
-      {controller.canManageAssignments && (
-        <UserAssignmentColumn
-          count={controller.state.assignments.taskIds.length}
-          empty={controller.t('hr:workforce.noTasksFound')}
-          items={controller.visibleTasks.map((task) => {
-            const project = controller.projects.find((item) => item.id === task.projectId);
-            return {
-              id: task.id,
-              name: task.name,
-              selected: controller.state.assignments.taskIds.includes(task.id),
-              subtitle: project?.name || controller.t('hr:workforce.unknownProject'),
-            };
-          })}
-          onSearch={(value) => controller.dispatch({ type: 'set', values: { taskSearch: value } })}
-          onToggle={(id) => controller.toggleAssignment('task', id)}
-          placeholder={controller.t('hr:workforce.searchTasks')}
-          searchValue={controller.state.taskSearch}
-          title="Tasks"
+}) => {
+  const assignedClientIds = new Set(controller.state.assignments.clientIds);
+  const assignedProjectIds = new Set(controller.state.assignments.projectIds);
+  const assignedTaskIds = new Set(controller.state.assignments.taskIds);
+  const clientNameById = new Map(controller.clients.map((client) => [client.id, client.name]));
+  const projectNameById = new Map(controller.projects.map((project) => [project.id, project.name]));
+
+  return (
+    <>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+        <SelectControl
+          options={controller.clientFilterOptions}
+          value={controller.state.filterClientId}
+          onChange={(value) =>
+            controller.dispatch({ type: 'set', values: { filterClientId: value as string } })
+          }
+          placeholder={controller.t('hr:workforce.filterByClient')}
+          searchable={true}
+          buttonClassName="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm font-semibold text-foreground shadow-sm"
         />
-      )}
-    </div>
-  </>
-);
+        <SelectControl
+          options={controller.projectFilterOptions}
+          value={controller.state.filterProjectId}
+          onChange={(value) =>
+            controller.dispatch({ type: 'set', values: { filterProjectId: value as string } })
+          }
+          placeholder={controller.t('hr:workforce.filterByProject')}
+          searchable={true}
+          buttonClassName="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm font-semibold text-foreground shadow-sm"
+          disabled={controller.projectFilterOptions.length === 1}
+        />
+      </div>
+      <div
+        className={`grid grid-cols-1 ${
+          controller.canManageAssignments ? 'md:grid-cols-3' : 'md:grid-cols-2'
+        } gap-6`}
+      >
+        <UserAssignmentColumn
+          count={controller.state.assignments.clientIds.length}
+          empty={controller.t('hr:workforce.noClientsFound')}
+          items={controller.visibleClients.map((client) => ({
+            id: client.id,
+            name: client.name,
+            selected: assignedClientIds.has(client.id),
+          }))}
+          onSearch={(value) =>
+            controller.dispatch({ type: 'set', values: { clientSearch: value } })
+          }
+          onToggle={(id) => controller.toggleAssignment('client', id)}
+          placeholder={controller.t('hr:workforce.searchClients')}
+          searchValue={controller.state.clientSearch}
+          title={controller.t('hr:workforce.clients')}
+        />
+        <UserAssignmentColumn
+          count={controller.state.assignments.projectIds.length}
+          empty={controller.t('hr:workforce.noProjectsFound')}
+          items={controller.visibleProjects.map((project) => ({
+            id: project.id,
+            name: project.name,
+            selected: assignedProjectIds.has(project.id),
+            subtitle:
+              clientNameById.get(project.clientId) || controller.t('hr:workforce.unknownClient'),
+          }))}
+          onSearch={(value) =>
+            controller.dispatch({ type: 'set', values: { projectSearch: value } })
+          }
+          onToggle={(id) => controller.toggleAssignment('project', id)}
+          placeholder={controller.t('hr:workforce.searchProjects')}
+          searchValue={controller.state.projectSearch}
+          title="Projects"
+        />
+        {controller.canManageAssignments && (
+          <UserAssignmentColumn
+            count={controller.state.assignments.taskIds.length}
+            empty={controller.t('hr:workforce.noTasksFound')}
+            items={controller.visibleTasks.map((task) => {
+              return {
+                id: task.id,
+                name: task.name,
+                selected: assignedTaskIds.has(task.id),
+                subtitle:
+                  projectNameById.get(task.projectId) ||
+                  controller.t('hr:workforce.unknownProject'),
+              };
+            })}
+            onSearch={(value) =>
+              controller.dispatch({ type: 'set', values: { taskSearch: value } })
+            }
+            onToggle={(id) => controller.toggleAssignment('task', id)}
+            placeholder={controller.t('hr:workforce.searchTasks')}
+            searchValue={controller.state.taskSearch}
+            title="Tasks"
+          />
+        )}
+      </div>
+    </>
+  );
+};
 
 const UserAssignmentColumn: React.FC<{
   count: number;

@@ -12,7 +12,7 @@ import {
   TriangleAlert,
 } from 'lucide-react';
 import type React from 'react';
-import { useReducer, useRef } from 'react';
+import { useReducer, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -969,7 +969,7 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({
     isSaving,
     isSaved,
   } = state;
-  const loadedSettingsRef = useRef<IGeneralSettings | null>(null);
+  const [loadedSettings, setLoadedSettings] = useState<IGeneralSettings | null>(null);
 
   const handleTabChange = (id: TabId) => {
     if (id === activeTab) return;
@@ -979,8 +979,9 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({
     });
   };
 
-  if (loadedSettingsRef.current !== settings) {
-    loadedSettingsRef.current = settings;
+  if (loadedSettings !== settings) {
+    // react-doctor-disable-next-line react-doctor/no-impure-state-updater -- React-supported prop snapshot adjustment; no updater callback is involved.
+    setLoadedSettings(settings);
     dispatch({
       type: 'merge',
       patch: createGeneralSettingsPatch(settings),

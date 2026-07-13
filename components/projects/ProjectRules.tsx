@@ -120,6 +120,7 @@ const projectRulesReducer = (
 };
 
 const canModifyRuleField = (rule: ProjectRule, permissions: string[]) => {
+  const permissionSet = new Set(permissions);
   const conditions =
     rule.conditions?.length > 0
       ? rule.conditions
@@ -136,9 +137,9 @@ const canModifyRuleField = (rule: ProjectRule, permissions: string[]) => {
     const valueDefinition =
       condition.valueType === 'field' ? getProjectRuleFieldDefinition(condition.value) : null;
     return (
-      (!definition?.requiresPermission || permissions.includes(definition.requiresPermission)) &&
+      (!definition?.requiresPermission || permissionSet.has(definition.requiresPermission)) &&
       (!valueDefinition?.requiresPermission ||
-        permissions.includes(valueDefinition.requiresPermission))
+        permissionSet.has(valueDefinition.requiresPermission))
     );
   });
 };

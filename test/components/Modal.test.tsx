@@ -1,6 +1,7 @@
-import { afterEach, describe, expect, mock, spyOn, test } from 'bun:test';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { afterEach, describe, expect, mock, spyOn } from 'bun:test';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { useState } from 'react';
+import { settleComponentTasks, reactTest as test } from '../helpers/reactTest';
 
 const { THEME_CHANGE_EVENT, THEME_STORAGE_KEY } = await import('../../utils/theme');
 const { default: Modal } = await import('../../components/shared/Modal');
@@ -222,7 +223,7 @@ describe('<Modal />', () => {
     expect(dialog.style.zIndex).toBe('1000');
   });
 
-  test('floating dropdowns render above the highest-z-index modal', () => {
+  test('floating dropdowns render above the highest-z-index modal', async () => {
     // 70 is the highest zIndex any modal in the app uses (nested "manage" modals);
     // Modal renders content at zIndex + 1 = 71, the worst case a dropdown must clear.
     const HIGHEST_MODAL_Z_INDEX = 70;
@@ -239,6 +240,9 @@ describe('<Modal />', () => {
         </Select>
       </Modal>,
     );
+    await act(async () => {
+      await settleComponentTasks();
+    });
 
     // The open Select applies aria-hidden to the rest of the tree, so query the
     // modal panel by data-slot rather than by the (now-hidden) dialog role.

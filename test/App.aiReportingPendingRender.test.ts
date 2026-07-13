@@ -37,6 +37,8 @@ describe('reports/ai-reporting pending render (issue #520)', () => {
 
     expect(block).toContain('reportsSettingsFailed');
     expect(block).toContain('<AiReportingView');
+    expect(block).toMatch(/key=\{`\$\{currentUser\.id\}\|\$\{generalSettings\.enableAiReporting/);
+    expect(block).toContain("generalSettings.enableAiReporting ? 'enabled' : 'disabled'");
     // The inline ai-reporting spinner used to use this translation key and
     // `fa-circle-notch fa-spin` icon. Both must be gone — pending state now
     // flows through the generic isActiveModulePending spinner instead.
