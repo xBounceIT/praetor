@@ -395,6 +395,7 @@ describe('<ClientOffersView /> discount summary', () => {
 
     const dialog = screen.getByRole('dialog');
     expect(within(dialog).getByText('common:labels.totalDiscount')).toBeInTheDocument();
+    expect(within(dialog).getByText('(19,00%)')).toHaveClass('text-amber-600');
     expect(within(dialog).getByText('-19,00 EUR')).toBeInTheDocument();
   });
 });

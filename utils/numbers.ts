@@ -280,6 +280,8 @@ export interface PricingTotals {
   discountAmount: number;
   // Sum of every line discount plus the global discount.
   totalDiscountAmount: number;
+  // Effective aggregate discount as a percentage of the gross subtotal.
+  totalDiscountPercentage: number;
   total: number;
   totalCost: number;
   margin: number;
@@ -291,6 +293,7 @@ export const EMPTY_PRICING_TOTALS: Readonly<PricingTotals> = {
   subtotal: 0,
   discountAmount: 0,
   totalDiscountAmount: 0,
+  totalDiscountPercentage: 0,
   total: 0,
   totalCost: 0,
   margin: 0,
@@ -321,6 +324,8 @@ export const calculatePricingTotals = (
   const total = subtotal - discountAmount;
   const margin = total - totalCost;
   const marginPercentage = total > 0 ? (margin / total) * 100 : 0;
+  const totalDiscountPercentage =
+    grossSubtotal > 0 ? ((grossSubtotal - total) / grossSubtotal) * 100 : 0;
   const roundedGrossSubtotal = roundCurrency(grossSubtotal);
   const roundedTotal = roundCurrency(total);
 
@@ -332,6 +337,7 @@ export const calculatePricingTotals = (
     subtotal: roundCurrency(subtotal),
     discountAmount: roundCurrency(discountAmount),
     totalDiscountAmount: roundCurrency(grossSubtotal - total),
+    totalDiscountPercentage: roundCurrency(totalDiscountPercentage),
     total: roundedTotal,
     totalCost: roundCurrency(totalCost),
     margin: roundCurrency(margin),

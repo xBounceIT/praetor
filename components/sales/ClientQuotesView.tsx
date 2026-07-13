@@ -3596,6 +3596,7 @@ const ClientQuoteSummaryPanel: React.FC<{ controller: ClientQuotesController }> 
             ? {
                 label: t('common:labels.totalDiscount'),
                 amount: formTotals.totalDiscountAmount,
+                percentage: formTotals.totalDiscountPercentage,
               }
             : undefined
         }

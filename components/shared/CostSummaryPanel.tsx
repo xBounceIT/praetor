@@ -1,6 +1,6 @@
 import type React from 'react';
 import type { DiscountType } from '../../types';
-import { formatDecimal } from '../../utils/numbers';
+import { formatDecimal, formatMolPercentage } from '../../utils/numbers';
 import SelectControl from './SelectControl';
 import ValidatedNumberInput from './ValidatedNumberInput';
 
@@ -25,6 +25,7 @@ export interface CostSummaryPanelProps {
   discountRow?: {
     label: string;
     amount: number;
+    percentage?: number;
   };
   // Optional VAT/IVA row, rendered between subtotal and total. Only shown when amount > 0
   // so non-tax flows (e.g. quotes/offers reusing this panel) stay unchanged.
@@ -101,7 +102,16 @@ const CostSummaryPanel: React.FC<CostSummaryPanelProps> = ({
         </div>
         {discountRow && discountRow.amount > 0 && (
           <div className="flex justify-between">
-            <span className="text-sm font-medium text-muted-foreground">{discountRow.label}</span>
+            <span className="text-sm font-medium text-muted-foreground">
+              {discountRow.label}
+              {typeof discountRow.percentage === 'number' &&
+                Number.isFinite(discountRow.percentage) && (
+                  <span className="text-amber-600">
+                    {' '}
+                    ({formatMolPercentage(discountRow.percentage)})
+                  </span>
+                )}
+            </span>
             <span className="text-sm font-semibold text-amber-600">
               -{formatAmount(discountRow.amount)} {currency}
             </span>

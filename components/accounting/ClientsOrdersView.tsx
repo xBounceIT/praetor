@@ -1749,13 +1749,19 @@ const OrderItemAmountField: React.FC<{
 const OrderNotesSummarySection: React.FC<{ controller: ClientsOrdersController }> = ({
   controller,
 }) => {
-  const { grossSubtotal, totalDiscountAmount, total, margin, marginPercentage } =
-    calculatePricingTotals(
-      controller.formData.items || [],
-      controller.formData.discount || 0,
-      DEFAULT_UNIT_TYPE,
-      controller.formData.discountType || 'percentage',
-    );
+  const {
+    grossSubtotal,
+    totalDiscountAmount,
+    totalDiscountPercentage,
+    total,
+    margin,
+    marginPercentage,
+  } = calculatePricingTotals(
+    controller.formData.items || [],
+    controller.formData.discount || 0,
+    DEFAULT_UNIT_TYPE,
+    controller.formData.discountType || 'percentage',
+  );
 
   return (
     <div className="flex flex-col gap-4 border-t border-border pt-4 md:flex-row">
@@ -1809,6 +1815,7 @@ const OrderNotesSummarySection: React.FC<{ controller: ClientsOrdersController }
               ? {
                   label: controller.t('common:labels.totalDiscount'),
                   amount: totalDiscountAmount,
+                  percentage: totalDiscountPercentage,
                 }
               : undefined
           }

@@ -2378,7 +2378,14 @@ const ClientOfferSummaryPanel: React.FC<{ controller: ClientOffersController }> 
   controller,
 }) => {
   const { t, formData, setFormData, formTotals, currency, isReadOnly } = controller;
-  const { grossSubtotal, totalDiscountAmount, total, margin, marginPercentage } = formTotals;
+  const {
+    grossSubtotal,
+    totalDiscountAmount,
+    totalDiscountPercentage,
+    total,
+    margin,
+    marginPercentage,
+  } = formTotals;
 
   return (
     <div className="space-y-2 md:w-1/3">
@@ -2409,6 +2416,7 @@ const ClientOfferSummaryPanel: React.FC<{ controller: ClientOffersController }> 
             ? {
                 label: t('common:labels.totalDiscount'),
                 amount: totalDiscountAmount,
+                percentage: totalDiscountPercentage,
               }
             : undefined
         }

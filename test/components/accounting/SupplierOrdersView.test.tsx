@@ -268,6 +268,7 @@ describe('<SupplierOrdersView /> item pricing columns', () => {
 
     const dialog = screen.getByRole('dialog');
     const discountLabel = within(dialog).getByText('common:labels.totalDiscount');
+    expect(within(dialog).getByText('(19,00%)')).toHaveClass('text-amber-600');
     expect(discountLabel.nextElementSibling).toHaveTextContent('-729,60 EUR');
     expect(within(dialog).getAllByText('3.840,00 EUR').length).toBeGreaterThan(0);
   });

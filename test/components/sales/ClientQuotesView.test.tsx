@@ -295,6 +295,7 @@ describe('<ClientQuotesView />', () => {
     fireEvent.click(screen.getByText('Q-TOTAL-DISCOUNT'));
     const dialog = await screen.findByRole('dialog');
     const discountLabel = within(dialog).getByText('common:labels.totalDiscount');
+    expect(within(dialog).getByText('(19,00%)')).toHaveClass('text-amber-600');
     expect(discountLabel.nextElementSibling).toHaveTextContent('-38,00 EUR');
   });
 

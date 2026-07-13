@@ -96,12 +96,15 @@ const calculateTotals = (
       ? Math.min(Math.max(globalDiscount, 0), subtotal)
       : subtotal * (globalDiscount / 100);
   const total = subtotal - discountAmount;
+  const totalDiscountPercentage =
+    grossSubtotal > 0 ? ((grossSubtotal - total) / grossSubtotal) * 100 : 0;
   const roundedGrossSubtotal = roundCurrency(grossSubtotal);
   const roundedTotal = roundCurrency(total);
 
   return {
     grossSubtotal: roundedGrossSubtotal,
     totalDiscountAmount: roundCurrency(grossSubtotal - total),
+    totalDiscountPercentage: roundCurrency(totalDiscountPercentage),
     total: roundedTotal,
   };
 };
@@ -1387,6 +1390,7 @@ const SupplierOrderNotesSummarySection: React.FC<{ controller: SupplierOrdersCon
             ? {
                 label: controller.t('common:labels.totalDiscount'),
                 amount: controller.totals.totalDiscountAmount,
+                percentage: controller.totals.totalDiscountPercentage,
               }
             : undefined
         }

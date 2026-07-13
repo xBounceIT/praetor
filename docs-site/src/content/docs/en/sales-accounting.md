@@ -24,7 +24,7 @@ The **MOL** on each line is local to the customer quote and determines its sale 
 
 Every **quote**, **offer**, and **customer-order** line also includes a **Discount** column. The line discount is a percentage from 0% to 100% and reduces the line revenue after quantity and duration are applied: `Net revenue = Unit price × Quantity × Duration × (1 − Discount / 100)`. The line **Margin** uses this net revenue, while cost is unchanged. Any global discount, which still supports either a percentage or a fixed amount, is applied afterwards to the sum of the already-discounted lines. The value is copied automatically from quote to offer and from offer to order, and remains editable until the document becomes read-only.
 
-In quote, offer, and order summaries, **Subtotal** is the gross amount before discounts. The **Total discounts** row combines every line discount with any global discount, while **Total** remains the final net amount. The same rule applies to supplier orders, including both line and global discounts.
+In quote, offer, and order summaries, **Subtotal** is the gross amount before discounts. The **Total discounts** row combines every line discount with any global discount and shows the effective average percentage against the gross subtotal in parentheses, while **Total** remains the final net amount. The same rule applies to supplier orders, including both line and global discounts.
 
 The quote list shows code, insertion date, client, gross subtotal, global discount percentage, total discounts, discounted total, margin, MOL, payment terms, due date, and status so the main values can be checked without opening each record.
 

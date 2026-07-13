@@ -444,6 +444,7 @@ describe('calculatePricingTotals', () => {
     expect(t.totalCost).toBe(120);
     expect(t.discountAmount).toBe(0);
     expect(t.totalDiscountAmount).toBe(0);
+    expect(t.totalDiscountPercentage).toBe(0);
     expect(t.total).toBe(200);
     expect(t.margin).toBe(80);
     expect(t.marginPercentage).toBe(40);
@@ -507,6 +508,7 @@ describe('calculatePricingTotals', () => {
     expect(t.subtotal).toBe(90);
     expect(t.discountAmount).toBe(45);
     expect(t.totalDiscountAmount).toBe(55);
+    expect(t.totalDiscountPercentage).toBe(55);
     expect(t.total).toBe(45);
   });
 
@@ -599,6 +601,7 @@ describe('calculatePricingTotals', () => {
     const t = calculatePricingTotals([{ unitPrice: 0.03, quantity: 1 }], 50);
     expect(t.discountAmount).toBe(0.02);
     expect(t.totalDiscountAmount).toBe(0.02);
+    expect(t.totalDiscountPercentage).toBe(50);
     expect(t.total).toBe(0.02);
   });
 
