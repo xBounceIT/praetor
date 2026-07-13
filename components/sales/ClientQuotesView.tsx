@@ -1,10 +1,17 @@
-import { GripVertical } from 'lucide-react';
+import { GripVertical, Pencil, Plus, Trash2 } from 'lucide-react';
 import type React from 'react';
-import { useCallback, useMemo, useReducer, useState } from 'react';
+import { useCallback, useMemo, useReducer, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { LinkedRecordBanner } from '@/components/shared/LinkedRecordBanner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuTrigger,
+} from '@/components/ui/context-menu';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -483,7 +490,7 @@ const useClientQuotesController = ({
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [productRowToDelete, setProductRowToDelete] = useState<number | null>(null);
-  const [isCandidateDeleteConfirmOpen, setIsCandidateDeleteConfirmOpen] = useState(false);
+  const [candidateToDeleteId, setCandidateToDeleteId] = useState<string | null>(null);
 
   const getStatusLabel = useCallback(
     (status: string) => {
@@ -640,6 +647,7 @@ const useClientQuotesController = ({
     dispatch({ type: 'closeModal' });
     setPreviewVersion(null);
     setProductRowToDelete(null);
+    setCandidateToDeleteId(null);
   }, []);
 
   const openAddModal = () => {
@@ -722,10 +730,13 @@ const useClientQuotesController = ({
     setErrors({});
   };
 
-  const addCandidate = (duplicateCurrent: boolean) => {
+  const addCandidate = (
+    duplicateCurrent: boolean,
+    sourceCandidateId: string | null = activeCandidateId,
+  ) => {
     const nextDrafts = currentCandidateDrafts();
     const source =
-      nextDrafts.find((candidate) => candidate.id === activeCandidateId) ?? nextDrafts[0];
+      nextDrafts.find((candidate) => candidate.id === sourceCandidateId) ?? nextDrafts[0];
     const nextIndex = nextDrafts.length;
     const name = nextCandidateName(nextDrafts);
     const candidate: QuoteCandidate = {
@@ -767,24 +778,29 @@ const useClientQuotesController = ({
     );
   };
 
-  const renameActiveCandidate = (name: string) => {
+  const renameCandidate = (candidateId: string, name: string) => {
     setCandidateDrafts((current) =>
       current.map((candidate) =>
-        candidate.id === activeCandidateId ? { ...candidate, name } : candidate,
+        candidate.id === candidateId ? { ...candidate, name } : candidate,
       ),
     );
   };
 
-  const removeActiveCandidate = () => {
-    if (candidateDrafts.length <= 1 || !activeCandidateId) return;
+  const removeCandidate = (candidateId: string) => {
+    if (candidateDrafts.length <= 1) return;
+    const synchronizedDrafts = currentCandidateDrafts();
+    const removedIndex = synchronizedDrafts.findIndex((candidate) => candidate.id === candidateId);
+    if (removedIndex < 0) return;
     const nextDrafts: QuoteCandidate[] = [];
-    for (const candidate of currentCandidateDrafts()) {
-      if (candidate.id !== activeCandidateId) {
+    for (const candidate of synchronizedDrafts) {
+      if (candidate.id !== candidateId) {
         nextDrafts.push({ ...candidate, position: nextDrafts.length });
       }
     }
-    const next = nextDrafts[0];
     setCandidateDrafts(nextDrafts);
+    if (candidateId !== activeCandidateId) return;
+
+    const next = nextDrafts[Math.min(removedIndex, nextDrafts.length - 1)];
     setActiveCandidateId(next.id);
     setFormData(
       candidateToFormData(
@@ -2175,8 +2191,8 @@ const useClientQuotesController = ({
     setErrors,
     productRowToDelete,
     setProductRowToDelete,
-    isCandidateDeleteConfirmOpen,
-    setIsCandidateDeleteConfirmOpen,
+    candidateToDeleteId,
+    setCandidateToDeleteId,
     getStatusLabel,
     isQuoteExpired,
     isHistoryRow,
@@ -2230,8 +2246,8 @@ const useClientQuotesController = ({
     activeCandidateId,
     handleSelectCandidate,
     addCandidate,
-    renameActiveCandidate,
-    removeActiveCandidate,
+    renameCandidate,
+    removeCandidate,
     promotionQuote,
     setPromotionQuote,
     promotionCandidateId,
@@ -2316,108 +2332,211 @@ const ClientQuoteCandidatesBar: React.FC<{ controller: ClientQuotesController }>
     activeCandidateId,
     handleSelectCandidate,
     addCandidate,
-    renameActiveCandidate,
-    setIsCandidateDeleteConfirmOpen,
+    renameCandidate,
+    setCandidateToDeleteId,
     editingQuote,
     isReadOnly,
     errors,
   } = controller;
+  const [renamingCandidateId, setRenamingCandidateId] = useState<string | null>(null);
+  const [renameDraft, setRenameDraft] = useState('');
+  const contextMenuRenameRef = useRef<QuoteCandidate | null>(null);
   if (!candidateDrafts.length || !activeCandidateId) return null;
-  const activeCandidate = candidateDrafts.find((candidate) => candidate.id === activeCandidateId);
   const canChangeComposition = !editingQuote || editingQuote.status === 'draft';
+  const canEditComposition = canChangeComposition && !isReadOnly;
+  const canDeleteCandidate = canEditComposition && candidateDrafts.length > 1;
+
+  const startRename = (candidate: QuoteCandidate) => {
+    if (isReadOnly) return;
+    if (candidate.id !== activeCandidateId) handleSelectCandidate(candidate.id);
+    setRenameDraft(candidate.name);
+    setRenamingCandidateId(candidate.id);
+  };
+
+  const finishRename = () => {
+    if (!renamingCandidateId) return;
+    renameCandidate(renamingCandidateId, renameDraft);
+    setRenamingCandidateId(null);
+  };
+
   return (
-    <div className="space-y-3 rounded-lg border border-border bg-muted/30 p-3">
-      <div className="flex items-center gap-2 overflow-x-auto">
+    <div className="space-y-1">
+      <div
+        data-testid="quote-candidate-tabs-scroll"
+        className="overflow-x-auto overflow-y-hidden border-b border-border pt-1"
+      >
         <Tabs
           value={activeCandidateId}
           onValueChange={handleSelectCandidate}
-          className="min-w-0 flex-1"
+          className="min-w-max gap-0"
         >
-          <TabsList className="h-auto min-w-max justify-start">
-            {candidateDrafts.map((candidate) => {
-              const totals = calculateClientQuotePricingTotals(
-                candidate.id === activeCandidateId
-                  ? controller.formData.items || []
-                  : candidate.items,
-                candidate.id === activeCandidateId
-                  ? Number(controller.formData.discount || 0)
-                  : candidate.discount,
-                candidate.id === activeCandidateId
-                  ? controller.formData.discountType || 'percentage'
-                  : candidate.discountType,
-              );
-              return (
-                <TabsTrigger
-                  key={candidate.id}
-                  value={candidate.id}
-                  className="min-w-36 gap-2 px-3"
+          <div className="flex items-end gap-1">
+            <TabsList className="h-auto min-w-max justify-start gap-1 rounded-none bg-transparent p-0">
+              {candidateDrafts.map((candidate) => {
+                const isActive = candidate.id === activeCandidateId;
+                const totals = calculateClientQuotePricingTotals(
+                  isActive ? controller.formData.items || [] : candidate.items,
+                  isActive ? Number(controller.formData.discount || 0) : candidate.discount,
+                  isActive
+                    ? controller.formData.discountType || 'percentage'
+                    : candidate.discountType,
+                );
+                const renameLabel = t('sales:clientQuotes.candidates.rename', {
+                  name: candidate.name,
+                  defaultValue: 'Rinomina {{name}}',
+                });
+                const deleteLabel = t('sales:clientQuotes.candidates.delete', {
+                  name: candidate.name,
+                  defaultValue: 'Elimina {{name}}',
+                });
+                return (
+                  <ContextMenu key={candidate.id}>
+                    <ContextMenuTrigger asChild>
+                      <div
+                        className={`group -mb-px flex h-10 items-center rounded-t-lg border-x border-t border-border transition-colors ${
+                          isActive ? 'bg-background' : 'bg-muted/60 hover:bg-muted'
+                        }`}
+                      >
+                        {renamingCandidateId === candidate.id ? (
+                          <>
+                            <TabsTrigger value={candidate.id} className="sr-only">
+                              {candidate.name}
+                            </TabsTrigger>
+                            <Input
+                              aria-label={t('sales:clientQuotes.candidates.name', {
+                                defaultValue: 'Nome variante',
+                              })}
+                              value={renameDraft}
+                              onChange={(event) => setRenameDraft(event.target.value)}
+                              onBlur={finishRename}
+                              onFocus={(event) => event.currentTarget.select()}
+                              onKeyDown={(event) => {
+                                if (event.key === 'Enter') {
+                                  event.preventDefault();
+                                  finishRename();
+                                }
+                                event.stopPropagation();
+                              }}
+                              autoFocus
+                              maxLength={100}
+                              className="mx-1 h-8 w-40"
+                            />
+                          </>
+                        ) : (
+                          <TabsTrigger
+                            value={candidate.id}
+                            onDoubleClick={() => startRename(candidate)}
+                            className="min-w-36 flex-1 justify-start rounded-none border-0 bg-transparent px-3 py-2 shadow-none after:hidden data-[state=active]:bg-transparent dark:data-[state=active]:bg-transparent"
+                          >
+                            <span>{candidate.name}</span>
+                            <span className="text-xs text-muted-foreground">
+                              {formatDecimal(totals.total)}
+                            </span>
+                            {candidate.state === 'selected' && (
+                              <Badge>
+                                {t('sales:clientQuotes.candidates.selected', {
+                                  defaultValue: 'Scelta',
+                                })}
+                              </Badge>
+                            )}
+                            {candidate.state === 'discarded' && (
+                              <Badge variant="secondary">
+                                {t('sales:clientQuotes.candidates.discarded', {
+                                  defaultValue: 'Scartata',
+                                })}
+                              </Badge>
+                            )}
+                          </TabsTrigger>
+                        )}
+                        <Button
+                          type="button"
+                          size="icon-xs"
+                          variant="ghost"
+                          disabled={isReadOnly}
+                          onClick={() => startRename(candidate)}
+                          aria-label={renameLabel}
+                          className="text-muted-foreground hover:text-foreground"
+                        >
+                          <Pencil aria-hidden="true" />
+                        </Button>
+                        <Button
+                          type="button"
+                          size="icon-xs"
+                          variant="ghost"
+                          disabled={!canDeleteCandidate}
+                          onClick={() => setCandidateToDeleteId(candidate.id)}
+                          aria-label={deleteLabel}
+                          className="mr-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                        >
+                          <Trash2 aria-hidden="true" />
+                        </Button>
+                      </div>
+                    </ContextMenuTrigger>
+                    <ContextMenuContent
+                      onCloseAutoFocus={(event) => {
+                        if (contextMenuRenameRef.current?.id !== candidate.id) return;
+                        event.preventDefault();
+                        const candidateToRename = contextMenuRenameRef.current;
+                        contextMenuRenameRef.current = null;
+                        startRename(candidateToRename);
+                      }}
+                    >
+                      <ContextMenuItem
+                        disabled={isReadOnly}
+                        onSelect={() => {
+                          contextMenuRenameRef.current = candidate;
+                        }}
+                      >
+                        <Pencil aria-hidden="true" />
+                        {renameLabel}
+                      </ContextMenuItem>
+                      <ContextMenuItem
+                        disabled={!canEditComposition}
+                        onSelect={() => addCandidate(true, candidate.id)}
+                      >
+                        <Plus aria-hidden="true" />
+                        {t('sales:clientQuotes.candidates.duplicate')}
+                      </ContextMenuItem>
+                      <ContextMenuSeparator />
+                      <ContextMenuItem
+                        variant="destructive"
+                        disabled={!canDeleteCandidate}
+                        onSelect={() => setCandidateToDeleteId(candidate.id)}
+                      >
+                        <Trash2 aria-hidden="true" />
+                        {deleteLabel}
+                      </ContextMenuItem>
+                    </ContextMenuContent>
+                  </ContextMenu>
+                );
+              })}
+            </TabsList>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  type="button"
+                  size="icon-sm"
+                  variant="ghost"
+                  disabled={!canEditComposition}
+                  aria-label={t('sales:clientQuotes.candidates.addMenu')}
+                  className="mb-px"
                 >
-                  <span>{candidate.name}</span>
-                  <span className="text-xs text-muted-foreground">
-                    {formatDecimal(totals.total)}
-                  </span>
-                  {candidate.state === 'selected' && (
-                    <Badge>
-                      {t('sales:clientQuotes.candidates.selected', { defaultValue: 'Scelta' })}
-                    </Badge>
-                  )}
-                  {candidate.state === 'discarded' && (
-                    <Badge variant="secondary">
-                      {t('sales:clientQuotes.candidates.discarded', { defaultValue: 'Scartata' })}
-                    </Badge>
-                  )}
-                </TabsTrigger>
-              );
-            })}
-          </TabsList>
+                  <Plus aria-hidden="true" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start">
+                <DropdownMenuItem onSelect={() => addCandidate(false)}>
+                  {t('sales:clientQuotes.candidates.add')}
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => addCandidate(true)}>
+                  {t('sales:clientQuotes.candidates.duplicate')}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </Tabs>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              disabled={!canChangeComposition || isReadOnly}
-              aria-label={t('sales:clientQuotes.candidates.addMenu')}
-            >
-              <i className="fa-solid fa-plus" aria-hidden="true"></i>
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onSelect={() => addCandidate(false)}>
-              {t('sales:clientQuotes.candidates.add')}
-            </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => addCandidate(true)}>
-              {t('sales:clientQuotes.candidates.duplicate')}
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-        <Button
-          type="button"
-          size="sm"
-          variant="ghost"
-          disabled={!canChangeComposition || isReadOnly || candidateDrafts.length <= 1}
-          onClick={() => setIsCandidateDeleteConfirmOpen(true)}
-          className="text-destructive hover:text-destructive"
-        >
-          {t('common:buttons.delete', { defaultValue: 'Elimina' })}
-        </Button>
       </div>
-      {activeCandidate && (
-        <Field>
-          <FieldLabel htmlFor="quote-candidate-name">
-            {t('sales:clientQuotes.candidates.name', { defaultValue: 'Nome variante' })}
-          </FieldLabel>
-          <Input
-            id="quote-candidate-name"
-            value={activeCandidate.name}
-            onChange={(event) => renameActiveCandidate(event.target.value)}
-            disabled={isReadOnly}
-            maxLength={100}
-          />
-          {errors.candidates && <FieldError>{errors.candidates}</FieldError>}
-        </Field>
-      )}
+      {errors.candidates && <FieldError>{errors.candidates}</FieldError>}
     </div>
   );
 };
@@ -3728,10 +3847,10 @@ const ClientQuoteDeleteDialogs: React.FC<{ controller: ClientQuotesController }>
     quoteToDelete,
     productRowToDelete,
     setProductRowToDelete,
-    isCandidateDeleteConfirmOpen,
-    setIsCandidateDeleteConfirmOpen,
+    candidateToDeleteId,
+    setCandidateToDeleteId,
     removeProductRow,
-    removeActiveCandidate,
+    removeCandidate,
   } = controller;
 
   return (
@@ -3750,11 +3869,11 @@ const ClientQuoteDeleteDialogs: React.FC<{ controller: ClientQuotesController }>
         })}
       />
       <DeleteConfirmModal
-        isOpen={isCandidateDeleteConfirmOpen}
-        onClose={() => setIsCandidateDeleteConfirmOpen(false)}
+        isOpen={candidateToDeleteId !== null}
+        onClose={() => setCandidateToDeleteId(null)}
         onConfirm={() => {
-          removeActiveCandidate();
-          setIsCandidateDeleteConfirmOpen(false);
+          if (candidateToDeleteId) removeCandidate(candidateToDeleteId);
+          setCandidateToDeleteId(null);
         }}
         title={t('sales:clientQuotes.candidates.removeTitle')}
         description={t('sales:clientQuotes.candidates.removeConfirm')}
