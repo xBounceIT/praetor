@@ -32,7 +32,7 @@ import { replyDocumentCodeCollision } from '../utils/document-code-replies.ts';
 import type { DurationUnit } from '../utils/duration-unit.ts';
 import { normalizeNullableNumber, normalizeNullableString } from '../utils/normalize.ts';
 import { generatePrefixedId, ITEM_ID_PREFIXES } from '../utils/order-ids.ts';
-import { ADMIN_ROLE_ID, TOP_MANAGER_ROLE_ID } from '../utils/permissions.ts';
+import { ADMIN_ROLE_ID, requestHasPermission, TOP_MANAGER_ROLE_ID } from '../utils/permissions.ts';
 import {
   effectiveQuoteStatusFromDate,
   normalizeQuoteStatus,
@@ -66,7 +66,6 @@ import {
 // Surfaced for both the gate-check inside the create-tx and the catch on the unique-index
 // violation; keep them identical so the error doesn't drift between paths.
 const LINKED_OFFER_CONFLICT = 'An offer already exists for this quote';
-const requireQuoteUpdateForOfferRollback = requirePermission('sales.client_quotes.update');
 
 const findLegacyAcceptedCandidate = (
   quoteId: string,
@@ -1556,9 +1555,21 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         offer.linkedQuoteCandidateId && linkedQuoteId && linkedQuoteStatus === 'accepted'
           ? linkedQuoteId
           : null;
-      if (shouldRollbackCandidatePromotion || legacyQuoteIdToReactivate) {
-        await requireQuoteUpdateForOfferRollback(request, reply);
-        if (reply.sent) return;
+      if (
+        (shouldRollbackCandidatePromotion || legacyQuoteIdToReactivate) &&
+        !requestHasPermission(request, 'sales.client_quotes.update')
+      ) {
+        return replyError(request, reply, {
+          statusCode: 403,
+          message: 'Insufficient permissions',
+          action: 'client_offer.delete.denied',
+          entityType: 'client_offer',
+          entityId: idResult.value,
+          details: {
+            secondaryLabel: 'quote_update_permission_required',
+            changedFields: ['sales.client_quotes.update'],
+          },
+        });
       }
       if (shouldRollbackCandidatePromotion) {
         try {
