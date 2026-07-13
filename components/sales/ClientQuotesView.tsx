@@ -2363,7 +2363,7 @@ const ClientQuoteCandidatesBar: React.FC<{ controller: ClientQuotesController }>
     <div className="space-y-1">
       <div
         data-testid="quote-candidate-tabs-scroll"
-        className="overflow-x-auto overflow-y-hidden border-b border-border pt-px"
+        className="overflow-x-auto overflow-y-hidden border-b border-border pt-1"
       >
         <Tabs
           value={activeCandidateId}
@@ -2393,7 +2393,7 @@ const ClientQuoteCandidatesBar: React.FC<{ controller: ClientQuotesController }>
                   <ContextMenu key={candidate.id}>
                     <ContextMenuTrigger asChild>
                       <div
-                        className={`group -mb-px flex h-10 items-center rounded-t-lg border border-b-0 border-border transition-colors ${
+                        className={`group -mb-px flex h-10 items-center rounded-t-lg border-x border-t border-border transition-colors ${
                           isActive ? 'bg-background' : 'bg-muted/60 hover:bg-muted'
                         }`}
                       >
