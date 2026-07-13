@@ -1,10 +1,10 @@
-import { afterEach, describe, expect, mock, test } from 'bun:test';
+import { afterEach, describe, expect, mock, spyOn, test } from 'bun:test';
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import type { Client, Invoice, Product } from '../../../types';
 import { installI18nMock } from '../../helpers/i18n';
 import { LineDeleteConfirmStub } from '../../helpers/lineItemDeleteConfirm';
 import { render } from '../../helpers/render';
-import { rowDeleteButtons } from '../../helpers/rowDeleteButtons';
+import { openRowDeleteButton, rowDeleteButtons } from '../../helpers/rowDeleteButtons';
 import {
   expectSourceContainsAll,
   expectSourceOmitsAll,
@@ -106,6 +106,87 @@ describe('<ClientsInvoicesView /> duration unit (issue #757)', () => {
     // ...but pricing still multiplies by durationMonths (24), so the taxable total is unchanged.
     expect(within(dialog).getAllByText(TAXABLE_LINE_TOTAL).length).toBeGreaterThan(0);
   });
+
+  test('normalizes a blank years duration to the canonical month unit before saving', async () => {
+    const onUpdateInvoice = mock((_id: string, _data: Partial<Invoice>) => {});
+    const invoice = buildInvoice('INV-BLANK-DURATION', 'months');
+    render(
+      <ClientsInvoicesView
+        invoices={[invoice]}
+        clients={clients}
+        products={[]}
+        onAddInvoice={mock(() => {})}
+        onUpdateInvoice={onUpdateInvoice}
+        onDeleteInvoice={mock(() => {})}
+        currency="EUR"
+      />,
+    );
+    fireEvent.click(screen.getByText('Helios Energy Services').closest('tr') as HTMLElement);
+    const dialog = await screen.findByRole('dialog');
+
+    fireEvent.change(within(dialog).getByDisplayValue('24'), { target: { value: '' } });
+    const durationUnitButton = within(dialog)
+      .getAllByText('sales:clientQuotes.months')
+      .map((element) => element.closest('button'))
+      .find(Boolean);
+    if (!durationUnitButton) throw new Error('Duration unit button not found');
+    fireEvent.click(durationUnitButton);
+    const yearsOption = (await screen.findAllByText('sales:clientQuotes.years'))
+      .map((element) => element.closest('[data-slot="select-item"]'))
+      .find(Boolean);
+    if (!yearsOption) throw new Error('Years duration option not found');
+    fireEvent.click(yearsOption);
+    fireEvent.submit(
+      within(dialog).getByText('common:buttons.save').closest('form') as HTMLFormElement,
+    );
+
+    expect(onUpdateInvoice).toHaveBeenCalledTimes(1);
+    const submittedInvoice = onUpdateInvoice.mock.calls[0]?.[1];
+    expect(submittedInvoice?.items?.[0]).toEqual(
+      expect.objectContaining({ durationMonths: undefined, durationUnit: 'months' }),
+    );
+  });
+});
+
+describe('<ClientsInvoicesView /> paginated item validation', () => {
+  test.each([
+    ['description', { description: '' }, 'common:validation.required'],
+    ['quantity', { quantity: undefined }, 'common:validation.positiveQuantityRequired'],
+    ['unit price', { unitPrice: undefined }, 'common:validation.unitPriceRequired'],
+  ])('rejects an invalid %s on an unmounted page', async (_field, invalidValues, errorKey) => {
+    const onUpdateInvoice = mock(() => {});
+    const invoice = buildInvoice('INV-PAGINATED', 'months');
+    invoice.items = Array.from({ length: 6 }, (_, index) => ({
+      ...invoice.items[0],
+      id: `item-${index + 1}`,
+      description: `Consulting ${index + 1}`,
+    }));
+    Object.assign(invoice.items[5], invalidValues);
+
+    render(
+      <ClientsInvoicesView
+        invoices={[invoice]}
+        clients={clients}
+        products={[]}
+        onAddInvoice={mock(() => {})}
+        onUpdateInvoice={onUpdateInvoice}
+        onDeleteInvoice={mock(() => {})}
+        currency="EUR"
+      />,
+    );
+    fireEvent.click(screen.getByText('Helios Energy Services').closest('tr') as HTMLElement);
+    const dialog = await screen.findByRole('dialog');
+    expect(
+      within(dialog).getAllByRole('textbox', { name: 'common:labels.description' }),
+    ).toHaveLength(5);
+
+    fireEvent.submit(
+      within(dialog).getByText('common:buttons.save').closest('form') as HTMLFormElement,
+    );
+
+    expect(onUpdateInvoice).not.toHaveBeenCalled();
+    expect(within(dialog).getByText(errorKey)).toBeInTheDocument();
+  });
 });
 
 describe('ClientsInvoicesView modal styling', () => {
@@ -155,24 +236,25 @@ describe('ClientsInvoicesView modal styling', () => {
     ]);
   });
 
-  // Regression: the `lg:pt-5` quick-view gutter must sit on the row flex (with `lg:items-center`,
-  // alongside the trash button), not the inner grid — else the delete button misaligns above the inputs.
-  test('delete button shares the floated quick-view gutter so it stays aligned with the line', async () => {
+  test('renders invoice items through the shared StandardTable', async () => {
     const source = await readComponentSource('accounting/ClientsInvoicesView.tsx');
 
     expectSourceContainsAll(source, [
-      'className="flex items-start gap-2 lg:items-center lg:pt-5"',
-      'className="grid flex-1 grid-cols-1 gap-2 lg:grid-cols-14"',
+      "import StandardTable, { type Column } from '../shared/StandardTable';",
+      'const columns: Column<InvoiceItem>[]',
+      '<StandardTable<InvoiceItem>',
+      'persistenceKey="accounting.clientInvoices.items"',
+      'createLineItemIndexResolver(controller.formData.items)',
     ]);
-    expectSourceOmitsAll(source, ['lg:grid-cols-14 lg:pt-5']);
+    expectSourceOmitsAll(source, ['<DocumentLineItemsScrollArea']);
   });
 
   test('item rows render unit, currency, and percentage beside inputs instead of headers', async () => {
     const source = await readComponentSource('accounting/ClientsInvoicesView.tsx');
 
     expectSourceContainsAll(source, [
-      "{controller.t('common:labels.price')}</div>",
-      "{controller.t('common:labels.discount')}</div>",
+      "header: controller.t('common:labels.price')",
+      "header: controller.t('common:labels.discount')",
       '/',
       'suffix={controller.currency}',
       '<span className="shrink-0 text-xs font-medium text-muted-foreground">',
@@ -186,16 +268,29 @@ describe('ClientsInvoicesView modal styling', () => {
     ]);
   });
 
+  test('right-aligns numeric invoice editors like the other document item tables', async () => {
+    const source = await readComponentSource('accounting/ClientsInvoicesView.tsx');
+
+    expectSourceContainsAll(source, [
+      "'h-9 max-w-[5rem] flex-none text-right font-medium'",
+      'className="flex h-9 items-center justify-end gap-1"',
+      'className={CLIENT_INVOICE_ITEM_NUMBER_INPUT_CLASSNAME}',
+      'placeholder="0,00"',
+      'placeholder="0"',
+    ]);
+    expectSourceOmitsAll(source, ['className="flex items-center justify-center gap-1"']);
+  });
+
   test('exposes a Durata column with a months/years unit selector and folds duration into the taxable line amount (issue #757)', async () => {
     const source = await readComponentSource('accounting/ClientsInvoicesView.tsx');
 
     expectSourceContainsAll(source, [
       // The Durata column header + per-row duration input wired through the shared value parser.
-      "{controller.t('sales:clientQuotes.durationColumn', { defaultValue: 'Duration' })}",
+      "header: controller.t('sales:clientQuotes.durationColumn', { defaultValue: 'Duration' })",
       "'durationMonths',",
       'parseDurationValueToMonths(value, unit)',
       // The input shows the display value in the chosen unit, with a months/years selector.
-      'getDurationDisplayValue(item)',
+      'getDurationInputValue(item)',
       '<DurationUnitSelector',
       // The taxable amount (and therefore subtotal/tax/total) multiplies by the line duration
       // via the shared clamp helper, which always works in canonical months.
@@ -279,8 +374,8 @@ describe('<ClientsInvoicesView /> product quick-view shortcut', () => {
       expect(link).toHaveAttribute('href', '#/catalog/internal-listing?filterId=product-1');
       expect(link).toHaveAttribute('target', '_blank');
     }
-    // The shortcut floats above the field on desktop (lg:absolute), matching quotes/offers.
-    expect(productLinks.some((link) => link.className.includes('lg:absolute'))).toBe(true);
+    // StandardTable cells have no floating-field gutter, so the shortcut stays inline.
+    expect(productLinks.some((link) => link.className.includes('lg:absolute'))).toBe(false);
   });
 
   test('hides the product shortcut entirely without internal-listing access', async () => {
@@ -333,7 +428,7 @@ describe('<ClientsInvoicesView /> line-item delete confirmation', () => {
     expect(rowDeletes.length).toBeGreaterThan(0);
 
     // Clicking the trash icon must NOT remove the row immediately — it opens a confirmation.
-    fireEvent.click(rowDeletes[0]);
+    fireEvent.click(await openRowDeleteButton(dialog));
     const confirmUi = await screen.findByTestId('line-delete-confirm');
     expect(within(confirmUi).getByTestId('line-delete-title')).toHaveTextContent(
       'accounting:clientsInvoices.removeProductTitle',
@@ -350,12 +445,84 @@ describe('<ClientsInvoicesView /> line-item delete confirmation', () => {
     const dialog = await openEditor();
     const rowDeletes = rowDeleteButtons(dialog);
 
-    fireEvent.click(rowDeletes[0]);
+    fireEvent.click(await openRowDeleteButton(dialog));
     fireEvent.click(await screen.findByTestId('line-delete-cancel'));
 
     await waitFor(() => {
       expect(screen.queryByTestId('line-delete-confirm')).not.toBeInTheDocument();
     });
     expect(rowDeleteButtons(dialog)).toHaveLength(rowDeletes.length);
+  });
+});
+
+describe('<ClientsInvoicesView /> new line identity', () => {
+  test('shows placeholders instead of numeric defaults on a new invoice line', async () => {
+    render(
+      <ClientsInvoicesView
+        invoices={[]}
+        clients={clients}
+        products={[]}
+        onAddInvoice={mock(() => {})}
+        onUpdateInvoice={mock(() => {})}
+        onDeleteInvoice={mock(() => {})}
+        currency="EUR"
+      />,
+    );
+    fireEvent.click(screen.getByText('accounting:clientsInvoices.addInvoice'));
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.click(within(dialog).getByText('accounting:clientsInvoices.addItem'));
+
+    await waitFor(() => {
+      const decimalInputs = within(dialog).getAllByPlaceholderText('0,00') as HTMLInputElement[];
+      expect(decimalInputs.length).toBeGreaterThanOrEqual(3);
+      expect(decimalInputs.every((input) => input.value === '')).toBe(true);
+      expect(within(dialog).getByPlaceholderText('0')).toHaveValue('');
+      expect(within(dialog).getByPlaceholderText('22,00')).toHaveValue('');
+    });
+  });
+
+  test('keeps the existing subtotal when a blank line is added', async () => {
+    const dialog = await openEditModal(buildInvoice('INV-BLANK-LINE', 'months'));
+    fireEvent.click(within(dialog).getByText('accounting:clientsInvoices.addItem'));
+
+    const subtotalLabel = within(dialog).getByText('accounting:clientsInvoices.subtotal');
+    expect(subtotalLabel.nextElementSibling).toHaveTextContent('7.200,00 EUR');
+  });
+
+  test('keeps rapidly-added rows independently editable when the clock value is unchanged', async () => {
+    const dateNowSpy = spyOn(Date, 'now').mockReturnValue(1_700_000_000_000);
+    try {
+      render(
+        <ClientsInvoicesView
+          invoices={[]}
+          clients={clients}
+          products={[]}
+          onAddInvoice={mock(() => {})}
+          onUpdateInvoice={mock(() => {})}
+          onDeleteInvoice={mock(() => {})}
+          currency="EUR"
+        />,
+      );
+      fireEvent.click(screen.getByText('accounting:clientsInvoices.addInvoice'));
+      const dialog = await screen.findByRole('dialog');
+      const addItemButton = within(dialog).getByText('accounting:clientsInvoices.addItem');
+
+      fireEvent.click(addItemButton);
+      fireEvent.click(addItemButton);
+
+      const descriptionInputs = await waitFor(() => {
+        const inputs = within(dialog).getAllByPlaceholderText(
+          'accounting:clientsInvoices.descriptionPlaceholder',
+        ) as HTMLInputElement[];
+        expect(inputs).toHaveLength(2);
+        return inputs;
+      });
+      fireEvent.change(descriptionInputs[1], { target: { value: 'Second line' } });
+
+      expect(descriptionInputs[0].value).toBe('');
+      expect(descriptionInputs[1].value).toBe('Second line');
+    } finally {
+      dateNowSpy.mockRestore();
+    }
   });
 });

@@ -3,6 +3,12 @@ import { fireEvent, screen } from '@testing-library/react';
 import type { Product, Supplier, SupplierInvoice } from '../../types';
 import { installI18nMock } from '../helpers/i18n';
 import { render } from '../helpers/render';
+import { openRowDeleteButton } from '../helpers/rowDeleteButtons';
+import {
+  expectSourceContainsAll,
+  expectSourceOmitsAll,
+  readComponentSource,
+} from './modalStylingTestUtils';
 
 installI18nMock();
 
@@ -73,7 +79,7 @@ describe('<SupplierInvoicesView /> line item duration (issue #776/#775)', () => 
       screen.getAllByText('accounting:supplierInvoices.durationColumn').length,
     ).toBeGreaterThan(0);
     const durationInputs = screen
-      .getAllByPlaceholderText('accounting:supplierInvoices.durationColumn')
+      .getAllByPlaceholderText('0')
       .filter((el): el is HTMLInputElement => el instanceof HTMLInputElement);
     expect(durationInputs.length).toBeGreaterThan(0);
     expect(durationInputs[0].value).toBe('3');
@@ -92,7 +98,7 @@ describe('<SupplierInvoicesView /> line item duration (issue #776/#775)', () => 
     fireEvent.click(screen.getByText('SINV-DUR-SUBMIT'));
 
     const durationInputs = screen
-      .getAllByPlaceholderText('accounting:supplierInvoices.durationColumn')
+      .getAllByPlaceholderText('0')
       .filter((el): el is HTMLInputElement => el instanceof HTMLInputElement);
     fireEvent.change(durationInputs[0], { target: { value: '5' } });
 
@@ -102,6 +108,44 @@ describe('<SupplierInvoicesView /> line item duration (issue #776/#775)', () => 
     const updates = onUpdateInvoice.mock.calls[0]?.[1] as Partial<SupplierInvoice>;
     expect(updates.items?.[0]?.durationMonths).toBe(5);
     expect(updates.items?.[0]?.durationUnit).toBe('months');
+  });
+
+  test('normalizes a blank years duration to the canonical month unit before saving', async () => {
+    const onUpdateInvoice = mock((_id: string, _updates: Partial<SupplierInvoice>) => {});
+    const invoice = buildInvoice({ id: 'SINV-BLANK-DURATION', status: 'draft' });
+    render(
+      <SupplierInvoicesView
+        {...baseProps}
+        invoices={[invoice]}
+        onUpdateInvoice={onUpdateInvoice}
+      />,
+    );
+    fireEvent.click(screen.getByText('SINV-BLANK-DURATION'));
+
+    const durationInput = screen
+      .getAllByPlaceholderText('0')
+      .find((element): element is HTMLInputElement => element instanceof HTMLInputElement);
+    if (!durationInput) throw new Error('Duration input not found');
+    fireEvent.change(durationInput, { target: { value: '' } });
+
+    const durationUnitButton = screen
+      .getAllByText('accounting:supplierInvoices.months')
+      .map((element) => element.closest('button'))
+      .find(Boolean);
+    if (!durationUnitButton) throw new Error('Duration unit button not found');
+    fireEvent.click(durationUnitButton);
+    const yearsOption = (await screen.findAllByText('accounting:supplierInvoices.years'))
+      .map((element) => element.closest('[data-slot="select-item"]'))
+      .find(Boolean);
+    if (!yearsOption) throw new Error('Years duration option not found');
+    fireEvent.click(yearsOption);
+    fireEvent.click(screen.getByText('common:buttons.update'));
+
+    expect(onUpdateInvoice).toHaveBeenCalledTimes(1);
+    const updates = onUpdateInvoice.mock.calls[0]?.[1];
+    expect(updates?.items?.[0]).toEqual(
+      expect.objectContaining({ durationMonths: undefined, durationUnit: 'months' }),
+    );
   });
 
   test('rounds discounted unit cost before quantity multiplies the line total', () => {
@@ -126,5 +170,44 @@ describe('<SupplierInvoicesView /> line item duration (issue #776/#775)', () => 
     fireEvent.click(screen.getByText('SINV-ROUNDING'));
 
     expect(screen.getAllByText('901,00 EUR').length).toBeGreaterThan(0);
+  });
+});
+
+describe('<SupplierInvoicesView /> line-item table', () => {
+  test('renders supplier invoice items through the shared StandardTable', async () => {
+    const source = await readComponentSource('accounting/SupplierInvoicesView.tsx');
+
+    expectSourceContainsAll(source, [
+      "import StandardTable, { type Column } from '../shared/StandardTable';",
+      'const columns: Column<SupplierInvoiceItem>[]',
+      '<StandardTable<SupplierInvoiceItem>',
+      'persistenceKey="accounting.supplierInvoices.items"',
+      'createLineItemIndexResolver(controller.formData.items)',
+    ]);
+    expectSourceOmitsAll(source, ['<DocumentLineItemsScrollArea']);
+  });
+
+  test('right-aligns numeric invoice editors like the other document item tables', async () => {
+    const source = await readComponentSource('accounting/SupplierInvoicesView.tsx');
+
+    expectSourceContainsAll(source, [
+      "'h-9 max-w-[5rem] flex-none text-right font-medium'",
+      'className="flex h-9 items-center justify-end gap-1"',
+      'inputClassName = SUPPLIER_INVOICE_ITEM_NUMBER_INPUT_CLASSNAME',
+      'placeholder="0,00"',
+      'placeholder="0"',
+    ]);
+    expectSourceOmitsAll(source, ["inputClassName = 'min-w-0 text-center'"]);
+  });
+
+  test('keeps the delete action available from the StandardTable row menu', async () => {
+    const invoice = buildInvoice({ id: 'SINV-DELETE', status: 'draft' });
+    render(<SupplierInvoicesView {...baseProps} invoices={[invoice]} />);
+    fireEvent.click(screen.getByText('SINV-DELETE'));
+
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.click(await openRowDeleteButton(dialog));
+
+    expect(screen.queryByDisplayValue('Managed service')).not.toBeInTheDocument();
   });
 });

@@ -2,7 +2,6 @@ import type React from 'react';
 import { useCallback, useMemo, useReducer } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
-import DocumentLineItemsScrollArea from '@/components/ui/document-line-items-scroll-area';
 import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -11,11 +10,19 @@ import { useDocumentCodePreview } from '../../hooks/useDocumentCodePreview';
 import type { Client, DurationUnit, Invoice, InvoiceItem, Product } from '../../types';
 import { addDaysToDateOnly, formatDateOnlyForLocale, getLocalDateString } from '../../utils/date';
 import {
+  createLineItemIndexResolver,
+  createTemporaryLineItemId,
+  isTemporaryLineItem,
+} from '../../utils/lineItemIndex';
+import {
   calcProductSalePrice,
   durationValueToMonths,
   formatDecimal,
-  getDurationDisplayValue,
+  getDurationInputValue,
   getEffectiveDurationMonths,
+  isFiniteNumber,
+  isPositiveFiniteNumber,
+  normalizeDurationForSubmit,
   normalizeDurationUnit,
   parseDurationValueToMonths,
 } from '../../utils/numbers';
@@ -36,7 +43,7 @@ import {
 } from '../shared/ModalLayout';
 import QuickViewLinkButton from '../shared/QuickViewLinkButton';
 import SelectControl from '../shared/SelectControl';
-import StandardTable from '../shared/StandardTable';
+import StandardTable, { type Column } from '../shared/StandardTable';
 import StatusBadge, { type StatusType } from '../shared/StatusBadge';
 import { TABLE_ROW_ACTION_BUTTON_CLASSNAME } from '../shared/tableControlStyles';
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
@@ -54,18 +61,24 @@ export interface ClientsInvoicesViewProps {
 
 // Italian standard VAT rate, used as the per-line default.
 const DEFAULT_TAX_RATE = 22;
+const EMPTY_INVOICE_ITEMS: InvoiceItem[] = [];
+const CLIENT_INVOICE_ITEM_NUMBER_INPUT_CLASSNAME =
+  'h-9 max-w-[5rem] flex-none text-right font-medium';
 
 // Months the line's service runs (issue #757); multiplies the taxable amount. The shared
 // `getEffectiveDurationMonths` clamps absent/invalid values to 1, so pre-duration invoices keep
 // their totals — matching the backend `computeInvoiceTotals`.
+const getLineGross = (item: InvoiceItem) =>
+  Number(item.quantity || 0) * Number(item.unitPrice || 0) * getEffectiveDurationMonths(item);
+
 const getLineTaxable = (item: InvoiceItem) =>
-  item.quantity *
-  item.unitPrice *
-  getEffectiveDurationMonths(item) *
-  (1 - Number(item.discount || 0) / 100);
+  getLineGross(item) * (1 - Number(item.discount || 0) / 100);
+
+const getInvoiceItemTaxRate = (item: InvoiceItem) =>
+  item.taxRate ?? (isTemporaryLineItem(item) ? DEFAULT_TAX_RATE : 0);
 
 const getLineTotal = (item: InvoiceItem) =>
-  getLineTaxable(item) * (1 + Number(item.taxRate || 0) / 100);
+  getLineTaxable(item) * (1 + getInvoiceItemTaxRate(item) / 100);
 
 const normalizeUnitOfMeasure = (
   unitOfMeasure?: InvoiceItem['unitOfMeasure'],
@@ -306,7 +319,7 @@ const useClientsInvoicesController = ({
     items.forEach((item) => {
       const taxable = getLineTaxable(item);
       subtotal += taxable;
-      taxTotal += (taxable * Number(item.taxRate || 0)) / 100;
+      taxTotal += (taxable * getInvoiceItemTaxRate(item)) / 100;
     });
 
     const total = subtotal + taxTotal;
@@ -333,16 +346,11 @@ const useClientsInvoicesController = ({
 
   const addItemRow = () => {
     const newItem: Partial<InvoiceItem> = {
-      id: `temp-${Date.now()}`,
+      id: createTemporaryLineItemId(),
       productId: undefined,
       description: '',
       unitOfMeasure: 'unit',
-      quantity: 1,
-      durationMonths: 1,
       durationUnit: 'months',
-      unitPrice: 0,
-      discount: 0,
-      taxRate: DEFAULT_TAX_RATE,
     };
 
     setFormData((prev) => ({
@@ -400,7 +408,11 @@ const useClientsInvoicesController = ({
   // months; 'years' multiplies by 12. Empty/invalid input falls back to 1 of the chosen unit.
   const handleDurationValueChange = (index: number, value: string) => {
     const unit = normalizeDurationUnit(formData.items?.[index]?.durationUnit);
-    updateItemRow(index, 'durationMonths', parseDurationValueToMonths(value, unit));
+    updateItemRow(
+      index,
+      'durationMonths',
+      value === '' ? undefined : parseDurationValueToMonths(value, unit),
+    );
   };
 
   // Switching months↔years keeps the displayed number and reinterprets it under the new unit
@@ -410,8 +422,11 @@ const useClientsInvoicesController = ({
     if (!item || normalizeDurationUnit(item.durationUnit) === newUnit) return;
     // 'N/A' marks the line as duration-less: reset to the neutral 1 month so it never multiplies
     // (issue #775). Months/years instead keeps the displayed number under the new unit.
+    const durationValue = getDurationInputValue(item);
     const durationMonths =
-      newUnit === 'na' ? 1 : durationValueToMonths(getDurationDisplayValue(item), newUnit);
+      newUnit === 'na' || durationValue === undefined
+        ? undefined
+        : durationValueToMonths(durationValue, newUnit);
     const nextItems = [...(formData.items || [])];
     nextItems[index] = {
       ...nextItems[index],
@@ -433,8 +448,15 @@ const useClientsInvoicesController = ({
       nextErrors.issueDate = t('accounting:clientsInvoices.issueDateRequired');
     }
     if (!formData.dueDate) nextErrors.dueDate = t('accounting:clientsInvoices.dueDateRequired');
-    if (!formData.items || formData.items.length === 0) {
+    const items = formData.items || [];
+    if (items.length === 0) {
       nextErrors.items = t('accounting:clientsInvoices.itemsRequired');
+    } else if (items.some((item) => !item.description.trim())) {
+      nextErrors.items = t('common:validation.required');
+    } else if (items.some((item) => !isPositiveFiniteNumber(item.quantity))) {
+      nextErrors.items = t('common:validation.positiveQuantityRequired');
+    } else if (items.some((item) => !isFiniteNumber(item.unitPrice) || item.unitPrice < 0)) {
+      nextErrors.items = t('common:validation.unitPriceRequired');
     }
 
     if (Object.keys(nextErrors).length > 0) {
@@ -442,7 +464,7 @@ const useClientsInvoicesController = ({
       return;
     }
 
-    const roundedItems = (formData.items || []).map((item) => {
+    const roundedItems = items.map((item) => {
       const unitOfMeasure = normalizeUnitOfMeasure(item.unitOfMeasure);
       return {
         ...item,
@@ -450,9 +472,8 @@ const useClientsInvoicesController = ({
         quantity: Number(item.quantity ?? 0),
         unitPrice: Number(item.unitPrice ?? 0),
         discount: Number(item.discount || 0),
-        taxRate: Number(item.taxRate || 0),
-        durationMonths: Number(item.durationMonths ?? 1) || 1,
-        durationUnit: normalizeDurationUnit(item.durationUnit),
+        taxRate: getInvoiceItemTaxRate(item),
+        ...normalizeDurationForSubmit(item),
       };
     });
 
@@ -488,12 +509,7 @@ const useClientsInvoicesController = ({
 
   const { subtotal, taxTotal, total } = calculateTotals(formData.items || []);
   const totalDiscount = (formData.items || []).reduce(
-    (sum, item) =>
-      sum +
-      item.quantity *
-        item.unitPrice *
-        getEffectiveDurationMonths(item) *
-        (Number(item.discount || 0) / 100),
+    (sum, item) => sum + getLineGross(item) * (Number(item.discount || 0) / 100),
     0,
   );
   const grossSubtotal = subtotal + totalDiscount;
@@ -883,103 +899,161 @@ const InvoiceDateField: React.FC<{
 
 const InvoiceItemsSection: React.FC<{ controller: ClientsInvoicesController }> = ({
   controller,
-}) => (
-  <div className="space-y-4">
-    <div className="flex items-center justify-between">
-      <SectionTitle>{controller.t('accounting:clientsInvoices.items')}</SectionTitle>
-      <Button type="button" size="sm" onClick={controller.addItemRow}>
-        <i className="fa-solid fa-plus text-[10px]" aria-hidden="true"></i>
-        {controller.t('accounting:clientsInvoices.addItem')}
-      </Button>
-    </div>
-    <FieldError className="-mt-2 text-xs">{controller.errors.items}</FieldError>
-    {controller.formData.items && controller.formData.items.length > 0 ? (
-      <DocumentLineItemsScrollArea aria-label={controller.t('accounting:clientsInvoices.items')}>
-        <InvoiceItemsHeader controller={controller} />
-        <div className="space-y-3">
-          {controller.formData.items.map((item, index) => (
-            <InvoiceItemRow key={item.id} controller={controller} item={item} index={index} />
-          ))}
-        </div>
-      </DocumentLineItemsScrollArea>
-    ) : (
-      <div className="rounded-md border border-dashed border-border py-8 text-center text-sm text-muted-foreground">
-        {controller.t('accounting:clientsInvoices.noItems')}
-      </div>
-    )}
-  </div>
-);
-
-const InvoiceItemsHeader: React.FC<{ controller: ClientsInvoicesController }> = ({
-  controller,
 }) => {
-  if (!controller.formData.items || controller.formData.items.length === 0) return null;
+  const items = controller.formData.items || EMPTY_INVOICE_ITEMS;
+  const getIndex = useMemo(
+    () => createLineItemIndexResolver(controller.formData.items),
+    [controller.formData.items],
+  );
+  const columns: Column<InvoiceItem>[] = [
+    {
+      id: 'product',
+      header: controller.t('common:labels.product'),
+      minWidth: 244,
+      accessorFn: (item) =>
+        controller.activeProducts.find((product) => product.id === item.productId)?.name || '',
+      cell: ({ row }) => (
+        <div className="min-w-[220px]">
+          <InvoiceItemProductField controller={controller} item={row} index={getIndex(row)} />
+        </div>
+      ),
+    },
+    {
+      id: 'description',
+      header: controller.t('common:labels.description'),
+      minWidth: 244,
+      accessorKey: 'description',
+      cell: ({ row }) => {
+        const index = getIndex(row);
+        return (
+          <Input
+            id={`client-invoice-item-description-${index}`}
+            type="text"
+            required
+            aria-label={controller.t('common:labels.description')}
+            placeholder={controller.t('accounting:clientsInvoices.descriptionPlaceholder')}
+            value={row.description}
+            onChange={(event) => controller.updateItemRow(index, 'description', event.target.value)}
+            className="min-w-[220px]"
+          />
+        );
+      },
+    },
+    {
+      id: 'quantity',
+      header: controller.t('common:labels.quantity'),
+      minWidth: 174,
+      accessorKey: 'quantity',
+      align: 'right',
+      cell: ({ row }) => (
+        <div className="min-w-[150px]">
+          <InvoiceItemQuantityField controller={controller} item={row} index={getIndex(row)} />
+        </div>
+      ),
+    },
+    {
+      id: 'duration',
+      header: controller.t('sales:clientQuotes.durationColumn', { defaultValue: 'Duration' }),
+      minWidth: 174,
+      accessorFn: (item) => getEffectiveDurationMonths(item),
+      align: 'right',
+      cell: ({ row }) => (
+        <div className="min-w-[150px]">
+          <InvoiceItemDurationField controller={controller} item={row} index={getIndex(row)} />
+        </div>
+      ),
+    },
+    {
+      id: 'unitPrice',
+      header: controller.t('common:labels.price'),
+      accessorKey: 'unitPrice',
+      align: 'right',
+      cell: ({ row }) => (
+        <div className="min-w-[130px]">
+          <InvoiceItemPriceField controller={controller} item={row} index={getIndex(row)} />
+        </div>
+      ),
+    },
+    {
+      id: 'discount',
+      header: controller.t('common:labels.discount'),
+      accessorFn: (item) => item.discount || 0,
+      align: 'right',
+      cell: ({ row }) => (
+        <div className="min-w-[110px]">
+          <InvoiceItemDiscountField controller={controller} item={row} index={getIndex(row)} />
+        </div>
+      ),
+    },
+    {
+      id: 'taxRate',
+      header: controller.t('accounting:clientsInvoices.taxRate', { defaultValue: 'IVA %' }),
+      accessorFn: getInvoiceItemTaxRate,
+      align: 'right',
+      cell: ({ row }) => (
+        <div className="min-w-[110px]">
+          <InvoiceItemTaxField controller={controller} item={row} index={getIndex(row)} />
+        </div>
+      ),
+    },
+    {
+      id: 'total',
+      header: controller.t('common:labels.total'),
+      accessorFn: getLineTotal,
+      align: 'right',
+      cell: ({ row }) => <InvoiceItemTotalField controller={controller} item={row} />,
+    },
+    {
+      id: 'actions',
+      header: controller.t('common:labels.actions'),
+      align: 'right',
+      cell: ({ row }) => (
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          onClick={() => controller.setProductRowToDelete(getIndex(row))}
+          className="text-muted-foreground hover:text-destructive"
+        >
+          <i className="fa-solid fa-trash-can" aria-hidden="true"></i>
+          <span className="sr-only">{controller.t('common:buttons.delete')}</span>
+        </Button>
+      ),
+    },
+  ];
+
   return (
-    <div className="mb-1 hidden items-center gap-2 px-3 lg:flex">
-      <div className="grid flex-1 grid-cols-14 gap-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-        <div className="col-span-3">{controller.t('common:labels.product')}</div>
-        <div className="col-span-2">{controller.t('common:labels.quantity')}</div>
-        <div className="col-span-2 whitespace-nowrap">
-          {controller.t('sales:clientQuotes.durationColumn', { defaultValue: 'Duration' })}
-        </div>
-        <div className="col-span-2">{controller.t('common:labels.price')}</div>
-        <div className="col-span-1">{controller.t('common:labels.discount')}</div>
-        <div className="col-span-2">
-          {controller.t('accounting:clientsInvoices.taxRate', { defaultValue: 'IVA %' })}
-        </div>
-        <div className="col-span-2 pr-2 text-right">{controller.t('common:labels.total')}</div>
+    <div className="space-y-2">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <SectionTitle>{controller.t('accounting:clientsInvoices.items')}</SectionTitle>
+        <Button type="button" size="sm" onClick={controller.addItemRow}>
+          <i className="fa-solid fa-plus text-[10px]" aria-hidden="true"></i>
+          {controller.t('accounting:clientsInvoices.addItem')}
+        </Button>
       </div>
-      <div className="w-8 shrink-0"></div>
+      <FieldError className="text-xs">{controller.errors.items}</FieldError>
+      <StandardTable<InvoiceItem>
+        title={controller.t('accounting:clientsInvoices.items')}
+        persistenceKey="accounting.clientInvoices.items"
+        allowColumnHiding={false}
+        data={items}
+        columns={columns}
+        defaultRowsPerPage={5}
+        autoRevealNewRows
+        shouldBypassFilters={(item) =>
+          isTemporaryLineItem(item) || !isPositiveFiniteNumber(item.quantity)
+        }
+        minBodyRows={0}
+        tableContainerClassName="overflow-x-auto"
+        emptyState={
+          <div className="py-8 text-sm text-muted-foreground">
+            {controller.t('accounting:clientsInvoices.noItems')}
+          </div>
+        }
+      />
     </div>
   );
 };
-
-const InvoiceItemRow: React.FC<{
-  controller: ClientsInvoicesController;
-  item: InvoiceItem;
-  index: number;
-}> = ({ controller, item, index }) => (
-  <div className="space-y-3 rounded-md border border-border bg-muted/30 p-3">
-    <div className="flex items-start gap-2 lg:items-center lg:pt-5">
-      <div className="grid flex-1 grid-cols-1 gap-2 lg:grid-cols-14">
-        <InvoiceItemProductField controller={controller} item={item} index={index} />
-        <InvoiceItemQuantityField controller={controller} item={item} index={index} />
-        <InvoiceItemDurationField controller={controller} item={item} index={index} />
-        <InvoiceItemPriceField controller={controller} item={item} index={index} />
-        <InvoiceItemDiscountField controller={controller} item={item} index={index} />
-        <InvoiceItemTaxField controller={controller} item={item} index={index} />
-        <InvoiceItemTotalField controller={controller} item={item} />
-      </div>
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon-sm"
-        onClick={() => controller.setProductRowToDelete(index)}
-        className="text-muted-foreground hover:text-destructive"
-      >
-        <i className="fa-solid fa-trash-can" aria-hidden="true"></i>
-        <span className="sr-only">{controller.t('common:buttons.delete')}</span>
-      </Button>
-    </div>
-    <Field>
-      <FieldLabel
-        htmlFor={`client-invoice-item-description-${index}`}
-        className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground"
-        required
-      >
-        {controller.t('common:labels.description')}
-      </FieldLabel>
-      <Input
-        id={`client-invoice-item-description-${index}`}
-        type="text"
-        required
-        placeholder={controller.t('accounting:clientsInvoices.descriptionPlaceholder')}
-        value={item.description}
-        onChange={(event) => controller.updateItemRow(index, 'description', event.target.value)}
-      />
-    </Field>
-  </div>
-);
 
 const InvoiceItemProductField: React.FC<{
   controller: ClientsInvoicesController;
@@ -1012,7 +1086,6 @@ const InvoiceItemProductField: React.FC<{
             href={productHref}
             label={controller.t('sales:clientQuotes.openProductInNewTab')}
             disabledLabel={controller.t('sales:clientQuotes.productShortcutUnavailable')}
-            floating
           />
         )}
       </div>
@@ -1032,21 +1105,22 @@ const InvoiceItemQuantityField: React.FC<{
     >
       {controller.t('common:labels.quantity')}
     </FieldLabel>
-    <div className="flex items-center justify-center gap-1">
+    <div className="flex h-9 items-center justify-end gap-1">
       <ValidatedNumberInput
         min="0"
         step="0.01"
         required
+        placeholder="0,00"
         value={item.quantity}
         onValueChange={(value) => {
           const parsed = parseFloat(value);
           controller.updateItemRow(
             index,
             'quantity',
-            value === '' || Number.isNaN(parsed) ? 0 : parsed,
+            value === '' || Number.isNaN(parsed) ? undefined : parsed,
           );
         }}
-        className="min-w-0 max-w-[5rem]"
+        className={CLIENT_INVOICE_ITEM_NUMBER_INPUT_CLASSNAME}
       />
       <span className="shrink-0 text-xs font-medium text-muted-foreground">/</span>
       <span className="shrink-0 text-xs font-medium text-muted-foreground">
@@ -1063,26 +1137,27 @@ const InvoiceItemDurationField: React.FC<{
   index: number;
 }> = ({ controller, item, index }) => {
   const durationUnit = normalizeDurationUnit(item.durationUnit);
-  const durationValue = getDurationDisplayValue(item);
+  const durationValue = getDurationInputValue(item);
   return (
     <div className="space-y-1 lg:col-span-2">
       <FieldLabel className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden">
         {controller.t('sales:clientQuotes.durationColumn', { defaultValue: 'Duration' })}
       </FieldLabel>
-      <div className="flex items-center justify-center gap-1">
+      <div className="flex h-9 items-center justify-end gap-1">
         <ValidatedNumberInput
           min="1"
           step="1"
+          placeholder="0"
           value={durationValue}
           onValueChange={(value) => controller.handleDurationValueChange(index, value)}
           disabled={durationUnit === 'na'}
-          className="min-w-0 max-w-[5rem]"
+          className={CLIENT_INVOICE_ITEM_NUMBER_INPUT_CLASSNAME}
         />
         <span className="shrink-0 text-xs font-medium text-muted-foreground">/</span>
         <DurationUnitSelector
           value={durationUnit}
           onChange={(value) => controller.handleDurationUnitChange(index, value)}
-          count={durationValue}
+          count={durationValue ?? 0}
         />
       </div>
     </div>
@@ -1105,7 +1180,7 @@ const InvoiceItemPriceField: React.FC<{
       controller.updateItemRow(
         index,
         'unitPrice',
-        value === '' || Number.isNaN(parsed) ? 0 : parsed,
+        value === '' || Number.isNaN(parsed) ? undefined : parsed,
       );
     }}
   />
@@ -1119,7 +1194,7 @@ const InvoiceItemDiscountField: React.FC<{
   <InvoiceItemNumberField
     label={controller.t('common:labels.discount')}
     suffix="%"
-    value={item.discount || 0}
+    value={item.discount}
     max="100"
     className="lg:col-span-1"
     onValueChange={(value) => {
@@ -1127,7 +1202,7 @@ const InvoiceItemDiscountField: React.FC<{
       controller.updateItemRow(
         index,
         'discount',
-        value === '' || Number.isNaN(parsed) ? 0 : parsed,
+        value === '' || Number.isNaN(parsed) ? undefined : parsed,
       );
     }}
   />
@@ -1141,12 +1216,17 @@ const InvoiceItemTaxField: React.FC<{
   <InvoiceItemNumberField
     label={controller.t('accounting:clientsInvoices.taxRate', { defaultValue: 'IVA %' })}
     suffix="%"
-    value={item.taxRate ?? DEFAULT_TAX_RATE}
+    value={item.taxRate}
+    placeholder={`${DEFAULT_TAX_RATE},00`}
     max="100"
     className="lg:col-span-2"
     onValueChange={(value) => {
       const parsed = parseFloat(value);
-      controller.updateItemRow(index, 'taxRate', value === '' || Number.isNaN(parsed) ? 0 : parsed);
+      controller.updateItemRow(
+        index,
+        'taxRate',
+        value === '' || Number.isNaN(parsed) ? undefined : parsed,
+      );
     }}
   />
 );
@@ -1154,12 +1234,13 @@ const InvoiceItemTaxField: React.FC<{
 const InvoiceItemNumberField: React.FC<{
   label: string;
   suffix: string;
-  value: number | string;
+  value: number | string | undefined;
   onValueChange: (value: string) => void;
   className: string;
   required?: boolean;
   max?: string;
-}> = ({ label, suffix, value, onValueChange, className, required, max }) => (
+  placeholder?: string;
+}> = ({ label, suffix, value, onValueChange, className, required, max, placeholder = '0,00' }) => (
   <div className={`space-y-1 ${className}`}>
     <FieldLabel
       className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground lg:hidden"
@@ -1167,16 +1248,17 @@ const InvoiceItemNumberField: React.FC<{
     >
       {label}
     </FieldLabel>
-    <div className="flex items-center gap-1">
+    <div className="flex h-9 items-center justify-end gap-1">
       <ValidatedNumberInput
         min="0"
         max={max}
         step="0.01"
         required={required}
+        placeholder={placeholder}
         value={value}
         formatDecimals={2}
         onValueChange={onValueChange}
-        className="min-w-0 font-medium"
+        className={CLIENT_INVOICE_ITEM_NUMBER_INPUT_CLASSNAME}
       />
       <span className="shrink-0 text-xs font-medium text-muted-foreground">{suffix}</span>
     </div>
