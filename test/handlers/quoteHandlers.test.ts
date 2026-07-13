@@ -95,7 +95,11 @@ type QuoteLike = {
   expirationDate?: string;
   linkedOfferId?: string;
   linkedSupplierQuoteId?: string | null;
-  candidates?: Array<{ id: string; state: string }>;
+  candidates?: Array<{
+    id: string;
+    state: string;
+    items?: Array<{ supplierQuoteItemId?: string | null }>;
+  }>;
   items?: Array<{ supplierQuoteItemId?: string | null }>;
   clientId?: string;
 };
@@ -536,6 +540,34 @@ describe('makeQuoteHandlers', () => {
     });
 
     await ctx.handlers.deleteClientOffer('of-1');
+    expect(refreshSupplierQuoteFlow).toHaveBeenCalledTimes(1);
+  });
+
+  test('deleteClientOffer refreshes when only a discarded sibling candidate sourced a supplier', async () => {
+    apiMocks.clientOffersDelete.mockImplementation(() => Promise.resolve());
+    const refreshSupplierQuoteFlow = mock(() => Promise.resolve());
+    const ctx = buildHandlers({
+      quotes: [
+        {
+          id: 'q1',
+          linkedOfferId: 'of-1',
+          items: [],
+          candidates: [
+            { id: 'qc-selected', state: 'selected', items: [] },
+            {
+              id: 'qc-discarded',
+              state: 'discarded',
+              items: [{ supplierQuoteItemId: 'sqi-sibling' }],
+            },
+          ],
+        },
+      ],
+      clientOffers: [{ id: 'of-1', items: [] }],
+      refreshSupplierQuoteFlow,
+    });
+
+    await ctx.handlers.deleteClientOffer('of-1');
+
     expect(refreshSupplierQuoteFlow).toHaveBeenCalledTimes(1);
   });
 

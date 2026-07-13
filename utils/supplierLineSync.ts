@@ -22,9 +22,17 @@ export type SupplierQuoteItemRef = {
 // supplier quote's derived status and its forward sync (issue #779 follow-up: the 1:1 header link
 // was removed, so line sourcing is the only linkage). Any mutation of such a document can stale the
 // separately-cached supplier-quotes table, so the cache handlers gate their refresh on it.
-export const sourcesSupplierQuote = (
-  doc?: { items?: Array<{ supplierQuoteItemId?: string | null }> } | null,
-): boolean => doc?.items?.some((item) => item.supplierQuoteItemId != null) ?? false;
+type SupplierSourcingDocument = {
+  items?: Array<{ supplierQuoteItemId?: string | null }>;
+  candidates?: Array<{ items?: Array<{ supplierQuoteItemId?: string | null }> }>;
+};
+
+export const sourcesSupplierQuote = (doc?: SupplierSourcingDocument | null): boolean =>
+  (doc?.items?.some((item) => item.supplierQuoteItemId != null) ?? false) ||
+  (doc?.candidates?.some((candidate) =>
+    candidate.items?.some((item) => item.supplierQuoteItemId != null),
+  ) ??
+    false);
 
 // item id → its CURRENT supplier quote + item, across ALL supplier quotes (not just the
 // sourceable ones), so order-lock and staleness resolve even for a line whose quote has since

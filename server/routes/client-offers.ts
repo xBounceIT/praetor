@@ -1544,13 +1544,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         offer.linkedQuoteCandidateId && linkedQuoteId
           ? await clientQuotesRepo.findStatusAndClientName(linkedQuoteId)
           : null;
+      const linkedQuoteStatus = linkedQuote ? normalizeQuoteStatus(linkedQuote.status) : null;
       // Migration 0101 backfilled the candidate link on pre-existing offers too. Only a parent
       // currently in `offer` represents the new promotion flow; accepted legacy parents must keep
       // the ordinary draft-offer delete path.
       const shouldRollbackCandidatePromotion =
-        offer.linkedQuoteCandidateId &&
-        linkedQuoteId &&
-        normalizeQuoteStatus(linkedQuote?.status ?? '') === 'offer';
+        offer.linkedQuoteCandidateId && linkedQuoteId && linkedQuoteStatus === 'offer';
+      const legacyQuoteIdToReactivate =
+        offer.linkedQuoteCandidateId && linkedQuoteId && linkedQuoteStatus === 'accepted'
+          ? linkedQuoteId
+          : null;
       if (shouldRollbackCandidatePromotion) {
         try {
           await withDbTransaction((tx) =>
@@ -1643,6 +1646,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           };
         }
         await clientOffersRepo.deleteById(idResult.value, tx);
+        if (legacyQuoteIdToReactivate) {
+          await quoteCandidatesRepo.reactivateAll(legacyQuoteIdToReactivate, tx);
+        }
         return { ok: true, clientName: lockedOffer.clientName };
       });
       if (!result.ok) {

@@ -1405,7 +1405,7 @@ describe('DELETE /api/sales/client-offers/:id expired guard (#812 round 25)', ()
 
     expect(res.statusCode).toBe(204);
     expect(coDeleteByIdMock).toHaveBeenCalledWith('off-1', expect.anything());
-    expect(qcReactivateAllMock).not.toHaveBeenCalled();
+    expect(qcReactivateAllMock).toHaveBeenCalledWith('q-1', expect.anything());
     expect(cqUpdateMock).not.toHaveBeenCalled();
   });
 });
