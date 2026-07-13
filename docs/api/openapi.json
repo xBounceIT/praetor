@@ -3,7 +3,7 @@
   "info": {
     "title": "Praetor API",
     "description": "Praetor API documentation",
-    "version": "0.10.0"
+    "version": "0.9.1"
   },
   "components": {
     "securitySchemes": {
