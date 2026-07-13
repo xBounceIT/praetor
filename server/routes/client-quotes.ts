@@ -2565,7 +2565,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.post(
     '/:id/promote',
     {
-      onRequest: [requirePermission('sales.client_quotes.update')],
+      onRequest: [requirePermission('sales.client_quotes.update', 'sales.client_offers.create')],
       schema: {
         tags: ['client-quotes'],
         summary: 'Promote a quote candidate to a customer offer',
@@ -2810,7 +2810,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.post(
     '/:id/promotion/rollback',
     {
-      onRequest: [requirePermission('sales.client_quotes.update')],
+      onRequest: [requirePermission('sales.client_quotes.update', 'sales.client_offers.delete')],
       schema: {
         tags: ['client-quotes'],
         summary: 'Roll back a promoted candidate while the offer is still draft',

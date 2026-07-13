@@ -239,6 +239,8 @@ const FULL_PERMS = [
   'sales.client_quotes.create',
   'sales.client_quotes.update',
   'sales.client_quotes.delete',
+  'sales.client_offers.create',
+  'sales.client_offers.delete',
   'sales.supplier_quotes.update',
 ];
 
@@ -909,6 +911,21 @@ describe('POST /api/sales/client-quotes/:id promotion lifecycle', () => {
     durationUnit: 'months' as const,
   });
 
+  test('requires permission to create the generated offer', async () => {
+    getRolePermissionsMock.mockResolvedValue(['sales.client_quotes.update']);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/sales/client-quotes/q-1/promote',
+      headers: authHeader(),
+      payload: { candidateId: 'qc-a' },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(qcFindByIdMock).not.toHaveBeenCalled();
+    expect(coCreateMock).not.toHaveBeenCalled();
+  });
+
   test('promotes exactly the selected active candidate and archives its siblings atomically', async () => {
     const winningCandidate = candidate();
     const winningItem = item();
@@ -1134,6 +1151,20 @@ describe('POST /api/sales/client-quotes/:id promotion lifecycle', () => {
       expect.objectContaining({ status: 'draft', paymentTerms: '30gg' }),
       expect.anything(),
     );
+  });
+
+  test('requires permission to delete the rolled-back offer', async () => {
+    getRolePermissionsMock.mockResolvedValue(['sales.client_quotes.update']);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/sales/client-quotes/q-1/promotion/rollback',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(cqFindLinkedOfferIdMock).not.toHaveBeenCalled();
+    expect(coDeleteByIdMock).not.toHaveBeenCalled();
   });
 
   test('blocks dedicated rollback when the linked offer is no longer draft', async () => {
