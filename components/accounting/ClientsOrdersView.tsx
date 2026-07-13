@@ -684,7 +684,7 @@ const useClientsOrdersController = ({
       {
         header: t('accounting:clientsOrders.subtotal', { defaultValue: 'Subtotal' }),
         id: 'subtotal',
-        accessorFn: (row: ClientsOrder) => orderPricingMap.get(row.id)?.subtotal ?? 0,
+        accessorFn: (row: ClientsOrder) => orderPricingMap.get(row.id)?.grossSubtotal ?? 0,
         className: 'whitespace-nowrap',
         headerClassName: 'min-w-[8rem]',
         disableFiltering: true,
@@ -698,9 +698,10 @@ const useClientsOrdersController = ({
         ),
       },
       {
-        header: t('common:labels.discount'),
+        header: t('common:labels.totalDiscount'),
+        // Keep the historical id so saved table views retain their column order and width.
         id: 'discountAmount',
-        accessorFn: (row: ClientsOrder) => orderPricingMap.get(row.id)?.discountAmount ?? 0,
+        accessorFn: (row: ClientsOrder) => orderPricingMap.get(row.id)?.totalDiscountAmount ?? 0,
         className: 'whitespace-nowrap',
         headerClassName: 'min-w-[8rem]',
         disableFiltering: true,
@@ -1798,7 +1799,14 @@ const OrderItemAmountField: React.FC<{
 const OrderNotesSummarySection: React.FC<{ controller: ClientsOrdersController }> = ({
   controller,
 }) => {
-  const { subtotal, discountAmount, total, margin, marginPercentage } = calculatePricingTotals(
+  const {
+    grossSubtotal,
+    totalDiscountAmount,
+    totalDiscountPercentage,
+    total,
+    margin,
+    marginPercentage,
+  } = calculatePricingTotals(
     controller.formData.items || [],
     controller.formData.discount || 0,
     DEFAULT_UNIT_TYPE,
@@ -1830,7 +1838,7 @@ const OrderNotesSummarySection: React.FC<{ controller: ClientsOrdersController }
         </OrderSectionTitle>
         <CostSummaryPanel
           currency={controller.currency}
-          subtotal={subtotal}
+          subtotal={grossSubtotal}
           total={total}
           subtotalLabel={controller.t('sales:clientQuotes.subtotal', {
             defaultValue: 'Subtotal',
@@ -1853,16 +1861,11 @@ const OrderNotesSummarySection: React.FC<{ controller: ClientsOrdersController }
             disabled: controller.isReadOnly,
           }}
           discountRow={
-            discountAmount > 0
+            totalDiscountAmount > 0
               ? {
-                  label: controller.t('sales:clientOffers.discountAmount', {
-                    value: formatDiscountValue(
-                      controller.formData.discount ?? 0,
-                      controller.formData.discountType ?? 'percentage',
-                      controller.currency,
-                    ),
-                  }),
-                  amount: discountAmount,
+                  label: controller.t('common:labels.totalDiscount'),
+                  amount: totalDiscountAmount,
+                  percentage: totalDiscountPercentage,
                 }
               : undefined
           }

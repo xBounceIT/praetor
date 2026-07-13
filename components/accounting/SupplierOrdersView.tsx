@@ -22,7 +22,6 @@ import {
   convertUnitPrice,
   durationValueToMonths,
   formatDecimal,
-  formatDiscountValue,
   getDiscountedLineTotal,
   getDiscountedUnitPrice,
   getDurationInputValue,
@@ -32,6 +31,7 @@ import {
   normalizeDurationForSubmit,
   normalizeDurationUnit,
   parseDurationValueToMonths,
+  roundCurrency,
 } from '../../utils/numbers';
 import { getPaymentTermsOptions } from '../../utils/options';
 import { toastError } from '../../utils/toast';
@@ -80,11 +80,14 @@ const calculateTotals = (
   globalDiscount: number,
   discountType: 'percentage' | 'currency' = 'percentage',
 ) => {
+  let grossSubtotal = 0;
   let subtotal = 0;
 
   items.forEach((item) => {
     // Duration multiplies the line total alongside quantity (issue #776), matching the supplier
     // quote the order was created from.
+    const durationMonths = getEffectiveDurationMonths(item);
+    grossSubtotal += (Number(item.quantity) || 0) * (Number(item.unitPrice) || 0) * durationMonths;
     subtotal += getDiscountedLineTotal(item);
   });
 
@@ -93,11 +96,16 @@ const calculateTotals = (
       ? Math.min(Math.max(globalDiscount, 0), subtotal)
       : subtotal * (globalDiscount / 100);
   const total = subtotal - discountAmount;
+  const totalDiscountPercentage =
+    grossSubtotal > 0 ? ((grossSubtotal - total) / grossSubtotal) * 100 : 0;
+  const roundedGrossSubtotal = roundCurrency(grossSubtotal);
+  const roundedTotal = roundCurrency(total);
 
   return {
-    subtotal,
-    discountAmount,
-    total,
+    grossSubtotal: roundedGrossSubtotal,
+    totalDiscountAmount: roundCurrency(grossSubtotal - total),
+    totalDiscountPercentage: roundCurrency(totalDiscountPercentage),
+    total: roundedTotal,
   };
 };
 
@@ -1365,7 +1373,7 @@ const SupplierOrderNotesSummarySection: React.FC<{ controller: SupplierOrdersCon
       </SupplierOrderSectionTitle>
       <CostSummaryPanel
         currency={controller.currency}
-        subtotal={controller.totals.subtotal}
+        subtotal={controller.totals.grossSubtotal}
         total={controller.totals.total}
         subtotalLabel={controller.t('accounting:supplierOrders.subtotal')}
         totalLabel={controller.t('accounting:supplierOrders.total')}
@@ -1378,16 +1386,11 @@ const SupplierOrderNotesSummarySection: React.FC<{ controller: SupplierOrdersCon
           disabled: controller.isReadOnly,
         }}
         discountRow={
-          controller.totals.discountAmount > 0
+          controller.totals.totalDiscountAmount > 0
             ? {
-                label: controller.t('sales:clientOffers.discountAmount', {
-                  value: formatDiscountValue(
-                    controller.formData.discount ?? 0,
-                    controller.formData.discountType ?? 'percentage',
-                    controller.currency,
-                  ),
-                }),
-                amount: controller.totals.discountAmount,
+                label: controller.t('common:labels.totalDiscount'),
+                amount: controller.totals.totalDiscountAmount,
+                percentage: controller.totals.totalDiscountPercentage,
               }
             : undefined
         }

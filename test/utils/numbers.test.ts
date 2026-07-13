@@ -459,9 +459,12 @@ describe('calculatePricingTotals', () => {
   test('computes totals for a simple single-item invoice', () => {
     const items: PricingItem[] = [{ unitPrice: 100, quantity: 2, productCost: 60 }];
     const t = calculatePricingTotals(items, 0);
+    expect(t.grossSubtotal).toBe(200);
     expect(t.subtotal).toBe(200);
     expect(t.totalCost).toBe(120);
     expect(t.discountAmount).toBe(0);
+    expect(t.totalDiscountAmount).toBe(0);
+    expect(t.totalDiscountPercentage).toBe(0);
     expect(t.total).toBe(200);
     expect(t.margin).toBe(80);
     expect(t.marginPercentage).toBe(40);
@@ -469,7 +472,10 @@ describe('calculatePricingTotals', () => {
 
   test('applies a per-line percentage discount', () => {
     const items: PricingItem[] = [{ unitPrice: 100, quantity: 1, discount: 10 }];
-    expect(calculatePricingTotals(items, 0).subtotal).toBe(90);
+    const totals = calculatePricingTotals(items, 0);
+    expect(totals.grossSubtotal).toBe(100);
+    expect(totals.subtotal).toBe(90);
+    expect(totals.totalDiscountAmount).toBe(10);
   });
 
   test('allows a 100% line discount without making revenue negative', () => {
@@ -521,6 +527,8 @@ describe('calculatePricingTotals', () => {
     const t = calculatePricingTotals(items, 50, 'hours', 'percentage');
     expect(t.subtotal).toBe(90);
     expect(t.discountAmount).toBe(45);
+    expect(t.totalDiscountAmount).toBe(55);
+    expect(t.totalDiscountPercentage).toBe(55);
     expect(t.total).toBe(45);
   });
 
@@ -607,6 +615,14 @@ describe('calculatePricingTotals', () => {
     const t = calculatePricingTotals([{ unitPrice: 1.005, quantity: 1 }], 0);
     expect(t.subtotal).toBe(1.01);
     expect(t.total).toBe(1.01);
+  });
+
+  test('rounds the aggregate discount from unrounded pricing amounts', () => {
+    const t = calculatePricingTotals([{ unitPrice: 0.03, quantity: 1 }], 50);
+    expect(t.discountAmount).toBe(0.02);
+    expect(t.totalDiscountAmount).toBe(0.02);
+    expect(t.totalDiscountPercentage).toBe(50);
+    expect(t.total).toBe(0.02);
   });
 
   test('rounds every returned field to 2 decimal places', () => {

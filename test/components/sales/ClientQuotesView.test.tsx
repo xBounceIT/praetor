@@ -225,7 +225,7 @@ describe('<ClientQuotesView />', () => {
       'sales:clientQuotes.candidates.column',
       'sales:clientQuotes.subtotal',
       'sales:clientQuotes.discountPercentColumn',
-      'common:labels.discount',
+      'common:labels.totalDiscount',
       'sales:clientQuotes.discountedTotalColumn',
       'sales:clientQuotes.marginLabel',
       'sales:clientQuotes.molLabel',
@@ -263,6 +263,40 @@ describe('<ClientQuotesView />', () => {
 
     expect(screen.getByText('10,5%')).toBeInTheDocument();
     expect(screen.queryByText('10.5%')).not.toBeInTheDocument();
+  });
+
+  test('shows the sum of line and global discounts in the list and summary', async () => {
+    const quoteWithDiscounts: Quote = {
+      ...quotes[0],
+      id: 'Q-TOTAL-DISCOUNT',
+      discount: 10,
+      items: [{ ...quotes[0].items[0], quoteId: 'Q-TOTAL-DISCOUNT', discount: 10 }],
+    };
+
+    render(
+      <ClientQuotesView
+        quotes={[quoteWithDiscounts]}
+        clients={clients}
+        products={[]}
+        supplierQuotes={[]}
+        communicationChannels={communicationChannels}
+        currency="EUR"
+        onAddQuote={mock(() => Promise.resolve())}
+        onUpdateQuote={mock(() => Promise.resolve())}
+        onDeleteQuote={mock(() => Promise.resolve())}
+      />,
+    );
+
+    const quoteRow = screen.getByText('Q-TOTAL-DISCOUNT').closest('tr');
+    if (!quoteRow) throw new Error('Expected quote row');
+    expect(within(quoteRow).getByText('-38,00 EUR')).toBeInTheDocument();
+    expect(within(quoteRow).getByText('200,00 EUR')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('Q-TOTAL-DISCOUNT'));
+    const dialog = await screen.findByRole('dialog');
+    const discountLabel = within(dialog).getByText('common:labels.totalDiscount');
+    expect(within(dialog).getByText('(19,00%)')).toHaveClass('text-amber-600');
+    expect(discountLabel.nextElementSibling).toHaveTextContent('-38,00 EUR');
   });
 
   test('exposes a Durata column and per-row duration input in the create dialog (issue #757)', () => {

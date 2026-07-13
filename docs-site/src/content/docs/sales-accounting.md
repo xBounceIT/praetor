@@ -27,7 +27,9 @@ Ogni riga di **preventivo**, **offerta** e **ordine cliente** espone il **Costo*
 
 Ogni voce include anche la colonna **Sconto**. Lo sconto di riga è una percentuale compresa tra 0% e 100% e riduce il ricavo della voce dopo avere applicato quantità e durata: `Ricavo netto = Prezzo di vendita unitario × Quantità × Durata × (1 − Sconto / 100)`. Il **Margine** della riga usa questo ricavo netto, mentre il costo non cambia. L'eventuale sconto globale, che continua a supportare percentuale o importo fisso, si applica successivamente alla somma delle righe già scontate. Prezzo di vendita e MOL vengono copiati automaticamente dal preventivo all'offerta e dall'offerta all'ordine e restano modificabili finché il documento non è in sola lettura.
 
-La lista dei preventivi mostra codice, data di inserimento, cliente, subtotale, sconto percentuale, sconto assoluto, totale scontato, margine, MOL, termini di pagamento, scadenza e stato per controllare rapidamente i valori principali senza aprire ogni record.
+Nei riepiloghi di preventivi, offerte e ordini il **Subtotale** è l'importo lordo prima degli sconti. La riga **Totale sconti** somma tutti gli sconti di riga e l'eventuale sconto globale e mostra tra parentesi la percentuale media effettiva calcolata sul subtotale lordo, mentre il **Totale** resta l'importo netto finale. La stessa regola vale per gli ordini fornitore, includendo gli sconti sulle singole righe e quello globale.
+
+La lista dei preventivi mostra codice, data di inserimento, cliente, subtotale lordo, sconto globale percentuale, totale sconti, totale scontato, margine, MOL, termini di pagamento, scadenza e stato per controllare rapidamente i valori principali senza aprire ogni record.
 
 La famiglia del preventivo cliente segue **Bozza → Inviato → scelta del candidato → Offerta**. **Scaduto** è uno stato derivato dalle varianti attive: la famiglia risulta scaduta solo quando tutte le varianti attive hanno superato la propria data di scadenza. Una singola variante scaduta resta visibile ma non può essere promossa.
 
@@ -51,9 +53,7 @@ Quando crei o modifichi un **preventivo** o un'**offerta**, il menu **…** di o
 
 Quando lo spazio orizzontale non è sufficiente, le intestazioni e le righe delle voci di **preventivi, offerte, ordini e fatture** restano allineate in un'area scorrevole orizzontalmente. Puoi trascinarla su dispositivi touch oppure usare la barra di scorrimento senza comprimere i campi del documento; il comportamento vale sia per i documenti cliente sia per quelli fornitore.
 
-Nel riepilogo delle offerte, la riga **Sconto** mostra sempre la percentuale equivalente tra parentesi, anche quando lo sconto globale è inserito come importo fisso. L'importo dello sconto resta visibile in valuta sulla destra.
-
-Nella lista **Offerte Clienti**, la data visibile è la **Data Invio**: viene valorizzata quando l'offerta passa allo stato inviata e non rappresenta più la data tecnica di creazione del record. La tabella mostra anche subtotale, sconto percentuale, sconto assoluto, totale scontato, margine, MOL e termini di pagamento per confrontare le offerte senza aprire ogni scheda.
+Nella lista **Offerte Clienti**, la data visibile è la **Data Invio**: viene valorizzata quando l'offerta passa allo stato inviata e non rappresenta più la data tecnica di creazione del record. La tabella mostra anche subtotale lordo, sconto globale percentuale, totale sconti, totale scontato, margine, MOL e termini di pagamento per confrontare le offerte senza aprire ogni scheda.
 
 Quando un'offerta cliente viene accettata, Praetor crea automaticamente l'ordine cliente collegato in stato **Bozza**. Le righe collegate a preventivi fornitore derivati e accettati generano anche i relativi ordini fornitore, come nella conversione manuale.
 

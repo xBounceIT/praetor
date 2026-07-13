@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test';
+import { screen } from '@testing-library/react';
 import { installI18nMock } from '../../helpers/i18n';
 import { render } from '../../helpers/render';
 
@@ -48,7 +49,7 @@ describe('<CostSummaryPanel />', () => {
         total={120.75}
         subtotalLabel="Subtotal"
         totalLabel="Total"
-        discountRow={{ label: 'Discount', amount: 5.25 }}
+        discountRow={{ label: 'Discount', amount: 5.25, percentage: 19 }}
         margin={{ label: 'Margin', amount: 30.5 }}
         balanceDue={{ label: 'Balance', amount: 90.25 }}
       />,
@@ -56,6 +57,8 @@ describe('<CostSummaryPanel />', () => {
     expect(container.textContent).toContain('100,50');
     expect(container.textContent).toContain('120,75');
     expect(container.textContent).toContain('5,25');
+    expect(screen.getByText('Discount')).toHaveClass('text-amber-600');
+    expect(screen.getByText('(19,00%)')).toHaveClass('text-amber-600');
     expect(container.textContent).toContain('30,50');
     expect(container.textContent).toContain('90,25');
   });

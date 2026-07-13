@@ -109,18 +109,6 @@ const baseProps = {
   currency: 'EUR',
 };
 
-const tinySubtotalItem: ClientOffer['items'][number] = {
-  id: 'tiny-item',
-  offerId: 'O-base',
-  productId: 'p-1',
-  productName: 'Tiny Widget',
-  quantity: 1,
-  unitPrice: 0.03,
-  productCost: 0,
-  productMolPercentage: 0,
-  unitType: 'unit',
-};
-
 afterEach(() => {
   document.body.style.overflow = '';
 });
@@ -135,7 +123,7 @@ describe('<ClientOffersView /> list', () => {
       'sales:clientOffers.clientColumn',
       'sales:clientOffers.subtotal',
       'sales:clientOffers.discountPercentColumn',
-      'common:labels.discount',
+      'common:labels.totalDiscount',
       'sales:clientOffers.discountedTotalColumn',
       'sales:clientOffers.margin',
       'sales:clientOffers.molColumn',
@@ -371,7 +359,7 @@ describe('<ClientOffersView /> sent status revert action', () => {
 });
 
 describe('<ClientOffersView /> discount summary', () => {
-  test('labels a fixed global discount with the equivalent percentage', () => {
+  test('labels a fixed global discount as part of total discounts', () => {
     const fixedDiscountOffer = buildOffer({
       id: 'O-FIXED-DISCOUNT',
       discount: 15,
@@ -383,29 +371,32 @@ describe('<ClientOffersView /> discount summary', () => {
     fireEvent.click(screen.getByText('O-FIXED-DISCOUNT'));
 
     expect(screen.getByText('sales:clientOffers.editOffer')).toBeInTheDocument();
-    expect(screen.getByText('sales:clientOffers.discountAmount (15%)')).toBeInTheDocument();
-    expect(screen.getAllByText('-15,00 EUR').length).toBeGreaterThan(0);
-    expect(
-      screen.queryByText('sales:clientOffers.discountAmount (15 EUR)'),
-    ).not.toBeInTheDocument();
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByText('common:labels.totalDiscount')).toBeInTheDocument();
+    expect(within(dialog).getByText('-15,00 EUR')).toBeInTheDocument();
   });
 
-  test('keeps the entered percentage label when the rounded discount amount differs', () => {
-    const percentageDiscountOffer = buildOffer({
-      id: 'O-PERCENT-DISCOUNT',
-      discount: 50,
-      discountType: 'percentage',
-      items: [tinySubtotalItem],
+  test('combines line and global discounts', () => {
+    const discountedOffer = buildOffer({
+      id: 'O-COMBINED-DISCOUNT',
+      discount: 10,
+      items: [
+        {
+          ...buildOffer({}).items[0],
+          offerId: 'O-COMBINED-DISCOUNT',
+          discount: 10,
+        },
+      ],
     });
 
-    render(<ClientOffersView {...baseProps} offers={[percentageDiscountOffer]} />);
+    render(<ClientOffersView {...baseProps} offers={[discountedOffer]} />);
 
-    fireEvent.click(screen.getByText('O-PERCENT-DISCOUNT'));
+    fireEvent.click(screen.getByText('O-COMBINED-DISCOUNT'));
 
-    expect(screen.getByText('sales:clientOffers.discountAmount (50%)')).toBeInTheDocument();
-    expect(
-      screen.queryByText('sales:clientOffers.discountAmount (66,67%)'),
-    ).not.toBeInTheDocument();
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByText('common:labels.totalDiscount')).toBeInTheDocument();
+    expect(within(dialog).getByText('(19,00%)')).toHaveClass('text-amber-600');
+    expect(within(dialog).getByText('-19,00 EUR')).toBeInTheDocument();
   });
 });
 

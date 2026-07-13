@@ -290,13 +290,32 @@ export const getItemPricingContext = (
 };
 
 export interface PricingTotals {
+  grossSubtotal: number;
   subtotal: number;
+  // Discount applied after line discounts. Kept separate because the global-discount
+  // percentage column is calculated against the already-discounted line subtotal.
   discountAmount: number;
+  // Sum of every line discount plus the global discount.
+  totalDiscountAmount: number;
+  // Effective aggregate discount as a percentage of the gross subtotal.
+  totalDiscountPercentage: number;
   total: number;
   totalCost: number;
   margin: number;
   marginPercentage: number;
 }
+
+export const EMPTY_PRICING_TOTALS: Readonly<PricingTotals> = {
+  grossSubtotal: 0,
+  subtotal: 0,
+  discountAmount: 0,
+  totalDiscountAmount: 0,
+  totalDiscountPercentage: 0,
+  total: 0,
+  totalCost: 0,
+  margin: 0,
+  marginPercentage: 0,
+};
 
 export const calculatePricingTotals = (
   items: PricingItem[],
@@ -304,11 +323,13 @@ export const calculatePricingTotals = (
   defaultUnitType: SupplierUnitType = 'hours',
   discountType: DiscountType = 'percentage',
 ): PricingTotals => {
+  let grossSubtotal = 0;
   let subtotal = 0;
   let totalCost = 0;
 
   items.forEach((item) => {
     const line = getItemPricingContext(item, defaultUnitType);
+    grossSubtotal += line.grossRevenue;
     subtotal += line.netRevenue;
     totalCost += line.lineCost;
   });
@@ -320,14 +341,21 @@ export const calculatePricingTotals = (
   const total = subtotal - discountAmount;
   const margin = total - totalCost;
   const marginPercentage = total > 0 ? (margin / total) * 100 : 0;
+  const totalDiscountPercentage =
+    grossSubtotal > 0 ? ((grossSubtotal - total) / grossSubtotal) * 100 : 0;
+  const roundedGrossSubtotal = roundCurrency(grossSubtotal);
+  const roundedTotal = roundCurrency(total);
 
   // Round at the same precision the backend uses so the rendered totals match what gets
   // persisted (NUMERIC(_, 2)). Without this, accumulating floats like 0.1 + 0.2 leak the
   // 0.30000000000000004 representation into the UI while the backend stores 0.30.
   return {
+    grossSubtotal: roundedGrossSubtotal,
     subtotal: roundCurrency(subtotal),
     discountAmount: roundCurrency(discountAmount),
-    total: roundCurrency(total),
+    totalDiscountAmount: roundCurrency(grossSubtotal - total),
+    totalDiscountPercentage: roundCurrency(totalDiscountPercentage),
+    total: roundedTotal,
     totalCost: roundCurrency(totalCost),
     margin: roundCurrency(margin),
     marginPercentage: roundCurrency(marginPercentage),

@@ -27,7 +27,9 @@ Every **quote**, **offer**, and **customer-order** line exposes its unit **Cost*
 
 Every line also includes a **Discount** column. The line discount is a percentage from 0% to 100% and reduces the line revenue after quantity and duration are applied: `Net revenue = Unit sale price × Quantity × Duration × (1 − Discount / 100)`. The line **Margin** uses this net revenue, while cost is unchanged. Any global discount, which still supports either a percentage or a fixed amount, is applied afterwards to the sum of the already-discounted lines. Sale price and MOL are copied automatically from quote to offer and from offer to order, and remain editable until the document becomes read-only.
 
-The quote list shows code, insertion date, client, subtotal, discount percentage, absolute discount, discounted total, margin, MOL, payment terms, due date, and status so the main values can be checked without opening each record.
+In quote, offer, and order summaries, **Subtotal** is the gross amount before discounts. The **Total discounts** row combines every line discount with any global discount and shows the effective average percentage against the gross subtotal in parentheses, while **Total** remains the final net amount. The same rule applies to supplier orders, including both line and global discounts.
+
+The quote list shows code, insertion date, client, gross subtotal, global discount percentage, total discounts, discounted total, margin, MOL, payment terms, due date, and status so the main values can be checked without opening each record.
 
 The customer quote family follows **Draft → Sent → candidate selection → Offer**. **Expired** is derived from the active variants: the family is expired only when every active candidate has passed its expiration date. An individual expired variant remains visible but cannot be promoted.
 
@@ -51,9 +53,7 @@ When creating or editing a **quote** or an **offer**, each **Products / Services
 
 When horizontal space is limited, the headers and line-item rows of **quotes, offers, orders, and invoices** stay aligned inside a horizontally scrollable area. Drag it on touch devices or use the scrollbar instead of letting document fields collapse; this applies to both client and supplier documents.
 
-In offer summaries, the **Discount** row always shows the equivalent percentage in parentheses, even when the global discount is entered as a fixed amount. The discount amount remains visible in currency on the right.
-
-In the **Customer Offers** list, the visible date is the **Delivery Date**: it is set when an offer moves to sent status and no longer represents the technical record creation date. The table also shows subtotal, discount percent, absolute discount, discounted total, margin, MOL, and payment terms so offers can be compared without opening each record.
+In the **Customer Offers** list, the visible date is the **Delivery Date**: it is set when an offer moves to sent status and no longer represents the technical record creation date. The table also shows gross subtotal, global discount percent, total discounts, discounted total, margin, MOL, and payment terms so offers can be compared without opening each record.
 
 When a customer offer is accepted, Praetor automatically creates the linked customer order in **Draft**. Lines linked to derived and accepted supplier quotes also generate the related supplier orders, matching the manual conversion path.
 

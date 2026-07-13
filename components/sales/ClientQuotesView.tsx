@@ -63,8 +63,8 @@ import {
   calculatePricingTotals,
   convertUnitPrice,
   durationValueToMonths,
+  EMPTY_PRICING_TOTALS,
   formatDecimal,
-  formatDiscountValue,
   formatMolPercentage,
   formatNumber,
   getDurationInputValue,
@@ -174,17 +174,6 @@ export interface ClientQuotesViewProps {
 }
 
 const EMPTY_OFFERS: ClientOffer[] = [];
-
-// Fallback for a row whose pricing isn't in the memoized map (never happens at runtime since
-// the map is built from the same list the table renders, but keeps the lookups type-safe).
-const EMPTY_PRICING_TOTALS: PricingTotals = {
-  subtotal: 0,
-  discountAmount: 0,
-  total: 0,
-  totalCost: 0,
-  margin: 0,
-  marginPercentage: 0,
-};
 
 const moveQuoteItem = (items: QuoteItem[], fromIndex: number, toIndex: number): QuoteItem[] => {
   if (
@@ -1644,18 +1633,18 @@ const useClientQuotesController = ({
     {
       header: t('sales:clientQuotes.subtotal', { defaultValue: 'Subtotal' }),
       id: 'subtotal',
-      accessorFn: (row) => quotePricingMap.get(row.id)?.subtotal ?? 0,
+      accessorFn: (row) => quotePricingMap.get(row.id)?.grossSubtotal ?? 0,
       className: 'whitespace-nowrap',
       headerClassName: 'min-w-[8rem]',
       disableFiltering: true,
       cell: ({ row }) => {
-        const { subtotal } = quotePricingMap.get(row.id) ?? EMPTY_PRICING_TOTALS;
+        const { grossSubtotal } = quotePricingMap.get(row.id) ?? EMPTY_PRICING_TOTALS;
         const history = isHistoryRow(row);
         return (
           <span
             className={`text-sm font-semibold whitespace-nowrap ${history ? 'text-zinc-400' : 'text-zinc-700'}`}
           >
-            {formatDecimal(subtotal)} {currency}
+            {formatDecimal(grossSubtotal)} {currency}
           </span>
         );
       },
@@ -1679,16 +1668,17 @@ const useClientQuotesController = ({
       },
     },
     {
-      header: t('common:labels.discount'),
+      header: t('common:labels.totalDiscount'),
+      // Keep the historical id so saved table views retain their column order and width.
       id: 'discountAmount',
-      accessorFn: (row) => quotePricingMap.get(row.id)?.discountAmount ?? 0,
+      accessorFn: (row) => quotePricingMap.get(row.id)?.totalDiscountAmount ?? 0,
       className: 'whitespace-nowrap',
       headerClassName: 'min-w-[8rem]',
       disableFiltering: true,
       cell: ({ row }) => {
-        const { discountAmount } = quotePricingMap.get(row.id) ?? EMPTY_PRICING_TOTALS;
+        const { totalDiscountAmount } = quotePricingMap.get(row.id) ?? EMPTY_PRICING_TOTALS;
         const history = isHistoryRow(row);
-        if (discountAmount <= 0) {
+        if (totalDiscountAmount <= 0) {
           return (
             <span
               className={`text-sm font-semibold ${history ? 'text-zinc-300' : 'text-zinc-400'}`}
@@ -1701,7 +1691,7 @@ const useClientQuotesController = ({
           <span
             className={`text-sm font-semibold whitespace-nowrap ${history ? 'text-amber-300' : 'text-amber-600'}`}
           >
-            -{formatDecimal(discountAmount)} {currency}
+            -{formatDecimal(totalDiscountAmount)} {currency}
           </span>
         );
       },
@@ -3712,7 +3702,7 @@ const ClientQuoteSummaryPanel: React.FC<{ controller: ClientQuotesController }> 
       {errors.total && <p className="text-red-500 text-[10px] font-bold mb-2">{errors.total}</p>}
       <CostSummaryPanel
         currency={currency}
-        subtotal={formTotals.subtotal}
+        subtotal={formTotals.grossSubtotal}
         total={formTotals.total}
         subtotalLabel={t('sales:clientQuotes.subtotal', { defaultValue: 'Subtotal' })}
         totalLabel={t('sales:clientQuotes.totalLabel')}
@@ -3735,16 +3725,11 @@ const ClientQuoteSummaryPanel: React.FC<{ controller: ClientQuotesController }> 
           disabled: isReadOnly,
         }}
         discountRow={
-          formTotals.discountAmount > 0
+          formTotals.totalDiscountAmount > 0
             ? {
-                label: t('sales:clientQuotes.discountAmount', {
-                  value: formatDiscountValue(
-                    formData.discount ?? 0,
-                    formData.discountType ?? 'percentage',
-                    currency,
-                  ),
-                }),
-                amount: formTotals.discountAmount,
+                label: t('common:labels.totalDiscount'),
+                amount: formTotals.totalDiscountAmount,
+                percentage: formTotals.totalDiscountPercentage,
               }
             : undefined
         }

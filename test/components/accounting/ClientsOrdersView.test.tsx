@@ -118,7 +118,7 @@ describe('<ClientsOrdersView />', () => {
 
     for (const header of [
       'accounting:clientsOrders.subtotal',
-      'common:labels.discount',
+      'common:labels.totalDiscount',
       'accounting:clientsOrders.margin',
       'sales:clientQuotes.totalCost',
       'accounting:clientsOrders.totalColumn',
@@ -149,6 +149,7 @@ describe('<ClientsOrdersView />', () => {
 
     fireEvent.click(listRow as HTMLElement);
     const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText('(5,00%)')).toHaveClass('text-amber-600');
     const itemMarginHeader = within(dialog)
       .getAllByText('sales:clientQuotes.marginLabel')
       .map((label) => label.closest('th'))

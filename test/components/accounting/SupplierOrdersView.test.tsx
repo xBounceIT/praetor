@@ -252,6 +252,27 @@ describe('<SupplierOrdersView /> item pricing columns', () => {
     expect(discountInput).toHaveValue('100');
   });
 
+  test('shows the combined line and global discounts in the summary', async () => {
+    renderView([
+      {
+        ...baseOrder,
+        discount: 10,
+        items: [{ ...baseOrder.items[0], discount: 10 }],
+      },
+    ]);
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('dm_ss_01'));
+      await Promise.resolve();
+    });
+
+    const dialog = screen.getByRole('dialog');
+    const discountLabel = within(dialog).getByText('common:labels.totalDiscount');
+    expect(within(dialog).getByText('(19,00%)')).toHaveClass('text-amber-600');
+    expect(discountLabel.nextElementSibling).toHaveTextContent('-729,60 EUR');
+    expect(within(dialog).getAllByText('3.840,00 EUR').length).toBeGreaterThan(0);
+  });
+
   test('rounds unit cost before quantity multiplies the line total', async () => {
     renderView([
       {
