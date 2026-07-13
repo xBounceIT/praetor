@@ -407,6 +407,22 @@ describe('<UserSettings /> MCP tokens', () => {
     expect(await screen.findByRole('tooltip')).toHaveTextContent('mcp.scopeReadOnlyDescription');
   });
 
+  test('opens the scope description when activated from touch input', async () => {
+    renderSettings();
+
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: /mcp.title/ })));
+
+    const scopeHelp = await screen.findByRole('button', { name: 'mcp.scopeFullDescription' });
+    fireEvent.pointerDown(scopeHelp, { pointerType: 'touch' });
+    fireEvent.click(scopeHelp);
+
+    await waitFor(() =>
+      expect(document.querySelector('[data-slot="popover-content"]')).toHaveTextContent(
+        'mcp.scopeFullDescription',
+      ),
+    );
+  });
+
   test('creates a token and displays the raw token once', async () => {
     renderSettings();
     fireEvent.click(screen.getByRole('button', { name: /mcp.title/ }));
