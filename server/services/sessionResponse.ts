@@ -2,6 +2,7 @@ import { generateTokenWithCurrentIdleTimeout } from '../middleware/auth.ts';
 import * as rolesRepo from '../repositories/rolesRepo.ts';
 import type { LoginUserWithAuth } from '../repositories/usersRepo.ts';
 import { getRolePermissions } from '../utils/permissions.ts';
+import { recordFirstInteractiveLogin } from './firstLogin.ts';
 
 // Fastify response schema for the canonical authenticated user. Shared by the login,
 // totp-challenge, confirm-via-enroll, /me, and switch-role responses so a field added here is
@@ -48,9 +49,9 @@ export const sessionSuccessResponseSchema = {
 // totp-challenge endpoint, and the confirm-via-enroll path: a fresh configured idle-window
 // token anchored at the current time, the role's effective permissions, and the user's
 // available roles (falling back to a single synthetic role when none are explicitly assigned).
-// The independent reads run in parallel since none depends on the others. Callers are
-// responsible for logging `user.login` themselves — this helper has no side effects beyond
-// the reads it performs.
+// The independent reads run in parallel since none depends on the others. Once permissions are
+// known, the helper atomically records the first issued session and creates the RIL onboarding tip
+// for eligible users. Callers remain responsible for logging `user.login` themselves.
 export const buildSessionSuccess = async (user: LoginUserWithAuth) => {
   const [token, permissions, availableRoles] = await Promise.all([
     generateTokenWithCurrentIdleTimeout(user.id, Date.now(), user.role, user.sessionVersion),
@@ -61,6 +62,10 @@ export const buildSessionSuccess = async (user: LoginUserWithAuth) => {
     availableRoles.length > 0
       ? availableRoles
       : [{ id: user.role, name: user.role, isSystem: false, isAdmin: user.role === 'admin' }];
+
+  await recordFirstInteractiveLogin(user.id, {
+    createRilPreferencesTip: permissions.includes('timesheets.ril.view'),
+  });
 
   return {
     token,

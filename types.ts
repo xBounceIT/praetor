@@ -172,6 +172,8 @@ export interface Notification {
     projectName?: string;
     ruleId?: string;
     ruleName?: string;
+    tipId?: string;
+    destination?: string;
     [key: string]: unknown;
   };
   isRead: boolean;

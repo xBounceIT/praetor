@@ -51,6 +51,9 @@ export const users = pgTable(
     costPerHour: numeric('cost_per_hour', { precision: 10, scale: 2 }).default('0'),
     isDisabled: boolean('is_disabled').default(false),
     createdAt: timestamp('created_at').default(sql`CURRENT_TIMESTAMP`),
+    // Null until the first interactive app session is actually issued. Existing accounts are
+    // backfilled by the introducing migration so onboarding tips are not sent retroactively.
+    firstLoginAt: timestamp('first_login_at'),
     employeeType: varchar('employee_type', { length: 20 })
       .$type<'app_user' | 'internal' | 'external'>()
       .default('app_user'),

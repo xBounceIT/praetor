@@ -7,6 +7,7 @@ import * as realGeneralSettingsRepo from '../../repositories/generalSettingsRepo
 import * as realPersonalAccessTokensRepo from '../../repositories/personalAccessTokensRepo.ts';
 import * as realRolesRepo from '../../repositories/rolesRepo.ts';
 import * as realUsersRepo from '../../repositories/usersRepo.ts';
+import * as realFirstLogin from '../../services/firstLogin.ts';
 import * as realAudit from '../../utils/audit.ts';
 import { encrypt, isEncrypted } from '../../utils/crypto.ts';
 import * as realPermissions from '../../utils/permissions.ts';
@@ -37,6 +38,7 @@ const generalSettingsRepoSnap = { ...realGeneralSettingsRepo };
 const rolesRepoSnap = { ...realRolesRepo };
 const permissionsSnap = { ...realPermissions };
 const auditSnap = { ...realAudit };
+const firstLoginSnap = { ...realFirstLogin };
 const bcryptSnap = { ...(realBcrypt as Record<string, unknown>) };
 
 // Auth-middleware deps: the real authenticateToken / requireEnrollOrSession run end-to-end, so we
@@ -73,6 +75,7 @@ const bcryptCompareMock = mock();
 // request.auth.source = 'personalAccessToken' and the session-only guard is what rejects it.
 const findPatByTokenHashMock = mock();
 const markPatUsedMock = mock(async () => undefined);
+const recordFirstInteractiveLoginMock = mock(async () => false);
 const { withDbTransactionMock, resetWithDbTransactionMock } = makeWithDbTransactionMock();
 
 let twoFactorRoutePlugin: FastifyPluginAsync;
@@ -120,6 +123,10 @@ beforeAll(async () => {
     ...auditSnap,
     logAudit: logAuditMock,
   }));
+  mock.module('../../services/firstLogin.ts', () => ({
+    ...firstLoginSnap,
+    recordFirstInteractiveLogin: recordFirstInteractiveLoginMock,
+  }));
   // Override only `compare` (the disable-flow password check we want to control); keep the REAL
   // `hash` so totp.ts `hashBackupCode` still works on the setup/regenerate paths.
   mock.module('bcryptjs', () => ({
@@ -140,6 +147,7 @@ afterAll(() => {
   mock.module('../../repositories/personalAccessTokensRepo.ts', () => personalAccessTokensRepoSnap);
   mock.module('../../utils/permissions.ts', () => permissionsSnap);
   mock.module('../../utils/audit.ts', () => auditSnap);
+  mock.module('../../services/firstLogin.ts', () => firstLoginSnap);
   mock.module('bcryptjs', () => bcryptSnap);
 });
 
@@ -202,6 +210,7 @@ const allMocks = [
   generalSettingsGetMock,
   findPatByTokenHashMock,
   markPatUsedMock,
+  recordFirstInteractiveLoginMock,
 ];
 
 let testApp: FastifyInstance;
@@ -606,6 +615,9 @@ describe('POST /api/auth/2fa/confirm', () => {
     // This path mints a real session (the user only had an enroll token), so it must also record
     // user.login — otherwise sessions born from mandatory enrollment are missing from the audit.
     expect(auditActions()).toContain('user.login');
+    expect(recordFirstInteractiveLoginMock).toHaveBeenCalledWith('u1', {
+      createRilPreferencesTip: false,
+    });
   });
 
   test('401 (enroll token): account switched to OIDC/SAML since the token was issued is rejected', async () => {

@@ -31,6 +31,10 @@ export const DEMO_PASSWORD_HASH = '$2a$12$z5H7VrzTpLImYWSH3xufKufCiGB0n9CSlNMOrR
 
 type DemoEmployeeType = 'app_user' | 'internal' | 'external';
 
+// Fresh demo users have not signed in yet. The refresh upsert deliberately preserves a non-null
+// database value so rerunning the seed never re-enables first-login onboarding.
+export const DEMO_FIRST_LOGIN_AT = null;
+
 type DemoUser = {
   id: string;
   name: string;

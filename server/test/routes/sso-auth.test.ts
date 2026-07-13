@@ -1,7 +1,10 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
+import * as realAuth from '../../middleware/auth.ts';
 import * as realSsoProvidersRepo from '../../repositories/ssoProvidersRepo.ts';
+import * as realFirstLogin from '../../services/firstLogin.ts';
 import * as realSsoService from '../../services/sso.ts';
+import * as realAudit from '../../utils/audit.ts';
 import { buildRouteTestApp } from '../helpers/buildRouteTestApp.ts';
 
 // Mix of two concerns sharing the same route plugin:
@@ -11,10 +14,28 @@ import { buildRouteTestApp } from '../helpers/buildRouteTestApp.ts';
 
 const ssoProvidersRepoSnap = { ...realSsoProvidersRepo };
 const ssoServiceSnap = { ...realSsoService };
+const authSnap = { ...realAuth };
+const firstLoginSnap = { ...realFirstLogin };
+const auditSnap = { ...realAudit };
 
 const findBySlugMock = mock();
 const completeOidcLoginMock = mock();
 const completeSamlLoginMock = mock();
+const consumeLoginTicketMock = mock();
+const buildAuthUserResponseMock = mock();
+const generateTokenWithCurrentIdleTimeoutMock = mock();
+const recordFirstInteractiveLoginMock = mock();
+const logAuditMock = mock();
+const routeMocks = [
+  findBySlugMock,
+  completeOidcLoginMock,
+  completeSamlLoginMock,
+  consumeLoginTicketMock,
+  buildAuthUserResponseMock,
+  generateTokenWithCurrentIdleTimeoutMock,
+  recordFirstInteractiveLoginMock,
+  logAuditMock,
+];
 
 let routePlugin: FastifyPluginAsync;
 
@@ -30,6 +51,20 @@ beforeAll(async () => {
     ...ssoServiceSnap,
     completeOidcLogin: completeOidcLoginMock,
     completeSamlLogin: completeSamlLoginMock,
+    consumeLoginTicket: consumeLoginTicketMock,
+    buildAuthUserResponse: buildAuthUserResponseMock,
+  }));
+  mock.module('../../middleware/auth.ts', () => ({
+    ...authSnap,
+    generateTokenWithCurrentIdleTimeout: generateTokenWithCurrentIdleTimeoutMock,
+  }));
+  mock.module('../../services/firstLogin.ts', () => ({
+    ...firstLoginSnap,
+    recordFirstInteractiveLogin: recordFirstInteractiveLoginMock,
+  }));
+  mock.module('../../utils/audit.ts', () => ({
+    ...auditSnap,
+    logAudit: logAuditMock,
   }));
 
   routePlugin = (await import('../../routes/sso-auth.ts')).default as FastifyPluginAsync;
@@ -38,6 +73,9 @@ beforeAll(async () => {
 afterAll(() => {
   mock.module('../../repositories/ssoProvidersRepo.ts', () => ssoProvidersRepoSnap);
   mock.module('../../services/sso.ts', () => ssoServiceSnap);
+  mock.module('../../middleware/auth.ts', () => authSnap);
+  mock.module('../../services/firstLogin.ts', () => firstLoginSnap);
+  mock.module('../../utils/audit.ts', () => auditSnap);
 });
 
 const samlProvider: realSsoProvidersRepo.SsoProvider = {
@@ -80,9 +118,7 @@ let testApp: FastifyInstance;
 
 beforeEach(async () => {
   process.env.SSO_CALLBACK_BASE_URL = 'https://app.example.com';
-  findBySlugMock.mockReset();
-  completeOidcLoginMock.mockReset();
-  completeSamlLoginMock.mockReset();
+  for (const routeMock of routeMocks) routeMock.mockReset();
   testApp = await buildRouteTestApp(routePlugin, '/api/auth/sso');
 });
 
@@ -150,6 +186,59 @@ describe('GET /api/auth/sso/oidc/:slug/start', () => {
       url: '/api/auth/sso/oidc/google/start',
     });
     expect(response.statusCode).toBe(404);
+  });
+});
+
+describe('POST /api/auth/sso/consume', () => {
+  test.each([
+    ['with RIL access', ['timesheets.ril.view'], true],
+    ['without RIL access', [], false],
+  ])('records the first interactive login %s', async (_label, permissions, createTip) => {
+    const tokenUser = {
+      id: 'u1',
+      name: 'Alice',
+      username: 'alice',
+      role: 'user',
+      avatarInitials: 'AL',
+      authMethod: 'oidc' as const,
+      isDisabled: false,
+      sessionVersion: 4,
+      tokenVersion: 2,
+    };
+    const responseUser = {
+      ...tokenUser,
+      permissions,
+      availableRoles: [{ id: 'user', name: 'User', isSystem: true, isAdmin: false }],
+    };
+    consumeLoginTicketMock.mockResolvedValue({ tokenUser, activeRole: 'user' });
+    buildAuthUserResponseMock.mockResolvedValue(responseUser);
+    generateTokenWithCurrentIdleTimeoutMock.mockResolvedValue('signed-token');
+    recordFirstInteractiveLoginMock.mockResolvedValue(true);
+    logAuditMock.mockResolvedValue(undefined);
+
+    const response = await testApp.inject({
+      method: 'POST',
+      url: '/api/auth/sso/consume',
+      payload: { ticket: 'one-time-ticket' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(JSON.parse(response.body)).toEqual({
+      token: 'signed-token',
+      user: {
+        id: 'u1',
+        name: 'Alice',
+        username: 'alice',
+        role: 'user',
+        avatarInitials: 'AL',
+        authMethod: 'oidc',
+        permissions,
+        availableRoles: responseUser.availableRoles,
+      },
+    });
+    expect(recordFirstInteractiveLoginMock).toHaveBeenCalledWith('u1', {
+      createRilPreferencesTip: createTip,
+    });
   });
 });
 

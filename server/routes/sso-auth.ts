@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { generateTokenWithCurrentIdleTimeout } from '../middleware/auth.ts';
 import { standardRateLimitedErrorResponses } from '../schemas/common.ts';
+import { recordFirstInteractiveLogin } from '../services/firstLogin.ts';
 import { authUserSchema } from '../services/sessionResponse.ts';
 import * as ssoService from '../services/sso.ts';
 import { logAudit } from '../utils/audit.ts';
@@ -204,6 +205,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         consumed.tokenUser.sessionVersion,
       );
       const user = await ssoService.buildAuthUserResponse(consumed.tokenUser, consumed.activeRole);
+      await recordFirstInteractiveLogin(user.id, {
+        createRilPreferencesTip: user.permissions.includes('timesheets.ril.view'),
+      });
       await logAudit({
         request,
         action: 'user.sso_login',

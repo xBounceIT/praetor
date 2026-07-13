@@ -10,6 +10,7 @@ import {
   COMPATIBILITY_DEFAULTS,
   DEMO_CLIENTS,
   DEMO_EXPECTED_COUNTS,
+  DEMO_FIRST_LOGIN_AT,
   DEMO_ITEM_IDS,
   DEMO_NOTIFICATIONS,
   DEMO_PASSWORD_HASH,
@@ -457,6 +458,7 @@ const insertDemoUsersAndSettings = async (client: PoolClient, counts: Record<str
       user.avatarInitials,
       user.costPerHour,
       user.employeeType,
+      DEMO_FIRST_LOGIN_AT,
       user.phone,
       user.jobTitle,
       user.department,
@@ -470,7 +472,7 @@ const insertDemoUsersAndSettings = async (client: PoolClient, counts: Record<str
       user.emergencyContactPhone,
       user.notes,
     );
-    return `(${Array.from({ length: 20 }, (_, offset) => `$${index + offset}`).join(', ')})`;
+    return `(${Array.from({ length: 21 }, (_, offset) => `$${index + offset}`).join(', ')})`;
   });
   const usersResult = await executeStatement(
     client,
@@ -483,6 +485,7 @@ const insertDemoUsersAndSettings = async (client: PoolClient, counts: Record<str
        avatar_initials,
        cost_per_hour,
        employee_type,
+       first_login_at,
        phone,
        job_title,
        department,

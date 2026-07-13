@@ -110,6 +110,7 @@ export interface LayoutProps {
   onMarkNotificationAsRead?: (id: string) => void;
   onMarkAllNotificationsAsRead?: () => void;
   onDeleteNotification?: (id: string) => void;
+  onOpenRilPreferences?: () => void;
 }
 
 interface LayoutHeaderProps {
@@ -121,6 +122,7 @@ interface LayoutHeaderProps {
   onMarkNotificationAsRead?: (id: string) => void;
   onMarkAllNotificationsAsRead?: () => void;
   onDeleteNotification?: (id: string) => void;
+  onOpenRilPreferences?: () => void;
 }
 
 const LayoutHeader: React.FC<LayoutHeaderProps> = ({
@@ -132,6 +134,7 @@ const LayoutHeader: React.FC<LayoutHeaderProps> = ({
   onMarkNotificationAsRead,
   onMarkAllNotificationsAsRead,
   onDeleteNotification,
+  onOpenRilPreferences,
 }) => (
   <header className="sticky top-0 z-40 flex items-center justify-between border-b border-zinc-200 bg-white/80 px-4 py-4 backdrop-blur-md md:px-8">
     <div className="flex min-w-0 items-center gap-2">
@@ -152,6 +155,7 @@ const LayoutHeader: React.FC<LayoutHeaderProps> = ({
             onMarkAsRead={onMarkNotificationAsRead}
             onMarkAllAsRead={onMarkAllNotificationsAsRead}
             onDelete={onDeleteNotification}
+            onOpenRilPreferences={onOpenRilPreferences}
           />
         )}
     </div>
@@ -185,6 +189,7 @@ const Layout: React.FC<LayoutProps> = ({
   onMarkNotificationAsRead,
   onMarkAllNotificationsAsRead,
   onDeleteNotification,
+  onOpenRilPreferences,
 }) => {
   const { t, i18n } = useTranslation(['layout', 'hr']);
   const resolvedTheme = useResolvedShadcnTheme();
@@ -459,6 +464,7 @@ const Layout: React.FC<LayoutProps> = ({
           onMarkNotificationAsRead={onMarkNotificationAsRead}
           onMarkAllNotificationsAsRead={onMarkAllNotificationsAsRead}
           onDeleteNotification={onDeleteNotification}
+          onOpenRilPreferences={onOpenRilPreferences}
         />
         <div className="p-4 md:p-8">{children}</div>
       </SidebarInset>

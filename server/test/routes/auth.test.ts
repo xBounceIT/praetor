@@ -10,6 +10,7 @@ import * as realRolesRepo from '../../repositories/rolesRepo.ts';
 import * as realSettingsRepo from '../../repositories/settingsRepo.ts';
 import * as realUsersRepo from '../../repositories/usersRepo.ts';
 import * as realExternalAuth from '../../services/external-auth.ts';
+import * as realFirstLogin from '../../services/firstLogin.ts';
 import * as realLdapService from '../../services/ldap.ts';
 import * as realSsoService from '../../services/sso.ts';
 import * as realAudit from '../../utils/audit.ts';
@@ -40,6 +41,7 @@ const auditSnap = { ...realAudit };
 const bcryptSnap = { ...(realBcrypt as Record<string, unknown>) };
 const ldapServiceSnap = { ...(realLdapService as Record<string, unknown>) };
 const externalAuthSnap = { ...realExternalAuth };
+const firstLoginSnap = { ...realFirstLogin };
 const ssoServiceSnap = { ...realSsoService };
 
 // Auth-middleware deps: the real authenticateToken runs end-to-end on /me and /switch-role,
@@ -83,6 +85,7 @@ const ldapAuthenticateWithProfileMock = mock();
 const ldapAuthenticateAndProvisionMock = mock();
 const externalGroupsYieldNoKnownRoleMock = mock();
 const endOidcSessionMock = mock();
+const recordFirstInteractiveLoginMock = mock(async () => false);
 
 let authRoutePlugin: FastifyPluginAsync;
 
@@ -137,6 +140,10 @@ beforeAll(async () => {
     ...externalAuthSnap,
     externalGroupsYieldNoKnownRole: externalGroupsYieldNoKnownRoleMock,
   }));
+  mock.module('../../services/firstLogin.ts', () => ({
+    ...firstLoginSnap,
+    recordFirstInteractiveLogin: recordFirstInteractiveLoginMock,
+  }));
   mock.module('../../services/sso.ts', () => ({
     ...ssoServiceSnap,
     endOidcSession: endOidcSessionMock,
@@ -164,6 +171,7 @@ afterAll(() => {
   mock.module('../../utils/audit.ts', () => auditSnap);
   mock.module('bcryptjs', () => bcryptSnap);
   mock.module('../../services/external-auth.ts', () => externalAuthSnap);
+  mock.module('../../services/firstLogin.ts', () => firstLoginSnap);
   mock.module('../../services/sso.ts', () => ssoServiceSnap);
   mock.module('../../services/ldap.ts', () => ldapServiceSnap);
 });
@@ -216,6 +224,7 @@ const allMocks = [
   ldapAuthenticateAndProvisionMock,
   externalGroupsYieldNoKnownRoleMock,
   endOidcSessionMock,
+  recordFirstInteractiveLoginMock,
 ];
 
 let testApp: FastifyInstance;
@@ -322,6 +331,26 @@ describe('POST /api/auth/login', () => {
         userId: 'u1',
       }),
     );
+    expect(recordFirstInteractiveLoginMock).toHaveBeenCalledWith('u1', {
+      createRilPreferencesTip: false,
+    });
+  });
+
+  test('200: RIL access enables the first-login preferences tip', async () => {
+    findLoginUserByNormalizedUsernameMock.mockResolvedValue(LOGIN_USER);
+    bcryptCompareMock.mockResolvedValue(true);
+    getRolePermissionsMock.mockResolvedValue([...HAPPY_PERMISSIONS, 'timesheets.ril.view']);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/auth/login',
+      payload: { username: 'alice', password: 'secret' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(recordFirstInteractiveLoginMock).toHaveBeenCalledWith('u1', {
+      createRilPreferencesTip: true,
+    });
   });
 
   test('200: local password comparison keeps existing trim normalization', async () => {
@@ -834,6 +863,7 @@ describe('POST /api/auth/login', () => {
         userId: 'u1',
       }),
     );
+    expect(recordFirstInteractiveLoginMock).not.toHaveBeenCalled();
     const actions = logAuditMock.mock.calls.map(
       (call) => (call as unknown as [{ action: string }])[0].action,
     );
@@ -1210,6 +1240,7 @@ describe('POST /api/auth/switch-role', () => {
         }),
       }),
     );
+    expect(recordFirstInteractiveLoginMock).not.toHaveBeenCalled();
   });
 
   test('403: switching into an enforced role without TOTP is blocked when enforcement is on', async () => {
@@ -1479,6 +1510,9 @@ describe('POST /api/auth/totp-challenge', () => {
         userId: 'u1',
       }),
     );
+    expect(recordFirstInteractiveLoginMock).toHaveBeenCalledWith('u1', {
+      createRilPreferencesTip: false,
+    });
   });
 
   test('400 when the account was switched to an IdP-managed method after the challenge issued', async () => {
