@@ -273,11 +273,16 @@ describe('<ClientsView /> bulk creation actions', () => {
 
     const dialog = await screen.findByRole('dialog', { name: 'crm:clients.bulk.csv.title' });
     const fileInput = within(dialog).getByLabelText('crm:clients.bulk.csv.fileLabel');
-    expect(fileInput).toHaveClass('sr-only');
+    const browseButton = within(dialog).getByRole('button', {
+      name: 'crm:clients.bulk.csv.browseButton',
+    });
+    const openFilePicker = mock(() => undefined);
+    Object.defineProperty(fileInput, 'click', { value: openFilePicker });
+    expect(fileInput).toHaveClass('hidden');
     expect(within(dialog).getByText('crm:clients.bulk.csv.noFileSelected')).toBeVisible();
-    expect(
-      within(dialog).getByRole('button', { name: 'crm:clients.bulk.csv.browseButton' }),
-    ).toBeVisible();
+    expect(browseButton).toBeVisible();
+    fireEvent.click(browseButton);
+    expect(openFilePicker).toHaveBeenCalledTimes(1);
     expect(within(dialog).getByText('crm:clients.bulk.csv.structureTitle')).toBeInTheDocument();
     expect(within(dialog).getByText('clientCode')).toBeInTheDocument();
     expect(within(dialog).getByText('fiscalCode')).toBeInTheDocument();

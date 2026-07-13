@@ -784,8 +784,7 @@ export function ClientCsvImportDialog({
                 id="client-csv-file"
                 type="file"
                 accept=".csv,text/csv"
-                className="sr-only"
-                tabIndex={-1}
+                className="hidden"
                 onClick={(event) => {
                   fileReadSequence.current += 1;
                   event.currentTarget.value = '';
@@ -801,7 +800,7 @@ export function ClientCsvImportDialog({
                   onClick={() => fileInputRef.current?.click()}
                   disabled={isSubmitting}
                 >
-                  <FolderOpen className="size-4" />
+                  <FolderOpen aria-hidden="true" className="size-4" />
                   {t('crm:clients.bulk.csv.browseButton')}
                 </Button>
                 <div
