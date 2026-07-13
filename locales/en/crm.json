@@ -58,6 +58,8 @@
         "rulesTitle": "File requirements",
         "rulesDescription": "UTF-8 file up to 5 MiB, using commas or semicolons. Headers may appear in any order; quoted fields may contain delimiters and line breaks.",
         "fileLabel": "CSV file",
+        "browseButton": "Browse",
+        "noFileSelected": "No file selected",
         "downloadTemplate": "Download CSV template",
         "invalidExtension": "Select a file with the .csv extension.",
         "fileTooLarge": "The file exceeds the 5 MiB limit.",

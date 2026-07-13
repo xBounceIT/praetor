@@ -272,6 +272,12 @@ describe('<ClientsView /> bulk creation actions', () => {
     await user.click(screen.getByRole('menuitem', { name: 'crm:clients.bulk.importCsv' }));
 
     const dialog = await screen.findByRole('dialog', { name: 'crm:clients.bulk.csv.title' });
+    const fileInput = within(dialog).getByLabelText('crm:clients.bulk.csv.fileLabel');
+    expect(fileInput).toHaveClass('sr-only');
+    expect(within(dialog).getByText('crm:clients.bulk.csv.noFileSelected')).toBeVisible();
+    expect(
+      within(dialog).getByRole('button', { name: 'crm:clients.bulk.csv.browseButton' }),
+    ).toBeVisible();
     expect(within(dialog).getByText('crm:clients.bulk.csv.structureTitle')).toBeInTheDocument();
     expect(within(dialog).getByText('clientCode')).toBeInTheDocument();
     expect(within(dialog).getByText('fiscalCode')).toBeInTheDocument();
@@ -313,7 +319,7 @@ describe('<ClientsView /> bulk creation actions', () => {
       { type: 'text/csv' },
     );
 
-    await user.upload(fileInput, file);
+    fireEvent.change(fileInput, { target: { files: [file] } });
     await screen.findByText('crm:clients.bulk.csv.readyTitle');
     const importButton = within(dialog).getByRole('button', {
       name: 'crm:clients.bulk.csv.importButton',
@@ -343,7 +349,9 @@ describe('<ClientsView /> bulk creation actions', () => {
       { type: 'text/csv' },
     );
 
-    await user.upload(within(dialog).getByLabelText('crm:clients.bulk.csv.fileLabel'), file);
+    fireEvent.change(within(dialog).getByLabelText('crm:clients.bulk.csv.fileLabel'), {
+      target: { files: [file] },
+    });
 
     expect(
       await within(dialog).findByText(/crm:clients.bulk.csv.errors.fieldMismatch/),
@@ -378,8 +386,8 @@ describe('<ClientsView /> bulk creation actions', () => {
     const dialog = await screen.findByRole('dialog', { name: 'crm:clients.bulk.csv.title' });
     const input = within(dialog).getByLabelText('crm:clients.bulk.csv.fileLabel');
 
-    await user.upload(input, firstFile);
-    await user.upload(input, secondFile);
+    fireEvent.change(input, { target: { files: [firstFile] } });
+    fireEvent.change(input, { target: { files: [secondFile] } });
     await within(dialog).findByText('crm:clients.bulk.csv.readyTitle');
     await act(async () => {
       resolveFirstRead?.('clientCode,name,fiscalCode\nCLI-1,First,IT1');

@@ -1,4 +1,4 @@
-import { FileDown, FileSpreadsheet, Info, Plus, Rows3, Trash2 } from 'lucide-react';
+import { FileDown, FileSpreadsheet, FolderOpen, Info, Plus, Rows3, Trash2 } from 'lucide-react';
 import { useCallback, useMemo, useReducer, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -676,6 +676,7 @@ export function ClientCsvImportDialog({
 }) {
   const { t } = useTranslation(['crm', 'common']);
   const [state, dispatch] = useReducer(csvImportReducer, INITIAL_CSV_IMPORT_STATE);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const fileReadSequence = useRef(0);
   const { fileName, parsed, fileError, isSubmitting, processed, report } = state;
   const csvFields = useMemo(
@@ -779,9 +780,12 @@ export function ClientCsvImportDialog({
                 {t('crm:clients.bulk.csv.fileLabel')}
               </label>
               <Input
+                ref={fileInputRef}
                 id="client-csv-file"
                 type="file"
                 accept=".csv,text/csv"
+                className="sr-only"
+                tabIndex={-1}
                 onClick={(event) => {
                   fileReadSequence.current += 1;
                   event.currentTarget.value = '';
@@ -790,7 +794,26 @@ export function ClientCsvImportDialog({
                 onChange={(event) => void chooseFile(event.target.files?.[0])}
                 disabled={isSubmitting}
               />
-              {fileName && <p className="text-xs text-muted-foreground">{fileName}</p>}
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isSubmitting}
+                >
+                  <FolderOpen className="size-4" />
+                  {t('crm:clients.bulk.csv.browseButton')}
+                </Button>
+                <div
+                  className="flex min-h-9 min-w-0 flex-1 items-center rounded-md border border-input bg-background px-3 text-sm text-muted-foreground shadow-xs"
+                  aria-live="polite"
+                  title={fileName ?? t('crm:clients.bulk.csv.noFileSelected')}
+                >
+                  <span className="truncate">
+                    {fileName ?? t('crm:clients.bulk.csv.noFileSelected')}
+                  </span>
+                </div>
+              </div>
             </div>
             <Button
               type="button"

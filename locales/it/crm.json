@@ -58,6 +58,8 @@
         "rulesTitle": "Requisiti del file",
         "rulesDescription": "File UTF-8 fino a 5 MiB, con virgola o punto e virgola. Le intestazioni possono essere in qualsiasi ordine; i campi tra virgolette possono contenere separatori e andare a capo.",
         "fileLabel": "File CSV",
+        "browseButton": "Sfoglia",
+        "noFileSelected": "Nessun file selezionato",
         "downloadTemplate": "Scarica modello CSV",
         "invalidExtension": "Seleziona un file con estensione .csv.",
         "fileTooLarge": "Il file supera il limite di 5 MiB.",
