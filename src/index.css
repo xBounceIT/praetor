@@ -501,3 +501,9 @@ tr[data-standard-table-font-size] [data-slot="button"][data-size="icon-sm"] {
 .standard-table-value-cell [data-status-badge] i {
   display: inline-block !important;
 }
+
+/* StatusBadge keeps a compact 10px default elsewhere. Inside StandardTable,
+   scale it with the row typography; its em-based spacing and icon follow too. */
+.standard-table-value-cell [data-status-badge] {
+  font-size: 0.714em;
+}

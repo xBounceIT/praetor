@@ -342,7 +342,16 @@ describe('makeSupplierQuoteHandlers', () => {
       supplierName: 'Acme',
       paymentTerms: '30',
       notes: 'note',
-      items: [{ productId: 'p1', quantity: 1, unitPrice: 10 }],
+      items: [
+        {
+          productId: 'p1',
+          quantity: 1,
+          listPrice: 12.5,
+          discountPercent: 20,
+          unitPrice: 10,
+          unitType: 'days',
+        },
+      ],
     };
 
     await ctx.handlers.createSupplierOrderFromQuote(quote as never);
@@ -352,6 +361,9 @@ describe('makeSupplierQuoteHandlers', () => {
     expect(callArg.linkedQuoteId).toBe('sq-1');
     expect(callArg.supplierId).toBe('sup-1');
     expect(callArg.status).toBe('draft');
+    expect(callArg.items).toEqual([
+      expect.objectContaining({ unitPrice: 12.5, discount: 20, unitType: 'days' }),
+    ]);
     expect(ctx.supplierQuoteFilterId.get()).toBe('sq-1');
     expect(ctx.setActiveView).toHaveBeenCalledWith('accounting/supplier-orders');
     expect(ctx.supplierQuotes.get()).toEqual([{ id: 'sq-1' }]);

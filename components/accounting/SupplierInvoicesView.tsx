@@ -23,6 +23,7 @@ import { createLineItemIndexResolver } from '../../utils/lineItemIndex';
 import {
   durationValueToMonths,
   formatDecimal,
+  getDiscountedLineTotal,
   getDurationInputValue,
   getEffectiveDurationMonths,
   isPositiveFiniteNumber,
@@ -60,13 +61,6 @@ const EMPTY_SUPPLIER_INVOICE_ITEMS: SupplierInvoiceItem[] = [];
 const SUPPLIER_INVOICE_ITEM_NUMBER_INPUT_CLASSNAME =
   'h-9 max-w-[5rem] flex-none text-right font-medium';
 
-const getSupplierInvoiceLineTotal = (item: SupplierInvoiceItem) => {
-  const lineSubtotal =
-    Number(item.quantity || 0) * Number(item.unitPrice || 0) * getEffectiveDurationMonths(item);
-  const lineDiscount = (lineSubtotal * Number(item.discount ?? 0)) / 100;
-  return lineSubtotal - lineDiscount;
-};
-
 const getStatusOptions = (t: (key: string, options?: Record<string, unknown>) => string) =>
   Object.entries(statusLabelMap).map(([id, key]) => ({ id, name: t(key) }));
 
@@ -77,7 +71,7 @@ const getStatusLabel = (
 
 const calculateTotals = (items: SupplierInvoiceItem[]) => {
   // Duration multiplies each line alongside quantity; 'na' lines use a neutral multiplier of 1.
-  const subtotal = items.reduce((sum, item) => sum + getSupplierInvoiceLineTotal(item), 0);
+  const subtotal = items.reduce((sum, item) => sum + getDiscountedLineTotal(item), 0);
 
   return { subtotal, total: subtotal };
 };
@@ -334,7 +328,7 @@ const useSupplierInvoicesController = ({
           Number(item.quantity ?? 0) *
           Number(item.unitPrice ?? 0) *
           getEffectiveDurationMonths(item);
-        return sum + (lineSubtotal * Number(item.discount ?? 0)) / 100;
+        return sum + lineSubtotal - getDiscountedLineTotal(item);
       }, 0),
     [formData.items],
   );
@@ -796,12 +790,12 @@ const SupplierInvoiceItemsSection: React.FC<{ controller: SupplierInvoicesContro
     {
       id: 'total',
       header: controller.t('common:labels.total'),
-      accessorFn: getSupplierInvoiceLineTotal,
+      accessorFn: getDiscountedLineTotal,
       align: 'right',
       cell: ({ row }) => (
         <SupplierInvoiceItemTotalField
           controller={controller}
-          lineTotal={getSupplierInvoiceLineTotal(row)}
+          lineTotal={getDiscountedLineTotal(row)}
           className="min-w-[120px]"
         />
       ),

@@ -44,10 +44,10 @@
     "selectStatus": "Select status...",
     "statusHelpLabel": "Job status information",
     "statusValues": {
-      "da_fare": "DA FARE",
-      "in_corso": "In Corso",
-      "in_pausa": "In Pausa",
-      "terminato": "TERMINATO"
+      "da_fare": "Da fare",
+      "in_corso": "In corso",
+      "in_pausa": "In pausa",
+      "terminato": "Terminato"
     },
     "statusHelp": {
       "da_fare": "Planned job, time entries allowed.",
@@ -324,10 +324,10 @@
           "retainer": "Retainer"
         },
         "status": {
-          "da_fare": "DA FARE",
-          "in_corso": "In Corso",
-          "in_pausa": "In Pausa",
-          "terminato": "TERMINATO"
+          "da_fare": "Da fare",
+          "in_corso": "In corso",
+          "in_pausa": "In pausa",
+          "terminato": "Terminato"
         }
       },
       "errors": {

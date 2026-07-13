@@ -33,7 +33,7 @@ Use the handle in a column header to drag that column into position; with the ke
 
 Named views are stored on the server and owned by whoever creates them, so they stay available from any device and can be shared. The owner can **share** a view with specific users, granting each one **read** access (apply only) or **write** access (edit, rename, and re-save it — and the change then applies to everyone the view is shared with). Only the owner can **delete** a view or manage its sharing; read recipients can still **duplicate** it into their own editable copy. Views shared with you show a badge with the author and your access level, and edits made by write recipients propagate the next time you load or apply the view, not in real time.
 
-View-only preferences such as row density, text size, column widths, and which view is active stay local to the browser, and are therefore private to each device. Text size is a single preference shared by all common tables: changing it in one view also applies it to the others.
+View-only preferences such as row density, text size, column widths, and which view is active stay local to the browser, and are therefore private to each device. Text size is a single preference shared by all common tables: changing it in one view also applies it to the others and scales status badges consistently.
 
 Shared views are backed by the `GET/POST/PUT/DELETE /api/views/*` endpoints documented in the **API** section. On the development side, a table enables the server-backed, shareable mode only when it receives a stable `viewKey` (for example `projects.directory`): the key namespaces the view and prevents collisions between different tables; tables without a `viewKey` keep saving views in the browser only.
 

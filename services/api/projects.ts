@@ -4,6 +4,7 @@ import type {
   Project,
   ProjectStatus,
   ProjectTipo,
+  RilProjectReference,
   StoredBillingType,
 } from '../../types';
 import { fetchApi } from './client';
@@ -30,6 +31,11 @@ export const projectsApi = {
     return fetchApi<Project[]>(`/projects${query ? `?${query}` : ''}`).then((projects) =>
       projects.map(normalizeProject),
     );
+  },
+
+  listRilCatalog: (userId: string): Promise<RilProjectReference[]> => {
+    const params = new URLSearchParams({ userId });
+    return fetchApi<RilProjectReference[]>(`/projects/ril-catalog?${params.toString()}`);
   },
 
   listOrderOptions: (): Promise<ClientsOrder[]> =>

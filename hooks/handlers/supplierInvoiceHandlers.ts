@@ -2,7 +2,7 @@ import type React from 'react';
 import api from '../../services/api';
 import type { SupplierInvoice, SupplierSaleOrder, View } from '../../types';
 import { addDaysToDateOnly, getLocalDateString } from '../../utils/date';
-import { getEffectiveDurationMonths } from '../../utils/numbers';
+import { getDiscountedLineTotal } from '../../utils/numbers';
 import { makeTempId } from '../../utils/tempId';
 import { toastError } from '../../utils/toast';
 
@@ -54,10 +54,7 @@ export const makeSupplierInvoiceHandlers = (deps: SupplierInvoiceHandlersDeps) =
       }));
       const totals = items.reduce(
         (acc, item) => {
-          const lineSubtotal = item.quantity * item.unitPrice * getEffectiveDurationMonths(item);
-          const lineDiscount = (lineSubtotal * item.discount) / 100;
-          const lineNet = lineSubtotal - lineDiscount;
-          acc.subtotal += lineNet;
+          acc.subtotal += getDiscountedLineTotal(item);
           return acc;
         },
         { subtotal: 0 },

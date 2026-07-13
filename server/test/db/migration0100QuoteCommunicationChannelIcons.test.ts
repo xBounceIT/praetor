@@ -30,7 +30,12 @@ describe('migration 0100 add quote communication channel icons', () => {
       entries: Array<{ idx: number; tag: string }>;
     };
 
-    expect(journal.entries.at(-1)).toEqual(
+    const migrationIndex = journal.entries.findIndex(
+      ({ tag }) => tag === '0100_add_quote_communication_channel_icons',
+    );
+
+    expect(journal.entries[migrationIndex - 1]).toEqual(expect.objectContaining({ idx: 99 }));
+    expect(journal.entries[migrationIndex]).toEqual(
       expect.objectContaining({ idx: 100, tag: '0100_add_quote_communication_channel_icons' }),
     );
   });

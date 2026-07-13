@@ -27,6 +27,7 @@
     "year": "Anno",
     "reset": "Ripristina dai timesheet",
     "exportExcel": "Esporta Excel",
+    "loading": "Caricamento RIL…",
     "loadFailed": "Impossibile caricare i dati RIL",
     "exportFailed": "Impossibile esportare il file RIL",
     "missingTimes": "Aggiungi entrata e uscita per i giorni validi prima di esportare: {{days}}",

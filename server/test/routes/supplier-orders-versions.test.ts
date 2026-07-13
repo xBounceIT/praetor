@@ -190,6 +190,7 @@ const SAMPLE_ITEM = {
   productId: 'p-1',
   productName: 'Widget',
   quantity: 2,
+  unitType: 'unit' as const,
   unitPrice: 100,
   discount: 0,
   note: null,
@@ -352,6 +353,48 @@ describe('POST /api/accounting/supplier-orders', () => {
       expect.anything(),
     );
   });
+
+  test('400 rejects a line discount to us above 100 percent', async () => {
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/accounting/supplier-orders',
+      headers: authHeader(),
+      payload: {
+        ...validBody,
+        items: [{ productName: 'Widget', quantity: 2, unitPrice: 100, discount: 100.01 }],
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(soInsertItemsMock).not.toHaveBeenCalled();
+  });
+
+  test('201 accepts the inclusive 100 percent line discount boundary', async () => {
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/accounting/supplier-orders',
+      headers: authHeader(),
+      payload: {
+        ...validBody,
+        items: [
+          {
+            productName: 'Widget',
+            quantity: 2,
+            unitType: 'days',
+            unitPrice: 100,
+            discount: 100,
+          },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(soInsertItemsMock).toHaveBeenCalledWith(
+      'SORD-2999-0001',
+      [expect.objectContaining({ discount: 100, unitType: 'days' })],
+      expect.anything(),
+    );
+  });
 });
 
 describe('GET /api/accounting/supplier-orders/:id/versions', () => {
@@ -494,16 +537,18 @@ describe('POST /api/accounting/supplier-orders/:id/versions/:versionId/restore',
     );
   });
 
-  test('restores a snapshot item duration and defaults legacy items to one month (issue #776)', async () => {
+  test('restores quantity/duration units and defaults legacy snapshot fields', async () => {
     setupHappyPath();
     // One duration-bearing item and one legacy item (snapshot predates duration → no keys).
     const durationItem = {
       ...SAMPLE_ITEM,
       id: 'ssi-dur',
+      unitType: 'days' as const,
       durationMonths: 24,
       durationUnit: 'years' as const,
     };
-    const legacyItem = { ...SAMPLE_ITEM, id: 'ssi-legacy' };
+    const { unitType: _legacyUnitType, ...legacyItemBase } = SAMPLE_ITEM;
+    const legacyItem = { ...legacyItemBase, id: 'ssi-legacy' };
     sovFindByIdMock.mockResolvedValue({
       ...SAMPLE_VERSION,
       snapshot: { ...SAMPLE_SNAPSHOT, items: [durationItem, legacyItem] },
@@ -518,10 +563,10 @@ describe('POST /api/accounting/supplier-orders/:id/versions/:versionId/restore',
     expect(res.statusCode).toBe(200);
     const restoredItems = soReplaceItemsMock.mock.calls[0]?.[1] as Array<Record<string, unknown>>;
     expect(restoredItems[0]).toEqual(
-      expect.objectContaining({ durationMonths: 24, durationUnit: 'years' }),
+      expect.objectContaining({ unitType: 'days', durationMonths: 24, durationUnit: 'years' }),
     );
     expect(restoredItems[1]).toEqual(
-      expect.objectContaining({ durationMonths: 1, durationUnit: 'months' }),
+      expect.objectContaining({ unitType: 'hours', durationMonths: 1, durationUnit: 'months' }),
     );
   });
 

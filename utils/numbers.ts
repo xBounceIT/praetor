@@ -146,6 +146,20 @@ export const getEffectiveDurationMonths = (item: PricingItem): number => {
   return Number.isFinite(months) && months > 0 ? months : 1;
 };
 
+// Supplier documents persist the gross/list unit price plus an inclusive 0-100 line discount.
+// Round the derived unit cost before quantity and duration multiply it, matching the persisted
+// supplier-quote pricing invariant and preventing downstream orders/invoices from drifting by
+// fractional cents.
+export const getDiscountedUnitPrice = (unitPrice?: number, discount?: number): number => {
+  const percentage = Number(discount) || 0;
+  return roundCurrency((Number(unitPrice) || 0) * (1 - percentage / 100));
+};
+
+export const getDiscountedLineTotal = (item: PricingItem): number =>
+  (Number(item.quantity) || 0) *
+  getDiscountedUnitPrice(item.unitPrice, item.discount) *
+  getEffectiveDurationMonths(item);
+
 // Coerce an arbitrary value to a valid duration unit, defaulting to 'months' (issue #757).
 // 'na' (N/A) marks a line where duration does not apply (issue #775).
 export const normalizeDurationUnit = (value: unknown): DurationUnit =>

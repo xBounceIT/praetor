@@ -3,7 +3,7 @@
   "info": {
     "title": "Praetor API",
     "description": "Praetor API documentation",
-    "version": "0.8.3"
+    "version": "0.9.0"
   },
   "components": {
     "securitySchemes": {
@@ -11062,6 +11062,205 @@
             }
           },
           "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/projects/ril-catalog": {
+      "get": {
+        "summary": "List the lightweight project catalog used for RIL order codes",
+        "tags": [
+          "ril"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "query",
+            "name": "userId",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "orderId": {
+                        "type": [
+                          "null",
+                          "string"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "name",
+                      "orderId"
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "429": {
             "description": "Default Response",
             "content": {
               "application/json": {
@@ -44440,6 +44639,14 @@
                             "quantity": {
                               "type": "number"
                             },
+                            "unitType": {
+                              "type": "string",
+                              "enum": [
+                                "hours",
+                                "days",
+                                "unit"
+                              ]
+                            },
                             "unitPrice": {
                               "type": "number"
                             },
@@ -44469,6 +44676,7 @@
                             "orderId",
                             "productName",
                             "quantity",
+                            "unitType",
                             "unitPrice",
                             "discount"
                           ]
@@ -44679,11 +44887,21 @@
                         "quantity": {
                           "type": "number"
                         },
+                        "unitType": {
+                          "type": "string",
+                          "enum": [
+                            "hours",
+                            "days",
+                            "unit"
+                          ]
+                        },
                         "unitPrice": {
                           "type": "number"
                         },
                         "discount": {
-                          "type": "number"
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 100
                         },
                         "note": {
                           "type": "string"
@@ -44822,6 +45040,14 @@
                           "quantity": {
                             "type": "number"
                           },
+                          "unitType": {
+                            "type": "string",
+                            "enum": [
+                              "hours",
+                              "days",
+                              "unit"
+                            ]
+                          },
                           "unitPrice": {
                             "type": "number"
                           },
@@ -44851,6 +45077,7 @@
                           "orderId",
                           "productName",
                           "quantity",
+                          "unitType",
                           "unitPrice",
                           "discount"
                         ]
@@ -45038,11 +45265,21 @@
                         "quantity": {
                           "type": "number"
                         },
+                        "unitType": {
+                          "type": "string",
+                          "enum": [
+                            "hours",
+                            "days",
+                            "unit"
+                          ]
+                        },
                         "unitPrice": {
                           "type": "number"
                         },
                         "discount": {
-                          "type": "number"
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 100
                         },
                         "note": {
                           "type": "string"
@@ -45185,6 +45422,14 @@
                           "quantity": {
                             "type": "number"
                           },
+                          "unitType": {
+                            "type": "string",
+                            "enum": [
+                              "hours",
+                              "days",
+                              "unit"
+                            ]
+                          },
                           "unitPrice": {
                             "type": "number"
                           },
@@ -45214,6 +45459,7 @@
                           "orderId",
                           "productName",
                           "quantity",
+                          "unitType",
                           "unitPrice",
                           "discount"
                         ]
@@ -46044,6 +46290,14 @@
                           "quantity": {
                             "type": "number"
                           },
+                          "unitType": {
+                            "type": "string",
+                            "enum": [
+                              "hours",
+                              "days",
+                              "unit"
+                            ]
+                          },
                           "unitPrice": {
                             "type": "number"
                           },
@@ -46073,6 +46327,7 @@
                           "orderId",
                           "productName",
                           "quantity",
+                          "unitType",
                           "unitPrice",
                           "discount"
                         ]

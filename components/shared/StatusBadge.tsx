@@ -44,6 +44,7 @@ export type StatusType =
 export interface StatusBadgeProps {
   type: StatusType;
   label: string;
+  icon?: React.ReactNode;
   className?: string;
 }
 
@@ -244,27 +245,28 @@ const STATUS_BADGE_STYLES: Record<
   },
 };
 
-const StatusBadge: React.FC<StatusBadgeProps> = ({ type, label, className = '' }) => {
+const StatusBadge: React.FC<StatusBadgeProps> = ({ type, label, icon, className = '' }) => {
   const currentStyle = STATUS_BADGE_STYLES[type];
 
   return (
     <span
       data-status-badge
-      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[10px] font-black uppercase tracking-wider transition-all duration-200 ${currentStyle.container} ${className}`}
+      className={`inline-flex items-center gap-[0.6em] rounded-[0.8em] border px-[1em] py-[0.4em] text-[10px] font-black uppercase tracking-wider transition-all duration-200 ${currentStyle.container} ${className}`}
     >
-      {currentStyle.svgPath ? (
-        <svg
-          aria-hidden="true"
-          role="img"
-          viewBox="0 0 24 24"
-          fill="currentColor"
-          className="size-[1em]"
-        >
-          <path d={currentStyle.svgPath} />
-        </svg>
-      ) : (
-        <i className={`fa-solid ${currentStyle.icon}`}></i>
-      )}
+      {icon ??
+        (currentStyle.svgPath ? (
+          <svg
+            aria-hidden="true"
+            role="img"
+            viewBox="0 0 24 24"
+            fill="currentColor"
+            className="size-[1em]"
+          >
+            <path d={currentStyle.svgPath} />
+          </svg>
+        ) : (
+          <i className={`fa-solid ${currentStyle.icon}`} aria-hidden="true"></i>
+        ))}
       {label}
     </span>
   );

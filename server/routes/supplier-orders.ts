@@ -19,12 +19,14 @@ import { generatePrefixedId, ITEM_ID_PREFIXES } from '../utils/order-ids.ts';
 import { effectiveSupplierQuoteStatusFromDate } from '../utils/quote-status.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { replyError } from '../utils/replyError.ts';
+import { normalizeUnitType, type UnitType } from '../utils/unit-type.ts';
 import {
   badRequest,
   optionalDurationMonths,
   optionalDurationUnit,
   optionalEnum,
   optionalLocalizedNonNegativeNumber,
+  optionalLocalizedPercentage,
   optionalNonEmptyString,
   parseLocalizedNonNegativeNumber,
   parseLocalizedPositiveNumber,
@@ -49,13 +51,14 @@ const itemSchema = {
     productId: { type: ['string', 'null'] },
     productName: { type: 'string' },
     quantity: { type: 'number' },
+    unitType: { type: 'string', enum: ['hours', 'days', 'unit'] },
     unitPrice: { type: 'number' },
     note: { type: ['string', 'null'] },
     discount: { type: 'number' },
     durationMonths: { type: 'number' },
     durationUnit: { type: 'string', enum: ['months', 'years', 'na'] },
   },
-  required: ['id', 'orderId', 'productName', 'quantity', 'unitPrice', 'discount'],
+  required: ['id', 'orderId', 'productName', 'quantity', 'unitType', 'unitPrice', 'discount'],
 } as const;
 
 const orderSchema = {
@@ -94,8 +97,9 @@ const itemBodySchema = {
     productId: { type: 'string' },
     productName: { type: 'string' },
     quantity: { type: 'number' },
+    unitType: { type: 'string', enum: ['hours', 'days', 'unit'] },
     unitPrice: { type: 'number' },
-    discount: { type: 'number' },
+    discount: { type: 'number', minimum: 0, maximum: 100 },
     note: { type: 'string' },
     durationMonths: { type: 'number' },
     durationUnit: { type: 'string', enum: ['months', 'years', 'na'] },
@@ -139,6 +143,7 @@ type SupplierOrderItemInput = {
   productId?: string;
   productName?: string;
   quantity?: string | number;
+  unitType?: UnitType;
   unitPrice?: string | number;
   discount?: string | number;
   note?: string;
@@ -171,16 +176,14 @@ const normalizeItems = (
       badRequest(reply, unitPriceResult.message);
       return null;
     }
-    const discountResult = optionalLocalizedNonNegativeNumber(
-      item.discount,
-      `items[${i}].discount`,
-    );
+    const discountResult = optionalLocalizedPercentage(item.discount, `items[${i}].discount`);
     if (!discountResult.ok) {
       badRequest(reply, discountResult.message);
       return null;
     }
-    // Duration in months: a positive whole number, defaulting to 1 (one-off line). Supplier orders
-    // have no unit-type concept, so duration is a plain multiplier (no unit-line coercion).
+    const unitType = normalizeUnitType(item.unitType);
+    // Duration in months: a positive whole number, defaulting to 1 (one-off line). It remains a
+    // plain multiplier for every quantity unit, matching supplier quotes.
     const durationMonthsResult = optionalDurationMonths(
       item.durationMonths,
       `items[${i}].durationMonths`,
@@ -199,6 +202,7 @@ const normalizeItems = (
       productId: item.productId || null,
       productName: productNameResult.value,
       quantity: quantityResult.value,
+      unitType,
       unitPrice: unitPriceResult.value,
       discount: discountResult.value || 0,
       note: item.note || null,
@@ -987,6 +991,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             id: generatePrefixedId(ITEM_ID_PREFIXES.supplierItem),
             // Empty-string productIds slip through some snapshots; the DB column needs NULL.
             productId: rest.productId || null,
+            // Version snapshots created before quantity units were stored have no unitType.
+            unitType: rest.unitType ?? 'hours',
             // Snapshots taken before duration existed (issue #776) lack these keys; default to a
             // single month so the restored line keeps its pre-duration total.
             durationMonths: rest.durationMonths ?? 1,

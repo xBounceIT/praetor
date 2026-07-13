@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, mock, test } from 'bun:test';
-import { screen, within } from '@testing-library/react';
+import { act, fireEvent, screen, within } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import type { Product, Supplier, SupplierSaleOrder } from '../../../types';
 import { render } from '../../helpers/render';
@@ -117,6 +117,7 @@ const baseOrder: SupplierSaleOrder = {
       productId: 'product-1',
       productName: 'Firewall appliance',
       quantity: 2,
+      unitType: 'days',
       unitPrice: 1920,
     },
   ],
@@ -198,5 +199,138 @@ describe('<SupplierOrdersView /> supplier-quote column', () => {
     renderView([orphanOrder]);
 
     expect(screen.getByText('accounting:supplierOrders.noQuoteLink')).toBeInTheDocument();
+  });
+});
+
+describe('<SupplierOrdersView /> item pricing columns', () => {
+  test('matches the supplier-quote pricing chain and keeps duration visible', async () => {
+    renderView([
+      {
+        ...baseOrder,
+        items: [{ ...baseOrder.items[0], unitPrice: 2_400, discount: 20, durationMonths: 12 }],
+      },
+    ]);
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('dm_ss_01'));
+      await Promise.resolve();
+    });
+
+    const headers = screen.getAllByRole('columnheader').map((header) => header.textContent ?? '');
+    expect(headers).toEqual([
+      'crm:quotes.productsServices',
+      'sales:supplierQuotes.listPrice',
+      'sales:supplierQuotes.discountToUs',
+      'sales:supplierQuotes.unitCost',
+      'sales:supplierQuotes.qty',
+      'accounting:supplierOrders.durationColumn',
+      'common:labels.total',
+      'accounting:supplierOrders.notes',
+      'common:labels.actions',
+    ]);
+    expect(screen.getAllByText('sales:supplierQuotes.days').length).toBeGreaterThan(0);
+  });
+
+  test('caps discount to us at 100 percent', async () => {
+    renderView([{ ...baseOrder, items: [{ ...baseOrder.items[0], discount: 20 }] }]);
+    await act(async () => {
+      fireEvent.click(screen.getByText('dm_ss_01'));
+      await Promise.resolve();
+    });
+
+    const discountInput = screen.getByLabelText('sales:supplierQuotes.discountToUs');
+    const discountHeader = screen
+      .getAllByText('sales:supplierQuotes.discountToUs')
+      .find((element) => element.closest('th'))
+      ?.closest('th');
+    expect(discountHeader).not.toHaveTextContent('%');
+    expect(discountInput.parentElement).toHaveTextContent('%');
+    await act(async () => {
+      fireEvent.focus(discountInput);
+      fireEvent.change(discountInput, { target: { value: '120' } });
+    });
+    expect(discountInput).toHaveValue('100');
+  });
+
+  test('rounds unit cost before quantity multiplies the line total', async () => {
+    renderView([
+      {
+        ...baseOrder,
+        items: [
+          {
+            ...baseOrder.items[0],
+            quantity: 100,
+            unitPrice: 10.01,
+            discount: 10,
+            durationMonths: 1,
+          },
+        ],
+      },
+    ]);
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('dm_ss_01'));
+      await Promise.resolve();
+    });
+
+    expect(screen.getByText('9,01')).toBeInTheDocument();
+    expect(screen.getAllByText('901,00 EUR').length).toBeGreaterThan(0);
+  });
+
+  test('converts a replacement product hourly cost into the retained day unit', async () => {
+    const onUpdateOrder = mock((_id: string, _updates: Partial<SupplierSaleOrder>) => {});
+    const products: Product[] = [
+      {
+        id: 'product-1',
+        name: 'Firewall appliance',
+        productCode: 'FW-1',
+        costo: 240,
+        molPercentage: 0,
+        costUnit: 'hours',
+        type: 'service',
+      },
+      {
+        id: 'product-2',
+        name: 'Daily consulting',
+        productCode: 'CONSULT',
+        costo: 100,
+        molPercentage: 0,
+        costUnit: 'hours',
+        type: 'service',
+      },
+    ];
+    render(
+      <SupplierOrdersView
+        orders={[baseOrder]}
+        suppliers={suppliers}
+        products={products}
+        orderIdsWithInvoices={new Set<string>()}
+        onUpdateOrder={onUpdateOrder}
+        onDeleteOrder={mock(() => Promise.resolve())}
+        currency="EUR"
+      />,
+    );
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('dm_ss_01'));
+      await Promise.resolve();
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /Firewall appliance/i }));
+      await Promise.resolve();
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByText('Daily consulting'));
+      await Promise.resolve();
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByText('common:buttons.update'));
+      await Promise.resolve();
+    });
+
+    const updates = onUpdateOrder.mock.calls[0]?.[1] as Partial<SupplierSaleOrder>;
+    expect(updates.items?.[0]).toEqual(
+      expect.objectContaining({ productId: 'product-2', unitPrice: 800, unitType: 'days' }),
+    );
   });
 });
