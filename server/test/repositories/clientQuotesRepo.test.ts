@@ -303,6 +303,14 @@ describe('update', () => {
     expect(sql).not.toMatch(/set[^"]*"id"\s*=/);
   });
 
+  test('clears notes when the patch explicitly supplies null', async () => {
+    exec.enqueue({ rows: [quoteRow()] });
+    await clientQuotesRepo.update('cq-1', { notes: null }, testDb);
+    const sql = exec.calls[0].sql.toLowerCase();
+    expect(sql).not.toMatch(/"notes"\s*=\s*coalesce/);
+    expect(exec.calls[0].params).toContain(null);
+  });
+
   test('returns null when no row updated', async () => {
     exec.enqueue({ rows: [] });
     expect(await clientQuotesRepo.update('cq-x', { status: 'accepted' }, testDb)).toBeNull();

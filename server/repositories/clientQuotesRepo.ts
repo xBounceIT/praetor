@@ -583,6 +583,7 @@ export type ClientQuoteUpdate = {
   status?: string | null;
   expirationDate?: string | null;
   communicationChannelId?: string | null;
+  // `undefined` leaves notes untouched; an explicit `null` clears them.
   notes?: string | null;
   // `undefined` leaves the link untouched; an explicit `null` clears it (direct write, not
   // COALESCE — the 1-to-1 supplier-quote link must be removable, mirroring supplierQuotes.clientId).
@@ -619,7 +620,7 @@ export const update = async (
       status: sql`COALESCE(${patch.status ?? null}, ${quotes.status})`,
       expirationDate: sql`COALESCE(${patch.expirationDate ?? null}::date, ${quotes.expirationDate})`,
       communicationChannelId: sql`COALESCE(${patch.communicationChannelId ?? null}, ${quotes.communicationChannelId})`,
-      notes: sql`COALESCE(${patch.notes ?? null}, ${quotes.notes})`,
+      notes: patch.notes === undefined ? sql`${quotes.notes}` : patch.notes,
       // Direct write (not COALESCE) so an explicit null clears the 1-to-1 link; `undefined` keeps it.
       linkedSupplierQuoteId:
         patch.linkedSupplierQuoteId === undefined

@@ -1764,7 +1764,11 @@ describe('client quote candidate-family create and update', () => {
     });
 
     expect(res.statusCode).toBe(200);
-    expect(cqUpdateMock).toHaveBeenCalled();
+    expect(cqUpdateMock).toHaveBeenCalledWith(
+      'q-1',
+      expect.objectContaining({ notes: null }),
+      expect.anything(),
+    );
   });
 
   test('blocks sending a candidate family sourced from an expired supplier quote', async () => {
