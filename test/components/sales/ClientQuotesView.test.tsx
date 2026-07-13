@@ -1430,19 +1430,45 @@ describe('<ClientQuotesView /> line-item delete confirmation', () => {
 
     await user.click(screen.getByRole('button', { name: 'sales:clientQuotes.createNewQuote' }));
     await user.click(screen.getByRole('button', { name: 'sales:clientQuotes.candidates.addMenu' }));
-    await user.click(screen.getByRole('menuitem', { name: 'sales:clientQuotes.candidates.add' }));
+    await user.dblClick(screen.getByRole('tab', { name: /Variante B/ }));
     const nameInput = screen.getByLabelText('sales:clientQuotes.candidates.name');
     await user.clear(nameInput);
     await user.type(nameInput, 'Variante C');
+    await user.keyboard('{Enter}');
     await user.click(screen.getByRole('tab', { name: /Variante A/ }));
     await user.click(screen.getByRole('button', { name: 'sales:clientQuotes.candidates.addMenu' }));
-    await user.click(screen.getByRole('menuitem', { name: 'sales:clientQuotes.candidates.add' }));
 
     expect(screen.getByRole('tab', { name: /Variante B/ })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /Variante C/ })).toBeInTheDocument();
   });
 
-  test('starts with Variante A and can add and rename candidate tabs', async () => {
+  test('keeps validation errors visible when renaming the active candidate', async () => {
+    const user = userEvent.setup();
+    render(
+      <ClientQuotesView
+        quotes={[]}
+        clients={clients}
+        products={[]}
+        supplierQuotes={[]}
+        communicationChannels={communicationChannels}
+        currency="EUR"
+        onAddQuote={mock(() => Promise.resolve())}
+        onUpdateQuote={mock(() => Promise.resolve())}
+        onDeleteQuote={mock(() => Promise.resolve())}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'sales:clientQuotes.createNewQuote' }));
+    await user.click(screen.getByRole('button', { name: 'sales:clientQuotes.createQuote' }));
+    expect(screen.getByText('sales:clientQuotes.errors.clientRequired')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'sales:clientQuotes.candidates.rename' }));
+
+    expect(screen.getByText('sales:clientQuotes.errors.clientRequired')).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /Variante A/ })).toHaveAttribute('tabindex', '-1');
+  });
+
+  test('manages browser-style candidate tabs from inline and contextual actions', async () => {
     const user = userEvent.setup();
     render(
       <ClientQuotesView
@@ -1461,13 +1487,35 @@ describe('<ClientQuotesView /> line-item delete confirmation', () => {
     await user.click(screen.getByRole('button', { name: 'sales:clientQuotes.createNewQuote' }));
     expect(screen.getByText('Variante A')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'sales:clientQuotes.candidates.addMenu' }));
-    await user.click(screen.getByRole('menuitem', { name: 'sales:clientQuotes.candidates.add' }));
     expect(screen.getByText('Variante B')).toBeInTheDocument();
 
+    const renameButtons = screen.getAllByRole('button', {
+      name: 'sales:clientQuotes.candidates.rename',
+    });
+    await user.click(renameButtons.at(-1) as HTMLButtonElement);
     const nameInput = screen.getByLabelText('sales:clientQuotes.candidates.name');
     await user.clear(nameInput);
     await user.type(nameInput, 'Premium');
+    await user.keyboard('{Enter}');
     expect(screen.getByRole('tab', { name: /Premium/ })).toBeInTheDocument();
+
+    fireEvent.contextMenu(screen.getByRole('tab', { name: /Variante A/ }));
+    await user.click(
+      await screen.findByRole('menuitem', { name: 'sales:clientQuotes.candidates.rename' }),
+    );
+    const contextualNameInput = await screen.findByLabelText('sales:clientQuotes.candidates.name');
+    await user.clear(contextualNameInput);
+    await user.type(contextualNameInput, 'Standard');
+    await user.keyboard('{Enter}');
+    expect(screen.getByRole('tab', { name: /Standard/ })).toBeInTheDocument();
+
+    const deleteButtons = screen.getAllByRole('button', {
+      name: 'sales:clientQuotes.candidates.delete',
+    });
+    await user.click(deleteButtons.at(-1) as HTMLButtonElement);
+    expect(screen.getByText('sales:clientQuotes.candidates.removeTitle')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('line-delete-confirm-btn'));
+    expect(screen.queryByRole('tab', { name: /Premium/ })).not.toBeInTheDocument();
   });
 });
 
