@@ -1961,7 +1961,12 @@ describe('client quote candidate-family create and update', () => {
   });
 
   test('rejects candidate edits when every active variant is expired', async () => {
+    setupCreate();
     cqFindCurrentMock.mockResolvedValue(gate({ status: 'sent', expirationDate: '2000-01-01' }));
+    cqLockCurrentByIdMock.mockResolvedValue(gate({ status: 'sent', expirationDate: '2000-01-01' }));
+    cqFindByIdMock.mockResolvedValue(
+      updatedQuote({ status: 'sent', expirationDate: '2000-01-01' }),
+    );
     qcListForQuoteMock.mockResolvedValue([
       activeCandidate({ expirationDate: '2000-01-01' }),
       activeCandidate({ id: 'qc-b', name: 'Variante B', expirationDate: '2000-02-01' }),
@@ -1997,6 +2002,87 @@ describe('client quote candidate-family create and update', () => {
     expect(res.statusCode).toBe(409);
     expect(JSON.parse(res.body).error).toContain('Expired quotes are read-only');
     expect(cqUpdateMock).not.toHaveBeenCalled();
+  });
+
+  test('revalidates an expired candidate family when only expiration dates are extended', async () => {
+    const expiredCandidate = activeCandidate({ expirationDate: '2000-01-01' });
+    const revalidatedCandidate = activeCandidate({ expirationDate: '2999-12-31' });
+    const expiredParent = updatedQuote({ status: 'sent', expirationDate: '2000-01-01' });
+    const revalidatedParent = updatedQuote({ status: 'sent', expirationDate: '2999-12-31' });
+    const existingItem = {
+      id: 'qi-local',
+      quoteId: 'q-1',
+      candidateId: 'qc-local',
+      productId: '',
+      productName: 'Service',
+      quantity: 2,
+      unitPrice: 50,
+      productCost: 50,
+      productMolPercentage: null,
+      supplierQuoteId: 'sq-9',
+      supplierQuoteItemId: 'sqi-9',
+      supplierQuoteSupplierName: 'Acme',
+      supplierQuoteUnitPrice: 50,
+      discount: 0,
+      note: null,
+      unitType: 'hours' as const,
+      durationMonths: 1,
+      durationUnit: 'months' as const,
+    };
+
+    cqFindCurrentMock.mockResolvedValue(gate({ status: 'sent', expirationDate: '2000-01-01' }));
+    cqLockCurrentByIdMock.mockResolvedValue(gate({ status: 'sent', expirationDate: '2000-01-01' }));
+    cqFindByIdMock.mockResolvedValueOnce(expiredParent).mockResolvedValue(revalidatedParent);
+    cqFindItemsForQuoteMock.mockResolvedValue([existingItem]);
+    cqFindItemSnapshotsForQuoteMock.mockResolvedValue([
+      {
+        id: 'qi-local',
+        candidateId: 'qc-local',
+        productId: '',
+        quantity: 2,
+        productCost: 50,
+        productMolPercentage: null,
+        supplierQuoteId: 'sq-9',
+        supplierQuoteItemId: 'sqi-9',
+        supplierQuoteSupplierName: 'Acme',
+        supplierQuoteUnitPrice: 50,
+        unitType: 'hours',
+      },
+    ]);
+    qcListForQuoteMock
+      .mockResolvedValueOnce([expiredCandidate])
+      .mockResolvedValueOnce([expiredCandidate])
+      .mockResolvedValueOnce([revalidatedCandidate]);
+    qcUpdateMock.mockResolvedValue(revalidatedCandidate);
+    cqUpdateMock.mockResolvedValue(revalidatedParent);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/sales/client-quotes/q-1',
+      headers: authHeader(),
+      payload: {
+        clientId: 'c1',
+        clientName: 'Client',
+        status: 'sent',
+        candidates: [
+          {
+            id: 'qc-local',
+            name: 'Variante A',
+            items: [freshLine({ id: 'qi-local', productId: '', unitPrice: 50 })],
+            expirationDate: '2999-12-31',
+            communicationChannelId: 'qcc_email',
+          },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(cqUpdateMock).toHaveBeenCalledWith(
+      'q-1',
+      expect.objectContaining({ expirationDate: '2999-12-31' }),
+      expect.anything(),
+    );
+    expect(JSON.parse(res.body).effectiveStatus).toBe('sent');
   });
 
   test('allows candidate edits while at least one active variant is still valid', async () => {

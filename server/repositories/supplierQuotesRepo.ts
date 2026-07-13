@@ -67,7 +67,7 @@ const outerSupplierQuoteId = sql`${sql.identifier('supplier_quotes')}.${sql.iden
 // (dead-ends — denied, expired — never outrank a live document; expired sits above denied because
 // extending the date can revive it). Legacy spellings rank with their canonical equivalents
 // (confirmed/approved→accepted, received→sent, rejected→denied). Requires the candidate's offer
-// joined as `co` (unique on linked_quote_id ⇒ no row multiplication). Tiebreak:
+// joined as `co` and the sourced candidate expiry joined as `sourcing_candidate`. Tiebreak:
 // most-recently-updated, then id.
 const sourcingRankOrderBy = sql`
   CASE
@@ -82,7 +82,7 @@ const sourcingRankOrderBy = sql`
       CASE
         WHEN cq.status IN ('accepted', 'confirmed', 'approved') THEN 6
         WHEN cq.status IN ('denied', 'rejected') THEN 1
-        WHEN cq.expiration_date < CURRENT_DATE THEN 2
+        WHEN COALESCE("sourcing_candidate"."expiration_date", cq.expiration_date) < CURRENT_DATE THEN 2
         WHEN cq.status = 'offer' THEN 5
         WHEN cq.status IN ('sent', 'received') THEN 4
         ELSE 3
@@ -90,6 +90,36 @@ const sourcingRankOrderBy = sql`
   END DESC,
   cq.updated_at DESC,
   cq.id`;
+
+// Resolve the latest expiry among non-discarded candidates whose own lines source this supplier
+// quote. MAX preserves family semantics when several active variants source the same document:
+// the chain expires only after every relevant candidate expires. The parent date is only a
+// rolling-deploy fallback for offer-only sourcing or legacy rows without a candidate.
+const sourcingCandidateExpirationLateral = sql`LATERAL (
+  SELECT MAX(qcand.expiration_date) AS expiration_date
+  FROM quote_items qi
+  JOIN quote_candidates qcand ON qcand.id = COALESCE(
+    qi.candidate_id,
+    (
+      SELECT default_candidate.id
+      FROM quote_candidates default_candidate
+      WHERE default_candidate.quote_id = qi.quote_id
+      ORDER BY default_candidate.position, default_candidate.id
+      LIMIT 1
+    )
+  )
+  WHERE qi.quote_id = cq.id AND qcand.quote_id = qi.quote_id AND qcand.state <> 'discarded' AND (
+    qi.supplier_quote_id = ${outerSupplierQuoteId}
+    OR qi.supplier_quote_item_id IN (
+      SELECT sqi.id FROM supplier_quote_items sqi WHERE sqi.quote_id = ${outerSupplierQuoteId}
+    )
+  )
+) "sourcing_candidate"`;
+
+const effectiveSourcingCandidateExpiration = sql`COALESCE(
+  "sourcing_candidate"."expiration_date",
+  cq.expiration_date
+)`;
 
 // A quote is a sourcing CANDIDATE when its own lines source this supplier quote OR when its
 // offer's lines do (#812 round 16): an offer can add a fresh sourced line that exists only in
@@ -99,25 +129,7 @@ const sourcingRankOrderBy = sql`
 // supplier_quote_item_id (null denormalized supplier_quote_id) via item membership (#812 round
 // 18) — otherwise those sourced quotes would keep displaying as unlinked draft.
 const sourcingCandidatePredicate = sql`(
-    EXISTS (
-      SELECT 1 FROM quote_items qi
-      JOIN quote_candidates qcand ON qcand.id = COALESCE(
-        qi.candidate_id,
-        (
-          SELECT default_candidate.id
-          FROM quote_candidates default_candidate
-          WHERE default_candidate.quote_id = qi.quote_id
-          ORDER BY default_candidate.position, default_candidate.id
-          LIMIT 1
-        )
-      )
-      WHERE qi.quote_id = cq.id AND qcand.state <> 'discarded' AND (
-        qi.supplier_quote_id = ${outerSupplierQuoteId}
-        OR qi.supplier_quote_item_id IN (
-          SELECT sqi.id FROM supplier_quote_items sqi WHERE sqi.quote_id = ${outerSupplierQuoteId}
-        )
-      )
-    )
+    "sourcing_candidate"."expiration_date" IS NOT NULL
     OR EXISTS (
       SELECT 1 FROM customer_offers co2
       JOIN customer_offer_items coi ON coi.offer_id = co2.id
@@ -133,6 +145,7 @@ const sourcingCandidatePredicate = sql`(
 const chosenClientQuoteId = sql<string | null>`(
   SELECT cq.id FROM quotes cq
   LEFT JOIN customer_offers co ON co.linked_quote_id = cq.id
+  LEFT JOIN ${sourcingCandidateExpirationLateral} ON true
   WHERE ${sourcingCandidatePredicate}
   ORDER BY ${sourcingRankOrderBy}
   LIMIT 1
@@ -146,9 +159,10 @@ const chosenClientQuoteId = sql<string | null>`(
 // (findById, lockEffectiveStatusById) keep the scalar subqueries: the 5× cost is negligible for
 // one row, and lockEffectiveStatusById's `FOR UPDATE` must not lock the joined quotes/offers rows.
 const chosenClientQuoteLateral = sql`LATERAL (
-  SELECT cq.id, cq.status, cq.expiration_date
+  SELECT cq.id, cq.status, ${effectiveSourcingCandidateExpiration} AS expiration_date
   FROM quotes cq
   LEFT JOIN customer_offers co ON co.linked_quote_id = cq.id
+  LEFT JOIN ${sourcingCandidateExpirationLateral} ON true
   WHERE ${sourcingCandidatePredicate}
   ORDER BY ${sourcingRankOrderBy}
   LIMIT 1
@@ -171,9 +185,16 @@ const linkedClientQuoteIdSubquery = chosenClientQuoteId;
 const linkedClientQuoteStatusSubquery = sql<string | null>`(
   SELECT q.status FROM quotes q WHERE q.id = ${chosenClientQuoteId} LIMIT 1
 )`;
-// ::text so the driver returns the plain 'YYYY-MM-DD' string instead of a Date object.
+// Resolve the same ranked quote as chosenClientQuoteId, but project the matched candidate-family
+// expiration instead of the mirrored parent date. ::text keeps the wire value as YYYY-MM-DD.
 const linkedClientQuoteExpirationSubquery = sql<string | null>`(
-  SELECT q.expiration_date::text FROM quotes q WHERE q.id = ${chosenClientQuoteId} LIMIT 1
+  SELECT ${effectiveSourcingCandidateExpiration}::text
+  FROM quotes cq
+  LEFT JOIN customer_offers co ON co.linked_quote_id = cq.id
+  LEFT JOIN ${sourcingCandidateExpirationLateral} ON true
+  WHERE ${sourcingCandidatePredicate}
+  ORDER BY ${sourcingRankOrderBy}
+  LIMIT 1
 )`;
 const linkedOfferStatusSubquery = sql<string | null>`(
   SELECT o.status FROM customer_offers o WHERE o.linked_quote_id = ${chosenClientQuoteId} LIMIT 1

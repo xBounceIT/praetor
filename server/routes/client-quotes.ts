@@ -826,6 +826,91 @@ type PreparedCandidate = {
   items: ResolvedQuoteItem[];
 };
 
+const sameNullableValue = <T>(left: T | null | undefined, right: T | null | undefined) =>
+  (left ?? null) === (right ?? null);
+
+const isSameCandidateItem = (
+  submitted: ResolvedQuoteItem,
+  existing: clientQuotesRepo.ClientQuoteItem,
+): boolean =>
+  submitted.id === existing.id &&
+  (submitted.productId || '') === existing.productId &&
+  submitted.productName === existing.productName &&
+  submitted.quantity === existing.quantity &&
+  submitted.unitPrice === existing.unitPrice &&
+  submitted.productCost === existing.productCost &&
+  sameNullableValue(submitted.productMolPercentage, existing.productMolPercentage) &&
+  sameNullableValue(submitted.supplierQuoteId, existing.supplierQuoteId) &&
+  sameNullableValue(submitted.supplierQuoteItemId, existing.supplierQuoteItemId) &&
+  sameNullableValue(submitted.supplierQuoteSupplierName, existing.supplierQuoteSupplierName) &&
+  sameNullableValue(submitted.supplierQuoteUnitPrice, existing.supplierQuoteUnitPrice) &&
+  submitted.discount === existing.discount &&
+  sameNullableValue(submitted.note, existing.note) &&
+  submitted.unitType === existing.unitType &&
+  submitted.durationMonths === existing.durationMonths &&
+  submitted.durationUnit === existing.durationUnit;
+
+const isExpirationOnlyCandidateFamilyUpdate = (args: {
+  quoteId: string;
+  nextQuoteId: string;
+  parent: clientQuotesRepo.ClientQuote;
+  clientId: string;
+  clientName: string;
+  requestedStatus: string;
+  submittedCandidates: PreparedCandidate[];
+  existingCandidates: quoteCandidatesRepo.QuoteCandidate[];
+  existingItems: clientQuotesRepo.ClientQuoteItem[];
+}): boolean => {
+  if (
+    args.nextQuoteId !== args.quoteId ||
+    args.parent.clientId !== args.clientId ||
+    args.parent.clientName !== args.clientName ||
+    normalizeQuoteStatus(args.parent.status) !== normalizeQuoteStatus(args.requestedStatus) ||
+    args.submittedCandidates.every((candidate) => isPastLocalDate(candidate.expirationDate))
+  ) {
+    return false;
+  }
+
+  const existingActive = args.existingCandidates.filter(
+    (candidate) => candidate.state === 'active',
+  );
+  if (existingActive.length !== args.submittedCandidates.length) return false;
+
+  let extended = false;
+  for (let index = 0; index < args.submittedCandidates.length; index++) {
+    const submitted = args.submittedCandidates[index];
+    const existing = existingActive.find((candidate) => candidate.id === submitted.id);
+    if (
+      !existing ||
+      existing.position !== index ||
+      existing.name !== submitted.name ||
+      existing.paymentTerms !== submitted.paymentTerms ||
+      existing.discount !== submitted.discount ||
+      existing.discountType !== submitted.discountType ||
+      existing.communicationChannelId !== submitted.communicationChannelId ||
+      !sameNullableValue(existing.notes, submitted.notes) ||
+      submitted.expirationDate < existing.expirationDate
+    ) {
+      return false;
+    }
+    extended ||= submitted.expirationDate > existing.expirationDate;
+
+    const existingCandidateItems = args.existingItems.filter(
+      (item) => item.candidateId === existing.id,
+    );
+    if (
+      existingCandidateItems.length !== submitted.items.length ||
+      submitted.items.some(
+        (item, itemIndex) => !isSameCandidateItem(item, existingCandidateItems[itemIndex]),
+      )
+    ) {
+      return false;
+    }
+  }
+
+  return extended;
+};
+
 const prepareCandidateBody = async (
   raw: unknown,
   index: number,
@@ -1649,9 +1734,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           quoteCandidatesRepo.listForQuote(idResult.value),
           clientQuotesRepo.findItemSnapshotsForQuote(idResult.value),
         ]);
-        if (isCandidateFamilyExpired(existingCandidates, currentEffective === 'expired')) {
-          return replyExpiredQuoteReadOnly(idResult.value, request, reply);
-        }
         const preparedCandidates: PreparedCandidate[] = [];
         const names = new Set<string>();
         for (let index = 0; index < candidates.length; index++) {
@@ -1775,19 +1857,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               };
             }
             const lockedCandidates = await quoteCandidatesRepo.listForQuote(idResult.value, tx);
-            if (
-              isCandidateFamilyExpired(
-                lockedCandidates,
-                effectiveQuoteStatusFromDate(lockedCurrent.status, lockedCurrent.expirationDate) ===
-                  'expired',
-              )
-            ) {
-              return {
-                kind: 'conflict' as const,
-                message: 'Expired quotes are read-only; extend the expiration date instead',
-                secondaryLabel: 'expired_read_only',
-              };
-            }
             const lockedActiveIds = new Set(
               lockedCandidates
                 .filter((candidate) => candidate.state === 'active')
@@ -1802,6 +1871,38 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                 message: 'The candidate family changed while it was being saved',
                 secondaryLabel: 'candidate_family_changed',
               };
+            }
+
+            const lockedFamilyExpired = isCandidateFamilyExpired(
+              lockedCandidates,
+              effectiveQuoteStatusFromDate(lockedCurrent.status, lockedCurrent.expirationDate) ===
+                'expired',
+            );
+            if (lockedFamilyExpired) {
+              const [lockedParent, lockedItems] = await Promise.all([
+                clientQuotesRepo.findById(idResult.value, tx),
+                clientQuotesRepo.findItemsForQuote(idResult.value, tx),
+              ]);
+              if (
+                !lockedParent ||
+                !isExpirationOnlyCandidateFamilyUpdate({
+                  quoteId: idResult.value,
+                  nextQuoteId: candidateFamilyId,
+                  parent: lockedParent,
+                  clientId: clientIdValue.value,
+                  clientName: clientNameValue.value,
+                  requestedStatus,
+                  submittedCandidates: preparedCandidates,
+                  existingCandidates: lockedCandidates,
+                  existingItems: lockedItems,
+                })
+              ) {
+                return {
+                  kind: 'conflict' as const,
+                  message: 'Expired quotes are read-only; extend the expiration date instead',
+                  secondaryLabel: 'expired_read_only',
+                };
+              }
             }
 
             await snapshotPreState(idResult.value, 'update', request, tx);
