@@ -1771,6 +1771,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         if (currentStatus !== 'draft') {
           const submittedSet = new Set(submittedExistingIds);
           if (
+            preparedCandidates.length !== existingActiveIds.size ||
             submittedSet.size !== existingActiveIds.size ||
             Array.from(existingActiveIds).some((candidateId) => !submittedSet.has(candidateId))
           ) {

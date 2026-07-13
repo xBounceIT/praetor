@@ -1752,6 +1752,37 @@ describe('client quote candidate-family create and update', () => {
     expect(qcUpdateMock).not.toHaveBeenCalled();
   });
 
+  test('rejects adding an id-less candidate after the quote has been sent', async () => {
+    setupCreate();
+    cqFindCurrentMock.mockResolvedValue(gate({ status: 'sent' }));
+    qcListForQuoteMock.mockResolvedValue([activeCandidate()]);
+    const candidateBody = {
+      items: [freshLine()],
+      expirationDate: '2999-12-31',
+      communicationChannelId: 'qcc_email',
+    };
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/sales/client-quotes/q-1',
+      headers: authHeader(),
+      payload: {
+        clientId: 'c1',
+        clientName: 'Client',
+        status: 'sent',
+        candidates: [
+          { ...candidateBody, id: 'qc-local', name: 'Variante A' },
+          { ...candidateBody, name: 'Variante B' },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(JSON.parse(res.body).error).toContain('only be added or removed while');
+    expect(qcInsertMock).not.toHaveBeenCalled();
+    expect(qcUpdateMock).not.toHaveBeenCalled();
+  });
+
   test('rejects a line id that belongs to a different candidate', async () => {
     setupCreate();
     cqFindCurrentMock.mockResolvedValue(gate({ status: 'draft' }));
