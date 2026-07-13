@@ -16,7 +16,15 @@ import {
   useReactTable,
   type VisibilityState,
 } from '@tanstack/react-table';
-import { ArrowDown, ArrowUp, ArrowUpDown, GripVertical, ZoomIn, ZoomOut } from 'lucide-react';
+import {
+  ArrowDown,
+  ArrowUp,
+  ArrowUpDown,
+  GripVertical,
+  Lightbulb,
+  ZoomIn,
+  ZoomOut,
+} from 'lucide-react';
 import {
   Children,
   type ComponentProps,
@@ -573,6 +581,8 @@ type ViewModalState = { kind: 'create' } | { kind: 'edit'; view: CustomView } | 
 type ColumnDropTarget = { columnId: string; position: DropPosition };
 type StateUpdate<T> = T | ((prev: T) => T);
 type TableViewApplication = ReturnType<typeof computeViewApplication>;
+const columnOrdersEqual = (left: readonly string[], right: readonly string[]) =>
+  left.length === right.length && left.every((id, index) => id === right[index]);
 type TableViewState = {
   sortState: SortState;
   filterState: FilterState;
@@ -1037,6 +1047,7 @@ const useStandardTableController = <T extends object>({
   const isServerBacked = viewKey != null;
   const tableContainerRef = useRef<HTMLDivElement | null>(null);
   const previousDataLengthRef = useRef(data?.length ?? 0);
+  const manualColumnOrderBaselineRef = useRef<ColumnOrderState | null>(null);
 
   // A programmatic filter (a quick-view deep link or a cross-view "view X"
   // navigation) must win over a persisted saved view, which would otherwise
@@ -1161,6 +1172,9 @@ const useStandardTableController = <T extends object>({
     (update: StateUpdate<ViewModalState>) => setTableUiField('modalState', update),
     [setTableUiField],
   );
+  const clearSaveColumnOrderTip = useCallback(() => {
+    manualColumnOrderBaselineRef.current = null;
+  }, []);
   const setDraggingViewId = useCallback(
     (update: StateUpdate<string | null>) => setTableUiField('draggingViewId', update),
     [setTableUiField],
@@ -1606,6 +1620,12 @@ const useStandardTableController = <T extends object>({
     () => normalizeColumnOrder(columnOrder, reorderableColumnIdSet),
     [columnOrder, reorderableColumnIdSet],
   );
+  const normalizedManualColumnOrderBaseline = manualColumnOrderBaselineRef.current
+    ? normalizeColumnOrder(manualColumnOrderBaselineRef.current, reorderableColumnIdSet)
+    : null;
+  const showSaveColumnOrderTip =
+    normalizedManualColumnOrderBaseline !== null &&
+    !columnOrdersEqual(normalizedColumnOrder, normalizedManualColumnOrderBaseline);
 
   const modalColumns = useMemo(
     () =>
@@ -1621,6 +1641,7 @@ const useStandardTableController = <T extends object>({
     () => (activeViewId ? (customViews.find((v) => v.id === activeViewId) ?? null) : null),
     [activeViewId, customViews],
   );
+  const isViewCreationDisabled = isServerBacked && (viewsLoading || viewBusy);
 
   // Access resolution for the views submenu. In legacy mode every view is fully owned
   // (no server concept of sharing), so gating is permissive. Per-row the submenu derives
@@ -1638,6 +1659,7 @@ const useStandardTableController = <T extends object>({
   const applyViewState = useCallback(
     (view: CustomView, nextActiveViewId?: string | null) => {
       const result = getViewApplicationForColumns(view, columns);
+      clearSaveColumnOrderTip();
       dispatchTableView({
         type: 'apply-view',
         application: allowColumnHiding ? result : { ...result, hiddenColIds: new Set<string>() },
@@ -1651,7 +1673,7 @@ const useStandardTableController = <T extends object>({
         } catch {}
       }
     },
-    [allowColumnHiding, columns, storageIdentity],
+    [allowColumnHiding, clearSaveColumnOrderTip, columns, storageIdentity],
   );
 
   useEffect(
@@ -1930,12 +1952,12 @@ const useStandardTableController = <T extends object>({
         functionalUpdate(updater, normalizedColumnOrder),
         reorderableColumnIdSet,
       );
-      if (
-        next.length === normalizedColumnOrder.length &&
-        next.every((id, index) => id === normalizedColumnOrder[index])
-      ) {
-        return;
-      }
+      if (columnOrdersEqual(next, normalizedColumnOrder)) return;
+      const baseline = normalizeColumnOrder(
+        manualColumnOrderBaselineRef.current ?? normalizedColumnOrder,
+        reorderableColumnIdSet,
+      );
+      manualColumnOrderBaselineRef.current = columnOrdersEqual(next, baseline) ? null : baseline;
       dispatchTableView({ type: 'set-column-order', columnOrder: next });
       updateActiveViewId(null);
     },
@@ -2303,6 +2325,7 @@ const useStandardTableController = <T extends object>({
   const resetColumnVisibility = () => {
     table.setColumnVisibility({});
     table.setColumnOrder(reorderableColumnIds);
+    clearSaveColumnOrderTip();
   };
 
   const applyView = (view: CustomView) => {
@@ -2345,6 +2368,7 @@ const useStandardTableController = <T extends object>({
     const applySavedColumnLayout = () => {
       dispatchTableView({ type: 'set-hidden-columns', hiddenColIds: new Set(hidden) });
       dispatchTableView({ type: 'set-column-order', columnOrder: savedColumnOrder });
+      clearSaveColumnOrderTip();
     };
 
     if (!isServerBacked) {
@@ -2667,6 +2691,8 @@ const useStandardTableController = <T extends object>({
     shouldRenderTable,
     processedRows,
     handleExportToCsv,
+    showSaveColumnOrderTip,
+    isViewCreationDisabled,
     stepFontSize,
     fontSize,
     gearOpen,
@@ -2811,7 +2837,16 @@ const StandardTableToolbar = <T extends object>({
 }: {
   controller: StandardTableController<T>;
 }) => {
-  const { t, handleExportToCsv, processedRows, stepFontSize, fontSize } = controller;
+  const {
+    t,
+    handleExportToCsv,
+    processedRows,
+    showSaveColumnOrderTip,
+    isViewCreationDisabled,
+    setModalState,
+    stepFontSize,
+    fontSize,
+  } = controller;
 
   return (
     <>
@@ -2822,6 +2857,16 @@ const StandardTableToolbar = <T extends object>({
         disabled={processedRows.length === 0}
         text={t('table.export')}
       />
+      {showSaveColumnOrderTip && (
+        <StandardTableToolbarButton
+          label={t('table.saveColumnOrderTip')}
+          icon={<Lightbulb className="size-3.5" aria-hidden="true" />}
+          onClick={() => setModalState({ kind: 'create' })}
+          disabled={isViewCreationDisabled}
+          active
+          text={t('table.saveColumnOrder')}
+        />
+      )}
       <StandardTableToolbarButton
         label={t('table.decreaseFont')}
         icon={<ZoomOut className="size-3.5" aria-hidden="true" />}
@@ -2952,7 +2997,7 @@ const StandardTableViewsSubmenu = <T extends object>({
     viewsLoading,
     viewsLoadFailed,
     reloadServerViews,
-    viewBusy,
+    isViewCreationDisabled,
     setModalState,
     setGearOpen,
     importView,
@@ -2985,7 +3030,7 @@ const StandardTableViewsSubmenu = <T extends object>({
         <DropdownMenuSeparator />
         <div className="flex gap-1 p-1">
           <DropdownMenuItem
-            disabled={isServerBacked && (viewsLoading || viewBusy)}
+            disabled={isViewCreationDisabled}
             onSelect={(e) => {
               e.preventDefault();
               setModalState({ kind: 'create' });
