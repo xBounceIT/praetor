@@ -68,7 +68,10 @@ BEGIN
     SELECT qc."id" INTO resolved_candidate_id
     FROM "quote_candidates" qc
     WHERE qc."quote_id" = NEW."quote_id"
-    ORDER BY qc."position", qc."id"
+    ORDER BY
+      CASE qc."state" WHEN 'selected' THEN 0 WHEN 'active' THEN 1 ELSE 2 END,
+      qc."position",
+      qc."id"
     LIMIT 1;
 
     IF resolved_candidate_id IS NULL THEN

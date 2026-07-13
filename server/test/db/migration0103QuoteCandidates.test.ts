@@ -26,11 +26,19 @@ describe('migration 0103 quote candidates', () => {
   });
 
   test('creates and assigns a default candidate for inserts from legacy writers', () => {
+    const quoteItemFunction = migrationSql.slice(
+      migrationSql.indexOf('CREATE FUNCTION "ensure_legacy_quote_item_candidate"()'),
+      migrationSql.indexOf('CREATE TRIGGER "quote_items_legacy_candidate_trigger"'),
+    );
+
     expect(migrationSql).toContain('CREATE FUNCTION "ensure_legacy_quote_item_candidate"()');
     expect(migrationSql).toContain('WHEN (NEW."candidate_id" IS NULL)');
     expect(migrationSql).toContain("'qc_legacy_' || md5");
     expect(migrationSql).toContain('NEW."candidate_id" := resolved_candidate_id');
     expect(migrationSql).toContain('CREATE TRIGGER "quote_items_legacy_candidate_trigger"');
+    expect(quoteItemFunction).toContain(
+      `CASE qc."state" WHEN 'selected' THEN 0 WHEN 'active' THEN 1 ELSE 2 END`,
+    );
   });
 
   test('links offers inserted by legacy writers and selects their candidate', () => {
