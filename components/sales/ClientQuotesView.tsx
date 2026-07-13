@@ -2386,7 +2386,7 @@ const ClientQuoteCandidatesBar: React.FC<{ controller: ClientQuotesController }>
                       <div
                         className={`group -mb-px flex h-10 items-center rounded-t-lg border border-b-0 transition-colors ${
                           isActive
-                            ? 'border-border bg-background shadow-sm'
+                            ? 'border-border border-t-2 border-t-primary bg-background shadow-sm'
                             : 'border-transparent bg-muted/60 hover:bg-muted'
                         }`}
                       >

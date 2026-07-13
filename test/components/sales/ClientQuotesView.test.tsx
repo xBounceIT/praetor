@@ -1488,6 +1488,10 @@ describe('<ClientQuotesView /> line-item delete confirmation', () => {
     expect(screen.getByText('Variante A')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'sales:clientQuotes.candidates.addMenu' }));
     expect(screen.getByText('Variante B')).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /Variante B/ }).parentElement).toHaveClass(
+      'border-t-2',
+      'border-t-primary',
+    );
 
     const renameButtons = screen.getAllByRole('button', {
       name: 'sales:clientQuotes.candidates.rename',
