@@ -2245,25 +2245,37 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                   tx,
                 );
           if (!quote) return { quote: null, items: [], syncAudits: [] };
-          if (typeof expirationDateValue === 'string') {
+          if (
+            paymentTerms !== undefined ||
+            discount !== undefined ||
+            discountType !== undefined ||
+            expirationDate !== undefined ||
+            communicationChannelId !== undefined ||
+            notes !== undefined
+          ) {
             const familyCandidates = await quoteCandidatesRepo.listForQuote(quote.id, tx);
             const primaryCandidate =
               familyCandidates.find((candidate) => candidate.state === 'selected') ??
               familyCandidates.find((candidate) => candidate.state === 'active') ??
               familyCandidates[0];
-            if (primaryCandidate && primaryCandidate.expirationDate !== expirationDateValue) {
+            if (primaryCandidate) {
               const updatedCandidate = await quoteCandidatesRepo.update(
                 quote.id,
                 primaryCandidate.id,
                 {
                   name: primaryCandidate.name,
                   position: primaryCandidate.position,
-                  paymentTerms: primaryCandidate.paymentTerms,
-                  discount: primaryCandidate.discount,
-                  discountType: primaryCandidate.discountType,
-                  expirationDate: expirationDateValue,
-                  communicationChannelId: primaryCandidate.communicationChannelId,
-                  notes: primaryCandidate.notes,
+                  paymentTerms:
+                    (paymentTerms as string | null | undefined) ?? primaryCandidate.paymentTerms,
+                  discount:
+                    (discountValue as number | null | undefined) ?? primaryCandidate.discount,
+                  discountType: discountTypeValue ?? primaryCandidate.discountType,
+                  expirationDate:
+                    (expirationDateValue as string | null | undefined) ??
+                    primaryCandidate.expirationDate,
+                  communicationChannelId:
+                    communicationChannel?.id ?? primaryCandidate.communicationChannelId,
+                  notes: notes === undefined ? primaryCandidate.notes : (notes as string | null),
                 },
                 tx,
               );
@@ -2475,10 +2487,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
       try {
         const result = await withDbTransaction(async (tx) => {
-          const [lockedQuote, lockedCandidate] = await Promise.all([
-            clientQuotesRepo.lockCurrentById(idResult.value, tx),
-            quoteCandidatesRepo.lockById(idResult.value, candidate.id, tx),
-          ]);
+          // Candidate-family saves lock parent first, then candidate rows. Keep the same order here
+          // so a concurrent save/promotion cannot form a parent↔candidate deadlock.
+          const lockedQuote = await clientQuotesRepo.lockCurrentById(idResult.value, tx);
+          const lockedCandidate = await quoteCandidatesRepo.lockById(
+            idResult.value,
+            candidate.id,
+            tx,
+          );
           if (!lockedQuote || !lockedCandidate) throw new Error('Quote candidate disappeared');
           const currentQuote = await clientQuotesRepo.findById(idResult.value, tx);
           if (!currentQuote) throw new Error('Quote candidate disappeared');
