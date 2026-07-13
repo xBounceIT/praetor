@@ -166,7 +166,10 @@ const codeForMessage = (message: string): ClientCreateErrorCode =>
 
 export const validateClientCreateInput = (
   input: Record<string, unknown>,
-  options: { profileOptions?: ClientProfileOptionMaps } = {},
+  options: {
+    profileOptions?: ClientProfileOptionMaps;
+    requireContactNameForTopLevelContactDetails?: boolean;
+  } = {},
 ):
   | { ok: true; value: NormalizedClientCreate }
   | { ok: false; errors: ClientCreateValidationError[] } => {
@@ -293,8 +296,11 @@ export const validateClientCreateInput = (
   const effectiveContactName = contactName ?? primaryContact?.fullName ?? null;
   const effectiveEmail = email.ok ? (email.value ?? primaryContact?.email ?? null) : null;
   const effectivePhone = phone ?? primaryContact?.phone ?? null;
-  const hasPrimaryContactDetails = Boolean(contactRole || effectiveEmail || effectivePhone);
-  if (hasPrimaryContactDetails && !effectiveContactName) {
+  const requiresContactName = Boolean(
+    contactRole ||
+      (options.requireContactNameForTopLevelContactDetails && (effectiveEmail || effectivePhone)),
+  );
+  if (requiresContactName && !effectiveContactName) {
     push({
       field: 'contactName',
       code: 'required',

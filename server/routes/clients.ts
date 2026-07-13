@@ -625,7 +625,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         loadClientProfileOptionMaps(),
       ]);
       const validations = inputs.map((input) =>
-        validateClientCreateInput(input, { profileOptions }),
+        validateClientCreateInput(input, {
+          profileOptions,
+          requireContactNameForTopLevelContactDetails: true,
+        }),
       );
       const errorsByIndex: ClientCreateValidationError[][] = validations.map((validation) =>
         validation.ok ? [] : [...validation.errors],

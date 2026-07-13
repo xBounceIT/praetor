@@ -461,6 +461,37 @@ describe('POST /api/clients', () => {
     expect(createClientMock).toHaveBeenCalledTimes(1);
   });
 
+  test('preserves standalone email and phone without requiring a contact name', async () => {
+    findByFiscalCodeMock.mockResolvedValue(false);
+    findByClientCodeMock.mockResolvedValue(false);
+    createClientMock.mockImplementation(async (entry: Record<string, unknown>) => ({
+      ...SAMPLE_CLIENT,
+      ...entry,
+    }));
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/clients',
+      headers: authHeader(),
+      payload: {
+        ...validBody,
+        email: 'info@example.com',
+        phone: '+39 0200000000',
+      },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(createClientMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        contacts: [],
+        contactName: null,
+        email: 'info@example.com',
+        phone: '+39 0200000000',
+      }),
+      TX_SENTINEL,
+    );
+  });
+
   test('400 whitespace-only name (handler validation)', async () => {
     const res = await testApp.inject({
       method: 'POST',
