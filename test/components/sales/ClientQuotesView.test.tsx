@@ -1430,6 +1430,9 @@ describe('<ClientQuotesView /> line-item delete confirmation', () => {
 
     await user.click(screen.getByRole('button', { name: 'sales:clientQuotes.createNewQuote' }));
     await user.click(screen.getByRole('button', { name: 'sales:clientQuotes.candidates.addMenu' }));
+    await user.click(
+      await screen.findByRole('menuitem', { name: 'sales:clientQuotes.candidates.add' }),
+    );
     await user.dblClick(screen.getByRole('tab', { name: /Variante B/ }));
     const nameInput = screen.getByLabelText('sales:clientQuotes.candidates.name');
     await user.clear(nameInput);
@@ -1437,6 +1440,9 @@ describe('<ClientQuotesView /> line-item delete confirmation', () => {
     await user.keyboard('{Enter}');
     await user.click(screen.getByRole('tab', { name: /Variante A/ }));
     await user.click(screen.getByRole('button', { name: 'sales:clientQuotes.candidates.addMenu' }));
+    await user.click(
+      await screen.findByRole('menuitem', { name: 'sales:clientQuotes.candidates.add' }),
+    );
 
     expect(screen.getByRole('tab', { name: /Variante B/ })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /Variante C/ })).toBeInTheDocument();
@@ -1486,7 +1492,15 @@ describe('<ClientQuotesView /> line-item delete confirmation', () => {
 
     await user.click(screen.getByRole('button', { name: 'sales:clientQuotes.createNewQuote' }));
     expect(screen.getByText('Variante A')).toBeInTheDocument();
+    expect(screen.getByTestId('quote-candidate-tabs-scroll')).toHaveClass(
+      'overflow-x-auto',
+      'overflow-y-hidden',
+    );
     await user.click(screen.getByRole('button', { name: 'sales:clientQuotes.candidates.addMenu' }));
+    expect(
+      await screen.findByRole('menuitem', { name: 'sales:clientQuotes.candidates.duplicate' }),
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole('menuitem', { name: 'sales:clientQuotes.candidates.add' }));
     expect(screen.getByText('Variante B')).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /Variante B/ }).parentElement).toHaveClass(
       'border-t-2',
@@ -1503,6 +1517,13 @@ describe('<ClientQuotesView /> line-item delete confirmation', () => {
     await user.keyboard('{Enter}');
     expect(screen.getByRole('tab', { name: /Premium/ })).toBeInTheDocument();
 
+    await user.click(screen.getByRole('button', { name: 'sales:clientQuotes.candidates.addMenu' }));
+    await user.click(
+      await screen.findByRole('menuitem', { name: 'sales:clientQuotes.candidates.duplicate' }),
+    );
+    expect(screen.getByRole('tab', { name: /Variante B/ })).toBeInTheDocument();
+    expect(screen.getAllByRole('tab')).toHaveLength(3);
+
     fireEvent.contextMenu(screen.getByRole('tab', { name: /Variante A/ }));
     await user.click(
       await screen.findByRole('menuitem', { name: 'sales:clientQuotes.candidates.rename' }),
@@ -1513,10 +1534,12 @@ describe('<ClientQuotesView /> line-item delete confirmation', () => {
     await user.keyboard('{Enter}');
     expect(screen.getByRole('tab', { name: /Standard/ })).toBeInTheDocument();
 
-    const deleteButtons = screen.getAllByRole('button', {
-      name: 'sales:clientQuotes.candidates.delete',
-    });
-    await user.click(deleteButtons.at(-1) as HTMLButtonElement);
+    const premiumTab = screen.getByRole('tab', { name: /Premium/ });
+    await user.click(
+      within(premiumTab.parentElement as HTMLElement).getByRole('button', {
+        name: 'sales:clientQuotes.candidates.delete',
+      }),
+    );
     expect(screen.getByText('sales:clientQuotes.candidates.removeTitle')).toBeInTheDocument();
     fireEvent.click(screen.getByTestId('line-delete-confirm-btn'));
     expect(screen.queryByRole('tab', { name: /Premium/ })).not.toBeInTheDocument();

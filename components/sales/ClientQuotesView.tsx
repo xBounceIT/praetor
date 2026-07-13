@@ -12,6 +12,12 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from '@/components/ui/context-menu';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -2355,7 +2361,10 @@ const ClientQuoteCandidatesBar: React.FC<{ controller: ClientQuotesController }>
 
   return (
     <div className="space-y-1">
-      <div className="overflow-x-auto border-b border-border">
+      <div
+        data-testid="quote-candidate-tabs-scroll"
+        className="overflow-x-auto overflow-y-hidden border-b border-border"
+      >
         <Tabs
           value={activeCandidateId}
           onValueChange={handleSelectCandidate}
@@ -2504,17 +2513,28 @@ const ClientQuoteCandidatesBar: React.FC<{ controller: ClientQuotesController }>
                 );
               })}
             </TabsList>
-            <Button
-              type="button"
-              size="icon-sm"
-              variant="ghost"
-              disabled={!canEditComposition}
-              onClick={() => addCandidate(false)}
-              aria-label={t('sales:clientQuotes.candidates.addMenu')}
-              className="mb-px rounded-t-lg rounded-b-none border border-transparent text-muted-foreground hover:border-border hover:bg-muted hover:text-foreground"
-            >
-              <Plus aria-hidden="true" />
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  type="button"
+                  size="icon-sm"
+                  variant="ghost"
+                  disabled={!canEditComposition}
+                  aria-label={t('sales:clientQuotes.candidates.addMenu')}
+                  className="mb-px rounded-t-lg rounded-b-none border border-transparent text-muted-foreground hover:border-border hover:bg-muted hover:text-foreground"
+                >
+                  <Plus aria-hidden="true" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start">
+                <DropdownMenuItem onSelect={() => addCandidate(false)}>
+                  {t('sales:clientQuotes.candidates.add')}
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => addCandidate(true)}>
+                  {t('sales:clientQuotes.candidates.duplicate')}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </Tabs>
       </div>
