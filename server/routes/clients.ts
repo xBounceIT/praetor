@@ -9,6 +9,13 @@ import * as clientProfileOptionsRepo from '../repositories/clientProfileOptionsR
 import * as clientsRepo from '../repositories/clientsRepo.ts';
 import * as userAssignmentsRepo from '../repositories/userAssignmentsRepo.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
+import {
+  type ClientCreateValidationError,
+  type ClientProfileOptionMaps,
+  createClientWithAssignments,
+  getClientIdentifierCandidates,
+  validateClientCreateInput,
+} from '../services/clientCreation.ts';
 import { logAudit } from '../utils/audit.ts';
 import { assertAuthenticated } from '../utils/auth-assert.ts';
 import { getForeignKeyViolation } from '../utils/db-errors.ts';
@@ -28,6 +35,40 @@ import {
 const PROFILE_OPTION_CATEGORIES = clientProfileOptionsRepo.PROFILE_OPTION_CATEGORIES;
 type ProfileOptionCategory = clientProfileOptionsRepo.ProfileOptionCategory;
 const PROFILE_OPTION_CATEGORY_SET = new Set<string>(PROFILE_OPTION_CATEGORIES);
+const BULK_CLIENT_CREATE_CONCURRENCY = 10;
+
+const mapWithConcurrency = async <T, R>(
+  items: readonly T[],
+  concurrency: number,
+  mapper: (item: T, index: number) => Promise<R>,
+): Promise<R[]> => {
+  const results = new Array<R>(items.length);
+  let nextIndex = 0;
+
+  const runNext = async (): Promise<void> => {
+    const index = nextIndex;
+    nextIndex += 1;
+    if (index >= items.length) return;
+    results[index] = await mapper(items[index], index);
+    return runNext();
+  };
+
+  await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, () => runNext()));
+  return results;
+};
+
+const loadClientProfileOptionMaps = async (): Promise<ClientProfileOptionMaps> => {
+  const maps = {
+    sector: new Map(),
+    numberOfEmployees: new Map(),
+    revenue: new Map(),
+    officeCountRange: new Map(),
+  };
+  for (const option of await clientProfileOptionsRepo.listValues()) {
+    maps[option.category].set(option.value.toLowerCase(), option.value);
+  }
+  return maps;
+};
 
 const PATCH_OPTIONAL_STRING_FIELDS = [
   'phone',
@@ -190,6 +231,93 @@ const clientCreateBodySchema = {
     taxCode: { type: 'string' },
   },
   required: ['name'],
+} as const;
+
+const bulkClientCreateItemSchema = {
+  type: 'object',
+  properties: {
+    clientCode: { type: 'string' },
+    name: { type: 'string' },
+    type: { type: 'string' },
+    fiscalCode: { type: 'string' },
+    contactName: { type: 'string' },
+    contactRole: { type: 'string' },
+    email: { type: 'string' },
+    phone: { type: 'string' },
+    website: { type: 'string' },
+    addressCountry: { type: 'string' },
+    addressState: { type: 'string' },
+    addressCap: { type: 'string' },
+    addressProvince: { type: 'string' },
+    addressCivicNumber: { type: 'string' },
+    addressLine: { type: 'string' },
+    atecoCode: { type: 'string' },
+    sector: { type: 'string' },
+    numberOfEmployees: { type: 'string' },
+    revenue: { type: 'string' },
+    officeCountRange: { type: 'string' },
+    description: { type: 'string' },
+  },
+  required: [],
+  additionalProperties: false,
+} as const;
+
+const bulkClientErrorSchema = {
+  type: 'object',
+  properties: {
+    field: { type: 'string' },
+    code: {
+      type: 'string',
+      enum: ['required', 'invalid', 'too_long', 'duplicate', 'unknown_option', 'creation_failed'],
+    },
+    message: { type: 'string' },
+  },
+  required: ['code', 'message'],
+  additionalProperties: false,
+} as const;
+
+const bulkClientResultSchema = {
+  anyOf: [
+    {
+      type: 'object',
+      properties: {
+        index: { type: 'number' },
+        success: { type: 'boolean', const: true },
+        client: clientSchema,
+      },
+      required: ['index', 'success', 'client'],
+      additionalProperties: false,
+    },
+    {
+      type: 'object',
+      properties: {
+        index: { type: 'number' },
+        success: { type: 'boolean', const: false },
+        errors: { type: 'array', items: bulkClientErrorSchema, minItems: 1 },
+      },
+      required: ['index', 'success', 'errors'],
+      additionalProperties: false,
+    },
+  ],
+} as const;
+
+const bulkClientResponseSchema = {
+  type: 'object',
+  properties: {
+    summary: {
+      type: 'object',
+      properties: {
+        total: { type: 'number' },
+        succeeded: { type: 'number' },
+        failed: { type: 'number' },
+      },
+      required: ['total', 'succeeded', 'failed'],
+      additionalProperties: false,
+    },
+    results: { type: 'array', items: bulkClientResultSchema },
+  },
+  required: ['summary', 'results'],
+  additionalProperties: false,
 } as const;
 
 const clientUpdateBodySchema = {
@@ -401,115 +529,15 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const {
-        name,
-        type,
-        contacts,
-        contactName,
-        clientCode,
-        email,
-        phone,
-        address,
-        addressCountry,
-        addressState,
-        addressCap,
-        addressProvince,
-        addressCivicNumber,
-        addressLine,
-        description,
-        atecoCode,
-        website,
-        sector,
-        numberOfEmployees,
-        revenue,
-        fiscalCode,
-        officeCountRange,
-        vatNumber,
-        taxCode,
-      } = request.body as Record<string, unknown>;
-
-      const nameResult = requireNonEmptyString(name, 'name');
-      if (!nameResult.ok) return badRequest(reply, nameResult.message);
-
-      const contactsResult = parseContacts(contacts);
-      if (!contactsResult.ok) return badRequest(reply, contactsResult.message);
-
-      const clientCodeResult = validateClientIdentifier(clientCode, 'clientCode');
-      if (!clientCodeResult.ok) return badRequest(reply, clientCodeResult.message);
-
-      const fiscalCodeResult = optionalNonEmptyString(fiscalCode, 'fiscalCode');
-      if (!fiscalCodeResult.ok) return badRequest(reply, fiscalCodeResult.message);
-
-      const vatNumberResult = optionalNonEmptyString(vatNumber, 'vatNumber');
-      if (!vatNumberResult.ok) return badRequest(reply, vatNumberResult.message);
-
-      const taxCodeResult = optionalNonEmptyString(taxCode, 'taxCode');
-      if (!taxCodeResult.ok) return badRequest(reply, taxCodeResult.message);
-
-      const resolvedFiscalCode = resolveFiscalCode({
-        vatNumber: vatNumberResult.value,
-        fiscalCode: fiscalCodeResult.value,
-        taxCode: taxCodeResult.value,
+      const profileOptions = await loadClientProfileOptionMaps();
+      const validation = validateClientCreateInput(request.body as Record<string, unknown>, {
+        profileOptions,
       });
-      if (!resolvedFiscalCode) return badRequest(reply, 'Fiscal code is required');
-
-      const addressResult = optionalNonEmptyString(address, 'address');
-      if (!addressResult.ok) return badRequest(reply, addressResult.message);
-      const addressCountryResult = optionalNonEmptyString(addressCountry, 'addressCountry');
-      if (!addressCountryResult.ok) return badRequest(reply, addressCountryResult.message);
-      const addressStateResult = optionalNonEmptyString(addressState, 'addressState');
-      if (!addressStateResult.ok) return badRequest(reply, addressStateResult.message);
-      const addressCapResult = optionalNonEmptyString(addressCap, 'addressCap');
-      if (!addressCapResult.ok) return badRequest(reply, addressCapResult.message);
-      const addressProvinceResult = optionalNonEmptyString(addressProvince, 'addressProvince');
-      if (!addressProvinceResult.ok) return badRequest(reply, addressProvinceResult.message);
-      const addressCivicNumberResult = optionalNonEmptyString(
-        addressCivicNumber,
-        'addressCivicNumber',
-      );
-      if (!addressCivicNumberResult.ok) return badRequest(reply, addressCivicNumberResult.message);
-      const addressLineResult = optionalNonEmptyString(addressLine, 'addressLine');
-      if (!addressLineResult.ok) return badRequest(reply, addressLineResult.message);
-
-      const descriptionResult = optionalNonEmptyString(description, 'description');
-      if (!descriptionResult.ok) return badRequest(reply, descriptionResult.message);
-
-      const atecoCodeResult = optionalNonEmptyString(atecoCode, 'atecoCode');
-      if (!atecoCodeResult.ok) return badRequest(reply, atecoCodeResult.message);
-
-      const websiteResult = optionalNonEmptyString(website, 'website');
-      if (!websiteResult.ok) return badRequest(reply, websiteResult.message);
-
-      const sectorResult = optionalNonEmptyString(sector, 'sector');
-      if (!sectorResult.ok) return badRequest(reply, sectorResult.message);
-
-      const numberOfEmployeesResult = optionalNonEmptyString(
-        numberOfEmployees,
-        'numberOfEmployees',
-      );
-      if (!numberOfEmployeesResult.ok) return badRequest(reply, numberOfEmployeesResult.message);
-
-      const revenueResult = optionalNonEmptyString(revenue, 'revenue');
-      if (!revenueResult.ok) return badRequest(reply, revenueResult.message);
-
-      const officeCountRangeResult = optionalNonEmptyString(officeCountRange, 'officeCountRange');
-      if (!officeCountRangeResult.ok) return badRequest(reply, officeCountRangeResult.message);
-
-      const explicitContactNameResult = optionalNonEmptyString(contactName, 'contactName');
-      if (!explicitContactNameResult.ok)
-        return badRequest(reply, explicitContactNameResult.message);
-
-      const explicitEmailResult = optionalEmail(email, 'email');
-      if (!explicitEmailResult.ok) return badRequest(reply, explicitEmailResult.message);
-
-      const explicitPhoneResult = optionalNonEmptyString(phone, 'phone');
-      if (!explicitPhoneResult.ok) return badRequest(reply, explicitPhoneResult.message);
+      if (!validation.ok) return badRequest(reply, validation.errors[0].message);
 
       const [fiscalCodeConflict, clientCodeConflict] = await Promise.all([
-        clientsRepo.findByFiscalCode(resolvedFiscalCode, null),
-        clientCodeResult.value
-          ? clientsRepo.findByClientCode(clientCodeResult.value, null)
-          : Promise.resolve(false),
+        clientsRepo.findByFiscalCode(validation.value.fiscalCode, null),
+        clientsRepo.findByClientCode(validation.value.clientCode ?? '', null),
       ]);
       if (fiscalCodeConflict) {
         return badRequest(reply, 'Fiscal code already exists');
@@ -518,56 +546,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return badRequest(reply, 'Client ID already exists');
       }
 
-      const id = generatePrefixedId('c');
-      const contactsValue = contactsResult.value;
-      const primaryFromContacts = buildPrimaryFieldsFromContacts(contactsValue);
-
       try {
-        // Atomicity: client insert + auto-assignments must all succeed or all roll back.
-        // Without the transaction, an assignment failure left the client committed but
-        // unassigned (orphan) while the handler still returned 500.
-        const client = await withDbTransaction(async (tx) => {
-          const created = await clientsRepo.create(
-            {
-              id,
-              name: nameResult.value,
-              type: typeof type === 'string' && type ? type : 'company',
-              contacts: contactsValue,
-              contactName: explicitContactNameResult.value ?? primaryFromContacts.contactName,
-              clientCode: clientCodeResult.value,
-              email: explicitEmailResult.value ?? primaryFromContacts.email,
-              phone: explicitPhoneResult.value ?? primaryFromContacts.phone,
-              address: addressResult.value,
-              addressCountry: addressCountryResult.value,
-              addressState: addressStateResult.value,
-              addressCap: addressCapResult.value,
-              addressProvince: addressProvinceResult.value,
-              addressCivicNumber: addressCivicNumberResult.value,
-              addressLine: addressLineResult.value,
-              description: descriptionResult.value,
-              atecoCode: atecoCodeResult.value,
-              website: websiteResult.value,
-              sector: sectorResult.value,
-              numberOfEmployees: numberOfEmployeesResult.value,
-              revenue: revenueResult.value,
-              fiscalCode: resolvedFiscalCode,
-              vatNumber: vatNumberResult.value,
-              taxCode: taxCodeResult.value,
-              officeCountRange: officeCountRangeResult.value,
-            },
-            tx,
-          );
+        const { id, client } = await createClientWithAssignments(
+          validation.value,
+          request.user?.id,
+        );
 
-          if (request.user?.id) {
-            await userAssignmentsRepo.assignClientToUser(request.user.id, id, undefined, tx);
-          }
-          await userAssignmentsRepo.assignClientToTopManagers(id, tx);
-
-          return created;
-        });
-
-        // Audit log is best-effort and intentionally outside the transaction: a logging
-        // failure must not roll back the resource that was successfully created.
         await logAudit({
           request,
           action: 'client.created',
@@ -583,6 +567,185 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         if (handleClientUniqueViolation(err, reply)) return reply;
         throw err;
       }
+    },
+  );
+
+  fastify.post(
+    '/bulk',
+    {
+      bodyLimit: 10 * 1024 * 1024,
+      onRequest: [authenticateToken, requireScopedPermission('crm.clients', 'create')],
+      schema: {
+        tags: ['clients'],
+        summary: 'Create multiple clients with per-row results',
+        body: {
+          type: 'object',
+          properties: {
+            clients: {
+              type: 'array',
+              items: bulkClientCreateItemSchema,
+              minItems: 1,
+              maxItems: 500,
+            },
+          },
+          required: ['clients'],
+          additionalProperties: false,
+        },
+        response: {
+          200: bulkClientResponseSchema,
+          ...standardErrorResponses,
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { clients: inputs } = request.body as { clients: Record<string, unknown>[] };
+      const identifiers = inputs.map(getClientIdentifierCandidates);
+      const clientCodeCounts = new Map<string, number>();
+      const fiscalCodeCounts = new Map<string, number>();
+      for (const identifier of identifiers) {
+        if (identifier.clientCode) {
+          clientCodeCounts.set(
+            identifier.clientCode,
+            (clientCodeCounts.get(identifier.clientCode) ?? 0) + 1,
+          );
+        }
+        if (identifier.fiscalCode) {
+          fiscalCodeCounts.set(
+            identifier.fiscalCode,
+            (fiscalCodeCounts.get(identifier.fiscalCode) ?? 0) + 1,
+          );
+        }
+      }
+
+      const [existingIdentifiers, profileOptions] = await Promise.all([
+        clientsRepo.findExistingIdentifiers(
+          identifiers.flatMap((value) => (value.clientCode ? [value.clientCode] : [])),
+          identifiers.flatMap((value) => (value.fiscalCode ? [value.fiscalCode] : [])),
+        ),
+        loadClientProfileOptionMaps(),
+      ]);
+      const validations = inputs.map((input) =>
+        validateClientCreateInput(input, { profileOptions }),
+      );
+      const errorsByIndex: ClientCreateValidationError[][] = validations.map((validation) =>
+        validation.ok ? [] : [...validation.errors],
+      );
+      const addError = (index: number, error: ClientCreateValidationError) => {
+        if (
+          !errorsByIndex[index].some(
+            (existing) => existing.field === error.field && existing.code === error.code,
+          )
+        ) {
+          errorsByIndex[index].push(error);
+        }
+      };
+
+      identifiers.forEach((identifier, index) => {
+        if (identifier.clientCode && (clientCodeCounts.get(identifier.clientCode) ?? 0) > 1) {
+          addError(index, {
+            field: 'clientCode',
+            code: 'duplicate',
+            message: 'Client ID is duplicated within this batch',
+          });
+        }
+        if (identifier.fiscalCode && (fiscalCodeCounts.get(identifier.fiscalCode) ?? 0) > 1) {
+          addError(index, {
+            field: 'fiscalCode',
+            code: 'duplicate',
+            message: 'Fiscal code is duplicated within this batch',
+          });
+        }
+        if (identifier.clientCode && existingIdentifiers.clientCodes.has(identifier.clientCode)) {
+          addError(index, {
+            field: 'clientCode',
+            code: 'duplicate',
+            message: 'Client ID already exists',
+          });
+        }
+        if (identifier.fiscalCode && existingIdentifiers.fiscalCodes.has(identifier.fiscalCode)) {
+          addError(index, {
+            field: 'fiscalCode',
+            code: 'duplicate',
+            message: 'Fiscal code already exists',
+          });
+        }
+      });
+
+      const results = await mapWithConcurrency(
+        inputs,
+        BULK_CLIENT_CREATE_CONCURRENCY,
+        async (
+          _input,
+          index,
+        ): Promise<
+          | { index: number; success: true; client: clientsRepo.Client }
+          | { index: number; success: false; errors: ClientCreateValidationError[] }
+        > => {
+          const validation = validations[index];
+          if (!validation.ok || errorsByIndex[index].length > 0) {
+            return { index, success: false, errors: errorsByIndex[index] };
+          }
+
+          try {
+            const { id, client } = await createClientWithAssignments(
+              validation.value,
+              request.user?.id,
+            );
+            try {
+              await logAudit({
+                request,
+                action: 'client.created',
+                entityType: 'client',
+                entityId: id,
+                details: {
+                  targetLabel: client.name,
+                  secondaryLabel: client.clientCode ?? undefined,
+                },
+              });
+            } catch (auditError) {
+              request.log.warn({ err: auditError, clientId: id }, 'Failed to audit bulk client');
+            }
+            return { index, success: true, client };
+          } catch (err) {
+            const duplicateKind = clientsRepo.classifyUniqueViolation(err);
+            if (duplicateKind) {
+              return {
+                index,
+                success: false,
+                errors: [
+                  duplicateKind === 'client_code'
+                    ? {
+                        field: 'clientCode',
+                        code: 'duplicate',
+                        message: 'Client ID already exists',
+                      }
+                    : {
+                        field: 'fiscalCode',
+                        code: 'duplicate',
+                        message: 'Fiscal code already exists',
+                      },
+                ],
+              };
+            }
+            request.log.error({ err, index }, 'Failed to create client in bulk operation');
+            return {
+              index,
+              success: false,
+              errors: [{ code: 'creation_failed', message: 'Unable to create client' }],
+            };
+          }
+        },
+      );
+
+      const succeeded = results.filter((result) => result.success).length;
+      return reply.send({
+        summary: {
+          total: results.length,
+          succeeded,
+          failed: results.length - succeeded,
+        },
+        results,
+      });
     },
   );
 

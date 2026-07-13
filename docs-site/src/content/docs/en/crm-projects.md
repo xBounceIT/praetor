@@ -15,6 +15,15 @@ In master-data tables, contact references are available in dedicated columns. Su
 
 Customer and supplier records can contain multiple contacts, each with a required name and optional role, email, and phone. The first contact is the primary contact and supplies the contact-person, email, and phone columns in the directory; when it is removed, the next contact becomes primary. The contact list may also be left empty.
 
+### Creating multiple clients
+
+The arrow beside **Add New Client** opens two actions for users who can create clients:
+
+- **Add Multiple Clients** opens a horizontal table. Enter one client per row, add or remove rows, and submit the batch. Valid rows are created immediately; invalid rows stay in the dialog with errors shown in the relevant cells.
+- **Import CSV** always shows the complete file structure and provides a header-only template. The file must be UTF-8, no larger than 5 MiB or 500 rows, and may use commas or semicolons. Quoted and multiline fields are supported.
+
+The technical CSV headers `clientCode`, `name`, and `fiscalCode` are required and case-sensitive. Optional headers are `type`, `contactName`, `contactRole`, `email`, `phone`, `website`, `addressCountry`, `addressState`, `addressCap`, `addressProvince`, `addressCivicNumber`, `addressLine`, `atecoCode`, `sector`, `numberOfEmployees`, `revenue`, `officeCountRange`, and `description`; they may be omitted or placed in any order. `type` accepts `company` or `individual` and defaults to `company` when blank. The four company-profile fields must match a value configured in the CRM. After a partial import, the summary lists discarded rows; select a corrected file to try again.
+
 Client and supplier quotes require the **Communication Channel** field to record how the quote was communicated or negotiated. The same channel is visible in the quote tables. The options are shared by both quote modules: users with quote-management permissions can use the gear **Manage** button above the field to add, rename, or remove available channels and choose an icon from the provided set. Email, Phone, and WhatsApp are default values with their own icons and cannot be modified or deleted. Custom channels already used by existing quotes cannot be deleted.
 
 ### Protected deletion

@@ -1,13 +1,23 @@
+import { ChevronDown, FileSpreadsheet, Plus, Rows3 } from 'lucide-react';
 import type React from 'react';
 import { useCallback, useEffect, useId, useMemo, useReducer } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
+import { ButtonGroup } from '@/components/ui/button-group';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Field, FieldError, FieldLabel, RequiredMark } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import api from '../../services/api';
 import type {
+  BulkClientCreateInput,
+  BulkClientCreateResponse,
   Client,
   ClientContact,
   ClientProfileOption,
@@ -18,7 +28,6 @@ import { formatInsertDate } from '../../utils/date';
 import { formatNumber } from '../../utils/numbers';
 import { hasScopedActionPermission } from '../../utils/permissions';
 import DeleteConfirmModal from '../shared/DeleteConfirmModal';
-import HeaderAddButton from '../shared/HeaderAddButton';
 import Modal from '../shared/Modal';
 import {
   ModalBody,
@@ -31,10 +40,12 @@ import {
 import SelectControl from '../shared/SelectControl';
 import StandardTable, { type Column } from '../shared/StandardTable';
 import StatusBadge from '../shared/StatusBadge';
+import { ClientBulkCreateDialog, ClientCsvImportDialog } from './ClientBulkCreateDialogs';
 
 export interface ClientsViewProps {
   clients: Client[];
   onAddClient: (clientData: Partial<Client>) => Promise<void>;
+  onAddClientsBulk: (clients: BulkClientCreateInput[]) => Promise<BulkClientCreateResponse>;
   onUpdateClient: (id: string, updates: Partial<Client>) => Promise<void>;
   onDeleteClient: (id: string) => Promise<void>;
   onCreateClientProfileOption: (
@@ -175,6 +186,8 @@ const hydrateContactsForEdit = (
 
 interface ClientsViewState {
   isModalOpen: boolean;
+  isBulkCreateModalOpen: boolean;
+  isCsvImportModalOpen: boolean;
   editingClient: Client | null;
   errors: Record<string, string>;
   formData: Partial<Client>;
@@ -196,6 +209,8 @@ interface ClientsViewState {
 
 const INITIAL_CLIENTS_STATE: ClientsViewState = {
   isModalOpen: false,
+  isBulkCreateModalOpen: false,
+  isCsvImportModalOpen: false,
   editingClient: null,
   errors: {},
   formData: INITIAL_FORM_DATA,
@@ -229,6 +244,8 @@ type ClientsViewAction =
   | { type: 'setProfileOptions'; value: ClientProfileOptionsByCategory }
   | { type: 'setIsLoadingProfileOptions'; value: boolean }
   | { type: 'setIsModalOpen'; value: boolean }
+  | { type: 'setIsBulkCreateModalOpen'; value: boolean }
+  | { type: 'setIsCsvImportModalOpen'; value: boolean }
   | { type: 'setIsManageProfileOptionModalOpen'; value: boolean }
   | { type: 'setEditingProfileOption'; value: ClientProfileOption | null }
   | { type: 'setNewProfileOptionValue'; value: string }
@@ -282,6 +299,10 @@ const clientsViewReducer = (
       return { ...state, isLoadingProfileOptions: action.value };
     case 'setIsModalOpen':
       return { ...state, isModalOpen: action.value };
+    case 'setIsBulkCreateModalOpen':
+      return { ...state, isBulkCreateModalOpen: action.value };
+    case 'setIsCsvImportModalOpen':
+      return { ...state, isCsvImportModalOpen: action.value };
     case 'setIsManageProfileOptionModalOpen':
       return { ...state, isManageProfileOptionModalOpen: action.value };
     case 'setEditingProfileOption':
@@ -374,6 +395,7 @@ const clientsViewReducer = (
 const useClientsController = ({
   clients,
   onAddClient,
+  onAddClientsBulk,
   onUpdateClient,
   onDeleteClient,
   onCreateClientProfileOption,
@@ -391,6 +413,8 @@ const useClientsController = ({
   const [state, dispatch] = useReducer(clientsViewReducer, INITIAL_CLIENTS_STATE);
   const {
     isModalOpen,
+    isBulkCreateModalOpen,
+    isCsvImportModalOpen,
     editingClient,
     errors,
     formData,
@@ -1176,6 +1200,8 @@ const useClientsController = ({
     isDeleteConfirmOpen,
     isLoadingProfileOptions,
     isManageProfileOptionModalOpen,
+    isBulkCreateModalOpen,
+    isCsvImportModalOpen,
     isModalOpen,
     isSavingProfileOption,
     manageCategory,
@@ -1183,6 +1209,7 @@ const useClientsController = ({
     newProfileOptionValue,
     numberOfEmployeesOptions,
     officeCountRangeOptions,
+    onAddClientsBulk,
     openAddModal,
     openEditModal,
     openManageProfileOptions,
@@ -1208,6 +1235,20 @@ const ClientsView: React.FC<ClientsViewProps> = (props) => {
 
 const ClientsLayout: React.FC<{ controller: ClientsController }> = ({ controller }) => (
   <div className="space-y-8">
+    {controller.isBulkCreateModalOpen && (
+      <ClientBulkCreateDialog
+        profileOptions={controller.profileOptions}
+        onCreateBulk={controller.onAddClientsBulk}
+        onClose={() => controller.dispatch({ type: 'setIsBulkCreateModalOpen', value: false })}
+      />
+    )}
+    {controller.isCsvImportModalOpen && (
+      <ClientCsvImportDialog
+        profileOptions={controller.profileOptions}
+        onCreateBulk={controller.onAddClientsBulk}
+        onClose={() => controller.dispatch({ type: 'setIsCsvImportModalOpen', value: false })}
+      />
+    )}
     <ClientProfileOptionsModal controller={controller} />
     <ClientFormModal controller={controller} />
     <ClientDeleteDialog controller={controller} />
@@ -1870,9 +1911,46 @@ const ClientsHeader: React.FC<{ controller: ClientsController }> = ({ controller
         <p className="text-muted-foreground text-sm">{controller.t('crm:clients.subtitle')}</p>
       </div>
       {controller.canCreateClients && (
-        <HeaderAddButton onClick={controller.openAddModal}>
-          {controller.t('crm:clients.addClient')}
-        </HeaderAddButton>
+        <ButtonGroup>
+          <Button
+            type="button"
+            onClick={controller.openAddModal}
+            className="h-auto rounded-lg px-5 py-2.5 has-[>svg]:px-5"
+          >
+            <Plus data-icon="inline-start" />
+            {controller.t('crm:clients.addClient')}
+          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                type="button"
+                size="icon"
+                aria-label={controller.t('crm:clients.bulk.addOptions')}
+                className="h-auto rounded-lg px-3 py-2.5"
+              >
+                <ChevronDown aria-hidden="true" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="min-w-64">
+              <DropdownMenuItem
+                onSelect={() =>
+                  controller.dispatch({ type: 'setIsBulkCreateModalOpen', value: true })
+                }
+              >
+                <Rows3 aria-hidden="true" />
+                {controller.t('crm:clients.bulk.addMultiple')}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onSelect={() =>
+                  controller.dispatch({ type: 'setIsCsvImportModalOpen', value: true })
+                }
+              >
+                <FileSpreadsheet aria-hidden="true" />
+                {controller.t('crm:clients.bulk.importCsv')}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </ButtonGroup>
       )}
     </div>
   </div>

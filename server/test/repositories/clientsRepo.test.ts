@@ -307,9 +307,39 @@ describe('findByClientCode', () => {
     await clientsRepo.findByClientCode('AC-1', 'c-1', testDb);
     const sql = exec.calls[0].sql.toLowerCase();
     expect(sql).toContain('"client_code"');
+    expect(sql).toContain('lower(');
     expect(sql).toMatch(/"id"\s*<>/);
     expect(exec.calls[0].params).toContain('AC-1');
     expect(exec.calls[0].params).toContain('c-1');
+  });
+});
+
+describe('findExistingIdentifiers', () => {
+  test('normalizes inputs and returns case-insensitive identifier sets', async () => {
+    exec.enqueue({
+      rows: [{ client_code: 'CLI-ONE', fiscal_code: 'It001' }],
+    });
+
+    const result = await clientsRepo.findExistingIdentifiers(
+      ['CLI-ONE', 'cli-one'],
+      ['IT001'],
+      testDb,
+    );
+
+    expect(result.clientCodes).toEqual(new Set(['cli-one']));
+    expect(result.fiscalCodes).toEqual(new Set(['it001']));
+    expect(exec.calls[0].sql.toLowerCase()).toContain('lower(client_code)');
+    expect(exec.calls[0].sql.toLowerCase()).toContain('lower(fiscal_code)');
+    expect(exec.calls[0].params).toContainEqual(['cli-one']);
+    expect(exec.calls[0].params).toContainEqual(['it001']);
+  });
+
+  test('does not query when both identifier lists are empty', async () => {
+    expect(await clientsRepo.findExistingIdentifiers([], [], testDb)).toEqual({
+      clientCodes: new Set(),
+      fiscalCodes: new Set(),
+    });
+    expect(exec.calls).toHaveLength(0);
   });
 });
 

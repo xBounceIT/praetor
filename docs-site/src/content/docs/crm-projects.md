@@ -15,6 +15,15 @@ Nelle tabelle anagrafiche, i riferimenti di contatto sono consultabili in colonn
 
 Nelle schede di clienti e fornitori puoi aggiungere più contatti, ciascuno con nome obbligatorio e ruolo, email e telefono facoltativi. Il primo contatto dell'elenco è quello principale e alimenta le colonne referente, email e telefono dell'anagrafica; eliminandolo, il contatto successivo diventa principale. Puoi anche lasciare l'elenco vuoto.
 
+### Creare più clienti
+
+Accanto a **Aggiungi Nuovo Cliente**, la freccia apre due azioni riservate a chi può creare clienti:
+
+- **Aggiungi molteplici Clienti** apre una tabella orizzontale. Inserisci una riga per cliente, aggiungi o elimina righe e salva il lotto. Le righe valide vengono create subito; quelle non valide restano nella finestra con l'errore indicato nella relativa cella.
+- **Importa in CSV** mostra la struttura completa del file e permette di scaricare un modello con le sole intestazioni. Il file deve essere UTF-8, non superare 5 MiB o 500 righe e può usare la virgola o il punto e virgola. Sono supportati campi tra virgolette e su più righe.
+
+Nel CSV le intestazioni tecniche `clientCode`, `name` e `fiscalCode` sono obbligatorie e distinguono maiuscole e minuscole. Le intestazioni facoltative sono `type`, `contactName`, `contactRole`, `email`, `phone`, `website`, `addressCountry`, `addressState`, `addressCap`, `addressProvince`, `addressCivicNumber`, `addressLine`, `atecoCode`, `sector`, `numberOfEmployees`, `revenue`, `officeCountRange` e `description`; possono essere omesse o disposte in qualsiasi ordine. `type` accetta `company` o `individual` e, se vuoto, assume `company`. I quattro campi del profilo azienda devono corrispondere a un valore configurato nel CRM. Dopo un'importazione parziale, il riepilogo elenca le righe scartate: seleziona un file corretto per riprovare.
+
 Nei preventivi clienti e fornitori il campo **Canale di Comunicazione** è obbligatorio e indica il canale usato per comunicare o negoziare il preventivo. Lo stesso canale è visibile nelle tabelle dei preventivi. Le opzioni sono condivise tra i due moduli: chi ha permessi di gestione sui preventivi può usare il pulsante **Gestisci** con icona a ingranaggio sopra il campo per aggiungere, rinominare o rimuovere i canali disponibili e scegliere un’icona dal set proposto. Email, Telefono e WhatsApp sono valori predefiniti riconoscibili dalla propria icona e non possono essere modificati o eliminati. I canali personalizzati già usati da preventivi esistenti non possono essere eliminati.
 
 ### Eliminazione protetta

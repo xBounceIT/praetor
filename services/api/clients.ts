@@ -1,4 +1,6 @@
 import type {
+  BulkClientCreateInput,
+  BulkClientCreateResponse,
   Client,
   ClientProfileOption,
   ClientProfileOptionCategory,
@@ -28,6 +30,17 @@ export const clientsApi = {
       method: 'POST',
       body: JSON.stringify(normalizeClientPayload(clientData)),
     }).then(normalizeClient),
+
+  createBulk: (clients: BulkClientCreateInput[]): Promise<BulkClientCreateResponse> =>
+    fetchApi<BulkClientCreateResponse>('/clients/bulk', {
+      method: 'POST',
+      body: JSON.stringify({ clients }),
+    }).then((response) => ({
+      ...response,
+      results: response.results.map((result) =>
+        result.success ? { ...result, client: normalizeClient(result.client) } : result,
+      ),
+    })),
 
   update: (id: string, updates: Partial<Client>): Promise<Client> =>
     fetchApi<Client>(`/clients/${id}`, {

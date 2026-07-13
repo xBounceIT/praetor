@@ -3092,6 +3092,7 @@ const useAppContentController = () => {
   );
 
   const addClient = clientHandlers.add;
+  const addClientsBulk = clientHandlers.addBulk;
   const handleUpdateClient = clientHandlers.update;
   const handleDeleteClient = clientHandlers.delete;
   const handleCreateClientProfileOption = clientHandlers.createProfileOption;
@@ -3453,6 +3454,7 @@ const useAppContentController = () => {
     handleDeleteProjectTask,
     handleDeleteProjectTaskWithToast,
     addClient,
+    addClientsBulk,
     handleUpdateClient,
     handleDeleteClient,
     handleCreateClientProfileOption,
@@ -3819,6 +3821,7 @@ const CustomerAndCatalogRoutes: React.FC<{
   const {
     activeView,
     addClient,
+    addClientsBulk,
     addProduct,
     addSupplier,
     clients,
@@ -3854,6 +3857,7 @@ const CustomerAndCatalogRoutes: React.FC<{
         <ClientsView
           clients={clients}
           onAddClient={addClient}
+          onAddClientsBulk={addClientsBulk}
           onUpdateClient={handleUpdateClient}
           onDeleteClient={handleDeleteClient}
           onCreateClientProfileOption={handleCreateClientProfileOption}

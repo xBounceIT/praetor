@@ -21,6 +21,8 @@ export type ProfileOption = {
   updatedAt: number | null;
 };
 
+export type ProfileOptionValue = Pick<ProfileOption, 'category' | 'value'>;
+
 // Internal allowlist: maps category to the column on `clients` that stores the option's value.
 // Keeping this private prevents any caller from injecting an arbitrary column name into the
 // cascade UPDATE - only this module touches the SQL.
@@ -76,6 +78,19 @@ export const listByCategory = async (
      ORDER BY o.sort_order ASC, o.value ASC`,
   );
   return rows.map(mapRow);
+};
+
+export const listValues = async (exec: DbExecutor = db): Promise<ProfileOptionValue[]> => {
+  const rows = await executeRows<{ category: string; value: string }>(
+    exec,
+    sql`SELECT category, value
+        FROM client_profile_options
+        ORDER BY category ASC, sort_order ASC, value ASC`,
+  );
+  return rows.map((row) => ({
+    category: row.category as ProfileOptionCategory,
+    value: row.value,
+  }));
 };
 
 export const findByCategoryAndId = async (

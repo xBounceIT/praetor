@@ -6,6 +6,10 @@ const apiMocks = {
   clientsCreate: mock(
     (data: unknown): Promise<unknown> => Promise.resolve({ id: 'c-new', ...(data as object) }),
   ),
+  clientsCreateBulk: mock(
+    (_data: unknown): Promise<unknown> =>
+      Promise.resolve({ summary: { total: 0, succeeded: 0, failed: 0 }, results: [] }),
+  ),
   clientsUpdate: mock(
     (id: string, updates: unknown): Promise<unknown> =>
       Promise.resolve({ id, ...(updates as object) }),
@@ -33,6 +37,7 @@ mock.module('../../services/api', () => ({
   default: {
     clients: {
       create: (data: unknown) => apiMocks.clientsCreate(data),
+      createBulk: (data: unknown) => apiMocks.clientsCreateBulk(data),
       update: (id: string, updates: unknown) => apiMocks.clientsUpdate(id, updates),
       delete: (id: string) => apiMocks.clientsDelete(id),
       list: () => apiMocks.clientsList(),
@@ -68,6 +73,7 @@ const makeStubSetter = <T>(initial: T[]) => {
 describe('makeClientHandlers', () => {
   beforeEach(() => {
     apiMocks.clientsCreate.mockClear();
+    apiMocks.clientsCreateBulk.mockClear();
     apiMocks.clientsUpdate.mockClear();
     apiMocks.clientsDelete.mockClear();
     apiMocks.clientsList.mockClear();
@@ -80,6 +86,7 @@ describe('makeClientHandlers', () => {
   afterEach(() => {
     apiMocks.clientsList.mockReset();
     apiMocks.clientsCreate.mockReset();
+    apiMocks.clientsCreateBulk.mockReset();
     apiMocks.clientsUpdate.mockReset();
     apiMocks.clientsDelete.mockReset();
   });
@@ -111,6 +118,38 @@ describe('makeClientHandlers', () => {
       setProjectTasks: makeStubSetter<TaskLike>([]).setter,
     });
     await expect(handlers.add({ name: 'X' })).rejects.toThrow('boom');
+  });
+
+  test('addBulk appends all successful clients in one state update and preserves result indexes', async () => {
+    apiMocks.clientsCreateBulk.mockResolvedValue({
+      summary: { total: 3, succeeded: 2, failed: 1 },
+      results: [
+        { index: 0, success: true, client: { id: 'c2', name: 'Alpha' } },
+        { index: 1, success: false, errors: [{ code: 'invalid', message: 'Invalid' }] },
+        { index: 2, success: true, client: { id: 'c3', name: 'Gamma' } },
+      ],
+    });
+    const clients = makeStubSetter<ClientLike>([{ id: 'c1', name: 'Existing' }]);
+    const handlers = makeClientHandlers({
+      getProjects: () => [],
+      setClients: clients.setter,
+      setProjects: makeStubSetter<ProjectLike>([]).setter,
+      setProjectTasks: makeStubSetter<TaskLike>([]).setter,
+    });
+
+    const response = await handlers.addBulk([
+      { clientCode: 'CLI-1', name: 'Alpha', fiscalCode: 'IT1' },
+      { clientCode: 'CLI-2', name: 'Beta', fiscalCode: 'IT2' },
+      { clientCode: 'CLI-3', name: 'Gamma', fiscalCode: 'IT3' },
+    ]);
+
+    expect(response.results.map((result) => result.index)).toEqual([0, 1, 2]);
+    expect(clients.setter).toHaveBeenCalledTimes(1);
+    expect(clients.get()).toEqual([
+      { id: 'c1', name: 'Existing' },
+      { id: 'c2', name: 'Alpha' },
+      { id: 'c3', name: 'Gamma' },
+    ]);
   });
 
   test('update replaces matching client', async () => {
