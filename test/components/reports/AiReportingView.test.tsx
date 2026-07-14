@@ -76,8 +76,8 @@ describe('<AiReportingView /> shadcn workspace', () => {
       'pointer-events-auto relative rounded-full',
       'pb-28',
       'min-h-14 items-center',
-      'self-center py-0 pr-1 pl-5',
-      'self-center gap-1 py-0 pr-5 pl-1',
+      'self-center py-0 pr-1 pl-3',
+      'self-center gap-1.5 py-0 pr-5 pl-1',
       'px-2 py-3',
     ]);
     expectSourceOmitsAll(source, [
@@ -87,6 +87,8 @@ describe('<AiReportingView /> shadcn workspace', () => {
       'AiReportingDeleteDialog',
       'self-end',
       'pt-4 pb-2',
+      'pr-1 pl-5',
+      'gap-1 py-0 pr-5',
     ]);
   });
 
