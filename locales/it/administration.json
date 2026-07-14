@@ -133,6 +133,15 @@
         "title": "Coda durevole",
         "description": "Gli eventi più vecchi vengono eliminati al superamento di retention o capacità."
       },
+      "workflow": {
+        "title": "Attivazione",
+        "description": "Completa i passaggi nell'ordine indicato per avviare lo streaming.",
+        "save": "Salva la configurazione",
+        "test": "Verifica il collector",
+        "enable": "Abilita lo streaming",
+        "unsaved": "Salva le modifiche prima di eseguire il test.",
+        "testRequired": "Esegui un test riuscito prima di abilitare il flusso."
+      },
       "fields": {
         "host": "Host",
         "port": "Porta",

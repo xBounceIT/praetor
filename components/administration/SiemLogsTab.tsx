@@ -12,7 +12,7 @@ import {
 import SecretField from '../shared/SecretField';
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
+import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Field, FieldDescription, FieldError, FieldLabel } from '../ui/field';
 import { Input } from '../ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
@@ -272,130 +272,64 @@ const SiemLogsTab: React.FC<Props> = ({ canUpdate }) => {
   const never = t('logs.siem.status.never');
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       {!canUpdate && (
         <div className="rounded-md border border-border bg-muted/50 p-3 text-sm text-muted-foreground">
           {t('logs.siem.viewOnly')}
         </div>
       )}
 
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <CardTitle>{t('logs.siem.status.title')}</CardTitle>
-              <CardDescription>{t('logs.siem.status.description')}</CardDescription>
-            </div>
-            <Badge variant={status?.enabled ? 'default' : 'secondary'}>{statusLabel}</Badge>
-          </div>
-        </CardHeader>
-        <CardContent className="grid gap-4 text-sm sm:grid-cols-2 lg:grid-cols-5">
-          <div>
-            <div className="text-muted-foreground">{t('logs.siem.status.lastTest')}</div>
-            <div className="flex items-center gap-2 font-medium">
-              <span>{formatDate(status?.lastTestAt ?? null, dateFormatter, never)}</span>
-              {typeof status?.lastTestSuccess === 'boolean' && (
-                <Badge variant={status.lastTestSuccess ? 'secondary' : 'destructive'}>
-                  {t(
-                    status.lastTestSuccess
-                      ? 'logs.siem.status.testSucceeded'
-                      : 'logs.siem.status.testFailed',
-                  )}
-                </Badge>
-              )}
-            </div>
-          </div>
-          <div>
-            <div className="text-muted-foreground">{t('logs.siem.status.oldestPending')}</div>
-            <div className="font-medium">
-              {formatDate(status?.oldestPendingAt ?? null, dateFormatter, never)}
-            </div>
-          </div>
-          <div>
-            <div className="text-muted-foreground">{t('logs.siem.status.lastDelivery')}</div>
-            <div className="font-medium">
-              {formatDate(status?.lastDeliveryAt ?? null, dateFormatter, never)}
-            </div>
-          </div>
-          <div>
-            <div className="text-muted-foreground">{t('logs.siem.status.pending')}</div>
-            <div className="font-medium">{status?.pendingCount.toLocaleString(i18n.language)}</div>
-          </div>
-          <div>
-            <div className="text-muted-foreground">{t('logs.siem.status.dropped')}</div>
-            <div className="font-medium">
-              {((status?.droppedCapacity ?? 0) + (status?.droppedRetention ?? 0)).toLocaleString(
-                i18n.language,
-              )}
-            </div>
-          </div>
-          {status?.lastError && (
-            <div className="col-span-full flex gap-2 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-destructive">
-              <AlertTriangle className="mt-0.5 size-4 shrink-0" />
-              <span>{status.lastError}</span>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          void handleSave();
+        }}
+      >
+        <fieldset className="m-0 min-w-0 space-y-8 border-0 p-0">
+          <Card className="gap-0 overflow-hidden rounded-lg border-border bg-background py-0">
+            <CardHeader className="border-b border-border bg-muted/40 px-6 py-4 [.border-b]:pb-4">
+              <CardTitle className="flex items-center gap-3 text-base">
+                <RadioTower aria-hidden="true" className="size-4 text-praetor" />
+                {t('logs.siem.destination.title')}
+              </CardTitle>
+              <CardDescription>{t('logs.siem.destination.description')}</CardDescription>
+              <CardAction>
+                <Badge variant={status?.enabled ? 'default' : 'secondary'}>{statusLabel}</Badge>
+              </CardAction>
+            </CardHeader>
 
-      <div className="grid gap-6 xl:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>{t('logs.siem.destination.title')}</CardTitle>
-            <CardDescription>{t('logs.siem.destination.description')}</CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-4 sm:grid-cols-2">
-            <Field data-invalid={fieldInvalid('host')} className="sm:col-span-2">
-              <FieldLabel htmlFor="siem-host">{t('logs.siem.fields.host')}</FieldLabel>
-              <Input
-                id="siem-host"
-                value={form.host}
-                onChange={(e) => updateField('host', e.target.value)}
-                disabled={!canUpdate}
-                aria-invalid={fieldInvalid('host')}
-              />
-              <FieldError>{errors.host}</FieldError>
-            </Field>
-            <Field data-invalid={fieldInvalid('port')}>
-              <FieldLabel htmlFor="siem-port">{t('logs.siem.fields.port')}</FieldLabel>
-              <Input
-                id="siem-port"
-                type="number"
-                min={1}
-                max={65535}
-                value={form.port}
-                onChange={(e) => updateField('port', Number(e.target.value))}
-                disabled={!canUpdate}
-                aria-invalid={fieldInvalid('port')}
-              />
-              <FieldError>{errors.port}</FieldError>
-            </Field>
-            <Field>
-              <FieldLabel>{t('logs.siem.fields.protocol')}</FieldLabel>
-              <Select
-                value={form.protocol}
-                onValueChange={(value) =>
-                  updateField('protocol', value as SiemConfigUpdate['protocol'])
-                }
-                disabled={!canUpdate}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="udp">UDP</SelectItem>
-                  <SelectItem value="tcp">TCP</SelectItem>
-                  <SelectItem value="tls">TLS</SelectItem>
-                </SelectContent>
-              </Select>
-            </Field>
-            {form.protocol !== 'udp' && (
+            <CardContent className="grid grid-cols-1 gap-6 p-6 md:grid-cols-2">
+              <Field data-invalid={fieldInvalid('host')} className="sm:col-span-2">
+                <FieldLabel htmlFor="siem-host">{t('logs.siem.fields.host')}</FieldLabel>
+                <Input
+                  id="siem-host"
+                  value={form.host}
+                  onChange={(e) => updateField('host', e.target.value)}
+                  disabled={!canUpdate}
+                  aria-invalid={fieldInvalid('host')}
+                />
+                <FieldError>{errors.host}</FieldError>
+              </Field>
+              <Field data-invalid={fieldInvalid('port')}>
+                <FieldLabel htmlFor="siem-port">{t('logs.siem.fields.port')}</FieldLabel>
+                <Input
+                  id="siem-port"
+                  type="number"
+                  min={1}
+                  max={65535}
+                  value={form.port}
+                  onChange={(e) => updateField('port', Number(e.target.value))}
+                  disabled={!canUpdate}
+                  aria-invalid={fieldInvalid('port')}
+                />
+                <FieldError>{errors.port}</FieldError>
+              </Field>
               <Field>
-                <FieldLabel>{t('logs.siem.fields.framing')}</FieldLabel>
+                <FieldLabel>{t('logs.siem.fields.protocol')}</FieldLabel>
                 <Select
-                  value={form.tcpFraming}
+                  value={form.protocol}
                   onValueChange={(value) =>
-                    updateField('tcpFraming', value as SiemConfigUpdate['tcpFraming'])
+                    updateField('protocol', value as SiemConfigUpdate['protocol'])
                   }
                   disabled={!canUpdate}
                 >
@@ -403,221 +337,366 @@ const SiemLogsTab: React.FC<Props> = ({ canUpdate }) => {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="newline">Newline</SelectItem>
-                    <SelectItem value="octet-counting">Octet counting</SelectItem>
+                    <SelectItem value="udp">UDP</SelectItem>
+                    <SelectItem value="tcp">TCP</SelectItem>
+                    <SelectItem value="tls">TLS</SelectItem>
                   </SelectContent>
                 </Select>
               </Field>
+              {form.protocol !== 'udp' && (
+                <Field>
+                  <FieldLabel>{t('logs.siem.fields.framing')}</FieldLabel>
+                  <Select
+                    value={form.tcpFraming}
+                    onValueChange={(value) =>
+                      updateField('tcpFraming', value as SiemConfigUpdate['tcpFraming'])
+                    }
+                    disabled={!canUpdate}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="newline">Newline</SelectItem>
+                      <SelectItem value="octet-counting">Octet counting</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </Field>
+              )}
+              <Field data-invalid={fieldInvalid('sourceIdentifier')}>
+                <FieldLabel htmlFor="siem-source">{t('logs.siem.fields.source')}</FieldLabel>
+                <Input
+                  id="siem-source"
+                  value={form.sourceIdentifier}
+                  onChange={(e) => updateField('sourceIdentifier', e.target.value)}
+                  disabled={!canUpdate}
+                  aria-invalid={fieldInvalid('sourceIdentifier')}
+                />
+                <FieldError>{errors.sourceIdentifier}</FieldError>
+              </Field>
+              <Field data-invalid={fieldInvalid('facility')}>
+                <FieldLabel htmlFor="siem-facility">{t('logs.siem.fields.facility')}</FieldLabel>
+                <Input
+                  id="siem-facility"
+                  type="number"
+                  min={0}
+                  max={23}
+                  value={form.facility}
+                  onChange={(e) => updateField('facility', Number(e.target.value))}
+                  disabled={!canUpdate}
+                  aria-invalid={fieldInvalid('facility')}
+                />
+                <FieldError>{errors.facility}</FieldError>
+              </Field>
+            </CardContent>
+
+            <fieldset className="space-y-4 border-t border-border p-6">
+              <legend className="mb-3 text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                {t('logs.siem.events.title')}
+              </legend>
+              <FieldDescription>{t('logs.siem.events.description')}</FieldDescription>
+              <div className="grid gap-5 md:grid-cols-2">
+                <div className="flex items-start gap-3">
+                  <Switch
+                    id="siem-runtime"
+                    checked={form.includeRuntime}
+                    onCheckedChange={(checked) => updateField('includeRuntime', checked)}
+                    disabled={!canUpdate}
+                  />
+                  <div className="flex flex-1 flex-col gap-1.5">
+                    <FieldLabel htmlFor="siem-runtime" className="cursor-pointer">
+                      {t('logs.siem.fields.runtime')}
+                    </FieldLabel>
+                    <FieldDescription>{t('logs.siem.fields.runtimeHelp')}</FieldDescription>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3">
+                  <Switch
+                    id="siem-audit"
+                    checked={form.includeAudit}
+                    onCheckedChange={(checked) => updateField('includeAudit', checked)}
+                    disabled={!canUpdate}
+                  />
+                  <div className="flex flex-1 flex-col gap-1.5">
+                    <FieldLabel htmlFor="siem-audit" className="cursor-pointer">
+                      {t('logs.siem.fields.audit')}
+                    </FieldLabel>
+                    <FieldDescription>{t('logs.siem.fields.auditHelp')}</FieldDescription>
+                  </div>
+                </div>
+              </div>
+              <Field className="max-w-sm pt-2">
+                <FieldLabel>{t('logs.siem.fields.runtimeLevel')}</FieldLabel>
+                <Select
+                  value={form.runtimeLevel}
+                  onValueChange={(value) =>
+                    updateField('runtimeLevel', value as SiemConfigUpdate['runtimeLevel'])
+                  }
+                  disabled={!canUpdate || !form.includeRuntime}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {['trace', 'debug', 'info', 'warn', 'error', 'fatal'].map((level) => (
+                      <SelectItem key={level} value={level}>
+                        {level.toUpperCase()}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
+            </fieldset>
+
+            {form.protocol === 'tls' && (
+              <fieldset className="space-y-4 border-t border-border p-6">
+                <legend className="mb-3 text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                  {t('logs.siem.tls.title')}
+                </legend>
+                <FieldDescription>{t('logs.siem.tls.description')}</FieldDescription>
+                <div className="grid gap-6 lg:grid-cols-2">
+                  <Field>
+                    <FieldLabel htmlFor="siem-server-name">
+                      {t('logs.siem.fields.serverName')}
+                    </FieldLabel>
+                    <Input
+                      id="siem-server-name"
+                      value={form.serverName}
+                      onChange={(e) => updateField('serverName', e.target.value)}
+                      disabled={!canUpdate}
+                    />
+                  </Field>
+                  <Field>
+                    <FieldLabel htmlFor="siem-ca">{t('logs.siem.fields.ca')}</FieldLabel>
+                    <Textarea
+                      id="siem-ca"
+                      className="font-mono text-xs"
+                      rows={6}
+                      value={form.caPem}
+                      onChange={(e) => updateField('caPem', e.target.value)}
+                      disabled={!canUpdate}
+                    />
+                  </Field>
+                  <Field>
+                    <FieldLabel htmlFor="siem-client-cert">
+                      {t('logs.siem.fields.clientCert')}
+                    </FieldLabel>
+                    <Textarea
+                      id="siem-client-cert"
+                      className="font-mono text-xs"
+                      rows={6}
+                      value={form.clientCertPem}
+                      onChange={(e) => updateField('clientCertPem', e.target.value)}
+                      disabled={!canUpdate}
+                    />
+                  </Field>
+                  <SecretField
+                    label={t('logs.siem.fields.clientKey')}
+                    value={form.clientKey}
+                    onChange={(value) => updateField('clientKey', value)}
+                    isStored={config.clientKey === '********'}
+                    isReplacing={replacingClientKey}
+                    onStartReplace={() => {
+                      setReplacingClientKey(true);
+                      updateField('clientKey', '');
+                    }}
+                    onCancelReplace={() => {
+                      setReplacingClientKey(false);
+                      updateField('clientKey', config.clientKey);
+                    }}
+                    storedLabel={t('logs.siem.tls.keyStored')}
+                    storedHelp={t('logs.siem.tls.keyStoredHelp')}
+                    multiline
+                    monospace
+                    error={errors.clientKey}
+                    disabled={!canUpdate}
+                    testId="siem-client-key"
+                  />
+                </div>
+              </fieldset>
             )}
-            <Field data-invalid={fieldInvalid('sourceIdentifier')}>
-              <FieldLabel htmlFor="siem-source">{t('logs.siem.fields.source')}</FieldLabel>
-              <Input
-                id="siem-source"
-                value={form.sourceIdentifier}
-                onChange={(e) => updateField('sourceIdentifier', e.target.value)}
-                disabled={!canUpdate}
-                aria-invalid={fieldInvalid('sourceIdentifier')}
-              />
-              <FieldError>{errors.sourceIdentifier}</FieldError>
-            </Field>
-            <Field data-invalid={fieldInvalid('facility')}>
-              <FieldLabel htmlFor="siem-facility">{t('logs.siem.fields.facility')}</FieldLabel>
-              <Input
-                id="siem-facility"
-                type="number"
-                min={0}
-                max={23}
-                value={form.facility}
-                onChange={(e) => updateField('facility', Number(e.target.value))}
-                disabled={!canUpdate}
-                aria-invalid={fieldInvalid('facility')}
-              />
-              <FieldError>{errors.facility}</FieldError>
-            </Field>
-          </CardContent>
-        </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>{t('logs.siem.events.title')}</CardTitle>
-            <CardDescription>{t('logs.siem.events.description')}</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-5">
-            <Field className="flex-row items-center justify-between">
-              <div>
-                <FieldLabel htmlFor="siem-runtime">{t('logs.siem.fields.runtime')}</FieldLabel>
-                <FieldDescription>{t('logs.siem.fields.runtimeHelp')}</FieldDescription>
+            <fieldset className="space-y-4 border-t border-border p-6">
+              <legend className="mb-3 text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                {t('logs.siem.queue.title')}
+              </legend>
+              <FieldDescription>{t('logs.siem.queue.description')}</FieldDescription>
+              <div className="grid gap-6 sm:grid-cols-2">
+                <Field data-invalid={fieldInvalid('retentionDays')}>
+                  <FieldLabel htmlFor="siem-retention">
+                    {t('logs.siem.fields.retention')}
+                  </FieldLabel>
+                  <Input
+                    id="siem-retention"
+                    type="number"
+                    min={1}
+                    max={30}
+                    value={form.retentionDays}
+                    onChange={(e) => updateField('retentionDays', Number(e.target.value))}
+                    disabled={!canUpdate}
+                    aria-invalid={fieldInvalid('retentionDays')}
+                  />
+                  <FieldError>{errors.retentionDays}</FieldError>
+                </Field>
+                <Field data-invalid={fieldInvalid('maxEvents')}>
+                  <FieldLabel htmlFor="siem-capacity">{t('logs.siem.fields.capacity')}</FieldLabel>
+                  <Input
+                    id="siem-capacity"
+                    type="number"
+                    min={10000}
+                    max={1000000}
+                    value={form.maxEvents}
+                    onChange={(e) => updateField('maxEvents', Number(e.target.value))}
+                    disabled={!canUpdate}
+                    aria-invalid={fieldInvalid('maxEvents')}
+                  />
+                  <FieldError>{errors.maxEvents}</FieldError>
+                </Field>
               </div>
-              <Switch
-                id="siem-runtime"
-                checked={form.includeRuntime}
-                onCheckedChange={(checked) => updateField('includeRuntime', checked)}
-                disabled={!canUpdate}
-              />
-            </Field>
-            <Field className="flex-row items-center justify-between">
-              <div>
-                <FieldLabel htmlFor="siem-audit">{t('logs.siem.fields.audit')}</FieldLabel>
-                <FieldDescription>{t('logs.siem.fields.auditHelp')}</FieldDescription>
-              </div>
-              <Switch
-                id="siem-audit"
-                checked={form.includeAudit}
-                onCheckedChange={(checked) => updateField('includeAudit', checked)}
-                disabled={!canUpdate}
-              />
-            </Field>
+            </fieldset>
+          </Card>
 
-            <Field>
-              <FieldLabel>{t('logs.siem.fields.runtimeLevel')}</FieldLabel>
-              <Select
-                value={form.runtimeLevel}
-                onValueChange={(value) =>
-                  updateField('runtimeLevel', value as SiemConfigUpdate['runtimeLevel'])
-                }
-                disabled={!canUpdate || !form.includeRuntime}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {['trace', 'debug', 'info', 'warn', 'error', 'fatal'].map((level) => (
-                    <SelectItem key={level} value={level}>
-                      {level.toUpperCase()}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </Field>
-          </CardContent>
-        </Card>
-      </div>
+          <div className="flex justify-end">
+            <Button type="submit" size="lg" disabled={!canUpdate || busy !== null || !isDirty}>
+              {busy === 'save' ? <Loader2 className="animate-spin" /> : <Save />}
+              {t('logs.siem.actions.save')}
+            </Button>
+          </div>
+        </fieldset>
+      </form>
 
-      {form.protocol === 'tls' && (
-        <Card>
-          <CardHeader>
-            <CardTitle>{t('logs.siem.tls.title')}</CardTitle>
-            <CardDescription>{t('logs.siem.tls.description')}</CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-5 lg:grid-cols-2">
-            <Field>
-              <FieldLabel htmlFor="siem-server-name">{t('logs.siem.fields.serverName')}</FieldLabel>
-              <Input
-                id="siem-server-name"
-                value={form.serverName}
-                onChange={(e) => updateField('serverName', e.target.value)}
-                disabled={!canUpdate}
-              />
-            </Field>
-            <Field>
-              <FieldLabel htmlFor="siem-ca">{t('logs.siem.fields.ca')}</FieldLabel>
-              <Textarea
-                id="siem-ca"
-                className="font-mono text-xs"
-                rows={6}
-                value={form.caPem}
-                onChange={(e) => updateField('caPem', e.target.value)}
-                disabled={!canUpdate}
-              />
-            </Field>
-            <Field>
-              <FieldLabel htmlFor="siem-client-cert">{t('logs.siem.fields.clientCert')}</FieldLabel>
-              <Textarea
-                id="siem-client-cert"
-                className="font-mono text-xs"
-                rows={6}
-                value={form.clientCertPem}
-                onChange={(e) => updateField('clientCertPem', e.target.value)}
-                disabled={!canUpdate}
-              />
-            </Field>
-            <SecretField
-              label={t('logs.siem.fields.clientKey')}
-              value={form.clientKey}
-              onChange={(value) => updateField('clientKey', value)}
-              isStored={config.clientKey === '********'}
-              isReplacing={replacingClientKey}
-              onStartReplace={() => {
-                setReplacingClientKey(true);
-                updateField('clientKey', '');
-              }}
-              onCancelReplace={() => {
-                setReplacingClientKey(false);
-                updateField('clientKey', config.clientKey);
-              }}
-              storedLabel={t('logs.siem.tls.keyStored')}
-              storedHelp={t('logs.siem.tls.keyStoredHelp')}
-              multiline
-              monospace
-              error={errors.clientKey}
-              disabled={!canUpdate}
-              testId="siem-client-key"
-            />
-          </CardContent>
-        </Card>
-      )}
-
-      <Card>
-        <CardHeader>
-          <CardTitle>{t('logs.siem.queue.title')}</CardTitle>
-          <CardDescription>{t('logs.siem.queue.description')}</CardDescription>
+      <Card className="gap-0 overflow-hidden rounded-lg border-border bg-background py-0">
+        <CardHeader className="border-b border-border bg-muted/40 px-6 py-4 [.border-b]:pb-4">
+          <CardTitle className="flex items-center gap-3 text-base">
+            <Send aria-hidden="true" className="size-4 text-praetor" />
+            {t('logs.siem.status.title')}
+          </CardTitle>
+          <CardDescription>{t('logs.siem.status.description')}</CardDescription>
         </CardHeader>
-        <CardContent className="grid gap-4 sm:grid-cols-2">
-          <Field data-invalid={fieldInvalid('retentionDays')}>
-            <FieldLabel htmlFor="siem-retention">{t('logs.siem.fields.retention')}</FieldLabel>
-            <Input
-              id="siem-retention"
-              type="number"
-              min={1}
-              max={30}
-              value={form.retentionDays}
-              onChange={(e) => updateField('retentionDays', Number(e.target.value))}
-              disabled={!canUpdate}
-              aria-invalid={fieldInvalid('retentionDays')}
-            />
-            <FieldError>{errors.retentionDays}</FieldError>
-          </Field>
-          <Field data-invalid={fieldInvalid('maxEvents')}>
-            <FieldLabel htmlFor="siem-capacity">{t('logs.siem.fields.capacity')}</FieldLabel>
-            <Input
-              id="siem-capacity"
-              type="number"
-              min={10000}
-              max={1000000}
-              value={form.maxEvents}
-              onChange={(e) => updateField('maxEvents', Number(e.target.value))}
-              disabled={!canUpdate}
-              aria-invalid={fieldInvalid('maxEvents')}
-            />
-            <FieldError>{errors.maxEvents}</FieldError>
-          </Field>
+        <CardContent className="grid grid-cols-1 gap-8 p-6 lg:grid-cols-[minmax(0,320px)_minmax(0,1fr)]">
+          <div className="space-y-4">
+            <div className="rounded-md border border-border bg-muted/30 p-4">
+              <div className="text-sm font-medium text-foreground">
+                {t('logs.siem.workflow.title')}
+              </div>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {t('logs.siem.workflow.description')}
+              </p>
+              <ol className="mt-4 space-y-3 text-sm">
+                {(['save', 'test', 'enable'] as const).map((step, index) => (
+                  <li key={step} className="flex items-center gap-3">
+                    <span className="flex size-6 shrink-0 items-center justify-center rounded-full border border-border bg-background text-xs font-semibold">
+                      {index + 1}
+                    </span>
+                    <span>{t(`logs.siem.workflow.${step}`)}</span>
+                  </li>
+                ))}
+              </ol>
+            </div>
+
+            {isDirty && (
+              <p className="text-xs font-medium text-amber-600 dark:text-amber-400">
+                {t('logs.siem.workflow.unsaved')}
+              </p>
+            )}
+            {!isDirty && !config.enabled && !hasSuccessfulTest && (
+              <p className="text-xs font-medium text-muted-foreground">
+                {t('logs.siem.workflow.testRequired')}
+              </p>
+            )}
+
+            <Button
+              type="button"
+              size="lg"
+              className="w-full"
+              onClick={handleTest}
+              disabled={!canUpdate || busy !== null || isDirty}
+            >
+              {busy === 'test' ? <Loader2 className="animate-spin" /> : <Send />}
+              {t('logs.siem.actions.test')}
+            </Button>
+            <Button
+              type="button"
+              size="lg"
+              variant={config.enabled ? 'outline' : 'default'}
+              className="w-full"
+              onClick={handleToggle}
+              disabled={!canUpdate || busy !== null || activationBlocked}
+            >
+              {busy === 'toggle' ? (
+                <Loader2 className="animate-spin" />
+              ) : config.enabled ? (
+                <RadioTower />
+              ) : (
+                <CheckCircle2 />
+              )}
+              {t(config.enabled ? 'logs.siem.actions.disable' : 'logs.siem.actions.enable')}
+            </Button>
+          </div>
+
+          <div className="min-h-64 rounded-md border border-border bg-muted/40 p-4 text-sm">
+            <div className="mb-5 flex items-center justify-between gap-4 border-b border-border pb-4">
+              <span className="font-medium text-foreground">{t('logs.siem.status.title')}</span>
+              <Badge variant={status?.enabled ? 'default' : 'secondary'}>{statusLabel}</Badge>
+            </div>
+            <div className="grid gap-x-6 gap-y-5 sm:grid-cols-2 xl:grid-cols-3">
+              <div>
+                <div className="text-xs text-muted-foreground">
+                  {t('logs.siem.status.lastTest')}
+                </div>
+                <div className="mt-1 flex flex-wrap items-center gap-2 font-medium">
+                  <span>{formatDate(status?.lastTestAt ?? null, dateFormatter, never)}</span>
+                  {typeof status?.lastTestSuccess === 'boolean' && (
+                    <Badge variant={status.lastTestSuccess ? 'secondary' : 'destructive'}>
+                      {t(
+                        status.lastTestSuccess
+                          ? 'logs.siem.status.testSucceeded'
+                          : 'logs.siem.status.testFailed',
+                      )}
+                    </Badge>
+                  )}
+                </div>
+              </div>
+              <div>
+                <div className="text-xs text-muted-foreground">
+                  {t('logs.siem.status.lastDelivery')}
+                </div>
+                <div className="mt-1 font-medium">
+                  {formatDate(status?.lastDeliveryAt ?? null, dateFormatter, never)}
+                </div>
+              </div>
+              <div>
+                <div className="text-xs text-muted-foreground">{t('logs.siem.status.pending')}</div>
+                <div className="mt-1 font-medium">
+                  {(status?.pendingCount ?? 0).toLocaleString(i18n.language)}
+                </div>
+              </div>
+              <div>
+                <div className="text-xs text-muted-foreground">
+                  {t('logs.siem.status.oldestPending')}
+                </div>
+                <div className="mt-1 font-medium">
+                  {formatDate(status?.oldestPendingAt ?? null, dateFormatter, never)}
+                </div>
+              </div>
+              <div>
+                <div className="text-xs text-muted-foreground">{t('logs.siem.status.dropped')}</div>
+                <div className="mt-1 font-medium">
+                  {(
+                    (status?.droppedCapacity ?? 0) + (status?.droppedRetention ?? 0)
+                  ).toLocaleString(i18n.language)}
+                </div>
+              </div>
+            </div>
+            {status?.lastError && (
+              <div className="mt-5 flex gap-2 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-destructive">
+                <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+                <span>{status.lastError}</span>
+              </div>
+            )}
+          </div>
         </CardContent>
       </Card>
-
-      <div className="flex flex-wrap items-center justify-end gap-3">
-        <Button variant="outline" onClick={handleSave} disabled={!canUpdate || busy !== null}>
-          {busy === 'save' ? <Loader2 className="animate-spin" /> : <Save />}
-          {t('logs.siem.actions.save')}
-        </Button>
-        <Button
-          variant="outline"
-          onClick={handleTest}
-          disabled={!canUpdate || busy !== null || isDirty}
-        >
-          {busy === 'test' ? <Loader2 className="animate-spin" /> : <Send />}
-          {t('logs.siem.actions.test')}
-        </Button>
-        <Button onClick={handleToggle} disabled={!canUpdate || busy !== null || activationBlocked}>
-          {busy === 'toggle' ? (
-            <Loader2 className="animate-spin" />
-          ) : config.enabled ? (
-            <RadioTower />
-          ) : (
-            <CheckCircle2 />
-          )}
-          {t(config.enabled ? 'logs.siem.actions.disable' : 'logs.siem.actions.enable')}
-        </Button>
-      </div>
     </div>
   );
 };

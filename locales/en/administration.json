@@ -133,6 +133,15 @@
         "title": "Durable queue",
         "description": "Oldest events are dropped when retention or capacity is exceeded."
       },
+      "workflow": {
+        "title": "Activation",
+        "description": "Complete these steps in order to start streaming.",
+        "save": "Save the configuration",
+        "test": "Verify the collector",
+        "enable": "Enable streaming",
+        "unsaved": "Save your changes before running the test.",
+        "testRequired": "Run a successful test before enabling the stream."
+      },
       "fields": {
         "host": "Host",
         "port": "Port",

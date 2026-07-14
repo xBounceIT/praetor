@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
-import { act, fireEvent, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ReactNode } from 'react';
 import type { SiemConfig, SiemStatus } from '../../../services/api/logs';
@@ -185,6 +185,26 @@ describe('<LogsView />', () => {
 
     await waitFor(() => expect(logsApiMock.getSiemConfig).toHaveBeenCalledTimes(1));
     expect(await screen.findByDisplayValue('siem.example.test')).toBeInTheDocument();
+  });
+
+  test('groups SIEM settings into an LDAP-style configuration card', async () => {
+    const user = userEvent.setup();
+    const { container } = render(<LogsView canUpdateSiem />);
+
+    await user.click(screen.getByRole('tab', { name: 'logs.tabs.siem' }));
+    await screen.findByDisplayValue('siem.example.test');
+
+    const configurationCard = screen
+      .getByText('logs.siem.destination.title')
+      .closest('[data-slot="card"]');
+    expect(configurationCard).not.toBeNull();
+    expect(
+      within(configurationCard as HTMLElement).getByText('logs.siem.events.title'),
+    ).toBeInTheDocument();
+    expect(
+      within(configurationCard as HTMLElement).getByText('logs.siem.queue.title'),
+    ).toBeInTheDocument();
+    expect(container.querySelectorAll('[data-slot="card"]')).toHaveLength(2);
   });
 
   test('renders SIEM configuration when the initial status request fails', async () => {
