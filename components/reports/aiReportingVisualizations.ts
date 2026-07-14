@@ -285,7 +285,10 @@ export const parseAiReportingVisualizations = (
 };
 
 const escapeMarkdownCell = (value: number | string) =>
-  String(value).replace(/\|/g, '\\|').replace(/\r?\n/g, ' ');
+  String(value)
+    .replace(/\\/g, '\\\\')
+    .replace(/\|/g, '\\|')
+    .replace(/[\r\n]+/g, ' ');
 
 export const aiReportingVisualizationToMarkdown = (visualization: AiReportingVisualization) => {
   const headers = [

@@ -151,4 +151,32 @@ describe('AI Reporting visualization protocol', () => {
     expect(copyText).not.toContain('praetor-visualization');
     expect(copyText).not.toContain('"series"');
   });
+
+  test('escapes backslashes before Markdown table delimiters', () => {
+    const parsed = parseAiReportingVisualizations(
+      fenced(
+        visualization({
+          data: [{ month: String.raw`North\East | West`, current: 1200, previous: 900 }],
+        }),
+      ),
+    );
+
+    expect(getAiReportingAssistantCopyText(parsed)).toContain(
+      String.raw`| North\\East \| West | 1200 | 900 |`,
+    );
+  });
+
+  test('normalizes every Markdown table line break variant', () => {
+    const parsed = parseAiReportingVisualizations(
+      fenced(
+        visualization({
+          data: [{ month: 'North\rSouth\nEast\r\nWest', current: 1200, previous: 900 }],
+        }),
+      ),
+    );
+
+    expect(getAiReportingAssistantCopyText(parsed)).toContain(
+      '| North South East West | 1200 | 900 |',
+    );
+  });
 });
