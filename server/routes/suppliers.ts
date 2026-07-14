@@ -6,7 +6,14 @@ import {
 } from '../middleware/auth.ts';
 import * as suppliersRepo from '../repositories/suppliersRepo.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
+import {
+  createSupplier,
+  getSupplierCodeCandidate,
+  type SupplierCreateValidationError,
+  validateBulkSupplierCreateInput,
+} from '../services/supplierCreation.ts';
 import { logAudit } from '../utils/audit.ts';
+import { mapWithConcurrency } from '../utils/concurrency.ts';
 import { getForeignKeyViolation } from '../utils/db-errors.ts';
 import { generatePrefixedId } from '../utils/order-ids.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
@@ -18,6 +25,8 @@ import {
   parseBooleanField,
   requireNonEmptyString,
 } from '../utils/validation.ts';
+
+const BULK_SUPPLIER_CREATE_CONCURRENCY = 10;
 
 const idParamSchema = {
   type: 'object',
@@ -82,6 +91,83 @@ const supplierCreateBodySchema = {
     notes: { type: 'string' },
   },
   required: ['name', 'vatNumber'],
+} as const;
+
+const bulkSupplierCreateItemSchema = {
+  type: 'object',
+  properties: {
+    supplierCode: { type: 'string' },
+    name: { type: 'string' },
+    contactName: { type: 'string' },
+    contactRole: { type: 'string' },
+    email: { type: 'string' },
+    phone: { type: 'string' },
+    address: { type: 'string' },
+    vatNumber: { type: 'string' },
+    taxCode: { type: 'string' },
+    paymentTerms: { type: 'string' },
+    notes: { type: 'string' },
+  },
+  required: [],
+  additionalProperties: false,
+} as const;
+
+const bulkSupplierErrorSchema = {
+  type: 'object',
+  properties: {
+    field: { type: 'string' },
+    code: {
+      type: 'string',
+      enum: ['required', 'invalid', 'too_long', 'duplicate', 'creation_failed'],
+    },
+    message: { type: 'string' },
+  },
+  required: ['code', 'message'],
+  additionalProperties: false,
+} as const;
+
+const bulkSupplierResultSchema = {
+  anyOf: [
+    {
+      type: 'object',
+      properties: {
+        index: { type: 'integer' },
+        success: { type: 'boolean', enum: [true] },
+        supplier: supplierSchema,
+      },
+      required: ['index', 'success', 'supplier'],
+      additionalProperties: false,
+    },
+    {
+      type: 'object',
+      properties: {
+        index: { type: 'integer' },
+        success: { type: 'boolean', enum: [false] },
+        errors: { type: 'array', items: bulkSupplierErrorSchema, minItems: 1 },
+      },
+      required: ['index', 'success', 'errors'],
+      additionalProperties: false,
+    },
+  ],
+} as const;
+
+const bulkSupplierResponseSchema = {
+  type: 'object',
+  properties: {
+    summary: {
+      type: 'object',
+      properties: {
+        total: { type: 'integer' },
+        succeeded: { type: 'integer' },
+        failed: { type: 'integer' },
+      },
+      required: ['total', 'succeeded', 'failed'],
+      additionalProperties: false,
+    },
+    results: { type: 'array', items: bulkSupplierResultSchema },
+  },
+  required: ['summary', 'results'],
+  additionalProperties: false,
 } as const;
 
 const supplierUpdateBodySchema = {
@@ -298,6 +384,135 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         },
       });
       return reply.code(201).send(created);
+    },
+  );
+
+  fastify.post(
+    '/bulk',
+    {
+      bodyLimit: 10 * 1024 * 1024,
+      onRequest: [requireScopedPermission('crm.suppliers', 'create')],
+      schema: {
+        tags: ['suppliers'],
+        summary: 'Create multiple suppliers with per-row results',
+        body: {
+          type: 'object',
+          properties: {
+            suppliers: {
+              type: 'array',
+              items: bulkSupplierCreateItemSchema,
+              minItems: 1,
+              maxItems: 500,
+            },
+          },
+          required: ['suppliers'],
+          additionalProperties: false,
+        },
+        response: {
+          200: bulkSupplierResponseSchema,
+          ...standardErrorResponses,
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { suppliers: inputs } = request.body as { suppliers: Record<string, unknown>[] };
+      const codeCandidates = inputs.map(getSupplierCodeCandidate);
+      const codeCounts = new Map<string, number>();
+      for (const code of codeCandidates) {
+        if (code) codeCounts.set(code, (codeCounts.get(code) ?? 0) + 1);
+      }
+
+      const existingCodesPromise = suppliersRepo.findExistingCodes(
+        codeCandidates.flatMap((code) => (code ? [code] : [])),
+      );
+      const validations = inputs.map(validateBulkSupplierCreateInput);
+      const existingCodes = await existingCodesPromise;
+      const errorsByIndex: SupplierCreateValidationError[][] = validations.map((validation) =>
+        validation.ok ? [] : [...validation.errors],
+      );
+      const addError = (index: number, error: SupplierCreateValidationError) => {
+        if (
+          !errorsByIndex[index].some(
+            (existing) => existing.field === error.field && existing.code === error.code,
+          )
+        ) {
+          errorsByIndex[index].push(error);
+        }
+      };
+
+      codeCandidates.forEach((code, index) => {
+        if (!code) return;
+        if ((codeCounts.get(code) ?? 0) > 1) {
+          addError(index, {
+            field: 'supplierCode',
+            code: 'duplicate',
+            message: 'Supplier code is duplicated within this batch',
+          });
+        }
+        if (existingCodes.has(code)) {
+          addError(index, {
+            field: 'supplierCode',
+            code: 'duplicate',
+            message: 'Supplier code already exists',
+          });
+        }
+      });
+
+      const results = await mapWithConcurrency(
+        inputs,
+        BULK_SUPPLIER_CREATE_CONCURRENCY,
+        async (
+          _input,
+          index,
+        ): Promise<
+          | { index: number; success: true; supplier: suppliersRepo.Supplier }
+          | { index: number; success: false; errors: SupplierCreateValidationError[] }
+        > => {
+          const validation = validations[index];
+          if (!validation.ok || errorsByIndex[index].length > 0) {
+            return { index, success: false, errors: errorsByIndex[index] };
+          }
+
+          try {
+            const { id, supplier } = await createSupplier(validation.value);
+            try {
+              await logAudit({
+                request,
+                action: 'supplier.created',
+                entityType: 'supplier',
+                entityId: id,
+                details: {
+                  targetLabel: supplier.name,
+                  secondaryLabel: supplier.supplierCode ?? undefined,
+                },
+              });
+            } catch (auditError) {
+              request.log.warn(
+                { err: auditError, supplierId: id },
+                'Failed to audit bulk supplier',
+              );
+            }
+            return { index, success: true, supplier };
+          } catch (err) {
+            request.log.error({ err, index }, 'Failed to create supplier in bulk operation');
+            return {
+              index,
+              success: false,
+              errors: [{ code: 'creation_failed', message: 'Unable to create supplier' }],
+            };
+          }
+        },
+      );
+
+      const succeeded = results.filter((result) => result.success).length;
+      return reply.send({
+        summary: {
+          total: results.length,
+          succeeded,
+          failed: results.length - succeeded,
+        },
+        results,
+      });
     },
   );
 

@@ -1,4 +1,4 @@
-import type { Supplier } from '../../types';
+import type { BulkSupplierCreateInput, BulkSupplierCreateResponse, Supplier } from '../../types';
 import { fetchApi } from './client';
 import { normalizeSupplier } from './normalizers';
 
@@ -11,6 +11,17 @@ export const suppliersApi = {
       method: 'POST',
       body: JSON.stringify(supplierData),
     }).then(normalizeSupplier),
+
+  createBulk: (suppliers: BulkSupplierCreateInput[]): Promise<BulkSupplierCreateResponse> =>
+    fetchApi<BulkSupplierCreateResponse>('/suppliers/bulk', {
+      method: 'POST',
+      body: JSON.stringify({ suppliers }),
+    }).then((response) => ({
+      ...response,
+      results: response.results.map((result) =>
+        result.success ? { ...result, supplier: normalizeSupplier(result.supplier) } : result,
+      ),
+    })),
 
   update: (id: string, updates: Partial<Supplier>): Promise<Supplier> =>
     fetchApi<Supplier>(`/suppliers/${id}`, {

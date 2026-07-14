@@ -18,6 +18,7 @@ import {
 } from '../services/clientCreation.ts';
 import { logAudit } from '../utils/audit.ts';
 import { assertAuthenticated } from '../utils/auth-assert.ts';
+import { mapWithConcurrency } from '../utils/concurrency.ts';
 import { getForeignKeyViolation } from '../utils/db-errors.ts';
 import { generatePrefixedId } from '../utils/order-ids.ts';
 import { requestHasPermission as hasPermission, makeAccessChecker } from '../utils/permissions.ts';
@@ -36,26 +37,6 @@ const PROFILE_OPTION_CATEGORIES = clientProfileOptionsRepo.PROFILE_OPTION_CATEGO
 type ProfileOptionCategory = clientProfileOptionsRepo.ProfileOptionCategory;
 const PROFILE_OPTION_CATEGORY_SET = new Set<string>(PROFILE_OPTION_CATEGORIES);
 const BULK_CLIENT_CREATE_CONCURRENCY = 10;
-
-const mapWithConcurrency = async <T, R>(
-  items: readonly T[],
-  concurrency: number,
-  mapper: (item: T, index: number) => Promise<R>,
-): Promise<R[]> => {
-  const results = new Array<R>(items.length);
-  let nextIndex = 0;
-
-  const runNext = async (): Promise<void> => {
-    const index = nextIndex;
-    nextIndex += 1;
-    if (index >= items.length) return;
-    results[index] = await mapper(items[index], index);
-    return runNext();
-  };
-
-  await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, () => runNext()));
-  return results;
-};
 
 const loadClientProfileOptionMaps = async (): Promise<ClientProfileOptionMaps> => {
   const maps = {

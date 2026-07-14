@@ -24,7 +24,12 @@ import type {
   ClientProfileOptionCategory,
   ClientProfileOptionsByCategory,
 } from '../../types';
+import {
+  buildClientImportDefinition,
+  CLIENT_IMPORT_FILENAME,
+} from '../../utils/clientImportWorkbook';
 import { formatInsertDate } from '../../utils/date';
+import { downloadImportWorkbook } from '../../utils/entityImportWorkbook';
 import { formatNumber } from '../../utils/numbers';
 import { hasScopedActionPermission } from '../../utils/permissions';
 import DeleteConfirmModal from '../shared/DeleteConfirmModal';
@@ -40,7 +45,7 @@ import {
 import SelectControl from '../shared/SelectControl';
 import StandardTable, { type Column } from '../shared/StandardTable';
 import StatusBadge from '../shared/StatusBadge';
-import { ClientBulkCreateDialog, ClientCsvImportDialog } from './ClientBulkCreateDialogs';
+import { ClientBulkCreateDialog, ClientWorkbookImportDialog } from './ClientBulkCreateDialogs';
 
 export interface ClientsViewProps {
   clients: Client[];
@@ -187,7 +192,7 @@ const hydrateContactsForEdit = (
 interface ClientsViewState {
   isModalOpen: boolean;
   isBulkCreateModalOpen: boolean;
-  isCsvImportModalOpen: boolean;
+  isWorkbookImportModalOpen: boolean;
   editingClient: Client | null;
   errors: Record<string, string>;
   formData: Partial<Client>;
@@ -210,7 +215,7 @@ interface ClientsViewState {
 const INITIAL_CLIENTS_STATE: ClientsViewState = {
   isModalOpen: false,
   isBulkCreateModalOpen: false,
-  isCsvImportModalOpen: false,
+  isWorkbookImportModalOpen: false,
   editingClient: null,
   errors: {},
   formData: INITIAL_FORM_DATA,
@@ -245,7 +250,7 @@ type ClientsViewAction =
   | { type: 'setIsLoadingProfileOptions'; value: boolean }
   | { type: 'setIsModalOpen'; value: boolean }
   | { type: 'setIsBulkCreateModalOpen'; value: boolean }
-  | { type: 'setIsCsvImportModalOpen'; value: boolean }
+  | { type: 'setIsWorkbookImportModalOpen'; value: boolean }
   | { type: 'setIsManageProfileOptionModalOpen'; value: boolean }
   | { type: 'setEditingProfileOption'; value: ClientProfileOption | null }
   | { type: 'setNewProfileOptionValue'; value: string }
@@ -301,8 +306,8 @@ const clientsViewReducer = (
       return { ...state, isModalOpen: action.value };
     case 'setIsBulkCreateModalOpen':
       return { ...state, isBulkCreateModalOpen: action.value };
-    case 'setIsCsvImportModalOpen':
-      return { ...state, isCsvImportModalOpen: action.value };
+    case 'setIsWorkbookImportModalOpen':
+      return { ...state, isWorkbookImportModalOpen: action.value };
     case 'setIsManageProfileOptionModalOpen':
       return { ...state, isManageProfileOptionModalOpen: action.value };
     case 'setEditingProfileOption':
@@ -414,7 +419,7 @@ const useClientsController = ({
   const {
     isModalOpen,
     isBulkCreateModalOpen,
-    isCsvImportModalOpen,
+    isWorkbookImportModalOpen,
     editingClient,
     errors,
     formData,
@@ -439,16 +444,26 @@ const useClientsController = ({
     try {
       const optionsByCategory = await api.clients.listAllProfileOptions();
       dispatch({ type: 'setProfileOptions', value: optionsByCategory });
+      return optionsByCategory;
     } catch (err) {
       console.error('Failed to load client profile options:', err);
+      throw err;
     } finally {
       dispatch({ type: 'setIsLoadingProfileOptions', value: false });
     }
   }, []);
 
   useEffect(() => {
-    void loadProfileOptions();
+    void loadProfileOptions().catch(() => undefined);
   }, [loadProfileOptions]);
+
+  const downloadClientImportTemplate = useCallback(async () => {
+    const latestProfileOptions = await loadProfileOptions();
+    await downloadImportWorkbook(
+      buildClientImportDefinition(latestProfileOptions, t),
+      CLIENT_IMPORT_FILENAME,
+    );
+  }, [loadProfileOptions, t]);
 
   const typeOptions = useMemo(
     () => [
@@ -1201,7 +1216,7 @@ const useClientsController = ({
     isLoadingProfileOptions,
     isManageProfileOptionModalOpen,
     isBulkCreateModalOpen,
-    isCsvImportModalOpen,
+    isWorkbookImportModalOpen,
     isModalOpen,
     isSavingProfileOption,
     manageCategory,
@@ -1215,6 +1230,7 @@ const useClientsController = ({
     openManageProfileOptions,
     profileOptionError,
     profileOptions,
+    downloadClientImportTemplate,
     revenueOptions,
     sectorOptions,
     t,
@@ -1242,11 +1258,12 @@ const ClientsLayout: React.FC<{ controller: ClientsController }> = ({ controller
         onClose={() => controller.dispatch({ type: 'setIsBulkCreateModalOpen', value: false })}
       />
     )}
-    {controller.isCsvImportModalOpen && (
-      <ClientCsvImportDialog
+    {controller.isWorkbookImportModalOpen && (
+      <ClientWorkbookImportDialog
         profileOptions={controller.profileOptions}
         onCreateBulk={controller.onAddClientsBulk}
-        onClose={() => controller.dispatch({ type: 'setIsCsvImportModalOpen', value: false })}
+        onDownloadTemplate={controller.downloadClientImportTemplate}
+        onClose={() => controller.dispatch({ type: 'setIsWorkbookImportModalOpen', value: false })}
       />
     )}
     <ClientProfileOptionsModal controller={controller} />
@@ -1942,11 +1959,11 @@ const ClientsHeader: React.FC<{ controller: ClientsController }> = ({ controller
               </DropdownMenuItem>
               <DropdownMenuItem
                 onSelect={() =>
-                  controller.dispatch({ type: 'setIsCsvImportModalOpen', value: true })
+                  controller.dispatch({ type: 'setIsWorkbookImportModalOpen', value: true })
                 }
               >
                 <FileSpreadsheet aria-hidden="true" />
-                {controller.t('crm:clients.bulk.importCsv')}
+                {controller.t('crm:clients.bulk.importExcel')}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>

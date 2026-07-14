@@ -137,6 +137,23 @@ describe('findNameById', () => {
   });
 });
 
+describe('findExistingCodes', () => {
+  test('normalizes requested and returned codes case-insensitively', async () => {
+    exec.enqueue({ rows: [['SUP-ONE'], ['sup-two']] });
+
+    expect(
+      await suppliersRepo.findExistingCodes([' Sup-One ', 'SUP-TWO', 'sup-one'], testDb),
+    ).toEqual(new Set(['sup-one', 'sup-two']));
+    expect(exec.calls[0].sql.toLowerCase()).toContain('lower("suppliers"."supplier_code")');
+    expect(exec.calls[0].params).toEqual(expect.arrayContaining(['sup-one', 'sup-two']));
+  });
+
+  test('does not query when no usable code is provided', async () => {
+    expect(await suppliersRepo.findExistingCodes(['', '   '], testDb)).toEqual(new Set());
+    expect(exec.calls).toHaveLength(0);
+  });
+});
+
 describe('create', () => {
   test('forces is_disabled false and converts createdAt millis to a Date', async () => {
     exec.enqueue({ rows: [makeRow(SUPPLIER_ROW)] });

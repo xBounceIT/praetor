@@ -1199,6 +1199,46 @@ export interface Supplier {
   createdAt?: number;
 }
 
+export interface BulkSupplierCreateInput {
+  supplierCode?: string;
+  name?: string;
+  contactName?: string;
+  contactRole?: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  vatNumber?: string;
+  taxCode?: string;
+  paymentTerms?: string;
+  notes?: string;
+}
+
+export type BulkSupplierErrorCode =
+  | 'required'
+  | 'invalid'
+  | 'too_long'
+  | 'duplicate'
+  | 'creation_failed';
+
+export interface BulkSupplierError {
+  field?: keyof BulkSupplierCreateInput;
+  code: BulkSupplierErrorCode;
+  message: string;
+}
+
+export type BulkSupplierCreateResult =
+  | { index: number; success: true; supplier: Supplier }
+  | { index: number; success: false; errors: BulkSupplierError[] };
+
+export interface BulkSupplierCreateResponse {
+  summary: {
+    total: number;
+    succeeded: number;
+    failed: number;
+  };
+  results: BulkSupplierCreateResult[];
+}
+
 export type SupplierUnitType = 'hours' | 'days' | 'unit';
 
 // Display unit for a line item's duration (issue #757). `durationMonths` stays the canonical

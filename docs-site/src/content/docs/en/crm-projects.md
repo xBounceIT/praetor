@@ -15,14 +15,21 @@ In master-data tables, contact references are available in dedicated columns. Su
 
 Customer and supplier records can contain multiple contacts, each with a required name and optional role, email, and phone. The first contact is the primary contact and supplies the contact-person, email, and phone columns in the directory; when it is removed, the next contact becomes primary. The contact list may also be left empty.
 
-### Creating multiple clients
+### Creating multiple clients and suppliers
 
 The arrow beside **Add New Client** opens two actions for users who can create clients:
 
 - **Add Multiple Clients** opens a horizontal table. Enter one client per row, add or remove rows, and submit the batch. Valid rows are created immediately; invalid rows stay in the dialog with errors shown in the relevant cells.
-- **Import CSV** always shows the complete file structure and provides a header-only template. The file must be UTF-8, no larger than 5 MiB or 500 rows, and may use commas or semicolons. Quoted and multiline fields are supported.
+- **Import from Excel** downloads `praetor-clients-import.xlsx`, where you fill the highlighted cells and import up to 500 clients. The template includes instructions, a non-imported example row, and dropdowns for typed fields. Sector, employee count, revenue, and office-count options are read from the CRM every time you download, so recent changes are included immediately.
 
-The technical CSV headers `clientCode`, `name`, and `fiscalCode` are required and case-sensitive. Optional headers are `type`, `contactName`, `contactRole`, `email`, `phone`, `website`, `addressCountry`, `addressState`, `addressCap`, `addressProvince`, `addressCivicNumber`, `addressLine`, `atecoCode`, `sector`, `numberOfEmployees`, `revenue`, `officeCountRange`, and `description`; they may be omitted or placed in any order. `type` accepts `company` or `individual` and defaults to `company` when blank. The four company-profile fields must match a value configured in the CRM. After a partial import, the summary lists discarded rows; select a corrected file to try again.
+The client template requires `clientCode`, `name`, and `fiscalCode`; it also provides `type`, `contactName`, `contactRole`, `email`, `phone`, `website`, `addressCountry`, `addressState`, `addressCap`, `addressProvince`, `addressCivicNumber`, `addressLine`, `atecoCode`, `sector`, `numberOfEmployees`, `revenue`, `officeCountRange`, and `description`. Do not change column names or order, sheets, or the protected structure. Only Praetor-generated XLSX templates up to 5 MiB are accepted. Valid rows are created even when other rows fail; after a partial result, **Import clients** retries only failed records. A typed value removed from the CRM after the template was downloaded is reported as invalid during import.
+
+The arrow beside **Add New Supplier** offers the same workflows:
+
+- **Add Multiple Suppliers** opens the table for entering and correcting a batch.
+- **Import from Excel** downloads `praetor-suppliers-import.xlsx` and applies the same limits and structural checks as the client template.
+
+Each supplier requires `supplierCode`, `name`, and `vatNumber`. Optional fields are `contactName`, `contactRole`, `email`, `phone`, `address`, `taxCode`, `paymentTerms`, and `notes`. If role, email, or phone is entered, the contact name is also required; the import creates one primary contact per row. Additional contacts can be added later from the supplier record. Supplier codes must be unique case-insensitively.
 
 Client and supplier quotes require the **Communication Channel** field to record how the quote was communicated or negotiated. The same channel is visible in the quote tables. The options are shared by both quote modules: users with quote-management permissions can use the gear **Manage** button above the field to add, rename, or remove available channels and choose an icon from the provided set. Email, Phone, and WhatsApp are default values with their own icons and cannot be modified or deleted. Custom channels already used by existing quotes cannot be deleted.
 

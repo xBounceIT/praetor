@@ -1,8 +1,18 @@
 import { describe, expect, mock, test } from 'bun:test';
-import { screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { Workbook, type Worksheet } from 'exceljs';
 import type { ComponentProps } from 'react';
-import type { Supplier } from '../../../types';
+import type { BulkSupplierCreateInput, Supplier } from '../../../types';
+import {
+  buildImportWorkbook,
+  IMPORT_FIRST_DATA_ROW,
+  IMPORT_WORKSHEET_NAME,
+} from '../../../utils/entityImportWorkbook';
+import {
+  buildSupplierImportDefinition,
+  SUPPLIER_IMPORT_FIELDS,
+} from '../../../utils/supplierImportWorkbook';
 import { installI18nMock } from '../../helpers/i18n';
 import { render } from '../../helpers/render';
 import { expectSourceContainsAll, readComponentSource } from '../modalStylingTestUtils';
@@ -50,6 +60,10 @@ const renderSuppliersView = (overrides: Partial<ComponentProps<typeof SuppliersV
     supplierOrders: [],
     currency: 'EUR',
     onAddSupplier: mock(async () => {}),
+    onAddSuppliersBulk: mock(async (suppliers: BulkSupplierCreateInput[]) => ({
+      summary: { total: suppliers.length, succeeded: suppliers.length, failed: 0 },
+      results: suppliers.map((_, index) => ({ index, success: true as const, supplier })),
+    })),
     onUpdateSupplier: mock(async () => {}),
     onDeleteSupplier: mock(async () => {}),
     permissions: ['crm.suppliers.view'],
@@ -64,6 +78,35 @@ const expectSupplierValueCell = (cell: HTMLElement, value: string) => {
   expect(cell).toHaveTextContent(value);
   const valueElement = within(cell).getByText(value);
   expect(valueElement.className).toContain('text-xs text-zinc-600');
+};
+
+const requireWorksheet = (workbook: Workbook, name: string): Worksheet => {
+  const worksheet = workbook.getWorksheet(name);
+  if (!worksheet) throw new Error(`Missing worksheet ${name}`);
+  return worksheet;
+};
+
+const makeSupplierWorkbookFile = async (
+  rows: Array<Partial<Record<(typeof SUPPLIER_IMPORT_FIELDS)[number], string>>>,
+) => {
+  const workbook = await buildImportWorkbook(
+    new Workbook(),
+    buildSupplierImportDefinition((key) => key),
+  );
+  const worksheet = requireWorksheet(workbook, IMPORT_WORKSHEET_NAME);
+  rows.forEach((row, rowIndex) => {
+    for (const [field, value] of Object.entries(row)) {
+      const column = SUPPLIER_IMPORT_FIELDS.indexOf(
+        field as (typeof SUPPLIER_IMPORT_FIELDS)[number],
+      );
+      if (column >= 0)
+        worksheet.getCell(IMPORT_FIRST_DATA_ROW + rowIndex, column + 1).value = value;
+    }
+  });
+  const buffer = await workbook.xlsx.writeBuffer();
+  return new File([buffer as unknown as BlobPart], 'praetor-suppliers-import.xlsx', {
+    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  });
 };
 
 describe('SuppliersView CRUD failure surfacing', () => {
@@ -85,6 +128,179 @@ describe('SuppliersView CRUD failure surfacing', () => {
       'void onStatusUpdate(row.id,',
       'isDisabled: !row.isDisabled',
     ]);
+  });
+});
+
+describe('<SuppliersView /> bulk creation actions', () => {
+  test('shows the split button with create permission', async () => {
+    const user = userEvent.setup();
+    renderSuppliersView({ permissions: ['crm.suppliers.create'] });
+
+    expect(screen.getByRole('button', { name: 'crm:suppliers.addSupplier' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'crm:suppliers.bulk.addOptions' }));
+    expect(
+      screen.getByRole('menuitem', { name: 'crm:suppliers.bulk.addMultiple' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('menuitem', { name: 'crm:suppliers.bulk.importExcel' }),
+    ).toBeInTheDocument();
+  });
+
+  test('hides the split button without create permission', () => {
+    renderSuppliersView({ permissions: ['crm.suppliers.view'] });
+    expect(
+      screen.queryByRole('button', { name: 'crm:suppliers.bulk.addOptions' }),
+    ).not.toBeInTheDocument();
+  });
+
+  test('keeps only failed supplier rows and retries them', async () => {
+    const createBulk = mock()
+      .mockResolvedValueOnce({
+        summary: { total: 2, succeeded: 1, failed: 1 },
+        results: [
+          { index: 0, success: true, supplier },
+          {
+            index: 1,
+            success: false,
+            errors: [{ field: 'name', code: 'required', message: 'Required' }],
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        summary: { total: 1, succeeded: 1, failed: 0 },
+        results: [{ index: 0, success: true, supplier }],
+      });
+    const user = userEvent.setup();
+    renderSuppliersView({
+      suppliers: [],
+      permissions: ['crm.suppliers.create'],
+      onAddSuppliersBulk: createBulk,
+    });
+    await user.click(screen.getByRole('button', { name: 'crm:suppliers.bulk.addOptions' }));
+    await user.click(screen.getByRole('menuitem', { name: 'crm:suppliers.bulk.addMultiple' }));
+    const dialog = await screen.findByRole('dialog', { name: 'crm:suppliers.bulk.title' });
+    await user.click(within(dialog).getByRole('button', { name: 'crm:suppliers.bulk.addRow' }));
+
+    const codes = within(dialog).getAllByPlaceholderText('crm:suppliers.codePlaceholder');
+    const names = within(dialog).getAllByPlaceholderText('crm:suppliers.namePlaceholder');
+    const vatNumbers = within(dialog).getAllByPlaceholderText('crm:suppliers.vatPlaceholder');
+    fireEvent.change(codes[0], { target: { value: 'SUP-1' } });
+    fireEvent.change(names[0], { target: { value: 'First' } });
+    fireEvent.change(vatNumbers[0], { target: { value: 'IT1' } });
+    fireEvent.change(codes[1], { target: { value: 'SUP-2' } });
+    fireEvent.change(vatNumbers[1], { target: { value: 'IT2' } });
+    await user.click(
+      within(dialog).getByRole('button', { name: 'crm:suppliers.bulk.createSuppliers' }),
+    );
+
+    await waitFor(() => expect(createBulk).toHaveBeenCalledTimes(1));
+    expect(within(dialog).getAllByPlaceholderText('crm:suppliers.codePlaceholder')).toHaveLength(1);
+    expect(within(dialog).getByText('common:validation.required')).toBeInTheDocument();
+    fireEvent.change(within(dialog).getByPlaceholderText('crm:suppliers.namePlaceholder'), {
+      target: { value: 'Second' },
+    });
+    await user.click(
+      within(dialog).getByRole('button', { name: 'crm:suppliers.bulk.createSuppliers' }),
+    );
+
+    await waitFor(() => expect(createBulk).toHaveBeenCalledTimes(2));
+    expect(createBulk.mock.calls[1]?.[0]).toEqual([
+      { supplierCode: 'SUP-2', name: 'Second', vatNumber: 'IT2' },
+    ]);
+    await waitFor(() =>
+      expect(
+        screen.queryByRole('dialog', { name: 'crm:suppliers.bulk.title' }),
+      ).not.toBeInTheDocument(),
+    );
+  });
+
+  test('imports the strict supplier workbook and retries only failed records', async () => {
+    window.ExcelJS = { Workbook };
+    const createBulk = mock()
+      .mockResolvedValueOnce({
+        summary: { total: 2, succeeded: 1, failed: 1 },
+        results: [
+          { index: 0, success: true, supplier },
+          {
+            index: 1,
+            success: false,
+            errors: [{ field: 'vatNumber', code: 'duplicate', message: 'Duplicate' }],
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        summary: { total: 1, succeeded: 1, failed: 0 },
+        results: [{ index: 0, success: true, supplier }],
+      });
+    const user = userEvent.setup();
+    renderSuppliersView({
+      suppliers: [],
+      permissions: ['crm.suppliers.create'],
+      onAddSuppliersBulk: createBulk,
+    });
+    await user.click(screen.getByRole('button', { name: 'crm:suppliers.bulk.addOptions' }));
+    await user.click(screen.getByRole('menuitem', { name: 'crm:suppliers.bulk.importExcel' }));
+    const dialog = await screen.findByRole('dialog', {
+      name: 'crm:suppliers.bulk.excel.title',
+    });
+    const file = await makeSupplierWorkbookFile([
+      {
+        supplierCode: 'SUP-XLSX-1',
+        name: 'Excel Supplier One',
+        vatNumber: 'IT123-1',
+        contactName: 'Jane',
+        contactRole: 'Buyer',
+      },
+      {
+        supplierCode: 'SUP-XLSX-2',
+        name: 'Excel Supplier Two',
+        vatNumber: 'IT123-2',
+      },
+    ]);
+
+    fireEvent.change(within(dialog).getByLabelText('crm:suppliers.bulk.excel.fileLabel'), {
+      target: { files: [file] },
+    });
+    await within(dialog).findByText('crm:suppliers.bulk.excel.readyTitle');
+    await user.click(
+      within(dialog).getByRole('button', { name: 'crm:suppliers.bulk.excel.importButton' }),
+    );
+
+    await waitFor(() => expect(createBulk).toHaveBeenCalledTimes(1));
+    expect(createBulk).toHaveBeenCalledWith([
+      {
+        supplierCode: 'SUP-XLSX-1',
+        name: 'Excel Supplier One',
+        vatNumber: 'IT123-1',
+        contactName: 'Jane',
+        contactRole: 'Buyer',
+      },
+      {
+        supplierCode: 'SUP-XLSX-2',
+        name: 'Excel Supplier Two',
+        vatNumber: 'IT123-2',
+      },
+    ]);
+    expect(within(dialog).getByText('crm:suppliers.bulk.excel.resultTitle')).toBeInTheDocument();
+    const importButton = within(dialog).getByRole('button', {
+      name: 'crm:suppliers.bulk.excel.importButton',
+    });
+    expect(importButton).toBeEnabled();
+
+    await user.click(importButton);
+    await waitFor(() => expect(createBulk).toHaveBeenCalledTimes(2));
+    expect(createBulk.mock.calls[1]?.[0]).toEqual([
+      {
+        supplierCode: 'SUP-XLSX-2',
+        name: 'Excel Supplier Two',
+        vatNumber: 'IT123-2',
+      },
+    ]);
+    await waitFor(() =>
+      expect(
+        screen.queryByRole('dialog', { name: 'crm:suppliers.bulk.excel.title' }),
+      ).not.toBeInTheDocument(),
+    );
   });
 });
 

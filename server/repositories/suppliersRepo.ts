@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { eq, inArray, sql } from 'drizzle-orm';
 import { type DbExecutor, db } from '../db/drizzle.ts';
 import { suppliers } from '../db/schema/suppliers.ts';
 
@@ -98,6 +98,27 @@ export const findNameById = async (id: string, exec: DbExecutor = db): Promise<s
     .from(suppliers)
     .where(eq(suppliers.id, id));
   return rows[0]?.name ?? null;
+};
+
+export const findExistingCodes = async (
+  codes: readonly string[],
+  exec: DbExecutor = db,
+): Promise<Set<string>> => {
+  const normalized = [
+    ...new Set(
+      codes.flatMap((code) => {
+        const normalizedCode = code.trim().toLowerCase();
+        return normalizedCode ? [normalizedCode] : [];
+      }),
+    ),
+  ];
+  if (normalized.length === 0) return new Set();
+
+  const rows = await exec
+    .select({ supplierCode: suppliers.supplierCode })
+    .from(suppliers)
+    .where(inArray(sql<string>`LOWER(${suppliers.supplierCode})`, normalized));
+  return new Set(rows.flatMap((row) => (row.supplierCode ? [row.supplierCode.toLowerCase()] : [])));
 };
 
 export type NewSupplier = {

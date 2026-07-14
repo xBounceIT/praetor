@@ -19,16 +19,18 @@ import type {
   ClientProfileOptionsByCategory,
 } from '../../types';
 import {
-  CLIENT_CSV_HEADERS,
-  type ClientCsvParseIssue,
-  type ClientCsvParseResult,
-  MAX_CLIENT_CSV_FILE_BYTES,
-  MAX_CLIENT_IMPORT_ROWS,
-  parseClientCsv,
-  REQUIRED_CLIENT_CSV_HEADERS,
-} from '../../utils/clientCsvImport';
-import { downloadCsv } from '../../utils/csv';
-import { toastSuccess } from '../../utils/toast';
+  buildClientImportDefinition,
+  parseClientImportWorkbook,
+  REQUIRED_CLIENT_IMPORT_FIELDS,
+} from '../../utils/clientImportWorkbook';
+import {
+  type ImportWorkbookIssue,
+  type ImportWorkbookParseResult,
+  loadImportWorkbook,
+  MAX_ENTITY_IMPORT_FILE_BYTES,
+  MAX_ENTITY_IMPORT_ROWS,
+} from '../../utils/entityImportWorkbook';
+import { toastError, toastSuccess } from '../../utils/toast';
 import Modal from '../shared/Modal';
 import {
   ModalBody,
@@ -149,7 +151,7 @@ const BulkClientDraftTable = ({
           type="button"
           size="sm"
           onClick={onAddRow}
-          disabled={rows.length >= MAX_CLIENT_IMPORT_ROWS || isSubmitting}
+          disabled={rows.length >= MAX_ENTITY_IMPORT_ROWS || isSubmitting}
         >
           <Plus className="size-4" />
           {t('crm:clients.bulk.addRow')}
@@ -359,7 +361,7 @@ export function ClientBulkCreateDialog({
   );
 
   const addRow = () => {
-    if (rows.length >= MAX_CLIENT_IMPORT_ROWS) return;
+    if (rows.length >= MAX_ENTITY_IMPORT_ROWS) return;
     const nextSequence = rowSequence.current;
     rowSequence.current += 1;
     setRows((current) => [...current, createDraftRow(nextSequence)]);
@@ -451,42 +453,45 @@ export function ClientBulkCreateDialog({
   );
 }
 
-type CsvReportIssue = { line?: number; messages: string[] };
+type WorkbookReportIssue = { line?: number; messages: string[] };
 
-type CsvImportReport = {
+type WorkbookImportReport = {
   succeeded: number;
   failed: number;
-  issues: CsvReportIssue[];
+  issues: WorkbookReportIssue[];
 };
 
-const CSV_ISSUE_TRANSLATION_KEYS: Record<ClientCsvParseIssue['code'], string> = {
-  empty_file: 'crm:clients.bulk.csv.errors.emptyFile',
-  missing_header: 'crm:clients.bulk.csv.errors.missingHeader',
-  unknown_header: 'crm:clients.bulk.csv.errors.unknownHeader',
-  duplicate_header: 'crm:clients.bulk.csv.errors.duplicateHeader',
-  invalid_csv: 'crm:clients.bulk.csv.errors.invalidCsv',
-  field_mismatch: 'crm:clients.bulk.csv.errors.fieldMismatch',
-  too_many_rows: 'crm:clients.bulk.csv.errors.tooManyRows',
+const WORKBOOK_ISSUE_TRANSLATION_KEYS: Record<ImportWorkbookIssue['code'], string> = {
+  invalid_workbook: 'crm:clients.bulk.excel.errors.invalidWorkbook',
+  wrong_template: 'crm:clients.bulk.excel.errors.wrongTemplate',
+  unsupported_version: 'crm:clients.bulk.excel.errors.unsupportedVersion',
+  wrong_entity: 'crm:clients.bulk.excel.errors.wrongEntity',
+  modified_structure: 'crm:clients.bulk.excel.errors.modifiedStructure',
+  too_many_rows: 'crm:clients.bulk.excel.errors.tooManyRows',
+  invalid_cell: 'crm:clients.bulk.excel.errors.invalidCell',
 };
 
-const csvIssueMessage = (issue: ClientCsvParseIssue, t: Translate) =>
-  t(CSV_ISSUE_TRANSLATION_KEYS[issue.code], issue.details);
+const workbookIssueMessage = (issue: ImportWorkbookIssue, t: Translate) =>
+  t(WORKBOOK_ISSUE_TRANSLATION_KEYS[issue.code], { field: issue.field });
 
-const groupCsvIssues = (issues: ClientCsvParseIssue[], t: Translate): CsvReportIssue[] => {
+const groupWorkbookIssues = (
+  issues: ImportWorkbookIssue[],
+  t: Translate,
+): WorkbookReportIssue[] => {
   const grouped = new Map<number | undefined, string[]>();
   for (const issue of issues) {
-    grouped.set(issue.line, [...(grouped.get(issue.line) ?? []), csvIssueMessage(issue, t)]);
+    grouped.set(issue.line, [...(grouped.get(issue.line) ?? []), workbookIssueMessage(issue, t)]);
   }
   return [...grouped].map(([line, messages]) => ({ line, messages }));
 };
 
-const CsvIssueList = ({ issues, t }: { issues: CsvReportIssue[]; t: Translate }) => {
+const WorkbookIssueList = ({ issues, t }: { issues: WorkbookReportIssue[]; t: Translate }) => {
   if (issues.length === 0) return null;
   return (
     <ul className="mt-2 list-disc space-y-1 pl-5">
       {issues.map((issue) => (
         <li key={`${issue.line ?? 'file'}-${issue.messages.join('|')}`}>
-          {issue.line ? `${t('crm:clients.bulk.csv.rowLabel', { row: issue.line })}: ` : ''}
+          {issue.line ? `${t('crm:clients.bulk.excel.rowLabel', { row: issue.line })}: ` : ''}
           {issue.messages.join('; ')}
         </li>
       ))}
@@ -494,16 +499,16 @@ const CsvIssueList = ({ issues, t }: { issues: CsvReportIssue[]; t: Translate })
   );
 };
 
-type CsvImportState = {
+type WorkbookImportState = {
   fileName: string | null;
-  parsed: ClientCsvParseResult | null;
+  parsed: ImportWorkbookParseResult<BulkClientCreateInput> | null;
   fileError: string | null;
   isSubmitting: boolean;
   processed: boolean;
-  report: CsvImportReport | null;
+  report: WorkbookImportReport | null;
 };
 
-const INITIAL_CSV_IMPORT_STATE: CsvImportState = {
+const INITIAL_WORKBOOK_IMPORT_STATE: WorkbookImportState = {
   fileName: null,
   parsed: null,
   fileError: null,
@@ -512,15 +517,22 @@ const INITIAL_CSV_IMPORT_STATE: CsvImportState = {
   report: null,
 };
 
-type CsvImportAction =
+type WorkbookImportAction =
   | { type: 'selectFile'; fileName: string | null }
-  | { type: 'fileParsed'; parsed: ClientCsvParseResult }
+  | { type: 'fileParsed'; parsed: ImportWorkbookParseResult<BulkClientCreateInput> }
   | { type: 'fileError'; message: string }
   | { type: 'submitStarted' }
-  | { type: 'submitCompleted'; report: CsvImportReport }
+  | {
+      type: 'submitCompleted';
+      report: WorkbookImportReport;
+      retryRows: ImportWorkbookParseResult<BulkClientCreateInput>['rows'];
+    }
   | { type: 'submitFinished' };
 
-const csvImportReducer = (state: CsvImportState, action: CsvImportAction): CsvImportState => {
+const workbookImportReducer = (
+  state: WorkbookImportState,
+  action: WorkbookImportAction,
+): WorkbookImportState => {
   switch (action.type) {
     case 'selectFile':
       return {
@@ -538,7 +550,12 @@ const csvImportReducer = (state: CsvImportState, action: CsvImportAction): CsvIm
     case 'submitStarted':
       return { ...state, isSubmitting: true, fileError: null };
     case 'submitCompleted':
-      return { ...state, processed: true, report: action.report };
+      return {
+        ...state,
+        parsed: state.parsed ? { ...state.parsed, rows: action.retryRows } : null,
+        processed: action.retryRows.length === 0,
+        report: action.report,
+      };
     case 'submitFinished':
       return { ...state, isSubmitting: false };
     default:
@@ -546,174 +563,119 @@ const csvImportReducer = (state: CsvImportState, action: CsvImportAction): CsvIm
   }
 };
 
-type CsvFieldDocumentation = readonly [
-  header: (typeof CLIENT_CSV_HEADERS)[number],
-  label: string,
-  accepted: string,
-  example: string,
-];
-
-const buildCsvFieldDocumentation = (
-  profileOptions: ClientProfileOptionsByCategory,
-  t: Translate,
-): CsvFieldDocumentation[] => {
-  const profileValues = (field: keyof ClientProfileOptionsByCategory) =>
-    profileOptions[field].map((option) => option.value).join(' | ') || '—';
-
-  return [
-    ['clientCode', t('crm:clients.clientCode'), t('crm:clients.bulk.csv.alphaNumeric'), 'CLI-001'],
-    ['name', t('crm:clients.name'), t('crm:clients.bulk.csv.freeText'), 'Acme S.p.A.'],
-    ['type', t('crm:clients.clientType'), 'company | individual', 'company'],
-    [
-      'fiscalCode',
-      t('crm:clients.fiscalCode'),
-      t('crm:clients.bulk.csv.freeText'),
-      'IT12345678901',
-    ],
-    ['contactName', t('crm:clients.fullName'), t('crm:clients.bulk.csv.freeText'), 'Mario Rossi'],
-    ['contactRole', t('crm:clients.role'), t('crm:clients.bulk.csv.freeText'), 'Acquisti'],
-    ['email', t('crm:clients.email'), t('crm:clients.bulk.csv.validEmail'), 'mario@example.com'],
-    ['phone', t('crm:clients.phone'), t('crm:clients.bulk.csv.freeText'), '+39 000 0000000'],
-    [
-      'website',
-      t('crm:clients.website'),
-      t('crm:clients.bulk.csv.freeText'),
-      'https://example.com',
-    ],
-    ['addressCountry', t('crm:clients.country'), t('crm:clients.bulk.csv.freeText'), 'Italia'],
-    ['addressState', t('crm:clients.state'), t('crm:clients.bulk.csv.freeText'), 'Roma'],
-    ['addressCap', t('crm:clients.cap'), t('crm:clients.bulk.csv.freeText'), '00100'],
-    ['addressProvince', t('crm:clients.province'), t('crm:clients.bulk.csv.freeText'), 'RM'],
-    ['addressCivicNumber', t('crm:clients.civicNumber'), t('crm:clients.bulk.csv.freeText'), '15A'],
-    ['addressLine', t('crm:clients.address'), t('crm:clients.bulk.csv.freeText'), 'Via Esempio'],
-    ['atecoCode', t('crm:clients.atecoCode'), t('crm:clients.bulk.csv.freeText'), '62.01'],
-    [
-      'sector',
-      t('crm:clients.sector'),
-      profileValues('sector'),
-      profileOptions.sector[0]?.value ?? '—',
-    ],
-    [
-      'numberOfEmployees',
-      t('crm:clients.numberOfEmployees'),
-      profileValues('numberOfEmployees'),
-      profileOptions.numberOfEmployees[0]?.value ?? '—',
-    ],
-    [
-      'revenue',
-      t('crm:clients.revenue'),
-      profileValues('revenue'),
-      profileOptions.revenue[0]?.value ?? '—',
-    ],
-    [
-      'officeCountRange',
-      t('crm:clients.officeCountRange'),
-      profileValues('officeCountRange'),
-      profileOptions.officeCountRange[0]?.value ?? '—',
-    ],
-    [
-      'description',
-      t('crm:clients.description'),
-      t('crm:clients.bulk.csv.freeText'),
-      'Cliente strategico',
-    ],
-  ];
+const WorkbookStructureTable = ({
+  profileOptions,
+  t,
+}: {
+  profileOptions: ClientProfileOptionsByCategory;
+  t: Translate;
+}) => {
+  const fields = buildClientImportDefinition(profileOptions, t).fields;
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between gap-3">
+        <h3 className="text-sm font-semibold">{t('crm:clients.bulk.excel.structureTitle')}</h3>
+        <span className="text-xs text-muted-foreground">
+          {t('crm:clients.bulk.excel.requiredFields', {
+            fields: REQUIRED_CLIENT_IMPORT_FIELDS.join(', '),
+          })}
+        </span>
+      </div>
+      <div className="max-h-[42vh] overflow-auto rounded-lg border border-border">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>{t('crm:clients.bulk.excel.keyColumn')}</TableHead>
+              <TableHead>{t('crm:clients.bulk.excel.fieldColumn')}</TableHead>
+              <TableHead>{t('crm:clients.bulk.excel.requiredColumn')}</TableHead>
+              <TableHead>{t('crm:clients.bulk.excel.acceptedColumn')}</TableHead>
+              <TableHead>{t('crm:clients.bulk.excel.exampleColumn')}</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {fields.map((field) => (
+              <TableRow key={field.key}>
+                <TableCell className="font-mono text-xs">{field.key}</TableCell>
+                <TableCell>{field.label}</TableCell>
+                <TableCell>
+                  {field.required ? t('common:boolean.yes') : t('common:boolean.no')}
+                </TableCell>
+                <TableCell className="max-w-80 whitespace-normal text-xs text-muted-foreground">
+                  {field.accepted}
+                </TableCell>
+                <TableCell className="whitespace-nowrap text-xs">{field.example || '—'}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+    </div>
+  );
 };
 
-const CsvStructureTable = ({ fields, t }: { fields: CsvFieldDocumentation[]; t: Translate }) => (
-  <div className="space-y-2">
-    <div className="flex items-center justify-between gap-3">
-      <h3 className="text-sm font-semibold">{t('crm:clients.bulk.csv.structureTitle')}</h3>
-      <span className="text-xs text-muted-foreground">
-        {t('crm:clients.bulk.csv.requiredHeaders', {
-          headers: REQUIRED_CLIENT_CSV_HEADERS.join(', '),
-        })}
-      </span>
-    </div>
-    <div className="max-h-[42vh] overflow-auto rounded-lg border border-border">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>{t('crm:clients.bulk.csv.headerColumn')}</TableHead>
-            <TableHead>{t('crm:clients.bulk.csv.fieldColumn')}</TableHead>
-            <TableHead>{t('crm:clients.bulk.csv.requiredColumn')}</TableHead>
-            <TableHead>{t('crm:clients.bulk.csv.acceptedColumn')}</TableHead>
-            <TableHead>{t('crm:clients.bulk.csv.exampleColumn')}</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {fields.map(([header, label, accepted, example]) => (
-            <TableRow key={header}>
-              <TableCell className="font-mono text-xs">{header}</TableCell>
-              <TableCell>{label}</TableCell>
-              <TableCell>
-                {REQUIRED_CLIENT_CSV_HEADERS.includes(
-                  header as (typeof REQUIRED_CLIENT_CSV_HEADERS)[number],
-                )
-                  ? t('common:boolean.yes')
-                  : t('common:boolean.no')}
-              </TableCell>
-              <TableCell className="max-w-80 whitespace-normal text-xs text-muted-foreground">
-                {accepted}
-              </TableCell>
-              <TableCell className="whitespace-nowrap text-xs">{example}</TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </div>
-  </div>
-);
-
-export function ClientCsvImportDialog({
+export function ClientWorkbookImportDialog({
   profileOptions,
   onClose,
   onCreateBulk,
+  onDownloadTemplate,
 }: {
   profileOptions: ClientProfileOptionsByCategory;
   onClose: () => void;
   onCreateBulk: CreateBulkClients;
+  onDownloadTemplate: () => Promise<void>;
 }) {
   const { t } = useTranslation(['crm', 'common']);
-  const [state, dispatch] = useReducer(csvImportReducer, INITIAL_CSV_IMPORT_STATE);
+  const [state, dispatch] = useReducer(workbookImportReducer, INITIAL_WORKBOOK_IMPORT_STATE);
+  const [isDownloading, setIsDownloading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const fileReadSequence = useRef(0);
   const { fileName, parsed, fileError, isSubmitting, processed, report } = state;
-  const csvFields = useMemo(
-    () => buildCsvFieldDocumentation(profileOptions, t),
-    [profileOptions, t],
+  const structuralIssues = useMemo(
+    () => groupWorkbookIssues(parsed?.rowIssues ?? [], t),
+    [parsed, t],
   );
-  const structuralIssues = useMemo(() => groupCsvIssues(parsed?.rowIssues ?? [], t), [parsed, t]);
 
   const chooseFile = async (file: File | undefined) => {
     const readSequence = fileReadSequence.current + 1;
     fileReadSequence.current = readSequence;
     dispatch({ type: 'selectFile', fileName: file?.name ?? null });
     if (!file) return;
-    if (!file.name.toLowerCase().endsWith('.csv')) {
-      dispatch({ type: 'fileError', message: t('crm:clients.bulk.csv.invalidExtension') });
+    if (!file.name.toLowerCase().endsWith('.xlsx')) {
+      dispatch({ type: 'fileError', message: t('crm:clients.bulk.excel.invalidExtension') });
       return;
     }
-    if (file.size > MAX_CLIENT_CSV_FILE_BYTES) {
-      dispatch({ type: 'fileError', message: t('crm:clients.bulk.csv.fileTooLarge') });
+    if (file.size > MAX_ENTITY_IMPORT_FILE_BYTES) {
+      dispatch({ type: 'fileError', message: t('crm:clients.bulk.excel.fileTooLarge') });
       return;
     }
     try {
-      const source = await file.text();
+      const workbook = await loadImportWorkbook(await file.arrayBuffer());
       if (readSequence !== fileReadSequence.current) return;
-      dispatch({ type: 'fileParsed', parsed: parseClientCsv(source) });
+      dispatch({ type: 'fileParsed', parsed: parseClientImportWorkbook(workbook) });
     } catch {
       if (readSequence !== fileReadSequence.current) return;
-      dispatch({ type: 'fileError', message: t('crm:clients.bulk.csv.readFailed') });
+      dispatch({ type: 'fileError', message: t('crm:clients.bulk.excel.readFailed') });
     }
   };
 
-  const importCsv = async () => {
+  const downloadTemplate = async () => {
+    if (isDownloading) return;
+    setIsDownloading(true);
+    try {
+      await onDownloadTemplate();
+    } catch {
+      toastError(t('crm:clients.bulk.excel.downloadFailed'));
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+
+  const importWorkbook = async () => {
     if (!parsed || parsed.rows.length === 0 || processed || isSubmitting) return;
     dispatch({ type: 'submitStarted' });
     try {
-      const response = await onCreateBulk(parsed.rows.map((row) => row.client));
-      const serverIssues: CsvReportIssue[] = response.results.flatMap((result) => {
+      const response = await onCreateBulk(parsed.rows.map((row) => row.item));
+      const serverIssues: WorkbookReportIssue[] = response.results.flatMap((result) => {
         if (result.success) return [];
         const sourceRow = parsed.rows[result.index];
         return [
@@ -723,6 +685,11 @@ export function ClientCsvImportDialog({
           },
         ];
       });
+      const retryRows = response.results.flatMap((result) => {
+        if (result.success) return [];
+        const sourceRow = parsed.rows[result.index];
+        return sourceRow ? [sourceRow] : [];
+      });
       const failed = response.summary.failed + structuralIssues.length;
       dispatch({
         type: 'submitCompleted',
@@ -731,6 +698,7 @@ export function ClientCsvImportDialog({
           failed,
           issues: [...structuralIssues, ...serverIssues],
         },
+        retryRows,
       });
       if (response.summary.succeeded > 0) {
         toastSuccess(t('crm:clients.bulk.importedCount', { count: response.summary.succeeded }));
@@ -754,36 +722,36 @@ export function ClientCsvImportDialog({
       onClose={onClose}
       closeOnBackdrop={!isSubmitting}
       closeOnEsc={!isSubmitting}
-      ariaLabel={t('crm:clients.bulk.csv.title')}
+      ariaLabel={t('crm:clients.bulk.excel.title')}
     >
       <ModalContent size="6xl">
         <ModalHeader>
           <div>
             <ModalTitle>
               <FileSpreadsheet className="size-5" />
-              {t('crm:clients.bulk.csv.title')}
+              {t('crm:clients.bulk.excel.title')}
             </ModalTitle>
-            <ModalDescription>{t('crm:clients.bulk.csv.description')}</ModalDescription>
+            <ModalDescription>{t('crm:clients.bulk.excel.description')}</ModalDescription>
           </div>
           <ModalCloseButton onClick={onClose} disabled={isSubmitting} />
         </ModalHeader>
         <ModalBody className="space-y-5">
           <Alert>
             <Info className="size-4" />
-            <AlertTitle>{t('crm:clients.bulk.csv.rulesTitle')}</AlertTitle>
-            <AlertDescription>{t('crm:clients.bulk.csv.rulesDescription')}</AlertDescription>
+            <AlertTitle>{t('crm:clients.bulk.excel.rulesTitle')}</AlertTitle>
+            <AlertDescription>{t('crm:clients.bulk.excel.rulesDescription')}</AlertDescription>
           </Alert>
 
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <div className="w-full max-w-xl space-y-1.5">
-              <label htmlFor="client-csv-file" className="text-sm font-medium">
-                {t('crm:clients.bulk.csv.fileLabel')}
+              <label htmlFor="client-xlsx-file" className="text-sm font-medium">
+                {t('crm:clients.bulk.excel.fileLabel')}
               </label>
               <Input
                 ref={fileInputRef}
-                id="client-csv-file"
+                id="client-xlsx-file"
                 type="file"
-                accept=".csv,text/csv"
+                accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 className="hidden"
                 onClick={(event) => {
                   fileReadSequence.current += 1;
@@ -801,15 +769,15 @@ export function ClientCsvImportDialog({
                   disabled={isSubmitting}
                 >
                   <FolderOpen aria-hidden="true" className="size-4" />
-                  {t('crm:clients.bulk.csv.browseButton')}
+                  {t('crm:clients.bulk.excel.browseButton')}
                 </Button>
                 <div
                   className="flex min-h-9 min-w-0 flex-1 items-center rounded-md border border-input bg-background px-3 text-sm text-muted-foreground shadow-xs"
                   aria-live="polite"
-                  title={fileName ?? t('crm:clients.bulk.csv.noFileSelected')}
+                  title={fileName ?? t('crm:clients.bulk.excel.noFileSelected')}
                 >
                   <span className="truncate">
-                    {fileName ?? t('crm:clients.bulk.csv.noFileSelected')}
+                    {fileName ?? t('crm:clients.bulk.excel.noFileSelected')}
                   </span>
                 </div>
               </div>
@@ -817,22 +785,27 @@ export function ClientCsvImportDialog({
             <Button
               type="button"
               variant="outline"
-              onClick={() => downloadCsv([[...CLIENT_CSV_HEADERS]], 'clienti_modello.csv')}
+              onClick={() => void downloadTemplate()}
+              disabled={isDownloading || isSubmitting}
             >
-              <FileDown className="size-4" />
-              {t('crm:clients.bulk.csv.downloadTemplate')}
+              {isDownloading ? (
+                <i className="fa-solid fa-circle-notch fa-spin text-xs" aria-hidden="true"></i>
+              ) : (
+                <FileDown className="size-4" />
+              )}
+              {t('crm:clients.bulk.excel.downloadTemplate')}
             </Button>
           </div>
 
           {(fileError || fatalIssues.length > 0) && (
             <Alert variant="destructive">
               <Info className="size-4" />
-              <AlertTitle>{t('crm:clients.bulk.csv.invalidFile')}</AlertTitle>
+              <AlertTitle>{t('crm:clients.bulk.excel.invalidFile')}</AlertTitle>
               <AlertDescription>
                 {fileError && <p>{fileError}</p>}
                 {fatalIssues.map((issue) => (
-                  <p key={`${issue.code}-${issue.line ?? 'file'}-${issue.message}`}>
-                    {csvIssueMessage(issue, t)}
+                  <p key={`${issue.code}-${issue.line ?? 'file'}-${issue.field ?? ''}`}>
+                    {workbookIssueMessage(issue, t)}
                   </p>
                 ))}
               </AlertDescription>
@@ -842,13 +815,13 @@ export function ClientCsvImportDialog({
           {parsed && fatalIssues.length === 0 && !report && (
             <Alert>
               <Info className="size-4" />
-              <AlertTitle>{t('crm:clients.bulk.csv.readyTitle')}</AlertTitle>
+              <AlertTitle>{t('crm:clients.bulk.excel.readyTitle')}</AlertTitle>
               <AlertDescription>
-                {t('crm:clients.bulk.csv.readyDescription', {
+                {t('crm:clients.bulk.excel.readyDescription', {
                   valid: parsed.rows.length,
-                  invalid: parsed.rowIssues.length,
+                  invalid: structuralIssues.length,
                 })}
-                <CsvIssueList issues={structuralIssues} t={t} />
+                <WorkbookIssueList issues={structuralIssues} t={t} />
               </AlertDescription>
             </Alert>
           )}
@@ -856,30 +829,30 @@ export function ClientCsvImportDialog({
           {report && (
             <Alert variant={report.failed > 0 ? 'destructive' : 'default'}>
               <Info className="size-4" />
-              <AlertTitle>{t('crm:clients.bulk.csv.resultTitle')}</AlertTitle>
+              <AlertTitle>{t('crm:clients.bulk.excel.resultTitle')}</AlertTitle>
               <AlertDescription>
                 <p>
-                  {t('crm:clients.bulk.csv.resultDescription', {
+                  {t('crm:clients.bulk.excel.resultDescription', {
                     succeeded: report.succeeded,
                     failed: report.failed,
                   })}
                 </p>
-                <CsvIssueList issues={report.issues} t={t} />
+                <WorkbookIssueList issues={report.issues} t={t} />
               </AlertDescription>
             </Alert>
           )}
 
-          <CsvStructureTable fields={csvFields} t={t} />
+          <WorkbookStructureTable profileOptions={profileOptions} t={t} />
         </ModalBody>
         <ModalFooter>
           <Button type="button" variant="outline" onClick={onClose} disabled={isSubmitting}>
             {t('common:buttons.cancel')}
           </Button>
-          <Button type="button" onClick={importCsv} disabled={!canImport}>
+          <Button type="button" onClick={importWorkbook} disabled={!canImport}>
             {isSubmitting && (
               <i className="fa-solid fa-circle-notch fa-spin text-xs" aria-hidden="true"></i>
             )}
-            {t('crm:clients.bulk.csv.importButton')}
+            {t('crm:clients.bulk.excel.importButton')}
           </Button>
         </ModalFooter>
       </ModalContent>
