@@ -47,11 +47,13 @@ export const generalSettings = pgTable(
     sessionIdleTimeoutMinutes: integer('session_idle_timeout_minutes').notNull().default(30),
     geminiApiKey: varchar('gemini_api_key', { length: 255 }),
     aiProvider: varchar('ai_provider', { length: 20 })
-      .$type<'gemini' | 'openrouter'>()
+      .$type<'gemini' | 'openrouter' | 'anthropic'>()
       .default('gemini'),
     openrouterApiKey: varchar('openrouter_api_key', { length: 255 }),
+    anthropicApiKey: varchar('anthropic_api_key', { length: 255 }),
     geminiModelId: varchar('gemini_model_id', { length: 255 }),
     openrouterModelId: varchar('openrouter_model_id', { length: 255 }),
+    anthropicModelId: varchar('anthropic_model_id', { length: 255 }),
     allowWeekendSelection: boolean('allow_weekend_selection').default(true),
     defaultLocation: varchar('default_location', { length: 20 }).default('remote'),
     rilCompanyName: varchar('ril_company_name', { length: 255 }).default(''),
@@ -76,7 +78,7 @@ export const generalSettings = pgTable(
     ),
     check(
       'general_settings_ai_provider_check',
-      sql`${table.aiProvider} IN ('gemini', 'openrouter')`,
+      sql`${table.aiProvider} IN ('gemini', 'openrouter', 'anthropic')`,
     ),
     check(
       'general_settings_ril_default_start_time_check',

@@ -11,6 +11,8 @@ Il modulo AI reporting è visibile solo se abilitato dall'amministrazione e se i
 
 Se non vedi il modulo, chiedi a un amministratore di verificare impostazioni AI, chiave API e permessi del ruolo.
 
+L'amministratore può collegare AI reporting a Gemini, OpenRouter o Anthropic. Praetor usa esclusivamente il provider selezionato nelle impostazioni generali e conserva separatamente chiave e modello di ciascun provider.
+
 ## Uso consigliato
 
 Formula richieste specifiche: indica periodo, area aziendale, cliente, progetto o metrica che vuoi analizzare. Domande precise producono risposte più verificabili.

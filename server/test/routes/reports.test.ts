@@ -183,6 +183,8 @@ const AI_ENABLED_SETTINGS = {
   geminiModelId: 'gemini-pro',
   openrouterApiKey: '',
   openrouterModelId: '',
+  anthropicApiKey: '',
+  anthropicModelId: '',
   currency: 'EUR',
 };
 
@@ -715,6 +717,51 @@ describe('POST /api/reports/ai-reporting/chat (non-streaming)', () => {
     expect(JSON.parse(res.body).error).toMatch(/upstream down/);
   });
 
+  test('200 generates a response through Anthropic Messages API', async () => {
+    getGeneralSettingsMock.mockResolvedValue({
+      ...AI_ENABLED_SETTINGS,
+      aiProvider: 'anthropic',
+      anthropicApiKey: 'sk-ant-test',
+      anthropicModelId: 'claude-sonnet-4-5',
+    });
+    getActiveSessionForUserMock.mockResolvedValue({ id: 'rpt-chat-1', title: 'Existing' });
+    listRecentMessagesMock.mockResolvedValue([]);
+    insertUserMessageMock.mockResolvedValue(undefined);
+    insertAssistantMessageMock.mockResolvedValue(undefined);
+    touchSessionMock.mockResolvedValue(undefined);
+    fetchMock.mockResolvedValue(
+      okFetchResponse({ content: [{ type: 'text', text: 'Anthropic answer' }] }),
+    );
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/reports/ai-reporting/chat',
+      headers: authHeader(),
+      payload: { sessionId: 'rpt-chat-1', message: 'Hi' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body).text).toBe('Anthropic answer');
+    const [url, options] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe('https://api.anthropic.com/v1/messages');
+    expect(options.headers).toEqual(
+      expect.objectContaining({
+        'x-api-key': 'sk-ant-test',
+        'anthropic-version': '2023-06-01',
+      }),
+    );
+    expect(JSON.parse(String(options.body))).toEqual(
+      expect.objectContaining({
+        model: 'claude-sonnet-4-5',
+        max_tokens: 4096,
+        messages: expect.any(Array),
+      }),
+    );
+    expect(insertAssistantMessageMock).toHaveBeenCalledWith(
+      expect.objectContaining({ content: 'Anthropic answer' }),
+    );
+  });
+
   test('401 missing token', async () => {
     const res = await testApp.inject({
       method: 'POST',
@@ -795,6 +842,61 @@ describe('POST /api/reports/ai-reporting/chat/stream (streaming)', () => {
 
     expect(res.statusCode).toBe(404);
     expect(JSON.parse(res.body)).toEqual({ error: 'Session not found' });
+  });
+
+  test('streams Anthropic text deltas and persists the final answer', async () => {
+    getGeneralSettingsMock.mockResolvedValue({
+      ...AI_ENABLED_SETTINGS,
+      aiProvider: 'anthropic',
+      anthropicApiKey: 'sk-ant-test',
+      anthropicModelId: 'claude-sonnet-4-5',
+    });
+    getActiveSessionForUserMock.mockResolvedValue({ id: 'rpt-chat-1', title: 'Existing' });
+    listRecentMessagesMock.mockResolvedValue([]);
+    insertUserMessageMock.mockResolvedValue(undefined);
+    insertAssistantMessageMock.mockResolvedValue(undefined);
+    touchSessionMock.mockResolvedValue(undefined);
+    const anthropicChunk = [
+      'event: content_block_delta',
+      `data: ${JSON.stringify({
+        type: 'content_block_delta',
+        delta: { type: 'text_delta', text: 'Streamed ' },
+      })}`,
+      '',
+      'event: content_block_delta',
+      `data: ${JSON.stringify({
+        type: 'content_block_delta',
+        delta: { type: 'text_delta', text: 'answer' },
+      })}`,
+      '',
+      '',
+    ].join('\r\n');
+    fetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      body: new ReadableStream({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode(anthropicChunk));
+          controller.close();
+        },
+      }),
+    } as unknown as Response);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/reports/ai-reporting/chat/stream',
+      headers: authHeader(),
+      payload: { sessionId: 'rpt-chat-1', message: 'Hi' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toContain('event: answer_delta');
+    expect(res.body).toContain('Streamed answer');
+    expect(insertAssistantMessageMock).toHaveBeenCalledWith(
+      expect.objectContaining({ content: 'Streamed answer' }),
+    );
+    const options = (fetchMock.mock.calls[0] as unknown as [string, RequestInit])[1];
+    expect(JSON.parse(String(options.body)).stream).toBe(true);
   });
 });
 

@@ -25,7 +25,7 @@ Praetor is a modern, AI-enhanced ERP application inspired by the simplicity of t
 - **Database**: PostgreSQL with Drizzle ORM
 - **Styling**: Tailwind CSS
 - **Charts**: Recharts
-- **AI Integration**: Gemini/OpenRouter via server-side provider calls (AI Reporting).
+- **AI Integration**: Gemini, OpenRouter, or Anthropic via server-side provider calls (AI Reporting).
 - **Icons**: FontAwesome
 
 ## Setup & Installation
