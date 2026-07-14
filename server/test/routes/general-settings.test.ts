@@ -96,8 +96,12 @@ const SETTINGS_WITH_KEYS = {
   geminiApiKey: 'plaintext-gemini-key',
   aiProvider: 'gemini',
   openrouterApiKey: 'plaintext-openrouter-key',
+  anthropicApiKey: 'plaintext-anthropic-key',
+  openaiApiKey: 'plaintext-openai-key',
   geminiModelId: 'gemini-2.5-flash',
   openrouterModelId: 'anthropic/claude-3-haiku',
+  anthropicModelId: 'claude-sonnet-4-5',
+  openaiModelId: 'gpt-5',
   allowWeekendSelection: false,
   defaultLocation: 'remote',
   rilCompanyName: 'ACME Consulting',
@@ -168,6 +172,8 @@ describe('GET /api/general-settings', () => {
     const body = JSON.parse(res.body);
     expect(body.geminiApiKey).toBe('plaintext-gemini-key');
     expect(body.openrouterApiKey).toBe('plaintext-openrouter-key');
+    expect(body.anthropicApiKey).toBe('plaintext-anthropic-key');
+    expect(body.openaiApiKey).toBe('plaintext-openai-key');
     expect(body.totpExemptUserIds).toEqual(['u2']);
   });
 
@@ -188,6 +194,8 @@ describe('GET /api/general-settings', () => {
     const body = JSON.parse(res.body);
     expect(body.geminiApiKey).toBe(MASKED_SECRET);
     expect(body.openrouterApiKey).toBe(MASKED_SECRET);
+    expect(body.anthropicApiKey).toBe(MASKED_SECRET);
+    expect(body.openaiApiKey).toBe(MASKED_SECRET);
     expect(body).not.toHaveProperty('totpExemptUserIds');
   });
 
@@ -233,19 +241,19 @@ describe('PUT /api/general-settings', () => {
   test('200 round-trip: updates fields, emits audit, response unmasked', async () => {
     settingsUpdateMock.mockResolvedValue({
       ...SETTINGS_WITH_KEYS,
-      aiProvider: 'openrouter',
+      aiProvider: 'openai',
     });
 
     const res = await testApp.inject({
       method: 'PUT',
       url: '/api/general-settings',
       headers: authHeader(),
-      payload: { aiProvider: 'openrouter', currency: 'USD' },
+      payload: { aiProvider: 'openai', currency: 'USD' },
     });
 
     expect(res.statusCode).toBe(200);
     expect(settingsUpdateMock).toHaveBeenCalledWith(
-      expect.objectContaining({ aiProvider: 'openrouter', currency: 'USD' }),
+      expect.objectContaining({ aiProvider: 'openai', currency: 'USD' }),
     );
     expect(logAuditMock).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -624,6 +632,33 @@ describe('PUT /api/general-settings', () => {
 
     expect(res.statusCode).toBe(400);
     expect(JSON.parse(res.body).error).toMatch(/aiProvider must be one of/);
+  });
+
+  test('200 accepts Anthropic provider credentials and model', async () => {
+    settingsUpdateMock.mockResolvedValue({
+      ...SETTINGS_WITH_KEYS,
+      aiProvider: 'anthropic',
+    });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/general-settings',
+      headers: authHeader(),
+      payload: {
+        aiProvider: 'anthropic',
+        anthropicApiKey: 'sk-ant-test',
+        anthropicModelId: 'claude-sonnet-4-5',
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(settingsUpdateMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        aiProvider: 'anthropic',
+        anthropicApiKey: 'sk-ant-test',
+        anthropicModelId: 'claude-sonnet-4-5',
+      }),
+    );
   });
 
   test('400 invalid startOfWeek enum, repo not called', async () => {

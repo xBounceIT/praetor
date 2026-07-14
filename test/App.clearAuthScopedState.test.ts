@@ -29,8 +29,12 @@ describe('App.tsx auth-scoped reset defaults', () => {
     expect(INITIAL_GENERAL_SETTINGS.enableAiReporting).toBe(false);
     expect(INITIAL_GENERAL_SETTINGS.geminiApiKey).toBe('');
     expect(INITIAL_GENERAL_SETTINGS.openrouterApiKey).toBe('');
+    expect(INITIAL_GENERAL_SETTINGS.anthropicApiKey).toBe('');
+    expect(INITIAL_GENERAL_SETTINGS.openaiApiKey).toBe('');
     expect(INITIAL_GENERAL_SETTINGS.geminiModelId).toBe('');
     expect(INITIAL_GENERAL_SETTINGS.openrouterModelId).toBe('');
+    expect(INITIAL_GENERAL_SETTINGS.anthropicModelId).toBe('');
+    expect(INITIAL_GENERAL_SETTINGS.openaiModelId).toBe('');
   });
 
   test('clearAuthScopedAppState body resets all three settings objects', () => {

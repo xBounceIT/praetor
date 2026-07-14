@@ -87,6 +87,8 @@ beforeEach(async () => {
   getGeneralSettingsMock.mockResolvedValue({
     geminiApiKey: 'test-gemini-key',
     openrouterApiKey: 'test-openrouter-key',
+    anthropicApiKey: 'test-anthropic-key',
+    openaiApiKey: 'test-openai-key',
   });
 
   testApp = await buildRouteTestApp(routePlugin, '/api/ai');
@@ -150,6 +152,8 @@ describe('POST /api/ai/validate-model', () => {
     getGeneralSettingsMock.mockResolvedValue({
       geminiApiKey: '',
       openrouterApiKey: '',
+      anthropicApiKey: '',
+      openaiApiKey: '',
     });
     const res = await testApp.inject({
       method: 'POST',
@@ -252,6 +256,56 @@ describe('POST /api/ai/validate-model', () => {
     expect(body.code).toBe('PROVIDER_ERROR');
   });
 
+  test('200 ok=true openai happy path', async () => {
+    fetchMock.mockResolvedValue(okResponse({ id: 'gpt-test', object: 'model' }, 200));
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/ai/validate-model',
+      headers: authHeader(),
+      payload: { provider: 'openai', modelId: 'gpt-test', apiKey: 'inline-key' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body)).toEqual(
+      expect.objectContaining({ ok: true, normalizedModelId: 'gpt-test' }),
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://api.openai.com/v1/models/gpt-test',
+      expect.objectContaining({
+        method: 'GET',
+        headers: { Authorization: 'Bearer inline-key' },
+      }),
+    );
+  });
+
+  test('200 ok=false NOT_FOUND for openai 404', async () => {
+    fetchMock.mockResolvedValue(okResponse({}, 404));
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/ai/validate-model',
+      headers: authHeader(),
+      payload: { provider: 'openai', modelId: 'gpt-missing', apiKey: 'inline-key' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body)).toEqual(expect.objectContaining({ ok: false, code: 'NOT_FOUND' }));
+  });
+
+  test('uses the saved openai key when apiKey is omitted', async () => {
+    fetchMock.mockResolvedValue(okResponse({ id: 'gpt-test' }, 200));
+    await testApp.inject({
+      method: 'POST',
+      url: '/api/ai/validate-model',
+      headers: authHeader(),
+      payload: { provider: 'openai', modelId: 'gpt-test' },
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://api.openai.com/v1/models/gpt-test',
+      expect.objectContaining({ headers: { Authorization: 'Bearer test-openai-key' } }),
+    );
+  });
+
   test('200 ok=true uses gemini key from settings when apiKey omitted', async () => {
     fetchMock.mockResolvedValue(okResponse({}, 200));
     const res = await testApp.inject({
@@ -266,5 +320,53 @@ describe('POST /api/ai/validate-model', () => {
     const fetchCall = (fetchMock.mock.calls[0] as unknown[])[0];
     const url = fetchCall instanceof URL ? fetchCall : new URL(String(fetchCall));
     expect(url.searchParams.get('key')).toBe('test-gemini-key');
+  });
+
+  test('200 ok=true anthropic happy path', async () => {
+    fetchMock.mockResolvedValue(
+      okResponse({ id: 'claude-sonnet-4-5', display_name: 'Claude Sonnet 4.5' }, 200),
+    );
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/ai/validate-model',
+      headers: authHeader(),
+      payload: {
+        provider: 'anthropic',
+        modelId: 'claude-sonnet-4-5',
+        apiKey: 'inline-key',
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body)).toEqual({
+      ok: true,
+      normalizedModelId: 'claude-sonnet-4-5',
+      name: 'Claude Sonnet 4.5',
+    });
+    const [url, options] = fetchMock.mock.calls[0] as unknown as [URL, RequestInit];
+    expect(url.pathname).toBe('/v1/models/claude-sonnet-4-5');
+    expect(options.headers).toEqual(
+      expect.objectContaining({
+        'x-api-key': 'inline-key',
+        'anthropic-version': '2023-06-01',
+      }),
+    );
+  });
+
+  test('200 ok=false NOT_FOUND for anthropic 404', async () => {
+    fetchMock.mockResolvedValue(okResponse({}, 404));
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/ai/validate-model',
+      headers: authHeader(),
+      payload: {
+        provider: 'anthropic',
+        modelId: 'claude-missing',
+        apiKey: 'inline-key',
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body).code).toBe('NOT_FOUND');
   });
 });

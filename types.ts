@@ -181,6 +181,8 @@ export interface Notification {
   createdAt: number;
 }
 
+export type AiProvider = 'gemini' | 'openrouter' | 'anthropic' | 'openai';
+
 export interface GeneralSettings {
   currency: string;
   dailyLimit: number;
@@ -188,10 +190,14 @@ export interface GeneralSettings {
   treatSaturdayAsHoliday: boolean;
   enableAiReporting: boolean;
   geminiApiKey?: string;
-  aiProvider?: 'gemini' | 'openrouter';
+  aiProvider?: AiProvider;
   openrouterApiKey?: string;
+  anthropicApiKey?: string;
+  openaiApiKey?: string;
   geminiModelId?: string;
   openrouterModelId?: string;
+  anthropicModelId?: string;
+  openaiModelId?: string;
   allowWeekendSelection: boolean;
   defaultLocation?: TimeEntryLocation;
   rilCompanyName?: string;
