@@ -492,12 +492,21 @@ type AppLocalStateAction = {
 }[keyof AppLocalState];
 
 const appLocalStateReducer = (state: AppLocalState, action: AppLocalStateAction): AppLocalState => {
-  const previous = state[action.key] as AppLocalState[keyof AppLocalState];
-  const nextValue = resolveAppModuleStateAction(
-    action.value as React.SetStateAction<AppLocalState[keyof AppLocalState]>,
-    previous,
-  );
-  return Object.is(nextValue, previous) ? state : { ...state, [action.key]: nextValue };
+  const actionType: AppLocalStateAction['type'] = action.type;
+  switch (actionType) {
+    case 'set': {
+      const previous = state[action.key] as AppLocalState[keyof AppLocalState];
+      const nextValue = resolveAppModuleStateAction(
+        action.value as React.SetStateAction<AppLocalState[keyof AppLocalState]>,
+        previous,
+      );
+      return Object.is(nextValue, previous) ? state : { ...state, [action.key]: nextValue };
+    }
+    default: {
+      const unhandledActionType: never = actionType;
+      throw new Error(`Unsupported app local state action: ${String(unhandledActionType)}`);
+    }
+  }
 };
 
 const getCurrencySymbol = (currency: string) => {
