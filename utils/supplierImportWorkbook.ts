@@ -52,7 +52,7 @@ export const buildSupplierImportDefinition = (
     },
     {
       key: 'contactName',
-      label: t('crm:suppliers.fullName'),
+      label: t('crm:suppliers.bulk.excel.contactNameHeader'),
       required: false,
       accepted: freeText,
       example: 'Mario Rossi',
@@ -61,7 +61,7 @@ export const buildSupplierImportDefinition = (
     },
     {
       key: 'contactRole',
-      label: t('crm:suppliers.role'),
+      label: t('crm:suppliers.bulk.excel.contactRoleHeader'),
       required: false,
       accepted: freeText,
       example: 'Commerciale',
@@ -70,7 +70,7 @@ export const buildSupplierImportDefinition = (
     },
     {
       key: 'email',
-      label: t('crm:suppliers.email'),
+      label: t('crm:suppliers.bulk.excel.contactEmailHeader'),
       required: false,
       accepted: t('crm:suppliers.bulk.excel.validEmail'),
       example: 'mario@example.com',
@@ -79,7 +79,7 @@ export const buildSupplierImportDefinition = (
     },
     {
       key: 'phone',
-      label: t('crm:suppliers.phone'),
+      label: t('crm:suppliers.bulk.excel.contactPhoneHeader'),
       required: false,
       accepted: freeText,
       example: '+39 000 0000000',

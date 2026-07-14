@@ -170,6 +170,18 @@ describe('Praetor entity import workbooks', () => {
     );
     const sheet = requireWorksheet(workbook, IMPORT_WORKSHEET_NAME);
 
+    expect(sheet.getCell(IMPORT_HEADER_ROW, supplierColumn('contactName')).value).toBe(
+      'en:crm:suppliers.bulk.excel.contactNameHeader',
+    );
+    expect(sheet.getCell(IMPORT_HEADER_ROW, supplierColumn('contactRole')).value).toBe(
+      'en:crm:suppliers.bulk.excel.contactRoleHeader',
+    );
+    expect(sheet.getCell(IMPORT_HEADER_ROW, supplierColumn('email')).value).toBe(
+      'en:crm:suppliers.bulk.excel.contactEmailHeader',
+    );
+    expect(sheet.getCell(IMPORT_HEADER_ROW, supplierColumn('phone')).value).toBe(
+      'en:crm:suppliers.bulk.excel.contactPhoneHeader',
+    );
     expect(parseSupplierImportWorkbook(workbook)).toEqual({
       rows: [],
       rowIssues: [],
@@ -182,6 +194,8 @@ describe('Praetor entity import workbooks', () => {
     sheet.getCell(IMPORT_FIRST_DATA_ROW, supplierColumn('vatNumber')).value = 123456789;
     sheet.getCell(IMPORT_FIRST_DATA_ROW, supplierColumn('contactName')).value = 'Jane';
     sheet.getCell(IMPORT_FIRST_DATA_ROW, supplierColumn('contactRole')).value = 'Buyer';
+    sheet.getCell(IMPORT_FIRST_DATA_ROW, supplierColumn('email')).value = 'jane@example.test';
+    sheet.getCell(IMPORT_FIRST_DATA_ROW, supplierColumn('phone')).value = '+39 123';
 
     expect(parseSupplierImportWorkbook(workbook).rows).toEqual([
       {
@@ -192,6 +206,8 @@ describe('Praetor entity import workbooks', () => {
           vatNumber: '123456789',
           contactName: 'Jane',
           contactRole: 'Buyer',
+          email: 'jane@example.test',
+          phone: '+39 123',
         },
       },
     ]);

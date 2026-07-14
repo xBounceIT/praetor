@@ -250,6 +250,8 @@ describe('<SuppliersView /> bulk creation actions', () => {
         vatNumber: 'IT123-1',
         contactName: 'Jane',
         contactRole: 'Buyer',
+        email: 'jane@example.test',
+        phone: '+39 123',
       },
       {
         supplierCode: 'SUP-XLSX-2',
@@ -274,6 +276,8 @@ describe('<SuppliersView /> bulk creation actions', () => {
         vatNumber: 'IT123-1',
         contactName: 'Jane',
         contactRole: 'Buyer',
+        email: 'jane@example.test',
+        phone: '+39 123',
       },
       {
         supplierCode: 'SUP-XLSX-2',
