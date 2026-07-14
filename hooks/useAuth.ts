@@ -148,6 +148,9 @@ export function useAuth(opts: UseAuthOptions = {}) {
           err,
         );
         if (logoutAttemptRef.current === logoutAttempt) {
+          // A failed authenticated response may have rotated and re-persisted the JWT before
+          // the API client threw. Clear it again without erasing a newer login's token.
+          setAuthToken(null);
           setLogoutReason('logout-incomplete');
         }
       });

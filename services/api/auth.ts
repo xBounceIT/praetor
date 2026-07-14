@@ -202,5 +202,5 @@ export const authApi = {
     ),
 
   logout: (): Promise<{ endSessionUrl: string | null }> =>
-    fetchApi('/auth/logout', { method: 'POST' }),
+    fetchApi('/auth/logout', { method: 'POST', persistAuthToken: false }),
 };

@@ -406,11 +406,15 @@ describe('useAuth', () => {
   });
 
   test('logout failure is logged and warns that server logout may be incomplete', async () => {
-    const logoutError = new ApiErrorStub('network down', 0, true);
+    const logoutError = new ApiErrorStub('server error', 500);
     const originalConsoleError = console.error;
     const consoleErrorMock = mock((_message?: unknown, _error?: unknown) => {});
     console.error = consoleErrorMock;
-    apiMocks.authLogout.mockImplementation(() => Promise.reject(logoutError));
+    apiMocks.authLogout.mockImplementation(async () => {
+      await Promise.resolve();
+      setAuthTokenMock('rotated-token');
+      throw logoutError;
+    });
 
     try {
       const { result } = renderHook(() => useAuth());
@@ -425,8 +429,49 @@ describe('useAuth', () => {
         'Server logout failed; server-side and external identity-provider sessions may still be active:',
         logoutError,
       );
+      expect(setAuthTokenMock.mock.calls.map(([token]) => token)).toEqual([
+        null,
+        'rotated-token',
+        null,
+      ]);
       expect(setAuthTokenMock).toHaveBeenLastCalledWith(null);
       expect(result.current.currentUser).toBeNull();
+    } finally {
+      console.error = originalConsoleError;
+    }
+  });
+
+  test('a delayed logout failure cannot clear a newer login token', async () => {
+    const logoutError = new ApiErrorStub('server error', 500);
+    const originalConsoleError = console.error;
+    console.error = mock((_message?: unknown, _error?: unknown) => {});
+    let rejectLogout: ((reason?: unknown) => void) | undefined;
+    apiMocks.authLogout.mockImplementation(
+      () =>
+        new Promise((_resolve, reject) => {
+          rejectLogout = reject;
+        }),
+    );
+
+    try {
+      const { result } = renderHook(() => useAuth());
+      await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+      act(() => {
+        result.current.logout();
+      });
+      await act(async () => {
+        await result.current.login({ id: 'new-session' } as never, 'new-token');
+      });
+      await act(async () => {
+        rejectLogout?.(logoutError);
+        await Promise.resolve();
+      });
+
+      expect(result.current.currentUser?.id).toBe('new-session');
+      expect(result.current.logoutReason).toBeNull();
+      expect(tokenStore.token).toBe('new-token');
+      expect(setAuthTokenMock).toHaveBeenLastCalledWith('new-token');
     } finally {
       console.error = originalConsoleError;
     }
