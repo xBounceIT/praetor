@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { parseAiReportingMessage } from '@/components/reports/aiReportingAttachments';
 import type { ReportChatMessage, ReportChatSessionSummary } from '@/types';
 import { render } from '../../helpers/render';
@@ -12,6 +13,7 @@ const renameSessionMock = mock();
 const chatMock = mock();
 const chatStreamMock = mock();
 const editMessageStreamMock = mock();
+const transcribeAudioMock = mock();
 const translationDefaults: Record<string, string> = {
   'aiReporting.placeholder': 'Ask a question about your business data...',
   'buttons.noGoBack': 'Cancel',
@@ -19,36 +21,35 @@ const translationDefaults: Record<string, string> = {
   'buttons.yesDelete': 'Delete',
 };
 
-let speechRecognitionInstance: MockSpeechRecognition | null = null;
-const speechRecognitionInstances: MockSpeechRecognition[] = [];
+let mediaRecorderInstance: MockMediaRecorder | null = null;
+const microphoneTrackStopMock = mock();
+const getUserMediaMock = mock();
 
-class MockSpeechRecognition {
-  continuous = false;
-  interimResults = false;
-  lang = '';
-  onend: (() => void) | null = null;
-  onerror: ((event: { error: string }) => void) | null = null;
-  onresult:
-    | ((event: {
-        resultIndex: number;
-        results: ArrayLike<{ readonly length: number; [index: number]: { transcript: string } }>;
-      }) => void)
-    | null = null;
-  start = mock(() => {});
-  stop = mock(() => {
-    this.onend?.();
+class MockMediaRecorder {
+  static isTypeSupported = () => true;
+  state: RecordingState = 'inactive';
+  mimeType: string;
+  ondataavailable: ((event: BlobEvent) => void) | null = null;
+  onerror: (() => void) | null = null;
+  onstop: (() => void) | null = null;
+
+  constructor(_stream: MediaStream, options?: MediaRecorderOptions) {
+    this.mimeType = options?.mimeType || 'audio/webm';
+    mediaRecorderInstance = this;
+  }
+
+  start = mock(() => {
+    this.state = 'recording';
   });
-  abort = mock(() => {});
 
-  constructor() {
-    speechRecognitionInstance = this;
-    speechRecognitionInstances.push(this);
-  }
-
-  emitResult(transcript: string) {
-    const result = { 0: { transcript }, length: 1 };
-    this.onresult?.({ resultIndex: 0, results: { 0: result, length: 1 } });
-  }
+  stop = mock(() => {
+    if (this.state === 'inactive') return;
+    this.state = 'inactive';
+    this.ondataavailable?.({
+      data: new Blob(['recorded audio'], { type: this.mimeType }),
+    } as BlobEvent);
+    this.onstop?.();
+  });
 }
 
 const t = (key: string, options?: { defaultValue?: string; [key: string]: unknown }) => {
@@ -76,6 +77,7 @@ mock.module('../../../services/api', () => ({
       chat: chatMock,
       chatStream: chatStreamMock,
       editMessageStream: editMessageStreamMock,
+      transcribeAudio: transcribeAudioMock,
     },
   },
 }));
@@ -143,6 +145,12 @@ const messages: ReportChatMessage[] = [
     sessionId: 'revenue',
     role: 'assistant',
     content: 'Quarterly revenue is available.',
+    technicalInfo: {
+      provider: 'gemini',
+      modelId: 'gemini-2.5-pro',
+      contextTokensUsed: 850_000,
+      contextWindowTokens: 1_000_000,
+    },
     createdAt: 1_752_493_600_001,
   },
 ];
@@ -164,9 +172,14 @@ beforeEach(() => {
   renameSessionMock.mockReset();
   chatMock.mockReset();
   chatStreamMock.mockReset();
+  transcribeAudioMock.mockReset();
+  mediaRecorderInstance = null;
+  microphoneTrackStopMock.mockReset();
+  getUserMediaMock.mockReset();
+  getUserMediaMock.mockResolvedValue({
+    getTracks: () => [{ stop: microphoneTrackStopMock }],
+  } as unknown as MediaStream);
   editMessageStreamMock.mockReset();
-  speechRecognitionInstance = null;
-  speechRecognitionInstances.length = 0;
 
   listSessionsMock.mockResolvedValue(sessions);
   createSessionMock.mockResolvedValue({ id: 'new-session' });
@@ -174,6 +187,7 @@ beforeEach(() => {
   archiveSessionMock.mockResolvedValue({ success: true });
   renameSessionMock.mockResolvedValue({ success: true });
   chatMock.mockResolvedValue({ sessionId: 'revenue', text: 'Analysis complete.' });
+  transcribeAudioMock.mockResolvedValue({ text: 'Show the quarterly revenue' });
   chatStreamMock.mockImplementation(
     async (
       _payload: unknown,
@@ -183,17 +197,90 @@ beforeEach(() => {
       return { sessionId: 'revenue', text: 'Analysis complete.' };
     },
   );
-  Object.defineProperty(window, 'SpeechRecognition', {
+  Object.defineProperty(globalThis, 'MediaRecorder', {
     configurable: true,
-    value: MockSpeechRecognition,
+    value: MockMediaRecorder,
+  });
+  Object.defineProperty(navigator, 'mediaDevices', {
+    configurable: true,
+    value: { getUserMedia: getUserMediaMock },
   });
 });
 
 afterEach(() => {
-  Reflect.deleteProperty(window, 'SpeechRecognition');
+  Reflect.deleteProperty(globalThis, 'MediaRecorder');
+  Reflect.deleteProperty(navigator, 'mediaDevices');
 });
 
 describe('<AiReportingView /> interactions', () => {
+  test('shows the experimental badge only in the chat sidebar', async () => {
+    renderView();
+
+    await screen.findAllByText('Quarterly revenue');
+    expect(screen.getAllByText('Experimental')).toHaveLength(1);
+  });
+
+  test('reveals technical model and context stats with a warning above 80%', async () => {
+    renderView();
+
+    await screen.findAllByText('Quarterly revenue');
+    fireEvent.click(screen.getByRole('switch', { name: 'Show technical information' }));
+
+    expect(screen.getByText('gemini · gemini-2.5-pro')).toBeInTheDocument();
+    const warning = screen.getByLabelText('Context window warning');
+    expect(warning.closest('[data-slot="badge"]')?.textContent).toMatch(
+      /850[.,]000 \/ 1[.,]000[.,]000 \(85%\)/,
+    );
+  });
+
+  test('does not warn when context usage is exactly 80%', async () => {
+    getSessionMessagesMock.mockResolvedValueOnce([
+      messages[0],
+      {
+        ...messages[1],
+        technicalInfo: {
+          provider: 'gemini',
+          modelId: 'gemini-2.5-pro',
+          contextTokensUsed: 800_000,
+          contextWindowTokens: 1_000_000,
+        },
+      },
+    ]);
+    renderView();
+
+    await screen.findAllByText('Quarterly revenue');
+    fireEvent.click(screen.getByRole('switch', { name: 'Show technical information' }));
+
+    expect(screen.queryByLabelText('Context window warning')).toBeNull();
+  });
+
+  test('does not show stale technical info when the latest AI response has none', async () => {
+    getSessionMessagesMock.mockResolvedValueOnce([
+      ...messages,
+      {
+        id: 'user-2',
+        sessionId: 'revenue',
+        role: 'user',
+        content: 'Run another analysis',
+        createdAt: 1_752_493_600_002,
+      },
+      {
+        id: 'assistant-2',
+        sessionId: 'revenue',
+        role: 'assistant',
+        content: 'The second analysis is ready.',
+        createdAt: 1_752_493_600_003,
+      },
+    ]);
+    renderView();
+
+    await screen.findAllByText('Quarterly revenue');
+    fireEvent.click(screen.getByRole('switch', { name: 'Show technical information' }));
+
+    expect(screen.queryByText('gemini · gemini-2.5-pro')).toBeNull();
+    expect(screen.getByText('Available after the next AI response.')).toBeInTheDocument();
+  });
+
   test('opens the mobile history sheet and closes it after session selection', async () => {
     renderView();
 
@@ -239,8 +326,37 @@ describe('<AiReportingView /> interactions', () => {
             resolveInitialSessions = resolve;
           }),
       )
-      .mockResolvedValue([]);
-    getSessionMessagesMock.mockResolvedValue([]);
+      .mockResolvedValue([
+        {
+          id: 'fresh-session',
+          title: 'First analysis',
+          createdAt: 1_752_493_800_000,
+          updatedAt: 1_752_493_800_000,
+        },
+      ]);
+    getSessionMessagesMock.mockImplementation((sessionId: string) =>
+      Promise.resolve(
+        sessionId === 'fresh-session'
+          ? [
+              {
+                id: 'user-fresh',
+                sessionId,
+                role: 'user',
+                content: 'Run the first analysis',
+                createdAt: 1_752_493_800_000,
+              },
+              {
+                id: 'assistant-fresh',
+                sessionId,
+                role: 'assistant',
+                content: 'The first analysis is ready.',
+                thoughtContent: 'Checking the data.',
+                createdAt: 1_752_493_800_001,
+              },
+            ]
+          : [],
+      ),
+    );
     let releaseStream: (() => void) | undefined;
     const streamGate = new Promise<void>((resolve) => {
       releaseStream = resolve;
@@ -281,14 +397,198 @@ describe('<AiReportingView /> interactions', () => {
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
     expect(getSessionMessagesMock).not.toHaveBeenCalled();
+    await act(async () => releaseStream?.());
+    await waitFor(() => expect(listSessionsMock).toHaveBeenCalledTimes(2));
     await act(async () => {
       resolveInitialSessions?.([]);
       await Promise.resolve();
     });
-    await act(async () => releaseStream?.());
 
     expect(await screen.findByText('The first analysis is ready.')).toBeInTheDocument();
     expect(screen.getByText('Run the first analysis')).toBeInTheDocument();
+    await waitFor(() =>
+      expect(getSessionMessagesMock).toHaveBeenCalledWith('fresh-session', {
+        limit: 200,
+      }),
+    );
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeEnabled();
+  });
+
+  test('starts only one request for two submissions in the same event batch', async () => {
+    let releaseStream: (() => void) | undefined;
+    const streamGate = new Promise<void>((resolve) => {
+      releaseStream = resolve;
+    });
+    chatStreamMock.mockImplementation(
+      async (
+        _payload: unknown,
+        handlers?: { onStart?: (event: { sessionId: string; messageId: string }) => void },
+      ) => {
+        handlers?.onStart?.({ sessionId: 'revenue', messageId: 'assistant-new' });
+        await streamGate;
+        return { sessionId: 'revenue', text: 'One response.' };
+      },
+    );
+    renderView();
+
+    const composer = await screen.findByRole('textbox', {
+      name: 'Ask a question about your business data...',
+    });
+    fireEvent.change(composer, { target: { value: 'Run this once' } });
+    const sendButton = screen.getByRole('button', { name: 'Send' });
+
+    act(() => {
+      sendButton.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+      sendButton.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+    });
+
+    await waitFor(() => expect(chatStreamMock).toHaveBeenCalledTimes(1));
+    await act(async () => releaseStream?.());
+    await waitFor(() => expect(getSessionMessagesMock).toHaveBeenCalledTimes(2));
+  });
+
+  test('ignores older messages that resolve after selecting another session', async () => {
+    const revenueHistory: ReportChatMessage[] = Array.from({ length: 100 }, (_, index) => [
+      {
+        id: `revenue-user-${index}`,
+        sessionId: 'revenue',
+        role: 'user' as const,
+        content: `Revenue question ${index}`,
+        createdAt: 10_000 + index * 2,
+      },
+      {
+        id: `revenue-assistant-${index}`,
+        sessionId: 'revenue',
+        role: 'assistant' as const,
+        content: `Revenue answer ${index}`,
+        createdAt: 10_001 + index * 2,
+      },
+    ]).flat();
+    const capacityMessages: ReportChatMessage[] = [
+      {
+        id: 'capacity-user',
+        sessionId: 'capacity',
+        role: 'user',
+        content: 'Show capacity',
+        createdAt: 20_000,
+      },
+      {
+        id: 'capacity-assistant',
+        sessionId: 'capacity',
+        role: 'assistant',
+        content: 'Capacity is ready.',
+        createdAt: 20_001,
+      },
+    ];
+    let resolveOlderMessages: ((messages: ReportChatMessage[]) => void) | undefined;
+    getSessionMessagesMock.mockImplementation(
+      (sessionId: string, options?: { before?: number }) => {
+        if (sessionId === 'capacity') return Promise.resolve(capacityMessages);
+        if (options?.before) {
+          return new Promise<ReportChatMessage[]>((resolve) => {
+            resolveOlderMessages = resolve;
+          });
+        }
+        return Promise.resolve(revenueHistory);
+      },
+    );
+
+    renderView();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Load older messages' }));
+    await waitFor(() => expect(resolveOlderMessages).toBeDefined());
+    fireEvent.click(screen.getByRole('button', { name: 'Project capacity' }));
+    await waitFor(() => expect(screen.getByText('Capacity is ready.')).toBeInTheDocument());
+
+    await act(async () => {
+      resolveOlderMessages?.([
+        {
+          id: 'stale-revenue-message',
+          sessionId: 'revenue',
+          role: 'assistant',
+          content: 'Old revenue contamination',
+          createdAt: 1,
+        },
+      ]);
+    });
+
+    expect(screen.queryByText('Old revenue contamination')).toBeNull();
+  });
+
+  test('clears failed edit stream state before loading another session', async () => {
+    editMessageStreamMock.mockImplementation(
+      async (
+        _payload: unknown,
+        handlers?: { onStart?: (event: { sessionId: string; messageId: string }) => void },
+      ) => {
+        handlers?.onStart?.({ sessionId: 'revenue', messageId: 'assistant-edit-failed' });
+        throw new Error('Edit failed');
+      },
+    );
+    getSessionMessagesMock.mockImplementation((sessionId: string) =>
+      Promise.resolve(
+        sessionId === 'capacity'
+          ? [{ ...messages[1], id: 'capacity-answer', sessionId, content: 'Capacity is ready.' }]
+          : messages,
+      ),
+    );
+
+    renderView();
+
+    await screen.findByText('Quarterly revenue is available.');
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    const editInput = screen.getByRole('textbox', { name: 'Edit message' });
+    fireEvent.change(editInput, { target: { value: 'Show updated quarterly revenue' } });
+    fireEvent.click(
+      within(editInput.closest('[data-slot="card"]') as HTMLElement).getByRole('button', {
+        name: 'Send',
+      }),
+    );
+    await waitFor(() => expect(editMessageStreamMock).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(getSessionMessagesMock.mock.calls.length).toBeGreaterThanOrEqual(2));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Project capacity' }));
+    await waitFor(() =>
+      expect(getSessionMessagesMock.mock.calls.some(([id]) => id === 'capacity')).toBe(true),
+    );
+  });
+
+  test('reloads canonical messages after stopping an edit stream', async () => {
+    editMessageStreamMock.mockImplementation(
+      (
+        _payload: unknown,
+        handlers: { onStart?: (event: { sessionId: string; messageId: string }) => void },
+        signal: AbortSignal,
+      ) =>
+        new Promise((_resolve, reject) => {
+          handlers.onStart?.({ sessionId: 'revenue', messageId: 'assistant-edit-pending' });
+          signal.addEventListener(
+            'abort',
+            () => reject(new DOMException('Aborted', 'AbortError')),
+            {
+              once: true,
+            },
+          );
+        }),
+    );
+
+    renderView();
+
+    await screen.findByText('Quarterly revenue is available.');
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    const editInput = screen.getByRole('textbox', { name: 'Edit message' });
+    fireEvent.change(editInput, { target: { value: 'Show updated quarterly revenue' } });
+    fireEvent.click(
+      within(editInput.closest('[data-slot="card"]') as HTMLElement).getByRole('button', {
+        name: 'Send',
+      }),
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'Stop' }));
+
+    await waitFor(() => expect(getSessionMessagesMock.mock.calls.length).toBeGreaterThanOrEqual(2));
+    await waitFor(() =>
+      expect(screen.getByText('Quarterly revenue is available.')).toBeInTheDocument(),
+    );
   });
 
   test('renames a chat from the actions contained in its history row', async () => {
@@ -305,6 +605,21 @@ describe('<AiReportingView /> interactions', () => {
       expect(renameSessionMock).toHaveBeenCalledWith('revenue', 'Revenue review'),
     );
     expect((await screen.findAllByText('Revenue review')).length).toBeGreaterThan(0);
+  });
+
+  test('closes a chat action tooltip when the pointer leaves its trigger', async () => {
+    const user = userEvent.setup();
+    renderView();
+
+    await screen.findAllByText('Quarterly revenue');
+    const deleteButton = screen.getByRole('button', { name: 'Delete chat Quarterly revenue' });
+    await user.hover(deleteButton);
+
+    const tooltip = await screen.findByRole('tooltip');
+    expect(tooltip).toHaveTextContent('Delete chat');
+
+    await user.hover(tooltip);
+    await waitFor(() => expect(screen.queryByRole('tooltip')).toBeNull());
   });
 
   test('confirms deletion through the destructive dialog', async () => {
@@ -355,22 +670,24 @@ describe('<AiReportingView /> interactions', () => {
     ]);
   });
 
-  test('adds dictated speech to the composer', async () => {
+  test('records and transcribes dictated speech without the Web Speech API', async () => {
+    Reflect.deleteProperty(window, 'SpeechRecognition');
     renderView();
 
     await screen.findAllByText('Quarterly revenue');
     fireEvent.click(screen.getByRole('button', { name: 'Start voice dictation' }));
 
-    expect(speechRecognitionInstance?.start).toHaveBeenCalledTimes(1);
-    await act(async () => {
-      speechRecognitionInstance?.emitResult('Show the quarterly revenue');
-    });
+    expect(await screen.findByRole('button', { name: 'Stop voice dictation' })).toBeEnabled();
+    expect(getUserMediaMock).toHaveBeenCalledWith({ audio: true });
+    expect(mediaRecorderInstance?.start).toHaveBeenCalledTimes(1);
 
+    fireEvent.click(screen.getByRole('button', { name: 'Stop voice dictation' }));
+
+    await waitFor(() => expect(transcribeAudioMock).toHaveBeenCalledTimes(1));
     expect(
       screen.getByRole('textbox', { name: 'Ask a question about your business data...' }),
     ).toHaveValue('Show the quarterly revenue');
-    fireEvent.click(screen.getByRole('button', { name: 'Stop voice dictation' }));
-    expect(speechRecognitionInstance?.stop).toHaveBeenCalledTimes(1);
+    expect(microphoneTrackStopMock).toHaveBeenCalled();
   });
 
   test('renders a validated visualization and exposes its source data', async () => {
@@ -415,20 +732,18 @@ describe('<AiReportingView /> interactions', () => {
     expect(within(table).getByText('12% pts')).toBeInTheDocument();
   });
 
-  test('ignores a delayed end event from a previous dictation session', async () => {
+  test('explains when microphone permission is denied', async () => {
+    getUserMediaMock.mockRejectedValueOnce(new DOMException('Denied', 'NotAllowedError'));
     renderView();
 
     await screen.findAllByText('Quarterly revenue');
     fireEvent.click(screen.getByRole('button', { name: 'Start voice dictation' }));
-    const firstRecognition = speechRecognitionInstances[0];
-    fireEvent.click(screen.getByRole('button', { name: 'Stop voice dictation' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Start voice dictation' }));
 
-    expect(speechRecognitionInstances).toHaveLength(2);
-    await act(async () => {
-      firstRecognition?.onend?.();
-    });
-
-    expect(screen.getByRole('button', { name: 'Stop voice dictation' })).toBeEnabled();
+    expect(
+      await screen.findByText(
+        'Microphone access was denied. Allow it in your browser settings and try again.',
+      ),
+    ).toBeInTheDocument();
+    expect(transcribeAudioMock).not.toHaveBeenCalled();
   });
 });

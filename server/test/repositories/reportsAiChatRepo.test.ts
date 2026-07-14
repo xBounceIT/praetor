@@ -179,7 +179,9 @@ describe('listMessagesForSession', () => {
 
   test('maps positional row to ChatMessage shape, coercing nulls', async () => {
     const created = new Date(1700000000000);
-    exec.enqueue({ rows: [['m1', 's1', 'user', 'hi', null, created]] });
+    exec.enqueue({
+      rows: [['m1', 's1', 'user', 'hi', null, null, null, null, null, created]],
+    });
     const result = await repo.listMessagesForSession('s1', { beforeMs: null, limit: 10 }, testDb);
     expect(result).toEqual([
       {
@@ -188,20 +190,24 @@ describe('listMessagesForSession', () => {
         role: 'user',
         content: 'hi',
         thoughtContent: null,
+        aiProvider: null,
+        aiModelId: null,
+        contextTokensUsed: null,
+        contextWindowTokens: null,
         createdAt: 1700000000000,
       },
     ]);
   });
 
   test('empty content/role pass through; empty thoughtContent maps to null', async () => {
-    exec.enqueue({ rows: [['m1', 's1', '', '', '', new Date(0)]] });
+    exec.enqueue({ rows: [['m1', 's1', '', '', '', null, null, null, null, new Date(0)]] });
     const [m] = await repo.listMessagesForSession('s1', { beforeMs: null, limit: 1 }, testDb);
     expect(m.content).toBe('');
     expect(m.thoughtContent).toBeNull();
   });
 
   test('null thoughtContent and null createdAt coerce safely', async () => {
-    exec.enqueue({ rows: [['m1', 's1', 'user', 'hi', null, null]] });
+    exec.enqueue({ rows: [['m1', 's1', 'user', 'hi', null, null, null, null, null, null]] });
     const [m] = await repo.listMessagesForSession('s1', { beforeMs: null, limit: 1 }, testDb);
     expect(m.thoughtContent).toBeNull();
     expect(m.createdAt).toBe(0);
@@ -242,16 +248,26 @@ describe('insertUserMessage', () => {
 });
 
 describe('insertAssistantMessage', () => {
-  test('without createdAt: column default supplies created_at; binds 5 params', async () => {
+  test('without createdAt: column default supplies created_at and nullable metadata', async () => {
     exec.enqueue({ rows: [] });
     await repo.insertAssistantMessage(
       { id: 'm1', sessionId: 's1', content: 'ok', thoughtContent: null },
       testDb,
     );
-    expect(exec.calls[0].params).toEqual(['m1', 's1', 'assistant', 'ok', null]);
+    expect(exec.calls[0].params).toEqual([
+      'm1',
+      's1',
+      'assistant',
+      'ok',
+      null,
+      null,
+      null,
+      null,
+      null,
+    ]);
   });
 
-  test('with explicit Date createdAt: binds it as the 6th param (ISO-serialized)', async () => {
+  test('with explicit Date createdAt: binds it after technical metadata (ISO-serialized)', async () => {
     exec.enqueue({ rows: [] });
     const when = new Date('2026-05-01T12:00:00Z');
     await repo.insertAssistantMessage(
@@ -270,6 +286,10 @@ describe('insertAssistantMessage', () => {
       'assistant',
       'ok',
       'thinking...',
+      null,
+      null,
+      null,
+      null,
       when.toISOString(),
     ]);
   });

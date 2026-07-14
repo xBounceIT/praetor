@@ -125,7 +125,18 @@ const resolveProviderKeyModel = (cfg: GeneralAiConfig) => {
   };
 };
 
-type AiTextResult = { text: string; thoughtContent?: string };
+type AiGenerationUsage = { modelId?: string; contextTokensUsed?: number };
+type AiTextResult = {
+  text: string;
+  thoughtContent?: string;
+  usage?: AiGenerationUsage;
+};
+type AiTechnicalInfo = {
+  provider: AiProvider;
+  modelId: string;
+  contextTokensUsed: number;
+  contextWindowTokens: number;
+};
 type AiStreamCallbacks = {
   onThoughtDelta?: (delta: string) => Promise<void> | void;
   onAnswerDelta?: (delta: string) => Promise<void> | void;
@@ -146,6 +157,8 @@ const findSseBoundary = (buffer: string): SseBoundary | null => {
 
 const googleTextFromGenerateContent = (payload: unknown): AiTextResult => {
   const p = payload as {
+    modelVersion?: string;
+    usageMetadata?: { totalTokenCount?: number };
     candidates?: Array<{
       content?: {
         parts?: Array<{ text?: string; thought?: boolean; type?: string }>;
@@ -164,11 +177,20 @@ const googleTextFromGenerateContent = (payload: unknown): AiTextResult => {
   }
   const text = textParts.join('').trim();
   const thoughtContent = thoughtParts.join('').trim();
-  return { text, thoughtContent: thoughtContent || undefined };
+  return {
+    text,
+    thoughtContent: thoughtContent || undefined,
+    usage: {
+      modelId: p.modelVersion,
+      contextTokensUsed: p.usageMetadata?.totalTokenCount,
+    },
+  };
 };
 
 const openrouterTextFromCompletion = (payload: unknown): AiTextResult => {
   const p = payload as {
+    model?: string;
+    usage?: { total_tokens?: number };
     choices?: Array<{
       message?: {
         content?: string;
@@ -182,11 +204,22 @@ const openrouterTextFromCompletion = (payload: unknown): AiTextResult => {
   const text = String(message?.content || '').trim();
   const thoughtContent = String(message?.reasoning_content || message?.reasoning || '').trim();
 
-  return { text, thoughtContent: thoughtContent || undefined };
+  return {
+    text,
+    thoughtContent: thoughtContent || undefined,
+    usage: { modelId: p.model, contextTokensUsed: p.usage?.total_tokens },
+  };
 };
 
 const anthropicTextFromMessage = (payload: unknown): AiTextResult => {
   const p = payload as {
+    model?: string;
+    usage?: {
+      input_tokens?: number;
+      output_tokens?: number;
+      cache_creation_input_tokens?: number;
+      cache_read_input_tokens?: number;
+    };
     content?: Array<{
       type?: string;
       text?: string;
@@ -201,7 +234,106 @@ const anthropicTextFromMessage = (payload: unknown): AiTextResult => {
   }
   const text = textParts.join('').trim();
   const thoughtContent = thoughtParts.join('').trim();
-  return { text, thoughtContent: thoughtContent || undefined };
+  const usage = p.usage;
+  const contextTokensUsed = usage
+    ? (usage.input_tokens || 0) +
+      (usage.output_tokens || 0) +
+      (usage.cache_creation_input_tokens || 0) +
+      (usage.cache_read_input_tokens || 0)
+    : undefined;
+  return {
+    text,
+    thoughtContent: thoughtContent || undefined,
+    usage: { modelId: p.model, contextTokensUsed },
+  };
+};
+
+const positiveInteger = (value: unknown): number | undefined => {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined;
+};
+
+const MODEL_CONTEXT_CACHE_TTL_MS = 60 * 60 * 1000;
+const MODEL_CONTEXT_REQUEST_TIMEOUT_MS = 3_000;
+const modelContextCache = new Map<string, { value: number; expiresAt: number }>();
+
+const fetchModelContextWindow = async (
+  provider: AiProvider,
+  apiKey: string,
+  modelId: string,
+): Promise<number | undefined> => {
+  const cacheKey = `${provider}:${modelId}`;
+  const cached = modelContextCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) return cached.value;
+
+  try {
+    let contextWindowTokens: number | undefined;
+    if (provider === 'gemini') {
+      const normalized = normalizeGeminiModelPath(modelId);
+      if (!normalized.ok) return undefined;
+      const url = new URL(
+        `/v1beta/${normalized.value}`,
+        'https://generativelanguage.googleapis.com',
+      );
+      url.searchParams.set('key', apiKey);
+      const response = await fetch(url, {
+        signal: AbortSignal.timeout(MODEL_CONTEXT_REQUEST_TIMEOUT_MS),
+      });
+      if (!response.ok) return undefined;
+      const data = (await response.json()) as { inputTokenLimit?: number };
+      contextWindowTokens = positiveInteger(data.inputTokenLimit);
+    } else if (provider === 'openrouter') {
+      const encodedModelPath = modelId.split('/').map(encodeURIComponent).join('/');
+      const response = await fetch(`https://openrouter.ai/api/v1/models/${encodedModelPath}`, {
+        headers: { Authorization: `Bearer ${apiKey}` },
+        signal: AbortSignal.timeout(MODEL_CONTEXT_REQUEST_TIMEOUT_MS),
+      });
+      if (!response.ok) return undefined;
+      const data = (await response.json()) as {
+        context_length?: number;
+        data?: { context_length?: number };
+      };
+      contextWindowTokens = positiveInteger(data.data?.context_length ?? data.context_length);
+    } else {
+      const response = await fetch(
+        `https://api.anthropic.com/v1/models/${encodeURIComponent(modelId)}`,
+        {
+          headers: {
+            'x-api-key': apiKey,
+            'anthropic-version': '2023-06-01',
+          },
+          signal: AbortSignal.timeout(MODEL_CONTEXT_REQUEST_TIMEOUT_MS),
+        },
+      );
+      if (!response.ok) return undefined;
+      const data = (await response.json()) as { max_input_tokens?: number };
+      contextWindowTokens = positiveInteger(data.max_input_tokens);
+    }
+
+    if (contextWindowTokens) {
+      modelContextCache.set(cacheKey, {
+        value: contextWindowTokens,
+        expiresAt: Date.now() + MODEL_CONTEXT_CACHE_TTL_MS,
+      });
+    }
+    return contextWindowTokens;
+  } catch {
+    return undefined;
+  }
+};
+
+const resolveTechnicalInfo = async (
+  provider: AiProvider,
+  apiKey: string,
+  configuredModelId: string,
+  usage: AiGenerationUsage | undefined,
+): Promise<AiTechnicalInfo | undefined> => {
+  const contextTokensUsed = positiveInteger(usage?.contextTokensUsed);
+  if (!contextTokensUsed) return undefined;
+  const modelId = String(usage?.modelId || configuredModelId).trim();
+  const contextWindowTokens = await fetchModelContextWindow(provider, apiKey, configuredModelId);
+  if (!modelId || !contextWindowTokens) return undefined;
+  return { provider, modelId, contextTokensUsed, contextWindowTokens };
 };
 
 const openaiTextFromResponse = (payload: unknown): AiTextResult => {
@@ -480,6 +612,7 @@ const geminiGenerateTextStream = async (
   let text = '';
   let thoughtContent = '';
   let thoughtDone = false;
+  let usage: AiGenerationUsage | undefined;
 
   for await (const evt of iterateSseEvents(res.body)) {
     if (signal?.aborted) throw createAbortError();
@@ -494,12 +627,20 @@ const geminiGenerateTextStream = async (
     }
 
     const p = payload as {
+      modelVersion?: string;
+      usageMetadata?: { totalTokenCount?: number };
       candidates?: Array<{
         content?: {
           parts?: Array<{ text?: string; thought?: boolean; type?: string }>;
         };
       }>;
     };
+    if (p.modelVersion || p.usageMetadata?.totalTokenCount) {
+      usage = {
+        modelId: p.modelVersion || usage?.modelId,
+        contextTokensUsed: p.usageMetadata?.totalTokenCount ?? usage?.contextTokensUsed,
+      };
+    }
     const parts = p.candidates?.[0]?.content?.parts || [];
 
     const nextThoughtParts: string[] = [];
@@ -536,6 +677,7 @@ const geminiGenerateTextStream = async (
   return {
     text: text.trim(),
     thoughtContent: thoughtContent.trim() || undefined,
+    usage,
   } as AiTextResult;
 };
 
@@ -566,6 +708,7 @@ const openrouterGenerateTextStream = async (
   let text = '';
   let thoughtContent = '';
   let thoughtDone = false;
+  let usage: AiGenerationUsage | undefined;
 
   for await (const evt of iterateSseEvents(res.body)) {
     if (signal?.aborted) throw createAbortError();
@@ -580,6 +723,8 @@ const openrouterGenerateTextStream = async (
     }
 
     const p = payload as {
+      model?: string;
+      usage?: { total_tokens?: number };
       choices?: Array<{
         delta?: {
           content?: string;
@@ -593,6 +738,12 @@ const openrouterGenerateTextStream = async (
         };
       }>;
     };
+    if (p.model || p.usage?.total_tokens) {
+      usage = {
+        modelId: p.model || usage?.modelId,
+        contextTokensUsed: p.usage?.total_tokens ?? usage?.contextTokensUsed,
+      };
+    }
 
     const choice = p.choices?.[0];
     const delta = choice?.delta;
@@ -643,6 +794,7 @@ const openrouterGenerateTextStream = async (
   return {
     text: text.trim(),
     thoughtContent: thoughtContent.trim() || undefined,
+    usage,
   } as AiTextResult;
 };
 
@@ -677,6 +829,9 @@ const anthropicGenerateTextStream = async (
   let text = '';
   let thoughtContent = '';
   let thoughtDone = false;
+  let responseModelId = '';
+  let inputTokens = 0;
+  let outputTokens = 0;
 
   for await (const evt of iterateSseEvents(res.body)) {
     if (signal?.aborted) throw createAbortError();
@@ -691,11 +846,34 @@ const anthropicGenerateTextStream = async (
     const event = payload as {
       type?: string;
       error?: { message?: string };
+      message?: {
+        model?: string;
+        usage?: {
+          input_tokens?: number;
+          output_tokens?: number;
+          cache_creation_input_tokens?: number;
+          cache_read_input_tokens?: number;
+        };
+      };
+      usage?: { output_tokens?: number };
       content_block?: { type?: string; text?: string; thinking?: string };
       delta?: { type?: string; text?: string; thinking?: string };
     };
     if (event.type === 'error') {
       throw new Error(event.error?.message || 'Anthropic stream failed');
+    }
+
+    if (event.type === 'message_start') {
+      responseModelId = event.message?.model || responseModelId;
+      const usage = event.message?.usage;
+      inputTokens =
+        (usage?.input_tokens || 0) +
+        (usage?.cache_creation_input_tokens || 0) +
+        (usage?.cache_read_input_tokens || 0);
+      outputTokens = usage?.output_tokens || outputTokens;
+    }
+    if (event.type === 'message_delta') {
+      outputTokens = event.usage?.output_tokens ?? outputTokens;
     }
 
     const block = event.type === 'content_block_start' ? event.content_block : event.delta;
@@ -725,6 +903,10 @@ const anthropicGenerateTextStream = async (
   return {
     text: text.trim(),
     thoughtContent: thoughtContent.trim() || undefined,
+    usage: {
+      modelId: responseModelId || undefined,
+      contextTokensUsed: inputTokens + outputTokens || undefined,
+    },
   } as AiTextResult;
 };
 
@@ -1768,6 +1950,17 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     required: ['id', 'title', 'createdAt', 'updatedAt'],
   } as const;
 
+  const technicalInfoSchema = {
+    type: 'object',
+    properties: {
+      provider: { type: 'string', enum: ['gemini', 'openrouter', 'anthropic'] },
+      modelId: { type: 'string' },
+      contextTokensUsed: { type: 'number' },
+      contextWindowTokens: { type: 'number' },
+    },
+    required: ['provider', 'modelId', 'contextTokensUsed', 'contextWindowTokens'],
+  } as const;
+
   const messageSchema = {
     type: 'object',
     properties: {
@@ -1776,6 +1969,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       role: { type: 'string' },
       content: { type: 'string' },
       thoughtContent: { type: 'string' },
+      technicalInfo: technicalInfoSchema,
       createdAt: { type: 'number' },
     },
     required: ['id', 'sessionId', 'role', 'content', 'createdAt'],
@@ -1967,6 +2161,18 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         role: m.role,
         content: m.content,
         thoughtContent: m.thoughtContent ?? undefined,
+        technicalInfo:
+          m.aiProvider &&
+          m.aiModelId &&
+          m.contextTokensUsed != null &&
+          m.contextWindowTokens != null
+            ? {
+                provider: m.aiProvider,
+                modelId: m.aiModelId,
+                contextTokensUsed: m.contextTokensUsed,
+                contextWindowTokens: m.contextWindowTokens,
+              }
+            : undefined,
         createdAt: m.createdAt,
       }));
 
@@ -2184,12 +2390,22 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               generatedText || streamHandlers.accumulated.text.trim() || 'No response.';
             const assistantThoughtContent =
               generatedThought || streamHandlers.accumulated.thoughtContent.trim();
+            const technicalInfo = await resolveTechnicalInfo(
+              provider,
+              apiKey,
+              modelId,
+              generated.usage,
+            );
 
             await reportsAiChatRepo.insertAssistantMessage({
               id: assistantMessageId,
               sessionId: resolvedSessionId,
               content: assistantText,
               thoughtContent: assistantThoughtContent || null,
+              aiProvider: technicalInfo?.provider,
+              aiModelId: technicalInfo?.modelId,
+              contextTokensUsed: technicalInfo?.contextTokensUsed,
+              contextWindowTokens: technicalInfo?.contextWindowTokens,
             });
 
             let titleToSet = '';
@@ -2225,6 +2441,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                   sessionId: resolvedSessionId,
                   text: assistantText,
                   thoughtContent: assistantThoughtContent || undefined,
+                  technicalInfo,
                 }))
               ) {
                 streamAbortController.abort();
@@ -2428,6 +2645,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               generatedText || streamHandlers.accumulated.text.trim() || 'No response.';
             const assistantThoughtContent =
               generatedThought || streamHandlers.accumulated.thoughtContent.trim();
+            const technicalInfo = await resolveTechnicalInfo(
+              provider,
+              apiKey,
+              modelId,
+              generated.usage,
+            );
 
             // Atomic swap: delete the old paired assistant (if any) and insert the new one in
             // a single transaction. Deferring the delete until here means a mid-stream failure
@@ -2442,6 +2665,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                   sessionId: sessionIdResult.value,
                   content: assistantText,
                   thoughtContent: assistantThoughtContent || null,
+                  aiProvider: technicalInfo?.provider,
+                  aiModelId: technicalInfo?.modelId,
+                  contextTokensUsed: technicalInfo?.contextTokensUsed,
+                  contextWindowTokens: technicalInfo?.contextWindowTokens,
                   createdAt: savedAssistantCreatedAt.toISOString(),
                 },
                 tx,
@@ -2455,6 +2682,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                 sessionId: sessionIdResult.value,
                 text: assistantText,
                 thoughtContent: assistantThoughtContent || undefined,
+                technicalInfo,
               }))
             ) {
               streamAbortController.abort();
@@ -2502,6 +2730,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               sessionId: { type: 'string' },
               text: { type: 'string' },
               thoughtContent: { type: 'string' },
+              technicalInfo: technicalInfoSchema,
             },
             required: ['sessionId', 'text'],
           },
@@ -2606,6 +2835,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         const cleaned = String(text || '').trim();
         const assistantText = cleaned || 'No response.';
         const assistantThoughtContent = String(thoughtContent || '').trim();
+        const technicalInfo = await resolveTechnicalInfo(
+          provider,
+          apiKey,
+          modelId,
+          generated.usage,
+        );
 
         const assistantMessageId = generatePrefixedId(reportsAiChatRepo.RPT_MSG_ID_PREFIX);
         await reportsAiChatRepo.insertAssistantMessage({
@@ -2613,6 +2848,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           sessionId: resolvedSessionId,
           content: assistantText,
           thoughtContent: assistantThoughtContent || null,
+          aiProvider: technicalInfo?.provider,
+          aiModelId: technicalInfo?.modelId,
+          contextTokensUsed: technicalInfo?.contextTokensUsed,
+          contextWindowTokens: technicalInfo?.contextWindowTokens,
         });
 
         let titleToSet = '';
@@ -2642,6 +2881,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           sessionId: resolvedSessionId,
           text: assistantText,
           thoughtContent: assistantThoughtContent || undefined,
+          technicalInfo,
         });
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'AI request failed';

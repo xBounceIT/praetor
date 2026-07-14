@@ -23,6 +23,8 @@ On mobile devices, open the history with the button in the conversation header.
 
 Chat actions are contained in its history row: use the pencil to rename the title, or use the trash button to remove the conversation and confirm the action.
 
+The **Technical info** toggle in the top-right corner shows the provider and model used for the latest response, together with used context tokens, the model's total capacity, and the percentage occupied. Above 80%, a warning appears: a nearly full window can reduce quality or performance, so starting a new chat is recommended. Conversations created before this feature show these details after their next AI response.
+
 ## Composer, attachments, and dictation
 
 The composer floats over the conversation: it stays compact on one line and grows automatically when the text wraps onto additional lines. Press **Enter** to send or **Shift+Enter** to insert a new line.

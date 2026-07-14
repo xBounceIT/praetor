@@ -750,6 +750,13 @@
       "when": 1784058187783,
       "tag": "0106_add_openai_ai_provider",
       "breakpoints": true
+    },
+    {
+      "idx": 107,
+      "version": "7",
+      "when": 1784066394120,
+      "tag": "0107_add_ai_reporting_technical_info",
+      "breakpoints": true
     }
   ]
 }

@@ -1,4 +1,8 @@
-import type { ReportChatMessage, ReportChatSessionSummary } from '../../types';
+import type {
+  ReportChatMessage,
+  ReportChatSessionSummary,
+  ReportChatTechnicalInfo,
+} from '../../types';
 import { fetchApi, fetchApiStream } from './client';
 import type { ReportChatStreamDoneEvent, ReportChatStreamHandlers } from './contracts';
 
@@ -112,11 +116,16 @@ const parseReportStream = async (
     }
 
     if (evt.event === 'done') {
+      const rawTechnicalInfo = payload.technicalInfo;
       donePayload = {
         sessionId: String(payload.sessionId || ''),
         text: String(payload.text || ''),
         thoughtContent:
           typeof payload.thoughtContent === 'string' ? payload.thoughtContent : undefined,
+        technicalInfo:
+          rawTechnicalInfo && typeof rawTechnicalInfo === 'object'
+            ? (rawTechnicalInfo as ReportChatTechnicalInfo)
+            : undefined,
       };
       continue;
     }
@@ -176,6 +185,7 @@ export const reportsApi = {
     sessionId: string;
     text: string;
     thoughtContent?: string;
+    technicalInfo?: ReportChatTechnicalInfo;
   }> =>
     fetchApi('/reports/ai-reporting/chat', {
       method: 'POST',
