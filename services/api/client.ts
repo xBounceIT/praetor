@@ -5,8 +5,11 @@ const DEFAULT_TIMEOUT_MS = 30_000;
 
 // react-doctor-disable-next-line react-doctor/auth-token-in-web-storage -- Existing bearer-token API contract; cookie migration requires a coordinated server compatibility window.
 let authToken: string | null = localStorage.getItem('praetor_auth_token');
+let authTokenRevision = 0;
+let nextAuthRequestId = 0;
+let latestAppliedTokenRequestId = 0;
 
-export const setAuthToken = (token: string | null) => {
+const persistAuthToken = (token: string | null) => {
   authToken = token;
   if (token) {
     // react-doctor-disable-next-line react-doctor/auth-token-in-web-storage -- Existing bearer-token API contract; cookie migration requires coordinated server support.
@@ -14,6 +17,11 @@ export const setAuthToken = (token: string | null) => {
   } else {
     localStorage.removeItem('praetor_auth_token');
   }
+};
+
+export const setAuthToken = (token: string | null) => {
+  authTokenRevision += 1;
+  persistAuthToken(token);
 };
 
 export const getAuthToken = () => authToken;
@@ -44,7 +52,32 @@ export interface FetchApiOptions extends RequestInit {
   timeoutMs?: number | null;
 }
 
+type AuthRequestContext = {
+  requestId: number;
+  tokenRevision: number;
+};
+
+const beginAuthRequest = (): AuthRequestContext => ({
+  requestId: ++nextAuthRequestId,
+  tokenRevision: authTokenRevision,
+});
+
+// Preserve request start order when concurrent responses rotate the session token.
+// The revision also prevents a response started before login/logout from restoring stale auth.
+const applyRotatedAuthToken = (response: Response, context: AuthRequestContext) => {
+  const newToken = response.headers.get('x-auth-token');
+  if (
+    newToken &&
+    context.tokenRevision === authTokenRevision &&
+    context.requestId > latestAppliedTokenRequestId
+  ) {
+    latestAppliedTokenRequestId = context.requestId;
+    persistAuthToken(newToken);
+  }
+};
+
 export const fetchApi = async <T>(endpoint: string, options: FetchApiOptions = {}): Promise<T> => {
+  const authContext = beginAuthRequest();
   const { timeoutMs = DEFAULT_TIMEOUT_MS, signal: callerSignal, ...fetchOptions } = options;
 
   const headers: HeadersInit = {
@@ -76,10 +109,7 @@ export const fetchApi = async <T>(endpoint: string, options: FetchApiOptions = {
     throw new ApiError(message, 0, true);
   }
 
-  const newToken = response.headers.get('x-auth-token');
-  if (newToken) {
-    setAuthToken(newToken);
-  }
+  applyRotatedAuthToken(response, authContext);
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({ error: 'Request failed' }));
@@ -102,6 +132,7 @@ export const fetchApiStream = async (
   endpoint: string,
   options: RequestInit = {},
 ): Promise<Response> => {
+  const authContext = beginAuthRequest();
   const headers: HeadersInit = {
     ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
     ...options.headers,
@@ -118,10 +149,7 @@ export const fetchApiStream = async (
     throw new ApiError(message, 0, true);
   }
 
-  const newToken = response.headers.get('x-auth-token');
-  if (newToken) {
-    setAuthToken(newToken);
-  }
+  applyRotatedAuthToken(response, authContext);
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({ error: 'Request failed' }));

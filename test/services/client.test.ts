@@ -1,6 +1,22 @@
 import { afterAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 import { buildResponse } from '../helpers/fetchMock';
 
+type FetchResponse = ReturnType<typeof buildResponse>;
+
+const buildTokenResponse = (token: string): FetchResponse =>
+  buildResponse({
+    headers: { 'x-auth-token': token },
+    json: () => ({}),
+  });
+
+const createDeferredResponse = () => {
+  let resolve!: (response: FetchResponse) => void;
+  const promise = new Promise<FetchResponse>((resolvePromise) => {
+    resolve = resolvePromise;
+  });
+  return { promise, resolve };
+};
+
 const originalFetch = globalThis.fetch;
 const fetchMock = mock(
   async (_input: unknown, _init?: unknown): Promise<unknown> => buildResponse({ status: 204 }),
@@ -66,6 +82,48 @@ describe('services/api/client', () => {
       await fetchApi('/anything');
       expect(getAuthToken()).toBe('rotated-token');
       expect(localStorage.getItem('praetor_auth_token')).toBe('rotated-token');
+    });
+
+    test('keeps the token from the newest concurrent request when responses arrive out of order', async () => {
+      setAuthToken('initial-token');
+
+      const firstResponse = createDeferredResponse();
+      const secondResponse = createDeferredResponse();
+      const thirdResponse = createDeferredResponse();
+
+      fetchMock.mockImplementationOnce(() => firstResponse.promise);
+      fetchMock.mockImplementationOnce(() => secondResponse.promise);
+      fetchMock.mockImplementationOnce(() => thirdResponse.promise);
+
+      const firstRequest = fetchApi('/first');
+      const secondRequest = fetchApi('/second');
+      const thirdRequest = fetchApi('/third');
+
+      firstResponse.resolve(buildTokenResponse('first-token'));
+      await firstRequest;
+
+      thirdResponse.resolve(buildTokenResponse('newest-token'));
+      await thirdRequest;
+
+      secondResponse.resolve(buildTokenResponse('stale-token'));
+      await secondRequest;
+
+      expect(getAuthToken()).toBe('newest-token');
+      expect(localStorage.getItem('praetor_auth_token')).toBe('newest-token');
+    });
+
+    test('ignores a rotation from a request started before an explicit token change', async () => {
+      setAuthToken('initial-token');
+      const response = createDeferredResponse();
+      fetchMock.mockImplementationOnce(() => response.promise);
+
+      const request = fetchApi('/in-flight');
+      setAuthToken(null);
+      response.resolve(buildTokenResponse('stale-token'));
+      await request;
+
+      expect(getAuthToken()).toBeNull();
+      expect(localStorage.getItem('praetor_auth_token')).toBeNull();
     });
 
     test('does not change token when response omits x-auth-token header', async () => {
