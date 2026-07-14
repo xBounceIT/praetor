@@ -61,6 +61,8 @@ const schemaReadinessTables = [
   ['sale_items', schema.saleItems],
   ['sales', schema.sales],
   ['settings', schema.settings],
+  ['siem_config', schema.siemConfig],
+  ['siem_outbox', schema.siemOutbox],
   ['sso_login_tickets', schema.ssoLoginTickets],
   ['sso_providers', schema.ssoProviders],
   ['sso_states', schema.ssoStates],

@@ -121,6 +121,7 @@ describe('ADMINISTRATION_PERMISSIONS / ADMIN_BASE_PERMISSIONS', () => {
     expect(ADMINISTRATION_PERMISSIONS.every((p) => p.startsWith('administration.'))).toBe(true);
     expect(ADMINISTRATION_PERMISSIONS).toContain('administration.user_management.view');
     expect(ADMINISTRATION_PERMISSIONS).toContain('administration.logs.view');
+    expect(ADMINISTRATION_PERMISSIONS).toContain('administration.logs.update');
   });
 
   test('ADMIN_BASE_PERMISSIONS covers standalone grants without HR module access', () => {

@@ -4671,6 +4671,7 @@ const AdministrationRoutes: React.FC<{ controller: AuthenticatedAppContentContro
           <LogsView
             startOfWeek={generalSettings.startOfWeek}
             treatSaturdayAsHoliday={generalSettings.treatSaturdayAsHoliday}
+            canUpdateSiem={hasPermission(currentUser.permissions, 'administration.logs.update')}
           />
         )}
       {hasPermission(currentUser.permissions, VIEW_PERMISSION_MAP['administration/email']) &&

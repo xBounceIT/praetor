@@ -11,6 +11,7 @@ import {
   type ProjectRulesSchedulerHandle,
   startProjectRulesScheduler,
 } from './services/projectRulesScheduler.ts';
+import siemService from './services/siem.ts';
 import { performShutdown } from './shutdown.ts';
 import { createChildLogger, serializeError } from './utils/logger.ts';
 import {
@@ -48,7 +49,7 @@ let projectRulesScheduler: ProjectRulesSchedulerHandle | null = null;
 const shutdown = async (signal: string) => {
   ldapSyncScheduler?.stop();
   projectRulesScheduler?.stop();
-  const code = await performShutdown(fastify, signal, logger);
+  const code = await performShutdown(fastify, signal, logger, () => siemService.shutdown());
   process.exit(code);
 };
 
@@ -98,6 +99,9 @@ try {
   } else {
     logger.info('Demo seeding disabled (set DEMO_SEEDING=true to enable)');
   }
+
+  // SIEM starts only after migrations/readiness so bootstrap logs remain stdout-only.
+  await siemService.initialize();
 
   await fastify.listen({ port: PORT, host: '0.0.0.0' });
 

@@ -94,7 +94,90 @@
     "title": "Logs",
     "subtitle": "Monitor system operations and access through audit logs.",
     "tabs": {
-      "audit": "Audit"
+      "audit": "Audit",
+      "siem": "SIEM"
+    },
+    "siem": {
+      "loading": "Loading SIEM configuration...",
+      "viewOnly": "You have read-only access. Updating or enabling the stream requires the logs update permission.",
+      "status": {
+        "title": "Stream status",
+        "description": "Delivery, test, and durable queue health.",
+        "enabled": "Enabled",
+        "disabled": "Disabled",
+        "unknown": "Unknown",
+        "never": "Never",
+        "lastTest": "Last test",
+        "testSucceeded": "Successful",
+        "testFailed": "Failed",
+        "lastDelivery": "Last delivery",
+        "pending": "Pending",
+        "oldestPending": "Oldest pending",
+        "dropped": "Dropped"
+      },
+      "destination": {
+        "title": "Destination",
+        "description": "Syslog collector receiving RFC 5424 events in LEEF 2.0 format."
+      },
+      "events": {
+        "title": "Event selection",
+        "description": "Audit and runtime events have independent filters."
+      },
+      "tls": {
+        "title": "TLS and mTLS",
+        "description": "Server verification is always enabled and requires TLS 1.2 or newer.",
+        "keyStored": "Key stored",
+        "keyStoredHelp": "The private key is encrypted. Keep it or choose Replace."
+      },
+      "queue": {
+        "title": "Durable queue",
+        "description": "Oldest events are dropped when retention or capacity is exceeded."
+      },
+      "fields": {
+        "host": "Host",
+        "port": "Port",
+        "protocol": "Protocol",
+        "framing": "TCP/TLS framing",
+        "source": "Source identifier",
+        "facility": "Syslog facility (0-23)",
+        "runtime": "Runtime logs",
+        "runtimeHelp": "Allowlisted Pino/Fastify events.",
+        "audit": "Application audits",
+        "auditHelp": "Action, actor, IP, entity, and normalized details.",
+        "runtimeLevel": "Minimum runtime level",
+        "serverName": "TLS server name",
+        "ca": "Private CA PEM (optional)",
+        "clientCert": "Client certificate PEM (optional)",
+        "clientKey": "Client private key PEM",
+        "retention": "Retention (days)",
+        "capacity": "Maximum event capacity"
+      },
+      "validation": {
+        "hostRequired": "Enter the collector host.",
+        "port": "Port must be between 1 and 65535.",
+        "facility": "Facility must be an integer between 0 and 23.",
+        "retention": "Retention must be an integer between 1 and 30 days.",
+        "capacity": "Capacity must be an integer between 10,000 and 1,000,000 events.",
+        "sourceRequired": "Enter a source identifier.",
+
+        "mtlsPair": "Client certificate and key must be configured together."
+      },
+      "actions": {
+        "save": "Save",
+        "test": "Test",
+        "enable": "Enable",
+        "disable": "Disable"
+      },
+      "messages": {
+        "loadFailed": "Unable to load the SIEM configuration.",
+        "saved": "SIEM configuration saved.",
+        "saveFailed": "Unable to save the SIEM configuration.",
+        "testSucceeded": "SIEM test completed.",
+        "testFailed": "SIEM test failed.",
+        "enabled": "SIEM streaming enabled.",
+        "disabled": "SIEM streaming disabled.",
+        "toggleFailed": "Unable to change SIEM streaming status."
+      }
     },
     "columns": {
       "user": "User",
@@ -160,6 +243,7 @@
         "project_rule": "project rule",
         "role": "role",
         "settings": "settings",
+        "siem_config": "SIEM configuration",
         "supplier": "supplier",
         "supplier_invoice": "supplier invoice",
         "supplier_order": "supplier order",

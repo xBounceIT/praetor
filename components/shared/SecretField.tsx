@@ -20,6 +20,7 @@ export type SecretFieldProps = {
   monospace?: boolean;
   error?: string;
   testId?: string;
+  disabled?: boolean;
 };
 
 // Stored secrets arrive from the server pre-masked. Typing into a populated field would silently
@@ -43,6 +44,7 @@ const SecretField: React.FC<SecretFieldProps> = ({
   monospace,
   error,
   testId,
+  disabled = false,
 }) => {
   const { t } = useTranslation('common');
   const replaceLabel = t('secretField.replace', 'Replace');
@@ -63,6 +65,7 @@ const SecretField: React.FC<SecretFieldProps> = ({
             size="sm"
             className="ml-auto"
             onClick={onStartReplace}
+            disabled={disabled}
             data-testid={testId ? `${testId}-replace` : undefined}
           >
             {replaceLabel}
@@ -87,6 +90,7 @@ const SecretField: React.FC<SecretFieldProps> = ({
             size="sm"
             className="h-6 px-2 text-xs text-muted-foreground hover:text-foreground"
             onClick={onCancelReplace}
+            disabled={disabled}
             data-testid={testId ? `${testId}-keep-stored` : undefined}
           >
             {keepStoredLabel}
@@ -102,6 +106,7 @@ const SecretField: React.FC<SecretFieldProps> = ({
           aria-invalid={isInvalid}
           className={inputClassName}
           data-testid={testId ? `${testId}-input` : undefined}
+          disabled={disabled}
         />
       ) : (
         <Input
@@ -112,6 +117,7 @@ const SecretField: React.FC<SecretFieldProps> = ({
           aria-invalid={isInvalid}
           className={inputClassName}
           data-testid={testId ? `${testId}-input` : undefined}
+          disabled={disabled}
         />
       )}
       {error && <FieldError>{error}</FieldError>}

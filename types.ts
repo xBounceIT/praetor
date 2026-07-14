@@ -1575,6 +1575,7 @@ export const AUDIT_ENTITY_TYPES = [
   'role',
   'saved_view',
   'settings',
+  'siem_config',
   'sso_provider',
   'supplier',
   'supplier_invoice',

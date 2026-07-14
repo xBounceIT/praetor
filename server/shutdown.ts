@@ -6,10 +6,22 @@ export const performShutdown = async (
   fastify: FastifyInstance,
   signal: string,
   log: Logger,
+  afterClose?: () => Promise<void>,
 ): Promise<number> => {
   try {
     log.info({ signal }, 'Shutting down');
-    await fastify.close();
+    let shutdownError: unknown;
+    try {
+      await fastify.close();
+    } catch (error) {
+      shutdownError = error;
+    }
+    try {
+      await afterClose?.();
+    } catch (error) {
+      shutdownError ??= error;
+    }
+    if (shutdownError) throw shutdownError;
     return 0;
   } catch (err) {
     log.error({ signal, err: serializeError(err) }, 'Shutdown error');

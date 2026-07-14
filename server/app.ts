@@ -2,7 +2,7 @@ import cors from '@fastify/cors';
 import multipart from '@fastify/multipart';
 import swagger from '@fastify/swagger';
 import dotenv from 'dotenv';
-import Fastify, { type FastifyInstance } from 'fastify';
+import Fastify, { type FastifyBaseLogger, type FastifyInstance } from 'fastify';
 import rateLimit, { type errorResponseBuilderContext } from 'fastify-rate-limit';
 import aiRoutes from './routes/ai.ts';
 import authRoutes from './routes/auth.ts';
@@ -44,7 +44,7 @@ import webhooksRoutes from './routes/webhooks.ts';
 import workUnitsRoutes from './routes/work-units.ts';
 import { ajvFormatsPlugin, ajvFormatsPluginOptions } from './utils/ajv-formats.ts';
 import { APP_VERSION } from './utils/app-version.ts';
-import { loggerOptions, serializeError } from './utils/logger.ts';
+import { logger, serializeError } from './utils/logger.ts';
 import { GLOBAL_RATE_LIMIT } from './utils/rate-limit.ts';
 
 dotenv.config({ quiet: true });
@@ -115,7 +115,7 @@ export const registerErrorHandler = (fastify: FastifyInstance) => {
 
 export const buildApp = async () => {
   const fastify = Fastify({
-    logger: loggerOptions,
+    loggerInstance: logger as FastifyBaseLogger,
     trustProxy: parseTrustProxyEnv(process.env.TRUST_PROXY),
     // Register `ajv-formats` so JSON-schema `format` keywords (`date-time`, `date`, `email`, ...)
     // are actually validated. Without this, schemas like `{ type: 'string', format: 'date-time' }`

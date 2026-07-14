@@ -33,6 +33,7 @@ import * as rolesSchema from './schema/roles.ts';
 import * as salesSchema from './schema/sales.ts';
 import * as savedViewsSchema from './schema/savedViews.ts';
 import * as settingsSchema from './schema/settings.ts';
+import * as siemSchema from './schema/siem.ts';
 import * as ssoSchema from './schema/sso.ts';
 import * as ssoProvidersSchema from './schema/ssoProviders.ts';
 import * as supplierInvoicesSchema from './schema/supplierInvoices.ts';
@@ -83,6 +84,7 @@ export const schema = {
   ...salesSchema,
   ...savedViewsSchema,
   ...settingsSchema,
+  ...siemSchema,
   ...ssoSchema,
   ...ssoProvidersSchema,
   ...supplierInvoicesSchema,
