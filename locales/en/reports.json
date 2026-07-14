@@ -56,6 +56,18 @@
     "deleteChatConfirm": "This will remove \"{{name}}\" from your chat history.",
     "goToBottom": "Go to bottom",
     "copyTable": "Copy table",
+    "visualizationTypes": {
+      "area": "Area chart",
+      "bar": "Bar chart",
+      "donut": "Donut chart",
+      "line": "Line chart",
+      "pie": "Pie chart"
+    },
+    "showVisualizationData": "Show data",
+    "hideVisualizationData": "Hide data",
+    "visualizationDataTable": "Data used for {{title}}",
+    "visualizationRendering": "Building visualization...",
+    "visualizationInvalid": "The AI returned a visualization that could not be rendered safely.",
     "loadOlder": "Load older messages",
     "loadingOlder": "Loading older messages...",
     "error": "Something went wrong.",

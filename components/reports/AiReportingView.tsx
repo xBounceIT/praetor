@@ -70,6 +70,10 @@ import api from '../../services/api';
 import type { ReportChatMessage, ReportChatSessionSummary } from '../../types';
 import { buildPermission, hasPermission } from '../../utils/permissions';
 import {
+  AiReportingVisualization,
+  AiReportingVisualizationPending,
+} from './AiReportingVisualization';
+import {
   AI_REPORTING_ATTACHMENT_ACCEPT,
   AI_REPORTING_MAX_ATTACHMENT_BYTES,
   AI_REPORTING_MAX_ATTACHMENT_CONTENT_CHARS,
@@ -87,6 +91,11 @@ import {
   type AiReportingSessionGroupKey,
   filterAndGroupAiReportingSessions,
 } from './aiReportingSessions';
+import {
+  type AiReportingVisualizationParseResult,
+  getAiReportingAssistantCopyText,
+  parseAiReportingVisualizations,
+} from './aiReportingVisualizations';
 import { useAiReportingDictation } from './useAiReportingDictation';
 
 export interface AiReportingViewProps {
@@ -1744,6 +1753,7 @@ const AiReportingLayout: React.FC<{ controller: AiReportingController }> = ({ co
                 onLoadOlderMessages={() => void loadOlderMessages()}
                 interactions={{
                   t,
+                  language,
                   canSend,
                   isSending,
                   editingMessageId,
@@ -2076,6 +2086,7 @@ const AiReportingAlerts: React.FC<AiReportingAlertsProps> = ({
 
 interface AiReportingMessageInteractions {
   t: TranslationFn;
+  language: string;
   canSend: boolean;
   isSending: boolean;
   editingMessageId: string;
@@ -2437,6 +2448,11 @@ const AiReportingAssistantMessage: React.FC<AiReportingAssistantMessageProps> = 
 }) => {
   const { t, setExpandedThoughtMessageIds, handleRetryMessage, dispatchAttemptSelection } =
     interactions;
+  const parsedContent = useMemo(
+    () => parseAiReportingVisualizations(message.content),
+    [message.content],
+  );
+  const copyText = useMemo(() => getAiReportingAssistantCopyText(parsedContent), [parsedContent]);
 
   return (
     <div className="group w-full flex justify-start">
@@ -2449,7 +2465,11 @@ const AiReportingAssistantMessage: React.FC<AiReportingAssistantMessageProps> = 
             setExpandedThoughtMessageIds={setExpandedThoughtMessageIds}
           />
         )}
-        <AiMarkdownMessage message={message} interactions={interactions} />
+        <AiMarkdownMessage
+          message={message}
+          interactions={interactions}
+          parsedContent={parsedContent}
+        />
         <div className="mt-2 flex justify-start items-center gap-1.5">
           <Tooltip>
             <TooltipTrigger asChild>
@@ -2457,7 +2477,7 @@ const AiReportingAssistantMessage: React.FC<AiReportingAssistantMessageProps> = 
                 iconOnly
                 variant="ghost"
                 size="icon-sm"
-                value={message.content}
+                value={copyText}
                 aria-label={t('common:buttons.copy', { defaultValue: 'Copy' })}
                 className="text-muted-foreground hover:bg-accent hover:text-foreground"
               />
@@ -2552,138 +2572,161 @@ const AiReportingThoughtPanel: React.FC<AiReportingThoughtPanelProps> = ({
 const AiMarkdownMessage: React.FC<{
   message: ReportChatMessage;
   interactions: AiReportingMessageInteractions;
-}> = ({ message, interactions }) => {
-  const { t, resolveTableMarkdown, tableRefs } = interactions;
+  parsedContent: AiReportingVisualizationParseResult;
+}> = ({ message, interactions, parsedContent }) => {
+  const { t, language, resolveTableMarkdown, tableRefs } = interactions;
   let tableRenderIndex = 0;
 
   return (
-    <ReactMarkdown
-      remarkPlugins={[remarkGfm, remarkBreaks]}
-      components={{
-        a: ({ children, href }: MarkdownRendererProps<'a'>) => {
-          const safe = safeHref(href);
-          if (!safe) return <>{children}</>;
-          return (
-            <a
-              href={safe}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="font-semibold text-foreground underline underline-offset-2 hover:text-foreground/80"
-            >
-              {children}
-            </a>
-          );
-        },
-        img: ({ alt, src }: MarkdownRendererProps<'img'>) => {
-          const safe = safeHref(src);
-          const label = alt?.trim() ? alt.trim() : src || 'image';
-          if (!safe) return <span className="text-muted-foreground">[Image: {label}]</span>;
-          return (
-            <a
-              href={safe}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="font-semibold text-foreground underline underline-offset-2 hover:text-foreground/80"
-            >
-              [Image: {label}]
-            </a>
-          );
-        },
-        p: ({ children }: MarkdownRendererProps<'p'>) => (
-          <p className="my-2 first:mt-0 last:mb-0">{children}</p>
-        ),
-        h1: ({ children }: MarkdownRendererProps<'h1'>) => (
-          <h1 className="mt-4 mb-2 text-lg font-semibold text-foreground">{children}</h1>
-        ),
-        h2: ({ children }: MarkdownRendererProps<'h2'>) => (
-          <h2 className="mt-4 mb-2 text-base font-semibold text-foreground">{children}</h2>
-        ),
-        h3: ({ children }: MarkdownRendererProps<'h3'>) => (
-          <h3 className="mt-3 mb-1 text-sm font-semibold text-foreground">{children}</h3>
-        ),
-        ul: ({ children }: MarkdownRendererProps<'ul'>) => (
-          <ul className="my-2 list-disc pl-5 marker:text-muted-foreground">{children}</ul>
-        ),
-        ol: ({ children }: MarkdownRendererProps<'ol'>) => (
-          <ol className="my-2 list-decimal pl-5 marker:text-muted-foreground">{children}</ol>
-        ),
-        li: ({ children }: MarkdownRendererProps<'li'>) => <li className="my-1">{children}</li>,
-        blockquote: ({ children }: MarkdownRendererProps<'blockquote'>) => (
-          <blockquote className="my-2 border-l-4 border-border pl-3 text-muted-foreground">
-            {children}
-          </blockquote>
-        ),
-        hr: () => <hr className="my-3 border-border" />,
-        table: ({ children }: MarkdownRendererProps<'table'>) => {
-          tableRenderIndex += 1;
-          const tableId = `${message.id}-table-${tableRenderIndex}`;
-          return (
-            <Card className="my-3 gap-0 overflow-hidden rounded-2xl py-0">
-              <div className="flex items-center justify-end border-b border-border px-2 py-1.5">
-                <CopyButton
-                  iconOnly
-                  variant="ghost"
-                  size="icon-xs"
-                  value={() => resolveTableMarkdown(tableId)}
-                  aria-label={t('aiReporting.copyTable', { defaultValue: 'Copy table' })}
-                  className="text-muted-foreground hover:bg-accent hover:text-foreground"
-                />
-              </div>
-              <div className="max-w-full overflow-x-auto">
-                <table
-                  ref={(tableElement) => {
-                    if (tableElement) {
-                      tableRefs.current[tableId] = tableElement;
-                    } else {
-                      delete tableRefs.current[tableId];
-                    }
-                  }}
-                  className="w-max min-w-full border-collapse text-left text-[13px] leading-relaxed text-foreground"
+    <>
+      {parsedContent.markdown ? (
+        <ReactMarkdown
+          remarkPlugins={[remarkGfm, remarkBreaks]}
+          components={{
+            a: ({ children, href }: MarkdownRendererProps<'a'>) => {
+              const safe = safeHref(href);
+              if (!safe) return <>{children}</>;
+              return (
+                <a
+                  href={safe}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-semibold text-foreground underline underline-offset-2 hover:text-foreground/80"
                 >
                   {children}
-                </table>
-              </div>
-            </Card>
-          );
-        },
-        th: ({ children }: MarkdownRendererProps<'th'>) => (
-          <th className="align-top whitespace-nowrap border border-border bg-muted px-3 py-2 font-semibold text-foreground">
-            {children}
-          </th>
-        ),
-        td: ({ children }: MarkdownRendererProps<'td'>) => (
-          <td className="align-top break-words border border-border px-3 py-2">{children}</td>
-        ),
-        pre: ({ children }: MarkdownRendererProps<'pre'>) => (
-          <pre className="my-2 overflow-x-auto rounded-xl bg-muted p-3 text-foreground">
-            {children}
-          </pre>
-        ),
-        code: (props: MarkdownRendererProps<'code'> & { inline?: boolean }) => {
-          // react-markdown provides `inline` here, but it is not represented in the
-          // published `Components` typing (intrinsic `code` props only).
-          const { inline, className, children } = props;
-
-          if (inline === false) {
-            return (
-              <code
-                className={`font-mono text-[12px] leading-relaxed text-foreground ${className ?? ''}`}
-              >
+                </a>
+              );
+            },
+            img: ({ alt, src }: MarkdownRendererProps<'img'>) => {
+              const safe = safeHref(src);
+              const label = alt?.trim() ? alt.trim() : src || 'image';
+              if (!safe) return <span className="text-muted-foreground">[Image: {label}]</span>;
+              return (
+                <a
+                  href={safe}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-semibold text-foreground underline underline-offset-2 hover:text-foreground/80"
+                >
+                  [Image: {label}]
+                </a>
+              );
+            },
+            p: ({ children }: MarkdownRendererProps<'p'>) => (
+              <p className="my-2 first:mt-0 last:mb-0">{children}</p>
+            ),
+            h1: ({ children }: MarkdownRendererProps<'h1'>) => (
+              <h1 className="mt-4 mb-2 text-lg font-semibold text-foreground">{children}</h1>
+            ),
+            h2: ({ children }: MarkdownRendererProps<'h2'>) => (
+              <h2 className="mt-4 mb-2 text-base font-semibold text-foreground">{children}</h2>
+            ),
+            h3: ({ children }: MarkdownRendererProps<'h3'>) => (
+              <h3 className="mt-3 mb-1 text-sm font-semibold text-foreground">{children}</h3>
+            ),
+            ul: ({ children }: MarkdownRendererProps<'ul'>) => (
+              <ul className="my-2 list-disc pl-5 marker:text-muted-foreground">{children}</ul>
+            ),
+            ol: ({ children }: MarkdownRendererProps<'ol'>) => (
+              <ol className="my-2 list-decimal pl-5 marker:text-muted-foreground">{children}</ol>
+            ),
+            li: ({ children }: MarkdownRendererProps<'li'>) => <li className="my-1">{children}</li>,
+            blockquote: ({ children }: MarkdownRendererProps<'blockquote'>) => (
+              <blockquote className="my-2 border-l-4 border-border pl-3 text-muted-foreground">
                 {children}
-              </code>
-            );
-          }
+              </blockquote>
+            ),
+            hr: () => <hr className="my-3 border-border" />,
+            table: ({ children }: MarkdownRendererProps<'table'>) => {
+              tableRenderIndex += 1;
+              const tableId = `${message.id}-table-${tableRenderIndex}`;
+              return (
+                <Card className="my-3 gap-0 overflow-hidden rounded-2xl py-0">
+                  <div className="flex items-center justify-end border-b border-border px-2 py-1.5">
+                    <CopyButton
+                      iconOnly
+                      variant="ghost"
+                      size="icon-xs"
+                      value={() => resolveTableMarkdown(tableId)}
+                      aria-label={t('aiReporting.copyTable', { defaultValue: 'Copy table' })}
+                      className="text-muted-foreground hover:bg-accent hover:text-foreground"
+                    />
+                  </div>
+                  <div className="max-w-full overflow-x-auto">
+                    <table
+                      ref={(tableElement) => {
+                        if (tableElement) {
+                          tableRefs.current[tableId] = tableElement;
+                        } else {
+                          delete tableRefs.current[tableId];
+                        }
+                      }}
+                      className="w-max min-w-full border-collapse text-left text-[13px] leading-relaxed text-foreground"
+                    >
+                      {children}
+                    </table>
+                  </div>
+                </Card>
+              );
+            },
+            th: ({ children }: MarkdownRendererProps<'th'>) => (
+              <th className="align-top whitespace-nowrap border border-border bg-muted px-3 py-2 font-semibold text-foreground">
+                {children}
+              </th>
+            ),
+            td: ({ children }: MarkdownRendererProps<'td'>) => (
+              <td className="align-top break-words border border-border px-3 py-2">{children}</td>
+            ),
+            pre: ({ children }: MarkdownRendererProps<'pre'>) => (
+              <pre className="my-2 overflow-x-auto rounded-xl bg-muted p-3 text-foreground">
+                {children}
+              </pre>
+            ),
+            code: (props: MarkdownRendererProps<'code'> & { inline?: boolean }) => {
+              // react-markdown provides `inline` here, but it is not represented in the
+              // published `Components` typing (intrinsic `code` props only).
+              const { inline, className, children } = props;
 
-          return (
-            <code className="rounded bg-muted px-1 py-0.5 font-mono text-[12px] text-foreground">
-              {children}
-            </code>
-          );
-        },
-      }}
-    >
-      {message.content}
-    </ReactMarkdown>
+              if (inline === false) {
+                return (
+                  <code
+                    className={`font-mono text-[12px] leading-relaxed text-foreground ${className ?? ''}`}
+                  >
+                    {children}
+                  </code>
+                );
+              }
+
+              return (
+                <code className="rounded bg-muted px-1 py-0.5 font-mono text-[12px] text-foreground">
+                  {children}
+                </code>
+              );
+            },
+          }}
+        >
+          {parsedContent.markdown}
+        </ReactMarkdown>
+      ) : null}
+      {parsedContent.visualizations.map((visualization, index) => (
+        <AiReportingVisualization
+          key={`${message.id}-visualization-${index}`}
+          visualization={visualization}
+          language={language}
+        />
+      ))}
+      {parsedContent.hasPendingVisualization ? <AiReportingVisualizationPending /> : null}
+      {parsedContent.invalidVisualizationCount > 0 ? (
+        <Alert variant="destructive" className="my-3">
+          <TriangleAlert aria-hidden="true" />
+          <span>
+            {t('aiReporting.visualizationInvalid', {
+              defaultValue: 'The AI returned a visualization that could not be rendered safely.',
+            })}
+          </span>
+        </Alert>
+      ) : null}
+    </>
   );
 };
 

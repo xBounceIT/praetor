@@ -31,6 +31,14 @@ Use the paperclip button to attach up to 5 text files, including TXT, Markdown, 
 
 When the browser supports the Web Speech API, use the microphone button to start voice dictation. Press it again to stop listening; recognized text is appended to the question before it is sent.
 
+## Interactive visualizations
+
+You can explicitly request a chart, for example “show the monthly trend of hours by project” or “compare revenue for the top five customers.” AI Reporting can answer with bar, line, area, pie, or donut charts and select the shape that best fits the available data.
+
+Point at the chart or use keyboard navigation to read values, use the legend when several series are present, and press **Show data** to open the accessible table behind the visualization. Colors and surfaces automatically adapt to the light or dark theme.
+
+Visualizations use only data included in the conversation's authorized dataset. Praetor validates the structure, size, and values before rendering and safely discards an invalid specification; charts remain a visual aid, so verify important figures against their original sources.
+
 ## Recommended use
 
 Ask specific questions: include period, business area, customer, project, or metric you want to analyze. Precise questions produce answers that are easier to verify.

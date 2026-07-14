@@ -31,6 +31,14 @@ Il pulsante con la graffetta allega fino a 5 file di testo, inclusi TXT, Markdow
 
 Se il browser supporta la Web Speech API, usa il pulsante con il microfono per avviare la dettatura vocale. Premi di nuovo il pulsante per interrompere l'ascolto; il testo riconosciuto viene aggiunto alla domanda prima dell'invio.
 
+## Visualizzazioni interattive
+
+Puoi chiedere esplicitamente un grafico, ad esempio “mostra l'andamento mensile delle ore per progetto” oppure “confronta i ricavi dei primi cinque clienti”. AI Reporting può rispondere con grafici a barre, linee, area, torta o anello, scegliendo la forma più adatta ai dati disponibili.
+
+Passa il puntatore o usa la navigazione da tastiera sul grafico per leggere i valori, consulta la legenda quando sono presenti più serie e premi **Mostra dati** per aprire la tabella accessibile usata dalla visualizzazione. Colori e superfici si adattano automaticamente al tema chiaro o scuro.
+
+Le visualizzazioni usano soltanto i dati inclusi nel dataset autorizzato della conversazione. Praetor valida struttura, dimensioni e valori prima del rendering e scarta in sicurezza una specifica non valida; il grafico resta comunque un supporto visivo e i dati importanti devono essere verificati nelle fonti originali.
+
 ## Uso consigliato
 
 Formula richieste specifiche: indica periodo, area aziendale, cliente, progetto o metrica che vuoi analizzare. Domande precise producono risposte più verificabili.

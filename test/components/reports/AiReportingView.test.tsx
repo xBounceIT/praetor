@@ -49,6 +49,37 @@ describe('<AiReportingView /> shadcn workspace', () => {
       'onArchive={() => void handleArchiveSession()}',
     ]);
   });
+
+  test('renders validated AI tool output with shadcn chart and data-table primitives', async () => {
+    const viewSource = await readComponentSource('reports/AiReportingView.tsx');
+    const visualizationSource = await readComponentSource('reports/AiReportingVisualization.tsx');
+
+    expectSourceContainsAll(viewSource, [
+      'parseAiReportingVisualizations',
+      '<AiReportingVisualization',
+      '<AiReportingVisualizationPending',
+      'getAiReportingAssistantCopyText',
+    ]);
+    expectSourceContainsAll(visualizationSource, [
+      '<ChartContainer',
+      '<ChartTooltipContent',
+      '<ChartLegendContent',
+      '<Collapsible',
+      '<Table',
+      'var(--chart-1)',
+      'bg-card',
+      'text-foreground',
+    ]);
+    expectSourceOmitsAll(visualizationSource, [
+      '<button',
+      '<table',
+      '<svg',
+      'bg-white',
+      'text-zinc',
+      'border-zinc',
+      '#fff',
+    ]);
+  });
 });
 
 describe('<AiReportingView /> async cleanup', () => {

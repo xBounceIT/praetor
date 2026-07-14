@@ -256,6 +256,48 @@ describe('<AiReportingView /> interactions', () => {
     expect(speechRecognitionInstance?.stop).toHaveBeenCalledTimes(1);
   });
 
+  test('renders a validated visualization and exposes its source data', async () => {
+    const chartDefinition = {
+      version: 1,
+      type: 'bar',
+      title: 'Monthly revenue',
+      xKey: 'month',
+      xLabel: 'Month',
+      series: [
+        { key: 'revenue', label: 'Revenue', format: 'currency', currency: 'EUR' },
+        { key: 'margin', label: 'Margin', format: 'percent', unit: 'pts' },
+      ],
+      data: [
+        { month: 'January', revenue: 1200, margin: 12 },
+        { month: 'February', revenue: 1500, margin: 15 },
+      ],
+    };
+    getSessionMessagesMock.mockResolvedValueOnce([
+      messages[0],
+      {
+        ...messages[1],
+        content: [
+          'Revenue increased.',
+          '```praetor-visualization',
+          JSON.stringify(chartDefinition),
+          '```',
+        ].join('\n'),
+      },
+    ]);
+
+    renderView();
+
+    expect(await screen.findByRole('figure', { name: 'Monthly revenue' })).toBeInTheDocument();
+    expect(screen.getByText('Revenue increased.')).toBeInTheDocument();
+    expect(screen.queryByText(/praetor-visualization/)).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show data' }));
+    const table = await screen.findByRole('table', { name: 'Data used for Monthly revenue' });
+    expect(within(table).getByText('January')).toBeInTheDocument();
+    expect(within(table).getByText('€1,200.00')).toBeInTheDocument();
+    expect(within(table).getByText('12% pts')).toBeInTheDocument();
+  });
+
   test('ignores a delayed end event from a previous dictation session', async () => {
     renderView();
 

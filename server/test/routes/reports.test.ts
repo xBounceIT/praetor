@@ -578,6 +578,18 @@ describe('POST /api/reports/ai-reporting/chat (non-streaming)', () => {
     expect(body.sessionId).toMatch(/^rpt-chat/);
     expect(insertUserMessageMock).toHaveBeenCalled();
     expect(insertAssistantMessageMock).toHaveBeenCalled();
+    const providerRequest = JSON.parse(
+      String((fetchMock.mock.calls[0]?.[1] as RequestInit | undefined)?.body),
+    ) as {
+      contents: Array<{ parts: Array<{ text: string }> }>;
+    };
+    const prompt = providerRequest.contents[0]?.parts[0]?.text ?? '';
+    expect(prompt).toContain('Tool `render_visualization`');
+    expect(prompt).toContain('```praetor-visualization');
+    expect(prompt).toContain('Supported `type`: `bar`, `line`, `area`, `pie`, `donut`');
+    expect(prompt).toContain('Required top-level fields are `version` (exactly `1`)');
+    expect(prompt).toContain('at most 10 points');
+    expect(prompt).toContain('Never include HTML, JavaScript, CSS, color values, URLs');
   });
 
   test('200 reuses existing session when sessionId is supplied', async () => {

@@ -56,6 +56,18 @@
     "deleteChatConfirm": "Questo rimuovera' \"{{name}}\" dalla cronologia chat.",
     "goToBottom": "Vai in fondo",
     "copyTable": "Copia tabella",
+    "visualizationTypes": {
+      "area": "Grafico ad area",
+      "bar": "Grafico a barre",
+      "donut": "Grafico ad anello",
+      "line": "Grafico a linee",
+      "pie": "Grafico a torta"
+    },
+    "showVisualizationData": "Mostra dati",
+    "hideVisualizationData": "Nascondi dati",
+    "visualizationDataTable": "Dati usati per {{title}}",
+    "visualizationRendering": "Creazione della visualizzazione...",
+    "visualizationInvalid": "L'AI ha restituito una visualizzazione che non puo' essere mostrata in sicurezza.",
     "loadOlder": "Carica messaggi precedenti",
     "loadingOlder": "Caricamento messaggi precedenti...",
     "error": "Si e' verificato un errore.",
