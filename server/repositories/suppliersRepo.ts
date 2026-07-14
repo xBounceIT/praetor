@@ -1,5 +1,5 @@
 import { eq, inArray, sql } from 'drizzle-orm';
-import { type DbExecutor, db } from '../db/drizzle.ts';
+import { type DbExecutor, db, runAtomically } from '../db/drizzle.ts';
 import { suppliers } from '../db/schema/suppliers.ts';
 
 export type SupplierContact = {
@@ -158,6 +158,24 @@ export const create = async (input: NewSupplier, exec: DbExecutor = db): Promise
     })
     .returning();
   return mapRow(rows[0]);
+};
+
+const SUPPLIER_CODE_LOCK_NAMESPACE = 'praetor:supplier-code';
+
+export const createIfCodeAvailable = async (
+  input: NewSupplier,
+  exec: DbExecutor = db,
+): Promise<Supplier | null> => {
+  if (!input.supplierCode) return create(input, exec);
+
+  const normalizedCode = input.supplierCode.toLowerCase();
+  return runAtomically(exec, async (tx) => {
+    await tx.execute(
+      sql`SELECT pg_advisory_xact_lock(hashtext(${SUPPLIER_CODE_LOCK_NAMESPACE}), hashtext(${normalizedCode}))`,
+    );
+    if ((await findExistingCodes([normalizedCode], tx)).has(normalizedCode)) return null;
+    return create(input, tx);
+  });
 };
 
 export type SupplierUpdate = {

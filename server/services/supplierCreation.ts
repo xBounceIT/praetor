@@ -165,10 +165,10 @@ export const validateBulkSupplierCreateInput = (
 
 export const createSupplier = async (input: NormalizedSupplierCreate) => {
   const id = generatePrefixedId('s');
-  const supplier = await suppliersRepo.create({
+  const supplier = await suppliersRepo.createIfCodeAvailable({
     ...input,
     id,
     createdAt: Date.now(),
   });
-  return { id, supplier };
+  return supplier ? { id, supplier } : null;
 };

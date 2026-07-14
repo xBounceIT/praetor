@@ -15,7 +15,6 @@ import {
 import { logAudit } from '../utils/audit.ts';
 import { mapWithConcurrency } from '../utils/concurrency.ts';
 import { getForeignKeyViolation } from '../utils/db-errors.ts';
-import { generatePrefixedId } from '../utils/order-ids.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { replyError } from '../utils/replyError.ts';
 import {
@@ -27,6 +26,7 @@ import {
 } from '../utils/validation.ts';
 
 const BULK_SUPPLIER_CREATE_CONCURRENCY = 10;
+const SUPPLIER_CODE_EXISTS_MESSAGE = 'Supplier code already exists';
 
 const idParamSchema = {
   type: 'object',
@@ -350,8 +350,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const notesResult = optionalNonEmptyString(notes, 'notes');
       if (!notesResult.ok) return badRequest(reply, notesResult.message);
 
-      const now = Date.now();
-      const id = generatePrefixedId('s');
       const contactFields = hasContacts
         ? buildPrimaryFields(contactsResult.value)
         : {
@@ -359,8 +357,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             email: emailResult.value,
             phone: phoneResult.value,
           };
-      const created = await suppliersRepo.create({
-        id,
+      const creation = await createSupplier({
         name: nameResult.value,
         supplierCode: supplierCodeResult.value,
         contacts: contactsResult.value,
@@ -370,8 +367,20 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         taxCode: taxCodeResult.value,
         paymentTerms: paymentTermsResult.value,
         notes: notesResult.value,
-        createdAt: now,
       });
+      if (!creation) {
+        return replyError(request, reply, {
+          statusCode: 409,
+          message: SUPPLIER_CODE_EXISTS_MESSAGE,
+          action: 'supplier.create.conflict',
+          entityType: 'supplier',
+          details: {
+            targetLabel: nameResult.value,
+            secondaryLabel: supplierCodeResult.value ?? undefined,
+          },
+        });
+      }
+      const { id, supplier: created } = creation;
 
       await logAudit({
         request,
@@ -453,7 +462,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           addError(index, {
             field: 'supplierCode',
             code: 'duplicate',
-            message: 'Supplier code already exists',
+            message: SUPPLIER_CODE_EXISTS_MESSAGE,
           });
         }
       });
@@ -474,7 +483,21 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           }
 
           try {
-            const { id, supplier } = await createSupplier(validation.value);
+            const creation = await createSupplier(validation.value);
+            if (!creation) {
+              return {
+                index,
+                success: false,
+                errors: [
+                  {
+                    field: 'supplierCode',
+                    code: 'duplicate',
+                    message: SUPPLIER_CODE_EXISTS_MESSAGE,
+                  },
+                ],
+              };
+            }
+            const { id, supplier } = creation;
             try {
               await logAudit({
                 request,

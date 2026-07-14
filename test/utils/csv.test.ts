@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
 import { downloadCsv, escapeCsvCell } from '../../utils/csv';
+import { downloadBlob } from '../../utils/download';
 
 describe('escapeCsvCell - formula injection protection', () => {
   test.each([
@@ -108,5 +109,15 @@ describe('downloadCsv - cleanup lifecycle', () => {
     cancel();
     // No double-revoke (cleanup early-returns: timeoutId is already null, anchor detached).
     expect(revokeObjectURLSpy.mock.calls.length).toBe(revokesBefore);
+  });
+
+  test('downloadBlob revokes the object URL only after the browser handles the click', async () => {
+    downloadBlob('suppliers.xlsx', new Blob(['workbook']));
+
+    expect(document.querySelector('a[download="suppliers.xlsx"]')).toBeNull();
+    expect(revokeObjectURLSpy).not.toHaveBeenCalled();
+
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    expect(revokeObjectURLSpy).toHaveBeenCalledWith('blob:mock-url');
   });
 });

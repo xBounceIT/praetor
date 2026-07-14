@@ -63,7 +63,7 @@ beforeAll(async () => {
     listAll: listAllMock,
     findById: findByIdMock,
     findExistingCodes: findExistingCodesMock,
-    create: createMock,
+    createIfCodeAvailable: createMock,
     update: updateMock,
     deleteById: deleteByIdMock,
   }));
@@ -211,6 +211,34 @@ describe('POST /api/suppliers', () => {
       }),
     );
   });
+
+  test('409 rejects a supplier code that becomes unavailable during creation', async () => {
+    createMock.mockResolvedValue(null);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/suppliers',
+      headers: authHeader(),
+      payload: {
+        name: 'ACME',
+        vatNumber: 'IT123',
+        supplierCode: 'ACM',
+      },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(JSON.parse(res.body).error).toBe('Supplier code already exists');
+    expect(logAuditMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'supplier.create.conflict',
+        entityType: 'supplier',
+      }),
+    );
+    expect(logAuditMock).not.toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'supplier.created' }),
+    );
+  });
+
   test('201 stores multiple contacts and mirrors the first contact into legacy fields', async () => {
     createMock.mockImplementation(async (input: Record<string, unknown>) => ({
       ...SAMPLE_SUPPLIER,
@@ -504,6 +532,36 @@ describe('POST /api/suppliers/bulk', () => {
       expect.objectContaining({ code: 'creation_failed' }),
     );
     expect(logAuditMock).toHaveBeenCalledTimes(1);
+  });
+
+  test('reports a duplicate when a supplier code becomes unavailable after preflight', async () => {
+    createMock.mockResolvedValue(null);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/suppliers/bulk',
+      headers: authHeader(),
+      payload: { suppliers: [validSupplier('RACE')] },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body)).toEqual({
+      summary: { total: 1, succeeded: 0, failed: 1 },
+      results: [
+        {
+          index: 0,
+          success: false,
+          errors: [
+            {
+              field: 'supplierCode',
+              code: 'duplicate',
+              message: 'Supplier code already exists',
+            },
+          ],
+        },
+      ],
+    });
+    expect(logAuditMock).not.toHaveBeenCalled();
   });
 
   test('never runs more than ten creations concurrently', async () => {
