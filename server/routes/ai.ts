@@ -111,10 +111,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return badRequest(reply, 'ollamaBearerToken must be a string');
       }
 
+      const usesStoredOllamaConnection =
+        providerResult.value === 'ollama' && ollamaBaseUrl === undefined;
       const needsStoredSettings =
-        providerResult.value === 'ollama'
-          ? ollamaBaseUrl === undefined || ollamaBearerToken === undefined
-          : apiKey === undefined;
+        providerResult.value === 'ollama' ? usesStoredOllamaConnection : apiKey === undefined;
       const settings = needsStoredSettings ? await generalSettingsRepo.get() : null;
 
       let keyToUse = apiKey ?? '';
@@ -139,7 +139,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             ollamaBaseUrl ?? settings?.ollamaBaseUrl ?? DEFAULT_OLLAMA_BASE_URL,
           );
           if (!baseUrlResult.ok) return badRequest(reply, baseUrlResult.message);
-          const tokenToUse = ollamaBearerToken ?? settings?.ollamaBearerToken ?? '';
+          const tokenToUse =
+            ollamaBearerToken ??
+            (usesStoredOllamaConnection ? (settings?.ollamaBearerToken ?? '') : '');
           const models = await listOllamaModels(baseUrlResult.value, tokenToUse);
           const match = models.find(
             (model) => model.model === resolvedModelId || model.name === resolvedModelId,

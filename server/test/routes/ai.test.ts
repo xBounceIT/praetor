@@ -327,7 +327,7 @@ describe('POST /api/ai/validate-model', () => {
     expect(getGeneralSettingsMock).toHaveBeenCalledTimes(2);
   });
 
-  test('Ollama model validation works without a token and reports missing models', async () => {
+  test('does not reuse the stored token for a supplied Ollama URL', async () => {
     fetchMock.mockResolvedValue(okResponse({ models: [{ name: 'llama3.2', model: 'llama3.2' }] }));
 
     const res = await testApp.inject({
@@ -338,7 +338,6 @@ describe('POST /api/ai/validate-model', () => {
         provider: 'ollama',
         modelId: 'qwen3:8b',
         ollamaBaseUrl: 'http://ollama:11434',
-        ollamaBearerToken: '',
       },
     });
 
@@ -349,6 +348,7 @@ describe('POST /api/ai/validate-model', () => {
         headers: expect.not.objectContaining({ Authorization: expect.anything() }),
       }),
     );
+    expect(getGeneralSettingsMock).toHaveBeenCalledTimes(1);
   });
 
   test('400 rejects unsafe Ollama base URL shapes before fetching', async () => {
