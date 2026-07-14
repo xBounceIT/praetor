@@ -25,7 +25,7 @@ Per rimuovere una conversazione, usa il pulsante con il cestino nella sua riga d
 
 ## Composer, allegati e dettatura
 
-Il composer permette di scrivere su più righe. Premi **Invio** per inviare oppure **Shift+Invio** per andare a capo.
+Il composer fluttua sopra la conversazione: resta compatto su una riga e cresce automaticamente quando il testo va su più righe. Premi **Invio** per inviare oppure **Shift+Invio** per andare a capo.
 
 Il pulsante con la graffetta allega fino a 5 file di testo, inclusi TXT, Markdown, CSV, JSON, XML, YAML, log, SQL e comuni file sorgente. Ogni file può pesare fino a 64 KB; il contenuto testuale complessivo degli allegati può raggiungere 12.000 caratteri. I file vengono letti nel browser e inclusi nella richiesta inviata ad AI Reporting.
 

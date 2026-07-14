@@ -50,6 +50,24 @@ describe('<AiReportingView /> shadcn workspace', () => {
     ]);
   });
 
+  test('keeps the composer compact, auto-growing, and floating over the conversation', async () => {
+    const source = await readComponentSource('reports/AiReportingView.tsx');
+
+    expectSourceContainsAll(source, [
+      'data-slot="ai-reporting-composer"',
+      'absolute inset-x-0 bottom-0',
+      'rows={1}',
+      'field-sizing-content',
+      "draft ? 'max-h-40' : 'max-h-12'",
+      'backdrop-blur-xl',
+      'pb-28',
+    ]);
+    expectSourceOmitsAll(source, [
+      'min-h-36 flex-col',
+      'border-t border-border bg-background px-4 py-4',
+    ]);
+  });
+
   test('renders validated AI tool output with shadcn chart and data-table primitives', async () => {
     const viewSource = await readComponentSource('reports/AiReportingView.tsx');
     const visualizationSource = await readComponentSource('reports/AiReportingVisualization.tsx');

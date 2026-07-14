@@ -25,7 +25,7 @@ To remove a conversation, use the trash button in its history row and confirm th
 
 ## Composer, attachments, and dictation
 
-The composer supports multiple lines. Press **Enter** to send or **Shift+Enter** to insert a new line.
+The composer floats over the conversation: it stays compact on one line and grows automatically when the text wraps onto additional lines. Press **Enter** to send or **Shift+Enter** to insert a new line.
 
 Use the paperclip button to attach up to 5 text files, including TXT, Markdown, CSV, JSON, XML, YAML, logs, SQL, and common source-code files. Each file can be up to 64 KB, while the combined text content can contain up to 12,000 characters. Files are read in the browser and included in the request sent to AI Reporting.
 

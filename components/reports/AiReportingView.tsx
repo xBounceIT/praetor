@@ -66,6 +66,7 @@ import {
 } from '@/components/ui/sheet';
 import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { cn } from '@/lib/utils';
 import api from '../../services/api';
 import type { ReportChatMessage, ReportChatSessionSummary } from '../../types';
 import { buildPermission, hasPermission } from '../../utils/permissions';
@@ -1780,22 +1781,22 @@ const AiReportingLayout: React.FC<{ controller: AiReportingController }> = ({ co
                   }}
                 />
               )}
-            </div>
 
-            {enableAiReporting && (
-              <AiReportingComposer
-                t={t}
-                draft={draft}
-                language={language}
-                canSend={canSend}
-                isSending={isSending}
-                footerHintWithPeriod={footerHintWithPeriod}
-                aiWarning={aiWarning}
-                setDraft={setDraft}
-                onSend={handleSend}
-                onStop={handleStop}
-              />
-            )}
+              {enableAiReporting && (
+                <AiReportingComposer
+                  t={t}
+                  draft={draft}
+                  language={language}
+                  canSend={canSend}
+                  isSending={isSending}
+                  footerHintWithPeriod={footerHintWithPeriod}
+                  aiWarning={aiWarning}
+                  setDraft={setDraft}
+                  onSend={handleSend}
+                  onStop={handleStop}
+                />
+              )}
+            </div>
           </section>
         </div>
       </Card>
@@ -2140,7 +2141,7 @@ const AiReportingConversation: React.FC<AiReportingConversationProps> = ({
     <div
       ref={scrollRef}
       onScroll={onScroll}
-      className="min-h-0 flex-1 overflow-y-auto px-4 py-6 md:px-8"
+      className="min-h-0 flex-1 overflow-y-auto px-4 pt-6 pb-28 md:px-8 md:pb-32"
     >
       <div className="mx-auto w-full max-w-3xl">
         {showLoadOlderButton && (
@@ -2803,7 +2804,7 @@ const AiReportingScrollButton: React.FC<AiReportingScrollButtonProps> = ({
     size="icon-lg"
     onClick={onGoToBottom}
     aria-label={t('aiReporting.goToBottom', { defaultValue: 'Go to bottom' })}
-    className="absolute bottom-4 left-1/2 z-[3] -translate-x-1/2 rounded-full bg-background text-muted-foreground shadow-md"
+    className="absolute bottom-28 left-1/2 z-10 -translate-x-1/2 rounded-full bg-background/80 text-muted-foreground shadow-md backdrop-blur-xl md:bottom-32"
   >
     <ArrowDown />
     {hasNewText && (
@@ -2954,39 +2955,79 @@ const AiReportingComposer: React.FC<AiReportingComposerProps> = ({
   };
 
   return (
-    <div className="border-t border-border bg-background px-4 py-4 md:px-8 md:py-5">
+    <div
+      data-slot="ai-reporting-composer"
+      className="pointer-events-none absolute inset-x-0 bottom-0 z-20 px-3 pb-3 md:px-8 md:pb-5"
+    >
       <div className="mx-auto w-full max-w-3xl">
+        {attachments.length > 0 && (
+          <div className="pointer-events-auto mb-2 flex flex-wrap gap-2 px-2">
+            {attachments.map((attachment) => (
+              <Badge key={attachment.id} variant="secondary" className="max-w-full gap-1 pl-2">
+                <FileText />
+                <span className="max-w-48 truncate">{attachment.name}</span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-xs"
+                  onClick={() =>
+                    setAttachments((currentAttachments) =>
+                      currentAttachments.filter((item) => item.id !== attachment.id),
+                    )
+                  }
+                  aria-label={t('aiReporting.removeAttachment', {
+                    name: attachment.name,
+                    defaultValue: 'Remove attachment {{name}}',
+                  })}
+                  className="-mr-1 rounded-full text-muted-foreground hover:text-foreground"
+                >
+                  <X />
+                </Button>
+              </Badge>
+            ))}
+          </div>
+        )}
+
         <InputGroup
           data-disabled={!canSend || isSending ? true : undefined}
-          className="min-h-36 flex-col items-stretch overflow-hidden rounded-2xl bg-muted/30 shadow-sm dark:bg-muted/15"
+          className="pointer-events-auto min-h-14 items-end overflow-hidden rounded-[1.75rem] border-border/80 bg-background/80 shadow-lg shadow-background/20 backdrop-blur-xl transition-[box-shadow,background-color] supports-[backdrop-filter]:bg-background/70 dark:bg-background/75"
         >
-          {attachments.length > 0 && (
-            <div className="flex flex-wrap gap-2 px-3 pt-3">
-              {attachments.map((attachment) => (
-                <Badge key={attachment.id} variant="secondary" className="max-w-full gap-1 pl-2">
-                  <FileText />
-                  <span className="max-w-48 truncate">{attachment.name}</span>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-xs"
-                    onClick={() =>
-                      setAttachments((currentAttachments) =>
-                        currentAttachments.filter((item) => item.id !== attachment.id),
-                      )
-                    }
-                    aria-label={t('aiReporting.removeAttachment', {
-                      name: attachment.name,
-                      defaultValue: 'Remove attachment {{name}}',
+          <InputGroupAddon align="inline-start" className="self-end py-0 pr-0 pb-2 pl-2">
+            <Input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              accept={AI_REPORTING_ATTACHMENT_ACCEPT}
+              className="sr-only"
+              tabIndex={-1}
+              aria-hidden="true"
+              disabled={!canSend || isSending || isReadingAttachments}
+              onChange={(event) => void handleAttachmentChange(event)}
+            />
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="inline-flex">
+                  <InputGroupButton
+                    size="icon-sm"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={!canSend || isSending || isReadingAttachments}
+                    aria-label={t('aiReporting.attachFiles', {
+                      defaultValue: 'Attach text files',
                     })}
-                    className="-mr-1 rounded-full text-muted-foreground hover:text-foreground"
+                    className="rounded-full"
                   >
-                    <X />
-                  </Button>
-                </Badge>
-              ))}
-            </div>
-          )}
+                    {isReadingAttachments ? <Loader2 className="animate-spin" /> : <Paperclip />}
+                  </InputGroupButton>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>
+                {t('aiReporting.attachFilesHelp', {
+                  max: AI_REPORTING_MAX_ATTACHMENTS,
+                  defaultValue: 'Attach up to {{max}} text files',
+                })}
+              </TooltipContent>
+            </Tooltip>
+          </InputGroupAddon>
 
           <InputGroupTextarea
             value={draft}
@@ -2995,121 +3036,86 @@ const AiReportingComposer: React.FC<AiReportingComposerProps> = ({
             aria-label={t('aiReporting.placeholder')}
             aria-invalid={Boolean(composerError)}
             disabled={!canSend || isSending}
-            rows={3}
+            rows={1}
             onKeyDown={(event) => {
               if (event.key !== 'Enter' || event.shiftKey) return;
               event.preventDefault();
               void handleSubmit();
             }}
-            className="max-h-52 min-h-20 px-4 pt-4 pb-2 leading-relaxed"
+            className={cn(
+              'field-sizing-content min-h-12 overflow-y-auto px-1 py-3 leading-6',
+              draft ? 'max-h-40' : 'max-h-12',
+            )}
           />
 
-          <InputGroupAddon align="block-end" className="mt-auto justify-between px-3 pb-3">
-            <div className="flex items-center gap-1">
-              <Input
-                ref={fileInputRef}
-                type="file"
-                multiple
-                accept={AI_REPORTING_ATTACHMENT_ACCEPT}
-                className="sr-only"
-                tabIndex={-1}
-                aria-hidden="true"
-                disabled={!canSend || isSending || isReadingAttachments}
-                onChange={(event) => void handleAttachmentChange(event)}
-              />
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span className="inline-flex">
-                    <InputGroupButton
-                      size="icon-sm"
-                      onClick={() => fileInputRef.current?.click()}
-                      disabled={!canSend || isSending || isReadingAttachments}
-                      aria-label={t('aiReporting.attachFiles', {
-                        defaultValue: 'Attach text files',
-                      })}
-                      className="rounded-full"
-                    >
-                      {isReadingAttachments ? <Loader2 className="animate-spin" /> : <Paperclip />}
-                    </InputGroupButton>
-                  </span>
-                </TooltipTrigger>
-                <TooltipContent>
-                  {t('aiReporting.attachFilesHelp', {
-                    max: AI_REPORTING_MAX_ATTACHMENTS,
-                    defaultValue: 'Attach up to {{max}} text files',
-                  })}
-                </TooltipContent>
-              </Tooltip>
-            </div>
-
-            <div className="flex items-center gap-1">
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span className="inline-flex">
-                    <InputGroupButton
-                      size="icon-sm"
-                      onClick={toggleDictation}
-                      disabled={!canSend || isSending || !isDictationSupported}
-                      aria-pressed={isListening}
-                      aria-label={t(
-                        isListening ? 'aiReporting.stopDictation' : 'aiReporting.startDictation',
-                        {
-                          defaultValue: isListening
-                            ? 'Stop voice dictation'
-                            : 'Start voice dictation',
-                        },
-                      )}
-                      className={`rounded-full ${isListening ? 'bg-destructive/10 text-destructive hover:bg-destructive/15 hover:text-destructive' : ''}`}
-                    >
-                      <Mic className={isListening ? 'animate-pulse' : undefined} />
-                    </InputGroupButton>
-                  </span>
-                </TooltipTrigger>
-                <TooltipContent>
-                  {isDictationSupported
-                    ? t(isListening ? 'aiReporting.stopDictation' : 'aiReporting.startDictation', {
+          <InputGroupAddon align="inline-end" className="self-end gap-1 py-0 pr-2 pb-2 pl-0">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="inline-flex">
+                  <InputGroupButton
+                    size="icon-sm"
+                    onClick={toggleDictation}
+                    disabled={!canSend || isSending || !isDictationSupported}
+                    aria-pressed={isListening}
+                    aria-label={t(
+                      isListening ? 'aiReporting.stopDictation' : 'aiReporting.startDictation',
+                      {
                         defaultValue: isListening
                           ? 'Stop voice dictation'
                           : 'Start voice dictation',
-                      })
-                    : t('aiReporting.dictationUnsupported', {
-                        defaultValue: 'Voice dictation is not supported by this browser.',
-                      })}
-                </TooltipContent>
-              </Tooltip>
+                      },
+                    )}
+                    className={`rounded-full ${isListening ? 'bg-destructive/10 text-destructive hover:bg-destructive/15 hover:text-destructive' : ''}`}
+                  >
+                    <Mic className={isListening ? 'animate-pulse' : undefined} />
+                  </InputGroupButton>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>
+                {isDictationSupported
+                  ? t(isListening ? 'aiReporting.stopDictation' : 'aiReporting.startDictation', {
+                      defaultValue: isListening ? 'Stop voice dictation' : 'Start voice dictation',
+                    })
+                  : t('aiReporting.dictationUnsupported', {
+                      defaultValue: 'Voice dictation is not supported by this browser.',
+                    })}
+              </TooltipContent>
+            </Tooltip>
 
-              {isSending ? (
-                <InputGroupButton
-                  variant="destructive"
-                  size="icon-sm"
-                  onClick={onStop}
-                  className="rounded-full"
-                  aria-label={t('aiReporting.stop', { defaultValue: 'Stop' })}
-                >
-                  <Square />
-                </InputGroupButton>
-              ) : (
-                <InputGroupButton
-                  variant="default"
-                  size="icon-sm"
-                  onClick={() => void handleSubmit()}
-                  disabled={!canSubmit}
-                  className="rounded-full"
-                  aria-label={t('common:buttons.send', { defaultValue: 'Send' })}
-                >
-                  <ArrowUp />
-                </InputGroupButton>
-              )}
-            </div>
+            {isSending ? (
+              <InputGroupButton
+                variant="destructive"
+                size="icon-sm"
+                onClick={onStop}
+                className="rounded-full"
+                aria-label={t('aiReporting.stop', { defaultValue: 'Stop' })}
+              >
+                <Square />
+              </InputGroupButton>
+            ) : (
+              <InputGroupButton
+                variant="default"
+                size="icon-sm"
+                onClick={() => void handleSubmit()}
+                disabled={!canSubmit}
+                className="rounded-full"
+                aria-label={t('common:buttons.send', { defaultValue: 'Send' })}
+              >
+                <ArrowUp />
+              </InputGroupButton>
+            )}
           </InputGroupAddon>
         </InputGroup>
 
         {composerError && (
-          <p role="alert" className="mt-2 px-2 text-xs text-destructive">
+          <p
+            role="alert"
+            className="pointer-events-auto mx-auto mt-1.5 w-fit max-w-full rounded-full bg-destructive/10 px-2.5 py-1 text-center text-xs text-destructive backdrop-blur-md"
+          >
             {composerError}
           </p>
         )}
-        <p className="mt-2 px-2 text-[11px] text-muted-foreground">
+        <p className="mx-auto mt-1 w-fit max-w-full rounded-full bg-background/60 px-2.5 py-1 text-center text-[10px] text-muted-foreground backdrop-blur-md">
           {footerHintWithPeriod ? [footerHintWithPeriod, aiWarning].join(' ') : aiWarning}
         </p>
       </div>
