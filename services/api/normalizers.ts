@@ -35,7 +35,7 @@ import type {
   UserEmploymentStatus,
   UserWorkLocation,
 } from '../../types';
-import { LEGACY_PROJECT_STATUS, PROJECT_STATUSES } from '../../types';
+import { DEFAULT_OLLAMA_BASE_URL, LEGACY_PROJECT_STATUS, PROJECT_STATUSES } from '../../types';
 import {
   DEFAULT_BILLING_TYPE,
   normalizeBillingFrequency,
@@ -529,6 +529,9 @@ const normalizeTaskBilling = (
 export const normalizeGeneralSettings = (s: GeneralSettings): GeneralSettings => ({
   ...s,
   dailyLimit: Number(s.dailyLimit || 0),
+  ollamaBaseUrl: s.ollamaBaseUrl || DEFAULT_OLLAMA_BASE_URL,
+  ollamaBearerToken: s.ollamaBearerToken || '',
+  ollamaModelId: s.ollamaModelId || '',
   rilCompanyName: s.rilCompanyName ?? '',
   rilDefaultStartTime: s.rilDefaultStartTime || DEFAULT_RIL_START_TIME,
   rilDefaultExitTime: s.rilDefaultExitTime || DEFAULT_RIL_EXIT_TIME,

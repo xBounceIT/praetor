@@ -180,6 +180,9 @@ export interface Notification {
   createdAt: number;
 }
 
+export const DEFAULT_OLLAMA_BASE_URL = 'http://localhost:11434';
+export type AiProvider = 'gemini' | 'openrouter' | 'ollama';
+
 export interface GeneralSettings {
   currency: string;
   dailyLimit: number;
@@ -187,10 +190,13 @@ export interface GeneralSettings {
   treatSaturdayAsHoliday: boolean;
   enableAiReporting: boolean;
   geminiApiKey?: string;
-  aiProvider?: 'gemini' | 'openrouter';
+  aiProvider?: AiProvider;
   openrouterApiKey?: string;
   geminiModelId?: string;
   openrouterModelId?: string;
+  ollamaBaseUrl?: string;
+  ollamaBearerToken?: string;
+  ollamaModelId?: string;
   allowWeekendSelection: boolean;
   defaultLocation?: TimeEntryLocation;
   rilCompanyName?: string;

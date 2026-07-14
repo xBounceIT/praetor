@@ -2687,6 +2687,14 @@
                   },
                   "apiKey": {
                     "type": "string"
+                  },
+                  "ollamaBaseUrl": {
+                    "type": "string",
+                    "maxLength": 2048
+                  },
+                  "ollamaBearerToken": {
+                    "type": "string",
+                    "maxLength": 2048
                   }
                 },
                 "required": [
@@ -25764,6 +25772,15 @@
                     "openrouterModelId": {
                       "type": "string"
                     },
+                    "ollamaBaseUrl": {
+                      "type": "string"
+                    },
+                    "ollamaBearerToken": {
+                      "type": "string"
+                    },
+                    "ollamaModelId": {
+                      "type": "string"
+                    },
                     "allowWeekendSelection": {
                       "type": "boolean"
                     },
@@ -25857,6 +25874,9 @@
                     "openrouterApiKey",
                     "geminiModelId",
                     "openrouterModelId",
+                    "ollamaBaseUrl",
+                    "ollamaBearerToken",
+                    "ollamaModelId",
                     "allowWeekendSelection",
                     "defaultLocation",
                     "rilCompanyName",
@@ -26066,6 +26086,18 @@
                   "openrouterModelId": {
                     "type": "string"
                   },
+                  "ollamaBaseUrl": {
+                    "type": "string",
+                    "maxLength": 2048
+                  },
+                  "ollamaBearerToken": {
+                    "type": "string",
+                    "maxLength": 2048
+                  },
+                  "ollamaModelId": {
+                    "type": "string",
+                    "maxLength": 255
+                  },
                   "allowWeekendSelection": {
                     "type": "boolean"
                   },
@@ -26190,6 +26222,15 @@
                     "openrouterModelId": {
                       "type": "string"
                     },
+                    "ollamaBaseUrl": {
+                      "type": "string"
+                    },
+                    "ollamaBearerToken": {
+                      "type": "string"
+                    },
+                    "ollamaModelId": {
+                      "type": "string"
+                    },
                     "allowWeekendSelection": {
                       "type": "boolean"
                     },
@@ -26283,6 +26324,9 @@
                     "openrouterApiKey",
                     "geminiModelId",
                     "openrouterModelId",
+                    "ollamaBaseUrl",
+                    "ollamaBearerToken",
+                    "ollamaModelId",
                     "allowWeekendSelection",
                     "defaultLocation",
                     "rilCompanyName",

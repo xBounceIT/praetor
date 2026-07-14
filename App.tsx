@@ -126,6 +126,7 @@ import type {
   View,
   WorkUnit,
 } from './types';
+import { DEFAULT_OLLAMA_BASE_URL } from './types';
 import { clearAuthScopedState } from './utils/authScopedState';
 import { formatDateOnlyForLocale, getLocalDateString } from './utils/date';
 import { getTechnicalDocsViewFromPathname } from './utils/docsRoutes';
@@ -468,6 +469,9 @@ const toGeneralSettingsState = (genSettings: IGeneralSettings): GeneralSettingsS
   openrouterApiKey: genSettings.openrouterApiKey || '',
   geminiModelId: genSettings.geminiModelId || '',
   openrouterModelId: genSettings.openrouterModelId || '',
+  ollamaBaseUrl: genSettings.ollamaBaseUrl || DEFAULT_OLLAMA_BASE_URL,
+  ollamaBearerToken: genSettings.ollamaBearerToken || '',
+  ollamaModelId: genSettings.ollamaModelId || '',
   defaultLocation: genSettings.defaultLocation || 'remote',
   rilCompanyName: genSettings.rilCompanyName || '',
   rilDefaultStartTime: genSettings.rilDefaultStartTime || DEFAULT_RIL_START_TIME,
@@ -3244,6 +3248,9 @@ const useAppContentController = () => {
       openrouterApiKey: updated.openrouterApiKey || '',
       geminiModelId: updated.geminiModelId || '',
       openrouterModelId: updated.openrouterModelId || '',
+      ollamaBaseUrl: updated.ollamaBaseUrl || DEFAULT_OLLAMA_BASE_URL,
+      ollamaBearerToken: updated.ollamaBearerToken || '',
+      ollamaModelId: updated.ollamaModelId || '',
       defaultLocation: updated.defaultLocation || 'remote',
       rilCompanyName: updated.rilCompanyName || '',
       rilDefaultStartTime: updated.rilDefaultStartTime || DEFAULT_RIL_START_TIME,

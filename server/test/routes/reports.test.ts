@@ -183,6 +183,9 @@ const AI_ENABLED_SETTINGS = {
   geminiModelId: 'gemini-pro',
   openrouterApiKey: '',
   openrouterModelId: '',
+  ollamaBaseUrl: 'http://localhost:11434',
+  ollamaBearerToken: '',
+  ollamaModelId: '',
   currency: 'EUR',
 };
 
@@ -588,6 +591,60 @@ describe('POST /api/reports/ai-reporting/chat (non-streaming)', () => {
     expect(getActiveSessionForUserMock).toHaveBeenCalledWith('rpt-chat-1', 'u1');
   });
 
+  test('200 uses Ollama chat with optional Bearer auth and stores thinking content', async () => {
+    getGeneralSettingsMock.mockResolvedValue({
+      ...AI_ENABLED_SETTINGS,
+      aiProvider: 'ollama',
+      ollamaBaseUrl: 'http://ollama:11434/proxy',
+      ollamaBearerToken: 'proxy-token',
+      ollamaModelId: 'qwen3:8b',
+    });
+    getActiveSessionForUserMock.mockResolvedValue({
+      id: 'rpt-chat-1',
+      title: 'Existing title',
+    });
+    listRecentMessagesMock.mockResolvedValue([]);
+    insertUserMessageMock.mockResolvedValue(undefined);
+    insertAssistantMessageMock.mockResolvedValue(undefined);
+    fetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          message: { content: 'Local answer', thinking: 'Inspect local data' },
+          done: true,
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+    );
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/reports/ai-reporting/chat',
+      headers: authHeader(),
+      payload: { sessionId: 'rpt-chat-1', message: 'Summarize revenue' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body)).toEqual(
+      expect.objectContaining({ text: 'Local answer', thoughtContent: 'Inspect local data' }),
+    );
+    expect(insertAssistantMessageMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        content: 'Local answer',
+        thoughtContent: 'Inspect local data',
+      }),
+    );
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('http://ollama:11434/proxy/api/chat');
+    expect(fetchMock.mock.calls[0]?.[1]).toEqual(
+      expect.objectContaining({
+        headers: expect.objectContaining({ Authorization: 'Bearer proxy-token' }),
+      }),
+    );
+    const requestBody = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body));
+    expect(requestBody).toEqual(
+      expect.objectContaining({ model: 'qwen3:8b', stream: false, think: true }),
+    );
+  });
+
   test('404 when supplied sessionId is not owned by the user', async () => {
     getActiveSessionForUserMock.mockResolvedValue(null);
 
@@ -667,6 +724,7 @@ describe('POST /api/reports/ai-reporting/chat (non-streaming)', () => {
     getGeneralSettingsMock.mockResolvedValue({
       ...AI_ENABLED_SETTINGS,
       geminiApiKey: '',
+      geminiModelId: '',
     });
 
     const res = await testApp.inject({
@@ -695,6 +753,39 @@ describe('POST /api/reports/ai-reporting/chat (non-streaming)', () => {
 
     expect(res.statusCode).toBe(400);
     expect(JSON.parse(res.body).error).toMatch(/Missing gemini model id/);
+  });
+
+  test('400 when Ollama endpoint or model configuration is invalid', async () => {
+    getGeneralSettingsMock.mockResolvedValue({
+      ...AI_ENABLED_SETTINGS,
+      aiProvider: 'ollama',
+      ollamaBaseUrl: 'ftp://ollama:11434',
+      ollamaModelId: 'qwen3:8b',
+    });
+    const invalidEndpoint = await testApp.inject({
+      method: 'POST',
+      url: '/api/reports/ai-reporting/chat',
+      headers: authHeader(),
+      payload: { message: 'Hi' },
+    });
+    expect(invalidEndpoint.statusCode).toBe(400);
+    expect(JSON.parse(invalidEndpoint.body).error).toMatch(/must use http or https/);
+
+    getGeneralSettingsMock.mockResolvedValue({
+      ...AI_ENABLED_SETTINGS,
+      aiProvider: 'ollama',
+      ollamaBaseUrl: 'http://ollama:11434',
+      ollamaModelId: '',
+    });
+    const missingModel = await testApp.inject({
+      method: 'POST',
+      url: '/api/reports/ai-reporting/chat',
+      headers: authHeader(),
+      payload: { message: 'Hi' },
+    });
+    expect(missingModel.statusCode).toBe(400);
+    expect(JSON.parse(missingModel.body).error).toMatch(/Missing ollama model id/);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   test('502 when LLM call fails', async () => {
@@ -795,6 +886,54 @@ describe('POST /api/reports/ai-reporting/chat/stream (streaming)', () => {
 
     expect(res.statusCode).toBe(404);
     expect(JSON.parse(res.body)).toEqual({ error: 'Session not found' });
+  });
+
+  test('streams Ollama NDJSON as the existing SSE thought and answer events', async () => {
+    getGeneralSettingsMock.mockResolvedValue({
+      ...AI_ENABLED_SETTINGS,
+      aiProvider: 'ollama',
+      ollamaBaseUrl: 'http://ollama:11434',
+      ollamaBearerToken: '',
+      ollamaModelId: 'qwen3:8b',
+    });
+    getActiveSessionForUserMock.mockResolvedValue({ id: 'rpt-chat-1', title: 'Existing' });
+    listRecentMessagesMock.mockResolvedValue([]);
+    insertUserMessageMock.mockResolvedValue(undefined);
+    insertAssistantMessageMock.mockResolvedValue(undefined);
+    touchSessionMock.mockResolvedValue(undefined);
+
+    const encoder = new TextEncoder();
+    const chunks = [
+      '{"message":{"thinking":"Inspect"},"done":false}\n{"message":',
+      '{"content":"Local answer"},"done":true}',
+    ];
+    fetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      body: new ReadableStream({
+        start(controller) {
+          for (const chunk of chunks) controller.enqueue(encoder.encode(chunk));
+          controller.close();
+        },
+      }),
+    } as unknown as Response);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/reports/ai-reporting/chat/stream',
+      headers: authHeader(),
+      payload: { sessionId: 'rpt-chat-1', message: 'Hi' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toContain('event: thought_delta');
+    expect(res.body).toContain('data: {"delta":"Inspect"}');
+    expect(res.body).toContain('event: thought_done');
+    expect(res.body).toContain('event: answer_delta');
+    expect(res.body).toContain('data: {"delta":"Local answer"}');
+    expect(insertAssistantMessageMock).toHaveBeenCalledWith(
+      expect.objectContaining({ content: 'Local answer', thoughtContent: 'Inspect' }),
+    );
   });
 });
 

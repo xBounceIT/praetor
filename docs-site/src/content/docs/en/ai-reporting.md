@@ -9,7 +9,9 @@ sidebar:
 
 AI reporting is visible only when enabled by administration and when your role has access permission.
 
-If you do not see the module, ask an administrator to check AI settings, API key, and role permissions.
+If you do not see the module, ask an administrator to check AI settings, provider configuration, and role permissions.
+
+Praetor supports Gemini, OpenRouter, and Ollama. With Ollama, the data used to generate the answer is sent only to the endpoint configured by the administrator. The URL must be reachable from the Praetor backend container: `localhost` means the container itself, so Docker deployments may need the Ollama service name or another hostname reachable from the backend network.
 
 ## Recommended use
 

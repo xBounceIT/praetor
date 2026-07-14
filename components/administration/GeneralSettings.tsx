@@ -21,11 +21,13 @@ import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import api from '../../services/api';
 import type {
+  AiProvider,
   AppBranding,
   GeneralSettings as IGeneralSettings,
   RilNoteOption,
   TimeEntryLocation,
 } from '../../types';
+import { DEFAULT_OLLAMA_BASE_URL } from '../../types';
 import {
   DEFAULT_RIL_EXIT_TIME,
   DEFAULT_RIL_START_TIME,
@@ -69,8 +71,6 @@ const CURRENCY_OPTIONS: Option[] = [
 ];
 
 type ModelCheckState = 'idle' | 'checking' | 'ok' | 'not_found' | 'error';
-
-type AiProvider = 'gemini' | 'openrouter';
 
 const TABS = [
   { id: 'localization', Icon: Globe, labelKey: 'general.tabs.localization' },
@@ -135,6 +135,9 @@ const createGeneralSettingsPatch = (settings: IGeneralSettings): Partial<General
   openrouterApiKey: settings.openrouterApiKey || '',
   geminiModelId: settings.geminiModelId || '',
   openrouterModelId: settings.openrouterModelId || '',
+  ollamaBaseUrl: settings.ollamaBaseUrl || DEFAULT_OLLAMA_BASE_URL,
+  ollamaBearerToken: settings.ollamaBearerToken || '',
+  ollamaModelId: settings.ollamaModelId || '',
   modelCheck: { state: 'idle' },
 });
 
@@ -159,6 +162,9 @@ const createGeneralSettingsUpdate = (state: GeneralSettingsState): Partial<IGene
   openrouterApiKey: state.openrouterApiKey,
   geminiModelId: state.geminiModelId,
   openrouterModelId: state.openrouterModelId,
+  ollamaBaseUrl: state.ollamaBaseUrl,
+  ollamaBearerToken: state.ollamaBearerToken,
+  ollamaModelId: state.ollamaModelId,
 });
 
 const hasGeneralSettingsChanges = (
@@ -188,7 +194,10 @@ const hasGeneralSettingsChanges = (
   state.aiProvider !== (settings.aiProvider || 'gemini') ||
   state.openrouterApiKey !== (settings.openrouterApiKey || '') ||
   state.geminiModelId !== (settings.geminiModelId || '') ||
-  state.openrouterModelId !== (settings.openrouterModelId || '');
+  state.openrouterModelId !== (settings.openrouterModelId || '') ||
+  state.ollamaBaseUrl !== (settings.ollamaBaseUrl || DEFAULT_OLLAMA_BASE_URL) ||
+  state.ollamaBearerToken !== (settings.ollamaBearerToken || '') ||
+  state.ollamaModelId !== (settings.ollamaModelId || '');
 
 interface GeneralSettingsState {
   currency: string;
@@ -209,6 +218,9 @@ interface GeneralSettingsState {
   openrouterApiKey: string;
   geminiModelId: string;
   openrouterModelId: string;
+  ollamaBaseUrl: string;
+  ollamaBearerToken: string;
+  ollamaModelId: string;
   modelCheck: { state: ModelCheckState; message?: string };
   activeTab: TabId;
   isSaving: boolean;
@@ -234,6 +246,9 @@ const INITIAL_GENERAL_SETTINGS_STATE: GeneralSettingsState = {
   openrouterApiKey: '',
   geminiModelId: '',
   openrouterModelId: '',
+  ollamaBaseUrl: DEFAULT_OLLAMA_BASE_URL,
+  ollamaBearerToken: '',
+  ollamaModelId: '',
   modelCheck: { state: 'idle' },
   activeTab: 'localization',
   isSaving: false,
@@ -705,11 +720,16 @@ const AiSettingsPanel: React.FC<{
     isApiKeyMissing: boolean;
     isModelMissing: boolean;
     isModelNotFound: boolean;
+    isOllamaBaseUrlMissing: boolean;
   };
-  state: Pick<GeneralSettingsState, 'aiProvider' | 'modelCheck' | 'enableAiReporting'>;
+  state: Pick<
+    GeneralSettingsState,
+    'aiProvider' | 'modelCheck' | 'enableAiReporting' | 'ollamaBaseUrl'
+  >;
   dispatch: React.Dispatch<GeneralSettingsAction>;
   onApiKeyChange: (value: string) => void;
   onModelIdChange: (value: string) => void;
+  onOllamaBaseUrlChange: (value: string) => void;
   onCheckModel: () => void;
 }> = ({
   animationClass,
@@ -721,6 +741,7 @@ const AiSettingsPanel: React.FC<{
   dispatch,
   onApiKeyChange,
   onModelIdChange,
+  onOllamaBaseUrlChange,
   onCheckModel,
 }) => {
   const { t } = useTranslation('settings');
@@ -766,11 +787,38 @@ const AiSettingsPanel: React.FC<{
               <FieldDescription>{t('general.aiProviderDescription')}</FieldDescription>
             </Field>
 
+            {state.aiProvider === 'ollama' && (
+              <Field
+                className="max-w-2xl"
+                data-invalid={validation.isOllamaBaseUrlMissing ? 'true' : undefined}
+              >
+                <FieldLabel htmlFor="general-ai-ollama-base-url" required>
+                  {t('general.ollamaBaseUrl')}
+                </FieldLabel>
+                <Input
+                  id="general-ai-ollama-base-url"
+                  type="url"
+                  value={state.ollamaBaseUrl}
+                  onChange={(event) => onOllamaBaseUrlChange(event.target.value)}
+                  placeholder={t('general.ollamaBaseUrlPlaceholder')}
+                  aria-invalid={validation.isOllamaBaseUrlMissing || undefined}
+                />
+                {validation.isOllamaBaseUrlMissing && (
+                  <p className="text-xs font-medium text-destructive">
+                    {t('general.ollamaBaseUrlRequired')}
+                  </p>
+                )}
+                <FieldDescription>{t('general.ollamaBaseUrlDescription')}</FieldDescription>
+              </Field>
+            )}
+
             <Field data-invalid={validation.isApiKeyMissing ? 'true' : undefined}>
-              <FieldLabel htmlFor="general-ai-api-key" required>
+              <FieldLabel htmlFor="general-ai-api-key" required={state.aiProvider !== 'ollama'}>
                 {state.aiProvider === 'gemini'
                   ? t('general.geminiApiKey')
-                  : t('general.openrouterApiKey')}
+                  : state.aiProvider === 'openrouter'
+                    ? t('general.openrouterApiKey')
+                    : t('general.ollamaBearerToken')}
               </FieldLabel>
               <Input
                 id="general-ai-api-key"
@@ -780,7 +828,9 @@ const AiSettingsPanel: React.FC<{
                 placeholder={
                   state.aiProvider === 'gemini'
                     ? t('general.apiKeyPlaceholder')
-                    : t('general.openrouterApiKeyPlaceholder')
+                    : state.aiProvider === 'openrouter'
+                      ? t('general.openrouterApiKeyPlaceholder')
+                      : t('general.ollamaBearerTokenPlaceholder')
                 }
                 aria-invalid={validation.isApiKeyMissing || undefined}
                 className={
@@ -795,24 +845,30 @@ const AiSettingsPanel: React.FC<{
                 </p>
               )}
               <FieldDescription>
-                {state.aiProvider === 'gemini'
-                  ? t('general.apiKeyDescription')
-                  : t('general.openrouterApiKeyDescription')}{' '}
-                <a
-                  href={
-                    state.aiProvider === 'gemini'
-                      ? 'https://makersuite.google.com/app/apikey'
-                      : 'https://openrouter.ai/keys'
-                  }
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-praetor hover:underline"
-                >
-                  {state.aiProvider === 'gemini'
-                    ? t('general.googleAiStudio')
-                    : t('general.openrouterDashboard')}
-                </a>
-                .
+                {state.aiProvider === 'ollama' ? (
+                  t('general.ollamaBearerTokenDescription')
+                ) : (
+                  <>
+                    {state.aiProvider === 'gemini'
+                      ? t('general.apiKeyDescription')
+                      : t('general.openrouterApiKeyDescription')}{' '}
+                    <a
+                      href={
+                        state.aiProvider === 'gemini'
+                          ? 'https://makersuite.google.com/app/apikey'
+                          : 'https://openrouter.ai/keys'
+                      }
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-praetor hover:underline"
+                    >
+                      {state.aiProvider === 'gemini'
+                        ? t('general.googleAiStudio')
+                        : t('general.openrouterDashboard')}
+                    </a>
+                    .
+                  </>
+                )}
               </FieldDescription>
             </Field>
 
@@ -849,8 +905,10 @@ const AiSettingsPanel: React.FC<{
                   onClick={onCheckModel}
                   disabled={
                     state.modelCheck.state === 'checking' ||
-                    !currentApiKey.trim() ||
-                    !currentModelId.trim()
+                    !currentModelId.trim() ||
+                    (state.aiProvider === 'ollama'
+                      ? !state.ollamaBaseUrl.trim()
+                      : !currentApiKey.trim())
                   }
                 >
                   {state.modelCheck.state === 'checking' ? (
@@ -889,7 +947,9 @@ const AiSettingsPanel: React.FC<{
                   href={
                     state.aiProvider === 'gemini'
                       ? 'https://ai.google.dev/gemini-api/docs/models/gemini'
-                      : 'https://openrouter.ai/models'
+                      : state.aiProvider === 'openrouter'
+                        ? 'https://openrouter.ai/models'
+                        : 'https://ollama.com/library'
                   }
                   target="_blank"
                   rel="noopener noreferrer"
@@ -943,6 +1003,7 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({
   const AI_PROVIDER_OPTIONS: Option[] = [
     { id: 'gemini', name: t('general.aiProviders.gemini') },
     { id: 'openrouter', name: t('general.aiProviders.openrouter') },
+    { id: 'ollama', name: t('general.aiProviders.ollama') },
   ];
   const [state, dispatch] = useReducer(generalSettingsReducer, INITIAL_GENERAL_SETTINGS_STATE);
   const {
@@ -964,6 +1025,9 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({
     openrouterApiKey,
     geminiModelId,
     openrouterModelId,
+    ollamaBaseUrl,
+    ollamaBearerToken,
+    ollamaModelId,
     modelCheck,
     activeTab,
     isSaving,
@@ -988,14 +1052,28 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({
     });
   }
 
-  const currentApiKey = aiProvider === 'gemini' ? geminiApiKey : openrouterApiKey;
-  const currentModelId = aiProvider === 'gemini' ? geminiModelId : openrouterModelId;
+  const currentApiKey =
+    aiProvider === 'gemini'
+      ? geminiApiKey
+      : aiProvider === 'openrouter'
+        ? openrouterApiKey
+        : ollamaBearerToken;
+  const currentModelId =
+    aiProvider === 'gemini'
+      ? geminiModelId
+      : aiProvider === 'openrouter'
+        ? openrouterModelId
+        : ollamaModelId;
 
   const handleApiKeyChange = (value: string) => {
     dispatch({
       type: 'merge',
       patch: {
-        ...(aiProvider === 'gemini' ? { geminiApiKey: value } : { openrouterApiKey: value }),
+        ...(aiProvider === 'gemini'
+          ? { geminiApiKey: value }
+          : aiProvider === 'openrouter'
+            ? { openrouterApiKey: value }
+            : { ollamaBearerToken: value }),
         modelCheck: { state: 'idle' },
       },
     });
@@ -1005,25 +1083,44 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({
     dispatch({
       type: 'merge',
       patch: {
-        ...(aiProvider === 'gemini' ? { geminiModelId: value } : { openrouterModelId: value }),
+        ...(aiProvider === 'gemini'
+          ? { geminiModelId: value }
+          : aiProvider === 'openrouter'
+            ? { openrouterModelId: value }
+            : { ollamaModelId: value }),
         modelCheck: { state: 'idle' },
       },
     });
   };
 
+  const handleOllamaBaseUrlChange = (value: string) => {
+    dispatch({
+      type: 'merge',
+      patch: { ollamaBaseUrl: value, modelCheck: { state: 'idle' } },
+    });
+  };
+
   const isAnyAiEnabled = enableAiReporting;
-  const isApiKeyMissing = () => isAnyAiEnabled && !currentApiKey.trim();
-  const isModelMissing = () => isAnyAiEnabled && !currentModelId.trim();
+  const isApiKeyMissing = () => isAnyAiEnabled && aiProvider !== 'ollama' && !currentApiKey.trim();
+  const isOllamaBaseUrlMissing = () => aiProvider === 'ollama' && !ollamaBaseUrl.trim();
+  const isModelMissing = () =>
+    (isAnyAiEnabled || aiProvider === 'ollama') && !currentModelId.trim();
   const isModelNotFound = isAnyAiEnabled && modelCheck.state === 'not_found';
 
   const handleCheckModel = async () => {
-    if (!currentApiKey.trim() || !currentModelId.trim()) return;
+    if (
+      !currentModelId.trim() ||
+      (aiProvider === 'ollama' ? !ollamaBaseUrl.trim() : !currentApiKey.trim())
+    )
+      return;
     dispatch({ type: 'merge', patch: { modelCheck: { state: 'checking' } } });
     try {
       const res = await api.ai.validateModel({
         provider: aiProvider,
         modelId: currentModelId,
-        apiKey: currentApiKey,
+        ...(aiProvider === 'ollama'
+          ? { ollamaBaseUrl, ollamaBearerToken: currentApiKey }
+          : { apiKey: currentApiKey }),
       });
       if (res.ok) {
         dispatch({ type: 'merge', patch: { modelCheck: { state: 'ok' } } });
@@ -1048,7 +1145,8 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (isApiKeyMissing() || isModelMissing() || isModelNotFound) return;
+    if (isApiKeyMissing() || isOllamaBaseUrlMissing() || isModelMissing() || isModelNotFound)
+      return;
     dispatch({ type: 'merge', patch: { isSaving: true } });
     try {
       await onUpdate(createGeneralSettingsUpdate(state));
@@ -1066,6 +1164,7 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({
   const submitDisabled =
     isSaving ||
     isApiKeyMissing() ||
+    isOllamaBaseUrlMissing() ||
     isModelMissing() ||
     isModelNotFound ||
     (!hasChanges && !isSaved);
@@ -1171,11 +1270,13 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({
               isApiKeyMissing: isApiKeyMissing(),
               isModelMissing: isModelMissing(),
               isModelNotFound,
+              isOllamaBaseUrlMissing: isOllamaBaseUrlMissing(),
             }}
-            state={{ aiProvider, modelCheck, enableAiReporting }}
+            state={{ aiProvider, modelCheck, enableAiReporting, ollamaBaseUrl }}
             dispatch={dispatch}
             onApiKeyChange={handleApiKeyChange}
             onModelIdChange={handleModelIdChange}
+            onOllamaBaseUrlChange={handleOllamaBaseUrlChange}
             onCheckModel={handleCheckModel}
           />
         )}

@@ -4,6 +4,7 @@ import { authenticateToken, generateToken, requirePermission } from '../middlewa
 import * as generalSettingsRepo from '../repositories/generalSettingsRepo.ts';
 import * as usersRepo from '../repositories/usersRepo.ts';
 import { standardRateLimitedErrorResponses } from '../schemas/common.ts';
+import { DEFAULT_OLLAMA_BASE_URL, normalizeOllamaBaseUrl } from '../services/ollama.ts';
 import { VALID_LOCATIONS } from '../services/timeEntries.ts';
 import { logAudit } from '../utils/audit.ts';
 import { MASKED_SECRET } from '../utils/crypto.ts';
@@ -78,6 +79,9 @@ const generalSettingsSchema = {
     openrouterApiKey: { type: 'string' },
     geminiModelId: { type: 'string' },
     openrouterModelId: { type: 'string' },
+    ollamaBaseUrl: { type: 'string' },
+    ollamaBearerToken: { type: 'string' },
+    ollamaModelId: { type: 'string' },
     allowWeekendSelection: { type: 'boolean' },
     defaultLocation: { type: 'string' },
     rilCompanyName: { type: 'string', maxLength: 255 },
@@ -104,6 +108,9 @@ const generalSettingsSchema = {
     'openrouterApiKey',
     'geminiModelId',
     'openrouterModelId',
+    'ollamaBaseUrl',
+    'ollamaBearerToken',
+    'ollamaModelId',
     'allowWeekendSelection',
     'defaultLocation',
     'rilCompanyName',
@@ -133,6 +140,9 @@ const generalSettingsUpdateBodySchema = {
     openrouterApiKey: { type: 'string' },
     geminiModelId: { type: 'string' },
     openrouterModelId: { type: 'string' },
+    ollamaBaseUrl: { type: 'string', maxLength: 2048 },
+    ollamaBearerToken: { type: 'string', maxLength: 2048 },
+    ollamaModelId: { type: 'string', maxLength: 255 },
     allowWeekendSelection: { type: 'boolean' },
     defaultLocation: { type: 'string' },
     rilCompanyName: { type: 'string', maxLength: 255 },
@@ -161,6 +171,9 @@ const DEFAULT_SETTINGS: generalSettingsRepo.GeneralSettings = {
   openrouterApiKey: null,
   geminiModelId: null,
   openrouterModelId: null,
+  ollamaBaseUrl: DEFAULT_OLLAMA_BASE_URL,
+  ollamaBearerToken: null,
+  ollamaModelId: null,
   allowWeekendSelection: true,
   defaultLocation: 'remote',
   rilCompanyName: '',
@@ -396,6 +409,9 @@ const toResponse = (
   openrouterApiKey: maskApiKey(settings.openrouterApiKey, revealSensitiveSettings),
   geminiModelId: settings.geminiModelId || '',
   openrouterModelId: settings.openrouterModelId || '',
+  ollamaBaseUrl: settings.ollamaBaseUrl || DEFAULT_OLLAMA_BASE_URL,
+  ollamaBearerToken: maskApiKey(settings.ollamaBearerToken, revealSensitiveSettings),
+  ollamaModelId: settings.ollamaModelId || '',
   allowWeekendSelection: settings.allowWeekendSelection ?? true,
   defaultLocation: settings.defaultLocation || 'remote',
   rilCompanyName: settings.rilCompanyName ?? '',
@@ -499,6 +515,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         openrouterApiKey?: string;
         geminiModelId?: string;
         openrouterModelId?: string;
+        ollamaBaseUrl?: string;
+        ollamaBearerToken?: string;
+        ollamaModelId?: string;
         allowWeekendSelection?: boolean;
         defaultLocation?: string;
         rilCompanyName?: string;
@@ -523,6 +542,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         openrouterApiKey,
         geminiModelId,
         openrouterModelId,
+        ollamaBaseUrl,
+        ollamaBearerToken,
+        ollamaModelId,
         defaultLocation,
         rilCompanyName,
         rilDefaultStartTime,
@@ -541,7 +563,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const dailyLimitResult = optionalLocalizedNonNegativeNumber(dailyLimit, 'dailyLimit');
       if (!dailyLimitResult.ok) return badRequest(reply, dailyLimitResult.message);
 
-      const aiProviderResult = optionalEnum(aiProvider, ['gemini', 'openrouter'], 'aiProvider');
+      const aiProviderResult = optionalEnum(
+        aiProvider,
+        ['gemini', 'openrouter', 'ollama'],
+        'aiProvider',
+      );
       if (!aiProviderResult.ok) return badRequest(reply, aiProviderResult.message);
 
       const startOfWeekResult = optionalEnum(startOfWeek, ['Monday', 'Sunday'], 'startOfWeek');
@@ -599,6 +625,20 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       )
         return badRequest(reply, 'openrouterModelId must be a string');
       if (
+        ollamaModelId !== undefined &&
+        ollamaModelId !== null &&
+        typeof ollamaModelId !== 'string'
+      )
+        return badRequest(reply, 'ollamaModelId must be a string');
+      const normalizedOllamaModelId =
+        typeof ollamaModelId === 'string' ? ollamaModelId.trim() : undefined;
+      if (
+        ollamaBearerToken !== undefined &&
+        ollamaBearerToken !== null &&
+        typeof ollamaBearerToken !== 'string'
+      )
+        return badRequest(reply, 'ollamaBearerToken must be a string');
+      if (
         openrouterApiKey !== undefined &&
         openrouterApiKey !== null &&
         typeof openrouterApiKey !== 'string'
@@ -606,6 +646,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return badRequest(reply, 'openrouterApiKey must be a string');
       if (geminiApiKey !== undefined && geminiApiKey !== null && typeof geminiApiKey !== 'string')
         return badRequest(reply, 'geminiApiKey must be a string');
+
+      let normalizedOllamaBaseUrl: string | undefined;
+      if (ollamaBaseUrl !== undefined && ollamaBaseUrl !== null) {
+        if (typeof ollamaBaseUrl !== 'string') {
+          return badRequest(reply, 'ollamaBaseUrl must be a string');
+        }
+        const ollamaBaseUrlResult = normalizeOllamaBaseUrl(ollamaBaseUrl);
+        if (!ollamaBaseUrlResult.ok) return badRequest(reply, ollamaBaseUrlResult.message);
+        normalizedOllamaBaseUrl = ollamaBaseUrlResult.value;
+      }
 
       const treatSaturdayAsHolidayResult = parseBooleanField(body, 'treatSaturdayAsHoliday');
       if (!treatSaturdayAsHolidayResult.ok) {
@@ -644,6 +694,20 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       const previousSettings = await generalSettingsRepo.get();
+      const effectiveAiProvider =
+        aiProviderResult.value ?? previousSettings?.aiProvider ?? 'gemini';
+      if (effectiveAiProvider === 'ollama') {
+        const effectiveOllamaBaseUrl =
+          normalizedOllamaBaseUrl ?? previousSettings?.ollamaBaseUrl ?? DEFAULT_OLLAMA_BASE_URL;
+        const effectiveOllamaModelId =
+          normalizedOllamaModelId ?? previousSettings?.ollamaModelId ?? '';
+        if (!effectiveOllamaBaseUrl.trim()) {
+          return badRequest(reply, 'ollamaBaseUrl is required when Ollama is selected');
+        }
+        if (!effectiveOllamaModelId.trim()) {
+          return badRequest(reply, 'ollamaModelId is required when Ollama is selected');
+        }
+      }
       const settingsPatch = {
         currency: currencyResult.value,
         dailyLimit: dailyLimitResult.value,
@@ -655,6 +719,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         openrouterApiKey,
         geminiModelId,
         openrouterModelId,
+        ollamaBaseUrl: normalizedOllamaBaseUrl,
+        ollamaBearerToken,
+        ollamaModelId: normalizedOllamaModelId,
         allowWeekendSelection: allowWeekendSelectionResult.value,
         defaultLocation: defaultLocationResult.value,
         rilCompanyName: rilCompanyNameResult.value,

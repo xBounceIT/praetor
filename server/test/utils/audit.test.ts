@@ -77,6 +77,8 @@ describe('getAuditChangedFields', () => {
         gemini_api_key: 'g',
         openrouterApiKey: 'o',
         openrouter_api_key: 'o',
+        ollamaBearerToken: 'ot',
+        ollama_bearer_token: 'ot',
         accessToken: 'at',
         refreshToken: 'rt',
         secret: 's',

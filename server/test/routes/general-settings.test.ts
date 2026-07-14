@@ -98,6 +98,9 @@ const SETTINGS_WITH_KEYS = {
   openrouterApiKey: 'plaintext-openrouter-key',
   geminiModelId: 'gemini-2.5-flash',
   openrouterModelId: 'anthropic/claude-3-haiku',
+  ollamaBaseUrl: 'http://ollama:11434',
+  ollamaBearerToken: 'plaintext-ollama-token',
+  ollamaModelId: 'qwen3:8b',
   allowWeekendSelection: false,
   defaultLocation: 'remote',
   rilCompanyName: 'ACME Consulting',
@@ -168,6 +171,7 @@ describe('GET /api/general-settings', () => {
     const body = JSON.parse(res.body);
     expect(body.geminiApiKey).toBe('plaintext-gemini-key');
     expect(body.openrouterApiKey).toBe('plaintext-openrouter-key');
+    expect(body.ollamaBearerToken).toBe('plaintext-ollama-token');
     expect(body.totpExemptUserIds).toEqual(['u2']);
   });
 
@@ -188,6 +192,7 @@ describe('GET /api/general-settings', () => {
     const body = JSON.parse(res.body);
     expect(body.geminiApiKey).toBe(MASKED_SECRET);
     expect(body.openrouterApiKey).toBe(MASKED_SECRET);
+    expect(body.ollamaBearerToken).toBe(MASKED_SECRET);
     expect(body).not.toHaveProperty('totpExemptUserIds');
   });
 
@@ -218,6 +223,9 @@ describe('GET /api/general-settings', () => {
     ]);
     expect(body.rilTransferOptions).toEqual(['In sede', 'Telelavoro']);
     expect(body.sessionIdleTimeoutMinutes).toBe(30);
+    expect(body.ollamaBaseUrl).toBe('http://localhost:11434');
+    expect(body.ollamaBearerToken).toBe('');
+    expect(body.ollamaModelId).toBe('');
   });
 
   test('401 missing token', async () => {
@@ -294,6 +302,70 @@ describe('PUT /api/general-settings', () => {
         details: expect.objectContaining({ secondaryLabel: '3' }),
       }),
     );
+  });
+
+  test('200 saves normalized Ollama configuration with an optional Bearer token', async () => {
+    settingsUpdateMock.mockResolvedValue({
+      ...SETTINGS_WITH_KEYS,
+      aiProvider: 'ollama',
+      ollamaBaseUrl: 'http://ollama:11434/proxy',
+      ollamaBearerToken: 'proxy-token',
+      ollamaModelId: 'qwen3:8b',
+    });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/general-settings',
+      headers: authHeader(),
+      payload: {
+        enableAiReporting: true,
+        aiProvider: 'ollama',
+        ollamaBaseUrl: ' http://ollama:11434/proxy/ ',
+        ollamaBearerToken: 'proxy-token',
+        ollamaModelId: ' qwen3:8b ',
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(settingsUpdateMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        aiProvider: 'ollama',
+        ollamaBaseUrl: 'http://ollama:11434/proxy',
+        ollamaBearerToken: 'proxy-token',
+        ollamaModelId: 'qwen3:8b',
+      }),
+    );
+  });
+
+  test('400 rejects invalid or incomplete selected Ollama configuration', async () => {
+    const invalidUrl = await testApp.inject({
+      method: 'PUT',
+      url: '/api/general-settings',
+      headers: authHeader(),
+      payload: { ollamaBaseUrl: 'file:///tmp/ollama.sock' },
+    });
+    expect(invalidUrl.statusCode).toBe(400);
+
+    settingsGetMock.mockResolvedValue({
+      ...SETTINGS_WITH_KEYS,
+      enableAiReporting: false,
+      ollamaModelId: '',
+    });
+    const missingModel = await testApp.inject({
+      method: 'PUT',
+      url: '/api/general-settings',
+      headers: authHeader(),
+      payload: {
+        enableAiReporting: false,
+        aiProvider: 'ollama',
+        ollamaBaseUrl: 'http://ollama:11434',
+      },
+    });
+    expect(missingModel.statusCode).toBe(400);
+    expect(JSON.parse(missingModel.body).error).toBe(
+      'ollamaModelId is required when Ollama is selected',
+    );
+    expect(settingsUpdateMock).not.toHaveBeenCalled();
   });
 
   test('200 leaving enforcement already-on does not revoke tokens', async () => {

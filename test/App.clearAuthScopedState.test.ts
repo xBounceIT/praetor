@@ -31,6 +31,9 @@ describe('App.tsx auth-scoped reset defaults', () => {
     expect(INITIAL_GENERAL_SETTINGS.openrouterApiKey).toBe('');
     expect(INITIAL_GENERAL_SETTINGS.geminiModelId).toBe('');
     expect(INITIAL_GENERAL_SETTINGS.openrouterModelId).toBe('');
+    expect(INITIAL_GENERAL_SETTINGS.ollamaBaseUrl).toBe('http://localhost:11434');
+    expect(INITIAL_GENERAL_SETTINGS.ollamaBearerToken).toBe('');
+    expect(INITIAL_GENERAL_SETTINGS.ollamaModelId).toBe('');
   });
 
   test('clearAuthScopedAppState body resets all three settings objects', () => {

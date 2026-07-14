@@ -1,4 +1,5 @@
 import type { EmailConfig, GeneralSettings, LdapConfig } from './types';
+import { DEFAULT_OLLAMA_BASE_URL } from './types';
 import {
   DEFAULT_RIL_EXIT_TIME,
   DEFAULT_RIL_NOTE_OPTIONS,
@@ -56,6 +57,9 @@ export const INITIAL_GENERAL_SETTINGS = deepFreeze<GeneralSettingsState>({
   openrouterApiKey: '',
   geminiModelId: '',
   openrouterModelId: '',
+  ollamaBaseUrl: DEFAULT_OLLAMA_BASE_URL,
+  ollamaBearerToken: '',
+  ollamaModelId: '',
   defaultLocation: 'remote',
   rilCompanyName: '',
   rilDefaultStartTime: DEFAULT_RIL_START_TIME,

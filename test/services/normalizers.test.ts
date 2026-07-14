@@ -1145,6 +1145,19 @@ describe('normalizeResaleOrderOption', () => {
 });
 
 describe('normalizeGeneralSettings', () => {
+  test('fills Ollama defaults for responses from an older backend', () => {
+    const settings = make<GeneralSettings>(baseGeneralSettings, {
+      ollamaBaseUrl: undefined,
+      ollamaBearerToken: undefined,
+      ollamaModelId: undefined,
+    });
+    expect(normalizeGeneralSettings(settings)).toMatchObject({
+      ollamaBaseUrl: 'http://localhost:11434',
+      ollamaBearerToken: '',
+      ollamaModelId: '',
+    });
+  });
+
   test('parses dailyLimit as a number', () => {
     const settings = make<GeneralSettings>(baseGeneralSettings, { dailyLimit: '8' });
     expect(normalizeGeneralSettings(settings).dailyLimit).toBe(8);

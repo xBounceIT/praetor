@@ -3,6 +3,7 @@ import { drizzle } from 'drizzle-orm/node-postgres';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { type DbExecutor, schema, withDbTransaction } from '../db/drizzle.ts';
 import pool from '../db/index.ts';
+import type { AiProvider } from '../db/schema/generalSettings.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
 import * as generalSettingsRepo from '../repositories/generalSettingsRepo.ts';
 import * as reportsAiChatRepo from '../repositories/reportsAiChatRepo.ts';
@@ -12,6 +13,13 @@ import * as reportsHoursRepo from '../repositories/reportsHoursRepo.ts';
 import * as reportsRevenueRepo from '../repositories/reportsRevenueRepo.ts';
 import * as workUnitsRepo from '../repositories/workUnitsRepo.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
+import {
+  DEFAULT_OLLAMA_BASE_URL,
+  normalizeOllamaBaseUrl,
+  type OllamaMessage,
+  ollamaGenerateText,
+  ollamaGenerateTextStream,
+} from '../services/ollama.ts';
 import { normalizeGeminiModelPath } from '../utils/ai-models.ts';
 import { assertAuthenticated } from '../utils/auth-assert.ts';
 import { generatePrefixedId } from '../utils/order-ids.ts';
@@ -20,7 +28,6 @@ import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { replyError } from '../utils/replyError.ts';
 import { badRequest, optionalNonEmptyString, requireNonEmptyString } from '../utils/validation.ts';
 
-type AiProvider = 'gemini' | 'openrouter';
 type UiLanguage = 'en' | 'it';
 
 export type GeneralAiConfig = {
@@ -30,6 +37,9 @@ export type GeneralAiConfig = {
   openrouterApiKey: string;
   geminiModelId: string;
   openrouterModelId: string;
+  ollamaBaseUrl: string;
+  ollamaBearerToken: string;
+  ollamaModelId: string;
   currency: string;
 };
 
@@ -65,11 +75,14 @@ export const getGeneralAiConfig = async (): Promise<GeneralAiConfig> => {
   const settings = await generalSettingsRepo.get();
   return {
     enableAiReporting: settings?.enableAiReporting ?? false,
-    aiProvider: (settings?.aiProvider || 'gemini') as AiProvider,
+    aiProvider: settings?.aiProvider || 'gemini',
     geminiApiKey: settings?.geminiApiKey || '',
     openrouterApiKey: settings?.openrouterApiKey || '',
     geminiModelId: settings?.geminiModelId || '',
     openrouterModelId: settings?.openrouterModelId || '',
+    ollamaBaseUrl: settings?.ollamaBaseUrl || DEFAULT_OLLAMA_BASE_URL,
+    ollamaBearerToken: settings?.ollamaBearerToken || '',
+    ollamaModelId: settings?.ollamaModelId || '',
     currency: settings?.currency || '',
   };
 };
@@ -93,6 +106,14 @@ const ensureAiEnabled = async (
 };
 
 const resolveProviderKeyModel = (cfg: GeneralAiConfig) => {
+  if (cfg.aiProvider === 'ollama') {
+    return {
+      provider: 'ollama' as const,
+      baseUrl: cfg.ollamaBaseUrl,
+      bearerToken: cfg.ollamaBearerToken,
+      modelId: cfg.ollamaModelId,
+    };
+  }
   if (cfg.aiProvider === 'openrouter') {
     return {
       provider: 'openrouter' as const,
@@ -101,6 +122,24 @@ const resolveProviderKeyModel = (cfg: GeneralAiConfig) => {
     };
   }
   return { provider: 'gemini' as const, apiKey: cfg.geminiApiKey, modelId: cfg.geminiModelId };
+};
+
+const getProviderConfigurationError = (
+  providerKeyModel: ReturnType<typeof resolveProviderKeyModel>,
+) => {
+  if (providerKeyModel.provider === 'ollama') {
+    if (!providerKeyModel.modelId.trim()) {
+      return 'Missing ollama model id in General Settings.';
+    }
+    const baseUrlResult = normalizeOllamaBaseUrl(providerKeyModel.baseUrl);
+    return baseUrlResult.ok ? null : baseUrlResult.message;
+  }
+  if (!providerKeyModel.apiKey.trim()) {
+    return `Missing ${providerKeyModel.provider} API key in General Settings.`;
+  }
+  return providerKeyModel.modelId.trim()
+    ? null
+    : `Missing ${providerKeyModel.provider} model id in General Settings.`;
 };
 
 type AiTextResult = { text: string; thoughtContent?: string };
@@ -538,19 +577,23 @@ const generateSessionTitle = async (
 
   const prompt = buildSessionTitlePrompt(seed, language);
 
-  if (providerKeyModel.provider === 'openrouter') {
-    const messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
+  if (providerKeyModel.provider !== 'gemini') {
+    const messages: OllamaMessage[] = [
       {
         role: 'system',
         content: 'You generate short chat titles. Output only the title text.',
       },
       { role: 'user', content: prompt },
     ];
-    const raw = await openrouterGenerateText(
-      providerKeyModel.apiKey,
-      providerKeyModel.modelId,
-      messages,
-    );
+    const raw =
+      providerKeyModel.provider === 'ollama'
+        ? await ollamaGenerateText(
+            providerKeyModel.baseUrl,
+            providerKeyModel.bearerToken,
+            providerKeyModel.modelId,
+            messages,
+          )
+        : await openrouterGenerateText(providerKeyModel.apiKey, providerKeyModel.modelId, messages);
     return cleanSessionTitle(raw.text);
   }
 
@@ -1322,8 +1365,8 @@ const buildAiReportingConversation = (
 
 type AiReportingPromptPayload =
   | {
-      provider: 'openrouter';
-      messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>;
+      provider: 'openrouter' | 'ollama';
+      messages: OllamaMessage[];
     }
   | { provider: 'gemini'; prompt: string };
 
@@ -1334,9 +1377,9 @@ const buildAiReportingPromptPayload = (args: {
   convo: AiReportingConvoTurn[];
 }): AiReportingPromptPayload => {
   const { provider, uiLanguage, datasetJson, convo } = args;
-  if (provider === 'openrouter') {
+  if (provider !== 'gemini') {
     return {
-      provider: 'openrouter',
+      provider,
       messages: [
         { role: 'system', content: buildAiReportingSystemPrompt(uiLanguage) },
         { role: 'user', content: buildDatasetInstruction(datasetJson, uiLanguage) },
@@ -1358,6 +1401,68 @@ const buildAiReportingPromptPayload = (args: {
       'Answer as the assistant:',
     ].join('\n'),
   };
+};
+
+const generateAiReportingText = async (
+  providerKeyModel: ReturnType<typeof resolveProviderKeyModel>,
+  payload: AiReportingPromptPayload,
+): Promise<AiTextResult> => {
+  if (providerKeyModel.provider === 'ollama') {
+    if (payload.provider === 'gemini') throw new Error('Invalid Ollama prompt payload');
+    return ollamaGenerateText(
+      providerKeyModel.baseUrl,
+      providerKeyModel.bearerToken,
+      providerKeyModel.modelId,
+      payload.messages,
+    );
+  }
+  if (providerKeyModel.provider === 'openrouter') {
+    if (payload.provider === 'gemini') throw new Error('Invalid OpenRouter prompt payload');
+    return openrouterGenerateText(
+      providerKeyModel.apiKey,
+      providerKeyModel.modelId,
+      payload.messages,
+    );
+  }
+  if (payload.provider !== 'gemini') throw new Error('Invalid Gemini prompt payload');
+  return geminiGenerateText(providerKeyModel.apiKey, providerKeyModel.modelId, payload.prompt);
+};
+
+const generateAiReportingTextStream = async (
+  providerKeyModel: ReturnType<typeof resolveProviderKeyModel>,
+  payload: AiReportingPromptPayload,
+  callbacks: AiStreamCallbacks,
+  signal: AbortSignal,
+): Promise<AiTextResult> => {
+  if (providerKeyModel.provider === 'ollama') {
+    if (payload.provider === 'gemini') throw new Error('Invalid Ollama prompt payload');
+    return ollamaGenerateTextStream(
+      providerKeyModel.baseUrl,
+      providerKeyModel.bearerToken,
+      providerKeyModel.modelId,
+      payload.messages,
+      callbacks,
+      signal,
+    );
+  }
+  if (providerKeyModel.provider === 'openrouter') {
+    if (payload.provider === 'gemini') throw new Error('Invalid OpenRouter prompt payload');
+    return openrouterGenerateTextStream(
+      providerKeyModel.apiKey,
+      providerKeyModel.modelId,
+      payload.messages,
+      callbacks,
+      signal,
+    );
+  }
+  if (payload.provider !== 'gemini') throw new Error('Invalid Gemini prompt payload');
+  return geminiGenerateTextStream(
+    providerKeyModel.apiKey,
+    providerKeyModel.modelId,
+    payload.prompt,
+    callbacks,
+    signal,
+  );
 };
 
 const createSseStreamHandlers = (
@@ -1640,11 +1745,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!(await ensureAiEnabled(cfg, request, reply))) return;
 
       const providerKeyModel = resolveProviderKeyModel(cfg);
-      const { provider, apiKey, modelId } = providerKeyModel;
-      if (!apiKey.trim())
-        return badRequest(reply, `Missing ${provider} API key in General Settings.`);
-      if (!modelId.trim())
-        return badRequest(reply, `Missing ${provider} model id in General Settings.`);
+      const configurationError = getProviderConfigurationError(providerKeyModel);
+      if (configurationError) return badRequest(reply, configurationError);
+      const { provider } = providerKeyModel;
 
       let shouldAutoTitle = false;
       let streamStarted = false;
@@ -1744,22 +1847,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           convo,
         });
         if (streamAbortController.signal.aborted) return;
-        const generated: AiTextResult =
-          payload.provider === 'openrouter'
-            ? await openrouterGenerateTextStream(
-                apiKey,
-                modelId,
-                payload.messages,
-                streamHandlers.callbacks,
-                streamAbortController.signal,
-              )
-            : await geminiGenerateTextStream(
-                apiKey,
-                modelId,
-                payload.prompt,
-                streamHandlers.callbacks,
-                streamAbortController.signal,
-              );
+        const generated = await generateAiReportingTextStream(
+          providerKeyModel,
+          payload,
+          streamHandlers.callbacks,
+          streamAbortController.signal,
+        );
 
         if (!streamAbortController.signal.aborted) {
           await emitThoughtDone();
@@ -1883,11 +1976,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!(await ensureAiEnabled(cfg, request, reply))) return;
 
       const providerKeyModel = resolveProviderKeyModel(cfg);
-      const { provider, apiKey, modelId } = providerKeyModel;
-      if (!apiKey.trim())
-        return badRequest(reply, `Missing ${provider} API key in General Settings.`);
-      if (!modelId.trim())
-        return badRequest(reply, `Missing ${provider} model id in General Settings.`);
+      const configurationError = getProviderConfigurationError(providerKeyModel);
+      if (configurationError) return badRequest(reply, configurationError);
+      const { provider } = providerKeyModel;
 
       let streamStarted = false;
       let thoughtDoneSent = false;
@@ -1995,22 +2086,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           convo,
         });
         if (streamAbortController.signal.aborted) return;
-        const generated: AiTextResult =
-          payload.provider === 'openrouter'
-            ? await openrouterGenerateTextStream(
-                apiKey,
-                modelId,
-                payload.messages,
-                streamHandlers.callbacks,
-                streamAbortController.signal,
-              )
-            : await geminiGenerateTextStream(
-                apiKey,
-                modelId,
-                payload.prompt,
-                streamHandlers.callbacks,
-                streamAbortController.signal,
-              );
+        const generated = await generateAiReportingTextStream(
+          providerKeyModel,
+          payload,
+          streamHandlers.callbacks,
+          streamAbortController.signal,
+        );
 
         if (!streamAbortController.signal.aborted) {
           await emitThoughtDone();
@@ -2124,11 +2205,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!(await ensureAiEnabled(cfg, request, reply))) return;
 
       const providerKeyModel = resolveProviderKeyModel(cfg);
-      const { provider, apiKey, modelId } = providerKeyModel;
-      if (!apiKey.trim())
-        return badRequest(reply, `Missing ${provider} API key in General Settings.`);
-      if (!modelId.trim())
-        return badRequest(reply, `Missing ${provider} model id in General Settings.`);
+      const configurationError = getProviderConfigurationError(providerKeyModel);
+      if (configurationError) return badRequest(reply, configurationError);
+      const { provider } = providerKeyModel;
 
       let shouldAutoTitle = false;
 
@@ -2191,10 +2270,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           datasetJson,
           convo,
         });
-        const generated =
-          payload.provider === 'openrouter'
-            ? await openrouterGenerateText(apiKey, modelId, payload.messages)
-            : await geminiGenerateText(apiKey, modelId, payload.prompt);
+        const generated = await generateAiReportingText(providerKeyModel, payload);
         const text = generated.text;
         const thoughtContent = generated.thoughtContent || '';
 

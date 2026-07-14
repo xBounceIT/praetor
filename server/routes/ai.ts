@@ -2,6 +2,11 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
 import * as generalSettingsRepo from '../repositories/generalSettingsRepo.ts';
 import { standardRateLimitedErrorResponses } from '../schemas/common.ts';
+import {
+  DEFAULT_OLLAMA_BASE_URL,
+  listOllamaModels,
+  normalizeOllamaBaseUrl,
+} from '../services/ollama.ts';
 import { normalizeGeminiModelPath } from '../utils/ai-models.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { badRequest, optionalNonEmptyString, validateEnum } from '../utils/validation.ts';
@@ -58,6 +63,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             provider: { type: 'string' },
             modelId: { type: 'string' },
             apiKey: { type: 'string' },
+            ollamaBaseUrl: { type: 'string', maxLength: 2048 },
+            ollamaBearerToken: { type: 'string', maxLength: 2048 },
           },
           required: ['provider', 'modelId'],
         },
@@ -78,13 +85,15 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const { provider, modelId, apiKey } = request.body as {
+      const { provider, modelId, apiKey, ollamaBaseUrl, ollamaBearerToken } = request.body as {
         provider: string;
         modelId: string;
         apiKey?: string;
+        ollamaBaseUrl?: string;
+        ollamaBearerToken?: string;
       };
 
-      const providerResult = validateEnum(provider, ['gemini', 'openrouter'], 'provider');
+      const providerResult = validateEnum(provider, ['gemini', 'openrouter', 'ollama'], 'provider');
       if (!providerResult.ok) return badRequest(reply, providerResult.message);
 
       const modelIdResult = optionalNonEmptyString(modelId, 'modelId');
@@ -92,19 +101,31 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const resolvedModelId = (modelIdResult as { ok: true; value: string | null }).value || '';
       if (!resolvedModelId) return badRequest(reply, 'modelId is required');
 
-      let keyToUse = '';
-      if (apiKey !== undefined) {
-        if (typeof apiKey !== 'string') return badRequest(reply, 'apiKey must be a string');
-        keyToUse = apiKey;
-      } else {
-        const settings = await generalSettingsRepo.get();
+      if (apiKey !== undefined && typeof apiKey !== 'string') {
+        return badRequest(reply, 'apiKey must be a string');
+      }
+      if (ollamaBaseUrl !== undefined && typeof ollamaBaseUrl !== 'string') {
+        return badRequest(reply, 'ollamaBaseUrl must be a string');
+      }
+      if (ollamaBearerToken !== undefined && typeof ollamaBearerToken !== 'string') {
+        return badRequest(reply, 'ollamaBearerToken must be a string');
+      }
+
+      const needsStoredSettings =
+        providerResult.value === 'ollama'
+          ? ollamaBaseUrl === undefined || ollamaBearerToken === undefined
+          : apiKey === undefined;
+      const settings = needsStoredSettings ? await generalSettingsRepo.get() : null;
+
+      let keyToUse = apiKey ?? '';
+      if (providerResult.value !== 'ollama' && apiKey === undefined) {
         keyToUse =
           providerResult.value === 'gemini'
             ? (settings?.geminiApiKey ?? '')
             : (settings?.openrouterApiKey ?? '');
       }
 
-      if (!keyToUse.trim()) {
+      if (providerResult.value !== 'ollama' && !keyToUse.trim()) {
         return reply.send({
           ok: false,
           code: 'MISSING_API_KEY',
@@ -113,6 +134,28 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       try {
+        if (providerResult.value === 'ollama') {
+          const baseUrlResult = normalizeOllamaBaseUrl(
+            ollamaBaseUrl ?? settings?.ollamaBaseUrl ?? DEFAULT_OLLAMA_BASE_URL,
+          );
+          if (!baseUrlResult.ok) return badRequest(reply, baseUrlResult.message);
+          const tokenToUse = ollamaBearerToken ?? settings?.ollamaBearerToken ?? '';
+          const models = await listOllamaModels(baseUrlResult.value, tokenToUse);
+          const match = models.find(
+            (model) => model.model === resolvedModelId || model.name === resolvedModelId,
+          );
+          return reply.send(
+            match
+              ? { ok: true, normalizedModelId: match.model, name: match.name }
+              : {
+                  ok: false,
+                  code: 'NOT_FOUND',
+                  message: 'Model not found.',
+                  normalizedModelId: resolvedModelId,
+                },
+          );
+        }
+
         if (providerResult.value === 'gemini') {
           const normalizedModelIdResult = normalizeGeminiModelPath(resolvedModelId);
           if (!normalizedModelIdResult.ok) {

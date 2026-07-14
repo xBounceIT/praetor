@@ -25,7 +25,7 @@ Praetor is a modern, AI-enhanced ERP application inspired by the simplicity of t
 - **Database**: PostgreSQL with Drizzle ORM
 - **Styling**: Tailwind CSS
 - **Charts**: Recharts
-- **AI Integration**: Gemini/OpenRouter via server-side provider calls (AI Reporting).
+- **AI Integration**: Gemini, OpenRouter, or local Ollama via server-side provider calls (AI Reporting).
 - **Icons**: FontAwesome
 
 ## Setup & Installation
@@ -42,7 +42,9 @@ Praetor is a modern, AI-enhanced ERP application inspired by the simplicity of t
    ```
 
 3. **Environment Configuration**
-   AI Reporting is optional. If you enable it, configure the provider + API key + model in Administration -> General Settings.
+   AI Reporting is optional. If you enable it, configure the provider and model in Administration -> General Settings. Gemini and OpenRouter require an API key; Ollama requires a backend-reachable base URL and supports an optional reverse-proxy Bearer token.
+
+   When upgrading to the Ollama-capable release, apply database migrations before deploying the new backend. The previous backend remains compatible while `ai_provider` is `gemini` or `openrouter`; switch away from `ollama` before rolling back to a version that predates Ollama support.
 
 4. **Run Locally**
    ```bash

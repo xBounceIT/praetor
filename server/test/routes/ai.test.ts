@@ -87,6 +87,8 @@ beforeEach(async () => {
   getGeneralSettingsMock.mockResolvedValue({
     geminiApiKey: 'test-gemini-key',
     openrouterApiKey: 'test-openrouter-key',
+    ollamaBaseUrl: 'http://saved-ollama:11434',
+    ollamaBearerToken: 'saved-ollama-token',
   });
 
   testApp = await buildRouteTestApp(routePlugin, '/api/ai');
@@ -266,5 +268,103 @@ describe('POST /api/ai/validate-model', () => {
     const fetchCall = (fetchMock.mock.calls[0] as unknown[])[0];
     const url = fetchCall instanceof URL ? fetchCall : new URL(String(fetchCall));
     expect(url.searchParams.get('key')).toBe('test-gemini-key');
+  });
+
+  test('200 ok=true validates an Ollama model with the configured Bearer token', async () => {
+    fetchMock.mockResolvedValue(
+      okResponse({ models: [{ name: 'qwen3:8b', model: 'qwen3:8b' }] }, 200),
+    );
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/ai/validate-model',
+      headers: authHeader(),
+      payload: {
+        provider: 'ollama',
+        modelId: 'qwen3:8b',
+        ollamaBaseUrl: 'http://ollama:11434/proxy/',
+        ollamaBearerToken: 'proxy-token',
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body)).toEqual(
+      expect.objectContaining({
+        ok: true,
+        normalizedModelId: 'qwen3:8b',
+        name: 'qwen3:8b',
+      }),
+    );
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('http://ollama:11434/proxy/api/tags');
+    expect(fetchMock.mock.calls[0]?.[1]).toEqual(
+      expect.objectContaining({
+        headers: expect.objectContaining({ Authorization: 'Bearer proxy-token' }),
+      }),
+    );
+    expect(getGeneralSettingsMock).toHaveBeenCalledTimes(1);
+  });
+
+  test('uses stored Ollama connection settings only when optional fields are omitted', async () => {
+    fetchMock.mockResolvedValue(
+      okResponse({ models: [{ name: 'qwen3:8b', model: 'qwen3:8b' }] }, 200),
+    );
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/ai/validate-model',
+      headers: authHeader(),
+      payload: { provider: 'ollama', modelId: 'qwen3:8b' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body).ok).toBe(true);
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('http://saved-ollama:11434/api/tags');
+    expect(fetchMock.mock.calls[0]?.[1]).toEqual(
+      expect.objectContaining({
+        headers: expect.objectContaining({ Authorization: 'Bearer saved-ollama-token' }),
+      }),
+    );
+    expect(getGeneralSettingsMock).toHaveBeenCalledTimes(2);
+  });
+
+  test('Ollama model validation works without a token and reports missing models', async () => {
+    fetchMock.mockResolvedValue(okResponse({ models: [{ name: 'llama3.2', model: 'llama3.2' }] }));
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/ai/validate-model',
+      headers: authHeader(),
+      payload: {
+        provider: 'ollama',
+        modelId: 'qwen3:8b',
+        ollamaBaseUrl: 'http://ollama:11434',
+        ollamaBearerToken: '',
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body).code).toBe('NOT_FOUND');
+    expect(fetchMock.mock.calls[0]?.[1]).toEqual(
+      expect.objectContaining({
+        headers: expect.not.objectContaining({ Authorization: expect.anything() }),
+      }),
+    );
+  });
+
+  test('400 rejects unsafe Ollama base URL shapes before fetching', async () => {
+    for (const ollamaBaseUrl of [
+      'ftp://ollama:11434',
+      'http://user:pass@ollama:11434',
+      'http://ollama:11434?token=x',
+    ]) {
+      const res = await testApp.inject({
+        method: 'POST',
+        url: '/api/ai/validate-model',
+        headers: authHeader(),
+        payload: { provider: 'ollama', modelId: 'qwen3:8b', ollamaBaseUrl },
+      });
+      expect(res.statusCode).toBe(400);
+    }
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

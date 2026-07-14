@@ -1,6 +1,6 @@
 import { eq, sql } from 'drizzle-orm';
 import { type DbExecutor, db } from '../db/drizzle.ts';
-import type { StoredRilNoteOption } from '../db/schema/generalSettings.ts';
+import type { AiProvider, StoredRilNoteOption } from '../db/schema/generalSettings.ts';
 import { generalSettings } from '../db/schema/generalSettings.ts';
 import { normalizeSessionIdleTimeoutMinutes } from '../utils/sessionTimeout.ts';
 
@@ -17,10 +17,13 @@ export type GeneralSettings = {
   totpExemptUserIds: string[] | null;
   sessionIdleTimeoutMinutes: number;
   geminiApiKey: string | null;
-  aiProvider: string | null;
+  aiProvider: AiProvider | null;
   openrouterApiKey: string | null;
   geminiModelId: string | null;
   openrouterModelId: string | null;
+  ollamaBaseUrl: string;
+  ollamaBearerToken: string | null;
+  ollamaModelId: string | null;
   allowWeekendSelection: boolean | null;
   defaultLocation: string | null;
   rilCompanyName: string | null;
@@ -44,10 +47,13 @@ export type GeneralSettingsPatch = {
   totpExemptUserIds?: string[] | null;
   sessionIdleTimeoutMinutes?: number | null;
   geminiApiKey?: string | null;
-  aiProvider?: string | null;
+  aiProvider?: AiProvider | null;
   openrouterApiKey?: string | null;
   geminiModelId?: string | null;
   openrouterModelId?: string | null;
+  ollamaBaseUrl?: string | null;
+  ollamaBearerToken?: string | null;
+  ollamaModelId?: string | null;
   allowWeekendSelection?: boolean | null;
   defaultLocation?: string | null;
   rilCompanyName?: string | null;
@@ -75,6 +81,9 @@ const GENERAL_SETTINGS_PROJECTION = {
   openrouterApiKey: generalSettings.openrouterApiKey,
   geminiModelId: generalSettings.geminiModelId,
   openrouterModelId: generalSettings.openrouterModelId,
+  ollamaBaseUrl: generalSettings.ollamaBaseUrl,
+  ollamaBearerToken: generalSettings.ollamaBearerToken,
+  ollamaModelId: generalSettings.ollamaModelId,
   allowWeekendSelection: generalSettings.allowWeekendSelection,
   defaultLocation: generalSettings.defaultLocation,
   rilCompanyName: generalSettings.rilCompanyName,
@@ -98,10 +107,13 @@ type GeneralSettingsRow = {
   totpExemptUserIds: string[] | null;
   sessionIdleTimeoutMinutes: number | null;
   geminiApiKey: string | null;
-  aiProvider: string | null;
+  aiProvider: AiProvider | null;
   openrouterApiKey: string | null;
   geminiModelId: string | null;
   openrouterModelId: string | null;
+  ollamaBaseUrl: string | null;
+  ollamaBearerToken: string | null;
+  ollamaModelId: string | null;
   allowWeekendSelection: boolean | null;
   defaultLocation: string | null;
   rilCompanyName: string | null;
@@ -131,6 +143,7 @@ const DEFAULT_FALLBACKS = {
   startOfWeek: 'Monday',
   treatSaturdayAsHoliday: true,
   sessionIdleTimeoutMinutes: 30,
+  ollamaBaseUrl: 'http://localhost:11434',
 } as const;
 
 const mapRow = (row: GeneralSettingsRow): GeneralSettings => ({
@@ -152,6 +165,9 @@ const mapRow = (row: GeneralSettingsRow): GeneralSettings => ({
   openrouterApiKey: row.openrouterApiKey,
   geminiModelId: row.geminiModelId,
   openrouterModelId: row.openrouterModelId,
+  ollamaBaseUrl: row.ollamaBaseUrl ?? DEFAULT_FALLBACKS.ollamaBaseUrl,
+  ollamaBearerToken: row.ollamaBearerToken,
+  ollamaModelId: row.ollamaModelId,
   allowWeekendSelection: row.allowWeekendSelection,
   defaultLocation: row.defaultLocation,
   rilCompanyName: row.rilCompanyName,
@@ -207,6 +223,9 @@ export const update = async (
       openrouterApiKey: sql`COALESCE(${patch.openrouterApiKey ?? null}, ${generalSettings.openrouterApiKey})`,
       geminiModelId: sql`COALESCE(${patch.geminiModelId ?? null}, ${generalSettings.geminiModelId})`,
       openrouterModelId: sql`COALESCE(${patch.openrouterModelId ?? null}, ${generalSettings.openrouterModelId})`,
+      ollamaBaseUrl: sql`COALESCE(${patch.ollamaBaseUrl ?? null}, ${generalSettings.ollamaBaseUrl})`,
+      ollamaBearerToken: sql`COALESCE(${patch.ollamaBearerToken ?? null}, ${generalSettings.ollamaBearerToken})`,
+      ollamaModelId: sql`COALESCE(${patch.ollamaModelId ?? null}, ${generalSettings.ollamaModelId})`,
       allowWeekendSelection: sql`COALESCE(${patch.allowWeekendSelection ?? null}, ${generalSettings.allowWeekendSelection})`,
       defaultLocation: sql`COALESCE(${patch.defaultLocation ?? null}, ${generalSettings.defaultLocation})`,
       rilCompanyName: sql`COALESCE(${patch.rilCompanyName ?? null}, ${generalSettings.rilCompanyName})`,

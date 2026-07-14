@@ -1,10 +1,13 @@
+import type { AiProvider } from '../../types';
 import { fetchApi } from './client';
 
 export const aiApi = {
   validateModel: (data: {
-    provider: 'gemini' | 'openrouter';
+    provider: AiProvider;
     modelId: string;
     apiKey?: string;
+    ollamaBaseUrl?: string;
+    ollamaBearerToken?: string;
   }): Promise<{
     ok: boolean;
     code?: string;

@@ -28,7 +28,7 @@
 <li><strong>Database</strong>: PostgreSQL with Drizzle ORM</li>
 <li><strong>Styling</strong>: Tailwind CSS</li>
 <li><strong>Charts</strong>: Recharts</li>
-<li><strong>AI Integration</strong>: Gemini/OpenRouter via server-side provider calls (AI Reporting).</li>
+<li><strong>AI Integration</strong>: Gemini, OpenRouter, or local Ollama via server-side provider calls (AI Reporting).</li>
 <li><strong>Icons</strong>: FontAwesome</li>
 </ul>
 <h2 id="setup-installation" class="tsd-anchor-link">Setup &amp; Installation<a href="#setup-installation" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2>
@@ -47,7 +47,8 @@
 </li>
 <li>
 <p><strong>Environment Configuration</strong>
-AI Reporting is optional. If you enable it, configure the provider + API key + model in Administration -&gt; General Settings.</p>
+AI Reporting is optional. If you enable it, configure the provider and model in Administration -&gt; General Settings. Gemini and OpenRouter require an API key; Ollama requires a backend-reachable base URL and supports an optional reverse-proxy Bearer token.</p>
+<p>When upgrading to the Ollama-capable release, apply database migrations before deploying the new backend. The previous backend remains compatible while <code>ai_provider</code> is <code>gemini</code> or <code>openrouter</code>; switch away from <code>ollama</code> before rolling back to a version that predates Ollama support.</p>
 </li>
 <li>
 <p><strong>Run Locally</strong></p>
