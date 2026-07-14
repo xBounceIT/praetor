@@ -759,10 +759,10 @@ const safeFetchRemoteUrl = async (url: string): Promise<Response> => {
       });
       if (response.status >= 300 && response.status < 400) {
         const next = response.headers.get('location');
+        await response.body?.cancel().catch(() => undefined);
         if (!next) {
           throw new Error(`Redirect response without Location header from ${current}`);
         }
-        await response.body?.cancel();
         current = new URL(next, current).href;
         continue;
       }

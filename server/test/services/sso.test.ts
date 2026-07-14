@@ -530,6 +530,18 @@ describe('safeFetchRemoteUrl behavior (exercised via SAML metadata fetch)', () =
     await expect(sso.startSamlLogin('okta')).rejects.toThrow(/Location header/);
   });
 
+  test('closes a malformed redirect stream before throwing for a missing Location header', async () => {
+    const incoming = new Readable({ read() {} }) as IncomingMessage;
+    incoming.statusCode = 302;
+    incoming.statusMessage = 'Found';
+    incoming.rawHeaders = [];
+    pinnedFetchResponseMock.mockResolvedValueOnce(incoming);
+
+    await expect(sso.startSamlLogin('okta')).rejects.toThrow(/Location header/);
+
+    expect(incoming.destroyed).toBe(true);
+  });
+
   test('rejects when a redirect target resolves to a private IP (per-hop revalidation)', async () => {
     pinnedFetchResponseMock.mockResolvedValueOnce(
       new Response(null, {
