@@ -1956,30 +1956,33 @@ export const AiReportingSidebar: React.FC<AiReportingSidebarProps> = ({
   const hasSearchResults = sessionGroups.length > 0;
 
   return (
-    <div className="flex h-full min-h-0 w-full flex-col bg-muted/20">
-      <div className="border-b border-border p-4">
+    <div className="flex h-full min-h-0 w-full flex-col bg-sidebar text-sidebar-foreground">
+      <div className="border-b border-sidebar-border p-4">
         <div className="flex items-center gap-3">
-          <div className="flex size-9 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+          <div className="flex size-9 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
             <Sparkles className="size-4" />
           </div>
           <div className="min-w-0">
-            <div className="font-semibold text-foreground">
+            <div className="font-semibold text-sidebar-foreground">
               {t('aiReporting.title', { defaultValue: 'AI Reporting' })}
             </div>
-            <Badge variant="secondary" className="mt-1 uppercase tracking-wide">
+            <Badge
+              variant="secondary"
+              className="mt-1 bg-sidebar-accent text-sidebar-accent-foreground uppercase tracking-wide hover:bg-sidebar-accent"
+            >
               <FlaskConical />
               {t('aiReporting.experimental', { defaultValue: 'Experimental' })}
             </Badge>
           </div>
         </div>
         <div className="relative mt-4">
-          <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-sidebar-foreground/60" />
           <Input
             value={searchQuery}
             onChange={(event) => setSearchQuery(event.target.value)}
             placeholder={t('aiReporting.searchChats', { defaultValue: 'Search chats...' })}
             aria-label={t('aiReporting.searchChats', { defaultValue: 'Search chats...' })}
-            className="pl-9"
+            className="border-sidebar-border bg-sidebar-accent/70 pl-9 text-sidebar-foreground placeholder:text-sidebar-foreground/60 focus-visible:ring-sidebar-ring"
           />
         </div>
       </div>
@@ -1987,7 +1990,7 @@ export const AiReportingSidebar: React.FC<AiReportingSidebarProps> = ({
       <ScrollArea className="min-h-0 flex-1">
         <div className="space-y-5 p-3">
           {isLoadingSessions && (
-            <div className="flex items-center gap-2 px-3 py-4 text-sm text-muted-foreground">
+            <div className="flex items-center gap-2 px-3 py-4 text-sm text-sidebar-foreground/70">
               <Loader2 className="size-4 animate-spin" />
               {t('aiReporting.loadingSessions', { defaultValue: 'Loading...' })}
             </div>
@@ -1996,10 +1999,10 @@ export const AiReportingSidebar: React.FC<AiReportingSidebarProps> = ({
           {!isLoadingSessions && sessions.length === 0 && (
             <Empty className="border-0 px-3 py-10">
               <EmptyHeader>
-                <EmptyTitle>
+                <EmptyTitle className="text-sidebar-foreground">
                   {t('aiReporting.noSessions', { defaultValue: 'No chats yet.' })}
                 </EmptyTitle>
-                <EmptyDescription>
+                <EmptyDescription className="text-sidebar-foreground/70">
                   {t('aiReporting.noSessionsDescription', {
                     defaultValue: 'Start a new conversation to analyze your business data.',
                   })}
@@ -2011,10 +2014,10 @@ export const AiReportingSidebar: React.FC<AiReportingSidebarProps> = ({
           {!isLoadingSessions && sessions.length > 0 && !hasSearchResults && (
             <Empty className="border-0 px-3 py-10">
               <EmptyHeader>
-                <EmptyTitle>
+                <EmptyTitle className="text-sidebar-foreground">
                   {t('aiReporting.noSearchResults', { defaultValue: 'No chats found' })}
                 </EmptyTitle>
-                <EmptyDescription>
+                <EmptyDescription className="text-sidebar-foreground/70">
                   {t('aiReporting.noSearchResultsDescription', {
                     defaultValue: 'Try a different search term.',
                   })}
@@ -2026,7 +2029,7 @@ export const AiReportingSidebar: React.FC<AiReportingSidebarProps> = ({
           {!isLoadingSessions &&
             sessionGroups.map((group) => (
               <div key={group.key}>
-                <div className="mb-1 px-3 text-xs font-medium text-muted-foreground">
+                <div className="mb-1 px-3 text-xs font-medium text-sidebar-foreground/70">
                   {getSessionGroupLabel(t, group.key)}
                 </div>
                 <div className="space-y-1">
@@ -2040,9 +2043,9 @@ export const AiReportingSidebar: React.FC<AiReportingSidebarProps> = ({
                         <form
                           key={session.id}
                           onSubmit={(event) => void handleRenameSubmit(event)}
-                          className="flex min-h-10 items-center gap-1 rounded-md bg-accent p-1"
+                          className="flex min-h-10 items-center gap-1 rounded-md bg-sidebar-accent p-1 text-sidebar-accent-foreground"
                         >
-                          <MessageSquareText className="ml-2 size-4 shrink-0 text-muted-foreground" />
+                          <MessageSquareText className="ml-2 size-4 shrink-0 text-sidebar-accent-foreground/70" />
                           <Input
                             autoFocus
                             value={editingTitle}
@@ -2056,7 +2059,7 @@ export const AiReportingSidebar: React.FC<AiReportingSidebarProps> = ({
                             aria-label={t('aiReporting.renameChatInput', {
                               defaultValue: 'Chat title',
                             })}
-                            className="h-8 min-w-0 flex-1 border-0 bg-transparent px-1 shadow-none focus-visible:ring-1"
+                            className="h-8 min-w-0 flex-1 border-0 bg-transparent px-1 text-sidebar-accent-foreground shadow-none focus-visible:ring-1 focus-visible:ring-sidebar-ring"
                           />
                           <Button
                             type="submit"
@@ -2066,6 +2069,7 @@ export const AiReportingSidebar: React.FC<AiReportingSidebarProps> = ({
                             aria-label={t('aiReporting.saveChatTitle', {
                               defaultValue: 'Save chat title',
                             })}
+                            className="text-sidebar-accent-foreground hover:bg-sidebar-primary/10 hover:text-sidebar-accent-foreground"
                           >
                             {renamingSessionId === session.id ? (
                               <Loader2 className="animate-spin" />
@@ -2082,6 +2086,7 @@ export const AiReportingSidebar: React.FC<AiReportingSidebarProps> = ({
                             aria-label={t('aiReporting.cancelRename', {
                               defaultValue: 'Cancel rename',
                             })}
+                            className="text-sidebar-accent-foreground hover:bg-sidebar-primary/10 hover:text-sidebar-accent-foreground"
                           >
                             <X />
                           </Button>
@@ -2093,8 +2098,8 @@ export const AiReportingSidebar: React.FC<AiReportingSidebarProps> = ({
                       <div
                         key={session.id}
                         className={cn(
-                          'group/session relative flex min-h-10 items-center rounded-md transition-colors hover:bg-accent/70',
-                          isActive && 'bg-accent',
+                          'group/session relative flex min-h-10 items-center rounded-md text-sidebar-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
+                          isActive && 'bg-sidebar-accent text-sidebar-accent-foreground',
                         )}
                       >
                         <Button
@@ -2103,9 +2108,9 @@ export const AiReportingSidebar: React.FC<AiReportingSidebarProps> = ({
                           size="sm"
                           aria-current={isActive ? 'page' : undefined}
                           onClick={() => onSelectSession(session.id)}
-                          className="h-auto min-w-0 flex-1 justify-start bg-transparent px-3 py-2.5 pr-20 font-normal hover:bg-transparent"
+                          className="h-auto min-w-0 flex-1 justify-start bg-transparent px-3 py-2.5 pr-20 font-normal text-inherit hover:bg-transparent hover:text-inherit"
                         >
-                          <MessageSquareText className="size-4 shrink-0 text-muted-foreground" />
+                          <MessageSquareText className="size-4 shrink-0 text-current opacity-70" />
                           <span className="truncate">{title}</span>
                         </Button>
                         <div
@@ -2127,7 +2132,7 @@ export const AiReportingSidebar: React.FC<AiReportingSidebarProps> = ({
                                     !canArchive || isDeletingSession || Boolean(renamingSessionId)
                                   }
                                   onClick={() => beginRename(session, title)}
-                                  className="text-muted-foreground hover:text-foreground"
+                                  className="text-sidebar-foreground/70 hover:bg-sidebar-primary/10 hover:text-sidebar-foreground"
                                   aria-label={t('aiReporting.renameChatAria', {
                                     name: title,
                                     defaultValue: 'Rename chat {{name}}',
@@ -2152,7 +2157,7 @@ export const AiReportingSidebar: React.FC<AiReportingSidebarProps> = ({
                                     !canArchive || isDeletingSession || Boolean(renamingSessionId)
                                   }
                                   onClick={() => onConfirmDeleteSession(session)}
-                                  className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                                  className="text-sidebar-foreground/70 hover:bg-destructive/10 hover:text-destructive"
                                   aria-label={t('aiReporting.deleteChatAria', {
                                     name: title,
                                     defaultValue: 'Delete chat {{name}}',
@@ -2176,8 +2181,13 @@ export const AiReportingSidebar: React.FC<AiReportingSidebarProps> = ({
         </div>
       </ScrollArea>
 
-      <div className="border-t border-border p-3">
-        <Button type="button" onClick={onNewChat} disabled={isNewChatDisabled} className="w-full">
+      <div className="border-t border-sidebar-border p-3">
+        <Button
+          type="button"
+          onClick={onNewChat}
+          disabled={isNewChatDisabled}
+          className="w-full bg-sidebar-primary text-sidebar-primary-foreground hover:bg-sidebar-primary/90"
+        >
           {isCreatingSession ? <Loader2 className="animate-spin" /> : <Plus />}
           {t('aiReporting.newChat', { defaultValue: 'New Chat' })}
         </Button>

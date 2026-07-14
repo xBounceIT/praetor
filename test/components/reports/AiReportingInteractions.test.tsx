@@ -80,6 +80,39 @@ mock.module('../../../services/api', () => ({
   },
 }));
 
+// Bun module mocks are process-wide and other suites replace DeleteConfirmModal with
+// feature-specific stubs. Pin an accessible deterministic version before importing the
+// view so this interaction test is independent of full-suite execution order.
+mock.module('../../../components/shared/DeleteConfirmModal', () => ({
+  default: ({
+    isOpen,
+    isDeleting = false,
+    onClose,
+    onConfirm,
+    title,
+    description,
+  }: {
+    isOpen: boolean;
+    isDeleting?: boolean;
+    onClose: () => void;
+    onConfirm: () => void;
+    title: string;
+    description?: string;
+  }) =>
+    isOpen ? (
+      <div role="dialog" aria-modal="true" aria-labelledby="ai-reporting-delete-title">
+        <h2 id="ai-reporting-delete-title">{title}</h2>
+        {description ? <p>{description}</p> : null}
+        <button type="button" onClick={onClose} disabled={isDeleting}>
+          Cancel
+        </button>
+        <button type="button" onClick={onConfirm} disabled={isDeleting}>
+          {isDeleting ? 'Saving...' : 'Delete'}
+        </button>
+      </div>
+    ) : null,
+}));
+
 const { default: AiReportingView } = await import('../../../components/reports/AiReportingView');
 
 const sessions: ReportChatSessionSummary[] = [

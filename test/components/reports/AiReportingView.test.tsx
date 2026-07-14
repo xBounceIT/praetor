@@ -43,6 +43,19 @@ describe('<AiReportingView /> shadcn workspace', () => {
     ]);
   });
 
+  test('uses sidebar-specific tokens for readable light-theme content', async () => {
+    const source = await readComponentSource('reports/AiReportingView.tsx');
+
+    expectSourceContainsAll(source, [
+      'bg-sidebar text-sidebar-foreground',
+      'border-sidebar-border',
+      'bg-sidebar-accent',
+      'text-sidebar-accent-foreground',
+      'bg-sidebar-primary',
+      'text-sidebar-primary-foreground',
+    ]);
+  });
+
   test('keeps the mobile history drawer and destructive confirmation wired', async () => {
     const source = await readComponentSource('reports/AiReportingView.tsx');
 
