@@ -1,6 +1,7 @@
 import { describe, expect, mock, test } from 'bun:test';
 import { fireEvent, screen, waitFor } from '@testing-library/react';
 import type { ComponentProps } from 'react';
+import { emailSettingsReducer } from '../../../components/administration/emailSettingsReducer';
 import type { EmailConfig } from '../../../types';
 import { installI18nMock } from '../../helpers/i18n';
 import { clearSpyStateAfterAll } from '../../helpers/mockCleanup.ts';
@@ -25,6 +26,27 @@ const baseConfig: EmailConfig = {
   fromEmail: 'noreply@example.com',
   fromName: 'Praetor',
 };
+
+describe('emailSettingsReducer', () => {
+  test('preserves state for an unknown action', () => {
+    const state: Parameters<typeof emailSettingsReducer>[0] = {
+      formData: baseConfig,
+      originalConfig: baseConfig,
+      testEmail: '',
+      testResult: null,
+      isTestLoading: false,
+      isSaving: false,
+      isSaved: false,
+      errors: {},
+      testErrors: {},
+    };
+    const unknownAction = { type: 'unknown' } as unknown as Parameters<
+      typeof emailSettingsReducer
+    >[1];
+
+    expect(emailSettingsReducer(state, unknownAction)).toBe(state);
+  });
+});
 
 const renderEmailSettings = (overrides: Partial<ComponentProps<typeof EmailSettings>> = {}) => {
   const onSave = mock(async (_config: EmailConfig) => {});
