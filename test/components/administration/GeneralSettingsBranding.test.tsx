@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
-import { fireEvent, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor } from '@testing-library/react';
 import type { AppBranding, GeneralSettings as IGeneralSettings } from '../../../types';
 import { ApiErrorStub } from '../../helpers/apiErrorStub';
 import { installI18nMock } from '../../helpers/i18n';
@@ -17,7 +17,7 @@ const uploadLogoMock = mock(
 const deleteLogoMock = mock(
   async (): Promise<AppBranding> => ({ companyName: null, logoUrl: null }),
 );
-const validateModelMock = mock(async () => ({ ok: true }));
+const validateModelMock = mock(async (_data?: unknown) => ({ ok: true }));
 
 // Own factory with ApiError (process-global mock convention — see helpers/mockCleanup.ts).
 mock.module('../../../services/api', () => ({
@@ -27,7 +27,7 @@ mock.module('../../../services/api', () => ({
       uploadLogo: (file: File) => uploadLogoMock(file),
       deleteLogo: () => deleteLogoMock(),
     },
-    ai: { validateModel: () => validateModelMock() },
+    ai: { validateModel: (data: unknown) => validateModelMock(data) },
   },
   ApiError: ApiErrorStub,
 }));
@@ -132,6 +132,11 @@ describe('<GeneralSettings /> branding tab', () => {
 });
 
 describe('<GeneralSettings /> AI provider settings', () => {
+  beforeEach(() => {
+    validateModelMock.mockReset();
+    validateModelMock.mockImplementation(async () => ({ ok: true }));
+  });
+
   test('selects Anthropic and saves its dedicated key and model', async () => {
     const onUpdate = mock(async () => undefined);
     render(
@@ -171,5 +176,98 @@ describe('<GeneralSettings /> AI provider settings', () => {
         }),
       ),
     );
+  });
+
+  test('configures, validates, and saves OpenAI credentials separately', async () => {
+    const onUpdate = mock(async () => undefined);
+    render(
+      <GeneralSettings
+        settings={{
+          ...baseSettings,
+          enableAiReporting: true,
+          aiProvider: 'openai',
+          openaiApiKey: 'sk-openai',
+          openaiModelId: 'gpt-test',
+        }}
+        onUpdate={onUpdate}
+        branding={{ companyName: null, logoUrl: null }}
+        onBrandingChange={() => {}}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'general.tabs.ai' }));
+
+    expect(screen.getByLabelText(/general\.openaiApiKey/)).toHaveValue('sk-openai');
+    expect(screen.getByLabelText(/general\.modelIdLabel/)).toHaveValue('gpt-test');
+    expect(screen.getByRole('link', { name: 'general.openaiDashboard' })).toHaveAttribute(
+      'href',
+      'https://platform.openai.com/api-keys',
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'general.checkModel' }));
+    await waitFor(() =>
+      expect(validateModelMock).toHaveBeenCalledWith({
+        provider: 'openai',
+        modelId: 'gpt-test',
+        apiKey: 'sk-openai',
+      }),
+    );
+
+    fireEvent.change(screen.getByLabelText(/general\.openaiApiKey/), {
+      target: { value: 'sk-openai-updated' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /general\.saveConfiguration/ }));
+    await waitFor(() =>
+      expect(onUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          aiProvider: 'openai',
+          openaiApiKey: 'sk-openai-updated',
+          openaiModelId: 'gpt-test',
+        }),
+      ),
+    );
+  });
+
+  test('ignores a stale model validation result after the target changes', async () => {
+    let resolveValidation:
+      | ((value: { ok: boolean; code?: string; message?: string }) => void)
+      | undefined;
+    validateModelMock.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveValidation = resolve;
+        }),
+    );
+
+    render(
+      <GeneralSettings
+        settings={{
+          ...baseSettings,
+          enableAiReporting: true,
+          aiProvider: 'openai',
+          openaiApiKey: 'sk-openai',
+          openaiModelId: 'gpt-old',
+        }}
+        onUpdate={async () => {}}
+        branding={{ companyName: null, logoUrl: null }}
+        onBrandingChange={() => {}}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'general.tabs.ai' }));
+    fireEvent.click(screen.getByRole('button', { name: 'general.checkModel' }));
+    await waitFor(() => expect(resolveValidation).toBeDefined());
+
+    fireEvent.change(screen.getByLabelText(/general\.modelIdLabel/), {
+      target: { value: 'gpt-new' },
+    });
+    if (!resolveValidation) throw new Error('Validation request did not start');
+    await act(async () => {
+      resolveValidation?.({ ok: false, code: 'NOT_FOUND', message: 'Old result' });
+      await Promise.resolve();
+    });
+
+    expect(screen.getByLabelText(/general\.modelIdLabel/)).toHaveValue('gpt-new');
+    expect(screen.queryByText('general.modelNotFound')).toBeNull();
   });
 });

@@ -25761,6 +25761,9 @@
                     "anthropicApiKey": {
                       "type": "string"
                     },
+                    "openaiApiKey": {
+                      "type": "string"
+                    },
                     "geminiModelId": {
                       "type": "string"
                     },
@@ -25768,6 +25771,9 @@
                       "type": "string"
                     },
                     "anthropicModelId": {
+                      "type": "string"
+                    },
+                    "openaiModelId": {
                       "type": "string"
                     },
                     "allowWeekendSelection": {
@@ -25862,9 +25868,11 @@
                     "aiProvider",
                     "openrouterApiKey",
                     "anthropicApiKey",
+                    "openaiApiKey",
                     "geminiModelId",
                     "openrouterModelId",
                     "anthropicModelId",
+                    "openaiModelId",
                     "allowWeekendSelection",
                     "defaultLocation",
                     "rilCompanyName",
@@ -26071,6 +26079,9 @@
                   "anthropicApiKey": {
                     "type": "string"
                   },
+                  "openaiApiKey": {
+                    "type": "string"
+                  },
                   "geminiModelId": {
                     "type": "string"
                   },
@@ -26078,6 +26089,9 @@
                     "type": "string"
                   },
                   "anthropicModelId": {
+                    "type": "string"
+                  },
+                  "openaiModelId": {
                     "type": "string"
                   },
                   "allowWeekendSelection": {
@@ -26201,6 +26215,9 @@
                     "anthropicApiKey": {
                       "type": "string"
                     },
+                    "openaiApiKey": {
+                      "type": "string"
+                    },
                     "geminiModelId": {
                       "type": "string"
                     },
@@ -26208,6 +26225,9 @@
                       "type": "string"
                     },
                     "anthropicModelId": {
+                      "type": "string"
+                    },
+                    "openaiModelId": {
                       "type": "string"
                     },
                     "allowWeekendSelection": {
@@ -26302,9 +26322,11 @@
                     "aiProvider",
                     "openrouterApiKey",
                     "anthropicApiKey",
+                    "openaiApiKey",
                     "geminiModelId",
                     "openrouterModelId",
                     "anthropicModelId",
+                    "openaiModelId",
                     "allowWeekendSelection",
                     "defaultLocation",
                     "rilCompanyName",

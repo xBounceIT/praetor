@@ -64,6 +64,23 @@ const anthropicModelExists = async (
   return (await res.json()) as AnthropicModel;
 };
 
+type OpenAiModel = { id: string };
+
+const openaiModelExists = async (apiKey: string, modelId: string): Promise<OpenAiModel | null> => {
+  const normalizedModelId = modelId.trim();
+  const res = await fetch(
+    `https://api.openai.com/v1/models/${encodeURIComponent(normalizedModelId)}`,
+    {
+      method: 'GET',
+      headers: { Authorization: `Bearer ${apiKey}` },
+    },
+  );
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(`OpenAI model request failed: HTTP ${res.status}`);
+  const model = (await res.json()) as { id?: string };
+  return model.id ? { id: model.id } : null;
+};
+
 export default async function (fastify: FastifyInstance, _opts: unknown) {
   // POST /validate-model - Admin-only utility used by General Settings UI.
   fastify.post(
@@ -111,7 +128,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const providerResult = validateEnum(
         provider,
-        ['gemini', 'openrouter', 'anthropic'],
+        ['gemini', 'openrouter', 'anthropic', 'openai'],
         'provider',
       );
       if (!providerResult.ok) return badRequest(reply, providerResult.message);
@@ -127,13 +144,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         keyToUse = apiKey;
       } else {
         const settings = await generalSettingsRepo.get();
-        if (providerResult.value === 'gemini') {
-          keyToUse = settings?.geminiApiKey ?? '';
-        } else if (providerResult.value === 'openrouter') {
-          keyToUse = settings?.openrouterApiKey ?? '';
-        } else {
-          keyToUse = settings?.anthropicApiKey ?? '';
-        }
+        const settingsKeys = {
+          gemini: settings?.geminiApiKey ?? '',
+          openrouter: settings?.openrouterApiKey ?? '',
+          anthropic: settings?.anthropicApiKey ?? '',
+          openai: settings?.openaiApiKey ?? '',
+        };
+        keyToUse = settingsKeys[providerResult.value];
       }
 
       if (!keyToUse.trim()) {
@@ -164,6 +181,20 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           return reply.send(
             match
               ? { ok: true, normalizedModelId: match.id, name: match.name || '' }
+              : {
+                  ok: false,
+                  code: 'NOT_FOUND',
+                  message: 'Model not found.',
+                  normalizedModelId: resolvedModelId,
+                },
+          );
+        }
+
+        if (providerResult.value === 'openai') {
+          const match = await openaiModelExists(keyToUse, resolvedModelId);
+          return reply.send(
+            match
+              ? { ok: true, normalizedModelId: match.id }
               : {
                   ok: false,
                   code: 'NOT_FOUND',
