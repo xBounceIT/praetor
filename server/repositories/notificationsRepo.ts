@@ -1,5 +1,5 @@
 import { and, count, desc, eq, inArray, sql } from 'drizzle-orm';
-import { type DbExecutor, db } from '../db/drizzle.ts';
+import { type DbExecutor, db, runAtomically } from '../db/drizzle.ts';
 import { notifications } from '../db/schema/notifications.ts';
 import { generatePrefixedId } from '../utils/order-ids.ts';
 
@@ -167,34 +167,35 @@ export const createRilPreferencesTip = async (
 export const upsertAdminPasswordWarning = async (
   userId: string,
   exec: DbExecutor = db,
-): Promise<void> => {
-  const warning = {
-    userId,
-    type: ADMIN_PASSWORD_WARNING_TYPE,
-    title: ADMIN_PASSWORD_WARNING_TITLE,
-    message: ADMIN_PASSWORD_WARNING_MESSAGE,
-    data: adminPasswordWarningData,
-    isRead: false,
-  };
+): Promise<void> =>
+  runAtomically(exec, async (tx) => {
+    const warning = {
+      userId,
+      type: ADMIN_PASSWORD_WARNING_TYPE,
+      title: ADMIN_PASSWORD_WARNING_TITLE,
+      message: ADMIN_PASSWORD_WARNING_MESSAGE,
+      data: adminPasswordWarningData,
+      isRead: false,
+    };
 
-  await exec
-    .delete(notifications)
-    .where(eq(notifications.id, LEGACY_ADMIN_PASSWORD_WARNING_NOTIFICATION_ID));
+    await tx
+      .delete(notifications)
+      .where(eq(notifications.id, LEGACY_ADMIN_PASSWORD_WARNING_NOTIFICATION_ID));
 
-  await exec
-    .insert(notifications)
-    .values({
-      id: adminPasswordWarningNotificationId(userId),
-      ...warning,
-    })
-    .onConflictDoUpdate({
-      target: notifications.id,
-      set: {
+    await tx
+      .insert(notifications)
+      .values({
+        id: adminPasswordWarningNotificationId(userId),
         ...warning,
-        createdAt: sql`CURRENT_TIMESTAMP`,
-      },
-    });
-};
+      })
+      .onConflictDoUpdate({
+        target: notifications.id,
+        set: {
+          ...warning,
+          createdAt: sql`CURRENT_TIMESTAMP`,
+        },
+      });
+  });
 
 export const deleteAdminPasswordWarning = async (
   userId: string,
