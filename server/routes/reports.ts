@@ -284,7 +284,7 @@ const fetchModelContextWindow = async (
       contextWindowTokens = positiveInteger(data.inputTokenLimit);
     } else if (provider === 'openrouter') {
       const encodedModelPath = modelId.split('/').map(encodeURIComponent).join('/');
-      const response = await fetch(`https://openrouter.ai/api/v1/models/${encodedModelPath}`, {
+      const response = await fetch(`https://openrouter.ai/api/v1/model/${encodedModelPath}`, {
         headers: { Authorization: `Bearer ${apiKey}` },
         signal: AbortSignal.timeout(MODEL_CONTEXT_REQUEST_TIMEOUT_MS),
       });
@@ -324,14 +324,14 @@ const fetchModelContextWindow = async (
 
 const resolveTechnicalInfo = async (
   provider: AiProvider,
-  apiKey: string,
   configuredModelId: string,
   usage: AiGenerationUsage | undefined,
+  contextWindowPromise: Promise<number | undefined>,
 ): Promise<AiTechnicalInfo | undefined> => {
   const contextTokensUsed = positiveInteger(usage?.contextTokensUsed);
   if (!contextTokensUsed) return undefined;
   const modelId = String(usage?.modelId || configuredModelId).trim();
-  const contextWindowTokens = await fetchModelContextWindow(provider, apiKey, configuredModelId);
+  const contextWindowTokens = await contextWindowPromise;
   if (!modelId || !contextWindowTokens) return undefined;
   return { provider, modelId, contextTokensUsed, contextWindowTokens };
 };
@@ -2372,13 +2372,15 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           convo,
         });
         if (streamAbortController.signal.aborted) return;
-        const generated = await generateAiReportingTextStream(
+        const generationPromise = generateAiReportingTextStream(
           apiKey,
           modelId,
           payload,
           streamHandlers.callbacks,
           streamAbortController.signal,
         );
+        const contextWindowPromise = fetchModelContextWindow(provider, apiKey, modelId);
+        const generated = await generationPromise;
 
         if (!streamAbortController.signal.aborted) {
           await emitThoughtDone();
@@ -2392,9 +2394,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               generatedThought || streamHandlers.accumulated.thoughtContent.trim();
             const technicalInfo = await resolveTechnicalInfo(
               provider,
-              apiKey,
               modelId,
               generated.usage,
+              contextWindowPromise,
             );
 
             await reportsAiChatRepo.insertAssistantMessage({
@@ -2627,13 +2629,15 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           convo,
         });
         if (streamAbortController.signal.aborted) return;
-        const generated = await generateAiReportingTextStream(
+        const generationPromise = generateAiReportingTextStream(
           apiKey,
           modelId,
           payload,
           streamHandlers.callbacks,
           streamAbortController.signal,
         );
+        const contextWindowPromise = fetchModelContextWindow(provider, apiKey, modelId);
+        const generated = await generationPromise;
 
         if (!streamAbortController.signal.aborted) {
           await emitThoughtDone();
@@ -2647,9 +2651,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               generatedThought || streamHandlers.accumulated.thoughtContent.trim();
             const technicalInfo = await resolveTechnicalInfo(
               provider,
-              apiKey,
               modelId,
               generated.usage,
+              contextWindowPromise,
             );
 
             // Atomic swap: delete the old paired assistant (if any) and insert the new one in
@@ -2828,7 +2832,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           datasetJson,
           convo,
         });
-        const generated = await generateAiReportingText(apiKey, modelId, payload);
+        const generationPromise = generateAiReportingText(apiKey, modelId, payload);
+        const contextWindowPromise = fetchModelContextWindow(provider, apiKey, modelId);
+        const generated = await generationPromise;
         const text = generated.text;
         const thoughtContent = generated.thoughtContent || '';
 
@@ -2837,9 +2843,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         const assistantThoughtContent = String(thoughtContent || '').trim();
         const technicalInfo = await resolveTechnicalInfo(
           provider,
-          apiKey,
           modelId,
           generated.usage,
+          contextWindowPromise,
         );
 
         const assistantMessageId = generatePrefixedId(reportsAiChatRepo.RPT_MSG_ID_PREFIX);
