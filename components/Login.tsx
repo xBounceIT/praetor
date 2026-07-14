@@ -1,10 +1,12 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { REGEXP_ONLY_DIGITS } from 'input-otp';
+import { TriangleAlert, X } from 'lucide-react';
 import type React from 'react';
 import { useEffect, useMemo, useReducer, useRef } from 'react';
 import { Controller, type UseFormReturn, useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { z } from 'zod';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Field, FieldError, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
@@ -14,12 +16,17 @@ import { getShadcnThemeClassName, useBrowserTheme } from '@/components/ui/use-sh
 import { cn } from '@/lib/utils';
 import type { ResolvedTheme } from '@/utils/theme';
 import api, { ApiError } from '../services/api';
-import { type PublicSsoProvider, SSO_LOGIN_ERROR_CODES, type User } from '../types';
+import {
+  type LogoutNotice,
+  type PublicSsoProvider,
+  SSO_LOGIN_ERROR_CODES,
+  type User,
+} from '../types';
 import TotpSetupWizard, { type TotpSetupResult } from './TotpSetupWizard';
 
 export interface LoginProps {
   onLogin: (user: User, token?: string) => void;
-  logoutReason?: 'inactivity' | null;
+  logoutReason?: LogoutNotice | null;
   onClearLogoutReason?: () => void;
   serverUnreachable?: boolean;
   onDismissServerUnreachable?: () => void;
@@ -499,7 +506,7 @@ const LoginLogo: React.FC<LoginLogoProps> = ({ src, alt, isDark, usingCustomLogo
 );
 
 interface LoginStatusAlertsProps {
-  logoutReason?: 'inactivity' | null;
+  logoutReason?: LogoutNotice | null;
   onClearLogoutReason?: () => void;
   serverUnreachable?: boolean;
   onDismissServerUnreachable?: () => void;
@@ -537,6 +544,28 @@ const LoginStatusAlerts: React.FC<LoginStatusAlertsProps> = ({
             </button>
           )}
         </div>
+      )}
+
+      {logoutReason === 'logout-incomplete' && (
+        <Alert className="mt-6 border-amber-500/30 bg-amber-500/10 pr-12 text-amber-800 animate-in fade-in slide-in-from-top-2 dark:text-amber-300">
+          <TriangleAlert />
+          <AlertTitle>{t('auth:session.logoutIncompleteTitle')}</AlertTitle>
+          <AlertDescription className="text-amber-700 dark:text-amber-400">
+            {t('auth:session.logoutIncompleteMessage')}
+          </AlertDescription>
+          {onClearLogoutReason && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-xs"
+              onClick={onClearLogoutReason}
+              aria-label={t('common:buttons.close')}
+              className="absolute top-2 right-2 text-amber-700 hover:bg-amber-500/15 hover:text-amber-900 dark:text-amber-300 dark:hover:text-amber-100"
+            >
+              <X />
+            </Button>
+          )}
+        </Alert>
       )}
 
       {serverUnreachable && (

@@ -52,6 +52,9 @@ export interface FetchApiOptions extends RequestInit {
   // that may legitimately take longer (e.g. AI completions) and that supply their
   // own AbortSignal for cancellation.
   timeoutMs?: number | null;
+  // Logout clears the local session before its response settles. Ignoring rotation headers
+  // prevents a delayed or failed logout response from restoring that session token.
+  persistAuthToken?: boolean;
 }
 
 type AuthRequestContext = {
@@ -88,7 +91,12 @@ const applyRotatedAuthToken = (response: Response, context: AuthRequestContext) 
 
 export const fetchApi = async <T>(endpoint: string, options: FetchApiOptions = {}): Promise<T> => {
   const authContext = beginAuthRequest();
-  const { timeoutMs = DEFAULT_TIMEOUT_MS, signal: callerSignal, ...fetchOptions } = options;
+  const {
+    timeoutMs = DEFAULT_TIMEOUT_MS,
+    persistAuthToken: shouldPersistAuthToken = true,
+    signal: callerSignal,
+    ...fetchOptions
+  } = options;
 
   const headers: HeadersInit = {
     ...(fetchOptions.body ? { 'Content-Type': 'application/json' } : {}),
@@ -119,7 +127,9 @@ export const fetchApi = async <T>(endpoint: string, options: FetchApiOptions = {
     throw new ApiError(message, 0, true);
   }
 
-  applyRotatedAuthToken(response, authContext);
+  if (shouldPersistAuthToken) {
+    applyRotatedAuthToken(response, authContext);
+  }
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({ error: 'Request failed' }));

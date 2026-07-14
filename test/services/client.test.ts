@@ -265,6 +265,22 @@ describe('services/api/client', () => {
       expect(getAuthToken()).toBe('rotated-on-401');
     });
 
+    test('can ignore rotation headers on an error response', async () => {
+      setAuthToken('new-login-token');
+      fetchMock.mockImplementationOnce(async () =>
+        buildResponse({
+          status: 500,
+          headers: { 'x-auth-token': 'stale-logout-token' },
+          json: () => ({ message: 'Logout failed' }),
+        }),
+      );
+
+      await expect(fetchApi('/logout', { persistAuthToken: false })).rejects.toThrow(
+        'Logout failed',
+      );
+      expect(getAuthToken()).toBe('new-login-token');
+    });
+
     test('network error from fetch propagates to caller', async () => {
       fetchMock.mockImplementationOnce(async () => {
         throw new TypeError('Failed to fetch');

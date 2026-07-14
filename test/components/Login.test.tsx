@@ -290,6 +290,18 @@ describe('<Login />', () => {
     expect(screen.queryByText('auth:session.expired')).not.toBeInTheDocument();
   });
 
+  test('incomplete server logout renders a dismissible warning', () => {
+    const onClear = mock(() => {});
+    render(
+      <Login onLogin={() => {}} logoutReason="logout-incomplete" onClearLogoutReason={onClear} />,
+    );
+
+    expect(screen.getByText('auth:session.logoutIncompleteTitle')).toBeInTheDocument();
+    expect(screen.getByText('auth:session.logoutIncompleteMessage')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'common:buttons.close' }));
+    expect(onClear).toHaveBeenCalled();
+  });
+
   test('shows loading state while login promise pending', async () => {
     let resolveLogin:
       | ((value: { user: { id: string; name: string }; token: string }) => void)

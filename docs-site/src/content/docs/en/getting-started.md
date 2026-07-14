@@ -41,6 +41,8 @@ Shared views are backed by the `GET/POST/PUT/DELETE /api/views/*` endpoints docu
 
 From the user menu you can open settings, switch role when multiple profiles are available, open this documentation, and log out.
 
+If server logout cannot be confirmed, Praetor still clears the local session and displays a warning because other Praetor sessions and the identity-provider session, if used, may remain active. Before signing in again, close the browser or sign out directly from the provider, especially on a shared device.
+
 The **Security** tab contains password changes and your personal access token for API use. Changing your password immediately revokes every other active session for your account *and* invalidates every personal access token and MCP token you previously issued: only the device you used to make the change stays signed in, every API integration must be re-keyed with a fresh token, and the operation is recorded in the audit logs. The token inherits your user permissions; copy it when it is created or renewed, because it is shown only in masked form afterward. The token is also rejected after 30 days without use — renew it before it goes idle, or have an administrator adjust the idle window via the `PAT_IDLE_TIMEOUT_MS` server environment variable.
 
 Always check that you are using the right role before changing administrative or accounting data.

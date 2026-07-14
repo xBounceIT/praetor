@@ -41,6 +41,8 @@ Le viste condivise sono gestite dagli endpoint `GET/POST/PUT/DELETE /api/views/*
 
 Dal menu utente puoi aprire le impostazioni, cambiare ruolo se hai più profili disponibili, consultare questa documentazione e uscire dall'applicazione.
 
+Se il logout dal server non può essere confermato, Praetor cancella comunque la sessione locale e mostra un avviso perché le altre sessioni Praetor e quella presso il provider di identità, se usato, potrebbero essere ancora attive. Prima di accedere di nuovo, chiudi il browser o esci direttamente dal provider, soprattutto su un dispositivo condiviso.
+
 La scheda **Sicurezza** contiene il cambio password e il token di accesso personale per usare le API. Quando cambi la password, tutte le altre sessioni attive del tuo utente vengono revocate immediatamente *e* anche tutti i token di accesso personale e i token MCP precedentemente emessi vengono invalidati: solo il dispositivo da cui hai effettuato il cambio resta connesso, ogni integrazione API deve essere reimpostata con un nuovo token, e l'operazione viene registrata nei log di audit. Il token eredita i permessi del tuo utente; copialo quando viene creato o rinnovato, perché in seguito verrà mostrato solo in forma mascherata. Il token viene inoltre rifiutato dopo 30 giorni di inattività — rinnovalo prima che scada o chiedi a un amministratore di regolare la finestra di inattività tramite la variabile d'ambiente `PAT_IDLE_TIMEOUT_MS` lato server.
 
 Controlla sempre di lavorare con il ruolo corretto prima di modificare dati amministrativi o contabili.
