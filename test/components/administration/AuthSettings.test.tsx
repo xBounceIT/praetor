@@ -1,6 +1,7 @@
 import { afterAll, beforeEach, describe, expect, mock } from 'bun:test';
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import type { ComponentProps } from 'react';
+import { authSettingsReducer } from '../../../components/administration/authSettingsState';
 import type {
   LdapConfig,
   LdapSyncResponse,
@@ -212,6 +213,14 @@ const fillMinimalOidcProvider = () => {
 
   return form;
 };
+
+describe('authSettingsReducer', () => {
+  test('preserves the current state for an unrecognized action', () => {
+    const state = { marker: true } as unknown as Parameters<typeof authSettingsReducer>[0];
+
+    expect(authSettingsReducer(state, { type: 'unknown' } as never)).toBe(state);
+  });
+});
 
 describe('<AuthSettings />', () => {
   beforeEach(() => {
