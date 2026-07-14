@@ -1,6 +1,7 @@
 import { describe, expect, mock, test } from 'bun:test';
 import { fireEvent, screen, within } from '@testing-library/react';
 import RolesView from '../../../components/administration/RolesView';
+import { rolesViewReducer } from '../../../components/administration/rolesViewState';
 import type { Role } from '../../../types';
 import { installI18nMock } from '../../helpers/i18n';
 import { render } from '../../helpers/render';
@@ -48,6 +49,28 @@ const findHrInternalRow = () => {
   if (!row) throw new Error('hr.internal row not found');
   return row as HTMLElement;
 };
+
+describe('rolesViewReducer', () => {
+  test('preserves state for unrecognized reducer actions', () => {
+    const state = {
+      isCreateOpen: false,
+      isRenameOpen: false,
+      isPermissionsOpen: false,
+      isDeleteConfirmOpen: false,
+      isDeleting: false,
+      activeRole: null,
+      roleName: '',
+      selectedPermissions: [],
+      formErrors: {},
+      activeModuleTab: '',
+    } satisfies Parameters<typeof rolesViewReducer>[0];
+    const unrecognizedAction = { type: 'unrecognized' } as unknown as Parameters<
+      typeof rolesViewReducer
+    >[1];
+
+    expect(rolesViewReducer(state, unrecognizedAction)).toBe(state);
+  });
+});
 
 describe('<RolesView />', () => {
   test('renders create/update/delete checkboxes for all-scope permission rows', () => {
