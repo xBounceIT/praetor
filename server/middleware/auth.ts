@@ -426,7 +426,11 @@ const denyForbidden = async (
   return reply.code(403).send({ error: 'Insufficient permissions' });
 };
 
-export const requireRole = (...roles: string[]) => {
+export const requireRole = (...roles: NonEmptyGuardArgs) => {
+  if (roles.length === 0) {
+    throw new Error('requireRole requires at least one role');
+  }
+
   return async (request: FastifyRequest, reply: FastifyReply) => {
     if (!request.user) {
       return reply.code(401).send({ error: 'Authentication required' });
