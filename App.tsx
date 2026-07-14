@@ -263,6 +263,8 @@ const appModuleStateReducer = (
       }
       return next ?? state;
     }
+    default:
+      return state;
   }
 };
 
