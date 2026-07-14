@@ -31,6 +31,7 @@ export function useAuth(opts: UseAuthOptions = {}) {
   const onLoginRef = useRef(opts.onLogin);
   const onLogoutRef = useRef(opts.onLogout);
   const logoutAttemptRef = useRef(0);
+  const logoutStartedRef = useRef(false);
   const retryDelaysRef = useRef(opts.retryDelaysMs ?? AUTH_CHECK_RETRY_DELAYS_MS);
   // Tie the ref-sync effect to the callback identities so we don't burn a
   // commit re-running it after every parent render. Consumers that pass stable
@@ -117,6 +118,7 @@ export function useAuth(opts: UseAuthOptions = {}) {
       // Invalidate any slow response from an earlier logout. It must not redirect or surface
       // a stale warning after the user has already established a new session.
       logoutAttemptRef.current += 1;
+      logoutStartedRef.current = false;
       setLogoutReason(null);
       if (token) setAuthToken(token);
       // Run the consumer's reset BEFORE flipping currentUser so any effects keyed on
@@ -131,6 +133,11 @@ export function useAuth(opts: UseAuthOptions = {}) {
   );
 
   const logout = useCallback((reason?: 'inactivity') => {
+    // The first request still carries the session token; a duplicate would be unauthenticated
+    // after the synchronous local clear and must not supersede the authoritative attempt.
+    if (logoutStartedRef.current) return;
+    logoutStartedRef.current = true;
+
     // Local state clears immediately so the user is logged out of Praetor regardless of
     // server reachability. If the server returns an IdP end-session URL we additionally
     // hand the browser to it, so the IdP's session cookie dies alongside our JWT.

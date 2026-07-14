@@ -385,6 +385,44 @@ describe('useAuth', () => {
     }
   });
 
+  test('a duplicate logout keeps the authenticated request authoritative', async () => {
+    const assignMock = mock((_url: string) => {});
+    const restoreAssign = stubLocationAssign(assignMock);
+    let resolveLogout: ((response: { endSessionUrl: string | null }) => void) | undefined;
+    apiMocks.authLogout.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveLogout = resolve;
+        }),
+    );
+
+    try {
+      const { result } = renderHook(() => useAuth());
+      await waitFor(() => expect(result.current.isLoading).toBe(false));
+      await act(async () => {
+        await result.current.login({ id: 'active-session' } as never, 'active-token');
+      });
+
+      act(() => {
+        result.current.logout();
+        result.current.logout('inactivity');
+      });
+
+      expect(apiMocks.authLogout).toHaveBeenCalledTimes(1);
+      expect(result.current.logoutReason).toBeNull();
+
+      await act(async () => {
+        resolveLogout?.({ endSessionUrl: 'https://idp.example.com/logout' });
+        await Promise.resolve();
+      });
+
+      expect(assignMock).toHaveBeenCalledWith('https://idp.example.com/logout');
+      expect(result.current.logoutReason).toBeNull();
+    } finally {
+      restoreAssign();
+    }
+  });
+
   test('logout does NOT redirect when endSessionUrl is null', async () => {
     const assignMock = mock((_url: string) => {});
     const restoreAssign = stubLocationAssign(assignMock);
