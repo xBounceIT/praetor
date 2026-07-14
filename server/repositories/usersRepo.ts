@@ -859,7 +859,7 @@ export const listScopedForManager = async (
        LEFT JOIN user_work_units uw ON u.id = uw.user_id
        LEFT JOIN work_unit_managers wum ON uw.work_unit_id = wum.work_unit_id
        WHERE (${whereClause})
-         AND ${topManagerFilter}
+         AND (u.id = ${viewerId} OR ${topManagerFilter})
        ORDER BY u.name`,
   );
   return rows.map(mapUserListRow);

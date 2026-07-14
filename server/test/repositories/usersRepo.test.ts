@@ -441,7 +441,7 @@ describe('listScopedForManager', () => {
     expect(exec.calls[0].params).toContain('viewer-1');
   });
 
-  test('hides top managers from results via NOT EXISTS', async () => {
+  test('keeps the viewer visible while hiding other top managers', async () => {
     exec.enqueue({ rows: [] });
     await usersRepo.listScopedForManager(
       'viewer-1',
@@ -449,14 +449,14 @@ describe('listScopedForManager', () => {
       testDb,
     );
     const sql = exec.calls[0].sql.replace(/\s+/g, ' ');
-    expect(sql).toContain('NOT EXISTS');
+    expect(sql).toMatch(/AND \(u\.id = \$\d+ OR NOT EXISTS \(/);
     expect(exec.calls[0].params).toContain('top_manager');
     // Without canViewManagedUsers, the shared-work-unit relaxation must not apply, or callers
     // with only hr.internal/hr.external view could see top managers via incidental wum rows.
     expect(sql).not.toMatch(/NOT EXISTS[\s\S]+OR wum\.user_id =/);
   });
 
-  test('still includes top managers reachable via the viewer’s managed work units', async () => {
+  test('keeps the viewer visible and includes top managers from managed work units', async () => {
     exec.enqueue({ rows: [] });
     await usersRepo.listScopedForManager(
       'viewer-1',
@@ -464,6 +464,7 @@ describe('listScopedForManager', () => {
       testDb,
     );
     const sql = exec.calls[0].sql.replace(/\s+/g, ' ');
+    expect(sql).toMatch(/AND \(u\.id = \$\d+ OR \( NOT EXISTS \(/);
     expect(sql).toMatch(/NOT EXISTS[\s\S]+OR wum\.user_id =/);
   });
 });
