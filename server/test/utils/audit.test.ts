@@ -77,6 +77,8 @@ describe('getAuditChangedFields', () => {
         gemini_api_key: 'g',
         openrouterApiKey: 'o',
         openrouter_api_key: 'o',
+        anthropicApiKey: 'a',
+        anthropic_api_key: 'a',
         accessToken: 'at',
         refreshToken: 'rt',
         secret: 's',

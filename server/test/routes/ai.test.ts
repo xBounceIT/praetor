@@ -87,6 +87,7 @@ beforeEach(async () => {
   getGeneralSettingsMock.mockResolvedValue({
     geminiApiKey: 'test-gemini-key',
     openrouterApiKey: 'test-openrouter-key',
+    anthropicApiKey: 'test-anthropic-key',
   });
 
   testApp = await buildRouteTestApp(routePlugin, '/api/ai');
@@ -150,6 +151,7 @@ describe('POST /api/ai/validate-model', () => {
     getGeneralSettingsMock.mockResolvedValue({
       geminiApiKey: '',
       openrouterApiKey: '',
+      anthropicApiKey: '',
     });
     const res = await testApp.inject({
       method: 'POST',
@@ -266,5 +268,53 @@ describe('POST /api/ai/validate-model', () => {
     const fetchCall = (fetchMock.mock.calls[0] as unknown[])[0];
     const url = fetchCall instanceof URL ? fetchCall : new URL(String(fetchCall));
     expect(url.searchParams.get('key')).toBe('test-gemini-key');
+  });
+
+  test('200 ok=true anthropic happy path', async () => {
+    fetchMock.mockResolvedValue(
+      okResponse({ id: 'claude-sonnet-4-5', display_name: 'Claude Sonnet 4.5' }, 200),
+    );
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/ai/validate-model',
+      headers: authHeader(),
+      payload: {
+        provider: 'anthropic',
+        modelId: 'claude-sonnet-4-5',
+        apiKey: 'inline-key',
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body)).toEqual({
+      ok: true,
+      normalizedModelId: 'claude-sonnet-4-5',
+      name: 'Claude Sonnet 4.5',
+    });
+    const [url, options] = fetchMock.mock.calls[0] as unknown as [URL, RequestInit];
+    expect(url.pathname).toBe('/v1/models/claude-sonnet-4-5');
+    expect(options.headers).toEqual(
+      expect.objectContaining({
+        'x-api-key': 'inline-key',
+        'anthropic-version': '2023-06-01',
+      }),
+    );
+  });
+
+  test('200 ok=false NOT_FOUND for anthropic 404', async () => {
+    fetchMock.mockResolvedValue(okResponse({}, 404));
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/ai/validate-model',
+      headers: authHeader(),
+      payload: {
+        provider: 'anthropic',
+        modelId: 'claude-missing',
+        apiKey: 'inline-key',
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body).code).toBe('NOT_FOUND');
   });
 });

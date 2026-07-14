@@ -39,6 +39,31 @@ const openrouterModelExists = async (
   return match || null;
 };
 
+type AnthropicModel = { id: string; display_name?: string };
+
+const anthropicModelExists = async (
+  apiKey: string,
+  modelId: string,
+): Promise<AnthropicModel | null> => {
+  const normalizedModelId = modelId.trim();
+  const url = new URL(
+    `/v1/models/${encodeURIComponent(normalizedModelId)}`,
+    'https://api.anthropic.com',
+  );
+  const res = await fetch(url, {
+    method: 'GET',
+    headers: {
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+    },
+  });
+  if (res.status === 404) return null;
+  if (!res.ok) {
+    throw new Error(`Anthropic model request failed: HTTP ${res.status}`);
+  }
+  return (await res.json()) as AnthropicModel;
+};
+
 export default async function (fastify: FastifyInstance, _opts: unknown) {
   // POST /validate-model - Admin-only utility used by General Settings UI.
   fastify.post(
@@ -84,7 +109,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         apiKey?: string;
       };
 
-      const providerResult = validateEnum(provider, ['gemini', 'openrouter'], 'provider');
+      const providerResult = validateEnum(
+        provider,
+        ['gemini', 'openrouter', 'anthropic'],
+        'provider',
+      );
       if (!providerResult.ok) return badRequest(reply, providerResult.message);
 
       const modelIdResult = optionalNonEmptyString(modelId, 'modelId');
@@ -98,10 +127,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         keyToUse = apiKey;
       } else {
         const settings = await generalSettingsRepo.get();
-        keyToUse =
-          providerResult.value === 'gemini'
-            ? (settings?.geminiApiKey ?? '')
-            : (settings?.openrouterApiKey ?? '');
+        if (providerResult.value === 'gemini') {
+          keyToUse = settings?.geminiApiKey ?? '';
+        } else if (providerResult.value === 'openrouter') {
+          keyToUse = settings?.openrouterApiKey ?? '';
+        } else {
+          keyToUse = settings?.anthropicApiKey ?? '';
+        }
       }
 
       if (!keyToUse.trim()) {
@@ -127,10 +159,28 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           );
         }
 
-        const match = await openrouterModelExists(keyToUse, resolvedModelId);
+        if (providerResult.value === 'openrouter') {
+          const match = await openrouterModelExists(keyToUse, resolvedModelId);
+          return reply.send(
+            match
+              ? { ok: true, normalizedModelId: match.id, name: match.name || '' }
+              : {
+                  ok: false,
+                  code: 'NOT_FOUND',
+                  message: 'Model not found.',
+                  normalizedModelId: resolvedModelId,
+                },
+          );
+        }
+
+        const match = await anthropicModelExists(keyToUse, resolvedModelId);
         return reply.send(
           match
-            ? { ok: true, normalizedModelId: match.id, name: match.name || '' }
+            ? {
+                ok: true,
+                normalizedModelId: match.id,
+                name: match.display_name || '',
+              }
             : {
                 ok: false,
                 code: 'NOT_FOUND',

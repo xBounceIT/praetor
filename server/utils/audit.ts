@@ -71,6 +71,8 @@ const SENSITIVE_AUDIT_FIELDS = new Set([
   'gemini_api_key',
   'openrouterApiKey',
   'openrouter_api_key',
+  'anthropicApiKey',
+  'anthropic_api_key',
 ]);
 
 export interface AuditLogParams {

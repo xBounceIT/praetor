@@ -130,3 +130,46 @@ describe('<GeneralSettings /> branding tab', () => {
     expect(onUpdate).not.toHaveBeenCalled();
   });
 });
+
+describe('<GeneralSettings /> AI provider settings', () => {
+  test('selects Anthropic and saves its dedicated key and model', async () => {
+    const onUpdate = mock(async () => undefined);
+    render(
+      <GeneralSettings
+        settings={{ ...baseSettings, enableAiReporting: true, aiProvider: 'anthropic' }}
+        onUpdate={onUpdate}
+        branding={{ companyName: null, logoUrl: null }}
+        onBrandingChange={() => {}}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'general.tabs.ai' }));
+    fireEvent.click(screen.getByRole('combobox', { name: 'general.aiProviderLabel' }));
+    const anthropicOption = screen.getByRole('option', {
+      name: 'general.aiProviders.anthropic',
+    });
+    expect(anthropicOption).toBeDefined();
+    fireEvent.click(anthropicOption);
+    const apiKeyInput = document.getElementById('general-ai-api-key');
+    if (!(apiKeyInput instanceof HTMLInputElement)) throw new Error('Missing Anthropic API key');
+    fireEvent.change(apiKeyInput, {
+      target: { value: 'sk-ant-test' },
+    });
+    const modelInput = document.getElementById('general-ai-model');
+    if (!(modelInput instanceof HTMLInputElement)) throw new Error('Missing Anthropic model ID');
+    fireEvent.change(modelInput, {
+      target: { value: 'claude-sonnet-4-5' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /general\.saveConfiguration/ }));
+
+    await waitFor(() =>
+      expect(onUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          aiProvider: 'anthropic',
+          anthropicApiKey: 'sk-ant-test',
+          anthropicModelId: 'claude-sonnet-4-5',
+        }),
+      ),
+    );
+  });
+});

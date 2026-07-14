@@ -19,8 +19,10 @@ export type GeneralSettings = {
   geminiApiKey: string | null;
   aiProvider: string | null;
   openrouterApiKey: string | null;
+  anthropicApiKey: string | null;
   geminiModelId: string | null;
   openrouterModelId: string | null;
+  anthropicModelId: string | null;
   allowWeekendSelection: boolean | null;
   defaultLocation: string | null;
   rilCompanyName: string | null;
@@ -46,8 +48,10 @@ export type GeneralSettingsPatch = {
   geminiApiKey?: string | null;
   aiProvider?: string | null;
   openrouterApiKey?: string | null;
+  anthropicApiKey?: string | null;
   geminiModelId?: string | null;
   openrouterModelId?: string | null;
+  anthropicModelId?: string | null;
   allowWeekendSelection?: boolean | null;
   defaultLocation?: string | null;
   rilCompanyName?: string | null;
@@ -73,8 +77,10 @@ const GENERAL_SETTINGS_PROJECTION = {
   geminiApiKey: generalSettings.geminiApiKey,
   aiProvider: generalSettings.aiProvider,
   openrouterApiKey: generalSettings.openrouterApiKey,
+  anthropicApiKey: generalSettings.anthropicApiKey,
   geminiModelId: generalSettings.geminiModelId,
   openrouterModelId: generalSettings.openrouterModelId,
+  anthropicModelId: generalSettings.anthropicModelId,
   allowWeekendSelection: generalSettings.allowWeekendSelection,
   defaultLocation: generalSettings.defaultLocation,
   rilCompanyName: generalSettings.rilCompanyName,
@@ -100,8 +106,10 @@ type GeneralSettingsRow = {
   geminiApiKey: string | null;
   aiProvider: string | null;
   openrouterApiKey: string | null;
+  anthropicApiKey: string | null;
   geminiModelId: string | null;
   openrouterModelId: string | null;
+  anthropicModelId: string | null;
   allowWeekendSelection: boolean | null;
   defaultLocation: string | null;
   rilCompanyName: string | null;
@@ -150,8 +158,10 @@ const mapRow = (row: GeneralSettingsRow): GeneralSettings => ({
   geminiApiKey: row.geminiApiKey,
   aiProvider: row.aiProvider,
   openrouterApiKey: row.openrouterApiKey,
+  anthropicApiKey: row.anthropicApiKey,
   geminiModelId: row.geminiModelId,
   openrouterModelId: row.openrouterModelId,
+  anthropicModelId: row.anthropicModelId,
   allowWeekendSelection: row.allowWeekendSelection,
   defaultLocation: row.defaultLocation,
   rilCompanyName: row.rilCompanyName,
@@ -205,8 +215,10 @@ export const update = async (
       geminiApiKey: sql`COALESCE(${patch.geminiApiKey ?? null}, ${generalSettings.geminiApiKey})`,
       aiProvider: sql`COALESCE(${patch.aiProvider ?? null}, ${generalSettings.aiProvider})`,
       openrouterApiKey: sql`COALESCE(${patch.openrouterApiKey ?? null}, ${generalSettings.openrouterApiKey})`,
+      anthropicApiKey: sql`COALESCE(${patch.anthropicApiKey ?? null}, ${generalSettings.anthropicApiKey})`,
       geminiModelId: sql`COALESCE(${patch.geminiModelId ?? null}, ${generalSettings.geminiModelId})`,
       openrouterModelId: sql`COALESCE(${patch.openrouterModelId ?? null}, ${generalSettings.openrouterModelId})`,
+      anthropicModelId: sql`COALESCE(${patch.anthropicModelId ?? null}, ${generalSettings.anthropicModelId})`,
       allowWeekendSelection: sql`COALESCE(${patch.allowWeekendSelection ?? null}, ${generalSettings.allowWeekendSelection})`,
       defaultLocation: sql`COALESCE(${patch.defaultLocation ?? null}, ${generalSettings.defaultLocation})`,
       rilCompanyName: sql`COALESCE(${patch.rilCompanyName ?? null}, ${generalSettings.rilCompanyName})`,
