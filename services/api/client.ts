@@ -1,3 +1,5 @@
+import { getTokenSessionVersion } from '../../utils/sessionTimeout';
+
 const API_BASE = import.meta.env.VITE_API_URL || '/api';
 
 // Without this, a hung server (no TCP reset) leaves the UI on a spinner forever.
@@ -62,16 +64,24 @@ const beginAuthRequest = (): AuthRequestContext => ({
   tokenRevision: authTokenRevision,
 });
 
-// Preserve request start order when concurrent responses rotate the session token.
-// The revision also prevents a response started before login/logout from restoring stale auth.
+// Prefer the server's monotonic session version, then preserve request start order for rotations
+// within that version. The revision prevents pre-login/logout responses from restoring stale auth.
 const applyRotatedAuthToken = (response: Response, context: AuthRequestContext) => {
   const newToken = response.headers.get('x-auth-token');
+  if (!newToken || context.tokenRevision !== authTokenRevision) return;
+
+  const currentSessionVersion = getTokenSessionVersion(authToken);
+  const newSessionVersion = getTokenSessionVersion(newToken);
+  const hasComparableSessionVersions = currentSessionVersion !== null && newSessionVersion !== null;
+  const supersedesCurrentSession =
+    hasComparableSessionVersions && newSessionVersion > currentSessionVersion;
+  const isStaleSession = hasComparableSessionVersions && newSessionVersion < currentSessionVersion;
+
   if (
-    newToken &&
-    context.tokenRevision === authTokenRevision &&
-    context.requestId > latestAppliedTokenRequestId
+    !isStaleSession &&
+    (supersedesCurrentSession || context.requestId > latestAppliedTokenRequestId)
   ) {
-    latestAppliedTokenRequestId = context.requestId;
+    latestAppliedTokenRequestId = Math.max(latestAppliedTokenRequestId, context.requestId);
     persistAuthToken(newToken);
   }
 };

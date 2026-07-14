@@ -5,6 +5,7 @@ export const MAX_SESSION_IDLE_TIMEOUT_MINUTES = 24 * 60;
 type SessionTokenPayload = {
   exp?: unknown;
   sessionMaxExpiresAt?: unknown;
+  sessionVersion?: unknown;
 };
 
 export const normalizeSessionIdleTimeoutMinutes = (value: unknown): number => {
@@ -52,6 +53,13 @@ export const getTokenExpiresAtMs = (token: string | null | undefined): number | 
 
 export const getSessionMaxExpiresAtMs = (token: string | null | undefined): number | null =>
   getPayloadSessionMaxExpiresAtMs(decodeTokenPayload(token));
+
+export const getTokenSessionVersion = (token: string | null | undefined): number | null => {
+  const sessionVersion = decodeTokenPayload(token)?.sessionVersion;
+  return typeof sessionVersion === 'number' && Number.isSafeInteger(sessionVersion)
+    ? sessionVersion
+    : null;
+};
 
 const getEffectiveTokenExpiresAtMs = (token: string | null | undefined): number | null => {
   const payload = decodeTokenPayload(token);
