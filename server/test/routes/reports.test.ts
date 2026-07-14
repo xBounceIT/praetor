@@ -183,6 +183,10 @@ const AI_ENABLED_SETTINGS = {
   geminiModelId: 'gemini-pro',
   openrouterApiKey: '',
   openrouterModelId: '',
+  anthropicApiKey: '',
+  anthropicModelId: '',
+  openaiApiKey: '',
+  openaiModelId: '',
   ollamaBaseUrl: 'http://localhost:11434',
   ollamaBearerToken: '',
   ollamaModelId: '',
@@ -250,6 +254,23 @@ const okFetchResponse = (body: unknown, status = 200) =>
     ok: status >= 200 && status < 300,
     status,
     json: async () => body,
+  }) as unknown as Response;
+
+const openAiStreamResponse = (events: Array<Record<string, unknown>>) =>
+  ({
+    ok: true,
+    status: 200,
+    body: new ReadableStream({
+      start(controller) {
+        const encoder = new TextEncoder();
+        for (const event of events) {
+          controller.enqueue(
+            encoder.encode(`event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`),
+          );
+        }
+        controller.close();
+      },
+    }),
   }) as unknown as Response;
 
 describe('GET /api/reports/ai-reporting/sessions', () => {
@@ -591,6 +612,50 @@ describe('POST /api/reports/ai-reporting/chat (non-streaming)', () => {
     expect(getActiveSessionForUserMock).toHaveBeenCalledWith('rpt-chat-1', 'u1');
   });
 
+  test('200 uses OpenAI Responses API and stores its text output', async () => {
+    getGeneralSettingsMock.mockResolvedValue({
+      ...AI_ENABLED_SETTINGS,
+      aiProvider: 'openai',
+      openaiApiKey: 'test-openai-key',
+      openaiModelId: '  gpt-test  ',
+    });
+    getActiveSessionForUserMock.mockResolvedValue({ id: 'rpt-chat-1', title: 'Existing' });
+    listRecentMessagesMock.mockResolvedValue([]);
+    insertUserMessageMock.mockResolvedValue(undefined);
+    insertAssistantMessageMock.mockResolvedValue(undefined);
+    fetchMock.mockResolvedValue(
+      okFetchResponse({
+        output: [
+          {
+            type: 'message',
+            content: [{ type: 'output_text', text: 'OpenAI answer' }],
+          },
+        ],
+      }),
+    );
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/reports/ai-reporting/chat',
+      headers: authHeader(),
+      payload: { sessionId: 'rpt-chat-1', message: 'Summarize revenue' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body).text).toBe('OpenAI answer');
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe('https://api.openai.com/v1/responses');
+    expect(init.headers).toEqual(
+      expect.objectContaining({ Authorization: 'Bearer test-openai-key' }),
+    );
+    expect(JSON.parse(String(init.body))).toEqual(
+      expect.objectContaining({ model: 'gpt-test', store: false }),
+    );
+    expect(insertAssistantMessageMock).toHaveBeenCalledWith(
+      expect.objectContaining({ content: 'OpenAI answer' }),
+    );
+  });
+
   test('200 uses Ollama chat with optional Bearer auth and stores thinking content', async () => {
     getGeneralSettingsMock.mockResolvedValue({
       ...AI_ENABLED_SETTINGS,
@@ -599,10 +664,7 @@ describe('POST /api/reports/ai-reporting/chat (non-streaming)', () => {
       ollamaBearerToken: 'proxy-token',
       ollamaModelId: 'qwen3:8b',
     });
-    getActiveSessionForUserMock.mockResolvedValue({
-      id: 'rpt-chat-1',
-      title: 'Existing title',
-    });
+    getActiveSessionForUserMock.mockResolvedValue({ id: 'rpt-chat-1', title: 'Existing title' });
     listRecentMessagesMock.mockResolvedValue([]);
     insertUserMessageMock.mockResolvedValue(undefined);
     insertAssistantMessageMock.mockResolvedValue(undefined);
@@ -628,10 +690,7 @@ describe('POST /api/reports/ai-reporting/chat (non-streaming)', () => {
       expect.objectContaining({ text: 'Local answer', thoughtContent: 'Inspect local data' }),
     );
     expect(insertAssistantMessageMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        content: 'Local answer',
-        thoughtContent: 'Inspect local data',
-      }),
+      expect.objectContaining({ content: 'Local answer', thoughtContent: 'Inspect local data' }),
     );
     expect(fetchMock.mock.calls[0]?.[0]).toBe('http://ollama:11434/proxy/api/chat');
     expect(fetchMock.mock.calls[0]?.[1]).toEqual(
@@ -639,9 +698,108 @@ describe('POST /api/reports/ai-reporting/chat (non-streaming)', () => {
         headers: expect.objectContaining({ Authorization: 'Bearer proxy-token' }),
       }),
     );
-    const requestBody = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body));
-    expect(requestBody).toEqual(
+    expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toEqual(
       expect.objectContaining({ model: 'qwen3:8b', stream: false, think: true }),
+    );
+  });
+
+  test('uses OpenAI Responses API for automatic session titles', async () => {
+    getGeneralSettingsMock.mockResolvedValue({
+      ...AI_ENABLED_SETTINGS,
+      aiProvider: 'openai',
+      openaiApiKey: 'test-openai-key',
+      openaiModelId: 'gpt-test',
+    });
+    createSessionMock.mockResolvedValue(undefined);
+    listRecentMessagesMock.mockResolvedValue([]);
+    insertUserMessageMock.mockResolvedValue(undefined);
+    insertAssistantMessageMock.mockResolvedValue(undefined);
+    getFirstUserMessageContentMock.mockResolvedValue('Summarize revenue');
+    updateSessionTitleAndTouchMock.mockResolvedValue(undefined);
+    fetchMock
+      .mockResolvedValueOnce(
+        okFetchResponse({
+          output: [
+            {
+              type: 'message',
+              content: [{ type: 'output_text', text: 'Revenue is growing.' }],
+            },
+          ],
+        }),
+      )
+      .mockResolvedValueOnce(
+        okFetchResponse({
+          output: [
+            {
+              type: 'message',
+              content: [{ type: 'output_text', text: 'Revenue overview' }],
+            },
+          ],
+        }),
+      );
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/reports/ai-reporting/chat',
+      headers: authHeader(),
+      payload: { message: 'Summarize revenue' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const [, titleInit] = fetchMock.mock.calls[1] as unknown as [string, RequestInit];
+    expect(JSON.parse(String(titleInit.body))).toEqual(
+      expect.objectContaining({
+        model: 'gpt-test',
+        store: false,
+        input: expect.arrayContaining([
+          expect.objectContaining({
+            role: 'system',
+            content: expect.stringContaining('short chat titles'),
+          }),
+        ]),
+      }),
+    );
+    expect(updateSessionTitleAndTouchMock).toHaveBeenCalledWith(
+      expect.stringMatching(/^rpt-chat/),
+      'u1',
+      'Revenue overview',
+    );
+  });
+
+  test('surfaces an OpenAI refusal instead of storing an empty assistant message', async () => {
+    getGeneralSettingsMock.mockResolvedValue({
+      ...AI_ENABLED_SETTINGS,
+      aiProvider: 'openai',
+      openaiApiKey: 'test-openai-key',
+      openaiModelId: 'gpt-test',
+    });
+    getActiveSessionForUserMock.mockResolvedValue({ id: 'rpt-chat-1', title: 'Existing' });
+    listRecentMessagesMock.mockResolvedValue([]);
+    insertUserMessageMock.mockResolvedValue(undefined);
+    insertAssistantMessageMock.mockResolvedValue(undefined);
+    fetchMock.mockResolvedValue(
+      okFetchResponse({
+        output: [
+          {
+            type: 'message',
+            content: [{ type: 'refusal', refusal: 'I cannot answer that request.' }],
+          },
+        ],
+      }),
+    );
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/reports/ai-reporting/chat',
+      headers: authHeader(),
+      payload: { sessionId: 'rpt-chat-1', message: 'Disallowed request' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body).text).toBe('I cannot answer that request.');
+    expect(insertAssistantMessageMock).toHaveBeenCalledWith(
+      expect.objectContaining({ content: 'I cannot answer that request.' }),
     );
   });
 
@@ -724,7 +882,6 @@ describe('POST /api/reports/ai-reporting/chat (non-streaming)', () => {
     getGeneralSettingsMock.mockResolvedValue({
       ...AI_ENABLED_SETTINGS,
       geminiApiKey: '',
-      geminiModelId: '',
     });
 
     const res = await testApp.inject({
@@ -806,6 +963,51 @@ describe('POST /api/reports/ai-reporting/chat (non-streaming)', () => {
     expect(JSON.parse(res.body).error).toMatch(/upstream down/);
   });
 
+  test('200 generates a response through Anthropic Messages API', async () => {
+    getGeneralSettingsMock.mockResolvedValue({
+      ...AI_ENABLED_SETTINGS,
+      aiProvider: 'anthropic',
+      anthropicApiKey: 'sk-ant-test',
+      anthropicModelId: 'claude-sonnet-4-5',
+    });
+    getActiveSessionForUserMock.mockResolvedValue({ id: 'rpt-chat-1', title: 'Existing' });
+    listRecentMessagesMock.mockResolvedValue([]);
+    insertUserMessageMock.mockResolvedValue(undefined);
+    insertAssistantMessageMock.mockResolvedValue(undefined);
+    touchSessionMock.mockResolvedValue(undefined);
+    fetchMock.mockResolvedValue(
+      okFetchResponse({ content: [{ type: 'text', text: 'Anthropic answer' }] }),
+    );
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/reports/ai-reporting/chat',
+      headers: authHeader(),
+      payload: { sessionId: 'rpt-chat-1', message: 'Hi' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body).text).toBe('Anthropic answer');
+    const [url, options] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe('https://api.anthropic.com/v1/messages');
+    expect(options.headers).toEqual(
+      expect.objectContaining({
+        'x-api-key': 'sk-ant-test',
+        'anthropic-version': '2023-06-01',
+      }),
+    );
+    expect(JSON.parse(String(options.body))).toEqual(
+      expect.objectContaining({
+        model: 'claude-sonnet-4-5',
+        max_tokens: 4096,
+        messages: expect.any(Array),
+      }),
+    );
+    expect(insertAssistantMessageMock).toHaveBeenCalledWith(
+      expect.objectContaining({ content: 'Anthropic answer' }),
+    );
+  });
+
   test('401 missing token', async () => {
     const res = await testApp.inject({
       method: 'POST',
@@ -828,6 +1030,79 @@ describe('POST /api/reports/ai-reporting/chat (non-streaming)', () => {
 });
 
 describe('POST /api/reports/ai-reporting/chat/stream (streaming)', () => {
+  test('streams OpenAI response.output_text.delta events', async () => {
+    getGeneralSettingsMock.mockResolvedValue({
+      ...AI_ENABLED_SETTINGS,
+      aiProvider: 'openai',
+      openaiApiKey: 'test-openai-key',
+      openaiModelId: 'gpt-test',
+    });
+    getActiveSessionForUserMock.mockResolvedValue({ id: 'rpt-chat-1', title: 'Existing' });
+    listRecentMessagesMock.mockResolvedValue([]);
+    insertUserMessageMock.mockResolvedValue(undefined);
+    insertAssistantMessageMock.mockResolvedValue(undefined);
+    touchSessionMock.mockResolvedValue(undefined);
+
+    fetchMock.mockResolvedValue(
+      openAiStreamResponse([
+        { type: 'response.output_text.delta', delta: 'OpenAI ' },
+        { type: 'response.output_text.delta', delta: 'stream' },
+      ]),
+    );
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/reports/ai-reporting/chat/stream',
+      headers: authHeader(),
+      payload: { sessionId: 'rpt-chat-1', message: 'Summarize revenue' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toContain('OpenAI ');
+    expect(res.body).toContain('stream');
+    const [, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(JSON.parse(String(init.body))).toEqual(
+      expect.objectContaining({ model: 'gpt-test', stream: true, store: false }),
+    );
+    expect(insertAssistantMessageMock).toHaveBeenCalledWith(
+      expect.objectContaining({ content: 'OpenAI stream' }),
+    );
+  });
+
+  test('streams and persists OpenAI refusal events', async () => {
+    getGeneralSettingsMock.mockResolvedValue({
+      ...AI_ENABLED_SETTINGS,
+      aiProvider: 'openai',
+      openaiApiKey: 'test-openai-key',
+      openaiModelId: 'gpt-test',
+    });
+    getActiveSessionForUserMock.mockResolvedValue({ id: 'rpt-chat-1', title: 'Existing' });
+    listRecentMessagesMock.mockResolvedValue([]);
+    insertUserMessageMock.mockResolvedValue(undefined);
+    insertAssistantMessageMock.mockResolvedValue(undefined);
+    touchSessionMock.mockResolvedValue(undefined);
+    fetchMock.mockResolvedValue(
+      openAiStreamResponse([
+        { type: 'response.refusal.delta', delta: 'Cannot ' },
+        { type: 'response.refusal.done', refusal: 'Cannot answer' },
+      ]),
+    );
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/reports/ai-reporting/chat/stream',
+      headers: authHeader(),
+      payload: { sessionId: 'rpt-chat-1', message: 'Disallowed request' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toContain('Cannot ');
+    expect(res.body).toContain('answer');
+    expect(insertAssistantMessageMock).toHaveBeenCalledWith(
+      expect.objectContaining({ content: 'Cannot answer' }),
+    );
+  });
+
   test('401 missing token', async () => {
     const res = await testApp.inject({
       method: 'POST',
@@ -886,6 +1161,61 @@ describe('POST /api/reports/ai-reporting/chat/stream (streaming)', () => {
 
     expect(res.statusCode).toBe(404);
     expect(JSON.parse(res.body)).toEqual({ error: 'Session not found' });
+  });
+
+  test('streams Anthropic text deltas and persists the final answer', async () => {
+    getGeneralSettingsMock.mockResolvedValue({
+      ...AI_ENABLED_SETTINGS,
+      aiProvider: 'anthropic',
+      anthropicApiKey: 'sk-ant-test',
+      anthropicModelId: 'claude-sonnet-4-5',
+    });
+    getActiveSessionForUserMock.mockResolvedValue({ id: 'rpt-chat-1', title: 'Existing' });
+    listRecentMessagesMock.mockResolvedValue([]);
+    insertUserMessageMock.mockResolvedValue(undefined);
+    insertAssistantMessageMock.mockResolvedValue(undefined);
+    touchSessionMock.mockResolvedValue(undefined);
+    const anthropicChunk = [
+      'event: content_block_delta',
+      `data: ${JSON.stringify({
+        type: 'content_block_delta',
+        delta: { type: 'text_delta', text: 'Streamed ' },
+      })}`,
+      '',
+      'event: content_block_delta',
+      `data: ${JSON.stringify({
+        type: 'content_block_delta',
+        delta: { type: 'text_delta', text: 'answer' },
+      })}`,
+      '',
+      '',
+    ].join('\r\n');
+    fetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      body: new ReadableStream({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode(anthropicChunk));
+          controller.close();
+        },
+      }),
+    } as unknown as Response);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/reports/ai-reporting/chat/stream',
+      headers: authHeader(),
+      payload: { sessionId: 'rpt-chat-1', message: 'Hi' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toContain('event: answer_delta');
+    expect(res.body).toContain('Streamed answer');
+    expect(insertAssistantMessageMock).toHaveBeenCalledWith(
+      expect.objectContaining({ content: 'Streamed answer' }),
+    );
+    const options = (fetchMock.mock.calls[0] as unknown as [string, RequestInit])[1];
+    expect(JSON.parse(String(options.body)).stream).toBe(true);
   });
 
   test('streams Ollama NDJSON as the existing SSE thought and answer events', async () => {

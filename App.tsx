@@ -264,6 +264,8 @@ const appModuleStateReducer = (
       }
       return next ?? state;
     }
+    default:
+      return state;
   }
 };
 
@@ -426,6 +428,8 @@ const appNavigationReducer = (
         ? state
         : { ...state, [action.key]: nextValue };
     }
+    default:
+      return state;
   }
 };
 
@@ -467,8 +471,12 @@ const toGeneralSettingsState = (genSettings: IGeneralSettings): GeneralSettingsS
   geminiApiKey: genSettings.geminiApiKey || '',
   aiProvider: genSettings.aiProvider || 'gemini',
   openrouterApiKey: genSettings.openrouterApiKey || '',
+  anthropicApiKey: genSettings.anthropicApiKey || '',
+  openaiApiKey: genSettings.openaiApiKey || '',
   geminiModelId: genSettings.geminiModelId || '',
   openrouterModelId: genSettings.openrouterModelId || '',
+  anthropicModelId: genSettings.anthropicModelId || '',
+  openaiModelId: genSettings.openaiModelId || '',
   ollamaBaseUrl: genSettings.ollamaBaseUrl || DEFAULT_OLLAMA_BASE_URL,
   ollamaBearerToken: genSettings.ollamaBearerToken || '',
   ollamaModelId: genSettings.ollamaModelId || '',
@@ -490,12 +498,21 @@ type AppLocalStateAction = {
 }[keyof AppLocalState];
 
 const appLocalStateReducer = (state: AppLocalState, action: AppLocalStateAction): AppLocalState => {
-  const previous = state[action.key] as AppLocalState[keyof AppLocalState];
-  const nextValue = resolveAppModuleStateAction(
-    action.value as React.SetStateAction<AppLocalState[keyof AppLocalState]>,
-    previous,
-  );
-  return Object.is(nextValue, previous) ? state : { ...state, [action.key]: nextValue };
+  const actionType: AppLocalStateAction['type'] = action.type;
+  switch (actionType) {
+    case 'set': {
+      const previous = state[action.key] as AppLocalState[keyof AppLocalState];
+      const nextValue = resolveAppModuleStateAction(
+        action.value as React.SetStateAction<AppLocalState[keyof AppLocalState]>,
+        previous,
+      );
+      return Object.is(nextValue, previous) ? state : { ...state, [action.key]: nextValue };
+    }
+    default: {
+      const unhandledActionType: never = actionType;
+      throw new Error(`Unsupported app local state action: ${String(unhandledActionType)}`);
+    }
+  }
 };
 
 const getCurrencySymbol = (currency: string) => {
@@ -3246,8 +3263,12 @@ const useAppContentController = () => {
       geminiApiKey: updated.geminiApiKey || '',
       aiProvider: updated.aiProvider || 'gemini',
       openrouterApiKey: updated.openrouterApiKey || '',
+      anthropicApiKey: updated.anthropicApiKey || '',
+      openaiApiKey: updated.openaiApiKey || '',
       geminiModelId: updated.geminiModelId || '',
       openrouterModelId: updated.openrouterModelId || '',
+      anthropicModelId: updated.anthropicModelId || '',
+      openaiModelId: updated.openaiModelId || '',
       ollamaBaseUrl: updated.ollamaBaseUrl || DEFAULT_OLLAMA_BASE_URL,
       ollamaBearerToken: updated.ollamaBearerToken || '',
       ollamaModelId: updated.ollamaModelId || '',

@@ -96,8 +96,12 @@ const SETTINGS_WITH_KEYS = {
   geminiApiKey: 'plaintext-gemini-key',
   aiProvider: 'gemini',
   openrouterApiKey: 'plaintext-openrouter-key',
+  anthropicApiKey: 'plaintext-anthropic-key',
+  openaiApiKey: 'plaintext-openai-key',
   geminiModelId: 'gemini-2.5-flash',
   openrouterModelId: 'anthropic/claude-3-haiku',
+  anthropicModelId: 'claude-sonnet-4-5',
+  openaiModelId: 'gpt-5',
   ollamaBaseUrl: 'http://ollama:11434',
   ollamaBearerToken: 'plaintext-ollama-token',
   ollamaModelId: 'qwen3:8b',
@@ -171,6 +175,8 @@ describe('GET /api/general-settings', () => {
     const body = JSON.parse(res.body);
     expect(body.geminiApiKey).toBe('plaintext-gemini-key');
     expect(body.openrouterApiKey).toBe('plaintext-openrouter-key');
+    expect(body.anthropicApiKey).toBe('plaintext-anthropic-key');
+    expect(body.openaiApiKey).toBe('plaintext-openai-key');
     expect(body.ollamaBearerToken).toBe('plaintext-ollama-token');
     expect(body.totpExemptUserIds).toEqual(['u2']);
   });
@@ -192,6 +198,8 @@ describe('GET /api/general-settings', () => {
     const body = JSON.parse(res.body);
     expect(body.geminiApiKey).toBe(MASKED_SECRET);
     expect(body.openrouterApiKey).toBe(MASKED_SECRET);
+    expect(body.anthropicApiKey).toBe(MASKED_SECRET);
+    expect(body.openaiApiKey).toBe(MASKED_SECRET);
     expect(body.ollamaBearerToken).toBe(MASKED_SECRET);
     expect(body).not.toHaveProperty('totpExemptUserIds');
   });
@@ -241,19 +249,19 @@ describe('PUT /api/general-settings', () => {
   test('200 round-trip: updates fields, emits audit, response unmasked', async () => {
     settingsUpdateMock.mockResolvedValue({
       ...SETTINGS_WITH_KEYS,
-      aiProvider: 'openrouter',
+      aiProvider: 'openai',
     });
 
     const res = await testApp.inject({
       method: 'PUT',
       url: '/api/general-settings',
       headers: authHeader(),
-      payload: { aiProvider: 'openrouter', currency: 'USD' },
+      payload: { aiProvider: 'openai', currency: 'USD' },
     });
 
     expect(res.statusCode).toBe(200);
     expect(settingsUpdateMock).toHaveBeenCalledWith(
-      expect.objectContaining({ aiProvider: 'openrouter', currency: 'USD' }),
+      expect.objectContaining({ aiProvider: 'openai', currency: 'USD' }),
     );
     expect(logAuditMock).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -263,45 +271,6 @@ describe('PUT /api/general-settings', () => {
     );
     const body = JSON.parse(res.body);
     expect(body.geminiApiKey).toBe('plaintext-gemini-key');
-  });
-
-  test('200 enabling 2FA enforcement revokes unenrolled-enforced tokens atomically and audits it', async () => {
-    // false -> true transition: pre-existing PAT/MCP tokens of now-enforced users without TOTP must
-    // be invalidated, or they keep API privileges until expiry. Interactive sessions are left
-    // alone (enforced at next login). The setting write + token revocation must commit in a single
-    // transaction.
-    settingsGetMock.mockResolvedValue({
-      ...SETTINGS_WITH_KEYS,
-      enableTotp: true,
-      enforceTotp: false,
-    });
-    settingsUpdateMock.mockResolvedValue({
-      ...SETTINGS_WITH_KEYS,
-      enableTotp: true,
-      enforceTotp: true,
-    });
-    revokeTokensForUnenrolledEnforcedUsersMock.mockResolvedValue(3);
-
-    const res = await testApp.inject({
-      method: 'PUT',
-      url: '/api/general-settings',
-      headers: authHeader(),
-      payload: { enforceTotp: true },
-    });
-
-    expect(res.statusCode).toBe(200);
-    expect(revokeTokensForUnenrolledEnforcedUsersMock).toHaveBeenCalledTimes(1);
-    // The update + revocation run inside withDbTransaction so a crash can't persist the policy
-    // while leaving the stale enforced-user tokens valid.
-    expect(withDbTransactionMock).toHaveBeenCalledTimes(1);
-    expect(settingsUpdateMock).toHaveBeenCalledTimes(1);
-    expect(logAuditMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        action: 'settings.totp_enforcement_tokens_revoked',
-        entityType: 'settings',
-        details: expect.objectContaining({ secondaryLabel: '3' }),
-      }),
-    );
   });
 
   test('200 saves normalized Ollama configuration with an optional Bearer token', async () => {
@@ -366,6 +335,45 @@ describe('PUT /api/general-settings', () => {
       'ollamaModelId is required when Ollama is selected',
     );
     expect(settingsUpdateMock).not.toHaveBeenCalled();
+  });
+
+  test('200 enabling 2FA enforcement revokes unenrolled-enforced tokens atomically and audits it', async () => {
+    // false -> true transition: pre-existing PAT/MCP tokens of now-enforced users without TOTP must
+    // be invalidated, or they keep API privileges until expiry. Interactive sessions are left
+    // alone (enforced at next login). The setting write + token revocation must commit in a single
+    // transaction.
+    settingsGetMock.mockResolvedValue({
+      ...SETTINGS_WITH_KEYS,
+      enableTotp: true,
+      enforceTotp: false,
+    });
+    settingsUpdateMock.mockResolvedValue({
+      ...SETTINGS_WITH_KEYS,
+      enableTotp: true,
+      enforceTotp: true,
+    });
+    revokeTokensForUnenrolledEnforcedUsersMock.mockResolvedValue(3);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/general-settings',
+      headers: authHeader(),
+      payload: { enforceTotp: true },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(revokeTokensForUnenrolledEnforcedUsersMock).toHaveBeenCalledTimes(1);
+    // The update + revocation run inside withDbTransaction so a crash can't persist the policy
+    // while leaving the stale enforced-user tokens valid.
+    expect(withDbTransactionMock).toHaveBeenCalledTimes(1);
+    expect(settingsUpdateMock).toHaveBeenCalledTimes(1);
+    expect(logAuditMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'settings.totp_enforcement_tokens_revoked',
+        entityType: 'settings',
+        details: expect.objectContaining({ secondaryLabel: '3' }),
+      }),
+    );
   });
 
   test('200 leaving enforcement already-on does not revoke tokens', async () => {
@@ -696,6 +704,33 @@ describe('PUT /api/general-settings', () => {
 
     expect(res.statusCode).toBe(400);
     expect(JSON.parse(res.body).error).toMatch(/aiProvider must be one of/);
+  });
+
+  test('200 accepts Anthropic provider credentials and model', async () => {
+    settingsUpdateMock.mockResolvedValue({
+      ...SETTINGS_WITH_KEYS,
+      aiProvider: 'anthropic',
+    });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/general-settings',
+      headers: authHeader(),
+      payload: {
+        aiProvider: 'anthropic',
+        anthropicApiKey: 'sk-ant-test',
+        anthropicModelId: 'claude-sonnet-4-5',
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(settingsUpdateMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        aiProvider: 'anthropic',
+        anthropicApiKey: 'sk-ant-test',
+        anthropicModelId: 'claude-sonnet-4-5',
+      }),
+    );
   });
 
   test('400 invalid startOfWeek enum, repo not called', async () => {

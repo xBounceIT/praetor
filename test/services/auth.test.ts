@@ -409,4 +409,20 @@ describe('authApi', () => {
       expect(getAuthToken()).toBe('prev');
     });
   });
+
+  describe('logout', () => {
+    test('does not persist a rotation header when logout fails', async () => {
+      setAuthToken('new-login-token');
+      fetchMock.mockImplementationOnce(async () =>
+        buildResponse({
+          status: 500,
+          headers: { 'x-auth-token': 'stale-logout-token' },
+          json: () => ({ message: 'Logout failed' }),
+        }),
+      );
+
+      await expect(authApi.logout()).rejects.toThrow('Logout failed');
+      expect(getAuthToken()).toBe('new-login-token');
+    });
+  });
 });

@@ -1,5 +1,5 @@
 {
-  "id": "914d16e8-5ed8-473f-9cc4-f3da43d22bbd",
+  "id": "3fd85587-4754-4b7c-8870-9db371b84ca9",
   "prevId": "916514f9-871d-4e27-babc-38e9068474ff",
   "version": "7",
   "dialect": "postgresql",
@@ -1327,6 +1327,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "anthropic_api_key": {
+          "name": "anthropic_api_key",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false
+        },
         "gemini_model_id": {
           "name": "gemini_model_id",
           "type": "varchar(255)",
@@ -1339,21 +1345,8 @@
           "primaryKey": false,
           "notNull": false
         },
-        "ollama_base_url": {
-          "name": "ollama_base_url",
-          "type": "varchar(2048)",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'http://localhost:11434'"
-        },
-        "ollama_bearer_token": {
-          "name": "ollama_bearer_token",
-          "type": "varchar(2048)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "ollama_model_id": {
-          "name": "ollama_model_id",
+        "anthropic_model_id": {
+          "name": "anthropic_model_id",
           "type": "varchar(255)",
           "primaryKey": false,
           "notNull": false
@@ -1438,7 +1431,7 @@
         },
         "general_settings_ai_provider_check": {
           "name": "general_settings_ai_provider_check",
-          "value": "\"general_settings\".\"ai_provider\" IN ('gemini', 'openrouter', 'ollama')"
+          "value": "\"general_settings\".\"ai_provider\" IN ('gemini', 'openrouter', 'anthropic')"
         },
         "general_settings_ril_default_start_time_check": {
           "name": "general_settings_ril_default_start_time_check",

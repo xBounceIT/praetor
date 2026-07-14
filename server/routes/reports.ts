@@ -16,7 +16,6 @@ import { standardErrorResponses, standardRateLimitedErrorResponses } from '../sc
 import {
   DEFAULT_OLLAMA_BASE_URL,
   normalizeOllamaBaseUrl,
-  type OllamaMessage,
   ollamaGenerateText,
   ollamaGenerateTextStream,
 } from '../services/ollama.ts';
@@ -29,19 +28,37 @@ import { replyError } from '../utils/replyError.ts';
 import { badRequest, optionalNonEmptyString, requireNonEmptyString } from '../utils/validation.ts';
 
 type UiLanguage = 'en' | 'it';
+type AiChatMessage = { role: 'system' | 'user' | 'assistant'; content: string };
 
 export type GeneralAiConfig = {
   enableAiReporting: boolean;
   aiProvider: AiProvider;
   geminiApiKey: string;
   openrouterApiKey: string;
+  anthropicApiKey: string;
+  openaiApiKey: string;
   geminiModelId: string;
   openrouterModelId: string;
+  anthropicModelId: string;
+  openaiModelId: string;
   ollamaBaseUrl: string;
   ollamaBearerToken: string;
   ollamaModelId: string;
   currency: string;
 };
+
+const AI_PROVIDER_CONFIG_FIELDS = {
+  gemini: { apiKey: 'geminiApiKey', modelId: 'geminiModelId' },
+  openrouter: { apiKey: 'openrouterApiKey', modelId: 'openrouterModelId' },
+  anthropic: { apiKey: 'anthropicApiKey', modelId: 'anthropicModelId' },
+  openai: { apiKey: 'openaiApiKey', modelId: 'openaiModelId' },
+} as const satisfies Record<
+  Exclude<AiProvider, 'ollama'>,
+  {
+    apiKey: 'geminiApiKey' | 'openrouterApiKey' | 'anthropicApiKey' | 'openaiApiKey';
+    modelId: 'geminiModelId' | 'openrouterModelId' | 'anthropicModelId' | 'openaiModelId';
+  }
+>;
 
 type DatasetQueryCounterStore = { count: number };
 const datasetQueryCounterStorage = new AsyncLocalStorage<DatasetQueryCounterStore>();
@@ -75,11 +92,15 @@ export const getGeneralAiConfig = async (): Promise<GeneralAiConfig> => {
   const settings = await generalSettingsRepo.get();
   return {
     enableAiReporting: settings?.enableAiReporting ?? false,
-    aiProvider: settings?.aiProvider || 'gemini',
+    aiProvider: (settings?.aiProvider || 'gemini') as AiProvider,
     geminiApiKey: settings?.geminiApiKey || '',
     openrouterApiKey: settings?.openrouterApiKey || '',
+    anthropicApiKey: settings?.anthropicApiKey || '',
+    openaiApiKey: settings?.openaiApiKey || '',
     geminiModelId: settings?.geminiModelId || '',
     openrouterModelId: settings?.openrouterModelId || '',
+    anthropicModelId: settings?.anthropicModelId || '',
+    openaiModelId: settings?.openaiModelId || '',
     ollamaBaseUrl: settings?.ollamaBaseUrl || DEFAULT_OLLAMA_BASE_URL,
     ollamaBearerToken: settings?.ollamaBearerToken || '',
     ollamaModelId: settings?.ollamaModelId || '',
@@ -111,24 +132,22 @@ const resolveProviderKeyModel = (cfg: GeneralAiConfig) => {
       provider: 'ollama' as const,
       baseUrl: cfg.ollamaBaseUrl,
       bearerToken: cfg.ollamaBearerToken,
-      modelId: cfg.ollamaModelId,
+      modelId: cfg.ollamaModelId.trim(),
     };
   }
-  if (cfg.aiProvider === 'openrouter') {
-    return {
-      provider: 'openrouter' as const,
-      apiKey: cfg.openrouterApiKey,
-      modelId: cfg.openrouterModelId,
-    };
-  }
-  return { provider: 'gemini' as const, apiKey: cfg.geminiApiKey, modelId: cfg.geminiModelId };
+  const fields = AI_PROVIDER_CONFIG_FIELDS[cfg.aiProvider];
+  return {
+    provider: cfg.aiProvider,
+    apiKey: cfg[fields.apiKey],
+    modelId: cfg[fields.modelId].trim(),
+  };
 };
 
 const getProviderConfigurationError = (
   providerKeyModel: ReturnType<typeof resolveProviderKeyModel>,
 ) => {
   if (providerKeyModel.provider === 'ollama') {
-    if (!providerKeyModel.modelId.trim()) {
+    if (!providerKeyModel.modelId) {
       return 'Missing ollama model id in General Settings.';
     }
     const baseUrlResult = normalizeOllamaBaseUrl(providerKeyModel.baseUrl);
@@ -137,7 +156,7 @@ const getProviderConfigurationError = (
   if (!providerKeyModel.apiKey.trim()) {
     return `Missing ${providerKeyModel.provider} API key in General Settings.`;
   }
-  return providerKeyModel.modelId.trim()
+  return providerKeyModel.modelId
     ? null
     : `Missing ${providerKeyModel.provider} model id in General Settings.`;
 };
@@ -155,7 +174,11 @@ type StreamReader = {
   releaseLock?: () => void;
 };
 type ReadableSseBody = { getReader?: () => StreamReader };
-const findSseBoundary = (buffer: string) => buffer.search(/\n\n/);
+type SseBoundary = { index: number; length: number };
+const findSseBoundary = (buffer: string): SseBoundary | null => {
+  const match = /\r?\n\r?\n/.exec(buffer);
+  return match ? { index: match.index, length: match[0].length } : null;
+};
 
 const googleTextFromGenerateContent = (payload: unknown): AiTextResult => {
   const p = payload as {
@@ -198,6 +221,64 @@ const openrouterTextFromCompletion = (payload: unknown): AiTextResult => {
   return { text, thoughtContent: thoughtContent || undefined };
 };
 
+const anthropicTextFromMessage = (payload: unknown): AiTextResult => {
+  const p = payload as {
+    content?: Array<{
+      type?: string;
+      text?: string;
+      thinking?: string;
+    }>;
+  };
+  const textParts: string[] = [];
+  const thoughtParts: string[] = [];
+  for (const block of p.content || []) {
+    if (block.type === 'text') textParts.push(block.text || '');
+    if (block.type === 'thinking') thoughtParts.push(block.thinking || '');
+  }
+  const text = textParts.join('').trim();
+  const thoughtContent = thoughtParts.join('').trim();
+  return { text, thoughtContent: thoughtContent || undefined };
+};
+
+const openaiTextFromResponse = (payload: unknown): AiTextResult => {
+  const response = payload as {
+    output_text?: string;
+    output?: Array<{
+      type?: string;
+      content?: Array<{ type?: string; text?: string; refusal?: string }>;
+    }>;
+  };
+  const outputText = typeof response.output_text === 'string' ? response.output_text.trim() : '';
+  if (outputText) return { text: outputText };
+
+  const text = (response.output || [])
+    .filter((item) => item.type === 'message')
+    .flatMap((item) => item.content || [])
+    .map((part) => {
+      if (part.type === 'output_text' && typeof part.text === 'string') return part.text;
+      if (part.type === 'refusal' && typeof part.refusal === 'string') return part.refusal;
+      return '';
+    })
+    .join('')
+    .trim();
+  return { text };
+};
+
+const toAnthropicMessages = (messages: AiChatMessage[]) => {
+  const systemParts: string[] = [];
+  const conversation: Array<{ role: 'user' | 'assistant'; content: string }> = [];
+
+  for (const message of messages) {
+    if (message.role === 'system') {
+      systemParts.push(message.content);
+    } else {
+      conversation.push({ role: message.role, content: message.content });
+    }
+  }
+
+  return { system: systemParts.join('\n\n'), messages: conversation };
+};
+
 const parseSseEventBlock = (rawBlock: string): ParsedSseEvent | null => {
   const lines = rawBlock.replace(/\r/g, '').split('\n');
   let event = 'message';
@@ -226,25 +307,21 @@ const iterateSseEvents = async function* (responseBody: unknown): AsyncGenerator
   const decoder = new TextDecoder();
   let buffer = '';
 
-  const readNextChunk = async function* (): AsyncGenerator<ParsedSseEvent> {
-    const { done, value } = (await reader.read()) as { done: boolean; value?: Uint8Array };
-    if (done) return;
-
-    buffer += decoder.decode(value || new Uint8Array(), { stream: true });
-    let boundary = findSseBoundary(buffer);
-    while (boundary !== -1) {
-      const rawBlock = buffer.slice(0, boundary);
-      buffer = buffer.slice(boundary + 2);
-      const parsed = parseSseEventBlock(rawBlock);
-      if (parsed) yield parsed;
-      boundary = findSseBoundary(buffer);
-    }
-
-    yield* readNextChunk();
-  };
-
   try {
-    yield* readNextChunk();
+    while (true) {
+      const { done, value } = (await reader.read()) as { done: boolean; value?: Uint8Array };
+      if (done) break;
+
+      buffer += decoder.decode(value || new Uint8Array(), { stream: true });
+      let boundary = findSseBoundary(buffer);
+      while (boundary) {
+        const rawBlock = buffer.slice(0, boundary.index);
+        buffer = buffer.slice(boundary.index + boundary.length);
+        const parsed = parseSseEventBlock(rawBlock);
+        if (parsed) yield parsed;
+        boundary = findSseBoundary(buffer);
+      }
+    }
 
     buffer += decoder.decode();
     const tail = buffer.trim();
@@ -348,7 +425,7 @@ const geminiGenerateText = async (apiKey: string, modelId: string, prompt: strin
 const openrouterGenerateText = async (
   apiKey: string,
   modelId: string,
-  messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>,
+  messages: AiChatMessage[],
 ) => {
   const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
     method: 'POST',
@@ -365,6 +442,45 @@ const openrouterGenerateText = async (
   if (!res.ok) throw new Error(`OpenRouter request failed: HTTP ${res.status}`);
   const data = await res.json();
   return openrouterTextFromCompletion(data);
+};
+
+const anthropicGenerateText = async (
+  apiKey: string,
+  modelId: string,
+  messages: AiChatMessage[],
+) => {
+  const anthropicMessages = toAnthropicMessages(messages);
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: modelId,
+      max_tokens: 4096,
+      temperature: 0.2,
+      system: anthropicMessages.system || undefined,
+      messages: anthropicMessages.messages,
+    }),
+  });
+  if (!res.ok) throw new Error(`Anthropic request failed: HTTP ${res.status}`);
+  const data = await res.json();
+  return anthropicTextFromMessage(data);
+};
+
+const openaiGenerateText = async (apiKey: string, modelId: string, messages: AiChatMessage[]) => {
+  const res = await fetch('https://api.openai.com/v1/responses', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ model: modelId, input: messages, store: false }),
+  });
+  if (!res.ok) throw new Error(`OpenAI request failed: HTTP ${res.status}`);
+  return openaiTextFromResponse(await res.json());
 };
 
 const geminiGenerateTextStream = async (
@@ -461,7 +577,7 @@ const geminiGenerateTextStream = async (
 const openrouterGenerateTextStream = async (
   apiKey: string,
   modelId: string,
-  messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>,
+  messages: AiChatMessage[],
   callbacks: AiStreamCallbacks = {},
   signal?: AbortSignal,
 ) => {
@@ -565,6 +681,170 @@ const openrouterGenerateTextStream = async (
   } as AiTextResult;
 };
 
+const anthropicGenerateTextStream = async (
+  apiKey: string,
+  modelId: string,
+  messages: AiChatMessage[],
+  callbacks: AiStreamCallbacks = {},
+  signal?: AbortSignal,
+) => {
+  const anthropicMessages = toAnthropicMessages(messages);
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: modelId,
+      max_tokens: 4096,
+      temperature: 0.2,
+      stream: true,
+      system: anthropicMessages.system || undefined,
+      messages: anthropicMessages.messages,
+    }),
+    signal,
+  });
+
+  if (!res.ok) throw new Error(`Anthropic request failed: HTTP ${res.status}`);
+
+  let text = '';
+  let thoughtContent = '';
+  let thoughtDone = false;
+
+  for await (const evt of iterateSseEvents(res.body)) {
+    if (signal?.aborted) throw createAbortError();
+
+    let payload: unknown = null;
+    try {
+      payload = JSON.parse(String(evt.data || ''));
+    } catch {
+      continue;
+    }
+
+    const event = payload as {
+      type?: string;
+      error?: { message?: string };
+      content_block?: { type?: string; text?: string; thinking?: string };
+      delta?: { type?: string; text?: string; thinking?: string };
+    };
+    if (event.type === 'error') {
+      throw new Error(event.error?.message || 'Anthropic stream failed');
+    }
+
+    const block = event.type === 'content_block_start' ? event.content_block : event.delta;
+    if (!block) continue;
+
+    const thoughtDelta =
+      block.type === 'thinking' || block.type === 'thinking_delta' ? block.thinking || '' : '';
+    if (thoughtDelta) {
+      thoughtContent += thoughtDelta;
+      await callbacks.onThoughtDelta?.(thoughtDelta);
+    }
+
+    const answerDelta =
+      block.type === 'text' || block.type === 'text_delta' ? block.text || '' : '';
+    if (answerDelta) {
+      if (!thoughtDone) {
+        thoughtDone = true;
+        await callbacks.onThoughtDone?.();
+      }
+      text += answerDelta;
+      await callbacks.onAnswerDelta?.(answerDelta);
+    }
+  }
+
+  if (!thoughtDone) await callbacks.onThoughtDone?.();
+
+  return {
+    text: text.trim(),
+    thoughtContent: thoughtContent.trim() || undefined,
+  } as AiTextResult;
+};
+
+const openaiGenerateTextStream = async (
+  apiKey: string,
+  modelId: string,
+  messages: AiChatMessage[],
+  callbacks: AiStreamCallbacks = {},
+  signal?: AbortSignal,
+) => {
+  const res = await fetch('https://api.openai.com/v1/responses', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ model: modelId, input: messages, stream: true, store: false }),
+    signal,
+  });
+  if (!res.ok) throw new Error(`OpenAI request failed: HTTP ${res.status}`);
+
+  let text = '';
+  let thoughtDone = false;
+  const emitThoughtDone = async () => {
+    if (thoughtDone) return;
+    thoughtDone = true;
+    await callbacks.onThoughtDone?.();
+  };
+
+  for await (const evt of iterateSseEvents(res.body)) {
+    if (signal?.aborted) throw createAbortError();
+    const rawData = String(evt.data || '').trim();
+    if (!rawData || rawData === '[DONE]') continue;
+
+    let payload: unknown;
+    try {
+      payload = JSON.parse(rawData);
+    } catch {
+      continue;
+    }
+
+    const event = payload as {
+      type?: string;
+      delta?: string;
+      text?: string;
+      refusal?: string;
+      response?: { error?: { message?: string } };
+      error?: { message?: string };
+      message?: string;
+    };
+    const eventType = event.type || evt.event;
+    if (eventType === 'error' || eventType === 'response.failed') {
+      throw new Error(
+        event.error?.message ||
+          event.response?.error?.message ||
+          event.message ||
+          'OpenAI streaming request failed',
+      );
+    }
+
+    let answerDelta = '';
+    if (
+      (eventType === 'response.output_text.delta' || eventType === 'response.refusal.delta') &&
+      typeof event.delta === 'string'
+    ) {
+      answerDelta = event.delta;
+    } else if (eventType === 'response.output_text.done' && typeof event.text === 'string') {
+      answerDelta = resolveStreamDelta(text, event.text);
+    } else if (eventType === 'response.refusal.done' && typeof event.refusal === 'string') {
+      answerDelta = resolveStreamDelta(text, event.refusal);
+    } else if (eventType === 'response.completed') {
+      answerDelta = resolveStreamDelta(text, openaiTextFromResponse(event.response).text);
+    }
+
+    if (answerDelta) {
+      await emitThoughtDone();
+      text += answerDelta;
+      await callbacks.onAnswerDelta?.(answerDelta);
+    }
+  }
+
+  await emitThoughtDone();
+  return { text: text.trim() } as AiTextResult;
+};
+
 const generateSessionTitle = async (
   providerKeyModel: ReturnType<typeof resolveProviderKeyModel>,
   firstUserMessage: string,
@@ -578,7 +858,7 @@ const generateSessionTitle = async (
   const prompt = buildSessionTitlePrompt(seed, language);
 
   if (providerKeyModel.provider !== 'gemini') {
-    const messages: OllamaMessage[] = [
+    const messages: AiChatMessage[] = [
       {
         role: 'system',
         content: 'You generate short chat titles. Output only the title text.',
@@ -593,7 +873,19 @@ const generateSessionTitle = async (
             providerKeyModel.modelId,
             messages,
           )
-        : await openrouterGenerateText(providerKeyModel.apiKey, providerKeyModel.modelId, messages);
+        : providerKeyModel.provider === 'openrouter'
+          ? await openrouterGenerateText(
+              providerKeyModel.apiKey,
+              providerKeyModel.modelId,
+              messages,
+            )
+          : providerKeyModel.provider === 'anthropic'
+            ? await anthropicGenerateText(
+                providerKeyModel.apiKey,
+                providerKeyModel.modelId,
+                messages,
+              )
+            : await openaiGenerateText(providerKeyModel.apiKey, providerKeyModel.modelId, messages);
     return cleanSessionTitle(raw.text);
   }
 
@@ -1365,8 +1657,20 @@ const buildAiReportingConversation = (
 
 type AiReportingPromptPayload =
   | {
-      provider: 'openrouter' | 'ollama';
-      messages: OllamaMessage[];
+      provider: 'openrouter';
+      messages: AiChatMessage[];
+    }
+  | {
+      provider: 'anthropic';
+      messages: AiChatMessage[];
+    }
+  | {
+      provider: 'openai';
+      messages: AiChatMessage[];
+    }
+  | {
+      provider: 'ollama';
+      messages: AiChatMessage[];
     }
   | { provider: 'gemini'; prompt: string };
 
@@ -1403,12 +1707,12 @@ const buildAiReportingPromptPayload = (args: {
   };
 };
 
-const generateAiReportingText = async (
+const generateAiReportingText = (
   providerKeyModel: ReturnType<typeof resolveProviderKeyModel>,
   payload: AiReportingPromptPayload,
 ): Promise<AiTextResult> => {
   if (providerKeyModel.provider === 'ollama') {
-    if (payload.provider === 'gemini') throw new Error('Invalid Ollama prompt payload');
+    if (payload.provider !== 'ollama') throw new Error('Invalid Ollama prompt payload');
     return ollamaGenerateText(
       providerKeyModel.baseUrl,
       providerKeyModel.bearerToken,
@@ -1416,26 +1720,28 @@ const generateAiReportingText = async (
       payload.messages,
     );
   }
-  if (providerKeyModel.provider === 'openrouter') {
-    if (payload.provider === 'gemini') throw new Error('Invalid OpenRouter prompt payload');
-    return openrouterGenerateText(
-      providerKeyModel.apiKey,
-      providerKeyModel.modelId,
-      payload.messages,
-    );
+  const { apiKey, modelId } = providerKeyModel;
+  if (payload.provider === 'openai') {
+    return openaiGenerateText(apiKey, modelId, payload.messages);
+  }
+  if (payload.provider === 'openrouter') {
+    return openrouterGenerateText(apiKey, modelId, payload.messages);
+  }
+  if (payload.provider === 'anthropic') {
+    return anthropicGenerateText(apiKey, modelId, payload.messages);
   }
   if (payload.provider !== 'gemini') throw new Error('Invalid Gemini prompt payload');
-  return geminiGenerateText(providerKeyModel.apiKey, providerKeyModel.modelId, payload.prompt);
+  return geminiGenerateText(apiKey, modelId, payload.prompt);
 };
 
-const generateAiReportingTextStream = async (
+const generateAiReportingTextStream = (
   providerKeyModel: ReturnType<typeof resolveProviderKeyModel>,
   payload: AiReportingPromptPayload,
   callbacks: AiStreamCallbacks,
   signal: AbortSignal,
 ): Promise<AiTextResult> => {
   if (providerKeyModel.provider === 'ollama') {
-    if (payload.provider === 'gemini') throw new Error('Invalid Ollama prompt payload');
+    if (payload.provider !== 'ollama') throw new Error('Invalid Ollama prompt payload');
     return ollamaGenerateTextStream(
       providerKeyModel.baseUrl,
       providerKeyModel.bearerToken,
@@ -1445,24 +1751,18 @@ const generateAiReportingTextStream = async (
       signal,
     );
   }
-  if (providerKeyModel.provider === 'openrouter') {
-    if (payload.provider === 'gemini') throw new Error('Invalid OpenRouter prompt payload');
-    return openrouterGenerateTextStream(
-      providerKeyModel.apiKey,
-      providerKeyModel.modelId,
-      payload.messages,
-      callbacks,
-      signal,
-    );
+  const { apiKey, modelId } = providerKeyModel;
+  if (payload.provider === 'openai') {
+    return openaiGenerateTextStream(apiKey, modelId, payload.messages, callbacks, signal);
+  }
+  if (payload.provider === 'openrouter') {
+    return openrouterGenerateTextStream(apiKey, modelId, payload.messages, callbacks, signal);
+  }
+  if (payload.provider === 'anthropic') {
+    return anthropicGenerateTextStream(apiKey, modelId, payload.messages, callbacks, signal);
   }
   if (payload.provider !== 'gemini') throw new Error('Invalid Gemini prompt payload');
-  return geminiGenerateTextStream(
-    providerKeyModel.apiKey,
-    providerKeyModel.modelId,
-    payload.prompt,
-    callbacks,
-    signal,
-  );
+  return geminiGenerateTextStream(apiKey, modelId, payload.prompt, callbacks, signal);
 };
 
 const createSseStreamHandlers = (

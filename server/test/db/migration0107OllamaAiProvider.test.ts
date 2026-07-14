@@ -1,11 +1,11 @@
 import { describe, expect, test } from 'bun:test';
 
 const migrationSql = await Bun.file(
-  new URL('../../db/migrations/0105_add_ollama_ai_provider.sql', import.meta.url),
+  new URL('../../db/migrations/0107_add_ollama_ai_provider.sql', import.meta.url),
 ).text();
 const readJson = <T>(path: string) => Bun.file(new URL(path, import.meta.url)).json() as Promise<T>;
 
-describe('migration 0105 Ollama AI provider', () => {
+describe('migration 0107 Ollama AI provider', () => {
   test('adds Ollama settings without rewriting or deleting legacy settings rows', () => {
     expect(migrationSql).toContain(
       `ADD COLUMN "ollama_base_url" varchar(2048) DEFAULT 'http://localhost:11434' NOT NULL`,
@@ -15,10 +15,10 @@ describe('migration 0105 Ollama AI provider', () => {
     expect(migrationSql).not.toMatch(/\b(?:UPDATE|DELETE FROM|DROP COLUMN)\b/i);
   });
 
-  test('widens the provider constraint while retaining both existing providers', () => {
+  test('widens the provider constraint while retaining all existing providers', () => {
     expect(migrationSql).toContain('DROP CONSTRAINT "general_settings_ai_provider_check"');
     expect(migrationSql).toContain(
-      `CHECK ("general_settings"."ai_provider" IN ('gemini', 'openrouter', 'ollama'))`,
+      `CHECK ("general_settings"."ai_provider" IN ('gemini', 'openrouter', 'anthropic', 'openai', 'ollama'))`,
     );
   });
 
@@ -31,7 +31,7 @@ describe('migration 0105 Ollama AI provider', () => {
           checkConstraints: Record<string, { value: string }>;
         }
       >;
-    }>('../../db/migrations/meta/0105_snapshot.json');
+    }>('../../db/migrations/meta/0107_snapshot.json');
     const table = snapshot.tables['public.general_settings'];
 
     expect(table.columns.ollama_base_url).toEqual(
@@ -42,17 +42,17 @@ describe('migration 0105 Ollama AI provider', () => {
     expect(table.checkConstraints.general_settings_ai_provider_check.value).toContain("'ollama'");
   });
 
-  test('is registered immediately after migration 0104', async () => {
+  test('is registered immediately after the OpenAI provider migration', async () => {
     const journal = await readJson<{ entries: Array<{ idx: number; tag: string }> }>(
       '../../db/migrations/meta/_journal.json',
     );
-    const index = journal.entries.findIndex((entry) => entry.tag === '0105_add_ollama_ai_provider');
+    const index = journal.entries.findIndex((entry) => entry.tag === '0107_add_ollama_ai_provider');
 
     expect(journal.entries[index - 1]).toEqual(
-      expect.objectContaining({ idx: 104, tag: '0104_add_first_login_tip' }),
+      expect.objectContaining({ idx: 106, tag: '0106_add_openai_ai_provider' }),
     );
     expect(journal.entries[index]).toEqual(
-      expect.objectContaining({ idx: 105, tag: '0105_add_ollama_ai_provider' }),
+      expect.objectContaining({ idx: 107, tag: '0107_add_ollama_ai_provider' }),
     );
   });
 });

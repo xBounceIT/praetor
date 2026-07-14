@@ -282,6 +282,9 @@ export const authenticateToken = async (request: FastifyRequest, reply: FastifyR
     }
 
     const sessionIdleTimeoutMinutes = await getConfiguredSessionIdleTimeoutMinutes();
+    // Rotation happens after this check, so the presented token's signed iat is the previous
+    // successful request time. Comparing it with the current database policy enforces a timeout
+    // reduction on the very next request, before a new token can advance iat.
     if (now - decoded.iat * 1000 > sessionIdleTimeoutMinutesToMs(sessionIdleTimeoutMinutes)) {
       return reply.code(403).send({ error: 'Invalid or expired token' });
     }
@@ -423,7 +426,11 @@ const denyForbidden = async (
   return reply.code(403).send({ error: 'Insufficient permissions' });
 };
 
-export const requireRole = (...roles: string[]) => {
+export const requireRole = (...roles: NonEmptyGuardArgs) => {
+  if (roles.length === 0) {
+    throw new Error('requireRole requires at least one role');
+  }
+
   return async (request: FastifyRequest, reply: FastifyReply) => {
     if (!request.user) {
       return reply.code(401).send({ error: 'Authentication required' });

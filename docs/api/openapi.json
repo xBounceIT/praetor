@@ -25766,10 +25766,22 @@
                     "openrouterApiKey": {
                       "type": "string"
                     },
+                    "anthropicApiKey": {
+                      "type": "string"
+                    },
+                    "openaiApiKey": {
+                      "type": "string"
+                    },
                     "geminiModelId": {
                       "type": "string"
                     },
                     "openrouterModelId": {
+                      "type": "string"
+                    },
+                    "anthropicModelId": {
+                      "type": "string"
+                    },
+                    "openaiModelId": {
                       "type": "string"
                     },
                     "ollamaBaseUrl": {
@@ -25872,8 +25884,12 @@
                     "geminiApiKey",
                     "aiProvider",
                     "openrouterApiKey",
+                    "anthropicApiKey",
+                    "openaiApiKey",
                     "geminiModelId",
                     "openrouterModelId",
+                    "anthropicModelId",
+                    "openaiModelId",
                     "ollamaBaseUrl",
                     "ollamaBearerToken",
                     "ollamaModelId",
@@ -26080,10 +26096,22 @@
                   "openrouterApiKey": {
                     "type": "string"
                   },
+                  "anthropicApiKey": {
+                    "type": "string"
+                  },
+                  "openaiApiKey": {
+                    "type": "string"
+                  },
                   "geminiModelId": {
                     "type": "string"
                   },
                   "openrouterModelId": {
+                    "type": "string"
+                  },
+                  "anthropicModelId": {
+                    "type": "string"
+                  },
+                  "openaiModelId": {
                     "type": "string"
                   },
                   "ollamaBaseUrl": {
@@ -26216,10 +26244,22 @@
                     "openrouterApiKey": {
                       "type": "string"
                     },
+                    "anthropicApiKey": {
+                      "type": "string"
+                    },
+                    "openaiApiKey": {
+                      "type": "string"
+                    },
                     "geminiModelId": {
                       "type": "string"
                     },
                     "openrouterModelId": {
+                      "type": "string"
+                    },
+                    "anthropicModelId": {
+                      "type": "string"
+                    },
+                    "openaiModelId": {
                       "type": "string"
                     },
                     "ollamaBaseUrl": {
@@ -26322,8 +26362,12 @@
                     "geminiApiKey",
                     "aiProvider",
                     "openrouterApiKey",
+                    "anthropicApiKey",
+                    "openaiApiKey",
                     "geminiModelId",
                     "openrouterModelId",
+                    "anthropicModelId",
+                    "openaiModelId",
                     "ollamaBaseUrl",
                     "ollamaBearerToken",
                     "ollamaModelId",

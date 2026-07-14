@@ -33,8 +33,12 @@ const PROJECTION_KEYS = [
   'geminiApiKey',
   'aiProvider',
   'openrouterApiKey',
+  'anthropicApiKey',
+  'openaiApiKey',
   'geminiModelId',
   'openrouterModelId',
+  'anthropicModelId',
+  'openaiModelId',
   'ollamaBaseUrl',
   'ollamaBearerToken',
   'ollamaModelId',
@@ -67,8 +71,12 @@ const baseFields: RowFields = {
   geminiApiKey: null,
   aiProvider: null,
   openrouterApiKey: null,
+  anthropicApiKey: null,
+  openaiApiKey: null,
   geminiModelId: null,
   openrouterModelId: null,
+  anthropicModelId: null,
+  openaiModelId: null,
   ollamaBaseUrl: 'http://localhost:11434',
   ollamaBearerToken: null,
   ollamaModelId: null,
@@ -184,10 +192,14 @@ describe('update', () => {
         totpExemptUserIds: ['u1'],
         sessionIdleTimeoutMinutes: 45,
         geminiApiKey: 'g-key',
-        aiProvider: 'gemini',
+        aiProvider: 'anthropic',
         openrouterApiKey: 'or-key',
+        anthropicApiKey: 'a-key',
+        openaiApiKey: 'oa-key',
         geminiModelId: 'gemini-2.0',
         openrouterModelId: 'or/model',
+        anthropicModelId: 'claude-sonnet-4-5',
+        openaiModelId: 'gpt-5',
         ollamaBaseUrl: 'http://ollama:11434',
         ollamaBearerToken: 'ollama-token',
         ollamaModelId: 'qwen3:8b',
@@ -210,10 +222,14 @@ describe('update', () => {
     expect(params).toContain(false);
     expect(params).toContain(45);
     expect(params).toContain('g-key');
-    expect(params).toContain('gemini');
+    expect(params).toContain('anthropic');
     expect(params).toContain('or-key');
+    expect(params).toContain('a-key');
+    expect(params).toContain('oa-key');
     expect(params).toContain('gemini-2.0');
     expect(params).toContain('or/model');
+    expect(params).toContain('claude-sonnet-4-5');
+    expect(params).toContain('gpt-5');
     expect(params).toContain('http://ollama:11434');
     expect(params).toContain('ollama-token');
     expect(params).toContain('qwen3:8b');
@@ -233,12 +249,12 @@ describe('update', () => {
     expect(params).toContain(noteOptionsJson);
     expect(params).toContain(transferOptionsJson);
     // Tighter check on top of the .toContain() pattern from the canonical ldap/email tests:
-    // since the SET clause emits its 27 COALESCE pairs in projection-declaration order and
+    // since the SET clause emits its 31 COALESCE pairs in projection-declaration order and
     // each pair binds exactly one patch-value param (the column ref renders as a SQL
-    // identifier, not a parameter), the first 27 params must match PROJECTION_KEYS order.
+    // identifier, not a parameter), the first 31 params must match PROJECTION_KEYS order.
     // Catches column→param wiring bugs where two same-typed booleans (e.g.,
     // treatSaturdayAsHoliday vs allowWeekendSelection) get swapped.
-    expect(params.slice(0, 27)).toEqual([
+    expect(params.slice(0, 31)).toEqual([
       'USD',
       9,
       'Sunday',
@@ -251,10 +267,14 @@ describe('update', () => {
       exemptUsersJson,
       45,
       'g-key',
-      'gemini',
+      'anthropic',
       'or-key',
+      'a-key',
+      'oa-key',
       'gemini-2.0',
       'or/model',
+      'claude-sonnet-4-5',
+      'gpt-5',
       'http://ollama:11434',
       'ollama-token',
       'qwen3:8b',
@@ -272,11 +292,11 @@ describe('update', () => {
   test('binds NULL for omitted patch fields (COALESCE preserves existing column)', async () => {
     exec.enqueue({ rows: [buildRow()] });
     await generalSettingsRepo.update({ currency: 'USD' }, testDb);
-    // The SET clause always emits 27 COALESCE pairs (one per patchable column); 26 of those
+    // The SET clause always emits 31 COALESCE pairs (one per patchable column); 30 of those
     // patch-value params are null when only `currency` is provided. The UPDATE also binds the
-    // singleton WHERE param (1), so we expect >=26 nulls in the param list.
+    // singleton WHERE param (1), so we expect >=30 nulls in the param list.
     const nullCount = exec.calls[0].params.filter((p) => p === null).length;
-    expect(nullCount).toBeGreaterThanOrEqual(26);
+    expect(nullCount).toBeGreaterThanOrEqual(30);
   });
 
   test('binds NULL for explicit null RIL arrays to preserve existing values', async () => {
@@ -284,8 +304,8 @@ describe('update', () => {
     await generalSettingsRepo.update({ rilNoteOptions: null, rilTransferOptions: null }, testDb);
 
     const params = exec.calls[0].params;
-    expect(params[24]).toBeNull();
-    expect(params[25]).toBeNull();
+    expect(params[29]).toBeNull();
+    expect(params[30]).toBeNull();
     expect(params).not.toContain('null');
   });
 

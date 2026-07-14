@@ -1,0 +1,144 @@
+import { afterAll, beforeAll, beforeEach, describe, expect, mock, test } from 'bun:test';
+import type { PoolClient } from 'pg';
+import * as realBootstrapAdmin from '../../db/bootstrapAdmin.ts';
+import { DEMO_EXPECTED_COUNTS } from '../../db/demoSeedManifest.ts';
+import * as realDbIndex from '../../db/index.ts';
+import * as realUserAssignmentsRepo from '../../repositories/userAssignmentsRepo.ts';
+
+type DemoSeedModule = typeof import('../../db/demoSeed.ts');
+type VerificationTable = keyof typeof DEMO_EXPECTED_COUNTS;
+
+const dbIndexSnap = { ...realDbIndex };
+const bootstrapAdminSnap = { ...realBootstrapAdmin };
+const userAssignmentsRepoSnap = { ...realUserAssignmentsRepo };
+
+const connectMock = mock();
+const ensureBootstrapAdminMock = mock();
+const syncTopManagerAssignmentsForUserMock = mock();
+const releaseMock = mock();
+const queryMock = mock();
+
+const sqlCalls: string[] = [];
+const events: string[] = [];
+let mismatchedTable: VerificationTable | null = null;
+
+const client = {
+  query: (sql: string, params?: unknown[]) => queryMock(sql, params),
+  release: releaseMock,
+} as unknown as PoolClient;
+
+let demoSeed: DemoSeedModule;
+
+beforeAll(async () => {
+  mock.module('../../db/index.ts', () => ({
+    ...dbIndexSnap,
+    default: { connect: connectMock },
+  }));
+  mock.module('../../db/bootstrapAdmin.ts', () => ({
+    ...bootstrapAdminSnap,
+    ensureBootstrapAdmin: ensureBootstrapAdminMock,
+  }));
+  mock.module('../../repositories/userAssignmentsRepo.ts', () => ({
+    ...userAssignmentsRepoSnap,
+    syncTopManagerAssignmentsForUser: syncTopManagerAssignmentsForUserMock,
+  }));
+
+  demoSeed = await import('../../db/demoSeed.ts');
+});
+
+afterAll(() => {
+  mock.module('../../db/index.ts', () => dbIndexSnap);
+  mock.module('../../db/bootstrapAdmin.ts', () => bootstrapAdminSnap);
+  mock.module('../../repositories/userAssignmentsRepo.ts', () => userAssignmentsRepoSnap);
+});
+
+beforeEach(() => {
+  for (const mockedFn of [
+    connectMock,
+    ensureBootstrapAdminMock,
+    syncTopManagerAssignmentsForUserMock,
+    releaseMock,
+    queryMock,
+  ]) {
+    mockedFn.mockReset();
+  }
+
+  sqlCalls.length = 0;
+  events.length = 0;
+  mismatchedTable = null;
+
+  connectMock.mockResolvedValue(client);
+  ensureBootstrapAdminMock.mockResolvedValue(undefined);
+  syncTopManagerAssignmentsForUserMock.mockImplementation(async () => {
+    events.push('sync-assignments');
+  });
+  queryMock.mockImplementation(async (sql: string) => {
+    const normalizedSql = sql.trim();
+    sqlCalls.push(normalizedSql);
+
+    const verificationMatch = normalizedSql.match(
+      /^SELECT COUNT\(\*\)::int AS count FROM ([a-z_]+) /,
+    );
+    if (verificationMatch) {
+      const table = verificationMatch[1] as VerificationTable;
+      const expected = DEMO_EXPECTED_COUNTS[table];
+      if (expected === undefined) throw new Error(`Unexpected verification table: ${table}`);
+      events.push(`verify-${table}`);
+      return {
+        rowCount: 1,
+        rows: [{ count: table === mismatchedTable ? expected - 1 : expected }],
+      };
+    }
+
+    if (normalizedSql === 'BEGIN' || normalizedSql === 'COMMIT' || normalizedSql === 'ROLLBACK') {
+      events.push(normalizedSql.toLowerCase());
+    }
+
+    return { rowCount: 1, rows: [] };
+  });
+});
+
+describe('demo seed transaction finalization', () => {
+  test('rolls back all seed work when dataset verification fails', async () => {
+    mismatchedTable = 'users';
+
+    await expect(demoSeed.runDemoSeedRefresh({ source: 'manual' })).rejects.toThrow(
+      `users expected ${DEMO_EXPECTED_COUNTS.users} got ${DEMO_EXPECTED_COUNTS.users - 1}`,
+    );
+
+    expect(events.indexOf('sync-assignments')).toBeGreaterThan(events.indexOf('begin'));
+    expect(events.indexOf('verify-users')).toBeGreaterThan(events.indexOf('sync-assignments'));
+    expect(events.indexOf('rollback')).toBeGreaterThan(events.indexOf('verify-users'));
+    expect(sqlCalls).not.toContain('COMMIT');
+    expect(syncTopManagerAssignmentsForUserMock.mock.calls[0]?.[1]).toBeDefined();
+    expect(releaseMock).toHaveBeenCalledTimes(1);
+  });
+
+  test('rolls back before verification when assignment synchronization fails', async () => {
+    syncTopManagerAssignmentsForUserMock.mockImplementation(async () => {
+      events.push('sync-assignments');
+      throw new Error('forced assignment synchronization failure');
+    });
+
+    await expect(demoSeed.runDemoSeedRefresh({ source: 'manual' })).rejects.toThrow(
+      'forced assignment synchronization failure',
+    );
+
+    expect(events.indexOf('sync-assignments')).toBeGreaterThan(events.indexOf('begin'));
+    expect(events).not.toContain('verify-users');
+    expect(events.at(-1)).toBe('rollback');
+    expect(sqlCalls).not.toContain('COMMIT');
+    expect(releaseMock).toHaveBeenCalledTimes(1);
+  });
+
+  test('commits only after assignments and every verification query succeed', async () => {
+    const result = await demoSeed.runDemoSeedRefresh({ source: 'manual' });
+
+    expect(events.indexOf('sync-assignments')).toBeGreaterThan(events.indexOf('begin'));
+    expect(events.indexOf('verify-users')).toBeGreaterThan(events.indexOf('sync-assignments'));
+    expect(events.indexOf('commit')).toBeGreaterThan(events.indexOf('verify-time_entries'));
+    expect(events).not.toContain('rollback');
+    expect(result.verificationCountsByTable).toEqual(DEMO_EXPECTED_COUNTS);
+    expect(releaseMock).toHaveBeenCalledTimes(1);
+  });
+});

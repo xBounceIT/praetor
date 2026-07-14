@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { loginUiReducer } from '../../components/loginUiReducer';
 import { THEME_STORAGE_KEY } from '../../utils/theme';
 import { ApiErrorStub } from '../helpers/apiErrorStub';
 import { installI18nMock } from '../helpers/i18n';
@@ -117,6 +118,26 @@ mock.module('../../services/api', () => ({
 clearSpyStateAfterAll();
 
 const Login = (await import('../../components/Login')).default;
+
+describe('loginUiReducer', () => {
+  test('preserves state for an unknown runtime action', () => {
+    const state: Parameters<typeof loginUiReducer>[0] = {
+      showPassword: false,
+      error: 'Existing error',
+      isLoading: false,
+      ssoProviders: [],
+      failedLogoUrl: null,
+      phase: 'credentials',
+      totpCode: '',
+      useBackupCode: false,
+      totpError: '',
+      verifyingTotp: false,
+    };
+    const unknownAction = { type: 'unexpected' } as unknown as Parameters<typeof loginUiReducer>[1];
+
+    expect(loginUiReducer(state, unknownAction)).toBe(state);
+  });
+});
 
 describe('<Login />', () => {
   beforeEach(() => {
@@ -288,6 +309,18 @@ describe('<Login />', () => {
   test('without logoutReason banner does not render', () => {
     render(<Login onLogin={() => {}} />);
     expect(screen.queryByText('auth:session.expired')).not.toBeInTheDocument();
+  });
+
+  test('incomplete server logout renders a dismissible warning', () => {
+    const onClear = mock(() => {});
+    render(
+      <Login onLogin={() => {}} logoutReason="logout-incomplete" onClearLogoutReason={onClear} />,
+    );
+
+    expect(screen.getByText('auth:session.logoutIncompleteTitle')).toBeInTheDocument();
+    expect(screen.getByText('auth:session.logoutIncompleteMessage')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'common:buttons.close' }));
+    expect(onClear).toHaveBeenCalled();
   });
 
   test('shows loading state while login promise pending', async () => {

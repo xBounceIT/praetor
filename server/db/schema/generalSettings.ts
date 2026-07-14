@@ -10,7 +10,7 @@ import {
   varchar,
 } from 'drizzle-orm/pg-core';
 
-export type AiProvider = 'gemini' | 'openrouter' | 'ollama';
+export type AiProvider = 'gemini' | 'openrouter' | 'anthropic' | 'openai' | 'ollama';
 
 export type StoredRilNoteOption = {
   value: string;
@@ -50,8 +50,12 @@ export const generalSettings = pgTable(
     geminiApiKey: varchar('gemini_api_key', { length: 255 }),
     aiProvider: varchar('ai_provider', { length: 20 }).$type<AiProvider>().default('gemini'),
     openrouterApiKey: varchar('openrouter_api_key', { length: 255 }),
+    anthropicApiKey: varchar('anthropic_api_key', { length: 255 }),
+    openaiApiKey: varchar('openai_api_key', { length: 255 }),
     geminiModelId: varchar('gemini_model_id', { length: 255 }),
     openrouterModelId: varchar('openrouter_model_id', { length: 255 }),
+    anthropicModelId: varchar('anthropic_model_id', { length: 255 }),
+    openaiModelId: varchar('openai_model_id', { length: 255 }),
     ollamaBaseUrl: varchar('ollama_base_url', { length: 2048 })
       .notNull()
       .default('http://localhost:11434'),
@@ -81,7 +85,7 @@ export const generalSettings = pgTable(
     ),
     check(
       'general_settings_ai_provider_check',
-      sql`${table.aiProvider} IN ('gemini', 'openrouter', 'ollama')`,
+      sql`${table.aiProvider} IN ('gemini', 'openrouter', 'anthropic', 'openai', 'ollama')`,
     ),
     check(
       'general_settings_ril_default_start_time_check',

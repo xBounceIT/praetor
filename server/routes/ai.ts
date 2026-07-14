@@ -44,6 +44,48 @@ const openrouterModelExists = async (
   return match || null;
 };
 
+type AnthropicModel = { id: string; display_name?: string };
+
+const anthropicModelExists = async (
+  apiKey: string,
+  modelId: string,
+): Promise<AnthropicModel | null> => {
+  const normalizedModelId = modelId.trim();
+  const url = new URL(
+    `/v1/models/${encodeURIComponent(normalizedModelId)}`,
+    'https://api.anthropic.com',
+  );
+  const res = await fetch(url, {
+    method: 'GET',
+    headers: {
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+    },
+  });
+  if (res.status === 404) return null;
+  if (!res.ok) {
+    throw new Error(`Anthropic model request failed: HTTP ${res.status}`);
+  }
+  return (await res.json()) as AnthropicModel;
+};
+
+type OpenAiModel = { id: string };
+
+const openaiModelExists = async (apiKey: string, modelId: string): Promise<OpenAiModel | null> => {
+  const normalizedModelId = modelId.trim();
+  const res = await fetch(
+    `https://api.openai.com/v1/models/${encodeURIComponent(normalizedModelId)}`,
+    {
+      method: 'GET',
+      headers: { Authorization: `Bearer ${apiKey}` },
+    },
+  );
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(`OpenAI model request failed: HTTP ${res.status}`);
+  const model = (await res.json()) as { id?: string };
+  return model.id ? { id: model.id } : null;
+};
+
 export default async function (fastify: FastifyInstance, _opts: unknown) {
   // POST /validate-model - Admin-only utility used by General Settings UI.
   fastify.post(
@@ -93,7 +135,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         ollamaBearerToken?: string;
       };
 
-      const providerResult = validateEnum(provider, ['gemini', 'openrouter', 'ollama'], 'provider');
+      const providerResult = validateEnum(
+        provider,
+        ['gemini', 'openrouter', 'anthropic', 'openai', 'ollama'],
+        'provider',
+      );
       if (!providerResult.ok) return badRequest(reply, providerResult.message);
 
       const modelIdResult = optionalNonEmptyString(modelId, 'modelId');
@@ -119,10 +165,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       let keyToUse = apiKey ?? '';
       if (providerResult.value !== 'ollama' && apiKey === undefined) {
-        keyToUse =
-          providerResult.value === 'gemini'
-            ? (settings?.geminiApiKey ?? '')
-            : (settings?.openrouterApiKey ?? '');
+        const settingsKeys = {
+          gemini: settings?.geminiApiKey ?? '',
+          openrouter: settings?.openrouterApiKey ?? '',
+          anthropic: settings?.anthropicApiKey ?? '',
+          openai: settings?.openaiApiKey ?? '',
+        };
+        keyToUse = settingsKeys[providerResult.value];
       }
 
       if (providerResult.value !== 'ollama' && !keyToUse.trim()) {
@@ -172,10 +221,42 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           );
         }
 
-        const match = await openrouterModelExists(keyToUse, resolvedModelId);
+        if (providerResult.value === 'openrouter') {
+          const match = await openrouterModelExists(keyToUse, resolvedModelId);
+          return reply.send(
+            match
+              ? { ok: true, normalizedModelId: match.id, name: match.name || '' }
+              : {
+                  ok: false,
+                  code: 'NOT_FOUND',
+                  message: 'Model not found.',
+                  normalizedModelId: resolvedModelId,
+                },
+          );
+        }
+
+        if (providerResult.value === 'openai') {
+          const match = await openaiModelExists(keyToUse, resolvedModelId);
+          return reply.send(
+            match
+              ? { ok: true, normalizedModelId: match.id }
+              : {
+                  ok: false,
+                  code: 'NOT_FOUND',
+                  message: 'Model not found.',
+                  normalizedModelId: resolvedModelId,
+                },
+          );
+        }
+
+        const match = await anthropicModelExists(keyToUse, resolvedModelId);
         return reply.send(
           match
-            ? { ok: true, normalizedModelId: match.id, name: match.name || '' }
+            ? {
+                ok: true,
+                normalizedModelId: match.id,
+                name: match.display_name || '',
+              }
             : {
                 ok: false,
                 code: 'NOT_FOUND',

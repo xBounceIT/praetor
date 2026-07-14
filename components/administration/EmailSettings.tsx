@@ -26,6 +26,11 @@ import { cn } from '@/lib/utils';
 import { useSecretReplaceState } from '../../hooks/useSecretReplaceState';
 import type { EmailConfig, SmtpEncryption } from '../../types';
 import SecretField from '../shared/SecretField';
+import {
+  type EmailTestResult,
+  emailSettingsReducer,
+  type StateUpdate,
+} from './emailSettingsReducer';
 
 export interface EmailSettingsProps {
   config: EmailConfig;
@@ -51,69 +56,6 @@ const DEFAULT_CONFIG: EmailConfig = {
   smtpPassword: '',
   fromEmail: '',
   fromName: 'Praetor',
-};
-
-type EmailTestResult = {
-  success: boolean;
-  code: string;
-  params?: Record<string, string>;
-};
-
-type EmailSettingsState = {
-  formData: EmailConfig;
-  originalConfig: EmailConfig;
-  testEmail: string;
-  testResult: EmailTestResult | null;
-  isTestLoading: boolean;
-  isSaving: boolean;
-  isSaved: boolean;
-  errors: Record<string, string>;
-  testErrors: Record<string, string>;
-};
-
-type StateUpdate<T> = T | ((prev: T) => T);
-
-type EmailSettingsAction =
-  | { type: 'loadConfig'; config: EmailConfig }
-  | { type: 'setFormData'; update: StateUpdate<EmailConfig> }
-  | { type: 'setOriginalConfig'; config: EmailConfig }
-  | { type: 'setTestEmail'; value: string }
-  | { type: 'setTestResult'; value: EmailTestResult | null }
-  | { type: 'setIsTestLoading'; value: boolean }
-  | { type: 'setIsSaving'; value: boolean }
-  | { type: 'setIsSaved'; value: boolean }
-  | { type: 'setErrors'; update: StateUpdate<Record<string, string>> }
-  | { type: 'setTestErrors'; update: StateUpdate<Record<string, string>> };
-
-const resolveStateUpdate = <T,>(current: T, update: StateUpdate<T>): T =>
-  typeof update === 'function' ? (update as (prev: T) => T)(current) : update;
-
-const emailSettingsReducer = (
-  state: EmailSettingsState,
-  action: EmailSettingsAction,
-): EmailSettingsState => {
-  switch (action.type) {
-    case 'loadConfig':
-      return { ...state, formData: action.config, originalConfig: action.config };
-    case 'setFormData':
-      return { ...state, formData: resolveStateUpdate(state.formData, action.update) };
-    case 'setOriginalConfig':
-      return { ...state, originalConfig: action.config };
-    case 'setTestEmail':
-      return { ...state, testEmail: action.value };
-    case 'setTestResult':
-      return { ...state, testResult: action.value };
-    case 'setIsTestLoading':
-      return { ...state, isTestLoading: action.value };
-    case 'setIsSaving':
-      return { ...state, isSaving: action.value };
-    case 'setIsSaved':
-      return { ...state, isSaved: action.value };
-    case 'setErrors':
-      return { ...state, errors: resolveStateUpdate(state.errors, action.update) };
-    case 'setTestErrors':
-      return { ...state, testErrors: resolveStateUpdate(state.testErrors, action.update) };
-  }
 };
 
 type EmailSettingsUpdater = (update: StateUpdate<EmailConfig>) => void;

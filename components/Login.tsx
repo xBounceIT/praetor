@@ -1,10 +1,12 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { REGEXP_ONLY_DIGITS } from 'input-otp';
+import { TriangleAlert, X } from 'lucide-react';
 import type React from 'react';
 import { useEffect, useMemo, useReducer, useRef } from 'react';
 import { Controller, type UseFormReturn, useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { z } from 'zod';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Field, FieldError, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
@@ -14,12 +16,18 @@ import { getShadcnThemeClassName, useBrowserTheme } from '@/components/ui/use-sh
 import { cn } from '@/lib/utils';
 import type { ResolvedTheme } from '@/utils/theme';
 import api, { ApiError } from '../services/api';
-import { type PublicSsoProvider, SSO_LOGIN_ERROR_CODES, type User } from '../types';
+import {
+  type LogoutNotice,
+  type PublicSsoProvider,
+  SSO_LOGIN_ERROR_CODES,
+  type User,
+} from '../types';
+import { initialLoginUiState, loginUiReducer } from './loginUiReducer';
 import TotpSetupWizard, { type TotpSetupResult } from './TotpSetupWizard';
 
 export interface LoginProps {
   onLogin: (user: User, token?: string) => void;
-  logoutReason?: 'inactivity' | null;
+  logoutReason?: LogoutNotice | null;
   onClearLogoutReason?: () => void;
   serverUnreachable?: boolean;
   onDismissServerUnreachable?: () => void;
@@ -31,9 +39,6 @@ interface LoginFormValues {
   username: string;
   password: string;
 }
-
-// Multi-step login: credentials → (optional) TOTP challenge or forced enrollment.
-type LoginPhase = 'credentials' | 'totp' | 'enroll';
 
 // Captures the { token, user } that /auth/2fa/confirm issues during the forced
 // enrollment flow, so onFinished can complete login after the user views their
@@ -70,97 +75,6 @@ const gridOverlayStyle: React.CSSProperties = {
   `,
   maskComposite: 'intersect',
   WebkitMaskComposite: 'source-in',
-};
-
-interface LoginUiState {
-  showPassword: boolean;
-  error: string;
-  isLoading: boolean;
-  ssoProviders: PublicSsoProvider[];
-  failedLogoUrl: string | null;
-  phase: LoginPhase;
-  totpCode: string;
-  useBackupCode: boolean;
-  totpError: string;
-  verifyingTotp: boolean;
-}
-
-type LoginUiAction =
-  | { type: 'togglePassword' }
-  | { type: 'setError'; error: string }
-  | { type: 'setLoading'; isLoading: boolean }
-  | { type: 'setSsoProviders'; providers: PublicSsoProvider[] }
-  | { type: 'logoFailed'; url: string }
-  | { type: 'beginTotpChallenge' }
-  | { type: 'beginEnrollment' }
-  | { type: 'resetCredentials'; error?: string }
-  | { type: 'setTotpCode'; code: string; clearError?: boolean }
-  | { type: 'toggleBackupCode' }
-  | { type: 'setTotpError'; error: string }
-  | { type: 'setVerifyingTotp'; verifying: boolean };
-
-const initialLoginUiState: LoginUiState = {
-  showPassword: false,
-  error: '',
-  isLoading: false,
-  ssoProviders: [],
-  failedLogoUrl: null,
-  phase: 'credentials',
-  totpCode: '',
-  useBackupCode: false,
-  totpError: '',
-  verifyingTotp: false,
-};
-
-const loginUiReducer = (state: LoginUiState, action: LoginUiAction): LoginUiState => {
-  switch (action.type) {
-    case 'togglePassword':
-      return { ...state, showPassword: !state.showPassword };
-    case 'setError':
-      return { ...state, error: action.error };
-    case 'setLoading':
-      return { ...state, isLoading: action.isLoading };
-    case 'setSsoProviders':
-      return { ...state, ssoProviders: action.providers };
-    case 'logoFailed':
-      return { ...state, failedLogoUrl: action.url };
-    case 'beginTotpChallenge':
-      return {
-        ...state,
-        phase: 'totp',
-        totpCode: '',
-        useBackupCode: false,
-        totpError: '',
-      };
-    case 'beginEnrollment':
-      return { ...state, phase: 'enroll' };
-    case 'resetCredentials':
-      return {
-        ...state,
-        phase: 'credentials',
-        totpCode: '',
-        useBackupCode: false,
-        totpError: '',
-        error: action.error ?? '',
-      };
-    case 'setTotpCode':
-      return {
-        ...state,
-        totpCode: action.code,
-        totpError: action.clearError ? '' : state.totpError,
-      };
-    case 'toggleBackupCode':
-      return {
-        ...state,
-        useBackupCode: !state.useBackupCode,
-        totpCode: '',
-        totpError: '',
-      };
-    case 'setTotpError':
-      return { ...state, totpError: action.error };
-    case 'setVerifyingTotp':
-      return { ...state, verifyingTotp: action.verifying };
-  }
 };
 
 const Login: React.FC<LoginProps> = ({
@@ -499,7 +413,7 @@ const LoginLogo: React.FC<LoginLogoProps> = ({ src, alt, isDark, usingCustomLogo
 );
 
 interface LoginStatusAlertsProps {
-  logoutReason?: 'inactivity' | null;
+  logoutReason?: LogoutNotice | null;
   onClearLogoutReason?: () => void;
   serverUnreachable?: boolean;
   onDismissServerUnreachable?: () => void;
@@ -537,6 +451,28 @@ const LoginStatusAlerts: React.FC<LoginStatusAlertsProps> = ({
             </button>
           )}
         </div>
+      )}
+
+      {logoutReason === 'logout-incomplete' && (
+        <Alert className="mt-6 border-amber-500/30 bg-amber-500/10 pr-12 text-amber-800 animate-in fade-in slide-in-from-top-2 dark:text-amber-300">
+          <TriangleAlert />
+          <AlertTitle>{t('auth:session.logoutIncompleteTitle')}</AlertTitle>
+          <AlertDescription className="text-amber-700 dark:text-amber-400">
+            {t('auth:session.logoutIncompleteMessage')}
+          </AlertDescription>
+          {onClearLogoutReason && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-xs"
+              onClick={onClearLogoutReason}
+              aria-label={t('common:buttons.close')}
+              className="absolute top-2 right-2 text-amber-700 hover:bg-amber-500/15 hover:text-amber-900 dark:text-amber-300 dark:hover:text-amber-100"
+            >
+              <X />
+            </Button>
+          )}
+        </Alert>
       )}
 
       {serverUnreachable && (

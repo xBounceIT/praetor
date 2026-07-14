@@ -740,8 +740,22 @@
     {
       "idx": 105,
       "version": "7",
-      "when": 1784035926808,
-      "tag": "0105_add_ollama_ai_provider",
+      "when": 1784035730808,
+      "tag": "0105_add_anthropic_ai_provider",
+      "breakpoints": true
+    },
+    {
+      "idx": 106,
+      "version": "7",
+      "when": 1784058187783,
+      "tag": "0106_add_openai_ai_provider",
+      "breakpoints": true
+    },
+    {
+      "idx": 107,
+      "version": "7",
+      "when": 1784067930001,
+      "tag": "0107_add_ollama_ai_provider",
       "breakpoints": true
     }
   ]

@@ -3,6 +3,7 @@ import {
   getSessionMaxExpiresAtMs,
   getSessionTimeoutThresholds,
   getTokenExpiresAtMs,
+  getTokenSessionVersion,
 } from '../../utils/sessionTimeout';
 
 const tokenWithPayload = (payload: Record<string, unknown>) => {
@@ -74,5 +75,12 @@ describe('session timeout thresholds', () => {
       logoutAfterMs: 45 * 60 * 1000,
       absoluteSessionExpiresAtMs: null,
     });
+  });
+
+  test('reads only an integer session version from the JWT payload', () => {
+    expect(getTokenSessionVersion(tokenWithPayload({ sessionVersion: 7 }))).toBe(7);
+    expect(getTokenSessionVersion(tokenWithPayload({ sessionVersion: '7' }))).toBeNull();
+    expect(getTokenSessionVersion(tokenWithPayload({ sessionVersion: 1.5 }))).toBeNull();
+    expect(getTokenSessionVersion(tokenWithPayload({}))).toBeNull();
   });
 });

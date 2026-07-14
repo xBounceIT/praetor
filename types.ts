@@ -60,6 +60,7 @@ export type KnownPermission = `${KnownPermissionResource}.${KnownPermissionActio
 export type Permission = KnownPermission | (string & {});
 export type EmployeeType = 'app_user' | 'internal' | 'external';
 export type UserAuthMethod = 'local' | 'ldap' | 'oidc' | 'saml';
+export type LogoutNotice = 'inactivity' | 'logout-incomplete';
 export type UserContractType =
   | 'permanent'
   | 'fixed_term'
@@ -181,7 +182,7 @@ export interface Notification {
 }
 
 export const DEFAULT_OLLAMA_BASE_URL = 'http://localhost:11434';
-export type AiProvider = 'gemini' | 'openrouter' | 'ollama';
+export type AiProvider = 'gemini' | 'openrouter' | 'anthropic' | 'openai' | 'ollama';
 
 export interface GeneralSettings {
   currency: string;
@@ -192,8 +193,12 @@ export interface GeneralSettings {
   geminiApiKey?: string;
   aiProvider?: AiProvider;
   openrouterApiKey?: string;
+  anthropicApiKey?: string;
+  openaiApiKey?: string;
   geminiModelId?: string;
   openrouterModelId?: string;
+  anthropicModelId?: string;
+  openaiModelId?: string;
   ollamaBaseUrl?: string;
   ollamaBearerToken?: string;
   ollamaModelId?: string;

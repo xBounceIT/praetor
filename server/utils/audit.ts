@@ -71,6 +71,10 @@ const SENSITIVE_AUDIT_FIELDS = new Set([
   'gemini_api_key',
   'openrouterApiKey',
   'openrouter_api_key',
+  'anthropicApiKey',
+  'anthropic_api_key',
+  'openaiApiKey',
+  'openai_api_key',
   'ollamaBearerToken',
   'ollama_bearer_token',
 ]);

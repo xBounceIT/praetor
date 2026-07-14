@@ -1,3 +1,4 @@
+import { drizzle } from 'drizzle-orm/node-postgres';
 import { readFileSync } from 'fs';
 import type { PoolClient } from 'pg';
 import * as userAssignmentsRepo from '../repositories/userAssignmentsRepo.ts';
@@ -25,7 +26,8 @@ import {
   LEGACY_DEMO_INVOICE_IDS,
   LEGACY_DEMO_SUPPLIER_INVOICE_IDS,
 } from './demoSeedManifest.ts';
-import pool, { query } from './index.ts';
+import { type DbExecutor, schema } from './drizzle.ts';
+import pool from './index.ts';
 
 const logger = createChildLogger({ module: 'db:demo-seed' });
 
@@ -1274,7 +1276,7 @@ const buildVerificationSteps = (
   { table: 'time_entries', ids: demoIds.timeEntries, expected: DEMO_EXPECTED_COUNTS.time_entries },
 ];
 
-const verifyDemoDataset = async (seedYear: number) => {
+const verifyDemoDataset = async (client: PoolClient, seedYear: number) => {
   const demoIds = buildDemoIds(seedYear);
   const assignmentTargetIds = buildDemoAssignmentTargetIds(demoIds);
   const verificationSteps = buildVerificationSteps(demoIds, assignmentTargetIds);
@@ -1285,7 +1287,7 @@ const verifyDemoDataset = async (seedYear: number) => {
     const countColumn = step.countColumn ?? 'id';
     const userFilter = step.userIds ? ' AND user_id = ANY($2::text[])' : '';
     const params = step.userIds ? [step.ids, step.userIds] : [step.ids];
-    const result = await query(
+    const result = await client.query(
       `SELECT COUNT(*)::int AS count FROM ${step.table} WHERE ${countColumn} = ANY($1::text[])${userFilter}`,
       params,
     );
@@ -1337,6 +1339,7 @@ export const runDemoSeedRefresh = async ({
 
   try {
     const demoUserIds = await collectDemoUserCleanupIds(client);
+    const transactionDb: DbExecutor = drizzle(client, { schema });
 
     await client.query('BEGIN');
     inTransaction = true;
@@ -1354,40 +1357,14 @@ export const runDemoSeedRefresh = async ({
       throw new Error('Demo seed insert phase failed');
     }
 
-    await client.query('COMMIT');
-    inTransaction = false;
-
-    // Each sync runs in its own transaction (default db executor) against a distinct user's
-    // assignment rows, so the per-user fan-outs are independent and run concurrently. This is
-    // a bounded, fixed set (DEMO_USERS), so there's no connection-pool-storm risk.
-    await Promise.all(
-      DEMO_TOP_MANAGER_USER_IDS.map((userId) =>
-        userAssignmentsRepo.syncTopManagerAssignmentsForUser(userId),
-      ),
-    );
-  } catch (err) {
-    if (inTransaction) {
-      await client.query('ROLLBACK');
+    // Reuse this client's open transaction so assignment writes and seed rows commit or roll back
+    // together. Passing an existing executor also prevents the repository from opening a nested
+    // transaction on the shared pool.
+    for (const userId of DEMO_TOP_MANAGER_USER_IDS) {
+      await userAssignmentsRepo.syncTopManagerAssignmentsForUser(userId, transactionDb);
     }
 
-    logger.error(
-      {
-        demoSeedingEnabled: true,
-        source,
-        cleanupCountsByTable,
-        insertCountsByTable,
-        failedStatements,
-        err: serializeError(err),
-      },
-      'Demo seed refresh failed during cleanup or insert phase',
-    );
-    throw err;
-  } finally {
-    client.release();
-  }
-
-  try {
-    const verification = await verifyDemoDataset(seedYear);
+    const verification = await verifyDemoDataset(client, seedYear);
     verificationCountsByTable = verification.verificationCountsByTable;
 
     if (verification.mismatches.length > 0) {
@@ -1409,17 +1386,13 @@ export const runDemoSeedRefresh = async ({
       );
     }
 
-    const result: DemoSeedResult = {
-      demoSeedingEnabled: true,
-      source,
-      cleanupCountsByTable,
-      insertCountsByTable,
-      verificationCountsByTable,
-    };
-
-    logger.info(result, 'Demo seed refresh completed');
-    return result;
+    await client.query('COMMIT');
+    inTransaction = false;
   } catch (err) {
+    if (inTransaction) {
+      await client.query('ROLLBACK');
+    }
+
     logger.error(
       {
         demoSeedingEnabled: true,
@@ -1427,10 +1400,24 @@ export const runDemoSeedRefresh = async ({
         cleanupCountsByTable,
         insertCountsByTable,
         verificationCountsByTable,
+        failedStatements,
         err: serializeError(err),
       },
-      'Demo seed refresh failed after insert phase',
+      'Demo seed refresh transaction failed',
     );
     throw err;
+  } finally {
+    client.release();
   }
+
+  const result: DemoSeedResult = {
+    demoSeedingEnabled: true,
+    source,
+    cleanupCountsByTable,
+    insertCountsByTable,
+    verificationCountsByTable,
+  };
+
+  logger.info(result, 'Demo seed refresh completed');
+  return result;
 };
