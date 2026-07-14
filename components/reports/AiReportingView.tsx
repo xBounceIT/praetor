@@ -1959,7 +1959,7 @@ export const AiReportingSidebar: React.FC<AiReportingSidebarProps> = ({
     <div className="flex h-full min-h-0 w-full flex-col bg-sidebar text-sidebar-foreground">
       <div className="border-b border-sidebar-border p-4">
         <div className="flex items-center gap-3">
-          <div className="flex size-9 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
+          <div className="flex size-9 items-center justify-center rounded-lg bg-primary text-primary-foreground">
             <Sparkles className="size-4" />
           </div>
           <div className="min-w-0">
@@ -2186,7 +2186,7 @@ export const AiReportingSidebar: React.FC<AiReportingSidebarProps> = ({
           type="button"
           onClick={onNewChat}
           disabled={isNewChatDisabled}
-          className="w-full bg-sidebar-primary text-sidebar-primary-foreground hover:bg-sidebar-primary/90"
+          className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
         >
           {isCreatingSession ? <Loader2 className="animate-spin" /> : <Plus />}
           {t('aiReporting.newChat', { defaultValue: 'New Chat' })}

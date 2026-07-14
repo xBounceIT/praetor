@@ -51,8 +51,15 @@ describe('<AiReportingView /> shadcn workspace', () => {
       'border-sidebar-border',
       'bg-sidebar-accent',
       'text-sidebar-accent-foreground',
-      'bg-sidebar-primary',
-      'text-sidebar-primary-foreground',
+    ]);
+  });
+
+  test('matches the sidebar identity and new-chat action to the user message bubble', async () => {
+    const source = await readComponentSource('reports/AiReportingView.tsx');
+
+    expectSourceContainsAll(source, [
+      'rounded-lg bg-primary text-primary-foreground',
+      'w-full bg-primary text-primary-foreground hover:bg-primary/90',
     ]);
   });
 
