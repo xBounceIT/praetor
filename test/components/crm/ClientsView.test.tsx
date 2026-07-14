@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { Workbook, type Worksheet } from 'exceljs';
 import type { ComponentProps } from 'react';
 import type {
   BulkClientCreateResponse,
@@ -8,6 +9,15 @@ import type {
   ClientProfileOption,
   ClientProfileOptionsByCategory,
 } from '../../../types';
+import {
+  buildClientImportDefinition,
+  CLIENT_IMPORT_FIELDS,
+} from '../../../utils/clientImportWorkbook';
+import {
+  buildImportWorkbook,
+  IMPORT_FIRST_DATA_ROW,
+  IMPORT_WORKSHEET_NAME,
+} from '../../../utils/entityImportWorkbook';
 import { installI18nMock } from '../../helpers/i18n';
 import { clearSpyStateAfterAll } from '../../helpers/mockCleanup.ts';
 import { render } from '../../helpers/render';
@@ -27,6 +37,8 @@ const emptyProfileOptions: ClientProfileOptionsByCategory = {
 };
 
 const listAllProfileOptions = mock(async () => emptyProfileOptions);
+const toastError = mock(() => undefined);
+const toastSuccess = mock(() => undefined);
 
 const profileOption: ClientProfileOption = {
   id: 'option-1',
@@ -43,6 +55,8 @@ mock.module('../../../services/api', () => ({
     },
   },
 }));
+
+mock.module('../../../utils/toast', () => ({ toastError, toastSuccess }));
 
 clearSpyStateAfterAll();
 
@@ -97,10 +111,44 @@ const openClientCreationMenu = async (user: ReturnType<typeof userEvent.setup>) 
   await user.click(screen.getByRole('button', { name: 'crm:clients.bulk.addOptions' }));
 };
 
+const workbookTranslator = (key: string) => key;
+
+const requireWorksheet = (workbook: Workbook, name: string): Worksheet => {
+  const worksheet = workbook.getWorksheet(name);
+  if (!worksheet) throw new Error(`Missing worksheet ${name}`);
+  return worksheet;
+};
+
+const makeClientWorkbookFile = async (
+  rows: Array<Partial<Record<(typeof CLIENT_IMPORT_FIELDS)[number], string>>> = [],
+  mutate?: (workbook: Workbook) => void,
+) => {
+  const workbook = await buildImportWorkbook(
+    new Workbook(),
+    buildClientImportDefinition(emptyProfileOptions, workbookTranslator),
+  );
+  const worksheet = requireWorksheet(workbook, IMPORT_WORKSHEET_NAME);
+  rows.forEach((row, rowIndex) => {
+    for (const [field, value] of Object.entries(row)) {
+      const column = CLIENT_IMPORT_FIELDS.indexOf(field as (typeof CLIENT_IMPORT_FIELDS)[number]);
+      if (column >= 0)
+        worksheet.getCell(IMPORT_FIRST_DATA_ROW + rowIndex, column + 1).value = value;
+    }
+  });
+  mutate?.(workbook);
+  const buffer = await workbook.xlsx.writeBuffer();
+  return new File([buffer as unknown as BlobPart], 'praetor-clients-import.xlsx', {
+    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  });
+};
+
 describe('<ClientsView /> bulk creation actions', () => {
   beforeEach(() => {
     localStorage.clear();
     listAllProfileOptions.mockClear();
+    toastError.mockClear();
+    toastSuccess.mockClear();
+    window.ExcelJS = { Workbook };
   });
 
   test('renders an accessible split button with create permission', async () => {
@@ -114,7 +162,7 @@ describe('<ClientsView /> bulk creation actions', () => {
       screen.getByRole('menuitem', { name: 'crm:clients.bulk.addMultiple' }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole('menuitem', { name: 'crm:clients.bulk.importCsv' }),
+      screen.getByRole('menuitem', { name: 'crm:clients.bulk.importExcel' }),
     ).toBeInTheDocument();
   });
 
@@ -265,38 +313,108 @@ describe('<ClientsView /> bulk creation actions', () => {
     );
   });
 
-  test('CSV dialog always shows the import contract and header-only template action', async () => {
+  test('Excel dialog shows the protected template contract and fetches fresh profile values on download', async () => {
+    const freshOptions: ClientProfileOptionsByCategory = {
+      ...emptyProfileOptions,
+      sector: [{ ...profileOption, value: 'Fresh sector' }],
+    };
+    listAllProfileOptions
+      .mockResolvedValueOnce(emptyProfileOptions)
+      .mockResolvedValueOnce(freshOptions);
+    const createObjectUrl = mock(() => 'blob:client-template');
+    const revokeObjectUrl = mock(() => undefined);
+    const previousCreateObjectUrl = URL.createObjectURL;
+    const previousRevokeObjectUrl = URL.revokeObjectURL;
+    const previousAnchorClick = HTMLAnchorElement.prototype.click;
+    URL.createObjectURL = createObjectUrl;
+    URL.revokeObjectURL = revokeObjectUrl;
+    HTMLAnchorElement.prototype.click = mock(() => undefined);
     const user = userEvent.setup();
-    renderClientsView();
-    await openClientCreationMenu(user);
-    await user.click(screen.getByRole('menuitem', { name: 'crm:clients.bulk.importCsv' }));
 
-    const dialog = await screen.findByRole('dialog', { name: 'crm:clients.bulk.csv.title' });
-    const fileInput = within(dialog).getByLabelText('crm:clients.bulk.csv.fileLabel');
-    const browseButton = within(dialog).getByRole('button', {
-      name: 'crm:clients.bulk.csv.browseButton',
-    });
-    const openFilePicker = mock(() => undefined);
-    Object.defineProperty(fileInput, 'click', { value: openFilePicker });
-    expect(fileInput).toHaveClass('hidden');
-    expect(within(dialog).getByText('crm:clients.bulk.csv.noFileSelected')).toBeVisible();
-    expect(browseButton).toBeVisible();
-    fireEvent.click(browseButton);
-    expect(openFilePicker).toHaveBeenCalledTimes(1);
-    expect(within(dialog).getByText('crm:clients.bulk.csv.structureTitle')).toBeInTheDocument();
-    expect(within(dialog).getByText('clientCode')).toBeInTheDocument();
-    expect(within(dialog).getByText('fiscalCode')).toBeInTheDocument();
-    expect(
-      within(dialog).getByRole('button', { name: 'crm:clients.bulk.csv.downloadTemplate' }),
-    ).toBeInTheDocument();
-    expect(
-      within(dialog).getByRole('button', { name: 'crm:clients.bulk.csv.importButton' }),
-    ).toBeDisabled();
+    try {
+      renderClientsView();
+      await waitFor(() => expect(listAllProfileOptions).toHaveBeenCalledTimes(1));
+      await openClientCreationMenu(user);
+      await user.click(screen.getByRole('menuitem', { name: 'crm:clients.bulk.importExcel' }));
+
+      const dialog = await screen.findByRole('dialog', { name: 'crm:clients.bulk.excel.title' });
+      const fileInput = within(dialog).getByLabelText('crm:clients.bulk.excel.fileLabel');
+      const browseButton = within(dialog).getByRole('button', {
+        name: 'crm:clients.bulk.excel.browseButton',
+      });
+      const openFilePicker = mock(() => undefined);
+      Object.defineProperty(fileInput, 'click', { value: openFilePicker });
+      expect(fileInput).toHaveClass('hidden');
+      expect(within(dialog).getByText('crm:clients.bulk.excel.noFileSelected')).toBeVisible();
+      fireEvent.click(browseButton);
+      expect(openFilePicker).toHaveBeenCalledTimes(1);
+      expect(within(dialog).getByText('crm:clients.bulk.excel.structureTitle')).toBeInTheDocument();
+      expect(within(dialog).getByText('clientCode')).toBeInTheDocument();
+      expect(within(dialog).getByText('fiscalCode')).toBeInTheDocument();
+
+      await user.click(
+        within(dialog).getByRole('button', {
+          name: 'crm:clients.bulk.excel.downloadTemplate',
+        }),
+      );
+      await waitFor(() => expect(listAllProfileOptions).toHaveBeenCalledTimes(2));
+      await waitFor(() => expect(createObjectUrl).toHaveBeenCalledTimes(1));
+      expect(
+        within(dialog).getByRole('button', { name: 'crm:clients.bulk.excel.importButton' }),
+      ).toBeDisabled();
+    } finally {
+      URL.createObjectURL = previousCreateObjectUrl;
+      URL.revokeObjectURL = previousRevokeObjectUrl;
+      HTMLAnchorElement.prototype.click = previousAnchorClick;
+    }
   });
 
-  test('CSV import maps mixed server results back to source lines and blocks duplicate submission', async () => {
-    const createBulk = mock(
-      async (): Promise<BulkClientCreateResponse> => ({
+  test('does not download a stale client template when the fresh profile request fails', async () => {
+    listAllProfileOptions
+      .mockResolvedValueOnce(emptyProfileOptions)
+      .mockRejectedValueOnce(new Error('profile options unavailable'));
+    const createObjectUrl = mock(() => 'blob:stale-client-template');
+    const previousCreateObjectUrl = URL.createObjectURL;
+    const previousConsoleError = console.error;
+    const consoleError = mock(() => undefined);
+    URL.createObjectURL = createObjectUrl;
+    console.error = consoleError;
+    const user = userEvent.setup();
+
+    try {
+      renderClientsView();
+      await waitFor(() => expect(listAllProfileOptions).toHaveBeenCalledTimes(1));
+      await openClientCreationMenu(user);
+      await user.click(screen.getByRole('menuitem', { name: 'crm:clients.bulk.importExcel' }));
+      const dialog = await screen.findByRole('dialog', { name: 'crm:clients.bulk.excel.title' });
+
+      await user.click(
+        within(dialog).getByRole('button', {
+          name: 'crm:clients.bulk.excel.downloadTemplate',
+        }),
+      );
+
+      await waitFor(() => expect(listAllProfileOptions).toHaveBeenCalledTimes(2));
+      await waitFor(() =>
+        expect(toastError).toHaveBeenCalledWith('crm:clients.bulk.excel.downloadFailed'),
+      );
+      expect(consoleError).toHaveBeenCalledWith(
+        'Failed to load client profile options:',
+        expect.any(Error),
+      );
+      expect(createObjectUrl).not.toHaveBeenCalled();
+      expect(
+        within(dialog).getByRole('button', { name: 'crm:clients.bulk.excel.downloadTemplate' }),
+      ).toBeEnabled();
+    } finally {
+      URL.createObjectURL = previousCreateObjectUrl;
+      console.error = previousConsoleError;
+    }
+  });
+
+  test('Excel import maps errors to worksheet rows and retries only failed records', async () => {
+    const createBulk = mock()
+      .mockResolvedValueOnce({
         summary: { total: 2, succeeded: 1, failed: 1 },
         results: [
           {
@@ -310,74 +428,98 @@ describe('<ClientsView /> bulk creation actions', () => {
             errors: [{ field: 'fiscalCode', code: 'duplicate' as const, message: 'Duplicate' }],
           },
         ],
-      }),
-    );
+      })
+      .mockResolvedValueOnce({
+        summary: { total: 1, succeeded: 1, failed: 0 },
+        results: [
+          {
+            index: 0,
+            success: true,
+            client: { id: 'c2', name: 'Beta', clientCode: 'CLI-2', fiscalCode: 'IT2' },
+          },
+        ],
+      });
     const user = userEvent.setup();
     renderClientsView({ onAddClientsBulk: createBulk });
     await openClientCreationMenu(user);
-    await user.click(screen.getByRole('menuitem', { name: 'crm:clients.bulk.importCsv' }));
-    const dialog = await screen.findByRole('dialog', { name: 'crm:clients.bulk.csv.title' });
-    const fileInput = within(dialog).getByLabelText('crm:clients.bulk.csv.fileLabel');
-    const file = new File(
-      ['fiscalCode;name;clientCode\n', 'IT1;Alpha;CLI-1\n', 'IT2;Beta;CLI-2'],
-      'clients.csv',
-      { type: 'text/csv' },
-    );
+    await user.click(screen.getByRole('menuitem', { name: 'crm:clients.bulk.importExcel' }));
+    const dialog = await screen.findByRole('dialog', { name: 'crm:clients.bulk.excel.title' });
+    const file = await makeClientWorkbookFile([
+      { fiscalCode: 'IT1', name: 'Alpha', clientCode: 'CLI-1' },
+      { fiscalCode: 'IT2', name: 'Beta', clientCode: 'CLI-2' },
+    ]);
 
-    fireEvent.change(fileInput, { target: { files: [file] } });
-    await screen.findByText('crm:clients.bulk.csv.readyTitle');
+    fireEvent.change(within(dialog).getByLabelText('crm:clients.bulk.excel.fileLabel'), {
+      target: { files: [file] },
+    });
+    await within(dialog).findByText('crm:clients.bulk.excel.readyTitle');
     const importButton = within(dialog).getByRole('button', {
-      name: 'crm:clients.bulk.csv.importButton',
+      name: 'crm:clients.bulk.excel.importButton',
     });
     expect(importButton).toBeEnabled();
     await user.click(importButton);
 
     await waitFor(() => expect(createBulk).toHaveBeenCalledTimes(1));
     expect(createBulk).toHaveBeenCalledWith([
-      { fiscalCode: 'IT1', name: 'Alpha', clientCode: 'CLI-1' },
-      { fiscalCode: 'IT2', name: 'Beta', clientCode: 'CLI-2' },
+      { clientCode: 'CLI-1', name: 'Alpha', fiscalCode: 'IT1' },
+      { clientCode: 'CLI-2', name: 'Beta', fiscalCode: 'IT2' },
     ]);
-    expect(within(dialog).getByText('crm:clients.bulk.csv.resultTitle')).toBeInTheDocument();
-    expect(within(dialog).getByText(/crm:clients.bulk.csv.rowLabel/)).toBeInTheDocument();
-    expect(importButton).toBeDisabled();
+    expect(within(dialog).getByText('crm:clients.bulk.excel.resultTitle')).toBeInTheDocument();
+    expect(within(dialog).getByText(/crm:clients.bulk.excel.rowLabel/)).toBeInTheDocument();
+    expect(importButton).toBeEnabled();
+    await user.click(importButton);
+    await waitFor(() => expect(createBulk).toHaveBeenCalledTimes(2));
+    expect(createBulk.mock.calls[1]?.[0]).toEqual([
+      { clientCode: 'CLI-2', name: 'Beta', fiscalCode: 'IT2' },
+    ]);
+    await waitFor(() =>
+      expect(
+        screen.queryByRole('dialog', { name: 'crm:clients.bulk.excel.title' }),
+      ).not.toBeInTheDocument(),
+    );
   });
 
-  test('shows structural errors even when a CSV has no importable rows', async () => {
+  test('shows formula-cell errors even when the Excel row is not importable', async () => {
     const user = userEvent.setup();
     renderClientsView();
     await openClientCreationMenu(user);
-    await user.click(screen.getByRole('menuitem', { name: 'crm:clients.bulk.importCsv' }));
-    const dialog = await screen.findByRole('dialog', { name: 'crm:clients.bulk.csv.title' });
-    const file = new File(
-      ['clientCode,name,fiscalCode\nCLI-1,Missing fiscal code'],
-      'invalid.csv',
-      { type: 'text/csv' },
-    );
+    await user.click(screen.getByRole('menuitem', { name: 'crm:clients.bulk.importExcel' }));
+    const dialog = await screen.findByRole('dialog', { name: 'crm:clients.bulk.excel.title' });
+    const file = await makeClientWorkbookFile([], (workbook) => {
+      const sheet = requireWorksheet(workbook, IMPORT_WORKSHEET_NAME);
+      sheet.getCell(IMPORT_FIRST_DATA_ROW, CLIENT_IMPORT_FIELDS.indexOf('clientCode') + 1).value = {
+        formula: 'CONCAT("CLI","-1")',
+        result: 'CLI-1',
+      };
+      sheet.getCell(IMPORT_FIRST_DATA_ROW, CLIENT_IMPORT_FIELDS.indexOf('name') + 1).value = 'Acme';
+    });
 
-    fireEvent.change(within(dialog).getByLabelText('crm:clients.bulk.csv.fileLabel'), {
+    fireEvent.change(within(dialog).getByLabelText('crm:clients.bulk.excel.fileLabel'), {
       target: { files: [file] },
     });
 
     expect(
-      await within(dialog).findByText(/crm:clients.bulk.csv.errors.fieldMismatch/),
+      await within(dialog).findByText(/crm:clients.bulk.excel.errors.invalidCell/),
     ).toBeInTheDocument();
     expect(
-      within(dialog).getByRole('button', { name: 'crm:clients.bulk.csv.importButton' }),
+      within(dialog).getByRole('button', { name: 'crm:clients.bulk.excel.importButton' }),
     ).toBeDisabled();
   });
 
-  test('ignores a stale file read when a newer CSV selection finishes first', async () => {
-    let resolveFirstRead: ((source: string) => void) | undefined;
-    const firstFile = new File(['ignored'], 'first.csv', { type: 'text/csv' });
-    Object.defineProperty(firstFile, 'text', {
+  test('ignores a stale workbook read when a newer XLSX selection finishes first', async () => {
+    let resolveFirstRead: ((source: ArrayBuffer) => void) | undefined;
+    const firstFile = await makeClientWorkbookFile([
+      { clientCode: 'CLI-1', name: 'First', fiscalCode: 'IT1' },
+    ]);
+    Object.defineProperty(firstFile, 'arrayBuffer', {
       value: () =>
-        new Promise<string>((resolve) => {
+        new Promise<ArrayBuffer>((resolve) => {
           resolveFirstRead = resolve;
         }),
     });
-    const secondFile = new File(['clientCode,name,fiscalCode\nCLI-2,Second,IT2'], 'second.csv', {
-      type: 'text/csv',
-    });
+    const secondFile = await makeClientWorkbookFile([
+      { clientCode: 'CLI-2', name: 'Second', fiscalCode: 'IT2' },
+    ]);
     const createBulk = mock(
       async (): Promise<BulkClientCreateResponse> => ({
         summary: { total: 1, succeeded: 1, failed: 0 },
@@ -387,19 +529,19 @@ describe('<ClientsView /> bulk creation actions', () => {
     const user = userEvent.setup();
     renderClientsView({ onAddClientsBulk: createBulk });
     await openClientCreationMenu(user);
-    await user.click(screen.getByRole('menuitem', { name: 'crm:clients.bulk.importCsv' }));
-    const dialog = await screen.findByRole('dialog', { name: 'crm:clients.bulk.csv.title' });
-    const input = within(dialog).getByLabelText('crm:clients.bulk.csv.fileLabel');
+    await user.click(screen.getByRole('menuitem', { name: 'crm:clients.bulk.importExcel' }));
+    const dialog = await screen.findByRole('dialog', { name: 'crm:clients.bulk.excel.title' });
+    const input = within(dialog).getByLabelText('crm:clients.bulk.excel.fileLabel');
 
     fireEvent.change(input, { target: { files: [firstFile] } });
     fireEvent.change(input, { target: { files: [secondFile] } });
-    await within(dialog).findByText('crm:clients.bulk.csv.readyTitle');
+    await within(dialog).findByText('crm:clients.bulk.excel.readyTitle');
     await act(async () => {
-      resolveFirstRead?.('clientCode,name,fiscalCode\nCLI-1,First,IT1');
+      resolveFirstRead?.(await firstFile.slice().arrayBuffer());
       await Promise.resolve();
     });
     await user.click(
-      within(dialog).getByRole('button', { name: 'crm:clients.bulk.csv.importButton' }),
+      within(dialog).getByRole('button', { name: 'crm:clients.bulk.excel.importButton' }),
     );
 
     expect(createBulk).toHaveBeenCalledWith([

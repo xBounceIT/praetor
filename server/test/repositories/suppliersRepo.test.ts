@@ -137,6 +137,23 @@ describe('findNameById', () => {
   });
 });
 
+describe('findExistingCodes', () => {
+  test('normalizes requested and returned codes case-insensitively', async () => {
+    exec.enqueue({ rows: [['SUP-ONE'], ['sup-two']] });
+
+    expect(
+      await suppliersRepo.findExistingCodes([' Sup-One ', 'SUP-TWO', 'sup-one'], testDb),
+    ).toEqual(new Set(['sup-one', 'sup-two']));
+    expect(exec.calls[0].sql.toLowerCase()).toContain('lower("suppliers"."supplier_code")');
+    expect(exec.calls[0].params).toEqual(expect.arrayContaining(['sup-one', 'sup-two']));
+  });
+
+  test('does not query when no usable code is provided', async () => {
+    expect(await suppliersRepo.findExistingCodes(['', '   '], testDb)).toEqual(new Set());
+    expect(exec.calls).toHaveLength(0);
+  });
+});
+
 describe('create', () => {
   test('forces is_disabled false and converts createdAt millis to a Date', async () => {
     exec.enqueue({ rows: [makeRow(SUPPLIER_ROW)] });
@@ -186,6 +203,46 @@ describe('create', () => {
       testDb,
     );
     expect(result).toEqual(mappedRow);
+  });
+});
+
+describe('createIfCodeAvailable', () => {
+  const input: suppliersRepo.NewSupplier = {
+    id: 's-1',
+    name: 'Acme Co',
+    supplierCode: 'ACM',
+    contactName: null,
+    contacts: [],
+    email: null,
+    phone: null,
+    address: null,
+    vatNumber: 'IT123',
+    taxCode: null,
+    paymentTerms: null,
+    notes: null,
+    createdAt: Date.now(),
+  };
+
+  test('locks and rechecks a normalized code before inserting', async () => {
+    exec.enqueue({ rows: [] });
+    exec.enqueue({ rows: [] });
+    exec.enqueue({ rows: [makeRow(SUPPLIER_ROW)] });
+
+    expect(await suppliersRepo.createIfCodeAvailable(input, testDb)).toEqual(mappedRow);
+    expect(exec.calls).toHaveLength(3);
+    expect(exec.calls[0].sql).toContain('pg_advisory_xact_lock');
+    expect(exec.calls[0].params).toContain('acm');
+    expect(exec.calls[1].sql.toLowerCase()).toContain('lower("suppliers"."supplier_code")');
+    expect(exec.calls[2].sql.toLowerCase()).toContain('insert into "suppliers"');
+  });
+
+  test('returns null without inserting when the locked code already exists', async () => {
+    exec.enqueue({ rows: [] });
+    exec.enqueue({ rows: [['ACM']] });
+
+    expect(await suppliersRepo.createIfCodeAvailable(input, testDb)).toBeNull();
+    expect(exec.calls).toHaveLength(2);
+    expect(exec.calls.some((call) => call.sql.toLowerCase().includes('insert into'))).toBe(false);
   });
 });
 

@@ -1,6 +1,6 @@
 import type React from 'react';
 import api from '../../services/api';
-import type { Supplier } from '../../types';
+import type { BulkSupplierCreateInput, BulkSupplierCreateResponse, Supplier } from '../../types';
 
 export type SupplierHandlersDeps = {
   setSuppliers: React.Dispatch<React.SetStateAction<Supplier[]>>;
@@ -15,6 +15,24 @@ export const makeSupplierHandlers = (deps: SupplierHandlersDeps) => {
       setSuppliers((prev) => [...prev, supplier]);
     } catch (err) {
       console.error('Failed to add supplier:', err);
+      throw err;
+    }
+  };
+
+  const addBulk = async (
+    suppliersToCreate: BulkSupplierCreateInput[],
+  ): Promise<BulkSupplierCreateResponse> => {
+    try {
+      const response = await api.suppliers.createBulk(suppliersToCreate);
+      const created = response.results.flatMap((result) =>
+        result.success ? [result.supplier] : [],
+      );
+      if (created.length > 0) {
+        setSuppliers((prev) => [...prev, ...created]);
+      }
+      return response;
+    } catch (err) {
+      console.error('Failed to add suppliers in bulk:', err);
       throw err;
     }
   };
@@ -39,5 +57,5 @@ export const makeSupplierHandlers = (deps: SupplierHandlersDeps) => {
     }
   };
 
-  return { add, update, delete: remove };
+  return { add, addBulk, update, delete: remove };
 };

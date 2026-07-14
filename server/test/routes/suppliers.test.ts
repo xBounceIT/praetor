@@ -35,6 +35,7 @@ const getRolePermissionsMock = mock();
 
 const listAllMock = mock();
 const findByIdMock = mock();
+const findExistingCodesMock = mock();
 const createMock = mock();
 const updateMock = mock();
 const deleteByIdMock = mock();
@@ -61,7 +62,8 @@ beforeAll(async () => {
     ...suppliersRepoSnap,
     listAll: listAllMock,
     findById: findByIdMock,
-    create: createMock,
+    findExistingCodes: findExistingCodesMock,
+    createIfCodeAvailable: createMock,
     update: updateMock,
     deleteById: deleteByIdMock,
   }));
@@ -126,6 +128,7 @@ const allMocks = [
   getRolePermissionsMock,
   listAllMock,
   findByIdMock,
+  findExistingCodesMock,
   createMock,
   updateMock,
   deleteByIdMock,
@@ -140,6 +143,7 @@ beforeEach(async () => {
   userHasRoleMock.mockResolvedValue(true);
   getRolePermissionsMock.mockResolvedValue(ALL_PERMS);
   findByIdMock.mockResolvedValue(SAMPLE_SUPPLIER);
+  findExistingCodesMock.mockResolvedValue(new Set());
   logAuditMock.mockImplementation(async () => undefined);
 
   testApp = await buildRouteTestApp(routePlugin, '/api/suppliers');
@@ -207,6 +211,34 @@ describe('POST /api/suppliers', () => {
       }),
     );
   });
+
+  test('409 rejects a supplier code that becomes unavailable during creation', async () => {
+    createMock.mockResolvedValue(null);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/suppliers',
+      headers: authHeader(),
+      payload: {
+        name: 'ACME',
+        vatNumber: 'IT123',
+        supplierCode: 'ACM',
+      },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(JSON.parse(res.body).error).toBe('Supplier code already exists');
+    expect(logAuditMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'supplier.create.conflict',
+        entityType: 'supplier',
+      }),
+    );
+    expect(logAuditMock).not.toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'supplier.created' }),
+    );
+  });
+
   test('201 stores multiple contacts and mirrors the first contact into legacy fields', async () => {
     createMock.mockImplementation(async (input: Record<string, unknown>) => ({
       ...SAMPLE_SUPPLIER,
@@ -391,6 +423,210 @@ describe('POST /api/suppliers', () => {
       payload: { name: 'ACME', vatNumber: 'IT123' },
     });
     expect(res.statusCode).toBe(403);
+  });
+});
+
+describe('POST /api/suppliers/bulk', () => {
+  const validSupplier = (supplierCode: string, name = supplierCode) => ({
+    supplierCode,
+    name,
+    vatNumber: `IT-${supplierCode}`,
+  });
+
+  test('creates valid rows in order, normalizes values, and stores one primary contact', async () => {
+    createMock.mockImplementation(async (input: Record<string, unknown>) => ({
+      ...SAMPLE_SUPPLIER,
+      ...input,
+    }));
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/suppliers/bulk',
+      headers: authHeader(),
+      payload: {
+        suppliers: [
+          {
+            supplierCode: ' SUP-001 ',
+            name: ' First Supplier ',
+            vatNumber: ' IT123 ',
+            contactName: ' Jane Doe ',
+            contactRole: ' Buyer ',
+            email: ' jane@example.test ',
+            phone: ' 123 ',
+          },
+          validSupplier('SUP-002', 'Second Supplier'),
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body.summary).toEqual({ total: 2, succeeded: 2, failed: 0 });
+    expect(body.results.map((result: { index: number }) => result.index)).toEqual([0, 1]);
+    expect(createMock).toHaveBeenCalledTimes(2);
+    expect(createMock.mock.calls[0]?.[0]).toEqual(
+      expect.objectContaining({
+        supplierCode: 'SUP-001',
+        name: 'First Supplier',
+        vatNumber: 'IT123',
+        contacts: [
+          {
+            fullName: 'Jane Doe',
+            role: 'Buyer',
+            email: 'jane@example.test',
+            phone: '123',
+          },
+        ],
+        contactName: 'Jane Doe',
+        email: 'jane@example.test',
+        phone: '123',
+      }),
+    );
+    expect(logAuditMock).toHaveBeenCalledTimes(2);
+  });
+
+  test('returns partial results for invalid rows, duplicates, and creation failures', async () => {
+    findExistingCodesMock.mockResolvedValue(new Set(['existing']));
+    createMock.mockImplementation(async (input: Record<string, unknown>) => {
+      if (input.supplierCode === 'FAIL') throw new Error('database failure');
+      return { ...SAMPLE_SUPPLIER, ...input };
+    });
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/suppliers/bulk',
+      headers: authHeader(),
+      payload: {
+        suppliers: [
+          validSupplier('DUP'),
+          validSupplier('dup'),
+          validSupplier('EXISTING'),
+          { ...validSupplier('DETAILS'), phone: '123' },
+          validSupplier('FAIL'),
+          validSupplier('OK'),
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body.summary).toEqual({ total: 6, succeeded: 1, failed: 5 });
+    expect(body.results.map((result: { success: boolean }) => result.success)).toEqual([
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+    ]);
+    expect(body.results[0].errors).toContainEqual(
+      expect.objectContaining({ field: 'supplierCode', code: 'duplicate' }),
+    );
+    expect(body.results[2].errors).toContainEqual(
+      expect.objectContaining({ field: 'supplierCode', code: 'duplicate' }),
+    );
+    expect(body.results[3].errors).toContainEqual(
+      expect.objectContaining({ field: 'contactName', code: 'required' }),
+    );
+    expect(body.results[4].errors).toContainEqual(
+      expect.objectContaining({ code: 'creation_failed' }),
+    );
+    expect(logAuditMock).toHaveBeenCalledTimes(1);
+  });
+
+  test('reports a duplicate when a supplier code becomes unavailable after preflight', async () => {
+    createMock.mockResolvedValue(null);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/suppliers/bulk',
+      headers: authHeader(),
+      payload: { suppliers: [validSupplier('RACE')] },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body)).toEqual({
+      summary: { total: 1, succeeded: 0, failed: 1 },
+      results: [
+        {
+          index: 0,
+          success: false,
+          errors: [
+            {
+              field: 'supplierCode',
+              code: 'duplicate',
+              message: 'Supplier code already exists',
+            },
+          ],
+        },
+      ],
+    });
+    expect(logAuditMock).not.toHaveBeenCalled();
+  });
+
+  test('never runs more than ten creations concurrently', async () => {
+    let active = 0;
+    let maxActive = 0;
+    createMock.mockImplementation(async (input: Record<string, unknown>) => {
+      active += 1;
+      maxActive = Math.max(maxActive, active);
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      active -= 1;
+      return { ...SAMPLE_SUPPLIER, ...input };
+    });
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/suppliers/bulk',
+      headers: authHeader(),
+      payload: {
+        suppliers: Array.from({ length: 25 }, (_, index) => validSupplier(`SUP-${index}`)),
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(maxActive).toBeLessThanOrEqual(10);
+    expect(maxActive).toBe(10);
+  });
+
+  test('requires authentication and create permission', async () => {
+    const unauthorized = await testApp.inject({
+      method: 'POST',
+      url: '/api/suppliers/bulk',
+      payload: { suppliers: [validSupplier('SUP-001')] },
+    });
+    expect(unauthorized.statusCode).toBe(401);
+
+    getRolePermissionsMock.mockResolvedValue(['crm.suppliers.view']);
+    const forbidden = await testApp.inject({
+      method: 'POST',
+      url: '/api/suppliers/bulk',
+      headers: authHeader(),
+      payload: { suppliers: [validSupplier('SUP-001')] },
+    });
+    expect(forbidden.statusCode).toBe(403);
+  });
+
+  test('rejects empty and oversized batches before repository access', async () => {
+    const empty = await testApp.inject({
+      method: 'POST',
+      url: '/api/suppliers/bulk',
+      headers: authHeader(),
+      payload: { suppliers: [] },
+    });
+    expect(empty.statusCode).toBe(400);
+
+    const oversized = await testApp.inject({
+      method: 'POST',
+      url: '/api/suppliers/bulk',
+      headers: authHeader(),
+      payload: {
+        suppliers: Array.from({ length: 501 }, (_, index) => validSupplier(`SUP-${index}`)),
+      },
+    });
+    expect(oversized.statusCode).toBe(400);
+    expect(findExistingCodesMock).not.toHaveBeenCalled();
+    expect(createMock).not.toHaveBeenCalled();
   });
 });
 

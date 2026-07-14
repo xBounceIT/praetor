@@ -1,5 +1,5 @@
-import { eq } from 'drizzle-orm';
-import { type DbExecutor, db } from '../db/drizzle.ts';
+import { eq, inArray, sql } from 'drizzle-orm';
+import { type DbExecutor, db, runAtomically } from '../db/drizzle.ts';
 import { suppliers } from '../db/schema/suppliers.ts';
 
 export type SupplierContact = {
@@ -100,6 +100,27 @@ export const findNameById = async (id: string, exec: DbExecutor = db): Promise<s
   return rows[0]?.name ?? null;
 };
 
+export const findExistingCodes = async (
+  codes: readonly string[],
+  exec: DbExecutor = db,
+): Promise<Set<string>> => {
+  const normalized = [
+    ...new Set(
+      codes.flatMap((code) => {
+        const normalizedCode = code.trim().toLowerCase();
+        return normalizedCode ? [normalizedCode] : [];
+      }),
+    ),
+  ];
+  if (normalized.length === 0) return new Set();
+
+  const rows = await exec
+    .select({ supplierCode: suppliers.supplierCode })
+    .from(suppliers)
+    .where(inArray(sql<string>`LOWER(${suppliers.supplierCode})`, normalized));
+  return new Set(rows.flatMap((row) => (row.supplierCode ? [row.supplierCode.toLowerCase()] : [])));
+};
+
 export type NewSupplier = {
   id: string;
   name: string;
@@ -137,6 +158,24 @@ export const create = async (input: NewSupplier, exec: DbExecutor = db): Promise
     })
     .returning();
   return mapRow(rows[0]);
+};
+
+const SUPPLIER_CODE_LOCK_NAMESPACE = 'praetor:supplier-code';
+
+export const createIfCodeAvailable = async (
+  input: NewSupplier,
+  exec: DbExecutor = db,
+): Promise<Supplier | null> => {
+  if (!input.supplierCode) return create(input, exec);
+
+  const normalizedCode = input.supplierCode.toLowerCase();
+  return runAtomically(exec, async (tx) => {
+    await tx.execute(
+      sql`SELECT pg_advisory_xact_lock(hashtext(${SUPPLIER_CODE_LOCK_NAMESPACE}), hashtext(${normalizedCode}))`,
+    );
+    if ((await findExistingCodes([normalizedCode], tx)).has(normalizedCode)) return null;
+    return create(input, tx);
+  });
 };
 
 export type SupplierUpdate = {

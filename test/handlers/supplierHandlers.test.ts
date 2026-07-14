@@ -6,6 +6,10 @@ const apiMocks = {
   suppliersCreate: mock(
     (data: unknown): Promise<unknown> => Promise.resolve({ id: 's-new', ...(data as object) }),
   ),
+  suppliersCreateBulk: mock(
+    (_data: unknown): Promise<unknown> =>
+      Promise.resolve({ summary: { total: 0, succeeded: 0, failed: 0 }, results: [] }),
+  ),
   suppliersUpdate: mock(
     (id: string, updates: unknown): Promise<unknown> =>
       Promise.resolve({ id, ...(updates as object) }),
@@ -17,6 +21,7 @@ mock.module('../../services/api', () => ({
   default: {
     suppliers: {
       create: (data: unknown) => apiMocks.suppliersCreate(data),
+      createBulk: (data: unknown) => apiMocks.suppliersCreateBulk(data),
       update: (id: string, updates: unknown) => apiMocks.suppliersUpdate(id, updates),
       delete: (id: string) => apiMocks.suppliersDelete(id),
     },
@@ -84,6 +89,33 @@ describe('makeSupplierHandlers', () => {
     } finally {
       restore();
     }
+  });
+
+  test('addBulk appends successful suppliers and preserves ordered per-row results', async () => {
+    apiMocks.suppliersCreateBulk.mockResolvedValue({
+      summary: { total: 3, succeeded: 2, failed: 1 },
+      results: [
+        { index: 0, success: true, supplier: { id: 's2', name: 'Alpha' } },
+        { index: 1, success: false, errors: [{ code: 'duplicate', message: 'Duplicate' }] },
+        { index: 2, success: true, supplier: { id: 's3', name: 'Gamma' } },
+      ],
+    });
+    const suppliers = makeStubSetter<SupplierLike>([{ id: 's1', name: 'Existing' }]);
+    const handlers = makeSupplierHandlers({ setSuppliers: suppliers.setter });
+
+    const response = await handlers.addBulk([
+      { supplierCode: 'SUP-1', name: 'Alpha', vatNumber: 'IT1' },
+      { supplierCode: 'SUP-2', name: 'Beta', vatNumber: 'IT2' },
+      { supplierCode: 'SUP-3', name: 'Gamma', vatNumber: 'IT3' },
+    ]);
+
+    expect(apiMocks.suppliersCreateBulk).toHaveBeenCalledTimes(1);
+    expect(response.results.map((result) => result.index)).toEqual([0, 1, 2]);
+    expect(suppliers.get()).toEqual([
+      { id: 's1', name: 'Existing' },
+      { id: 's2', name: 'Alpha' },
+      { id: 's3', name: 'Gamma' },
+    ]);
   });
 
   test('update replaces matching supplier', async () => {

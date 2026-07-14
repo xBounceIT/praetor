@@ -15,14 +15,21 @@ Nelle tabelle anagrafiche, i riferimenti di contatto sono consultabili in colonn
 
 Nelle schede di clienti e fornitori puoi aggiungere più contatti, ciascuno con nome obbligatorio e ruolo, email e telefono facoltativi. Il primo contatto dell'elenco è quello principale e alimenta le colonne referente, email e telefono dell'anagrafica; eliminandolo, il contatto successivo diventa principale. Puoi anche lasciare l'elenco vuoto.
 
-### Creare più clienti
+### Creare più clienti e fornitori
 
 Accanto a **Aggiungi Nuovo Cliente**, la freccia apre due azioni riservate a chi può creare clienti:
 
 - **Aggiungi molteplici Clienti** apre una tabella orizzontale. Inserisci una riga per cliente, aggiungi o elimina righe e salva il lotto. Le righe valide vengono create subito; quelle non valide restano nella finestra con l'errore indicato nella relativa cella.
-- **Importa in CSV** mostra la struttura completa del file e permette di scaricare un modello con le sole intestazioni. Il file deve essere UTF-8, non superare 5 MiB o 500 righe e può usare la virgola o il punto e virgola. Sono supportati campi tra virgolette e su più righe.
+- **Importa da Excel** permette di scaricare `praetor-clients-import.xlsx`, compilare le celle evidenziate e importare fino a 500 clienti. Il modello include istruzioni e tendine per i campi tipizzati. Le opzioni di settore, numero dipendenti, fatturato e numero sedi vengono lette dal CRM ogni volta che scarichi il modello, quindi includono subito le modifiche più recenti.
 
-Nel CSV le intestazioni tecniche `clientCode`, `name` e `fiscalCode` sono obbligatorie e distinguono maiuscole e minuscole. Le intestazioni facoltative sono `type`, `contactName`, `contactRole`, `email`, `phone`, `website`, `addressCountry`, `addressState`, `addressCap`, `addressProvince`, `addressCivicNumber`, `addressLine`, `atecoCode`, `sector`, `numberOfEmployees`, `revenue`, `officeCountRange` e `description`; possono essere omesse o disposte in qualsiasi ordine. `type` accetta `company` o `individual` e, se vuoto, assume `company`. I quattro campi del profilo azienda devono corrispondere a un valore configurato nel CRM. Dopo un'importazione parziale, il riepilogo elenca le righe scartate: seleziona un file corretto per riprovare.
+Il modello clienti richiede `clientCode`, `name` e `fiscalCode`; offre inoltre `type`, `contactName`, `contactRole`, `email`, `phone`, `website`, `addressCountry`, `addressState`, `addressCap`, `addressProvince`, `addressCivicNumber`, `addressLine`, `atecoCode`, `sector`, `numberOfEmployees`, `revenue`, `officeCountRange` e `description`. Non modificare nomi, ordine delle colonne, fogli o struttura protetta. Sono accettati soltanto modelli XLSX generati da Praetor, fino a 5 MiB. Le righe valide vengono create anche quando altre contengono errori; dopo un risultato parziale, **Importa clienti** riprova soltanto i record non riusciti. Un valore tipizzato eliminato dal CRM dopo il download viene segnalato come non valido durante l'importazione.
+
+La freccia accanto a **Aggiungi Nuovo Fornitore** offre le stesse modalità:
+
+- **Aggiungi molteplici fornitori** apre la tabella per inserire e correggere un lotto.
+- **Importa da Excel** scarica `praetor-suppliers-import.xlsx` e applica gli stessi limiti e controlli strutturali del modello clienti.
+
+Per ogni fornitore sono obbligatori `supplierCode`, `name` e `vatNumber`. Il modello evidenzia il gruppo del referente con le colonne **Nome Contatto**, **Ruolo Contatto**, **Email Contatto** e **Telefono Contatto**, corrispondenti a `contactName`, `contactRole`, `email` e `phone`; sono disponibili anche `address`, `taxCode`, `paymentTerms` e `notes`. Se compili ruolo, email o telefono devi indicare anche il nome del referente; l'import crea un solo contatto principale per riga. Ulteriori contatti possono essere aggiunti successivamente dalla scheda fornitore. I codici fornitore devono essere univoci senza distinzione tra maiuscole e minuscole.
 
 Nei preventivi clienti e fornitori il campo **Canale di Comunicazione** è obbligatorio e indica il canale usato per comunicare o negoziare il preventivo. Lo stesso canale è visibile nelle tabelle dei preventivi. Le opzioni sono condivise tra i due moduli: chi ha permessi di gestione sui preventivi può usare il pulsante **Gestisci** con icona a ingranaggio sopra il campo per aggiungere, rinominare o rimuovere i canali disponibili e scegliere un’icona dal set proposto. Email, Telefono e WhatsApp sono valori predefiniti riconoscibili dalla propria icona e non possono essere modificati o eliminati. I canali personalizzati già usati da preventivi esistenti non possono essere eliminati.
 

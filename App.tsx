@@ -3192,6 +3192,7 @@ const useAppContentController = () => {
   const handleDeleteInvoice = invoiceHandlers.delete;
 
   const addSupplier = supplierHandlers.add;
+  const addSuppliersBulk = supplierHandlers.addBulk;
   const handleUpdateSupplier = supplierHandlers.update;
   const handleDeleteSupplier = supplierHandlers.delete;
 
@@ -3519,6 +3520,7 @@ const useAppContentController = () => {
     handleUpdateInvoice,
     handleDeleteInvoice,
     addSupplier,
+    addSuppliersBulk,
     handleUpdateSupplier,
     handleDeleteSupplier,
     addSupplierQuote,
@@ -3855,6 +3857,7 @@ const CustomerAndCatalogRoutes: React.FC<{
     addClientsBulk,
     addProduct,
     addSupplier,
+    addSuppliersBulk,
     clients,
     currentUser,
     generalSettings,
@@ -3924,6 +3927,7 @@ const CustomerAndCatalogRoutes: React.FC<{
             supplierOrders={supplierOrders}
             currency={generalSettings.currency}
             onAddSupplier={addSupplier}
+            onAddSuppliersBulk={addSuppliersBulk}
             onUpdateSupplier={handleUpdateSupplier}
             onDeleteSupplier={handleDeleteSupplier}
             permissions={currentUser.permissions || []}

@@ -1,17 +1,30 @@
+import { ChevronDown, FileSpreadsheet, Plus, Rows3 } from 'lucide-react';
 import type React from 'react';
 import { useCallback, useMemo, useReducer } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
+import { ButtonGroup } from '@/components/ui/button-group';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Field, FieldError, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import type { Supplier, SupplierContact, SupplierSaleOrder } from '../../types';
+import type {
+  BulkSupplierCreateInput,
+  BulkSupplierCreateResponse,
+  Supplier,
+  SupplierContact,
+  SupplierSaleOrder,
+} from '../../types';
 import { formatInsertDate } from '../../utils/date';
 import { formatDecimal, getDiscountedLineTotal } from '../../utils/numbers';
 import { hasScopedActionPermission } from '../../utils/permissions';
 import { toastError } from '../../utils/toast';
 import DeleteConfirmModal from '../shared/DeleteConfirmModal';
-import HeaderAddButton from '../shared/HeaderAddButton';
 import Modal from '../shared/Modal';
 import {
   ModalBody,
@@ -23,6 +36,10 @@ import {
 } from '../shared/ModalLayout';
 import StandardTable, { type Column } from '../shared/StandardTable';
 import StatusBadge from '../shared/StatusBadge';
+import {
+  SupplierBulkCreateDialog,
+  SupplierWorkbookImportDialog,
+} from './SupplierBulkCreateDialogs';
 import SupplierContactsSection, { type SupplierContactRow } from './SupplierContactsSection';
 
 export interface SuppliersViewProps {
@@ -30,6 +47,7 @@ export interface SuppliersViewProps {
   supplierOrders: SupplierSaleOrder[];
   currency: string;
   onAddSupplier: (supplierData: Partial<Supplier>) => Promise<void>;
+  onAddSuppliersBulk: (suppliers: BulkSupplierCreateInput[]) => Promise<BulkSupplierCreateResponse>;
   onUpdateSupplier: (id: string, updates: Partial<Supplier>) => Promise<void>;
   onDeleteSupplier: (id: string) => Promise<void>;
   permissions: string[];
@@ -126,6 +144,8 @@ type SuppliersViewState = {
   contactDraftError: string | null;
   contactsTouched: boolean;
   isDeleteConfirmOpen: boolean;
+  isBulkCreateModalOpen: boolean;
+  isWorkbookImportModalOpen: boolean;
   supplierToDelete: Supplier | null;
   errors: Record<string, string>;
   formData: Partial<Supplier>;
@@ -148,7 +168,9 @@ type SuppliersViewAction =
   | { type: 'setErrors'; errors: Record<string, string> }
   | { type: 'submitSuccess' }
   | { type: 'confirmDelete'; supplier: Supplier }
-  | { type: 'deleteSuccess' };
+  | { type: 'deleteSuccess' }
+  | { type: 'setBulkCreateModalOpen'; value: boolean }
+  | { type: 'setWorkbookImportModalOpen'; value: boolean };
 
 const createSuppliersViewState = (): SuppliersViewState => ({
   isModalOpen: false,
@@ -159,6 +181,8 @@ const createSuppliersViewState = (): SuppliersViewState => ({
   contactDraftError: null,
   contactsTouched: false,
   isDeleteConfirmOpen: false,
+  isBulkCreateModalOpen: false,
+  isWorkbookImportModalOpen: false,
   supplierToDelete: null,
   errors: {},
   formData: createEmptySupplierForm(),
@@ -275,6 +299,10 @@ const suppliersViewReducer = (
       return { ...state, supplierToDelete: action.supplier, isDeleteConfirmOpen: true };
     case 'deleteSuccess':
       return { ...state, isDeleteConfirmOpen: false, supplierToDelete: null };
+    case 'setBulkCreateModalOpen':
+      return { ...state, isBulkCreateModalOpen: action.value };
+    case 'setWorkbookImportModalOpen':
+      return { ...state, isWorkbookImportModalOpen: action.value };
     default:
       return state;
   }
@@ -846,6 +874,7 @@ const SuppliersView: React.FC<SuppliersViewProps> = ({
   supplierOrders,
   currency,
   onAddSupplier,
+  onAddSuppliersBulk,
   onUpdateSupplier,
   onDeleteSupplier,
   permissions,
@@ -864,6 +893,8 @@ const SuppliersView: React.FC<SuppliersViewProps> = ({
     contactDraftError,
     contactsTouched,
     isDeleteConfirmOpen,
+    isBulkCreateModalOpen,
+    isWorkbookImportModalOpen,
     supplierToDelete,
     errors,
     formData,
@@ -1036,6 +1067,19 @@ const SuppliersView: React.FC<SuppliersViewProps> = ({
         dispatch={dispatch}
       />
 
+      {isBulkCreateModalOpen && (
+        <SupplierBulkCreateDialog
+          onCreateBulk={onAddSuppliersBulk}
+          onClose={() => dispatch({ type: 'setBulkCreateModalOpen', value: false })}
+        />
+      )}
+      {isWorkbookImportModalOpen && (
+        <SupplierWorkbookImportDialog
+          onCreateBulk={onAddSuppliersBulk}
+          onClose={() => dispatch({ type: 'setWorkbookImportModalOpen', value: false })}
+        />
+      )}
+
       {/* Delete Confirmation Modal */}
       <DeleteConfirmModal
         isOpen={isDeleteConfirmOpen}
@@ -1054,9 +1098,42 @@ const SuppliersView: React.FC<SuppliersViewProps> = ({
             <p className="text-zinc-500 text-sm">{t('crm:suppliers.subtitle')}</p>
           </div>
           {canCreateSuppliers && (
-            <HeaderAddButton onClick={openAddModal}>
-              {t('crm:suppliers.addSupplier')}
-            </HeaderAddButton>
+            <ButtonGroup>
+              <Button
+                type="button"
+                onClick={openAddModal}
+                className="h-auto rounded-lg px-5 py-2.5 has-[>svg]:px-5"
+              >
+                <Plus data-icon="inline-start" />
+                {t('crm:suppliers.addSupplier')}
+              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    type="button"
+                    size="icon"
+                    aria-label={t('crm:suppliers.bulk.addOptions')}
+                    className="h-auto rounded-lg px-3 py-2.5"
+                  >
+                    <ChevronDown aria-hidden="true" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="min-w-64">
+                  <DropdownMenuItem
+                    onSelect={() => dispatch({ type: 'setBulkCreateModalOpen', value: true })}
+                  >
+                    <Rows3 aria-hidden="true" />
+                    {t('crm:suppliers.bulk.addMultiple')}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onSelect={() => dispatch({ type: 'setWorkbookImportModalOpen', value: true })}
+                  >
+                    <FileSpreadsheet aria-hidden="true" />
+                    {t('crm:suppliers.bulk.importExcel')}
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </ButtonGroup>
           )}
         </div>
       </div>
