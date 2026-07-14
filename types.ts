@@ -60,6 +60,7 @@ export type KnownPermission = `${KnownPermissionResource}.${KnownPermissionActio
 export type Permission = KnownPermission | (string & {});
 export type EmployeeType = 'app_user' | 'internal' | 'external';
 export type UserAuthMethod = 'local' | 'ldap' | 'oidc' | 'saml';
+export type LogoutNotice = 'inactivity' | 'logout-incomplete';
 export type UserContractType =
   | 'permanent'
   | 'fixed_term'

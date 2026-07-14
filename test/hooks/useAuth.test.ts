@@ -351,6 +351,40 @@ describe('useAuth', () => {
     }
   });
 
+  test('a delayed logout response cannot redirect after a new login', async () => {
+    const assignMock = mock((_url: string) => {});
+    const restoreAssign = stubLocationAssign(assignMock);
+    let resolveLogout: ((response: { endSessionUrl: string | null }) => void) | undefined;
+    apiMocks.authLogout.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveLogout = resolve;
+        }),
+    );
+
+    try {
+      const { result } = renderHook(() => useAuth());
+      await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+      act(() => {
+        result.current.logout();
+      });
+      await act(async () => {
+        await result.current.login({ id: 'new-session' } as never, 'new-token');
+      });
+      await act(async () => {
+        resolveLogout?.({ endSessionUrl: 'https://idp.example.com/logout' });
+        await Promise.resolve();
+      });
+
+      expect(assignMock).not.toHaveBeenCalled();
+      expect(result.current.currentUser?.id).toBe('new-session');
+      expect(result.current.logoutReason).toBeNull();
+    } finally {
+      restoreAssign();
+    }
+  });
+
   test('logout does NOT redirect when endSessionUrl is null', async () => {
     const assignMock = mock((_url: string) => {});
     const restoreAssign = stubLocationAssign(assignMock);
@@ -368,6 +402,33 @@ describe('useAuth', () => {
       expect(assignMock).not.toHaveBeenCalled();
     } finally {
       restoreAssign();
+    }
+  });
+
+  test('logout failure is logged and warns that server logout may be incomplete', async () => {
+    const logoutError = new ApiErrorStub('network down', 0, true);
+    const originalConsoleError = console.error;
+    const consoleErrorMock = mock((_message?: unknown, _error?: unknown) => {});
+    console.error = consoleErrorMock;
+    apiMocks.authLogout.mockImplementation(() => Promise.reject(logoutError));
+
+    try {
+      const { result } = renderHook(() => useAuth());
+      await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+      act(() => {
+        result.current.logout();
+      });
+
+      await waitFor(() => expect(result.current.logoutReason).toBe('logout-incomplete'));
+      expect(consoleErrorMock).toHaveBeenCalledWith(
+        'Server logout failed; server-side and external identity-provider sessions may still be active:',
+        logoutError,
+      );
+      expect(setAuthTokenMock).toHaveBeenLastCalledWith(null);
+      expect(result.current.currentUser).toBeNull();
+    } finally {
+      console.error = originalConsoleError;
     }
   });
 

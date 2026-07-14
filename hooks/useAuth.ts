@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import api, { ApiError, getAuthToken, type Settings, setAuthToken } from '../services/api';
-import type { User } from '../types';
+import type { LogoutNotice, User } from '../types';
 import { applyLanguagePreference } from '../utils/language';
 import { isTransientError, RETRY_DELAYS_MS } from '../utils/retry';
 
@@ -24,12 +24,13 @@ export type UseAuthOptions = {
 export function useAuth(opts: UseAuthOptions = {}) {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [logoutReason, setLogoutReason] = useState<'inactivity' | null>(null);
+  const [logoutReason, setLogoutReason] = useState<LogoutNotice | null>(null);
   const [userSettings, setUserSettings] = useState<Settings>(DEFAULT_SETTINGS);
   const [serverUnreachable, setServerUnreachable] = useState(false);
 
   const onLoginRef = useRef(opts.onLogin);
   const onLogoutRef = useRef(opts.onLogout);
+  const logoutAttemptRef = useRef(0);
   const retryDelaysRef = useRef(opts.retryDelaysMs ?? AUTH_CHECK_RETRY_DELAYS_MS);
   // Tie the ref-sync effect to the callback identities so we don't burn a
   // commit re-running it after every parent render. Consumers that pass stable
@@ -113,6 +114,10 @@ export function useAuth(opts: UseAuthOptions = {}) {
 
   const login = useCallback(
     async (user: User, token?: string) => {
+      // Invalidate any slow response from an earlier logout. It must not redirect or surface
+      // a stale warning after the user has already established a new session.
+      logoutAttemptRef.current += 1;
+      setLogoutReason(null);
       if (token) setAuthToken(token);
       // Run the consumer's reset BEFORE flipping currentUser so any effects keyed on
       // currentUser see the cleaned auth-scoped state in the same render batch - otherwise
@@ -129,14 +134,23 @@ export function useAuth(opts: UseAuthOptions = {}) {
     // Local state clears immediately so the user is logged out of Praetor regardless of
     // server reachability. If the server returns an IdP end-session URL we additionally
     // hand the browser to it, so the IdP's session cookie dies alongside our JWT.
+    const logoutAttempt = ++logoutAttemptRef.current;
     api.auth
       .logout()
       .then((res) => {
-        if (res?.endSessionUrl) {
+        if (logoutAttemptRef.current === logoutAttempt && res?.endSessionUrl) {
           window.location.assign(res.endSessionUrl);
         }
       })
-      .catch(() => {});
+      .catch((err) => {
+        console.error(
+          'Server logout failed; server-side and external identity-provider sessions may still be active:',
+          err,
+        );
+        if (logoutAttemptRef.current === logoutAttempt) {
+          setLogoutReason('logout-incomplete');
+        }
+      });
     setAuthToken(null);
     setCurrentUser(null);
     const finalReason = reason ?? null;
