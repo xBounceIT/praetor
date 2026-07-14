@@ -12,12 +12,13 @@ describe('<AiReportingView /> shadcn workspace', () => {
     expect(source).toBeTruthy();
     expectSourceContainsAll(source, [
       'md:grid-cols-[17rem_minmax(0,1fr)]',
+      'h-[calc(100dvh-140px)]',
       '<ScrollArea',
       '<Sheet',
       '<InputGroup',
       '<InputGroupTextarea',
       '<Textarea',
-      '<Dialog',
+      '<DeleteConfirmModal',
       'bg-background',
       'border-border',
     ]);
@@ -43,10 +44,14 @@ describe('<AiReportingView /> shadcn workspace', () => {
       'onOpenHistory={() => setIsHistoryOpen(true)}',
       'onSelectSession={handleSelectSession}',
       'onConfirmDeleteSession={confirmDeleteSession}',
+      'onRenameSession={handleRenameSession}',
+      'absolute inset-y-1 right-1',
+      'pr-20',
+      '<Pencil',
       '<Paperclip',
       '<Mic',
       'variant="destructive"',
-      'onArchive={() => void handleArchiveSession()}',
+      'onConfirm={() => void handleArchiveSession()}',
     ]);
   });
 
@@ -60,11 +65,19 @@ describe('<AiReportingView /> shadcn workspace', () => {
       'field-sizing-content',
       "draft ? 'max-h-40' : 'max-h-12'",
       'backdrop-blur-xl',
+      'mb-2 flex justify-center',
+      'pointer-events-auto relative rounded-full',
       'pb-28',
+      'min-h-14 items-center',
+      'pr-1 pb-1 pl-5',
+      'pr-5 pb-1 pl-1',
+      'px-2 pt-4 pb-2',
     ]);
     expectSourceOmitsAll(source, [
       'min-h-36 flex-col',
+      'absolute bottom-28',
       'border-t border-border bg-background px-4 py-4',
+      'AiReportingDeleteDialog',
     ]);
   });
 

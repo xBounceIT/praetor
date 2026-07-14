@@ -70,6 +70,24 @@ describe('archiveSession', () => {
   });
 });
 
+describe('renameSession', () => {
+  test.each([
+    [1, true],
+    [0, false],
+    [null, false],
+  ] as const)('returns %s when rowCount is %s', async (rowCount, expected) => {
+    exec.enqueue({ rows: [], rowCount });
+    expect(await repo.renameSession('s1', 'user-1', 'Renamed chat', testDb)).toBe(expected);
+  });
+
+  test('updates only an active session owned by the user', async () => {
+    exec.enqueue({ rows: [], rowCount: 1 });
+    await repo.renameSession('s1', 'user-1', 'Renamed chat', testDb);
+    expect(exec.calls[0].sql).toContain('update "report_chat_sessions"');
+    expect(exec.calls[0].params).toEqual(['Renamed chat', 's1', 'user-1', false]);
+  });
+});
+
 describe('sessionExistsForUser', () => {
   test('returns true when at least one row matches', async () => {
     exec.enqueue({ rows: [[1]] });

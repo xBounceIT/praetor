@@ -21,7 +21,7 @@ Usa il campo di ricerca per filtrare le chat in base al titolo. Seleziona una vo
 
 Su dispositivi mobili, apri la cronologia con il pulsante nella barra superiore della conversazione.
 
-Per rimuovere una conversazione, usa il pulsante con il cestino nella sua riga della cronologia e conferma l'operazione.
+Le azioni della chat sono integrate nella sua riga: usa la matita per rinominare il titolo oppure il cestino per rimuovere la conversazione e conferma l'operazione.
 
 ## Composer, allegati e dettatura
 

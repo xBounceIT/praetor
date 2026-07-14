@@ -88,6 +88,25 @@ export const archiveSession = async (
   return (result.rowCount ?? 0) > 0;
 };
 
+export const renameSession = async (
+  id: string,
+  userId: string,
+  title: string,
+  exec: DbExecutor = db,
+): Promise<boolean> => {
+  const result = await exec
+    .update(reportChatSessions)
+    .set({ title })
+    .where(
+      and(
+        eq(reportChatSessions.id, id),
+        eq(reportChatSessions.userId, userId),
+        eq(reportChatSessions.isArchived, false),
+      ),
+    );
+  return (result.rowCount ?? 0) > 0;
+};
+
 export const sessionExistsForUser = async (
   id: string,
   userId: string,

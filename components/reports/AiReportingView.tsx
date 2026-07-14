@@ -1,6 +1,7 @@
 import {
   ArrowDown,
   ArrowUp,
+  Check,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -29,19 +30,12 @@ import { useTranslation } from 'react-i18next';
 import ReactMarkdown from 'react-markdown';
 import remarkBreaks from 'remark-breaks';
 import remarkGfm from 'remark-gfm';
+import DeleteConfirmModal from '@/components/shared/DeleteConfirmModal';
 import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardTitle } from '@/components/ui/card';
 import { CopyButton } from '@/components/ui/copy-button';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
 import {
   Empty,
   EmptyDescription,
@@ -1533,6 +1527,29 @@ const useAiReportingController = ({
     t,
   ]);
 
+  const handleRenameSession = useCallback(
+    async (sessionId: string, title: string): Promise<boolean> => {
+      if (!canArchive) return false;
+      const normalizedTitle = title.trim();
+      if (!normalizedTitle) return false;
+
+      setError('');
+      try {
+        await api.reports.renameSession(sessionId, normalizedTitle);
+        setSessions((currentSessions) =>
+          currentSessions.map((session) =>
+            session.id === sessionId ? { ...session, title: normalizedTitle } : session,
+          ),
+        );
+        return true;
+      } catch (err) {
+        setError((err as Error).message || t('aiReporting.error'));
+        return false;
+      }
+    },
+    [canArchive, setError, setSessions, t],
+  );
+
   const activeSession = sessions.find((session) => session.id === activeSessionId) ?? null;
   const activeTitle = isNewChat
     ? t('aiReporting.newChat', { defaultValue: 'New Chat' })
@@ -1569,6 +1586,7 @@ const useAiReportingController = ({
     isCreatingSession,
     isNewChatDisabled,
     confirmDeleteSession,
+    handleRenameSession,
     handleNewChat,
     setIsNewChat,
     setActiveSessionId,
@@ -1641,6 +1659,7 @@ const AiReportingLayout: React.FC<{ controller: AiReportingController }> = ({ co
     isCreatingSession,
     isNewChatDisabled,
     confirmDeleteSession,
+    handleRenameSession,
     handleNewChat,
     setIsNewChat,
     setActiveSessionId,
@@ -1708,6 +1727,7 @@ const AiReportingLayout: React.FC<{ controller: AiReportingController }> = ({ co
       isDeletingSession={isDeletingSession}
       onSelectSession={handleSelectSession}
       onConfirmDeleteSession={confirmDeleteSession}
+      onRenameSession={handleRenameSession}
       onNewChat={() => {
         setIsHistoryOpen(false);
         void handleNewChat();
@@ -1717,7 +1737,7 @@ const AiReportingLayout: React.FC<{ controller: AiReportingController }> = ({ co
 
   return (
     <>
-      <Card className="h-[calc(100vh-180px)] min-h-[560px] gap-0 overflow-hidden bg-background py-0 text-foreground">
+      <Card className="h-[calc(100dvh-140px)] min-h-[560px] gap-0 overflow-hidden bg-background py-0 text-foreground">
         <div className="grid h-full min-h-0 md:grid-cols-[17rem_minmax(0,1fr)]">
           <aside className="hidden min-h-0 border-r border-border md:flex">{sidebar}</aside>
 
@@ -1771,30 +1791,39 @@ const AiReportingLayout: React.FC<{ controller: AiReportingController }> = ({ co
                 }}
               />
 
-              {showGoToBottom && (
-                <AiReportingScrollButton
-                  t={t}
-                  hasNewText={hasNewText}
-                  onGoToBottom={() => {
-                    scrollToBottom();
-                    setHasNewText(false);
-                  }}
-                />
-              )}
+              {(showGoToBottom || enableAiReporting) && (
+                <div
+                  data-slot="ai-reporting-composer"
+                  className="pointer-events-none absolute inset-x-0 bottom-0 z-20 px-3 pb-3 md:px-8 md:pb-5"
+                >
+                  <div className="mx-auto w-full max-w-3xl">
+                    {showGoToBottom && (
+                      <AiReportingScrollButton
+                        t={t}
+                        hasNewText={hasNewText}
+                        onGoToBottom={() => {
+                          scrollToBottom();
+                          setHasNewText(false);
+                        }}
+                      />
+                    )}
 
-              {enableAiReporting && (
-                <AiReportingComposer
-                  t={t}
-                  draft={draft}
-                  language={language}
-                  canSend={canSend}
-                  isSending={isSending}
-                  footerHintWithPeriod={footerHintWithPeriod}
-                  aiWarning={aiWarning}
-                  setDraft={setDraft}
-                  onSend={handleSend}
-                  onStop={handleStop}
-                />
+                    {enableAiReporting && (
+                      <AiReportingComposer
+                        t={t}
+                        draft={draft}
+                        language={language}
+                        canSend={canSend}
+                        isSending={isSending}
+                        footerHintWithPeriod={footerHintWithPeriod}
+                        aiWarning={aiWarning}
+                        setDraft={setDraft}
+                        onSend={handleSend}
+                        onStop={handleStop}
+                      />
+                    )}
+                  </div>
+                </div>
               )}
             </div>
           </section>
@@ -1817,17 +1846,23 @@ const AiReportingLayout: React.FC<{ controller: AiReportingController }> = ({ co
         </SheetContent>
       </Sheet>
 
-      <AiReportingDeleteDialog
-        t={t}
+      <DeleteConfirmModal
         isOpen={isDeleteConfirmOpen}
-        sessionToDelete={sessionToDelete}
-        canArchive={canArchive}
-        isDeletingSession={isDeletingSession}
         onClose={() => {
+          if (isDeletingSession) return;
           setIsDeleteConfirmOpen(false);
           setSessionToDelete(null);
         }}
-        onArchive={() => void handleArchiveSession()}
+        onConfirm={() => void handleArchiveSession()}
+        isDeleting={isDeletingSession}
+        title={t('aiReporting.deleteChatTitle', { defaultValue: 'Delete chat' })}
+        description={t('aiReporting.deleteChatConfirm', {
+          name: sessionToDelete
+            ? toOptionLabel(sessionToDelete) ||
+              t('aiReporting.newChat', { defaultValue: 'New Chat' })
+            : '',
+          defaultValue: 'This will remove "{{name}}" from your chat history.',
+        })}
       />
     </>
   );
@@ -1844,6 +1879,7 @@ interface AiReportingSidebarProps {
   isDeletingSession: boolean;
   onSelectSession: (sessionId: string) => void;
   onConfirmDeleteSession: (session: ReportChatSessionSummary) => void;
+  onRenameSession: (sessionId: string, title: string) => Promise<boolean>;
   onNewChat: () => void;
 }
 
@@ -1871,9 +1907,38 @@ export const AiReportingSidebar: React.FC<AiReportingSidebarProps> = ({
   isDeletingSession,
   onSelectSession,
   onConfirmDeleteSession,
+  onRenameSession,
   onNewChat,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
+  const [editingSessionId, setEditingSessionId] = useState('');
+  const [editingTitle, setEditingTitle] = useState('');
+  const [renamingSessionId, setRenamingSessionId] = useState('');
+
+  const cancelRename = () => {
+    if (renamingSessionId) return;
+    setEditingSessionId('');
+    setEditingTitle('');
+  };
+
+  const beginRename = (session: ReportChatSessionSummary, title: string) => {
+    setEditingSessionId(session.id);
+    setEditingTitle(title);
+  };
+
+  const handleRenameSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const normalizedTitle = editingTitle.trim();
+    if (!editingSessionId || !normalizedTitle || renamingSessionId) return;
+
+    setRenamingSessionId(editingSessionId);
+    const didRename = await onRenameSession(editingSessionId, normalizedTitle);
+    setRenamingSessionId('');
+    if (didRename) {
+      setEditingSessionId('');
+      setEditingTitle('');
+    }
+  };
   const sessionGroups = useMemo(
     () => filterAndGroupAiReportingSessions(sessions, searchQuery),
     [searchQuery, sessions],
@@ -1960,42 +2025,138 @@ export const AiReportingSidebar: React.FC<AiReportingSidebarProps> = ({
                     const title =
                       toOptionLabel(session) ||
                       t('aiReporting.newChat', { defaultValue: 'New Chat' });
+                    if (editingSessionId === session.id) {
+                      return (
+                        <form
+                          key={session.id}
+                          onSubmit={(event) => void handleRenameSubmit(event)}
+                          className="flex min-h-10 items-center gap-1 rounded-md bg-accent p-1"
+                        >
+                          <MessageSquareText className="ml-2 size-4 shrink-0 text-muted-foreground" />
+                          <Input
+                            autoFocus
+                            value={editingTitle}
+                            maxLength={80}
+                            onChange={(event) => setEditingTitle(event.target.value)}
+                            onKeyDown={(event) => {
+                              if (event.key !== 'Escape') return;
+                              event.preventDefault();
+                              cancelRename();
+                            }}
+                            aria-label={t('aiReporting.renameChatInput', {
+                              defaultValue: 'Chat title',
+                            })}
+                            className="h-8 min-w-0 flex-1 border-0 bg-transparent px-1 shadow-none focus-visible:ring-1"
+                          />
+                          <Button
+                            type="submit"
+                            variant="ghost"
+                            size="icon-xs"
+                            disabled={!editingTitle.trim() || renamingSessionId === session.id}
+                            aria-label={t('aiReporting.saveChatTitle', {
+                              defaultValue: 'Save chat title',
+                            })}
+                          >
+                            {renamingSessionId === session.id ? (
+                              <Loader2 className="animate-spin" />
+                            ) : (
+                              <Check />
+                            )}
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon-xs"
+                            disabled={renamingSessionId === session.id}
+                            onClick={cancelRename}
+                            aria-label={t('aiReporting.cancelRename', {
+                              defaultValue: 'Cancel rename',
+                            })}
+                          >
+                            <X />
+                          </Button>
+                        </form>
+                      );
+                    }
+
                     return (
-                      <div key={session.id} className="group/session flex items-center gap-1">
+                      <div
+                        key={session.id}
+                        className={cn(
+                          'group/session relative flex min-h-10 items-center rounded-md transition-colors hover:bg-accent/70',
+                          isActive && 'bg-accent',
+                        )}
+                      >
                         <Button
                           type="button"
-                          variant={isActive ? 'secondary' : 'ghost'}
+                          variant="ghost"
                           size="sm"
                           aria-current={isActive ? 'page' : undefined}
                           onClick={() => onSelectSession(session.id)}
-                          className="h-auto min-w-0 flex-1 justify-start px-3 py-2.5 font-normal"
+                          className="h-auto min-w-0 flex-1 justify-start bg-transparent px-3 py-2.5 pr-20 font-normal hover:bg-transparent"
                         >
                           <MessageSquareText className="size-4 shrink-0 text-muted-foreground" />
                           <span className="truncate">{title}</span>
                         </Button>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <span className="inline-flex shrink-0">
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon-sm"
-                                disabled={!canArchive || isDeletingSession}
-                                onClick={() => onConfirmDeleteSession(session)}
-                                className={`text-muted-foreground hover:bg-destructive/10 hover:text-destructive ${isActive ? 'md:opacity-100' : 'md:opacity-0 md:group-focus-within/session:opacity-100 md:group-hover/session:opacity-100'}`}
-                                aria-label={t('aiReporting.deleteChatAria', {
-                                  name: title,
-                                  defaultValue: 'Delete chat {{name}}',
-                                })}
-                              >
-                                <Trash2 />
-                              </Button>
-                            </span>
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            {t('aiReporting.deleteChatTitle', { defaultValue: 'Delete chat' })}
-                          </TooltipContent>
-                        </Tooltip>
+                        <div
+                          className={cn(
+                            'absolute inset-y-1 right-1 z-10 flex items-center gap-0.5 transition-opacity',
+                            isActive
+                              ? 'opacity-100'
+                              : 'md:opacity-0 md:group-focus-within/session:opacity-100 md:group-hover/session:opacity-100',
+                          )}
+                        >
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className="inline-flex">
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon-xs"
+                                  disabled={
+                                    !canArchive || isDeletingSession || Boolean(renamingSessionId)
+                                  }
+                                  onClick={() => beginRename(session, title)}
+                                  className="text-muted-foreground hover:text-foreground"
+                                  aria-label={t('aiReporting.renameChatAria', {
+                                    name: title,
+                                    defaultValue: 'Rename chat {{name}}',
+                                  })}
+                                >
+                                  <Pencil />
+                                </Button>
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              {t('aiReporting.renameChatTitle', { defaultValue: 'Rename chat' })}
+                            </TooltipContent>
+                          </Tooltip>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className="inline-flex">
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon-xs"
+                                  disabled={
+                                    !canArchive || isDeletingSession || Boolean(renamingSessionId)
+                                  }
+                                  onClick={() => onConfirmDeleteSession(session)}
+                                  className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                                  aria-label={t('aiReporting.deleteChatAria', {
+                                    name: title,
+                                    defaultValue: 'Delete chat {{name}}',
+                                  })}
+                                >
+                                  <Trash2 />
+                                </Button>
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              {t('aiReporting.deleteChatTitle', { defaultValue: 'Delete chat' })}
+                            </TooltipContent>
+                          </Tooltip>
+                        </div>
                       </div>
                     );
                   })}
@@ -2798,19 +2959,21 @@ const AiReportingScrollButton: React.FC<AiReportingScrollButtonProps> = ({
   hasNewText,
   onGoToBottom,
 }) => (
-  <Button
-    type="button"
-    variant="outline"
-    size="icon-lg"
-    onClick={onGoToBottom}
-    aria-label={t('aiReporting.goToBottom', { defaultValue: 'Go to bottom' })}
-    className="absolute bottom-28 left-1/2 z-10 -translate-x-1/2 rounded-full bg-background/80 text-muted-foreground shadow-md backdrop-blur-xl md:bottom-32"
-  >
-    <ArrowDown />
-    {hasNewText && (
-      <span className="absolute -top-1 -right-1 size-3 rounded-full border-2 border-background bg-primary" />
-    )}
-  </Button>
+  <div className="mb-2 flex justify-center">
+    <Button
+      type="button"
+      variant="outline"
+      size="icon-lg"
+      onClick={onGoToBottom}
+      aria-label={t('aiReporting.goToBottom', { defaultValue: 'Go to bottom' })}
+      className="pointer-events-auto relative rounded-full bg-background/80 text-muted-foreground shadow-md backdrop-blur-xl"
+    >
+      <ArrowDown />
+      {hasNewText && (
+        <span className="absolute -top-1 -right-1 size-3 rounded-full border-2 border-background bg-primary" />
+      )}
+    </Button>
+  </div>
 );
 
 interface AiReportingComposerProps {
@@ -2955,233 +3118,165 @@ const AiReportingComposer: React.FC<AiReportingComposerProps> = ({
   };
 
   return (
-    <div
-      data-slot="ai-reporting-composer"
-      className="pointer-events-none absolute inset-x-0 bottom-0 z-20 px-3 pb-3 md:px-8 md:pb-5"
-    >
-      <div className="mx-auto w-full max-w-3xl">
-        {attachments.length > 0 && (
-          <div className="pointer-events-auto mb-2 flex flex-wrap gap-2 px-2">
-            {attachments.map((attachment) => (
-              <Badge key={attachment.id} variant="secondary" className="max-w-full gap-1 pl-2">
-                <FileText />
-                <span className="max-w-48 truncate">{attachment.name}</span>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-xs"
-                  onClick={() =>
-                    setAttachments((currentAttachments) =>
-                      currentAttachments.filter((item) => item.id !== attachment.id),
-                    )
-                  }
-                  aria-label={t('aiReporting.removeAttachment', {
-                    name: attachment.name,
-                    defaultValue: 'Remove attachment {{name}}',
-                  })}
-                  className="-mr-1 rounded-full text-muted-foreground hover:text-foreground"
-                >
-                  <X />
-                </Button>
-              </Badge>
-            ))}
-          </div>
-        )}
-
-        <InputGroup
-          data-disabled={!canSend || isSending ? true : undefined}
-          className="pointer-events-auto min-h-14 items-end overflow-hidden rounded-[1.75rem] border-border/80 bg-background/80 shadow-lg shadow-background/20 backdrop-blur-xl transition-[box-shadow,background-color] supports-[backdrop-filter]:bg-background/70 dark:bg-background/75"
-        >
-          <InputGroupAddon align="inline-start" className="self-end py-0 pr-0 pb-2 pl-2">
-            <Input
-              ref={fileInputRef}
-              type="file"
-              multiple
-              accept={AI_REPORTING_ATTACHMENT_ACCEPT}
-              className="sr-only"
-              tabIndex={-1}
-              aria-hidden="true"
-              disabled={!canSend || isSending || isReadingAttachments}
-              onChange={(event) => void handleAttachmentChange(event)}
-            />
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span className="inline-flex">
-                  <InputGroupButton
-                    size="icon-sm"
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={!canSend || isSending || isReadingAttachments}
-                    aria-label={t('aiReporting.attachFiles', {
-                      defaultValue: 'Attach text files',
-                    })}
-                    className="rounded-full"
-                  >
-                    {isReadingAttachments ? <Loader2 className="animate-spin" /> : <Paperclip />}
-                  </InputGroupButton>
-                </span>
-              </TooltipTrigger>
-              <TooltipContent>
-                {t('aiReporting.attachFilesHelp', {
-                  max: AI_REPORTING_MAX_ATTACHMENTS,
-                  defaultValue: 'Attach up to {{max}} text files',
+    <>
+      {attachments.length > 0 && (
+        <div className="pointer-events-auto mb-2 flex flex-wrap gap-2 px-2">
+          {attachments.map((attachment) => (
+            <Badge key={attachment.id} variant="secondary" className="max-w-full gap-1 pl-2">
+              <FileText />
+              <span className="max-w-48 truncate">{attachment.name}</span>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-xs"
+                onClick={() =>
+                  setAttachments((currentAttachments) =>
+                    currentAttachments.filter((item) => item.id !== attachment.id),
+                  )
+                }
+                aria-label={t('aiReporting.removeAttachment', {
+                  name: attachment.name,
+                  defaultValue: 'Remove attachment {{name}}',
                 })}
-              </TooltipContent>
-            </Tooltip>
-          </InputGroupAddon>
+                className="-mr-1 rounded-full text-muted-foreground hover:text-foreground"
+              >
+                <X />
+              </Button>
+            </Badge>
+          ))}
+        </div>
+      )}
 
-          <InputGroupTextarea
-            value={draft}
-            onChange={(event) => setDraft(event.target.value)}
-            placeholder={t('aiReporting.placeholder')}
-            aria-label={t('aiReporting.placeholder')}
-            aria-invalid={Boolean(composerError)}
-            disabled={!canSend || isSending}
-            rows={1}
-            onKeyDown={(event) => {
-              if (event.key !== 'Enter' || event.shiftKey) return;
-              event.preventDefault();
-              void handleSubmit();
-            }}
-            className={cn(
-              'field-sizing-content min-h-12 overflow-y-auto px-1 py-3 leading-6',
-              draft ? 'max-h-40' : 'max-h-12',
-            )}
+      <InputGroup
+        data-disabled={!canSend || isSending ? true : undefined}
+        className="pointer-events-auto min-h-14 items-center overflow-hidden rounded-[1.75rem] border-border/80 bg-background/80 shadow-lg shadow-background/20 backdrop-blur-xl transition-[box-shadow,background-color] supports-[backdrop-filter]:bg-background/70 dark:bg-background/75"
+      >
+        <InputGroupAddon align="inline-start" className="self-end py-0 pr-1 pb-1 pl-5">
+          <Input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            accept={AI_REPORTING_ATTACHMENT_ACCEPT}
+            className="sr-only"
+            tabIndex={-1}
+            aria-hidden="true"
+            disabled={!canSend || isSending || isReadingAttachments}
+            onChange={(event) => void handleAttachmentChange(event)}
           />
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="inline-flex">
+                <InputGroupButton
+                  size="icon-sm"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={!canSend || isSending || isReadingAttachments}
+                  aria-label={t('aiReporting.attachFiles', {
+                    defaultValue: 'Attach text files',
+                  })}
+                  className="rounded-full"
+                >
+                  {isReadingAttachments ? <Loader2 className="animate-spin" /> : <Paperclip />}
+                </InputGroupButton>
+              </span>
+            </TooltipTrigger>
+            <TooltipContent>
+              {t('aiReporting.attachFilesHelp', {
+                max: AI_REPORTING_MAX_ATTACHMENTS,
+                defaultValue: 'Attach up to {{max}} text files',
+              })}
+            </TooltipContent>
+          </Tooltip>
+        </InputGroupAddon>
 
-          <InputGroupAddon align="inline-end" className="self-end gap-1 py-0 pr-2 pb-2 pl-0">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span className="inline-flex">
-                  <InputGroupButton
-                    size="icon-sm"
-                    onClick={toggleDictation}
-                    disabled={!canSend || isSending || !isDictationSupported}
-                    aria-pressed={isListening}
-                    aria-label={t(
-                      isListening ? 'aiReporting.stopDictation' : 'aiReporting.startDictation',
-                      {
-                        defaultValue: isListening
-                          ? 'Stop voice dictation'
-                          : 'Start voice dictation',
-                      },
-                    )}
-                    className={`rounded-full ${isListening ? 'bg-destructive/10 text-destructive hover:bg-destructive/15 hover:text-destructive' : ''}`}
-                  >
-                    <Mic className={isListening ? 'animate-pulse' : undefined} />
-                  </InputGroupButton>
-                </span>
-              </TooltipTrigger>
-              <TooltipContent>
-                {isDictationSupported
-                  ? t(isListening ? 'aiReporting.stopDictation' : 'aiReporting.startDictation', {
+        <InputGroupTextarea
+          value={draft}
+          onChange={(event) => setDraft(event.target.value)}
+          placeholder={t('aiReporting.placeholder')}
+          aria-label={t('aiReporting.placeholder')}
+          aria-invalid={Boolean(composerError)}
+          disabled={!canSend || isSending}
+          rows={1}
+          onKeyDown={(event) => {
+            if (event.key !== 'Enter' || event.shiftKey) return;
+            event.preventDefault();
+            void handleSubmit();
+          }}
+          className={cn(
+            'field-sizing-content min-h-12 overflow-y-auto px-2 pt-4 pb-2 leading-6',
+            draft ? 'max-h-40' : 'max-h-12',
+          )}
+        />
+
+        <InputGroupAddon align="inline-end" className="self-end gap-1 py-0 pr-5 pb-1 pl-1">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="inline-flex">
+                <InputGroupButton
+                  size="icon-sm"
+                  onClick={toggleDictation}
+                  disabled={!canSend || isSending || !isDictationSupported}
+                  aria-pressed={isListening}
+                  aria-label={t(
+                    isListening ? 'aiReporting.stopDictation' : 'aiReporting.startDictation',
+                    {
                       defaultValue: isListening ? 'Stop voice dictation' : 'Start voice dictation',
-                    })
-                  : t('aiReporting.dictationUnsupported', {
-                      defaultValue: 'Voice dictation is not supported by this browser.',
-                    })}
-              </TooltipContent>
-            </Tooltip>
+                    },
+                  )}
+                  className={`rounded-full ${isListening ? 'bg-destructive/10 text-destructive hover:bg-destructive/15 hover:text-destructive' : ''}`}
+                >
+                  <Mic className={isListening ? 'animate-pulse' : undefined} />
+                </InputGroupButton>
+              </span>
+            </TooltipTrigger>
+            <TooltipContent>
+              {isDictationSupported
+                ? t(isListening ? 'aiReporting.stopDictation' : 'aiReporting.startDictation', {
+                    defaultValue: isListening ? 'Stop voice dictation' : 'Start voice dictation',
+                  })
+                : t('aiReporting.dictationUnsupported', {
+                    defaultValue: 'Voice dictation is not supported by this browser.',
+                  })}
+            </TooltipContent>
+          </Tooltip>
 
-            {isSending ? (
-              <InputGroupButton
-                variant="destructive"
-                size="icon-sm"
-                onClick={onStop}
-                className="rounded-full"
-                aria-label={t('aiReporting.stop', { defaultValue: 'Stop' })}
-              >
-                <Square />
-              </InputGroupButton>
-            ) : (
-              <InputGroupButton
-                variant="default"
-                size="icon-sm"
-                onClick={() => void handleSubmit()}
-                disabled={!canSubmit}
-                className="rounded-full"
-                aria-label={t('common:buttons.send', { defaultValue: 'Send' })}
-              >
-                <ArrowUp />
-              </InputGroupButton>
-            )}
-          </InputGroupAddon>
-        </InputGroup>
+          {isSending ? (
+            <InputGroupButton
+              variant="destructive"
+              size="icon-sm"
+              onClick={onStop}
+              className="rounded-full"
+              aria-label={t('aiReporting.stop', { defaultValue: 'Stop' })}
+            >
+              <Square />
+            </InputGroupButton>
+          ) : (
+            <InputGroupButton
+              variant="default"
+              size="icon-sm"
+              onClick={() => void handleSubmit()}
+              disabled={!canSubmit}
+              className="rounded-full"
+              aria-label={t('common:buttons.send', { defaultValue: 'Send' })}
+            >
+              <ArrowUp />
+            </InputGroupButton>
+          )}
+        </InputGroupAddon>
+      </InputGroup>
 
-        {composerError && (
-          <p
-            role="alert"
-            className="pointer-events-auto mx-auto mt-1.5 w-fit max-w-full rounded-full bg-destructive/10 px-2.5 py-1 text-center text-xs text-destructive backdrop-blur-md"
-          >
-            {composerError}
-          </p>
-        )}
-        <p className="mx-auto mt-1 w-fit max-w-full rounded-full bg-background/60 px-2.5 py-1 text-center text-[10px] text-muted-foreground backdrop-blur-md">
-          {footerHintWithPeriod ? [footerHintWithPeriod, aiWarning].join(' ') : aiWarning}
+      {composerError && (
+        <p
+          role="alert"
+          className="pointer-events-auto mx-auto mt-1.5 w-fit max-w-full rounded-full bg-destructive/10 px-2.5 py-1 text-center text-xs text-destructive backdrop-blur-md"
+        >
+          {composerError}
         </p>
-      </div>
-    </div>
+      )}
+      <p className="mx-auto mt-1 w-fit max-w-full rounded-full bg-background/60 px-2.5 py-1 text-center text-[10px] text-muted-foreground backdrop-blur-md">
+        {footerHintWithPeriod ? [footerHintWithPeriod, aiWarning].join(' ') : aiWarning}
+      </p>
+    </>
   );
 };
-
-interface AiReportingDeleteDialogProps {
-  t: TranslationFn;
-  isOpen: boolean;
-  sessionToDelete: ReportChatSessionSummary | null;
-  canArchive: boolean;
-  isDeletingSession: boolean;
-  onClose: () => void;
-  onArchive: () => void;
-}
-
-const AiReportingDeleteDialog: React.FC<AiReportingDeleteDialogProps> = ({
-  t,
-  isOpen,
-  sessionToDelete,
-  canArchive,
-  isDeletingSession,
-  onClose,
-  onArchive,
-}) => (
-  <Dialog
-    open={isOpen}
-    onOpenChange={(open) => {
-      if (!open) onClose();
-    }}
-  >
-    <DialogContent className="max-w-sm" showCloseButton={false}>
-      <DialogHeader className="items-center text-center sm:text-center">
-        <div className="flex size-12 items-center justify-center rounded-full bg-destructive/10 text-destructive">
-          <TriangleAlert className="size-6" />
-        </div>
-        <DialogTitle>
-          {t('aiReporting.deleteChatTitle', { defaultValue: 'Delete chat' })}
-        </DialogTitle>
-        <DialogDescription>
-          {t('aiReporting.deleteChatConfirm', {
-            name: sessionToDelete
-              ? toOptionLabel(sessionToDelete) ||
-                t('aiReporting.newChat', { defaultValue: 'New Chat' })
-              : '',
-            defaultValue: 'This will remove "{{name}}" from your chat history.',
-          })}
-        </DialogDescription>
-      </DialogHeader>
-      <DialogFooter className="grid grid-cols-2 sm:grid-cols-2">
-        <Button type="button" variant="outline" onClick={onClose}>
-          {t('common:buttons.cancel', { defaultValue: 'Cancel' })}
-        </Button>
-        <Button
-          type="button"
-          variant="destructive"
-          disabled={!canArchive || isDeletingSession || !sessionToDelete}
-          onClick={onArchive}
-        >
-          {isDeletingSession && <Loader2 className="animate-spin" />}
-          {t('common:buttons.delete', { defaultValue: 'Delete' })}
-        </Button>
-      </DialogFooter>
-    </DialogContent>
-  </Dialog>
-);
 
 export default AiReportingView;

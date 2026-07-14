@@ -42,6 +42,7 @@ const getGeneralSettingsMock = mock();
 const listSessionsForUserMock = mock();
 const createSessionMock = mock();
 const archiveSessionMock = mock();
+const renameSessionMock = mock();
 const sessionExistsForUserMock = mock();
 const getActiveSessionForUserMock = mock();
 const updateSessionTitleAndTouchMock = mock();
@@ -97,6 +98,7 @@ beforeAll(async () => {
     listSessionsForUser: listSessionsForUserMock,
     createSession: createSessionMock,
     archiveSession: archiveSessionMock,
+    renameSession: renameSessionMock,
     sessionExistsForUser: sessionExistsForUserMock,
     getActiveSessionForUser: getActiveSessionForUserMock,
     updateSessionTitleAndTouch: updateSessionTitleAndTouchMock,
@@ -198,6 +200,7 @@ const allMocks = [
   listSessionsForUserMock,
   createSessionMock,
   archiveSessionMock,
+  renameSessionMock,
   sessionExistsForUserMock,
   getActiveSessionForUserMock,
   updateSessionTitleAndTouchMock,
@@ -492,6 +495,57 @@ describe('GET /api/reports/ai-reporting/sessions/:id/messages', () => {
       method: 'GET',
       url: '/api/reports/ai-reporting/sessions/rpt-chat-1/messages',
       headers: authHeader(),
+    });
+    expect(res.statusCode).toBe(403);
+  });
+});
+
+describe('PATCH /api/reports/ai-reporting/sessions/:id', () => {
+  test('200 trims and renames a session successfully', async () => {
+    renameSessionMock.mockResolvedValue(true);
+
+    const res = await testApp.inject({
+      method: 'PATCH',
+      url: '/api/reports/ai-reporting/sessions/rpt-chat-1',
+      headers: authHeader(),
+      payload: { title: '  Revenue review  ' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body)).toEqual({ success: true });
+    expect(renameSessionMock).toHaveBeenCalledWith('rpt-chat-1', 'u1', 'Revenue review');
+  });
+
+  test('404 when the session does not exist', async () => {
+    renameSessionMock.mockResolvedValue(false);
+    const res = await testApp.inject({
+      method: 'PATCH',
+      url: '/api/reports/ai-reporting/sessions/missing',
+      headers: authHeader(),
+      payload: { title: 'Renamed chat' },
+    });
+    expect(res.statusCode).toBe(404);
+    expect(JSON.parse(res.body)).toEqual({ error: 'Session not found' });
+  });
+
+  test.each(['   ', 'x'.repeat(81)])('400 rejects invalid title %s', async (title) => {
+    const res = await testApp.inject({
+      method: 'PATCH',
+      url: '/api/reports/ai-reporting/sessions/rpt-chat-1',
+      headers: authHeader(),
+      payload: { title },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(renameSessionMock).not.toHaveBeenCalled();
+  });
+
+  test('403 missing view permission', async () => {
+    getRolePermissionsMock.mockResolvedValue([]);
+    const res = await testApp.inject({
+      method: 'PATCH',
+      url: '/api/reports/ai-reporting/sessions/rpt-chat-1',
+      headers: authHeader(),
+      payload: { title: 'Renamed chat' },
     });
     expect(res.statusCode).toBe(403);
   });

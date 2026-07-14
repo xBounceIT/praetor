@@ -1844,6 +1844,60 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
   );
 
+  // PATCH /ai-reporting/sessions/:id
+  fastify.patch(
+    '/ai-reporting/sessions/:id',
+    {
+      onRequest: [requirePermission('reports.ai_reporting.view')],
+      schema: {
+        tags: ['reports'],
+        summary: 'Rename an AI Reporting chat session',
+        params: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] },
+        body: {
+          type: 'object',
+          properties: { title: { type: 'string', minLength: 1, maxLength: 80 } },
+          required: ['title'],
+        },
+        response: {
+          200: {
+            type: 'object',
+            properties: { success: { type: 'boolean' } },
+            required: ['success'],
+          },
+          ...standardErrorResponses,
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      if (!assertAuthenticated(request, reply)) return;
+      const userId = request.user.id;
+      const { id } = request.params as { id: string };
+      const idResult = requireNonEmptyString(id, 'id');
+      if (!idResult.ok) return badRequest(reply, idResult.message);
+      const { title } = request.body as { title?: unknown };
+      const titleResult = requireNonEmptyString(title, 'title');
+      if (!titleResult.ok) return badRequest(reply, titleResult.message);
+      if (titleResult.value.length > 80) {
+        return badRequest(reply, 'title must be at most 80 characters');
+      }
+
+      const cfg = await getGeneralAiConfig();
+      if (!(await ensureAiEnabled(cfg, request, reply))) return;
+
+      if (!(await reportsAiChatRepo.renameSession(idResult.value, userId, titleResult.value))) {
+        return replyError(request, reply, {
+          statusCode: 404,
+          message: 'Session not found',
+          action: 'reports_ai_session.rename.not_found',
+          entityType: 'reports_ai_session',
+          entityId: idResult.value,
+        });
+      }
+
+      return reply.send({ success: true });
+    },
+  );
+
   // GET /ai-reporting/sessions/:id/messages
   fastify.get(
     '/ai-reporting/sessions/:id/messages',

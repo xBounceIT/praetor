@@ -43,6 +43,7 @@ describe('<AiReportingSidebar />', () => {
         isDeletingSession={false}
         onSelectSession={onSelectSession}
         onConfirmDeleteSession={() => {}}
+        onRenameSession={() => Promise.resolve(true)}
         onNewChat={() => {}}
       />,
     );
@@ -71,6 +72,7 @@ describe('<AiReportingSidebar />', () => {
         isDeletingSession={false}
         onSelectSession={() => {}}
         onConfirmDeleteSession={() => {}}
+        onRenameSession={() => Promise.resolve(true)}
         onNewChat={onNewChat}
       />,
     );
@@ -94,6 +96,7 @@ describe('<AiReportingSidebar />', () => {
         isDeletingSession={false}
         onSelectSession={() => {}}
         onConfirmDeleteSession={onConfirmDeleteSession}
+        onRenameSession={() => Promise.resolve(true)}
         onNewChat={() => {}}
       />,
     );

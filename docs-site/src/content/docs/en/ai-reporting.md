@@ -21,7 +21,7 @@ Use the search field to filter chats by title. Select an item to resume that con
 
 On mobile devices, open the history with the button in the conversation header.
 
-To remove a conversation, use the trash button in its history row and confirm the action.
+Chat actions are contained in its history row: use the pencil to rename the title, or use the trash button to remove the conversation and confirm the action.
 
 ## Composer, attachments, and dictation
 

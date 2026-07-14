@@ -8,11 +8,15 @@ const listSessionsMock = mock();
 const createSessionMock = mock();
 const getSessionMessagesMock = mock();
 const archiveSessionMock = mock();
+const renameSessionMock = mock();
 const chatMock = mock();
 const chatStreamMock = mock();
 const editMessageStreamMock = mock();
 const translationDefaults: Record<string, string> = {
   'aiReporting.placeholder': 'Ask a question about your business data...',
+  'buttons.noGoBack': 'Cancel',
+  'buttons.saving': 'Saving...',
+  'buttons.yesDelete': 'Delete',
 };
 
 let speechRecognitionInstance: MockSpeechRecognition | null = null;
@@ -68,6 +72,7 @@ mock.module('../../../services/api', () => ({
       createSession: createSessionMock,
       getSessionMessages: getSessionMessagesMock,
       archiveSession: archiveSessionMock,
+      renameSession: renameSessionMock,
       chat: chatMock,
       chatStream: chatStreamMock,
       editMessageStream: editMessageStreamMock,
@@ -123,6 +128,7 @@ beforeEach(() => {
   createSessionMock.mockReset();
   getSessionMessagesMock.mockReset();
   archiveSessionMock.mockReset();
+  renameSessionMock.mockReset();
   chatMock.mockReset();
   chatStreamMock.mockReset();
   editMessageStreamMock.mockReset();
@@ -133,6 +139,7 @@ beforeEach(() => {
   createSessionMock.mockResolvedValue({ id: 'new-session' });
   getSessionMessagesMock.mockResolvedValue(messages);
   archiveSessionMock.mockResolvedValue({ success: true });
+  renameSessionMock.mockResolvedValue({ success: true });
   chatMock.mockResolvedValue({ sessionId: 'revenue', text: 'Analysis complete.' });
   chatStreamMock.mockImplementation(
     async (
@@ -188,6 +195,22 @@ describe('<AiReportingView /> interactions', () => {
 
     await waitFor(() => expect(createSessionMock).toHaveBeenCalledTimes(1));
     expect((await screen.findAllByText('New analysis')).length).toBeGreaterThan(0);
+  });
+
+  test('renames a chat from the actions contained in its history row', async () => {
+    renderView();
+
+    await screen.findAllByText('Quarterly revenue');
+    fireEvent.click(screen.getByRole('button', { name: 'Rename chat Quarterly revenue' }));
+
+    const titleInput = screen.getByRole('textbox', { name: 'Chat title' });
+    fireEvent.change(titleInput, { target: { value: 'Revenue review' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save chat title' }));
+
+    await waitFor(() =>
+      expect(renameSessionMock).toHaveBeenCalledWith('revenue', 'Revenue review'),
+    );
+    expect((await screen.findAllByText('Revenue review')).length).toBeGreaterThan(0);
   });
 
   test('confirms deletion through the destructive dialog', async () => {

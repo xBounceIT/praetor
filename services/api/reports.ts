@@ -141,6 +141,12 @@ export const reportsApi = {
       body: JSON.stringify(data),
     }),
 
+  renameSession: (sessionId: string, title: string): Promise<{ success: boolean }> =>
+    fetchApi(`/reports/ai-reporting/sessions/${sessionId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ title }),
+    }),
+
   getSessionMessages: (
     sessionId: string,
     opts: { limit?: number; before?: number } = {},
