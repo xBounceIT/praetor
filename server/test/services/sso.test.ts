@@ -1,5 +1,12 @@
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, mock, test } from 'bun:test';
+import { afterAll, beforeAll, beforeEach, describe, expect, mock, test } from 'bun:test';
+import type { LookupAddress } from 'node:dns';
 import * as realDns from 'node:dns/promises';
+import { EventEmitter } from 'node:events';
+import type { IncomingMessage } from 'node:http';
+import type { RequestOptions } from 'node:https';
+import * as realHttps from 'node:https';
+import { Readable } from 'node:stream';
+import { gzipSync } from 'node:zlib';
 import * as realNodeSaml from '@node-saml/node-saml';
 import * as realOidc from 'openid-client';
 import * as realSsoLoginTicketsRepo from '../../repositories/ssoLoginTicketsRepo.ts';
@@ -9,6 +16,7 @@ import * as realSsoUserSessionsRepo from '../../repositories/ssoUserSessionsRepo
 import * as realExternalAuth from '../../services/external-auth.ts';
 
 const dnsSnap = { ...realDns };
+const httpsSnap = { ...realHttps };
 const nodeSamlSnap = { ...realNodeSaml };
 const oidcSnap = { ...realOidc };
 const externalAuthSnap = { ...realExternalAuth };
@@ -18,6 +26,42 @@ const ssoUserSessionsRepoSnap = { ...realSsoUserSessionsRepo };
 const ssoLoginTicketsRepoSnap = { ...realSsoLoginTicketsRepo };
 
 const dnsLookupMock = mock();
+const pinnedFetchResponseMock = mock();
+type AutoSelectingRequestOptions = RequestOptions & { autoSelectFamily?: boolean };
+const httpsRequestMock = mock(
+  (options: AutoSelectingRequestOptions, onResponse: (response: IncomingMessage) => void) => {
+    const outbound = new EventEmitter() as EventEmitter & {
+      destroy: (error?: Error) => void;
+      end: (body?: Uint8Array) => void;
+    };
+    outbound.destroy = (error) => {
+      if (error) queueMicrotask(() => outbound.emit('error', error));
+    };
+    outbound.end = (body) => {
+      void Promise.resolve(pinnedFetchResponseMock(options, body)).then(
+        async (result) => {
+          if (!(result instanceof Response)) {
+            onResponse(result as IncomingMessage);
+            return;
+          }
+          const response = result as Response;
+          const bytes = response.body ? Buffer.from(await response.arrayBuffer()) : Buffer.alloc(0);
+          const incoming = Readable.from(bytes.length > 0 ? [bytes] : []) as IncomingMessage;
+          const rawHeaders: string[] = [];
+          response.headers.forEach((value, name) => {
+            rawHeaders.push(name, value);
+          });
+          incoming.statusCode = response.status;
+          incoming.statusMessage = response.statusText;
+          incoming.rawHeaders = rawHeaders;
+          onResponse(incoming);
+        },
+        (error) => outbound.emit('error', error),
+      );
+    };
+    return outbound as unknown as ReturnType<typeof realHttps.request>;
+  },
+);
 const findBySlugMock = mock();
 const findByIdMock = mock();
 const insertMock = mock();
@@ -61,6 +105,11 @@ beforeAll(async () => {
     ...dnsSnap,
     default: { ...dnsSnap, lookup: dnsLookupMock },
     lookup: dnsLookupMock,
+  }));
+  mock.module('node:https', () => ({
+    ...httpsSnap,
+    default: { ...httpsSnap, request: httpsRequestMock },
+    request: httpsRequestMock,
   }));
   mock.module('@node-saml/node-saml', () => ({
     ...nodeSamlSnap,
@@ -108,6 +157,7 @@ beforeAll(async () => {
 
 afterAll(() => {
   mock.module('node:dns/promises', () => dnsSnap);
+  mock.module('node:https', () => httpsSnap);
   mock.module('@node-saml/node-saml', () => nodeSamlSnap);
   mock.module('../../services/external-auth.ts', () => externalAuthSnap);
   mock.module('../../repositories/ssoProvidersRepo.ts', () => ssoProvidersRepoSnap);
@@ -118,8 +168,10 @@ afterAll(() => {
 });
 
 beforeEach(() => {
+  httpsRequestMock.mockClear();
   for (const m of [
     dnsLookupMock,
+    pinnedFetchResponseMock,
     findBySlugMock,
     findByIdMock,
     insertMock,
@@ -377,14 +429,10 @@ describe('startSamlLogin SSRF protections', () => {
 });
 
 describe('safeFetchRemoteUrl behavior (exercised via SAML metadata fetch)', () => {
-  const realFetch = globalThis.fetch;
   const originalSsoBase = process.env.SSO_CALLBACK_BASE_URL;
-  const fetchMock = mock();
 
   beforeEach(() => {
     process.env.SSO_CALLBACK_BASE_URL = 'https://app.example.com';
-    fetchMock.mockReset();
-    globalThis.fetch = fetchMock as unknown as typeof globalThis.fetch;
     findBySlugMock.mockResolvedValue({
       ...SAML_PROVIDER,
       metadataUrl: 'https://idp.example.com/metadata',
@@ -393,17 +441,13 @@ describe('safeFetchRemoteUrl behavior (exercised via SAML metadata fetch)', () =
     dnsLookupMock.mockResolvedValue([{ address: '203.0.113.10', family: 4 }]);
   });
 
-  afterEach(() => {
-    globalThis.fetch = realFetch;
-  });
-
   afterAll(() => {
     if (originalSsoBase === undefined) delete process.env.SSO_CALLBACK_BASE_URL;
     else process.env.SSO_CALLBACK_BASE_URL = originalSsoBase;
   });
 
   test('follows a single 302 redirect and re-validates the target', async () => {
-    fetchMock
+    pinnedFetchResponseMock
       .mockResolvedValueOnce(
         new Response(null, {
           status: 302,
@@ -415,18 +459,91 @@ describe('safeFetchRemoteUrl behavior (exercised via SAML metadata fetch)', () =
     // construction then fails with a domain-specific error proving safeFetchRemoteUrl returned
     // the post-redirect response successfully.
     await expect(sso.startSamlLogin('okta')).rejects.toThrow(/missing entry point/);
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-    // assertSafeRemoteUrl runs dns.lookup once per hop.
+    expect(pinnedFetchResponseMock).toHaveBeenCalledTimes(2);
+    // resolveSafeRemoteAddresses runs dns.lookup once per hop.
     expect(dnsLookupMock).toHaveBeenCalledTimes(2);
   });
 
+  test('pins the HTTPS connection to the vetted DNS address while preserving TLS hostname', async () => {
+    pinnedFetchResponseMock.mockResolvedValueOnce(
+      new Response('<EntityDescriptor entityID="x"/>', { status: 200 }),
+    );
+
+    await expect(sso.startSamlLogin('okta')).rejects.toThrow(/missing entry point/);
+
+    expect(dnsLookupMock).toHaveBeenCalledTimes(1);
+    expect(httpsRequestMock).toHaveBeenCalledTimes(1);
+    const requestOptions = httpsRequestMock.mock.calls[0][0];
+    expect(requestOptions.hostname).toBe('idp.example.com');
+    expect(requestOptions.servername).toBe('idp.example.com');
+    expect(requestOptions.headers).toMatchObject({ host: 'idp.example.com' });
+    expect(requestOptions.agent).toBe(false);
+    expect(requestOptions.autoSelectFamily).toBe(true);
+  });
+
+  test('offers every vetted DNS address to connection family selection', async () => {
+    const addresses: LookupAddress[] = [
+      { address: '2606:4700:4700::1111', family: 6 },
+      { address: '203.0.113.10', family: 4 },
+    ];
+    dnsLookupMock.mockResolvedValue(addresses);
+    pinnedFetchResponseMock.mockResolvedValueOnce(
+      new Response('<EntityDescriptor entityID="x"/>', { status: 200 }),
+    );
+
+    await expect(sso.startSamlLogin('okta')).rejects.toThrow(/missing entry point/);
+
+    const requestOptions = httpsRequestMock.mock.calls[0][0];
+    const lookup = requestOptions.lookup;
+    if (!lookup) throw new Error('Expected a pinned HTTPS lookup');
+    const resolved = await new Promise<LookupAddress[]>((resolve, reject) => {
+      lookup('idp.example.com', { all: true }, (error, result) => {
+        if (error) reject(error);
+        else resolve(result as LookupAddress[]);
+      });
+    });
+    expect(resolved).toEqual(addresses);
+    expect(dnsLookupMock).toHaveBeenCalledTimes(1);
+  });
+
+  test('normalizes an IPv6 URL hostname for lookup and connects to the vetted literal', async () => {
+    findBySlugMock.mockResolvedValue({
+      ...SAML_PROVIDER,
+      metadataUrl: 'https://[2606:4700:4700::1111]/metadata',
+    });
+    dnsLookupMock.mockResolvedValue([{ address: '2606:4700:4700::1111', family: 6 }]);
+    pinnedFetchResponseMock.mockResolvedValueOnce(
+      new Response('<EntityDescriptor entityID="x"/>', { status: 200 }),
+    );
+
+    await expect(sso.startSamlLogin('okta')).rejects.toThrow(/missing entry point/);
+
+    expect(dnsLookupMock).toHaveBeenCalledWith('2606:4700:4700::1111', { all: true });
+    expect(httpsRequestMock.mock.calls[0][0]).toMatchObject({
+      hostname: '2606:4700:4700::1111',
+      servername: undefined,
+    });
+  });
+
   test('throws when a redirect response is missing the Location header', async () => {
-    fetchMock.mockResolvedValueOnce(new Response(null, { status: 302 }));
+    pinnedFetchResponseMock.mockResolvedValueOnce(new Response(null, { status: 302 }));
     await expect(sso.startSamlLogin('okta')).rejects.toThrow(/Location header/);
   });
 
+  test('closes a malformed redirect stream before throwing for a missing Location header', async () => {
+    const incoming = new Readable({ read() {} }) as IncomingMessage;
+    incoming.statusCode = 302;
+    incoming.statusMessage = 'Found';
+    incoming.rawHeaders = [];
+    pinnedFetchResponseMock.mockResolvedValueOnce(incoming);
+
+    await expect(sso.startSamlLogin('okta')).rejects.toThrow(/Location header/);
+
+    expect(incoming.destroyed).toBe(true);
+  });
+
   test('rejects when a redirect target resolves to a private IP (per-hop revalidation)', async () => {
-    fetchMock.mockResolvedValueOnce(
+    pinnedFetchResponseMock.mockResolvedValueOnce(
       new Response(null, {
         status: 302,
         headers: { location: 'https://internal.example/m' },
@@ -438,9 +555,28 @@ describe('safeFetchRemoteUrl behavior (exercised via SAML metadata fetch)', () =
     await expect(sso.startSamlLogin('okta')).rejects.toThrow(/private\/loopback/);
   });
 
+  test('closes a compressed redirect stream before following the next hop', async () => {
+    const incoming = new Readable({ read() {} }) as IncomingMessage;
+    incoming.statusCode = 302;
+    incoming.statusMessage = 'Found';
+    incoming.rawHeaders = [
+      'content-encoding',
+      'gzip',
+      'location',
+      'https://idp2.example.com/metadata',
+    ];
+    pinnedFetchResponseMock
+      .mockResolvedValueOnce(incoming)
+      .mockResolvedValueOnce(new Response('<EntityDescriptor entityID="x"/>', { status: 200 }));
+
+    await expect(sso.startSamlLogin('okta')).rejects.toThrow(/missing entry point/);
+
+    expect(incoming.destroyed).toBe(true);
+  });
+
   test('rejects after exceeding the redirect limit', async () => {
     // Same Location each time — drives the loop to its bound.
-    fetchMock.mockResolvedValue(
+    pinnedFetchResponseMock.mockResolvedValue(
       new Response(null, {
         status: 302,
         headers: { location: 'https://idp.example.com/metadata' },
@@ -451,7 +587,7 @@ describe('safeFetchRemoteUrl behavior (exercised via SAML metadata fetch)', () =
 
   test('rejects when Content-Length declares a body larger than the cap', async () => {
     // No body, but the declared content-length is enough to fail the pre-stream check.
-    fetchMock.mockResolvedValueOnce(
+    pinnedFetchResponseMock.mockResolvedValueOnce(
       new Response(null, {
         status: 200,
         headers: { 'content-length': String(2 * 1024 * 1024) },
@@ -471,7 +607,34 @@ describe('safeFetchRemoteUrl behavior (exercised via SAML metadata fetch)', () =
         controller.close();
       },
     });
-    fetchMock.mockResolvedValueOnce(new Response(stream, { status: 200 }));
+    pinnedFetchResponseMock.mockResolvedValueOnce(new Response(stream, { status: 200 }));
+    await expect(sso.startSamlLogin('okta')).rejects.toThrow(/exceeded/);
+  });
+
+  test('decompresses gzip metadata before parsing and size enforcement', async () => {
+    const compressed = gzipSync('<EntityDescriptor entityID="x"/>');
+    pinnedFetchResponseMock.mockResolvedValueOnce(
+      new Response(compressed, {
+        status: 200,
+        headers: {
+          'content-encoding': 'gzip',
+          'content-length': String(compressed.byteLength),
+        },
+      }),
+    );
+
+    await expect(sso.startSamlLogin('okta')).rejects.toThrow(/missing entry point/);
+  });
+
+  test('applies the response cap to decompressed metadata bytes', async () => {
+    const compressed = gzipSync(new Uint8Array(2 * 1024 * 1024).fill(65));
+    pinnedFetchResponseMock.mockResolvedValueOnce(
+      new Response(compressed, {
+        status: 200,
+        headers: { 'content-encoding': 'gzip' },
+      }),
+    );
+
     await expect(sso.startSamlLogin('okta')).rejects.toThrow(/exceeded/);
   });
 });
@@ -548,9 +711,7 @@ describe('completeOidcLogin state-before-provider ordering', () => {
 });
 
 describe('OIDC remote endpoint hardening', () => {
-  const realFetch = globalThis.fetch;
   const originalSsoBase = process.env.SSO_CALLBACK_BASE_URL;
-  const fetchMock = mock();
 
   const OIDC_PROVIDER_ENDPOINTS: realSsoProvidersRepo.SsoProvider = {
     ...SAML_PROVIDER,
@@ -568,14 +729,8 @@ describe('OIDC remote endpoint hardening', () => {
 
   beforeEach(() => {
     process.env.SSO_CALLBACK_BASE_URL = 'https://app.example.com';
-    fetchMock.mockReset();
-    globalThis.fetch = fetchMock as unknown as typeof globalThis.fetch;
     findBySlugMock.mockResolvedValue(OIDC_PROVIDER_ENDPOINTS);
     oidcBuildAuthorizationUrlMock.mockReturnValue(new URL('https://accounts.google.com/auth'));
-  });
-
-  afterEach(() => {
-    globalThis.fetch = realFetch;
   });
 
   afterAll(() => {
@@ -605,10 +760,62 @@ describe('OIDC remote endpoint hardening', () => {
     ).rejects.toThrow(/private\/loopback/);
   });
 
+  test('pins OIDC custom fetches to the address returned by their safety lookup', async () => {
+    dnsLookupMock.mockResolvedValue([{ address: '142.251.32.46', family: 4 }]);
+    oidcDiscoveryMock.mockResolvedValue({ serverMetadata: () => ({}) });
+    await sso.startOidcLogin('google');
+    const options = oidcDiscoveryMock.mock.calls[0][4];
+
+    dnsLookupMock.mockReset();
+    dnsLookupMock.mockResolvedValue([{ address: '203.0.113.25', family: 4 }]);
+    httpsRequestMock.mockClear();
+    pinnedFetchResponseMock.mockResolvedValueOnce(new Response('{}', { status: 200 }));
+
+    await options[realOidc.customFetch]('https://idp.example.com/token', {
+      body: 'grant_type=client_credentials',
+      headers: {},
+      method: 'POST',
+      redirect: 'manual',
+    });
+
+    expect(dnsLookupMock).toHaveBeenCalledTimes(1);
+    expect(httpsRequestMock).toHaveBeenCalledTimes(1);
+    expect(httpsRequestMock.mock.calls[0][0]).toMatchObject({
+      agent: false,
+      hostname: 'idp.example.com',
+      servername: 'idp.example.com',
+    });
+    expect(Buffer.from(pinnedFetchResponseMock.mock.calls[0][1]).toString()).toBe(
+      'grant_type=client_credentials',
+    );
+  });
+
+  test('aborts an OIDC response body after headers when the request signal is cancelled', async () => {
+    dnsLookupMock.mockResolvedValue([{ address: '142.251.32.46', family: 4 }]);
+    oidcDiscoveryMock.mockResolvedValue({ serverMetadata: () => ({}) });
+    await sso.startOidcLogin('google');
+    const options = oidcDiscoveryMock.mock.calls[0][4];
+
+    const incoming = new Readable({ read() {} }) as IncomingMessage;
+    incoming.statusCode = 200;
+    incoming.statusMessage = 'OK';
+    incoming.rawHeaders = [];
+    pinnedFetchResponseMock.mockResolvedValueOnce(incoming);
+    const controller = new AbortController();
+    const response = await options[realOidc.customFetch]('https://idp.example.com/userinfo', {
+      body: undefined,
+      headers: {},
+      method: 'GET',
+      redirect: 'manual',
+      signal: controller.signal,
+    });
+
+    controller.abort();
+    await expect(response.text()).rejects.toThrow(/abort/i);
+  });
+
   test('rejects discovered OIDC endpoints that resolve to private addresses before redirecting', async () => {
-    dnsLookupMock
-      .mockResolvedValueOnce([{ address: '142.251.32.46', family: 4 }])
-      .mockResolvedValueOnce([{ address: '10.0.0.5', family: 4 }]);
+    dnsLookupMock.mockResolvedValueOnce([{ address: '10.0.0.5', family: 4 }]);
     oidcDiscoveryMock.mockResolvedValue({
       serverMetadata: () => ({
         token_endpoint: 'https://internal.example.com/token',
@@ -627,7 +834,7 @@ describe('OIDC remote endpoint hardening', () => {
 
     dnsLookupMock.mockReset();
     dnsLookupMock.mockResolvedValue([{ address: '203.0.113.10', family: 4 }]);
-    fetchMock.mockResolvedValueOnce(
+    pinnedFetchResponseMock.mockResolvedValueOnce(
       new Response(null, {
         status: 200,
         headers: { 'content-length': String(2 * 1024 * 1024) },
@@ -660,7 +867,7 @@ describe('OIDC remote endpoint hardening', () => {
         controller.close();
       },
     });
-    fetchMock.mockResolvedValueOnce(new Response(stream, { status: 200 }));
+    pinnedFetchResponseMock.mockResolvedValueOnce(new Response(stream, { status: 200 }));
 
     const response = await options[realOidc.customFetch]('https://idp.example.com/userinfo', {
       body: undefined,
@@ -672,9 +879,6 @@ describe('OIDC remote endpoint hardening', () => {
   });
 
   test('does not validate end_session_endpoint during login when OIDC logout is disabled', async () => {
-    dnsLookupMock
-      .mockResolvedValueOnce([{ address: '142.251.32.46', family: 4 }])
-      .mockResolvedValueOnce([{ address: '10.0.0.5', family: 4 }]);
     oidcDiscoveryMock.mockResolvedValue({
       serverMetadata: () => ({
         end_session_endpoint: 'https://internal.example.com/logout',
@@ -683,15 +887,13 @@ describe('OIDC remote endpoint hardening', () => {
 
     await sso.startOidcLogin('google');
 
-    expect(dnsLookupMock).toHaveBeenCalledTimes(1);
+    expect(dnsLookupMock).not.toHaveBeenCalled();
     expect(oidcBuildAuthorizationUrlMock).toHaveBeenCalledTimes(1);
   });
 
   test('rejects unsafe end_session_endpoint during login when OIDC logout is enabled', async () => {
     findBySlugMock.mockResolvedValue({ ...OIDC_PROVIDER_ENDPOINTS, endSessionEnabled: true });
-    dnsLookupMock
-      .mockResolvedValueOnce([{ address: '142.251.32.46', family: 4 }])
-      .mockResolvedValueOnce([{ address: '10.0.0.5', family: 4 }]);
+    dnsLookupMock.mockResolvedValueOnce([{ address: '10.0.0.5', family: 4 }]);
     oidcDiscoveryMock.mockResolvedValue({
       serverMetadata: () => ({
         end_session_endpoint: 'https://internal.example.com/logout',
@@ -1543,8 +1745,6 @@ describe('OIDC nonce wiring', () => {
   beforeEach(() => {
     process.env.SSO_CALLBACK_BASE_URL = 'https://app.example.com';
     oidcDiscoveryMock.mockResolvedValue({ serverMetadata: () => ({}) });
-    // createOidcConfig SSRF-checks issuerUrl via dns.lookup({ all: true }).
-    dnsLookupMock.mockResolvedValue([{ address: '142.251.32.46', family: 4 }]);
   });
   afterAll(() => {
     if (originalSsoBase === undefined) delete process.env.SSO_CALLBACK_BASE_URL;

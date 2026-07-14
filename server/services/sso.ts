@@ -1,4 +1,10 @@
+import type { LookupAddress } from 'node:dns';
 import dns from 'node:dns/promises';
+import type { IncomingMessage } from 'node:http';
+import https, { type RequestOptions as HttpsRequestOptions } from 'node:https';
+import { isIP } from 'node:net';
+import { addAbortSignal, Readable } from 'node:stream';
+import { createBrotliDecompress, createGunzip, createInflate } from 'node:zlib';
 import {
   type CacheItem,
   type CacheProvider,
@@ -524,27 +530,115 @@ export const isPrivateIp = (ip: string): boolean => {
   return false;
 };
 
+const remoteUrlHostname = (url: URL): string => url.hostname.replace(/^\[|\]$/g, '');
+
+type AutoSelectingHttpsRequestOptions = HttpsRequestOptions & { autoSelectFamily: true };
+
 /**
- * Throws if `url` is non-HTTPS or its hostname resolves to a private / loopback / link-local
- * address. Shared by the SSRF-fetch loop and the OIDC issuer pre-flight so the two cannot drift.
+ * Resolves `url` once and returns the public addresses that the caller may connect to. Returning
+ * the vetted addresses (instead of merely validating them) prevents DNS rebinding between the
+ * check and the TCP connection.
  */
-const assertSafeRemoteUrl = async (url: URL): Promise<void> => {
+const resolveSafeRemoteAddresses = async (url: URL): Promise<LookupAddress[]> => {
   if (url.protocol !== 'https:') {
     throw new Error(`Refusing to fetch non-HTTPS URL: ${url.protocol}//...`);
   }
-  const addresses = await dns.lookup(url.hostname, { all: true });
+  const hostname = remoteUrlHostname(url);
+  const addresses = await dns.lookup(hostname, { all: true });
   if (addresses.length === 0) {
     throw new Error(`Could not resolve host ${url.hostname}`);
   }
   if (addresses.some((a) => isPrivateIp(a.address))) {
     throw new Error(`Refusing to fetch URL with private/loopback host: ${url.hostname}`);
   }
+  return addresses;
+};
+
+const responseFromIncoming = (incoming: IncomingMessage, request: Request): Response => {
+  const responseHeaders = new Headers();
+  for (let index = 0; index < incoming.rawHeaders.length; index += 2) {
+    responseHeaders.append(incoming.rawHeaders[index], incoming.rawHeaders[index + 1]);
+  }
+  const status = incoming.statusCode ?? 500;
+  const hasBody = request.method !== 'HEAD' && ![204, 205, 304].includes(status);
+  const contentEncoding = responseHeaders.get('content-encoding')?.trim().toLowerCase();
+  let responseBody: Readable = incoming;
+  if (contentEncoding === 'gzip' || contentEncoding === 'x-gzip') {
+    responseBody = incoming.pipe(createGunzip());
+  } else if (contentEncoding === 'deflate') {
+    responseBody = incoming.pipe(createInflate());
+  } else if (contentEncoding === 'br') {
+    responseBody = incoming.pipe(createBrotliDecompress());
+  }
+  if (responseBody !== incoming) {
+    responseHeaders.delete('content-encoding');
+    responseHeaders.delete('content-length');
+    responseBody.once('close', () => incoming.destroy());
+  }
+  addAbortSignal(request.signal, responseBody);
+  return new Response(
+    hasBody ? (Readable.toWeb(responseBody) as ReadableStream<Uint8Array>) : null,
+    {
+      headers: responseHeaders,
+      status,
+      statusText: incoming.statusMessage,
+    },
+  );
+};
+
+/**
+ * Performs one HTTPS request using only already-vetted IPs while retaining the original hostname
+ * for the Host header, SNI, and certificate verification. The custom lookup enables connection
+ * family selection without another DNS query.
+ */
+const fetchPinnedRemoteUrl = async (
+  url: URL,
+  addresses: LookupAddress[],
+  options: RequestInit = {},
+): Promise<Response> => {
+  const request = new Request(url.href, options);
+  const body = request.body ? Buffer.from(await request.arrayBuffer()) : undefined;
+  const headers = new Headers(request.headers);
+  headers.set('host', url.host);
+  headers.set('accept-encoding', 'gzip, deflate, br');
+  const originalHostname = remoteUrlHostname(url);
+
+  return new Promise<Response>((resolve, reject) => {
+    const requestOptions: AutoSelectingHttpsRequestOptions = {
+      agent: false,
+      autoSelectFamily: true,
+      headers: Object.fromEntries(headers.entries()),
+      hostname: originalHostname,
+      lookup: (_hostname, lookupOptions, callback) => {
+        if (lookupOptions.all) {
+          callback(null, addresses);
+          return;
+        }
+        callback(null, addresses[0].address, addresses[0].family);
+      },
+      method: request.method,
+      path: `${url.pathname}${url.search}`,
+      port: url.port ? Number(url.port) : 443,
+      servername: isIP(originalHostname) === 0 ? originalHostname : undefined,
+      signal: request.signal,
+    };
+    const outbound = https.request(requestOptions, (incoming) => {
+      try {
+        resolve(responseFromIncoming(incoming, request));
+      } catch (error) {
+        incoming.destroy();
+        reject(error);
+      }
+    });
+    outbound.once('error', reject);
+    outbound.end(body);
+  });
 };
 
 const safeOidcFetch: oidc.CustomFetch = async (url, options) => {
   const parsed = new URL(url);
-  await assertSafeRemoteUrl(parsed);
-  const response = await fetch(parsed, options);
+  const addresses = await resolveSafeRemoteAddresses(parsed);
+  const response = await fetchPinnedRemoteUrl(parsed, addresses, options);
   return responseWithBoundedBody(response, options.method);
 };
 
@@ -573,52 +667,68 @@ const assertSafeOidcServerMetadata = async (
       } catch {
         throw new Error(`OIDC discovery ${field} is not a valid URL`);
       }
-      return [assertSafeRemoteUrl(endpoint)];
+      return [resolveSafeRemoteAddresses(endpoint)];
     }),
   );
 };
 
-/**
- * Reads a response body as text, refusing to buffer more than REMOTE_FETCH_MAX_BYTES. Guards
- * against a hostile IdP that returns a huge metadata document hoping to OOM the backend.
- */
-const readBoundedText = async (response: Response): Promise<string> => {
-  return responseWithBoundedBody(response, 'GET').text();
-};
-
-const responseWithBoundedBody = (response: Response, method: string): Response => {
+const responseWithBoundedBody = (
+  response: Response,
+  method: string,
+  onComplete: () => void = () => undefined,
+): Response => {
+  let completed = false;
+  const complete = () => {
+    if (completed) return;
+    completed = true;
+    onComplete();
+  };
   const init = {
     headers: response.headers,
     status: response.status,
     statusText: response.statusText,
   };
   if (method.toUpperCase() === 'HEAD' || [204, 205, 304].includes(response.status)) {
+    complete();
     return new Response(null, init);
   }
 
   const declared = Number(response.headers.get('content-length'));
   if (Number.isFinite(declared) && declared > REMOTE_FETCH_MAX_BYTES) {
+    void response.body?.cancel();
+    complete();
     throw new Error(`Remote response too large (${declared} bytes)`);
   }
-  if (!response.body) return new Response(null, init);
+  if (!response.body) {
+    complete();
+    return new Response(null, init);
+  }
 
   let total = 0;
   const reader = response.body.getReader();
   const boundedBody = new ReadableStream<Uint8Array>({
     async pull(controller) {
-      const { done, value } = await reader.read();
-      if (done) {
-        controller.close();
-        return;
+      try {
+        const { done, value } = await reader.read();
+        if (done) {
+          complete();
+          controller.close();
+          return;
+        }
+        total += value.byteLength;
+        if (total > REMOTE_FETCH_MAX_BYTES) {
+          await reader.cancel().catch(() => undefined);
+          complete();
+          throw new Error(`Remote response exceeded ${REMOTE_FETCH_MAX_BYTES} bytes`);
+        }
+        controller.enqueue(value);
+      } catch (error) {
+        complete();
+        throw error;
       }
-      total += value.byteLength;
-      if (total > REMOTE_FETCH_MAX_BYTES) {
-        await reader.cancel().catch(() => undefined);
-        throw new Error(`Remote response exceeded ${REMOTE_FETCH_MAX_BYTES} bytes`);
-      }
-      controller.enqueue(value);
     },
     cancel(reason) {
+      complete();
       return reader.cancel(reason);
     },
   });
@@ -631,31 +741,38 @@ const responseWithBoundedBody = (response: Response, method: string): Response =
  * Guarantees:
  *   - HTTPS only (no http:, file:, gopher:, etc).
  *   - Host resolved via DNS; rejects if any resolved address is private/loopback/link-local.
+ *   - TCP connection restricted to vetted addresses while TLS verifies the original hostname.
  *   - 5-second total timeout via AbortController.
  *   - Bounded follows: each redirect target is re-validated identically.
  */
 const safeFetchRemoteUrl = async (url: string): Promise<Response> => {
   let current = url;
-  for (let hops = 0; hops <= REMOTE_FETCH_REDIRECT_LIMIT; hops++) {
-    await assertSafeRemoteUrl(new URL(current));
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), REMOTE_FETCH_TIMEOUT_MS);
-    try {
-      const response = await fetch(current, { signal: controller.signal, redirect: 'manual' });
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), REMOTE_FETCH_TIMEOUT_MS);
+  try {
+    for (let hops = 0; hops <= REMOTE_FETCH_REDIRECT_LIMIT; hops++) {
+      const parsed = new URL(current);
+      const addresses = await resolveSafeRemoteAddresses(parsed);
+      const response = await fetchPinnedRemoteUrl(parsed, addresses, {
+        signal: controller.signal,
+        redirect: 'manual',
+      });
       if (response.status >= 300 && response.status < 400) {
         const next = response.headers.get('location');
+        await response.body?.cancel().catch(() => undefined);
         if (!next) {
           throw new Error(`Redirect response without Location header from ${current}`);
         }
         current = new URL(next, current).href;
         continue;
       }
-      return response;
-    } finally {
-      clearTimeout(timer);
+      return responseWithBoundedBody(response, 'GET', () => clearTimeout(timer));
     }
+    throw new Error('Exceeded redirect limit while fetching remote URL');
+  } catch (error) {
+    clearTimeout(timer);
+    throw error;
   }
-  throw new Error('Exceeded redirect limit while fetching remote URL');
 };
 
 const resolveSamlIdpConfig = async (provider: ssoProvidersRepo.SsoProvider) => {
@@ -664,8 +781,11 @@ const resolveSamlIdpConfig = async (provider: ssoProvidersRepo.SsoProvider) => {
   }
   if (provider.metadataUrl.trim()) {
     const response = await safeFetchRemoteUrl(provider.metadataUrl);
-    if (!response.ok) throw new Error(`Failed to fetch SAML metadata: HTTP ${response.status}`);
-    return { ...parseSamlMetadata(await readBoundedText(response)), source: 'metadataUrl' };
+    if (!response.ok) {
+      await response.body?.cancel();
+      throw new Error(`Failed to fetch SAML metadata: HTTP ${response.status}`);
+    }
+    return { ...parseSamlMetadata(await response.text()), source: 'metadataUrl' };
   }
   return {
     idpIssuer: provider.idpIssuer,
@@ -790,13 +910,16 @@ const createOidcConfig = async (provider: ssoProvidersRepo.SsoProvider) => {
     // Keep every openid-client HTTP request on the same SSRF/timeout policy as the SAML
     // metadata fetch. customFetch covers discovery, JWKS, token, UserInfo, and future OIDC calls.
     const issuerUrl = new URL(provider.issuerUrl);
-    const [config] = await Promise.all([
-      oidc.discovery(issuerUrl, provider.clientId, clientSecret || undefined, undefined, {
+    const config = await oidc.discovery(
+      issuerUrl,
+      provider.clientId,
+      clientSecret || undefined,
+      undefined,
+      {
         [oidc.customFetch]: safeOidcFetch,
         timeout: OIDC_REMOTE_FETCH_TIMEOUT_SECONDS,
-      }),
-      assertSafeRemoteUrl(issuerUrl),
-    ]);
+      },
+    );
     await assertSafeOidcServerMetadata(config, {
       includeEndSessionEndpoint: provider.endSessionEnabled,
     });
