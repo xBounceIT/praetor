@@ -13,6 +13,14 @@ If you do not see the module, ask an administrator to check AI settings, API key
 
 Administrators can connect AI reporting to Gemini, OpenRouter, Anthropic, or OpenAI. Praetor uses only the provider selected in general settings and stores each provider's key and model separately.
 
+## Conversation history
+
+On desktop, AI Reporting shows conversation history in the left column and the active chat on the right. Chats are ordered by latest activity and grouped by time period.
+
+Use the search field to filter chats by title. Select an item to resume that conversation, or press **New Chat** at the bottom of the history to start a new one.
+
+On mobile devices, open the history with the button in the conversation header.
+
 ## Recommended use
 
 Ask specific questions: include period, business area, customer, project, or metric you want to analyze. Precise questions produce answers that are easier to verify.

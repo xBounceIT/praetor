@@ -1,17 +1,68 @@
+import {
+  ArrowDown,
+  ArrowUp,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  ChevronUp,
+  FlaskConical,
+  Lightbulb,
+  Loader2,
+  MessageSquareText,
+  PanelLeftOpen,
+  Pencil,
+  Plus,
+  RefreshCw,
+  Search,
+  Sparkles,
+  Square,
+  Trash2,
+  TriangleAlert,
+} from 'lucide-react';
 import type React from 'react';
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import ReactMarkdown from 'react-markdown';
 import remarkBreaks from 'remark-breaks';
 import remarkGfm from 'remark-gfm';
+import { Alert } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardTitle } from '@/components/ui/card';
 import { CopyButton } from '@/components/ui/copy-button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from '@/components/ui/empty';
+import { Input } from '@/components/ui/input';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet';
+import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import api from '../../services/api';
 import type { ReportChatMessage, ReportChatSessionSummary } from '../../types';
 import { buildPermission, hasPermission } from '../../utils/permissions';
-import Modal from '../shared/Modal';
-import SelectControl from '../shared/SelectControl';
-import StatusBadge from '../shared/StatusBadge';
+import {
+  type AiReportingSessionGroupKey,
+  filterAndGroupAiReportingSessions,
+} from './aiReportingSessions';
 
 export interface AiReportingViewProps {
   currentUserId: string;
@@ -1409,15 +1460,10 @@ const useAiReportingController = ({
     t,
   ]);
 
+  const activeSession = sessions.find((session) => session.id === activeSessionId) ?? null;
   const activeTitle = isNewChat
     ? t('aiReporting.newChat', { defaultValue: 'New Chat' })
-    : sessions.find((s) => s.id === activeSessionId)?.title ||
-      t('aiReporting.newChat', { defaultValue: 'New Chat' });
-  const activeSession = sessions.find((s) => s.id === activeSessionId) || null;
-  const sessionOptions = sessions.map((s) => ({
-    id: s.id,
-    name: toOptionLabel(s) || t('aiReporting.newChat', { defaultValue: 'New Chat' }),
-  }));
+    : activeSession?.title || t('aiReporting.newChat', { defaultValue: 'New Chat' });
   const canDeleteActive =
     Boolean(activeSession) && canArchive && !isDeletingSession && !isLoadingSessions;
   const isEmptySession = Boolean(activeSessionId) && !isLoadingMessages && messages.length === 0;
@@ -1444,7 +1490,6 @@ const useAiReportingController = ({
     t,
     enableAiReporting,
     activeTitle,
-    sessionOptions,
     activeSessionId,
     isNewChat,
     isLoadingSessions,
@@ -1504,7 +1549,6 @@ const useAiReportingController = ({
 
 type AiReportingController = ReturnType<typeof useAiReportingController>;
 type TranslationFn = ReturnType<typeof useTranslation>['t'];
-type SessionOption = { id: string; name: string };
 type AiReportingSetter<Key extends keyof AiReportingState> = (
   update: StateUpdate<AiReportingState[Key]>,
 ) => void;
@@ -1520,9 +1564,7 @@ const AiReportingLayout: React.FC<{ controller: AiReportingController }> = ({ co
     t,
     enableAiReporting,
     activeTitle,
-    sessionOptions,
     activeSessionId,
-    isNewChat,
     isLoadingSessions,
     sessions,
     canDeleteActive,
@@ -1576,99 +1618,135 @@ const AiReportingLayout: React.FC<{ controller: AiReportingController }> = ({ co
     setSessionToDelete,
     handleArchiveSession,
   } = controller;
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+
+  const handleSelectSession = (sessionId: string) => {
+    setIsNewChat(false);
+    setActiveSessionId(sessionId);
+    setHasNewText(false);
+    setIsHistoryOpen(false);
+  };
+
+  const sidebar = (
+    <AiReportingSidebar
+      t={t}
+      sessions={sessions}
+      activeSessionId={activeSessionId}
+      isLoadingSessions={isLoadingSessions}
+      isCreatingSession={isCreatingSession}
+      isNewChatDisabled={isNewChatDisabled}
+      onSelectSession={handleSelectSession}
+      onNewChat={() => {
+        setIsHistoryOpen(false);
+        void handleNewChat();
+      }}
+    />
+  );
 
   return (
-    <div className="flex h-[calc(100vh-180px)] min-h-[560px]">
-      <div className="flex-1 flex flex-col min-w-0 relative">
-        <AiReportingHeader
-          t={t}
-          activeTitle={activeTitle}
-          sessionOptions={sessionOptions}
-          activeSessionId={activeSessionId}
-          state={{
-            isNewChat,
-            isLoadingSessions,
-            sessionsCount: sessions.length,
-            canDeleteActive,
-            isCreatingSession,
-            isNewChatDisabled,
-          }}
-          activeSession={activeSession}
-          onConfirmDeleteSession={confirmDeleteSession}
-          onNewChat={() => void handleNewChat()}
-          setIsNewChat={setIsNewChat}
-          setActiveSessionId={setActiveSessionId}
-          setHasNewText={setHasNewText}
-        />
+    <>
+      <Card className="h-[calc(100vh-180px)] min-h-[560px] gap-0 overflow-hidden bg-background py-0 text-foreground">
+        <div className="grid h-full min-h-0 md:grid-cols-[17rem_minmax(0,1fr)]">
+          <aside className="hidden min-h-0 border-r border-border md:flex">{sidebar}</aside>
 
-        <AiReportingAlerts
-          t={t}
-          error={error}
-          enableAiReporting={enableAiReporting}
-          canSend={canSend}
-        />
+          <section className="relative flex min-h-0 min-w-0 flex-col">
+            <AiReportingHeader
+              t={t}
+              activeTitle={activeTitle}
+              canDeleteActive={canDeleteActive}
+              activeSession={activeSession}
+              onOpenHistory={() => setIsHistoryOpen(true)}
+              onConfirmDeleteSession={confirmDeleteSession}
+            />
 
-        <AiReportingConversation
-          t={t}
-          state={{
-            isEnabled: enableAiReporting,
-            showLoadOlderButton,
-            isLoadingOlderMessages,
-            isLoadingMessages,
-          }}
-          scrollRef={scrollRef}
-          endRef={endRef}
-          onScroll={updateAtBottom}
-          messages={messages}
-          assistantAttemptGroups={assistantAttemptGroups}
-          selectedAttemptIndexByGroup={selectedAttemptIndexByGroup}
-          expandedThoughtMessageIds={expandedThoughtMessageIds}
-          onLoadOlderMessages={() => void loadOlderMessages()}
-          interactions={{
-            t,
-            canSend,
-            isSending,
-            editingMessageId,
-            editingDraft,
-            setEditingDraft,
-            setEditingMessageId,
-            setExpandedThoughtMessageIds,
-            handleEditSend,
-            handleRetryMessage,
-            getRetryMessageContent,
-            resolveTableMarkdown,
-            tableRefs,
-            dispatchAttemptSelection,
-          }}
-        />
+            <AiReportingAlerts
+              t={t}
+              error={error}
+              enableAiReporting={enableAiReporting}
+              canSend={canSend}
+            />
 
-        {showGoToBottom && (
-          <AiReportingScrollButton
-            t={t}
-            hasNewText={hasNewText}
-            onGoToBottom={() => {
-              scrollToBottom();
-              setHasNewText(false);
-            }}
-          />
-        )}
+            <div className="relative flex min-h-0 flex-1">
+              <AiReportingConversation
+                t={t}
+                state={{
+                  isEnabled: enableAiReporting,
+                  showLoadOlderButton,
+                  isLoadingOlderMessages,
+                  isLoadingMessages,
+                }}
+                scrollRef={scrollRef}
+                endRef={endRef}
+                onScroll={updateAtBottom}
+                messages={messages}
+                assistantAttemptGroups={assistantAttemptGroups}
+                selectedAttemptIndexByGroup={selectedAttemptIndexByGroup}
+                expandedThoughtMessageIds={expandedThoughtMessageIds}
+                onLoadOlderMessages={() => void loadOlderMessages()}
+                interactions={{
+                  t,
+                  canSend,
+                  isSending,
+                  editingMessageId,
+                  editingDraft,
+                  setEditingDraft,
+                  setEditingMessageId,
+                  setExpandedThoughtMessageIds,
+                  handleEditSend,
+                  handleRetryMessage,
+                  getRetryMessageContent,
+                  resolveTableMarkdown,
+                  tableRefs,
+                  dispatchAttemptSelection,
+                }}
+              />
 
-        {enableAiReporting && (
-          <AiReportingComposer
-            t={t}
-            draft={draft}
-            canSend={canSend}
-            isSending={isSending}
-            footerHintWithPeriod={footerHintWithPeriod}
-            aiWarning={aiWarning}
-            setDraft={setDraft}
-            onSend={() => void handleSend()}
-            onStop={handleStop}
-          />
-        )}
-      </div>
+              {showGoToBottom && (
+                <AiReportingScrollButton
+                  t={t}
+                  hasNewText={hasNewText}
+                  onGoToBottom={() => {
+                    scrollToBottom();
+                    setHasNewText(false);
+                  }}
+                />
+              )}
+            </div>
 
-      <AiReportingDeleteModal
+            {enableAiReporting && (
+              <AiReportingComposer
+                t={t}
+                draft={draft}
+                canSend={canSend}
+                isSending={isSending}
+                footerHintWithPeriod={footerHintWithPeriod}
+                aiWarning={aiWarning}
+                setDraft={setDraft}
+                onSend={() => void handleSend()}
+                onStop={handleStop}
+              />
+            )}
+          </section>
+        </div>
+      </Card>
+
+      <Sheet open={isHistoryOpen} onOpenChange={setIsHistoryOpen}>
+        <SheetContent side="left" className="w-[min(22rem,90vw)] gap-0 p-0" showCloseButton={false}>
+          <SheetHeader className="sr-only">
+            <SheetTitle>
+              {t('aiReporting.chatHistory', { defaultValue: 'Chat history' })}
+            </SheetTitle>
+            <SheetDescription>
+              {t('aiReporting.chatHistoryDescription', {
+                defaultValue: 'Search and select an AI Reporting conversation.',
+              })}
+            </SheetDescription>
+          </SheetHeader>
+          {sidebar}
+        </SheetContent>
+      </Sheet>
+
+      <AiReportingDeleteDialog
         t={t}
         isOpen={isDeleteConfirmOpen}
         sessionToDelete={sessionToDelete}
@@ -1680,6 +1758,158 @@ const AiReportingLayout: React.FC<{ controller: AiReportingController }> = ({ co
         }}
         onArchive={() => void handleArchiveSession()}
       />
+    </>
+  );
+};
+
+interface AiReportingSidebarProps {
+  t: TranslationFn;
+  sessions: ReportChatSessionSummary[];
+  activeSessionId: string;
+  isLoadingSessions: boolean;
+  isCreatingSession: boolean;
+  isNewChatDisabled: boolean;
+  onSelectSession: (sessionId: string) => void;
+  onNewChat: () => void;
+}
+
+const getSessionGroupLabel = (t: TranslationFn, groupKey: AiReportingSessionGroupKey) => {
+  switch (groupKey) {
+    case 'today':
+      return t('aiReporting.sessionGroups.today', { defaultValue: 'Today' });
+    case 'yesterday':
+      return t('aiReporting.sessionGroups.yesterday', { defaultValue: 'Yesterday' });
+    case 'lastSevenDays':
+      return t('aiReporting.sessionGroups.lastSevenDays', { defaultValue: 'Last 7 days' });
+    case 'older':
+      return t('aiReporting.sessionGroups.older', { defaultValue: 'Older' });
+  }
+};
+
+export const AiReportingSidebar: React.FC<AiReportingSidebarProps> = ({
+  t,
+  sessions,
+  activeSessionId,
+  isLoadingSessions,
+  isCreatingSession,
+  isNewChatDisabled,
+  onSelectSession,
+  onNewChat,
+}) => {
+  const [searchQuery, setSearchQuery] = useState('');
+  const sessionGroups = useMemo(
+    () => filterAndGroupAiReportingSessions(sessions, searchQuery),
+    [searchQuery, sessions],
+  );
+  const hasSearchResults = sessionGroups.length > 0;
+
+  return (
+    <div className="flex h-full min-h-0 w-full flex-col bg-muted/20">
+      <div className="border-b border-border p-4">
+        <div className="flex items-center gap-3">
+          <div className="flex size-9 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+            <Sparkles className="size-4" />
+          </div>
+          <div className="min-w-0">
+            <div className="font-semibold text-foreground">
+              {t('aiReporting.title', { defaultValue: 'AI Reporting' })}
+            </div>
+            <Badge variant="secondary" className="mt-1 uppercase tracking-wide">
+              <FlaskConical />
+              {t('aiReporting.experimental', { defaultValue: 'Experimental' })}
+            </Badge>
+          </div>
+        </div>
+        <div className="relative mt-4">
+          <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            placeholder={t('aiReporting.searchChats', { defaultValue: 'Search chats...' })}
+            aria-label={t('aiReporting.searchChats', { defaultValue: 'Search chats...' })}
+            className="pl-9"
+          />
+        </div>
+      </div>
+
+      <ScrollArea className="min-h-0 flex-1">
+        <div className="space-y-5 p-3">
+          {isLoadingSessions && (
+            <div className="flex items-center gap-2 px-3 py-4 text-sm text-muted-foreground">
+              <Loader2 className="size-4 animate-spin" />
+              {t('aiReporting.loadingSessions', { defaultValue: 'Loading...' })}
+            </div>
+          )}
+
+          {!isLoadingSessions && sessions.length === 0 && (
+            <Empty className="border-0 px-3 py-10">
+              <EmptyHeader>
+                <EmptyTitle>
+                  {t('aiReporting.noSessions', { defaultValue: 'No chats yet.' })}
+                </EmptyTitle>
+                <EmptyDescription>
+                  {t('aiReporting.noSessionsDescription', {
+                    defaultValue: 'Start a new conversation to analyze your business data.',
+                  })}
+                </EmptyDescription>
+              </EmptyHeader>
+            </Empty>
+          )}
+
+          {!isLoadingSessions && sessions.length > 0 && !hasSearchResults && (
+            <Empty className="border-0 px-3 py-10">
+              <EmptyHeader>
+                <EmptyTitle>
+                  {t('aiReporting.noSearchResults', { defaultValue: 'No chats found' })}
+                </EmptyTitle>
+                <EmptyDescription>
+                  {t('aiReporting.noSearchResultsDescription', {
+                    defaultValue: 'Try a different search term.',
+                  })}
+                </EmptyDescription>
+              </EmptyHeader>
+            </Empty>
+          )}
+
+          {!isLoadingSessions &&
+            sessionGroups.map((group) => (
+              <div key={group.key}>
+                <div className="mb-1 px-3 text-xs font-medium text-muted-foreground">
+                  {getSessionGroupLabel(t, group.key)}
+                </div>
+                <div className="space-y-1">
+                  {group.sessions.map((session) => {
+                    const isActive = session.id === activeSessionId;
+                    const title =
+                      toOptionLabel(session) ||
+                      t('aiReporting.newChat', { defaultValue: 'New Chat' });
+                    return (
+                      <Button
+                        key={session.id}
+                        type="button"
+                        variant={isActive ? 'secondary' : 'ghost'}
+                        size="sm"
+                        aria-current={isActive ? 'page' : undefined}
+                        onClick={() => onSelectSession(session.id)}
+                        className="h-auto w-full justify-start px-3 py-2.5 font-normal"
+                      >
+                        <MessageSquareText className="size-4 text-muted-foreground" />
+                        <span className="truncate">{title}</span>
+                      </Button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+        </div>
+      </ScrollArea>
+
+      <div className="border-t border-border p-3">
+        <Button type="button" onClick={onNewChat} disabled={isNewChatDisabled} className="w-full">
+          {isCreatingSession ? <Loader2 className="animate-spin" /> : <Plus />}
+          {t('aiReporting.newChat', { defaultValue: 'New Chat' })}
+        </Button>
+      </div>
     </div>
   );
 };
@@ -1687,124 +1917,70 @@ const AiReportingLayout: React.FC<{ controller: AiReportingController }> = ({ co
 interface AiReportingHeaderProps {
   t: TranslationFn;
   activeTitle: string;
-  sessionOptions: SessionOption[];
-  activeSessionId: string;
-  state: {
-    isNewChat: boolean;
-    isLoadingSessions: boolean;
-    sessionsCount: number;
-    canDeleteActive: boolean;
-    isCreatingSession: boolean;
-    isNewChatDisabled: boolean;
-  };
+  canDeleteActive: boolean;
   activeSession: ReportChatSessionSummary | null;
+  onOpenHistory: () => void;
   onConfirmDeleteSession: (session: ReportChatSessionSummary) => void;
-  onNewChat: () => void;
-  setIsNewChat: AiReportingSetter<'isNewChat'>;
-  setActiveSessionId: AiReportingSetter<'activeSessionId'>;
-  setHasNewText: AiReportingSetter<'hasNewText'>;
 }
 
 const AiReportingHeader: React.FC<AiReportingHeaderProps> = ({
   t,
   activeTitle,
-  sessionOptions,
-  activeSessionId,
-  state,
+  canDeleteActive,
   activeSession,
+  onOpenHistory,
   onConfirmDeleteSession,
-  onNewChat,
-  setIsNewChat,
-  setActiveSessionId,
-  setHasNewText,
-}) => {
-  const {
-    isNewChat,
-    isLoadingSessions,
-    sessionsCount,
-    canDeleteActive,
-    isCreatingSession,
-    isNewChatDisabled,
-  } = state;
-
-  return (
-    <div className="flex items-start justify-between gap-4 mb-4 px-4 md:px-6">
-      <div className="flex items-center gap-3 min-w-0">
-        <div className="min-w-0">
-          <div className="text-xs font-black text-zinc-400 uppercase tracking-widest">
-            {t('aiReporting.session', { defaultValue: 'Session' })}
-          </div>
-          <div className="flex items-center gap-2 min-w-0">
-            <div className="text-base font-extrabold text-zinc-900 truncate">{activeTitle}</div>
-            <StatusBadge type="experimental" label="EXPERIMENTAL" className="shrink-0" />
-          </div>
+}) => (
+  <header className="flex min-h-16 items-center justify-between gap-3 border-b border-border px-4 md:px-6">
+    <div className="flex min-w-0 items-center gap-3">
+      <Button
+        type="button"
+        variant="outline"
+        size="icon"
+        className="md:hidden"
+        onClick={onOpenHistory}
+        aria-label={t('aiReporting.openChatHistory', { defaultValue: 'Open chat history' })}
+      >
+        <PanelLeftOpen />
+      </Button>
+      <div className="min-w-0">
+        <div className="text-xs font-medium text-muted-foreground">
+          {t('aiReporting.session', { defaultValue: 'Session' })}
         </div>
+        <div className="truncate font-semibold text-foreground">{activeTitle}</div>
       </div>
-
-      <div className="shrink-0 flex items-center gap-3">
-        <div className="w-48 sm:w-56 md:w-72">
-          <SelectControl
-            options={sessionOptions}
-            value={activeSessionId}
-            onChange={(value) => {
-              setIsNewChat(false);
-              setActiveSessionId(value as string);
-              setHasNewText(false);
-            }}
-            placeholder={
-              isLoadingSessions
-                ? t('aiReporting.loadingSessions', { defaultValue: 'Loading...' })
-                : t('aiReporting.selectSession', { defaultValue: 'Select chat' })
-            }
-            displayValue={
-              isNewChat ? t('aiReporting.newChat', { defaultValue: 'New Chat' }) : undefined
-            }
-            disabled={isLoadingSessions || sessionsCount === 0}
-            searchable
-            buttonClassName="py-2.5 text-sm font-semibold"
-          />
-        </div>
-
-        <button
-          type="button"
-          aria-label={t('aiReporting.deleteActiveChatAria', {
-            defaultValue: 'Delete active chat',
-          })}
-          disabled={!canDeleteActive}
-          onClick={() => {
-            if (!activeSession) return;
-            onConfirmDeleteSession(activeSession);
-          }}
-          className={`size-11 rounded-xl flex items-center justify-center transition-colors ${
-            canDeleteActive
-              ? 'bg-white border border-zinc-200 text-red-600 hover:text-red-600 hover:bg-red-50'
-              : 'bg-zinc-100 border border-zinc-200 text-zinc-300 cursor-not-allowed'
-          }`}
-        >
-          <i className="fa-solid fa-trash text-sm" />
-        </button>
-
-        <button
-          type="button"
-          onClick={onNewChat}
-          disabled={isNewChatDisabled}
-          className={`px-5 py-2.5 rounded-xl text-sm font-black transition-all flex items-center gap-2 ${
-            !isNewChatDisabled
-              ? 'bg-praetor text-white shadow-xl shadow-zinc-200 hover:bg-[var(--color-primary-hover)] active:scale-95'
-              : 'bg-zinc-100 border border-zinc-200 text-zinc-400 shadow-none cursor-not-allowed active:scale-100'
-          }`}
-        >
-          <i
-            className={`${
-              isCreatingSession ? 'fa-solid fa-spinner fa-spin' : 'fa-solid fa-plus'
-            } text-xs`}
-          />
-          {t('aiReporting.newChat', { defaultValue: 'New Chat' })}
-        </button>
-      </div>
+      <Badge variant="outline" className="hidden shrink-0 sm:inline-flex">
+        <FlaskConical />
+        {t('aiReporting.experimental', { defaultValue: 'Experimental' })}
+      </Badge>
     </div>
-  );
-};
+
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span className="inline-flex">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            disabled={!canDeleteActive}
+            onClick={() => {
+              if (activeSession) onConfirmDeleteSession(activeSession);
+            }}
+            className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+            aria-label={t('aiReporting.deleteActiveChatAria', {
+              defaultValue: 'Delete active chat',
+            })}
+          >
+            <Trash2 />
+          </Button>
+        </span>
+      </TooltipTrigger>
+      <TooltipContent>
+        {t('aiReporting.deleteChatTitle', { defaultValue: 'Delete chat' })}
+      </TooltipContent>
+    </Tooltip>
+  </header>
+);
 
 interface AiReportingAlertsProps {
   t: TranslationFn;
@@ -1819,27 +1995,28 @@ const AiReportingAlerts: React.FC<AiReportingAlertsProps> = ({
   enableAiReporting,
   canSend,
 }) => (
-  <>
+  <div className="space-y-2 px-4 pt-3 md:px-6 empty:hidden">
     {error && (
-      <div className="mb-3 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-700 dark:text-red-300 mx-4 md:mx-6">
+      <Alert variant="destructive">
+        <TriangleAlert />
         {error}
-      </div>
+      </Alert>
     )}
 
     {!enableAiReporting && (
-      <div className="mb-3 rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-600 mx-4 md:mx-6">
+      <Alert>
         {t('aiReporting.disabledByAdmin', {
           defaultValue: 'AI Reporting is disabled by administration.',
         })}
-      </div>
+      </Alert>
     )}
 
     {enableAiReporting && !canSend && (
-      <div className="mb-3 rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-600 mx-4 md:mx-6">
+      <Alert>
         {t('aiReporting.noPermissionToSend', { defaultValue: 'You do not have permission.' })}
-      </div>
+      </Alert>
     )}
-  </>
+  </div>
 );
 
 interface AiReportingMessageInteractions {
@@ -1894,30 +2071,35 @@ const AiReportingConversation: React.FC<AiReportingConversationProps> = ({
   const { isEnabled, showLoadOlderButton, isLoadingOlderMessages, isLoadingMessages } = state;
 
   return isEnabled ? (
-    <div ref={scrollRef} onScroll={onScroll} className="flex-1 overflow-y-auto px-4 md:px-6 pb-52">
-      <div className="mx-auto w-full max-w-[760px]">
+    <div
+      ref={scrollRef}
+      onScroll={onScroll}
+      className="min-h-0 flex-1 overflow-y-auto px-4 py-6 md:px-8"
+    >
+      <div className="mx-auto w-full max-w-3xl">
         {showLoadOlderButton && (
           <div className="mb-4 flex justify-center">
-            <button
+            <Button
               type="button"
+              variant="outline"
+              size="sm"
               onClick={onLoadOlderMessages}
               disabled={isLoadingOlderMessages || isLoadingMessages}
-              className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-xs font-semibold transition-colors ${
-                isLoadingOlderMessages || isLoadingMessages
-                  ? 'cursor-not-allowed border-zinc-200 text-zinc-400 bg-zinc-50'
-                  : 'border-zinc-300 text-zinc-700 hover:border-zinc-400 hover:bg-zinc-50'
-              }`}
+              className="rounded-full"
             >
-              {isLoadingOlderMessages && <i className="fa-solid fa-spinner fa-spin" />}
+              {isLoadingOlderMessages && <Loader2 className="animate-spin" />}
               {isLoadingOlderMessages
                 ? t('aiReporting.loadingOlder', { defaultValue: 'Loading older messages...' })
                 : t('aiReporting.loadOlder', { defaultValue: 'Load older messages' })}
-            </button>
+            </Button>
           </div>
         )}
 
         {isLoadingMessages && (
-          <div className="text-sm text-zinc-500">{t('aiReporting.thinking')}</div>
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Loader2 className="size-4 animate-spin" />
+            {t('aiReporting.thinking')}
+          </div>
         )}
 
         {!isLoadingMessages && messages.length === 0 && <AiReportingEmptyState t={t} />}
@@ -1942,38 +2124,44 @@ const AiReportingConversation: React.FC<AiReportingConversationProps> = ({
 };
 
 const AiReportingEmptyState: React.FC<{ t: TranslationFn }> = ({ t }) => (
-  <div className="min-h-[45vh] flex items-center justify-center px-4">
-    <div className="max-w-xl text-center">
-      <div className="text-3xl md:text-4xl font-black text-zinc-900 tracking-tight">
+  <Empty className="min-h-[45vh] border-0 px-4">
+    <EmptyHeader className="max-w-xl">
+      <EmptyMedia
+        variant="icon"
+        className="mb-4 size-16 rounded-2xl bg-primary/10 text-primary [&_svg]:size-8"
+      >
+        <Sparkles className="size-8" />
+      </EmptyMedia>
+      <EmptyTitle className="text-2xl font-semibold tracking-tight md:text-3xl">
         {t('aiReporting.emptyPlaceholderTitle', {
           defaultValue: 'What should we build together now?',
         })}
-      </div>
-      <div className="mt-3 text-sm md:text-base text-zinc-500 leading-relaxed">
+      </EmptyTitle>
+      <EmptyDescription className="text-sm md:text-base">
         {t('aiReporting.emptyPlaceholderBody', {
           defaultValue:
             'Start with a question about your business data. I will use your reports to help you.',
         })}
-      </div>
-    </div>
-  </div>
+      </EmptyDescription>
+    </EmptyHeader>
+  </Empty>
 );
 
 const AiReportingDisabledPane: React.FC<{ t: TranslationFn }> = ({ t }) => (
-  <div className="flex-1 px-4 md:px-6 pb-52">
-    <div className="mx-auto w-full max-w-[760px] pt-10">
-      <div className="rounded-3xl border border-zinc-200 bg-white shadow-xl shadow-zinc-900/5 p-6">
-        <div className="text-sm font-black text-zinc-900">
+  <div className="min-h-0 flex-1 overflow-y-auto px-4 py-10 md:px-8">
+    <Card className="mx-auto max-w-3xl">
+      <CardContent>
+        <CardTitle>
           {t('aiReporting.disabledTitle', { defaultValue: 'AI Reporting disabled' })}
-        </div>
-        <div className="mt-2 text-sm text-zinc-600">
+        </CardTitle>
+        <CardDescription className="mt-2">
           {t('aiReporting.disabledBody', {
             defaultValue:
               'This feature has been disabled by administration. Contact an admin to enable it in General Administration.',
           })}
-        </div>
-      </div>
-    </div>
+        </CardDescription>
+      </CardContent>
+    </Card>
   </div>
 );
 
@@ -2054,15 +2242,15 @@ const AiReportingUserMessage: React.FC<AiReportingUserMessageProps> = ({
     <div className="group w-full flex justify-end">
       {isEditing ? (
         <div className="w-full">
-          <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-3">
-            <textarea
+          <Card className="gap-3 rounded-2xl bg-muted/30 p-3 py-3">
+            <Textarea
               value={editingDraft}
               onChange={(event) => setEditingDraft(event.target.value)}
               rows={3}
               aria-label={t('aiReporting.editMessage', {
                 defaultValue: 'Edit message',
               })}
-              className="w-full resize-none bg-transparent outline-none text-sm leading-relaxed text-zinc-800"
+              className="resize-none text-sm leading-relaxed"
               onKeyDown={(event) => {
                 if (event.key === 'Escape') {
                   setEditingMessageId('');
@@ -2074,33 +2262,34 @@ const AiReportingUserMessage: React.FC<AiReportingUserMessageProps> = ({
               }}
             />
             <div className="flex justify-end gap-2 mt-2">
-              <button
+              <Button
                 type="button"
+                variant="ghost"
+                size="sm"
                 onClick={() => {
                   setEditingMessageId('');
                   setEditingDraft('');
                 }}
-                className="px-4 py-1.5 text-xs font-medium text-zinc-600 hover:text-zinc-800 hover:bg-zinc-200 rounded-full transition-colors"
               >
                 {t('common:buttons.cancel', { defaultValue: 'Cancel' })}
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
+                size="sm"
                 onClick={() => void handleEditSend(message)}
                 disabled={!editingDraft.trim()}
-                className="px-4 py-1.5 text-xs font-medium text-white bg-praetor hover:bg-praetor/90 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {t('common:buttons.send', { defaultValue: 'Send' })}
-              </button>
+              </Button>
             </div>
-          </div>
+          </Card>
         </div>
       ) : (
         <div className="flex flex-col items-end max-w-[85%]">
-          <div className="rounded-2xl px-4 py-3 text-sm leading-relaxed bg-praetor text-white rounded-br-md whitespace-pre-wrap">
+          <div className="rounded-2xl rounded-br-md bg-primary px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap text-primary-foreground">
             {message.content}
           </div>
-          <div className="flex items-center gap-1 mt-1 opacity-0 group-hover:opacity-100 transition-all">
+          <div className="mt-1 flex items-center gap-1 opacity-100 transition-opacity md:opacity-0 md:group-focus-within:opacity-100 md:group-hover:opacity-100">
             <Tooltip>
               <TooltipTrigger asChild>
                 <CopyButton
@@ -2117,22 +2306,20 @@ const AiReportingUserMessage: React.FC<AiReportingUserMessageProps> = ({
             <Tooltip>
               <TooltipTrigger asChild>
                 <span className="inline-flex">
-                  <button
+                  <Button
                     type="button"
+                    variant="ghost"
+                    size="icon-sm"
                     onClick={() => {
                       setEditingMessageId(message.id);
                       setEditingDraft(message.content);
                     }}
                     disabled={editDisabled}
                     aria-label={t('common:buttons.edit', { defaultValue: 'Edit' })}
-                    className={`p-1.5 rounded-lg transition-colors ${
-                      editDisabled
-                        ? 'text-zinc-300 cursor-not-allowed'
-                        : 'text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100'
-                    }`}
+                    className="text-muted-foreground"
                   >
-                    <i className="fa-regular fa-pen-to-square" />
-                  </button>
+                    <Pencil />
+                  </Button>
                 </span>
               </TooltipTrigger>
               <TooltipContent>{t('common:buttons.edit', { defaultValue: 'Edit' })}</TooltipContent>
@@ -2168,7 +2355,7 @@ const AiReportingAssistantMessage: React.FC<AiReportingAssistantMessageProps> = 
 
   return (
     <div className="group w-full flex justify-start">
-      <div className="w-full text-sm leading-relaxed text-zinc-800">
+      <div className="w-full text-sm leading-relaxed text-foreground">
         {message.thoughtContent?.trim() && (
           <AiReportingThoughtPanel
             t={t}
@@ -2195,19 +2382,17 @@ const AiReportingAssistantMessage: React.FC<AiReportingAssistantMessageProps> = 
           <Tooltip>
             <TooltipTrigger asChild>
               <span className="inline-flex">
-                <button
+                <Button
                   type="button"
+                  variant="ghost"
+                  size="icon-sm"
                   onClick={() => void handleRetryMessage(message.id)}
                   disabled={!canRetry}
-                  className={`p-1.5 rounded-lg transition-colors ${
-                    canRetry
-                      ? 'text-zinc-500 hover:text-zinc-700 hover:bg-zinc-100'
-                      : 'text-zinc-300 cursor-not-allowed'
-                  }`}
+                  className="text-muted-foreground"
                   aria-label={t('aiReporting.retry', { defaultValue: 'Retry' })}
                 >
-                  <i className="fa-solid fa-rotate-right" />
-                </button>
+                  <RefreshCw />
+                </Button>
               </span>
             </TooltipTrigger>
             <TooltipContent>{t('aiReporting.retry', { defaultValue: 'Retry' })}</TooltipContent>
@@ -2240,9 +2425,10 @@ const AiReportingThoughtPanel: React.FC<AiReportingThoughtPanelProps> = ({
   isExpanded,
   setExpandedThoughtMessageIds,
 }) => (
-  <div className="mb-3 rounded-2xl border border-zinc-200/80 bg-zinc-50/70 backdrop-blur-sm">
-    <button
+  <Card className="mb-3 gap-0 overflow-hidden rounded-2xl bg-muted/30 py-0">
+    <Button
       type="button"
+      variant="ghost"
       onClick={() =>
         setExpandedThoughtMessageIds((prev) =>
           prev.includes(message.id)
@@ -2250,14 +2436,14 @@ const AiReportingThoughtPanel: React.FC<AiReportingThoughtPanelProps> = ({
             : [...prev, message.id],
         )
       }
-      className="w-full flex items-center justify-between px-3 py-2.5 text-left text-xs font-semibold text-zinc-600 hover:text-zinc-800 transition-colors"
+      className="h-auto w-full justify-between rounded-none px-3 py-2.5 text-xs"
     >
       <span className="inline-flex items-center gap-2">
-        <i className="fa-regular fa-lightbulb text-zinc-500" />
+        <Lightbulb className="size-4 text-muted-foreground" />
         {t('aiReporting.thoughtLabel', { defaultValue: 'Thought process' })}
       </span>
-      <i className={`fa-solid ${isExpanded ? 'fa-chevron-up' : 'fa-chevron-down'}`} />
-    </button>
+      {isExpanded ? <ChevronUp /> : <ChevronDown />}
+    </Button>
     <div
       className={`grid overflow-hidden transition-[grid-template-rows] duration-300 ease-out ${
         isExpanded ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
@@ -2265,9 +2451,9 @@ const AiReportingThoughtPanel: React.FC<AiReportingThoughtPanelProps> = ({
     >
       <div className="overflow-hidden">
         <div
-          className={`border-t text-xs leading-relaxed text-zinc-600 whitespace-pre-wrap transition-[opacity,padding,border-color,transform] duration-300 ease-out ${
+          className={`border-t text-xs leading-relaxed text-muted-foreground whitespace-pre-wrap transition-[opacity,padding,border-color,transform] duration-300 ease-out ${
             isExpanded
-              ? 'border-zinc-200/80 px-3 py-2.5 opacity-100 translate-y-0'
+              ? 'border-border px-3 py-2.5 opacity-100 translate-y-0'
               : 'border-transparent px-3 py-0 opacity-0 -translate-y-1'
           }`}
         >
@@ -2275,7 +2461,7 @@ const AiReportingThoughtPanel: React.FC<AiReportingThoughtPanelProps> = ({
         </div>
       </div>
     </div>
-  </div>
+  </Card>
 );
 
 const AiMarkdownMessage: React.FC<{
@@ -2297,7 +2483,7 @@ const AiMarkdownMessage: React.FC<{
               href={safe}
               target="_blank"
               rel="noopener noreferrer"
-              className="font-semibold underline underline-offset-2 text-zinc-900 hover:text-zinc-700"
+              className="font-semibold text-foreground underline underline-offset-2 hover:text-foreground/80"
             >
               {children}
             </a>
@@ -2306,13 +2492,13 @@ const AiMarkdownMessage: React.FC<{
         img: ({ alt, src }: MarkdownRendererProps<'img'>) => {
           const safe = safeHref(src);
           const label = alt?.trim() ? alt.trim() : src || 'image';
-          if (!safe) return <span className="text-zinc-500">[Image: {label}]</span>;
+          if (!safe) return <span className="text-muted-foreground">[Image: {label}]</span>;
           return (
             <a
               href={safe}
               target="_blank"
               rel="noopener noreferrer"
-              className="font-semibold underline underline-offset-2 text-zinc-900 hover:text-zinc-700"
+              className="font-semibold text-foreground underline underline-offset-2 hover:text-foreground/80"
             >
               [Image: {label}]
             </a>
@@ -2322,33 +2508,33 @@ const AiMarkdownMessage: React.FC<{
           <p className="my-2 first:mt-0 last:mb-0">{children}</p>
         ),
         h1: ({ children }: MarkdownRendererProps<'h1'>) => (
-          <h1 className="mt-4 mb-2 text-lg font-semibold text-zinc-900">{children}</h1>
+          <h1 className="mt-4 mb-2 text-lg font-semibold text-foreground">{children}</h1>
         ),
         h2: ({ children }: MarkdownRendererProps<'h2'>) => (
-          <h2 className="mt-4 mb-2 text-base font-semibold text-zinc-900">{children}</h2>
+          <h2 className="mt-4 mb-2 text-base font-semibold text-foreground">{children}</h2>
         ),
         h3: ({ children }: MarkdownRendererProps<'h3'>) => (
-          <h3 className="mt-3 mb-1 text-sm font-semibold text-zinc-900">{children}</h3>
+          <h3 className="mt-3 mb-1 text-sm font-semibold text-foreground">{children}</h3>
         ),
         ul: ({ children }: MarkdownRendererProps<'ul'>) => (
-          <ul className="my-2 list-disc pl-5 marker:text-zinc-400">{children}</ul>
+          <ul className="my-2 list-disc pl-5 marker:text-muted-foreground">{children}</ul>
         ),
         ol: ({ children }: MarkdownRendererProps<'ol'>) => (
-          <ol className="my-2 list-decimal pl-5 marker:text-zinc-400">{children}</ol>
+          <ol className="my-2 list-decimal pl-5 marker:text-muted-foreground">{children}</ol>
         ),
         li: ({ children }: MarkdownRendererProps<'li'>) => <li className="my-1">{children}</li>,
         blockquote: ({ children }: MarkdownRendererProps<'blockquote'>) => (
-          <blockquote className="my-2 border-l-4 border-zinc-200 pl-3 text-zinc-700">
+          <blockquote className="my-2 border-l-4 border-border pl-3 text-muted-foreground">
             {children}
           </blockquote>
         ),
-        hr: () => <hr className="my-3 border-zinc-200" />,
+        hr: () => <hr className="my-3 border-border" />,
         table: ({ children }: MarkdownRendererProps<'table'>) => {
           tableRenderIndex += 1;
           const tableId = `${message.id}-table-${tableRenderIndex}`;
           return (
-            <div className="my-3 overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm">
-              <div className="flex items-center justify-end border-b border-zinc-200 px-2 py-1.5">
+            <Card className="my-3 gap-0 overflow-hidden rounded-2xl py-0">
+              <div className="flex items-center justify-end border-b border-border px-2 py-1.5">
                 <CopyButton
                   iconOnly
                   variant="ghost"
@@ -2367,24 +2553,24 @@ const AiMarkdownMessage: React.FC<{
                       delete tableRefs.current[tableId];
                     }
                   }}
-                  className="w-max min-w-full border-collapse text-left text-[13px] leading-relaxed text-zinc-700"
+                  className="w-max min-w-full border-collapse text-left text-[13px] leading-relaxed text-foreground"
                 >
                   {children}
                 </table>
               </div>
-            </div>
+            </Card>
           );
         },
         th: ({ children }: MarkdownRendererProps<'th'>) => (
-          <th className="align-top whitespace-nowrap border border-zinc-200 bg-zinc-50 px-3 py-2 font-semibold text-zinc-700">
+          <th className="align-top whitespace-nowrap border border-border bg-muted px-3 py-2 font-semibold text-foreground">
             {children}
           </th>
         ),
         td: ({ children }: MarkdownRendererProps<'td'>) => (
-          <td className="align-top break-words border border-zinc-200/80 px-3 py-2">{children}</td>
+          <td className="align-top break-words border border-border px-3 py-2">{children}</td>
         ),
         pre: ({ children }: MarkdownRendererProps<'pre'>) => (
-          <pre className="my-2 overflow-x-auto rounded-xl bg-zinc-950 p-3 text-zinc-100">
+          <pre className="my-2 overflow-x-auto rounded-xl bg-muted p-3 text-foreground">
             {children}
           </pre>
         ),
@@ -2396,7 +2582,7 @@ const AiMarkdownMessage: React.FC<{
           if (inline === false) {
             return (
               <code
-                className={`font-mono text-[12px] leading-relaxed text-zinc-100 ${className ?? ''}`}
+                className={`font-mono text-[12px] leading-relaxed text-foreground ${className ?? ''}`}
               >
                 {children}
               </code>
@@ -2404,7 +2590,7 @@ const AiMarkdownMessage: React.FC<{
           }
 
           return (
-            <code className="font-mono text-[12px] rounded bg-zinc-100 px-1 py-0.5 text-zinc-900">
+            <code className="rounded bg-muted px-1 py-0.5 font-mono text-[12px] text-foreground">
               {children}
             </code>
           );
@@ -2432,8 +2618,10 @@ const AiReportingAttemptPager: React.FC<AiReportingAttemptPagerProps> = ({
   dispatchAttemptSelection,
 }) => (
   <div className="inline-flex items-center gap-1">
-    <button
+    <Button
       type="button"
+      variant="ghost"
+      size="icon-xs"
       onClick={() =>
         dispatchAttemptSelection({
           type: 'set',
@@ -2443,19 +2631,17 @@ const AiReportingAttemptPager: React.FC<AiReportingAttemptPagerProps> = ({
       }
       disabled={selectedAttemptIndex <= 0}
       aria-label={t('aiReporting.previousVersion', { defaultValue: 'Previous version' })}
-      className={`p-1 text-xs rounded transition-colors ${
-        selectedAttemptIndex > 0
-          ? 'text-zinc-500 hover:text-zinc-700 hover:bg-zinc-100'
-          : 'text-zinc-300 cursor-not-allowed'
-      }`}
+      className="text-muted-foreground"
     >
-      <i className="fa-solid fa-chevron-left text-[10px]" />
-    </button>
-    <span className="text-xs text-zinc-500 min-w-[36px] text-center">
+      <ChevronLeft />
+    </Button>
+    <span className="min-w-[36px] text-center text-xs text-muted-foreground">
       {selectedAttemptIndex + 1}/{attemptCount}
     </span>
-    <button
+    <Button
       type="button"
+      variant="ghost"
+      size="icon-xs"
       onClick={() =>
         dispatchAttemptSelection({
           type: 'set',
@@ -2465,14 +2651,10 @@ const AiReportingAttemptPager: React.FC<AiReportingAttemptPagerProps> = ({
       }
       disabled={selectedAttemptIndex >= attemptCount - 1}
       aria-label={t('aiReporting.nextVersion', { defaultValue: 'Next version' })}
-      className={`p-1 text-xs rounded transition-colors ${
-        selectedAttemptIndex < attemptCount - 1
-          ? 'text-zinc-500 hover:text-zinc-700 hover:bg-zinc-100'
-          : 'text-zinc-300 cursor-not-allowed'
-      }`}
+      className="text-muted-foreground"
     >
-      <i className="fa-solid fa-chevron-right text-[10px]" />
-    </button>
+      <ChevronRight />
+    </Button>
   </div>
 );
 
@@ -2487,17 +2669,19 @@ const AiReportingScrollButton: React.FC<AiReportingScrollButtonProps> = ({
   hasNewText,
   onGoToBottom,
 }) => (
-  <button
+  <Button
     type="button"
+    variant="outline"
+    size="icon-lg"
     onClick={onGoToBottom}
     aria-label={t('aiReporting.goToBottom', { defaultValue: 'Go to bottom' })}
-    className="absolute left-1/2 -translate-x-1/2 bottom-32 z-[3] size-11 rounded-full bg-white border border-zinc-200 text-zinc-500 hover:text-zinc-900 hover:bg-zinc-50 transition-colors flex items-center justify-center"
+    className="absolute bottom-4 left-1/2 z-[3] -translate-x-1/2 rounded-full bg-background text-muted-foreground shadow-md"
   >
-    <i className="fa-solid fa-arrow-down" />
+    <ArrowDown />
     {hasNewText && (
-      <span className="absolute -top-1 -right-1 size-3 rounded-full bg-praetor border-2 border-white" />
+      <span className="absolute -top-1 -right-1 size-3 rounded-full border-2 border-background bg-primary" />
     )}
-  </button>
+  </Button>
 );
 
 interface AiReportingComposerProps {
@@ -2523,74 +2707,59 @@ const AiReportingComposer: React.FC<AiReportingComposerProps> = ({
   onSend,
   onStop,
 }) => (
-  <>
-    <div
-      className="absolute left-0 right-0 bottom-0 h-32 pointer-events-none z-[1]"
-      style={{
-        background:
-          'linear-gradient(to top, rgb(249 250 251) 0%, rgba(249,250,251,0.8) 40%, transparent 100%)',
-      }}
-    />
+  <div className="border-t border-border bg-background px-4 py-3 md:px-8">
+    <div className="mx-auto w-full max-w-3xl">
+      <Card className="gap-0 rounded-2xl p-2 py-2 shadow-sm">
+        <div className="flex items-end gap-2">
+          <Textarea
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+            placeholder={t('aiReporting.placeholder')}
+            aria-label={t('aiReporting.placeholder')}
+            disabled={!canSend || isSending}
+            rows={1}
+            onKeyDown={(event) => {
+              if (event.key !== 'Enter') return;
+              if (event.shiftKey) return;
+              event.preventDefault();
+              onSend();
+            }}
+            className="max-h-40 min-h-10 flex-1 resize-none border-0 bg-transparent p-2 shadow-none focus-visible:ring-0"
+          />
 
-    <div className="absolute left-0 right-0 bottom-0 z-[2]">
-      <div className="w-full px-4 md:px-6 pb-6">
-        <div className="mx-auto w-full max-w-[760px]">
-          <div className="rounded-3xl border border-zinc-200 bg-white shadow-xl shadow-zinc-900/5 p-3">
-            <div className="flex items-end gap-2">
-              <textarea
-                value={draft}
-                onChange={(event) => setDraft(event.target.value)}
-                placeholder={t('aiReporting.placeholder')}
-                aria-label={t('aiReporting.placeholder')}
-                disabled={!canSend || isSending}
-                rows={1}
-                onKeyDown={(event) => {
-                  if (event.key !== 'Enter') return;
-                  if (event.shiftKey) return;
-                  event.preventDefault();
-                  onSend();
-                }}
-                className="flex-1 resize-none bg-transparent outline-none text-sm text-zinc-900 placeholder:text-zinc-400 p-2 max-h-40 disabled:cursor-not-allowed"
-              />
-
-              {isSending ? (
-                <button
-                  type="button"
-                  onClick={onStop}
-                  className="shrink-0 size-10 rounded-full flex items-center justify-center transition-colors bg-red-600 text-white hover:bg-red-700"
-                  aria-label={t('aiReporting.stop', { defaultValue: 'Stop' })}
-                >
-                  <i className="fa-solid fa-stop text-sm" />
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={onSend}
-                  disabled={!canSend || !draft.trim()}
-                  className={`shrink-0 size-10 rounded-full flex items-center justify-center transition-colors ${
-                    !canSend || !draft.trim()
-                      ? 'bg-zinc-200 text-zinc-400 cursor-not-allowed'
-                      : 'bg-praetor text-white hover:bg-[var(--color-primary-hover)]'
-                  }`}
-                  aria-label="Send"
-                >
-                  <i className="fa-solid fa-arrow-up text-sm" />
-                </button>
-              )}
-            </div>
-          </div>
+          {isSending ? (
+            <Button
+              type="button"
+              variant="destructive"
+              size="icon-lg"
+              onClick={onStop}
+              className="rounded-full"
+              aria-label={t('aiReporting.stop', { defaultValue: 'Stop' })}
+            >
+              <Square />
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              size="icon-lg"
+              onClick={onSend}
+              disabled={!canSend || !draft.trim()}
+              className="rounded-full"
+              aria-label={t('common:buttons.send', { defaultValue: 'Send' })}
+            >
+              <ArrowUp />
+            </Button>
+          )}
         </div>
-        <div className="mx-auto w-full max-w-[760px] mt-2 px-2">
-          <div className="text-[11px] text-zinc-400">
-            {footerHintWithPeriod ? `${footerHintWithPeriod} ${aiWarning}` : aiWarning}
-          </div>
-        </div>
-      </div>
+      </Card>
+      <p className="mt-2 px-2 text-[11px] text-muted-foreground">
+        {footerHintWithPeriod ? [footerHintWithPeriod, aiWarning].join(' ') : aiWarning}
+      </p>
     </div>
-  </>
+  </div>
 );
 
-interface AiReportingDeleteModalProps {
+interface AiReportingDeleteDialogProps {
   t: TranslationFn;
   isOpen: boolean;
   sessionToDelete: ReportChatSessionSummary | null;
@@ -2600,7 +2769,7 @@ interface AiReportingDeleteModalProps {
   onArchive: () => void;
 }
 
-const AiReportingDeleteModal: React.FC<AiReportingDeleteModalProps> = ({
+const AiReportingDeleteDialog: React.FC<AiReportingDeleteDialogProps> = ({
   t,
   isOpen,
   sessionToDelete,
@@ -2609,50 +2778,46 @@ const AiReportingDeleteModal: React.FC<AiReportingDeleteModalProps> = ({
   onClose,
   onArchive,
 }) => (
-  <Modal isOpen={isOpen} onClose={onClose}>
-    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in duration-200">
-      <div className="p-6 text-center space-y-4">
-        <div className="size-12 bg-red-100 rounded-full flex items-center justify-center mx-auto text-red-600">
-          <i className="fa-solid fa-triangle-exclamation text-xl"></i>
+  <Dialog
+    open={isOpen}
+    onOpenChange={(open) => {
+      if (!open) onClose();
+    }}
+  >
+    <DialogContent className="max-w-sm" showCloseButton={false}>
+      <DialogHeader className="items-center text-center sm:text-center">
+        <div className="flex size-12 items-center justify-center rounded-full bg-destructive/10 text-destructive">
+          <TriangleAlert className="size-6" />
         </div>
-        <div>
-          <h3 className="text-lg font-semibold text-zinc-800">
-            {t('aiReporting.deleteChatTitle', { defaultValue: 'Delete chat' })}
-          </h3>
-          <p className="text-sm text-zinc-500 mt-2 leading-relaxed">
-            {t('aiReporting.deleteChatConfirm', {
-              name: sessionToDelete
-                ? toOptionLabel(sessionToDelete) ||
-                  t('aiReporting.newChat', { defaultValue: 'New Chat' })
-                : '',
-              defaultValue: 'This will remove "{{name}}" from your chat history.',
-            })}
-          </p>
-        </div>
-        <div className="flex gap-3 pt-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex-1 py-3 text-sm font-bold text-zinc-500 hover:bg-zinc-50 rounded-xl transition-colors"
-          >
-            {t('common:buttons.cancel', { defaultValue: 'Cancel' })}
-          </button>
-          <button
-            type="button"
-            disabled={!canArchive || isDeletingSession || !sessionToDelete}
-            onClick={onArchive}
-            className={`flex-1 py-3 text-white text-sm font-bold rounded-xl shadow-lg transition-all active:scale-95 ${
-              !canArchive || isDeletingSession || !sessionToDelete
-                ? 'bg-zinc-300 shadow-none cursor-not-allowed'
-                : 'bg-red-600 shadow-red-200 hover:bg-red-700'
-            }`}
-          >
-            {t('common:buttons.delete', { defaultValue: 'Delete' })}
-          </button>
-        </div>
-      </div>
-    </div>
-  </Modal>
+        <DialogTitle>
+          {t('aiReporting.deleteChatTitle', { defaultValue: 'Delete chat' })}
+        </DialogTitle>
+        <DialogDescription>
+          {t('aiReporting.deleteChatConfirm', {
+            name: sessionToDelete
+              ? toOptionLabel(sessionToDelete) ||
+                t('aiReporting.newChat', { defaultValue: 'New Chat' })
+              : '',
+            defaultValue: 'This will remove "{{name}}" from your chat history.',
+          })}
+        </DialogDescription>
+      </DialogHeader>
+      <DialogFooter className="grid grid-cols-2 sm:grid-cols-2">
+        <Button type="button" variant="outline" onClick={onClose}>
+          {t('common:buttons.cancel', { defaultValue: 'Cancel' })}
+        </Button>
+        <Button
+          type="button"
+          variant="destructive"
+          disabled={!canArchive || isDeletingSession || !sessionToDelete}
+          onClick={onArchive}
+        >
+          {isDeletingSession && <Loader2 className="animate-spin" />}
+          {t('common:buttons.delete', { defaultValue: 'Delete' })}
+        </Button>
+      </DialogFooter>
+    </DialogContent>
+  </Dialog>
 );
 
 export default AiReportingView;

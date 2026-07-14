@@ -13,6 +13,14 @@ Se non vedi il modulo, chiedi a un amministratore di verificare impostazioni AI,
 
 L'amministratore può collegare AI reporting a Gemini, OpenRouter, Anthropic o OpenAI. Praetor usa esclusivamente il provider selezionato nelle impostazioni generali e conserva separatamente chiave e modello di ciascun provider.
 
+## Cronologia delle conversazioni
+
+Su desktop AI Reporting mostra la cronologia nella colonna sinistra e la conversazione attiva a destra. Le chat sono ordinate per ultima attività e raggruppate per periodo.
+
+Usa il campo di ricerca per filtrare le chat in base al titolo. Seleziona una voce per riprendere la conversazione oppure premi **Nuova Chat** in fondo alla cronologia per iniziarne una nuova.
+
+Su dispositivi mobili, apri la cronologia con il pulsante nella barra superiore della conversazione.
+
 ## Uso consigliato
 
 Formula richieste specifiche: indica periodo, area aziendale, cliente, progetto o metrica che vuoi analizzare. Domande precise producono risposte più verificabili.
