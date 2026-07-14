@@ -134,7 +134,7 @@ export const buildSupplierImportDefinition = (
     entity: 'suppliers',
     title: t('crm:suppliers.bulk.excel.workbookTitle'),
     instructions: t('crm:suppliers.bulk.excel.workbookInstructions'),
-    exampleNotice: t('crm:suppliers.bulk.excel.workbookExampleNotice'),
+    dataNotice: t('crm:suppliers.bulk.excel.workbookDataNotice'),
     fieldComment: (field) =>
       t('crm:suppliers.bulk.excel.workbookFieldComment', {
         field: field.label,

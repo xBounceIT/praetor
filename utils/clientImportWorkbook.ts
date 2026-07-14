@@ -225,7 +225,7 @@ export const buildClientImportDefinition = (
     entity: 'clients',
     title: t('crm:clients.bulk.excel.workbookTitle'),
     instructions: t('crm:clients.bulk.excel.workbookInstructions'),
-    exampleNotice: t('crm:clients.bulk.excel.workbookExampleNotice'),
+    dataNotice: t('crm:clients.bulk.excel.workbookDataNotice'),
     fieldComment: (field) =>
       t('crm:clients.bulk.excel.workbookFieldComment', {
         field: field.label,

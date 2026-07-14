@@ -5,12 +5,13 @@ export const IMPORT_WORKBOOK_VERSION = 1;
 export const IMPORT_WORKSHEET_NAME = 'Import';
 export const IMPORT_METADATA_SHEET_NAME = '_praetor';
 export const IMPORT_HEADER_ROW = 4;
-export const IMPORT_EXAMPLE_ROW = 5;
-export const IMPORT_FIRST_DATA_ROW = 6;
+export const IMPORT_FIRST_DATA_ROW = 5;
 export const MAX_ENTITY_IMPORT_ROWS = 500;
 export const MAX_ENTITY_IMPORT_FILE_BYTES = 5 * 1024 * 1024;
 
 const IMPORT_LAST_DATA_ROW = IMPORT_FIRST_DATA_ROW + MAX_ENTITY_IMPORT_ROWS - 1;
+const LEGACY_IMPORT_EXAMPLE_ROW = 5;
+const LEGACY_IMPORT_FIRST_DATA_ROW = 6;
 const METADATA_FIELD_START_ROW = 11;
 const METADATA_LIST_START_COLUMN = 8;
 const WORKSHEET_PROTECTION_PASSWORD = 'praetor-import-template';
@@ -37,7 +38,7 @@ export type ImportWorkbookDefinition<Field extends string> = {
   entity: ImportWorkbookEntity;
   title: string;
   instructions: string;
-  exampleNotice: string;
+  dataNotice: string;
   fieldComment: (field: ImportFieldDefinition<Field>) => string;
   invalidValueTitle: string;
   invalidValueMessage: string;
@@ -119,7 +120,7 @@ export const buildImportWorkbook = async <Field extends string>(
   workbook.modified = new Date();
 
   const worksheet = workbook.addWorksheet(IMPORT_WORKSHEET_NAME, {
-    views: [{ state: 'frozen', ySplit: IMPORT_EXAMPLE_ROW, showGridLines: false }],
+    views: [{ state: 'frozen', ySplit: IMPORT_HEADER_ROW, showGridLines: false }],
   });
   const metadata = workbook.addWorksheet(IMPORT_METADATA_SHEET_NAME, {
     views: [{ showGridLines: false }],
@@ -132,7 +133,7 @@ export const buildImportWorkbook = async <Field extends string>(
   worksheet.mergeCells(3, 1, 3, lastColumn);
   worksheet.getCell(1, 1).value = definition.title;
   worksheet.getCell(2, 1).value = definition.instructions;
-  worksheet.getCell(3, 1).value = definition.exampleNotice;
+  worksheet.getCell(3, 1).value = definition.dataNotice;
   worksheet.getCell(1, 1).font = { bold: true, size: 16, color: { argb: 'FFFFFFFF' } };
   worksheet.getCell(1, 1).fill = fill('FF0F766E');
   worksheet.getCell(1, 1).alignment = { vertical: 'middle', horizontal: 'left' };
@@ -158,14 +159,12 @@ export const buildImportWorkbook = async <Field extends string>(
   metadata.getCell('B4').value = IMPORT_WORKSHEET_NAME;
   metadata.getCell('A5').value = 'header_row';
   metadata.getCell('B5').value = IMPORT_HEADER_ROW;
-  metadata.getCell('A6').value = 'example_row';
-  metadata.getCell('B6').value = IMPORT_EXAMPLE_ROW;
-  metadata.getCell('A7').value = 'first_data_row';
-  metadata.getCell('B7').value = IMPORT_FIRST_DATA_ROW;
-  metadata.getCell('A8').value = 'max_rows';
-  metadata.getCell('B8').value = MAX_ENTITY_IMPORT_ROWS;
-  metadata.getCell('A9').value = 'field_count';
-  metadata.getCell('B9').value = definition.fields.length;
+  metadata.getCell('A6').value = 'first_data_row';
+  metadata.getCell('B6').value = IMPORT_FIRST_DATA_ROW;
+  metadata.getCell('A7').value = 'max_rows';
+  metadata.getCell('B7').value = MAX_ENTITY_IMPORT_ROWS;
+  metadata.getCell('A8').value = 'field_count';
+  metadata.getCell('B8').value = definition.fields.length;
 
   definition.fields.forEach((field, fieldIndex) => {
     const column = fieldIndex + 1;
@@ -177,14 +176,6 @@ export const buildImportWorkbook = async <Field extends string>(
     headerCell.alignment = { vertical: 'middle', horizontal: 'left', wrapText: true };
     headerCell.border = thinBorder;
     headerCell.note = definition.fieldComment(field);
-
-    const exampleCell = worksheet.getCell(IMPORT_EXAMPLE_ROW, column);
-    exampleCell.value = field.example;
-    exampleCell.font = { italic: true, color: { argb: 'FF64748B' } };
-    exampleCell.fill = fill('FFF1F5F9');
-    exampleCell.alignment = { vertical: 'middle', horizontal: 'left' };
-    exampleCell.border = thinBorder;
-    exampleCell.numFmt = '@';
 
     worksheet.getColumn(column).width = Math.min(Math.max(field.width ?? 20, 12), 42);
 
@@ -309,17 +300,33 @@ export const parseImportWorkbook = <Field extends string>(
   if (metadataText(workbook, 'B3') !== expectedEntity) {
     return emptyResult({ code: 'wrong_entity' });
   }
-  const fieldCount = Number(metadataText(workbook, 'B9'));
+  const usesCurrentLayout =
+    metadataText(workbook, 'A6') === 'first_data_row' &&
+    Number(metadataText(workbook, 'B6')) === IMPORT_FIRST_DATA_ROW &&
+    metadataText(workbook, 'A7') === 'max_rows' &&
+    Number(metadataText(workbook, 'B7')) === MAX_ENTITY_IMPORT_ROWS &&
+    metadataText(workbook, 'A8') === 'field_count' &&
+    Number(metadataText(workbook, 'B8')) === expectedFields.length;
+  const usesLegacyExampleLayout =
+    metadataText(workbook, 'A6') === 'example_row' &&
+    Number(metadataText(workbook, 'B6')) === LEGACY_IMPORT_EXAMPLE_ROW &&
+    metadataText(workbook, 'A7') === 'first_data_row' &&
+    Number(metadataText(workbook, 'B7')) === LEGACY_IMPORT_FIRST_DATA_ROW &&
+    metadataText(workbook, 'A8') === 'max_rows' &&
+    Number(metadataText(workbook, 'B8')) === MAX_ENTITY_IMPORT_ROWS &&
+    metadataText(workbook, 'A9') === 'field_count' &&
+    Number(metadataText(workbook, 'B9')) === expectedFields.length;
   if (
     metadataText(workbook, 'B4') !== IMPORT_WORKSHEET_NAME ||
     Number(metadataText(workbook, 'B5')) !== IMPORT_HEADER_ROW ||
-    Number(metadataText(workbook, 'B6')) !== IMPORT_EXAMPLE_ROW ||
-    Number(metadataText(workbook, 'B7')) !== IMPORT_FIRST_DATA_ROW ||
-    Number(metadataText(workbook, 'B8')) !== MAX_ENTITY_IMPORT_ROWS ||
-    fieldCount !== expectedFields.length
+    (!usesCurrentLayout && !usesLegacyExampleLayout)
   ) {
     return emptyResult({ code: 'modified_structure' });
   }
+  const firstDataRow = usesLegacyExampleLayout
+    ? LEGACY_IMPORT_FIRST_DATA_ROW
+    : IMPORT_FIRST_DATA_ROW;
+  const lastDataRow = firstDataRow + MAX_ENTITY_IMPORT_ROWS - 1;
 
   const worksheet = workbook.getWorksheet(IMPORT_WORKSHEET_NAME);
   const metadata = workbook.getWorksheet(IMPORT_METADATA_SHEET_NAME);
@@ -336,7 +343,8 @@ export const parseImportWorkbook = <Field extends string>(
       storedField !== field ||
       typeof storedHeader !== 'string' ||
       worksheet.getCell(IMPORT_HEADER_ROW, index + 1).value !== storedHeader ||
-      worksheet.getCell(IMPORT_EXAMPLE_ROW, index + 1).value !== storedExample
+      (usesLegacyExampleLayout &&
+        worksheet.getCell(LEGACY_IMPORT_EXAMPLE_ROW, index + 1).value !== storedExample)
     ) {
       return emptyResult({ code: 'modified_structure' });
     }
@@ -379,7 +387,7 @@ export const parseImportWorkbook = <Field extends string>(
 
   let hasOverflowData = false;
   worksheet.eachRow((row, rowNumber) => {
-    if (hasOverflowData || rowNumber <= IMPORT_LAST_DATA_ROW) return;
+    if (hasOverflowData || rowNumber <= lastDataRow) return;
     for (let column = 1; column <= expectedFields.length; column += 1) {
       const value = scalarText(row.getCell(column));
       if (!value.ok || value.value !== '') {
@@ -393,7 +401,7 @@ export const parseImportWorkbook = <Field extends string>(
   const rows: Array<{ line: number; item: Partial<Record<Field, string>> }> = [];
   const rowIssues: ImportWorkbookIssue[] = [];
   let totalDataRows = 0;
-  for (let row = IMPORT_FIRST_DATA_ROW; row <= IMPORT_LAST_DATA_ROW; row += 1) {
+  for (let row = firstDataRow; row <= lastDataRow; row += 1) {
     const item: Partial<Record<Field, string>> = {};
     let hasValue = false;
     let rowInvalid = false;

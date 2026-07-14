@@ -8,7 +8,6 @@ import {
 } from '../../utils/clientImportWorkbook';
 import {
   buildImportWorkbook,
-  IMPORT_EXAMPLE_ROW,
   IMPORT_FIRST_DATA_ROW,
   IMPORT_HEADER_ROW,
   IMPORT_METADATA_SHEET_NAME,
@@ -104,6 +103,8 @@ describe('Praetor entity import workbooks', () => {
     expect(metadata.getCell('B1').value).toBe(IMPORT_WORKBOOK_SIGNATURE);
     expect(metadata.getCell('B2').value).toBe(IMPORT_WORKBOOK_VERSION);
     expect(metadata.getCell('B3').value).toBe('clients');
+    expect(metadata.getCell('A6').value).toBe('first_data_row');
+    expect(metadata.getCell('B6').value).toBe(IMPORT_FIRST_DATA_ROW);
     expect(
       (sheet as unknown as { sheetProtection?: { sheet?: boolean } }).sheetProtection?.sheet,
     ).toBe(true);
@@ -111,7 +112,7 @@ describe('Praetor entity import workbooks', () => {
       (metadata as unknown as { sheetProtection?: { sheet?: boolean } }).sheetProtection?.sheet,
     ).toBe(true);
     expect(sheet.getCell(IMPORT_HEADER_ROW, 1).protection?.locked).not.toBe(false);
-    expect(sheet.getCell(IMPORT_EXAMPLE_ROW, 1).protection?.locked).not.toBe(false);
+    expect(sheet.getCell(IMPORT_FIRST_DATA_ROW, 1).value).toBeNull();
     expect(sheet.getCell(IMPORT_FIRST_DATA_ROW, 1).protection.locked).toBe(false);
     expect(
       sheet.getCell(IMPORT_FIRST_DATA_ROW + MAX_ENTITY_IMPORT_ROWS - 1, 1).protection.locked,
@@ -162,7 +163,7 @@ describe('Praetor entity import workbooks', () => {
     );
   });
 
-  test('generates the supplier workbook and does not import its locked example row', async () => {
+  test('generates the supplier workbook with no pre-filled example row', async () => {
     const workbook = await buildImportWorkbook(
       new Workbook(),
       buildSupplierImportDefinition(translator('en')),
@@ -191,6 +192,41 @@ describe('Praetor entity import workbooks', () => {
           vatNumber: '123456789',
           contactName: 'Jane',
           contactRole: 'Buyer',
+        },
+      },
+    ]);
+  });
+
+  test('keeps legacy version 1 workbooks with the old example-row layout importable', async () => {
+    const workbook = await buildImportWorkbook(
+      new Workbook(),
+      buildSupplierImportDefinition(translator('en')),
+    );
+    const sheet = requireWorksheet(workbook, IMPORT_WORKSHEET_NAME);
+    const metadata = requireWorksheet(workbook, IMPORT_METADATA_SHEET_NAME);
+
+    metadata.getCell('A6').value = 'example_row';
+    metadata.getCell('B6').value = 5;
+    metadata.getCell('A7').value = 'first_data_row';
+    metadata.getCell('B7').value = 6;
+    metadata.getCell('A8').value = 'max_rows';
+    metadata.getCell('B8').value = MAX_ENTITY_IMPORT_ROWS;
+    metadata.getCell('A9').value = 'field_count';
+    metadata.getCell('B9').value = SUPPLIER_IMPORT_FIELDS.length;
+    SUPPLIER_IMPORT_FIELDS.forEach((_, index) => {
+      sheet.getCell(5, index + 1).value = metadata.getCell(11 + index, 4).value;
+    });
+    sheet.getCell(6, supplierColumn('supplierCode')).value = 'SUP-LEGACY';
+    sheet.getCell(6, supplierColumn('name')).value = 'Legacy Supplier';
+    sheet.getCell(6, supplierColumn('vatNumber')).value = 'IT12345678901';
+
+    expect(parseSupplierImportWorkbook(workbook).rows).toEqual([
+      {
+        line: 6,
+        item: {
+          supplierCode: 'SUP-LEGACY',
+          name: 'Legacy Supplier',
+          vatNumber: 'IT12345678901',
         },
       },
     ]);
