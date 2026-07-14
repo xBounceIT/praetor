@@ -1,6 +1,30 @@
 import { afterAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 import { buildResponse } from '../helpers/fetchMock';
 
+type FetchResponse = ReturnType<typeof buildResponse>;
+
+const buildTokenResponse = (token: string): FetchResponse =>
+  buildResponse({
+    headers: { 'x-auth-token': token },
+    json: () => ({}),
+  });
+
+const tokenWithSessionVersion = (sessionVersion: number) => {
+  const payload = btoa(JSON.stringify({ sessionVersion }))
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
+  return `header.${payload}.signature`;
+};
+
+const createDeferredResponse = () => {
+  let resolve!: (response: FetchResponse) => void;
+  const promise = new Promise<FetchResponse>((resolvePromise) => {
+    resolve = resolvePromise;
+  });
+  return { promise, resolve };
+};
+
 const originalFetch = globalThis.fetch;
 const fetchMock = mock(
   async (_input: unknown, _init?: unknown): Promise<unknown> => buildResponse({ status: 204 }),
@@ -66,6 +90,83 @@ describe('services/api/client', () => {
       await fetchApi('/anything');
       expect(getAuthToken()).toBe('rotated-token');
       expect(localStorage.getItem('praetor_auth_token')).toBe('rotated-token');
+    });
+
+    test('keeps the token from the newest concurrent request when responses arrive out of order', async () => {
+      setAuthToken('initial-token');
+
+      const firstResponse = createDeferredResponse();
+      const secondResponse = createDeferredResponse();
+      const thirdResponse = createDeferredResponse();
+
+      fetchMock.mockImplementationOnce(() => firstResponse.promise);
+      fetchMock.mockImplementationOnce(() => secondResponse.promise);
+      fetchMock.mockImplementationOnce(() => thirdResponse.promise);
+
+      const firstRequest = fetchApi('/first');
+      const secondRequest = fetchApi('/second');
+      const thirdRequest = fetchApi('/third');
+
+      firstResponse.resolve(buildTokenResponse('first-token'));
+      await firstRequest;
+
+      thirdResponse.resolve(buildTokenResponse('newest-token'));
+      await thirdRequest;
+
+      secondResponse.resolve(buildTokenResponse('stale-token'));
+      await secondRequest;
+
+      expect(getAuthToken()).toBe('newest-token');
+      expect(localStorage.getItem('praetor_auth_token')).toBe('newest-token');
+    });
+
+    test('ignores a rotation from a request started before an explicit token change', async () => {
+      setAuthToken('initial-token');
+      const response = createDeferredResponse();
+      fetchMock.mockImplementationOnce(() => response.promise);
+
+      const request = fetchApi('/in-flight');
+      setAuthToken(null);
+      response.resolve(buildTokenResponse('stale-token'));
+      await request;
+
+      expect(getAuthToken()).toBeNull();
+      expect(localStorage.getItem('praetor_auth_token')).toBeNull();
+    });
+
+    test('prefers a higher session version regardless of concurrent response order', async () => {
+      const versionOne = tokenWithSessionVersion(1);
+      const versionTwo = tokenWithSessionVersion(2);
+      const versionThree = tokenWithSessionVersion(3);
+      setAuthToken(versionOne);
+
+      const lateReplacement = createDeferredResponse();
+      const earlyStaleRotation = createDeferredResponse();
+      fetchMock.mockImplementationOnce(() => lateReplacement.promise);
+      fetchMock.mockImplementationOnce(() => earlyStaleRotation.promise);
+
+      const lateReplacementRequest = fetchApi('/password-change');
+      const earlyStaleRequest = fetchApi('/normal-request');
+      earlyStaleRotation.resolve(buildTokenResponse(versionOne));
+      await earlyStaleRequest;
+      lateReplacement.resolve(buildTokenResponse(versionTwo));
+      await lateReplacementRequest;
+      expect(getAuthToken()).toBe(versionTwo);
+
+      const earlyReplacement = createDeferredResponse();
+      const lateStaleRotation = createDeferredResponse();
+      fetchMock.mockImplementationOnce(() => earlyReplacement.promise);
+      fetchMock.mockImplementationOnce(() => lateStaleRotation.promise);
+
+      const earlyReplacementRequest = fetchApi('/totp-disable');
+      const lateStaleRequest = fetchApi('/normal-request');
+      earlyReplacement.resolve(buildTokenResponse(versionThree));
+      await earlyReplacementRequest;
+      lateStaleRotation.resolve(buildTokenResponse(versionTwo));
+      await lateStaleRequest;
+
+      expect(getAuthToken()).toBe(versionThree);
+      expect(localStorage.getItem('praetor_auth_token')).toBe(versionThree);
     });
 
     test('does not change token when response omits x-auth-token header', async () => {
