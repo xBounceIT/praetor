@@ -88,6 +88,7 @@ beforeEach(async () => {
     geminiApiKey: 'test-gemini-key',
     openrouterApiKey: 'test-openrouter-key',
     anthropicApiKey: 'test-anthropic-key',
+    openaiApiKey: 'test-openai-key',
   });
 
   testApp = await buildRouteTestApp(routePlugin, '/api/ai');
@@ -152,6 +153,7 @@ describe('POST /api/ai/validate-model', () => {
       geminiApiKey: '',
       openrouterApiKey: '',
       anthropicApiKey: '',
+      openaiApiKey: '',
     });
     const res = await testApp.inject({
       method: 'POST',
@@ -252,6 +254,56 @@ describe('POST /api/ai/validate-model', () => {
     const body = JSON.parse(res.body);
     expect(body.ok).toBe(false);
     expect(body.code).toBe('PROVIDER_ERROR');
+  });
+
+  test('200 ok=true openai happy path', async () => {
+    fetchMock.mockResolvedValue(okResponse({ id: 'gpt-test', object: 'model' }, 200));
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/ai/validate-model',
+      headers: authHeader(),
+      payload: { provider: 'openai', modelId: 'gpt-test', apiKey: 'inline-key' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body)).toEqual(
+      expect.objectContaining({ ok: true, normalizedModelId: 'gpt-test' }),
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://api.openai.com/v1/models/gpt-test',
+      expect.objectContaining({
+        method: 'GET',
+        headers: { Authorization: 'Bearer inline-key' },
+      }),
+    );
+  });
+
+  test('200 ok=false NOT_FOUND for openai 404', async () => {
+    fetchMock.mockResolvedValue(okResponse({}, 404));
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/ai/validate-model',
+      headers: authHeader(),
+      payload: { provider: 'openai', modelId: 'gpt-missing', apiKey: 'inline-key' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body)).toEqual(expect.objectContaining({ ok: false, code: 'NOT_FOUND' }));
+  });
+
+  test('uses the saved openai key when apiKey is omitted', async () => {
+    fetchMock.mockResolvedValue(okResponse({ id: 'gpt-test' }, 200));
+    await testApp.inject({
+      method: 'POST',
+      url: '/api/ai/validate-model',
+      headers: authHeader(),
+      payload: { provider: 'openai', modelId: 'gpt-test' },
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://api.openai.com/v1/models/gpt-test',
+      expect.objectContaining({ headers: { Authorization: 'Bearer test-openai-key' } }),
+    );
   });
 
   test('200 ok=true uses gemini key from settings when apiKey omitted', async () => {

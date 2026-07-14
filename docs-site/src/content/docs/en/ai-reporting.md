@@ -11,7 +11,7 @@ AI reporting is visible only when enabled by administration and when your role h
 
 If you do not see the module, ask an administrator to check AI settings, API key, and role permissions.
 
-Administrators can connect AI reporting to Gemini, OpenRouter, or Anthropic. Praetor uses only the provider selected in general settings and stores each provider's key and model separately.
+Administrators can connect AI reporting to Gemini, OpenRouter, Anthropic, or OpenAI. Praetor uses only the provider selected in general settings and stores each provider's key and model separately.
 
 ## Recommended use
 

@@ -77,9 +77,11 @@ const generalSettingsSchema = {
     aiProvider: { type: 'string' },
     openrouterApiKey: { type: 'string' },
     anthropicApiKey: { type: 'string' },
+    openaiApiKey: { type: 'string' },
     geminiModelId: { type: 'string' },
     openrouterModelId: { type: 'string' },
     anthropicModelId: { type: 'string' },
+    openaiModelId: { type: 'string' },
     allowWeekendSelection: { type: 'boolean' },
     defaultLocation: { type: 'string' },
     rilCompanyName: { type: 'string', maxLength: 255 },
@@ -105,9 +107,11 @@ const generalSettingsSchema = {
     'aiProvider',
     'openrouterApiKey',
     'anthropicApiKey',
+    'openaiApiKey',
     'geminiModelId',
     'openrouterModelId',
     'anthropicModelId',
+    'openaiModelId',
     'allowWeekendSelection',
     'defaultLocation',
     'rilCompanyName',
@@ -136,9 +140,11 @@ const generalSettingsUpdateBodySchema = {
     aiProvider: { type: 'string' },
     openrouterApiKey: { type: 'string' },
     anthropicApiKey: { type: 'string' },
+    openaiApiKey: { type: 'string' },
     geminiModelId: { type: 'string' },
     openrouterModelId: { type: 'string' },
     anthropicModelId: { type: 'string' },
+    openaiModelId: { type: 'string' },
     allowWeekendSelection: { type: 'boolean' },
     defaultLocation: { type: 'string' },
     rilCompanyName: { type: 'string', maxLength: 255 },
@@ -166,9 +172,11 @@ const DEFAULT_SETTINGS: generalSettingsRepo.GeneralSettings = {
   aiProvider: 'gemini',
   openrouterApiKey: null,
   anthropicApiKey: null,
+  openaiApiKey: null,
   geminiModelId: null,
   openrouterModelId: null,
   anthropicModelId: null,
+  openaiModelId: null,
   allowWeekendSelection: true,
   defaultLocation: 'remote',
   rilCompanyName: '',
@@ -403,9 +411,11 @@ const toResponse = (
   aiProvider: settings.aiProvider || 'gemini',
   openrouterApiKey: maskApiKey(settings.openrouterApiKey, revealSensitiveSettings),
   anthropicApiKey: maskApiKey(settings.anthropicApiKey, revealSensitiveSettings),
+  openaiApiKey: maskApiKey(settings.openaiApiKey, revealSensitiveSettings),
   geminiModelId: settings.geminiModelId || '',
   openrouterModelId: settings.openrouterModelId || '',
   anthropicModelId: settings.anthropicModelId || '',
+  openaiModelId: settings.openaiModelId || '',
   allowWeekendSelection: settings.allowWeekendSelection ?? true,
   defaultLocation: settings.defaultLocation || 'remote',
   rilCompanyName: settings.rilCompanyName ?? '',
@@ -508,9 +518,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         aiProvider?: string;
         openrouterApiKey?: string;
         anthropicApiKey?: string;
+        openaiApiKey?: string;
         geminiModelId?: string;
         openrouterModelId?: string;
         anthropicModelId?: string;
+        openaiModelId?: string;
         allowWeekendSelection?: boolean;
         defaultLocation?: string;
         rilCompanyName?: string;
@@ -534,9 +546,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         aiProvider,
         openrouterApiKey,
         anthropicApiKey,
+        openaiApiKey,
         geminiModelId,
         openrouterModelId,
         anthropicModelId,
+        openaiModelId,
         defaultLocation,
         rilCompanyName,
         rilDefaultStartTime,
@@ -557,7 +571,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const aiProviderResult = optionalEnum(
         aiProvider,
-        ['gemini', 'openrouter', 'anthropic'],
+        ['gemini', 'openrouter', 'anthropic', 'openai'],
         'aiProvider',
       );
       if (!aiProviderResult.ok) return badRequest(reply, aiProviderResult.message);
@@ -623,6 +637,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       )
         return badRequest(reply, 'anthropicModelId must be a string');
       if (
+        openaiModelId !== undefined &&
+        openaiModelId !== null &&
+        typeof openaiModelId !== 'string'
+      )
+        return badRequest(reply, 'openaiModelId must be a string');
+      if (
         openrouterApiKey !== undefined &&
         openrouterApiKey !== null &&
         typeof openrouterApiKey !== 'string'
@@ -634,6 +654,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         typeof anthropicApiKey !== 'string'
       )
         return badRequest(reply, 'anthropicApiKey must be a string');
+      if (openaiApiKey !== undefined && openaiApiKey !== null && typeof openaiApiKey !== 'string')
+        return badRequest(reply, 'openaiApiKey must be a string');
       if (geminiApiKey !== undefined && geminiApiKey !== null && typeof geminiApiKey !== 'string')
         return badRequest(reply, 'geminiApiKey must be a string');
 
@@ -684,9 +706,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         aiProvider: aiProviderResult.value,
         openrouterApiKey,
         anthropicApiKey,
+        openaiApiKey,
         geminiModelId,
         openrouterModelId,
         anthropicModelId,
+        openaiModelId,
         allowWeekendSelection: allowWeekendSelectionResult.value,
         defaultLocation: defaultLocationResult.value,
         rilCompanyName: rilCompanyNameResult.value,

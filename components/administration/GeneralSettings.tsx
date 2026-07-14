@@ -12,7 +12,7 @@ import {
   TriangleAlert,
 } from 'lucide-react';
 import type React from 'react';
-import { useReducer, useState } from 'react';
+import { useEffect, useReducer, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -83,6 +83,7 @@ const AI_PROVIDER_FIELDS = {
   gemini: { apiKey: 'geminiApiKey', modelId: 'geminiModelId' },
   openrouter: { apiKey: 'openrouterApiKey', modelId: 'openrouterModelId' },
   anthropic: { apiKey: 'anthropicApiKey', modelId: 'anthropicModelId' },
+  openai: { apiKey: 'openaiApiKey', modelId: 'openaiModelId' },
 } as const satisfies Record<AiProvider, { apiKey: string; modelId: string }>;
 
 type TabId = (typeof TABS)[number]['id'];
@@ -139,9 +140,11 @@ const createGeneralSettingsPatch = (settings: IGeneralSettings): Partial<General
   aiProvider: settings.aiProvider || 'gemini',
   openrouterApiKey: settings.openrouterApiKey || '',
   anthropicApiKey: settings.anthropicApiKey || '',
+  openaiApiKey: settings.openaiApiKey || '',
   geminiModelId: settings.geminiModelId || '',
   openrouterModelId: settings.openrouterModelId || '',
   anthropicModelId: settings.anthropicModelId || '',
+  openaiModelId: settings.openaiModelId || '',
   modelCheck: { state: 'idle' },
 });
 
@@ -165,9 +168,11 @@ const createGeneralSettingsUpdate = (state: GeneralSettingsState): Partial<IGene
   aiProvider: state.aiProvider,
   openrouterApiKey: state.openrouterApiKey,
   anthropicApiKey: state.anthropicApiKey,
+  openaiApiKey: state.openaiApiKey,
   geminiModelId: state.geminiModelId,
   openrouterModelId: state.openrouterModelId,
   anthropicModelId: state.anthropicModelId,
+  openaiModelId: state.openaiModelId,
 });
 
 const hasGeneralSettingsChanges = (
@@ -197,9 +202,11 @@ const hasGeneralSettingsChanges = (
   state.aiProvider !== (settings.aiProvider || 'gemini') ||
   state.openrouterApiKey !== (settings.openrouterApiKey || '') ||
   state.anthropicApiKey !== (settings.anthropicApiKey || '') ||
+  state.openaiApiKey !== (settings.openaiApiKey || '') ||
   state.geminiModelId !== (settings.geminiModelId || '') ||
   state.openrouterModelId !== (settings.openrouterModelId || '') ||
-  state.anthropicModelId !== (settings.anthropicModelId || '');
+  state.anthropicModelId !== (settings.anthropicModelId || '') ||
+  state.openaiModelId !== (settings.openaiModelId || '');
 
 interface GeneralSettingsState {
   currency: string;
@@ -219,9 +226,11 @@ interface GeneralSettingsState {
   aiProvider: AiProvider;
   openrouterApiKey: string;
   anthropicApiKey: string;
+  openaiApiKey: string;
   geminiModelId: string;
   openrouterModelId: string;
   anthropicModelId: string;
+  openaiModelId: string;
   modelCheck: { state: ModelCheckState; message?: string };
   activeTab: TabId;
   isSaving: boolean;
@@ -246,9 +255,11 @@ const INITIAL_GENERAL_SETTINGS_STATE: GeneralSettingsState = {
   aiProvider: 'gemini',
   openrouterApiKey: '',
   anthropicApiKey: '',
+  openaiApiKey: '',
   geminiModelId: '',
   openrouterModelId: '',
   anthropicModelId: '',
+  openaiModelId: '',
   modelCheck: { state: 'idle' },
   activeTab: 'localization',
   isSaving: false,
@@ -723,6 +734,7 @@ const AiSettingsPanel: React.FC<{
   };
   state: Pick<GeneralSettingsState, 'aiProvider' | 'modelCheck' | 'enableAiReporting'>;
   dispatch: React.Dispatch<GeneralSettingsAction>;
+  onProviderChange: (provider: AiProvider) => void;
   onApiKeyChange: (value: string) => void;
   onModelIdChange: (value: string) => void;
   onCheckModel: () => void;
@@ -734,6 +746,7 @@ const AiSettingsPanel: React.FC<{
   validation,
   state,
   dispatch,
+  onProviderChange,
   onApiKeyChange,
   onModelIdChange,
   onCheckModel,
@@ -763,6 +776,14 @@ const AiSettingsPanel: React.FC<{
       dashboardLabel: t('general.anthropicConsole'),
       dashboardUrl: 'https://console.anthropic.com/settings/keys',
       modelsUrl: 'https://platform.claude.com/docs/en/about-claude/models/overview',
+    },
+    openai: {
+      apiKeyLabel: t('general.openaiApiKey'),
+      apiKeyPlaceholder: t('general.openaiApiKeyPlaceholder'),
+      apiKeyDescription: t('general.openaiApiKeyDescription'),
+      dashboardLabel: t('general.openaiDashboard'),
+      dashboardUrl: 'https://platform.openai.com/api-keys',
+      modelsUrl: 'https://developers.openai.com/api/docs/models',
     },
   }[state.aiProvider];
 
@@ -797,12 +818,7 @@ const AiSettingsPanel: React.FC<{
                 id="general-ai-provider"
                 options={aiProviderOptions}
                 value={state.aiProvider}
-                onChange={(val) =>
-                  dispatch({
-                    type: 'merge',
-                    patch: { aiProvider: val as AiProvider, modelCheck: { state: 'idle' } },
-                  })
-                }
+                onChange={(val) => onProviderChange(val as AiProvider)}
               />
               <FieldDescription>{t('general.aiProviderDescription')}</FieldDescription>
             </Field>
@@ -967,8 +983,15 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({
     { id: 'gemini', name: t('general.aiProviders.gemini') },
     { id: 'openrouter', name: t('general.aiProviders.openrouter') },
     { id: 'anthropic', name: t('general.aiProviders.anthropic') },
+    { id: 'openai', name: t('general.aiProviders.openai') },
   ];
   const [state, dispatch] = useReducer(generalSettingsReducer, INITIAL_GENERAL_SETTINGS_STATE);
+  const modelCheckRequestIdRef = useRef(0);
+  const modelCheckTargetRef = useRef<{
+    provider: AiProvider;
+    apiKey: string;
+    modelId: string;
+  } | null>(null);
   const {
     currency,
     dailyLimit,
@@ -1012,7 +1035,28 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({
   const currentApiKey = state[providerFields.apiKey];
   const currentModelId = state[providerFields.modelId];
 
+  useEffect(() => {
+    modelCheckTargetRef.current = {
+      provider: aiProvider,
+      apiKey: currentApiKey,
+      modelId: currentModelId,
+    };
+  }, [aiProvider, currentApiKey, currentModelId]);
+
+  const invalidateModelCheck = () => {
+    modelCheckRequestIdRef.current += 1;
+  };
+
+  const handleProviderChange = (provider: AiProvider) => {
+    invalidateModelCheck();
+    dispatch({
+      type: 'merge',
+      patch: { aiProvider: provider, modelCheck: { state: 'idle' } },
+    });
+  };
+
   const handleApiKeyChange = (value: string) => {
+    invalidateModelCheck();
     dispatch({
       type: 'merge',
       patch: {
@@ -1023,6 +1067,7 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({
   };
 
   const handleModelIdChange = (value: string) => {
+    invalidateModelCheck();
     dispatch({
       type: 'merge',
       patch: {
@@ -1039,13 +1084,22 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({
 
   const handleCheckModel = async () => {
     if (!currentApiKey.trim() || !currentModelId.trim()) return;
+    const requestId = modelCheckRequestIdRef.current + 1;
+    modelCheckRequestIdRef.current = requestId;
+    const target = { provider: aiProvider, apiKey: currentApiKey, modelId: currentModelId };
+    const isCurrentRequest = () => {
+      const currentTarget = modelCheckTargetRef.current;
+      return (
+        modelCheckRequestIdRef.current === requestId &&
+        currentTarget?.provider === target.provider &&
+        currentTarget.apiKey === target.apiKey &&
+        currentTarget.modelId === target.modelId
+      );
+    };
     dispatch({ type: 'merge', patch: { modelCheck: { state: 'checking' } } });
     try {
-      const res = await api.ai.validateModel({
-        provider: aiProvider,
-        modelId: currentModelId,
-        apiKey: currentApiKey,
-      });
+      const res = await api.ai.validateModel(target);
+      if (!isCurrentRequest()) return;
       if (res.ok) {
         dispatch({ type: 'merge', patch: { modelCheck: { state: 'ok' } } });
       } else if (res.code === 'NOT_FOUND') {
@@ -1060,6 +1114,7 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({
         });
       }
     } catch (err) {
+      if (!isCurrentRequest()) return;
       dispatch({
         type: 'merge',
         patch: { modelCheck: { state: 'error', message: (err as Error).message } },
@@ -1195,6 +1250,7 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({
             }}
             state={{ aiProvider, modelCheck, enableAiReporting }}
             dispatch={dispatch}
+            onProviderChange={handleProviderChange}
             onApiKeyChange={handleApiKeyChange}
             onModelIdChange={handleModelIdChange}
             onCheckModel={handleCheckModel}

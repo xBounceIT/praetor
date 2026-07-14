@@ -20,7 +20,7 @@ import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { replyError } from '../utils/replyError.ts';
 import { badRequest, optionalNonEmptyString, requireNonEmptyString } from '../utils/validation.ts';
 
-type AiProvider = 'gemini' | 'openrouter' | 'anthropic';
+type AiProvider = 'gemini' | 'openrouter' | 'anthropic' | 'openai';
 type UiLanguage = 'en' | 'it';
 type AiChatMessage = { role: 'system' | 'user' | 'assistant'; content: string };
 
@@ -30,11 +30,26 @@ export type GeneralAiConfig = {
   geminiApiKey: string;
   openrouterApiKey: string;
   anthropicApiKey: string;
+  openaiApiKey: string;
   geminiModelId: string;
   openrouterModelId: string;
   anthropicModelId: string;
+  openaiModelId: string;
   currency: string;
 };
+
+const AI_PROVIDER_CONFIG_FIELDS = {
+  gemini: { apiKey: 'geminiApiKey', modelId: 'geminiModelId' },
+  openrouter: { apiKey: 'openrouterApiKey', modelId: 'openrouterModelId' },
+  anthropic: { apiKey: 'anthropicApiKey', modelId: 'anthropicModelId' },
+  openai: { apiKey: 'openaiApiKey', modelId: 'openaiModelId' },
+} as const satisfies Record<
+  AiProvider,
+  {
+    apiKey: 'geminiApiKey' | 'openrouterApiKey' | 'anthropicApiKey' | 'openaiApiKey';
+    modelId: 'geminiModelId' | 'openrouterModelId' | 'anthropicModelId' | 'openaiModelId';
+  }
+>;
 
 type DatasetQueryCounterStore = { count: number };
 const datasetQueryCounterStorage = new AsyncLocalStorage<DatasetQueryCounterStore>();
@@ -72,9 +87,11 @@ export const getGeneralAiConfig = async (): Promise<GeneralAiConfig> => {
     geminiApiKey: settings?.geminiApiKey || '',
     openrouterApiKey: settings?.openrouterApiKey || '',
     anthropicApiKey: settings?.anthropicApiKey || '',
+    openaiApiKey: settings?.openaiApiKey || '',
     geminiModelId: settings?.geminiModelId || '',
     openrouterModelId: settings?.openrouterModelId || '',
     anthropicModelId: settings?.anthropicModelId || '',
+    openaiModelId: settings?.openaiModelId || '',
     currency: settings?.currency || '',
   };
 };
@@ -98,21 +115,12 @@ const ensureAiEnabled = async (
 };
 
 const resolveProviderKeyModel = (cfg: GeneralAiConfig) => {
-  if (cfg.aiProvider === 'openrouter') {
-    return {
-      provider: 'openrouter' as const,
-      apiKey: cfg.openrouterApiKey,
-      modelId: cfg.openrouterModelId,
-    };
-  }
-  if (cfg.aiProvider === 'anthropic') {
-    return {
-      provider: 'anthropic' as const,
-      apiKey: cfg.anthropicApiKey,
-      modelId: cfg.anthropicModelId,
-    };
-  }
-  return { provider: 'gemini' as const, apiKey: cfg.geminiApiKey, modelId: cfg.geminiModelId };
+  const fields = AI_PROVIDER_CONFIG_FIELDS[cfg.aiProvider];
+  return {
+    provider: cfg.aiProvider,
+    apiKey: cfg[fields.apiKey],
+    modelId: cfg[fields.modelId].trim(),
+  };
 };
 
 type AiTextResult = { text: string; thoughtContent?: string };
@@ -194,6 +202,30 @@ const anthropicTextFromMessage = (payload: unknown): AiTextResult => {
   return { text, thoughtContent: thoughtContent || undefined };
 };
 
+const openaiTextFromResponse = (payload: unknown): AiTextResult => {
+  const response = payload as {
+    output_text?: string;
+    output?: Array<{
+      type?: string;
+      content?: Array<{ type?: string; text?: string; refusal?: string }>;
+    }>;
+  };
+  const outputText = typeof response.output_text === 'string' ? response.output_text.trim() : '';
+  if (outputText) return { text: outputText };
+
+  const text = (response.output || [])
+    .filter((item) => item.type === 'message')
+    .flatMap((item) => item.content || [])
+    .map((part) => {
+      if (part.type === 'output_text' && typeof part.text === 'string') return part.text;
+      if (part.type === 'refusal' && typeof part.refusal === 'string') return part.refusal;
+      return '';
+    })
+    .join('')
+    .trim();
+  return { text };
+};
+
 const toAnthropicMessages = (messages: AiChatMessage[]) => {
   const systemParts: string[] = [];
   const conversation: Array<{ role: 'user' | 'assistant'; content: string }> = [];
@@ -237,25 +269,21 @@ const iterateSseEvents = async function* (responseBody: unknown): AsyncGenerator
   const decoder = new TextDecoder();
   let buffer = '';
 
-  const readNextChunk = async function* (): AsyncGenerator<ParsedSseEvent> {
-    const { done, value } = (await reader.read()) as { done: boolean; value?: Uint8Array };
-    if (done) return;
-
-    buffer += decoder.decode(value || new Uint8Array(), { stream: true });
-    let boundary = findSseBoundary(buffer);
-    while (boundary) {
-      const rawBlock = buffer.slice(0, boundary.index);
-      buffer = buffer.slice(boundary.index + boundary.length);
-      const parsed = parseSseEventBlock(rawBlock);
-      if (parsed) yield parsed;
-      boundary = findSseBoundary(buffer);
-    }
-
-    yield* readNextChunk();
-  };
-
   try {
-    yield* readNextChunk();
+    while (true) {
+      const { done, value } = (await reader.read()) as { done: boolean; value?: Uint8Array };
+      if (done) break;
+
+      buffer += decoder.decode(value || new Uint8Array(), { stream: true });
+      let boundary = findSseBoundary(buffer);
+      while (boundary) {
+        const rawBlock = buffer.slice(0, boundary.index);
+        buffer = buffer.slice(boundary.index + boundary.length);
+        const parsed = parseSseEventBlock(rawBlock);
+        if (parsed) yield parsed;
+        boundary = findSseBoundary(buffer);
+      }
+    }
 
     buffer += decoder.decode();
     const tail = buffer.trim();
@@ -402,6 +430,19 @@ const anthropicGenerateText = async (
   if (!res.ok) throw new Error(`Anthropic request failed: HTTP ${res.status}`);
   const data = await res.json();
   return anthropicTextFromMessage(data);
+};
+
+const openaiGenerateText = async (apiKey: string, modelId: string, messages: AiChatMessage[]) => {
+  const res = await fetch('https://api.openai.com/v1/responses', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ model: modelId, input: messages, store: false }),
+  });
+  if (!res.ok) throw new Error(`OpenAI request failed: HTTP ${res.status}`);
+  return openaiTextFromResponse(await res.json());
 };
 
 const geminiGenerateTextStream = async (
@@ -684,6 +725,88 @@ const anthropicGenerateTextStream = async (
   } as AiTextResult;
 };
 
+const openaiGenerateTextStream = async (
+  apiKey: string,
+  modelId: string,
+  messages: AiChatMessage[],
+  callbacks: AiStreamCallbacks = {},
+  signal?: AbortSignal,
+) => {
+  const res = await fetch('https://api.openai.com/v1/responses', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ model: modelId, input: messages, stream: true, store: false }),
+    signal,
+  });
+  if (!res.ok) throw new Error(`OpenAI request failed: HTTP ${res.status}`);
+
+  let text = '';
+  let thoughtDone = false;
+  const emitThoughtDone = async () => {
+    if (thoughtDone) return;
+    thoughtDone = true;
+    await callbacks.onThoughtDone?.();
+  };
+
+  for await (const evt of iterateSseEvents(res.body)) {
+    if (signal?.aborted) throw createAbortError();
+    const rawData = String(evt.data || '').trim();
+    if (!rawData || rawData === '[DONE]') continue;
+
+    let payload: unknown;
+    try {
+      payload = JSON.parse(rawData);
+    } catch {
+      continue;
+    }
+
+    const event = payload as {
+      type?: string;
+      delta?: string;
+      text?: string;
+      refusal?: string;
+      response?: { error?: { message?: string } };
+      error?: { message?: string };
+      message?: string;
+    };
+    const eventType = event.type || evt.event;
+    if (eventType === 'error' || eventType === 'response.failed') {
+      throw new Error(
+        event.error?.message ||
+          event.response?.error?.message ||
+          event.message ||
+          'OpenAI streaming request failed',
+      );
+    }
+
+    let answerDelta = '';
+    if (
+      (eventType === 'response.output_text.delta' || eventType === 'response.refusal.delta') &&
+      typeof event.delta === 'string'
+    ) {
+      answerDelta = event.delta;
+    } else if (eventType === 'response.output_text.done' && typeof event.text === 'string') {
+      answerDelta = resolveStreamDelta(text, event.text);
+    } else if (eventType === 'response.refusal.done' && typeof event.refusal === 'string') {
+      answerDelta = resolveStreamDelta(text, event.refusal);
+    } else if (eventType === 'response.completed') {
+      answerDelta = resolveStreamDelta(text, openaiTextFromResponse(event.response).text);
+    }
+
+    if (answerDelta) {
+      await emitThoughtDone();
+      text += answerDelta;
+      await callbacks.onAnswerDelta?.(answerDelta);
+    }
+  }
+
+  await emitThoughtDone();
+  return { text: text.trim() } as AiTextResult;
+};
+
 const generateSessionTitle = async (
   providerKeyModel: ReturnType<typeof resolveProviderKeyModel>,
   firstUserMessage: string,
@@ -707,7 +830,9 @@ const generateSessionTitle = async (
     const raw =
       providerKeyModel.provider === 'openrouter'
         ? await openrouterGenerateText(providerKeyModel.apiKey, providerKeyModel.modelId, messages)
-        : await anthropicGenerateText(providerKeyModel.apiKey, providerKeyModel.modelId, messages);
+        : providerKeyModel.provider === 'anthropic'
+          ? await anthropicGenerateText(providerKeyModel.apiKey, providerKeyModel.modelId, messages)
+          : await openaiGenerateText(providerKeyModel.apiKey, providerKeyModel.modelId, messages);
     return cleanSessionTitle(raw.text);
   }
 
@@ -1486,6 +1611,10 @@ type AiReportingPromptPayload =
       provider: 'anthropic';
       messages: AiChatMessage[];
     }
+  | {
+      provider: 'openai';
+      messages: AiChatMessage[];
+    }
   | { provider: 'gemini'; prompt: string };
 
 const buildAiReportingPromptPayload = (args: {
@@ -1519,6 +1648,42 @@ const buildAiReportingPromptPayload = (args: {
       'Answer as the assistant:',
     ].join('\n'),
   };
+};
+
+const generateAiReportingText = (
+  apiKey: string,
+  modelId: string,
+  payload: AiReportingPromptPayload,
+): Promise<AiTextResult> => {
+  if (payload.provider === 'openai') {
+    return openaiGenerateText(apiKey, modelId, payload.messages);
+  }
+  if (payload.provider === 'openrouter') {
+    return openrouterGenerateText(apiKey, modelId, payload.messages);
+  }
+  if (payload.provider === 'anthropic') {
+    return anthropicGenerateText(apiKey, modelId, payload.messages);
+  }
+  return geminiGenerateText(apiKey, modelId, payload.prompt);
+};
+
+const generateAiReportingTextStream = (
+  apiKey: string,
+  modelId: string,
+  payload: AiReportingPromptPayload,
+  callbacks: AiStreamCallbacks,
+  signal: AbortSignal,
+): Promise<AiTextResult> => {
+  if (payload.provider === 'openai') {
+    return openaiGenerateTextStream(apiKey, modelId, payload.messages, callbacks, signal);
+  }
+  if (payload.provider === 'openrouter') {
+    return openrouterGenerateTextStream(apiKey, modelId, payload.messages, callbacks, signal);
+  }
+  if (payload.provider === 'anthropic') {
+    return anthropicGenerateTextStream(apiKey, modelId, payload.messages, callbacks, signal);
+  }
+  return geminiGenerateTextStream(apiKey, modelId, payload.prompt, callbacks, signal);
 };
 
 const createSseStreamHandlers = (
@@ -1905,32 +2070,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           convo,
         });
         if (streamAbortController.signal.aborted) return;
-        let generated: AiTextResult;
-        if (payload.provider === 'openrouter') {
-          generated = await openrouterGenerateTextStream(
-            apiKey,
-            modelId,
-            payload.messages,
-            streamHandlers.callbacks,
-            streamAbortController.signal,
-          );
-        } else if (payload.provider === 'anthropic') {
-          generated = await anthropicGenerateTextStream(
-            apiKey,
-            modelId,
-            payload.messages,
-            streamHandlers.callbacks,
-            streamAbortController.signal,
-          );
-        } else {
-          generated = await geminiGenerateTextStream(
-            apiKey,
-            modelId,
-            payload.prompt,
-            streamHandlers.callbacks,
-            streamAbortController.signal,
-          );
-        }
+        const generated = await generateAiReportingTextStream(
+          apiKey,
+          modelId,
+          payload,
+          streamHandlers.callbacks,
+          streamAbortController.signal,
+        );
 
         if (!streamAbortController.signal.aborted) {
           await emitThoughtDone();
@@ -2166,32 +2312,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           convo,
         });
         if (streamAbortController.signal.aborted) return;
-        let generated: AiTextResult;
-        if (payload.provider === 'openrouter') {
-          generated = await openrouterGenerateTextStream(
-            apiKey,
-            modelId,
-            payload.messages,
-            streamHandlers.callbacks,
-            streamAbortController.signal,
-          );
-        } else if (payload.provider === 'anthropic') {
-          generated = await anthropicGenerateTextStream(
-            apiKey,
-            modelId,
-            payload.messages,
-            streamHandlers.callbacks,
-            streamAbortController.signal,
-          );
-        } else {
-          generated = await geminiGenerateTextStream(
-            apiKey,
-            modelId,
-            payload.prompt,
-            streamHandlers.callbacks,
-            streamAbortController.signal,
-          );
-        }
+        const generated = await generateAiReportingTextStream(
+          apiKey,
+          modelId,
+          payload,
+          streamHandlers.callbacks,
+          streamAbortController.signal,
+        );
 
         if (!streamAbortController.signal.aborted) {
           await emitThoughtDone();
@@ -2372,14 +2499,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           datasetJson,
           convo,
         });
-        let generated: AiTextResult;
-        if (payload.provider === 'openrouter') {
-          generated = await openrouterGenerateText(apiKey, modelId, payload.messages);
-        } else if (payload.provider === 'anthropic') {
-          generated = await anthropicGenerateText(apiKey, modelId, payload.messages);
-        } else {
-          generated = await geminiGenerateText(apiKey, modelId, payload.prompt);
-        }
+        const generated = await generateAiReportingText(apiKey, modelId, payload);
         const text = generated.text;
         const thoughtContent = generated.thoughtContent || '';
 

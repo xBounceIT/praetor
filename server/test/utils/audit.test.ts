@@ -79,6 +79,8 @@ describe('getAuditChangedFields', () => {
         openrouter_api_key: 'o',
         anthropicApiKey: 'a',
         anthropic_api_key: 'a',
+        openaiApiKey: 'oa',
+        openai_api_key: 'oa',
         accessToken: 'at',
         refreshToken: 'rt',
         secret: 's',
