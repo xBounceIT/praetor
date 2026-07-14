@@ -1,7 +1,7 @@
 import type { LookupAddress } from 'node:dns';
 import dns from 'node:dns/promises';
 import type { IncomingMessage } from 'node:http';
-import https from 'node:https';
+import https, { type RequestOptions as HttpsRequestOptions } from 'node:https';
 import { isIP } from 'node:net';
 import { addAbortSignal, Readable } from 'node:stream';
 import { createBrotliDecompress, createGunzip, createInflate } from 'node:zlib';
@@ -532,12 +532,14 @@ export const isPrivateIp = (ip: string): boolean => {
 
 const remoteUrlHostname = (url: URL): string => url.hostname.replace(/^\[|\]$/g, '');
 
+type AutoSelectingHttpsRequestOptions = HttpsRequestOptions & { autoSelectFamily: true };
+
 /**
- * Resolves `url` once and returns the public address that the caller must connect to. Returning
- * the vetted address (instead of merely validating it) prevents DNS rebinding between the check
- * and the TCP connection.
+ * Resolves `url` once and returns the public addresses that the caller may connect to. Returning
+ * the vetted addresses (instead of merely validating them) prevents DNS rebinding between the
+ * check and the TCP connection.
  */
-const resolveSafeRemoteUrl = async (url: URL): Promise<LookupAddress> => {
+const resolveSafeRemoteAddresses = async (url: URL): Promise<LookupAddress[]> => {
   if (url.protocol !== 'https:') {
     throw new Error(`Refusing to fetch non-HTTPS URL: ${url.protocol}//...`);
   }
@@ -549,7 +551,7 @@ const resolveSafeRemoteUrl = async (url: URL): Promise<LookupAddress> => {
   if (addresses.some((a) => isPrivateIp(a.address))) {
     throw new Error(`Refusing to fetch URL with private/loopback host: ${url.hostname}`);
   }
-  return addresses[0];
+  return addresses;
 };
 
 const responseFromIncoming = (incoming: IncomingMessage, request: Request): Response => {
@@ -585,12 +587,13 @@ const responseFromIncoming = (incoming: IncomingMessage, request: Request): Resp
 };
 
 /**
- * Performs one HTTPS request against an already-vetted IP while retaining the original hostname
- * for the Host header, SNI, and certificate verification. No DNS lookup occurs in this function.
+ * Performs one HTTPS request using only already-vetted IPs while retaining the original hostname
+ * for the Host header, SNI, and certificate verification. The custom lookup enables connection
+ * family selection without another DNS query.
  */
 const fetchPinnedRemoteUrl = async (
   url: URL,
-  address: LookupAddress,
+  addresses: LookupAddress[],
   options: RequestInit = {},
 ): Promise<Response> => {
   const request = new Request(url.href, options);
@@ -601,27 +604,32 @@ const fetchPinnedRemoteUrl = async (
   const originalHostname = remoteUrlHostname(url);
 
   return new Promise<Response>((resolve, reject) => {
-    const outbound = https.request(
-      {
-        agent: false,
-        family: address.family,
-        headers: Object.fromEntries(headers.entries()),
-        hostname: address.address,
-        method: request.method,
-        path: `${url.pathname}${url.search}`,
-        port: url.port ? Number(url.port) : 443,
-        servername: isIP(originalHostname) === 0 ? originalHostname : undefined,
-        signal: request.signal,
-      },
-      (incoming) => {
-        try {
-          resolve(responseFromIncoming(incoming, request));
-        } catch (error) {
-          incoming.destroy();
-          reject(error);
+    const requestOptions: AutoSelectingHttpsRequestOptions = {
+      agent: false,
+      autoSelectFamily: true,
+      headers: Object.fromEntries(headers.entries()),
+      hostname: originalHostname,
+      lookup: (_hostname, lookupOptions, callback) => {
+        if (lookupOptions.all) {
+          callback(null, addresses);
+          return;
         }
+        callback(null, addresses[0].address, addresses[0].family);
       },
-    );
+      method: request.method,
+      path: `${url.pathname}${url.search}`,
+      port: url.port ? Number(url.port) : 443,
+      servername: isIP(originalHostname) === 0 ? originalHostname : undefined,
+      signal: request.signal,
+    };
+    const outbound = https.request(requestOptions, (incoming) => {
+      try {
+        resolve(responseFromIncoming(incoming, request));
+      } catch (error) {
+        incoming.destroy();
+        reject(error);
+      }
+    });
     outbound.once('error', reject);
     outbound.end(body);
   });
@@ -629,8 +637,8 @@ const fetchPinnedRemoteUrl = async (
 
 const safeOidcFetch: oidc.CustomFetch = async (url, options) => {
   const parsed = new URL(url);
-  const address = await resolveSafeRemoteUrl(parsed);
-  const response = await fetchPinnedRemoteUrl(parsed, address, options);
+  const addresses = await resolveSafeRemoteAddresses(parsed);
+  const response = await fetchPinnedRemoteUrl(parsed, addresses, options);
   return responseWithBoundedBody(response, options.method);
 };
 
@@ -659,7 +667,7 @@ const assertSafeOidcServerMetadata = async (
       } catch {
         throw new Error(`OIDC discovery ${field} is not a valid URL`);
       }
-      return [resolveSafeRemoteUrl(endpoint)];
+      return [resolveSafeRemoteAddresses(endpoint)];
     }),
   );
 };
@@ -733,7 +741,7 @@ const responseWithBoundedBody = (
  * Guarantees:
  *   - HTTPS only (no http:, file:, gopher:, etc).
  *   - Host resolved via DNS; rejects if any resolved address is private/loopback/link-local.
- *   - TCP connection pinned to the vetted address while TLS still verifies the original hostname.
+ *   - TCP connection restricted to vetted addresses while TLS verifies the original hostname.
  *   - 5-second total timeout via AbortController.
  *   - Bounded follows: each redirect target is re-validated identically.
  */
@@ -744,8 +752,8 @@ const safeFetchRemoteUrl = async (url: string): Promise<Response> => {
   try {
     for (let hops = 0; hops <= REMOTE_FETCH_REDIRECT_LIMIT; hops++) {
       const parsed = new URL(current);
-      const address = await resolveSafeRemoteUrl(parsed);
-      const response = await fetchPinnedRemoteUrl(parsed, address, {
+      const addresses = await resolveSafeRemoteAddresses(parsed);
+      const response = await fetchPinnedRemoteUrl(parsed, addresses, {
         signal: controller.signal,
         redirect: 'manual',
       });

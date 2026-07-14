@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, mock, test } from 'bun:test';
+import type { LookupAddress } from 'node:dns';
 import * as realDns from 'node:dns/promises';
 import { EventEmitter } from 'node:events';
 import type { IncomingMessage } from 'node:http';
@@ -26,8 +27,9 @@ const ssoLoginTicketsRepoSnap = { ...realSsoLoginTicketsRepo };
 
 const dnsLookupMock = mock();
 const pinnedFetchResponseMock = mock();
+type AutoSelectingRequestOptions = RequestOptions & { autoSelectFamily?: boolean };
 const httpsRequestMock = mock(
-  (options: RequestOptions, onResponse: (response: IncomingMessage) => void) => {
+  (options: AutoSelectingRequestOptions, onResponse: (response: IncomingMessage) => void) => {
     const outbound = new EventEmitter() as EventEmitter & {
       destroy: (error?: Error) => void;
       end: (body?: Uint8Array) => void;
@@ -458,7 +460,7 @@ describe('safeFetchRemoteUrl behavior (exercised via SAML metadata fetch)', () =
     // the post-redirect response successfully.
     await expect(sso.startSamlLogin('okta')).rejects.toThrow(/missing entry point/);
     expect(pinnedFetchResponseMock).toHaveBeenCalledTimes(2);
-    // resolveSafeRemoteUrl runs dns.lookup once per hop.
+    // resolveSafeRemoteAddresses runs dns.lookup once per hop.
     expect(dnsLookupMock).toHaveBeenCalledTimes(2);
   });
 
@@ -472,10 +474,36 @@ describe('safeFetchRemoteUrl behavior (exercised via SAML metadata fetch)', () =
     expect(dnsLookupMock).toHaveBeenCalledTimes(1);
     expect(httpsRequestMock).toHaveBeenCalledTimes(1);
     const requestOptions = httpsRequestMock.mock.calls[0][0];
-    expect(requestOptions.hostname).toBe('203.0.113.10');
+    expect(requestOptions.hostname).toBe('idp.example.com');
     expect(requestOptions.servername).toBe('idp.example.com');
     expect(requestOptions.headers).toMatchObject({ host: 'idp.example.com' });
     expect(requestOptions.agent).toBe(false);
+    expect(requestOptions.autoSelectFamily).toBe(true);
+  });
+
+  test('offers every vetted DNS address to connection family selection', async () => {
+    const addresses: LookupAddress[] = [
+      { address: '2606:4700:4700::1111', family: 6 },
+      { address: '203.0.113.10', family: 4 },
+    ];
+    dnsLookupMock.mockResolvedValue(addresses);
+    pinnedFetchResponseMock.mockResolvedValueOnce(
+      new Response('<EntityDescriptor entityID="x"/>', { status: 200 }),
+    );
+
+    await expect(sso.startSamlLogin('okta')).rejects.toThrow(/missing entry point/);
+
+    const requestOptions = httpsRequestMock.mock.calls[0][0];
+    const lookup = requestOptions.lookup;
+    if (!lookup) throw new Error('Expected a pinned HTTPS lookup');
+    const resolved = await new Promise<LookupAddress[]>((resolve, reject) => {
+      lookup('idp.example.com', { all: true }, (error, result) => {
+        if (error) reject(error);
+        else resolve(result as LookupAddress[]);
+      });
+    });
+    expect(resolved).toEqual(addresses);
+    expect(dnsLookupMock).toHaveBeenCalledTimes(1);
   });
 
   test('normalizes an IPv6 URL hostname for lookup and connects to the vetted literal', async () => {
@@ -742,7 +770,7 @@ describe('OIDC remote endpoint hardening', () => {
     expect(httpsRequestMock).toHaveBeenCalledTimes(1);
     expect(httpsRequestMock.mock.calls[0][0]).toMatchObject({
       agent: false,
-      hostname: '203.0.113.25',
+      hostname: 'idp.example.com',
       servername: 'idp.example.com',
     });
     expect(Buffer.from(pinnedFetchResponseMock.mock.calls[0][1]).toString()).toBe(
