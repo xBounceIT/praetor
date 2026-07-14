@@ -263,17 +263,20 @@ describe('authenticateToken', () => {
     expect(reply.body).toEqual({ error: 'Session expired (max duration exceeded)' });
   });
 
-  test('403 when token exceeds the configured idle timeout but is still within jwt exp', async () => {
+  test('403s on the first request after an idle-timeout reduction despite the old jwt exp', async () => {
     generalSettingsGetMock.mockResolvedValue({ sessionIdleTimeoutMinutes: 5 });
+    // This token was last rotated six minutes ago under a longer policy. Its old two-hour exp is
+    // still valid, but iat records the previous request and must be checked against the new policy.
     const issuedAtSeconds = Math.floor((Date.now() - 6 * 60 * 1000) / 1000);
-    const request = buildFakeRequest(
-      signToken({
-        userId: 'u1',
-        sessionStart: Date.now() - 6 * 60 * 1000,
-        issuedAtSeconds,
-        expiresIn: '2h',
-      }),
-    );
+    const token = signToken({
+      userId: 'u1',
+      sessionStart: Date.now() - 6 * 60 * 1000,
+      issuedAtSeconds,
+      expiresIn: '2h',
+    });
+    const decoded = decodeForAssertion(token);
+    expect((decoded.exp as number) * 1000).toBeGreaterThan(Date.now());
+    const request = buildFakeRequest(token);
     const reply = buildFakeReply();
 
     await authenticateToken(request as never, reply as never);
