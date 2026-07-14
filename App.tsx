@@ -427,6 +427,8 @@ const appNavigationReducer = (
         ? state
         : { ...state, [action.key]: nextValue };
     }
+    default:
+      return state;
   }
 };
 
