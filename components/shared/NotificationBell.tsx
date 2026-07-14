@@ -116,6 +116,9 @@ const NotificationBell: React.FC<NotificationBellProps> = ({
         project: notification.data?.projectName ?? '',
       });
     }
+    if (notification.type === 'admin_password_warning') {
+      return t('notifications.adminPasswordWarningTitle');
+    }
     if (isRilPreferencesTip(notification)) {
       return t('notifications.rilPreferencesTipTitle');
     }
