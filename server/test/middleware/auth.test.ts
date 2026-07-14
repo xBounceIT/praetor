@@ -760,6 +760,11 @@ describe('authenticateToken', () => {
 });
 
 describe('requireRole', () => {
+  test('rejects empty role guards before a route can be registered', () => {
+    // @ts-expect-error Regression coverage for runtime JavaScript callers.
+    expect(() => requireRole()).toThrow('requireRole requires at least one role');
+  });
+
   test('401 when request.user is undefined', async () => {
     const reply = buildFakeReply();
     await requireRole('manager')({} as never, reply as never);
