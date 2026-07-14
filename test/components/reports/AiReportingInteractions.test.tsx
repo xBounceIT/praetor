@@ -197,6 +197,67 @@ describe('<AiReportingView /> interactions', () => {
     expect((await screen.findAllByText('New analysis')).length).toBeGreaterThan(0);
   });
 
+  test('preserves the first streamed response while stale startup requests resolve', async () => {
+    let resolveInitialSessions: ((sessions: ReportChatSessionSummary[]) => void) | undefined;
+    listSessionsMock
+      .mockImplementationOnce(
+        () =>
+          new Promise<ReportChatSessionSummary[]>((resolve) => {
+            resolveInitialSessions = resolve;
+          }),
+      )
+      .mockResolvedValue([]);
+    getSessionMessagesMock.mockResolvedValue([]);
+    let releaseStream: (() => void) | undefined;
+    const streamGate = new Promise<void>((resolve) => {
+      releaseStream = resolve;
+    });
+    chatStreamMock.mockImplementation(
+      async (
+        _payload: unknown,
+        handlers?: {
+          onStart?: (event: { sessionId: string; messageId: string }) => void;
+          onThoughtDelta?: (delta: string) => void;
+          onThoughtDone?: () => void;
+          onAnswerDelta?: (delta: string) => void;
+        },
+      ) => {
+        handlers?.onStart?.({ sessionId: 'fresh-session', messageId: 'assistant-fresh' });
+        await streamGate;
+        handlers?.onThoughtDelta?.('Checking the data.');
+        handlers?.onThoughtDone?.();
+        handlers?.onAnswerDelta?.('The first analysis is ready.');
+        return {
+          sessionId: 'fresh-session',
+          text: 'The first analysis is ready.',
+          thoughtContent: 'Checking the data.',
+        };
+      },
+    );
+
+    renderView();
+
+    const composer = await screen.findByRole('textbox', {
+      name: 'Ask a question about your business data...',
+    });
+    fireEvent.change(composer, { target: { value: 'Run the first analysis' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    await waitFor(() => expect(chatStreamMock).toHaveBeenCalledTimes(1));
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(getSessionMessagesMock).not.toHaveBeenCalled();
+    await act(async () => {
+      resolveInitialSessions?.([]);
+      await Promise.resolve();
+    });
+    await act(async () => releaseStream?.());
+
+    expect(await screen.findByText('The first analysis is ready.')).toBeInTheDocument();
+    expect(screen.getByText('Run the first analysis')).toBeInTheDocument();
+  });
+
   test('renames a chat from the actions contained in its history row', async () => {
     renderView();
 

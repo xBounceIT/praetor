@@ -696,6 +696,7 @@ const useAiReportingController = ({
           // to caching/version bump timing. Pin the UI to the newly created session id so we don't
           // accidentally "jump" to the most recently updated existing session.
           if (opts.preferredSessionId) return opts.preferredSessionId;
+          if (activeAssistantMessageIdRef.current && prev) return prev;
           if (isNewChat) return '';
           if (prev && data.some((s) => s.id === prev)) return prev;
           return data[0]?.id || '';
@@ -861,6 +862,12 @@ const useAiReportingController = ({
     const abortController = new AbortController();
     const runId = ++sendRunIdRef.current;
     abortRef.current = abortController;
+
+    // A history load already in flight must never replace the optimistic user/assistant pair
+    // used by stream callbacks.
+    loadTokenRef.current += 1;
+    setIsLoadingMessages(false);
+    setIsLoadingOlderMessages(false);
 
     setIsSending(true);
     setError('');
@@ -1484,6 +1491,9 @@ const useAiReportingController = ({
   useEffect(() => {
     if (!enableAiReporting) return;
     if (!activeSessionId) return;
+    // The first stream assigns its server session id before the assistant answer is persisted.
+    // Loading that session here would replace the optimistic pair and orphan subsequent deltas.
+    if (activeAssistantMessageIdRef.current) return;
     void loadMessages(activeSessionId, { forceScroll: true });
   }, [activeSessionId, enableAiReporting, loadMessages]);
 
