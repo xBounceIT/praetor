@@ -107,6 +107,7 @@
     "newProjects": "{{count}} nuovi progetti disponibili",
     "newProject": "1 nuovo progetto disponibile",
     "projectRuleTriggered": "{{rule}} attivata per {{project}}",
+    "adminPasswordWarningTitle": "Cambia la password predefinita dell'amministratore",
     "rilPreferencesTipTitle": "Configura le preferenze di trasferta RIL",
     "rilPreferencesTipMessage": "Scegli il valore di trasferta predefinito per ogni giorno feriale, così il RIL verrà precompilato correttamente.",
     "rilPreferencesTipAction": "Configura preferenze",

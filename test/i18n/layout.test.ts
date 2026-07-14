@@ -18,4 +18,13 @@ describe('layout translations', () => {
     expect(itLayout.routes.resales).toBe('Rivendite');
     expect(itLayout.titles.resales).toBe('Rivendite');
   });
+
+  test('admin password warning has localized notification text', () => {
+    expect(enLayout.notifications.adminPasswordWarningTitle).toBe(
+      'Change the default admin password',
+    );
+    expect(itLayout.notifications.adminPasswordWarningTitle).toBe(
+      "Cambia la password predefinita dell'amministratore",
+    );
+  });
 });

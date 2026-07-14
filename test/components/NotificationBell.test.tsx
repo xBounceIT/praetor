@@ -121,7 +121,7 @@ describe('<NotificationBell />', () => {
     expect(readTitle.className).not.toContain('text-zinc-600');
   });
 
-  test('admin password warning notifications use the warning icon', () => {
+  test('admin password warning notifications use the localized title and warning icon', () => {
     const warning: Notification = {
       id: 'admin-default-password-warning',
       userId: 'u1',
@@ -135,7 +135,8 @@ describe('<NotificationBell />', () => {
 
     openDropdown();
 
-    expect(screen.getByText('Change the default admin password')).toBeInTheDocument();
+    expect(screen.getByText('notifications.adminPasswordWarningTitle')).toBeInTheDocument();
+    expect(screen.queryByText('Change the default admin password')).not.toBeInTheDocument();
     expect(container.querySelector('i.fa-triangle-exclamation')).not.toBeNull();
     expect(container.querySelector('i.fa-folder-tree')).toBeNull();
   });
