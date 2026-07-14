@@ -1,9 +1,16 @@
 import { describe, expect, mock, test } from 'bun:test';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, screen } from '@testing-library/react';
 import { AiReportingSidebar } from '@/components/reports/AiReportingView';
 import type { ReportChatSessionSummary } from '@/types';
+import { render } from '../../helpers/render';
 
-const t = (key: string, options?: { defaultValue?: string }) => options?.defaultValue ?? key;
+const t = (key: string, options?: { defaultValue?: string; [key: string]: unknown }) => {
+  let value = options?.defaultValue ?? key;
+  for (const [name, replacement] of Object.entries(options ?? {})) {
+    if (name !== 'defaultValue') value = value.replace(`{{${name}}}`, String(replacement));
+  }
+  return value;
+};
 
 const sessions: ReportChatSessionSummary[] = [
   {
@@ -32,7 +39,10 @@ describe('<AiReportingSidebar />', () => {
         isLoadingSessions={false}
         isCreatingSession={false}
         isNewChatDisabled={false}
+        canArchive
+        isDeletingSession={false}
         onSelectSession={onSelectSession}
+        onConfirmDeleteSession={() => {}}
         onNewChat={() => {}}
       />,
     );
@@ -42,7 +52,7 @@ describe('<AiReportingSidebar />', () => {
     });
 
     expect(screen.queryByText('Quarterly revenue')).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: /Project capacity/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Project capacity' }));
     expect(onSelectSession).toHaveBeenCalledWith('capacity');
   });
 
@@ -57,12 +67,38 @@ describe('<AiReportingSidebar />', () => {
         isLoadingSessions={false}
         isCreatingSession={false}
         isNewChatDisabled={false}
+        canArchive
+        isDeletingSession={false}
         onSelectSession={() => {}}
+        onConfirmDeleteSession={() => {}}
         onNewChat={onNewChat}
       />,
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'New Chat' }));
     expect(onNewChat).toHaveBeenCalledTimes(1);
+  });
+
+  test('requests deletion from the matching chat row', () => {
+    const onConfirmDeleteSession = mock(() => {});
+
+    render(
+      <AiReportingSidebar
+        t={t as never}
+        sessions={sessions}
+        activeSessionId="revenue"
+        isLoadingSessions={false}
+        isCreatingSession={false}
+        isNewChatDisabled={false}
+        canArchive
+        isDeletingSession={false}
+        onSelectSession={() => {}}
+        onConfirmDeleteSession={onConfirmDeleteSession}
+        onNewChat={() => {}}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Delete chat Project capacity' }));
+    expect(onConfirmDeleteSession).toHaveBeenCalledWith(sessions[1]);
   });
 });

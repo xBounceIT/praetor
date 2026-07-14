@@ -5,11 +5,14 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronUp,
+  FileText,
   FlaskConical,
   Lightbulb,
   Loader2,
   MessageSquareText,
+  Mic,
   PanelLeftOpen,
+  Paperclip,
   Pencil,
   Plus,
   RefreshCw,
@@ -18,6 +21,7 @@ import {
   Square,
   Trash2,
   TriangleAlert,
+  X,
 } from 'lucide-react';
 import type React from 'react';
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
@@ -46,6 +50,12 @@ import {
   EmptyTitle,
 } from '@/components/ui/empty';
 import { Input } from '@/components/ui/input';
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupButton,
+  InputGroupTextarea,
+} from '@/components/ui/input-group';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Sheet,
@@ -60,9 +70,24 @@ import api from '../../services/api';
 import type { ReportChatMessage, ReportChatSessionSummary } from '../../types';
 import { buildPermission, hasPermission } from '../../utils/permissions';
 import {
+  AI_REPORTING_ATTACHMENT_ACCEPT,
+  AI_REPORTING_MAX_ATTACHMENT_BYTES,
+  AI_REPORTING_MAX_ATTACHMENT_CONTENT_CHARS,
+  AI_REPORTING_MAX_ATTACHMENTS,
+  AI_REPORTING_MAX_MESSAGE_CHARS,
+  AI_REPORTING_MAX_TOTAL_ATTACHMENT_CONTENT_CHARS,
+  type AiReportingAttachmentError,
+  type AiReportingMessageAttachment,
+  type AiReportingPendingAttachment,
+  parseAiReportingMessage,
+  readAiReportingAttachments,
+  serializeAiReportingMessage,
+} from './aiReportingAttachments';
+import {
   type AiReportingSessionGroupKey,
   filterAndGroupAiReportingSessions,
 } from './aiReportingSessions';
+import { useAiReportingDictation } from './useAiReportingDictation';
 
 export interface AiReportingViewProps {
   currentUserId: string;
@@ -1136,14 +1161,52 @@ const useAiReportingController = ({
     }
   };
 
-  const handleSend = async () => {
-    await sendMessage(draft, { clearDraft: true });
+  const handleSend = async (
+    attachments: readonly AiReportingMessageAttachment[] = [],
+  ): Promise<boolean> => {
+    const text =
+      draft.trim() ||
+      (attachments.length > 0
+        ? t('aiReporting.attachmentOnlyPrompt', {
+            defaultValue: 'Analyze the attached files.',
+          })
+        : '');
+    const content = serializeAiReportingMessage(text, attachments);
+    if (!content) return false;
+    if (content.length > AI_REPORTING_MAX_MESSAGE_CHARS) {
+      setError(
+        t('aiReporting.messageTooLong', {
+          max: AI_REPORTING_MAX_MESSAGE_CHARS,
+          defaultValue: 'The message and attachments exceed {{max}} characters.',
+        }),
+      );
+      return false;
+    }
+    await sendMessage(content, { clearDraft: true });
+    return true;
   };
 
   const handleEditSend = async (userMessage: ReportChatMessage) => {
     if (!enableAiReporting || !canSend || isSending) return;
-    const content = editingDraft.trim();
+    const originalMessage = parseAiReportingMessage(userMessage.content);
+    const editedText =
+      editingDraft.trim() ||
+      (originalMessage.attachments.length > 0
+        ? t('aiReporting.attachmentOnlyPrompt', {
+            defaultValue: 'Analyze the attached files.',
+          })
+        : '');
+    const content = serializeAiReportingMessage(editedText, originalMessage.attachments);
     if (!content) return;
+    if (content.length > AI_REPORTING_MAX_MESSAGE_CHARS) {
+      setError(
+        t('aiReporting.messageTooLong', {
+          max: AI_REPORTING_MAX_MESSAGE_CHARS,
+          defaultValue: 'The message and attachments exceed {{max}} characters.',
+        }),
+      );
+      return;
+    }
 
     // If content unchanged, just cancel edit
     if (content === userMessage.content.trim()) {
@@ -1464,8 +1527,6 @@ const useAiReportingController = ({
   const activeTitle = isNewChat
     ? t('aiReporting.newChat', { defaultValue: 'New Chat' })
     : activeSession?.title || t('aiReporting.newChat', { defaultValue: 'New Chat' });
-  const canDeleteActive =
-    Boolean(activeSession) && canArchive && !isDeletingSession && !isLoadingSessions;
   const isEmptySession = Boolean(activeSessionId) && !isLoadingMessages && messages.length === 0;
   const isNewChatDisabled = !canSend || isCreatingSession || isEmptySession || isLoadingMessages;
   const showLoadOlderButton =
@@ -1492,10 +1553,9 @@ const useAiReportingController = ({
     activeTitle,
     activeSessionId,
     isNewChat,
+    language: i18n.language,
     isLoadingSessions,
     sessions,
-    canDeleteActive,
-    activeSession,
     isCreatingSession,
     isNewChatDisabled,
     confirmDeleteSession,
@@ -1565,10 +1625,9 @@ const AiReportingLayout: React.FC<{ controller: AiReportingController }> = ({ co
     enableAiReporting,
     activeTitle,
     activeSessionId,
+    language,
     isLoadingSessions,
     sessions,
-    canDeleteActive,
-    activeSession,
     isCreatingSession,
     isNewChatDisabled,
     confirmDeleteSession,
@@ -1635,7 +1694,10 @@ const AiReportingLayout: React.FC<{ controller: AiReportingController }> = ({ co
       isLoadingSessions={isLoadingSessions}
       isCreatingSession={isCreatingSession}
       isNewChatDisabled={isNewChatDisabled}
+      canArchive={canArchive}
+      isDeletingSession={isDeletingSession}
       onSelectSession={handleSelectSession}
+      onConfirmDeleteSession={confirmDeleteSession}
       onNewChat={() => {
         setIsHistoryOpen(false);
         void handleNewChat();
@@ -1653,10 +1715,7 @@ const AiReportingLayout: React.FC<{ controller: AiReportingController }> = ({ co
             <AiReportingHeader
               t={t}
               activeTitle={activeTitle}
-              canDeleteActive={canDeleteActive}
-              activeSession={activeSession}
               onOpenHistory={() => setIsHistoryOpen(true)}
-              onConfirmDeleteSession={confirmDeleteSession}
             />
 
             <AiReportingAlerts
@@ -1717,12 +1776,13 @@ const AiReportingLayout: React.FC<{ controller: AiReportingController }> = ({ co
               <AiReportingComposer
                 t={t}
                 draft={draft}
+                language={language}
                 canSend={canSend}
                 isSending={isSending}
                 footerHintWithPeriod={footerHintWithPeriod}
                 aiWarning={aiWarning}
                 setDraft={setDraft}
-                onSend={() => void handleSend()}
+                onSend={handleSend}
                 onStop={handleStop}
               />
             )}
@@ -1769,7 +1829,10 @@ interface AiReportingSidebarProps {
   isLoadingSessions: boolean;
   isCreatingSession: boolean;
   isNewChatDisabled: boolean;
+  canArchive: boolean;
+  isDeletingSession: boolean;
   onSelectSession: (sessionId: string) => void;
+  onConfirmDeleteSession: (session: ReportChatSessionSummary) => void;
   onNewChat: () => void;
 }
 
@@ -1793,7 +1856,10 @@ export const AiReportingSidebar: React.FC<AiReportingSidebarProps> = ({
   isLoadingSessions,
   isCreatingSession,
   isNewChatDisabled,
+  canArchive,
+  isDeletingSession,
   onSelectSession,
+  onConfirmDeleteSession,
   onNewChat,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
@@ -1884,18 +1950,42 @@ export const AiReportingSidebar: React.FC<AiReportingSidebarProps> = ({
                       toOptionLabel(session) ||
                       t('aiReporting.newChat', { defaultValue: 'New Chat' });
                     return (
-                      <Button
-                        key={session.id}
-                        type="button"
-                        variant={isActive ? 'secondary' : 'ghost'}
-                        size="sm"
-                        aria-current={isActive ? 'page' : undefined}
-                        onClick={() => onSelectSession(session.id)}
-                        className="h-auto w-full justify-start px-3 py-2.5 font-normal"
-                      >
-                        <MessageSquareText className="size-4 text-muted-foreground" />
-                        <span className="truncate">{title}</span>
-                      </Button>
+                      <div key={session.id} className="group/session flex items-center gap-1">
+                        <Button
+                          type="button"
+                          variant={isActive ? 'secondary' : 'ghost'}
+                          size="sm"
+                          aria-current={isActive ? 'page' : undefined}
+                          onClick={() => onSelectSession(session.id)}
+                          className="h-auto min-w-0 flex-1 justify-start px-3 py-2.5 font-normal"
+                        >
+                          <MessageSquareText className="size-4 shrink-0 text-muted-foreground" />
+                          <span className="truncate">{title}</span>
+                        </Button>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className="inline-flex shrink-0">
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon-sm"
+                                disabled={!canArchive || isDeletingSession}
+                                onClick={() => onConfirmDeleteSession(session)}
+                                className={`text-muted-foreground hover:bg-destructive/10 hover:text-destructive ${isActive ? 'md:opacity-100' : 'md:opacity-0 md:group-focus-within/session:opacity-100 md:group-hover/session:opacity-100'}`}
+                                aria-label={t('aiReporting.deleteChatAria', {
+                                  name: title,
+                                  defaultValue: 'Delete chat {{name}}',
+                                })}
+                              >
+                                <Trash2 />
+                              </Button>
+                            </span>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            {t('aiReporting.deleteChatTitle', { defaultValue: 'Delete chat' })}
+                          </TooltipContent>
+                        </Tooltip>
+                      </div>
                     );
                   })}
                 </div>
@@ -1917,21 +2007,11 @@ export const AiReportingSidebar: React.FC<AiReportingSidebarProps> = ({
 interface AiReportingHeaderProps {
   t: TranslationFn;
   activeTitle: string;
-  canDeleteActive: boolean;
-  activeSession: ReportChatSessionSummary | null;
   onOpenHistory: () => void;
-  onConfirmDeleteSession: (session: ReportChatSessionSummary) => void;
 }
 
-const AiReportingHeader: React.FC<AiReportingHeaderProps> = ({
-  t,
-  activeTitle,
-  canDeleteActive,
-  activeSession,
-  onOpenHistory,
-  onConfirmDeleteSession,
-}) => (
-  <header className="flex min-h-16 items-center justify-between gap-3 border-b border-border px-4 md:px-6">
+const AiReportingHeader: React.FC<AiReportingHeaderProps> = ({ t, activeTitle, onOpenHistory }) => (
+  <header className="flex min-h-16 items-center gap-3 border-b border-border px-4 md:px-6">
     <div className="flex min-w-0 items-center gap-3">
       <Button
         type="button"
@@ -1954,31 +2034,6 @@ const AiReportingHeader: React.FC<AiReportingHeaderProps> = ({
         {t('aiReporting.experimental', { defaultValue: 'Experimental' })}
       </Badge>
     </div>
-
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <span className="inline-flex">
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            disabled={!canDeleteActive}
-            onClick={() => {
-              if (activeSession) onConfirmDeleteSession(activeSession);
-            }}
-            className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-            aria-label={t('aiReporting.deleteActiveChatAria', {
-              defaultValue: 'Delete active chat',
-            })}
-          >
-            <Trash2 />
-          </Button>
-        </span>
-      </TooltipTrigger>
-      <TooltipContent>
-        {t('aiReporting.deleteChatTitle', { defaultValue: 'Delete chat' })}
-      </TooltipContent>
-    </Tooltip>
   </header>
 );
 
@@ -2235,6 +2290,13 @@ const AiReportingUserMessage: React.FC<AiReportingUserMessageProps> = ({
     handleEditSend,
   } = interactions;
   const isEditing = editingMessageId === message.id;
+  const parsedMessage = useMemo(() => parseAiReportingMessage(message.content), [message.content]);
+  const copyValue = [
+    parsedMessage.text,
+    ...parsedMessage.attachments.map((attachment) => attachment.name),
+  ]
+    .filter(Boolean)
+    .join('\n');
   const editDisabled =
     isSending || !canSend || editingMessageId !== '' || message.id.startsWith('tmp-');
 
@@ -2243,6 +2305,16 @@ const AiReportingUserMessage: React.FC<AiReportingUserMessageProps> = ({
       {isEditing ? (
         <div className="w-full">
           <Card className="gap-3 rounded-2xl bg-muted/30 p-3 py-3">
+            {parsedMessage.attachments.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {parsedMessage.attachments.map((attachment) => (
+                  <Badge key={attachment.name} variant="secondary">
+                    <FileText />
+                    <span className="max-w-52 truncate">{attachment.name}</span>
+                  </Badge>
+                ))}
+              </div>
+            )}
             <Textarea
               value={editingDraft}
               onChange={(event) => setEditingDraft(event.target.value)}
@@ -2277,7 +2349,7 @@ const AiReportingUserMessage: React.FC<AiReportingUserMessageProps> = ({
                 type="button"
                 size="sm"
                 onClick={() => void handleEditSend(message)}
-                disabled={!editingDraft.trim()}
+                disabled={!editingDraft.trim() && parsedMessage.attachments.length === 0}
               >
                 {t('common:buttons.send', { defaultValue: 'Send' })}
               </Button>
@@ -2286,8 +2358,21 @@ const AiReportingUserMessage: React.FC<AiReportingUserMessageProps> = ({
         </div>
       ) : (
         <div className="flex flex-col items-end max-w-[85%]">
-          <div className="rounded-2xl rounded-br-md bg-primary px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap text-primary-foreground">
-            {message.content}
+          <div className="space-y-2 rounded-2xl rounded-br-md bg-primary px-4 py-3 text-sm leading-relaxed text-primary-foreground">
+            {parsedMessage.text && <div className="whitespace-pre-wrap">{parsedMessage.text}</div>}
+            {parsedMessage.attachments.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {parsedMessage.attachments.map((attachment) => (
+                  <Badge
+                    key={attachment.name}
+                    className="max-w-full border-primary-foreground/20 bg-primary-foreground/15 text-primary-foreground"
+                  >
+                    <FileText />
+                    <span className="max-w-52 truncate">{attachment.name}</span>
+                  </Badge>
+                ))}
+              </div>
+            )}
           </div>
           <div className="mt-1 flex items-center gap-1 opacity-100 transition-opacity md:opacity-0 md:group-focus-within:opacity-100 md:group-hover:opacity-100">
             <Tooltip>
@@ -2296,7 +2381,7 @@ const AiReportingUserMessage: React.FC<AiReportingUserMessageProps> = ({
                   iconOnly
                   variant="ghost"
                   size="icon-sm"
-                  value={message.content}
+                  value={copyValue}
                   aria-label={t('common:buttons.copy', { defaultValue: 'Copy' })}
                   className="text-muted-foreground hover:bg-accent hover:text-foreground"
                 />
@@ -2312,7 +2397,7 @@ const AiReportingUserMessage: React.FC<AiReportingUserMessageProps> = ({
                     size="icon-sm"
                     onClick={() => {
                       setEditingMessageId(message.id);
-                      setEditingDraft(message.content);
+                      setEditingDraft(parsedMessage.text);
                     }}
                     disabled={editDisabled}
                     aria-label={t('common:buttons.edit', { defaultValue: 'Edit' })}
@@ -2687,18 +2772,56 @@ const AiReportingScrollButton: React.FC<AiReportingScrollButtonProps> = ({
 interface AiReportingComposerProps {
   t: TranslationFn;
   draft: string;
+  language: string;
   canSend: boolean;
   isSending: boolean;
   footerHintWithPeriod: string;
   aiWarning: string;
   setDraft: AiReportingSetter<'draft'>;
-  onSend: () => void;
+  onSend: (attachments?: readonly AiReportingMessageAttachment[]) => Promise<boolean>;
   onStop: () => void;
 }
+
+const getAttachmentErrorMessage = (t: TranslationFn, error: AiReportingAttachmentError) => {
+  switch (error.code) {
+    case 'tooManyFiles':
+      return t('aiReporting.attachmentTooMany', {
+        max: AI_REPORTING_MAX_ATTACHMENTS,
+        defaultValue: 'You can attach up to {{max}} files.',
+      });
+    case 'unsupportedType':
+      return t('aiReporting.attachmentUnsupported', {
+        name: error.fileName,
+        defaultValue: '“{{name}}” is not a supported text file.',
+      });
+    case 'fileTooLarge':
+      return t('aiReporting.attachmentTooLarge', {
+        name: error.fileName,
+        max: Math.round(AI_REPORTING_MAX_ATTACHMENT_BYTES / 1024),
+        defaultValue: '“{{name}}” is too large. The limit is {{max}} KB per file.',
+      });
+    case 'fileContentTooLong':
+      return t('aiReporting.attachmentContentTooLong', {
+        name: error.fileName,
+        max: AI_REPORTING_MAX_ATTACHMENT_CONTENT_CHARS,
+        defaultValue: '“{{name}}” contains more than {{max}} text characters.',
+      });
+    case 'totalContentTooLarge':
+      return t('aiReporting.attachmentTotalTooLarge', {
+        max: AI_REPORTING_MAX_TOTAL_ATTACHMENT_CONTENT_CHARS,
+        defaultValue: 'Attached file content cannot exceed {{max}} characters in total.',
+      });
+    case 'readFailed':
+      return t('aiReporting.attachmentReadFailed', {
+        defaultValue: 'One or more files could not be read.',
+      });
+  }
+};
 
 const AiReportingComposer: React.FC<AiReportingComposerProps> = ({
   t,
   draft,
+  language,
   canSend,
   isSending,
   footerHintWithPeriod,
@@ -2706,58 +2829,250 @@ const AiReportingComposer: React.FC<AiReportingComposerProps> = ({
   setDraft,
   onSend,
   onStop,
-}) => (
-  <div className="border-t border-border bg-background px-4 py-3 md:px-8">
-    <div className="mx-auto w-full max-w-3xl">
-      <Card className="gap-0 rounded-2xl p-2 py-2 shadow-sm">
-        <div className="flex items-end gap-2">
-          <Textarea
+}) => {
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [attachments, setAttachments] = useState<AiReportingPendingAttachment[]>([]);
+  const [composerError, setComposerError] = useState('');
+  const [isReadingAttachments, setIsReadingAttachments] = useState(false);
+
+  const appendTranscript = useCallback(
+    (transcript: string) => {
+      const normalizedTranscript = transcript.trim();
+      if (!normalizedTranscript) return;
+      setDraft((currentDraft) => {
+        const separator = currentDraft && !/\s$/.test(currentDraft) ? ' ' : '';
+        return `${currentDraft}${separator}${normalizedTranscript}`;
+      });
+    },
+    [setDraft],
+  );
+  const handleDictationError = useCallback(() => {
+    setComposerError(
+      t('aiReporting.dictationError', {
+        defaultValue: 'Voice dictation could not be started.',
+      }),
+    );
+  }, [t]);
+  const {
+    isListening,
+    isSupported: isDictationSupported,
+    stop: stopDictation,
+    toggle: toggleDictation,
+  } = useAiReportingDictation({
+    language,
+    onError: handleDictationError,
+    onTranscript: appendTranscript,
+  });
+
+  const handleAttachmentChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.currentTarget.files ?? []);
+    event.currentTarget.value = '';
+    if (files.length === 0) return;
+
+    setComposerError('');
+    setIsReadingAttachments(true);
+    const result = await readAiReportingAttachments(files, attachments);
+    setIsReadingAttachments(false);
+
+    if (result.error) {
+      setComposerError(getAttachmentErrorMessage(t, result.error));
+      return;
+    }
+    setAttachments((currentAttachments) => [...currentAttachments, ...result.attachments]);
+  };
+
+  const attachmentOnlyPrompt = t('aiReporting.attachmentOnlyPrompt', {
+    defaultValue: 'Analyze the attached files.',
+  });
+  const canSubmit =
+    canSend &&
+    !isSending &&
+    !isReadingAttachments &&
+    (Boolean(draft.trim()) || attachments.length > 0);
+
+  const handleSubmit = async () => {
+    if (!canSubmit) return;
+    const content = serializeAiReportingMessage(draft.trim() || attachmentOnlyPrompt, attachments);
+    if (content.length > AI_REPORTING_MAX_MESSAGE_CHARS) {
+      setComposerError(
+        t('aiReporting.messageTooLong', {
+          max: AI_REPORTING_MAX_MESSAGE_CHARS,
+          defaultValue: 'The message and attachments exceed {{max}} characters.',
+        }),
+      );
+      return;
+    }
+
+    stopDictation();
+    setComposerError('');
+    if (await onSend(attachments)) {
+      setAttachments([]);
+    }
+  };
+
+  return (
+    <div className="border-t border-border bg-background px-4 py-4 md:px-8 md:py-5">
+      <div className="mx-auto w-full max-w-3xl">
+        <InputGroup
+          data-disabled={!canSend || isSending ? true : undefined}
+          className="min-h-36 flex-col items-stretch overflow-hidden rounded-2xl bg-muted/30 shadow-sm dark:bg-muted/15"
+        >
+          {attachments.length > 0 && (
+            <div className="flex flex-wrap gap-2 px-3 pt-3">
+              {attachments.map((attachment) => (
+                <Badge key={attachment.id} variant="secondary" className="max-w-full gap-1 pl-2">
+                  <FileText />
+                  <span className="max-w-48 truncate">{attachment.name}</span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-xs"
+                    onClick={() =>
+                      setAttachments((currentAttachments) =>
+                        currentAttachments.filter((item) => item.id !== attachment.id),
+                      )
+                    }
+                    aria-label={t('aiReporting.removeAttachment', {
+                      name: attachment.name,
+                      defaultValue: 'Remove attachment {{name}}',
+                    })}
+                    className="-mr-1 rounded-full text-muted-foreground hover:text-foreground"
+                  >
+                    <X />
+                  </Button>
+                </Badge>
+              ))}
+            </div>
+          )}
+
+          <InputGroupTextarea
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
             placeholder={t('aiReporting.placeholder')}
             aria-label={t('aiReporting.placeholder')}
+            aria-invalid={Boolean(composerError)}
             disabled={!canSend || isSending}
-            rows={1}
+            rows={3}
             onKeyDown={(event) => {
-              if (event.key !== 'Enter') return;
-              if (event.shiftKey) return;
+              if (event.key !== 'Enter' || event.shiftKey) return;
               event.preventDefault();
-              onSend();
+              void handleSubmit();
             }}
-            className="max-h-40 min-h-10 flex-1 resize-none border-0 bg-transparent p-2 shadow-none focus-visible:ring-0"
+            className="max-h-52 min-h-20 px-4 pt-4 pb-2 leading-relaxed"
           />
 
-          {isSending ? (
-            <Button
-              type="button"
-              variant="destructive"
-              size="icon-lg"
-              onClick={onStop}
-              className="rounded-full"
-              aria-label={t('aiReporting.stop', { defaultValue: 'Stop' })}
-            >
-              <Square />
-            </Button>
-          ) : (
-            <Button
-              type="button"
-              size="icon-lg"
-              onClick={onSend}
-              disabled={!canSend || !draft.trim()}
-              className="rounded-full"
-              aria-label={t('common:buttons.send', { defaultValue: 'Send' })}
-            >
-              <ArrowUp />
-            </Button>
-          )}
-        </div>
-      </Card>
-      <p className="mt-2 px-2 text-[11px] text-muted-foreground">
-        {footerHintWithPeriod ? [footerHintWithPeriod, aiWarning].join(' ') : aiWarning}
-      </p>
+          <InputGroupAddon align="block-end" className="mt-auto justify-between px-3 pb-3">
+            <div className="flex items-center gap-1">
+              <Input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                accept={AI_REPORTING_ATTACHMENT_ACCEPT}
+                className="sr-only"
+                tabIndex={-1}
+                aria-hidden="true"
+                disabled={!canSend || isSending || isReadingAttachments}
+                onChange={(event) => void handleAttachmentChange(event)}
+              />
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="inline-flex">
+                    <InputGroupButton
+                      size="icon-sm"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={!canSend || isSending || isReadingAttachments}
+                      aria-label={t('aiReporting.attachFiles', {
+                        defaultValue: 'Attach text files',
+                      })}
+                      className="rounded-full"
+                    >
+                      {isReadingAttachments ? <Loader2 className="animate-spin" /> : <Paperclip />}
+                    </InputGroupButton>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {t('aiReporting.attachFilesHelp', {
+                    max: AI_REPORTING_MAX_ATTACHMENTS,
+                    defaultValue: 'Attach up to {{max}} text files',
+                  })}
+                </TooltipContent>
+              </Tooltip>
+            </div>
+
+            <div className="flex items-center gap-1">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="inline-flex">
+                    <InputGroupButton
+                      size="icon-sm"
+                      onClick={toggleDictation}
+                      disabled={!canSend || isSending || !isDictationSupported}
+                      aria-pressed={isListening}
+                      aria-label={t(
+                        isListening ? 'aiReporting.stopDictation' : 'aiReporting.startDictation',
+                        {
+                          defaultValue: isListening
+                            ? 'Stop voice dictation'
+                            : 'Start voice dictation',
+                        },
+                      )}
+                      className={`rounded-full ${isListening ? 'bg-destructive/10 text-destructive hover:bg-destructive/15 hover:text-destructive' : ''}`}
+                    >
+                      <Mic className={isListening ? 'animate-pulse' : undefined} />
+                    </InputGroupButton>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {isDictationSupported
+                    ? t(isListening ? 'aiReporting.stopDictation' : 'aiReporting.startDictation', {
+                        defaultValue: isListening
+                          ? 'Stop voice dictation'
+                          : 'Start voice dictation',
+                      })
+                    : t('aiReporting.dictationUnsupported', {
+                        defaultValue: 'Voice dictation is not supported by this browser.',
+                      })}
+                </TooltipContent>
+              </Tooltip>
+
+              {isSending ? (
+                <InputGroupButton
+                  variant="destructive"
+                  size="icon-sm"
+                  onClick={onStop}
+                  className="rounded-full"
+                  aria-label={t('aiReporting.stop', { defaultValue: 'Stop' })}
+                >
+                  <Square />
+                </InputGroupButton>
+              ) : (
+                <InputGroupButton
+                  variant="default"
+                  size="icon-sm"
+                  onClick={() => void handleSubmit()}
+                  disabled={!canSubmit}
+                  className="rounded-full"
+                  aria-label={t('common:buttons.send', { defaultValue: 'Send' })}
+                >
+                  <ArrowUp />
+                </InputGroupButton>
+              )}
+            </div>
+          </InputGroupAddon>
+        </InputGroup>
+
+        {composerError && (
+          <p role="alert" className="mt-2 px-2 text-xs text-destructive">
+            {composerError}
+          </p>
+        )}
+        <p className="mt-2 px-2 text-[11px] text-muted-foreground">
+          {footerHintWithPeriod ? [footerHintWithPeriod, aiWarning].join(' ') : aiWarning}
+        </p>
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 interface AiReportingDeleteDialogProps {
   t: TranslationFn;

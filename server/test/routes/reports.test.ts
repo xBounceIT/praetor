@@ -803,12 +803,34 @@ describe('POST /api/reports/ai-reporting/chat (non-streaming)', () => {
     expect(res.statusCode).toBe(400);
   });
 
-  test('400 when message exceeds 4000 chars', async () => {
+  test('accepts messages above the legacy 4000 character limit', async () => {
+    listRecentMessagesMock.mockResolvedValue([]);
+    insertUserMessageMock.mockResolvedValue(undefined);
+    insertAssistantMessageMock.mockResolvedValue(undefined);
+    createSessionMock.mockResolvedValue(undefined);
+    updateSessionTitleAndTouchMock.mockResolvedValue(undefined);
+    getFirstUserMessageContentMock.mockResolvedValue('Long attachment prompt');
+    fetchMock.mockResolvedValue(
+      okFetchResponse({
+        candidates: [{ content: { parts: [{ text: 'Attachment analyzed' }] } }],
+      }),
+    );
+
     const res = await testApp.inject({
       method: 'POST',
       url: '/api/reports/ai-reporting/chat',
       headers: authHeader(),
-      payload: { message: 'x'.repeat(4001) },
+      payload: { message: 'x'.repeat(5000) },
+    });
+    expect(res.statusCode).toBe(200);
+  });
+
+  test('400 when message exceeds 16000 chars', async () => {
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/reports/ai-reporting/chat',
+      headers: authHeader(),
+      payload: { message: 'x'.repeat(16_001) },
     });
     expect(res.statusCode).toBe(400);
   });
@@ -1167,12 +1189,12 @@ describe('POST /api/reports/ai-reporting/chat/edit-stream', () => {
     expect(res.statusCode).toBe(400);
   });
 
-  test('400 content too long', async () => {
+  test('400 when edited content exceeds 16000 chars', async () => {
     const res = await testApp.inject({
       method: 'POST',
       url: '/api/reports/ai-reporting/chat/edit-stream',
       headers: authHeader(),
-      payload: { sessionId: 's', messageId: 'm', content: 'x'.repeat(4001) },
+      payload: { sessionId: 's', messageId: 'm', content: 'x'.repeat(16_001) },
     });
     expect(res.statusCode).toBe(400);
   });

@@ -14,6 +14,8 @@ describe('<AiReportingView /> shadcn workspace', () => {
       'md:grid-cols-[17rem_minmax(0,1fr)]',
       '<ScrollArea',
       '<Sheet',
+      '<InputGroup',
+      '<InputGroupTextarea',
       '<Textarea',
       '<Dialog',
       'bg-background',
@@ -40,6 +42,9 @@ describe('<AiReportingView /> shadcn workspace', () => {
       'open={isHistoryOpen}',
       'onOpenHistory={() => setIsHistoryOpen(true)}',
       'onSelectSession={handleSelectSession}',
+      'onConfirmDeleteSession={confirmDeleteSession}',
+      '<Paperclip',
+      '<Mic',
       'variant="destructive"',
       'onArchive={() => void handleArchiveSession()}',
     ]);

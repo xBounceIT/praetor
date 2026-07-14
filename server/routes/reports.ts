@@ -23,6 +23,8 @@ import { badRequest, optionalNonEmptyString, requireNonEmptyString } from '../ut
 type AiProvider = 'gemini' | 'openrouter' | 'anthropic' | 'openai';
 type UiLanguage = 'en' | 'it';
 type AiChatMessage = { role: 'system' | 'user' | 'assistant'; content: string };
+const AI_REPORTING_MESSAGE_MAX_CHARS = 16_000;
+const AI_REPORTING_ATTACHMENT_MARKER = '\u001ePRAETOR_AI_ATTACHMENTS_V1';
 
 export type GeneralAiConfig = {
   enableAiReporting: boolean;
@@ -318,7 +320,8 @@ const createAbortError = () => {
 };
 
 const cleanSessionTitle = (raw: string) => {
-  const t = String(raw || '')
+  const visibleContent = String(raw || '').split(AI_REPORTING_ATTACHMENT_MARKER, 1)[0];
+  const t = visibleContent
     .replace(/[\r\n]+/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
@@ -1958,7 +1961,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!sessionIdResult.ok) return badRequest(reply, sessionIdResult.message);
       const messageResult = requireNonEmptyString(message, 'message');
       if (!messageResult.ok) return badRequest(reply, messageResult.message);
-      if (messageResult.value.length > 4000) return badRequest(reply, 'message is too long');
+      if (messageResult.value.length > AI_REPORTING_MESSAGE_MAX_CHARS) {
+        return badRequest(reply, 'message is too long');
+      }
 
       const uiLanguage = normalizeUiLanguage(language);
 
@@ -2192,7 +2197,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!messageIdResult.ok) return badRequest(reply, messageIdResult.message);
       const contentResult = requireNonEmptyString(content, 'content');
       if (!contentResult.ok) return badRequest(reply, contentResult.message);
-      if (contentResult.value.length > 4000) return badRequest(reply, 'content is too long');
+      if (contentResult.value.length > AI_REPORTING_MESSAGE_MAX_CHARS) {
+        return badRequest(reply, 'content is too long');
+      }
 
       const uiLanguage = normalizeUiLanguage(language);
 
@@ -2424,7 +2431,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!sessionIdResult.ok) return badRequest(reply, sessionIdResult.message);
       const messageResult = requireNonEmptyString(message, 'message');
       if (!messageResult.ok) return badRequest(reply, messageResult.message);
-      if (messageResult.value.length > 4000) return badRequest(reply, 'message is too long');
+      if (messageResult.value.length > AI_REPORTING_MESSAGE_MAX_CHARS) {
+        return badRequest(reply, 'message is too long');
+      }
 
       const uiLanguage = normalizeUiLanguage(language);
 

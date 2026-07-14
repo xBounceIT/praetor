@@ -21,6 +21,16 @@ Usa il campo di ricerca per filtrare le chat in base al titolo. Seleziona una vo
 
 Su dispositivi mobili, apri la cronologia con il pulsante nella barra superiore della conversazione.
 
+Per rimuovere una conversazione, usa il pulsante con il cestino nella sua riga della cronologia e conferma l'operazione.
+
+## Composer, allegati e dettatura
+
+Il composer permette di scrivere su più righe. Premi **Invio** per inviare oppure **Shift+Invio** per andare a capo.
+
+Il pulsante con la graffetta allega fino a 5 file di testo, inclusi TXT, Markdown, CSV, JSON, XML, YAML, log, SQL e comuni file sorgente. Ogni file può pesare fino a 64 KB; il contenuto testuale complessivo degli allegati può raggiungere 12.000 caratteri. I file vengono letti nel browser e inclusi nella richiesta inviata ad AI Reporting.
+
+Se il browser supporta la Web Speech API, usa il pulsante con il microfono per avviare la dettatura vocale. Premi di nuovo il pulsante per interrompere l'ascolto; il testo riconosciuto viene aggiunto alla domanda prima dell'invio.
+
 ## Uso consigliato
 
 Formula richieste specifiche: indica periodo, area aziendale, cliente, progetto o metrica che vuoi analizzare. Domande precise producono risposte più verificabili.

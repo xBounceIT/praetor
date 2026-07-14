@@ -21,6 +21,16 @@ Use the search field to filter chats by title. Select an item to resume that con
 
 On mobile devices, open the history with the button in the conversation header.
 
+To remove a conversation, use the trash button in its history row and confirm the action.
+
+## Composer, attachments, and dictation
+
+The composer supports multiple lines. Press **Enter** to send or **Shift+Enter** to insert a new line.
+
+Use the paperclip button to attach up to 5 text files, including TXT, Markdown, CSV, JSON, XML, YAML, logs, SQL, and common source-code files. Each file can be up to 64 KB, while the combined text content can contain up to 12,000 characters. Files are read in the browser and included in the request sent to AI Reporting.
+
+When the browser supports the Web Speech API, use the microphone button to start voice dictation. Press it again to stop listening; recognized text is appended to the question before it is sent.
+
 ## Recommended use
 
 Ask specific questions: include period, business area, customer, project, or metric you want to analyze. Precise questions produce answers that are easier to verify.
