@@ -39,7 +39,17 @@ export const findByIdentity = async (
 };
 
 export const insert = async (identity: ExternalIdentity, exec: DbExecutor = db): Promise<void> => {
-  await exec.insert(externalIdentities).values(identity).onConflictDoNothing();
+  await exec
+    .insert(externalIdentities)
+    .values(identity)
+    .onConflictDoNothing({
+      target: [
+        externalIdentities.providerId,
+        externalIdentities.protocol,
+        externalIdentities.issuer,
+        externalIdentities.subject,
+      ],
+    });
 };
 
 export const hasOtherSubjectForUserAndProvider = async (
