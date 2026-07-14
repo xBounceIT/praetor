@@ -3151,7 +3151,7 @@ const AiReportingComposer: React.FC<AiReportingComposerProps> = ({
         data-disabled={!canSend || isSending ? true : undefined}
         className="pointer-events-auto min-h-14 items-center overflow-hidden rounded-[1.75rem] border-border/80 bg-background/80 shadow-lg shadow-background/20 backdrop-blur-xl transition-[box-shadow,background-color] supports-[backdrop-filter]:bg-background/70 dark:bg-background/75"
       >
-        <InputGroupAddon align="inline-start" className="self-end py-0 pr-1 pb-1 pl-5">
+        <InputGroupAddon align="inline-start" className="self-center py-0 pr-1 pl-5">
           <Input
             ref={fileInputRef}
             type="file"
@@ -3202,12 +3202,12 @@ const AiReportingComposer: React.FC<AiReportingComposerProps> = ({
             void handleSubmit();
           }}
           className={cn(
-            'field-sizing-content min-h-12 overflow-y-auto px-2 pt-4 pb-2 leading-6',
+            'field-sizing-content min-h-12 overflow-y-auto px-2 py-3 leading-6',
             draft ? 'max-h-40' : 'max-h-12',
           )}
         />
 
-        <InputGroupAddon align="inline-end" className="self-end gap-1 py-0 pr-5 pb-1 pl-1">
+        <InputGroupAddon align="inline-end" className="self-center gap-1 py-0 pr-5 pl-1">
           <Tooltip>
             <TooltipTrigger asChild>
               <span className="inline-flex">

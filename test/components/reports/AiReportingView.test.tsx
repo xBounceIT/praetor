@@ -6,6 +6,13 @@ import {
 } from '../modalStylingTestUtils';
 
 describe('<AiReportingView /> shadcn workspace', () => {
+  test('uses the native shadcn input-group container without fieldset layout offsets', async () => {
+    const source = await readComponentSource('ui/input-group.tsx');
+
+    expectSourceContainsAll(source, ["React.ComponentProps<'div'>", '<div', 'role="group"']);
+    expectSourceOmitsAll(source, ["React.ComponentProps<'fieldset'>", '<fieldset']);
+  });
+
   test('uses the responsive two-panel layout and semantic theme tokens', async () => {
     const source = await readComponentSource('reports/AiReportingView.tsx');
 
@@ -69,15 +76,17 @@ describe('<AiReportingView /> shadcn workspace', () => {
       'pointer-events-auto relative rounded-full',
       'pb-28',
       'min-h-14 items-center',
-      'pr-1 pb-1 pl-5',
-      'pr-5 pb-1 pl-1',
-      'px-2 pt-4 pb-2',
+      'self-center py-0 pr-1 pl-5',
+      'self-center gap-1 py-0 pr-5 pl-1',
+      'px-2 py-3',
     ]);
     expectSourceOmitsAll(source, [
       'min-h-36 flex-col',
       'absolute bottom-28',
       'border-t border-border bg-background px-4 py-4',
       'AiReportingDeleteDialog',
+      'self-end',
+      'pt-4 pb-2',
     ]);
   });
 
