@@ -1,18 +1,25 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 import * as realBcrypt from 'bcryptjs';
-import * as realDbIndex from '../../db/index.ts';
+import * as realDrizzle from '../../db/drizzle.ts';
 import * as realNotificationsRepo from '../../repositories/notificationsRepo.ts';
 import * as realUsersRepo from '../../repositories/usersRepo.ts';
 
 type BootstrapAdminModule = typeof import('../../db/bootstrapAdmin.ts');
 
-const dbIndexSnap = { ...realDbIndex };
+const drizzleSnap = { ...realDrizzle };
 const usersRepoSnap = { ...realUsersRepo };
 const notificationsRepoSnap = { ...realNotificationsRepo };
 const bcryptSnap = { ...(realBcrypt as Record<string, unknown>) };
 
-const queryMock = mock();
+const advisoryLockMock = mock();
+const withDbTransactionMock = mock(async (callback: (tx: unknown) => unknown): Promise<unknown> => {
+  const tx = { execute: advisoryLockMock };
+  return callback(tx);
+});
+const findLoginUserByExactUsernameMock = mock();
+const findLoginUserByIdMock = mock();
 const createUserMock = mock();
+const addUserRoleMock = mock();
 const upsertAdminPasswordWarningMock = mock();
 const deleteAdminPasswordWarningMock = mock();
 const bcryptHashMock = mock();
@@ -21,13 +28,16 @@ const bcryptCompareMock = mock();
 let bootstrapAdmin: BootstrapAdminModule;
 
 beforeAll(async () => {
-  mock.module('../../db/index.ts', () => ({
-    ...dbIndexSnap,
-    query: queryMock,
+  mock.module('../../db/drizzle.ts', () => ({
+    ...drizzleSnap,
+    withDbTransaction: withDbTransactionMock,
   }));
   mock.module('../../repositories/usersRepo.ts', () => ({
     ...usersRepoSnap,
+    findLoginUserByExactUsername: findLoginUserByExactUsernameMock,
+    findLoginUserById: findLoginUserByIdMock,
     createUser: createUserMock,
+    addUserRole: addUserRoleMock,
   }));
   mock.module('../../repositories/notificationsRepo.ts', () => ({
     ...notificationsRepoSnap,
@@ -44,15 +54,19 @@ beforeAll(async () => {
 });
 
 afterAll(() => {
-  mock.module('../../db/index.ts', () => dbIndexSnap);
+  mock.module('../../db/drizzle.ts', () => drizzleSnap);
   mock.module('../../repositories/usersRepo.ts', () => usersRepoSnap);
   mock.module('../../repositories/notificationsRepo.ts', () => notificationsRepoSnap);
   mock.module('bcryptjs', () => bcryptSnap);
 });
 
 const allMocks = [
-  queryMock,
+  advisoryLockMock,
+  withDbTransactionMock,
+  findLoginUserByExactUsernameMock,
+  findLoginUserByIdMock,
   createUserMock,
+  addUserRoleMock,
   upsertAdminPasswordWarningMock,
   deleteAdminPasswordWarningMock,
   bcryptHashMock,
@@ -64,7 +78,15 @@ const originalAdminPasswordEnv = process.env[ADMIN_PASSWORD_ENV];
 
 beforeEach(() => {
   for (const mockedFn of allMocks) mockedFn.mockReset();
+  advisoryLockMock.mockResolvedValue({ rows: [] });
+  withDbTransactionMock.mockImplementation(async (callback: (tx: unknown) => unknown) => {
+    const tx = { execute: advisoryLockMock };
+    return callback(tx);
+  });
+  findLoginUserByExactUsernameMock.mockResolvedValue(null);
+  findLoginUserByIdMock.mockResolvedValue(null);
   createUserMock.mockResolvedValue(undefined);
+  addUserRoleMock.mockResolvedValue(undefined);
   upsertAdminPasswordWarningMock.mockResolvedValue(undefined);
   deleteAdminPasswordWarningMock.mockResolvedValue(undefined);
   delete process.env[ADMIN_PASSWORD_ENV];
@@ -79,11 +101,48 @@ afterEach(() => {
 });
 
 describe('ensureBootstrapAdmin', () => {
+  test('concurrent startup creates the bootstrap admin only once', async () => {
+    let admin: { id: string; passwordHash: string } | null = null;
+    let lockTail = Promise.resolve();
+    let lockAcquisitions = 0;
+    withDbTransactionMock.mockImplementation(async (callback: (tx: unknown) => unknown) => {
+      const previousLock = lockTail;
+      let releaseLock: () => void = () => undefined;
+      lockTail = new Promise<void>((resolve) => {
+        releaseLock = resolve;
+      });
+      const tx = {
+        execute: async () => {
+          lockAcquisitions += 1;
+          await previousLock;
+          return { rows: [] };
+        },
+      };
+      try {
+        return await callback(tx);
+      } finally {
+        releaseLock();
+      }
+    });
+    findLoginUserByExactUsernameMock.mockImplementation(async () => admin);
+    createUserMock.mockImplementation(async (user: { id: string; passwordHash: string }) => {
+      admin = { id: user.id, passwordHash: user.passwordHash };
+    });
+    bcryptHashMock.mockResolvedValue('$2a$password-hash');
+    bcryptCompareMock.mockResolvedValue(true);
+
+    const adminIds = await Promise.all([
+      bootstrapAdmin.ensureBootstrapAdmin(),
+      bootstrapAdmin.ensureBootstrapAdmin(),
+    ]);
+
+    expect(adminIds).toEqual(['u1', 'u1']);
+    expect(lockAcquisitions).toBe(2);
+    expect(createUserMock).toHaveBeenCalledTimes(1);
+    expect(addUserRoleMock).toHaveBeenCalledTimes(2);
+  });
+
   test('creates a fresh admin with the literal default password', async () => {
-    queryMock
-      .mockResolvedValueOnce({ rows: [] })
-      .mockResolvedValueOnce({ rows: [] })
-      .mockResolvedValueOnce({ rows: [], rowCount: 1 });
     bcryptHashMock.mockResolvedValue('$2a$password-hash');
     bcryptCompareMock.mockResolvedValue(true);
 
@@ -91,21 +150,40 @@ describe('ensureBootstrapAdmin', () => {
 
     expect(adminId).toBe('u1');
     expect(bcryptHashMock).toHaveBeenCalledWith('password', 12);
-    expect(createUserMock).toHaveBeenCalledWith({
-      id: 'u1',
-      name: 'Admin User',
-      username: 'admin',
-      passwordHash: '$2a$password-hash',
-      role: 'admin',
-      avatarInitials: 'AD',
-    });
+    expect(createUserMock).toHaveBeenCalledWith(
+      {
+        id: 'u1',
+        name: 'Admin User',
+        username: 'admin',
+        passwordHash: '$2a$password-hash',
+        role: 'admin',
+        avatarInitials: 'AD',
+      },
+      expect.anything(),
+    );
+    const transaction = createUserMock.mock.calls[0][1];
+    expect(addUserRoleMock).toHaveBeenCalledWith('u1', 'admin', transaction);
+    expect(advisoryLockMock).toHaveBeenCalledTimes(1);
     expect(upsertAdminPasswordWarningMock).toHaveBeenCalledWith('u1');
   });
 
+  test('keeps user creation and role assignment in the same transaction', async () => {
+    addUserRoleMock.mockRejectedValue(new Error('role assignment failed'));
+    bcryptHashMock.mockResolvedValue('$2a$password-hash');
+
+    await expect(bootstrapAdmin.ensureBootstrapAdmin()).rejects.toThrow('role assignment failed');
+
+    expect(createUserMock).toHaveBeenCalledTimes(1);
+    expect(createUserMock.mock.calls[0][1]).toBe(addUserRoleMock.mock.calls[0][2]);
+    expect(upsertAdminPasswordWarningMock).not.toHaveBeenCalled();
+    expect(deleteAdminPasswordWarningMock).not.toHaveBeenCalled();
+  });
+
   test('existing admin with default password gets the warning', async () => {
-    queryMock
-      .mockResolvedValueOnce({ rows: [{ id: 'u1', password_hash: '$2a$existing' }] })
-      .mockResolvedValueOnce({ rows: [], rowCount: 1 });
+    findLoginUserByExactUsernameMock.mockResolvedValue({
+      id: 'u1',
+      passwordHash: '$2a$existing',
+    });
     bcryptCompareMock.mockResolvedValue(true);
 
     const adminId = await bootstrapAdmin.ensureBootstrapAdmin();
@@ -118,9 +196,10 @@ describe('ensureBootstrapAdmin', () => {
   });
 
   test('existing admin with changed password removes the warning', async () => {
-    queryMock
-      .mockResolvedValueOnce({ rows: [{ id: 'u1', password_hash: '$2a$changed' }] })
-      .mockResolvedValueOnce({ rows: [], rowCount: 1 });
+    findLoginUserByExactUsernameMock.mockResolvedValue({
+      id: 'u1',
+      passwordHash: '$2a$changed',
+    });
     bcryptCompareMock.mockResolvedValue(false);
 
     const adminId = await bootstrapAdmin.ensureBootstrapAdmin();
@@ -139,10 +218,6 @@ describe('ensureBootstrapAdmin', () => {
 
   test('fresh admin uses ADMIN_DEFAULT_PASSWORD when set', async () => {
     process.env[ADMIN_PASSWORD_ENV] = 'op-chosen-strong-pw';
-    queryMock
-      .mockResolvedValueOnce({ rows: [] })
-      .mockResolvedValueOnce({ rows: [] })
-      .mockResolvedValueOnce({ rows: [], rowCount: 1 });
     bcryptHashMock.mockResolvedValue('$2a$op-hash');
     bcryptCompareMock.mockResolvedValue(false);
 
@@ -152,6 +227,7 @@ describe('ensureBootstrapAdmin', () => {
     expect(bcryptHashMock).not.toHaveBeenCalledWith('password', 12);
     expect(createUserMock).toHaveBeenCalledWith(
       expect.objectContaining({ passwordHash: '$2a$op-hash' }),
+      expect.anything(),
     );
     expect(upsertAdminPasswordWarningMock).not.toHaveBeenCalled();
     expect(deleteAdminPasswordWarningMock).toHaveBeenCalledTimes(1);
@@ -160,10 +236,6 @@ describe('ensureBootstrapAdmin', () => {
 
   test('fresh admin falls back to literal default when env var is whitespace', async () => {
     process.env[ADMIN_PASSWORD_ENV] = '   ';
-    queryMock
-      .mockResolvedValueOnce({ rows: [] })
-      .mockResolvedValueOnce({ rows: [] })
-      .mockResolvedValueOnce({ rows: [], rowCount: 1 });
     bcryptHashMock.mockResolvedValue('$2a$password-hash');
     bcryptCompareMock.mockResolvedValue(true);
 
@@ -173,9 +245,10 @@ describe('ensureBootstrapAdmin', () => {
   });
 
   test('existing admin still using the .env.example placeholder gets the warning', async () => {
-    queryMock
-      .mockResolvedValueOnce({ rows: [{ id: 'u1', password_hash: '$2a$placeholder' }] })
-      .mockResolvedValueOnce({ rows: [], rowCount: 1 });
+    findLoginUserByExactUsernameMock.mockResolvedValue({
+      id: 'u1',
+      passwordHash: '$2a$placeholder',
+    });
     bcryptCompareMock.mockImplementation(
       async (candidate: string) => candidate === 'change-me-strong-admin-password',
     );
