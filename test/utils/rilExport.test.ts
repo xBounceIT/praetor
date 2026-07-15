@@ -1,7 +1,7 @@
-import { describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from 'bun:test';
 import { Workbook } from 'exceljs';
 import { applyRilDraftToRows, generateRilRows } from '../../utils/ril';
-import { buildRilWorkbook } from '../../utils/rilExport';
+import { buildRilWorkbook, downloadRilWorkbook } from '../../utils/rilExport';
 
 const buildTestRilWorkbook = (input: Parameters<typeof buildRilWorkbook>[0]) =>
   buildRilWorkbook(input, new Workbook());
@@ -224,5 +224,46 @@ describe('RIL Excel export', () => {
     expect(worksheet?.getCell('H39').value).toBe(21);
     expect(worksheet?.getCell('H41').value).toBe('168:00');
     expect(worksheet?.getCell('H42').value).toBe('168,00');
+  });
+});
+
+describe('RIL Excel download', () => {
+  let previousExcelJs: typeof window.ExcelJS;
+
+  beforeEach(() => {
+    previousExcelJs = window.ExcelJS;
+    window.ExcelJS = { Workbook };
+  });
+
+  afterEach(() => {
+    window.ExcelJS = previousExcelJs;
+    mock.restore();
+  });
+
+  test('revokes the object URL only after the browser handles the download click', async () => {
+    const events: string[] = [];
+    spyOn(URL, 'createObjectURL').mockImplementation(() => 'blob:ril-workbook');
+    spyOn(URL, 'revokeObjectURL').mockImplementation(() => {
+      events.push('revoke');
+    });
+    spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {
+      events.push('click');
+    });
+
+    const filename = await downloadRilWorkbook({
+      rows: [],
+      employeeName: 'User Name',
+      companyName: 'ACME',
+      year: 2026,
+      month: 5,
+      lunchBreakMinutes: 60,
+    });
+    events.push('resolved');
+
+    expect(filename).toBe('RIL_2026_05_User_Name.xlsx');
+    expect(events).toEqual(['click', 'resolved']);
+
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    expect(events).toEqual(['click', 'resolved', 'revoke']);
   });
 });
