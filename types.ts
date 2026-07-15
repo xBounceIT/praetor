@@ -1140,7 +1140,7 @@ export interface ReportChatMessage {
 }
 
 export interface ReportChatTechnicalInfo {
-  provider: 'gemini' | 'openrouter' | 'anthropic';
+  provider: AiProvider;
   modelId: string;
   contextTokensUsed: number;
   contextWindowTokens: number;

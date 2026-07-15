@@ -21,6 +21,10 @@ const getAudioFormat = (mimeType: string) => {
 
 const OPENAI_TRANSCRIPTION_MODEL = 'gpt-4o-mini-transcribe';
 const OPENROUTER_TRANSCRIPTION_MODEL = 'openai/whisper-large-v3';
+const OPENAI_TRANSCRIPTION_FORMATS = new Set(['mp3', 'mp4', 'mpga', 'm4a', 'wav', 'webm']);
+
+const supportsOpenAiTranscription = (mimeType: string) =>
+  OPENAI_TRANSCRIPTION_FORMATS.has(getAudioFormat(mimeType));
 
 const parseTranscript = (payload: unknown) => {
   const text = (payload as { text?: unknown })?.text;
@@ -124,7 +128,7 @@ export const transcribeAiReportingAudio = async (
   language: 'en' | 'it',
 ) => {
   const available = {
-    openai: Boolean(config.openaiApiKey.trim()),
+    openai: Boolean(config.openaiApiKey.trim()) && supportsOpenAiTranscription(mimeType),
     openrouter: Boolean(config.openrouterApiKey.trim()),
     gemini: Boolean(config.geminiApiKey.trim() && config.geminiModelId.trim()),
   };
