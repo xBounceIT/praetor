@@ -339,6 +339,28 @@ describe('determineRequestedSections', () => {
 
     expect(sections).toEqual(new Set(['invoices']));
   });
+
+  test('honors a later full-report request after an attachment turn', () => {
+    const sections = determineRequestedSections('Now give me a full report', [
+      {
+        role: 'user',
+        content: attachmentMessage('Analyze the attached file', 'invoice'),
+      },
+    ]);
+
+    expect(sections).toBeNull();
+  });
+
+  test('keeps explicit attachment follow-ups isolated from business datasets', () => {
+    const sections = determineRequestedSections('Summarize the attached file', [
+      {
+        role: 'user',
+        content: attachmentMessage('Analyze this file', 'invoice'),
+      },
+    ]);
+
+    expect(sections).toEqual(new Set());
+  });
 });
 
 describe('GET /api/reports/ai-reporting/sessions', () => {

@@ -1282,6 +1282,21 @@ const shouldIncludeDatasetSection = (
 const getAiReportingVisibleText = (content: string) =>
   content.split(AI_REPORTING_ATTACHMENT_MARKER, 1)[0] ?? '';
 
+const attachmentReferenceTerms = [
+  'attached file',
+  'attached files',
+  'attachment',
+  'attachments',
+  'uploaded file',
+  'uploaded files',
+  'file allegato',
+  'file allegati',
+  'allegato',
+  'allegati',
+  'allegata',
+  'allegate',
+];
+
 export const determineRequestedSections = (
   message: string,
   convo: Array<{ role: 'user' | 'assistant'; content: string }>,
@@ -1294,14 +1309,15 @@ export const determineRequestedSections = (
     .slice(-3)
     .map((entry) => entry.content);
 
+  const currentVisibleText = normalizeQueryText(getAiReportingVisibleText(message));
+  const requestTargetsAttachments =
+    message.includes(AI_REPORTING_ATTACHMENT_MARKER) ||
+    attachmentReferenceTerms.some((term) => includesTerm(currentVisibleText, term));
   const candidateMessages = [message, ...recentUserMessages];
-  const hasAttachments = candidateMessages.some((content) =>
-    content.includes(AI_REPORTING_ATTACHMENT_MARKER),
-  );
   const detectionText = normalizeQueryText(
     candidateMessages.map(getAiReportingVisibleText).join(' '),
   );
-  if (!detectionText) return hasAttachments ? new Set() : null;
+  if (!detectionText) return requestTargetsAttachments ? new Set() : null;
 
   const overviewTerms = [
     'overview',
@@ -1314,7 +1330,10 @@ export const determineRequestedSections = (
     'tutto',
     'dati completi',
   ];
-  if (!hasAttachments && overviewTerms.some((term) => includesTerm(detectionText, term))) {
+  if (
+    !requestTargetsAttachments &&
+    overviewTerms.some((term) => includesTerm(currentVisibleText, term))
+  ) {
     return null;
   }
 
@@ -1326,7 +1345,7 @@ export const determineRequestedSections = (
     }
   }
 
-  if (matchedSections.size === 0) return hasAttachments ? new Set() : null;
+  if (matchedSections.size === 0) return requestTargetsAttachments ? new Set() : null;
   if (matchedSections.size >= 8) return null;
 
   if (matchedSections.has('tasks')) matchedSections.add('projects');
