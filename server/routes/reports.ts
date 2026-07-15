@@ -2282,7 +2282,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         consumes: ['multipart/form-data'],
         querystring: {
           type: 'object',
-          properties: { language: { type: 'string', enum: ['en', 'it'] } },
+          properties: { language: { type: 'string', maxLength: 35 } },
         },
         response: {
           200: {
