@@ -180,6 +180,15 @@ type AssistantAttemptGroup = {
 
 const MESSAGES_PAGE_SIZE = 200;
 
+const mergeLoadedMessages = (
+  loadedMessages: ReportChatMessage[],
+  canonicalMessages: ReportChatMessage[],
+) => {
+  const messagesById = new Map(loadedMessages.map((message) => [message.id, message]));
+  for (const message of canonicalMessages) messagesById.set(message.id, message);
+  return Array.from(messagesById.values()).sort((left, right) => left.createdAt - right.createdAt);
+};
+
 type AttemptSelectionAction = { type: 'set'; groupId: string; index: number } | { type: 'reset' };
 type StateUpdate<T> = T | ((prev: T) => T);
 
@@ -717,7 +726,10 @@ const useAiReportingController = ({
   );
 
   const loadMessages = useCallback(
-    async (sessionId: string, opts: { forceScroll?: boolean } = {}) => {
+    async (
+      sessionId: string,
+      opts: { forceScroll?: boolean; preserveLoadedHistory?: boolean } = {},
+    ) => {
       const token = ++loadTokenRef.current;
       setIsLoadingMessages(true);
       setIsLoadingOlderMessages(false);
@@ -735,8 +747,12 @@ const useAiReportingController = ({
           ) {
             pendingEmptySessionIdRef.current = '';
           }
-          setMessages(data);
-          setHasOlderMessages(data.length >= MESSAGES_PAGE_SIZE);
+          setMessages((currentMessages) =>
+            opts.preserveLoadedHistory ? mergeLoadedMessages(currentMessages, data) : data,
+          );
+          if (!opts.preserveLoadedHistory) {
+            setHasOlderMessages(data.length >= MESSAGES_PAGE_SIZE);
+          }
           queueMicrotask(() => {
             if (opts.forceScroll || isAtBottomRef.current) {
               scrollToBottom();
@@ -1419,7 +1435,10 @@ const useAiReportingController = ({
           activeAssistantMessageIdRef.current = '';
         }
         await Promise.all([
-          loadMessages(streamed.sessionId, { forceScroll: false }),
+          loadMessages(streamed.sessionId, {
+            forceScroll: false,
+            preserveLoadedHistory: true,
+          }),
           loadSessions({ preferredSessionId: streamed.sessionId }),
         ]);
       }

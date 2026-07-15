@@ -121,6 +121,28 @@ const messages: ReportChatMessage[] = [
   },
 ];
 
+const createMessageHistory = (
+  prefix: string,
+  questionLabel: string,
+  answerLabel: string,
+): ReportChatMessage[] =>
+  Array.from({ length: 100 }, (_, index) => [
+    {
+      id: `${prefix}-user-${index}`,
+      sessionId: 'revenue',
+      role: 'user' as const,
+      content: `${questionLabel} ${index}`,
+      createdAt: 10_000 + index * 2,
+    },
+    {
+      id: `${prefix}-assistant-${index}`,
+      sessionId: 'revenue',
+      role: 'assistant' as const,
+      content: `${answerLabel} ${index}`,
+      createdAt: 10_001 + index * 2,
+    },
+  ]).flat();
+
 const renderView = () =>
   render(
     <AiReportingView
@@ -393,22 +415,7 @@ describe('<AiReportingView /> interactions', () => {
   });
 
   test('ignores older messages that resolve after selecting another session', async () => {
-    const revenueHistory: ReportChatMessage[] = Array.from({ length: 100 }, (_, index) => [
-      {
-        id: `revenue-user-${index}`,
-        sessionId: 'revenue',
-        role: 'user' as const,
-        content: `Revenue question ${index}`,
-        createdAt: 10_000 + index * 2,
-      },
-      {
-        id: `revenue-assistant-${index}`,
-        sessionId: 'revenue',
-        role: 'assistant' as const,
-        content: `Revenue answer ${index}`,
-        createdAt: 10_001 + index * 2,
-      },
-    ]).flat();
+    const revenueHistory = createMessageHistory('revenue', 'Revenue question', 'Revenue answer');
     const capacityMessages: ReportChatMessage[] = [
       {
         id: 'capacity-user',
@@ -458,6 +465,58 @@ describe('<AiReportingView /> interactions', () => {
     });
 
     expect(screen.queryByText('Old revenue contamination')).toBeNull();
+  });
+
+  test('preserves loaded history after editing an older message', async () => {
+    const latestHistory = createMessageHistory('latest', 'Latest question', 'Latest answer');
+    const olderHistory: ReportChatMessage[] = [
+      {
+        id: 'older-user',
+        sessionId: 'revenue',
+        role: 'user',
+        content: 'Old editable question',
+        createdAt: 1,
+      },
+      {
+        id: 'older-assistant',
+        sessionId: 'revenue',
+        role: 'assistant',
+        content: 'Old answer',
+        createdAt: 2,
+      },
+    ];
+    getSessionMessagesMock.mockImplementation((_sessionId: string, options?: { before?: number }) =>
+      Promise.resolve(options?.before ? olderHistory : latestHistory),
+    );
+    editMessageStreamMock.mockImplementation(
+      async (
+        _payload: unknown,
+        handlers?: { onStart?: (event: { sessionId: string; messageId: string }) => void },
+      ) => {
+        handlers?.onStart?.({ sessionId: 'revenue', messageId: 'older-assistant-edited' });
+        return { sessionId: 'revenue', text: 'Updated old answer.' };
+      },
+    );
+
+    renderView();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Load older messages' }));
+    const olderQuestion = await screen.findByText('Old editable question');
+    const olderTurn = olderQuestion.closest('.group');
+    expect(olderTurn).not.toBeNull();
+    fireEvent.click(within(olderTurn as HTMLElement).getByRole('button', { name: 'Edit' }));
+    const editInput = screen.getByRole('textbox', { name: 'Edit message' });
+    fireEvent.change(editInput, { target: { value: 'Updated old question' } });
+    fireEvent.click(
+      within(editInput.closest('[data-slot="card"]') as HTMLElement).getByRole('button', {
+        name: 'Send',
+      }),
+    );
+
+    await waitFor(() => expect(getSessionMessagesMock.mock.calls.length).toBeGreaterThanOrEqual(3));
+    await waitFor(() => expect(screen.getByText('Updated old answer.')).toBeInTheDocument());
+    expect(screen.getByText('Updated old question')).toBeInTheDocument();
+    expect(screen.getByText('Latest answer 99')).toBeInTheDocument();
   });
 
   test('clears failed edit stream state before loading another session', async () => {
