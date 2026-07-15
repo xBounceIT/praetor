@@ -496,7 +496,24 @@ const buildSessionTitlePrompt = (firstUserMessage: string, language: UiLanguage)
   ].join('\n');
 };
 
-const geminiGenerateText = async (apiKey: string, modelId: string, prompt: string) => {
+const buildGeminiRequestBody = (prompt: string, systemPrompt?: string) => ({
+  ...(systemPrompt
+    ? {
+        systemInstruction: {
+          parts: [{ text: systemPrompt }],
+        },
+      }
+    : {}),
+  contents: [{ role: 'user', parts: [{ text: prompt }] }],
+  generationConfig: { temperature: 0.2 },
+});
+
+const geminiGenerateText = async (
+  apiKey: string,
+  modelId: string,
+  prompt: string,
+  systemPrompt?: string,
+) => {
   const modelPathResult = normalizeGeminiModelPath(modelId);
   if (!modelPathResult.ok) {
     throw new Error(modelPathResult.message);
@@ -509,10 +526,7 @@ const geminiGenerateText = async (apiKey: string, modelId: string, prompt: strin
   const res = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      contents: [{ role: 'user', parts: [{ text: prompt }] }],
-      generationConfig: { temperature: 0.2 },
-    }),
+    body: JSON.stringify(buildGeminiRequestBody(prompt, systemPrompt)),
   });
   if (!res.ok) throw new Error(`Gemini request failed: HTTP ${res.status}`);
   const data = await res.json();
@@ -584,6 +598,7 @@ const geminiGenerateTextStream = async (
   apiKey: string,
   modelId: string,
   prompt: string,
+  systemPrompt: string | undefined,
   callbacks: AiStreamCallbacks = {},
   signal?: AbortSignal,
 ) => {
@@ -600,10 +615,7 @@ const geminiGenerateTextStream = async (
   const res = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      contents: [{ role: 'user', parts: [{ text: prompt }] }],
-      generationConfig: { temperature: 0.2 },
-    }),
+    body: JSON.stringify(buildGeminiRequestBody(prompt, systemPrompt)),
     signal,
   });
 
@@ -1728,18 +1740,20 @@ const buildVisualizationToolInstruction = (language: UiLanguage) => {
   return [
     '<visualization_protocol>',
     description,
-    'Using the tool means emitting one fenced block with this exact language identifier; the client renders it automatically:',
+    'Using the tool means emitting one fenced block per visualization with this exact language identifier; the client renders each block automatically:',
     '```praetor-visualization',
     example,
     '```',
+    'Each fenced block must contain exactly one valid JSON object and no commentary, Markdown, or code comments.',
     'Schema and rendering rules:',
     '- Supported `type`: `bar`, `line`, `area`, `pie`, `donut`.',
     '- Required top-level fields are `version` (exactly `1`), `type`, `title`, `xKey`, `series`, and `data`; `description`, `xLabel`, `orientation`, and `stacked` are optional.',
-    '- Keep `title` at 1-120 characters, `description` at most 300, and `xLabel` at most 60. Each data row may contain only `xKey` and the declared series keys.',
-    '- Use 1-50 data points and 1-5 series. `pie` and `donut` require exactly one series, non-negative values, and at most 10 points.',
-    '- Series keys and `xKey` must match `^[A-Za-z][A-Za-z0-9_]{0,31}$` and must be unique.',
-    '- Series `format` is `number`, `currency`, or `percent`. Currency requires an uppercase three-letter ISO code. Percent values use the 0-100 scale. Optional `decimals` must be 0-4 and optional `unit` at most 20 characters.',
-    '- `orientation` is available only for `bar`; `stacked` is available only for `bar` and `area`.',
+    '- Keep `title` at 1-120 characters, `description` at most 300, and `xLabel` at most 60.',
+    '- Use 1-50 data points and 1-5 series. `pie` and `donut` require exactly one series, at most 10 points, non-negative values, and a positive total.',
+    '- Series keys and `xKey` must match `^[A-Za-z][A-Za-z0-9_]{0,31}$`; series keys must be unique and distinct from `xKey`.',
+    '- Each series requires `key`, `label` (1-60 characters), and `format` (`number`, `currency`, or `percent`). `currency` is required for the currency format and forbidden for other formats; it must be an uppercase three-letter ISO code. Percent values use the 0-100 scale. Optional `decimals` must be an integer from 0 to 4 and optional `unit` at most 20 characters.',
+    '- Each data row may contain only `xKey` and the declared series keys. Its `xKey` value must be a finite number or a 1-80 character string; every series value must be a finite number.',
+    '- `orientation` (`horizontal` or `vertical`) is available only for `bar`; boolean `stacked` is available only for `bar` and `area`.',
     '- Never include HTML, JavaScript, CSS, color values, URLs, or extra configuration fields.',
     '- Emit at most 7 visualization blocks and only when they materially improve the answer.',
     narrativeRule,
@@ -1747,10 +1761,13 @@ const buildVisualizationToolInstruction = (language: UiLanguage) => {
   ].join('\n');
 };
 
+const escapePromptTagCharacters = (json: string) =>
+  json.replaceAll('<', '\\u003c').replaceAll('>', '\\u003e');
+
 const buildDatasetInstruction = (datasetJson: string, language: UiLanguage) =>
   [
     '<dataset_json>',
-    datasetJson,
+    escapePromptTagCharacters(datasetJson),
     '</dataset_json>',
     '',
     buildVisualizationToolInstruction(language),
@@ -1857,7 +1874,7 @@ type AiReportingPromptPayload =
       provider: 'openai';
       messages: AiChatMessage[];
     }
-  | { provider: 'gemini'; prompt: string };
+  | { provider: 'gemini'; systemPrompt: string; prompt: string };
 
 const buildAiReportingPromptPayload = (args: {
   provider: AiProvider;
@@ -1879,9 +1896,8 @@ const buildAiReportingPromptPayload = (args: {
   const transcript = convo.map((m) => `${m.role.toUpperCase()}: ${m.content}`).join('\n\n');
   return {
     provider: 'gemini',
+    systemPrompt: buildAiReportingSystemPrompt(uiLanguage),
     prompt: [
-      buildAiReportingSystemPrompt(uiLanguage),
-      '',
       buildDatasetInstruction(datasetJson, uiLanguage),
       '',
       'Conversation:',
@@ -1906,7 +1922,7 @@ const generateAiReportingText = (
   if (payload.provider === 'anthropic') {
     return anthropicGenerateText(apiKey, modelId, payload.messages);
   }
-  return geminiGenerateText(apiKey, modelId, payload.prompt);
+  return geminiGenerateText(apiKey, modelId, payload.prompt, payload.systemPrompt);
 };
 
 const generateAiReportingTextStream = (
@@ -1925,7 +1941,14 @@ const generateAiReportingTextStream = (
   if (payload.provider === 'anthropic') {
     return anthropicGenerateTextStream(apiKey, modelId, payload.messages, callbacks, signal);
   }
-  return geminiGenerateTextStream(apiKey, modelId, payload.prompt, callbacks, signal);
+  return geminiGenerateTextStream(
+    apiKey,
+    modelId,
+    payload.prompt,
+    payload.systemPrompt,
+    callbacks,
+    signal,
+  );
 };
 
 const createSseStreamHandlers = (
