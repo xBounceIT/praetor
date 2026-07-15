@@ -375,6 +375,39 @@ const resolveTechnicalInfo = async (
   return { provider, modelId, contextTokensUsed, contextWindowTokens };
 };
 
+const resolveAndPersistTechnicalInfo = async (
+  request: FastifyRequest,
+  messageId: string,
+  provider: AiProvider,
+  configuredModelId: string,
+  usage: AiGenerationUsage | undefined,
+  contextWindowPromise: Promise<number | undefined>,
+): Promise<AiTechnicalInfo | undefined> => {
+  let technicalInfo: AiTechnicalInfo | undefined;
+  try {
+    technicalInfo = await resolveTechnicalInfo(
+      provider,
+      configuredModelId,
+      usage,
+      contextWindowPromise,
+    );
+    if (technicalInfo) {
+      await reportsAiChatRepo.updateAssistantTechnicalInfo(messageId, {
+        aiProvider: technicalInfo.provider,
+        aiModelId: technicalInfo.modelId,
+        contextTokensUsed: technicalInfo.contextTokensUsed,
+        contextWindowTokens: technicalInfo.contextWindowTokens,
+      });
+    }
+  } catch (error) {
+    request.log.warn(
+      { err: error, messageId },
+      'Failed to persist AI Reporting technical metadata',
+    );
+  }
+  return technicalInfo;
+};
+
 const openaiTextFromResponse = (payload: unknown): AiTextResult => {
   const response = payload as {
     output_text?: string;
@@ -2570,24 +2603,21 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               generatedText || streamHandlers.accumulated.text.trim() || 'No response.';
             const assistantThoughtContent =
               generatedThought || streamHandlers.accumulated.thoughtContent.trim();
-            const technicalInfo = await resolveTechnicalInfo(
+            await reportsAiChatRepo.insertAssistantMessage({
+              id: assistantMessageId,
+              sessionId: resolvedSessionId,
+              content: assistantText,
+              thoughtContent: assistantThoughtContent || null,
+            });
+            const technicalInfo = await resolveAndPersistTechnicalInfo(
+              request,
+              assistantMessageId,
               provider,
               modelId,
               generated.usage,
               contextWindowPromise,
             );
             if (streamAbortController.signal.aborted) return;
-
-            await reportsAiChatRepo.insertAssistantMessage({
-              id: assistantMessageId,
-              sessionId: resolvedSessionId,
-              content: assistantText,
-              thoughtContent: assistantThoughtContent || null,
-              aiProvider: technicalInfo?.provider,
-              aiModelId: technicalInfo?.modelId,
-              contextTokensUsed: technicalInfo?.contextTokensUsed,
-              contextWindowTokens: technicalInfo?.contextWindowTokens,
-            });
 
             let titleToSet = '';
             if (shouldAutoTitle) {
@@ -2827,14 +2857,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               generatedText || streamHandlers.accumulated.text.trim() || 'No response.';
             const assistantThoughtContent =
               generatedThought || streamHandlers.accumulated.thoughtContent.trim();
-            const technicalInfo = await resolveTechnicalInfo(
-              provider,
-              modelId,
-              generated.usage,
-              contextWindowPromise,
-            );
-            if (streamAbortController.signal.aborted) return;
-
             // Atomic swap: delete the old paired assistant (if any) and insert the new one in
             // a single transaction. Deferring the delete until here means a mid-stream failure
             // leaves the previous assistant response intact (the swap simply never runs).
@@ -2848,10 +2870,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                   sessionId: sessionIdResult.value,
                   content: assistantText,
                   thoughtContent: assistantThoughtContent || null,
-                  aiProvider: technicalInfo?.provider,
-                  aiModelId: technicalInfo?.modelId,
-                  contextTokensUsed: technicalInfo?.contextTokensUsed,
-                  contextWindowTokens: technicalInfo?.contextWindowTokens,
                   createdAt: savedAssistantCreatedAt.toISOString(),
                 },
                 tx,
@@ -2859,6 +2877,15 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             });
 
             await reportsAiChatRepo.touchSession(sessionIdResult.value, userId);
+            const technicalInfo = await resolveAndPersistTechnicalInfo(
+              request,
+              assistantMessageId,
+              provider,
+              modelId,
+              generated.usage,
+              contextWindowPromise,
+            );
+            if (streamAbortController.signal.aborted) return;
 
             if (
               !(await writeSseEvent(reply, 'done', {

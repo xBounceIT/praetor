@@ -344,6 +344,24 @@ export const updateMessageContent = async (
   await exec.update(reportChatMessages).set({ content }).where(eq(reportChatMessages.id, id));
 };
 
+export type AssistantTechnicalInfoInput = {
+  aiProvider: string;
+  aiModelId: string;
+  contextTokensUsed: number;
+  contextWindowTokens: number;
+};
+
+export const updateAssistantTechnicalInfo = async (
+  id: string,
+  technicalInfo: AssistantTechnicalInfoInput,
+  exec: DbExecutor = db,
+): Promise<void> => {
+  await exec
+    .update(reportChatMessages)
+    .set(technicalInfo)
+    .where(and(eq(reportChatMessages.id, id), eq(reportChatMessages.role, CHAT_ROLE.assistant)));
+};
+
 export const getFirstUserMessageContent = async (
   sessionId: string,
   exec: DbExecutor = db,

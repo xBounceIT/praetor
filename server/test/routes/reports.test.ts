@@ -56,6 +56,7 @@ const findUserMessageMock = mock();
 const findFirstAssistantAfterMock = mock();
 const deleteMessageMock = mock();
 const updateMessageContentMock = mock();
+const updateAssistantTechnicalInfoMock = mock();
 const getFirstUserMessageContentMock = mock();
 
 const getTimesheetsSectionMock = mock(async () => ({}));
@@ -112,6 +113,7 @@ beforeAll(async () => {
     findFirstAssistantAfter: findFirstAssistantAfterMock,
     deleteMessage: deleteMessageMock,
     updateMessageContent: updateMessageContentMock,
+    updateAssistantTechnicalInfo: updateAssistantTechnicalInfoMock,
     getFirstUserMessageContent: getFirstUserMessageContentMock,
   }));
   mock.module('../../repositories/reportsCatalogRepo.ts', () => ({
@@ -214,6 +216,7 @@ const allMocks = [
   findFirstAssistantAfterMock,
   deleteMessageMock,
   updateMessageContentMock,
+  updateAssistantTechnicalInfoMock,
   getFirstUserMessageContentMock,
   getTimesheetsSectionMock,
   getProjectsSectionMock,
@@ -273,6 +276,26 @@ const okFetchResponse = (body: unknown, status = 200) =>
     status,
     json: async () => body,
   }) as unknown as Response;
+
+const createDeferredResponse = () => {
+  let resolveResponse!: (response: Response) => void;
+  const promise = new Promise<Response>((resolve) => {
+    resolveResponse = resolve;
+  });
+  return { promise, resolve: resolveResponse };
+};
+
+const expectAssistantPersistedBeforeMetadata = async () => {
+  for (
+    let attempt = 0;
+    attempt < 50 && insertAssistantMessageMock.mock.calls.length === 0;
+    attempt++
+  ) {
+    await Bun.sleep(1);
+  }
+  expect(insertAssistantMessageMock).toHaveBeenCalledTimes(1);
+  expect(updateAssistantTechnicalInfoMock).not.toHaveBeenCalled();
+};
 
 const openAiStreamResponse = (events: Array<Record<string, unknown>>) =>
   ({
@@ -1358,6 +1381,11 @@ describe('POST /api/reports/ai-reporting/chat/stream (streaming)', () => {
     expect(insertAssistantMessageMock).toHaveBeenCalledWith(
       expect.objectContaining({
         content: 'OpenAI stream',
+      }),
+    );
+    expect(updateAssistantTechnicalInfoMock).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
         aiProvider: 'openai',
         aiModelId: 'gpt-5',
         contextTokensUsed: 1350,
@@ -1502,6 +1530,7 @@ describe('POST /api/reports/ai-reporting/chat/stream (streaming)', () => {
       '',
       '',
     ].join('\r\n');
+    const contextWindowResponse = createDeferredResponse();
     fetchMock
       .mockResolvedValueOnce({
         ok: true,
@@ -1513,14 +1542,17 @@ describe('POST /api/reports/ai-reporting/chat/stream (streaming)', () => {
           },
         }),
       } as unknown as Response)
-      .mockResolvedValueOnce(okFetchResponse({ max_input_tokens: 200_000 }));
+      .mockImplementationOnce(() => contextWindowResponse.promise);
 
-    const res = await testApp.inject({
+    const responsePromise = testApp.inject({
       method: 'POST',
       url: '/api/reports/ai-reporting/chat/stream',
       headers: authHeader(),
       payload: { sessionId: 'rpt-chat-1', message: 'Hi' },
     });
+    await expectAssistantPersistedBeforeMetadata();
+    contextWindowResponse.resolve(okFetchResponse({ max_input_tokens: 200_000 }));
+    const res = await responsePromise;
 
     expect(res.statusCode).toBe(200);
     expect(res.body).toContain('event: answer_delta');
@@ -1528,6 +1560,11 @@ describe('POST /api/reports/ai-reporting/chat/stream (streaming)', () => {
     expect(insertAssistantMessageMock).toHaveBeenCalledWith(
       expect.objectContaining({
         content: 'Streamed answer',
+      }),
+    );
+    expect(updateAssistantTechnicalInfoMock).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
         aiProvider: 'anthropic',
         aiModelId: 'claude-sonnet-4-5',
         contextTokensUsed: 162_000,
@@ -1661,6 +1698,10 @@ describe('POST /api/reports/ai-reporting/chat/edit-stream', () => {
   });
 
   test('wraps delete-old + insert-new in a single transaction on stream success', async () => {
+    getGeneralSettingsMock.mockResolvedValue({
+      ...AI_ENABLED_SETTINGS,
+      geminiModelId: 'gemini-edit-persistence-order',
+    });
     getActiveSessionForUserMock.mockResolvedValue({ id: 'rpt-chat-1', title: 'Existing' });
     findUserMessageMock.mockResolvedValue({ id: 'm-user', createdAt: new Date(1000) });
     findFirstAssistantAfterMock.mockResolvedValue({
@@ -1677,23 +1718,29 @@ describe('POST /api/reports/ai-reporting/chat/edit-stream', () => {
     const geminiChunk = `data: ${JSON.stringify({
       candidates: [{ content: { parts: [{ text: 'new answer' }] } }],
     })}\n\n`;
-    fetchMock.mockResolvedValue({
-      ok: true,
-      status: 200,
-      body: new ReadableStream({
-        start(controller) {
-          controller.enqueue(new TextEncoder().encode(geminiChunk));
-          controller.close();
-        },
-      }),
-    } as unknown as Response);
+    const contextWindowResponse = createDeferredResponse();
+    fetchMock
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        body: new ReadableStream({
+          start(controller) {
+            controller.enqueue(new TextEncoder().encode(geminiChunk));
+            controller.close();
+          },
+        }),
+      } as unknown as Response)
+      .mockImplementationOnce(() => contextWindowResponse.promise);
 
-    const res = await testApp.inject({
+    const responsePromise = testApp.inject({
       method: 'POST',
       url: '/api/reports/ai-reporting/chat/edit-stream',
       headers: authHeader(),
       payload: { sessionId: 'rpt-chat-1', messageId: 'm-user', content: 'edited' },
     });
+    await expectAssistantPersistedBeforeMetadata();
+    contextWindowResponse.resolve(okFetchResponse({ inputTokenLimit: 1_000_000 }));
+    const res = await responsePromise;
 
     expect(res.statusCode).toBe(200);
     const generationInit = fetchMock.mock.calls
@@ -1709,7 +1756,6 @@ describe('POST /api/reports/ai-reporting/chat/edit-stream', () => {
     expect(withDbTransactionMock).toHaveBeenCalledTimes(1);
     // Both repo writes happened inside the tx callback (TX_SENTINEL is passed as exec).
     expect(deleteMessageMock).toHaveBeenCalledWith('m-old-assistant', TX_SENTINEL);
-    expect(insertAssistantMessageMock).toHaveBeenCalledTimes(1);
     expect(insertAssistantMessageMock.mock.calls[0]?.[1]).toBe(TX_SENTINEL);
   });
 

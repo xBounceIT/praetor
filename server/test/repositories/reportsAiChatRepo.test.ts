@@ -350,7 +350,7 @@ describe('findUserMessage / findFirstAssistantAfter', () => {
   });
 });
 
-describe('deleteMessage / updateMessageContent', () => {
+describe('message updates', () => {
   test('deleteMessage targets report_chat_messages with [id]', async () => {
     exec.enqueue({ rows: [] });
     await repo.deleteMessage('m1', testDb);
@@ -362,6 +362,21 @@ describe('deleteMessage / updateMessageContent', () => {
     exec.enqueue({ rows: [] });
     await repo.updateMessageContent('m1', 'new', testDb);
     expect(exec.calls[0].params).toEqual(['new', 'm1']);
+  });
+
+  test('updateAssistantTechnicalInfo updates only the targeted assistant message', async () => {
+    exec.enqueue({ rows: [] });
+    await repo.updateAssistantTechnicalInfo(
+      'm1',
+      {
+        aiProvider: 'openai',
+        aiModelId: 'gpt-5',
+        contextTokensUsed: 1200,
+        contextWindowTokens: 400_000,
+      },
+      testDb,
+    );
+    expect(exec.calls[0].params).toEqual(['openai', 'gpt-5', 1200, 400_000, 'm1', 'assistant']);
   });
 });
 
