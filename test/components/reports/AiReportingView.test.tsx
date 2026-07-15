@@ -74,6 +74,7 @@ describe('<AiReportingView /> shadcn workspace', () => {
       'onRenameSession={handleRenameSession}',
       'absolute inset-y-1 right-1',
       'pr-20',
+      'className="min-w-0 flex-1 truncate text-left"',
       '<Pencil',
       '<Paperclip',
       '<Mic',
