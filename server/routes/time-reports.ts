@@ -143,17 +143,53 @@ const validateDefinition = (
   };
 };
 
-const resolveAllowedUserIds = async (request: FastifyRequest): Promise<string[]> => {
-  if (!request.user) return [];
+type ReportUserScope = {
+  allowedUserIds: string[];
+  managedUserIds: string[];
+};
+
+const resolveUserScope = async (
+  request: FastifyRequest,
+  includeManagedUserIds = false,
+): Promise<ReportUserScope> => {
+  if (!request.user) return { allowedUserIds: [], managedUserIds: [] };
   if (!requestHasPermission(request, 'reports.time_report_all.view')) {
-    return [request.user.id];
+    return { allowedUserIds: [request.user.id], managedUserIds: [] };
   }
   if (requestHasPermission(request, 'timesheets.tracker_all.view')) {
-    return timeReportsRepo.listAllNonAdminUserIds();
+    const managedUserIds =
+      includeManagedUserIds && !requestHasPermission(request, 'timesheets.tracker_all.update')
+        ? await workUnitsRepo.listManagedUserIds(request.user.id)
+        : [];
+    return {
+      allowedUserIds: await timeReportsRepo.listAllNonAdminUserIds(),
+      managedUserIds,
+    };
   }
-  const managed = await workUnitsRepo.listManagedUserIds(request.user.id);
-  const candidates = Array.from(new Set([request.user.id, ...managed]));
-  return timeReportsRepo.filterNonAdminUserIds(candidates);
+  const managedUserIds = await workUnitsRepo.listManagedUserIds(request.user.id);
+  const candidates = Array.from(new Set([request.user.id, ...managedUserIds]));
+  return {
+    allowedUserIds: await timeReportsRepo.filterNonAdminUserIds(candidates),
+    managedUserIds,
+  };
+};
+
+const resolveEditableUserIds = (
+  request: FastifyRequest,
+  { allowedUserIds, managedUserIds }: ReportUserScope,
+): string[] => {
+  if (!request.user) return [];
+  const canViewEntries =
+    requestHasPermission(request, 'timesheets.tracker.view') ||
+    requestHasPermission(request, 'timesheets.tracker_all.view');
+  const canUpdateEntries =
+    requestHasPermission(request, 'timesheets.tracker.update') ||
+    requestHasPermission(request, 'timesheets.tracker_all.update');
+  if (!canViewEntries || !canUpdateEntries) return [];
+  if (requestHasPermission(request, 'timesheets.tracker_all.update')) return allowedUserIds;
+
+  const editable = new Set([request.user.id, ...managedUserIds]);
+  return allowedUserIds.filter((userId) => editable.has(userId));
 };
 
 const assertNotAdmin = (request: FastifyRequest, reply: FastifyReply): boolean => {
@@ -173,7 +209,7 @@ const scopedDefinition = async (
     return null;
   }
   const definition = validation.value;
-  const allowed = await resolveAllowedUserIds(request);
+  const { allowedUserIds: allowed } = await resolveUserScope(request);
   const allowedSet = new Set(allowed);
   const canSelectUsers = requestHasPermission(request, 'reports.time_report_all.view');
   const requested = canSelectUsers
@@ -276,8 +312,9 @@ export default async function timeReportRoutes(fastify: FastifyInstance) {
     },
     async (request, reply) => {
       if (!assertAuthenticated(request, reply) || !assertNotAdmin(request, reply)) return;
-      const allowedUserIds = await resolveAllowedUserIds(request);
-      return timeReportsRepo.listOptions(allowedUserIds);
+      const scope = await resolveUserScope(request, true);
+      const options = await timeReportsRepo.listOptions(scope.allowedUserIds);
+      return { ...options, editableUserIds: resolveEditableUserIds(request, scope) };
     },
   );
 

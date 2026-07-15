@@ -33,7 +33,7 @@ import type {
   TimeReportRow,
 } from '../../types';
 import { getLocalDateString } from '../../utils/date';
-import { hasPermission, hasScopedActionPermission } from '../../utils/permissions';
+import { hasPermission } from '../../utils/permissions';
 import {
   finalizeTimeReportFavorite,
   sanitizeTimeReportFavorite,
@@ -179,12 +179,6 @@ const TimeReportView = ({
   const { t, i18n } = useTranslation(['reports', 'common']);
   const canSelectUsers = hasPermission(permissions, 'reports.time_report_all.view');
   const canViewCost = hasPermission(permissions, 'reports.cost.view');
-  const canEditOwnEntries =
-    hasScopedActionPermission(permissions, 'timesheets.tracker', 'view') &&
-    hasScopedActionPermission(permissions, 'timesheets.tracker', 'update');
-  const canEditOtherEntries =
-    hasPermission(permissions, 'timesheets.tracker_all.view') &&
-    hasPermission(permissions, 'timesheets.tracker_all.update');
 
   const [definition, setDefinition] = useState<TimeReportDefinition>(() =>
     createDefaultDefinition(currentUserId, startOfWeek),
@@ -441,6 +435,7 @@ const TimeReportView = ({
 
   const tableColumns = useMemo<Column<TimeReportRow>[]>(() => {
     if (!generatedDefinition) return [];
+    const editableUserIds = new Set(options?.editableUserIds ?? []);
     const grouped = generatedDefinition.groupBy.length > 0;
     const common = {
       disableSorting: grouped,
@@ -521,14 +516,12 @@ const TimeReportView = ({
       },
     };
     for (const field of generatedDefinition.fields) columns.push(fieldColumns[field]);
-    if (canEditOwnEntries || canEditOtherEntries) {
+    if (editableUserIds.size > 0) {
       columns.push({
         id: 'actions',
         header: t('common:labels.actions'),
         cell: ({ row }) =>
-          row.kind === 'detail' &&
-          row.entry &&
-          (row.userId === currentUserId ? canEditOwnEntries : canEditOtherEntries) ? (
+          row.kind === 'detail' && row.entry && row.userId && editableUserIds.has(row.userId) ? (
             <Button
               type="button"
               variant="ghost"
@@ -549,15 +542,7 @@ const TimeReportView = ({
       });
     }
     return columns;
-  }, [
-    canEditOtherEntries,
-    canEditOwnEntries,
-    currency,
-    currentUserId,
-    generatedDefinition,
-    i18n.language,
-    t,
-  ]);
+  }, [currency, generatedDefinition, i18n.language, options?.editableUserIds, t]);
 
   const saveEditedEntry = async (
     id: string,

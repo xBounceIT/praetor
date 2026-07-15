@@ -168,6 +168,60 @@ describe('time report RBAC routes', () => {
     expect(generateTimeReportMock.mock.calls[0]?.[1]).toEqual(['u1']);
   });
 
+  test('options expose current and managed users as editable with effective Timesheet access', async () => {
+    getRolePermissionsMock.mockResolvedValue([
+      'reports.time_report.view',
+      'reports.time_report_all.view',
+      'timesheets.tracker.view',
+      'timesheets.tracker.update',
+    ]);
+    listManagedUserIdsMock.mockResolvedValue(['u2']);
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/reports/time-report/options',
+      headers: auth(),
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ editableUserIds: ['u1', 'u2'] });
+  });
+
+  test('options expose every report user as editable with all-scope Timesheet update', async () => {
+    getRolePermissionsMock.mockResolvedValue([
+      'reports.time_report.view',
+      'reports.time_report_all.view',
+      'timesheets.tracker_all.view',
+      'timesheets.tracker_all.update',
+    ]);
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/reports/time-report/options',
+      headers: auth(),
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ editableUserIds: ['u1', 'u2'] });
+    expect(listManagedUserIdsMock).not.toHaveBeenCalled();
+  });
+
+  test('options expose no editable users without effective Timesheet update', async () => {
+    getRolePermissionsMock.mockResolvedValue([
+      'reports.time_report.view',
+      'timesheets.tracker.view',
+    ]);
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/reports/time-report/options',
+      headers: auth(),
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ editableUserIds: [] });
+  });
+
   test('scoped permission accepts managed users and rejects IDs outside scope', async () => {
     getRolePermissionsMock.mockResolvedValue(['reports.time_report_all.view']);
     listManagedUserIdsMock.mockResolvedValue(['u2']);

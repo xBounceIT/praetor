@@ -1151,6 +1151,7 @@ export interface TimeReportOptions {
   clients: TimeReportOption[];
   projects: Array<TimeReportOption & { clientId: string }>;
   tasks: TimeReportTaskOption[];
+  editableUserIds: string[];
 }
 
 export interface TimeReportRow {

@@ -49,6 +49,7 @@ describe('finalizeTimeReportFavorite', () => {
 describe('sanitizeTimeReportFavorite', () => {
   test('removes selections that conflict with current visibility and dependencies', () => {
     const options: TimeReportOptions = {
+      editableUserIds: [],
       users: [{ id: 'user-1', name: 'Current user' }],
       clients: [
         { id: 'client-1', name: 'Client 1' },
@@ -90,6 +91,7 @@ describe('sanitizeTimeReportFavorite', () => {
       task: { projectId: 'project-1', taskId: null, name: 'Code Review' },
     };
     const options: TimeReportOptions = {
+      editableUserIds: [],
       users: [{ id: 'user-1', name: 'Current user' }],
       clients: [],
       projects: [{ id: 'project-1', name: 'Project 1', clientId: 'client-1' }],

@@ -49,6 +49,7 @@ beforeEach(() => {
     fn.mockReset();
   }
   optionsMock.mockResolvedValue({
+    editableUserIds: ['u1'],
     users: [
       { id: 'u1', name: 'Alice' },
       { id: 'u2', name: 'Bob' },
@@ -205,7 +206,7 @@ describe('TimeReportView', () => {
     expect(await screen.findByLabelText('timeReport.actions.edit')).toBeTruthy();
   });
 
-  test('hides edit actions for other users without all-scope Timesheet permissions', async () => {
+  test('hides edit actions for users outside the editable scope', async () => {
     generateMock.mockResolvedValue({
       rows: [
         {
@@ -243,5 +244,57 @@ describe('TimeReportView', () => {
 
     await screen.findByText('2026-07-10');
     expect(screen.queryByLabelText('timeReport.actions.edit')).toBeNull();
+  });
+
+  test('shows the standard row actions menu for a managed user entry', async () => {
+    const user = userEvent.setup();
+    optionsMock.mockResolvedValue({
+      editableUserIds: ['u1', 'u2'],
+      users: [
+        { id: 'u1', name: 'Alice' },
+        { id: 'u2', name: 'Bob' },
+      ],
+      clients: [],
+      projects: [],
+      tasks: [],
+    });
+    generateMock.mockResolvedValue({
+      rows: [
+        {
+          key: 'detail:e1',
+          kind: 'detail',
+          groupLevel: null,
+          label: null,
+          date: '2026-07-10',
+          userId: 'u2',
+          userName: 'Bob',
+          clientId: 'c1',
+          clientName: 'Acme',
+          projectId: 'p1',
+          projectName: 'Portal',
+          taskId: null,
+          taskName: 'Build',
+          notes: null,
+          duration: 2,
+          cost: null,
+          entry: { userId: 'u2' },
+        },
+      ],
+      matchedEntryCount: 1,
+      outputRowCount: 1,
+      truncated: false,
+      totals: { duration: 2, cost: null },
+    });
+
+    renderView([
+      'reports.time_report.view',
+      'reports.time_report_all.view',
+      'timesheets.tracker.view',
+      'timesheets.tracker.update',
+    ]);
+    fireEvent.click(await screen.findByText('timeReport.actions.generate'));
+
+    await user.click(await screen.findByLabelText('table.rowActions'));
+    expect(await screen.findByLabelText('timeReport.actions.edit')).toBeTruthy();
   });
 });
