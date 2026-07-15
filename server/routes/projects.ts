@@ -35,6 +35,7 @@ import { replyError } from '../utils/replyError.ts';
 import {
   badRequest,
   ensureArrayOfStrings,
+  forbidden,
   optionalDateString,
   optionalEnum,
   optionalNonEmptyString,
@@ -234,7 +235,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const targetUserId = targetUserIdResult.value;
       if (targetUserId) {
         if (!(await canListProjectsForTargetUser(request, targetUserId))) {
-          return reply.code(403).send({ message: 'Insufficient permissions' });
+          return forbidden(reply, 'Insufficient permissions');
         }
         return projectsRepo.listForUser(targetUserId);
       }
@@ -275,7 +276,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!targetUserId) return badRequest(reply, 'userId is required');
 
       if (!(await canListProjectsForTargetUser(request, targetUserId))) {
-        return reply.code(403).send({ message: 'Insufficient permissions' });
+        return forbidden(reply, 'Insufficient permissions');
       }
 
       return projectsRepo.listRilCatalogForUser(targetUserId);
