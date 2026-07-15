@@ -960,6 +960,7 @@ export type StandardTableProps<T extends object = object> = {
    * backward compatibility. Use this when multiple tables share the same translated title.
    */
   persistenceKey?: string;
+  /** Override the header count, including when client-side data is supplied. */
   totalCount?: number;
   totalLabel?: string;
   headerExtras?: ReactNode;
@@ -2019,7 +2020,7 @@ const useStandardTableController = <T extends object>({
     .map((column) => colsById.get(column.id))
     .filter((column): column is Column<T> => column !== undefined);
   const processedRows = shouldRenderTable ? table.getPrePaginationRowModel().rows : [];
-  const totalItems = shouldRenderTable ? processedRows.length : externalTotalCount || 0;
+  const totalItems = externalTotalCount ?? (shouldRenderTable ? processedRows.length : 0);
   const totalPages = shouldRenderTable ? table.getPageCount() : Math.ceil(totalItems / rowsPerPage);
   const paginatedRows = shouldRenderTable ? table.getRowModel().rows : [];
 

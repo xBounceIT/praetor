@@ -2334,6 +2334,21 @@ describe('<StandardTable />', () => {
     expect(screen.getByText(/42\s+things/)).toBeInTheDocument();
   });
 
+  test('externalTotalCount overrides the processed row count when data is supplied', () => {
+    render(
+      <StandardTable<Row>
+        title="ExternalCountWithData"
+        totalCount={42}
+        totalLabel="things"
+        data={sampleRows}
+        columns={sampleColumns}
+      />,
+    );
+
+    expect(screen.getByText(/42\s+things/)).toBeInTheDocument();
+    expect(screen.queryByText(/3\s+things/)).not.toBeInTheDocument();
+  });
+
   test('font size buttons disable at min and max', () => {
     render(<StandardTable<Row> title="Fonts" data={sampleRows} columns={sampleColumns} />);
     const decrease = screen.getByLabelText('table.decreaseFont');
