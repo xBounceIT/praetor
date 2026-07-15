@@ -1664,6 +1664,7 @@ const useAiReportingController = ({
     expandedThoughtMessageIds,
     loadOlderMessages,
     isSending,
+    activeAssistantMessageId: activeAssistantMessageIdRef.current,
     editingMessageId,
     editingDraft,
     setEditingDraft,
@@ -1737,6 +1738,7 @@ const AiReportingLayout: React.FC<{ controller: AiReportingController }> = ({ co
     expandedThoughtMessageIds,
     loadOlderMessages,
     isSending,
+    activeAssistantMessageId,
     editingMessageId,
     editingDraft,
     setEditingDraft,
@@ -1846,6 +1848,7 @@ const AiReportingLayout: React.FC<{ controller: AiReportingController }> = ({ co
                   language,
                   canSend,
                   isSending,
+                  activeAssistantMessageId,
                   editingMessageId,
                   editingDraft,
                   setEditingDraft,
@@ -2415,6 +2418,7 @@ interface AiReportingMessageInteractions {
   language: string;
   canSend: boolean;
   isSending: boolean;
+  activeAssistantMessageId: string;
   editingMessageId: string;
   editingDraft: string;
   setEditingDraft: AiReportingSetter<'editingDraft'>;
@@ -2777,9 +2781,14 @@ const AiReportingAssistantMessage: React.FC<AiReportingAssistantMessageProps> = 
 }) => {
   const { t, setExpandedThoughtMessageIds, handleRetryMessage, dispatchAttemptSelection } =
     interactions;
+  const allowPendingVisualization =
+    interactions.isSending && message.id === interactions.activeAssistantMessageId;
   const parsedContent = useMemo(
-    () => parseAiReportingVisualizations(message.content),
-    [message.content],
+    () =>
+      parseAiReportingVisualizations(message.content, {
+        allowPending: allowPendingVisualization,
+      }),
+    [allowPendingVisualization, message.content],
   );
   const copyText = useMemo(() => getAiReportingAssistantCopyText(parsedContent), [parsedContent]);
 

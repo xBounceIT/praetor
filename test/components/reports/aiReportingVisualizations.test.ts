@@ -116,15 +116,37 @@ describe('AI Reporting visualization protocol', () => {
   test('hides complete and partial visualization fences until streaming finishes', () => {
     const pendingBlock = parseAiReportingVisualizations(
       ['Intro', FENCE + 'praetor-visualization', '{"version":1'].join('\n'),
+      { allowPending: true },
     );
     const pendingFence = parseAiReportingVisualizations(
       ['Intro', FENCE + 'praetor-vis'].join('\n'),
+      { allowPending: true },
     );
 
     expect(pendingBlock.markdown).toBe('Intro');
     expect(pendingBlock.hasPendingVisualization).toBe(true);
     expect(pendingFence.markdown).toBe('Intro');
     expect(pendingFence.hasPendingVisualization).toBe(true);
+  });
+
+  test('reports unclosed visualization fences as invalid after streaming finishes', () => {
+    const incompleteBlock = parseAiReportingVisualizations(
+      ['Intro', FENCE + 'praetor-visualization', '{"version":1'].join('\n'),
+    );
+    const incompleteFence = parseAiReportingVisualizations(
+      ['Intro', FENCE + 'praetor-vis'].join('\n'),
+    );
+
+    expect(incompleteBlock).toMatchObject({
+      markdown: 'Intro',
+      invalidVisualizationCount: 1,
+      hasPendingVisualization: false,
+    });
+    expect(incompleteFence).toMatchObject({
+      markdown: 'Intro',
+      invalidVisualizationCount: 1,
+      hasPendingVisualization: false,
+    });
   });
 
   test('limits one response to seven visualizations and reports the remainder', () => {

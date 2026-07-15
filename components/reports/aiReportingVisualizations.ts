@@ -216,6 +216,7 @@ export const validateAiReportingVisualization = (
 
 export const parseAiReportingVisualizations = (
   content: string,
+  options: { allowPending?: boolean } = {},
 ): AiReportingVisualizationParseResult => {
   const lines = content.replace(/\r\n?/g, '\n').split('\n');
   const markdownLines: string[] = [];
@@ -232,7 +233,8 @@ export const parseAiReportingVisualizations = (
         possibleFence.startsWith('```p') &&
         VISUALIZATION_FENCE_PREFIX.startsWith(possibleFence)
       ) {
-        hasPendingVisualization = true;
+        if (options.allowPending) hasPendingVisualization = true;
+        else invalidVisualizationCount += 1;
         break;
       }
       markdownLines.push(line);
@@ -250,7 +252,8 @@ export const parseAiReportingVisualizations = (
     }
 
     if (closingIndex >= lines.length) {
-      hasPendingVisualization = true;
+      if (options.allowPending) hasPendingVisualization = true;
+      else invalidVisualizationCount += 1;
       break;
     }
 
