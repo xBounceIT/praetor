@@ -46,7 +46,7 @@ export const projectsApi = {
   create: (data: {
     name: string;
     clientId: string;
-    description?: string;
+    description?: string | null;
     orderId: string;
     offerId?: string | null;
     startDate?: string | null;

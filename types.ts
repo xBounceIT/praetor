@@ -368,7 +368,7 @@ export interface Project {
   id: string;
   name: string;
   clientId: string;
-  description?: string;
+  description?: string | null;
   isDisabled?: boolean;
   createdAt?: number;
   orderId?: string | null;
