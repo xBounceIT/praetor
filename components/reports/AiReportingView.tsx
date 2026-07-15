@@ -3192,6 +3192,7 @@ const AiReportingComposer: React.FC<AiReportingComposerProps> = ({
     (transcript: string) => {
       const normalizedTranscript = transcript.trim();
       if (!normalizedTranscript) return;
+      setComposerError('');
       setDraft((currentDraft) => {
         const separator = currentDraft && !/\s$/.test(currentDraft) ? ' ' : '';
         return `${currentDraft}${separator}${normalizedTranscript}`;

@@ -20,6 +20,8 @@ const translationDefaults: Record<string, string> = {
   'buttons.saving': 'Saving...',
   'buttons.yesDelete': 'Delete',
 };
+const microphonePermissionDeniedMessage =
+  'Microphone access was denied. Allow it in your browser settings and try again.';
 
 let mediaRecorderInstance: MockMediaRecorder | null = null;
 const microphoneTrackStopMock = mock();
@@ -718,6 +720,23 @@ describe('<AiReportingView /> interactions', () => {
     expect(microphoneTrackStopMock).toHaveBeenCalled();
   });
 
+  test('clears a stale dictation error after a successful retry', async () => {
+    getUserMediaMock.mockImplementationOnce(() =>
+      Promise.reject(new DOMException('Denied', 'NotAllowedError')),
+    );
+    renderView();
+
+    await screen.findAllByText('Quarterly revenue');
+    fireEvent.click(screen.getByRole('button', { name: 'Start voice dictation' }));
+    expect(await screen.findByText(microphonePermissionDeniedMessage)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Start voice dictation' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Stop voice dictation' }));
+
+    await waitFor(() => expect(transcribeAudioMock).toHaveBeenCalledTimes(1));
+    expect(screen.queryByText(microphonePermissionDeniedMessage)).toBeNull();
+  });
+
   test('renders a validated visualization and exposes its source data', async () => {
     const chartDefinition = {
       version: 1,
@@ -769,11 +788,7 @@ describe('<AiReportingView /> interactions', () => {
     await screen.findAllByText('Quarterly revenue');
     fireEvent.click(screen.getByRole('button', { name: 'Start voice dictation' }));
 
-    expect(
-      await screen.findByText(
-        'Microphone access was denied. Allow it in your browser settings and try again.',
-      ),
-    ).toBeInTheDocument();
+    expect(await screen.findByText(microphonePermissionDeniedMessage)).toBeInTheDocument();
     expect(transcribeAudioMock).not.toHaveBeenCalled();
   });
 });
