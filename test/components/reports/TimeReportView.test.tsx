@@ -21,6 +21,7 @@ const exportCsvMock = mock();
 const listViewsMock = mock();
 const createViewMock = mock();
 const removeViewMock = mock();
+const scrollIntoViewMock = mock();
 const reportApi = {
   options: optionsMock,
   generate: generateMock,
@@ -33,6 +34,8 @@ const savedViewsApi = {
 } as unknown as SavedViewsApi;
 
 beforeEach(() => {
+  Element.prototype.scrollIntoView =
+    scrollIntoViewMock as unknown as typeof Element.prototype.scrollIntoView;
   for (const fn of [
     optionsMock,
     generateMock,
@@ -40,6 +43,7 @@ beforeEach(() => {
     listViewsMock,
     createViewMock,
     removeViewMock,
+    scrollIntoViewMock,
   ]) {
     fn.mockReset();
   }
@@ -82,6 +86,23 @@ const renderView = (permissions: string[]) =>
   );
 
 describe('TimeReportView', () => {
+  test('renders the table without a redundant results card and scrolls to it', async () => {
+    renderView(['reports.time_report.view']);
+
+    fireEvent.click(await screen.findByText('timeReport.actions.generate'));
+
+    const results = await screen.findByTestId('time-report-results');
+    expect(screen.queryByTestId('time-report-results-section')).toBeNull();
+    expect(results).not.toHaveAttribute('data-slot', 'card');
+    expect(results.querySelector(':scope > [data-slot="card-header"]')).toBeNull();
+    await waitFor(() =>
+      expect(scrollIntoViewMock).toHaveBeenCalledWith({
+        behavior: 'smooth',
+        block: 'start',
+      }),
+    );
+  });
+
   test('uses LDAP-style cards arranged as vertical sections', async () => {
     renderView(['reports.time_report.view']);
 

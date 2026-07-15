@@ -1,7 +1,6 @@
 import {
   Bookmark,
   Columns3,
-  FileText,
   Layers3,
   ListFilter,
   Loader2,
@@ -9,7 +8,7 @@ import {
   Save,
   Trash2,
 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -207,6 +206,7 @@ const TimeReportView = ({
   const [isSavingFavorite, setIsSavingFavorite] = useState(false);
   const [isDeletingFavorite, setIsDeletingFavorite] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const resultsRef = useRef<HTMLDivElement>(null);
 
   const loadFavorites = useCallback(async () => {
     const rows = await savedViewsApi.list('report', REPORT_SCOPE_KEY);
@@ -241,6 +241,11 @@ const TimeReportView = ({
       current.userIds.some(Boolean) ? current : { ...current, userIds: [currentUserId] },
     );
   }, [currentUserId]);
+
+  useEffect(() => {
+    if (!result || !generatedDefinition) return;
+    resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [generatedDefinition, result]);
 
   const updateDefinition = (patch: Partial<TimeReportDefinition>) => {
     setDefinition((current) => ({ ...current, ...patch }));
@@ -833,63 +838,51 @@ const TimeReportView = ({
       </div>
 
       {result && generatedDefinition && (
-        <Card
-          className="gap-0 overflow-hidden rounded-lg border-border bg-background py-0"
-          data-testid="time-report-results-section"
-        >
-          <CardHeader className="border-b border-border bg-muted/40 px-6 py-4 [.border-b]:pb-4">
-            <CardTitle className="flex items-center gap-3 text-base">
-              <FileText aria-hidden="true" className="size-4 text-praetor" />
-              {t('timeReport.results.title')}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-6">
-            {result.truncated && (
-              <Alert className="mb-4">
-                <AlertTitle>{t('timeReport.results.truncatedTitle')}</AlertTitle>
-                <AlertDescription>
-                  {t('timeReport.results.truncated', { count: result.matchedEntryCount })}
-                </AlertDescription>
-              </Alert>
-            )}
-            <StandardTable
-              title={t('timeReport.results.title')}
-              persistenceKey="reports.timeReport.results"
-              data={result.rows}
-              columns={tableColumns}
-              totalCount={result.matchedEntryCount}
-              totalLabel={t('timeReport.results.entries')}
-              showConfigurationControls={false}
-              suppressSavedView
-              allowColumnHiding={false}
-              onExportCsv={exportCsv}
-              isExporting={isExporting}
-              shouldBypassFilters={(row) => row.kind === 'subtotal'}
-              rowClassName={(row) =>
-                row.kind === 'subtotal' ? 'bg-muted/60 font-medium border-t border-border' : ''
-              }
-              emptyState={
-                <div className="py-10 text-center text-sm text-muted-foreground">
-                  {t('timeReport.results.empty')}
-                </div>
-              }
-              footer={
-                <div className="flex flex-wrap justify-end gap-6 text-sm font-semibold">
+        <div ref={resultsRef} className="scroll-mt-6" data-testid="time-report-results">
+          {result.truncated && (
+            <Alert className="mb-4">
+              <AlertTitle>{t('timeReport.results.truncatedTitle')}</AlertTitle>
+              <AlertDescription>
+                {t('timeReport.results.truncated', { count: result.matchedEntryCount })}
+              </AlertDescription>
+            </Alert>
+          )}
+          <StandardTable
+            title={t('timeReport.results.title')}
+            persistenceKey="reports.timeReport.results"
+            data={result.rows}
+            columns={tableColumns}
+            totalCount={result.matchedEntryCount}
+            totalLabel={t('timeReport.results.entries')}
+            showConfigurationControls={false}
+            suppressSavedView
+            allowColumnHiding={false}
+            onExportCsv={exportCsv}
+            isExporting={isExporting}
+            shouldBypassFilters={(row) => row.kind === 'subtotal'}
+            rowClassName={(row) =>
+              row.kind === 'subtotal' ? 'bg-muted/60 font-medium border-t border-border' : ''
+            }
+            emptyState={
+              <div className="py-10 text-center text-sm text-muted-foreground">
+                {t('timeReport.results.empty')}
+              </div>
+            }
+            footer={
+              <div className="flex flex-wrap justify-end gap-6 text-sm font-semibold">
+                <span>
+                  {t('timeReport.results.totalDuration')}: {formatDuration(result.totals.duration)}
+                </span>
+                {result.totals.cost !== null && (
                   <span>
-                    {t('timeReport.results.totalDuration')}:{' '}
-                    {formatDuration(result.totals.duration)}
+                    {t('timeReport.results.totalCost')}:{' '}
+                    {formatCost(result.totals.cost, currency, i18n.language)}
                   </span>
-                  {result.totals.cost !== null && (
-                    <span>
-                      {t('timeReport.results.totalCost')}:{' '}
-                      {formatCost(result.totals.cost, currency, i18n.language)}
-                    </span>
-                  )}
-                </div>
-              }
-            />
-          </CardContent>
-        </Card>
+                )}
+              </div>
+            }
+          />
+        </div>
       )}
 
       <EntryEditDialog
