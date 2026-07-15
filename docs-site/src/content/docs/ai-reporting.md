@@ -36,6 +36,9 @@ Se il browser supporta la Web Speech API, usa il pulsante con il microfono per a
 ## Visualizzazioni interattive
 
 Puoi chiedere esplicitamente un grafico, ad esempio “mostra l'andamento mensile delle ore per progetto” oppure “confronta i ricavi dei primi cinque clienti”. AI Reporting può rispondere con grafici a barre, linee, area, torta o anello, scegliendo la forma più adatta ai dati disponibili.
+
+Quando la richiesta menziona esplicitamente un grafico, una visualizzazione, una dashboard o un report di dati, l'assistente usa il renderer integrato invece di sostituire il risultato con una semplice descrizione o tabella. Se i dati necessari non sono disponibili, indica quali mancano e chiede un chiarimento senza inventarli.
+
 Una singola risposta può includere fino a sette visualizzazioni, quando più grafici migliorano concretamente la comprensione dell'analisi.
 
 Passa il puntatore o usa la navigazione da tastiera sul grafico per leggere i valori, consulta la legenda quando sono presenti più serie e premi **Mostra dati** per aprire la tabella accessibile usata dalla visualizzazione. Colori e superfici si adattano automaticamente al tema chiaro o scuro.

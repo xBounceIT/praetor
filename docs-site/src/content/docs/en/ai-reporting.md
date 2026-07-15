@@ -36,6 +36,9 @@ When the browser supports the Web Speech API, use the microphone button to start
 ## Interactive visualizations
 
 You can explicitly request a chart, for example “show the monthly trend of hours by project” or “compare revenue for the top five customers.” AI Reporting can answer with bar, line, area, pie, or donut charts and select the shape that best fits the available data.
+
+When a request explicitly asks for a chart, visualization, dashboard, or data report, the assistant uses the built-in renderer instead of substituting a prose-only description or table. If required data is unavailable, it identifies what is missing and asks for clarification without inventing values.
+
 A single response can include up to seven visualizations when multiple charts materially improve the analysis.
 
 Point at the chart or use keyboard navigation to read values, use the legend when several series are present, and press **Show data** to open the accessible table behind the visualization. Colors and surfaces automatically adapt to the light or dark theme.
