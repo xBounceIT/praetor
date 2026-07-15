@@ -127,14 +127,14 @@ describe('AI Reporting visualization protocol', () => {
     expect(pendingFence.hasPendingVisualization).toBe(true);
   });
 
-  test('limits one response to three visualizations and reports the remainder', () => {
+  test('limits one response to seven visualizations and reports the remainder', () => {
     const parsed = parseAiReportingVisualizations(
-      Array.from({ length: 4 }, (_, index) =>
+      Array.from({ length: 8 }, (_, index) =>
         fenced(visualization({ title: 'Chart ' + String(index + 1) })),
       ).join('\n'),
     );
 
-    expect(parsed.visualizations).toHaveLength(3);
+    expect(parsed.visualizations).toHaveLength(7);
     expect(parsed.invalidVisualizationCount).toBe(1);
   });
 

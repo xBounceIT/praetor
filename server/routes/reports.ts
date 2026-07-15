@@ -1713,7 +1713,7 @@ const buildVisualizationToolInstruction = (language: UiLanguage) => {
     '- `orientation` is available only for `bar`; `stacked` is available only for `bar` and `area`.',
     '- Use only values present in the dataset or calculations explicitly derived from it. Never invent missing values.',
     '- Never include HTML, JavaScript, CSS, color values, URLs, or extra configuration fields.',
-    '- Emit at most 3 visualization blocks and only when they materially improve the answer.',
+    '- Emit at most 7 visualization blocks and only when they materially improve the answer.',
     narrativeRule,
   ].join('\n');
 };
