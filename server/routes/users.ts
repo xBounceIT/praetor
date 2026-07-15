@@ -321,7 +321,6 @@ const canViewAllUsers = (request: FastifyRequest) =>
 
 const canViewTargetUserAssignments = async (request: FastifyRequest, targetUserId: string) => {
   if (request.user?.id === targetUserId) return true;
-  if (hasPermission(request, 'timesheets.tracker_all.view')) return true;
 
   const hasAssignmentPermission =
     hasPermission(request, 'administration.user_management.view') ||
@@ -1928,7 +1927,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
-      if (!(await canViewTargetUserAssignments(request, idResult.value))) {
+      const canViewCatalogs =
+        hasPermission(request, 'timesheets.tracker_all.view') ||
+        (await canViewTargetUserAssignments(request, idResult.value));
+      if (!canViewCatalogs) {
         return replyError(request, reply, {
           statusCode: 403,
           message: 'Insufficient permissions',
