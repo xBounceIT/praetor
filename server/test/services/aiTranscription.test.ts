@@ -46,7 +46,7 @@ describe('transcribeAiReportingAudio', () => {
         parts: Array<{ text?: string; inlineData?: { mimeType: string; data: string } }>;
       }>;
     };
-    expect(body.contents[0]?.parts[0]?.text).toContain('verbatim in it');
+    expect(body.contents[0]?.parts[0]?.text).toContain('verbatim in Italian');
     expect(body.contents[0]?.parts[1]?.inlineData).toEqual({
       mimeType: 'audio/webm',
       data: Buffer.from('audio').toString('base64'),

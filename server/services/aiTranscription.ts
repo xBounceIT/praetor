@@ -104,6 +104,7 @@ const transcribeWithGemini = async (
 ) => {
   const normalizedModel = normalizeGeminiModelPath(modelId);
   if (!normalizedModel.ok) throw new AiTranscriptionUnavailableError();
+  const languageName = language === 'it' ? 'Italian' : 'English';
   const url = new URL(
     `/v1beta/${normalizedModel.value}:generateContent`,
     'https://generativelanguage.googleapis.com',
@@ -117,7 +118,9 @@ const transcribeWithGemini = async (
         {
           role: 'user',
           parts: [
-            { text: `Transcribe this audio verbatim in ${language}. Return only the transcript.` },
+            {
+              text: `Transcribe this audio verbatim in ${languageName}. Return only the transcript.`,
+            },
             { inlineData: { mimeType, data: audio.toString('base64') } },
           ],
         },

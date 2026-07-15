@@ -155,11 +155,6 @@ type StreamReader = {
 };
 type ReadableSseBody = { getReader?: () => StreamReader };
 type SseBoundary = { index: number; length: number };
-
-const markPromiseHandled = <T>(promise: Promise<T>): Promise<T> => {
-  void promise.catch(() => undefined);
-  return promise;
-};
 const findSseBoundary = (buffer: string): SseBoundary | null => {
   const match = /\r?\n\r?\n/.exec(buffer);
   return match ? { index: match.index, length: match[0].length } : null;
@@ -2554,17 +2549,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           convo,
         });
         if (streamAbortController.signal.aborted) return;
-        const generationPromise = markPromiseHandled(
-          generateAiReportingTextStream(
-            apiKey,
-            modelId,
-            payload,
-            streamHandlers.callbacks,
-            streamAbortController.signal,
-          ),
+        const generated = await generateAiReportingTextStream(
+          apiKey,
+          modelId,
+          payload,
+          streamHandlers.callbacks,
+          streamAbortController.signal,
         );
         const contextWindowPromise = fetchModelContextWindow(provider, apiKey, modelId);
-        const generated = await generationPromise;
 
         if (!streamAbortController.signal.aborted) {
           await emitThoughtDone();
@@ -2813,17 +2805,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           convo,
         });
         if (streamAbortController.signal.aborted) return;
-        const generationPromise = markPromiseHandled(
-          generateAiReportingTextStream(
-            apiKey,
-            modelId,
-            payload,
-            streamHandlers.callbacks,
-            streamAbortController.signal,
-          ),
+        const generated = await generateAiReportingTextStream(
+          apiKey,
+          modelId,
+          payload,
+          streamHandlers.callbacks,
+          streamAbortController.signal,
         );
         const contextWindowPromise = fetchModelContextWindow(provider, apiKey, modelId);
-        const generated = await generationPromise;
 
         if (!streamAbortController.signal.aborted) {
           await emitThoughtDone();
@@ -3018,11 +3007,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           datasetJson,
           convo,
         });
-        const generationPromise = markPromiseHandled(
-          generateAiReportingText(apiKey, modelId, payload),
-        );
+        const generated = await generateAiReportingText(apiKey, modelId, payload);
         const contextWindowPromise = fetchModelContextWindow(provider, apiKey, modelId);
-        const generated = await generationPromise;
         const text = generated.text;
         const thoughtContent = generated.thoughtContent || '';
 

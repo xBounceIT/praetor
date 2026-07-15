@@ -653,7 +653,7 @@ describe('POST /api/reports/ai-reporting/transcribe', () => {
     ) as {
       contents: Array<{ parts: Array<{ text?: string; inlineData?: { mimeType: string } }> }>;
     };
-    expect(providerBody.contents[0]?.parts[0]?.text).toContain('verbatim in it');
+    expect(providerBody.contents[0]?.parts[0]?.text).toContain('verbatim in Italian');
     expect(providerBody.contents[0]?.parts[1]?.inlineData?.mimeType).toBe('audio/webm');
   });
 
@@ -676,7 +676,7 @@ describe('POST /api/reports/ai-reporting/transcribe', () => {
     const providerBody = JSON.parse(
       String((fetchMock.mock.calls[0]?.[1] as RequestInit | undefined)?.body),
     ) as { contents: Array<{ parts: Array<{ text?: string }> }> };
-    expect(providerBody.contents[0]?.parts[0]?.text).toContain('verbatim in it');
+    expect(providerBody.contents[0]?.parts[0]?.text).toContain('verbatim in Italian');
   });
 
   test('400 rejects requests that are not multipart', async () => {
