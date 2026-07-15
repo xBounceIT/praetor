@@ -670,6 +670,34 @@ describe('<AiReportingView /> interactions', () => {
     ]);
   });
 
+  test('keeps attachments selected when sending fails', async () => {
+    chatStreamMock.mockImplementationOnce(() => Promise.reject(new Error('Stream failed')));
+    chatMock.mockImplementationOnce(() => Promise.reject(new Error('Request failed')));
+    renderView();
+
+    await screen.findAllByText('Quarterly revenue');
+    const attachmentInput = document.querySelector<HTMLInputElement>('input[type="file"]');
+    expect(attachmentInput).not.toBeNull();
+    const attachment = new File(['quarter,revenue\nQ1,120000'], 'metrics.csv', {
+      type: 'text/csv',
+      lastModified: 1,
+    });
+
+    fireEvent.change(attachmentInput as HTMLInputElement, { target: { files: [attachment] } });
+    await screen.findByRole('button', { name: 'Remove attachment metrics.csv' });
+    fireEvent.change(
+      screen.getByRole('textbox', { name: 'Ask a question about your business data...' }),
+      { target: { value: 'Summarize this file' } },
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    await waitFor(() => expect(chatMock).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(getSessionMessagesMock.mock.calls.length).toBeGreaterThan(1));
+    expect(
+      screen.getByRole('button', { name: 'Remove attachment metrics.csv' }),
+    ).toBeInTheDocument();
+  });
+
   test('records and transcribes dictated speech without the Web Speech API', async () => {
     Reflect.deleteProperty(window, 'SpeechRecognition');
     renderView();

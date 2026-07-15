@@ -866,13 +866,14 @@ const useAiReportingController = ({
   const sendMessage = async (
     rawContent: string,
     opts: { clearDraft?: boolean; retryInsertAfterGroupId?: string } = {},
-  ) => {
-    if (!enableAiReporting) return;
+  ): Promise<boolean> => {
+    if (!enableAiReporting) return false;
     const content = rawContent.trim();
-    if (!content || isSending || abortRef.current || !canSend) return;
+    if (!content || isSending || abortRef.current || !canSend) return false;
 
     const abortController = new AbortController();
     const runId = ++sendRunIdRef.current;
+    let sentSuccessfully = false;
     abortRef.current = abortController;
 
     // A history load already in flight must never replace the optimistic user/assistant pair
@@ -970,7 +971,7 @@ const useAiReportingController = ({
       };
 
       try {
-        if (!isRunActive()) return;
+        if (!isRunActive()) return false;
         const streamed = await api.reports.chatStream(
           {
             sessionId: activeSessionId || undefined,
@@ -1086,6 +1087,7 @@ const useAiReportingController = ({
           if (activeAssistantMessageIdRef.current === assistantMessageId) {
             activeAssistantMessageIdRef.current = '';
           }
+          sentSuccessfully = true;
           await Promise.all([
             loadMessages(streamed.sessionId, { forceScroll: false }),
             loadSessions({ preferredSessionId: streamed.sessionId }),
@@ -1094,13 +1096,13 @@ const useAiReportingController = ({
       } catch (streamErr) {
         if (!isRunActive()) {
           cleanupCancelledAssistant();
-          return;
+          return false;
         }
 
         if ((streamErr as Error).name === 'AbortError') {
           cleanupCancelledAssistant();
         } else if (!streamStarted && !streamProducedOutput) {
-          if (!isRunActive()) return;
+          if (!isRunActive()) return false;
           setMessages((prev) =>
             prev.map((m) =>
               m.id === assistantMessageId
@@ -1108,7 +1110,7 @@ const useAiReportingController = ({
                 : m,
             ),
           );
-          if (!isRunActive()) return;
+          if (!isRunActive()) return false;
           const fallback = await api.reports.chat(
             {
               sessionId: activeSessionId || undefined,
@@ -1139,6 +1141,7 @@ const useAiReportingController = ({
               },
             );
             if (completed && isRunActive()) {
+              sentSuccessfully = true;
               if (activeAssistantMessageIdRef.current === assistantMessageId) {
                 activeAssistantMessageIdRef.current = '';
               }
@@ -1156,7 +1159,7 @@ const useAiReportingController = ({
             cleanupCancelledAssistant();
           }
         } else {
-          if (!isRunActive()) return;
+          if (!isRunActive()) return false;
           setError((streamErr as Error).message || t('aiReporting.error'));
           if (resolvedSessionId) {
             await loadMessages(resolvedSessionId, { forceScroll: false });
@@ -1166,7 +1169,7 @@ const useAiReportingController = ({
     } catch (err) {
       if (!isRunActive()) {
         cleanupCancelledAssistant();
-        return;
+        return false;
       }
 
       if ((err as Error).name === 'AbortError') {
@@ -1189,6 +1192,7 @@ const useAiReportingController = ({
         setIsSending(false);
       }
     }
+    return sentSuccessfully;
   };
 
   const handleSend = async (
@@ -1212,8 +1216,7 @@ const useAiReportingController = ({
       );
       return false;
     }
-    await sendMessage(content, { clearDraft: true });
-    return true;
+    return sendMessage(content, { clearDraft: true });
   };
 
   const handleEditSend = async (userMessage: ReportChatMessage) => {
