@@ -53,6 +53,28 @@ describe('transcribeAiReportingAudio', () => {
     });
   });
 
+  test('normalizes configured Gemini tuned model paths', async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        candidates: [{ content: { parts: [{ text: 'Tuned transcript' }] } }],
+      }),
+    });
+
+    await transcribeAiReportingAudio(
+      { ...config, geminiModelId: '  tunedModels/company-transcriber  ' },
+      Buffer.from('audio'),
+      'audio/webm',
+      'en',
+    );
+
+    const [url] = fetchMock.mock.calls[0] as [URL, RequestInit];
+    expect(url.toString()).toContain(
+      'generativelanguage.googleapis.com/v1beta/tunedModels/company-transcriber:generateContent',
+    );
+  });
+
   test('falls back to a configured OpenAI key when Anthropic is selected', async () => {
     fetchMock.mockResolvedValue({
       ok: true,

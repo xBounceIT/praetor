@@ -1,3 +1,5 @@
+import { normalizeGeminiModelPath } from '../utils/ai-models.ts';
+
 export type AiTranscriptionProvider = 'gemini' | 'openrouter' | 'anthropic' | 'openai';
 
 export interface AiTranscriptionConfig {
@@ -98,10 +100,10 @@ const transcribeWithGemini = async (
   mimeType: string,
   language: string,
 ) => {
-  const normalizedModel = modelId.replace(/^models\//, '').trim();
-  if (!normalizedModel) throw new AiTranscriptionUnavailableError();
+  const normalizedModel = normalizeGeminiModelPath(modelId);
+  if (!normalizedModel.ok) throw new AiTranscriptionUnavailableError();
   const url = new URL(
-    `/v1beta/models/${encodeURIComponent(normalizedModel)}:generateContent`,
+    `/v1beta/${normalizedModel.value}:generateContent`,
     'https://generativelanguage.googleapis.com',
   );
   url.searchParams.set('key', apiKey);
