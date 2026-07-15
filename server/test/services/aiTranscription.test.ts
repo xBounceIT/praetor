@@ -200,6 +200,29 @@ describe('transcribeAiReportingAudio', () => {
     });
   });
 
+  test('maps Safari MP4 recordings to the OpenRouter M4A format', async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ text: 'Safari transcript' }),
+    });
+
+    await transcribeAiReportingAudio(
+      {
+        ...config,
+        aiProvider: 'openrouter',
+        openrouterApiKey: 'openrouter-key',
+      },
+      Buffer.from('audio'),
+      'audio/mp4;codecs=mp4a.40.2',
+      'en',
+    );
+
+    const [, request] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(String(request.body)) as { input_audio: { format: string } };
+    expect(body.input_audio.format).toBe('m4a');
+  });
+
   test('reports unavailable transcription when no audio-capable provider is configured', async () => {
     await expect(
       transcribeAiReportingAudio(

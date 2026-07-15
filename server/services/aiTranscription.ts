@@ -41,6 +41,10 @@ const supportsOpenAiTranscription = (mimeType: string) =>
   OPENAI_TRANSCRIPTION_FORMATS.has(getAudioFormat(mimeType));
 const supportsGeminiTranscription = (mimeType: string) =>
   GEMINI_TRANSCRIPTION_FORMATS.has(getAudioFormat(mimeType));
+const getOpenRouterAudioFormat = (mimeType: string) => {
+  const format = getAudioFormat(mimeType);
+  return format === 'mp4' ? 'm4a' : format;
+};
 
 const parseTranscript = (payload: unknown) => {
   const text = (payload as { text?: unknown })?.text;
@@ -90,7 +94,7 @@ const transcribeWithOpenRouter = async (
       language,
       input_audio: {
         data: audio.toString('base64'),
-        format: getAudioFormat(mimeType),
+        format: getOpenRouterAudioFormat(mimeType),
       },
     }),
   });
