@@ -83,13 +83,11 @@ describe('transcribeAiReportingAudio', () => {
     expect(body.get('file')).toBeInstanceOf(Blob);
   });
 
-  test('skips OpenAI for Ogg recordings and falls back to Gemini', async () => {
+  test('sends Firefox Ogg recordings directly to OpenAI', async () => {
     fetchMock.mockResolvedValue({
       ok: true,
       status: 200,
-      json: async () => ({
-        candidates: [{ content: { parts: [{ text: 'Firefox transcript' }] } }],
-      }),
+      json: async () => ({ text: 'Firefox transcript' }),
     });
 
     const text = await transcribeAiReportingAudio(
@@ -100,11 +98,13 @@ describe('transcribeAiReportingAudio', () => {
     );
 
     expect(text).toBe('Firefox transcript');
-    const [url] = fetchMock.mock.calls[0] as [URL, RequestInit];
-    expect(url.toString()).toContain('generativelanguage.googleapis.com');
+    const [url, request] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('https://api.openai.com/v1/audio/transcriptions');
+    const body = request.body as FormData;
+    expect((body.get('file') as Blob).type).toBe('audio/ogg;codecs=opus');
   });
 
-  test('rejects Ogg before calling OpenAI when no compatible fallback is configured', async () => {
+  test('rejects unsupported audio before calling OpenAI when no fallback is configured', async () => {
     await expect(
       transcribeAiReportingAudio(
         {
@@ -115,7 +115,7 @@ describe('transcribeAiReportingAudio', () => {
           openaiApiKey: 'openai-key',
         },
         Buffer.from('audio'),
-        'audio/ogg',
+        'audio/aac',
         'en',
       ),
     ).rejects.toBeInstanceOf(AiTranscriptionUnavailableError);

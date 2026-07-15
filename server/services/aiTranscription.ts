@@ -21,7 +21,16 @@ const getAudioFormat = (mimeType: string) => {
 
 const OPENAI_TRANSCRIPTION_MODEL = 'gpt-4o-mini-transcribe';
 const OPENROUTER_TRANSCRIPTION_MODEL = 'openai/whisper-large-v3';
-const OPENAI_TRANSCRIPTION_FORMATS = new Set(['mp3', 'mp4', 'mpga', 'm4a', 'wav', 'webm']);
+const OPENAI_TRANSCRIPTION_FORMATS = new Set([
+  'flac',
+  'mp3',
+  'mp4',
+  'mpga',
+  'm4a',
+  'ogg',
+  'wav',
+  'webm',
+]);
 
 const supportsOpenAiTranscription = (mimeType: string) =>
   OPENAI_TRANSCRIPTION_FORMATS.has(getAudioFormat(mimeType));
