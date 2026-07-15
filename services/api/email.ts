@@ -23,6 +23,9 @@ export const emailApi = {
       body: JSON.stringify({ recipientEmail }),
     }),
 
-  testConnection: (): Promise<{ success: boolean; message: string }> =>
-    fetchApi('/email/test-connection', { method: 'POST' }),
+  testConnection: (): Promise<{
+    success: boolean;
+    code: string;
+    params?: Record<string, string> | null;
+  }> => fetchApi('/email/test-connection', { method: 'POST' }),
 };
