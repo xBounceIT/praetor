@@ -80,6 +80,7 @@
       "load": "Impossibile caricare le opzioni del report.",
       "generate": "Impossibile generare il report.",
       "export": "Impossibile esportare il CSV.",
+      "editCatalogs": "Impossibile caricare clienti, progetti e attività per la registrazione.",
       "favorite": "Impossibile aggiornare il preferito."
     }
   },

@@ -321,12 +321,12 @@ const canViewAllUsers = (request: FastifyRequest) =>
 
 const canViewTargetUserAssignments = async (request: FastifyRequest, targetUserId: string) => {
   if (request.user?.id === targetUserId) return true;
+  if (hasPermission(request, 'timesheets.tracker_all.view')) return true;
 
   const hasAssignmentPermission =
     hasPermission(request, 'administration.user_management.view') ||
     hasPermission(request, 'administration.user_management.update') ||
     hasPermission(request, 'timesheets.tracker.view') ||
-    hasPermission(request, 'timesheets.tracker_all.view') ||
     hasPermission(request, 'hr.employee_assignments.update');
 
   if (!hasAssignmentPermission) return false;

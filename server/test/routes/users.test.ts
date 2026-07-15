@@ -3662,6 +3662,21 @@ describe('GET /api/users/:id/tracker-catalogs', () => {
     expect(listTasksForUserMock).not.toHaveBeenCalled();
   });
 
+  test('200 all-scope tracker viewer can load an unmanaged user catalog', async () => {
+    findAuthUserByIdMock.mockResolvedValue(MANAGER_USER);
+    getRolePermissionsMock.mockResolvedValue(['timesheets.tracker_all.view']);
+    canManageUserMock.mockResolvedValue(false);
+
+    const res = await testApp.inject({
+      method: 'GET',
+      url: '/api/users/u-target/tracker-catalogs',
+      headers: managerAuth(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(canManageUserMock).not.toHaveBeenCalled();
+  });
+
   test('200 includes parent project and client for task-only assignments', async () => {
     findAuthUserByIdMock.mockResolvedValue(MANAGER_USER);
     getRolePermissionsMock.mockResolvedValue(['timesheets.tracker.view']);

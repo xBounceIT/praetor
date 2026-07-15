@@ -80,6 +80,7 @@
       "load": "Could not load report options.",
       "generate": "Could not generate the report.",
       "export": "Could not export the CSV.",
+      "editCatalogs": "Could not load clients, projects, and tasks for this entry.",
       "favorite": "Could not update the favorite."
     }
   },

@@ -8,6 +8,7 @@ import { CurrentUserIdProvider } from '../../../contexts/CurrentUserContext';
 
 type ReportApi = NonNullable<TimeReportViewProps['reportApi']>;
 type SavedViewsApi = NonNullable<TimeReportViewProps['savedViewsApi']>;
+type UserCatalogsApi = NonNullable<TimeReportViewProps['userCatalogsApi']>;
 
 import { getLocalDateString } from '../../../utils/date';
 import { installI18nMock } from '../../helpers/i18n';
@@ -22,6 +23,7 @@ const exportCsvMock = mock();
 const listViewsMock = mock();
 const createViewMock = mock();
 const removeViewMock = mock();
+const getTrackerCatalogsMock = mock();
 const scrollIntoViewMock = mock();
 const reportApi = {
   options: optionsMock,
@@ -33,6 +35,9 @@ const savedViewsApi = {
   create: createViewMock,
   remove: removeViewMock,
 } as unknown as SavedViewsApi;
+const userCatalogsApi = {
+  getTrackerCatalogs: getTrackerCatalogsMock,
+} as unknown as UserCatalogsApi;
 
 beforeEach(() => {
   Element.prototype.scrollIntoView =
@@ -44,6 +49,7 @@ beforeEach(() => {
     listViewsMock,
     createViewMock,
     removeViewMock,
+    getTrackerCatalogsMock,
     scrollIntoViewMock,
   ]) {
     fn.mockReset();
@@ -59,6 +65,7 @@ beforeEach(() => {
     tasks: [],
   });
   listViewsMock.mockResolvedValue([]);
+  getTrackerCatalogsMock.mockResolvedValue({ clients: [], projects: [], projectTasks: [] });
   generateMock.mockResolvedValue({
     rows: [],
     matchedEntryCount: 0,
@@ -75,12 +82,10 @@ const renderView = (permissions: string[]) =>
         permissions={permissions}
         currency="€"
         startOfWeek="Monday"
-        clients={[]}
-        projects={[]}
-        projectTasks={[]}
         onUpdateEntry={mock()}
         onAddCustomTask={mock()}
         reportApi={reportApi}
+        userCatalogsApi={userCatalogsApi}
         savedViewsApi={savedViewsApi}
         currentUserId="u1"
       />
@@ -277,7 +282,25 @@ describe('TimeReportView', () => {
           notes: null,
           duration: 2,
           cost: null,
-          entry: { userId: 'u2' },
+          entry: {
+            id: 'e1',
+            userId: 'u2',
+            date: '2026-07-10',
+            clientId: 'c1',
+            clientName: 'Acme',
+            projectId: 'p1',
+            projectName: 'Portal',
+            task: 'Build',
+            taskId: 't1',
+            notes: null,
+            duration: 2,
+            hourlyCost: 0,
+            cost: 0,
+            isPlaceholder: false,
+            location: 'remote',
+            createdAt: 1,
+            version: 1,
+          },
         },
       ],
       matchedEntryCount: 1,
@@ -295,6 +318,8 @@ describe('TimeReportView', () => {
     fireEvent.click(await screen.findByText('timeReport.actions.generate'));
 
     await user.click(await screen.findByLabelText('table.rowActions'));
-    expect(await screen.findByLabelText('timeReport.actions.edit')).toBeTruthy();
+    await user.click(await screen.findByLabelText('timeReport.actions.edit'));
+    await waitFor(() => expect(getTrackerCatalogsMock).toHaveBeenCalledWith('u2'));
+    expect(await screen.findByRole('dialog')).toBeTruthy();
   });
 });

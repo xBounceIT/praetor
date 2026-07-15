@@ -18,10 +18,9 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Field, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { timeReportsApi } from '../../services/api/timeReports';
+import { usersApi } from '../../services/api/users';
 import { type SavedViewDto, viewsApi } from '../../services/api/views';
 import type {
-  Client,
-  Project,
   ProjectTask,
   TimeEntry,
   TimeReportDefinition,
@@ -38,6 +37,7 @@ import {
   finalizeTimeReportFavorite,
   sanitizeTimeReportFavorite,
 } from '../../utils/timeReportFavorites';
+import type { TrackerCatalogs } from '../../utils/trackerCatalogs';
 import type { RecurringConfig, TaskFormDetails } from '../projects/TaskFormModal';
 import DateField from '../shared/DateField';
 import DeleteConfirmModal from '../shared/DeleteConfirmModal';
@@ -144,9 +144,6 @@ export interface TimeReportViewProps {
   permissions: string[];
   currency: string;
   startOfWeek: 'Monday' | 'Sunday';
-  clients: Client[];
-  projects: Project[];
-  projectTasks: ProjectTask[];
   onUpdateEntry: (
     id: string,
     updates: Partial<Omit<TimeEntry, 'version'>> & Pick<TimeEntry, 'version'>,
@@ -159,6 +156,7 @@ export interface TimeReportViewProps {
     details?: TaskFormDetails,
   ) => Promise<ProjectTask>;
   reportApi?: Pick<typeof timeReportsApi, 'options' | 'generate' | 'exportCsv'>;
+  userCatalogsApi?: Pick<typeof usersApi, 'getTrackerCatalogs'>;
   savedViewsApi?: Pick<typeof viewsApi, 'list' | 'create' | 'remove'>;
   currentUserId: string;
 }
@@ -167,12 +165,10 @@ const TimeReportView = ({
   permissions,
   currency,
   startOfWeek,
-  clients,
-  projects,
-  projectTasks,
   onUpdateEntry,
   onAddCustomTask,
   reportApi = timeReportsApi,
+  userCatalogsApi = usersApi,
   savedViewsApi = viewsApi,
   currentUserId,
 }: TimeReportViewProps) => {
@@ -191,6 +187,7 @@ const TimeReportView = ({
   const [favoriteName, setFavoriteName] = useState('');
   const [favoriteToDelete, setFavoriteToDelete] = useState<SavedViewDto | null>(null);
   const [editingEntry, setEditingEntry] = useState<TimeEntry | null>(null);
+  const [editingCatalogs, setEditingCatalogs] = useState<TrackerCatalogs | null>(null);
   const [isLoadingOptions, setIsLoadingOptions] = useState(true);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
@@ -433,6 +430,29 @@ const TimeReportView = ({
     }
   };
 
+  const closeEntryEditor = useCallback(() => {
+    setEditingEntry(null);
+    setEditingCatalogs(null);
+  }, []);
+
+  const openEntryEditor = useCallback(
+    async (entry: TimeEntry) => {
+      setEditingCatalogs(null);
+      try {
+        const catalogs = await userCatalogsApi.getTrackerCatalogs(entry.userId);
+        setEditingCatalogs(catalogs);
+        setEditingEntry(entry);
+      } catch (catalogError) {
+        toast.error(
+          catalogError instanceof Error
+            ? catalogError.message
+            : t('timeReport.errors.editCatalogs'),
+        );
+      }
+    },
+    [t, userCatalogsApi],
+  );
+
   const tableColumns = useMemo<Column<TimeReportRow>[]>(() => {
     if (!generatedDefinition) return [];
     const editableUserIds = new Set(options?.editableUserIds ?? []);
@@ -520,8 +540,12 @@ const TimeReportView = ({
       columns.push({
         id: 'actions',
         header: t('common:labels.actions'),
-        cell: ({ row }) =>
-          row.kind === 'detail' && row.entry && row.userId && editableUserIds.has(row.userId) ? (
+        cell: ({ row }) => {
+          const entry = row.entry;
+          if (row.kind !== 'detail' || !entry || !row.userId || !editableUserIds.has(row.userId)) {
+            return null;
+          }
+          return (
             <Button
               type="button"
               variant="ghost"
@@ -529,12 +553,13 @@ const TimeReportView = ({
               aria-label={t('timeReport.actions.edit')}
               onClick={(event) => {
                 event.stopPropagation();
-                setEditingEntry(row.entry);
+                void openEntryEditor(entry);
               }}
             >
               <Pencil className="size-4" />
             </Button>
-          ) : null,
+          );
+        },
         disableSorting: true,
         disableFiltering: true,
         align: 'center',
@@ -542,14 +567,14 @@ const TimeReportView = ({
       });
     }
     return columns;
-  }, [currency, generatedDefinition, i18n.language, options?.editableUserIds, t]);
+  }, [currency, generatedDefinition, i18n.language, openEntryEditor, options?.editableUserIds, t]);
 
   const saveEditedEntry = async (
     id: string,
     updates: Partial<Omit<TimeEntry, 'version'>> & Pick<TimeEntry, 'version'>,
   ) => {
     await onUpdateEntry(id, updates);
-    setEditingEntry(null);
+    closeEntryEditor();
     if (generatedDefinition) await generate(generatedDefinition);
   };
 
@@ -869,11 +894,11 @@ const TimeReportView = ({
 
       <EntryEditDialog
         entry={editingEntry}
-        onClose={() => setEditingEntry(null)}
+        onClose={closeEntryEditor}
         onSave={saveEditedEntry}
-        clients={clients}
-        projects={projects}
-        projectTasks={projectTasks}
+        clients={editingCatalogs?.clients ?? []}
+        projects={editingCatalogs?.projects ?? []}
+        projectTasks={editingCatalogs?.projectTasks ?? []}
         permissions={permissions}
         currency={currency}
         onAddCustomTask={onAddCustomTask}

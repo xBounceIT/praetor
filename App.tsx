@@ -151,7 +151,6 @@ import {
   getNotFoundReturnView,
   hasAnyPermission,
   hasPermission,
-  hasScopedActionPermission,
   hasViewAccess,
   TOP_MANAGER_ROLE_ID,
   VIEW_PERMISSION_MAP,
@@ -2220,10 +2219,6 @@ const useAppContentController = () => {
           buildPermission('sales.supplier_quotes', 'view'),
         );
         const canListEntries = hasViewAccess(permissions, 'timesheets/tracker');
-        const canEditTimeEntries =
-          hasScopedActionPermission(permissions, 'timesheets.tracker', 'view') &&
-          hasScopedActionPermission(permissions, 'timesheets.tracker', 'update');
-
         const canListClients = hasAnyPermission(permissions, [
           ...equivalentPermissionsFor('crm.clients', 'view'),
           ...equivalentPermissionsFor('timesheets.tracker', 'view'),
@@ -2836,17 +2831,6 @@ const useAppContentController = () => {
           case 'reports': {
             // Reports pages fetch their own data as needed, but they still depend on global settings
             // (e.g. AI Reporting enablement).
-            if (activeView === 'reports/time-report' && canEditTimeEntries) {
-              failedDatasets = await loadDatasets(
-                module,
-                [
-                  listRequest('clients', canListClients, () => api.clients.list(), setClients),
-                  listRequest('projects', canListProjects, () => api.projects.list(), setProjects),
-                  listRequest('tasks', canListTasks, () => api.tasks.list(), setProjectTasks),
-                ],
-                { shouldApply: isCurrentModuleLoad },
-              );
-            }
             await loadOptionalDataset(
               module,
               'general settings',
@@ -4721,12 +4705,9 @@ const SettingsAndReportsRoutes: React.FC<{
   const {
     activeView,
     addProjectTask,
-    clients,
     currentUser,
     generalSettings,
     handleUpdateEntry,
-    projects,
-    projectTasks,
     handleCreateMcpToken,
     handleGetPersonalAccessToken,
     handleListMcpTokens,
@@ -4774,9 +4755,6 @@ const SettingsAndReportsRoutes: React.FC<{
           permissions={currentUser.permissions || []}
           currency={generalSettings.currency}
           startOfWeek={generalSettings.startOfWeek}
-          clients={clients}
-          projects={projects}
-          projectTasks={projectTasks}
           onUpdateEntry={handleUpdateEntry}
           onAddCustomTask={addProjectTask}
           currentUserId={currentUser.id}

@@ -317,9 +317,9 @@ describe('time report RBAC routes', () => {
   });
 
   test('CSV export reports the explicit 50,000-entry limit', async () => {
-    generateCompleteTimeReportMock.mockRejectedValue(
-      new serviceSnap.TimeReportExportLimitError(50_001),
-    );
+    generateCompleteTimeReportMock.mockImplementation(async () => {
+      throw new serviceSnap.TimeReportExportLimitError(50_001);
+    });
 
     const response = await app.inject({
       method: 'POST',
