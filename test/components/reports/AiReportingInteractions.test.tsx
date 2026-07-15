@@ -593,6 +593,48 @@ describe('<AiReportingView /> interactions', () => {
     );
   });
 
+  test('updates technical metadata immediately after editing a message', async () => {
+    getSessionMessagesMock
+      .mockResolvedValueOnce(messages)
+      .mockImplementationOnce(() => new Promise(() => {}));
+    editMessageStreamMock.mockImplementation(
+      async (
+        _payload: unknown,
+        handlers?: { onStart?: (event: { sessionId: string; messageId: string }) => void },
+      ) => {
+        handlers?.onStart?.({ sessionId: 'revenue', messageId: 'assistant-edited' });
+        return {
+          sessionId: 'revenue',
+          text: 'Updated revenue analysis.',
+          technicalInfo: {
+            provider: 'openai',
+            modelId: 'gpt-5.1',
+            contextTokensUsed: 10_000,
+            contextWindowTokens: 128_000,
+          },
+        };
+      },
+    );
+    renderView();
+
+    await screen.findByText('Quarterly revenue is available.');
+    fireEvent.click(screen.getByRole('switch', { name: 'Show technical information' }));
+    expect(screen.getByText('gemini · gemini-2.5-pro')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    const editInput = screen.getByRole('textbox', { name: 'Edit message' });
+    fireEvent.change(editInput, { target: { value: 'Update the quarterly revenue analysis' } });
+    fireEvent.click(
+      within(editInput.closest('[data-slot="card"]') as HTMLElement).getByRole('button', {
+        name: 'Send',
+      }),
+    );
+
+    expect(await screen.findByText('Updated revenue analysis.')).toBeInTheDocument();
+    expect(screen.getByText('openai · gpt-5.1')).toBeInTheDocument();
+    expect(screen.queryByText('gemini · gemini-2.5-pro')).toBeNull();
+  });
+
   test('renames a chat from the actions contained in its history row', async () => {
     renderView();
 

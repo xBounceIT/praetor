@@ -1408,7 +1408,12 @@ const useAiReportingController = ({
         setMessages((prev) =>
           prev.map((m) =>
             m.id === finalId
-              ? { ...m, content: streamed.text, thoughtContent: finalThought || undefined }
+              ? {
+                  ...m,
+                  content: streamed.text,
+                  thoughtContent: finalThought || undefined,
+                  technicalInfo: streamed.technicalInfo,
+                }
               : m,
           ),
         );
