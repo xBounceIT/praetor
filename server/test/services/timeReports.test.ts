@@ -72,6 +72,27 @@ describe('time report grouping', () => {
     });
   });
 
+  test.each([
+    ['user', { userId: 'u1', userName: 'Alex' }, { userId: 'u2', userName: 'Alex' }],
+    ['client', { clientId: 'c1', clientName: 'Acme' }, { clientId: 'c2', clientName: 'Acme' }],
+    [
+      'project',
+      { projectId: 'p1', projectName: 'Portal' },
+      { projectId: 'p2', projectName: 'Portal' },
+    ],
+  ] as const)('keeps distinct %s entities with duplicate display names in separate groups', (group, firstPatch, secondPatch) => {
+    const rows = buildTimeReportRows(
+      [entry('e1', { ...firstPatch, duration: 2 }), entry('e2', { ...secondPatch, duration: 3 })],
+      definition({ groupBy: [group] }),
+      false,
+    );
+
+    expect(rows.filter((row) => row.kind === 'subtotal')).toEqual([
+      expect.objectContaining({ duration: 2 }),
+      expect.objectContaining({ duration: 3 }),
+    ]);
+  });
+
   test('totalsOnly omits details and preserves group totals', () => {
     const rows = buildTimeReportRows(
       [entry('e1'), entry('e2', { duration: 1, cost: 50 })],
@@ -94,7 +115,7 @@ describe('time report grouping', () => {
 
   test('uses complete database aggregates when displayed details are truncated', () => {
     const rows = buildTimeReportRows([entry('e1')], definition({ groupBy: ['client'] }), true, [
-      { groupLevel: 0, groupValues: ['Acme'], label: 'Acme', duration: 10, cost: 500 },
+      { groupLevel: 0, groupKeys: ['c1'], label: 'Acme', duration: 10, cost: 500 },
     ]);
 
     expect(rows.at(-1)).toMatchObject({ kind: 'subtotal', duration: 10, cost: 500 });
@@ -105,7 +126,7 @@ describe('time report grouping', () => {
       [
         {
           groupLevel: 1,
-          groupValues: ['Acme', 'Portal'],
+          groupKeys: ['c1', 'p1'],
           label: 'Portal',
           duration: 8,
           cost: 400,

@@ -59,7 +59,7 @@ export type TimeReportOptions = {
 
 export type TimeReportSubtotal = {
   groupLevel: number;
-  groupValues: string[];
+  groupKeys: string[];
   label: string;
   duration: number;
   cost: number;
@@ -294,7 +294,22 @@ export const listEntriesPage = (
   exec: DbExecutor = db,
 ): Promise<TimeReportEntry[]> => queryEntries(definition, userIds, limit, offset, exec);
 
-const groupExpression = (group: TimeReportGroup): SQL => {
+const groupKeyExpression = (group: TimeReportGroup): SQL => {
+  switch (group) {
+    case 'date':
+      return sql`te.date`;
+    case 'user':
+      return sql`te.user_id`;
+    case 'client':
+      return sql`te.client_id`;
+    case 'project':
+      return sql`te.project_id`;
+    case 'task':
+      return sql`te.project_id::text || ':' || COALESCE(te.task_id::text, 'legacy:' || lower(te.task))`;
+  }
+};
+
+const groupLabelExpression = (group: TimeReportGroup): SQL => {
   switch (group) {
     case 'date':
       return sql`te.date`;
@@ -317,23 +332,28 @@ export const listSubtotals = async (
 ): Promise<TimeReportSubtotal[]> => {
   if (definition.groupBy.length === 0) return [];
   const where = buildWhere(definition, userIds);
-  const expressions = definition.groupBy.map(groupExpression);
-  const groupSets = expressions.map(
-    (_, index) => sql`(${sql.join(expressions.slice(0, index + 1), sql`, `)})`,
+  const keyExpressions = definition.groupBy.map(groupKeyExpression);
+  const labelExpressions = definition.groupBy.map(groupLabelExpression);
+  const groupSets = keyExpressions.map(
+    (_, index) => sql`(${sql.join(keyExpressions.slice(0, index + 1), sql`, `)})`,
   );
-  const valueColumns = expressions.map(
-    (expression, index) => sql`${expression}::text AS ${sql.identifier(`group_value_${index}`)}`,
+  const keyColumns = keyExpressions.map(
+    (expression, index) => sql`${expression}::text AS ${sql.identifier(`group_key_${index}`)}`,
   );
-  const groupingColumns = expressions.map(
+  const labelColumns = labelExpressions.map(
+    (expression, index) =>
+      sql`MIN(${expression}::text) AS ${sql.identifier(`group_label_${index}`)}`,
+  );
+  const groupingColumns = keyExpressions.map(
     (expression, index) =>
       sql`GROUPING(${expression})::int AS ${sql.identifier(`grouped_${index}`)}`,
   );
-  const orderColumns = expressions.map((expression) => sql`lower(${expression}::text) NULLS LAST`);
+  const orderColumns = keyExpressions.map((expression) => sql`${expression} NULLS LAST`);
   const rows = await executeRows<
     Record<string, unknown> & { duration: string | number | null; cost: string | number | null }
   >(
     exec,
-    sql`SELECT ${sql.join([...valueColumns, ...groupingColumns], sql`, `)},
+    sql`SELECT ${sql.join([...keyColumns, ...labelColumns, ...groupingColumns], sql`, `)},
                COALESCE(SUM(te.duration), 0) AS duration,
                COALESCE(SUM(te.duration * COALESCE(te.hourly_cost, 0)), 0) AS cost
           FROM time_entries te
@@ -345,16 +365,16 @@ export const listSubtotals = async (
   );
   return rows.map((row) => {
     let groupLevel = 0;
-    for (let index = 0; index < expressions.length; index += 1) {
+    for (let index = 0; index < keyExpressions.length; index += 1) {
       if (Number(row[`grouped_${index}`]) === 0) groupLevel = index;
     }
-    const groupValues = Array.from({ length: groupLevel + 1 }, (_, index) =>
-      String(row[`group_value_${index}`] ?? ''),
+    const groupKeys = Array.from({ length: groupLevel + 1 }, (_, index) =>
+      String(row[`group_key_${index}`] ?? ''),
     );
     return {
       groupLevel,
-      groupValues,
-      label: groupValues[groupLevel],
+      groupKeys,
+      label: String(row[`group_label_${groupLevel}`] ?? ''),
       duration: parseDbNumber(row.duration, 0),
       cost: Math.round(parseDbNumber(row.cost, 0) * 100) / 100,
     };

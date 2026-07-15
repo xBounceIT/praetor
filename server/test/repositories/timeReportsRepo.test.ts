@@ -134,8 +134,10 @@ describe('timeReportsRepo', () => {
     exec.enqueue({
       rows: [
         {
-          group_value_0: 'Acme',
-          group_value_1: null,
+          group_key_0: 'c1',
+          group_key_1: null,
+          group_label_0: 'Acme',
+          group_label_1: 'Portal',
           grouped_0: 0,
           grouped_1: 1,
           duration: '12.5',
@@ -152,8 +154,9 @@ describe('timeReportsRepo', () => {
     );
 
     expect(rows).toEqual([
-      { groupLevel: 0, groupValues: ['Acme'], label: 'Acme', duration: 12.5, cost: 625.01 },
+      { groupLevel: 0, groupKeys: ['c1'], label: 'Acme', duration: 12.5, cost: 625.01 },
     ]);
     expect(exec.calls[0].sql).toContain('GROUP BY GROUPING SETS');
+    expect(exec.calls[0].sql).toContain('te.client_id');
   });
 });

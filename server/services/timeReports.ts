@@ -66,7 +66,22 @@ export const collectTimeReportEntryBatches = async (
 const compareText = (left: string, right: string) =>
   left.localeCompare(right, undefined, { sensitivity: 'base', numeric: true });
 
-const groupValue = (entry: TimeReportEntry, group: TimeReportGroup): string => {
+const groupKey = (entry: TimeReportEntry, group: TimeReportGroup): string => {
+  switch (group) {
+    case 'date':
+      return entry.date;
+    case 'user':
+      return entry.userId;
+    case 'client':
+      return entry.clientId;
+    case 'project':
+      return entry.projectId;
+    case 'task':
+      return `${entry.projectId}:${entry.taskId ?? `legacy:${entry.task.toLowerCase()}`}`;
+  }
+};
+
+const groupLabel = (entry: TimeReportEntry, group: TimeReportGroup): string => {
   switch (group) {
     case 'date':
       return entry.date;
@@ -84,7 +99,7 @@ const groupValue = (entry: TimeReportEntry, group: TimeReportGroup): string => {
 const sortedEntries = (entries: TimeReportEntry[], groupBy: TimeReportGroup[]): TimeReportEntry[] =>
   [...entries].sort((left, right) => {
     for (const group of groupBy) {
-      const comparison = compareText(groupValue(left, group), groupValue(right, group));
+      const comparison = compareText(groupKey(left, group), groupKey(right, group));
       if (comparison !== 0) return comparison;
     }
     return (
@@ -126,8 +141,8 @@ const detailRow = (entry: TimeReportEntry, includeCost: boolean): TimeReportRow 
   };
 };
 
-const subtotalKey = (level: number, groupValues: string[]) =>
-  JSON.stringify([level, ...groupValues.slice(0, level + 1)]);
+const subtotalKey = (level: number, groupKeys: string[]) =>
+  JSON.stringify([level, ...groupKeys.slice(0, level + 1)]);
 
 const subtotalRow = (
   level: number,
@@ -170,7 +185,7 @@ export const buildTimeReportRows = (
 
   const rows: TimeReportRow[] = [];
   const subtotalByGroup = new Map(
-    subtotals.map((subtotal) => [subtotalKey(subtotal.groupLevel, subtotal.groupValues), subtotal]),
+    subtotals.map((subtotal) => [subtotalKey(subtotal.groupLevel, subtotal.groupKeys), subtotal]),
   );
   let subtotalSequence = 0;
 
@@ -184,20 +199,30 @@ export const buildTimeReportRows = (
     const group = definition.groupBy[level];
     let start = 0;
     while (start < subset.length) {
-      const value = groupValue(subset[start], group);
+      const key = groupKey(subset[start], group);
       let end = start + 1;
-      while (end < subset.length && groupValue(subset[end], group) === value) end += 1;
+      while (end < subset.length && groupKey(subset[end], group) === key) end += 1;
       const groupedEntries = subset.slice(start, end);
-      const groupValues = [...parentValues, value];
-      appendLevel(groupedEntries, level + 1, groupValues);
-      const aggregate = subtotalByGroup.get(subtotalKey(level, groupValues));
+      const groupKeys = [...parentValues, key];
+      appendLevel(groupedEntries, level + 1, groupKeys);
+      const aggregate = subtotalByGroup.get(subtotalKey(level, groupKeys));
       const duration =
         aggregate?.duration ?? groupedEntries.reduce((sum, entry) => sum + entry.duration, 0);
       const cost =
         aggregate?.cost ??
         Math.round(groupedEntries.reduce((sum, entry) => sum + entry.cost, 0) * 100) / 100;
       subtotalSequence += 1;
-      rows.push(subtotalRow(level, group, value, subtotalSequence, includeCost, duration, cost));
+      rows.push(
+        subtotalRow(
+          level,
+          group,
+          groupLabel(groupedEntries[0], group),
+          subtotalSequence,
+          includeCost,
+          duration,
+          cost,
+        ),
+      );
       start = end;
     }
   };
