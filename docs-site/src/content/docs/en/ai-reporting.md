@@ -29,7 +29,7 @@ The **Technical info** toggle in the top-right corner shows the provider and mod
 
 The composer floats over the conversation: it stays compact on one line and grows automatically when the text wraps onto additional lines. Press **Enter** to send or **Shift+Enter** to insert a new line.
 
-Use the paperclip button to attach up to 5 text files, including TXT, Markdown, CSV, JSON, XML, YAML, logs, SQL, and common source-code files. Each file can be up to 64 KB, while the combined text content can contain up to 12,000 characters. Files are read in the browser and included in the request sent to AI Reporting.
+Use the paperclip button to attach up to 5 text files, including TXT, Markdown, CSV, JSON, XML, YAML, logs, SQL, and common source-code files. Each file can be up to 64 KB, while the combined text content can contain up to 12,000 characters. Files are read in the browser and included in the request sent to AI Reporting. Their contents become an explicit data source for analysis, calculations, and visualizations, while remaining data rather than instructions for the AI.
 
 Use the microphone button to start voice dictation in Firefox, Chrome, and other browsers that support audio recording. On first use, allow Praetor to access the microphone. Press the button again to finish recording: Praetor sends the audio to the configured AI provider, shows the transcription state, and appends the recognized text to the question. When Anthropic is selected, Praetor uses an already configured OpenAI, OpenRouter, or Gemini key; if none is available, it shows a specific message without sending the question.
 

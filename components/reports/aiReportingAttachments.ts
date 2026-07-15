@@ -171,7 +171,6 @@ export const serializeAiReportingMessage = (
   if (attachments.length === 0) return normalizedText;
 
   const payload = JSON.stringify({
-    instructions: 'Use the attached text files as context for the user request.',
     files: attachments.map(({ name, type, size, content }) => ({ name, type, size, content })),
   });
 

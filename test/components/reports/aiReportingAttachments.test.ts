@@ -28,6 +28,7 @@ describe('AI Reporting attachments', () => {
     expect(result.attachments).toHaveLength(1);
 
     const serialized = serializeAiReportingMessage('Summarize the data', result.attachments);
+    expect(serialized).not.toContain('"instructions"');
     const parsed = parseAiReportingMessage(serialized);
     expect(parsed.text).toBe('Summarize the data');
     expect(parsed.attachments).toEqual([
