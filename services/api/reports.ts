@@ -136,6 +136,17 @@ const parseReportStream = async (
 };
 
 export const reportsApi = {
+  transcribeAudio: (audio: Blob, language: string): Promise<{ text: string }> => {
+    const body = new FormData();
+    body.append('audio', audio, 'dictation.webm');
+    const params = new URLSearchParams({ language });
+    return fetchApi(`/reports/ai-reporting/transcribe?${params.toString()}`, {
+      method: 'POST',
+      body,
+      timeoutMs: 60_000,
+    });
+  },
+
   listSessions: (): Promise<ReportChatSessionSummary[]> =>
     fetchApi<ReportChatSessionSummary[]>('/reports/ai-reporting/sessions'),
 

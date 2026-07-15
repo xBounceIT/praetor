@@ -10,6 +10,7 @@ import { ajvFormatsPlugin, ajvFormatsPluginOptions } from '../../utils/ajv-forma
 export const buildRouteTestApp = async (
   routePlugin: FastifyPluginAsync,
   prefix: string,
+  configure?: (app: FastifyInstance) => Promise<void> | void,
 ): Promise<FastifyInstance> => {
   const app = Fastify({
     logger: false,
@@ -19,6 +20,7 @@ export const buildRouteTestApp = async (
     },
   });
   app.decorate('rateLimit', () => async () => {});
+  await configure?.(app);
   await app.register(routePlugin, { prefix });
   await app.ready();
   return app;

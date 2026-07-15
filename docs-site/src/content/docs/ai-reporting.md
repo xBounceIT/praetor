@@ -31,7 +31,7 @@ Il composer fluttua sopra la conversazione: resta compatto su una riga e cresce 
 
 Il pulsante con la graffetta allega fino a 5 file di testo, inclusi TXT, Markdown, CSV, JSON, XML, YAML, log, SQL e comuni file sorgente. Ogni file può pesare fino a 64 KB; il contenuto testuale complessivo degli allegati può raggiungere 12.000 caratteri. I file vengono letti nel browser e inclusi nella richiesta inviata ad AI Reporting.
 
-Se il browser supporta la Web Speech API, usa il pulsante con il microfono per avviare la dettatura vocale. Premi di nuovo il pulsante per interrompere l'ascolto; il testo riconosciuto viene aggiunto alla domanda prima dell'invio.
+Usa il pulsante con il microfono per avviare la dettatura vocale su Firefox, Chrome e sugli altri browser che supportano la registrazione audio. Al primo utilizzo autorizza Praetor ad accedere al microfono. Premi di nuovo il pulsante per terminare la registrazione: Praetor invia l'audio al provider AI configurato, mostra lo stato di trascrizione e aggiunge il testo riconosciuto alla domanda. Se Anthropic e' il provider selezionato, Praetor usa una chiave OpenAI, OpenRouter o Gemini gia' configurata; se nessuna e' disponibile, mostra un messaggio specifico senza inviare la domanda.
 
 ## Visualizzazioni interattive
 

@@ -12,6 +12,10 @@ import * as reportsHoursRepo from '../repositories/reportsHoursRepo.ts';
 import * as reportsRevenueRepo from '../repositories/reportsRevenueRepo.ts';
 import * as workUnitsRepo from '../repositories/workUnitsRepo.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
+import {
+  AiTranscriptionUnavailableError,
+  transcribeAiReportingAudio,
+} from '../services/aiTranscription.ts';
 import { normalizeGeminiModelPath } from '../utils/ai-models.ts';
 import { assertAuthenticated } from '../utils/auth-assert.ts';
 import { generatePrefixedId } from '../utils/order-ids.ts';
@@ -24,6 +28,7 @@ type AiProvider = 'gemini' | 'openrouter' | 'anthropic' | 'openai';
 type UiLanguage = 'en' | 'it';
 type AiChatMessage = { role: 'system' | 'user' | 'assistant'; content: string };
 const AI_REPORTING_MESSAGE_MAX_CHARS = 16_000;
+const AI_REPORTING_AUDIO_MAX_BYTES = 10 * 1024 * 1024;
 const AI_REPORTING_ATTACHMENT_MARKER = '\u001ePRAETOR_AI_ATTACHMENTS_V1';
 
 export type GeneralAiConfig = {
@@ -2263,6 +2268,96 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       return reply.send({ success: true });
+    },
+  );
+
+  // POST /ai-reporting/transcribe
+  fastify.post(
+    '/ai-reporting/transcribe',
+    {
+      onRequest: [requirePermission('reports.ai_reporting.create')],
+      schema: {
+        tags: ['reports'],
+        summary: 'Transcribe an AI Reporting voice dictation',
+        consumes: ['multipart/form-data'],
+        querystring: {
+          type: 'object',
+          properties: { language: { type: 'string', enum: ['en', 'it'] } },
+        },
+        response: {
+          200: {
+            type: 'object',
+            properties: { text: { type: 'string' } },
+            required: ['text'],
+          },
+          ...standardErrorResponses,
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      if (!assertAuthenticated(request, reply)) return;
+      if (!request.isMultipart()) {
+        return badRequest(reply, 'Request must be multipart/form-data');
+      }
+
+      const cfg = await getGeneralAiConfig();
+      if (!(await ensureAiEnabled(cfg, request, reply))) return;
+
+      const part = await request.file();
+      if (!part) return badRequest(reply, 'An audio file is required');
+
+      let audio: Buffer;
+      try {
+        audio = await part.toBuffer();
+      } catch (error) {
+        if ((error as { code?: string }).code === 'FST_REQ_FILE_TOO_LARGE') {
+          return reply.code(413).send({ error: 'Voice recording exceeds the upload limit.' });
+        }
+        throw error;
+      }
+
+      if (!part.mimetype.startsWith('audio/')) {
+        return badRequest(reply, 'The uploaded file must contain audio.');
+      }
+      if (audio.byteLength === 0) {
+        return replyError(request, reply, {
+          statusCode: 400,
+          message: 'The voice recording is empty.',
+          errorCode: 'dictation_no_speech',
+          action: 'reports_ai.dictation.empty',
+          entityType: 'reports_ai',
+        });
+      }
+      if (audio.byteLength > AI_REPORTING_AUDIO_MAX_BYTES) {
+        return reply.code(413).send({ error: 'Voice recording exceeds the upload limit.' });
+      }
+
+      const { language } = request.query as { language?: unknown };
+      const uiLanguage = normalizeUiLanguage(language);
+      try {
+        const text = await transcribeAiReportingAudio(
+          cfg,
+          audio,
+          part.mimetype.split(';', 1)[0] || 'audio/webm',
+          uiLanguage,
+        );
+        return reply.send({ text });
+      } catch (error) {
+        if (error instanceof AiTranscriptionUnavailableError) {
+          return replyError(request, reply, {
+            statusCode: 400,
+            message: 'No configured AI provider supports audio transcription.',
+            errorCode: 'dictation_transcription_unavailable',
+            action: 'reports_ai.dictation.provider_unavailable',
+            entityType: 'reports_ai',
+          });
+        }
+        request.log.error({ err: error }, 'AI Reporting dictation transcription failed');
+        return reply.code(502).send({
+          error: 'Voice transcription failed.',
+          errorCode: 'dictation_transcription_failed',
+        });
+      }
     },
   );
 
