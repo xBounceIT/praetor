@@ -339,6 +339,24 @@ describe('determineRequestedSections', () => {
 
     expect(sections).toEqual(new Set(['invoices']));
   });
+
+  test('keeps attachment overview requests isolated from business datasets', () => {
+    const sections = determineRequestedSections(
+      attachmentMessage('Summarize everything in the attached files', 'invoice'),
+      [],
+    );
+
+    expect(sections).toEqual(new Set());
+  });
+
+  test('honors explicit business sections inside attachment overview requests', () => {
+    const sections = determineRequestedSections(
+      attachmentMessage('Give me a full report of Praetor invoices and this file', 'project'),
+      [],
+    );
+
+    expect(sections).toEqual(new Set(['invoices']));
+  });
 });
 
 describe('GET /api/reports/ai-reporting/sessions', () => {

@@ -1319,7 +1319,7 @@ export const determineRequestedSections = (
     'tutto',
     'dati completi',
   ];
-  if (overviewTerms.some((term) => includesTerm(detectionText, term))) {
+  if (!hasAttachments && overviewTerms.some((term) => includesTerm(detectionText, term))) {
     return null;
   }
 
