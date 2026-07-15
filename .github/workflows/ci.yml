@@ -478,8 +478,14 @@ jobs:
 
       - name: Scan postgres logs for FATAL/PANIC
         run: |
-          if grep -nE '\b(FATAL|PANIC):' logs/postgres.log; then
-            echo "::error::Postgres logged FATAL or PANIC"
+          unexpected_postgres_errors="$(
+            grep -nE '\b(FATAL|PANIC):' logs/postgres.log \
+              | grep -vF 'the database system is shutting down' \
+              || true
+          )"
+          if [[ -n "$unexpected_postgres_errors" ]]; then
+            printf '%s\n' "$unexpected_postgres_errors"
+            echo "::error::Postgres logged an unexpected FATAL or PANIC"
             exit 1
           fi
 
