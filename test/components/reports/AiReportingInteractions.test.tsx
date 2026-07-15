@@ -733,7 +733,9 @@ describe('<AiReportingView /> interactions', () => {
   });
 
   test('explains when microphone permission is denied', async () => {
-    getUserMediaMock.mockRejectedValueOnce(new DOMException('Denied', 'NotAllowedError'));
+    getUserMediaMock.mockImplementationOnce(() =>
+      Promise.reject(new DOMException('Denied', 'NotAllowedError')),
+    );
     renderView();
 
     await screen.findAllByText('Quarterly revenue');
