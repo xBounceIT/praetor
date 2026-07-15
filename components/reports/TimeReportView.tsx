@@ -1,4 +1,14 @@
-import { FileText, Loader2, Pencil, Save, Trash2 } from 'lucide-react';
+import {
+  Bookmark,
+  Columns3,
+  FileText,
+  Layers3,
+  ListFilter,
+  Loader2,
+  Pencil,
+  Save,
+  Trash2,
+} from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
@@ -566,12 +576,9 @@ const TimeReportView = ({
   }
 
   return (
-    <div className="space-y-6">
+    <div className="mx-auto max-w-5xl space-y-8" data-testid="time-report-layout">
       <div>
-        <div className="flex items-center gap-2">
-          <FileText className="size-5 text-primary" />
-          <h1 className="text-2xl font-semibold tracking-tight">{t('timeReport.title')}</h1>
-        </div>
+        <h1 className="text-2xl font-semibold text-foreground">{t('timeReport.title')}</h1>
         <p className="mt-1 text-sm text-muted-foreground">{t('timeReport.description')}</p>
       </div>
 
@@ -582,11 +589,17 @@ const TimeReportView = ({
         </Alert>
       )}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>{t('timeReport.favorites.title')}</CardTitle>
+      <Card
+        className="gap-0 overflow-hidden rounded-lg border-border bg-background py-0"
+        data-testid="time-report-favorites-section"
+      >
+        <CardHeader className="border-b border-border bg-muted/40 px-6 py-4 [.border-b]:pb-4">
+          <CardTitle className="flex items-center gap-3 text-base">
+            <Bookmark aria-hidden="true" className="size-4 text-praetor" />
+            {t('timeReport.favorites.title')}
+          </CardTitle>
         </CardHeader>
-        <CardContent className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
+        <CardContent className="grid gap-4 p-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
           <SelectControl
             options={favorites.map((favorite) => ({ id: favorite.id, name: favorite.name }))}
             value={selectedFavoriteId}
@@ -632,11 +645,17 @@ const TimeReportView = ({
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>{t('timeReport.filters.title')}</CardTitle>
+      <Card
+        className="gap-0 overflow-hidden rounded-lg border-border bg-background py-0"
+        data-testid="time-report-filters-section"
+      >
+        <CardHeader className="border-b border-border bg-muted/40 px-6 py-4 [.border-b]:pb-4">
+          <CardTitle className="flex items-center gap-3 text-base">
+            <ListFilter aria-hidden="true" className="size-4 text-praetor" />
+            {t('timeReport.filters.title')}
+          </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-6">
+        <CardContent className="space-y-6 p-6">
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             <SelectControl
               options={PERIOD_ORDER.map((preset) => ({
@@ -726,80 +745,105 @@ const TimeReportView = ({
               />
             </Field>
           </div>
-
-          <div className="grid gap-6 lg:grid-cols-2">
-            <Field>
-              <FieldLabel>{t('timeReport.fields.title')}</FieldLabel>
-              <div className="grid grid-cols-2 gap-3 rounded-lg border border-border p-4 sm:grid-cols-3">
-                <label className="flex items-center gap-2 text-sm">
-                  <Checkbox checked disabled />
-                  {t('timeReport.columns.date')}
-                </label>
-                {FIELD_ORDER.filter((field) => field !== 'cost' || canViewCost).map((field) => (
-                  <label key={field} className="flex items-center gap-2 text-sm">
-                    <Checkbox
-                      checked={definition.fields.includes(field)}
-                      onCheckedChange={(checked) => toggleField(field, checked === true)}
-                    />
-                    {t(`timeReport.columns.${field}`)}
-                  </label>
-                ))}
-              </div>
-            </Field>
-
-            <Field>
-              <FieldLabel>{t('timeReport.groups.title')}</FieldLabel>
-              <div className="space-y-3 rounded-lg border border-border p-4">
-                {[0, 1, 2].map((index) => (
-                  <SelectControl
-                    key={index}
-                    options={[
-                      { id: '', name: t('timeReport.groups.none') },
-                      ...GROUP_ORDER.map((group) => ({
-                        id: group,
-                        name: t(`timeReport.columns.${group}`),
-                        disabled:
-                          definition.groupBy.includes(group) && definition.groupBy[index] !== group,
-                      })),
-                    ]}
-                    value={definition.groupBy[index] ?? ''}
-                    onChange={(value) => updateGroup(index, value)}
-                    disabled={index > definition.groupBy.length}
-                  />
-                ))}
-                <label className="flex items-center gap-2 text-sm">
-                  <Checkbox
-                    checked={definition.totalsOnly}
-                    disabled={definition.groupBy.length === 0}
-                    onCheckedChange={(checked) =>
-                      updateDefinition({ totalsOnly: checked === true })
-                    }
-                  />
-                  {t('timeReport.groups.totalsOnly')}
-                </label>
-              </div>
-            </Field>
-          </div>
-
-          <div className="flex justify-end">
-            <Button
-              type="button"
-              onClick={() => generate(definition)}
-              disabled={isGenerating || definition.fromDate > definition.toDate}
-            >
-              {isGenerating && <Loader2 className="size-4 animate-spin" />}
-              {t('timeReport.actions.generate')}
-            </Button>
-          </div>
         </CardContent>
       </Card>
 
+      <Card
+        className="gap-0 overflow-hidden rounded-lg border-border bg-background py-0"
+        data-testid="time-report-fields-section"
+      >
+        <CardHeader className="border-b border-border bg-muted/40 px-6 py-4 [.border-b]:pb-4">
+          <CardTitle className="flex items-center gap-3 text-base">
+            <Columns3 aria-hidden="true" className="size-4 text-praetor" />
+            {t('timeReport.fields.title')}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-6">
+          <Field>
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+              <label className="flex items-center gap-2 text-sm">
+                <Checkbox checked disabled />
+                {t('timeReport.columns.date')}
+              </label>
+              {FIELD_ORDER.filter((field) => field !== 'cost' || canViewCost).map((field) => (
+                <label key={field} className="flex items-center gap-2 text-sm">
+                  <Checkbox
+                    checked={definition.fields.includes(field)}
+                    onCheckedChange={(checked) => toggleField(field, checked === true)}
+                  />
+                  {t(`timeReport.columns.${field}`)}
+                </label>
+              ))}
+            </div>
+          </Field>
+        </CardContent>
+      </Card>
+
+      <Card
+        className="gap-0 overflow-hidden rounded-lg border-border bg-background py-0"
+        data-testid="time-report-groups-section"
+      >
+        <CardHeader className="border-b border-border bg-muted/40 px-6 py-4 [.border-b]:pb-4">
+          <CardTitle className="flex items-center gap-3 text-base">
+            <Layers3 aria-hidden="true" className="size-4 text-praetor" />
+            {t('timeReport.groups.title')}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4 p-6">
+          <div className="grid gap-4 md:grid-cols-3">
+            {[0, 1, 2].map((index) => (
+              <SelectControl
+                key={index}
+                options={[
+                  { id: '', name: t('timeReport.groups.none') },
+                  ...GROUP_ORDER.map((group) => ({
+                    id: group,
+                    name: t(`timeReport.columns.${group}`),
+                    disabled:
+                      definition.groupBy.includes(group) && definition.groupBy[index] !== group,
+                  })),
+                ]}
+                value={definition.groupBy[index] ?? ''}
+                onChange={(value) => updateGroup(index, value)}
+                disabled={index > definition.groupBy.length}
+              />
+            ))}
+          </div>
+          <label className="flex items-center gap-2 text-sm">
+            <Checkbox
+              checked={definition.totalsOnly}
+              disabled={definition.groupBy.length === 0}
+              onCheckedChange={(checked) => updateDefinition({ totalsOnly: checked === true })}
+            />
+            {t('timeReport.groups.totalsOnly')}
+          </label>
+        </CardContent>
+      </Card>
+
+      <div className="flex justify-end">
+        <Button
+          type="button"
+          size="lg"
+          onClick={() => generate(definition)}
+          disabled={isGenerating || definition.fromDate > definition.toDate}
+        >
+          {isGenerating && <Loader2 className="size-4 animate-spin" />}
+          {t('timeReport.actions.generate')}
+        </Button>
+      </div>
+
       {result && generatedDefinition && (
-        <Card>
-          <CardHeader>
-            <CardTitle>{t('timeReport.results.title')}</CardTitle>
+        <Card
+          className="gap-0 overflow-hidden rounded-lg border-border bg-background py-0"
+          data-testid="time-report-results-section"
+        >
+          <CardHeader className="border-b border-border bg-muted/40 px-6 py-4 [.border-b]:pb-4">
+            <CardTitle className="flex items-center gap-3 text-base">
+              <FileText aria-hidden="true" className="size-4 text-praetor" />
+              {t('timeReport.results.title')}
+            </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-6">
             {result.truncated && (
               <Alert className="mb-4">
                 <AlertTitle>{t('timeReport.results.truncatedTitle')}</AlertTitle>

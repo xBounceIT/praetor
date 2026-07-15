@@ -82,6 +82,37 @@ const renderView = (permissions: string[]) =>
   );
 
 describe('TimeReportView', () => {
+  test('uses LDAP-style cards arranged as vertical sections', async () => {
+    renderView(['reports.time_report.view']);
+
+    await screen.findByText('timeReport.filters.title');
+
+    const layout = screen.getByTestId('time-report-layout');
+    expect(layout).toHaveClass('max-w-5xl', 'space-y-8');
+
+    const sectionIds = [
+      'time-report-favorites-section',
+      'time-report-filters-section',
+      'time-report-fields-section',
+      'time-report-groups-section',
+    ];
+    const sections = sectionIds.map((id) => screen.getByTestId(id));
+
+    expect(
+      Array.from(layout.children)
+        .filter((element) => sectionIds.includes(element.getAttribute('data-testid') ?? ''))
+        .map((element) => element.getAttribute('data-testid')),
+    ).toEqual(sectionIds);
+
+    for (const section of sections) {
+      expect(section).toHaveClass('border-border', 'bg-background', 'py-0');
+      expect(section.querySelector('[data-slot="card-header"]')).toHaveClass(
+        'border-b',
+        'bg-muted/40',
+      );
+    }
+  });
+
   test('defaults to the current month and forces self without multi-user scope', async () => {
     renderView(['reports.time_report.view']);
 
