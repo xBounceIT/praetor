@@ -57,14 +57,19 @@ export function useAuth(opts: UseAuthOptions = {}) {
 
   useEffect(() => {
     let cancelled = false;
-    let pendingRetryTimer: ReturnType<typeof setTimeout> | null = null;
+    let cancelPendingRetry: (() => void) | null = null;
     const delays = retryDelaysRef.current;
     const sleep = (ms: number) =>
       new Promise<void>((resolve) => {
-        pendingRetryTimer = setTimeout(() => {
-          pendingRetryTimer = null;
+        const finish = () => {
+          cancelPendingRetry = null;
           resolve();
-        }, ms);
+        };
+        const timer = setTimeout(finish, ms);
+        cancelPendingRetry = () => {
+          clearTimeout(timer);
+          finish();
+        };
       });
     const checkAuth = async () => {
       const token = getAuthToken();
@@ -106,10 +111,7 @@ export function useAuth(opts: UseAuthOptions = {}) {
     checkAuth();
     return () => {
       cancelled = true;
-      if (pendingRetryTimer !== null) {
-        clearTimeout(pendingRetryTimer);
-        pendingRetryTimer = null;
-      }
+      cancelPendingRetry?.();
     };
   }, [loadUserSettings]);
 
