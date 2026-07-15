@@ -23,6 +23,8 @@ const getAudioFormat = (mimeType: string) => {
 
 const OPENAI_TRANSCRIPTION_MODEL = 'gpt-4o-mini-transcribe';
 const OPENROUTER_TRANSCRIPTION_MODEL = 'openai/whisper-large-v3';
+// The endpoint reference includes browser-recorded Ogg and FLAC even though the speech guide omits them:
+// https://developers.openai.com/api/reference/resources/audio/subresources/transcriptions/methods/create
 const OPENAI_TRANSCRIPTION_FORMATS = new Set([
   'flac',
   'mp3',
