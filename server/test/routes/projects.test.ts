@@ -380,6 +380,7 @@ describe('GET /api/projects', () => {
     });
 
     expect(res.statusCode).toBe(403);
+    expect(JSON.parse(res.body)).toEqual({ error: 'Insufficient permissions' });
     expect(listForUserMock).not.toHaveBeenCalled();
     expect(listAllMock).not.toHaveBeenCalled();
   });
@@ -447,6 +448,7 @@ describe('GET /api/projects/ril-catalog', () => {
     });
 
     expect(res.statusCode).toBe(403);
+    expect(JSON.parse(res.body)).toEqual({ error: 'Insufficient permissions' });
     expect(listRilCatalogForUserMock).not.toHaveBeenCalled();
   });
 
