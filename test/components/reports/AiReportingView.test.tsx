@@ -89,6 +89,8 @@ describe('<AiReportingView /> shadcn workspace', () => {
     expectSourceContainsAll(source, [
       'data-slot="ai-reporting-composer"',
       'data-slot="ai-reporting-composer-backdrop"',
+      'data-slot="ai-reporting-conversation-scroll"',
+      '[scrollbar-gutter:stable_both-edges]',
       'absolute inset-x-0 bottom-0',
       'bottom-0 left-1/2 w-[calc(100%-1.5rem)] max-w-3xl -translate-x-1/2',
       'md:w-[calc(100%-4rem)]',
