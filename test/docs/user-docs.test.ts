@@ -15,6 +15,7 @@ const expectedPages = [
   'time-tracking.md',
   'crm-projects.md',
   'sales-accounting.md',
+  'time-report.md',
   'ai-reporting.md',
   'administration.md',
   'faq.md',

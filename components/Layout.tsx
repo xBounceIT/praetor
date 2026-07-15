@@ -317,7 +317,10 @@ const Layout: React.FC<LayoutProps> = ({
         id: 'reports',
         name: t('modules.reports'),
         icon: BarChart3,
-        routes: [{ view: 'reports/ai-reporting', label: t('routes.aiReporting'), icon: Sparkles }],
+        routes: [
+          { view: 'reports/time-report', label: t('routes.timeReport'), icon: FileText },
+          { view: 'reports/ai-reporting', label: t('routes.aiReporting'), icon: Sparkles },
+        ],
       },
       {
         id: 'administration',

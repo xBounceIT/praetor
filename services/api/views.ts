@@ -4,7 +4,7 @@ import { fetchApi } from './client';
 // `kind` distinguishes a StandardTable view from a project-dashboard view; `config` is the
 // opaque per-kind payload (table preset or dashboard layout). `access` is computed per-viewer:
 // `owner` for rows the caller owns, otherwise the granted share permission.
-export type SavedViewKind = 'table' | 'dashboard';
+export type SavedViewKind = 'table' | 'dashboard' | 'report';
 export type SavedViewPermission = 'read' | 'write';
 export type SavedViewAccess = 'owner' | SavedViewPermission;
 

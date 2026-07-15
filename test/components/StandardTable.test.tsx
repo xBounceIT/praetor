@@ -484,6 +484,25 @@ describe('<StandardTable />', () => {
     expect((args[1] as string).endsWith('.csv')).toBe(true);
   });
 
+  test('supports a custom CSV export and hides report configuration controls', () => {
+    const onExportCsv = mock(() => Promise.resolve());
+    render(
+      <StandardTable<Row>
+        title="Report"
+        data={[]}
+        columns={sampleColumns}
+        onExportCsv={onExportCsv}
+        showConfigurationControls={false}
+      />,
+    );
+
+    fireEvent.click(screen.getByText('table.export'));
+
+    expect(onExportCsv).toHaveBeenCalledTimes(1);
+    expect(downloadCsvSpy).not.toHaveBeenCalled();
+    expect(screen.queryByLabelText('table.columnSettings')).toBeNull();
+  });
+
   test('cell renders custom cell function output', () => {
     const colsWithCustom = [
       ...sampleColumns,

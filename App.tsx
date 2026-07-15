@@ -52,6 +52,7 @@ const FrontendDocsView = lazy(() => import('./components/docs/FrontendDocsView')
 import ProjectsView, { type ProjectsViewTab } from './components/projects/ProjectsView';
 import ResalesView from './components/projects/ResalesView';
 import AiReportingView from './components/reports/AiReportingView';
+import TimeReportView from './components/reports/TimeReportView';
 import SessionTimeoutHandler from './components/SessionTimeoutHandler';
 import ClientOffersView from './components/sales/ClientOffersView';
 import ClientQuotesView from './components/sales/ClientQuotesView';
@@ -150,6 +151,7 @@ import {
   getNotFoundReturnView,
   hasAnyPermission,
   hasPermission,
+  hasScopedActionPermission,
   hasViewAccess,
   TOP_MANAGER_ROLE_ID,
   VIEW_PERMISSION_MAP,
@@ -331,6 +333,7 @@ const VALID_INITIAL_VIEWS: readonly View[] = [
   'hr/external',
   'hr/work-units',
   'reports/ai-reporting',
+  'reports/time-report',
   'settings',
   'docs',
   'docs/api',
@@ -1398,6 +1401,7 @@ const useAppContentController = () => {
       'hr/work-units',
       // Reports module
       'reports/ai-reporting',
+      'reports/time-report',
       'settings',
       'docs',
       'docs/api',
@@ -1956,6 +1960,9 @@ const useAppContentController = () => {
     }
     if (!currentUser) return false;
     if (activeView === '404') return false;
+    if (activeView === 'reports/time-report' && currentUser.role === ADMIN_ROLE_ID) {
+      return false;
+    }
     if (activeView === 'reports/ai-reporting') {
       if (hasLoadedGeneralSettings && !generalSettings.enableAiReporting) return false;
     }
@@ -2213,6 +2220,9 @@ const useAppContentController = () => {
           buildPermission('sales.supplier_quotes', 'view'),
         );
         const canListEntries = hasViewAccess(permissions, 'timesheets/tracker');
+        const canEditTimeEntries =
+          hasScopedActionPermission(permissions, 'timesheets.tracker', 'view') &&
+          hasScopedActionPermission(permissions, 'timesheets.tracker', 'update');
 
         const canListClients = hasAnyPermission(permissions, [
           ...equivalentPermissionsFor('crm.clients', 'view'),
@@ -2826,6 +2836,17 @@ const useAppContentController = () => {
           case 'reports': {
             // Reports pages fetch their own data as needed, but they still depend on global settings
             // (e.g. AI Reporting enablement).
+            if (activeView === 'reports/time-report' && canEditTimeEntries) {
+              failedDatasets = await loadDatasets(
+                module,
+                [
+                  listRequest('clients', canListClients, () => api.clients.list(), setClients),
+                  listRequest('projects', canListProjects, () => api.projects.list(), setProjects),
+                  listRequest('tasks', canListTasks, () => api.tasks.list(), setProjectTasks),
+                ],
+                { shouldApply: isCurrentModuleLoad },
+              );
+            }
             await loadOptionalDataset(
               module,
               'general settings',
@@ -4699,8 +4720,13 @@ const SettingsAndReportsRoutes: React.FC<{
 }> = ({ controller }) => {
   const {
     activeView,
+    addProjectTask,
+    clients,
     currentUser,
     generalSettings,
+    handleUpdateEntry,
+    projects,
+    projectTasks,
     handleCreateMcpToken,
     handleGetPersonalAccessToken,
     handleListMcpTokens,
@@ -4741,6 +4767,18 @@ const SettingsAndReportsRoutes: React.FC<{
           onRevokeMcpToken={handleRevokeMcpToken}
           onGetPersonalAccessToken={handleGetPersonalAccessToken}
           onRenewPersonalAccessToken={handleRenewPersonalAccessToken}
+        />
+      )}
+      {activeView === 'reports/time-report' && (
+        <TimeReportView
+          permissions={currentUser.permissions || []}
+          currency={generalSettings.currency}
+          startOfWeek={generalSettings.startOfWeek}
+          clients={clients}
+          projects={projects}
+          projectTasks={projectTasks}
+          onUpdateEntry={handleUpdateEntry}
+          onAddCustomTask={addProjectTask}
         />
       )}
       {activeView === 'reports/ai-reporting' &&
