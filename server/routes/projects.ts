@@ -129,7 +129,7 @@ const projectCreateBodySchema = {
   properties: {
     name: { type: 'string' },
     clientId: { type: 'string' },
-    description: { type: 'string' },
+    description: { type: ['string', 'null'] },
     orderId: { type: 'string' },
     offerId: { type: ['string', 'null'] },
     startDate: { type: 'string' },
@@ -148,7 +148,7 @@ const projectUpdateBodySchema = {
   properties: {
     name: { type: 'string' },
     clientId: { type: 'string' },
-    description: { type: 'string' },
+    description: { type: ['string', 'null'] },
     isDisabled: { type: 'boolean' },
     orderId: { type: ['string', 'null'] },
     offerId: { type: ['string', 'null'] },
@@ -346,7 +346,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const { name, clientId, description, orderId } = request.body as {
         name: string;
         clientId: string;
-        description?: string;
+        description?: string | null;
         orderId?: string;
         billingType?: string;
         billingFrequency?: string;
@@ -595,7 +595,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const body = request.body as {
         name?: string;
         clientId?: string;
-        description?: string;
+        description?: string | null;
         isDisabled?: boolean;
         orderId?: string | null;
         offerId?: string | null;
@@ -766,7 +766,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             {
               name: name || undefined,
               clientId: clientChanged ? requestedClientId : undefined,
-              description: description || undefined,
+              description: description === null ? null : description || undefined,
               isDisabled,
               orderId: orderIdPatch,
               offerId: offerIdPatch.provided ? offerIdPatch.value : undefined,

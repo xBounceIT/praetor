@@ -623,6 +623,23 @@ describe('POST /api/projects', () => {
     );
   });
 
+  test('201: accepts an explicitly null description', async () => {
+    createMock.mockResolvedValue(SAMPLE_PROJECT);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/projects',
+      headers: authHeader(),
+      payload: { ...VALID_CREATE_PAYLOAD, description: null },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(createMock).toHaveBeenCalledWith(
+      expect.objectContaining({ description: null }),
+      TX_SENTINEL,
+    );
+  });
+
   test('201: color is no longer part of the project model (create)', async () => {
     createMock.mockResolvedValue(SAMPLE_PROJECT);
 
@@ -1245,6 +1262,42 @@ describe('PUT /api/projects/:id', () => {
     expect(logAuditMock).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'project.updated' }),
     );
+  });
+
+  test('200: clears the description when explicitly set to null', async () => {
+    lockClientIdByIdMock.mockResolvedValue('c-1');
+    updateMock.mockResolvedValue(SAMPLE_PROJECT);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/projects/p-1',
+      headers: authHeader(),
+      payload: { description: null },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(updateMock).toHaveBeenCalledWith(
+      'p-1',
+      expect.objectContaining({ description: null }),
+      TX_SENTINEL,
+    );
+  });
+
+  test('200: leaves the description unchanged when set to an empty string', async () => {
+    lockClientIdByIdMock.mockResolvedValue('c-1');
+    updateMock.mockResolvedValue(SAMPLE_PROJECT);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/projects/p-1',
+      headers: authHeader(),
+      payload: { description: '' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(updateMock).toHaveBeenCalled();
+    const updateArgs = updateMock.mock.calls.at(-1)?.[1] as Record<string, unknown> | undefined;
+    expect(updateArgs?.description).toBeUndefined();
   });
 
   test('200: color is no longer part of the project model (update)', async () => {
