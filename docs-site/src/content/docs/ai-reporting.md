@@ -23,7 +23,7 @@ Su dispositivi mobili, apri la cronologia con il pulsante nella barra superiore 
 
 Le azioni della chat sono integrate nella sua riga: usa la matita per rinominare il titolo oppure il cestino per rimuovere la conversazione e conferma l'operazione.
 
-Il toggle **Info tecniche** in alto a destra mostra il provider e il modello usati per l'ultima risposta, insieme ai token di contesto utilizzati, alla capacità totale del modello e alla percentuale occupata. Oltre l'80% compare un avviso: una finestra quasi piena può ridurre la qualità o le prestazioni, quindi è consigliabile iniziare una nuova chat. Le conversazioni create prima di questa funzione mostrano i dati dopo la successiva risposta AI.
+Il toggle **Info tecniche** in alto a destra mostra il provider e il modello usati per l'ultima risposta, insieme ai token di contesto utilizzati, alla capacità totale del modello e alla percentuale occupata. Per OpenAI e Anthropic il modello mostrato corrisponde sempre all'ID configurato dall'amministratore, anche quando il provider restituisce internamente uno slug versionato. Oltre l'80% compare un avviso: una finestra quasi piena può ridurre la qualità o le prestazioni, quindi è consigliabile iniziare una nuova chat. Le conversazioni create prima di questa funzione mostrano i dati dopo la successiva risposta AI.
 
 ## Composer, allegati e dettatura
 

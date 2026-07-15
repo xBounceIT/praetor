@@ -933,7 +933,7 @@ describe('POST /api/reports/ai-reporting/chat (non-streaming)', () => {
     });
   });
 
-  test('200 uses OpenAI Responses API and stores its text output', async () => {
+  test('uses the admin-configured OpenAI model id for technical metadata', async () => {
     getGeneralSettingsMock.mockResolvedValue({
       ...AI_ENABLED_SETTINGS,
       aiProvider: 'openai',
@@ -966,6 +966,7 @@ describe('POST /api/reports/ai-reporting/chat (non-streaming)', () => {
 
     expect(res.statusCode).toBe(200);
     expect(JSON.parse(res.body).text).toBe('OpenAI answer');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
     const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toBe('https://api.openai.com/v1/responses');
     expect(init.headers).toEqual(
@@ -976,7 +977,7 @@ describe('POST /api/reports/ai-reporting/chat (non-streaming)', () => {
     );
     expect(JSON.parse(res.body).technicalInfo).toEqual({
       provider: 'openai',
-      modelId: 'gpt-5-2025-08-07',
+      modelId: 'gpt-5',
       contextTokensUsed: 1500,
       contextWindowTokens: 400_000,
     });
@@ -984,7 +985,7 @@ describe('POST /api/reports/ai-reporting/chat (non-streaming)', () => {
       expect.objectContaining({
         content: 'OpenAI answer',
         aiProvider: 'openai',
-        aiModelId: 'gpt-5-2025-08-07',
+        aiModelId: 'gpt-5',
         contextTokensUsed: 1500,
         contextWindowTokens: 400_000,
       }),
@@ -1358,7 +1359,7 @@ describe('POST /api/reports/ai-reporting/chat/stream (streaming)', () => {
       expect.objectContaining({
         content: 'OpenAI stream',
         aiProvider: 'openai',
-        aiModelId: 'gpt-5-2025-08-07',
+        aiModelId: 'gpt-5',
         contextTokensUsed: 1350,
         contextWindowTokens: 400_000,
       }),
@@ -1476,7 +1477,7 @@ describe('POST /api/reports/ai-reporting/chat/stream (streaming)', () => {
       `data: ${JSON.stringify({
         type: 'message_start',
         message: {
-          model: 'claude-sonnet-4-5',
+          model: 'claude-sonnet-4-5-20250929',
           usage: { input_tokens: 160_000, output_tokens: 0 },
         },
       })}`,

@@ -218,7 +218,6 @@ const openrouterTextFromCompletion = (payload: unknown): AiTextResult => {
 
 const anthropicTextFromMessage = (payload: unknown): AiTextResult => {
   const p = payload as {
-    model?: string;
     usage?: {
       input_tokens?: number;
       output_tokens?: number;
@@ -249,7 +248,7 @@ const anthropicTextFromMessage = (payload: unknown): AiTextResult => {
   return {
     text,
     thoughtContent: thoughtContent || undefined,
-    usage: { modelId: p.model, contextTokensUsed },
+    usage: { contextTokensUsed },
   };
 };
 
@@ -262,6 +261,25 @@ const MODEL_CONTEXT_CACHE_TTL_MS = 60 * 60 * 1000;
 const MODEL_CONTEXT_REQUEST_TIMEOUT_MS = 3_000;
 const modelContextCache = new Map<string, { value: number; expiresAt: number }>();
 
+const resolveOpenAiContextWindow = (modelId: string): number | undefined => {
+  const normalized = modelId.trim().toLowerCase();
+  if (!normalized) return undefined;
+
+  // OpenAI's model metadata endpoint does not expose context size. Keep these
+  // families aligned with https://developers.openai.com/api/docs/models.
+  if (normalized === 'gpt-5-chat-latest' || /^gpt-5\.\d+-chat(?:-|$)/.test(normalized)) {
+    return 128_000;
+  }
+  if (normalized === 'chat-latest') return 400_000;
+  if (/^gpt-5\.4-(?:mini|nano)(?:-|$)/.test(normalized)) return 400_000;
+  if (/^gpt-5\.(?:4|5|6)(?:-|$)/.test(normalized)) return 1_050_000;
+  if (/^(?:gpt-5|gpt-5\.\d+)(?:-|$)/.test(normalized)) return 400_000;
+  if (/^gpt-4\.1(?:-|$)/.test(normalized)) return 1_047_576;
+  if (/^gpt-4o(?:-|$)/.test(normalized)) return 128_000;
+  if (/^(?:o1|o3|o4)(?:-|$)/.test(normalized)) return 200_000;
+  return undefined;
+};
+
 const fetchModelContextWindow = async (
   provider: AiProvider,
   apiKey: string,
@@ -270,6 +288,17 @@ const fetchModelContextWindow = async (
   const cacheKey = `${provider}:${modelId}`;
   const cached = modelContextCache.get(cacheKey);
   if (cached && cached.expiresAt > Date.now()) return cached.value;
+
+  if (provider === 'openai') {
+    const contextWindowTokens = resolveOpenAiContextWindow(modelId);
+    if (contextWindowTokens) {
+      modelContextCache.set(cacheKey, {
+        value: contextWindowTokens,
+        expiresAt: Date.now() + MODEL_CONTEXT_CACHE_TTL_MS,
+      });
+    }
+    return contextWindowTokens;
+  }
 
   try {
     let contextWindowTokens: number | undefined;
@@ -335,7 +364,10 @@ const resolveTechnicalInfo = async (
 ): Promise<AiTechnicalInfo | undefined> => {
   const contextTokensUsed = positiveInteger(usage?.contextTokensUsed);
   if (!contextTokensUsed) return undefined;
-  const modelId = String(usage?.modelId || configuredModelId).trim();
+  const usesConfiguredModelId = provider === 'openai' || provider === 'anthropic';
+  const modelId = String(
+    usesConfiguredModelId ? configuredModelId : usage?.modelId || configuredModelId,
+  ).trim();
   const contextWindowTokens = await contextWindowPromise;
   if (!modelId || !contextWindowTokens) return undefined;
   return { provider, modelId, contextTokensUsed, contextWindowTokens };
@@ -348,9 +380,15 @@ const openaiTextFromResponse = (payload: unknown): AiTextResult => {
       type?: string;
       content?: Array<{ type?: string; text?: string; refusal?: string }>;
     }>;
+    usage?: { input_tokens?: number; output_tokens?: number; total_tokens?: number };
   };
+  const contextTokensUsed = positiveInteger(
+    response.usage?.total_tokens ||
+      Number(response.usage?.input_tokens || 0) + Number(response.usage?.output_tokens || 0),
+  );
+  const usage = { contextTokensUsed };
   const outputText = typeof response.output_text === 'string' ? response.output_text.trim() : '';
-  if (outputText) return { text: outputText };
+  if (outputText) return { text: outputText, usage };
 
   const text = (response.output || [])
     .filter((item) => item.type === 'message')
@@ -362,7 +400,7 @@ const openaiTextFromResponse = (payload: unknown): AiTextResult => {
     })
     .join('')
     .trim();
-  return { text };
+  return { text, usage };
 };
 
 const toAnthropicMessages = (messages: AiChatMessage[]) => {
@@ -846,7 +884,6 @@ const anthropicGenerateTextStream = async (
   let text = '';
   let thoughtContent = '';
   let thoughtDone = false;
-  let responseModelId = '';
   let inputTokens = 0;
   let outputTokens = 0;
 
@@ -864,7 +901,6 @@ const anthropicGenerateTextStream = async (
       type?: string;
       error?: { message?: string };
       message?: {
-        model?: string;
         usage?: {
           input_tokens?: number;
           output_tokens?: number;
@@ -881,7 +917,6 @@ const anthropicGenerateTextStream = async (
     }
 
     if (event.type === 'message_start') {
-      responseModelId = event.message?.model || responseModelId;
       const usage = event.message?.usage;
       inputTokens =
         (usage?.input_tokens || 0) +
@@ -921,7 +956,6 @@ const anthropicGenerateTextStream = async (
     text: text.trim(),
     thoughtContent: thoughtContent.trim() || undefined,
     usage: {
-      modelId: responseModelId || undefined,
       contextTokensUsed: inputTokens + outputTokens || undefined,
     },
   } as AiTextResult;
@@ -946,6 +980,7 @@ const openaiGenerateTextStream = async (
   if (!res.ok) throw new Error(`OpenAI request failed: HTTP ${res.status}`);
 
   let text = '';
+  let usage: AiGenerationUsage | undefined;
   let thoughtDone = false;
   const emitThoughtDone = async () => {
     if (thoughtDone) return;
@@ -995,7 +1030,9 @@ const openaiGenerateTextStream = async (
     } else if (eventType === 'response.refusal.done' && typeof event.refusal === 'string') {
       answerDelta = resolveStreamDelta(text, event.refusal);
     } else if (eventType === 'response.completed') {
-      answerDelta = resolveStreamDelta(text, openaiTextFromResponse(event.response).text);
+      const completed = openaiTextFromResponse(event.response);
+      usage = completed.usage;
+      answerDelta = resolveStreamDelta(text, completed.text);
     }
 
     if (answerDelta) {
@@ -1006,7 +1043,7 @@ const openaiGenerateTextStream = async (
   }
 
   await emitThoughtDone();
-  return { text: text.trim() } as AiTextResult;
+  return { text: text.trim(), usage } as AiTextResult;
 };
 
 const generateSessionTitle = async (
@@ -2003,7 +2040,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   const technicalInfoSchema = {
     type: 'object',
     properties: {
-      provider: { type: 'string', enum: ['gemini', 'openrouter', 'anthropic'] },
+      provider: { type: 'string', enum: ['gemini', 'openrouter', 'anthropic', 'openai'] },
       modelId: { type: 'string' },
       contextTokensUsed: { type: 'number' },
       contextWindowTokens: { type: 'number' },
