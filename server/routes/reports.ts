@@ -2576,6 +2576,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               generated.usage,
               contextWindowPromise,
             );
+            if (streamAbortController.signal.aborted) return;
 
             await reportsAiChatRepo.insertAssistantMessage({
               id: assistantMessageId,
@@ -2832,6 +2833,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               generated.usage,
               contextWindowPromise,
             );
+            if (streamAbortController.signal.aborted) return;
 
             // Atomic swap: delete the old paired assistant (if any) and insert the new one in
             // a single transaction. Deferring the delete until here means a mid-stream failure
