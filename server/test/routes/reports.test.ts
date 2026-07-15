@@ -75,6 +75,7 @@ let originalFetch: typeof fetch;
 const fetchMock = mock();
 
 let routePlugin: FastifyPluginAsync;
+let determineRequestedSections: typeof import('../../routes/reports.ts').determineRequestedSections;
 
 beforeAll(async () => {
   installAuthMiddlewareMock();
@@ -147,7 +148,9 @@ beforeAll(async () => {
     withDbTransaction: withDbTransactionMock,
   }));
 
-  routePlugin = (await import('../../routes/reports.ts')).default as FastifyPluginAsync;
+  const reportsModule = await import('../../routes/reports.ts');
+  routePlugin = reportsModule.default as FastifyPluginAsync;
+  determineRequestedSections = reportsModule.determineRequestedSections;
 
   originalFetch = globalThis.fetch;
   globalThis.fetch = fetchMock as unknown as typeof fetch;
@@ -269,6 +272,10 @@ const multipartAudioBody = (content = 'recorded audio') => {
   ].join('\r\n');
   return { body, contentType: `multipart/form-data; boundary=${boundary}` };
 };
+const attachmentMessage = (visibleText: string, content: string) =>
+  `${visibleText}\n\n\u001ePRAETOR_AI_ATTACHMENTS_V1\n${JSON.stringify({
+    files: [{ name: 'data.csv', content }],
+  })}\n\u001eEND_PRAETOR_AI_ATTACHMENTS_V1`;
 
 const okFetchResponse = (body: unknown, status = 200) =>
   ({
@@ -313,6 +320,26 @@ const openAiStreamResponse = (events: Array<Record<string, unknown>>) =>
       },
     }),
   }) as unknown as Response;
+
+describe('determineRequestedSections', () => {
+  test('does not select business datasets from attachment contents', () => {
+    const sections = determineRequestedSections(
+      attachmentMessage('Analyze the attached file', 'invoice, client, project'),
+      [],
+    );
+
+    expect(sections).toEqual(new Set());
+  });
+
+  test('still selects datasets explicitly requested in visible attachment prompts', () => {
+    const sections = determineRequestedSections(
+      attachmentMessage('Compare this file with invoices', 'project'),
+      [],
+    );
+
+    expect(sections).toEqual(new Set(['invoices']));
+  });
+});
 
 describe('GET /api/reports/ai-reporting/sessions', () => {
   test('200 returns sessions list for current user', async () => {
@@ -794,6 +821,44 @@ describe('POST /api/reports/ai-reporting/chat (non-streaming)', () => {
     expect(prompt).toContain('at most 10 points');
     expect(prompt).toContain('at most 7 visualization blocks');
     expect(prompt).toContain('Never include HTML, JavaScript, CSS, color values, URLs');
+  });
+
+  test('does not load business datasets for attachment-only requests', async () => {
+    getActiveSessionForUserMock.mockResolvedValue({ id: 'rpt-chat-1', title: 'Attachments' });
+    listRecentMessagesMock.mockResolvedValue([]);
+    insertUserMessageMock.mockResolvedValue(undefined);
+    insertAssistantMessageMock.mockResolvedValue(undefined);
+    fetchMock.mockResolvedValue(
+      okFetchResponse({
+        candidates: [{ content: { parts: [{ text: 'Attachment analysis' }] } }],
+      }),
+    );
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/reports/ai-reporting/chat',
+      headers: authHeader(),
+      payload: {
+        sessionId: 'rpt-chat-1',
+        message: attachmentMessage('Analyze the attached file', 'invoice, client, project'),
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    for (const sectionMock of [
+      getTimesheetsSectionMock,
+      getProjectsSectionMock,
+      getTasksSectionMock,
+      getClientsSectionMock,
+      getQuotesSectionMock,
+      getOrdersSectionMock,
+      getInvoicesSectionMock,
+      getSuppliersSectionMock,
+      getSupplierQuotesSectionMock,
+      getCatalogSectionMock,
+    ]) {
+      expect(sectionMock).not.toHaveBeenCalled();
+    }
   });
 
   test('makes the visualization tool mandatory for Italian chart and report requests', async () => {

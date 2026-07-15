@@ -1282,7 +1282,10 @@ const includesTerm = (haystack: string, term: string) => {
 const shouldIncludeDatasetSection = (
   requestedSections: Set<DatasetSection> | null,
   section: DatasetSection,
-) => !requestedSections || requestedSections.size === 0 || requestedSections.has(section);
+) => requestedSections === null || requestedSections.has(section);
+
+const getAiReportingVisibleText = (content: string) =>
+  content.split(AI_REPORTING_ATTACHMENT_MARKER, 1)[0] ?? '';
 
 export const determineRequestedSections = (
   message: string,
@@ -1296,8 +1299,14 @@ export const determineRequestedSections = (
     .slice(-3)
     .map((entry) => entry.content);
 
-  const detectionText = normalizeQueryText([message, ...recentUserMessages].join(' '));
-  if (!detectionText) return null;
+  const candidateMessages = [message, ...recentUserMessages];
+  const hasAttachments = candidateMessages.some((content) =>
+    content.includes(AI_REPORTING_ATTACHMENT_MARKER),
+  );
+  const detectionText = normalizeQueryText(
+    candidateMessages.map(getAiReportingVisibleText).join(' '),
+  );
+  if (!detectionText) return hasAttachments ? new Set() : null;
 
   const overviewTerms = [
     'overview',
@@ -1322,7 +1331,7 @@ export const determineRequestedSections = (
     }
   }
 
-  if (matchedSections.size === 0) return null;
+  if (matchedSections.size === 0) return hasAttachments ? new Set() : null;
   if (matchedSections.size >= 8) return null;
 
   if (matchedSections.has('tasks')) matchedSections.add('projects');
