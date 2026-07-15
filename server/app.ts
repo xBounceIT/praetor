@@ -149,6 +149,20 @@ export const buildApp = async () => {
   });
 
   fastify.register(swagger, {
+    transform: ({ schema: routeSchema, url }) => {
+      if (url !== '/api/reports/ai-reporting/transcribe') return { schema: routeSchema, url };
+      return {
+        schema: {
+          ...routeSchema,
+          body: {
+            type: 'object',
+            properties: { audio: { type: 'string', format: 'binary' } },
+            required: ['audio'],
+          },
+        },
+        url,
+      };
+    },
     openapi: {
       info: {
         title: 'Praetor API',
