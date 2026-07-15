@@ -4779,6 +4779,7 @@ const SettingsAndReportsRoutes: React.FC<{
           projectTasks={projectTasks}
           onUpdateEntry={handleUpdateEntry}
           onAddCustomTask={addProjectTask}
+          currentUserId={currentUser.id}
         />
       )}
       {activeView === 'reports/ai-reporting' &&

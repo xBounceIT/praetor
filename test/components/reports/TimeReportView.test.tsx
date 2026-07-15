@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, mock } from 'bun:test';
 import { fireEvent, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import TimeReportView, {
   type TimeReportViewProps,
 } from '../../../components/reports/TimeReportView';
@@ -161,6 +162,47 @@ describe('TimeReportView', () => {
     await screen.findByText('timeReport.filters.title');
     expect(screen.getByText('timeReport.filters.users')).toBeTruthy();
     expect(screen.getByText('timeReport.columns.cost')).toBeTruthy();
+  });
+
+  test('shows the edit action in the row actions menu for an owned detail entry', async () => {
+    const user = userEvent.setup();
+    generateMock.mockResolvedValue({
+      rows: [
+        {
+          key: 'detail:e1',
+          kind: 'detail',
+          groupLevel: null,
+          label: null,
+          date: '2026-07-10',
+          userId: 'u1',
+          userName: 'Alice',
+          clientId: 'c1',
+          clientName: 'Acme',
+          projectId: 'p1',
+          projectName: 'Portal',
+          taskId: null,
+          taskName: 'Build',
+          notes: null,
+          duration: 2,
+          cost: null,
+          entry: { userId: 'u1' },
+        },
+      ],
+      matchedEntryCount: 1,
+      outputRowCount: 1,
+      truncated: false,
+      totals: { duration: 2, cost: null },
+    });
+
+    renderView([
+      'reports.time_report.view',
+      'timesheets.tracker.view',
+      'timesheets.tracker.update',
+    ]);
+    fireEvent.click(await screen.findByText('timeReport.actions.generate'));
+
+    await user.click(await screen.findByLabelText('table.rowActions'));
+    expect(await screen.findByLabelText('timeReport.actions.edit')).toBeTruthy();
   });
 
   test('hides edit actions for other users without all-scope Timesheet permissions', async () => {

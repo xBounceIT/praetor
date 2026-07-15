@@ -17,7 +17,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Field, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
-import { useCurrentUserId } from '../../contexts/useCurrentUserId';
 import { timeReportsApi } from '../../services/api/timeReports';
 import { type SavedViewDto, viewsApi } from '../../services/api/views';
 import type {
@@ -161,7 +160,7 @@ export interface TimeReportViewProps {
   ) => Promise<ProjectTask>;
   reportApi?: Pick<typeof timeReportsApi, 'options' | 'generate' | 'exportCsv'>;
   savedViewsApi?: Pick<typeof viewsApi, 'list' | 'create' | 'remove'>;
-  currentUserId?: string;
+  currentUserId: string;
 }
 
 const TimeReportView = ({
@@ -175,11 +174,9 @@ const TimeReportView = ({
   onAddCustomTask,
   reportApi = timeReportsApi,
   savedViewsApi = viewsApi,
-  currentUserId: currentUserIdProp,
+  currentUserId,
 }: TimeReportViewProps) => {
   const { t, i18n } = useTranslation(['reports', 'common']);
-  const contextCurrentUserId = useCurrentUserId() ?? '';
-  const currentUserId = currentUserIdProp ?? contextCurrentUserId;
   const canSelectUsers = hasPermission(permissions, 'reports.time_report_all.view');
   const canViewCost = hasPermission(permissions, 'reports.cost.view');
   const canEditOwnEntries =
@@ -531,7 +528,7 @@ const TimeReportView = ({
         cell: ({ row }) =>
           row.kind === 'detail' &&
           row.entry &&
-          (row.entry.userId === currentUserId ? canEditOwnEntries : canEditOtherEntries) ? (
+          (row.userId === currentUserId ? canEditOwnEntries : canEditOtherEntries) ? (
             <Button
               type="button"
               variant="ghost"
