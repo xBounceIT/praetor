@@ -35,9 +35,12 @@ const OPENAI_TRANSCRIPTION_FORMATS = new Set([
   'wav',
   'webm',
 ]);
+const GEMINI_TRANSCRIPTION_FORMATS = new Set(['wav', 'mp3', 'aiff', 'aac', 'ogg', 'flac']);
 
 const supportsOpenAiTranscription = (mimeType: string) =>
   OPENAI_TRANSCRIPTION_FORMATS.has(getAudioFormat(mimeType));
+const supportsGeminiTranscription = (mimeType: string) =>
+  GEMINI_TRANSCRIPTION_FORMATS.has(getAudioFormat(mimeType));
 
 const parseTranscript = (payload: unknown) => {
   const text = (payload as { text?: unknown })?.text;
@@ -146,7 +149,9 @@ export const transcribeAiReportingAudio = async (
   const available = {
     openai: Boolean(config.openaiApiKey.trim()) && supportsOpenAiTranscription(mimeType),
     openrouter: Boolean(config.openrouterApiKey.trim()),
-    gemini: Boolean(config.geminiApiKey.trim() && config.geminiModelId.trim()),
+    gemini:
+      Boolean(config.geminiApiKey.trim() && config.geminiModelId.trim()) &&
+      supportsGeminiTranscription(mimeType),
   };
   const fallbackOrder = ['openai', 'openrouter', 'gemini'] as const;
   const preferred = config.aiProvider === 'anthropic' ? null : config.aiProvider;

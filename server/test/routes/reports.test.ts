@@ -260,8 +260,8 @@ const multipartAudioBody = (content = 'recorded audio') => {
   const boundary = 'praetor-dictation-boundary';
   const body = [
     `--${boundary}`,
-    'Content-Disposition: form-data; name="audio"; filename="dictation.webm"',
-    'Content-Type: audio/webm',
+    'Content-Disposition: form-data; name="audio"; filename="dictation.wav"',
+    'Content-Type: audio/wav',
     '',
     content,
     `--${boundary}--`,
@@ -677,7 +677,7 @@ describe('POST /api/reports/ai-reporting/transcribe', () => {
       contents: Array<{ parts: Array<{ text?: string; inlineData?: { mimeType: string } }> }>;
     };
     expect(providerBody.contents[0]?.parts[0]?.text).toContain('verbatim in Italian');
-    expect(providerBody.contents[0]?.parts[1]?.inlineData?.mimeType).toBe('audio/webm');
+    expect(providerBody.contents[0]?.parts[1]?.inlineData?.mimeType).toBe('audio/wav');
   });
 
   test('200 normalizes a regional browser language for transcription', async () => {

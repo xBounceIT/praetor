@@ -25,7 +25,7 @@ afterEach(() => {
 });
 
 describe('transcribeAiReportingAudio', () => {
-  test('sends recorded audio to the selected Gemini provider', async () => {
+  test('sends a supported recording to the selected Gemini provider', async () => {
     fetchMock.mockResolvedValue({
       ok: true,
       status: 200,
@@ -34,7 +34,7 @@ describe('transcribeAiReportingAudio', () => {
       }),
     });
 
-    const text = await transcribeAiReportingAudio(config, Buffer.from('audio'), 'audio/webm', 'it');
+    const text = await transcribeAiReportingAudio(config, Buffer.from('audio'), 'audio/wav', 'it');
 
     expect(text).toBe('Testo dettato');
     const [url, request] = fetchMock.mock.calls[0] as [URL, RequestInit];
@@ -48,7 +48,7 @@ describe('transcribeAiReportingAudio', () => {
     };
     expect(body.contents[0]?.parts[0]?.text).toContain('verbatim in Italian');
     expect(body.contents[0]?.parts[1]?.inlineData).toEqual({
-      mimeType: 'audio/webm',
+      mimeType: 'audio/wav',
       data: Buffer.from('audio').toString('base64'),
     });
   });
@@ -65,7 +65,7 @@ describe('transcribeAiReportingAudio', () => {
     await transcribeAiReportingAudio(
       { ...config, geminiModelId: '  tunedModels/company-transcriber  ' },
       Buffer.from('audio'),
-      'audio/webm',
+      'audio/wav',
       'en',
     );
 
@@ -73,6 +73,32 @@ describe('transcribeAiReportingAudio', () => {
     expect(url.toString()).toContain(
       'generativelanguage.googleapis.com/v1beta/tunedModels/company-transcriber:generateContent',
     );
+  });
+
+  test('falls back from Gemini to OpenAI for Chrome WebM recordings', async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ text: 'Chrome transcript' }),
+    });
+
+    const text = await transcribeAiReportingAudio(
+      { ...config, openaiApiKey: 'openai-key' },
+      Buffer.from('audio'),
+      'audio/webm;codecs=opus',
+      'en',
+    );
+
+    expect(text).toBe('Chrome transcript');
+    const [url] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('https://api.openai.com/v1/audio/transcriptions');
+  });
+
+  test('rejects Chrome WebM when only Gemini transcription is configured', async () => {
+    await expect(
+      transcribeAiReportingAudio(config, Buffer.from('audio'), 'audio/webm;codecs=opus', 'en'),
+    ).rejects.toBeInstanceOf(AiTranscriptionUnavailableError);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   test('falls back to a configured OpenAI key when Anthropic is selected', async () => {
