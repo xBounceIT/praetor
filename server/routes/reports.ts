@@ -318,6 +318,8 @@ const fetchModelContextWindow = async (
       contextWindowTokens = positiveInteger(data.inputTokenLimit);
     } else if (provider === 'openrouter') {
       const encodedModelPath = modelId.split('/').map(encodeURIComponent).join('/');
+      // OpenRouter's single-model endpoint is singular (`model`), unlike the models list endpoint:
+      // https://openrouter.ai/docs/api/api-reference/models/get-model
       const response = await fetch(`https://openrouter.ai/api/v1/model/${encodedModelPath}`, {
         headers: { Authorization: `Bearer ${apiKey}` },
         signal: AbortSignal.timeout(MODEL_CONTEXT_REQUEST_TIMEOUT_MS),
