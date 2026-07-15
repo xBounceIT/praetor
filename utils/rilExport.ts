@@ -1,4 +1,5 @@
 import type { Cell, Workbook } from 'exceljs';
+import { downloadBlob } from './download';
 import type { RilRow } from './ril';
 import {
   calculateRilTotals,
@@ -283,13 +284,6 @@ export const downloadRilWorkbook = async (input: RilWorkbookInput): Promise<stri
   const blob = new Blob([buffer], {
     type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   });
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = filename;
-  document.body.appendChild(anchor);
-  anchor.click();
-  anchor.remove();
-  URL.revokeObjectURL(url);
+  downloadBlob(filename, blob);
   return filename;
 };
