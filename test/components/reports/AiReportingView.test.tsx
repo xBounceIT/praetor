@@ -77,7 +77,6 @@ describe('<AiReportingView /> shadcn workspace', () => {
       'z-10 flex items-center gap-0.5 pr-1 transition-opacity',
       '<Pencil',
       '<Paperclip',
-      '<Mic',
       'variant="destructive"',
       'onConfirm={() => void handleArchiveSession()}',
     ]);
@@ -108,7 +107,7 @@ describe('<AiReportingView /> shadcn workspace', () => {
       'pb-28',
       'min-h-14 items-center',
       'self-center py-0 pr-1 pl-3',
-      'self-center gap-1.5 py-0 pr-5 pl-1',
+      'self-center py-0 pr-5 pl-1',
       'px-2 py-3',
     ]);
     expectSourceOmitsAll(source, [

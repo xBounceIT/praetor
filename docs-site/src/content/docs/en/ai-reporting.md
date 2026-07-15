@@ -25,13 +25,11 @@ Chat actions are contained in its history row: use the pencil to rename the titl
 
 The **Technical info** toggle in the top-right corner shows the provider and model used for the latest response, together with used context tokens, the model's total capacity, and the percentage occupied. For OpenAI and Anthropic, the displayed model always matches the ID configured by the administrator, even when the provider internally returns a versioned slug. Above 80%, a warning appears: a nearly full window can reduce quality or performance, so starting a new chat is recommended. Conversations created before this feature show these details after their next AI response.
 
-## Composer, attachments, and dictation
+## Composer and attachments
 
 The composer floats over the conversation: it stays compact on one line and grows automatically when the text wraps onto additional lines. Press **Enter** to send or **Shift+Enter** to insert a new line.
 
 Use the paperclip button to attach up to 5 text files, including TXT, Markdown, CSV, JSON, XML, YAML, logs, SQL, and common source-code files. Each file can be up to 64 KB, while the combined text content can contain up to 12,000 characters. Files are read in the browser and included in the request sent to AI Reporting. Their contents become an explicit data source for analysis, calculations, and visualizations, while remaining data rather than instructions for the AI.
-
-Use the microphone button to start voice dictation in Firefox, Chrome, and other browsers that support audio recording. On first use, allow Praetor to access the microphone. Press the button again to finish recording: Praetor sends the audio to the configured AI provider, shows the transcription state, and appends the recognized text to the question. When Anthropic is selected, or when OpenAI does not support the format recorded by the browser, Praetor uses an already configured compatible OpenAI, OpenRouter, or Gemini key; if none is available, it shows a specific message without sending the question.
 
 ## Interactive visualizations
 

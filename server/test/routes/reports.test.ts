@@ -1,5 +1,4 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, mock, test } from 'bun:test';
-import multipart from '@fastify/multipart';
 import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import * as realDrizzle from '../../db/drizzle.ts';
 import * as realGeneralSettingsRepo from '../../repositories/generalSettingsRepo.ts';
@@ -247,11 +246,7 @@ beforeEach(async () => {
   getGeneralSettingsMock.mockResolvedValue(AI_ENABLED_SETTINGS);
   listManagedUserIdsMock.mockResolvedValue([]);
 
-  testApp = await buildRouteTestApp(routePlugin, '/api/reports', async (app) => {
-    await app.register(multipart, {
-      limits: { fileSize: 10 * 1024 * 1024, files: 1, fields: 0 },
-    });
-  });
+  testApp = await buildRouteTestApp(routePlugin, '/api/reports');
 });
 
 afterEach(async () => {
@@ -259,19 +254,6 @@ afterEach(async () => {
 });
 
 const authHeader = () => ({ authorization: `Bearer ${signToken({ userId: 'u1' })}` });
-const multipartAudioBody = (content = 'recorded audio') => {
-  const boundary = 'praetor-dictation-boundary';
-  const body = [
-    `--${boundary}`,
-    'Content-Disposition: form-data; name="audio"; filename="dictation.wav"',
-    'Content-Type: audio/wav',
-    '',
-    content,
-    `--${boundary}--`,
-    '',
-  ].join('\r\n');
-  return { body, contentType: `multipart/form-data; boundary=${boundary}` };
-};
 const attachmentMessage = (visibleText: string, content: string) =>
   `${visibleText}\n\n\u001ePRAETOR_AI_ATTACHMENTS_V1\n${JSON.stringify({
     files: [{ name: 'data.csv', content }],
@@ -695,70 +677,6 @@ describe('POST /api/reports/ai-reporting/sessions/:id/archive', () => {
       headers: authHeader(),
     });
     expect(res.statusCode).toBe(403);
-  });
-});
-
-describe('POST /api/reports/ai-reporting/transcribe', () => {
-  test('200 transcribes a browser recording with the configured provider', async () => {
-    fetchMock.mockResolvedValue(
-      okFetchResponse({
-        candidates: [{ content: { parts: [{ text: 'Testo dettato' }] } }],
-      }),
-    );
-    const { body, contentType } = multipartAudioBody();
-
-    const response = await testApp.inject({
-      method: 'POST',
-      url: '/api/reports/ai-reporting/transcribe?language=it',
-      headers: { ...authHeader(), 'content-type': contentType },
-      payload: body,
-    });
-
-    expect(response.statusCode).toBe(200);
-    expect(JSON.parse(response.body)).toEqual({ text: 'Testo dettato' });
-    const providerBody = JSON.parse(
-      String((fetchMock.mock.calls[0]?.[1] as RequestInit | undefined)?.body),
-    ) as {
-      contents: Array<{ parts: Array<{ text?: string; inlineData?: { mimeType: string } }> }>;
-    };
-    expect(providerBody.contents[0]?.parts[0]?.text).toContain('verbatim in Italian');
-    expect(providerBody.contents[0]?.parts[1]?.inlineData?.mimeType).toBe('audio/wav');
-  });
-
-  test('200 normalizes a regional browser language for transcription', async () => {
-    fetchMock.mockResolvedValue(
-      okFetchResponse({
-        candidates: [{ content: { parts: [{ text: 'Testo dettato' }] } }],
-      }),
-    );
-    const { body, contentType } = multipartAudioBody();
-
-    const response = await testApp.inject({
-      method: 'POST',
-      url: '/api/reports/ai-reporting/transcribe?language=it-IT',
-      headers: { ...authHeader(), 'content-type': contentType },
-      payload: body,
-    });
-
-    expect(response.statusCode).toBe(200);
-    const providerBody = JSON.parse(
-      String((fetchMock.mock.calls[0]?.[1] as RequestInit | undefined)?.body),
-    ) as { contents: Array<{ parts: Array<{ text?: string }> }> };
-    expect(providerBody.contents[0]?.parts[0]?.text).toContain('verbatim in Italian');
-  });
-
-  test('400 rejects requests that are not multipart', async () => {
-    const response = await testApp.inject({
-      method: 'POST',
-      url: '/api/reports/ai-reporting/transcribe',
-      headers: authHeader(),
-      payload: {},
-    });
-
-    expect(response.statusCode).toBe(400);
-    expect(JSON.parse(response.body)).toEqual({
-      error: 'Request must be multipart/form-data',
-    });
   });
 });
 

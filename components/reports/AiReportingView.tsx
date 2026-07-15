@@ -11,7 +11,6 @@ import {
   Lightbulb,
   Loader2,
   MessageSquareText,
-  Mic,
   PanelLeftOpen,
   Paperclip,
   Pencil,
@@ -92,7 +91,6 @@ import {
   getAiReportingAssistantCopyText,
   parseAiReportingVisualizations,
 } from './aiReportingVisualizations';
-import { type AiReportingDictationError, useAiReportingDictation } from './useAiReportingDictation';
 
 export interface AiReportingViewProps {
   currentUserId: string;
@@ -1873,7 +1871,6 @@ const AiReportingLayout: React.FC<{ controller: AiReportingController }> = ({ co
                         <AiReportingComposer
                           t={t}
                           draft={draft}
-                          language={language}
                           canSend={canSend}
                           isSending={isSending}
                           footerHintWithPeriod={footerHintWithPeriod}
@@ -3130,7 +3127,6 @@ const AiReportingScrollButton: React.FC<AiReportingScrollButtonProps> = ({
 interface AiReportingComposerProps {
   t: TranslationFn;
   draft: string;
-  language: string;
   canSend: boolean;
   isSending: boolean;
   footerHintWithPeriod: string;
@@ -3179,7 +3175,6 @@ const getAttachmentErrorMessage = (t: TranslationFn, error: AiReportingAttachmen
 const AiReportingComposer: React.FC<AiReportingComposerProps> = ({
   t,
   draft,
-  language,
   canSend,
   isSending,
   footerHintWithPeriod,
@@ -3192,70 +3187,6 @@ const AiReportingComposer: React.FC<AiReportingComposerProps> = ({
   const [attachments, setAttachments] = useState<AiReportingPendingAttachment[]>([]);
   const [composerError, setComposerError] = useState('');
   const [isReadingAttachments, setIsReadingAttachments] = useState(false);
-
-  const appendTranscript = useCallback(
-    (transcript: string) => {
-      const normalizedTranscript = transcript.trim();
-      if (!normalizedTranscript) return;
-      setComposerError('');
-      setDraft((currentDraft) => {
-        const separator = currentDraft && !/\s$/.test(currentDraft) ? ' ' : '';
-        return `${currentDraft}${separator}${normalizedTranscript}`;
-      });
-    },
-    [setDraft],
-  );
-  const handleDictationError = useCallback(
-    (error: AiReportingDictationError) => {
-      const messages: Record<AiReportingDictationError, { key: string; fallback: string }> = {
-        'microphone-permission': {
-          key: 'aiReporting.dictationPermissionDenied',
-          fallback:
-            'Microphone access was denied. Allow it in your browser settings and try again.',
-        },
-        'microphone-unavailable': {
-          key: 'aiReporting.dictationMicrophoneUnavailable',
-          fallback: 'No available microphone was found.',
-        },
-        'recording-failed': {
-          key: 'aiReporting.dictationError',
-          fallback: 'Voice recording could not be started.',
-        },
-        'no-speech': {
-          key: 'aiReporting.dictationNoSpeech',
-          fallback: 'No speech was detected. Try again and speak closer to the microphone.',
-        },
-        'transcription-unavailable': {
-          key: 'aiReporting.dictationTranscriptionUnavailable',
-          fallback: 'Voice transcription is not configured for the selected AI provider.',
-        },
-        'transcription-failed': {
-          key: 'aiReporting.dictationTranscriptionFailed',
-          fallback: 'The recording could not be transcribed. Please try again.',
-        },
-      };
-      const message = messages[error];
-      setComposerError(t(message.key, { defaultValue: message.fallback }));
-    },
-    [t],
-  );
-  const transcribeDictation = useCallback(
-    async (audio: Blob, dictationLanguage: string) =>
-      (await api.reports.transcribeAudio(audio, dictationLanguage)).text,
-    [],
-  );
-  const {
-    isListening,
-    isTranscribing,
-    isSupported: isDictationSupported,
-    stop: stopDictation,
-    toggle: toggleDictation,
-  } = useAiReportingDictation({
-    language,
-    onError: handleDictationError,
-    onTranscript: appendTranscript,
-    transcribe: transcribeDictation,
-  });
 
   const handleAttachmentChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.currentTarget.files ?? []);
@@ -3281,7 +3212,6 @@ const AiReportingComposer: React.FC<AiReportingComposerProps> = ({
     canSend &&
     !isSending &&
     !isReadingAttachments &&
-    !isTranscribing &&
     (Boolean(draft.trim()) || attachments.length > 0);
 
   const handleSubmit = async () => {
@@ -3297,7 +3227,6 @@ const AiReportingComposer: React.FC<AiReportingComposerProps> = ({
       return;
     }
 
-    stopDictation();
     setComposerError('');
     if (await onSend(attachments)) {
       setAttachments([]);
@@ -3394,46 +3323,7 @@ const AiReportingComposer: React.FC<AiReportingComposerProps> = ({
           )}
         />
 
-        <InputGroupAddon align="inline-end" className="self-center gap-1.5 py-0 pr-5 pl-1">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <span className="inline-flex">
-                <InputGroupButton
-                  size="icon-sm"
-                  onClick={toggleDictation}
-                  disabled={!canSend || isSending || isTranscribing || !isDictationSupported}
-                  aria-pressed={isListening}
-                  aria-label={t(
-                    isListening ? 'aiReporting.stopDictation' : 'aiReporting.startDictation',
-                    {
-                      defaultValue: isListening ? 'Stop voice dictation' : 'Start voice dictation',
-                    },
-                  )}
-                  className={`rounded-full ${isListening ? 'bg-destructive/10 text-destructive hover:bg-destructive/15 hover:text-destructive' : ''}`}
-                >
-                  {isTranscribing ? (
-                    <Loader2 className="animate-spin" />
-                  ) : (
-                    <Mic className={isListening ? 'animate-pulse' : undefined} />
-                  )}
-                </InputGroupButton>
-              </span>
-            </TooltipTrigger>
-            <TooltipContent>
-              {isTranscribing
-                ? t('aiReporting.transcribingDictation', {
-                    defaultValue: 'Transcribing voice dictation...',
-                  })
-                : isDictationSupported
-                  ? t(isListening ? 'aiReporting.stopDictation' : 'aiReporting.startDictation', {
-                      defaultValue: isListening ? 'Stop voice dictation' : 'Start voice dictation',
-                    })
-                  : t('aiReporting.dictationUnsupported', {
-                      defaultValue: 'Voice dictation is not supported by this browser.',
-                    })}
-            </TooltipContent>
-          </Tooltip>
-
+        <InputGroupAddon align="inline-end" className="self-center py-0 pr-5 pl-1">
           {isSending ? (
             <InputGroupButton
               variant="destructive"

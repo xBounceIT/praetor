@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
+import { beforeEach, describe, expect, mock, test } from 'bun:test';
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { parseAiReportingMessage } from '@/components/reports/aiReportingAttachments';
@@ -13,47 +13,12 @@ const renameSessionMock = mock();
 const chatMock = mock();
 const chatStreamMock = mock();
 const editMessageStreamMock = mock();
-const transcribeAudioMock = mock();
 const translationDefaults: Record<string, string> = {
   'aiReporting.placeholder': 'Ask a question about your business data...',
   'buttons.noGoBack': 'Cancel',
   'buttons.saving': 'Saving...',
   'buttons.yesDelete': 'Delete',
 };
-const microphonePermissionDeniedMessage =
-  'Microphone access was denied. Allow it in your browser settings and try again.';
-
-let mediaRecorderInstance: MockMediaRecorder | null = null;
-const microphoneTrackStopMock = mock();
-const getUserMediaMock = mock();
-
-class MockMediaRecorder {
-  static isTypeSupported = () => true;
-  state: RecordingState = 'inactive';
-  mimeType: string;
-  ondataavailable: ((event: BlobEvent) => void) | null = null;
-  onerror: (() => void) | null = null;
-  onstop: (() => void) | null = null;
-
-  constructor(_stream: MediaStream, options?: MediaRecorderOptions) {
-    this.mimeType = options?.mimeType || 'audio/webm';
-    mediaRecorderInstance = this;
-  }
-
-  start = mock(() => {
-    this.state = 'recording';
-  });
-
-  stop = mock(() => {
-    if (this.state === 'inactive') return;
-    this.state = 'inactive';
-    this.ondataavailable?.({
-      data: new Blob(['recorded audio'], { type: this.mimeType }),
-    } as BlobEvent);
-    this.onstop?.();
-  });
-}
-
 const t = (key: string, options?: { defaultValue?: string; [key: string]: unknown }) => {
   let value = options?.defaultValue ?? translationDefaults[key] ?? key;
   for (const [name, replacement] of Object.entries(options ?? {})) {
@@ -79,7 +44,6 @@ mock.module('../../../services/api', () => ({
       chat: chatMock,
       chatStream: chatStreamMock,
       editMessageStream: editMessageStreamMock,
-      transcribeAudio: transcribeAudioMock,
     },
   },
 }));
@@ -174,13 +138,6 @@ beforeEach(() => {
   renameSessionMock.mockReset();
   chatMock.mockReset();
   chatStreamMock.mockReset();
-  transcribeAudioMock.mockReset();
-  mediaRecorderInstance = null;
-  microphoneTrackStopMock.mockReset();
-  getUserMediaMock.mockReset();
-  getUserMediaMock.mockResolvedValue({
-    getTracks: () => [{ stop: microphoneTrackStopMock }],
-  } as unknown as MediaStream);
   editMessageStreamMock.mockReset();
 
   listSessionsMock.mockResolvedValue(sessions);
@@ -189,7 +146,6 @@ beforeEach(() => {
   archiveSessionMock.mockResolvedValue({ success: true });
   renameSessionMock.mockResolvedValue({ success: true });
   chatMock.mockResolvedValue({ sessionId: 'revenue', text: 'Analysis complete.' });
-  transcribeAudioMock.mockResolvedValue({ text: 'Show the quarterly revenue' });
   chatStreamMock.mockImplementation(
     async (
       _payload: unknown,
@@ -199,19 +155,6 @@ beforeEach(() => {
       return { sessionId: 'revenue', text: 'Analysis complete.' };
     },
   );
-  Object.defineProperty(globalThis, 'MediaRecorder', {
-    configurable: true,
-    value: MockMediaRecorder,
-  });
-  Object.defineProperty(navigator, 'mediaDevices', {
-    configurable: true,
-    value: { getUserMedia: getUserMediaMock },
-  });
-});
-
-afterEach(() => {
-  Reflect.deleteProperty(globalThis, 'MediaRecorder');
-  Reflect.deleteProperty(navigator, 'mediaDevices');
 });
 
 describe('<AiReportingView /> interactions', () => {
@@ -742,43 +685,6 @@ describe('<AiReportingView /> interactions', () => {
     ).toBeInTheDocument();
   });
 
-  test('records and transcribes dictated speech without the Web Speech API', async () => {
-    Reflect.deleteProperty(window, 'SpeechRecognition');
-    renderView();
-
-    await screen.findAllByText('Quarterly revenue');
-    fireEvent.click(screen.getByRole('button', { name: 'Start voice dictation' }));
-
-    expect(await screen.findByRole('button', { name: 'Stop voice dictation' })).toBeEnabled();
-    expect(getUserMediaMock).toHaveBeenCalledWith({ audio: true });
-    expect(mediaRecorderInstance?.start).toHaveBeenCalledTimes(1);
-
-    fireEvent.click(screen.getByRole('button', { name: 'Stop voice dictation' }));
-
-    await waitFor(() => expect(transcribeAudioMock).toHaveBeenCalledTimes(1));
-    expect(
-      screen.getByRole('textbox', { name: 'Ask a question about your business data...' }),
-    ).toHaveValue('Show the quarterly revenue');
-    expect(microphoneTrackStopMock).toHaveBeenCalled();
-  });
-
-  test('clears a stale dictation error after a successful retry', async () => {
-    getUserMediaMock.mockImplementationOnce(() =>
-      Promise.reject(new DOMException('Denied', 'NotAllowedError')),
-    );
-    renderView();
-
-    await screen.findAllByText('Quarterly revenue');
-    fireEvent.click(screen.getByRole('button', { name: 'Start voice dictation' }));
-    expect(await screen.findByText(microphonePermissionDeniedMessage)).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Start voice dictation' }));
-    fireEvent.click(await screen.findByRole('button', { name: 'Stop voice dictation' }));
-
-    await waitFor(() => expect(transcribeAudioMock).toHaveBeenCalledTimes(1));
-    expect(screen.queryByText(microphonePermissionDeniedMessage)).toBeNull();
-  });
-
   test('renders a validated visualization and exposes its source data', async () => {
     const chartDefinition = {
       version: 1,
@@ -819,18 +725,5 @@ describe('<AiReportingView /> interactions', () => {
     expect(within(table).getByText('January')).toBeInTheDocument();
     expect(within(table).getByText('€1,200.00')).toBeInTheDocument();
     expect(within(table).getByText('12% pts')).toBeInTheDocument();
-  });
-
-  test('explains when microphone permission is denied', async () => {
-    getUserMediaMock.mockImplementationOnce(() =>
-      Promise.reject(new DOMException('Denied', 'NotAllowedError')),
-    );
-    renderView();
-
-    await screen.findAllByText('Quarterly revenue');
-    fireEvent.click(screen.getByRole('button', { name: 'Start voice dictation' }));
-
-    expect(await screen.findByText(microphonePermissionDeniedMessage)).toBeInTheDocument();
-    expect(transcribeAudioMock).not.toHaveBeenCalled();
   });
 });
