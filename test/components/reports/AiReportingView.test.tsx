@@ -87,7 +87,11 @@ describe('<AiReportingView /> shadcn workspace', () => {
 
     expectSourceContainsAll(source, [
       'data-slot="ai-reporting-composer"',
+      'data-slot="ai-reporting-composer-backdrop"',
       'absolute inset-x-0 bottom-0',
+      'bg-gradient-to-b from-background/0 via-background/70 to-background/95',
+      'backdrop-blur-md',
+      'relative z-10 mx-auto w-full max-w-3xl',
       'rows={1}',
       'field-sizing-content',
       "draft ? 'max-h-40' : 'max-h-12'",
