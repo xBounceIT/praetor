@@ -150,7 +150,7 @@
         "source": "Identificativo sorgente",
         "facility": "Facility syslog (0-23)",
         "runtime": "Log runtime",
-        "runtimeHelp": "Eventi Pino/Fastify filtrati tramite allowlist.",
+        "runtimeHelp": "Eventi tecnici generati dall’applicazione.",
         "audit": "Audit applicativi",
         "auditHelp": "Azioni, attore, IP, entità e dettagli normalizzati.",
         "runtimeLevel": "Livello runtime minimo",
