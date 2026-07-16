@@ -31,6 +31,23 @@ The composer floats over the conversation: it stays compact on one line and grow
 
 Use the paperclip button to attach up to 5 text files, including TXT, Markdown, CSV, JSON, XML, YAML, logs, SQL, and common source-code files. Each file can be up to 64 KB, while the combined text content can contain up to 12,000 characters. Files are read in the browser and included in the request sent to AI Reporting. Their contents become an explicit data source for analysis, calculations, and visualizations, while remaining data rather than instructions for the AI.
 
+## Available business datasets
+
+For every request, AI Reporting builds a fresh dataset restricted to the view permissions granted to your role. Answers can use these sections:
+
+- **Timesheets** — hours, authorized costs, and distributions by period, location, user, client, project, and task.
+- **Clients** — master data and related activity.
+- **Projects** — status, active/passive type, dates, revenue, billing, linked documents, hours, and authorized costs.
+- **Tasks** — recurrence, duration, effort, revenue, billing, and recorded hours.
+- **Client quotes** and **client offers** — amounts, statuses, expiry dates, and leading clients.
+- **Client orders** and **client invoices** — values, statuses, payments, outstanding amounts, and aging.
+- **Suppliers** and **supplier quotes** — master data, activity, and amounts.
+- **Supplier orders** and **supplier invoices** — purchasing, payments, outstanding amounts, and aging.
+- **Catalog** — products, types, categories, suppliers, and document usage.
+- **Resales** — costs, revenue, margin, billing frequencies, categories, and activity release state.
+
+Unauthorized sections are never added to the AI context. When a question targets one area, Praetor loads only the relevant sections; an overview request uses every available section. Document totals for duration-based lines include the month multiplier and, for quotes with multiple candidates, reporting analyzes the selected candidate or the first active candidate.
+
 ## Interactive visualizations
 
 You can explicitly request a chart, for example “show the monthly trend of hours by project” or “compare revenue for the top five customers.” AI Reporting can answer with bar, line, area, pie, or donut charts and select the shape that best fits the available data.

@@ -256,6 +256,7 @@ describe('getProjectsSection', () => {
     );
     expect(exec.calls[0].sql).toContain('JOIN user_projects');
     expect(exec.calls[0].params).toEqual(['u1']);
+    expect(exec.calls[1].sql).toContain("THEN 'mixed'");
     expect(exec.calls[1].params).toEqual(['u1', 50]);
   });
 
@@ -269,6 +270,15 @@ describe('getProjectsSection', () => {
           client_id: 'c1',
           client_name: 'Acme',
           description: 'desc',
+          order_id: 'o1',
+          offer_id: 'of1',
+          start_date: '2026-01-01',
+          end_date: '2026-12-31',
+          revenue: '50000',
+          billing_type: 'fixed',
+          billing_frequency: 'monthly',
+          status: 'active',
+          tipo: 'attivo',
           is_disabled: false,
         },
       ],
@@ -288,6 +298,7 @@ describe('getProjectsSection', () => {
       },
       testDb,
     );
+    expect(exec.calls[1].sql).toContain("THEN 'mixed'");
     expect(result.items).toEqual([
       {
         id: 'p1',
@@ -295,6 +306,15 @@ describe('getProjectsSection', () => {
         clientId: 'c1',
         clientName: 'Acme',
         description: 'desc',
+        orderId: 'o1',
+        offerId: 'of1',
+        startDate: '2026-01-01',
+        endDate: '2026-12-31',
+        revenue: 50000,
+        billingType: 'fixed',
+        billingFrequency: 'monthly',
+        status: 'active',
+        type: 'attivo',
         isDisabled: false,
       },
     ]);
@@ -388,7 +408,7 @@ describe('getTasksSection', () => {
     });
   });
 
-  test('items + topByHours rows are mapped through helpers', async () => {
+  test('items derive effort from current duration and monthly effort', async () => {
     exec.enqueue({ rows: [{ count: '1', disabled_count: '0', recurring_count: '1' }] });
     exec.enqueue({
       rows: [
@@ -400,6 +420,16 @@ describe('getTasksSection', () => {
           is_disabled: false,
           is_recurring: true,
           recurrence_pattern: 'weekly',
+          description: 'Recurring delivery',
+          recurrence_start: '2026-01-01',
+          recurrence_end: '2026-12-31',
+          recurrence_duration: '2',
+          expected_effort: '24',
+          revenue: '1200',
+          duration: '12',
+          billing_type: 'fixed',
+          billing_frequency: 'monthly',
+          monthly_effort: '8',
         },
       ],
     });
@@ -418,6 +448,7 @@ describe('getTasksSection', () => {
       },
       testDb,
     );
+    expect(exec.calls[1].sql).not.toContain('t.expected_effort');
     expect(result.items).toEqual([
       {
         id: 't1',
@@ -427,6 +458,16 @@ describe('getTasksSection', () => {
         isDisabled: false,
         isRecurring: true,
         recurrencePattern: 'weekly',
+        description: 'Recurring delivery',
+        recurrenceStart: '2026-01-01',
+        recurrenceEnd: '2026-12-31',
+        recurrenceDuration: 2,
+        expectedEffort: 96,
+        revenue: 1200,
+        duration: 12,
+        billingType: 'fixed',
+        billingFrequency: 'monthly',
+        monthlyEffort: 8,
       },
     ]);
     expect(result.topByHours).toEqual([{ label: 'Build', value: 12.5, entryCount: 3 }]);

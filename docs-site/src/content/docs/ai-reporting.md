@@ -31,6 +31,23 @@ Il composer fluttua sopra la conversazione: resta compatto su una riga e cresce 
 
 Il pulsante con la graffetta allega fino a 5 file di testo, inclusi TXT, Markdown, CSV, JSON, XML, YAML, log, SQL e comuni file sorgente. Ogni file può pesare fino a 64 KB; il contenuto testuale complessivo degli allegati può raggiungere 12.000 caratteri. I file vengono letti nel browser e inclusi nella richiesta inviata ad AI Reporting. Il loro contenuto diventa una fonte dati esplicita per analisi, calcoli e visualizzazioni, ma viene sempre trattato come dato e mai come istruzione per l'AI.
 
+## Dataset aziendali disponibili
+
+AI Reporting costruisce per ogni richiesta un dataset aggiornato e limitato ai permessi di visualizzazione del tuo ruolo. La risposta può usare queste sezioni:
+
+- **Consuntivi** — ore, costi autorizzati e distribuzioni per periodo, luogo, utente, cliente, progetto e attività.
+- **Clienti** — anagrafica e attività collegate.
+- **Progetti** — stato, tipo attivo/passivo, periodo, ricavi, fatturazione, documenti collegati, ore e costi autorizzati.
+- **Attività** — ricorrenza, durata, effort, ricavi, fatturazione e ore consuntivate.
+- **Preventivi cliente** e **offerte cliente** — importi, stati, scadenze e clienti principali.
+- **Ordini cliente** e **fatture cliente** — valori, stati, incassi, insoluti e scadenzario.
+- **Fornitori** e **preventivi fornitore** — anagrafiche, attività e importi.
+- **Ordini fornitore** e **fatture fornitore** — acquisti, pagamenti, insoluti e scadenzario.
+- **Catalogo** — prodotti, tipologie, categorie, fornitori e utilizzo nei documenti.
+- **Rivendite** — costi, ricavi, margini, frequenze di fatturazione, categorie e stato di rilascio delle attività.
+
+Le sezioni non autorizzate non vengono inserite nel contesto AI. Se la domanda riguarda un'area specifica, Praetor carica soltanto le sezioni pertinenti; una richiesta di panoramica usa tutte quelle disponibili. Gli importi dei documenti con righe a durata includono il moltiplicatore in mesi e, per i preventivi con più candidati, viene analizzato il candidato selezionato oppure il primo candidato attivo.
+
 ## Visualizzazioni interattive
 
 Puoi chiedere esplicitamente un grafico, ad esempio “mostra l'andamento mensile delle ore per progetto” oppure “confronta i ricavi dei primi cinque clienti”. AI Reporting può rispondere con grafici a barre, linee, area, torta o anello, scegliendo la forma più adatta ai dati disponibili.

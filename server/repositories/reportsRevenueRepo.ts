@@ -2,6 +2,11 @@ import { sql } from 'drizzle-orm';
 import { type DbExecutor, db, executeRows } from '../db/drizzle.ts';
 import { toDbNumber, toDbText } from '../utils/parse.ts';
 
+import {
+  effectiveQuoteItemsJoin,
+  orderNetValueSql,
+  quoteNetValueSql,
+} from './reportsCommercialSql.ts';
 export type RevenueDateRangeOptions = {
   fromDate: string;
   toDate: string;
@@ -35,10 +40,9 @@ export const getQuotesSection = async (
       sql`WITH per_quote AS (
           SELECT
             q.id,
-            SUM(qi.quantity * qi.unit_price * (1 - COALESCE(qi.discount, 0) / 100.0))
-              * (1 - COALESCE(q.discount, 0) / 100.0) as net_value
+            ${quoteNetValueSql} as net_value
             FROM quotes q
-            JOIN quote_items qi ON qi.quote_id = q.id
+            ${effectiveQuoteItemsJoin}
            WHERE q.created_at::date >= ${fromDate} AND q.created_at::date <= ${toDate}
            GROUP BY q.id
          )
@@ -56,9 +60,9 @@ export const getQuotesSection = async (
             q.status,
             q.client_name,
             q.created_at,
-            (SUM(qi.quantity * qi.unit_price * (1 - COALESCE(qi.discount, 0) / 100.0)) * (1 - COALESCE(q.discount, 0) / 100.0)) as net_value
+            ${quoteNetValueSql} as net_value
             FROM quotes q
-            JOIN quote_items qi ON qi.quote_id = q.id
+            ${effectiveQuoteItemsJoin}
            WHERE q.created_at::date >= ${fromDate} AND q.created_at::date <= ${toDate}
            GROUP BY q.id
          )
@@ -73,10 +77,9 @@ export const getQuotesSection = async (
           SELECT
             q.id,
             q.created_at,
-            SUM(qi.quantity * qi.unit_price * (1 - COALESCE(qi.discount, 0) / 100.0))
-              * (1 - COALESCE(q.discount, 0) / 100.0) as net_value
+            ${quoteNetValueSql} as net_value
             FROM quotes q
-            JOIN quote_items qi ON qi.quote_id = q.id
+            ${effectiveQuoteItemsJoin}
            WHERE q.created_at::date >= ${fromDate} AND q.created_at::date <= ${toDate}
            GROUP BY q.id
          )
@@ -102,10 +105,9 @@ export const getQuotesSection = async (
             q.client_name,
             q.status,
             q.created_at,
-            SUM(qi.quantity * qi.unit_price * (1 - COALESCE(qi.discount, 0) / 100.0))
-              * (1 - COALESCE(q.discount, 0) / 100.0) as net_value
+            ${quoteNetValueSql} as net_value
             FROM quotes q
-            JOIN quote_items qi ON qi.quote_id = q.id
+            ${effectiveQuoteItemsJoin}
            WHERE q.created_at::date >= ${fromDate} AND q.created_at::date <= ${toDate}
            GROUP BY q.id
          )
@@ -125,9 +127,9 @@ export const getQuotesSection = async (
           SELECT
             q.id,
             q.client_name,
-            (SUM(qi.quantity * qi.unit_price * (1 - COALESCE(qi.discount, 0) / 100.0)) * (1 - COALESCE(q.discount, 0) / 100.0)) as net_value
+            ${quoteNetValueSql} as net_value
             FROM quotes q
-            JOIN quote_items qi ON qi.quote_id = q.id
+            ${effectiveQuoteItemsJoin}
            WHERE q.created_at::date >= ${fromDate} AND q.created_at::date <= ${toDate}
            GROUP BY q.id
          )
@@ -203,8 +205,7 @@ export const getOrdersSection = async (
       sql`WITH per_order AS (
           SELECT
             s.id,
-            SUM(si.quantity * si.unit_price * (1 - COALESCE(si.discount, 0) / 100.0))
-              * (1 - COALESCE(s.discount, 0) / 100.0) as net_value
+            ${orderNetValueSql} as net_value
             FROM sales s
             JOIN sale_items si ON si.sale_id = s.id
            WHERE s.created_at::date >= ${fromDate} AND s.created_at::date <= ${toDate}
@@ -224,7 +225,7 @@ export const getOrdersSection = async (
             s.status,
             s.client_name,
             s.created_at,
-            (SUM(si.quantity * si.unit_price * (1 - COALESCE(si.discount, 0) / 100.0)) * (1 - COALESCE(s.discount, 0) / 100.0)) as net_value
+            ${orderNetValueSql} as net_value
             FROM sales s
             JOIN sale_items si ON si.sale_id = s.id
            WHERE s.created_at::date >= ${fromDate} AND s.created_at::date <= ${toDate}
@@ -241,8 +242,7 @@ export const getOrdersSection = async (
           SELECT
             s.id,
             s.created_at,
-            SUM(si.quantity * si.unit_price * (1 - COALESCE(si.discount, 0) / 100.0))
-              * (1 - COALESCE(s.discount, 0) / 100.0) as net_value
+            ${orderNetValueSql} as net_value
             FROM sales s
             JOIN sale_items si ON si.sale_id = s.id
            WHERE s.created_at::date >= ${fromDate} AND s.created_at::date <= ${toDate}
@@ -270,8 +270,7 @@ export const getOrdersSection = async (
             s.client_name,
             s.status,
             s.created_at,
-            SUM(si.quantity * si.unit_price * (1 - COALESCE(si.discount, 0) / 100.0))
-              * (1 - COALESCE(s.discount, 0) / 100.0) as net_value
+            ${orderNetValueSql} as net_value
             FROM sales s
             JOIN sale_items si ON si.sale_id = s.id
            WHERE s.created_at::date >= ${fromDate} AND s.created_at::date <= ${toDate}
@@ -293,7 +292,7 @@ export const getOrdersSection = async (
           SELECT
             s.id,
             s.client_name,
-            (SUM(si.quantity * si.unit_price * (1 - COALESCE(si.discount, 0) / 100.0)) * (1 - COALESCE(s.discount, 0) / 100.0)) as net_value
+            ${orderNetValueSql} as net_value
             FROM sales s
             JOIN sale_items si ON si.sale_id = s.id
            WHERE s.created_at::date >= ${fromDate} AND s.created_at::date <= ${toDate}
