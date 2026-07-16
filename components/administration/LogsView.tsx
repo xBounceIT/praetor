@@ -487,7 +487,9 @@ const LogsView: React.FC<LogsViewProps> = ({
           )}
         </TabsContent>
         <TabsContent value="siem" className="mt-4">
-          <SiemLogsTab canUpdate={canUpdateSiem} />
+          <div className="mx-auto max-w-5xl">
+            <SiemLogsTab canUpdate={canUpdateSiem} />
+          </div>
         </TabsContent>
       </Tabs>
     </div>

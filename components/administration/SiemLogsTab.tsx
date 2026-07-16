@@ -428,7 +428,7 @@ const SiemLogsTab: React.FC<Props> = ({ canUpdate }) => {
   const never = t('logs.siem.status.never');
 
   return (
-    <div className="mx-auto max-w-5xl space-y-8">
+    <div className="space-y-8">
       {!canUpdate && (
         <div className="rounded-md border border-border bg-muted/50 p-3 text-sm text-muted-foreground">
           {t('logs.siem.viewOnly')}

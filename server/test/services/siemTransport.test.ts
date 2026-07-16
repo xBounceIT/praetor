@@ -126,7 +126,7 @@ describe('SIEM native transports', () => {
 
   test('rejects a TLS collector signed by an untrusted CA', async () => {
     const collector = tls.createServer({ key: SIEM_TEST_SERVER_KEY, cert: SIEM_TEST_SERVER_CERT });
-    collector.on('tlsClientError', () => undefined);
+    collector.on('tlsClientError', (_error, socket) => socket.destroy());
     await new Promise<void>((resolve) => collector.listen(0, '127.0.0.1', resolve));
     closers.push(() => new Promise<void>((resolve) => collector.close(() => resolve())));
     const address = collector.address();

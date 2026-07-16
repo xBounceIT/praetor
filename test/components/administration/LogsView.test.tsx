@@ -187,6 +187,27 @@ describe('<LogsView />', () => {
     expect(await screen.findByDisplayValue('siem.example.test')).toBeInTheDocument();
   });
 
+  test('keeps the SIEM layout width stable while configuration loads', async () => {
+    const user = userEvent.setup();
+    const configRequest = createDeferred<SiemConfig>();
+    logsApiMock.getSiemConfig.mockReturnValueOnce(configRequest.promise);
+    render(<LogsView canUpdateSiem />);
+
+    await user.click(screen.getByRole('tab', { name: 'logs.tabs.siem' }));
+
+    const loadingLayout = (await screen.findByText('logs.siem.loading')).closest('.max-w-5xl');
+    expect(loadingLayout).toHaveClass('mx-auto', 'max-w-5xl');
+
+    await act(async () => {
+      configRequest.resolve(siemConfig);
+    });
+
+    const configurationCard = (await screen.findByText('logs.siem.destination.title')).closest(
+      '[data-slot="card"]',
+    );
+    expect(configurationCard?.closest('.max-w-5xl')).toBe(loadingLayout);
+  });
+
   test('groups SIEM settings into an LDAP-style configuration card', async () => {
     const user = userEvent.setup();
     const { container } = render(<LogsView canUpdateSiem />);
