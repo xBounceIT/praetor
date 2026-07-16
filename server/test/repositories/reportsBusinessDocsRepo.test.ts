@@ -50,6 +50,9 @@ describe('commercial document datasets', () => {
 
     expect(exec.calls[0].sql).toContain('COALESCE(ssi.duration_months, 1)');
     expect(exec.calls[0].sql).toContain("ssi.duration_unit = 'na'");
+    expect(exec.calls[0].sql).toContain(
+      'ROUND(ssi.unit_price * (1 - COALESCE(ssi.discount, 0) / 100.0), 2)',
+    );
     expect(result.totals).toEqual({ count: 2, totalNet: 1200, avgNet: 600 });
     expect(result.topDocumentsByNet[0]).toEqual({
       id: 'so-1',
