@@ -296,10 +296,23 @@ export const generateCompleteTimeReport = async (
   if (totals.count > TIME_REPORT_EXPORT_ENTRY_LIMIT) {
     throw new TimeReportExportLimitError(totals.count);
   }
-  const entries = await collectTimeReportEntryBatches(totals.count, (limit, offset) =>
-    timeReportsRepo.listEntriesPage(definition, userIds, limit, offset),
-  );
-  const rows = buildTimeReportRows(entries, definition, includeCost);
+  const [entries, subtotals] = await Promise.all([
+    definition.totalsOnly
+      ? Promise.resolve([])
+      : collectTimeReportEntryBatches(totals.count, (limit, offset) =>
+          timeReportsRepo.listEntriesPage(definition, userIds, limit, offset),
+        ),
+    definition.groupBy.length === 0 || totals.count === 0
+      ? Promise.resolve([])
+      : timeReportsRepo.listSubtotals(
+          definition,
+          userIds,
+          totals.count * definition.groupBy.length,
+        ),
+  ]);
+  const rows = definition.totalsOnly
+    ? buildTimeReportSubtotalRows(subtotals, definition, includeCost)
+    : buildTimeReportRows(entries, definition, includeCost, subtotals);
   return {
     rows,
     matchedEntryCount: totals.count,
