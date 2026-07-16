@@ -1,6 +1,5 @@
 import {
   AlertTriangle,
-  CheckCircle2,
   CircleHelp,
   FileUp,
   Loader2,
@@ -354,11 +353,11 @@ const SiemLogsTab: React.FC<Props> = ({ canUpdate }) => {
     }
   };
 
-  const handleToggle = async () => {
-    if (!config) return;
+  const handleToggle = async (enabled: boolean) => {
+    if (!config || enabled === config.enabled) return;
     setBusy('toggle');
     try {
-      const next = config.enabled ? await logsApi.disableSiem() : await logsApi.enableSiem();
+      const next = enabled ? await logsApi.enableSiem() : await logsApi.disableSiem();
       applyConfig(next, true);
       refreshStatusBestEffort();
       toast.success(t(next.enabled ? 'logs.siem.messages.enabled' : 'logs.siem.messages.disabled'));
@@ -450,7 +449,17 @@ const SiemLogsTab: React.FC<Props> = ({ canUpdate }) => {
               </CardTitle>
               <CardDescription>{t('logs.siem.destination.description')}</CardDescription>
               <CardAction>
-                <Badge variant={status?.enabled ? 'default' : 'secondary'}>{statusLabel}</Badge>
+                <Field className="flex-row items-center gap-2">
+                  <Switch
+                    id="siem-enabled"
+                    checked={config.enabled}
+                    onCheckedChange={(enabled) => void handleToggle(enabled)}
+                    disabled={!canUpdate || busy !== null || activationBlocked}
+                  />
+                  <FieldLabel htmlFor="siem-enabled">
+                    {t(config.enabled ? 'logs.siem.status.enabled' : 'logs.siem.status.disabled')}
+                  </FieldLabel>
+                </Field>
               </CardAction>
             </CardHeader>
 
@@ -839,23 +848,6 @@ const SiemLogsTab: React.FC<Props> = ({ canUpdate }) => {
             >
               {busy === 'test' ? <Loader2 className="animate-spin" /> : <Send />}
               {t('logs.siem.actions.test')}
-            </Button>
-            <Button
-              type="button"
-              size="lg"
-              variant={config.enabled ? 'outline' : 'default'}
-              className="w-full"
-              onClick={handleToggle}
-              disabled={!canUpdate || busy !== null || activationBlocked}
-            >
-              {busy === 'toggle' ? (
-                <Loader2 className="animate-spin" />
-              ) : config.enabled ? (
-                <RadioTower />
-              ) : (
-                <CheckCircle2 />
-              )}
-              {t(config.enabled ? 'logs.siem.actions.disable' : 'logs.siem.actions.enable')}
             </Button>
           </div>
 

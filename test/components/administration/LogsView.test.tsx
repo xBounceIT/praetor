@@ -280,6 +280,7 @@ describe('<LogsView />', () => {
     expect(host).toBeDisabled();
     expect(screen.getByText('logs.siem.viewOnly')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'logs.siem.actions.save' })).toBeDisabled();
+    expect(screen.getByRole('switch', { name: 'logs.siem.status.disabled' })).toBeDisabled();
   });
 
   test('explains, highlights, and focuses a missing SIEM host before testing', async () => {
@@ -404,12 +405,12 @@ describe('<LogsView />', () => {
     render(<LogsView canUpdateSiem />);
     await user.click(screen.getByRole('tab', { name: 'logs.tabs.siem' }));
     const testButton = await screen.findByRole('button', { name: 'logs.siem.actions.test' });
-    const enableButton = screen.getByRole('button', { name: 'logs.siem.actions.enable' });
+    const enableSwitch = screen.getByRole('switch', { name: 'logs.siem.status.disabled' });
 
-    expect(enableButton).toBeDisabled();
+    expect(enableSwitch).toBeDisabled();
     await user.click(testButton);
     await waitFor(() => expect(logsApiMock.testSiem).toHaveBeenCalledTimes(1));
-    await waitFor(() => expect(enableButton).toBeEnabled());
+    await waitFor(() => expect(enableSwitch).toBeEnabled());
   });
 
   test('blocks activation after a newer failed test when refreshing config fails', async () => {
@@ -439,11 +440,11 @@ describe('<LogsView />', () => {
     await user.click(screen.getByRole('tab', { name: 'logs.tabs.siem' }));
 
     await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'logs.siem.actions.enable' })).toBeEnabled(),
+      expect(screen.getByRole('switch', { name: 'logs.siem.status.disabled' })).toBeEnabled(),
     );
     await user.click(screen.getByRole('button', { name: 'logs.siem.actions.test' }));
     await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'logs.siem.actions.enable' })).toBeDisabled(),
+      expect(screen.getByRole('switch', { name: 'logs.siem.status.disabled' })).toBeDisabled(),
     );
     expect(screen.getByText('logs.siem.status.testFailed')).toBeInTheDocument();
   });
@@ -455,7 +456,10 @@ describe('<LogsView />', () => {
     const host = await screen.findByDisplayValue('siem.example.test');
 
     expect(screen.getByRole('button', { name: 'logs.siem.actions.test' })).toBeEnabled();
-    expect(screen.getByRole('button', { name: 'logs.siem.actions.enable' })).toBeDisabled();
+    expect(screen.getByRole('switch', { name: 'logs.siem.status.disabled' })).toBeDisabled();
+    expect(
+      screen.queryByRole('button', { name: 'logs.siem.actions.enable' }),
+    ).not.toBeInTheDocument();
     await user.clear(host);
     await user.type(host, 'new-siem.example.test');
     expect(screen.getByRole('button', { name: 'logs.siem.actions.test' })).toBeDisabled();
@@ -479,10 +483,14 @@ describe('<LogsView />', () => {
     await waitFor(() => expect(logsApiMock.testSiem).toHaveBeenCalledTimes(1));
 
     await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'logs.siem.actions.enable' })).toBeEnabled(),
+      expect(screen.getByRole('switch', { name: 'logs.siem.status.disabled' })).toBeEnabled(),
     );
-    await user.click(screen.getByRole('button', { name: 'logs.siem.actions.enable' }));
+    await user.click(screen.getByRole('switch', { name: 'logs.siem.status.disabled' }));
     await waitFor(() => expect(logsApiMock.enableSiem).toHaveBeenCalledTimes(1));
+
+    const disableSwitch = screen.getByRole('switch', { name: 'logs.siem.status.enabled' });
+    await user.click(disableSwitch);
+    await waitFor(() => expect(logsApiMock.disableSiem).toHaveBeenCalledTimes(1));
   });
 
   test('allows runtime and audit capture to be disabled independently at the same time', async () => {
