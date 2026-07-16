@@ -1218,7 +1218,15 @@ export interface ReportChatMessage {
   role: 'user' | 'assistant';
   content: string;
   thoughtContent?: string;
+  technicalInfo?: ReportChatTechnicalInfo;
   createdAt: number;
+}
+
+export interface ReportChatTechnicalInfo {
+  provider: AiProvider;
+  modelId: string;
+  contextTokensUsed: number;
+  contextWindowTokens: number;
 }
 
 export interface WorkUnit {

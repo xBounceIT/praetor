@@ -80,6 +80,7 @@ export type ReportChatStreamDoneEvent = {
   sessionId: string;
   text: string;
   thoughtContent?: string;
+  technicalInfo?: import('../../types').ReportChatTechnicalInfo;
 };
 
 export type ReportChatStreamHandlers = {

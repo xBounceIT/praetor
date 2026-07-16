@@ -1,4 +1,8 @@
-import type { ReportChatMessage, ReportChatSessionSummary } from '../../types';
+import type {
+  ReportChatMessage,
+  ReportChatSessionSummary,
+  ReportChatTechnicalInfo,
+} from '../../types';
 import { fetchApi, fetchApiStream } from './client';
 import type { ReportChatStreamDoneEvent, ReportChatStreamHandlers } from './contracts';
 
@@ -29,26 +33,21 @@ const iterateSseEvents = async function* (body: ReadableStream<Uint8Array>) {
   const decoder = new TextDecoder();
   let buffer = '';
 
-  const readNextChunk = async function* (): AsyncGenerator<{ event: string; data: string }> {
-    const { done, value } = await reader.read();
-    if (done) return;
-
-    buffer += decoder.decode(value || new Uint8Array(), { stream: true });
-    let boundary = findSseBoundary(buffer);
-
-    while (boundary !== -1) {
-      const rawBlock = buffer.slice(0, boundary);
-      buffer = buffer.slice(boundary + 2);
-      const parsed = parseSseEventBlock(rawBlock);
-      if (parsed) yield parsed;
-      boundary = findSseBoundary(buffer);
-    }
-
-    yield* readNextChunk();
-  };
-
   try {
-    yield* readNextChunk();
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value || new Uint8Array(), { stream: true });
+      let boundary = findSseBoundary(buffer);
+      while (boundary !== -1) {
+        const rawBlock = buffer.slice(0, boundary);
+        buffer = buffer.slice(boundary + 2);
+        const parsed = parseSseEventBlock(rawBlock);
+        if (parsed) yield parsed;
+        boundary = findSseBoundary(buffer);
+      }
+    }
 
     buffer += decoder.decode();
     const tail = buffer.trim();
@@ -112,11 +111,16 @@ const parseReportStream = async (
     }
 
     if (evt.event === 'done') {
+      const rawTechnicalInfo = payload.technicalInfo;
       donePayload = {
         sessionId: String(payload.sessionId || ''),
         text: String(payload.text || ''),
         thoughtContent:
           typeof payload.thoughtContent === 'string' ? payload.thoughtContent : undefined,
+        technicalInfo:
+          rawTechnicalInfo && typeof rawTechnicalInfo === 'object'
+            ? (rawTechnicalInfo as ReportChatTechnicalInfo)
+            : undefined,
       };
       continue;
     }
@@ -139,6 +143,12 @@ export const reportsApi = {
     fetchApi('/reports/ai-reporting/sessions', {
       method: 'POST',
       body: JSON.stringify(data),
+    }),
+
+  renameSession: (sessionId: string, title: string): Promise<{ success: boolean }> =>
+    fetchApi(`/reports/ai-reporting/sessions/${sessionId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ title }),
     }),
 
   getSessionMessages: (
@@ -170,6 +180,7 @@ export const reportsApi = {
     sessionId: string;
     text: string;
     thoughtContent?: string;
+    technicalInfo?: ReportChatTechnicalInfo;
   }> =>
     fetchApi('/reports/ai-reporting/chat', {
       method: 'POST',

@@ -1,6 +1,6 @@
 {
-  "id": "74f1b94d-06f7-4426-b122-76429261707a",
-  "prevId": "decb60fe-88b4-47ce-a580-1013d1d31148",
+  "id": "80488ecf-67c7-4fc9-b66d-89546c83fd25",
+  "prevId": "74f1b94d-06f7-4426-b122-76429261707a",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -5631,6 +5631,40 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "idx_saved_views_report_owner_scope_name_unique": {
+          "name": "idx_saved_views_report_owner_scope_name_unique",
+          "columns": [
+            {
+              "expression": "owner_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "kind",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "scope_key",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "lower(\"name\")",
+              "asc": true,
+              "isExpression": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"saved_views\".\"kind\" = 'report'",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
@@ -5650,7 +5684,7 @@
       "checkConstraints": {
         "saved_views_kind_check": {
           "name": "saved_views_kind_check",
-          "value": "\"saved_views\".\"kind\" IN ('table', 'dashboard')"
+          "value": "\"saved_views\".\"kind\" IN ('table', 'dashboard', 'report')"
         }
       },
       "isRLSEnabled": false

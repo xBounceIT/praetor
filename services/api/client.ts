@@ -99,7 +99,9 @@ export const fetchApi = async <T>(endpoint: string, options: FetchApiOptions = {
   } = options;
 
   const headers: HeadersInit = {
-    ...(fetchOptions.body ? { 'Content-Type': 'application/json' } : {}),
+    ...(fetchOptions.body && !(fetchOptions.body instanceof FormData)
+      ? { 'Content-Type': 'application/json' }
+      : {}),
     ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
     ...fetchOptions.headers,
   };
