@@ -81,7 +81,7 @@ type ProjectRawRow = {
   tipo_confirmed: boolean | null;
 };
 
-const derivedBillingTypeSql = sql`CASE
+export const derivedBillingTypeSql = sql`CASE
   WHEN EXISTS (
     SELECT 1 FROM tasks t
     WHERE t.project_id = p.id AND t.billing_type <> p.billing_type

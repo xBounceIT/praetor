@@ -2,6 +2,7 @@ import { sql } from 'drizzle-orm';
 import { type DbExecutor, db, executeRows } from '../db/drizzle.ts';
 import { roundCurrency } from '../utils/invoice-math.ts';
 import { parseDbNumber, toDbText } from '../utils/parse.ts';
+import { derivedBillingTypeSql } from './projectsRepo.ts';
 import { tasksT, timeEntriesTasksJoin } from './tasksRepo.ts';
 
 const parseCost = (value: string | number | null | undefined): number =>
@@ -40,7 +41,6 @@ type TaskRow = {
   recurrence_start: string | null;
   recurrence_end: string | null;
   recurrence_duration: string | number | null;
-  expected_effort: string | number | null;
   revenue: string | number | null;
   duration: string | number | null;
   billing_type: string | null;
@@ -290,7 +290,7 @@ export const getProjectsSection = async (
             p.start_date,
             p.end_date,
             p.revenue,
-            p.billing_type,
+            ${derivedBillingTypeSql} AS billing_type,
             p.billing_frequency,
             p.status,
             p.tipo,
@@ -313,7 +313,7 @@ export const getProjectsSection = async (
             p.start_date,
             p.end_date,
             p.revenue,
-            p.billing_type,
+            ${derivedBillingTypeSql} AS billing_type,
             p.billing_frequency,
             p.status,
             p.tipo,
@@ -496,7 +496,6 @@ export const getTasksSection = async (
             t.recurrence_start,
             t.recurrence_end,
             t.recurrence_duration,
-            t.expected_effort,
             t.revenue,
             t.duration,
             t.billing_type,
@@ -521,7 +520,6 @@ export const getTasksSection = async (
             t.recurrence_start,
             t.recurrence_end,
             t.recurrence_duration,
-            t.expected_effort,
             t.revenue,
             t.duration,
             t.billing_type,
@@ -585,25 +583,29 @@ export const getTasksSection = async (
     activeCount: Math.max(taskCount - disabledCount, 0),
     disabledCount,
     recurringCount: parseDbNumber(summaryRows[0]?.recurring_count, 0),
-    items: itemsRows.map((r) => ({
-      id: toDbText(r.id),
-      name: toDbText(r.name),
-      projectId: toDbText(r.project_id),
-      projectName: toDbText(r.project_name),
-      isDisabled: Boolean(r.is_disabled),
-      isRecurring: Boolean(r.is_recurring),
-      recurrencePattern: toDbText(r.recurrence_pattern),
-      description: toDbText(r.description),
-      recurrenceStart: toDbText(r.recurrence_start),
-      recurrenceEnd: toDbText(r.recurrence_end),
-      recurrenceDuration: parseDbNumber(r.recurrence_duration, 0),
-      expectedEffort: parseDbNumber(r.expected_effort, 0),
-      revenue: parseDbNumber(r.revenue, 0),
-      duration: parseDbNumber(r.duration, 1),
-      billingType: toDbText(r.billing_type),
-      billingFrequency: toDbText(r.billing_frequency),
-      monthlyEffort: parseDbNumber(r.monthly_effort, 0),
-    })),
+    items: itemsRows.map((r) => {
+      const duration = parseDbNumber(r.duration, 1);
+      const monthlyEffort = parseDbNumber(r.monthly_effort, 0);
+      return {
+        id: toDbText(r.id),
+        name: toDbText(r.name),
+        projectId: toDbText(r.project_id),
+        projectName: toDbText(r.project_name),
+        isDisabled: Boolean(r.is_disabled),
+        isRecurring: Boolean(r.is_recurring),
+        recurrencePattern: toDbText(r.recurrence_pattern),
+        description: toDbText(r.description),
+        recurrenceStart: toDbText(r.recurrence_start),
+        recurrenceEnd: toDbText(r.recurrence_end),
+        recurrenceDuration: parseDbNumber(r.recurrence_duration, 0),
+        expectedEffort: roundCurrency(monthlyEffort * duration),
+        revenue: parseDbNumber(r.revenue, 0),
+        duration,
+        billingType: toDbText(r.billing_type),
+        billingFrequency: toDbText(r.billing_frequency),
+        monthlyEffort,
+      };
+    }),
     topByHours,
   };
 };

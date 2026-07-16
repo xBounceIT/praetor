@@ -256,6 +256,7 @@ describe('getProjectsSection', () => {
     );
     expect(exec.calls[0].sql).toContain('JOIN user_projects');
     expect(exec.calls[0].params).toEqual(['u1']);
+    expect(exec.calls[1].sql).toContain("THEN 'mixed'");
     expect(exec.calls[1].params).toEqual(['u1', 50]);
   });
 
@@ -297,6 +298,7 @@ describe('getProjectsSection', () => {
       },
       testDb,
     );
+    expect(exec.calls[1].sql).toContain("THEN 'mixed'");
     expect(result.items).toEqual([
       {
         id: 'p1',
@@ -406,7 +408,7 @@ describe('getTasksSection', () => {
     });
   });
 
-  test('items + topByHours rows are mapped through helpers', async () => {
+  test('items derive effort from current duration and monthly effort', async () => {
     exec.enqueue({ rows: [{ count: '1', disabled_count: '0', recurring_count: '1' }] });
     exec.enqueue({
       rows: [
@@ -446,6 +448,7 @@ describe('getTasksSection', () => {
       },
       testDb,
     );
+    expect(exec.calls[1].sql).not.toContain('t.expected_effort');
     expect(result.items).toEqual([
       {
         id: 't1',
@@ -459,7 +462,7 @@ describe('getTasksSection', () => {
         recurrenceStart: '2026-01-01',
         recurrenceEnd: '2026-12-31',
         recurrenceDuration: 2,
-        expectedEffort: 24,
+        expectedEffort: 96,
         revenue: 1200,
         duration: 12,
         billingType: 'fixed',
