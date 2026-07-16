@@ -1,5 +1,11 @@
 import { describe, expect, test } from 'bun:test';
-import { createChildLogger, logger, loggerOptions, serializeError } from '../../utils/logger.ts';
+import {
+  createChildLogger,
+  logger,
+  loggerOptions,
+  registerSiemLogSink,
+  serializeError,
+} from '../../utils/logger.ts';
 
 // Note on env-branch coverage:
 //   logger.ts reads NODE_ENV / LOG_LEVEL / LOG_PRETTY at module top-level. Once Bun loads
@@ -88,8 +94,8 @@ describe('logger instance', () => {
     expect(typeof logger.child).toBe('function');
   });
 
-  test('is configured with the level from loggerOptions', () => {
-    expect(logger.level).toBe(loggerOptions.level ?? 'info');
+  test('root accepts trace so the SIEM threshold remains independent from stdout', () => {
+    expect(logger.level).toBe('trace');
   });
 });
 
@@ -104,6 +110,25 @@ describe('createChildLogger', () => {
     const child = createChildLogger({ component: 'parent' });
     const grandchild = child.child({ component: 'grandchild' });
     expect(typeof grandchild.info).toBe('function');
+  });
+
+  test('root and child loggers write to the registered SIEM capture sink', () => {
+    const records: Record<string, unknown>[] = [];
+    registerSiemLogSink((record) => records.push(record));
+    logger.info({ eventId: 'root.event' }, 'root');
+    createChildLogger({ module: 'child-test' }).warn('child');
+    registerSiemLogSink(null);
+
+    expect(records.some((record) => record.eventId === 'root.event')).toBe(true);
+    expect(records.some((record) => record.module === 'child-test')).toBe(true);
+  });
+
+  test('worker-internal records never reach the SIEM capture sink', () => {
+    const records: Record<string, unknown>[] = [];
+    registerSiemLogSink((record) => records.push(record));
+    createChildLogger({ module: 'siem-worker', siemInternal: true }).error('internal');
+    registerSiemLogSink(null);
+    expect(records).toHaveLength(0);
   });
 });
 

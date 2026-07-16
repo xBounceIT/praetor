@@ -6752,7 +6752,8 @@
               "type": "string",
               "enum": [
                 "table",
-                "dashboard"
+                "dashboard",
+                "report"
               ]
             },
             "in": "query",
@@ -6791,7 +6792,8 @@
                         "type": "string",
                         "enum": [
                           "table",
-                          "dashboard"
+                          "dashboard",
+                          "report"
                         ]
                       },
                       "scopeKey": {
@@ -7001,7 +7003,8 @@
                     "type": "string",
                     "enum": [
                       "table",
-                      "dashboard"
+                      "dashboard",
+                      "report"
                     ]
                   },
                   "scopeKey": {
@@ -7046,7 +7049,8 @@
                       "type": "string",
                       "enum": [
                         "table",
-                        "dashboard"
+                        "dashboard",
+                        "report"
                       ]
                     },
                     "scopeKey": {
@@ -7465,7 +7469,8 @@
                       "type": "string",
                       "enum": [
                         "table",
-                        "dashboard"
+                        "dashboard",
+                        "report"
                       ]
                     },
                     "scopeKey": {
@@ -54956,6 +54961,83 @@
         }
       }
     },
+    "/api/reports/time-report/options": {
+      "get": {
+        "summary": "List time report filter options in the caller scope",
+        "tags": [
+          "reports"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/reports/time-report/generate": {
+      "post": {
+        "summary": "Generate a grouped time entry report",
+        "tags": [
+          "reports"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/reports/time-report/export.csv": {
+      "post": {
+        "summary": "Export a complete grouped time entry report as CSV",
+        "tags": [
+          "reports"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
     "/api/logs/audit": {
       "get": {
         "summary": "List system audit logs",
@@ -55041,6 +55123,7 @@
                 "role",
                 "saved_view",
                 "settings",
+                "siem_config",
                 "sso_provider",
                 "supplier",
                 "supplier_invoice",
@@ -55152,6 +55235,1774 @@
                       "createdAt"
                     ]
                   }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/logs/siem/config": {
+      "get": {
+        "summary": "Get SIEM log streaming configuration",
+        "tags": [
+          "logs"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "enabled": {
+                      "type": "boolean"
+                    },
+                    "host": {
+                      "type": "string"
+                    },
+                    "port": {
+                      "type": "integer"
+                    },
+                    "protocol": {
+                      "type": "string",
+                      "enum": [
+                        "udp",
+                        "tcp",
+                        "tls"
+                      ]
+                    },
+                    "tcpFraming": {
+                      "type": "string",
+                      "enum": [
+                        "newline",
+                        "octet-counting"
+                      ]
+                    },
+                    "sourceIdentifier": {
+                      "type": "string"
+                    },
+                    "facility": {
+                      "type": "integer"
+                    },
+                    "runtimeLevel": {
+                      "type": "string",
+                      "enum": [
+                        "trace",
+                        "debug",
+                        "info",
+                        "warn",
+                        "error",
+                        "fatal"
+                      ]
+                    },
+                    "includeRuntime": {
+                      "type": "boolean"
+                    },
+                    "includeAudit": {
+                      "type": "boolean"
+                    },
+                    "caPem": {
+                      "type": "string"
+                    },
+                    "serverName": {
+                      "type": "string"
+                    },
+                    "clientCertPem": {
+                      "type": "string"
+                    },
+                    "clientKey": {
+                      "type": "string"
+                    },
+                    "retentionDays": {
+                      "type": "integer"
+                    },
+                    "maxEvents": {
+                      "type": "integer"
+                    },
+                    "revision": {
+                      "type": "integer"
+                    },
+                    "testedRevision": {
+                      "type": [
+                        "null",
+                        "integer"
+                      ]
+                    },
+                    "lastTestAt": {
+                      "type": [
+                        "null",
+                        "string"
+                      ],
+                      "format": "date-time"
+                    },
+                    "lastTestSuccess": {
+                      "type": [
+                        "null",
+                        "boolean"
+                      ]
+                    },
+                    "lastDeliveryAt": {
+                      "type": [
+                        "null",
+                        "string"
+                      ],
+                      "format": "date-time"
+                    },
+                    "lastErrorAt": {
+                      "type": [
+                        "null",
+                        "string"
+                      ],
+                      "format": "date-time"
+                    },
+                    "lastError": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "droppedRetention": {
+                      "type": "integer"
+                    },
+                    "droppedCapacity": {
+                      "type": "integer"
+                    },
+                    "updatedAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "enabled",
+                    "host",
+                    "port",
+                    "protocol",
+                    "tcpFraming",
+                    "sourceIdentifier",
+                    "facility",
+                    "runtimeLevel",
+                    "includeRuntime",
+                    "includeAudit",
+                    "caPem",
+                    "serverName",
+                    "clientCertPem",
+                    "clientKey",
+                    "retentionDays",
+                    "maxEvents",
+                    "revision",
+                    "testedRevision",
+                    "lastTestAt",
+                    "lastTestSuccess",
+                    "lastDeliveryAt",
+                    "lastErrorAt",
+                    "lastError",
+                    "droppedRetention",
+                    "droppedCapacity",
+                    "updatedAt"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "summary": "Update SIEM log streaming configuration",
+        "tags": [
+          "logs"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "minProperties": 1,
+                "properties": {
+                  "host": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 255
+                  },
+                  "port": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 65535
+                  },
+                  "protocol": {
+                    "type": "string",
+                    "enum": [
+                      "udp",
+                      "tcp",
+                      "tls"
+                    ]
+                  },
+                  "tcpFraming": {
+                    "type": "string",
+                    "enum": [
+                      "newline",
+                      "octet-counting"
+                    ]
+                  },
+                  "sourceIdentifier": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 255
+                  },
+                  "facility": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 23
+                  },
+                  "runtimeLevel": {
+                    "type": "string",
+                    "enum": [
+                      "trace",
+                      "debug",
+                      "info",
+                      "warn",
+                      "error",
+                      "fatal"
+                    ]
+                  },
+                  "includeRuntime": {
+                    "type": "boolean"
+                  },
+                  "includeAudit": {
+                    "type": "boolean"
+                  },
+                  "caPem": {
+                    "type": "string",
+                    "maxLength": 100000
+                  },
+                  "serverName": {
+                    "type": "string",
+                    "maxLength": 255
+                  },
+                  "clientCertPem": {
+                    "type": "string",
+                    "maxLength": 100000
+                  },
+                  "clientKey": {
+                    "type": "string",
+                    "maxLength": 100000
+                  },
+                  "retentionDays": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 30
+                  },
+                  "maxEvents": {
+                    "type": "integer",
+                    "minimum": 10000,
+                    "maximum": 1000000
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "enabled": {
+                      "type": "boolean"
+                    },
+                    "host": {
+                      "type": "string"
+                    },
+                    "port": {
+                      "type": "integer"
+                    },
+                    "protocol": {
+                      "type": "string",
+                      "enum": [
+                        "udp",
+                        "tcp",
+                        "tls"
+                      ]
+                    },
+                    "tcpFraming": {
+                      "type": "string",
+                      "enum": [
+                        "newline",
+                        "octet-counting"
+                      ]
+                    },
+                    "sourceIdentifier": {
+                      "type": "string"
+                    },
+                    "facility": {
+                      "type": "integer"
+                    },
+                    "runtimeLevel": {
+                      "type": "string",
+                      "enum": [
+                        "trace",
+                        "debug",
+                        "info",
+                        "warn",
+                        "error",
+                        "fatal"
+                      ]
+                    },
+                    "includeRuntime": {
+                      "type": "boolean"
+                    },
+                    "includeAudit": {
+                      "type": "boolean"
+                    },
+                    "caPem": {
+                      "type": "string"
+                    },
+                    "serverName": {
+                      "type": "string"
+                    },
+                    "clientCertPem": {
+                      "type": "string"
+                    },
+                    "clientKey": {
+                      "type": "string"
+                    },
+                    "retentionDays": {
+                      "type": "integer"
+                    },
+                    "maxEvents": {
+                      "type": "integer"
+                    },
+                    "revision": {
+                      "type": "integer"
+                    },
+                    "testedRevision": {
+                      "type": [
+                        "null",
+                        "integer"
+                      ]
+                    },
+                    "lastTestAt": {
+                      "type": [
+                        "null",
+                        "string"
+                      ],
+                      "format": "date-time"
+                    },
+                    "lastTestSuccess": {
+                      "type": [
+                        "null",
+                        "boolean"
+                      ]
+                    },
+                    "lastDeliveryAt": {
+                      "type": [
+                        "null",
+                        "string"
+                      ],
+                      "format": "date-time"
+                    },
+                    "lastErrorAt": {
+                      "type": [
+                        "null",
+                        "string"
+                      ],
+                      "format": "date-time"
+                    },
+                    "lastError": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "droppedRetention": {
+                      "type": "integer"
+                    },
+                    "droppedCapacity": {
+                      "type": "integer"
+                    },
+                    "updatedAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "enabled",
+                    "host",
+                    "port",
+                    "protocol",
+                    "tcpFraming",
+                    "sourceIdentifier",
+                    "facility",
+                    "runtimeLevel",
+                    "includeRuntime",
+                    "includeAudit",
+                    "caPem",
+                    "serverName",
+                    "clientCertPem",
+                    "clientKey",
+                    "retentionDays",
+                    "maxEvents",
+                    "revision",
+                    "testedRevision",
+                    "lastTestAt",
+                    "lastTestSuccess",
+                    "lastDeliveryAt",
+                    "lastErrorAt",
+                    "lastError",
+                    "droppedRetention",
+                    "droppedCapacity",
+                    "updatedAt"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/logs/siem/status": {
+      "get": {
+        "summary": "Get SIEM outbox and delivery status",
+        "tags": [
+          "logs"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "enabled": {
+                      "type": "boolean"
+                    },
+                    "revision": {
+                      "type": "integer"
+                    },
+                    "testedRevision": {
+                      "type": [
+                        "null",
+                        "integer"
+                      ]
+                    },
+                    "lastTestAt": {
+                      "type": [
+                        "null",
+                        "string"
+                      ],
+                      "format": "date-time"
+                    },
+                    "lastTestSuccess": {
+                      "type": [
+                        "null",
+                        "boolean"
+                      ]
+                    },
+                    "lastDeliveryAt": {
+                      "type": [
+                        "null",
+                        "string"
+                      ],
+                      "format": "date-time"
+                    },
+                    "lastErrorAt": {
+                      "type": [
+                        "null",
+                        "string"
+                      ],
+                      "format": "date-time"
+                    },
+                    "lastError": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "droppedRetention": {
+                      "type": "integer"
+                    },
+                    "droppedCapacity": {
+                      "type": "integer"
+                    },
+                    "pendingCount": {
+                      "type": "integer"
+                    },
+                    "oldestPendingAt": {
+                      "type": [
+                        "null",
+                        "string"
+                      ],
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "enabled",
+                    "revision",
+                    "testedRevision",
+                    "lastTestAt",
+                    "lastTestSuccess",
+                    "lastDeliveryAt",
+                    "lastErrorAt",
+                    "lastError",
+                    "droppedRetention",
+                    "droppedCapacity",
+                    "pendingCount",
+                    "oldestPendingAt"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/logs/siem/test": {
+      "post": {
+        "summary": "Test the saved SIEM destination",
+        "tags": [
+          "logs"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/logs/siem/enable": {
+      "post": {
+        "summary": "Enable SIEM log streaming",
+        "tags": [
+          "logs"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "enabled": {
+                      "type": "boolean"
+                    },
+                    "host": {
+                      "type": "string"
+                    },
+                    "port": {
+                      "type": "integer"
+                    },
+                    "protocol": {
+                      "type": "string",
+                      "enum": [
+                        "udp",
+                        "tcp",
+                        "tls"
+                      ]
+                    },
+                    "tcpFraming": {
+                      "type": "string",
+                      "enum": [
+                        "newline",
+                        "octet-counting"
+                      ]
+                    },
+                    "sourceIdentifier": {
+                      "type": "string"
+                    },
+                    "facility": {
+                      "type": "integer"
+                    },
+                    "runtimeLevel": {
+                      "type": "string",
+                      "enum": [
+                        "trace",
+                        "debug",
+                        "info",
+                        "warn",
+                        "error",
+                        "fatal"
+                      ]
+                    },
+                    "includeRuntime": {
+                      "type": "boolean"
+                    },
+                    "includeAudit": {
+                      "type": "boolean"
+                    },
+                    "caPem": {
+                      "type": "string"
+                    },
+                    "serverName": {
+                      "type": "string"
+                    },
+                    "clientCertPem": {
+                      "type": "string"
+                    },
+                    "clientKey": {
+                      "type": "string"
+                    },
+                    "retentionDays": {
+                      "type": "integer"
+                    },
+                    "maxEvents": {
+                      "type": "integer"
+                    },
+                    "revision": {
+                      "type": "integer"
+                    },
+                    "testedRevision": {
+                      "type": [
+                        "null",
+                        "integer"
+                      ]
+                    },
+                    "lastTestAt": {
+                      "type": [
+                        "null",
+                        "string"
+                      ],
+                      "format": "date-time"
+                    },
+                    "lastTestSuccess": {
+                      "type": [
+                        "null",
+                        "boolean"
+                      ]
+                    },
+                    "lastDeliveryAt": {
+                      "type": [
+                        "null",
+                        "string"
+                      ],
+                      "format": "date-time"
+                    },
+                    "lastErrorAt": {
+                      "type": [
+                        "null",
+                        "string"
+                      ],
+                      "format": "date-time"
+                    },
+                    "lastError": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "droppedRetention": {
+                      "type": "integer"
+                    },
+                    "droppedCapacity": {
+                      "type": "integer"
+                    },
+                    "updatedAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "enabled",
+                    "host",
+                    "port",
+                    "protocol",
+                    "tcpFraming",
+                    "sourceIdentifier",
+                    "facility",
+                    "runtimeLevel",
+                    "includeRuntime",
+                    "includeAudit",
+                    "caPem",
+                    "serverName",
+                    "clientCertPem",
+                    "clientKey",
+                    "retentionDays",
+                    "maxEvents",
+                    "revision",
+                    "testedRevision",
+                    "lastTestAt",
+                    "lastTestSuccess",
+                    "lastDeliveryAt",
+                    "lastErrorAt",
+                    "lastError",
+                    "droppedRetention",
+                    "droppedCapacity",
+                    "updatedAt"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/logs/siem/disable": {
+      "post": {
+        "summary": "Disable SIEM log streaming",
+        "tags": [
+          "logs"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "enabled": {
+                      "type": "boolean"
+                    },
+                    "host": {
+                      "type": "string"
+                    },
+                    "port": {
+                      "type": "integer"
+                    },
+                    "protocol": {
+                      "type": "string",
+                      "enum": [
+                        "udp",
+                        "tcp",
+                        "tls"
+                      ]
+                    },
+                    "tcpFraming": {
+                      "type": "string",
+                      "enum": [
+                        "newline",
+                        "octet-counting"
+                      ]
+                    },
+                    "sourceIdentifier": {
+                      "type": "string"
+                    },
+                    "facility": {
+                      "type": "integer"
+                    },
+                    "runtimeLevel": {
+                      "type": "string",
+                      "enum": [
+                        "trace",
+                        "debug",
+                        "info",
+                        "warn",
+                        "error",
+                        "fatal"
+                      ]
+                    },
+                    "includeRuntime": {
+                      "type": "boolean"
+                    },
+                    "includeAudit": {
+                      "type": "boolean"
+                    },
+                    "caPem": {
+                      "type": "string"
+                    },
+                    "serverName": {
+                      "type": "string"
+                    },
+                    "clientCertPem": {
+                      "type": "string"
+                    },
+                    "clientKey": {
+                      "type": "string"
+                    },
+                    "retentionDays": {
+                      "type": "integer"
+                    },
+                    "maxEvents": {
+                      "type": "integer"
+                    },
+                    "revision": {
+                      "type": "integer"
+                    },
+                    "testedRevision": {
+                      "type": [
+                        "null",
+                        "integer"
+                      ]
+                    },
+                    "lastTestAt": {
+                      "type": [
+                        "null",
+                        "string"
+                      ],
+                      "format": "date-time"
+                    },
+                    "lastTestSuccess": {
+                      "type": [
+                        "null",
+                        "boolean"
+                      ]
+                    },
+                    "lastDeliveryAt": {
+                      "type": [
+                        "null",
+                        "string"
+                      ],
+                      "format": "date-time"
+                    },
+                    "lastErrorAt": {
+                      "type": [
+                        "null",
+                        "string"
+                      ],
+                      "format": "date-time"
+                    },
+                    "lastError": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "droppedRetention": {
+                      "type": "integer"
+                    },
+                    "droppedCapacity": {
+                      "type": "integer"
+                    },
+                    "updatedAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "enabled",
+                    "host",
+                    "port",
+                    "protocol",
+                    "tcpFraming",
+                    "sourceIdentifier",
+                    "facility",
+                    "runtimeLevel",
+                    "includeRuntime",
+                    "includeAudit",
+                    "caPem",
+                    "serverName",
+                    "clientCertPem",
+                    "clientKey",
+                    "retentionDays",
+                    "maxEvents",
+                    "revision",
+                    "testedRevision",
+                    "lastTestAt",
+                    "lastTestSuccess",
+                    "lastDeliveryAt",
+                    "lastErrorAt",
+                    "lastError",
+                    "droppedRetention",
+                    "droppedCapacity",
+                    "updatedAt"
+                  ]
                 }
               }
             }

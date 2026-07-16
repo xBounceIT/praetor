@@ -94,7 +94,113 @@
     "title": "Logs",
     "subtitle": "Monitora le operazioni e gli accessi al sistema tramite audit log.",
     "tabs": {
-      "audit": "Audit"
+      "audit": "Audit",
+      "siem": "SIEM"
+    },
+    "siem": {
+      "loading": "Caricamento configurazione SIEM...",
+      "viewOnly": "Hai accesso in sola lettura. Per modificare o attivare il flusso serve il permesso di aggiornamento dei log.",
+      "status": {
+        "title": "Stato del flusso",
+        "description": "Consegna, test e salute della coda durevole.",
+        "enabled": "Attivo",
+        "disabled": "Disattivato",
+        "unknown": "Sconosciuto",
+        "never": "Mai",
+        "lastTest": "Ultimo test",
+        "testSucceeded": "Riuscito",
+        "testFailed": "Fallito",
+        "lastDelivery": "Ultima consegna",
+        "pending": "In coda",
+        "oldestPending": "Evento più vecchio",
+        "dropped": "Eliminati"
+      },
+      "destination": {
+        "title": "Destinazione",
+        "description": "Collector syslog che riceve eventi RFC 5424 in formato LEEF 2.0."
+      },
+      "events": {
+        "title": "Selezione eventi",
+        "description": "Audit e runtime hanno filtri indipendenti."
+      },
+      "runtimeLevels": {
+        "helpLabel": "Significato dei livelli runtime",
+        "description": "Include il livello selezionato e tutti quelli più gravi.",
+        "trace": "Dettagli diagnostici molto granulari.",
+        "debug": "Informazioni utili per analisi e sviluppo.",
+        "info": "Normali eventi operativi.",
+        "warn": "Anomalie che non interrompono il servizio.",
+        "error": "Errori che compromettono singole operazioni.",
+        "fatal": "Errori critici che possono arrestare il servizio."
+      },
+      "tls": {
+        "title": "TLS e mTLS",
+        "description": "La verifica del server è sempre attiva e richiede almeno TLS 1.2.",
+        "keyStored": "Chiave memorizzata",
+        "keyStoredHelp": "La chiave privata è cifrata. Mantieni il valore oppure scegli Sostituisci."
+      },
+      "queue": {
+        "title": "Coda durevole",
+        "description": "Gli eventi più vecchi vengono eliminati al superamento di retention o capacità."
+      },
+      "workflow": {
+        "title": "Attivazione",
+        "description": "Completa i passaggi nell'ordine indicato per avviare lo streaming.",
+        "save": "Salva la configurazione",
+        "test": "Verifica il collector",
+        "enable": "Abilita lo streaming",
+        "unsaved": "Salva le modifiche prima di eseguire il test.",
+        "testRequired": "Esegui un test riuscito prima di abilitare il flusso."
+      },
+      "fields": {
+        "host": "Host",
+        "port": "Porta",
+        "protocol": "Protocollo",
+        "framing": "Framing TCP/TLS",
+        "source": "Identificativo sorgente",
+        "facility": "Facility syslog (0-23)",
+        "runtime": "Log runtime",
+        "runtimeHelp": "Eventi tecnici generati dall’applicazione.",
+        "audit": "Audit applicativi",
+        "auditHelp": "Azioni, attore, IP, entità e dettagli normalizzati.",
+        "runtimeLevel": "Livello runtime minimo",
+        "serverName": "Server name TLS",
+        "ca": "CA privata PEM (opzionale)",
+        "clientCert": "Certificato client PEM (opzionale)",
+        "clientKey": "Chiave privata client PEM",
+        "retention": "Retention (giorni)",
+        "capacity": "Capacità massima eventi"
+      },
+      "validation": {
+        "hostRequired": "Inserisci l’host del collector SIEM.",
+        "port": "La porta deve essere compresa tra 1 e 65535.",
+        "facility": "La facility deve essere un intero compreso tra 0 e 23.",
+        "retention": "La retention deve essere un intero compreso tra 1 e 30 giorni.",
+        "capacity": "La capacità deve essere un intero compreso tra 10.000 e 1.000.000 di eventi.",
+        "sourceRequired": "Inserisci un identificativo sorgente.",
+
+        "mtlsPair": "Certificato e chiave client devono essere configurati insieme.",
+        "pemFileTooLarge": "Il file non può superare 64 KB.",
+        "pemFileReadFailed": "Impossibile leggere il file selezionato."
+      },
+      "actions": {
+        "save": "Salva",
+        "test": "Testa",
+        "enable": "Abilita",
+        "disable": "Disabilita",
+        "importPem": "Importa file .pem",
+        "clear": "Svuota"
+      },
+      "messages": {
+        "loadFailed": "Impossibile caricare la configurazione SIEM.",
+        "saved": "Configurazione SIEM salvata.",
+        "saveFailed": "Salvataggio della configurazione SIEM non riuscito.",
+        "testSucceeded": "Test SIEM completato.",
+        "testFailed": "Test SIEM non riuscito.",
+        "enabled": "Streaming SIEM abilitato.",
+        "disabled": "Streaming SIEM disabilitato.",
+        "toggleFailed": "Impossibile cambiare lo stato dello streaming SIEM."
+      }
     },
     "columns": {
       "user": "Utente",
@@ -160,6 +266,7 @@
         "project_rule": "regola progetto",
         "role": "ruolo",
         "settings": "impostazioni",
+        "siem_config": "configurazione SIEM",
         "supplier": "fornitore",
         "supplier_invoice": "fattura fornitore",
         "supplier_order": "ordine fornitore",

@@ -771,6 +771,13 @@
       "when": 1784205553546,
       "tag": "0109_add_local_ai_provider",
       "breakpoints": true
+    },
+    {
+      "idx": 110,
+      "version": "7",
+      "when": 1784209064202,
+      "tag": "0110_add_siem_streaming",
+      "breakpoints": true
     }
   ]
 }

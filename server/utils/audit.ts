@@ -1,6 +1,7 @@
 import type { FastifyRequest } from 'fastify';
 import type { AuditLogDetails } from '../db/schema/auditLogs.ts';
 import * as auditLogsRepo from '../repositories/auditLogsRepo.ts';
+import siemService from '../services/siem.ts';
 import { createChildLogger, serializeError } from './logger.ts';
 
 // Canonical list of `entityType` values written by `logAudit`/`replyError` calls. Shared with
@@ -36,6 +37,7 @@ export const AUDIT_ENTITY_TYPES = [
   'role',
   'saved_view',
   'settings',
+  'siem_config',
   'sso_provider',
   'supplier',
   'supplier_invoice',
@@ -176,16 +178,34 @@ export async function logAudit({
   }
 
   try {
+    const normalizedDetails = normalizeAuditDetails(details);
+    const normalizedEntityId = entityId != null ? entityId.slice(0, 100) : null;
     await auditLogsRepo.create({
       userId: effectiveUserId,
       action,
       entityType: entityType ?? null,
       // `audit_logs.entity_id` is `varchar(100)`; truncate here so callers don't have to know
       // the column width. The full label is also written into `details.targetLabel` if needed.
-      entityId: entityId != null ? entityId.slice(0, 100) : null,
+      entityId: normalizedEntityId,
       ipAddress: request.ip || 'unknown',
-      details: normalizeAuditDetails(details),
+      details: normalizedDetails,
     });
+    try {
+      await siemService.captureAudit({
+        action,
+        actorId: effectiveUserId,
+        actorName: request.user?.username,
+        ipAddress: request.ip || 'unknown',
+        entityType: entityType ?? null,
+        entityId: normalizedEntityId,
+        details: normalizedDetails,
+      });
+    } catch (err) {
+      logger.error(
+        { siemInternal: true, err: serializeError(err), action },
+        'SIEM audit enqueue failed',
+      );
+    }
   } catch (err) {
     logger.error(
       { err: serializeError(err), userId: effectiveUserId, action },

@@ -1,3 +1,4 @@
+import { Writable } from 'node:stream';
 import dotenv from 'dotenv';
 import pino, { type Bindings, type Logger, type LoggerOptions } from 'pino';
 
@@ -54,7 +55,48 @@ export const loggerOptions: LoggerOptions = {
   ...(prettyTransport ? { transport: prettyTransport } : {}),
 };
 
-export const logger: Logger = pino(loggerOptions);
+export type SiemLogSink = (record: Record<string, unknown>) => void;
+
+let siemLogSink: SiemLogSink | null = null;
+
+export const registerSiemLogSink = (sink: SiemLogSink | null): void => {
+  siemLogSink = sink;
+};
+
+const siemCaptureStream = new Writable({
+  write(chunk, _encoding, callback) {
+    try {
+      if (siemLogSink) {
+        const record = JSON.parse(chunk.toString()) as Record<string, unknown>;
+        if (record.siemInternal !== true) siemLogSink(record);
+      }
+    } catch {
+      // Logging must always remain fail-open. Malformed capture records still reached stdout.
+    }
+    callback();
+  },
+});
+
+const stdoutStream = shouldUsePrettyLogs
+  ? pino.transport({
+      target: 'pino-pretty',
+      options: {
+        colorize: true,
+        translateTime: 'SYS:standard',
+        ignore: 'pid,hostname',
+      },
+    })
+  : process.stdout;
+
+// The root accepts every Pino level so the SIEM threshold is independent from LOG_LEVEL.
+// The stdout stream still enforces LOG_LEVEL and keeps the existing JSON/pretty behavior.
+export const logger: Logger = pino(
+  { ...baseLoggerOptions, level: 'trace' },
+  pino.multistream([
+    { level: logLevel, stream: stdoutStream },
+    { level: 'trace', stream: siemCaptureStream },
+  ]),
+);
 
 export const createChildLogger = (bindings: Bindings): Logger => logger.child(bindings);
 

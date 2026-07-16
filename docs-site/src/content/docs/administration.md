@@ -122,9 +122,13 @@ Dopo aver modificato SMTP, mittente o sicurezza, esegui sempre un test di invio 
 
 ## Log
 
-I log aiutano a ricostruire accessi e operazioni rilevanti. Usali per audit, troubleshooting e verifiche dopo modifiche amministrative.
+La scheda **Audit** aiuta a ricostruire accessi e operazioni rilevanti. Filtra per periodo per ridurre il rumore e concentrarti sull'evento da analizzare.
 
-Filtra per periodo per ridurre il rumore e concentrarti sull'evento da analizzare.
+La scheda **SIEM** configura lo streaming dei log runtime e degli audit applicativi verso un collector syslog. Gli eventi sono codificati in UTF-8 come LEEF 2.0, con intestazione RFC 5424 e delimitatore `^`. Sono supportati UDP, TCP e TLS; per TCP/TLS puoi scegliere framing newline o octet-counting. Con TLS la verifica del certificato server è sempre attiva (TLS 1.2 minimo); puoi aggiungere una CA privata e credenziali client per mTLS. La chiave privata client viene cifrata e l'interfaccia applica il flusso Mantieni/Sostituisci. CA, certificato client e chiave privata possono essere importati da file PEM fino a 64 KB.
+
+La configurazione segue il flusso **Salva → Testa → Abilita**. Una modifica a destinazione, framing, identità syslog o materiale TLS disabilita automaticamente lo streaming e richiede un nuovo test. Per UDP il test conferma soltanto che il sistema operativo ha accettato il datagramma; per TCP/TLS conferma connessione e scrittura, non l'ingestione applicativa del SIEM.
+
+La coda PostgreSQL conserva gli eventi durante errori o riavvii e ritenta con attesa crescente. Disabilitare lo streaming conserva il backlog. Retention e capacità sono configurabili; al superamento dei limiti Praetor elimina prima gli eventi più vecchi e mostra i contatori nella scheda SIEM. Il backlog usa sempre la configurazione di destinazione corrente. Per modificare la configurazione serve `administration.logs.update`; con il solo permesso `view` la scheda resta consultabile.
 
 ## Webhook
 

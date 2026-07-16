@@ -1,5 +1,5 @@
 import type { TFunction } from 'i18next';
-import { ArrowRight, Loader2, RefreshCw } from 'lucide-react';
+import { ArrowRight, Loader2, RadioTower, RefreshCw, ShieldCheck } from 'lucide-react';
 import type React from 'react';
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -10,6 +10,8 @@ import SelectControl from '../shared/SelectControl';
 import StandardTable, { type Column } from '../shared/StandardTable';
 import { TABLE_CONTROL_BUTTON_CLASSNAME } from '../shared/tableControlStyles';
 import { Button } from '../ui/button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
+import SiemLogsTab from './SiemLogsTab';
 
 const humanizeToken = (value: string) =>
   value
@@ -186,6 +188,7 @@ const formatOperationPrimary = (row: AuditLogEntry, t: TFunction) => {
 interface LogsViewProps {
   startOfWeek?: 'Monday' | 'Sunday';
   treatSaturdayAsHoliday?: boolean;
+  canUpdateSiem?: boolean;
 }
 
 type LogsViewState = {
@@ -256,9 +259,10 @@ const logsViewReducer = (state: LogsViewState, action: LogsViewAction): LogsView
 const LogsView: React.FC<LogsViewProps> = ({
   startOfWeek = 'Monday',
   treatSaturdayAsHoliday = false,
+  canUpdateSiem = false,
 }) => {
   const { t, i18n } = useTranslation(['administration', 'common']);
-  const [activeTab, setActiveTab] = useState<'audit'>('audit');
+  const [activeTab, setActiveTab] = useState<'audit' | 'siem'>('audit');
   const [state, dispatch] = useReducer(logsViewReducer, undefined, createLogsViewState);
   const initialLoadRef = useRef(true);
   const latestAuditRequestIdRef = useRef(0);
@@ -444,26 +448,23 @@ const LogsView: React.FC<LogsViewProps> = ({
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-semibold text-zinc-800">{t('logs.title')}</h2>
-        <p className="text-zinc-500 mt-1">{t('logs.subtitle')}</p>
+        <h2 className="text-2xl font-semibold text-foreground">{t('logs.title')}</h2>
+        <p className="mt-1 text-muted-foreground">{t('logs.subtitle')}</p>
       </div>
 
-      <div className="flex border-b border-zinc-200 gap-8">
-        <button
-          type="button"
-          onClick={() => setActiveTab('audit')}
-          className={`pb-4 text-sm font-bold transition-all relative ${activeTab === 'audit' ? 'text-praetor' : 'text-zinc-400 hover:text-zinc-600'}`}
-        >
-          <i className="fa-solid fa-shield-halved mr-2"></i>
-          {t('logs.tabs.audit')}
-          {activeTab === 'audit' && (
-            <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-praetor rounded-full"></div>
-          )}
-        </button>
-      </div>
+      <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'audit' | 'siem')}>
+        <TabsList variant="line" className="justify-start">
+          <TabsTrigger value="audit">
+            <ShieldCheck />
+            {t('logs.tabs.audit')}
+          </TabsTrigger>
+          <TabsTrigger value="siem">
+            <RadioTower />
+            {t('logs.tabs.siem')}
+          </TabsTrigger>
+        </TabsList>
 
-      {activeTab === 'audit' && (
-        <>
+        <TabsContent value="audit" className="mt-4 space-y-4">
           {error && <div className="text-sm font-medium text-red-600">{error}</div>}
 
           {loading ? (
@@ -484,8 +485,13 @@ const LogsView: React.FC<LogsViewProps> = ({
               }
             />
           )}
-        </>
-      )}
+        </TabsContent>
+        <TabsContent value="siem" className="mt-4">
+          <div className="mx-auto max-w-5xl">
+            <SiemLogsTab canUpdate={canUpdateSiem} />
+          </div>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 };

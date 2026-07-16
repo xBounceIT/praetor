@@ -32,6 +32,7 @@ export * from './roles.ts';
 export * from './sales.ts';
 export * from './savedViews.ts';
 export * from './settings.ts';
+export * from './siem.ts';
 export * from './sso.ts';
 export * from './supplierInvoices.ts';
 export * from './supplierOrderVersions.ts';

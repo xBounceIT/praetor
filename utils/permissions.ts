@@ -91,7 +91,7 @@ export const PERMISSION_DEFINITIONS: PermissionDefinition[] = [
   },
   { id: 'administration.email', actions: VIEW_UPDATE, module: 'administration' },
   { id: 'administration.roles', actions: CRUD, module: 'administration' },
-  { id: 'administration.logs', actions: VIEW_ONLY, module: 'administration' },
+  { id: 'administration.logs', actions: VIEW_UPDATE, module: 'administration' },
   { id: 'administration.webhooks', actions: CRUD, module: 'administration' },
 
   // Standalone

@@ -22,29 +22,35 @@ const makeFastify = (close: () => Promise<void>): FastifyInstance =>
 
 describe('performShutdown', () => {
   test('returns 0 when fastify.close() resolves', async () => {
-    let closeCalls = 0;
+    const order: string[] = [];
     const fastify = makeFastify(async () => {
-      closeCalls += 1;
+      order.push('fastify');
     });
     const { calls, logger } = makeLogger();
 
-    const code = await performShutdown(fastify, 'SIGINT', logger);
+    const code = await performShutdown(fastify, 'SIGINT', logger, async () => {
+      order.push('siem');
+    });
 
     expect(code).toBe(0);
-    expect(closeCalls).toBe(1);
+    expect(order).toEqual(['fastify', 'siem']);
     expect(calls).toEqual([{ level: 'info', obj: { signal: 'SIGINT' }, msg: 'Shutting down' }]);
   });
 
   test('returns 1 when fastify.close() throws', async () => {
     const closeErr = new Error('connection pool drain failed');
+    let siemShutdownCalls = 0;
     const fastify = makeFastify(async () => {
       throw closeErr;
     });
     const { calls, logger } = makeLogger();
 
-    const code = await performShutdown(fastify, 'SIGTERM', logger);
+    const code = await performShutdown(fastify, 'SIGTERM', logger, async () => {
+      siemShutdownCalls += 1;
+    });
 
     expect(code).toBe(1);
+    expect(siemShutdownCalls).toBe(1);
     const errorEntry = calls.find((entry) => entry.level === 'error');
     expect(errorEntry).toBeDefined();
     expect(errorEntry?.msg).toBe('Shutdown error');
