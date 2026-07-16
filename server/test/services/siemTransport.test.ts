@@ -126,9 +126,20 @@ describe('SIEM native transports', () => {
 
   test('rejects a TLS collector signed by an untrusted CA', async () => {
     const collector = tls.createServer({ key: SIEM_TEST_SERVER_KEY, cert: SIEM_TEST_SERVER_CERT });
+    const sockets = new Set<net.Socket>();
+    collector.on('connection', (socket) => {
+      sockets.add(socket);
+      socket.once('close', () => sockets.delete(socket));
+    });
     collector.on('tlsClientError', (_error, socket) => socket.destroy());
     await new Promise<void>((resolve) => collector.listen(0, '127.0.0.1', resolve));
-    closers.push(() => new Promise<void>((resolve) => collector.close(() => resolve())));
+    closers.push(
+      () =>
+        new Promise<void>((resolve) => {
+          collector.close(() => resolve());
+          for (const socket of sockets) socket.destroy();
+        }),
+    );
     const address = collector.address();
     if (!address || typeof address === 'string') throw new Error('Expected TLS address info');
     const transport = new SiemTransport();
