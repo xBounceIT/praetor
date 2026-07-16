@@ -19,6 +19,10 @@ On desktop, AI Reporting shows conversation history in the left column and the a
 
 Use the search field to filter chats by title. Select an item to resume that conversation, or press **New Chat** at the bottom of the history to start a new one.
 
+When you open a conversation, Praetor loads only its most recent messages. Use **Load older messages** to retrieve earlier parts progressively without slowing down the page.
+
+In the browser, only visible messages and a small area above and below the scroll viewport are rendered. Distant content remains as lightweight placeholders and is materialized only as you approach it.
+
 On mobile devices, open the history with the button in the conversation header.
 
 Chat actions are contained in its history row: use the pencil to rename the title, or use the trash button to remove the conversation and confirm the action.

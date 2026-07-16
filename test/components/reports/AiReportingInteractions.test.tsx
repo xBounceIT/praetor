@@ -197,6 +197,157 @@ beforeEach(() => {
 });
 
 describe('<AiReportingView /> interactions', () => {
+  test('keeps startup stable and loads only the latest history page', async () => {
+    let resolveSessions: ((value: ReportChatSessionSummary[]) => void) | undefined;
+    listSessionsMock.mockImplementationOnce(
+      () =>
+        new Promise<ReportChatSessionSummary[]>((resolve) => {
+          resolveSessions = resolve;
+        }),
+    );
+
+    renderView();
+
+    expect(screen.queryByText('What should we build together now?')).toBeNull();
+
+    await act(async () => resolveSessions?.(sessions));
+    await waitFor(() =>
+      expect(getSessionMessagesMock).toHaveBeenCalledWith('revenue', {
+        limit: 20,
+      }),
+    );
+  });
+
+  test('jumps directly to loaded history without animating through it', async () => {
+    const originalScrollTo = HTMLElement.prototype.scrollTo;
+    const scrollToMock = mock(() => {});
+    HTMLElement.prototype.scrollTo =
+      scrollToMock as unknown as typeof HTMLElement.prototype.scrollTo;
+
+    try {
+      renderView();
+
+      await screen.findByText('Quarterly revenue is available.');
+      await waitFor(() =>
+        expect(scrollToMock).toHaveBeenCalledWith(expect.objectContaining({ behavior: 'auto' })),
+      );
+      expect(scrollToMock).not.toHaveBeenCalledWith(
+        expect.objectContaining({ behavior: 'smooth' }),
+      );
+    } finally {
+      HTMLElement.prototype.scrollTo = originalScrollTo;
+    }
+  });
+
+  test('hides the previous conversation while the selected history page is loading', async () => {
+    let resolveCapacityMessages: ((value: ReportChatMessage[]) => void) | undefined;
+    getSessionMessagesMock.mockImplementation((sessionId: string) => {
+      if (sessionId === 'revenue') return Promise.resolve(messages);
+      return new Promise<ReportChatMessage[]>((resolve) => {
+        resolveCapacityMessages = resolve;
+      });
+    });
+
+    renderView();
+
+    await screen.findByText('Quarterly revenue is available.');
+    fireEvent.click(screen.getByRole('button', { name: 'Project capacity' }));
+
+    const composer = screen.getByRole('textbox', {
+      name: 'Ask a question about your business data...',
+    });
+    const newChatButton = screen.getByRole('button', { name: 'New Chat' });
+    expect(screen.queryByText('Quarterly revenue is available.')).toBeNull();
+    expect(screen.queryByText('What should we build together now?')).toBeNull();
+    expect(composer).toBeDisabled();
+    expect(newChatButton).toBeDisabled();
+
+    await act(async () =>
+      resolveCapacityMessages?.([
+        {
+          id: 'capacity-assistant',
+          sessionId: 'capacity',
+          role: 'assistant',
+          content: 'Capacity is ready.',
+          createdAt: 20_001,
+        },
+      ]),
+    );
+    expect(await screen.findByText('Capacity is ready.')).toBeInTheDocument();
+    expect(composer).toBeEnabled();
+    expect(newChatButton).toBeEnabled();
+  });
+
+  test('mounts message bodies only when they are near the viewport', async () => {
+    const originalIntersectionObserver = globalThis.IntersectionObserver;
+    const callbacks = new Map<Element, IntersectionObserverCallback>();
+
+    class TestIntersectionObserver {
+      readonly root = null;
+      readonly rootMargin = '';
+      readonly thresholds = [0];
+      private readonly callback: IntersectionObserverCallback;
+
+      constructor(callback: IntersectionObserverCallback) {
+        this.callback = callback;
+      }
+
+      observe(target: Element) {
+        callbacks.set(target, this.callback);
+      }
+
+      unobserve(target: Element) {
+        callbacks.delete(target);
+      }
+
+      disconnect() {}
+
+      takeRecords(): IntersectionObserverEntry[] {
+        return [];
+      }
+    }
+
+    Object.defineProperty(globalThis, 'IntersectionObserver', {
+      configurable: true,
+      writable: true,
+      value: TestIntersectionObserver as unknown as typeof IntersectionObserver,
+    });
+
+    try {
+      getSessionMessagesMock.mockResolvedValueOnce(
+        createMessageHistory('virtual', 'Virtual question', 'Virtual answer').slice(0, 10),
+      );
+      renderView();
+
+      await screen.findByText('Virtual answer 4');
+      expect(screen.queryByText('Virtual question 0')).toBeNull();
+      expect(screen.queryByText('Virtual question 2')).toBeNull();
+
+      const placeholder = document.querySelector<HTMLElement>(
+        '[data-message-group-id="virtual-user-0"]',
+      );
+      expect(placeholder).not.toBeNull();
+      expect(placeholder?.dataset.rendered).toBe('false');
+      await waitFor(() => expect(callbacks.has(placeholder as HTMLElement)).toBe(true));
+
+      await act(async () => {
+        callbacks.get(placeholder as HTMLElement)?.(
+          [{ target: placeholder, isIntersecting: true } as unknown as IntersectionObserverEntry],
+          {} as IntersectionObserver,
+        );
+      });
+
+      expect(await screen.findByText('Virtual question 0')).toBeInTheDocument();
+      expect(placeholder?.dataset.rendered).toBe('true');
+    } finally {
+      Object.defineProperty(globalThis, 'IntersectionObserver', {
+        configurable: true,
+        writable: true,
+        value: originalIntersectionObserver,
+      });
+    }
+  });
+
   test('shows the experimental badge only in the chat sidebar', async () => {
     renderView();
 
@@ -392,7 +543,7 @@ describe('<AiReportingView /> interactions', () => {
     expect(screen.getByText('Run the first analysis')).toBeInTheDocument();
     await waitFor(() =>
       expect(getSessionMessagesMock).toHaveBeenCalledWith('fresh-session', {
-        limit: 200,
+        limit: 20,
       }),
     );
     expect(screen.getByRole('button', { name: 'Retry' })).toBeEnabled();

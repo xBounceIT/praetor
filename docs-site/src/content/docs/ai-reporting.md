@@ -19,6 +19,10 @@ Su desktop AI Reporting mostra la cronologia nella colonna sinistra e la convers
 
 Usa il campo di ricerca per filtrare le chat in base al titolo. Seleziona una voce per riprendere la conversazione oppure premi **Nuova Chat** in fondo alla cronologia per iniziarne una nuova.
 
+Quando apri una conversazione, Praetor carica solo i messaggi più recenti. Usa **Carica messaggi precedenti** per recuperare progressivamente le parti più vecchie senza rallentare l'apertura della pagina.
+
+Nel browser vengono renderizzati soltanto i messaggi visibili e una piccola fascia sopra e sotto l'area di scorrimento. I contenuti più lontani restano come segnaposto leggeri e vengono materializzati solo quando ti avvicini.
+
 Su dispositivi mobili, apri la cronologia con il pulsante nella barra superiore della conversazione.
 
 Le azioni della chat sono integrate nella sua riga: usa la matita per rinominare il titolo oppure il cestino per rimuovere la conversazione e conferma l'operazione.
