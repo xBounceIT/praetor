@@ -2957,6 +2957,7 @@ const AiReportingAssistantMessage: React.FC<AiReportingAssistantMessageProps> = 
           message={message}
           interactions={interactions}
           parsedContent={parsedContent}
+          deferVisualizations={allowPendingVisualization}
         />
         <div className="mt-2 flex justify-start items-center gap-1.5">
           <Tooltip>
@@ -3061,9 +3062,13 @@ const AiMarkdownMessage: React.FC<{
   message: ReportChatMessage;
   interactions: AiReportingMessageInteractions;
   parsedContent: AiReportingVisualizationParseResult;
-}> = ({ message, interactions, parsedContent }) => {
+  deferVisualizations: boolean;
+}> = ({ message, interactions, parsedContent, deferVisualizations }) => {
   const { t, language, resolveTableMarkdown, tableRefs } = interactions;
   let tableRenderIndex = 0;
+  // Recharts dispatches each new data reference into its internal store. Streaming reparses
+  // completed blocks on every delta, so mount charts only after their data has settled.
+  const hasDeferredVisualization = deferVisualizations && parsedContent.visualizations.length > 0;
 
   return (
     <>
@@ -3196,14 +3201,18 @@ const AiMarkdownMessage: React.FC<{
           {parsedContent.markdown}
         </ReactMarkdown>
       ) : null}
-      {parsedContent.visualizations.map((visualization, index) => (
-        <AiReportingVisualization
-          key={`${message.id}-visualization-${index}`}
-          visualization={visualization}
-          language={language}
-        />
-      ))}
-      {parsedContent.hasPendingVisualization ? <AiReportingVisualizationPending /> : null}
+      {deferVisualizations
+        ? null
+        : parsedContent.visualizations.map((visualization, index) => (
+            <AiReportingVisualization
+              key={`${message.id}-visualization-${index}`}
+              visualization={visualization}
+              language={language}
+            />
+          ))}
+      {parsedContent.hasPendingVisualization || hasDeferredVisualization ? (
+        <AiReportingVisualizationPending />
+      ) : null}
       {parsedContent.invalidVisualizationCount > 0 ? (
         <Alert variant="destructive" className="my-3">
           <TriangleAlert aria-hidden="true" />

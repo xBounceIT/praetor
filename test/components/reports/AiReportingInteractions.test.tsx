@@ -978,4 +978,75 @@ describe('<AiReportingView /> interactions', () => {
     expect(within(table).getByText('€1,200.00')).toBeInTheDocument();
     expect(within(table).getByText('12% pts')).toBeInTheDocument();
   });
+
+  test('defers Recharts visualizations until the streamed answer is complete', async () => {
+    const chartDefinition = {
+      version: 1,
+      type: 'bar',
+      title: 'Streaming revenue',
+      xKey: 'month',
+      series: [{ key: 'revenue', label: 'Revenue', format: 'number' }],
+      data: [{ month: 'January', revenue: 1200 }],
+    };
+    const chartContent = [
+      'Revenue is ready.',
+      '```praetor-visualization',
+      JSON.stringify(chartDefinition),
+      '```',
+    ].join('\n');
+    const completedMessages: ReportChatMessage[] = [
+      ...messages,
+      {
+        id: 'user-streaming-chart',
+        sessionId: 'revenue',
+        role: 'user',
+        content: 'Chart the revenue',
+        createdAt: 1_752_493_600_002,
+      },
+      {
+        id: 'assistant-streaming-chart',
+        sessionId: 'revenue',
+        role: 'assistant',
+        content: chartContent,
+        createdAt: 1_752_493_600_003,
+      },
+    ];
+    getSessionMessagesMock.mockResolvedValueOnce(messages).mockResolvedValueOnce(completedMessages);
+
+    let releaseStream: (() => void) | undefined;
+    const streamGate = new Promise<void>((resolve) => {
+      releaseStream = resolve;
+    });
+    chatStreamMock.mockImplementationOnce(
+      async (
+        _payload: unknown,
+        handlers?: {
+          onStart?: (event: { sessionId: string; messageId: string }) => void;
+          onAnswerDelta?: (delta: string) => void;
+        },
+      ) => {
+        handlers?.onStart?.({ sessionId: 'revenue', messageId: 'assistant-streaming-chart' });
+        handlers?.onAnswerDelta?.(chartContent);
+        await streamGate;
+        return { sessionId: 'revenue', text: chartContent };
+      },
+    );
+
+    renderView();
+
+    const composer = await screen.findByRole('textbox', {
+      name: 'Ask a question about your business data...',
+    });
+    fireEvent.change(composer, { target: { value: 'Chart the revenue' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    expect(
+      await screen.findByRole('status', { name: 'Building visualization...' }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('figure', { name: 'Streaming revenue' })).toBeNull();
+
+    await act(async () => releaseStream?.());
+
+    expect(await screen.findByRole('figure', { name: 'Streaming revenue' })).toBeInTheDocument();
+  });
 });
