@@ -38,7 +38,7 @@ const EXPECTED_KEYS: readonly AuthScopedStateKey[] = [
   'entries',
   'workUnits',
   'responsibleUserOptions',
-  'viewingUserAssignmentState',
+  'viewingUserCatalogState',
 ];
 
 const buildResetters = (recorder: (key: AuthScopedStateKey) => void): AuthScopedStateResetters => {

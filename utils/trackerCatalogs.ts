@@ -2,15 +2,8 @@ import type { Client, Project, ProjectTask } from '../types';
 import { isDateOnlyBeforeToday } from './date';
 import { hasPermission } from './permissions';
 
-export type TrackerAssignments = {
-  clientIds: string[];
-  projectIds: string[];
-  taskIds: string[];
-};
-
-export type TrackerAssignmentState = {
+export type TrackerCatalogState = {
   userId: string;
-  assignments: TrackerAssignments | null;
   catalogs: TrackerCatalogs | null;
   isLoading: boolean;
 };
@@ -78,32 +71,22 @@ export const filterTrackerCatalogs = ({
   projectTasks,
   currentUserId,
   viewingUserId,
-  assignmentState,
+  catalogState,
 }: TrackerCatalogs & {
   currentUserId: string;
   viewingUserId: string;
-  assignmentState: TrackerAssignmentState;
+  catalogState: TrackerCatalogState;
 }): TrackerCatalogs => {
   if (viewingUserId === currentUserId) {
     return activeOnly({ clients, projects, projectTasks });
   }
 
-  const isCurrentTarget = assignmentState.userId === viewingUserId && !assignmentState.isLoading;
-  const assignments = isCurrentTarget ? assignmentState.assignments : null;
-  const targetCatalogs = isCurrentTarget ? assignmentState.catalogs : null;
+  const isCurrentTarget = catalogState.userId === viewingUserId && !catalogState.isLoading;
+  const targetCatalogs = isCurrentTarget ? catalogState.catalogs : null;
 
-  if (!assignments || !targetCatalogs) {
+  if (!targetCatalogs) {
     return { clients: [], projects: [], projectTasks: [] };
   }
 
-  const activeTargetCatalogs = activeOnly(targetCatalogs);
-  const assignedClientIds = new Set(assignments.clientIds);
-  const assignedProjectIds = new Set(assignments.projectIds);
-  const assignedTaskIds = new Set(assignments.taskIds);
-
-  return {
-    clients: activeTargetCatalogs.clients.filter((client) => assignedClientIds.has(client.id)),
-    projects: activeTargetCatalogs.projects.filter((project) => assignedProjectIds.has(project.id)),
-    projectTasks: activeTargetCatalogs.projectTasks.filter((task) => assignedTaskIds.has(task.id)),
-  };
+  return activeOnly(targetCatalogs);
 };
