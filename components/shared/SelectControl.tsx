@@ -493,7 +493,7 @@ const SearchableSelectControl = ({
                     <CommandItem
                       key={option.id || EMPTY_VALUE_SENTINEL}
                       value={option.name}
-                      disabled={option.disabled}
+                      disabled={option.disabled && !(isMulti && selected)}
                       onSelect={() => handleSelect(option)}
                     >
                       <span className="flex items-center gap-2 min-w-0 flex-1">
