@@ -143,6 +143,23 @@ const createMessageHistory = (
     },
   ]).flat();
 
+const olderEditableHistory: ReportChatMessage[] = [
+  {
+    id: 'older-user',
+    sessionId: 'revenue',
+    role: 'user',
+    content: 'Old editable question',
+    createdAt: 1,
+  },
+  {
+    id: 'older-assistant',
+    sessionId: 'revenue',
+    role: 'assistant',
+    content: 'Old answer',
+    createdAt: 2,
+  },
+];
+
 const renderView = () =>
   render(
     <AiReportingView
@@ -469,24 +486,9 @@ describe('<AiReportingView /> interactions', () => {
 
   test('preserves loaded history after editing an older message', async () => {
     const latestHistory = createMessageHistory('latest', 'Latest question', 'Latest answer');
-    const olderHistory: ReportChatMessage[] = [
-      {
-        id: 'older-user',
-        sessionId: 'revenue',
-        role: 'user',
-        content: 'Old editable question',
-        createdAt: 1,
-      },
-      {
-        id: 'older-assistant',
-        sessionId: 'revenue',
-        role: 'assistant',
-        content: 'Old answer',
-        createdAt: 2,
-      },
-    ];
+
     getSessionMessagesMock.mockImplementation((_sessionId: string, options?: { before?: number }) =>
-      Promise.resolve(options?.before ? olderHistory : latestHistory),
+      Promise.resolve(options?.before ? olderEditableHistory : latestHistory),
     );
     editMessageStreamMock.mockImplementation(
       async (
@@ -516,6 +518,45 @@ describe('<AiReportingView /> interactions', () => {
     await waitFor(() => expect(getSessionMessagesMock.mock.calls.length).toBeGreaterThanOrEqual(3));
     await waitFor(() => expect(screen.getByText('Updated old answer.')).toBeInTheDocument());
     expect(screen.getByText('Updated old question')).toBeInTheDocument();
+    expect(screen.getByText('Latest answer 99')).toBeInTheDocument();
+  });
+
+  test('restores loaded history when editing an older message fails', async () => {
+    const latestHistory = createMessageHistory('latest', 'Latest question', 'Latest answer');
+    getSessionMessagesMock.mockImplementation((_sessionId: string, options?: { before?: number }) =>
+      Promise.resolve(options?.before ? olderEditableHistory : latestHistory),
+    );
+    editMessageStreamMock.mockImplementation(
+      async (
+        _payload: unknown,
+        handlers?: { onStart?: (event: { sessionId: string; messageId: string }) => void },
+      ) => {
+        handlers?.onStart?.({ sessionId: 'revenue', messageId: 'older-assistant-failed' });
+        throw new Error('Edit failed');
+      },
+    );
+
+    renderView();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Load older messages' }));
+    const olderQuestion = await screen.findByText('Old editable question');
+    const olderTurn = olderQuestion.closest('.group');
+    expect(olderTurn).not.toBeNull();
+    fireEvent.click(within(olderTurn as HTMLElement).getByRole('button', { name: 'Edit' }));
+    const editInput = screen.getByRole('textbox', { name: 'Edit message' });
+    fireEvent.change(editInput, { target: { value: 'Updated old question' } });
+    fireEvent.click(
+      within(editInput.closest('[data-slot="card"]') as HTMLElement).getByRole('button', {
+        name: 'Send',
+      }),
+    );
+
+    await waitFor(() => expect(editMessageStreamMock).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(getSessionMessagesMock.mock.calls.length).toBeGreaterThanOrEqual(3));
+    expect(screen.getByText('Edit failed')).toBeInTheDocument();
+    expect(screen.getByText('Old editable question')).toBeInTheDocument();
+    expect(screen.getByText('Old answer')).toBeInTheDocument();
+    expect(screen.queryByText('Updated old question')).toBeNull();
     expect(screen.getByText('Latest answer 99')).toBeInTheDocument();
   });
 
@@ -739,6 +780,7 @@ describe('<AiReportingView /> interactions', () => {
 
     await waitFor(() => expect(chatMock).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(getSessionMessagesMock.mock.calls.length).toBeGreaterThan(1));
+    expect(screen.getByText('Request failed')).toBeInTheDocument();
     expect(
       screen.getByRole('button', { name: 'Remove attachment metrics.csv' }),
     ).toBeInTheDocument();

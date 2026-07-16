@@ -728,12 +728,16 @@ const useAiReportingController = ({
   const loadMessages = useCallback(
     async (
       sessionId: string,
-      opts: { forceScroll?: boolean; preserveLoadedHistory?: boolean } = {},
+      opts: {
+        forceScroll?: boolean;
+        preserveLoadedHistory?: boolean;
+        preserveError?: boolean;
+      } = {},
     ) => {
       const token = ++loadTokenRef.current;
       setIsLoadingMessages(true);
       setIsLoadingOlderMessages(false);
-      setError('');
+      if (!opts.preserveError) setError('');
       try {
         const data = await api.reports.getSessionMessages(sessionId, {
           limit: MESSAGES_PAGE_SIZE,
@@ -1176,7 +1180,7 @@ const useAiReportingController = ({
           if (!isRunActive()) return false;
           setError((streamErr as Error).message || t('aiReporting.error'));
           if (resolvedSessionId) {
-            await loadMessages(resolvedSessionId, { forceScroll: false });
+            await loadMessages(resolvedSessionId, { forceScroll: false, preserveError: true });
           }
         }
       }
@@ -1192,7 +1196,7 @@ const useAiReportingController = ({
         setError((err as Error).message || t('aiReporting.error'));
         // Reload canonical messages if possible.
         if (activeSessionId) {
-          await loadMessages(activeSessionId, { forceScroll: false });
+          await loadMessages(activeSessionId, { forceScroll: false, preserveError: true });
         } else {
           setMessages([]);
         }
@@ -1270,6 +1274,7 @@ const useAiReportingController = ({
       Math.min(selectedAttemptIndexByGroup[group?.id || ''] ?? 0, Math.max(0, attemptCount - 1)),
     );
     const pairedAssistant = group && attemptCount > 0 ? group.assistantAttempts[safeIdx] : null;
+    const messagesBeforeEdit = messages;
 
     const abortController = new AbortController();
     const runId = ++sendRunIdRef.current;
@@ -1452,9 +1457,14 @@ const useAiReportingController = ({
         cleanupPlaceholder();
       } else {
         setError((err as Error).message || t('aiReporting.error'));
-        // Reload canonical messages to restore consistent state
+        // Restore older loaded turns before merging the latest canonical page.
+        setMessages(messagesBeforeEdit);
         if (activeSessionId) {
-          await loadMessages(activeSessionId, { forceScroll: false });
+          await loadMessages(activeSessionId, {
+            forceScroll: false,
+            preserveLoadedHistory: true,
+            preserveError: true,
+          });
         }
       }
     } finally {
