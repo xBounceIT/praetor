@@ -39,7 +39,7 @@ Quando la richiesta menziona esplicitamente un grafico, una visualizzazione, una
 
 Una singola risposta può includere fino a sette visualizzazioni, quando più grafici migliorano concretamente la comprensione dell'analisi.
 
-Passa il puntatore o usa la navigazione da tastiera sul grafico per leggere i valori, consulta la legenda quando sono presenti più serie e premi **Mostra dati** per aprire la tabella accessibile usata dalla visualizzazione. Colori e superfici si adattano automaticamente al tema chiaro o scuro.
+Passa il puntatore o usa la navigazione da tastiera sul grafico per leggere i valori, consulta la legenda quando sono presenti più serie e premi **Mostra dati** per aprire la tabella accessibile usata dalla visualizzazione. Il pulsante **Copia PNG** copia negli appunti l'intestazione, il grafico e la legenda, pronti per essere incollati in un documento o messaggio. Colori e superfici si adattano automaticamente al tema chiaro o scuro.
 
 Le visualizzazioni usano soltanto i dati inclusi nel dataset autorizzato della conversazione. Praetor valida struttura, dimensioni e valori prima del rendering e scarta in sicurezza una specifica non valida; il grafico resta comunque un supporto visivo e i dati importanti devono essere verificati nelle fonti originali.
 

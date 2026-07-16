@@ -820,6 +820,7 @@ describe('<AiReportingView /> interactions', () => {
     expect(await screen.findByRole('figure', { name: 'Monthly revenue' })).toBeInTheDocument();
     expect(screen.getByText('Revenue increased.')).toBeInTheDocument();
     expect(screen.queryByText(/praetor-visualization/)).toBeNull();
+    expect(screen.getByRole('button', { name: 'Copy PNG' })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Show data' }));
     const table = await screen.findByRole('table', { name: 'Data used for Monthly revenue' });

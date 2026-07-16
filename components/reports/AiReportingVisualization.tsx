@@ -1,6 +1,15 @@
-import { BarChart3, ChevronDown, ChevronUp, Table2 } from 'lucide-react';
-import { useId, useMemo, useState } from 'react';
+import {
+  BarChart3,
+  ChevronDown,
+  ChevronUp,
+  Image as ImageIcon,
+  Loader2,
+  Table2,
+} from 'lucide-react';
+import { useId, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import type { BarShapeProps } from 'recharts';
+import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -40,23 +49,16 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { copyElementAsPng } from '@/utils/copyElementAsPng';
+import {
+  CHART_COLORS,
+  getBarPointColor,
+  getCircularTooltipLabel,
+} from './aiReportingChartPresentation';
 import type {
   AiReportingVisualization as AiReportingVisualizationDefinition,
   AiReportingVisualizationSeries,
 } from './aiReportingVisualizations';
-
-const CHART_COLORS = [
-  'var(--chart-1)',
-  'var(--chart-2)',
-  'var(--chart-3)',
-  'var(--chart-4)',
-  'var(--chart-5)',
-  'color-mix(in oklch, var(--chart-1) 65%, var(--background))',
-  'color-mix(in oklch, var(--chart-2) 65%, var(--background))',
-  'color-mix(in oklch, var(--chart-3) 65%, var(--background))',
-  'color-mix(in oklch, var(--chart-4) 65%, var(--background))',
-  'color-mix(in oklch, var(--chart-5) 65%, var(--background))',
-] as const;
 
 const DEFAULT_TYPE_LABELS = {
   area: 'Area chart',
@@ -108,21 +110,34 @@ const buildChartConfig = (visualization: AiReportingVisualizationDefinition): Ch
 interface VisualizationTooltipProps {
   visualization: AiReportingVisualizationDefinition;
   language: string;
+  circular?: boolean;
 }
 
-const VisualizationTooltip = ({ visualization, language }: VisualizationTooltipProps) => (
+const VisualizationTooltip = ({
+  visualization,
+  language,
+  circular = false,
+}: VisualizationTooltipProps) => (
   <ChartTooltip
     cursor={false}
     content={
       <ChartTooltipContent
+        hideLabel={circular}
         formatter={(value, name, item) => {
-          const seriesKey = String(item.dataKey ?? name);
-          const series = visualization.series.find((candidate) => candidate.key === seriesKey);
+          const series = circular
+            ? visualization.series[0]
+            : visualization.series.find(
+                (candidate) => candidate.key === String(item.dataKey ?? name),
+              );
           if (!series || typeof value !== 'number') return null;
+          const label = circular
+            ? getCircularTooltipLabel(item.payload, visualization.xKey)
+            : series.label;
+          if (!label) return null;
 
           return (
             <div className="flex min-w-40 items-center justify-between gap-4">
-              <span className="text-muted-foreground">{series.label}</span>
+              <span className="text-muted-foreground">{label}</span>
               <span className="font-mono font-medium tabular-nums text-foreground">
                 {formatVisualizationValue(value, series, language)}
               </span>
@@ -133,6 +148,22 @@ const VisualizationTooltip = ({ visualization, language }: VisualizationTooltipP
     }
   />
 );
+
+const DistinctBarShape = ({ height, index, width, x, y }: BarShapeProps) => {
+  const radius = Math.min(5, Math.abs(width) / 2, Math.abs(height) / 2);
+
+  return (
+    <rect
+      fill={getBarPointColor(index)}
+      height={height}
+      rx={radius}
+      ry={radius}
+      width={width}
+      x={x}
+      y={y}
+    />
+  );
+};
 
 const CartesianVisualization = ({ visualization, language }: VisualizationTooltipProps) => {
   const isHorizontalBar =
@@ -191,6 +222,7 @@ const CartesianVisualization = ({ visualization, language }: VisualizationToolti
             dataKey={series.key}
             fill={`var(--color-${series.key})`}
             radius={visualization.stacked ? 0 : 5}
+            shape={visualization.series.length === 1 ? DistinctBarShape : undefined}
             stackId={visualization.stacked ? 'total' : undefined}
           />
         ))}
@@ -261,7 +293,7 @@ const CircularVisualization = ({ visualization, language, config }: CircularVisu
         aria-label={visualization.title}
       >
         <PieChart accessibilityLayer>
-          <VisualizationTooltip visualization={visualization} language={language} />
+          <VisualizationTooltip visualization={visualization} language={language} circular />
           <Pie
             data={pieData}
             dataKey={series.key}
@@ -340,12 +372,34 @@ export const AiReportingVisualization = ({
 }: AiReportingVisualizationProps) => {
   const { t } = useTranslation('reports');
   const titleId = useId();
+  const chartExportRef = useRef<HTMLDivElement>(null);
   const [isTableOpen, setIsTableOpen] = useState(false);
+  const [isCopyingPng, setIsCopyingPng] = useState(false);
   const config = useMemo(() => buildChartConfig(visualization), [visualization]);
   const isCircular = visualization.type === 'pie' || visualization.type === 'donut';
   const typeLabel = t(`aiReporting.visualizationTypes.${visualization.type}`, {
     defaultValue: DEFAULT_TYPE_LABELS[visualization.type],
   });
+  const copyPngLabel = t('aiReporting.copyVisualizationPng', { defaultValue: 'Copy PNG' });
+
+  const handleCopyPng = async () => {
+    if (!chartExportRef.current || isCopyingPng) return;
+    setIsCopyingPng(true);
+    try {
+      await copyElementAsPng(chartExportRef.current);
+      toast.success(
+        t('aiReporting.visualizationCopiedPng', { defaultValue: 'Chart copied as PNG.' }),
+      );
+    } catch {
+      toast.error(
+        t('aiReporting.visualizationCopyPngError', {
+          defaultValue: 'Could not copy the chart as PNG. Check clipboard permissions.',
+        }),
+      );
+    } finally {
+      setIsCopyingPng(false);
+    }
+  };
 
   return (
     <Card
@@ -353,39 +407,59 @@ export const AiReportingVisualization = ({
       aria-labelledby={titleId}
       className="my-4 gap-0 overflow-hidden rounded-2xl py-0"
     >
-      <CardHeader className="border-b px-4 py-4 sm:px-5">
-        <div className="flex items-start justify-between gap-3">
-          <div className="grid gap-1.5">
-            <CardTitle id={titleId} className="text-base leading-snug">
-              {visualization.title}
-            </CardTitle>
-            {visualization.description ? (
-              <CardDescription>{visualization.description}</CardDescription>
-            ) : null}
+      <div ref={chartExportRef} className="bg-card text-card-foreground">
+        <CardHeader className="border-b px-4 py-4 sm:px-5">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="grid gap-1.5">
+              <CardTitle id={titleId} className="text-base leading-snug">
+                {visualization.title}
+              </CardTitle>
+              {visualization.description ? (
+                <CardDescription>{visualization.description}</CardDescription>
+              ) : null}
+            </div>
+            <div className="flex flex-wrap items-center justify-end gap-2 sm:shrink-0">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                aria-label={copyPngLabel}
+                data-export-exclude="true"
+                disabled={isCopyingPng}
+                onClick={handleCopyPng}
+              >
+                {isCopyingPng ? (
+                  <Loader2 className="animate-spin" aria-hidden="true" />
+                ) : (
+                  <ImageIcon aria-hidden="true" />
+                )}
+                {copyPngLabel}
+              </Button>
+              <Badge variant="secondary" className="gap-1.5">
+                <BarChart3 aria-hidden="true" />
+                {typeLabel}
+              </Badge>
+            </div>
           </div>
-          <Badge variant="secondary" className="shrink-0 gap-1.5">
-            <BarChart3 aria-hidden="true" />
-            {typeLabel}
-          </Badge>
-        </div>
-      </CardHeader>
-      <CardContent className="px-3 py-4 sm:px-5">
-        {isCircular ? (
-          <CircularVisualization
-            visualization={visualization}
-            language={language}
-            config={config}
-          />
-        ) : (
-          <ChartContainer
-            config={config}
-            className="h-80 w-full aspect-auto"
-            aria-label={visualization.title}
-          >
-            <CartesianVisualization visualization={visualization} language={language} />
-          </ChartContainer>
-        )}
-      </CardContent>
+        </CardHeader>
+        <CardContent className="px-3 py-4 sm:px-5">
+          {isCircular ? (
+            <CircularVisualization
+              visualization={visualization}
+              language={language}
+              config={config}
+            />
+          ) : (
+            <ChartContainer
+              config={config}
+              className="h-80 w-full aspect-auto"
+              aria-label={visualization.title}
+            >
+              <CartesianVisualization visualization={visualization} language={language} />
+            </ChartContainer>
+          )}
+        </CardContent>
+      </div>
       <Collapsible open={isTableOpen} onOpenChange={setIsTableOpen}>
         <CardFooter className="justify-end border-t px-3 py-2 sm:px-4">
           <CollapsibleTrigger asChild>
