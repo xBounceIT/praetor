@@ -198,6 +198,7 @@ describe('<LogsView />', () => {
       .getByText('logs.siem.destination.title')
       .closest('[data-slot="card"]');
     expect(configurationCard).not.toBeNull();
+    expect(configurationCard?.closest('.max-w-5xl')).toHaveClass('mx-auto', 'max-w-5xl');
     expect(
       within(configurationCard as HTMLElement).getByText('logs.siem.events.title'),
     ).toBeInTheDocument();
