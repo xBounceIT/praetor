@@ -6,6 +6,7 @@ import pool from '../db/index.ts';
 import { authenticateToken, requirePermission } from '../middleware/auth.ts';
 import * as generalSettingsRepo from '../repositories/generalSettingsRepo.ts';
 import * as reportsAiChatRepo from '../repositories/reportsAiChatRepo.ts';
+import * as reportsBusinessDocsRepo from '../repositories/reportsBusinessDocsRepo.ts';
 import * as reportsCatalogRepo from '../repositories/reportsCatalogRepo.ts';
 import * as reportsClientsRepo from '../repositories/reportsClientsRepo.ts';
 import * as reportsHoursRepo from '../repositories/reportsHoursRepo.ts';
@@ -1309,11 +1310,15 @@ const DATASET_SECTIONS = [
   'projects',
   'tasks',
   'quotes',
+  'clientOffers',
   'orders',
   'invoices',
   'suppliers',
   'supplierQuotes',
+  'supplierOrders',
+  'supplierInvoices',
   'catalog',
+  'resales',
 ] as const;
 
 export type DatasetSection = (typeof DATASET_SECTIONS)[number];
@@ -1347,6 +1352,14 @@ const datasetSectionTerms: Record<DatasetSection, string[]> = {
   projects: ['project', 'projects', 'progetto', 'progetti'],
   tasks: ['task', 'tasks', 'attivita', 'attivita ricorrenti'],
   quotes: ['quote', 'quotes', 'quotation', 'quotations', 'preventivo', 'preventivi'],
+  clientOffers: [
+    'client offer',
+    'client offers',
+    'customer offer',
+    'customer offers',
+    'offerta cliente',
+    'offerte clienti',
+  ],
   orders: ['order', 'orders', 'sale', 'sales', 'ordine', 'ordini'],
   invoices: ['invoice', 'invoices', 'fattura', 'fatture', 'overdue', 'aging', 'scadenzario'],
   suppliers: ['supplier', 'suppliers', 'fornitore', 'fornitori'],
@@ -1355,25 +1368,82 @@ const datasetSectionTerms: Record<DatasetSection, string[]> = {
     'supplier quotes',
     'supplierquote',
     'supplierquotes',
-    'purchase order',
     'offerta fornitore',
     'offerte fornitori',
   ],
+  supplierOrders: [
+    'supplier order',
+    'supplier orders',
+    'purchase order',
+    'purchase orders',
+    'ordine fornitore',
+    'ordini fornitori',
+  ],
+  supplierInvoices: [
+    'supplier invoice',
+    'supplier invoices',
+    'purchase invoice',
+    'purchase invoices',
+    'fattura fornitore',
+    'fatture fornitori',
+  ],
   catalog: ['catalog', 'catalogo', 'product', 'products', 'prodotto', 'prodotti', 'subcategory'],
+  resales: ['resale', 'resales', 'rivendita', 'rivendite', 'margine rivendita'],
 };
+
+const qualifiedDatasetSectionTerms: Partial<Record<DatasetSection, string[]>> = {
+  quotes: [
+    'client quote',
+    'client quotes',
+    'customer quote',
+    'customer quotes',
+    'preventivo cliente',
+    'preventivi clienti',
+  ],
+  clientOffers: datasetSectionTerms.clientOffers,
+  orders: [
+    'client order',
+    'client orders',
+    'customer order',
+    'customer orders',
+    'ordine cliente',
+    'ordini clienti',
+  ],
+  invoices: [
+    'client invoice',
+    'client invoices',
+    'customer invoice',
+    'customer invoices',
+    'fattura cliente',
+    'fatture clienti',
+  ],
+  supplierQuotes: datasetSectionTerms.supplierQuotes,
+  supplierOrders: datasetSectionTerms.supplierOrders,
+  supplierInvoices: datasetSectionTerms.supplierInvoices,
+};
+
+const invoiceAnalysisTerms = ['overdue', 'aging', 'scadenzario'];
 
 const normalizeQueryText = (value: string) =>
   value
+    .normalize('NFD')
+    .replace(/\p{M}+/gu, '')
     .replace(/([a-z])([A-Z])/g, '$1 $2')
     .toLowerCase()
     .replace(/[_-]+/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 
+const escapeRegex = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 const includesTerm = (haystack: string, term: string) => {
-  const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const pattern = new RegExp(`(^|[^a-z0-9])${escaped}([^a-z0-9]|$)`);
+  const pattern = new RegExp(`(^|[^a-z0-9])${escapeRegex(term)}([^a-z0-9]|$)`);
   return pattern.test(haystack);
+};
+
+const removeTerm = (haystack: string, term: string) => {
+  const pattern = new RegExp(`(^|[^a-z0-9])${escapeRegex(term)}(?=[^a-z0-9]|$)`, 'g');
+  return haystack.replace(pattern, '$1');
 };
 
 const shouldIncludeDatasetSection = (
@@ -1440,19 +1510,39 @@ export const determineRequestedSections = (
   }
 
   const matchedSections = new Set<DatasetSection>();
+  let unqualifiedDetectionText = detectionText;
+  for (const section of DATASET_SECTIONS) {
+    const terms = qualifiedDatasetSectionTerms[section];
+    if (!terms) continue;
+    if (terms.some((term) => includesTerm(detectionText, normalizeQueryText(term)))) {
+      matchedSections.add(section);
+    }
+    for (const term of terms) {
+      unqualifiedDetectionText = removeTerm(unqualifiedDetectionText, normalizeQueryText(term));
+    }
+  }
+
+  if (matchedSections.has('supplierInvoices') && !matchedSections.has('invoices')) {
+    for (const term of invoiceAnalysisTerms) {
+      unqualifiedDetectionText = removeTerm(unqualifiedDetectionText, term);
+    }
+  }
+
   for (const section of DATASET_SECTIONS) {
     const terms = datasetSectionTerms[section];
-    if (terms.some((term) => includesTerm(detectionText, normalizeQueryText(term)))) {
+    if (terms.some((term) => includesTerm(unqualifiedDetectionText, normalizeQueryText(term)))) {
       matchedSections.add(section);
     }
   }
 
   if (matchedSections.size === 0) return requestTargetsAttachments ? new Set() : null;
-  if (matchedSections.size >= 8) return null;
+  if (matchedSections.size >= Math.ceil(DATASET_SECTIONS.length * 0.75)) return null;
 
   if (matchedSections.has('tasks')) matchedSections.add('projects');
   if (matchedSections.has('projects')) matchedSections.add('tasks');
   if (matchedSections.has('supplierQuotes')) matchedSections.add('suppliers');
+  if (matchedSections.has('supplierOrders')) matchedSections.add('suppliers');
+  if (matchedSections.has('supplierInvoices')) matchedSections.add('suppliers');
 
   return matchedSections;
 };
@@ -1492,6 +1582,7 @@ export const buildBusinessDataset = async (
     }
     const permissionsApplied = new Set<string>();
     const includedSections = new Set<DatasetSection>();
+    const availableSections = new Set<DatasetSection>();
     const requestedSectionsLabel = requestedSections
       ? Array.from(requestedSections).sort()
       : ['all'];
@@ -1511,7 +1602,7 @@ export const buildBusinessDataset = async (
 
     const dataset: Record<string, unknown> = {
       meta: {
-        datasetVersion: 2,
+        datasetVersion: 3,
         generatedAt: new Date().toISOString(),
         fromDate,
         toDate,
@@ -1521,6 +1612,7 @@ export const buildBusinessDataset = async (
           permissionsApplied: [] as string[],
         },
         context: contextState,
+        availableSections: [] as string[],
         truncation: truncationState,
       },
     };
@@ -1553,6 +1645,7 @@ export const buildBusinessDataset = async (
       : null;
 
     if (canViewTimesheets) {
+      availableSections.add('timesheets');
       addGrantedPermissions(
         request,
         ['timesheets.tracker.view', 'timesheets.tracker_all.view'],
@@ -1627,12 +1720,24 @@ export const buildBusinessDataset = async (
       ...supplierWorkflowViewPermissions,
     ];
     const canViewQuotes = hasPermission(request, 'sales.client_quotes.view');
+    const canViewClientOffers = hasPermission(request, 'sales.client_offers.view');
     const canViewOrders = hasPermission(request, 'accounting.clients_orders.view');
     const canViewInvoices = hasPermission(request, 'accounting.clients_invoices.view');
     const canViewSupplierQuotes = hasPermission(request, 'sales.supplier_quotes.view');
+    const canViewSupplierOrders = hasPermission(request, 'accounting.supplier_orders.view');
+    const canViewSupplierInvoices = hasPermission(request, 'accounting.supplier_invoices.view');
+    const canViewResales = hasPermission(request, 'projects.resales.view');
 
+    if (canViewQuotes) availableSections.add('quotes');
+    if (canViewOrders) availableSections.add('orders');
+    if (canViewInvoices) availableSections.add('invoices');
+    if (canViewSupplierQuotes) availableSections.add('supplierQuotes');
     if (canViewQuotes)
       addGrantedPermissions(request, ['sales.client_quotes.view'], permissionsApplied);
+    if (canViewClientOffers) {
+      availableSections.add('clientOffers');
+      addGrantedPermissions(request, ['sales.client_offers.view'], permissionsApplied);
+    }
     if (canViewOrders) {
       addGrantedPermissions(request, ['accounting.clients_orders.view'], permissionsApplied);
     }
@@ -1642,13 +1747,27 @@ export const buildBusinessDataset = async (
     if (canViewSupplierQuotes) {
       addGrantedPermissions(request, ['sales.supplier_quotes.view'], permissionsApplied);
     }
+    if (canViewSupplierOrders) {
+      availableSections.add('supplierOrders');
+      addGrantedPermissions(request, ['accounting.supplier_orders.view'], permissionsApplied);
+    }
+    if (canViewSupplierInvoices) {
+      availableSections.add('supplierInvoices');
+      addGrantedPermissions(request, ['accounting.supplier_invoices.view'], permissionsApplied);
+    }
+    if (canViewResales) {
+      availableSections.add('resales');
+      addGrantedPermissions(request, ['projects.resales.view'], permissionsApplied);
+    }
 
     const canListProducts = productListPermissions.some((p) => hasPermission(request, p));
+    if (canListProducts) availableSections.add('catalog');
     if (canListProducts) {
       addGrantedPermissions(request, productListPermissions, permissionsApplied);
     }
 
     const canListClients = clientListPermissions.some((p) => hasPermission(request, p));
+    if (canListClients) availableSections.add('clients');
 
     if (canListClients && shouldIncludeDatasetSection(requestedSections, 'clients')) {
       includedSections.add('clients');
@@ -1662,6 +1781,7 @@ export const buildBusinessDataset = async (
           toDate,
           canViewAllClients,
           canViewQuotes,
+          canViewOffers: canViewClientOffers,
           canViewOrders,
           canViewInvoices,
           canViewTimesheets,
@@ -1679,6 +1799,7 @@ export const buildBusinessDataset = async (
       'timesheets.tracker.view',
       'timesheets.recurring.view',
     ].some((p) => hasPermission(request, p));
+    if (canListProjects) availableSections.add('projects');
     if (canListProjects && shouldIncludeDatasetSection(requestedSections, 'projects')) {
       includedSections.add('projects');
       addGrantedPermissions(
@@ -1724,6 +1845,7 @@ export const buildBusinessDataset = async (
       'timesheets.tracker.view',
       'timesheets.recurring.view',
     ].some((p) => hasPermission(request, p));
+    if (canListTasks) availableSections.add('tasks');
     if (canListTasks && shouldIncludeDatasetSection(requestedSections, 'tasks')) {
       includedSections.add('tasks');
       addGrantedPermissions(
@@ -1761,6 +1883,13 @@ export const buildBusinessDataset = async (
         datasetDb,
       );
     }
+    if (canViewClientOffers && shouldIncludeDatasetSection(requestedSections, 'clientOffers')) {
+      includedSections.add('clientOffers');
+      dataset.clientOffers = await reportsBusinessDocsRepo.getClientOffersSection(
+        { fromDate, toDate, topLimit: listLimits.top },
+        datasetDb,
+      );
+    }
 
     if (canViewOrders && shouldIncludeDatasetSection(requestedSections, 'orders')) {
       includedSections.add('orders');
@@ -1779,6 +1908,7 @@ export const buildBusinessDataset = async (
     }
 
     const canListSuppliers = supplierListPermissions.some((p) => hasPermission(request, p));
+    if (canListSuppliers) availableSections.add('suppliers');
     if (canListSuppliers && shouldIncludeDatasetSection(requestedSections, 'suppliers')) {
       includedSections.add('suppliers');
       addGrantedPermissions(request, supplierListPermissions, permissionsApplied);
@@ -1801,10 +1931,35 @@ export const buildBusinessDataset = async (
         datasetDb,
       );
     }
+    if (canViewSupplierOrders && shouldIncludeDatasetSection(requestedSections, 'supplierOrders')) {
+      includedSections.add('supplierOrders');
+      dataset.supplierOrders = await reportsBusinessDocsRepo.getSupplierOrdersSection(
+        { fromDate, toDate, topLimit: listLimits.top },
+        datasetDb,
+      );
+    }
+
+    if (
+      canViewSupplierInvoices &&
+      shouldIncludeDatasetSection(requestedSections, 'supplierInvoices')
+    ) {
+      includedSections.add('supplierInvoices');
+      dataset.supplierInvoices = await reportsBusinessDocsRepo.getSupplierInvoicesSection(
+        { fromDate, toDate, topLimit: listLimits.top },
+        datasetDb,
+      );
+    }
 
     if (canListProducts && shouldIncludeDatasetSection(requestedSections, 'catalog')) {
       includedSections.add('catalog');
       dataset.catalog = await reportsCatalogRepo.getCatalogSection(
+        { fromDate, toDate, topLimit: listLimits.top },
+        datasetDb,
+      );
+    }
+    if (canViewResales && shouldIncludeDatasetSection(requestedSections, 'resales')) {
+      includedSections.add('resales');
+      dataset.resales = await reportsBusinessDocsRepo.getResalesSection(
         { fromDate, toDate, topLimit: listLimits.top },
         datasetDb,
       );
@@ -1815,6 +1970,7 @@ export const buildBusinessDataset = async (
     if (scope) {
       scope.permissionsApplied = Array.from(permissionsApplied).sort();
     }
+    if (meta) meta.availableSections = Array.from(availableSections).sort();
 
     // Keep dataset size bounded with progressive trimming.
     const maxChars = 50_000;
@@ -1846,10 +2002,14 @@ export const buildBusinessDataset = async (
 
     const dropOrder = [
       'catalog',
+      'resales',
+      'supplierInvoices',
+      'supplierOrders',
       'supplierQuotes',
       'suppliers',
       'invoices',
       'orders',
+      'clientOffers',
       'quotes',
       'tasks',
       'projects',

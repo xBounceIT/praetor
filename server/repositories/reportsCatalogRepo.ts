@@ -1,6 +1,7 @@
 import { sql } from 'drizzle-orm';
 import { type DbExecutor, db, executeRows } from '../db/drizzle.ts';
 import { toDbNumber, toDbText } from '../utils/parse.ts';
+import { supplierQuoteNetValueSql } from './reportsCommercialSql.ts';
 
 type SupplierRow = {
   id: string;
@@ -108,7 +109,7 @@ export const getSuppliersSection = async (
               SELECT
                 sq.id,
                 sq.supplier_id,
-                SUM(sqi.quantity * sqi.unit_price) as net_value
+                ${supplierQuoteNetValueSql} as net_value
               FROM supplier_quotes sq
               JOIN supplier_quote_items sqi ON sqi.quote_id = sq.id
              WHERE sq.created_at::date >= ${fromDate}
@@ -203,7 +204,7 @@ export const getSupplierQuotesSection = async (
       sql`WITH per_quote AS (
           SELECT
             sq.id,
-            SUM(sqi.quantity * sqi.unit_price) as net_value
+            ${supplierQuoteNetValueSql} as net_value
             FROM supplier_quotes sq
             JOIN supplier_quote_items sqi ON sqi.quote_id = sq.id
            WHERE sq.created_at::date >= ${fromDate} AND sq.created_at::date <= ${toDate}
@@ -223,7 +224,7 @@ export const getSupplierQuotesSection = async (
             sq.status,
             sq.supplier_name,
             sq.created_at,
-            SUM(sqi.quantity * sqi.unit_price) as net_value
+            ${supplierQuoteNetValueSql} as net_value
             FROM supplier_quotes sq
             JOIN supplier_quote_items sqi ON sqi.quote_id = sq.id
            WHERE sq.created_at::date >= ${fromDate} AND sq.created_at::date <= ${toDate}
@@ -240,7 +241,7 @@ export const getSupplierQuotesSection = async (
           SELECT
             sq.id,
             sq.created_at,
-            SUM(sqi.quantity * sqi.unit_price) as net_value
+            ${supplierQuoteNetValueSql} as net_value
             FROM supplier_quotes sq
             JOIN supplier_quote_items sqi ON sqi.quote_id = sq.id
            WHERE sq.created_at::date >= ${fromDate} AND sq.created_at::date <= ${toDate}
@@ -260,7 +261,7 @@ export const getSupplierQuotesSection = async (
           SELECT
             sq.id,
             sq.supplier_name,
-            SUM(sqi.quantity * sqi.unit_price) as net_value
+            ${supplierQuoteNetValueSql} as net_value
             FROM supplier_quotes sq
             JOIN supplier_quote_items sqi ON sqi.quote_id = sq.id
            WHERE sq.created_at::date >= ${fromDate} AND sq.created_at::date <= ${toDate}
@@ -289,7 +290,7 @@ export const getSupplierQuotesSection = async (
             sq.supplier_name,
             sq.status,
             sq.created_at,
-            SUM(sqi.quantity * sqi.unit_price) as net_value
+            ${supplierQuoteNetValueSql} as net_value
             FROM supplier_quotes sq
             JOIN supplier_quote_items sqi ON sqi.quote_id = sq.id
            WHERE sq.created_at::date >= ${fromDate} AND sq.created_at::date <= ${toDate}

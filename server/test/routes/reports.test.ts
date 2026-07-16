@@ -3,6 +3,7 @@ import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import * as realDrizzle from '../../db/drizzle.ts';
 import * as realGeneralSettingsRepo from '../../repositories/generalSettingsRepo.ts';
 import * as realReportsAiChatRepo from '../../repositories/reportsAiChatRepo.ts';
+import * as realReportsBusinessDocsRepo from '../../repositories/reportsBusinessDocsRepo.ts';
 import * as realReportsCatalogRepo from '../../repositories/reportsCatalogRepo.ts';
 import * as realReportsClientsRepo from '../../repositories/reportsClientsRepo.ts';
 import * as realReportsHoursRepo from '../../repositories/reportsHoursRepo.ts';
@@ -27,6 +28,7 @@ const permissionsSnap = { ...realPermissions };
 const generalSettingsRepoSnap = { ...realGeneralSettingsRepo };
 const aiChatSnap = { ...realReportsAiChatRepo };
 const reportsCatalogSnap = { ...realReportsCatalogRepo };
+const reportsBusinessDocsSnap = { ...realReportsBusinessDocsRepo };
 const reportsClientsSnap = { ...realReportsClientsRepo };
 const reportsHoursSnap = { ...realReportsHoursRepo };
 const reportsRevenueSnap = { ...realReportsRevenueRepo };
@@ -70,6 +72,10 @@ const getInvoicesSectionMock = mock(async () => ({}));
 const getSuppliersSectionMock = mock(async () => ({}));
 const getSupplierQuotesSectionMock = mock(async () => ({}));
 const getCatalogSectionMock = mock(async () => ({}));
+const getClientOffersSectionMock = mock(async () => ({}));
+const getSupplierOrdersSectionMock = mock(async () => ({}));
+const getSupplierInvoicesSectionMock = mock(async () => ({}));
+const getResalesSectionMock = mock(async () => ({}));
 const listManagedUserIdsMock = mock(async () => [] as string[]);
 
 let originalFetch: typeof fetch;
@@ -81,6 +87,7 @@ const localAiFetchMock = mock(async (input: string | URL, init?: RequestInit) =>
 
 let routePlugin: FastifyPluginAsync;
 let determineRequestedSections: typeof import('../../routes/reports.ts').determineRequestedSections;
+let buildBusinessDataset: typeof import('../../routes/reports.ts').buildBusinessDataset;
 
 beforeAll(async () => {
   installAuthMiddlewareMock();
@@ -122,6 +129,14 @@ beforeAll(async () => {
     updateAssistantTechnicalInfo: updateAssistantTechnicalInfoMock,
     getFirstUserMessageContent: getFirstUserMessageContentMock,
   }));
+  mock.module('../../repositories/reportsBusinessDocsRepo.ts', () => ({
+    ...reportsBusinessDocsSnap,
+    getClientOffersSection: getClientOffersSectionMock,
+    getSupplierOrdersSection: getSupplierOrdersSectionMock,
+    getSupplierInvoicesSection: getSupplierInvoicesSectionMock,
+    getResalesSection: getResalesSectionMock,
+  }));
+
   mock.module('../../repositories/reportsCatalogRepo.ts', () => ({
     ...reportsCatalogSnap,
     getSuppliersSection: getSuppliersSectionMock,
@@ -160,6 +175,7 @@ beforeAll(async () => {
   const reportsModule = await import('../../routes/reports.ts');
   routePlugin = reportsModule.default as FastifyPluginAsync;
   determineRequestedSections = reportsModule.determineRequestedSections;
+  buildBusinessDataset = reportsModule.buildBusinessDataset;
 
   originalFetch = globalThis.fetch;
   globalThis.fetch = fetchMock as unknown as typeof fetch;
@@ -173,6 +189,7 @@ afterAll(() => {
   mock.module('../../repositories/generalSettingsRepo.ts', () => generalSettingsRepoSnap);
   mock.module('../../repositories/reportsAiChatRepo.ts', () => aiChatSnap);
   mock.module('../../repositories/reportsCatalogRepo.ts', () => reportsCatalogSnap);
+  mock.module('../../repositories/reportsBusinessDocsRepo.ts', () => reportsBusinessDocsSnap);
   mock.module('../../repositories/reportsClientsRepo.ts', () => reportsClientsSnap);
   mock.module('../../repositories/reportsHoursRepo.ts', () => reportsHoursSnap);
   mock.module('../../repositories/reportsRevenueRepo.ts', () => reportsRevenueSnap);
@@ -244,6 +261,10 @@ const allMocks = [
   getSuppliersSectionMock,
   getSupplierQuotesSectionMock,
   getCatalogSectionMock,
+  getClientOffersSectionMock,
+  getSupplierOrdersSectionMock,
+  getSupplierInvoicesSectionMock,
+  getResalesSectionMock,
   listManagedUserIdsMock,
   fetchMock,
   withDbTransactionMock,
@@ -375,6 +396,116 @@ describe('determineRequestedSections', () => {
     ]);
 
     expect(sections).toEqual(new Set());
+  });
+
+  test('recognizes modern datasets without loading generic client document sections', () => {
+    const sections = determineRequestedSections(
+      'Compare client offers, supplier orders, supplier invoices and resales',
+      [],
+    );
+
+    expect(sections).toEqual(
+      new Set(['clientOffers', 'supplierOrders', 'supplierInvoices', 'suppliers', 'resales']),
+    );
+  });
+
+  test('normalizes Italian diacritics when selecting a dataset', () => {
+    const sections = determineRequestedSections('Analizza le attività ricorrenti', []);
+
+    expect(sections).toEqual(new Set(['projects', 'tasks']));
+  });
+
+  test('recognizes qualified client documents without loading client master data', () => {
+    const sections = determineRequestedSections(
+      'Compare client quotes, client orders and client invoices',
+      [],
+    );
+
+    expect(sections).toEqual(new Set(['quotes', 'orders', 'invoices']));
+  });
+
+  test('does not treat supplier invoice aging as client invoice data', () => {
+    const sections = determineRequestedSections('Show overdue supplier invoices', []);
+
+    expect(sections).toEqual(new Set(['supplierInvoices', 'suppliers']));
+  });
+
+  test('keeps an explicitly requested generic dataset beside a qualified one', () => {
+    const sections = determineRequestedSections('Compare supplier orders with all orders', []);
+
+    expect(sections).toEqual(new Set(['orders', 'supplierOrders', 'suppliers']));
+  });
+});
+
+describe('buildBusinessDataset modern sections', () => {
+  test('loads newly available sections only when their view permissions are granted', async () => {
+    getClientOffersSectionMock.mockResolvedValue({ source: 'client-offers' });
+    getSupplierOrdersSectionMock.mockResolvedValue({ source: 'supplier-orders' });
+    getSupplierInvoicesSectionMock.mockResolvedValue({ source: 'supplier-invoices' });
+    getResalesSectionMock.mockResolvedValue({ source: 'resales' });
+
+    const result = await buildBusinessDataset(
+      {
+        user: {
+          id: 'u1',
+          permissions: [
+            'sales.client_offers.view',
+            'accounting.supplier_orders.view',
+            'accounting.supplier_invoices.view',
+            'projects.resales.view',
+          ],
+        },
+      } as never,
+      AI_ENABLED_SETTINGS as never,
+      '2026-04-01',
+      '2026-07-31',
+    );
+
+    expect(result.dataset).toMatchObject({
+      clientOffers: { source: 'client-offers' },
+      supplierOrders: { source: 'supplier-orders' },
+      supplierInvoices: { source: 'supplier-invoices' },
+      resales: { source: 'resales' },
+      meta: {
+        datasetVersion: 3,
+        availableSections: expect.arrayContaining([
+          'clientOffers',
+          'supplierOrders',
+          'supplierInvoices',
+          'resales',
+        ]),
+      },
+    });
+    expect(getClientOffersSectionMock).toHaveBeenCalledTimes(1);
+    expect(getSupplierOrdersSectionMock).toHaveBeenCalledTimes(1);
+    expect(getSupplierInvoicesSectionMock).toHaveBeenCalledTimes(1);
+    expect(getResalesSectionMock).toHaveBeenCalledTimes(1);
+  });
+
+  test('does not expose or load modern sections without their view permissions', async () => {
+    const requestedSections = new Set([
+      'clientOffers',
+      'supplierOrders',
+      'supplierInvoices',
+      'resales',
+    ] as const);
+    const result = await buildBusinessDataset(
+      { user: { id: 'u1', permissions: [] } } as never,
+      AI_ENABLED_SETTINGS as never,
+      '2026-04-01',
+      '2026-07-31',
+      requestedSections,
+    );
+
+    expect(result.dataset).not.toHaveProperty('clientOffers');
+    expect(result.dataset).not.toHaveProperty('supplierOrders');
+    expect(result.dataset).not.toHaveProperty('supplierInvoices');
+    expect(result.dataset).not.toHaveProperty('resales');
+    expect(result.dataset).toHaveProperty('meta.availableSections', []);
+    expect(getClientOffersSectionMock).not.toHaveBeenCalled();
+    expect(getSupplierOrdersSectionMock).not.toHaveBeenCalled();
+    expect(getSupplierInvoicesSectionMock).not.toHaveBeenCalled();
+    expect(getResalesSectionMock).not.toHaveBeenCalled();
   });
 });
 
@@ -829,6 +960,10 @@ describe('POST /api/reports/ai-reporting/chat (non-streaming)', () => {
       getSuppliersSectionMock,
       getSupplierQuotesSectionMock,
       getCatalogSectionMock,
+      getClientOffersSectionMock,
+      getSupplierOrdersSectionMock,
+      getSupplierInvoicesSectionMock,
+      getResalesSectionMock,
     ]) {
       expect(sectionMock).not.toHaveBeenCalled();
     }
