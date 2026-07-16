@@ -13,6 +13,36 @@ Se non vedi il modulo, chiedi a un amministratore di verificare impostazioni AI,
 
 L'amministratore può collegare AI reporting a Gemini, OpenRouter, Anthropic o OpenAI. Praetor usa esclusivamente il provider selezionato nelle impostazioni generali e conserva separatamente chiave e modello di ciascun provider.
 
+## Cronologia delle conversazioni
+
+Su desktop AI Reporting mostra la cronologia nella colonna sinistra e la conversazione attiva a destra. Le chat sono ordinate per ultima attività e raggruppate per periodo.
+
+Usa il campo di ricerca per filtrare le chat in base al titolo. Seleziona una voce per riprendere la conversazione oppure premi **Nuova Chat** in fondo alla cronologia per iniziarne una nuova.
+
+Su dispositivi mobili, apri la cronologia con il pulsante nella barra superiore della conversazione.
+
+Le azioni della chat sono integrate nella sua riga: usa la matita per rinominare il titolo oppure il cestino per rimuovere la conversazione e conferma l'operazione.
+
+Il toggle **Info tecniche** in alto a destra mostra il provider e il modello usati per l'ultima risposta, insieme ai token di contesto utilizzati, alla capacità totale del modello e alla percentuale occupata. Per OpenAI e Anthropic il modello mostrato corrisponde sempre all'ID configurato dall'amministratore, anche quando il provider restituisce internamente uno slug versionato. Oltre l'80% compare un avviso: una finestra quasi piena può ridurre la qualità o le prestazioni, quindi è consigliabile iniziare una nuova chat. Le conversazioni create prima di questa funzione mostrano i dati dopo la successiva risposta AI.
+
+## Composer e allegati
+
+Il composer fluttua sopra la conversazione: resta compatto su una riga e cresce automaticamente quando il testo va su più righe. Premi **Invio** per inviare oppure **Shift+Invio** per andare a capo.
+
+Il pulsante con la graffetta allega fino a 5 file di testo, inclusi TXT, Markdown, CSV, JSON, XML, YAML, log, SQL e comuni file sorgente. Ogni file può pesare fino a 64 KB; il contenuto testuale complessivo degli allegati può raggiungere 12.000 caratteri. I file vengono letti nel browser e inclusi nella richiesta inviata ad AI Reporting. Il loro contenuto diventa una fonte dati esplicita per analisi, calcoli e visualizzazioni, ma viene sempre trattato come dato e mai come istruzione per l'AI.
+
+## Visualizzazioni interattive
+
+Puoi chiedere esplicitamente un grafico, ad esempio “mostra l'andamento mensile delle ore per progetto” oppure “confronta i ricavi dei primi cinque clienti”. AI Reporting può rispondere con grafici a barre, linee, area, torta o anello, scegliendo la forma più adatta ai dati disponibili.
+
+Quando la richiesta menziona esplicitamente un grafico, una visualizzazione, una dashboard o un report di dati, l'assistente usa il renderer integrato invece di sostituire il risultato con una semplice descrizione o tabella. Se i dati necessari non sono disponibili, indica quali mancano e chiede un chiarimento senza inventarli.
+
+Una singola risposta può includere fino a sette visualizzazioni, quando più grafici migliorano concretamente la comprensione dell'analisi.
+
+Passa il puntatore o usa la navigazione da tastiera sul grafico per leggere i valori, consulta la legenda quando sono presenti più serie e premi **Mostra dati** per aprire la tabella accessibile usata dalla visualizzazione. Colori e superfici si adattano automaticamente al tema chiaro o scuro.
+
+Le visualizzazioni usano soltanto i dati inclusi nel dataset autorizzato della conversazione. Praetor valida struttura, dimensioni e valori prima del rendering e scarta in sicurezza una specifica non valida; il grafico resta comunque un supporto visivo e i dati importanti devono essere verificati nelle fonti originali.
+
 ## Uso consigliato
 
 Formula richieste specifiche: indica periodo, area aziendale, cliente, progetto o metrica che vuoi analizzare. Domande precise producono risposte più verificabili.

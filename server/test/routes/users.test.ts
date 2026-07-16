@@ -3588,6 +3588,21 @@ describe('GET /api/users/:id/assignments', () => {
 
     expect(res.statusCode).toBe(403);
   });
+
+  test('403 all-scope tracker viewer cannot read unmanaged user assignments', async () => {
+    findAuthUserByIdMock.mockResolvedValue(MANAGER_USER);
+    getRolePermissionsMock.mockResolvedValue(['timesheets.tracker_all.view']);
+    canManageUserMock.mockResolvedValue(false);
+
+    const res = await testApp.inject({
+      method: 'GET',
+      url: '/api/users/u-target/assignments',
+      headers: managerAuth(),
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(getAssignmentsMock).not.toHaveBeenCalled();
+  });
 });
 
 describe('GET /api/users/:id/tracker-catalogs', () => {
@@ -3660,6 +3675,21 @@ describe('GET /api/users/:id/tracker-catalogs', () => {
 
     expect(res.statusCode).toBe(403);
     expect(listTasksForUserMock).not.toHaveBeenCalled();
+  });
+
+  test('200 all-scope tracker viewer can load an unmanaged user catalog', async () => {
+    findAuthUserByIdMock.mockResolvedValue(MANAGER_USER);
+    getRolePermissionsMock.mockResolvedValue(['timesheets.tracker_all.view']);
+    canManageUserMock.mockResolvedValue(false);
+
+    const res = await testApp.inject({
+      method: 'GET',
+      url: '/api/users/u-target/tracker-catalogs',
+      headers: managerAuth(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(canManageUserMock).not.toHaveBeenCalled();
   });
 
   test('200 includes parent project and client for task-only assignments', async () => {

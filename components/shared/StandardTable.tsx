@@ -960,12 +960,22 @@ export type StandardTableProps<T extends object = object> = {
    * backward compatibility. Use this when multiple tables share the same translated title.
    */
   persistenceKey?: string;
+  /** Override the header count, including when client-side data is supplied. */
   totalCount?: number;
   totalLabel?: string;
   headerExtras?: ReactNode;
   headerAction?: ReactNode;
   /** Whether users and saved views may hide columns. Defaults to true. */
   allowColumnHiding?: boolean;
+  /** Override the built-in visible-row CSV export (for server-generated reports). */
+  onExportCsv?: () => void | Promise<void>;
+  /** Disables the export action while a custom export is in progress. */
+  isExporting?: boolean;
+  /**
+   * Hide saved-view and column configuration controls. Defaults to true.
+   * Font-size and CSV controls remain available.
+   */
+  showConfigurationControls?: boolean;
   containerClassName?: string;
   tableContainerClassName?: string;
   /** Stacking level for all portaled table menus, selects, tooltips, and nested view dialogs. */
@@ -1019,6 +1029,9 @@ const useStandardTableController = <T extends object>({
   headerExtras,
   headerAction,
   allowColumnHiding = true,
+  onExportCsv,
+  isExporting = false,
+  showConfigurationControls = true,
   containerClassName,
   tableContainerClassName,
   popupZIndex,
@@ -1057,7 +1070,9 @@ const useStandardTableController = <T extends object>({
   // non-empty `initialFilterState` is present OR the caller forces deep-link mode
   // (`suppressSavedView`) because its filter value resolves asynchronously.
   const skipSavedView =
-    suppressSavedView || (initialFilterState != null && Object.keys(initialFilterState).length > 0);
+    suppressSavedView ||
+    !showConfigurationControls ||
+    (initialFilterState != null && Object.keys(initialFilterState).length > 0);
   const [tableViewState, dispatchTableView] = useReducer(tableViewReducer, null, () =>
     createInitialTableViewState({
       title: storageIdentity,
@@ -2005,7 +2020,7 @@ const useStandardTableController = <T extends object>({
     .map((column) => colsById.get(column.id))
     .filter((column): column is Column<T> => column !== undefined);
   const processedRows = shouldRenderTable ? table.getPrePaginationRowModel().rows : [];
-  const totalItems = shouldRenderTable ? processedRows.length : externalTotalCount || 0;
+  const totalItems = externalTotalCount ?? (shouldRenderTable ? processedRows.length : 0);
   const totalPages = shouldRenderTable ? table.getPageCount() : Math.ceil(totalItems / rowsPerPage);
   const paginatedRows = shouldRenderTable ? table.getRowModel().rows : [];
 
@@ -2275,6 +2290,10 @@ const useStandardTableController = <T extends object>({
   // Skips columns without an accessor (Actions, etc.) - they render UI from
   // `cell` and have no scalar value to serialize.
   const handleExportToCsv = () => {
+    if (onExportCsv) {
+      void onExportCsv();
+      return;
+    }
     const exportColumns = visibleColumns.filter(
       (c) => c.accessorKey != null || c.accessorFn != null,
     );
@@ -2672,6 +2691,9 @@ const useStandardTableController = <T extends object>({
     headerExtras,
     headerAction,
     allowColumnHiding,
+    isExporting,
+    hasCustomCsvExport: onExportCsv != null,
+    showConfigurationControls,
     containerClassName,
     tableContainerClassName,
     popupZIndex,
@@ -2846,11 +2868,14 @@ const StandardTableToolbar = <T extends object>({
     setModalState,
     stepFontSize,
     fontSize,
+    isExporting,
+    hasCustomCsvExport,
+    showConfigurationControls,
   } = controller;
 
   return (
     <>
-      {showSaveColumnOrderTip && (
+      {showConfigurationControls && showSaveColumnOrderTip && (
         <StandardTableToolbarButton
           label={t('table.saveColumnOrderTip')}
           icon={<Lightbulb className="size-3.5" aria-hidden="true" />}
@@ -2864,7 +2889,7 @@ const StandardTableToolbar = <T extends object>({
         label={t('table.exportToCsv')}
         iconClass="fa-file-export"
         onClick={handleExportToCsv}
-        disabled={processedRows.length === 0}
+        disabled={isExporting || (!hasCustomCsvExport && processedRows.length === 0)}
         text={t('table.export')}
       />
       <StandardTableToolbarButton
@@ -2879,7 +2904,7 @@ const StandardTableToolbar = <T extends object>({
         onClick={() => stepFontSize(1)}
         disabled={fontSize === 'base'}
       />
-      <StandardTableColumnSettingsMenu controller={controller} />
+      {showConfigurationControls && <StandardTableColumnSettingsMenu controller={controller} />}
     </>
   );
 };

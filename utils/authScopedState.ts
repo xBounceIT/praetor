@@ -40,7 +40,7 @@ export type AuthScopedStateKey =
   | 'entries'
   | 'workUnits'
   | 'responsibleUserOptions'
-  | 'viewingUserAssignmentState';
+  | 'viewingUserCatalogState';
 
 export const ALL_AUTH_SCOPED_KEYS: readonly AuthScopedStateKey[] = [
   'hasLoadedGeneralSettings',
@@ -74,7 +74,7 @@ export const ALL_AUTH_SCOPED_KEYS: readonly AuthScopedStateKey[] = [
   'entries',
   'workUnits',
   'responsibleUserOptions',
-  'viewingUserAssignmentState',
+  'viewingUserCatalogState',
 ];
 
 // `Record` (not `Partial`) so a new union member that lacks a registered

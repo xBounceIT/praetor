@@ -24,6 +24,10 @@ export type ChatMessage = {
   role: string;
   content: string;
   thoughtContent: string | null;
+  aiProvider: string | null;
+  aiModelId: string | null;
+  contextTokensUsed: number | null;
+  contextWindowTokens: number | null;
   createdAt: number;
 };
 
@@ -85,6 +89,25 @@ export const archiveSession = async (
     .update(reportChatSessions)
     .set({ isArchived: true, updatedAt: sql`CURRENT_TIMESTAMP` })
     .where(and(eq(reportChatSessions.id, id), eq(reportChatSessions.userId, userId)));
+  return (result.rowCount ?? 0) > 0;
+};
+
+export const renameSession = async (
+  id: string,
+  userId: string,
+  title: string,
+  exec: DbExecutor = db,
+): Promise<boolean> => {
+  const result = await exec
+    .update(reportChatSessions)
+    .set({ title })
+    .where(
+      and(
+        eq(reportChatSessions.id, id),
+        eq(reportChatSessions.userId, userId),
+        eq(reportChatSessions.isArchived, false),
+      ),
+    );
   return (result.rowCount ?? 0) > 0;
 };
 
@@ -175,6 +198,10 @@ export const listMessagesForSession = async (
       role: reportChatMessages.role,
       content: reportChatMessages.content,
       thoughtContent: reportChatMessages.thoughtContent,
+      aiProvider: reportChatMessages.aiProvider,
+      aiModelId: reportChatMessages.aiModelId,
+      contextTokensUsed: reportChatMessages.contextTokensUsed,
+      contextWindowTokens: reportChatMessages.contextWindowTokens,
       createdAt: reportChatMessages.createdAt,
     })
     .from(reportChatMessages)
@@ -187,6 +214,10 @@ export const listMessagesForSession = async (
     role: r.role,
     content: r.content,
     thoughtContent: r.thoughtContent || null,
+    aiProvider: r.aiProvider || null,
+    aiModelId: r.aiModelId || null,
+    contextTokensUsed: r.contextTokensUsed ?? null,
+    contextWindowTokens: r.contextWindowTokens ?? null,
     // `created_at` is nullable in the schema but has DEFAULT CURRENT_TIMESTAMP -
     // `?? 0` is a TS-strict appeasement for the unreachable branch.
     createdAt: r.createdAt?.getTime() ?? 0,
@@ -235,6 +266,10 @@ export type InsertAssistantMessageInput = {
   sessionId: string;
   content: string;
   thoughtContent: string | null;
+  aiProvider?: string | null;
+  aiModelId?: string | null;
+  contextTokensUsed?: number | null;
+  contextWindowTokens?: number | null;
   createdAt?: Date | string;
 };
 
@@ -248,6 +283,10 @@ export const insertAssistantMessage = async (
     role: CHAT_ROLE.assistant,
     content: input.content,
     thoughtContent: input.thoughtContent,
+    aiProvider: input.aiProvider ?? null,
+    aiModelId: input.aiModelId ?? null,
+    contextTokensUsed: input.contextTokensUsed ?? null,
+    contextWindowTokens: input.contextWindowTokens ?? null,
     ...(input.createdAt !== undefined ? { createdAt: new Date(input.createdAt) } : {}),
   });
 };
@@ -303,6 +342,24 @@ export const updateMessageContent = async (
   exec: DbExecutor = db,
 ): Promise<void> => {
   await exec.update(reportChatMessages).set({ content }).where(eq(reportChatMessages.id, id));
+};
+
+export type AssistantTechnicalInfoInput = {
+  aiProvider: string;
+  aiModelId: string;
+  contextTokensUsed: number;
+  contextWindowTokens: number;
+};
+
+export const updateAssistantTechnicalInfo = async (
+  id: string,
+  technicalInfo: AssistantTechnicalInfoInput,
+  exec: DbExecutor = db,
+): Promise<void> => {
+  await exec
+    .update(reportChatMessages)
+    .set(technicalInfo)
+    .where(and(eq(reportChatMessages.id, id), eq(reportChatMessages.role, CHAT_ROLE.assistant)));
 };
 
 export const getFirstUserMessageContent = async (

@@ -11335,7 +11335,10 @@
                     "type": "string"
                   },
                   "description": {
-                    "type": "string"
+                    "type": [
+                      "string",
+                      "null"
+                    ]
                   },
                   "orderId": {
                     "type": "string"
@@ -12203,7 +12206,10 @@
                     "type": "string"
                   },
                   "description": {
-                    "type": "string"
+                    "type": [
+                      "string",
+                      "null"
+                    ]
                   },
                   "isDisabled": {
                     "type": "boolean"
@@ -53832,6 +53838,190 @@
         }
       }
     },
+    "/api/reports/ai-reporting/sessions/{id}": {
+      "patch": {
+        "summary": "Rename an AI Reporting chat session",
+        "tags": [
+          "reports"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "title": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 80
+                  }
+                },
+                "required": [
+                  "title"
+                ]
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "success"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/reports/ai-reporting/sessions/{id}/messages": {
       "get": {
         "summary": "List messages for an AI Reporting session",
@@ -53888,6 +54078,35 @@
                       },
                       "thoughtContent": {
                         "type": "string"
+                      },
+                      "technicalInfo": {
+                        "type": "object",
+                        "properties": {
+                          "provider": {
+                            "type": "string",
+                            "enum": [
+                              "gemini",
+                              "openrouter",
+                              "anthropic",
+                              "openai"
+                            ]
+                          },
+                          "modelId": {
+                            "type": "string"
+                          },
+                          "contextTokensUsed": {
+                            "type": "number"
+                          },
+                          "contextWindowTokens": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "provider",
+                          "modelId",
+                          "contextTokensUsed",
+                          "contextWindowTokens"
+                        ]
                       },
                       "createdAt": {
                         "type": "number"
@@ -54569,6 +54788,35 @@
                     },
                     "thoughtContent": {
                       "type": "string"
+                    },
+                    "technicalInfo": {
+                      "type": "object",
+                      "properties": {
+                        "provider": {
+                          "type": "string",
+                          "enum": [
+                            "gemini",
+                            "openrouter",
+                            "anthropic",
+                            "openai"
+                          ]
+                        },
+                        "modelId": {
+                          "type": "string"
+                        },
+                        "contextTokensUsed": {
+                          "type": "number"
+                        },
+                        "contextWindowTokens": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "provider",
+                        "modelId",
+                        "contextTokensUsed",
+                        "contextWindowTokens"
+                      ]
                     }
                   },
                   "required": [

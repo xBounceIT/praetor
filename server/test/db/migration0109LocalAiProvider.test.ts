@@ -1,11 +1,11 @@
 import { describe, expect, test } from 'bun:test';
 import { readMigrationFile } from '../helpers/schemaFiles.ts';
 
-const MIGRATION = readMigrationFile('0107_add_local_ai_provider.sql');
+const MIGRATION = readMigrationFile('0109_add_local_ai_provider.sql');
 const readJournal = async () =>
   Bun.file(new URL('../../db/migrations/meta/_journal.json', import.meta.url)).json();
 
-describe('migration 0107: adds local AI reporting provider', () => {
+describe('migration 0109: adds local AI reporting provider', () => {
   test('adds nullable local endpoint fields without rewriting existing settings', () => {
     expect(MIGRATION).toContain('ADD COLUMN "local_api_key" varchar(255)');
     expect(MIGRATION).toContain('ADD COLUMN "local_base_url" varchar(2048)');
@@ -22,14 +22,14 @@ describe('migration 0107: adds local AI reporting provider', () => {
     );
   });
 
-  test('is registered immediately after the OpenAI provider migration', async () => {
+  test('is registered immediately after the time reports migration', async () => {
     const journal = (await readJournal()) as { entries: Array<{ idx: number; tag: string }> };
-    const index = journal.entries.findIndex((entry) => entry.tag === '0107_add_local_ai_provider');
+    const index = journal.entries.findIndex((entry) => entry.tag === '0109_add_local_ai_provider');
     expect(journal.entries[index - 1]).toEqual(
-      expect.objectContaining({ idx: 106, tag: '0106_add_openai_ai_provider' }),
+      expect.objectContaining({ idx: 108, tag: '0108_add_time_reports' }),
     );
     expect(journal.entries[index]).toEqual(
-      expect.objectContaining({ idx: 107, tag: '0107_add_local_ai_provider' }),
+      expect.objectContaining({ idx: 109, tag: '0109_add_local_ai_provider' }),
     );
   });
 });

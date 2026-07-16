@@ -1,5 +1,5 @@
 {
-  "id": "a18526b8-8ac6-4533-9187-074dfdabe953",
+  "id": "74f1b94d-06f7-4426-b122-76429261707a",
   "prevId": "decb60fe-88b4-47ce-a580-1013d1d31148",
   "version": "7",
   "dialect": "postgresql",
@@ -1339,18 +1339,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "local_api_key": {
-          "name": "local_api_key",
-          "type": "varchar(255)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "local_base_url": {
-          "name": "local_base_url",
-          "type": "varchar(2048)",
-          "primaryKey": false,
-          "notNull": false
-        },
         "gemini_model_id": {
           "name": "gemini_model_id",
           "type": "varchar(255)",
@@ -1371,12 +1359,6 @@
         },
         "openai_model_id": {
           "name": "openai_model_id",
-          "type": "varchar(255)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "local_model_id": {
-          "name": "local_model_id",
           "type": "varchar(255)",
           "primaryKey": false,
           "notNull": false
@@ -1461,7 +1443,7 @@
         },
         "general_settings_ai_provider_check": {
           "name": "general_settings_ai_provider_check",
-          "value": "\"general_settings\".\"ai_provider\" IN ('gemini', 'openrouter', 'anthropic', 'openai', 'local')"
+          "value": "\"general_settings\".\"ai_provider\" IN ('gemini', 'openrouter', 'anthropic', 'openai')"
         },
         "general_settings_ril_default_start_time_check": {
           "name": "general_settings_ril_default_start_time_check",
@@ -4334,6 +4316,30 @@
         "thought_content": {
           "name": "thought_content",
           "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "ai_provider": {
+          "name": "ai_provider",
+          "type": "varchar(20)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "ai_model_id": {
+          "name": "ai_model_id",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "context_tokens_used": {
+          "name": "context_tokens_used",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "context_window_tokens": {
+          "name": "context_window_tokens",
+          "type": "integer",
           "primaryKey": false,
           "notNull": false
         },

@@ -754,8 +754,22 @@
     {
       "idx": 107,
       "version": "7",
-      "when": 1784070406043,
-      "tag": "0107_add_local_ai_provider",
+      "when": 1784066394120,
+      "tag": "0107_add_ai_reporting_technical_info",
+      "breakpoints": true
+    },
+    {
+      "idx": 108,
+      "version": "7",
+      "when": 1784197767878,
+      "tag": "0108_add_time_reports",
+      "breakpoints": true
+    },
+    {
+      "idx": 109,
+      "version": "7",
+      "when": 1784205553546,
+      "tag": "0109_add_local_ai_provider",
       "breakpoints": true
     }
   ]

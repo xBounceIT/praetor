@@ -68,6 +68,8 @@
     },
     "reports": {
       "ai_reporting": "AI Reporting",
+      "time_report": "Time reports",
+      "time_report_all": "Time reports (All users)",
       "cost": "Cost reports"
     },
     "configuration": {

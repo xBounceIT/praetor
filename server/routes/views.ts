@@ -5,13 +5,18 @@ import * as viewsRepo from '../repositories/viewsRepo.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import { logAudit } from '../utils/audit.ts';
 import { assertAuthenticated } from '../utils/auth-assert.ts';
-import { getForeignKeyViolation } from '../utils/db-errors.ts';
+import { getForeignKeyViolation, getUniqueViolation } from '../utils/db-errors.ts';
 import { generatePrefixedId } from '../utils/order-ids.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { replyError } from '../utils/replyError.ts';
-import { badRequest, requireNonEmptyString, validateEnum } from '../utils/validation.ts';
+import {
+  badRequest,
+  parseDateString,
+  requireNonEmptyString,
+  validateEnum,
+} from '../utils/validation.ts';
 
-const SAVED_VIEW_KINDS = ['table', 'dashboard'] as const;
+const SAVED_VIEW_KINDS = ['table', 'dashboard', 'report'] as const;
 const SHARE_PERMISSIONS = ['read', 'write'] as const;
 
 // ---------------------------------------------------------------------------
@@ -131,6 +136,14 @@ const MAX_CONFIG_BYTES = 100_000;
 const isStringArray = (v: unknown): v is string[] =>
   Array.isArray(v) && v.every((item) => typeof item === 'string');
 
+const isNonEmptyString = (value: unknown): value is string =>
+  typeof value === 'string' && value.trim() !== '';
+const isCanonicalIdArray = (value: unknown, maximum: number): value is string[] =>
+  isStringArray(value) &&
+  value.length <= maximum &&
+  value.every((item) => item.trim() !== '') &&
+  new Set(value).size === value.length;
+
 const isValidSortState = (v: unknown): boolean => {
   if (v === null || v === undefined) return true;
   if (typeof v !== 'object') return false;
@@ -177,6 +190,58 @@ const isValidTableConfig = (config: Record<string, unknown>): boolean =>
 const isValidDashboardConfig = (config: Record<string, unknown>): boolean =>
   Array.isArray(config.layout) && config.layout.every(isValidWidgetState);
 
+const REPORT_PERIOD_PRESETS = new Set([
+  'today',
+  'yesterday',
+  'this_week',
+  'last_week',
+  'this_month',
+  'last_month',
+  'this_year',
+  'last_year',
+  'custom',
+]);
+const REPORT_FIELDS = new Set(['user', 'client', 'project', 'task', 'duration', 'note', 'cost']);
+const REPORT_GROUPS = new Set(['date', 'user', 'client', 'project', 'task']);
+
+const isValidReportConfig = (config: Record<string, unknown>): boolean => {
+  const task = config.task;
+  const fromDate = parseDateString(config.fromDate, 'fromDate');
+  const toDate = parseDateString(config.toDate, 'toDate');
+  const validTask =
+    task === null ||
+    (!!task &&
+      typeof task === 'object' &&
+      !Array.isArray(task) &&
+      isNonEmptyString((task as Record<string, unknown>).projectId) &&
+      ((task as Record<string, unknown>).taskId === null ||
+        isNonEmptyString((task as Record<string, unknown>).taskId)) &&
+      isNonEmptyString((task as Record<string, unknown>).name));
+  return (
+    typeof config.periodPreset === 'string' &&
+    REPORT_PERIOD_PRESETS.has(config.periodPreset) &&
+    fromDate.ok &&
+    toDate.ok &&
+    fromDate.value <= toDate.value &&
+    isCanonicalIdArray(config.userIds, 1_000) &&
+    (config.clientId === null || isNonEmptyString(config.clientId)) &&
+    isCanonicalIdArray(config.projectIds, 1_000) &&
+    validTask &&
+    typeof config.noteContains === 'string' &&
+    config.noteContains.length <= 2_000 &&
+    isStringArray(config.fields) &&
+    config.fields.length <= REPORT_FIELDS.size &&
+    new Set(config.fields).size === config.fields.length &&
+    config.fields.every((field) => REPORT_FIELDS.has(field)) &&
+    isStringArray(config.groupBy) &&
+    config.groupBy.length <= 3 &&
+    new Set(config.groupBy).size === config.groupBy.length &&
+    config.groupBy.every((group) => REPORT_GROUPS.has(group)) &&
+    typeof config.totalsOnly === 'boolean' &&
+    (!config.totalsOnly || config.groupBy.length > 0)
+  );
+};
+
 // Returns the validated config object, or an error message describing why it's rejected.
 const validateConfig = (
   kind: (typeof SAVED_VIEW_KINDS)[number],
@@ -190,7 +255,12 @@ const validateConfig = (
     return { ok: false, message: 'config exceeds the maximum allowed size' };
   }
   const config = raw as Record<string, unknown>;
-  const valid = kind === 'table' ? isValidTableConfig(config) : isValidDashboardConfig(config);
+  const valid =
+    kind === 'table'
+      ? isValidTableConfig(config)
+      : kind === 'dashboard'
+        ? isValidDashboardConfig(config)
+        : isValidReportConfig(config);
   if (!valid) {
     return { ok: false, message: `config is not a valid ${kind} view payload` };
   }
@@ -238,6 +308,26 @@ async function authorizeViewAccess(
   return found;
 }
 
+const canUseReportViews = (request: FastifyRequest): boolean =>
+  request.user?.role !== 'admin' &&
+  !!request.user?.permissions.some(
+    (permission) =>
+      permission === 'reports.time_report.view' || permission === 'reports.time_report_all.view',
+  );
+
+const assertCanUseKind = (
+  request: FastifyRequest,
+  reply: FastifyReply,
+  kind: (typeof SAVED_VIEW_KINDS)[number],
+): boolean => {
+  if (kind !== 'report' || canUseReportViews(request)) return true;
+  reply.code(403).send({ error: 'Time report permission is required' });
+  return false;
+};
+
+const isReportFavoriteNameConflict = (error: unknown): boolean =>
+  getUniqueViolation(error)?.constraint === 'idx_saved_views_report_owner_scope_name_unique';
+
 export default async function (fastify: FastifyInstance, _opts: unknown) {
   // Saved views are a per-user productivity feature available to any authenticated user.
   // Ownership / share permission is enforced in-handler via viewsRepo.findAccess.
@@ -264,6 +354,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const kindResult = validateEnum(query.kind, SAVED_VIEW_KINDS, 'kind');
       if (!kindResult.ok) return badRequest(reply, kindResult.message);
+      if (!assertCanUseKind(request, reply, kindResult.value)) return;
       const scopeKeyResult = requireNonEmptyString(query.scopeKey, 'scopeKey');
       if (!scopeKeyResult.ok) return badRequest(reply, scopeKeyResult.message);
 
@@ -316,6 +407,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const kindResult = validateEnum(body.kind, SAVED_VIEW_KINDS, 'kind');
       if (!kindResult.ok) return badRequest(reply, kindResult.message);
+      if (!assertCanUseKind(request, reply, kindResult.value)) return;
       const scopeKeyResult = requireNonEmptyString(body.scopeKey, 'scopeKey');
       if (!scopeKeyResult.ok) return badRequest(reply, scopeKeyResult.message);
       const nameResult = requireNonEmptyString(body.name, 'name');
@@ -323,15 +415,32 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const configResult = validateConfig(kindResult.value, body.config);
       if (!configResult.ok) return badRequest(reply, configResult.message);
 
+      if (
+        kindResult.value === 'report' &&
+        (await viewsRepo.reportNameExists(request.user.id, scopeKeyResult.value, nameResult.value))
+      ) {
+        return reply.code(409).send({ error: 'A report favorite with this name already exists' });
+      }
+
       const id = generatePrefixedId('sv');
-      const created = await viewsRepo.create({
-        id,
-        ownerId: request.user.id,
-        kind: kindResult.value,
-        scopeKey: scopeKeyResult.value,
-        name: nameResult.value,
-        config: configResult.value,
-      });
+      let created: Awaited<ReturnType<typeof viewsRepo.create>>;
+      try {
+        created = await viewsRepo.create({
+          id,
+          ownerId: request.user.id,
+          kind: kindResult.value,
+          scopeKey: scopeKeyResult.value,
+          name: nameResult.value,
+          config: configResult.value,
+        });
+      } catch (error) {
+        if (kindResult.value === 'report' && isReportFavoriteNameConflict(error)) {
+          return reply.code(409).send({
+            error: 'A report favorite with this name already exists',
+          });
+        }
+        throw error;
+      }
 
       await logAudit({
         request,
@@ -374,6 +483,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         'saved_view.update',
       );
       if (!viewAccess) return;
+      const viewKind = await viewsRepo.getViewKind(idResult.value);
+      if (!viewKind) return reply.code(404).send({ error: 'Saved view not found' });
+      if (!assertCanUseKind(request, reply, viewKind)) return;
 
       const body = request.body as { name?: unknown; config?: unknown };
       const patch: viewsRepo.UpdateSavedViewInput = {};
@@ -383,25 +495,32 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         if (!nameResult.ok) return badRequest(reply, nameResult.message);
         patch.name = nameResult.value;
       }
+      if (
+        viewKind === 'report' &&
+        patch.name &&
+        (await viewsRepo.reportNameExistsForView(idResult.value, patch.name))
+      ) {
+        return reply.code(409).send({ error: 'A report favorite with this name already exists' });
+      }
       // Validate a config patch against the view's own kind so a table config can't be
       // written onto a dashboard view (or vice versa).
       if (Object.hasOwn(body, 'config')) {
-        const kind = await viewsRepo.getViewKind(idResult.value);
-        if (!kind) {
-          return replyError(request, reply, {
-            statusCode: 404,
-            message: 'Saved view not found',
-            action: 'saved_view.update.not_found',
-            entityType: 'saved_view',
-            entityId: idResult.value,
-          });
-        }
-        const configResult = validateConfig(kind, body.config);
+        const configResult = validateConfig(viewKind, body.config);
         if (!configResult.ok) return badRequest(reply, configResult.message);
         patch.config = configResult.value;
       }
 
-      const updated = await viewsRepo.update(idResult.value, patch);
+      let updated: Awaited<ReturnType<typeof viewsRepo.update>>;
+      try {
+        updated = await viewsRepo.update(idResult.value, patch);
+      } catch (error) {
+        if (viewKind === 'report' && isReportFavoriteNameConflict(error)) {
+          return reply.code(409).send({
+            error: 'A report favorite with this name already exists',
+          });
+        }
+        throw error;
+      }
       if (!updated) {
         return replyError(request, reply, {
           statusCode: 404,
@@ -504,6 +623,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return;
       }
 
+      if ((await viewsRepo.getViewKind(idResult.value)) === 'report') {
+        return badRequest(reply, 'Report favorites cannot be shared');
+      }
+
       const shares = await viewsRepo.getShares(idResult.value);
       return { shares };
     },
@@ -539,6 +662,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         'saved_view.shares_update',
       );
       if (!access) return;
+      if ((await viewsRepo.getViewKind(idResult.value)) === 'report') {
+        return badRequest(reply, 'Report favorites cannot be shared');
+      }
       const { ownerId } = access;
 
       const body = request.body as { shares?: unknown };

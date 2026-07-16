@@ -32,6 +32,8 @@ const listForUserMock = mock();
 const findAccessMock = mock();
 const getViewKindMock = mock();
 const createMock = mock();
+const reportNameExistsMock = mock();
+const reportNameExistsForViewMock = mock();
 const updateMock = mock();
 const deleteByIdMock = mock();
 const getSharesMock = mock();
@@ -63,6 +65,8 @@ beforeAll(async () => {
     findAccess: findAccessMock,
     getViewKind: getViewKindMock,
     create: createMock,
+    reportNameExists: reportNameExistsMock,
+    reportNameExistsForView: reportNameExistsForViewMock,
     update: updateMock,
     deleteById: deleteByIdMock,
     getShares: getSharesMock,
@@ -103,6 +107,20 @@ const TABLE_CONFIG = {
   filterState: {},
 };
 
+const REPORT_CONFIG = {
+  periodPreset: 'this_month',
+  fromDate: '2026-07-01',
+  toDate: '2026-07-31',
+  userIds: ['u1'],
+  clientId: null,
+  projectIds: [],
+  task: null,
+  noteContains: '',
+  fields: ['client', 'duration'],
+  groupBy: [],
+  totalsOnly: false,
+};
+
 const OWNED_VIEW = {
   id: 'sv-1',
   ownerId: 'u1',
@@ -125,6 +143,8 @@ const allMocks = [
   findAccessMock,
   getViewKindMock,
   createMock,
+  reportNameExistsMock,
+  reportNameExistsForViewMock,
   updateMock,
   deleteByIdMock,
   getSharesMock,
@@ -142,6 +162,9 @@ beforeEach(async () => {
   userHasRoleMock.mockResolvedValue(true);
   getRolePermissionsMock.mockResolvedValue([]);
   logAuditMock.mockImplementation(async () => undefined);
+  getViewKindMock.mockResolvedValue('table');
+  reportNameExistsMock.mockResolvedValue(false);
+  reportNameExistsForViewMock.mockResolvedValue(false);
 
   testApp = await buildRouteTestApp(routePlugin, '/api/views');
 });
@@ -150,6 +173,9 @@ afterEach(async () => {
   await testApp.close();
 });
 
+const REPORT_PERMISSION = 'reports.time_report.view';
+const REPORT_SCOPE_KEY = 'reports.time_report';
+const REPORT_KIND = 'report' as const;
 const authHeader = (userId = 'u1') => ({ authorization: `Bearer ${signToken({ userId })}` });
 
 describe('GET /api/views', () => {
@@ -307,6 +333,70 @@ describe('POST /api/views', () => {
   });
 });
 
+test('accepts valid and rejects invalid report favorite configs', async () => {
+  getRolePermissionsMock.mockResolvedValue([REPORT_PERMISSION]);
+  createMock.mockResolvedValue({ ...OWNED_VIEW, kind: REPORT_KIND, config: REPORT_CONFIG });
+
+  const valid = await testApp.inject({
+    method: 'POST',
+    url: '/api/views',
+    headers: authHeader(),
+    payload: {
+      kind: REPORT_KIND,
+      scopeKey: REPORT_SCOPE_KEY,
+      name: 'Mine',
+      config: REPORT_CONFIG,
+    },
+  });
+  const invalid = await testApp.inject({
+    method: 'POST',
+    url: '/api/views',
+    headers: authHeader(),
+    payload: {
+      kind: REPORT_KIND,
+      scopeKey: REPORT_SCOPE_KEY,
+      name: 'Bad',
+      config: { ...REPORT_CONFIG, fromDate: '2026-02-30' },
+    },
+  });
+  const invalidIds = await testApp.inject({
+    method: 'POST',
+    url: '/api/views',
+    headers: authHeader(),
+    payload: {
+      kind: REPORT_KIND,
+      scopeKey: REPORT_SCOPE_KEY,
+      name: 'Bad IDs',
+      config: { ...REPORT_CONFIG, userIds: ['u1', 'u1'], projectIds: [''] },
+    },
+  });
+
+  expect(valid.statusCode).toBe(201);
+  expect(invalid.statusCode).toBe(400);
+  expect(invalidIds.statusCode).toBe(400);
+  expect(createMock).toHaveBeenCalledTimes(1);
+});
+
+test('maps a concurrent duplicate report favorite insert to 409', async () => {
+  getRolePermissionsMock.mockResolvedValue([REPORT_PERMISSION]);
+  createMock.mockRejectedValue(
+    makeDbError('23505', 'idx_saved_views_report_owner_scope_name_unique'),
+  );
+
+  const res = await testApp.inject({
+    method: 'POST',
+    url: '/api/views',
+    headers: authHeader(),
+    payload: {
+      kind: REPORT_KIND,
+      scopeKey: REPORT_SCOPE_KEY,
+      name: 'Mine',
+      config: REPORT_CONFIG,
+    },
+  });
+
+  expect(res.statusCode).toBe(409);
+});
 describe('PUT /api/views/:id', () => {
   test('200 when the owner updates (name only)', async () => {
     findAccessMock.mockResolvedValue({ ownerId: 'u1', access: 'owner' });
@@ -390,6 +480,23 @@ describe('PUT /api/views/:id', () => {
     expect(res.statusCode).toBe(404);
     expect(updateMock).not.toHaveBeenCalled();
   });
+});
+
+test('rejects a duplicate report favorite rename', async () => {
+  getRolePermissionsMock.mockResolvedValue([REPORT_PERMISSION]);
+  findAccessMock.mockResolvedValue({ ownerId: 'u1', access: 'owner' });
+  getViewKindMock.mockResolvedValue(REPORT_KIND);
+  reportNameExistsForViewMock.mockResolvedValue(true);
+
+  const res = await testApp.inject({
+    method: 'PUT',
+    url: '/api/views/sv-1',
+    headers: authHeader(),
+    payload: { name: 'Existing' },
+  });
+
+  expect(res.statusCode).toBe(409);
+  expect(updateMock).not.toHaveBeenCalled();
 });
 
 describe('DELETE /api/views/:id', () => {

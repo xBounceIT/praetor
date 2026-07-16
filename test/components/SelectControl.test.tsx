@@ -219,7 +219,7 @@ describe('<SelectControl />', () => {
     );
 
     expect(screen.getByText('Apple')).toBeInTheDocument();
-    expect(screen.getByRole('button')).toHaveClass('h-auto', 'min-h-9', 'whitespace-normal');
+    expect(screen.getByRole('button')).toHaveClass('h-9', 'overflow-hidden', 'whitespace-nowrap');
     expect(screen.getByText('Apple').parentElement).toHaveClass('text-foreground');
 
     fireEvent.click(screen.getByRole('button'));
@@ -232,6 +232,28 @@ describe('<SelectControl />', () => {
     );
     expect(screen.getAllByText('Apple').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Banana').length).toBeGreaterThan(0);
+  });
+
+  test('multi combobox shows one or two selected values responsively and summarizes the rest', () => {
+    render(
+      <SelectControl
+        options={options}
+        value={['a', 'b', 'c']}
+        onChange={() => {}}
+        searchable
+        isMulti
+      />,
+    );
+
+    const trigger = screen.getByRole('button');
+    expect(within(trigger).getByText('Apple')).toBeInTheDocument();
+    expect(within(trigger).getByText('Banana').parentElement).toHaveClass(
+      'hidden',
+      'sm:inline-flex',
+    );
+    expect(within(trigger).queryByText('Cherry')).toBeNull();
+    expect(within(trigger).getByText('+2')).toHaveClass('sm:hidden');
+    expect(within(trigger).getByText('+1')).toHaveClass('hidden', 'sm:inline-flex');
   });
 
   test('empty-string option ids round-trip through plain select', () => {
@@ -329,6 +351,22 @@ describe('<SelectControl />', () => {
     expect(onChange).toHaveBeenCalledWith('a');
   });
 
+  test('searchable single select keeps its selected disabled option disabled', () => {
+    const onChange = mock((_value: string | string[]) => {});
+    const disabledOptions = [options[0], { ...options[1], disabled: true }];
+
+    render(<SelectControl options={disabledOptions} value="b" onChange={onChange} searchable />);
+    fireEvent.click(screen.getByRole('button'));
+
+    const disabledOption = within(screen.getByRole('dialog')).getByText('Banana');
+    expect(disabledOption.closest('[data-slot="command-item"]')).toHaveAttribute(
+      'data-disabled',
+      'true',
+    );
+
+    fireEvent.click(disabledOption);
+    expect(onChange).not.toHaveBeenCalled();
+  });
   test('multi-select all excludes disabled options', () => {
     const onChange = mock((_value: string | string[]) => {});
     const disabledOptions = [options[0], { ...options[1], disabled: true }, options[2]];
@@ -360,5 +398,28 @@ describe('<SelectControl />', () => {
     fireEvent.click(removeControl as HTMLElement);
 
     expect(onChange).toHaveBeenCalledWith(['a']);
+  });
+
+  test('multi-select can remove a hidden selected option that later becomes disabled', () => {
+    const onChange = mock((_value: string | string[]) => {});
+    const disabledOptions = [options[0], options[1], { ...options[2], disabled: true }];
+
+    render(
+      <SelectControl
+        options={disabledOptions}
+        value={['a', 'b', 'c']}
+        onChange={onChange}
+        searchable
+        isMulti
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button'));
+    const hiddenSelectedOption = screen.getByText('Cherry').closest('[data-slot="command-item"]');
+    expect(hiddenSelectedOption).not.toBeNull();
+    expect(hiddenSelectedOption).toHaveAttribute('data-disabled', 'false');
+    fireEvent.click(hiddenSelectedOption as HTMLElement);
+
+    expect(onChange).toHaveBeenCalledWith(['a', 'b']);
   });
 });

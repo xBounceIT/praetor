@@ -76,6 +76,16 @@ describe('findAuthUserById', () => {
   });
 });
 
+describe('findLoginUserByExactUsername', () => {
+  test('uses an exact username lookup for bootstrap compatibility', async () => {
+    exec.enqueue({ rows: [] });
+
+    expect(await usersRepo.findLoginUserByExactUsername('admin', testDb)).toBeNull();
+    expect(exec.calls[0].params).toContain('admin');
+    expect(exec.calls[0].sql).not.toContain('LOWER(');
+  });
+});
+
 describe('findLoginUserByNormalizedUsername', () => {
   test('returns the mapped login user when the row exists', async () => {
     // Projection: id, name, username, role, passwordHash, avatarInitials, isDisabled,

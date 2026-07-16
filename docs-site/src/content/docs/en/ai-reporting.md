@@ -13,6 +13,36 @@ If you do not see the module, ask an administrator to check AI settings, API key
 
 Administrators can connect AI reporting to Gemini, OpenRouter, Anthropic, or OpenAI. Praetor uses only the provider selected in general settings and stores each provider's key and model separately.
 
+## Conversation history
+
+On desktop, AI Reporting shows conversation history in the left column and the active chat on the right. Chats are ordered by latest activity and grouped by time period.
+
+Use the search field to filter chats by title. Select an item to resume that conversation, or press **New Chat** at the bottom of the history to start a new one.
+
+On mobile devices, open the history with the button in the conversation header.
+
+Chat actions are contained in its history row: use the pencil to rename the title, or use the trash button to remove the conversation and confirm the action.
+
+The **Technical info** toggle in the top-right corner shows the provider and model used for the latest response, together with used context tokens, the model's total capacity, and the percentage occupied. For OpenAI and Anthropic, the displayed model always matches the ID configured by the administrator, even when the provider internally returns a versioned slug. Above 80%, a warning appears: a nearly full window can reduce quality or performance, so starting a new chat is recommended. Conversations created before this feature show these details after their next AI response.
+
+## Composer and attachments
+
+The composer floats over the conversation: it stays compact on one line and grows automatically when the text wraps onto additional lines. Press **Enter** to send or **Shift+Enter** to insert a new line.
+
+Use the paperclip button to attach up to 5 text files, including TXT, Markdown, CSV, JSON, XML, YAML, logs, SQL, and common source-code files. Each file can be up to 64 KB, while the combined text content can contain up to 12,000 characters. Files are read in the browser and included in the request sent to AI Reporting. Their contents become an explicit data source for analysis, calculations, and visualizations, while remaining data rather than instructions for the AI.
+
+## Interactive visualizations
+
+You can explicitly request a chart, for example “show the monthly trend of hours by project” or “compare revenue for the top five customers.” AI Reporting can answer with bar, line, area, pie, or donut charts and select the shape that best fits the available data.
+
+When a request explicitly asks for a chart, visualization, dashboard, or data report, the assistant uses the built-in renderer instead of substituting a prose-only description or table. If required data is unavailable, it identifies what is missing and asks for clarification without inventing values.
+
+A single response can include up to seven visualizations when multiple charts materially improve the analysis.
+
+Point at the chart or use keyboard navigation to read values, use the legend when several series are present, and press **Show data** to open the accessible table behind the visualization. Colors and surfaces automatically adapt to the light or dark theme.
+
+Visualizations use only data included in the conversation's authorized dataset. Praetor validates the structure, size, and values before rendering and safely discards an invalid specification; charts remain a visual aid, so verify important figures against their original sources.
+
 ## Recommended use
 
 Ask specific questions: include period, business area, customer, project, or metric you want to analyze. Precise questions produce answers that are easier to verify.

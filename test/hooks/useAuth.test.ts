@@ -573,7 +573,7 @@ describe('useAuth', () => {
     expect(onLoginB).toHaveBeenLastCalledWith({ id: 'check-b' });
   });
 
-  test('pending retry-sleep timer is cleared on unmount (no leaked setTimeout)', async () => {
+  test('pending retry sleep is cleared and settled on unmount', async () => {
     tokenStore.token = 'good-token';
     apiMocks.authMe.mockImplementation(() => Promise.reject(new ApiErrorStub('offline', 0, true)));
 
@@ -582,8 +582,31 @@ describe('useAuth', () => {
     const SLEEP_MS = 5000;
     const sleepTimerIds = new Set<unknown>();
     const clearedIds: unknown[] = [];
+    let retrySleepScheduled = false;
+    let retrySleepSettled = false;
     const realSetTimeout = globalThis.setTimeout;
     const realClearTimeout = globalThis.clearTimeout;
+    const RealPromise = globalThis.Promise;
+    // Track the explicit Promise created by sleep() without exposing test-only
+    // state from the hook; the distinctive timer delay identifies that Promise.
+    const TrackedPromise = function <T>(
+      executor: (
+        resolve: (value: T | PromiseLike<T>) => void,
+        reject: (reason?: unknown) => void,
+      ) => void,
+    ) {
+      let isRetrySleep = false;
+      return new RealPromise<T>((resolve, reject) => {
+        executor((value) => {
+          if (isRetrySleep) retrySleepSettled = true;
+          resolve(value);
+        }, reject);
+        isRetrySleep = retrySleepScheduled;
+        retrySleepScheduled = false;
+      });
+    };
+    Object.setPrototypeOf(TrackedPromise, RealPromise);
+    TrackedPromise.prototype = RealPromise.prototype;
     // Use plain assignment instead of spyOn so @testing-library doesn't treat
     // setTimeout as a jest-fake-timer mock (which makes waitFor explode).
     globalThis.setTimeout = ((
@@ -592,13 +615,17 @@ describe('useAuth', () => {
       ...rest: unknown[]
     ) => {
       const id = (realSetTimeout as unknown as (...a: unknown[]) => unknown)(cb, ms, ...rest);
-      if (ms === SLEEP_MS) sleepTimerIds.add(id);
+      if (ms === SLEEP_MS) {
+        sleepTimerIds.add(id);
+        retrySleepScheduled = true;
+      }
       return id;
     }) as unknown as typeof setTimeout;
     globalThis.clearTimeout = ((id: unknown) => {
       clearedIds.push(id);
       return (realClearTimeout as unknown as (i: unknown) => void)(id);
     }) as unknown as typeof clearTimeout;
+    globalThis.Promise = TrackedPromise as unknown as PromiseConstructor;
 
     try {
       const { unmount } = renderHook(() => useAuth({ retryDelaysMs: [SLEEP_MS] }));
@@ -611,9 +638,11 @@ describe('useAuth', () => {
 
       const cleared = clearedIds.some((id) => sleepTimerIds.has(id));
       expect(cleared).toBe(true);
+      expect(retrySleepSettled).toBe(true);
     } finally {
       globalThis.setTimeout = realSetTimeout;
       globalThis.clearTimeout = realClearTimeout;
+      globalThis.Promise = RealPromise;
     }
   });
 

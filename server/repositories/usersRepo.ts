@@ -395,6 +395,18 @@ export const revokeTokensForUnenrolledEnforcedUsers = async (
   return rows.length;
 };
 
+export const findLoginUserByExactUsername = async (
+  username: string,
+  exec: DbExecutor = db,
+): Promise<LoginUserWithAuth | null> => {
+  const rows = await exec
+    .select(LOGIN_USER_PROJECTION)
+    .from(users)
+    .where(eq(users.username, username))
+    .limit(1);
+  return rows[0] ? mapLoginUserRow(rows[0]) : null;
+};
+
 export const findLoginUserByNormalizedUsername = async (
   username: string,
   exec: DbExecutor = db,

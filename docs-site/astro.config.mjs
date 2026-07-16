@@ -38,6 +38,7 @@ export default defineConfig({
             'time-tracking',
             'crm-projects',
             'sales-accounting',
+            'time-report',
             'ai-reporting',
             'administration',
             'faq',

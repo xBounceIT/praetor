@@ -71,6 +71,8 @@ export const PERMISSION_DEFINITIONS: PermissionDefinition[] = [
 
   // Reports
   { id: 'reports.ai_reporting', actions: ['view', 'create'] },
+  { id: 'reports.time_report', actions: VIEW_ONLY },
+  { id: 'reports.time_report_all', actions: VIEW_ONLY, isScope: true },
   // `reports.cost.view` gates exposure of per-entry / aggregated *cost* numbers
   // (duration * hourly_cost) - kept separate from `hr.costs` because someone can be
   // allowed to read cost roll-ups in reports without being trusted to set per-user

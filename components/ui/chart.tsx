@@ -41,6 +41,10 @@ const LazyBarChart = lazyRechartsComponent('BarChart');
 const LazyCartesianGrid = lazyRechartsComponent('CartesianGrid');
 const LazyLabelList = lazyRechartsComponent('LabelList');
 const LazyLegend = lazyRechartsComponent('Legend');
+const LazyLine = lazyRechartsComponent('Line');
+const LazyLineChart = lazyRechartsComponent('LineChart');
+const LazyPie = lazyRechartsComponent('Pie');
+const LazyPieChart = lazyRechartsComponent('PieChart');
 const LazyReferenceLine = lazyRechartsComponent('ReferenceLine');
 const LazyResponsiveContainer = lazyRechartsComponent('ResponsiveContainer');
 const LazyTooltip = lazyRechartsComponent('Tooltip');
@@ -61,6 +65,22 @@ function Bar(props: RechartsComponentProps<'Bar'>) {
 
 function BarChart(props: RechartsComponentProps<'BarChart'>) {
   return <LazyBarChart {...props} />;
+}
+
+function Line(props: RechartsComponentProps<'Line'>) {
+  return <LazyLine {...props} />;
+}
+
+function LineChart(props: RechartsComponentProps<'LineChart'>) {
+  return <LazyLineChart {...props} />;
+}
+
+function Pie(props: RechartsComponentProps<'Pie'>) {
+  return <LazyPie {...props} />;
+}
+
+function PieChart(props: RechartsComponentProps<'PieChart'>) {
+  return <LazyPieChart {...props} />;
 }
 
 function CartesianGrid(props: RechartsComponentProps<'CartesianGrid'>) {
@@ -413,6 +433,10 @@ export {
   ChartTooltip,
   ChartTooltipContent,
   LabelList,
+  Line,
+  LineChart,
+  Pie,
+  PieChart,
   ReferenceLine,
   XAxis,
   YAxis,
