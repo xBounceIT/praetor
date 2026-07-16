@@ -52,6 +52,7 @@ const FrontendDocsView = lazy(() => import('./components/docs/FrontendDocsView')
 import ProjectsView, { type ProjectsViewTab } from './components/projects/ProjectsView';
 import ResalesView from './components/projects/ResalesView';
 import AiReportingView from './components/reports/AiReportingView';
+import TimeReportView from './components/reports/TimeReportView';
 import SessionTimeoutHandler from './components/SessionTimeoutHandler';
 import ClientOffersView from './components/sales/ClientOffersView';
 import ClientQuotesView from './components/sales/ClientQuotesView';
@@ -169,11 +170,7 @@ import { sourcesSupplierQuote } from './utils/supplierLineSync';
 import { applyBrowserTheme, applyTheme, getTheme } from './utils/theme';
 import { getTimesheetLoadRequirements } from './utils/timesheetLoadRequirements';
 import { toastError } from './utils/toast';
-import {
-  filterTrackerCatalogs,
-  type TrackerAssignmentState,
-  type TrackerAssignments,
-} from './utils/trackerCatalogs';
+import { filterTrackerCatalogs, type TrackerCatalogState } from './utils/trackerCatalogs';
 
 type AppModuleState = {
   users: User[];
@@ -331,6 +328,7 @@ const VALID_INITIAL_VIEWS: readonly View[] = [
   'hr/external',
   'hr/work-units',
   'reports/ai-reporting',
+  'reports/time-report',
   'settings',
   'docs',
   'docs/api',
@@ -445,7 +443,7 @@ type AppLocalState = {
   emailConfig: EmailConfig;
   roles: Role[];
   notificationsState: NotificationsState;
-  viewingUserAssignmentState: TrackerAssignmentState;
+  viewingUserCatalogState: TrackerCatalogState;
 };
 
 const INITIAL_APP_LOCAL_STATE: AppLocalState = {
@@ -456,9 +454,8 @@ const INITIAL_APP_LOCAL_STATE: AppLocalState = {
   emailConfig: INITIAL_EMAIL_CONFIG,
   roles: [],
   notificationsState: { items: [], unreadCount: 0 },
-  viewingUserAssignmentState: {
+  viewingUserCatalogState: {
     userId: '',
-    assignments: null,
     catalogs: null,
     isLoading: false,
   },
@@ -1287,7 +1284,7 @@ const useAppContentController = () => {
     emailConfig,
     roles,
     notificationsState,
-    viewingUserAssignmentState,
+    viewingUserCatalogState,
   } = localState;
   const setLdapConfig = useCallback<React.Dispatch<React.SetStateAction<LdapConfig>>>(
     (value) => dispatchLocalState({ type: 'set', key: 'ldapConfig', value }),
@@ -1315,9 +1312,9 @@ const useAppContentController = () => {
   const setNotificationsState = useCallback<
     React.Dispatch<React.SetStateAction<NotificationsState>>
   >((value) => dispatchLocalState({ type: 'set', key: 'notificationsState', value }), []);
-  const setViewingUserAssignmentState = useCallback<
-    React.Dispatch<React.SetStateAction<TrackerAssignmentState>>
-  >((value) => dispatchLocalState({ type: 'set', key: 'viewingUserAssignmentState', value }), []);
+  const setViewingUserCatalogState = useCallback<
+    React.Dispatch<React.SetStateAction<TrackerCatalogState>>
+  >((value) => dispatchLocalState({ type: 'set', key: 'viewingUserCatalogState', value }), []);
   // Branding is public and must persist across login/logout so the login screen
   // and sidebar stay consistent. clearAuthScopedAppState intentionally leaves it alone.
   const {
@@ -1398,6 +1395,7 @@ const useAppContentController = () => {
       'hr/work-units',
       // Reports module
       'reports/ai-reporting',
+      'reports/time-report',
       'settings',
       'docs',
       'docs/api',
@@ -1597,10 +1595,9 @@ const useAppContentController = () => {
       entries: () => setModuleState('entries', []),
       workUnits: () => setModuleState('workUnits', []),
       responsibleUserOptions: () => setModuleState('responsibleUserOptions', []),
-      viewingUserAssignmentState: () =>
-        setLocalState('viewingUserAssignmentState', {
+      viewingUserCatalogState: () =>
+        setLocalState('viewingUserCatalogState', {
           userId: '',
-          assignments: null,
           catalogs: null,
           isLoading: false,
         }),
@@ -1956,6 +1953,9 @@ const useAppContentController = () => {
     }
     if (!currentUser) return false;
     if (activeView === '404') return false;
+    if (activeView === 'reports/time-report' && currentUser.role === ADMIN_ROLE_ID) {
+      return false;
+    }
     if (activeView === 'reports/ai-reporting') {
       if (hasLoadedGeneralSettings && !generalSettings.enableAiReporting) return false;
     }
@@ -2213,7 +2213,6 @@ const useAppContentController = () => {
           buildPermission('sales.supplier_quotes', 'view'),
         );
         const canListEntries = hasViewAccess(permissions, 'timesheets/tracker');
-
         const canListClients = hasAnyPermission(permissions, [
           ...equivalentPermissionsFor('crm.clients', 'view'),
           ...equivalentPermissionsFor('timesheets.tracker', 'view'),
@@ -2891,18 +2890,17 @@ const useAppContentController = () => {
     setResponsibleUserOptions,
   ]);
 
-  // Load target user assignments when the timesheet user switcher changes.
+  // Load target user catalogs when the timesheet user switcher changes.
   useEffect(() => {
     if (!currentUser || !viewingUserId) return;
     if (activeView !== 'timesheets/tracker') return;
 
     let isCancelled = false;
 
-    const loadAssignments = async () => {
+    const loadCatalogs = async () => {
       if (viewingUserId === currentUser.id) {
-        setViewingUserAssignmentState({
+        setViewingUserCatalogState({
           userId: viewingUserId,
-          assignments: null,
           catalogs: null,
           isLoading: false,
         });
@@ -2910,7 +2908,7 @@ const useAppContentController = () => {
       }
 
       try {
-        const canViewAssignments = hasAnyPermission(currentUser.permissions, [
+        const canViewCatalogs = hasAnyPermission(currentUser.permissions, [
           buildPermission('administration.user_management', 'view'),
           buildPermission('administration.user_management', 'update'),
           buildPermission('administration.user_management_all', 'view'),
@@ -2919,18 +2917,16 @@ const useAppContentController = () => {
           buildPermission('timesheets.tracker_all', 'view'),
         ]);
 
-        setViewingUserAssignmentState({
+        setViewingUserCatalogState({
           userId: viewingUserId,
-          assignments: null,
           catalogs: null,
           isLoading: true,
         });
 
-        if (!canViewAssignments) {
+        if (!canViewCatalogs) {
           if (!isCancelled) {
-            setViewingUserAssignmentState({
+            setViewingUserCatalogState({
               userId: viewingUserId,
-              assignments: null,
               catalogs: null,
               isLoading: false,
             });
@@ -2938,24 +2934,19 @@ const useAppContentController = () => {
           return;
         }
 
-        const [assignments, catalogs] = await Promise.all([
-          api.users.getAssignments(viewingUserId),
-          api.users.getTrackerCatalogs(viewingUserId),
-        ]);
+        const catalogs = await api.users.getTrackerCatalogs(viewingUserId);
         if (!isCancelled) {
-          setViewingUserAssignmentState({
+          setViewingUserCatalogState({
             userId: viewingUserId,
-            assignments: assignments as TrackerAssignments,
             catalogs,
             isLoading: false,
           });
         }
       } catch (err) {
-        console.error('Failed to load user assignments:', err);
+        console.error('Failed to load user tracker catalogs:', err);
         if (!isCancelled) {
-          setViewingUserAssignmentState({
+          setViewingUserCatalogState({
             userId: viewingUserId,
-            assignments: null,
             catalogs: null,
             isLoading: false,
           });
@@ -2963,12 +2954,12 @@ const useAppContentController = () => {
       }
     };
 
-    loadAssignments();
+    loadCatalogs();
 
     return () => {
       isCancelled = true;
     };
-  }, [activeView, currentUser, viewingUserId, setViewingUserAssignmentState]);
+  }, [activeView, currentUser, viewingUserId, setViewingUserCatalogState]);
 
   // Update viewingUserId when currentUser changes
   useEffect(() => {
@@ -3083,9 +3074,9 @@ const useAppContentController = () => {
         projectTasks,
         currentUserId: currentUser?.id ?? '',
         viewingUserId,
-        assignmentState: viewingUserAssignmentState,
+        catalogState: viewingUserCatalogState,
       }),
-    [clients, projects, projectTasks, currentUser, viewingUserId, viewingUserAssignmentState],
+    [clients, projects, projectTasks, currentUser, viewingUserId, viewingUserCatalogState],
   );
 
   const taskHandlers = useMemo(
@@ -4699,8 +4690,10 @@ const SettingsAndReportsRoutes: React.FC<{
 }> = ({ controller }) => {
   const {
     activeView,
+    addProjectTask,
     currentUser,
     generalSettings,
+    handleUpdateEntry,
     handleCreateMcpToken,
     handleGetPersonalAccessToken,
     handleListMcpTokens,
@@ -4741,6 +4734,16 @@ const SettingsAndReportsRoutes: React.FC<{
           onRevokeMcpToken={handleRevokeMcpToken}
           onGetPersonalAccessToken={handleGetPersonalAccessToken}
           onRenewPersonalAccessToken={handleRenewPersonalAccessToken}
+        />
+      )}
+      {activeView === 'reports/time-report' && (
+        <TimeReportView
+          permissions={currentUser.permissions || []}
+          currency={generalSettings.currency}
+          startOfWeek={generalSettings.startOfWeek}
+          onUpdateEntry={handleUpdateEntry}
+          onAddCustomTask={addProjectTask}
+          currentUserId={currentUser.id}
         />
       )}
       {activeView === 'reports/ai-reporting' &&

@@ -42,6 +42,8 @@ export type KnownPermissionResource =
   | 'hr.work_units'
   | 'hr.work_units_all'
   | 'reports.ai_reporting'
+  | 'reports.time_report'
+  | 'reports.time_report_all'
   | 'reports.cost'
   | 'administration.authentication'
   | 'administration.general'
@@ -1093,11 +1095,92 @@ export type View =
   | 'hr/work-units'
   // Reports module
   | 'reports/ai-reporting'
+  | 'reports/time-report'
   // Standalone
   | 'settings'
   | 'docs'
   | 'docs/api'
   | 'docs/frontend';
+
+export type TimeReportPeriodPreset =
+  | 'today'
+  | 'yesterday'
+  | 'this_week'
+  | 'last_week'
+  | 'this_month'
+  | 'last_month'
+  | 'this_year'
+  | 'last_year'
+  | 'custom';
+
+export type TimeReportField = 'user' | 'client' | 'project' | 'task' | 'duration' | 'note' | 'cost';
+
+export type TimeReportGroup = 'date' | 'user' | 'client' | 'project' | 'task';
+
+export interface TimeReportTaskFilter {
+  projectId: string;
+  taskId: string | null;
+  name: string;
+}
+
+export interface TimeReportDefinition {
+  periodPreset: TimeReportPeriodPreset;
+  fromDate: string;
+  toDate: string;
+  userIds: string[];
+  clientId: string | null;
+  projectIds: string[];
+  task: TimeReportTaskFilter | null;
+  noteContains: string;
+  fields: TimeReportField[];
+  groupBy: TimeReportGroup[];
+  totalsOnly: boolean;
+}
+
+export interface TimeReportOption {
+  id: string;
+  name: string;
+}
+
+export interface TimeReportTaskOption extends TimeReportTaskFilter {
+  key: string;
+}
+
+export interface TimeReportOptions {
+  users: TimeReportOption[];
+  clients: TimeReportOption[];
+  projects: Array<TimeReportOption & { clientId: string }>;
+  tasks: TimeReportTaskOption[];
+  editableUserIds: string[];
+}
+
+export interface TimeReportRow {
+  key: string;
+  kind: 'detail' | 'subtotal';
+  groupLevel: number | null;
+  label: string | null;
+  date: string | null;
+  userId: string | null;
+  userName: string | null;
+  clientId: string | null;
+  clientName: string | null;
+  projectId: string | null;
+  projectName: string | null;
+  taskId: string | null;
+  taskName: string | null;
+  notes: string | null;
+  duration: number;
+  cost: number | null;
+  entry: TimeEntry | null;
+}
+
+export interface TimeReportResult {
+  rows: TimeReportRow[];
+  matchedEntryCount: number;
+  outputRowCount: number;
+  truncated: boolean;
+  totals: { duration: number; cost: number | null };
+}
 
 export interface ReportChatSessionSummary {
   id: string;

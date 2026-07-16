@@ -3,6 +3,87 @@
   "costTotal": "Total cost",
   "costPerHour": "Hourly cost",
   "costPermissionRequired": "Cost data is hidden because your role does not have the 'reports.cost' permission.",
+  "timeReport": {
+    "title": "Time report",
+    "description": "Filter, group, and export time entries within your visibility scope.",
+    "favorites": {
+      "title": "Personal favorites",
+      "select": "Favorite report",
+      "none": "No favorite",
+      "name": "Favorite name",
+      "save": "Save",
+      "delete": "Delete favorite",
+      "saved": "Favorite saved.",
+      "deleted": "Favorite deleted.",
+      "sanitized": "Some filters that are no longer accessible were removed.",
+      "deleteTitle": "Delete this favorite?",
+      "deleteDescription": "The “{{name}}” favorite will be permanently deleted."
+    },
+    "filters": {
+      "title": "Filters",
+      "period": "Period",
+      "from": "Start date",
+      "to": "End date",
+      "users": "Users",
+      "usersPlaceholder": "Select users",
+      "client": "Client",
+      "allClients": "All clients",
+      "projects": "Projects",
+      "allProjects": "All projects",
+      "task": "Task",
+      "allTasks": "All tasks",
+      "note": "Note contains",
+      "notePlaceholder": "Search notes"
+    },
+    "periods": {
+      "today": "Today",
+      "yesterday": "Yesterday",
+      "this_week": "Current week",
+      "last_week": "Previous week",
+      "this_month": "Current month",
+      "last_month": "Previous month",
+      "this_year": "Current year",
+      "last_year": "Previous year",
+      "custom": "Custom range"
+    },
+    "fields": { "title": "Fields to show" },
+    "groups": {
+      "title": "Group by",
+      "none": "Do not group",
+      "totalsOnly": "Totals only"
+    },
+    "columns": {
+      "date": "Date",
+      "user": "User",
+      "client": "Client",
+      "project": "Project",
+      "task": "Task",
+      "duration": "Duration",
+      "note": "Note",
+      "cost": "Cost"
+    },
+    "actions": {
+      "generate": "Generate report",
+      "edit": "Edit time entry"
+    },
+    "results": {
+      "title": "Results",
+      "entries": "entries",
+      "empty": "No time entries match the selected filters.",
+      "truncatedTitle": "Partial result",
+      "truncated": "The table shows the first structured rows; counts and totals include all {{count}} entries.",
+      "totalDuration": "Total duration",
+      "totalCost": "Total cost"
+    },
+    "errors": {
+      "title": "Could not complete the report",
+      "load": "Could not load report options.",
+      "generate": "Could not generate the report.",
+      "export": "Could not export the CSV.",
+      "editCatalogs": "Could not load clients, projects, and tasks for this entry.",
+      "favorite": "Could not update the favorite."
+    }
+  },
   "aiReporting": {
     "title": "AI Reporting",
     "experimental": "Experimental",

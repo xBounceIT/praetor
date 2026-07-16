@@ -36,6 +36,7 @@ import supplierOrdersRoutes from './routes/supplier-orders.ts';
 import supplierQuotesRoutes from './routes/supplier-quotes.ts';
 import suppliersRoutes from './routes/suppliers.ts';
 import tasksRoutes from './routes/tasks.ts';
+import timeReportRoutes from './routes/time-reports.ts';
 import twoFactorRoutes from './routes/two-factor.ts';
 import usersRoutes from './routes/users.ts';
 import viewsRoutes from './routes/views.ts';
@@ -204,6 +205,7 @@ export const buildApp = async () => {
   fastify.register(emailRoutes, { prefix: '/api/email' });
   fastify.register(rolesRoutes, { prefix: '/api/roles' });
   fastify.register(reportsRoutes, { prefix: '/api/reports' });
+  fastify.register(timeReportRoutes, { prefix: '/api/reports/time-report' });
   fastify.register(logsRoutes, { prefix: '/api/logs' });
   fastify.register(mcpRoutes, { prefix: '/api/mcp' });
   fastify.register(webhooksRoutes, { prefix: '/api/webhooks' });

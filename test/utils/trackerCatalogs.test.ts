@@ -6,7 +6,7 @@ import {
   filterTrackerEntrySelectableCatalogs,
   isProjectExpiredForTimeEntries,
   isProjectStatusBlockedForTimeEntries,
-  type TrackerAssignmentState,
+  type TrackerCatalogState,
 } from '../../utils/trackerCatalogs';
 
 const clients: Client[] = [
@@ -76,9 +76,8 @@ const terminatedProjectTask: ProjectTask = {
   name: 'Terminated Task',
   projectId: 'project-terminated',
 };
-const loadingState: TrackerAssignmentState = {
+const loadingState: TrackerCatalogState = {
   userId: 'user-b',
-  assignments: null,
   catalogs: null,
   isLoading: true,
 };
@@ -91,7 +90,7 @@ describe('filterTrackerCatalogs', () => {
       projectTasks,
       currentUserId: 'user-a',
       viewingUserId: 'user-a',
-      assignmentState: loadingState,
+      catalogState: loadingState,
     });
 
     expect(result.clients.map((client) => client.id)).toEqual(['client-a', 'client-b']);
@@ -106,17 +105,12 @@ describe('filterTrackerCatalogs', () => {
       projectTasks,
       currentUserId: 'user-a',
       viewingUserId: 'user-b',
-      assignmentState: {
+      catalogState: {
         userId: 'user-b',
-        assignments: {
-          clientIds: ['client-b', 'client-disabled'],
-          projectIds: ['project-b', 'project-disabled-client'],
-          taskIds: ['task-b', 'task-disabled'],
-        },
         catalogs: {
-          clients,
-          projects,
-          projectTasks,
+          clients: [clients[1], clients[2]],
+          projects: [projects[1], projects[3]],
+          projectTasks: [projectTasks[1], projectTasks[3]],
         },
         isLoading: false,
       },
@@ -127,33 +121,28 @@ describe('filterTrackerCatalogs', () => {
     expect(result.projectTasks.map((task) => task.id)).toEqual(['task-b']);
   });
 
-  test('viewing another user while assignments load returns empty catalogs', () => {
+  test('viewing another user while catalogs load returns empty catalogs', () => {
     const result = filterTrackerCatalogs({
       clients,
       projects,
       projectTasks,
       currentUserId: 'user-a',
       viewingUserId: 'user-b',
-      assignmentState: loadingState,
+      catalogState: loadingState,
     });
 
     expect(result).toEqual({ clients: [], projects: [], projectTasks: [] });
   });
 
-  test('ignores stale assignment state for a previously selected user', () => {
+  test('ignores stale catalog state for a previously selected user', () => {
     const result = filterTrackerCatalogs({
       clients,
       projects,
       projectTasks,
       currentUserId: 'user-a',
       viewingUserId: 'user-c',
-      assignmentState: {
+      catalogState: {
         userId: 'user-b',
-        assignments: {
-          clientIds: ['client-b'],
-          projectIds: ['project-b'],
-          taskIds: ['task-b'],
-        },
         catalogs: {
           clients,
           projects,
@@ -173,13 +162,8 @@ describe('filterTrackerCatalogs', () => {
       projectTasks: [projectTasks[0]],
       currentUserId: 'manager-user',
       viewingUserId: 'test-user',
-      assignmentState: {
+      catalogState: {
         userId: 'test-user',
-        assignments: {
-          clientIds: ['client-b'],
-          projectIds: ['project-b'],
-          taskIds: ['task-b'],
-        },
         catalogs: {
           clients: [clients[1]],
           projects: [projects[1]],

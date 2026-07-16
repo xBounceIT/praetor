@@ -1,8 +1,17 @@
 import { sql } from 'drizzle-orm';
-import { check, index, jsonb, pgTable, primaryKey, timestamp, varchar } from 'drizzle-orm/pg-core';
+import {
+  check,
+  index,
+  jsonb,
+  pgTable,
+  primaryKey,
+  timestamp,
+  uniqueIndex,
+  varchar,
+} from 'drizzle-orm/pg-core';
 import { users } from './users.ts';
 
-export type SavedViewKind = 'table' | 'dashboard';
+export type SavedViewKind = 'table' | 'dashboard' | 'report';
 export type SavedViewPermission = 'read' | 'write';
 
 // One row per saved view. Both kinds (StandardTable presets and project-dashboard layouts)
@@ -26,7 +35,10 @@ export const savedViews = pgTable(
   (table) => [
     index('idx_saved_views_owner_kind_scope').on(table.ownerId, table.kind, table.scopeKey),
     index('idx_saved_views_kind_scope').on(table.kind, table.scopeKey),
-    check('saved_views_kind_check', sql`${table.kind} IN ('table', 'dashboard')`),
+    uniqueIndex('idx_saved_views_report_owner_scope_name_unique')
+      .on(table.ownerId, table.kind, table.scopeKey, sql`lower(${table.name})`)
+      .where(sql`${table.kind} = 'report'`),
+    check('saved_views_kind_check', sql`${table.kind} IN ('table', 'dashboard', 'report')`),
   ],
 );
 

@@ -3,6 +3,87 @@
   "costTotal": "Costo totale",
   "costPerHour": "Costo orario",
   "costPermissionRequired": "I dati di costo sono nascosti perché il tuo ruolo non ha il permesso 'reports.cost'.",
+  "timeReport": {
+    "title": "Report ore",
+    "description": "Filtra, raggruppa ed esporta le registrazioni ore nel tuo ambito di visibilità.",
+    "favorites": {
+      "title": "Preferiti personali",
+      "select": "Rapporto preferito",
+      "none": "Nessun preferito",
+      "name": "Nome del preferito",
+      "save": "Salva",
+      "delete": "Elimina preferito",
+      "saved": "Preferito salvato.",
+      "deleted": "Preferito eliminato.",
+      "sanitized": "Alcuni filtri non più accessibili sono stati rimossi.",
+      "deleteTitle": "Eliminare il preferito?",
+      "deleteDescription": "Il preferito “{{name}}” verrà eliminato definitivamente."
+    },
+    "filters": {
+      "title": "Filtri",
+      "period": "Periodo",
+      "from": "Data inizio",
+      "to": "Data fine",
+      "users": "Utenti",
+      "usersPlaceholder": "Seleziona utenti",
+      "client": "Cliente",
+      "allClients": "Tutti i clienti",
+      "projects": "Progetti",
+      "allProjects": "Tutti i progetti",
+      "task": "Attività",
+      "allTasks": "Tutte le attività",
+      "note": "Nota contenente",
+      "notePlaceholder": "Cerca nelle note"
+    },
+    "periods": {
+      "today": "Oggi",
+      "yesterday": "Ieri",
+      "this_week": "Settimana corrente",
+      "last_week": "Settimana precedente",
+      "this_month": "Mese corrente",
+      "last_month": "Mese precedente",
+      "this_year": "Anno corrente",
+      "last_year": "Anno precedente",
+      "custom": "Intervallo personalizzato"
+    },
+    "fields": { "title": "Campi da mostrare" },
+    "groups": {
+      "title": "Raggruppa per",
+      "none": "Non raggruppare",
+      "totalsOnly": "Solo totali"
+    },
+    "columns": {
+      "date": "Data",
+      "user": "Utente",
+      "client": "Cliente",
+      "project": "Progetto",
+      "task": "Attività",
+      "duration": "Durata",
+      "note": "Nota",
+      "cost": "Costo"
+    },
+    "actions": {
+      "generate": "Genera report",
+      "edit": "Modifica registrazione"
+    },
+    "results": {
+      "title": "Risultati",
+      "entries": "registrazioni",
+      "empty": "Nessuna registrazione corrisponde ai filtri selezionati.",
+      "truncatedTitle": "Risultato parziale",
+      "truncated": "La tabella mostra le prime righe strutturate; conteggi e totale includono tutte le {{count}} registrazioni.",
+      "totalDuration": "Durata totale",
+      "totalCost": "Costo totale"
+    },
+    "errors": {
+      "title": "Impossibile completare il report",
+      "load": "Impossibile caricare le opzioni del report.",
+      "generate": "Impossibile generare il report.",
+      "export": "Impossibile esportare il CSV.",
+      "editCatalogs": "Impossibile caricare clienti, progetti e attività per la registrazione.",
+      "favorite": "Impossibile aggiornare il preferito."
+    }
+  },
   "aiReporting": {
     "title": "AI Reporting",
     "experimental": "Sperimentale",

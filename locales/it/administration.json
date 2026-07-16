@@ -68,6 +68,8 @@
     },
     "reports": {
       "ai_reporting": "Reportistica IA",
+      "time_report": "Report ore",
+      "time_report_all": "Report ore (Tutti gli utenti)",
       "cost": "Report costi"
     },
     "configuration": {

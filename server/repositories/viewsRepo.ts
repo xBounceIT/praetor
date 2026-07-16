@@ -227,6 +227,48 @@ export const update = async (
   return fetchViewById(viewId, exec);
 };
 
+export const reportNameExists = async (
+  ownerId: string,
+  scopeKey: string,
+  name: string,
+  exec: DbExecutor = db,
+): Promise<boolean> => {
+  const rows = await executeRows<{ exists: boolean }>(
+    exec,
+    sql`SELECT EXISTS (
+          SELECT 1
+            FROM saved_views
+           WHERE owner_id = ${ownerId}
+             AND kind = 'report'
+             AND scope_key = ${scopeKey}
+             AND lower(name) = lower(${name})
+        ) AS exists`,
+  );
+  return rows[0]?.exists === true;
+};
+
+export const reportNameExistsForView = async (
+  viewId: string,
+  name: string,
+  exec: DbExecutor = db,
+): Promise<boolean> => {
+  const rows = await executeRows<{ exists: boolean }>(
+    exec,
+    sql`SELECT EXISTS (
+          SELECT 1
+            FROM saved_views target
+            JOIN saved_views candidate
+              ON candidate.owner_id = target.owner_id
+             AND candidate.kind = target.kind
+             AND candidate.scope_key = target.scope_key
+           WHERE target.id = ${viewId}
+             AND target.kind = 'report'
+             AND candidate.id <> target.id
+             AND lower(candidate.name) = lower(${name})
+        ) AS exists`,
+  );
+  return rows[0]?.exists === true;
+};
 export const deleteById = async (viewId: string, exec: DbExecutor = db): Promise<boolean> => {
   const result = await exec.delete(savedViews).where(eq(savedViews.id, viewId));
   return (result.rowCount ?? 0) > 0;
