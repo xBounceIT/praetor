@@ -22,6 +22,16 @@ import { Textarea } from '../ui/textarea';
 type Props = { canUpdate: boolean };
 type FormErrors = Partial<Record<keyof SiemConfigUpdate, string>>;
 
+const FIELD_FOCUS_SELECTORS: Partial<Record<keyof SiemConfigUpdate, string>> = {
+  host: '#siem-host',
+  port: '#siem-port',
+  sourceIdentifier: '#siem-source',
+  facility: '#siem-facility',
+  clientKey: '[data-testid="siem-client-key-input"]',
+  retentionDays: '#siem-retention',
+  maxEvents: '#siem-capacity',
+};
+
 const formatDate = (value: string | null, formatter: Intl.DateTimeFormat, fallback: string) =>
   value ? formatter.format(new Date(value)) : fallback;
 
@@ -135,6 +145,40 @@ const SiemLogsTab: React.FC<Props> = ({ canUpdate }) => {
     setErrors((current) => ({ ...current, [key]: undefined }));
   };
 
+  const showValidationErrors = (next: FormErrors, replace = true): boolean => {
+    const firstInvalidField = (Object.keys(next) as Array<keyof SiemConfigUpdate>).find(
+      (key) => next[key],
+    );
+    setErrors((current) => (replace ? next : { ...current, ...next }));
+    if (!firstInvalidField) return false;
+
+    const message = next[firstInvalidField];
+    if (message) toast.error(message);
+    const selector = FIELD_FOCUS_SELECTORS[firstInvalidField];
+    if (selector) {
+      window.requestAnimationFrame(() => {
+        document.querySelector<HTMLElement>(selector)?.focus();
+      });
+    }
+    return true;
+  };
+
+  const showServerValidationError = (code: string): boolean => {
+    if (code === 'SIEM_HOST_REQUIRED') {
+      return showValidationErrors({ host: t('logs.siem.validation.hostRequired') }, false);
+    }
+    if (code === 'SIEM_SOURCE_IDENTIFIER_REQUIRED') {
+      return showValidationErrors(
+        { sourceIdentifier: t('logs.siem.validation.sourceRequired') },
+        false,
+      );
+    }
+    if (code === 'SIEM_MTLS_CERT_KEY_REQUIRED') {
+      return showValidationErrors({ clientKey: t('logs.siem.validation.mtlsPair') }, false);
+    }
+    return false;
+  };
+
   const validate = (candidate: SiemConfigUpdate): boolean => {
     const next: FormErrors = {};
     if (!candidate.host.trim()) next.host = t('logs.siem.validation.hostRequired');
@@ -163,8 +207,7 @@ const SiemLogsTab: React.FC<Props> = ({ canUpdate }) => {
     ) {
       next.clientKey = t('logs.siem.validation.mtlsPair');
     }
-    setErrors(next);
-    return Object.keys(next).length === 0;
+    return !showValidationErrors(next);
   };
 
   const handleSave = async () => {
@@ -176,13 +219,20 @@ const SiemLogsTab: React.FC<Props> = ({ canUpdate }) => {
       refreshStatusBestEffort();
       toast.success(t('logs.siem.messages.saved'));
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : t('logs.siem.messages.saveFailed'));
+      const errorCode =
+        error instanceof Error
+          ? ((error as Error & { errorCode?: string }).errorCode ?? error.message)
+          : '';
+      if (!showServerValidationError(errorCode)) {
+        toast.error(error instanceof Error ? error.message : t('logs.siem.messages.saveFailed'));
+      }
     } finally {
       setBusy(null);
     }
   };
 
   const handleTest = async () => {
+    if (!form || !validate(form)) return;
     setBusy('test');
     try {
       const result = await logsApi.testSiem();
@@ -190,9 +240,17 @@ const SiemLogsTab: React.FC<Props> = ({ canUpdate }) => {
       if (nextConfig) applyConfig(nextConfig, true);
       refreshStatusBestEffort();
       if (result.success) toast.success(t('logs.siem.messages.testSucceeded'));
-      else toast.error(result.error || t('logs.siem.messages.testFailed'));
+      else if (!result.error || !showServerValidationError(result.error)) {
+        toast.error(result.error || t('logs.siem.messages.testFailed'));
+      }
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : t('logs.siem.messages.testFailed'));
+      const errorCode =
+        error instanceof Error
+          ? ((error as Error & { errorCode?: string }).errorCode ?? error.message)
+          : '';
+      if (!showServerValidationError(errorCode)) {
+        toast.error(error instanceof Error ? error.message : t('logs.siem.messages.testFailed'));
+      }
     } finally {
       setBusy(null);
     }

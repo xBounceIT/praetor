@@ -240,6 +240,22 @@ describe('<LogsView />', () => {
     expect(screen.getByRole('button', { name: 'logs.siem.actions.save' })).toBeDisabled();
   });
 
+  test('explains, highlights, and focuses a missing SIEM host before testing', async () => {
+    logsApiMock.getSiemConfig.mockResolvedValueOnce({ ...siemConfig, host: '' });
+    const user = userEvent.setup();
+    render(<LogsView canUpdateSiem />);
+    await user.click(screen.getByRole('tab', { name: 'logs.tabs.siem' }));
+
+    const host = await screen.findByLabelText('logs.siem.fields.host');
+    await user.click(screen.getByRole('button', { name: 'logs.siem.actions.test' }));
+
+    expect(logsApiMock.testSiem).not.toHaveBeenCalled();
+    expect(host).toHaveAttribute('aria-invalid', 'true');
+    expect(screen.getByText('logs.siem.validation.hostRequired')).toBeInTheDocument();
+    expect(toastError).toHaveBeenCalledWith('logs.siem.validation.hostRequired');
+    await waitFor(() => expect(host).toHaveFocus());
+  });
+
   test('keeps a successful save successful when the status refresh fails', async () => {
     logsApiMock.getSiemStatus
       .mockResolvedValueOnce(siemStatus)

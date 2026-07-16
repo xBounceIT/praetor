@@ -162,7 +162,7 @@
         "capacity": "Maximum event capacity"
       },
       "validation": {
-        "hostRequired": "Enter the collector host.",
+        "hostRequired": "Enter the SIEM collector host.",
         "port": "Port must be between 1 and 65535.",
         "facility": "Facility must be an integer between 0 and 23.",
         "retention": "Retention must be an integer between 1 and 30 days.",
