@@ -10,6 +10,7 @@ import * as realReportsRevenueRepo from '../../repositories/reportsRevenueRepo.t
 import * as realRolesRepo from '../../repositories/rolesRepo.ts';
 import * as realUsersRepo from '../../repositories/usersRepo.ts';
 import * as realWorkUnitsRepo from '../../repositories/workUnitsRepo.ts';
+import * as realLocalAiEndpoint from '../../utils/local-ai-endpoint.ts';
 import * as realPermissions from '../../utils/permissions.ts';
 import {
   installAuthMiddlewareMock,
@@ -31,6 +32,7 @@ const reportsHoursSnap = { ...realReportsHoursRepo };
 const reportsRevenueSnap = { ...realReportsRevenueRepo };
 const workUnitsSnap = { ...realWorkUnitsRepo };
 const drizzleSnap = { ...realDrizzle };
+const localAiEndpointSnap = { ...realLocalAiEndpoint };
 
 const { withDbTransactionMock, resetWithDbTransactionMock } = makeWithDbTransactionMock();
 
@@ -70,6 +72,10 @@ const listManagedUserIdsMock = mock(async () => [] as string[]);
 
 let originalFetch: typeof fetch;
 const fetchMock = mock();
+const localAiFetchMock = mock(async (input: string | URL, init?: RequestInit) => {
+  await localAiEndpointSnap.assertSafeLocalAiBaseUrl(String(input));
+  return fetchMock(input, init);
+});
 
 let routePlugin: FastifyPluginAsync;
 
@@ -141,6 +147,10 @@ beforeAll(async () => {
     ...drizzleSnap,
     withDbTransaction: withDbTransactionMock,
   }));
+  mock.module('../../utils/local-ai-endpoint.ts', () => ({
+    ...localAiEndpointSnap,
+    fetchLocalAi: localAiFetchMock,
+  }));
 
   routePlugin = (await import('../../routes/reports.ts')).default as FastifyPluginAsync;
 
@@ -161,6 +171,7 @@ afterAll(() => {
   mock.module('../../repositories/reportsRevenueRepo.ts', () => reportsRevenueSnap);
   mock.module('../../repositories/workUnitsRepo.ts', () => workUnitsSnap);
   mock.module('../../db/drizzle.ts', () => drizzleSnap);
+  mock.module('../../utils/local-ai-endpoint.ts', () => localAiEndpointSnap);
   globalThis.fetch = originalFetch;
 });
 
@@ -187,6 +198,9 @@ const AI_ENABLED_SETTINGS = {
   anthropicModelId: '',
   openaiApiKey: '',
   openaiModelId: '',
+  localApiKey: '',
+  localBaseUrl: '',
+  localModelId: '',
   currency: 'EUR',
 };
 
@@ -230,6 +244,7 @@ let testApp: FastifyInstance;
 
 beforeEach(async () => {
   for (const m of allMocks) m.mockReset();
+  localAiFetchMock.mockClear();
   resetWithDbTransactionMock();
   findAuthUserByIdMock.mockResolvedValue(HAPPY_USER);
   userHasRoleMock.mockResolvedValue(true);
@@ -862,6 +877,26 @@ describe('POST /api/reports/ai-reporting/chat (non-streaming)', () => {
     expect(JSON.parse(res.body).error).toMatch(/Missing gemini model id/);
   });
 
+  test('400 when the local provider base URL is missing even without an API key', async () => {
+    getGeneralSettingsMock.mockResolvedValue({
+      ...AI_ENABLED_SETTINGS,
+      aiProvider: 'local',
+      localApiKey: '',
+      localBaseUrl: '',
+      localModelId: 'llama3.2',
+    });
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/reports/ai-reporting/chat',
+      headers: authHeader(),
+      payload: { message: 'Hi' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body).error).toMatch(/Missing local AI base URL/);
+  });
+
   test('502 when LLM call fails', async () => {
     listRecentMessagesMock.mockResolvedValue([]);
     insertUserMessageMock.mockResolvedValue(undefined);
@@ -922,6 +957,128 @@ describe('POST /api/reports/ai-reporting/chat (non-streaming)', () => {
     );
     expect(insertAssistantMessageMock).toHaveBeenCalledWith(
       expect.objectContaining({ content: 'Anthropic answer' }),
+    );
+  });
+
+  test('200 generates through a local OpenAI-compatible endpoint without an API key', async () => {
+    getGeneralSettingsMock.mockResolvedValue({
+      ...AI_ENABLED_SETTINGS,
+      aiProvider: 'local',
+      localApiKey: '',
+      localBaseUrl: 'http://127.0.0.1:11434/v1',
+      localModelId: 'llama3.2',
+    });
+    getActiveSessionForUserMock.mockResolvedValue({ id: 'rpt-chat-1', title: 'Existing' });
+    listRecentMessagesMock.mockResolvedValue([]);
+    insertUserMessageMock.mockResolvedValue(undefined);
+    insertAssistantMessageMock.mockResolvedValue(undefined);
+    touchSessionMock.mockResolvedValue(undefined);
+    fetchMock.mockResolvedValue(
+      okFetchResponse({
+        choices: [
+          {
+            message: {
+              content: 'Local answer',
+              reasoning_content: 'Local reasoning',
+            },
+          },
+        ],
+      }),
+    );
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/reports/ai-reporting/chat',
+      headers: authHeader(),
+      payload: { sessionId: 'rpt-chat-1', message: 'Hi' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body).text).toBe('Local answer');
+    const [url, options] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe('http://127.0.0.1:11434/v1/chat/completions');
+    expect(options.headers).toEqual({ 'Content-Type': 'application/json' });
+    expect(options.redirect).toBe('error');
+    expect(JSON.parse(String(options.body))).toEqual(
+      expect.objectContaining({ model: 'llama3.2', messages: expect.any(Array) }),
+    );
+    expect(insertAssistantMessageMock).toHaveBeenCalledWith(
+      expect.objectContaining({ content: 'Local answer', thoughtContent: 'Local reasoning' }),
+    );
+  });
+
+  test('does not expose the configured local hostname through reporting errors', async () => {
+    getGeneralSettingsMock.mockResolvedValue({
+      ...AI_ENABLED_SETTINGS,
+      aiProvider: 'local',
+      localBaseUrl: 'http://127.0.0.1:11434/v1',
+      localModelId: 'llama3.2',
+    });
+    getActiveSessionForUserMock.mockResolvedValue({ id: 'rpt-chat-1', title: 'Existing' });
+    listRecentMessagesMock.mockResolvedValue([]);
+    insertUserMessageMock.mockResolvedValue(undefined);
+    fetchMock.mockRejectedValue(new Error('connect ECONNREFUSED inference.internal:11434'));
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/reports/ai-reporting/chat',
+      headers: authHeader(),
+      payload: { sessionId: 'rpt-chat-1', message: 'Hi' },
+    });
+
+    expect(res.statusCode).toBe(502);
+    expect(JSON.parse(res.body)).toEqual({ error: 'Local AI request failed.' });
+    expect(res.body).not.toContain('inference.internal');
+  });
+
+  test('uses the local endpoint for automatic session titles', async () => {
+    getGeneralSettingsMock.mockResolvedValue({
+      ...AI_ENABLED_SETTINGS,
+      aiProvider: 'local',
+      localApiKey: '',
+      localBaseUrl: 'http://127.0.0.1:11434/v1',
+      localModelId: 'llama3.2',
+    });
+    createSessionMock.mockResolvedValue(undefined);
+    listRecentMessagesMock.mockResolvedValue([]);
+    insertUserMessageMock.mockResolvedValue(undefined);
+    insertAssistantMessageMock.mockResolvedValue(undefined);
+    getFirstUserMessageContentMock.mockResolvedValue('Summarize revenue');
+    updateSessionTitleAndTouchMock.mockResolvedValue(undefined);
+    fetchMock
+      .mockResolvedValueOnce(
+        okFetchResponse({ choices: [{ message: { content: 'Revenue is growing.' } }] }),
+      )
+      .mockResolvedValueOnce(
+        okFetchResponse({ choices: [{ message: { content: 'Revenue overview' } }] }),
+      );
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/reports/ai-reporting/chat',
+      headers: authHeader(),
+      payload: { message: 'Summarize revenue' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const [titleUrl, titleInit] = fetchMock.mock.calls[1] as unknown as [string, RequestInit];
+    expect(titleUrl).toBe('http://127.0.0.1:11434/v1/chat/completions');
+    expect(JSON.parse(String(titleInit.body))).toEqual(
+      expect.objectContaining({
+        model: 'llama3.2',
+        messages: expect.arrayContaining([
+          expect.objectContaining({
+            role: 'system',
+            content: expect.stringContaining('short chat titles'),
+          }),
+        ]),
+      }),
+    );
+    expect(updateSessionTitleAndTouchMock).toHaveBeenCalledWith(
+      expect.stringMatching(/^rpt-chat/),
+      'u1',
+      'Revenue overview',
     );
   });
 
@@ -1132,6 +1289,61 @@ describe('POST /api/reports/ai-reporting/chat/stream (streaming)', () => {
       expect.objectContaining({ content: 'Streamed answer' }),
     );
     const options = (fetchMock.mock.calls[0] as unknown as [string, RequestInit])[1];
+    expect(JSON.parse(String(options.body)).stream).toBe(true);
+  });
+
+  test('streams local Chat Completions deltas and persists reasoning', async () => {
+    getGeneralSettingsMock.mockResolvedValue({
+      ...AI_ENABLED_SETTINGS,
+      aiProvider: 'local',
+      localApiKey: 'local-token',
+      localBaseUrl: 'http://127.0.0.1:11434/v1',
+      localModelId: 'llama3.2',
+    });
+    getActiveSessionForUserMock.mockResolvedValue({ id: 'rpt-chat-1', title: 'Existing' });
+    listRecentMessagesMock.mockResolvedValue([]);
+    insertUserMessageMock.mockResolvedValue(undefined);
+    insertAssistantMessageMock.mockResolvedValue(undefined);
+    touchSessionMock.mockResolvedValue(undefined);
+    const localChunk = [
+      `data: ${JSON.stringify({ choices: [{ delta: { reasoning_content: 'Thinking' } }] })}`,
+      '',
+      `data: ${JSON.stringify({ choices: [{ delta: { content: 'Local ' } }] })}`,
+      '',
+      `data: ${JSON.stringify({ choices: [{ delta: { content: 'stream' } }] })}`,
+      '',
+      'data: [DONE]',
+      '',
+      '',
+    ].join('\n');
+    fetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      body: new ReadableStream({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode(localChunk));
+          controller.close();
+        },
+      }),
+    } as unknown as Response);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/reports/ai-reporting/chat/stream',
+      headers: authHeader(),
+      payload: { sessionId: 'rpt-chat-1', message: 'Hi' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toContain('Local stream');
+    expect(insertAssistantMessageMock).toHaveBeenCalledWith(
+      expect.objectContaining({ content: 'Local stream', thoughtContent: 'Thinking' }),
+    );
+    const [url, options] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe('http://127.0.0.1:11434/v1/chat/completions');
+    expect(options.headers).toEqual(
+      expect.objectContaining({ Authorization: 'Bearer local-token' }),
+    );
     expect(JSON.parse(String(options.body)).stream).toBe(true);
   });
 });

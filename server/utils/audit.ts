@@ -75,6 +75,8 @@ const SENSITIVE_AUDIT_FIELDS = new Set([
   'anthropic_api_key',
   'openaiApiKey',
   'openai_api_key',
+  'localApiKey',
+  'local_api_key',
 ]);
 
 export interface AuditLogParams {

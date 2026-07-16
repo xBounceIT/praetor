@@ -21,10 +21,13 @@ export type GeneralSettings = {
   openrouterApiKey: string | null;
   anthropicApiKey: string | null;
   openaiApiKey: string | null;
+  localApiKey: string | null;
+  localBaseUrl: string | null;
   geminiModelId: string | null;
   openrouterModelId: string | null;
   anthropicModelId: string | null;
   openaiModelId: string | null;
+  localModelId: string | null;
   allowWeekendSelection: boolean | null;
   defaultLocation: string | null;
   rilCompanyName: string | null;
@@ -52,10 +55,13 @@ export type GeneralSettingsPatch = {
   openrouterApiKey?: string | null;
   anthropicApiKey?: string | null;
   openaiApiKey?: string | null;
+  localApiKey?: string | null;
+  localBaseUrl?: string | null;
   geminiModelId?: string | null;
   openrouterModelId?: string | null;
   anthropicModelId?: string | null;
   openaiModelId?: string | null;
+  localModelId?: string | null;
   allowWeekendSelection?: boolean | null;
   defaultLocation?: string | null;
   rilCompanyName?: string | null;
@@ -83,10 +89,13 @@ const GENERAL_SETTINGS_PROJECTION = {
   openrouterApiKey: generalSettings.openrouterApiKey,
   anthropicApiKey: generalSettings.anthropicApiKey,
   openaiApiKey: generalSettings.openaiApiKey,
+  localApiKey: generalSettings.localApiKey,
+  localBaseUrl: generalSettings.localBaseUrl,
   geminiModelId: generalSettings.geminiModelId,
   openrouterModelId: generalSettings.openrouterModelId,
   anthropicModelId: generalSettings.anthropicModelId,
   openaiModelId: generalSettings.openaiModelId,
+  localModelId: generalSettings.localModelId,
   allowWeekendSelection: generalSettings.allowWeekendSelection,
   defaultLocation: generalSettings.defaultLocation,
   rilCompanyName: generalSettings.rilCompanyName,
@@ -114,10 +123,13 @@ type GeneralSettingsRow = {
   openrouterApiKey: string | null;
   anthropicApiKey: string | null;
   openaiApiKey: string | null;
+  localApiKey: string | null;
+  localBaseUrl: string | null;
   geminiModelId: string | null;
   openrouterModelId: string | null;
   anthropicModelId: string | null;
   openaiModelId: string | null;
+  localModelId: string | null;
   allowWeekendSelection: boolean | null;
   defaultLocation: string | null;
   rilCompanyName: string | null;
@@ -168,10 +180,13 @@ const mapRow = (row: GeneralSettingsRow): GeneralSettings => ({
   openrouterApiKey: row.openrouterApiKey,
   anthropicApiKey: row.anthropicApiKey,
   openaiApiKey: row.openaiApiKey,
+  localApiKey: row.localApiKey,
+  localBaseUrl: row.localBaseUrl,
   geminiModelId: row.geminiModelId,
   openrouterModelId: row.openrouterModelId,
   anthropicModelId: row.anthropicModelId,
   openaiModelId: row.openaiModelId,
+  localModelId: row.localModelId,
   allowWeekendSelection: row.allowWeekendSelection,
   defaultLocation: row.defaultLocation,
   rilCompanyName: row.rilCompanyName,
@@ -227,10 +242,13 @@ export const update = async (
       openrouterApiKey: sql`COALESCE(${patch.openrouterApiKey ?? null}, ${generalSettings.openrouterApiKey})`,
       anthropicApiKey: sql`COALESCE(${patch.anthropicApiKey ?? null}, ${generalSettings.anthropicApiKey})`,
       openaiApiKey: sql`COALESCE(${patch.openaiApiKey ?? null}, ${generalSettings.openaiApiKey})`,
+      localApiKey: sql`COALESCE(${patch.localApiKey ?? null}, ${generalSettings.localApiKey})`,
+      localBaseUrl: sql`COALESCE(${patch.localBaseUrl ?? null}, ${generalSettings.localBaseUrl})`,
       geminiModelId: sql`COALESCE(${patch.geminiModelId ?? null}, ${generalSettings.geminiModelId})`,
       openrouterModelId: sql`COALESCE(${patch.openrouterModelId ?? null}, ${generalSettings.openrouterModelId})`,
       anthropicModelId: sql`COALESCE(${patch.anthropicModelId ?? null}, ${generalSettings.anthropicModelId})`,
       openaiModelId: sql`COALESCE(${patch.openaiModelId ?? null}, ${generalSettings.openaiModelId})`,
+      localModelId: sql`COALESCE(${patch.localModelId ?? null}, ${generalSettings.localModelId})`,
       allowWeekendSelection: sql`COALESCE(${patch.allowWeekendSelection ?? null}, ${generalSettings.allowWeekendSelection})`,
       defaultLocation: sql`COALESCE(${patch.defaultLocation ?? null}, ${generalSettings.defaultLocation})`,
       rilCompanyName: sql`COALESCE(${patch.rilCompanyName ?? null}, ${generalSettings.rilCompanyName})`,

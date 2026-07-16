@@ -3,6 +3,12 @@ import { authenticateToken, requirePermission } from '../middleware/auth.ts';
 import * as generalSettingsRepo from '../repositories/generalSettingsRepo.ts';
 import { standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import { normalizeGeminiModelPath } from '../utils/ai-models.ts';
+import {
+  fetchLocalAi,
+  localAiEndpointUrl,
+  localAiHeaders,
+  normalizeLocalAiBaseUrl,
+} from '../utils/local-ai-endpoint.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { badRequest, optionalNonEmptyString, validateEnum } from '../utils/validation.ts';
 
@@ -81,6 +87,21 @@ const openaiModelExists = async (apiKey: string, modelId: string): Promise<OpenA
   return model.id ? { id: model.id } : null;
 };
 
+const localModelExists = async (
+  baseUrl: string,
+  apiKey: string,
+  modelId: string,
+): Promise<OpenRouterModel | null> => {
+  const res = await fetchLocalAi(localAiEndpointUrl(baseUrl, 'models'), {
+    method: 'GET',
+    headers: localAiHeaders(apiKey),
+    redirect: 'error',
+  });
+  if (!res.ok) throw new Error(`Local AI models request failed: HTTP ${res.status}`);
+  const data = (await res.json()) as { data?: OpenRouterModel[] };
+  return data.data?.find(({ id }) => id === modelId.trim()) || null;
+};
+
 export default async function (fastify: FastifyInstance, _opts: unknown) {
   // POST /validate-model - Admin-only utility used by General Settings UI.
   fastify.post(
@@ -100,6 +121,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             provider: { type: 'string' },
             modelId: { type: 'string' },
             apiKey: { type: 'string' },
+            baseUrl: { type: 'string' },
           },
           required: ['provider', 'modelId'],
         },
@@ -120,15 +142,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const { provider, modelId, apiKey } = request.body as {
+      const { provider, modelId, apiKey, baseUrl } = request.body as {
         provider: string;
         modelId: string;
         apiKey?: string;
+        baseUrl?: string;
       };
 
       const providerResult = validateEnum(
         provider,
-        ['gemini', 'openrouter', 'anthropic', 'openai'],
+        ['gemini', 'openrouter', 'anthropic', 'openai', 'local'],
         'provider',
       );
       if (!providerResult.ok) return badRequest(reply, providerResult.message);
@@ -139,21 +162,38 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!resolvedModelId) return badRequest(reply, 'modelId is required');
 
       let keyToUse = '';
+      let localBaseUrl = '';
+      const savedSettings =
+        apiKey === undefined || (providerResult.value === 'local' && baseUrl === undefined)
+          ? await generalSettingsRepo.get()
+          : null;
       if (apiKey !== undefined) {
         if (typeof apiKey !== 'string') return badRequest(reply, 'apiKey must be a string');
         keyToUse = apiKey;
       } else {
-        const settings = await generalSettingsRepo.get();
         const settingsKeys = {
-          gemini: settings?.geminiApiKey ?? '',
-          openrouter: settings?.openrouterApiKey ?? '',
-          anthropic: settings?.anthropicApiKey ?? '',
-          openai: settings?.openaiApiKey ?? '',
+          gemini: savedSettings?.geminiApiKey ?? '',
+          openrouter: savedSettings?.openrouterApiKey ?? '',
+          anthropic: savedSettings?.anthropicApiKey ?? '',
+          openai: savedSettings?.openaiApiKey ?? '',
+          local: savedSettings?.localApiKey ?? '',
         };
         keyToUse = settingsKeys[providerResult.value];
       }
+      if (providerResult.value === 'local') localBaseUrl = savedSettings?.localBaseUrl ?? '';
 
-      if (!keyToUse.trim()) {
+      if (providerResult.value === 'local' && baseUrl !== undefined) {
+        if (typeof baseUrl !== 'string') return badRequest(reply, 'baseUrl must be a string');
+        const baseUrlResult = normalizeLocalAiBaseUrl(baseUrl);
+        if (!baseUrlResult.ok) return badRequest(reply, baseUrlResult.message);
+        localBaseUrl = baseUrlResult.value;
+      }
+
+      if (providerResult.value === 'local' && !localBaseUrl) {
+        return badRequest(reply, 'baseUrl is required for local AI');
+      }
+
+      if (providerResult.value !== 'local' && !keyToUse.trim()) {
         return reply.send({
           ok: false,
           code: 'MISSING_API_KEY',
@@ -162,6 +202,20 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       try {
+        if (providerResult.value === 'local') {
+          const match = await localModelExists(localBaseUrl, keyToUse, resolvedModelId);
+          return reply.send(
+            match
+              ? { ok: true, normalizedModelId: match.id, name: match.name || '' }
+              : {
+                  ok: false,
+                  code: 'NOT_FOUND',
+                  message: 'Model not found.',
+                  normalizedModelId: resolvedModelId,
+                },
+          );
+        }
+
         if (providerResult.value === 'gemini') {
           const normalizedModelIdResult = normalizeGeminiModelPath(resolvedModelId);
           if (!normalizedModelIdResult.ok) {
@@ -220,7 +274,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               },
         );
       } catch (err) {
-        const msg = err instanceof Error ? err.message : 'Unable to verify model.';
+        const msg =
+          providerResult.value === 'local'
+            ? 'Unable to verify model with the Local AI endpoint.'
+            : err instanceof Error
+              ? err.message
+              : 'Unable to verify model.';
         return reply.send({ ok: false, code: 'PROVIDER_ERROR', message: msg });
       }
     },

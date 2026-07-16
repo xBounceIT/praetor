@@ -2687,6 +2687,9 @@
                   },
                   "apiKey": {
                     "type": "string"
+                  },
+                  "baseUrl": {
+                    "type": "string"
                   }
                 },
                 "required": [
@@ -25764,6 +25767,12 @@
                     "openaiApiKey": {
                       "type": "string"
                     },
+                    "localApiKey": {
+                      "type": "string"
+                    },
+                    "localBaseUrl": {
+                      "type": "string"
+                    },
                     "geminiModelId": {
                       "type": "string"
                     },
@@ -25774,6 +25783,9 @@
                       "type": "string"
                     },
                     "openaiModelId": {
+                      "type": "string"
+                    },
+                    "localModelId": {
                       "type": "string"
                     },
                     "allowWeekendSelection": {
@@ -25869,10 +25881,13 @@
                     "openrouterApiKey",
                     "anthropicApiKey",
                     "openaiApiKey",
+                    "localApiKey",
+                    "localBaseUrl",
                     "geminiModelId",
                     "openrouterModelId",
                     "anthropicModelId",
                     "openaiModelId",
+                    "localModelId",
                     "allowWeekendSelection",
                     "defaultLocation",
                     "rilCompanyName",
@@ -26082,6 +26097,13 @@
                   "openaiApiKey": {
                     "type": "string"
                   },
+                  "localApiKey": {
+                    "type": "string"
+                  },
+                  "localBaseUrl": {
+                    "type": "string",
+                    "maxLength": 2048
+                  },
                   "geminiModelId": {
                     "type": "string"
                   },
@@ -26092,6 +26114,9 @@
                     "type": "string"
                   },
                   "openaiModelId": {
+                    "type": "string"
+                  },
+                  "localModelId": {
                     "type": "string"
                   },
                   "allowWeekendSelection": {
@@ -26218,6 +26243,12 @@
                     "openaiApiKey": {
                       "type": "string"
                     },
+                    "localApiKey": {
+                      "type": "string"
+                    },
+                    "localBaseUrl": {
+                      "type": "string"
+                    },
                     "geminiModelId": {
                       "type": "string"
                     },
@@ -26228,6 +26259,9 @@
                       "type": "string"
                     },
                     "openaiModelId": {
+                      "type": "string"
+                    },
+                    "localModelId": {
                       "type": "string"
                     },
                     "allowWeekendSelection": {
@@ -26323,10 +26357,13 @@
                     "openrouterApiKey",
                     "anthropicApiKey",
                     "openaiApiKey",
+                    "localApiKey",
+                    "localBaseUrl",
                     "geminiModelId",
                     "openrouterModelId",
                     "anthropicModelId",
                     "openaiModelId",
+                    "localModelId",
                     "allowWeekendSelection",
                     "defaultLocation",
                     "rilCompanyName",

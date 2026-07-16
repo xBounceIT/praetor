@@ -6,6 +6,7 @@ export const aiApi = {
     provider: AiProvider;
     modelId: string;
     apiKey?: string;
+    baseUrl?: string;
   }): Promise<{
     ok: boolean;
     code?: string;

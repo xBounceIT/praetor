@@ -81,6 +81,8 @@ describe('getAuditChangedFields', () => {
         anthropic_api_key: 'a',
         openaiApiKey: 'oa',
         openai_api_key: 'oa',
+        localApiKey: 'la',
+        local_api_key: 'la',
         accessToken: 'at',
         refreshToken: 'rt',
         secret: 's',
