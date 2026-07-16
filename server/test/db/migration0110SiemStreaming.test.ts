@@ -1,10 +1,10 @@
 import { describe, expect, test } from 'bun:test';
 
 const migrationSql = await Bun.file(
-  new URL('../../db/migrations/0109_add_siem_streaming.sql', import.meta.url),
+  new URL('../../db/migrations/0110_add_siem_streaming.sql', import.meta.url),
 ).text();
 
-describe('migration 0109 SIEM streaming', () => {
+describe('migration 0110 SIEM streaming', () => {
   test('creates a disabled singleton with bounded transport and queue settings', () => {
     expect(migrationSql).toContain('CREATE TABLE "siem_config"');
     expect(migrationSql).toContain('"enabled" boolean DEFAULT false NOT NULL');

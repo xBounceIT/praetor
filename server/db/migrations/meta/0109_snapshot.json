@@ -1,5 +1,5 @@
 {
-  "id": "1a95386f-1621-4476-98ba-67b7393f685a",
+  "id": "b95b610a-69a8-4fff-9dc4-e0669c458b0d",
   "prevId": "80488ecf-67c7-4fc9-b66d-89546c83fd25",
   "version": "7",
   "dialect": "postgresql",
@@ -1339,6 +1339,18 @@
           "primaryKey": false,
           "notNull": false
         },
+        "local_api_key": {
+          "name": "local_api_key",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "local_base_url": {
+          "name": "local_base_url",
+          "type": "varchar(2048)",
+          "primaryKey": false,
+          "notNull": false
+        },
         "gemini_model_id": {
           "name": "gemini_model_id",
           "type": "varchar(255)",
@@ -1359,6 +1371,12 @@
         },
         "openai_model_id": {
           "name": "openai_model_id",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "local_model_id": {
+          "name": "local_model_id",
           "type": "varchar(255)",
           "primaryKey": false,
           "notNull": false
@@ -1443,7 +1461,7 @@
         },
         "general_settings_ai_provider_check": {
           "name": "general_settings_ai_provider_check",
-          "value": "\"general_settings\".\"ai_provider\" IN ('gemini', 'openrouter', 'anthropic', 'openai')"
+          "value": "\"general_settings\".\"ai_provider\" IN ('gemini', 'openrouter', 'anthropic', 'openai', 'local')"
         },
         "general_settings_ril_default_start_time_check": {
           "name": "general_settings_ril_default_start_time_check",
@@ -5802,351 +5820,6 @@
           "value": "jsonb_typeof(\"settings\".\"ril_weekday_transfer_defaults\") = 'object'"
         }
       },
-      "isRLSEnabled": false
-    },
-    "public.siem_config": {
-      "name": "siem_config",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "integer",
-          "primaryKey": true,
-          "notNull": true,
-          "default": 1
-        },
-        "enabled": {
-          "name": "enabled",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": false
-        },
-        "host": {
-          "name": "host",
-          "type": "varchar(255)",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "''"
-        },
-        "port": {
-          "name": "port",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 6514
-        },
-        "protocol": {
-          "name": "protocol",
-          "type": "varchar(8)",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'tls'"
-        },
-        "tcp_framing": {
-          "name": "tcp_framing",
-          "type": "varchar(20)",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'newline'"
-        },
-        "source_identifier": {
-          "name": "source_identifier",
-          "type": "varchar(255)",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'praetor'"
-        },
-        "facility": {
-          "name": "facility",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 16
-        },
-        "runtime_level": {
-          "name": "runtime_level",
-          "type": "varchar(8)",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'info'"
-        },
-        "include_runtime": {
-          "name": "include_runtime",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": true
-        },
-        "include_audit": {
-          "name": "include_audit",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": true
-        },
-        "ca_pem": {
-          "name": "ca_pem",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "''"
-        },
-        "server_name": {
-          "name": "server_name",
-          "type": "varchar(255)",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "''"
-        },
-        "client_cert_pem": {
-          "name": "client_cert_pem",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "''"
-        },
-        "client_key": {
-          "name": "client_key",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "''"
-        },
-        "retention_days": {
-          "name": "retention_days",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 30
-        },
-        "max_events": {
-          "name": "max_events",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 1000000
-        },
-        "revision": {
-          "name": "revision",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 1
-        },
-        "tested_revision": {
-          "name": "tested_revision",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "last_test_at": {
-          "name": "last_test_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "last_test_success": {
-          "name": "last_test_success",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "last_delivery_at": {
-          "name": "last_delivery_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "last_error_at": {
-          "name": "last_error_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "last_error": {
-          "name": "last_error",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "dropped_retention": {
-          "name": "dropped_retention",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "dropped_capacity": {
-          "name": "dropped_capacity",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "CURRENT_TIMESTAMP"
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {
-        "siem_config_id_check": {
-          "name": "siem_config_id_check",
-          "value": "\"siem_config\".\"id\" = 1"
-        },
-        "siem_config_port_check": {
-          "name": "siem_config_port_check",
-          "value": "\"siem_config\".\"port\" BETWEEN 1 AND 65535"
-        },
-        "siem_config_protocol_check": {
-          "name": "siem_config_protocol_check",
-          "value": "\"siem_config\".\"protocol\" IN ('udp', 'tcp', 'tls')"
-        },
-        "siem_config_tcp_framing_check": {
-          "name": "siem_config_tcp_framing_check",
-          "value": "\"siem_config\".\"tcp_framing\" IN ('newline', 'octet-counting')"
-        },
-        "siem_config_facility_check": {
-          "name": "siem_config_facility_check",
-          "value": "\"siem_config\".\"facility\" BETWEEN 0 AND 23"
-        },
-        "siem_config_runtime_level_check": {
-          "name": "siem_config_runtime_level_check",
-          "value": "\"siem_config\".\"runtime_level\" IN ('trace', 'debug', 'info', 'warn', 'error', 'fatal')"
-        },
-        "siem_config_retention_days_check": {
-          "name": "siem_config_retention_days_check",
-          "value": "\"siem_config\".\"retention_days\" BETWEEN 1 AND 30"
-        },
-        "siem_config_max_events_check": {
-          "name": "siem_config_max_events_check",
-          "value": "\"siem_config\".\"max_events\" BETWEEN 10000 AND 1000000"
-        }
-      },
-      "isRLSEnabled": false
-    },
-    "public.siem_outbox": {
-      "name": "siem_outbox",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "varchar(50)",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "payload": {
-          "name": "payload",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "CURRENT_TIMESTAMP"
-        },
-        "attempts": {
-          "name": "attempts",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "available_at": {
-          "name": "available_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "CURRENT_TIMESTAMP"
-        },
-        "claim_token": {
-          "name": "claim_token",
-          "type": "varchar(100)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "claimed_at": {
-          "name": "claimed_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "last_error": {
-          "name": "last_error",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        }
-      },
-      "indexes": {
-        "idx_siem_outbox_available": {
-          "name": "idx_siem_outbox_available",
-          "columns": [
-            {
-              "expression": "available_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "created_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "idx_siem_outbox_claimed_at": {
-          "name": "idx_siem_outbox_claimed_at",
-          "columns": [
-            {
-              "expression": "claimed_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "idx_siem_outbox_created_at": {
-          "name": "idx_siem_outbox_created_at",
-          "columns": [
-            {
-              "expression": "created_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
       "isRLSEnabled": false
     },
     "public.external_identities": {

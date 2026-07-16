@@ -84,6 +84,7 @@ const AI_PROVIDER_FIELDS = {
   openrouter: { apiKey: 'openrouterApiKey', modelId: 'openrouterModelId' },
   anthropic: { apiKey: 'anthropicApiKey', modelId: 'anthropicModelId' },
   openai: { apiKey: 'openaiApiKey', modelId: 'openaiModelId' },
+  local: { apiKey: 'localApiKey', modelId: 'localModelId' },
 } as const satisfies Record<AiProvider, { apiKey: string; modelId: string }>;
 
 type TabId = (typeof TABS)[number]['id'];
@@ -141,10 +142,13 @@ const createGeneralSettingsPatch = (settings: IGeneralSettings): Partial<General
   openrouterApiKey: settings.openrouterApiKey || '',
   anthropicApiKey: settings.anthropicApiKey || '',
   openaiApiKey: settings.openaiApiKey || '',
+  localApiKey: settings.localApiKey || '',
+  localBaseUrl: settings.localBaseUrl || '',
   geminiModelId: settings.geminiModelId || '',
   openrouterModelId: settings.openrouterModelId || '',
   anthropicModelId: settings.anthropicModelId || '',
   openaiModelId: settings.openaiModelId || '',
+  localModelId: settings.localModelId || '',
   modelCheck: { state: 'idle' },
 });
 
@@ -169,10 +173,13 @@ const createGeneralSettingsUpdate = (state: GeneralSettingsState): Partial<IGene
   openrouterApiKey: state.openrouterApiKey,
   anthropicApiKey: state.anthropicApiKey,
   openaiApiKey: state.openaiApiKey,
+  localApiKey: state.localApiKey,
+  localBaseUrl: state.localBaseUrl,
   geminiModelId: state.geminiModelId,
   openrouterModelId: state.openrouterModelId,
   anthropicModelId: state.anthropicModelId,
   openaiModelId: state.openaiModelId,
+  localModelId: state.localModelId,
 });
 
 const hasGeneralSettingsChanges = (
@@ -203,10 +210,13 @@ const hasGeneralSettingsChanges = (
   state.openrouterApiKey !== (settings.openrouterApiKey || '') ||
   state.anthropicApiKey !== (settings.anthropicApiKey || '') ||
   state.openaiApiKey !== (settings.openaiApiKey || '') ||
+  state.localApiKey !== (settings.localApiKey || '') ||
+  state.localBaseUrl !== (settings.localBaseUrl || '') ||
   state.geminiModelId !== (settings.geminiModelId || '') ||
   state.openrouterModelId !== (settings.openrouterModelId || '') ||
   state.anthropicModelId !== (settings.anthropicModelId || '') ||
-  state.openaiModelId !== (settings.openaiModelId || '');
+  state.openaiModelId !== (settings.openaiModelId || '') ||
+  state.localModelId !== (settings.localModelId || '');
 
 interface GeneralSettingsState {
   currency: string;
@@ -227,10 +237,13 @@ interface GeneralSettingsState {
   openrouterApiKey: string;
   anthropicApiKey: string;
   openaiApiKey: string;
+  localApiKey: string;
+  localBaseUrl: string;
   geminiModelId: string;
   openrouterModelId: string;
   anthropicModelId: string;
   openaiModelId: string;
+  localModelId: string;
   modelCheck: { state: ModelCheckState; message?: string };
   activeTab: TabId;
   isSaving: boolean;
@@ -256,10 +269,13 @@ const INITIAL_GENERAL_SETTINGS_STATE: GeneralSettingsState = {
   openrouterApiKey: '',
   anthropicApiKey: '',
   openaiApiKey: '',
+  localApiKey: '',
+  localBaseUrl: '',
   geminiModelId: '',
   openrouterModelId: '',
   anthropicModelId: '',
   openaiModelId: '',
+  localModelId: '',
   modelCheck: { state: 'idle' },
   activeTab: 'localization',
   isSaving: false,
@@ -725,10 +741,12 @@ const AiSettingsPanel: React.FC<{
   animationClass: string;
   aiProviderOptions: Option[];
   currentApiKey: string;
+  currentBaseUrl: string;
   currentModelId: string;
   validation: {
     isAnyAiEnabled: boolean;
     isApiKeyMissing: boolean;
+    isBaseUrlMissing: boolean;
     isModelMissing: boolean;
     isModelNotFound: boolean;
   };
@@ -736,18 +754,21 @@ const AiSettingsPanel: React.FC<{
   dispatch: React.Dispatch<GeneralSettingsAction>;
   onProviderChange: (provider: AiProvider) => void;
   onApiKeyChange: (value: string) => void;
+  onBaseUrlChange: (value: string) => void;
   onModelIdChange: (value: string) => void;
   onCheckModel: () => void;
 }> = ({
   animationClass,
   aiProviderOptions,
   currentApiKey,
+  currentBaseUrl,
   currentModelId,
   validation,
   state,
   dispatch,
   onProviderChange,
   onApiKeyChange,
+  onBaseUrlChange,
   onModelIdChange,
   onCheckModel,
 }) => {
@@ -784,6 +805,14 @@ const AiSettingsPanel: React.FC<{
       dashboardLabel: t('general.openaiDashboard'),
       dashboardUrl: 'https://platform.openai.com/api-keys',
       modelsUrl: 'https://developers.openai.com/api/docs/models',
+    },
+    local: {
+      apiKeyLabel: t('general.localApiKey'),
+      apiKeyPlaceholder: t('general.localApiKeyPlaceholder'),
+      apiKeyDescription: t('general.localApiKeyDescription'),
+      dashboardLabel: '',
+      dashboardUrl: '',
+      modelsUrl: '',
     },
   }[state.aiProvider];
 
@@ -823,8 +852,30 @@ const AiSettingsPanel: React.FC<{
               <FieldDescription>{t('general.aiProviderDescription')}</FieldDescription>
             </Field>
 
+            {state.aiProvider === 'local' && (
+              <Field data-invalid={validation.isBaseUrlMissing ? 'true' : undefined}>
+                <FieldLabel htmlFor="general-ai-base-url" required>
+                  {t('general.localBaseUrl')}
+                </FieldLabel>
+                <Input
+                  id="general-ai-base-url"
+                  type="url"
+                  value={currentBaseUrl}
+                  onChange={(event) => onBaseUrlChange(event.target.value)}
+                  placeholder={t('general.localBaseUrlPlaceholder')}
+                  aria-invalid={validation.isBaseUrlMissing || undefined}
+                />
+                {validation.isBaseUrlMissing && (
+                  <p className="text-xs font-medium text-destructive">
+                    {t('general.localBaseUrlRequired')}
+                  </p>
+                )}
+                <FieldDescription>{t('general.localBaseUrlDescription')}</FieldDescription>
+              </Field>
+            )}
+
             <Field data-invalid={validation.isApiKeyMissing ? 'true' : undefined}>
-              <FieldLabel htmlFor="general-ai-api-key" required>
+              <FieldLabel htmlFor="general-ai-api-key" required={state.aiProvider !== 'local'}>
                 {providerUi.apiKeyLabel}
               </FieldLabel>
               <Input
@@ -846,16 +897,21 @@ const AiSettingsPanel: React.FC<{
                 </p>
               )}
               <FieldDescription>
-                {providerUi.apiKeyDescription}{' '}
-                <a
-                  href={providerUi.dashboardUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-praetor hover:underline"
-                >
-                  {providerUi.dashboardLabel}
-                </a>
-                .
+                {providerUi.apiKeyDescription}
+                {providerUi.dashboardUrl && (
+                  <>
+                    {' '}
+                    <a
+                      href={providerUi.dashboardUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-praetor hover:underline"
+                    >
+                      {providerUi.dashboardLabel}
+                    </a>
+                    .
+                  </>
+                )}
               </FieldDescription>
             </Field>
 
@@ -892,7 +948,8 @@ const AiSettingsPanel: React.FC<{
                   onClick={onCheckModel}
                   disabled={
                     state.modelCheck.state === 'checking' ||
-                    !currentApiKey.trim() ||
+                    (state.aiProvider !== 'local' && !currentApiKey.trim()) ||
+                    (state.aiProvider === 'local' && !currentBaseUrl.trim()) ||
                     !currentModelId.trim()
                   }
                 >
@@ -927,16 +984,21 @@ const AiSettingsPanel: React.FC<{
                 </p>
               )}
               <FieldDescription>
-                {t('general.modelIdDescription')}{' '}
-                <a
-                  href={providerUi.modelsUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-praetor hover:underline"
-                >
-                  {t('general.modelIdHelpLink')}
-                </a>
-                .
+                {t('general.modelIdDescription')}
+                {providerUi.modelsUrl && (
+                  <>
+                    {' '}
+                    <a
+                      href={providerUi.modelsUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-praetor hover:underline"
+                    >
+                      {t('general.modelIdHelpLink')}
+                    </a>
+                    .
+                  </>
+                )}
               </FieldDescription>
             </Field>
           </div>
@@ -984,12 +1046,14 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({
     { id: 'openrouter', name: t('general.aiProviders.openrouter') },
     { id: 'anthropic', name: t('general.aiProviders.anthropic') },
     { id: 'openai', name: t('general.aiProviders.openai') },
+    { id: 'local', name: t('general.aiProviders.local') },
   ];
   const [state, dispatch] = useReducer(generalSettingsReducer, INITIAL_GENERAL_SETTINGS_STATE);
   const modelCheckRequestIdRef = useRef(0);
   const modelCheckTargetRef = useRef<{
     provider: AiProvider;
     apiKey: string;
+    baseUrl?: string;
     modelId: string;
   } | null>(null);
   const {
@@ -1033,15 +1097,17 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({
 
   const providerFields = AI_PROVIDER_FIELDS[aiProvider];
   const currentApiKey = state[providerFields.apiKey];
+  const currentBaseUrl = aiProvider === 'local' ? state.localBaseUrl : '';
   const currentModelId = state[providerFields.modelId];
 
   useEffect(() => {
     modelCheckTargetRef.current = {
       provider: aiProvider,
       apiKey: currentApiKey,
+      baseUrl: aiProvider === 'local' ? currentBaseUrl : undefined,
       modelId: currentModelId,
     };
-  }, [aiProvider, currentApiKey, currentModelId]);
+  }, [aiProvider, currentApiKey, currentBaseUrl, currentModelId]);
 
   const invalidateModelCheck = () => {
     modelCheckRequestIdRef.current += 1;
@@ -1077,22 +1143,42 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({
     });
   };
 
+  const handleBaseUrlChange = (value: string) => {
+    invalidateModelCheck();
+    dispatch({
+      type: 'merge',
+      patch: { localBaseUrl: value, modelCheck: { state: 'idle' } },
+    });
+  };
+
   const isAnyAiEnabled = enableAiReporting;
-  const isApiKeyMissing = () => isAnyAiEnabled && !currentApiKey.trim();
+  const isApiKeyMissing = () => isAnyAiEnabled && aiProvider !== 'local' && !currentApiKey.trim();
+  const isBaseUrlMissing = () => isAnyAiEnabled && aiProvider === 'local' && !currentBaseUrl.trim();
   const isModelMissing = () => isAnyAiEnabled && !currentModelId.trim();
   const isModelNotFound = isAnyAiEnabled && modelCheck.state === 'not_found';
 
   const handleCheckModel = async () => {
-    if (!currentApiKey.trim() || !currentModelId.trim()) return;
+    if (
+      (aiProvider !== 'local' && !currentApiKey.trim()) ||
+      (aiProvider === 'local' && !currentBaseUrl.trim()) ||
+      !currentModelId.trim()
+    )
+      return;
     const requestId = modelCheckRequestIdRef.current + 1;
     modelCheckRequestIdRef.current = requestId;
-    const target = { provider: aiProvider, apiKey: currentApiKey, modelId: currentModelId };
+    const target = {
+      provider: aiProvider,
+      apiKey: currentApiKey,
+      ...(aiProvider === 'local' ? { baseUrl: currentBaseUrl } : {}),
+      modelId: currentModelId,
+    };
     const isCurrentRequest = () => {
       const currentTarget = modelCheckTargetRef.current;
       return (
         modelCheckRequestIdRef.current === requestId &&
         currentTarget?.provider === target.provider &&
         currentTarget.apiKey === target.apiKey &&
+        currentTarget.baseUrl === target.baseUrl &&
         currentTarget.modelId === target.modelId
       );
     };
@@ -1124,7 +1210,7 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (isApiKeyMissing() || isModelMissing() || isModelNotFound) return;
+    if (isApiKeyMissing() || isBaseUrlMissing() || isModelMissing() || isModelNotFound) return;
     dispatch({ type: 'merge', patch: { isSaving: true } });
     try {
       await onUpdate(createGeneralSettingsUpdate(state));
@@ -1142,6 +1228,7 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({
   const submitDisabled =
     isSaving ||
     isApiKeyMissing() ||
+    isBaseUrlMissing() ||
     isModelMissing() ||
     isModelNotFound ||
     (!hasChanges && !isSaved);
@@ -1241,10 +1328,12 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({
             animationClass=""
             aiProviderOptions={AI_PROVIDER_OPTIONS}
             currentApiKey={currentApiKey}
+            currentBaseUrl={currentBaseUrl}
             currentModelId={currentModelId}
             validation={{
               isAnyAiEnabled,
               isApiKeyMissing: isApiKeyMissing(),
+              isBaseUrlMissing: isBaseUrlMissing(),
               isModelMissing: isModelMissing(),
               isModelNotFound,
             }}
@@ -1252,6 +1341,7 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({
             dispatch={dispatch}
             onProviderChange={handleProviderChange}
             onApiKeyChange={handleApiKeyChange}
+            onBaseUrlChange={handleBaseUrlChange}
             onModelIdChange={handleModelIdChange}
             onCheckModel={handleCheckModel}
           />

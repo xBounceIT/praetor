@@ -183,7 +183,7 @@ export interface Notification {
   createdAt: number;
 }
 
-export type AiProvider = 'gemini' | 'openrouter' | 'anthropic' | 'openai';
+export type AiProvider = 'gemini' | 'openrouter' | 'anthropic' | 'openai' | 'local';
 
 export interface GeneralSettings {
   currency: string;
@@ -196,10 +196,13 @@ export interface GeneralSettings {
   openrouterApiKey?: string;
   anthropicApiKey?: string;
   openaiApiKey?: string;
+  localApiKey?: string;
+  localBaseUrl?: string;
   geminiModelId?: string;
   openrouterModelId?: string;
   anthropicModelId?: string;
   openaiModelId?: string;
+  localModelId?: string;
   allowWeekendSelection: boolean;
   defaultLocation?: TimeEntryLocation;
   rilCompanyName?: string;

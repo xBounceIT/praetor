@@ -7,6 +7,7 @@ import { standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import { VALID_LOCATIONS } from '../services/timeEntries.ts';
 import { logAudit } from '../utils/audit.ts';
 import { MASKED_SECRET } from '../utils/crypto.ts';
+import { normalizeLocalAiBaseUrl } from '../utils/local-ai-endpoint.ts';
 import { requestHasPermission as hasPermission } from '../utils/permissions.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import {
@@ -78,10 +79,13 @@ const generalSettingsSchema = {
     openrouterApiKey: { type: 'string' },
     anthropicApiKey: { type: 'string' },
     openaiApiKey: { type: 'string' },
+    localApiKey: { type: 'string' },
+    localBaseUrl: { type: 'string' },
     geminiModelId: { type: 'string' },
     openrouterModelId: { type: 'string' },
     anthropicModelId: { type: 'string' },
     openaiModelId: { type: 'string' },
+    localModelId: { type: 'string' },
     allowWeekendSelection: { type: 'boolean' },
     defaultLocation: { type: 'string' },
     rilCompanyName: { type: 'string', maxLength: 255 },
@@ -108,10 +112,13 @@ const generalSettingsSchema = {
     'openrouterApiKey',
     'anthropicApiKey',
     'openaiApiKey',
+    'localApiKey',
+    'localBaseUrl',
     'geminiModelId',
     'openrouterModelId',
     'anthropicModelId',
     'openaiModelId',
+    'localModelId',
     'allowWeekendSelection',
     'defaultLocation',
     'rilCompanyName',
@@ -141,10 +148,13 @@ const generalSettingsUpdateBodySchema = {
     openrouterApiKey: { type: 'string' },
     anthropicApiKey: { type: 'string' },
     openaiApiKey: { type: 'string' },
+    localApiKey: { type: 'string' },
+    localBaseUrl: { type: 'string', maxLength: 2048 },
     geminiModelId: { type: 'string' },
     openrouterModelId: { type: 'string' },
     anthropicModelId: { type: 'string' },
     openaiModelId: { type: 'string' },
+    localModelId: { type: 'string' },
     allowWeekendSelection: { type: 'boolean' },
     defaultLocation: { type: 'string' },
     rilCompanyName: { type: 'string', maxLength: 255 },
@@ -173,10 +183,13 @@ const DEFAULT_SETTINGS: generalSettingsRepo.GeneralSettings = {
   openrouterApiKey: null,
   anthropicApiKey: null,
   openaiApiKey: null,
+  localApiKey: null,
+  localBaseUrl: null,
   geminiModelId: null,
   openrouterModelId: null,
   anthropicModelId: null,
   openaiModelId: null,
+  localModelId: null,
   allowWeekendSelection: true,
   defaultLocation: 'remote',
   rilCompanyName: '',
@@ -412,10 +425,13 @@ const toResponse = (
   openrouterApiKey: maskApiKey(settings.openrouterApiKey, revealSensitiveSettings),
   anthropicApiKey: maskApiKey(settings.anthropicApiKey, revealSensitiveSettings),
   openaiApiKey: maskApiKey(settings.openaiApiKey, revealSensitiveSettings),
+  localApiKey: maskApiKey(settings.localApiKey, revealSensitiveSettings),
+  localBaseUrl: revealSensitiveSettings ? settings.localBaseUrl || '' : '',
   geminiModelId: settings.geminiModelId || '',
   openrouterModelId: settings.openrouterModelId || '',
   anthropicModelId: settings.anthropicModelId || '',
   openaiModelId: settings.openaiModelId || '',
+  localModelId: settings.localModelId || '',
   allowWeekendSelection: settings.allowWeekendSelection ?? true,
   defaultLocation: settings.defaultLocation || 'remote',
   rilCompanyName: settings.rilCompanyName ?? '',
@@ -519,10 +535,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         openrouterApiKey?: string;
         anthropicApiKey?: string;
         openaiApiKey?: string;
+        localApiKey?: string;
+        localBaseUrl?: string;
         geminiModelId?: string;
         openrouterModelId?: string;
         anthropicModelId?: string;
         openaiModelId?: string;
+        localModelId?: string;
         allowWeekendSelection?: boolean;
         defaultLocation?: string;
         rilCompanyName?: string;
@@ -547,10 +566,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         openrouterApiKey,
         anthropicApiKey,
         openaiApiKey,
+        localApiKey,
+        localBaseUrl,
         geminiModelId,
         openrouterModelId,
         anthropicModelId,
         openaiModelId,
+        localModelId,
         defaultLocation,
         rilCompanyName,
         rilDefaultStartTime,
@@ -571,7 +593,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const aiProviderResult = optionalEnum(
         aiProvider,
-        ['gemini', 'openrouter', 'anthropic', 'openai'],
+        ['gemini', 'openrouter', 'anthropic', 'openai', 'local'],
         'aiProvider',
       );
       if (!aiProviderResult.ok) return badRequest(reply, aiProviderResult.message);
@@ -642,6 +664,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         typeof openaiModelId !== 'string'
       )
         return badRequest(reply, 'openaiModelId must be a string');
+      if (localModelId !== undefined && localModelId !== null && typeof localModelId !== 'string')
+        return badRequest(reply, 'localModelId must be a string');
       if (
         openrouterApiKey !== undefined &&
         openrouterApiKey !== null &&
@@ -656,8 +680,19 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return badRequest(reply, 'anthropicApiKey must be a string');
       if (openaiApiKey !== undefined && openaiApiKey !== null && typeof openaiApiKey !== 'string')
         return badRequest(reply, 'openaiApiKey must be a string');
+      if (localApiKey !== undefined && localApiKey !== null && typeof localApiKey !== 'string')
+        return badRequest(reply, 'localApiKey must be a string');
       if (geminiApiKey !== undefined && geminiApiKey !== null && typeof geminiApiKey !== 'string')
         return badRequest(reply, 'geminiApiKey must be a string');
+
+      let normalizedLocalBaseUrl: string | null = null;
+      if (localBaseUrl !== undefined && localBaseUrl !== null) {
+        if (typeof localBaseUrl !== 'string')
+          return badRequest(reply, 'localBaseUrl must be a string');
+        const localBaseUrlResult = normalizeLocalAiBaseUrl(localBaseUrl);
+        if (!localBaseUrlResult.ok) return badRequest(reply, localBaseUrlResult.message);
+        normalizedLocalBaseUrl = localBaseUrlResult.value;
+      }
 
       const treatSaturdayAsHolidayResult = parseBooleanField(body, 'treatSaturdayAsHoliday');
       if (!treatSaturdayAsHolidayResult.ok) {
@@ -696,6 +731,17 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       const previousSettings = await generalSettingsRepo.get();
+      const effectiveAiProvider =
+        aiProviderResult.value ?? previousSettings?.aiProvider ?? 'gemini';
+      const effectiveAiEnabled =
+        enableAiReportingResult.value ?? previousSettings?.enableAiReporting ?? false;
+      if (effectiveAiEnabled && effectiveAiProvider === 'local') {
+        const effectiveBaseUrl = normalizedLocalBaseUrl ?? previousSettings?.localBaseUrl ?? '';
+        const effectiveModelId = localModelId ?? previousSettings?.localModelId ?? '';
+        if (!effectiveBaseUrl) return badRequest(reply, 'localBaseUrl is required for local AI');
+        if (!effectiveModelId.trim())
+          return badRequest(reply, 'localModelId is required for local AI');
+      }
       const settingsPatch = {
         currency: currencyResult.value,
         dailyLimit: dailyLimitResult.value,
@@ -707,10 +753,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         openrouterApiKey,
         anthropicApiKey,
         openaiApiKey,
+        localApiKey,
+        localBaseUrl: normalizedLocalBaseUrl,
         geminiModelId,
         openrouterModelId,
         anthropicModelId,
         openaiModelId,
+        localModelId,
         allowWeekendSelection: allowWeekendSelectionResult.value,
         defaultLocation: defaultLocationResult.value,
         rilCompanyName: rilCompanyNameResult.value,
