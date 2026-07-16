@@ -123,6 +123,16 @@
         "title": "Selezione eventi",
         "description": "Audit e runtime hanno filtri indipendenti."
       },
+      "runtimeLevels": {
+        "helpLabel": "Significato dei livelli runtime",
+        "description": "Include il livello selezionato e tutti quelli più gravi.",
+        "trace": "Dettagli diagnostici molto granulari.",
+        "debug": "Informazioni utili per analisi e sviluppo.",
+        "info": "Normali eventi operativi.",
+        "warn": "Anomalie che non interrompono il servizio.",
+        "error": "Errori che compromettono singole operazioni.",
+        "fatal": "Errori critici che possono arrestare il servizio."
+      },
       "tls": {
         "title": "TLS e mTLS",
         "description": "La verifica del server è sempre attiva e richiede almeno TLS 1.2.",

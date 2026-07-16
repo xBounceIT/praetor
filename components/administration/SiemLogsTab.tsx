@@ -1,6 +1,7 @@
 import {
   AlertTriangle,
   CheckCircle2,
+  CircleHelp,
   FileUp,
   Loader2,
   RadioTower,
@@ -27,6 +28,7 @@ import { Input } from '../ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Switch } from '../ui/switch';
 import { Textarea } from '../ui/textarea';
+import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip';
 
 type Props = { canUpdate: boolean };
 type FormErrors = Partial<Record<keyof SiemConfigUpdate, string>>;
@@ -34,6 +36,7 @@ type PemField = 'caPem' | 'clientCertPem' | 'clientKey';
 
 const PEM_FILE_MAX_BYTES = 64 * 1024;
 const PEM_FILE_ACCEPT = '.pem,.crt,.cer,.cert,.key';
+const RUNTIME_LEVELS = ['trace', 'debug', 'info', 'warn', 'error', 'fatal'] as const;
 
 type PemFileActionsProps = {
   inputRef: React.RefObject<HTMLInputElement | null>;
@@ -579,7 +582,37 @@ const SiemLogsTab: React.FC<Props> = ({ canUpdate }) => {
                 </div>
               </div>
               <Field className="max-w-sm pt-2">
-                <FieldLabel>{t('logs.siem.fields.runtimeLevel')}</FieldLabel>
+                <div className="flex items-center gap-1">
+                  <FieldLabel>{t('logs.siem.fields.runtimeLevel')}</FieldLabel>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-xs"
+                        className="text-muted-foreground hover:text-foreground"
+                        aria-label={t('logs.siem.runtimeLevels.helpLabel')}
+                      >
+                        <CircleHelp aria-hidden="true" className="size-3.5" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent
+                      side="top"
+                      align="start"
+                      className="w-80 max-w-[calc(100vw-2rem)] text-left"
+                    >
+                      <p className="mb-2 font-medium">{t('logs.siem.runtimeLevels.description')}</p>
+                      <div className="space-y-1.5">
+                        {RUNTIME_LEVELS.map((level) => (
+                          <div key={level} className="grid grid-cols-[3.25rem_1fr] gap-2">
+                            <span className="font-semibold">{level.toUpperCase()}</span>
+                            <span>{t(['logs.siem.runtimeLevels', level].join('.'))}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
                 <Select
                   value={form.runtimeLevel}
                   onValueChange={(value) =>
@@ -591,7 +624,7 @@ const SiemLogsTab: React.FC<Props> = ({ canUpdate }) => {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {['trace', 'debug', 'info', 'warn', 'error', 'fatal'].map((level) => (
+                    {RUNTIME_LEVELS.map((level) => (
                       <SelectItem key={level} value={level}>
                         {level.toUpperCase()}
                       </SelectItem>

@@ -208,6 +208,26 @@ describe('<LogsView />', () => {
     expect(container.querySelectorAll('[data-slot="card"]')).toHaveLength(2);
   });
 
+  test('explains every runtime log level in an accessible tooltip', async () => {
+    const user = userEvent.setup();
+    render(<LogsView canUpdateSiem />);
+    await user.click(screen.getByRole('tab', { name: 'logs.tabs.siem' }));
+
+    const help = await screen.findByRole('button', {
+      name: 'logs.siem.runtimeLevels.helpLabel',
+    });
+    await user.hover(help);
+
+    const tooltip = await screen.findByRole('tooltip');
+    expect(within(tooltip).getByText('logs.siem.runtimeLevels.description')).toBeInTheDocument();
+    for (const level of ['trace', 'debug', 'info', 'warn', 'error', 'fatal']) {
+      expect(within(tooltip).getByText(level.toUpperCase())).toBeInTheDocument();
+      expect(
+        within(tooltip).getByText(['logs.siem.runtimeLevels', level].join('.')),
+      ).toBeInTheDocument();
+    }
+  });
+
   test('renders SIEM configuration when the initial status request fails', async () => {
     logsApiMock.getSiemStatus.mockRejectedValueOnce(new Error('status unavailable'));
     const user = userEvent.setup();

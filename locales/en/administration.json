@@ -123,6 +123,16 @@
         "title": "Event selection",
         "description": "Audit and runtime events have independent filters."
       },
+      "runtimeLevels": {
+        "helpLabel": "Runtime level meanings",
+        "description": "Includes the selected level and all more severe events.",
+        "trace": "Highly granular diagnostic details.",
+        "debug": "Information useful for analysis and development.",
+        "info": "Normal operational events.",
+        "warn": "Issues that do not interrupt the service.",
+        "error": "Errors affecting individual operations.",
+        "fatal": "Critical errors that may stop the service."
+      },
       "tls": {
         "title": "TLS and mTLS",
         "description": "Server verification is always enabled and requires TLS 1.2 or newer.",
