@@ -228,6 +228,55 @@ describe('<GeneralSettings /> AI provider settings', () => {
     );
   });
 
+  test('configures and validates a local endpoint without requiring an API token', async () => {
+    const onUpdate = mock(async () => undefined);
+    render(
+      <GeneralSettings
+        settings={{
+          ...baseSettings,
+          enableAiReporting: true,
+          aiProvider: 'local',
+          localApiKey: '',
+          localBaseUrl: 'http://inference:11434/v1',
+          localModelId: 'llama3.2',
+        }}
+        onUpdate={onUpdate}
+        branding={{ companyName: null, logoUrl: null }}
+        onBrandingChange={() => {}}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'general.tabs.ai' }));
+    expect(screen.getByLabelText(/general\.localBaseUrl/)).toHaveValue('http://inference:11434/v1');
+    expect(screen.getByLabelText(/general\.localApiKey/)).toHaveValue('');
+    expect(screen.getByLabelText(/general\.modelIdLabel/)).toHaveValue('llama3.2');
+
+    fireEvent.click(screen.getByRole('button', { name: 'general.checkModel' }));
+    await waitFor(() =>
+      expect(validateModelMock).toHaveBeenCalledWith({
+        provider: 'local',
+        apiKey: '',
+        baseUrl: 'http://inference:11434/v1',
+        modelId: 'llama3.2',
+      }),
+    );
+
+    fireEvent.change(screen.getByLabelText(/general\.localBaseUrl/), {
+      target: { value: 'http://inference:8000/v1' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /general\.saveConfiguration/ }));
+    await waitFor(() =>
+      expect(onUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          aiProvider: 'local',
+          localApiKey: '',
+          localBaseUrl: 'http://inference:8000/v1',
+          localModelId: 'llama3.2',
+        }),
+      ),
+    );
+  });
+
   test('ignores a stale model validation result after the target changes', async () => {
     let resolveValidation:
       | ((value: { ok: boolean; code?: string; message?: string }) => void)

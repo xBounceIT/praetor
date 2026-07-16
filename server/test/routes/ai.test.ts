@@ -3,6 +3,7 @@ import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import * as realGeneralSettingsRepo from '../../repositories/generalSettingsRepo.ts';
 import * as realRolesRepo from '../../repositories/rolesRepo.ts';
 import * as realUsersRepo from '../../repositories/usersRepo.ts';
+import * as realLocalAiEndpoint from '../../utils/local-ai-endpoint.ts';
 import * as realPermissions from '../../utils/permissions.ts';
 import {
   installAuthMiddlewareMock,
@@ -15,6 +16,7 @@ const usersRepoSnap = { ...realUsersRepo };
 const rolesRepoSnap = { ...realRolesRepo };
 const permissionsSnap = { ...realPermissions };
 const generalSettingsRepoSnap = { ...realGeneralSettingsRepo };
+const localAiEndpointSnap = { ...realLocalAiEndpoint };
 
 const findAuthUserByIdMock = mock();
 const userHasRoleMock = mock();
@@ -24,6 +26,10 @@ const getGeneralSettingsMock = mock();
 let routePlugin: FastifyPluginAsync;
 let originalFetch: typeof fetch;
 const fetchMock = mock();
+const localAiFetchMock = mock(async (input: string | URL, init?: RequestInit) => {
+  await localAiEndpointSnap.assertSafeLocalAiBaseUrl(String(input));
+  return fetchMock(input, init);
+});
 
 beforeAll(async () => {
   installAuthMiddlewareMock();
@@ -44,6 +50,10 @@ beforeAll(async () => {
     ...generalSettingsRepoSnap,
     get: getGeneralSettingsMock,
   }));
+  mock.module('../../utils/local-ai-endpoint.ts', () => ({
+    ...localAiEndpointSnap,
+    fetchLocalAi: localAiFetchMock,
+  }));
 
   routePlugin = (await import('../../routes/ai.ts')).default as FastifyPluginAsync;
 
@@ -57,6 +67,7 @@ afterAll(() => {
   mock.module('../../repositories/rolesRepo.ts', () => rolesRepoSnap);
   mock.module('../../utils/permissions.ts', () => permissionsSnap);
   mock.module('../../repositories/generalSettingsRepo.ts', () => generalSettingsRepoSnap);
+  mock.module('../../utils/local-ai-endpoint.ts', () => localAiEndpointSnap);
   globalThis.fetch = originalFetch;
 });
 
@@ -80,6 +91,7 @@ beforeEach(async () => {
   getRolePermissionsMock.mockReset();
   getGeneralSettingsMock.mockReset();
   fetchMock.mockReset();
+  localAiFetchMock.mockClear();
 
   findAuthUserByIdMock.mockResolvedValue(HAPPY_USER);
   userHasRoleMock.mockResolvedValue(true);
@@ -89,6 +101,8 @@ beforeEach(async () => {
     openrouterApiKey: 'test-openrouter-key',
     anthropicApiKey: 'test-anthropic-key',
     openaiApiKey: 'test-openai-key',
+    localApiKey: 'test-local-key',
+    localBaseUrl: 'http://127.0.0.1:11434/v1',
   });
 
   testApp = await buildRouteTestApp(routePlugin, '/api/ai');
@@ -368,5 +382,106 @@ describe('POST /api/ai/validate-model', () => {
 
     expect(res.statusCode).toBe(200);
     expect(JSON.parse(res.body).code).toBe('NOT_FOUND');
+  });
+
+  test('200 ok=true validates a local model without requiring an API key', async () => {
+    fetchMock.mockResolvedValue(okResponse({ data: [{ id: 'llama3.2', name: 'Llama 3.2' }] }, 200));
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/ai/validate-model',
+      headers: authHeader(),
+      payload: {
+        provider: 'local',
+        modelId: 'llama3.2',
+        apiKey: '',
+        baseUrl: 'http://127.0.0.1:11434/v1/',
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body)).toEqual({
+      ok: true,
+      normalizedModelId: 'llama3.2',
+      name: 'Llama 3.2',
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://127.0.0.1:11434/v1/models',
+      expect.objectContaining({
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+        redirect: 'error',
+      }),
+    );
+  });
+
+  test('uses saved local endpoint and Bearer token when inline values are omitted', async () => {
+    fetchMock.mockResolvedValue(okResponse({ data: [{ id: 'llama3.2' }] }, 200));
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/ai/validate-model',
+      headers: authHeader(),
+      payload: { provider: 'local', modelId: 'llama3.2' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://127.0.0.1:11434/v1/models',
+      expect.objectContaining({
+        headers: expect.objectContaining({ Authorization: 'Bearer test-local-key' }),
+      }),
+    );
+  });
+
+  test('returns NOT_FOUND when a local model is absent from the model list', async () => {
+    fetchMock.mockResolvedValue(okResponse({ data: [{ id: 'other-model' }] }, 200));
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/ai/validate-model',
+      headers: authHeader(),
+      payload: {
+        provider: 'local',
+        modelId: 'llama3.2',
+        baseUrl: 'http://127.0.0.1:11434/v1',
+      },
+    });
+    expect(JSON.parse(res.body)).toEqual(expect.objectContaining({ ok: false, code: 'NOT_FOUND' }));
+  });
+
+  test('blocks link-local metadata destinations before fetch', async () => {
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/ai/validate-model',
+      headers: authHeader(),
+      payload: {
+        provider: 'local',
+        modelId: 'llama3.2',
+        baseUrl: 'http://169.254.169.254/v1',
+      },
+    });
+    expect(JSON.parse(res.body)).toEqual(
+      expect.objectContaining({ ok: false, code: 'PROVIDER_ERROR' }),
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  test('does not expose the configured local hostname through provider errors', async () => {
+    fetchMock.mockRejectedValue(new Error('getaddrinfo ENOTFOUND inference.internal'));
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/ai/validate-model',
+      headers: authHeader(),
+      payload: {
+        provider: 'local',
+        modelId: 'llama3.2',
+        baseUrl: 'http://127.0.0.1:11434/v1',
+      },
+    });
+
+    expect(JSON.parse(res.body)).toEqual({
+      ok: false,
+      code: 'PROVIDER_ERROR',
+      message: 'Unable to verify model with the Local AI endpoint.',
+    });
+    expect(res.body).not.toContain('inference.internal');
   });
 });

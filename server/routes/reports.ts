@@ -14,13 +14,14 @@ import * as workUnitsRepo from '../repositories/workUnitsRepo.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import { normalizeGeminiModelPath } from '../utils/ai-models.ts';
 import { assertAuthenticated } from '../utils/auth-assert.ts';
+import { fetchLocalAi, localAiEndpointUrl, localAiHeaders } from '../utils/local-ai-endpoint.ts';
 import { generatePrefixedId } from '../utils/order-ids.ts';
 import { requestHasPermission as hasPermission } from '../utils/permissions.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { replyError } from '../utils/replyError.ts';
 import { badRequest, optionalNonEmptyString, requireNonEmptyString } from '../utils/validation.ts';
 
-type AiProvider = 'gemini' | 'openrouter' | 'anthropic' | 'openai';
+type AiProvider = 'gemini' | 'openrouter' | 'anthropic' | 'openai' | 'local';
 type UiLanguage = 'en' | 'it';
 type AiChatMessage = { role: 'system' | 'user' | 'assistant'; content: string };
 const AI_REPORTING_MESSAGE_MAX_CHARS = 16_000;
@@ -33,10 +34,13 @@ export type GeneralAiConfig = {
   openrouterApiKey: string;
   anthropicApiKey: string;
   openaiApiKey: string;
+  localApiKey: string;
+  localBaseUrl: string;
   geminiModelId: string;
   openrouterModelId: string;
   anthropicModelId: string;
   openaiModelId: string;
+  localModelId: string;
   currency: string;
 };
 
@@ -45,11 +49,22 @@ const AI_PROVIDER_CONFIG_FIELDS = {
   openrouter: { apiKey: 'openrouterApiKey', modelId: 'openrouterModelId' },
   anthropic: { apiKey: 'anthropicApiKey', modelId: 'anthropicModelId' },
   openai: { apiKey: 'openaiApiKey', modelId: 'openaiModelId' },
+  local: { apiKey: 'localApiKey', modelId: 'localModelId' },
 } as const satisfies Record<
   AiProvider,
   {
-    apiKey: 'geminiApiKey' | 'openrouterApiKey' | 'anthropicApiKey' | 'openaiApiKey';
-    modelId: 'geminiModelId' | 'openrouterModelId' | 'anthropicModelId' | 'openaiModelId';
+    apiKey:
+      | 'geminiApiKey'
+      | 'openrouterApiKey'
+      | 'anthropicApiKey'
+      | 'openaiApiKey'
+      | 'localApiKey';
+    modelId:
+      | 'geminiModelId'
+      | 'openrouterModelId'
+      | 'anthropicModelId'
+      | 'openaiModelId'
+      | 'localModelId';
   }
 >;
 
@@ -90,10 +105,13 @@ export const getGeneralAiConfig = async (): Promise<GeneralAiConfig> => {
     openrouterApiKey: settings?.openrouterApiKey || '',
     anthropicApiKey: settings?.anthropicApiKey || '',
     openaiApiKey: settings?.openaiApiKey || '',
+    localApiKey: settings?.localApiKey || '',
+    localBaseUrl: settings?.localBaseUrl || '',
     geminiModelId: settings?.geminiModelId || '',
     openrouterModelId: settings?.openrouterModelId || '',
     anthropicModelId: settings?.anthropicModelId || '',
     openaiModelId: settings?.openaiModelId || '',
+    localModelId: settings?.localModelId || '',
     currency: settings?.currency || '',
   };
 };
@@ -122,6 +140,7 @@ const resolveProviderKeyModel = (cfg: GeneralAiConfig) => {
     provider: cfg.aiProvider,
     apiKey: cfg[fields.apiKey],
     modelId: cfg[fields.modelId].trim(),
+    baseUrl: cfg.aiProvider === 'local' ? cfg.localBaseUrl.trim() : '',
   };
 };
 
@@ -131,6 +150,7 @@ type AiTextResult = {
   thoughtContent?: string;
   usage?: AiGenerationUsage;
 };
+type AiFetcher = (input: string | URL, init?: RequestInit) => Promise<Response>;
 type AiTechnicalInfo = {
   provider: AiProvider;
   modelId: string;
@@ -294,6 +314,9 @@ const fetchModelContextWindow = async (
     }
     return contextWindowTokens;
   }
+
+  // OpenAI-compatible model metadata does not define a standard context-window field.
+  if (provider === 'local') return undefined;
 
   try {
     let contextWindowTokens: number | undefined;
@@ -518,6 +541,13 @@ const isAbortError = (err: unknown) => {
   return code === 'ABORT_ERR';
 };
 
+const aiRequestErrorMessage = (err: unknown, provider: AiProvider): string =>
+  provider === 'local'
+    ? 'Local AI request failed.'
+    : err instanceof Error
+      ? err.message
+      : 'AI request failed';
+
 const createAbortError = () => {
   const err = new Error('Operation aborted');
   err.name = 'AbortError';
@@ -606,27 +636,49 @@ const geminiGenerateText = async (
   return googleTextFromGenerateContent(data);
 };
 
-const openrouterGenerateText = async (
-  apiKey: string,
+const chatCompletionsGenerateText = async (
+  endpoint: string,
+  headers: Record<string, string>,
+  providerLabel: string,
   modelId: string,
   messages: AiChatMessage[],
+  fetcher: AiFetcher = fetch,
+  redirect?: RequestInit['redirect'],
 ) => {
-  const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+  const res = await fetcher(endpoint, {
     method: 'POST',
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: modelId,
-      temperature: 0.2,
-      messages,
-    }),
+    headers,
+    body: JSON.stringify({ model: modelId, temperature: 0.2, messages }),
+    redirect,
   });
-  if (!res.ok) throw new Error(`OpenRouter request failed: HTTP ${res.status}`);
-  const data = await res.json();
-  return openrouterTextFromCompletion(data);
+  if (!res.ok) throw new Error(`${providerLabel} request failed: HTTP ${res.status}`);
+  return openrouterTextFromCompletion(await res.json());
 };
+
+const openrouterGenerateText = (apiKey: string, modelId: string, messages: AiChatMessage[]) =>
+  chatCompletionsGenerateText(
+    'https://openrouter.ai/api/v1/chat/completions',
+    { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+    'OpenRouter',
+    modelId,
+    messages,
+  );
+
+const localGenerateText = (
+  apiKey: string,
+  baseUrl: string,
+  modelId: string,
+  messages: AiChatMessage[],
+) =>
+  chatCompletionsGenerateText(
+    localAiEndpointUrl(baseUrl, 'chat/completions'),
+    localAiHeaders(apiKey),
+    'Local AI',
+    modelId,
+    messages,
+    fetchLocalAi,
+    'error',
+  );
 
 const anthropicGenerateText = async (
   apiKey: string,
@@ -766,19 +818,20 @@ const geminiGenerateTextStream = async (
   } as AiTextResult;
 };
 
-const openrouterGenerateTextStream = async (
-  apiKey: string,
+const chatCompletionsGenerateTextStream = async (
+  endpoint: string,
+  headers: Record<string, string>,
+  providerLabel: string,
   modelId: string,
   messages: AiChatMessage[],
   callbacks: AiStreamCallbacks = {},
   signal?: AbortSignal,
+  fetcher: AiFetcher = fetch,
+  redirect?: RequestInit['redirect'],
 ) => {
-  const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+  const res = await fetcher(endpoint, {
     method: 'POST',
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
+    headers,
     body: JSON.stringify({
       model: modelId,
       temperature: 0.2,
@@ -786,9 +839,10 @@ const openrouterGenerateTextStream = async (
       messages,
     }),
     signal,
+    redirect,
   });
 
-  if (!res.ok) throw new Error(`OpenRouter request failed: HTTP ${res.status}`);
+  if (!res.ok) throw new Error(`${providerLabel} request failed: HTTP ${res.status}`);
 
   let text = '';
   let thoughtContent = '';
@@ -882,6 +936,43 @@ const openrouterGenerateTextStream = async (
     usage,
   } as AiTextResult;
 };
+
+const openrouterGenerateTextStream = (
+  apiKey: string,
+  modelId: string,
+  messages: AiChatMessage[],
+  callbacks: AiStreamCallbacks = {},
+  signal?: AbortSignal,
+) =>
+  chatCompletionsGenerateTextStream(
+    'https://openrouter.ai/api/v1/chat/completions',
+    { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+    'OpenRouter',
+    modelId,
+    messages,
+    callbacks,
+    signal,
+  );
+
+const localGenerateTextStream = (
+  apiKey: string,
+  baseUrl: string,
+  modelId: string,
+  messages: AiChatMessage[],
+  callbacks: AiStreamCallbacks = {},
+  signal?: AbortSignal,
+) =>
+  chatCompletionsGenerateTextStream(
+    localAiEndpointUrl(baseUrl, 'chat/completions'),
+    localAiHeaders(apiKey),
+    'Local AI',
+    modelId,
+    messages,
+    callbacks,
+    signal,
+    fetchLocalAi,
+    'error',
+  );
 
 const anthropicGenerateTextStream = async (
   apiKey: string,
@@ -1099,9 +1190,20 @@ const generateSessionTitle = async (
     const raw =
       providerKeyModel.provider === 'openrouter'
         ? await openrouterGenerateText(providerKeyModel.apiKey, providerKeyModel.modelId, messages)
-        : providerKeyModel.provider === 'anthropic'
-          ? await anthropicGenerateText(providerKeyModel.apiKey, providerKeyModel.modelId, messages)
-          : await openaiGenerateText(providerKeyModel.apiKey, providerKeyModel.modelId, messages);
+        : providerKeyModel.provider === 'local'
+          ? await localGenerateText(
+              providerKeyModel.apiKey,
+              providerKeyModel.baseUrl,
+              providerKeyModel.modelId,
+              messages,
+            )
+          : providerKeyModel.provider === 'anthropic'
+            ? await anthropicGenerateText(
+                providerKeyModel.apiKey,
+                providerKeyModel.modelId,
+                messages,
+              )
+            : await openaiGenerateText(providerKeyModel.apiKey, providerKeyModel.modelId, messages);
     return cleanSessionTitle(raw.text);
   }
 
@@ -1969,6 +2071,10 @@ type AiReportingPromptPayload =
       messages: AiChatMessage[];
     }
   | {
+      provider: 'local';
+      messages: AiChatMessage[];
+    }
+  | {
       provider: 'anthropic';
       messages: AiChatMessage[];
     }
@@ -2012,9 +2118,13 @@ const buildAiReportingPromptPayload = (args: {
 
 const generateAiReportingText = (
   apiKey: string,
+  baseUrl: string,
   modelId: string,
   payload: AiReportingPromptPayload,
 ): Promise<AiTextResult> => {
+  if (payload.provider === 'local') {
+    return localGenerateText(apiKey, baseUrl, modelId, payload.messages);
+  }
   if (payload.provider === 'openai') {
     return openaiGenerateText(apiKey, modelId, payload.messages);
   }
@@ -2029,11 +2139,15 @@ const generateAiReportingText = (
 
 const generateAiReportingTextStream = (
   apiKey: string,
+  baseUrl: string,
   modelId: string,
   payload: AiReportingPromptPayload,
   callbacks: AiStreamCallbacks,
   signal: AbortSignal,
 ): Promise<AiTextResult> => {
+  if (payload.provider === 'local') {
+    return localGenerateTextStream(apiKey, baseUrl, modelId, payload.messages, callbacks, signal);
+  }
   if (payload.provider === 'openai') {
     return openaiGenerateTextStream(apiKey, modelId, payload.messages, callbacks, signal);
   }
@@ -2413,9 +2527,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!(await ensureAiEnabled(cfg, request, reply))) return;
 
       const providerKeyModel = resolveProviderKeyModel(cfg);
-      const { provider, apiKey, modelId } = providerKeyModel;
-      if (!apiKey.trim())
+      const { provider, apiKey, baseUrl, modelId } = providerKeyModel;
+      if (provider !== 'local' && !apiKey.trim())
         return badRequest(reply, `Missing ${provider} API key in General Settings.`);
+      if (provider === 'local' && !baseUrl)
+        return badRequest(reply, 'Missing local AI base URL in General Settings.');
       if (!modelId.trim())
         return badRequest(reply, `Missing ${provider} model id in General Settings.`);
 
@@ -2519,6 +2635,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         if (streamAbortController.signal.aborted) return;
         const generated = await generateAiReportingTextStream(
           apiKey,
+          baseUrl,
           modelId,
           payload,
           streamHandlers.callbacks,
@@ -2599,7 +2716,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           endSseResponse(reply);
           return;
         }
-        const msg = err instanceof Error ? err.message : 'AI request failed';
+        const msg = aiRequestErrorMessage(err, provider);
         if (!streamStarted) return reply.code(502).send({ error: msg });
         await writeSseEvent(reply, 'error', { message: msg });
         endSseResponse(reply);
@@ -2659,9 +2776,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!(await ensureAiEnabled(cfg, request, reply))) return;
 
       const providerKeyModel = resolveProviderKeyModel(cfg);
-      const { provider, apiKey, modelId } = providerKeyModel;
-      if (!apiKey.trim())
+      const { provider, apiKey, baseUrl, modelId } = providerKeyModel;
+      if (provider !== 'local' && !apiKey.trim())
         return badRequest(reply, `Missing ${provider} API key in General Settings.`);
+      if (provider === 'local' && !baseUrl)
+        return badRequest(reply, 'Missing local AI base URL in General Settings.');
       if (!modelId.trim())
         return badRequest(reply, `Missing ${provider} model id in General Settings.`);
 
@@ -2773,6 +2892,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         if (streamAbortController.signal.aborted) return;
         const generated = await generateAiReportingTextStream(
           apiKey,
+          baseUrl,
           modelId,
           payload,
           streamHandlers.callbacks,
@@ -2838,7 +2958,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           endSseResponse(reply);
           return;
         }
-        const msg = err instanceof Error ? err.message : 'AI request failed';
+        const msg = aiRequestErrorMessage(err, provider);
         if (!streamStarted) return reply.code(502).send({ error: msg });
         await writeSseEvent(reply, 'error', { message: msg });
         endSseResponse(reply);
@@ -2904,9 +3024,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!(await ensureAiEnabled(cfg, request, reply))) return;
 
       const providerKeyModel = resolveProviderKeyModel(cfg);
-      const { provider, apiKey, modelId } = providerKeyModel;
-      if (!apiKey.trim())
+      const { provider, apiKey, baseUrl, modelId } = providerKeyModel;
+      if (provider !== 'local' && !apiKey.trim())
         return badRequest(reply, `Missing ${provider} API key in General Settings.`);
+      if (provider === 'local' && !baseUrl)
+        return badRequest(reply, 'Missing local AI base URL in General Settings.');
       if (!modelId.trim())
         return badRequest(reply, `Missing ${provider} model id in General Settings.`);
 
@@ -2971,7 +3093,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           datasetJson,
           convo,
         });
-        const generated = await generateAiReportingText(apiKey, modelId, payload);
+        const generated = await generateAiReportingText(apiKey, baseUrl, modelId, payload);
         const contextWindowPromise = fetchModelContextWindow(provider, apiKey, modelId);
         const text = generated.text;
         const thoughtContent = generated.thoughtContent || '';
@@ -3028,7 +3150,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           technicalInfo,
         });
       } catch (err) {
-        const msg = err instanceof Error ? err.message : 'AI request failed';
+        const msg = aiRequestErrorMessage(err, provider);
         return reply.code(502).send({ error: msg });
       }
     },

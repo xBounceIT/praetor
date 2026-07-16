@@ -98,10 +98,13 @@ const SETTINGS_WITH_KEYS = {
   openrouterApiKey: 'plaintext-openrouter-key',
   anthropicApiKey: 'plaintext-anthropic-key',
   openaiApiKey: 'plaintext-openai-key',
+  localApiKey: 'plaintext-local-key',
+  localBaseUrl: 'http://inference:11434/v1',
   geminiModelId: 'gemini-2.5-flash',
   openrouterModelId: 'anthropic/claude-3-haiku',
   anthropicModelId: 'claude-sonnet-4-5',
   openaiModelId: 'gpt-5',
+  localModelId: 'llama3.2',
   allowWeekendSelection: false,
   defaultLocation: 'remote',
   rilCompanyName: 'ACME Consulting',
@@ -174,6 +177,8 @@ describe('GET /api/general-settings', () => {
     expect(body.openrouterApiKey).toBe('plaintext-openrouter-key');
     expect(body.anthropicApiKey).toBe('plaintext-anthropic-key');
     expect(body.openaiApiKey).toBe('plaintext-openai-key');
+    expect(body.localApiKey).toBe('plaintext-local-key');
+    expect(body.localBaseUrl).toBe('http://inference:11434/v1');
     expect(body.totpExemptUserIds).toEqual(['u2']);
   });
 
@@ -196,6 +201,8 @@ describe('GET /api/general-settings', () => {
     expect(body.openrouterApiKey).toBe(MASKED_SECRET);
     expect(body.anthropicApiKey).toBe(MASKED_SECRET);
     expect(body.openaiApiKey).toBe(MASKED_SECRET);
+    expect(body.localApiKey).toBe(MASKED_SECRET);
+    expect(body.localBaseUrl).toBe('');
     expect(body).not.toHaveProperty('totpExemptUserIds');
   });
 
@@ -632,6 +639,74 @@ describe('PUT /api/general-settings', () => {
 
     expect(res.statusCode).toBe(400);
     expect(JSON.parse(res.body).error).toMatch(/aiProvider must be one of/);
+  });
+
+  test('200 accepts and normalizes a local provider configuration without an API key', async () => {
+    settingsUpdateMock.mockResolvedValue({
+      ...SETTINGS_WITH_KEYS,
+      aiProvider: 'local',
+      localApiKey: '',
+      localBaseUrl: 'http://inference:11434/v1',
+      localModelId: 'llama3.2',
+    });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/general-settings',
+      headers: authHeader(),
+      payload: {
+        enableAiReporting: true,
+        aiProvider: 'local',
+        localApiKey: '',
+        localBaseUrl: ' http://inference:11434/v1/ ',
+        localModelId: 'llama3.2',
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(settingsUpdateMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        aiProvider: 'local',
+        localApiKey: '',
+        localBaseUrl: 'http://inference:11434/v1',
+        localModelId: 'llama3.2',
+      }),
+    );
+  });
+
+  test('400 rejects local AI enabled without a base URL', async () => {
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/general-settings',
+      headers: authHeader(),
+      payload: {
+        enableAiReporting: true,
+        aiProvider: 'local',
+        localBaseUrl: '',
+        localModelId: 'llama3.2',
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body).error).toMatch(/localBaseUrl is required/);
+    expect(settingsUpdateMock).not.toHaveBeenCalled();
+  });
+
+  test('400 rejects credentials, query strings, and fragments in the local base URL', async () => {
+    for (const localBaseUrl of [
+      'http://user:pass@inference:11434/v1',
+      'http://inference:11434/v1?tenant=x',
+      'http://inference:11434/v1#models',
+    ]) {
+      const res = await testApp.inject({
+        method: 'PUT',
+        url: '/api/general-settings',
+        headers: authHeader(),
+        payload: { localBaseUrl },
+      });
+      expect(res.statusCode).toBe(400);
+    }
+    expect(settingsUpdateMock).not.toHaveBeenCalled();
   });
 
   test('200 accepts Anthropic provider credentials and model', async () => {
