@@ -257,6 +257,45 @@ describe('<LogsView />', () => {
     await waitFor(() => expect(host).toHaveFocus());
   });
 
+  test('imports CA, client certificate, and private key files into the TLS fields', async () => {
+    logsApiMock.getSiemConfig.mockResolvedValueOnce({ ...siemConfig, clientKey: '********' });
+    const user = userEvent.setup();
+    render(<LogsView canUpdateSiem />);
+    await user.click(screen.getByRole('tab', { name: 'logs.tabs.siem' }));
+
+    await user.upload(
+      await screen.findByLabelText('logs.siem.actions.importPem: logs.siem.fields.ca'),
+      new File(['CA PEM'], 'ca.pem'),
+    );
+    await user.upload(
+      screen.getByLabelText('logs.siem.actions.importPem: logs.siem.fields.clientCert'),
+      new File(['CLIENT CERT PEM'], 'client.pem'),
+    );
+    await user.upload(
+      screen.getByLabelText('logs.siem.actions.importPem: logs.siem.fields.clientKey'),
+      new File(['CLIENT KEY PEM'], 'client.key'),
+    );
+
+    expect(screen.getByLabelText('logs.siem.fields.ca')).toHaveValue('CA PEM');
+    expect(screen.getByLabelText('logs.siem.fields.clientCert')).toHaveValue('CLIENT CERT PEM');
+    expect(screen.getByLabelText('logs.siem.fields.clientKey')).toHaveValue('CLIENT KEY PEM');
+    expect(screen.getByTestId('siem-client-key-keep-stored')).toBeInTheDocument();
+  });
+
+  test('rejects imported PEM files larger than 64 KB', async () => {
+    const user = userEvent.setup();
+    render(<LogsView canUpdateSiem />);
+    await user.click(screen.getByRole('tab', { name: 'logs.tabs.siem' }));
+
+    await user.upload(
+      await screen.findByLabelText('logs.siem.actions.importPem: logs.siem.fields.ca'),
+      new File([new Uint8Array(65_537)], 'oversized.pem'),
+    );
+
+    expect(screen.getByLabelText('logs.siem.fields.ca')).toHaveAttribute('aria-invalid', 'true');
+    expect(screen.getByText('logs.siem.validation.pemFileTooLarge')).toBeInTheDocument();
+  });
+
   test('keeps a successful save successful when the status refresh fails', async () => {
     logsApiMock.getSiemStatus
       .mockResolvedValueOnce(siemStatus)

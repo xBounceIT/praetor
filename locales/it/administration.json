@@ -169,13 +169,17 @@
         "capacity": "La capacità deve essere un intero compreso tra 10.000 e 1.000.000 di eventi.",
         "sourceRequired": "Inserisci un identificativo sorgente.",
 
-        "mtlsPair": "Certificato e chiave client devono essere configurati insieme."
+        "mtlsPair": "Certificato e chiave client devono essere configurati insieme.",
+        "pemFileTooLarge": "Il file non può superare 64 KB.",
+        "pemFileReadFailed": "Impossibile leggere il file selezionato."
       },
       "actions": {
         "save": "Salva",
         "test": "Testa",
         "enable": "Abilita",
-        "disable": "Disabilita"
+        "disable": "Disabilita",
+        "importPem": "Importa file .pem",
+        "clear": "Svuota"
       },
       "messages": {
         "loadFailed": "Impossibile caricare la configurazione SIEM.",

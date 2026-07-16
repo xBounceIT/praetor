@@ -1,4 +1,13 @@
-import { AlertTriangle, CheckCircle2, Loader2, RadioTower, Save, Send } from 'lucide-react';
+import {
+  AlertTriangle,
+  CheckCircle2,
+  FileUp,
+  Loader2,
+  RadioTower,
+  Save,
+  Send,
+  Trash2,
+} from 'lucide-react';
 import type React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -21,6 +30,66 @@ import { Textarea } from '../ui/textarea';
 
 type Props = { canUpdate: boolean };
 type FormErrors = Partial<Record<keyof SiemConfigUpdate, string>>;
+type PemField = 'caPem' | 'clientCertPem' | 'clientKey';
+
+const PEM_FILE_MAX_BYTES = 64 * 1024;
+const PEM_FILE_ACCEPT = '.pem,.crt,.cer,.cert,.key';
+
+type PemFileActionsProps = {
+  inputRef: React.RefObject<HTMLInputElement | null>;
+  fieldLabel: string;
+  importLabel: string;
+  clearLabel: string;
+  disabled: boolean;
+  onChange: (event: React.ChangeEvent<HTMLInputElement>) => void;
+  onClear?: () => void;
+};
+
+const PemFileActions: React.FC<PemFileActionsProps> = ({
+  inputRef,
+  fieldLabel,
+  importLabel,
+  clearLabel,
+  disabled,
+  onChange,
+  onClear,
+}) => (
+  <div className="flex flex-wrap items-center gap-3">
+    <Button
+      type="button"
+      variant="secondary"
+      size="sm"
+      className="text-xs font-bold"
+      onClick={() => inputRef.current?.click()}
+      disabled={disabled}
+    >
+      <FileUp aria-hidden="true" />
+      {importLabel}
+    </Button>
+    {onClear && (
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        className="text-xs font-bold text-muted-foreground hover:text-destructive"
+        onClick={onClear}
+        disabled={disabled}
+      >
+        <Trash2 aria-hidden="true" />
+        {clearLabel}
+      </Button>
+    )}
+    <input
+      ref={inputRef}
+      type="file"
+      accept={PEM_FILE_ACCEPT}
+      onChange={onChange}
+      aria-label={[importLabel, fieldLabel].join(': ')}
+      className="hidden"
+      disabled={disabled}
+    />
+  </div>
+);
 
 const FIELD_FOCUS_SELECTORS: Partial<Record<keyof SiemConfigUpdate, string>> = {
   host: '#siem-host',
@@ -64,6 +133,9 @@ const SiemLogsTab: React.FC<Props> = ({ canUpdate }) => {
   const [replacingClientKey, setReplacingClientKey] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const latestStatusRequestIdRef = useRef(0);
+  const caFileInputRef = useRef<HTMLInputElement>(null);
+  const clientCertFileInputRef = useRef<HTMLInputElement>(null);
+  const clientKeyFileInputRef = useRef<HTMLInputElement>(null);
 
   const applyConfig = useCallback((next: SiemConfig, invalidatePendingStatus = false) => {
     if (invalidatePendingStatus) latestStatusRequestIdRef.current += 1;
@@ -143,6 +215,29 @@ const SiemLogsTab: React.FC<Props> = ({ canUpdate }) => {
   const updateField = <K extends keyof SiemConfigUpdate>(key: K, value: SiemConfigUpdate[K]) => {
     setForm((current) => (current ? { ...current, [key]: value } : current));
     setErrors((current) => ({ ...current, [key]: undefined }));
+  };
+
+  const handlePemFileImport = async (key: PemField, event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    if (file.size > PEM_FILE_MAX_BYTES) {
+      setErrors((current) => ({
+        ...current,
+        [key]: t('logs.siem.validation.pemFileTooLarge'),
+      }));
+      return;
+    }
+    try {
+      const text = await file.text();
+      if (key === 'clientKey') setReplacingClientKey(true);
+      updateField(key, text);
+    } catch {
+      setErrors((current) => ({
+        ...current,
+        [key]: t('logs.siem.validation.pemFileReadFailed'),
+      }));
+    }
   };
 
   const showValidationErrors = (next: FormErrors, replace = true): boolean => {
@@ -524,7 +619,7 @@ const SiemLogsTab: React.FC<Props> = ({ canUpdate }) => {
                       disabled={!canUpdate}
                     />
                   </Field>
-                  <Field>
+                  <Field data-invalid={fieldInvalid('caPem')}>
                     <FieldLabel htmlFor="siem-ca">{t('logs.siem.fields.ca')}</FieldLabel>
                     <Textarea
                       id="siem-ca"
@@ -533,9 +628,20 @@ const SiemLogsTab: React.FC<Props> = ({ canUpdate }) => {
                       value={form.caPem}
                       onChange={(e) => updateField('caPem', e.target.value)}
                       disabled={!canUpdate}
+                      aria-invalid={fieldInvalid('caPem')}
+                    />
+                    <FieldError>{errors.caPem}</FieldError>
+                    <PemFileActions
+                      inputRef={caFileInputRef}
+                      fieldLabel={t('logs.siem.fields.ca')}
+                      importLabel={t('logs.siem.actions.importPem')}
+                      clearLabel={t('logs.siem.actions.clear')}
+                      disabled={!canUpdate}
+                      onChange={(event) => void handlePemFileImport('caPem', event)}
+                      onClear={form.caPem ? () => updateField('caPem', '') : undefined}
                     />
                   </Field>
-                  <Field>
+                  <Field data-invalid={fieldInvalid('clientCertPem')}>
                     <FieldLabel htmlFor="siem-client-cert">
                       {t('logs.siem.fields.clientCert')}
                     </FieldLabel>
@@ -546,30 +652,58 @@ const SiemLogsTab: React.FC<Props> = ({ canUpdate }) => {
                       value={form.clientCertPem}
                       onChange={(e) => updateField('clientCertPem', e.target.value)}
                       disabled={!canUpdate}
+                      aria-invalid={fieldInvalid('clientCertPem')}
+                    />
+                    <FieldError>{errors.clientCertPem}</FieldError>
+                    <PemFileActions
+                      inputRef={clientCertFileInputRef}
+                      fieldLabel={t('logs.siem.fields.clientCert')}
+                      importLabel={t('logs.siem.actions.importPem')}
+                      clearLabel={t('logs.siem.actions.clear')}
+                      disabled={!canUpdate}
+                      onChange={(event) => void handlePemFileImport('clientCertPem', event)}
+                      onClear={
+                        form.clientCertPem ? () => updateField('clientCertPem', '') : undefined
+                      }
                     />
                   </Field>
-                  <SecretField
-                    label={t('logs.siem.fields.clientKey')}
-                    value={form.clientKey}
-                    onChange={(value) => updateField('clientKey', value)}
-                    isStored={config.clientKey === '********'}
-                    isReplacing={replacingClientKey}
-                    onStartReplace={() => {
-                      setReplacingClientKey(true);
-                      updateField('clientKey', '');
-                    }}
-                    onCancelReplace={() => {
-                      setReplacingClientKey(false);
-                      updateField('clientKey', config.clientKey);
-                    }}
-                    storedLabel={t('logs.siem.tls.keyStored')}
-                    storedHelp={t('logs.siem.tls.keyStoredHelp')}
-                    multiline
-                    monospace
-                    error={errors.clientKey}
-                    disabled={!canUpdate}
-                    testId="siem-client-key"
-                  />
+                  <div className="space-y-2">
+                    <SecretField
+                      label={t('logs.siem.fields.clientKey')}
+                      value={form.clientKey}
+                      onChange={(value) => updateField('clientKey', value)}
+                      isStored={config.clientKey === '********'}
+                      isReplacing={replacingClientKey}
+                      onStartReplace={() => {
+                        setReplacingClientKey(true);
+                        updateField('clientKey', '');
+                      }}
+                      onCancelReplace={() => {
+                        setReplacingClientKey(false);
+                        updateField('clientKey', config.clientKey);
+                      }}
+                      storedLabel={t('logs.siem.tls.keyStored')}
+                      storedHelp={t('logs.siem.tls.keyStoredHelp')}
+                      multiline
+                      monospace
+                      error={errors.clientKey}
+                      disabled={!canUpdate}
+                      testId="siem-client-key"
+                    />
+                    <PemFileActions
+                      inputRef={clientKeyFileInputRef}
+                      fieldLabel={t('logs.siem.fields.clientKey')}
+                      importLabel={t('logs.siem.actions.importPem')}
+                      clearLabel={t('logs.siem.actions.clear')}
+                      disabled={!canUpdate}
+                      onChange={(event) => void handlePemFileImport('clientKey', event)}
+                      onClear={
+                        replacingClientKey && form.clientKey
+                          ? () => updateField('clientKey', '')
+                          : undefined
+                      }
+                    />
+                  </div>
                 </div>
               </fieldset>
             )}
