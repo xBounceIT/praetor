@@ -981,19 +981,42 @@ describe('<AiReportingView /> interactions', () => {
     expect(within(table).getByText('12% pts')).toBeInTheDocument();
   });
 
-  test('defers Recharts visualizations until the streamed answer is complete', async () => {
-    const chartDefinition = {
+  test('reveals streamed visualizations progressively in narrative order', async () => {
+    const firstChartDefinition = {
       version: 1,
       type: 'bar',
-      title: 'Streaming revenue',
+      title: 'Streaming revenue trend',
       xKey: 'month',
       series: [{ key: 'revenue', label: 'Revenue', format: 'number' }],
       data: [{ month: 'January', revenue: 1200 }],
     };
-    const chartContent = [
-      'Revenue is ready.',
+    const secondChartDefinition = {
+      version: 1,
+      type: 'bar',
+      title: 'Streaming margin trend',
+      xKey: 'month',
+      series: [{ key: 'margin', label: 'Margin', format: 'percent' }],
+      data: [{ month: 'January', margin: 12 }],
+    };
+    const firstChartContent = [
+      'Revenue analysis is ready.',
       '```praetor-visualization',
-      JSON.stringify(chartDefinition),
+      JSON.stringify(firstChartDefinition),
+      '```',
+    ].join('\n');
+    const secondChartJson = JSON.stringify(secondChartDefinition);
+    const secondChartSplitIndex = Math.floor(secondChartJson.length / 2);
+    const secondChartStart = [
+      'Margin analysis is ready.',
+      '```praetor-visualization',
+      secondChartJson.slice(0, secondChartSplitIndex),
+    ].join('\n');
+    const secondChartEnd = `${secondChartJson.slice(secondChartSplitIndex)}\n\`\`\``;
+    const chartContent = [
+      firstChartContent,
+      'Margin analysis is ready.',
+      '```praetor-visualization',
+      secondChartJson,
       '```',
     ].join('\n');
     const completedMessages: ReportChatMessage[] = [
@@ -1015,9 +1038,13 @@ describe('<AiReportingView /> interactions', () => {
     ];
     getSessionMessagesMock.mockResolvedValueOnce(messages).mockResolvedValueOnce(completedMessages);
 
-    let releaseStream: (() => void) | undefined;
-    const streamGate = new Promise<void>((resolve) => {
-      releaseStream = resolve;
+    let releaseSecondChart: (() => void) | undefined;
+    const secondChartGate = new Promise<void>((resolve) => {
+      releaseSecondChart = resolve;
+    });
+    let releaseCompletion: (() => void) | undefined;
+    const completionGate = new Promise<void>((resolve) => {
+      releaseCompletion = resolve;
     });
     chatStreamMock.mockImplementationOnce(
       async (
@@ -1028,8 +1055,10 @@ describe('<AiReportingView /> interactions', () => {
         },
       ) => {
         handlers?.onStart?.({ sessionId: 'revenue', messageId: 'assistant-streaming-chart' });
-        handlers?.onAnswerDelta?.(chartContent);
-        await streamGate;
+        handlers?.onAnswerDelta?.(`${firstChartContent}\n${secondChartStart}`);
+        await secondChartGate;
+        handlers?.onAnswerDelta?.(secondChartEnd);
+        await completionGate;
         return { sessionId: 'revenue', text: chartContent };
       },
     );
@@ -1042,13 +1071,32 @@ describe('<AiReportingView /> interactions', () => {
     fireEvent.change(composer, { target: { value: 'Chart the revenue' } });
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
 
+    const firstAnalysis = await screen.findByText('Revenue analysis is ready.');
+    const firstChart = await screen.findByRole('figure', { name: 'Streaming revenue trend' });
+    const secondAnalysis = screen.getByText('Margin analysis is ready.');
+    const pendingChart = screen.getByRole('status', { name: 'Building visualization...' });
     expect(
-      await screen.findByRole('status', { name: 'Building visualization...' }),
+      firstAnalysis.compareDocumentPosition(firstChart) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(
+      firstChart.compareDocumentPosition(secondAnalysis) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(
+      secondAnalysis.compareDocumentPosition(pendingChart) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(screen.queryByRole('figure', { name: 'Streaming margin trend' })).toBeNull();
+
+    await act(async () => releaseSecondChart?.());
+
+    expect(
+      await screen.findByRole('figure', { name: 'Streaming margin trend' }),
     ).toBeInTheDocument();
-    expect(screen.queryByRole('figure', { name: 'Streaming revenue' })).toBeNull();
+    expect(screen.queryByRole('status', { name: 'Building visualization...' })).toBeNull();
 
-    await act(async () => releaseStream?.());
-
-    expect(await screen.findByRole('figure', { name: 'Streaming revenue' })).toBeInTheDocument();
+    await act(async () => releaseCompletion?.());
+    expect(
+      await screen.findByRole('figure', { name: 'Streaming revenue trend' }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('figure', { name: 'Streaming margin trend' })).toBeInTheDocument();
   });
 });

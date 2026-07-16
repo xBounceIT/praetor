@@ -87,6 +87,8 @@ import {
   filterAndGroupAiReportingSessions,
 } from './aiReportingSessions';
 import {
+  type AiReportingVisualizationContentBlock,
+  type AiReportingVisualization as AiReportingVisualizationDefinition,
   type AiReportingVisualizationParseResult,
   getAiReportingAssistantCopyText,
   parseAiReportingVisualizations,
@@ -2940,6 +2942,28 @@ const AiReportingAssistantMessage: React.FC<AiReportingAssistantMessageProps> = 
       }),
     [allowPendingVisualization, message.content],
   );
+  const visualizationCacheRef = useRef(
+    new Map<string, { signature: string; visualization: AiReportingVisualizationDefinition }>(),
+  );
+  const stableContentBlocks = useMemo(
+    () =>
+      parsedContent.blocks.map((block) => {
+        if (block.type !== 'visualization') return block;
+
+        const cacheKey = `${message.id}:${block.visualizationIndex}`;
+        const cached = visualizationCacheRef.current.get(cacheKey);
+        if (cached?.signature === block.source) {
+          return { ...block, visualization: cached.visualization };
+        }
+
+        visualizationCacheRef.current.set(cacheKey, {
+          signature: block.source,
+          visualization: block.visualization,
+        });
+        return block;
+      }),
+    [message.id, parsedContent.blocks],
+  );
   const copyText = useMemo(() => getAiReportingAssistantCopyText(parsedContent), [parsedContent]);
 
   return (
@@ -2957,7 +2981,7 @@ const AiReportingAssistantMessage: React.FC<AiReportingAssistantMessageProps> = 
           message={message}
           interactions={interactions}
           parsedContent={parsedContent}
-          deferVisualizations={allowPendingVisualization}
+          blocks={stableContentBlocks}
         />
         <div className="mt-2 flex justify-start items-center gap-1.5">
           <Tooltip>
@@ -3062,156 +3086,164 @@ const AiMarkdownMessage: React.FC<{
   message: ReportChatMessage;
   interactions: AiReportingMessageInteractions;
   parsedContent: AiReportingVisualizationParseResult;
-  deferVisualizations: boolean;
-}> = ({ message, interactions, parsedContent, deferVisualizations }) => {
+  blocks: AiReportingVisualizationContentBlock[];
+}> = ({ message, interactions, parsedContent, blocks }) => {
   const { t, language, resolveTableMarkdown, tableRefs } = interactions;
   let tableRenderIndex = 0;
-  // Recharts dispatches each new data reference into its internal store. Streaming reparses
-  // completed blocks on every delta, so mount charts only after their data has settled.
-  const showVisualizationPending =
-    parsedContent.hasPendingVisualization ||
-    (deferVisualizations && parsedContent.visualizations.length > 0);
 
   return (
     <>
-      {parsedContent.markdown ? (
-        <ReactMarkdown
-          remarkPlugins={[remarkGfm, remarkBreaks]}
-          components={{
-            a: ({ children, href }: MarkdownRendererProps<'a'>) => {
-              const safe = safeHref(href);
-              if (!safe) return <>{children}</>;
-              return (
-                <a
-                  href={safe}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="font-semibold text-foreground underline underline-offset-2 hover:text-foreground/80"
-                >
+      {blocks.map((block, blockIndex) => {
+        if (block.type === 'visualization') {
+          return (
+            <AiReportingVisualization
+              key={`${message.id}-visualization-${block.visualizationIndex}`}
+              visualization={block.visualization}
+              language={language}
+            />
+          );
+        }
+        if (block.type === 'pending') {
+          return (
+            <AiReportingVisualizationPending
+              key={`${message.id}-visualization-pending-${block.visualizationIndex}`}
+            />
+          );
+        }
+
+        return (
+          <ReactMarkdown
+            key={`${message.id}-markdown-${blockIndex}`}
+            remarkPlugins={[remarkGfm, remarkBreaks]}
+            components={{
+              a: ({ children, href }: MarkdownRendererProps<'a'>) => {
+                const safe = safeHref(href);
+                if (!safe) return <>{children}</>;
+                return (
+                  <a
+                    href={safe}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-semibold text-foreground underline underline-offset-2 hover:text-foreground/80"
+                  >
+                    {children}
+                  </a>
+                );
+              },
+              img: ({ alt, src }: MarkdownRendererProps<'img'>) => {
+                const safe = safeHref(src);
+                const label = alt?.trim() ? alt.trim() : src || 'image';
+                if (!safe) return <span className="text-muted-foreground">[Image: {label}]</span>;
+                return (
+                  <a
+                    href={safe}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-semibold text-foreground underline underline-offset-2 hover:text-foreground/80"
+                  >
+                    [Image: {label}]
+                  </a>
+                );
+              },
+              p: ({ children }: MarkdownRendererProps<'p'>) => (
+                <p className="my-2 first:mt-0 last:mb-0">{children}</p>
+              ),
+              h1: ({ children }: MarkdownRendererProps<'h1'>) => (
+                <h1 className="mt-4 mb-2 text-lg font-semibold text-foreground">{children}</h1>
+              ),
+              h2: ({ children }: MarkdownRendererProps<'h2'>) => (
+                <h2 className="mt-4 mb-2 text-base font-semibold text-foreground">{children}</h2>
+              ),
+              h3: ({ children }: MarkdownRendererProps<'h3'>) => (
+                <h3 className="mt-3 mb-1 text-sm font-semibold text-foreground">{children}</h3>
+              ),
+              ul: ({ children }: MarkdownRendererProps<'ul'>) => (
+                <ul className="my-2 list-disc pl-5 marker:text-muted-foreground">{children}</ul>
+              ),
+              ol: ({ children }: MarkdownRendererProps<'ol'>) => (
+                <ol className="my-2 list-decimal pl-5 marker:text-muted-foreground">{children}</ol>
+              ),
+              li: ({ children }: MarkdownRendererProps<'li'>) => (
+                <li className="my-1">{children}</li>
+              ),
+              blockquote: ({ children }: MarkdownRendererProps<'blockquote'>) => (
+                <blockquote className="my-2 border-l-4 border-border pl-3 text-muted-foreground">
                   {children}
-                </a>
-              );
-            },
-            img: ({ alt, src }: MarkdownRendererProps<'img'>) => {
-              const safe = safeHref(src);
-              const label = alt?.trim() ? alt.trim() : src || 'image';
-              if (!safe) return <span className="text-muted-foreground">[Image: {label}]</span>;
-              return (
-                <a
-                  href={safe}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="font-semibold text-foreground underline underline-offset-2 hover:text-foreground/80"
-                >
-                  [Image: {label}]
-                </a>
-              );
-            },
-            p: ({ children }: MarkdownRendererProps<'p'>) => (
-              <p className="my-2 first:mt-0 last:mb-0">{children}</p>
-            ),
-            h1: ({ children }: MarkdownRendererProps<'h1'>) => (
-              <h1 className="mt-4 mb-2 text-lg font-semibold text-foreground">{children}</h1>
-            ),
-            h2: ({ children }: MarkdownRendererProps<'h2'>) => (
-              <h2 className="mt-4 mb-2 text-base font-semibold text-foreground">{children}</h2>
-            ),
-            h3: ({ children }: MarkdownRendererProps<'h3'>) => (
-              <h3 className="mt-3 mb-1 text-sm font-semibold text-foreground">{children}</h3>
-            ),
-            ul: ({ children }: MarkdownRendererProps<'ul'>) => (
-              <ul className="my-2 list-disc pl-5 marker:text-muted-foreground">{children}</ul>
-            ),
-            ol: ({ children }: MarkdownRendererProps<'ol'>) => (
-              <ol className="my-2 list-decimal pl-5 marker:text-muted-foreground">{children}</ol>
-            ),
-            li: ({ children }: MarkdownRendererProps<'li'>) => <li className="my-1">{children}</li>,
-            blockquote: ({ children }: MarkdownRendererProps<'blockquote'>) => (
-              <blockquote className="my-2 border-l-4 border-border pl-3 text-muted-foreground">
-                {children}
-              </blockquote>
-            ),
-            hr: () => <hr className="my-3 border-border" />,
-            table: ({ children }: MarkdownRendererProps<'table'>) => {
-              tableRenderIndex += 1;
-              const tableId = `${message.id}-table-${tableRenderIndex}`;
-              return (
-                <Card className="my-3 gap-0 overflow-hidden rounded-2xl py-0">
-                  <div className="flex items-center justify-end border-b border-border px-2 py-1.5">
-                    <CopyButton
-                      iconOnly
-                      variant="ghost"
-                      size="icon-xs"
-                      value={() => resolveTableMarkdown(tableId)}
-                      aria-label={t('aiReporting.copyTable', { defaultValue: 'Copy table' })}
-                      className="text-muted-foreground hover:bg-accent hover:text-foreground"
-                    />
-                  </div>
-                  <div className="max-w-full overflow-x-auto">
-                    <table
-                      ref={(tableElement) => {
-                        if (tableElement) {
-                          tableRefs.current[tableId] = tableElement;
-                        } else {
-                          delete tableRefs.current[tableId];
-                        }
-                      }}
-                      className="w-max min-w-full border-collapse text-left text-[13px] leading-relaxed text-foreground"
+                </blockquote>
+              ),
+              hr: () => <hr className="my-3 border-border" />,
+              table: ({ children }: MarkdownRendererProps<'table'>) => {
+                tableRenderIndex += 1;
+                const tableId = `${message.id}-block-${blockIndex}-table-${tableRenderIndex}`;
+                return (
+                  <Card className="my-3 gap-0 overflow-hidden rounded-2xl py-0">
+                    <div className="flex items-center justify-end border-b border-border px-2 py-1.5">
+                      <CopyButton
+                        iconOnly
+                        variant="ghost"
+                        size="icon-xs"
+                        value={() => resolveTableMarkdown(tableId)}
+                        aria-label={t('aiReporting.copyTable', { defaultValue: 'Copy table' })}
+                        className="text-muted-foreground hover:bg-accent hover:text-foreground"
+                      />
+                    </div>
+                    <div className="max-w-full overflow-x-auto">
+                      <table
+                        ref={(tableElement) => {
+                          if (tableElement) {
+                            tableRefs.current[tableId] = tableElement;
+                          } else {
+                            delete tableRefs.current[tableId];
+                          }
+                        }}
+                        className="w-max min-w-full border-collapse text-left text-[13px] leading-relaxed text-foreground"
+                      >
+                        {children}
+                      </table>
+                    </div>
+                  </Card>
+                );
+              },
+              th: ({ children }: MarkdownRendererProps<'th'>) => (
+                <th className="align-top whitespace-nowrap border border-border bg-muted px-3 py-2 font-semibold text-foreground">
+                  {children}
+                </th>
+              ),
+              td: ({ children }: MarkdownRendererProps<'td'>) => (
+                <td className="align-top break-words border border-border px-3 py-2">{children}</td>
+              ),
+              pre: ({ children }: MarkdownRendererProps<'pre'>) => (
+                <pre className="my-2 overflow-x-auto rounded-xl bg-muted p-3 text-foreground">
+                  {children}
+                </pre>
+              ),
+              code: (props: MarkdownRendererProps<'code'> & { inline?: boolean }) => {
+                // react-markdown provides `inline` here, but it is not represented in the
+                // published `Components` typing (intrinsic `code` props only).
+                const { inline, className, children } = props;
+
+                if (inline === false) {
+                  return (
+                    <code
+                      className={`font-mono text-[12px] leading-relaxed text-foreground ${className ?? ''}`}
                     >
                       {children}
-                    </table>
-                  </div>
-                </Card>
-              );
-            },
-            th: ({ children }: MarkdownRendererProps<'th'>) => (
-              <th className="align-top whitespace-nowrap border border-border bg-muted px-3 py-2 font-semibold text-foreground">
-                {children}
-              </th>
-            ),
-            td: ({ children }: MarkdownRendererProps<'td'>) => (
-              <td className="align-top break-words border border-border px-3 py-2">{children}</td>
-            ),
-            pre: ({ children }: MarkdownRendererProps<'pre'>) => (
-              <pre className="my-2 overflow-x-auto rounded-xl bg-muted p-3 text-foreground">
-                {children}
-              </pre>
-            ),
-            code: (props: MarkdownRendererProps<'code'> & { inline?: boolean }) => {
-              // react-markdown provides `inline` here, but it is not represented in the
-              // published `Components` typing (intrinsic `code` props only).
-              const { inline, className, children } = props;
+                    </code>
+                  );
+                }
 
-              if (inline === false) {
                 return (
-                  <code
-                    className={`font-mono text-[12px] leading-relaxed text-foreground ${className ?? ''}`}
-                  >
+                  <code className="rounded bg-muted px-1 py-0.5 font-mono text-[12px] text-foreground">
                     {children}
                   </code>
                 );
-              }
-
-              return (
-                <code className="rounded bg-muted px-1 py-0.5 font-mono text-[12px] text-foreground">
-                  {children}
-                </code>
-              );
-            },
-          }}
-        >
-          {parsedContent.markdown}
-        </ReactMarkdown>
-      ) : null}
-      {!deferVisualizations &&
-        parsedContent.visualizations.map((visualization, index) => (
-          <AiReportingVisualization
-            key={`${message.id}-visualization-${index}`}
-            visualization={visualization}
-            language={language}
-          />
-        ))}
-      {showVisualizationPending ? <AiReportingVisualizationPending /> : null}
+              },
+            }}
+          >
+            {block.markdown}
+          </ReactMarkdown>
+        );
+      })}
       {parsedContent.invalidVisualizationCount > 0 ? (
         <Alert variant="destructive" className="my-3">
           <TriangleAlert aria-hidden="true" />

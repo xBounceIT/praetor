@@ -50,6 +50,38 @@ describe('AI Reporting visualization protocol', () => {
     expect(parsed.hasPendingVisualization).toBe(false);
   });
 
+  test('preserves the interleaved narrative and visualization order', () => {
+    const secondVisualization = visualization({ title: 'Customer margin' });
+    const parsed = parseAiReportingVisualizations(
+      [
+        'Revenue analysis.',
+        fenced(visualization()),
+        'Margin analysis.',
+        fenced(secondVisualization),
+        'Final note.',
+      ].join('\n\n'),
+    );
+
+    expect(parsed.blocks.map((block) => block.type)).toEqual([
+      'markdown',
+      'visualization',
+      'markdown',
+      'visualization',
+      'markdown',
+    ]);
+    expect(parsed.blocks[0]).toMatchObject({ type: 'markdown', markdown: 'Revenue analysis.' });
+    expect(parsed.blocks[1]).toMatchObject({
+      type: 'visualization',
+      visualization: { title: 'Monthly revenue' },
+    });
+    expect(parsed.blocks[2]).toMatchObject({ type: 'markdown', markdown: 'Margin analysis.' });
+    expect(parsed.blocks[3]).toMatchObject({
+      type: 'visualization',
+      visualization: { title: 'Customer margin' },
+    });
+    expect(parsed.blocks[4]).toMatchObject({ type: 'markdown', markdown: 'Final note.' });
+  });
+
   test('rejects unsupported fields, invalid numeric values, and oversized datasets', () => {
     expect(validateAiReportingVisualization(visualization({ color: '#fff' }))).toBeNull();
     expect(validateAiReportingVisualization(visualization({ description: 123 }))).toBeNull();
@@ -127,6 +159,8 @@ describe('AI Reporting visualization protocol', () => {
     expect(pendingBlock.hasPendingVisualization).toBe(true);
     expect(pendingFence.markdown).toBe('Intro');
     expect(pendingFence.hasPendingVisualization).toBe(true);
+    expect(pendingBlock.blocks.map((block) => block.type)).toEqual(['markdown', 'pending']);
+    expect(pendingFence.blocks.map((block) => block.type)).toEqual(['markdown', 'pending']);
   });
 
   test('reports unclosed visualization fences as invalid after streaming finishes', () => {

@@ -1934,8 +1934,8 @@ const buildVisualizationToolInstruction = (language: UiLanguage) => {
       : 'Tool `render_visualization`: it is available in this interface. Never claim that you cannot create charts and do not merely describe them.';
   const narrativeRule =
     language === 'it'
-      ? '- Accompagna ogni blocco con una breve interpretazione basata sui dati. Fuori dal blocco richiesto, non citare o spiegare il JSON o il protocollo.'
-      : '- Accompany each block with a brief data-based interpretation. Outside the required block, do not mention or explain its JSON or protocol.';
+      ? '- Inserisci ogni interpretazione immediatamente prima del relativo blocco di visualizzazione, quindi emetti quel blocco prima di passare all’analisi successiva. Non descrivere mai i grafici successivi prima di aver emesso il grafico corrente. Fuori dal blocco richiesto, non citare o spiegare il JSON o il protocollo.'
+      : '- Place each interpretation immediately before its matching visualization block, then emit that block before moving to the next analysis. Never describe later charts before emitting the current chart. Outside the required block, do not mention or explain its JSON or protocol.';
   const example =
     language === 'it'
       ? '{"version":1,"type":"bar","title":"Ricavi per mese","description":"Confronto mensile","xKey":"period","xLabel":"Mese","orientation":"vertical","stacked":false,"series":[{"key":"revenue","label":"Ricavi","format":"currency","currency":"EUR","decimals":0}],"data":[{"period":"Gen","revenue":120000},{"period":"Feb","revenue":135000}]}'

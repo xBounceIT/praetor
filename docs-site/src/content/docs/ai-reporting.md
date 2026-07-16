@@ -43,6 +43,8 @@ Quando la richiesta menziona esplicitamente un grafico, una visualizzazione, una
 
 Una singola risposta può includere fino a sette visualizzazioni, quando più grafici migliorano concretamente la comprensione dell'analisi.
 
+Nelle risposte con più visualizzazioni, ogni breve interpretazione precede il grafico a cui si riferisce. Durante la generazione, i grafici completati compaiono progressivamente uno alla volta, mentre quello ancora in costruzione resta indicato da un segnaposto.
+
 Passa il puntatore o usa la navigazione da tastiera sul grafico per leggere i valori, consulta la legenda quando sono presenti più serie e premi **Mostra dati** per aprire la tabella accessibile usata dalla visualizzazione. Colori e superfici si adattano automaticamente al tema chiaro o scuro.
 
 Le visualizzazioni usano soltanto i dati inclusi nel dataset autorizzato della conversazione. Praetor valida struttura, dimensioni e valori prima del rendering e scarta in sicurezza una specifica non valida; il grafico resta comunque un supporto visivo e i dati importanti devono essere verificati nelle fonti originali.
