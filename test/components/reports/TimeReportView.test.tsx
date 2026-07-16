@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, mock } from 'bun:test';
-import { fireEvent, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import TimeReportView, {
   type TimeReportViewProps,
@@ -108,6 +108,49 @@ describe('TimeReportView', () => {
         block: 'start',
       }),
     );
+  });
+
+  test('defers revoking the CSV object URL until after the download click', async () => {
+    const createObjectUrl = mock(() => 'blob:time-report');
+    const revokeObjectUrl = mock(() => undefined);
+    const anchorClick = mock(() => undefined);
+    const previousCreateObjectUrl = URL.createObjectURL;
+    const previousRevokeObjectUrl = URL.revokeObjectURL;
+    const previousAnchorClick = HTMLAnchorElement.prototype.click;
+    let resolveExport: ((blob: Blob) => void) | undefined;
+
+    URL.createObjectURL = createObjectUrl;
+    URL.revokeObjectURL = revokeObjectUrl;
+    HTMLAnchorElement.prototype.click = anchorClick;
+    exportCsvMock.mockImplementation(
+      () =>
+        new Promise<Blob>((resolve) => {
+          resolveExport = resolve;
+        }),
+    );
+
+    try {
+      renderView(['reports.time_report.view']);
+      fireEvent.click(await screen.findByText('timeReport.actions.generate'));
+      await waitFor(() => expect(generateMock).toHaveBeenCalledTimes(1));
+
+      fireEvent.click(await screen.findByText('table.export'));
+      await waitFor(() => expect(exportCsvMock).toHaveBeenCalledTimes(1));
+      await act(async () => {
+        resolveExport?.(new Blob(['csv']));
+        await Promise.resolve();
+      });
+
+      expect(createObjectUrl).toHaveBeenCalledTimes(1);
+      expect(anchorClick).toHaveBeenCalledTimes(1);
+      expect(revokeObjectUrl).not.toHaveBeenCalled();
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      expect(revokeObjectUrl).toHaveBeenCalledWith('blob:time-report');
+    } finally {
+      URL.createObjectURL = previousCreateObjectUrl;
+      URL.revokeObjectURL = previousRevokeObjectUrl;
+      HTMLAnchorElement.prototype.click = previousAnchorClick;
+    }
   });
 
   test('uses LDAP-style cards arranged as vertical sections', async () => {

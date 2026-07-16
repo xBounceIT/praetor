@@ -32,6 +32,7 @@ import type {
   TimeReportRow,
 } from '../../types';
 import { getLocalDateString } from '../../utils/date';
+import { downloadBlob } from '../../utils/download';
 import { hasPermission } from '../../utils/permissions';
 import {
   finalizeTimeReportFavorite,
@@ -413,14 +414,10 @@ const TimeReportView = ({
         generatedDefinition,
         i18n.language.toLowerCase().startsWith('en') ? 'en' : 'it',
       );
-      const url = URL.createObjectURL(blob);
-      const anchor = document.createElement('a');
-      anchor.href = url;
-      anchor.download = `time-report-${generatedDefinition.fromDate}-${generatedDefinition.toDate}.csv`;
-      document.body.appendChild(anchor);
-      anchor.click();
-      anchor.remove();
-      URL.revokeObjectURL(url);
+      downloadBlob(
+        `time-report-${generatedDefinition.fromDate}-${generatedDefinition.toDate}.csv`,
+        blob,
+      );
     } catch (exportError) {
       toast.error(
         exportError instanceof Error ? exportError.message : t('timeReport.errors.export'),
