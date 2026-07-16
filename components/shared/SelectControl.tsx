@@ -69,6 +69,8 @@ const toSelectValue = (value: string) => (value === '' ? EMPTY_VALUE_SENTINEL : 
 const fromSelectValue = (value: string) => (value === EMPTY_VALUE_SENTINEL ? '' : value);
 
 const baseTriggerClassName = 'w-full min-w-0 justify-between text-left text-sm font-normal';
+const multiValueOverflowClassName =
+  'shrink-0 rounded border border-border bg-muted px-2 py-0.5 font-bold text-[10px] text-foreground';
 
 /**
  * When the combobox lives inside a modal dialog, Radix's scroll-lock
@@ -398,16 +400,19 @@ const SearchableSelectControl = ({
             aria-expanded={open}
             className={cn(
               baseTriggerClassName,
-              isMulti && 'h-auto min-h-9 items-start whitespace-normal py-1.5',
+              isMulti && 'h-9 items-center overflow-hidden whitespace-nowrap py-1.5',
               buttonClassName,
             )}
           >
             {isMulti && selectedOptions.length > 0 && !displayValue ? (
-              <span className="flex min-w-0 flex-1 flex-wrap gap-1.5">
-                {selectedOptions.map((option) => (
+              <span className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden">
+                {selectedOptions.slice(0, 2).map((option, index) => (
                   <span
                     key={option.id}
-                    className="inline-flex max-w-full min-w-0 items-center gap-1.5 rounded border border-border bg-muted px-2 py-0.5 font-bold text-[10px] text-foreground uppercase tracking-wider"
+                    className={cn(
+                      'inline-flex max-w-full min-w-0 shrink items-center gap-1.5 rounded border border-border bg-muted px-2 py-0.5 font-bold text-[10px] text-foreground uppercase tracking-wider',
+                      index === 1 && 'hidden sm:inline-flex',
+                    )}
                     onClick={(event) => event.stopPropagation()}
                   >
                     <span className="truncate">{option.name}</span>
@@ -423,6 +428,16 @@ const SearchableSelectControl = ({
                     </span>
                   </span>
                 ))}
+                {selectedOptions.length > 1 && (
+                  <span className={cn(multiValueOverflowClassName, 'sm:hidden')}>
+                    +{selectedOptions.length - 1}
+                  </span>
+                )}
+                {selectedOptions.length > 2 && (
+                  <span className={cn(multiValueOverflowClassName, 'hidden sm:inline-flex')}>
+                    +{selectedOptions.length - 2}
+                  </span>
+                )}
               </span>
             ) : (
               <TriggerLabel
