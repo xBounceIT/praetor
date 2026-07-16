@@ -552,18 +552,19 @@ describe('GET /api/reports/ai-reporting/sessions/:id/messages', () => {
     });
   });
 
-  test('200 honors limit and before query params', async () => {
+  test('200 honors limit and cursor query params', async () => {
     sessionExistsForUserMock.mockResolvedValue(true);
     listMessagesForSessionMock.mockResolvedValue([]);
 
     const res = await testApp.inject({
       method: 'GET',
-      url: '/api/reports/ai-reporting/sessions/rpt-chat-1/messages?limit=50&before=1700000000000',
+      url: '/api/reports/ai-reporting/sessions/rpt-chat-1/messages?limit=50&before=1700000000000&beforeId=rpt-msg-20',
       headers: authHeader(),
     });
 
     expect(res.statusCode).toBe(200);
     expect(listMessagesForSessionMock).toHaveBeenCalledWith('rpt-chat-1', {
+      beforeId: 'rpt-msg-20',
       beforeMs: 1_700_000_000_000,
       limit: 50,
     });
@@ -582,6 +583,15 @@ describe('GET /api/reports/ai-reporting/sessions/:id/messages', () => {
     const res = await testApp.inject({
       method: 'GET',
       url: '/api/reports/ai-reporting/sessions/rpt-chat-1/messages?before=-1',
+      headers: authHeader(),
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  test('400 beforeId must be non-empty', async () => {
+    const res = await testApp.inject({
+      method: 'GET',
+      url: '/api/reports/ai-reporting/sessions/rpt-chat-1/messages?beforeId=%20',
       headers: authHeader(),
     });
     expect(res.statusCode).toBe(400);

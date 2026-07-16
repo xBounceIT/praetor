@@ -834,7 +834,7 @@ const useAiReportingController = ({
     try {
       const older = await api.reports.getSessionMessages(activeSessionId, {
         limit: MESSAGES_PAGE_SIZE,
-        before: oldestLoaded.createdAt,
+        beforeId: oldestLoaded.id,
       });
       if (token !== loadTokenRef.current) return;
       const nearestOlderGroup = buildAssistantAttemptGroups(older).at(-1);
@@ -3068,7 +3068,9 @@ const AiMarkdownMessage: React.FC<{
   let tableRenderIndex = 0;
   // Recharts dispatches each new data reference into its internal store. Streaming reparses
   // completed blocks on every delta, so mount charts only after their data has settled.
-  const hasDeferredVisualization = deferVisualizations && parsedContent.visualizations.length > 0;
+  const showVisualizationPending =
+    parsedContent.hasPendingVisualization ||
+    (deferVisualizations && parsedContent.visualizations.length > 0);
 
   return (
     <>
@@ -3201,18 +3203,15 @@ const AiMarkdownMessage: React.FC<{
           {parsedContent.markdown}
         </ReactMarkdown>
       ) : null}
-      {deferVisualizations
-        ? null
-        : parsedContent.visualizations.map((visualization, index) => (
-            <AiReportingVisualization
-              key={`${message.id}-visualization-${index}`}
-              visualization={visualization}
-              language={language}
-            />
-          ))}
-      {parsedContent.hasPendingVisualization || hasDeferredVisualization ? (
-        <AiReportingVisualizationPending />
-      ) : null}
+      {!deferVisualizations &&
+        parsedContent.visualizations.map((visualization, index) => (
+          <AiReportingVisualization
+            key={`${message.id}-visualization-${index}`}
+            visualization={visualization}
+            language={language}
+          />
+        ))}
+      {showVisualizationPending ? <AiReportingVisualizationPending /> : null}
       {parsedContent.invalidVisualizationCount > 0 ? (
         <Alert variant="destructive" className="my-3">
           <TriangleAlert aria-hidden="true" />

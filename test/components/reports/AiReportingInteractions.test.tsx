@@ -602,9 +602,9 @@ describe('<AiReportingView /> interactions', () => {
     ];
     let resolveOlderMessages: ((messages: ReportChatMessage[]) => void) | undefined;
     getSessionMessagesMock.mockImplementation(
-      (sessionId: string, options?: { before?: number }) => {
+      (sessionId: string, options?: { beforeId?: string }) => {
         if (sessionId === 'capacity') return Promise.resolve(capacityMessages);
-        if (options?.before) {
+        if (options?.beforeId) {
           return new Promise<ReportChatMessage[]>((resolve) => {
             resolveOlderMessages = resolve;
           });
@@ -638,8 +638,9 @@ describe('<AiReportingView /> interactions', () => {
   test('preserves loaded history after editing an older message', async () => {
     const latestHistory = createMessageHistory('latest', 'Latest question', 'Latest answer');
 
-    getSessionMessagesMock.mockImplementation((_sessionId: string, options?: { before?: number }) =>
-      Promise.resolve(options?.before ? olderEditableHistory : latestHistory),
+    getSessionMessagesMock.mockImplementation(
+      (_sessionId: string, options?: { beforeId?: string }) =>
+        Promise.resolve(options?.beforeId ? olderEditableHistory : latestHistory),
     );
     editMessageStreamMock.mockImplementation(
       async (
@@ -674,8 +675,9 @@ describe('<AiReportingView /> interactions', () => {
 
   test('restores loaded history when editing an older message fails', async () => {
     const latestHistory = createMessageHistory('latest', 'Latest question', 'Latest answer');
-    getSessionMessagesMock.mockImplementation((_sessionId: string, options?: { before?: number }) =>
-      Promise.resolve(options?.before ? olderEditableHistory : latestHistory),
+    getSessionMessagesMock.mockImplementation(
+      (_sessionId: string, options?: { beforeId?: string }) =>
+        Promise.resolve(options?.beforeId ? olderEditableHistory : latestHistory),
     );
     editMessageStreamMock.mockImplementation(
       async (

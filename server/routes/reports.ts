@@ -2365,6 +2365,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           properties: {
             limit: { type: 'number' },
             before: { type: 'number' },
+            beforeId: { type: 'string' },
           },
         },
         response: {
@@ -2379,7 +2380,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const { id } = request.params as { id: string };
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
-      const { limit, before } = request.query as { limit?: unknown; before?: unknown };
+      const { limit, before, beforeId } = request.query as {
+        limit?: unknown;
+        before?: unknown;
+        beforeId?: unknown;
+      };
 
       const parsedLimit = limit === undefined ? 200 : Number.parseInt(String(limit), 10);
       if (!Number.isFinite(parsedLimit) || parsedLimit <= 0) {
@@ -2396,6 +2401,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         beforeTimestampMs = Math.floor(parsedBefore);
       }
 
+      let beforeMessageId: string | null = null;
+      if (beforeId !== undefined) {
+        const beforeIdResult = requireNonEmptyString(beforeId, 'beforeId');
+        if (!beforeIdResult.ok) return badRequest(reply, beforeIdResult.message);
+        beforeMessageId = beforeIdResult.value;
+      }
+
       const cfg = await getGeneralAiConfig();
       if (!(await ensureAiEnabled(cfg, request, reply))) return;
 
@@ -2410,6 +2422,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       const messages = await reportsAiChatRepo.listMessagesForSession(idResult.value, {
+        beforeId: beforeMessageId,
         beforeMs: beforeTimestampMs,
         limit: messageLimit,
       });
