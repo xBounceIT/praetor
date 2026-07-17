@@ -250,13 +250,15 @@ const TimeReportView = ({
     updateDefinition({ periodPreset: preset, ...periodRange(preset, startOfWeek) });
   };
 
-  const visibleProjects = useMemo(
-    () =>
-      options?.projects.filter(
-        (project) => definition.clientId === null || project.clientId === definition.clientId,
-      ) ?? [],
-    [definition.clientId, options],
-  );
+  const visibleProjects = useMemo(() => {
+    const seenProjectIds = new Set<string>();
+    return (options?.projects ?? []).filter((project) => {
+      if (definition.clientId !== null && project.clientId !== definition.clientId) return false;
+      if (seenProjectIds.has(project.id)) return false;
+      seenProjectIds.add(project.id);
+      return true;
+    });
+  }, [definition.clientId, options]);
 
   const visibleTasks = useMemo(() => {
     const visibleProjectIds =

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, mock } from 'bun:test';
-import { act, fireEvent, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import TimeReportView, {
   type TimeReportViewProps,
@@ -222,12 +222,18 @@ describe('TimeReportView', () => {
         { id: 'c2', name: 'Beta' },
       ],
       projects: [
+        { id: 'p1', name: 'Migration', clientId: 'c1' },
         { id: 'p1', name: 'Migration', clientId: 'c2' },
         { id: 'p2', name: 'Portal', clientId: 'c2' },
       ],
       tasks: [],
     });
     renderView(['reports.time_report.view']);
+
+    await user.click(await screen.findByRole('button', { name: 'timeReport.filters.allProjects' }));
+    const projectDialog = screen.getByRole('dialog');
+    expect(within(projectDialog).getAllByText('Migration')).toHaveLength(1);
+    await user.click(within(projectDialog).getByText('timeReport.filters.allProjects'));
 
     await user.click(await screen.findByRole('button', { name: 'timeReport.filters.allClients' }));
     await user.type(screen.getByPlaceholderText('select.search'), 'beta');

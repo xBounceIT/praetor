@@ -132,6 +132,10 @@ describe('timeReportsRepo', () => {
 
     const projectQuery = exec.calls[2];
     expect(projectQuery.sql).toContain('FROM user_tasks');
+    expect(projectQuery.sql).toMatch(
+      /SELECT DISTINCT ON \(\s*available\.id,\s*available\.client_id\s*\)/,
+    );
+    expect(projectQuery.sql).toContain('LEFT JOIN projects current_project');
 
     const taskQuery = exec.calls[3];
     expect(taskQuery.sql).toContain('SELECT DISTINCT ON');

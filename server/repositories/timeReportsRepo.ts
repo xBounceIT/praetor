@@ -197,12 +197,13 @@ export const listOptions = async (
                     available.entry_date DESC NULLS LAST,
                     available.entry_created_at DESC NULLS LAST`,
     ),
-    executeRows<{ id: string; name: string; clientId: string }>(
+    executeRows<{ id: string; name: string; clientId: string; sourceOrder: number }>(
       exec,
-      sql`SELECT DISTINCT ON (available.id)
+      sql`SELECT DISTINCT ON (available.id, available.client_id)
                   available.id,
                   available.name,
-                  available.client_id AS "clientId"
+                  available.client_id AS "clientId",
+                  available.source_order AS "sourceOrder"
             FROM (
               SELECT p.id,
                      p.name,
@@ -223,15 +224,17 @@ export const listOptions = async (
                 JOIN projects p ON p.id = assigned.id
               UNION ALL
               SELECT te.project_id AS id,
-                     te.project_name AS name,
+                     COALESCE(current_project.name, te.project_name) AS name,
                      te.client_id,
                      1 AS source_order,
                      te.date AS entry_date,
                      te.created_at AS entry_created_at
                 FROM time_entries te
+                LEFT JOIN projects current_project ON current_project.id = te.project_id
                WHERE te.user_id = ANY(${ids}::text[])
             ) available
            ORDER BY available.id,
+                    available.client_id,
                     available.source_order,
                     available.entry_date DESC NULLS LAST,
                     available.entry_created_at DESC NULLS LAST`,
@@ -274,7 +277,9 @@ export const listOptions = async (
   return {
     users,
     clients: clients.sort((a, b) => a.name.localeCompare(b.name)),
-    projects: projects.sort((a, b) => a.name.localeCompare(b.name)),
+    projects: projects
+      .sort((a, b) => a.name.localeCompare(b.name) || a.sourceOrder - b.sourceOrder)
+      .map(({ id, name, clientId }) => ({ id, name, clientId })),
     tasks: tasks.map((task) => ({
       ...task,
       key: task.taskId ?? `legacy:${task.projectId}:${task.name.toLowerCase()}`,
