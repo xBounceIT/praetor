@@ -745,10 +745,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             throw new PermissionError();
           }
           const clientChanged = requestedClientId !== previousClientId;
-          const assignedUserIds = clientChanged
-            ? await projectsRepo.findNonTopManagerUserIds(idResult.value, tx)
-            : [];
-
           // Resolve the final commercial state from the locked row plus this patch.
           const finalOrderId = orderIdPatch.provided ? orderIdPatch.value : existingLinks.orderId;
           const finalOfferId = offerIdPatch.provided ? offerIdPatch.value : existingLinks.offerId;
@@ -811,6 +807,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           }
 
           if (clientChanged) {
+            const assignedUserIds = await projectsRepo.findNonTopManagerUserIds(idResult.value, tx);
             await projectsRepo.ensureClientCascadeAssignments(
               assignedUserIds,
               updated.clientId,

@@ -1211,7 +1211,6 @@ const useProjectDetailController = ({
     setRevenue,
     setTempIsDisabled,
     setStatus,
-    setTipo,
     setErrors,
     entries,
     entriesLoading,
