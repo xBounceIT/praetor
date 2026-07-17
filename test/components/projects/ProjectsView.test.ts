@@ -140,6 +140,19 @@ describe('ProjectsView create-form validation', () => {
     expect(source).toContain('formatDateOnlyForLocale(String(value), i18n.language)');
   });
 
+  test('lets the description use the full width of a resized column', async () => {
+    const source = await Bun.file(
+      new URL('../../../components/projects/ProjectsView.tsx', import.meta.url),
+    ).text();
+    const descriptionColumn = source.match(
+      /header: t\('projects:projects\.tableHeaders\.description'\)[\s\S]*?header: t\('projects:projects\.tipo'\)/,
+    )?.[0];
+
+    expect(descriptionColumn).toBeDefined();
+    expect(descriptionColumn).not.toContain('max-w-md');
+    expect(descriptionColumn).not.toContain('line-clamp-1');
+  });
+
   test('requires and forwards the project status with tooltip and table column', async () => {
     const source = await Bun.file(
       new URL('../../../components/projects/ProjectsView.tsx', import.meta.url),
