@@ -19,6 +19,10 @@ On desktop, AI Reporting shows conversation history in the left column and the a
 
 Use the search field to filter chats by title. Select an item to resume that conversation, or press **New Chat** at the bottom of the history to start a new one.
 
+When you open a conversation, Praetor loads only its most recent messages. Use **Load older messages** to retrieve earlier parts progressively without slowing down the page.
+
+In the browser, only visible messages and a small area above and below the scroll viewport are rendered. Distant content remains as lightweight placeholders and is materialized only as you approach it.
+
 On mobile devices, open the history with the button in the conversation header.
 
 Chat actions are contained in its history row: use the pencil to rename the title, or use the trash button to remove the conversation and confirm the action.
@@ -31,6 +35,23 @@ The composer floats over the conversation: it stays compact on one line and grow
 
 Use the paperclip button to attach up to 5 text files, including TXT, Markdown, CSV, JSON, XML, YAML, logs, SQL, and common source-code files. Each file can be up to 64 KB, while the combined text content can contain up to 12,000 characters. Files are read in the browser and included in the request sent to AI Reporting. Their contents become an explicit data source for analysis, calculations, and visualizations, while remaining data rather than instructions for the AI.
 
+## Available business datasets
+
+For every request, AI Reporting builds a fresh dataset restricted to the view permissions granted to your role. Answers can use these sections:
+
+- **Timesheets** — hours, authorized costs, and distributions by period, location, user, client, project, and task.
+- **Clients** — master data and related activity.
+- **Projects** — status, active/passive type, dates, revenue, billing, linked documents, hours, and authorized costs.
+- **Tasks** — recurrence, duration, effort, revenue, billing, and recorded hours.
+- **Client quotes** and **client offers** — amounts, statuses, expiry dates, and leading clients.
+- **Client orders** and **client invoices** — values, statuses, payments, outstanding amounts, and aging.
+- **Suppliers** and **supplier quotes** — master data, activity, and amounts.
+- **Supplier orders** and **supplier invoices** — purchasing, payments, outstanding amounts, and aging.
+- **Catalog** — products, types, categories, suppliers, and document usage.
+- **Resales** — costs, revenue, margin, billing frequencies, categories, and activity release state.
+
+Unauthorized sections are never added to the AI context. When a question targets one area, Praetor loads only the relevant sections; an overview request uses every available section. Document totals for duration-based lines include the month multiplier and, for quotes with multiple candidates, reporting analyzes the selected candidate or the first active candidate.
+
 ## Interactive visualizations
 
 You can explicitly request a chart, for example “show the monthly trend of hours by project” or “compare revenue for the top five customers.” AI Reporting can answer with bar, line, area, pie, or donut charts and select the shape that best fits the available data.
@@ -38,6 +59,8 @@ You can explicitly request a chart, for example “show the monthly trend of hou
 When a request explicitly asks for a chart, visualization, dashboard, or data report, the assistant uses the built-in renderer instead of substituting a prose-only description or table. If required data is unavailable, it identifies what is missing and asks for clarification without inventing values.
 
 A single response can include up to seven visualizations when multiple charts materially improve the analysis.
+
+In responses with multiple visualizations, each short interpretation appears immediately before its matching chart. During generation, completed charts appear progressively one at a time, while the chart still being built remains represented by a placeholder.
 
 Point at the chart or use keyboard navigation to read values, use the legend when several series are present, and press **Show data** to open the accessible table behind the visualization. **Copy PNG** places the heading, chart, and legend on the clipboard, ready to paste into a document or message. Colors and surfaces automatically adapt to the light or dark theme.
 

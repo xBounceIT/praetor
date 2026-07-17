@@ -153,7 +153,7 @@ export const reportsApi = {
 
   getSessionMessages: (
     sessionId: string,
-    opts: { limit?: number; before?: number } = {},
+    opts: { limit?: number; before?: number; beforeId?: string } = {},
   ): Promise<ReportChatMessage[]> => {
     const params = new URLSearchParams();
     if (typeof opts.limit === 'number' && Number.isFinite(opts.limit)) {
@@ -162,6 +162,7 @@ export const reportsApi = {
     if (typeof opts.before === 'number' && Number.isFinite(opts.before)) {
       params.set('before', String(Math.floor(opts.before)));
     }
+    if (opts.beforeId) params.set('beforeId', opts.beforeId);
     const suffix = params.toString();
     const endpoint = `/reports/ai-reporting/sessions/${sessionId}/messages${
       suffix ? `?${suffix}` : ''

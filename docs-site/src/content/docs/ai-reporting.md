@@ -19,6 +19,10 @@ Su desktop AI Reporting mostra la cronologia nella colonna sinistra e la convers
 
 Usa il campo di ricerca per filtrare le chat in base al titolo. Seleziona una voce per riprendere la conversazione oppure premi **Nuova Chat** in fondo alla cronologia per iniziarne una nuova.
 
+Quando apri una conversazione, Praetor carica solo i messaggi più recenti. Usa **Carica messaggi precedenti** per recuperare progressivamente le parti più vecchie senza rallentare l'apertura della pagina.
+
+Nel browser vengono renderizzati soltanto i messaggi visibili e una piccola fascia sopra e sotto l'area di scorrimento. I contenuti più lontani restano come segnaposto leggeri e vengono materializzati solo quando ti avvicini.
+
 Su dispositivi mobili, apri la cronologia con il pulsante nella barra superiore della conversazione.
 
 Le azioni della chat sono integrate nella sua riga: usa la matita per rinominare il titolo oppure il cestino per rimuovere la conversazione e conferma l'operazione.
@@ -31,6 +35,23 @@ Il composer fluttua sopra la conversazione: resta compatto su una riga e cresce 
 
 Il pulsante con la graffetta allega fino a 5 file di testo, inclusi TXT, Markdown, CSV, JSON, XML, YAML, log, SQL e comuni file sorgente. Ogni file può pesare fino a 64 KB; il contenuto testuale complessivo degli allegati può raggiungere 12.000 caratteri. I file vengono letti nel browser e inclusi nella richiesta inviata ad AI Reporting. Il loro contenuto diventa una fonte dati esplicita per analisi, calcoli e visualizzazioni, ma viene sempre trattato come dato e mai come istruzione per l'AI.
 
+## Dataset aziendali disponibili
+
+AI Reporting costruisce per ogni richiesta un dataset aggiornato e limitato ai permessi di visualizzazione del tuo ruolo. La risposta può usare queste sezioni:
+
+- **Consuntivi** — ore, costi autorizzati e distribuzioni per periodo, luogo, utente, cliente, progetto e attività.
+- **Clienti** — anagrafica e attività collegate.
+- **Progetti** — stato, tipo attivo/passivo, periodo, ricavi, fatturazione, documenti collegati, ore e costi autorizzati.
+- **Attività** — ricorrenza, durata, effort, ricavi, fatturazione e ore consuntivate.
+- **Preventivi cliente** e **offerte cliente** — importi, stati, scadenze e clienti principali.
+- **Ordini cliente** e **fatture cliente** — valori, stati, incassi, insoluti e scadenzario.
+- **Fornitori** e **preventivi fornitore** — anagrafiche, attività e importi.
+- **Ordini fornitore** e **fatture fornitore** — acquisti, pagamenti, insoluti e scadenzario.
+- **Catalogo** — prodotti, tipologie, categorie, fornitori e utilizzo nei documenti.
+- **Rivendite** — costi, ricavi, margini, frequenze di fatturazione, categorie e stato di rilascio delle attività.
+
+Le sezioni non autorizzate non vengono inserite nel contesto AI. Se la domanda riguarda un'area specifica, Praetor carica soltanto le sezioni pertinenti; una richiesta di panoramica usa tutte quelle disponibili. Gli importi dei documenti con righe a durata includono il moltiplicatore in mesi e, per i preventivi con più candidati, viene analizzato il candidato selezionato oppure il primo candidato attivo.
+
 ## Visualizzazioni interattive
 
 Puoi chiedere esplicitamente un grafico, ad esempio “mostra l'andamento mensile delle ore per progetto” oppure “confronta i ricavi dei primi cinque clienti”. AI Reporting può rispondere con grafici a barre, linee, area, torta o anello, scegliendo la forma più adatta ai dati disponibili.
@@ -38,6 +59,8 @@ Puoi chiedere esplicitamente un grafico, ad esempio “mostra l'andamento mensil
 Quando la richiesta menziona esplicitamente un grafico, una visualizzazione, una dashboard o un report di dati, l'assistente usa il renderer integrato invece di sostituire il risultato con una semplice descrizione o tabella. Se i dati necessari non sono disponibili, indica quali mancano e chiede un chiarimento senza inventarli.
 
 Una singola risposta può includere fino a sette visualizzazioni, quando più grafici migliorano concretamente la comprensione dell'analisi.
+
+Nelle risposte con più visualizzazioni, ogni breve interpretazione precede il grafico a cui si riferisce. Durante la generazione, i grafici completati compaiono progressivamente uno alla volta, mentre quello ancora in costruzione resta indicato da un segnaposto.
 
 Passa il puntatore o usa la navigazione da tastiera sul grafico per leggere i valori, consulta la legenda quando sono presenti più serie e premi **Mostra dati** per aprire la tabella accessibile usata dalla visualizzazione. Il pulsante **Copia PNG** copia negli appunti l'intestazione, il grafico e la legenda, pronti per essere incollati in un documento o messaggio. Colori e superfici si adattano automaticamente al tema chiaro o scuro.
 

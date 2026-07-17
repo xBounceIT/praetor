@@ -7,7 +7,7 @@ const toBlobMock = mock(
 
 mock.module('html-to-image', () => ({ toBlob: toBlobMock }));
 
-const { copyElementAsPng } = await import('../../utils/copyElementAsPng');
+const { CopyElementAsPngError, copyElementAsPng } = await import('../../utils/copyElementAsPng');
 
 const originalClipboardDescriptor = Object.getOwnPropertyDescriptor(
   globalThis.navigator,
@@ -93,9 +93,9 @@ describe('copyElementAsPng', () => {
     setClipboard({});
     setClipboardItem(undefined);
 
-    await expect(copyElementAsPng(document.createElement('div'))).rejects.toThrow(
-      'PNG clipboard writes are not supported',
-    );
+    await expect(copyElementAsPng(document.createElement('div'))).rejects.toMatchObject({
+      failure: 'unsupported',
+    });
     expect(toBlobMock).not.toHaveBeenCalled();
   });
 
@@ -106,9 +106,24 @@ describe('copyElementAsPng', () => {
     setClipboard({ write });
     toBlobMock.mockResolvedValueOnce(null);
 
-    await expect(copyElementAsPng(document.createElement('div'))).rejects.toThrow(
-      'Could not render the chart as PNG',
+    await expect(copyElementAsPng(document.createElement('div'))).rejects.toMatchObject({
+      failure: 'render',
+    });
+    expect(write).toHaveBeenCalledTimes(1);
+  });
+
+  test('distinguishes a clipboard rejection from a PNG render failure', async () => {
+    const write = mock(async () => {
+      throw new DOMException('Clipboard write blocked', 'NotAllowedError');
+    });
+    setClipboard({ write });
+
+    const error = await copyElementAsPng(document.createElement('div')).catch(
+      (reason: unknown) => reason,
     );
+
+    expect(error).toBeInstanceOf(CopyElementAsPngError);
+    expect(error).toMatchObject({ failure: 'write' });
     expect(write).toHaveBeenCalledTimes(1);
   });
 });

@@ -2,6 +2,7 @@ import { sql } from 'drizzle-orm';
 import { type DbExecutor, db, executeRows } from '../db/drizzle.ts';
 import { roundCurrency } from '../utils/invoice-math.ts';
 import { parseDbNumber, toDbText } from '../utils/parse.ts';
+import { derivedBillingTypeSql } from './projectsRepo.ts';
 import { tasksT, timeEntriesTasksJoin } from './tasksRepo.ts';
 
 const parseCost = (value: string | number | null | undefined): number =>
@@ -16,6 +17,15 @@ type ProjectRow = {
   client_id: string | null;
   client_name: string | null;
   description: string | null;
+  order_id: string | null;
+  offer_id: string | null;
+  start_date: string | null;
+  end_date: string | null;
+  revenue: string | number | null;
+  billing_type: string | null;
+  billing_frequency: string | null;
+  status: string | null;
+  tipo: string | null;
   is_disabled: boolean | null;
 };
 
@@ -27,6 +37,15 @@ type TaskRow = {
   is_disabled: boolean | null;
   is_recurring: boolean | null;
   recurrence_pattern: string | null;
+  description: string | null;
+  recurrence_start: string | null;
+  recurrence_end: string | null;
+  recurrence_duration: string | number | null;
+  revenue: string | number | null;
+  duration: string | number | null;
+  billing_type: string | null;
+  billing_frequency: string | null;
+  monthly_effort: string | number | null;
 };
 
 export type TimesheetsSectionOptions = {
@@ -202,6 +221,15 @@ export type ProjectInfo = {
   clientId: string;
   clientName: string;
   description: string;
+  orderId: string;
+  offerId: string;
+  startDate: string;
+  endDate: string;
+  revenue: number;
+  billingType: string;
+  billingFrequency: string;
+  status: string;
+  type: string;
   isDisabled: boolean;
 };
 
@@ -257,6 +285,15 @@ export const getProjectsSection = async (
             p.client_id,
             c.name as client_name,
             p.description,
+            p.order_id,
+            p.offer_id,
+            p.start_date,
+            p.end_date,
+            p.revenue,
+            ${derivedBillingTypeSql} AS billing_type,
+            p.billing_frequency,
+            p.status,
+            p.tipo,
             p.is_disabled
            FROM projects p
            JOIN clients c ON c.id = p.client_id
@@ -271,6 +308,15 @@ export const getProjectsSection = async (
             p.client_id,
             c.name as client_name,
             p.description,
+            p.order_id,
+            p.offer_id,
+            p.start_date,
+            p.end_date,
+            p.revenue,
+            ${derivedBillingTypeSql} AS billing_type,
+            p.billing_frequency,
+            p.status,
+            p.tipo,
             p.is_disabled
            FROM projects p
            JOIN clients c ON c.id = p.client_id
@@ -342,6 +388,15 @@ export const getProjectsSection = async (
       clientId: toDbText(r.client_id),
       clientName: toDbText(r.client_name),
       description: toDbText(r.description),
+      orderId: toDbText(r.order_id),
+      offerId: toDbText(r.offer_id),
+      startDate: toDbText(r.start_date),
+      endDate: toDbText(r.end_date),
+      revenue: parseDbNumber(r.revenue, 0),
+      billingType: toDbText(r.billing_type),
+      billingFrequency: toDbText(r.billing_frequency),
+      status: toDbText(r.status),
+      type: toDbText(r.tipo),
       isDisabled: Boolean(r.is_disabled),
     })),
     topByHours,
@@ -369,6 +424,16 @@ export type TaskInfo = {
   isDisabled: boolean;
   isRecurring: boolean;
   recurrencePattern: string;
+  description: string;
+  recurrenceStart: string;
+  recurrenceEnd: string;
+  recurrenceDuration: number;
+  expectedEffort: number;
+  revenue: number;
+  duration: number;
+  billingType: string;
+  billingFrequency: string;
+  monthlyEffort: number;
 };
 
 export type TasksSection = {
@@ -426,7 +491,16 @@ export const getTasksSection = async (
             p.name as project_name,
             t.is_disabled,
             t.is_recurring,
-            t.recurrence_pattern
+            t.recurrence_pattern,
+            t.description,
+            t.recurrence_start,
+            t.recurrence_end,
+            t.recurrence_duration,
+            t.revenue,
+            t.duration,
+            t.billing_type,
+            t.billing_frequency,
+            t.monthly_effort
            FROM tasks t
            JOIN projects p ON p.id = t.project_id
           ORDER BY t.name ASC
@@ -441,7 +515,16 @@ export const getTasksSection = async (
             p.name as project_name,
             t.is_disabled,
             t.is_recurring,
-            t.recurrence_pattern
+            t.recurrence_pattern,
+            t.description,
+            t.recurrence_start,
+            t.recurrence_end,
+            t.recurrence_duration,
+            t.revenue,
+            t.duration,
+            t.billing_type,
+            t.billing_frequency,
+            t.monthly_effort
            FROM tasks t
            JOIN projects p ON p.id = t.project_id
            JOIN user_tasks ut ON ut.task_id = t.id
@@ -500,15 +583,29 @@ export const getTasksSection = async (
     activeCount: Math.max(taskCount - disabledCount, 0),
     disabledCount,
     recurringCount: parseDbNumber(summaryRows[0]?.recurring_count, 0),
-    items: itemsRows.map((r) => ({
-      id: toDbText(r.id),
-      name: toDbText(r.name),
-      projectId: toDbText(r.project_id),
-      projectName: toDbText(r.project_name),
-      isDisabled: Boolean(r.is_disabled),
-      isRecurring: Boolean(r.is_recurring),
-      recurrencePattern: toDbText(r.recurrence_pattern),
-    })),
+    items: itemsRows.map((r) => {
+      const duration = parseDbNumber(r.duration, 1);
+      const monthlyEffort = parseDbNumber(r.monthly_effort, 0);
+      return {
+        id: toDbText(r.id),
+        name: toDbText(r.name),
+        projectId: toDbText(r.project_id),
+        projectName: toDbText(r.project_name),
+        isDisabled: Boolean(r.is_disabled),
+        isRecurring: Boolean(r.is_recurring),
+        recurrencePattern: toDbText(r.recurrence_pattern),
+        description: toDbText(r.description),
+        recurrenceStart: toDbText(r.recurrence_start),
+        recurrenceEnd: toDbText(r.recurrence_end),
+        recurrenceDuration: parseDbNumber(r.recurrence_duration, 0),
+        expectedEffort: roundCurrency(monthlyEffort * duration),
+        revenue: parseDbNumber(r.revenue, 0),
+        duration,
+        billingType: toDbText(r.billing_type),
+        billingFrequency: toDbText(r.billing_frequency),
+        monthlyEffort,
+      };
+    }),
     topByHours,
   };
 };

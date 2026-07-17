@@ -170,6 +170,17 @@ describe('listMessagesForSession', () => {
     expect(exec.calls[0].sql).not.toContain('TO_TIMESTAMP');
   });
 
+  test('with beforeId uses an exact tuple cursor and deterministic ordering', async () => {
+    exec.enqueue({ rows: [] });
+    await repo.listMessagesForSession('s1', { beforeId: 'm20', limit: 10 }, testDb);
+    expect(exec.calls[0].params).toEqual(['s1', 's1', 'm20', 10]);
+    expect(exec.calls[0].sql).toContain('FROM report_chat_messages cursor_message');
+    expect(exec.calls[0].sql).toContain('"cursor_message"."id" = $3');
+    expect(exec.calls[0].sql).toContain(
+      'order by "report_chat_messages"."created_at" desc, "report_chat_messages"."id" desc',
+    );
+  });
+
   test('with beforeMs uses 3-param query and TO_TIMESTAMP filter', async () => {
     exec.enqueue({ rows: [] });
     await repo.listMessagesForSession('s1', { beforeMs: 1700000000000, limit: 10 }, testDb);

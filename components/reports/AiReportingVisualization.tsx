@@ -6,7 +6,7 @@ import {
   Loader2,
   Table2,
 } from 'lucide-react';
-import { useId, useMemo, useRef, useState } from 'react';
+import { memo, useId, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { BarShapeProps } from 'recharts';
 import { toast } from 'sonner';
@@ -49,7 +49,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { copyElementAsPng } from '@/utils/copyElementAsPng';
+import { CopyElementAsPngError, copyElementAsPng } from '@/utils/copyElementAsPng';
 import {
   CHART_COLORS,
   getBarPointColor,
@@ -368,7 +368,7 @@ const VisualizationDataTable = ({
   </div>
 );
 
-export const AiReportingVisualization = ({
+const AiReportingVisualizationContent = ({
   visualization,
   language,
 }: AiReportingVisualizationProps) => {
@@ -392,12 +392,22 @@ export const AiReportingVisualization = ({
       toast.success(
         t('aiReporting.visualizationCopiedPng', { defaultValue: 'Chart copied as PNG.' }),
       );
-    } catch {
-      toast.error(
-        t('aiReporting.visualizationCopyPngError', {
-          defaultValue: 'Could not copy the chart as PNG. Check clipboard permissions.',
-        }),
-      );
+    } catch (error) {
+      let errorMessage = t('aiReporting.visualizationCopyPngError', {
+        defaultValue:
+          'The browser blocked clipboard access. Keep this tab active and try Copy PNG again.',
+      });
+      if (error instanceof CopyElementAsPngError && error.failure === 'render') {
+        errorMessage = t('aiReporting.visualizationCopyPngRenderError', {
+          defaultValue: 'Could not create the chart PNG. Please try again.',
+        });
+      } else if (error instanceof CopyElementAsPngError && error.failure === 'unsupported') {
+        errorMessage = t('aiReporting.visualizationCopyPngUnsupported', {
+          defaultValue:
+            'PNG clipboard copy is unavailable in this browser or page context. Use HTTPS and an up-to-date browser.',
+        });
+      }
+      toast.error(errorMessage);
     } finally {
       setIsCopyingPng(false);
     }
@@ -488,6 +498,9 @@ export const AiReportingVisualization = ({
     </Card>
   );
 };
+
+export const AiReportingVisualization = memo(AiReportingVisualizationContent);
+AiReportingVisualization.displayName = 'AiReportingVisualization';
 
 export const AiReportingVisualizationPending = () => {
   const { t } = useTranslation('reports');

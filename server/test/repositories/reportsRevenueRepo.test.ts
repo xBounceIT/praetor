@@ -21,6 +21,10 @@ describe('getQuotesSection', () => {
     for (const call of exec.calls) {
       expect(call.params[0]).toBe(FROM);
       expect(call.params[1]).toBe(TO);
+      expect(call.sql).toContain('FROM quote_candidates qc');
+      expect(call.sql).toContain('COALESCE(qi.duration_months, 1)');
+      expect(call.sql).toContain("qi.duration_unit = 'na'");
+      expect(call.sql).toContain('MAX(reporting_candidate.discount');
     }
   });
 
@@ -80,6 +84,8 @@ describe('getOrdersSection', () => {
     expect(exec.calls).toHaveLength(5);
     for (const call of exec.calls) {
       expect(call.sql).toContain('FROM sales s');
+      expect(call.sql).toContain('COALESCE(si.duration_months, 1)');
+      expect(call.sql).toContain("si.duration_unit = 'na'");
     }
   });
 

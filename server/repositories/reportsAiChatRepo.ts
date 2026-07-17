@@ -1,4 +1,5 @@
 import { and, asc, desc, eq, gt, lt, lte, sql } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/pg-core';
 import { type DbExecutor, db } from '../db/drizzle.ts';
 import { reportChatMessages } from '../db/schema/reportChatMessages.ts';
 import { reportChatSessions } from '../db/schema/reportChatSessions.ts';
@@ -40,6 +41,8 @@ export type ChatMessageRef = {
   id: string;
   createdAt: Date;
 };
+
+const cursorMessage = alias(reportChatMessages, 'cursor_message');
 
 export const listSessionsForUser = async (
   userId: string,
@@ -180,17 +183,21 @@ export const touchSession = async (
 
 export const listMessagesForSession = async (
   sessionId: string,
-  options: { beforeMs: number | null; limit: number },
+  options: { beforeId?: string | null; beforeMs?: number | null; limit: number },
   exec: DbExecutor = db,
 ): Promise<ChatMessage[]> => {
-  const { beforeMs, limit } = options;
-  const where =
-    beforeMs == null
-      ? eq(reportChatMessages.sessionId, sessionId)
-      : and(
-          eq(reportChatMessages.sessionId, sessionId),
-          lt(reportChatMessages.createdAt, sql`TO_TIMESTAMP(${beforeMs} / 1000.0)`),
-        );
+  const { beforeId, beforeMs, limit } = options;
+  const cursorFilter = beforeId
+    ? sql`(${reportChatMessages.createdAt}, ${reportChatMessages.id}) < (
+        SELECT ${cursorMessage.createdAt}, ${cursorMessage.id}
+        FROM report_chat_messages cursor_message
+        WHERE ${cursorMessage.sessionId} = ${sessionId}
+          AND ${cursorMessage.id} = ${beforeId}
+      )`
+    : beforeMs == null
+      ? undefined
+      : lt(reportChatMessages.createdAt, sql`TO_TIMESTAMP(${beforeMs} / 1000.0)`);
+  const where = and(eq(reportChatMessages.sessionId, sessionId), cursorFilter);
   const rows = await exec
     .select({
       id: reportChatMessages.id,
@@ -206,7 +213,7 @@ export const listMessagesForSession = async (
     })
     .from(reportChatMessages)
     .where(where)
-    .orderBy(desc(reportChatMessages.createdAt))
+    .orderBy(desc(reportChatMessages.createdAt), desc(reportChatMessages.id))
     .limit(limit);
   return rows.map((r) => ({
     id: r.id,

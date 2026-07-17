@@ -17,6 +17,7 @@ const baseOpts = {
   fromDate: FROM,
   toDate: TO,
   canViewAllClients: true,
+  canViewOffers: false,
   canViewQuotes: false,
   canViewOrders: false,
   canViewInvoices: false,
@@ -121,6 +122,8 @@ describe('getClientsSection', () => {
         clientId: 'c1',
         quotesCount: 2,
         quotesNet: 500,
+        offersCount: null,
+        offersNet: null,
         ordersCount: null,
         ordersNet: null,
         invoicesCount: null,
@@ -129,6 +132,40 @@ describe('getClientsSection', () => {
         timesheetHours: null,
       },
     ]);
+  });
+
+  test('client offer activity uses duration and both line and header discounts', async () => {
+    exec.enqueue({ rows: [{ count: '1' }] });
+    exec.enqueue({
+      rows: [
+        {
+          id: 'c1',
+          name: 'Acme',
+          client_code: null,
+          type: null,
+          contact_name: null,
+          email: null,
+          phone: null,
+          address: null,
+          is_disabled: false,
+        },
+      ],
+    });
+    exec.enqueue({ rows: [{ client_id: 'c1', offer_count: '2', net_value: '840' }] });
+
+    const result = await repo.getClientsSection({ ...baseOpts, canViewOffers: true }, testDb);
+
+    expect(exec.calls).toHaveLength(3);
+    const sqlText = exec.calls[2].sql;
+    expect(sqlText).toContain('FROM customer_offers co');
+    expect(sqlText).toContain('COALESCE(coi.duration_months, 1)');
+    expect(sqlText).toContain("coi.duration_unit = 'na'");
+    expect(sqlText).toContain("co.discount_type = 'currency'");
+    expect(result.activitySummary[0]).toMatchObject({
+      clientId: 'c1',
+      offersCount: 2,
+      offersNet: 840,
+    });
   });
 
   test('orders/invoices/timesheets activity rows are mapped per-client', async () => {
@@ -179,6 +216,8 @@ describe('getClientsSection', () => {
         clientId: 'c1',
         quotesCount: null,
         quotesNet: null,
+        offersCount: null,
+        offersNet: null,
         ordersCount: 3,
         ordersNet: 750,
         invoicesCount: 4,
@@ -237,6 +276,8 @@ describe('getClientsSection', () => {
       clientId: 'c1',
       quotesCount: null,
       quotesNet: null,
+      offersCount: null,
+      offersNet: null,
       ordersCount: null,
       ordersNet: null,
       invoicesCount: null,
