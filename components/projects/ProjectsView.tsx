@@ -1316,13 +1316,14 @@ const ProjectClientOrderFields: React.FC<{ controller: ProjectsController }> = (
     )}
     {controller.isInternalProject ? (
       <Field>
-        <div className="flex w-fit items-center gap-1">
+        <div className="relative w-fit">
           <FieldLabel htmlFor="project-client" required>
             {controller.t('projects:projects.client')}
           </FieldLabel>
           <FieldTooltip
             description={controller.t('projects:projects.internalClientHint')}
             icon="info"
+            className="absolute top-1/2 left-full ml-1 -translate-y-1/2"
           />
         </div>
         <output

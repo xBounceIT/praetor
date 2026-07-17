@@ -152,6 +152,7 @@ describe('ProjectsView create-form validation', () => {
     expect(source).toContain("t('projects:projects.internalClientHint')");
     expect(source).toContain('<FieldTooltip');
     expect(source).toContain('icon="info"');
+    expect(source).toContain('className="absolute top-1/2 left-full ml-1 -translate-y-1/2"');
     expect(source).not.toContain(
       "<FieldDescription>{controller.t('projects:projects.internalClientHint')}",
     );
