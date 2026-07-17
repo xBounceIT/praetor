@@ -1612,7 +1612,10 @@ const ProjectsTabs: React.FC<{ controller: ProjectsController }> = ({ controller
     onValueChange={controller.handleTabChange}
     className="space-y-6"
   >
-    <TabsList variant="line" className="w-full justify-start overflow-x-auto border-b px-0">
+    <TabsList
+      variant="line"
+      className="w-full justify-start overflow-x-auto overflow-y-hidden border-b px-0"
+    >
       {controller.canViewCommissions && (
         <TabsTrigger value="commissions" className="flex-none rounded-none pb-3">
           <Folder className="size-4" aria-hidden="true" />

@@ -25,6 +25,16 @@ describe('ProjectsView (create-only dialog after detail-page revamp)', () => {
     expect(source).toContain('<TasksView');
   });
 
+  test('keeps the commissions tab bar horizontally scrollable without vertical overflow', async () => {
+    const source = await Bun.file(
+      new URL('../../../components/projects/ProjectsView.tsx', import.meta.url),
+    ).text();
+
+    expect(source).toContain(
+      'className="w-full justify-start overflow-x-auto overflow-y-hidden border-b px-0"',
+    );
+  });
+
   test('loads project progress hours only for the commissions tab', async () => {
     const source = await Bun.file(
       new URL('../../../components/projects/ProjectsView.tsx', import.meta.url),
