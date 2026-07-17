@@ -62,7 +62,7 @@ A single response can include up to seven visualizations when multiple charts ma
 
 In responses with multiple visualizations, each short interpretation appears immediately before its matching chart. During generation, completed charts appear progressively one at a time, while the chart still being built remains represented by a placeholder.
 
-Point at the chart or use keyboard navigation to read values, use the legend when several series are present, and press **Show data** to open the accessible table behind the visualization. Colors and surfaces automatically adapt to the light or dark theme.
+Point at the chart or use keyboard navigation to read values, use the legend when several series are present, and press **Show data** to open the accessible table behind the visualization. **Copy PNG** places the heading, chart, and legend on the clipboard, ready to paste into a document or message. Colors and surfaces automatically adapt to the light or dark theme.
 
 Visualizations use only data included in the conversation's authorized dataset. Praetor validates the structure, size, and values before rendering and safely discards an invalid specification; charts remain a visual aid, so verify important figures against their original sources.
 

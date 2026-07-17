@@ -125,6 +125,7 @@ describe('<AiReportingView /> shadcn workspace', () => {
   test('renders validated AI tool output with shadcn chart and data-table primitives', async () => {
     const viewSource = await readComponentSource('reports/AiReportingView.tsx');
     const visualizationSource = await readComponentSource('reports/AiReportingVisualization.tsx');
+    const presentationSource = await readComponentSource('reports/aiReportingChartPresentation.ts');
 
     expectSourceContainsAll(viewSource, [
       'parseAiReportingVisualizations',
@@ -138,14 +139,22 @@ describe('<AiReportingView /> shadcn workspace', () => {
       '<ChartLegendContent',
       '<Collapsible',
       '<Table',
-      'var(--chart-1)',
+      'copyElementAsPng',
+      'data-export-exclude',
+      'fill={getBarPointColor(index)}',
+      'flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between',
+      'getCircularTooltipLabel(item.payload, visualization.xKey)',
+      'shape={visualization.series.length === 1 ? DistinctBarShape : undefined}',
+      'sm:shrink-0',
       'bg-card',
       'text-foreground',
     ]);
+    expectSourceContainsAll(presentationSource, ['var(--chart-1)', 'color-mix(in oklch']);
     expectSourceOmitsAll(visualizationSource, [
       '<button',
       '<table',
       '<svg',
+      '...rectangleProps',
       'bg-white',
       'text-zinc',
       'border-zinc',
