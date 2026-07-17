@@ -340,6 +340,24 @@ const makeCreateTimeEntryArgs = (task: string) => ({
   task,
   duration: 1,
 });
+const FULL_PROJECT = {
+  id: 'p1',
+  name: 'Project One',
+  clientId: 'c1',
+  description: 'Advanced description',
+  isDisabled: false,
+  createdAt: 1_700_000_000_000,
+  orderId: 'co-1',
+  offerId: 'of-1',
+  startDate: '2026-01-01',
+  endDate: '2026-12-31',
+  revenue: 12_000,
+  billingType: 'retainer',
+  billingFrequency: 'monthly',
+  status: 'in_corso',
+  tipo: 'attivo',
+  tipoConfirmed: true,
+};
 
 const expectOneBulkSuccessAndOneFailure = (summary: unknown) => {
   expect(summary).toEqual({ requested: 2, succeeded: 1, failed: 1 });
@@ -393,6 +411,52 @@ describe('/api/mcp', () => {
       { id: 'c1', name: 'Client One', description: null },
     ]);
     expect(clientsListMock).toHaveBeenCalledWith({ canViewAllClients: false, userId: 'u1' });
+  });
+
+  test('redacts advanced project data for list-only MCP users', async () => {
+    currentPermissions = ['projects.manage.view'];
+    projectsListForUserMock.mockResolvedValue([FULL_PROJECT]);
+
+    const projectsRes = await rpc({
+      jsonrpc: '2.0',
+      id: 31,
+      method: 'tools/call',
+      params: { name: 'praetor_list_projects', arguments: {} },
+    });
+
+    expect(projectsRes.statusCode).toBe(200);
+    const projectsBody = parseMcpBody(projectsRes.body);
+    const [project] = projectsBody.result.structuredContent.projects;
+    expect(project).toMatchObject({
+      id: FULL_PROJECT.id,
+      name: FULL_PROJECT.name,
+      clientId: FULL_PROJECT.clientId,
+      description: FULL_PROJECT.description,
+      billingType: FULL_PROJECT.billingType,
+      status: FULL_PROJECT.status,
+    });
+    expect(project).not.toHaveProperty('orderId');
+    expect(project).not.toHaveProperty('offerId');
+    expect(project).not.toHaveProperty('revenue');
+    expect(project).not.toHaveProperty('tipoConfirmed');
+  });
+
+  test('keeps the complete MCP project payload for manage_all advanced-data viewers', async () => {
+    currentPermissions = ['projects.manage_all.view', 'projects.details.view'];
+    projectsListAllMock.mockResolvedValue([FULL_PROJECT]);
+
+    const projectsRes = await rpc({
+      jsonrpc: '2.0',
+      id: 32,
+      method: 'tools/call',
+      params: { name: 'praetor_list_projects', arguments: {} },
+    });
+
+    expect(projectsRes.statusCode).toBe(200);
+    const projectsBody = parseMcpBody(projectsRes.body);
+    expect(projectsBody.result.structuredContent.projects).toEqual([FULL_PROJECT]);
+    expect(projectsListAllMock).toHaveBeenCalledTimes(1);
+    expect(projectsListForUserMock).not.toHaveBeenCalled();
   });
 
   test('returns multiple supplier contacts through the supplier list tool', async () => {

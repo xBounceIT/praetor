@@ -11160,12 +11160,15 @@
                       "id",
                       "name",
                       "clientId",
+                      "description",
                       "isDisabled",
+                      "createdAt",
+                      "startDate",
+                      "endDate",
                       "billingType",
                       "billingFrequency",
                       "status",
-                      "tipo",
-                      "tipoConfirmed"
+                      "tipo"
                     ]
                   }
                 }
@@ -11507,12 +11510,15 @@
                     "id",
                     "name",
                     "clientId",
+                    "description",
                     "isDisabled",
+                    "createdAt",
+                    "startDate",
+                    "endDate",
                     "billingType",
                     "billingFrequency",
                     "status",
-                    "tipo",
-                    "tipoConfirmed"
+                    "tipo"
                   ]
                 }
               }
@@ -12045,6 +12051,279 @@
       }
     },
     "/api/projects/{id}": {
+      "get": {
+        "summary": "Get project details",
+        "tags": [
+          "projects"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "clientId": {
+                      "type": "string"
+                    },
+                    "description": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "isDisabled": {
+                      "type": "boolean"
+                    },
+                    "createdAt": {
+                      "type": "number"
+                    },
+                    "orderId": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "offerId": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "startDate": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "endDate": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "revenue": {
+                      "type": [
+                        "null",
+                        "number"
+                      ]
+                    },
+                    "billingType": {
+                      "type": "string",
+                      "enum": [
+                        "retainer",
+                        "time_and_materials",
+                        "mixed"
+                      ]
+                    },
+                    "billingFrequency": {
+                      "type": "string",
+                      "enum": [
+                        "monthly",
+                        "one_time"
+                      ]
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "da_fare",
+                        "in_corso",
+                        "in_pausa",
+                        "terminato"
+                      ]
+                    },
+                    "tipo": {
+                      "type": "string",
+                      "enum": [
+                        "attivo",
+                        "passivo"
+                      ]
+                    },
+                    "tipoConfirmed": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "clientId",
+                    "isDisabled",
+                    "billingType",
+                    "billingFrequency",
+                    "status",
+                    "tipo",
+                    "tipoConfirmed"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
       "delete": {
         "summary": "Delete project",
         "tags": [
@@ -12392,12 +12671,15 @@
                     "id",
                     "name",
                     "clientId",
+                    "description",
                     "isDisabled",
+                    "createdAt",
+                    "startDate",
+                    "endDate",
                     "billingType",
                     "billingFrequency",
                     "status",
-                    "tipo",
-                    "tipoConfirmed"
+                    "tipo"
                   ]
                 }
               }

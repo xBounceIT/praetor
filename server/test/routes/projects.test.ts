@@ -191,6 +191,7 @@ const MANAGE_PERMS = [
   'projects.manage.update',
   'projects.manage.delete',
   'projects.manage_all.view',
+  'projects.details.view',
   'projects.tasks.view',
   'projects.assignments.update',
 ];
@@ -214,6 +215,12 @@ const SAMPLE_PROJECT = {
   status: 'in_corso',
   tipo: 'attivo',
   tipoConfirmed: true,
+};
+
+const expectProjectDetailsRedacted = (project: Record<string, unknown>) => {
+  for (const field of ['orderId', 'offerId', 'revenue', 'tipoConfirmed']) {
+    expect(project).not.toHaveProperty(field);
+  }
 };
 
 const VALID_CREATE_PAYLOAD = {
@@ -321,6 +328,7 @@ describe('GET /api/projects', () => {
     expect(res.statusCode).toBe(200);
     expect(listAllMock).toHaveBeenCalledTimes(1);
     expect(listForUserMock).not.toHaveBeenCalled();
+    expect(res.json() as (typeof SAMPLE_PROJECT)[]).toEqual([SAMPLE_PROJECT]);
   });
 
   test('200: without manage_all → listForUser(viewer.id)', async () => {
@@ -336,6 +344,33 @@ describe('GET /api/projects', () => {
     expect(res.statusCode).toBe(200);
     expect(listForUserMock).toHaveBeenCalledWith('u1');
     expect(listAllMock).not.toHaveBeenCalled();
+  });
+
+  test('200: list-only viewers receive the current table fields without advanced data', async () => {
+    getRolePermissionsMock.mockResolvedValue(USER_PERMS);
+    listForUserMock.mockResolvedValue([SAMPLE_PROJECT]);
+
+    const res = await testApp.inject({
+      method: 'GET',
+      url: '/api/projects',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    const [project] = res.json() as Array<Record<string, unknown>>;
+    expect(project).toMatchObject({
+      id: SAMPLE_PROJECT.id,
+      name: SAMPLE_PROJECT.name,
+      clientId: SAMPLE_PROJECT.clientId,
+      description: SAMPLE_PROJECT.description,
+      startDate: SAMPLE_PROJECT.startDate,
+      endDate: SAMPLE_PROJECT.endDate,
+      billingType: SAMPLE_PROJECT.billingType,
+      billingFrequency: SAMPLE_PROJECT.billingFrequency,
+      status: SAMPLE_PROJECT.status,
+      tipo: SAMPLE_PROJECT.tipo,
+    });
+    expectProjectDetailsRedacted(project);
   });
 
   test('200: RIL viewer can list scoped projects for RIL order codes', async () => {
@@ -369,6 +404,43 @@ describe('GET /api/projects', () => {
     expect(listAllMock).not.toHaveBeenCalled();
   });
 
+  test('200: redacts target-user projects without manage_all even with detail access', async () => {
+    getRolePermissionsMock.mockResolvedValue([
+      'projects.manage.view',
+      'projects.details.view',
+      'timesheets.tracker_all.view',
+    ]);
+    listForUserMock.mockResolvedValue([SAMPLE_PROJECT]);
+
+    const res = await testApp.inject({
+      method: 'GET',
+      url: '/api/projects?userId=u2',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(isUserManagedByMock).not.toHaveBeenCalled();
+    expect(listForUserMock).toHaveBeenCalledWith('u2');
+    const [project] = res.json() as Array<Record<string, unknown>>;
+    expectProjectDetailsRedacted(project);
+  });
+
+  test('200: manage_all detail viewers receive full target-user projects', async () => {
+    getRolePermissionsMock.mockResolvedValue(['projects.manage_all.view', 'projects.details.view']);
+    listForUserMock.mockResolvedValue([SAMPLE_PROJECT]);
+
+    const res = await testApp.inject({
+      method: 'GET',
+      url: '/api/projects?userId=u2',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(isUserManagedByMock).not.toHaveBeenCalled();
+    expect(listForUserMock).toHaveBeenCalledWith('u2');
+    expect(res.json() as (typeof SAMPLE_PROJECT)[]).toEqual([SAMPLE_PROJECT]);
+  });
+
   test('403: RIL viewer cannot list projects for an unmanaged user', async () => {
     getRolePermissionsMock.mockResolvedValue(['timesheets.ril.view']);
     isUserManagedByMock.mockResolvedValue(false);
@@ -400,6 +472,77 @@ describe('GET /api/projects', () => {
     });
 
     expect(res.statusCode).toBe(403);
+  });
+});
+
+describe('GET /api/projects/:id', () => {
+  test('200: returns full details for an assigned scoped viewer', async () => {
+    getRolePermissionsMock.mockResolvedValue(['projects.manage.view', 'projects.details.view']);
+    findByIdMock.mockResolvedValue(SAMPLE_PROJECT);
+
+    const res = await testApp.inject({
+      method: 'GET',
+      url: '/api/projects/p-1',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json() as typeof SAMPLE_PROJECT).toEqual(SAMPLE_PROJECT);
+    expect(isProjectAssignedToUserMock).toHaveBeenCalledWith('u1', 'p-1');
+  });
+
+  test('200: manage_all viewers bypass the assignment lookup', async () => {
+    getRolePermissionsMock.mockResolvedValue(['projects.manage_all.view', 'projects.details.view']);
+    isProjectAssignedToUserMock.mockResolvedValue(false);
+    findByIdMock.mockResolvedValue(SAMPLE_PROJECT);
+
+    const res = await testApp.inject({
+      method: 'GET',
+      url: '/api/projects/p-1',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(isProjectAssignedToUserMock).not.toHaveBeenCalled();
+  });
+
+  test('403: rejects project viewers without the advanced-data permission', async () => {
+    getRolePermissionsMock.mockResolvedValue(['projects.manage.view']);
+
+    const res = await testApp.inject({
+      method: 'GET',
+      url: '/api/projects/p-1',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(findByIdMock).not.toHaveBeenCalled();
+  });
+
+  test('403: rejects scoped viewers when the project is not assigned', async () => {
+    getRolePermissionsMock.mockResolvedValue(['projects.manage.view', 'projects.details.view']);
+    isProjectAssignedToUserMock.mockResolvedValue(false);
+
+    const res = await testApp.inject({
+      method: 'GET',
+      url: '/api/projects/p-1',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(findByIdMock).not.toHaveBeenCalled();
+  });
+
+  test('404: returns not found when an in-scope project does not exist', async () => {
+    findByIdMock.mockResolvedValue(null);
+
+    const res = await testApp.inject({
+      method: 'GET',
+      url: '/api/projects/missing',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(404);
   });
 });
 
@@ -621,6 +764,28 @@ describe('POST /api/projects', () => {
     expect(logAuditMock).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'project.created', entityType: 'project' }),
     );
+  });
+
+  test('201: redacts advanced fields for creators without detail access', async () => {
+    getRolePermissionsMock.mockResolvedValue(['projects.manage.create']);
+    createMock.mockResolvedValue({
+      ...SAMPLE_PROJECT,
+      orderId: 'co-1',
+      offerId: 'of-1',
+      revenue: 12345.5,
+    });
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/projects',
+      headers: authHeader(),
+      payload: VALID_CREATE_PAYLOAD,
+    });
+
+    expect(res.statusCode).toBe(201);
+    const project = res.json() as Record<string, unknown>;
+    expect(project).toMatchObject({ id: 'p-1', name: 'Website', tipo: 'attivo' });
+    expectProjectDetailsRedacted(project);
   });
 
   test('201: accepts an explicitly null description', async () => {
@@ -1262,6 +1427,30 @@ describe('PUT /api/projects/:id', () => {
     expect(logAuditMock).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'project.updated' }),
     );
+  });
+
+  test('200: redacts advanced fields for updaters without detail access', async () => {
+    getRolePermissionsMock.mockResolvedValue(['projects.manage.update']);
+    lockClientIdByIdMock.mockResolvedValue('c-1');
+    updateMock.mockResolvedValue({
+      ...SAMPLE_PROJECT,
+      name: 'Renamed',
+      orderId: 'co-1',
+      offerId: 'of-1',
+      revenue: 12345.5,
+    });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/projects/p-1',
+      headers: authHeader(),
+      payload: { name: 'Renamed' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const project = res.json() as Record<string, unknown>;
+    expect(project).toMatchObject({ id: 'p-1', name: 'Renamed', tipo: 'attivo' });
+    expectProjectDetailsRedacted(project);
   });
 
   test('200: clears the description when explicitly set to null', async () => {

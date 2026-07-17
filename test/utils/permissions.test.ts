@@ -5,6 +5,7 @@ import {
   buildPermission,
   buildPermissions,
   CONFIGURATION_PERMISSIONS,
+  canViewProjectDetails,
   formatPermissionLabel,
   hasAnyPermission,
   hasPermission,
@@ -51,6 +52,7 @@ describe('PERMISSION_DEFINITIONS / ALL_PERMISSIONS', () => {
     expect(ALL_PERMISSIONS).toContain('projects.rules.create');
     expect(ALL_PERMISSIONS).toContain('projects.rules.update');
     expect(ALL_PERMISSIONS).toContain('projects.rules.delete');
+    expect(ALL_PERMISSIONS).toContain('projects.details.view');
     expect(ALL_PERMISSIONS).toContain('projects.resales.view');
     expect(ALL_PERMISSIONS).toContain('projects.resales.create');
     expect(ALL_PERMISSIONS).toContain('projects.resales.update');
@@ -255,6 +257,23 @@ describe('hasViewAccess', () => {
   test('gates project resales behind the dedicated resale view permission', () => {
     expect(hasViewAccess(['projects.resales.view'], 'projects/resales')).toBe(true);
     expect(hasViewAccess(['projects.manage.view'], 'projects/resales')).toBe(false);
+  });
+
+  test('requires project list and advanced-data permissions for project details', () => {
+    expect(hasViewAccess(['projects.manage.view'], 'projects/detail')).toBe(false);
+    expect(hasViewAccess(['projects.details.view'], 'projects/detail')).toBe(false);
+    expect(
+      hasViewAccess(['projects.manage.view', 'projects.details.view'], 'projects/detail'),
+    ).toBe(true);
+    expect(
+      hasViewAccess(['projects.manage_all.view', 'projects.details.view'], 'projects/detail'),
+    ).toBe(true);
+  });
+
+  test('exposes the same combined project-detail predicate for row navigation', () => {
+    expect(canViewProjectDetails(['projects.manage.view', 'projects.details.view'])).toBe(true);
+    expect(canViewProjectDetails(['projects.manage.view'])).toBe(false);
+    expect(canViewProjectDetails(['projects.details.view'])).toBe(false);
   });
 
   test('allows administration/user-management with either base or all-scope view', () => {

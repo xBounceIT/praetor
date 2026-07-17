@@ -29,6 +29,7 @@ export type KnownPermissionResource =
   | 'accounting.supplier_invoices'
   | 'projects.manage'
   | 'projects.manage_all'
+  | 'projects.details'
   | 'projects.resales'
   | 'projects.tasks'
   | 'projects.tasks_all'
