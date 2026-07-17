@@ -39,6 +39,23 @@ export type Project = {
   tipoConfirmed: boolean;
 };
 
+export type ProjectSummary = Omit<Project, 'orderId' | 'offerId' | 'revenue' | 'tipoConfirmed'>;
+
+export const toProjectSummary = (project: Project): ProjectSummary => ({
+  id: project.id,
+  name: project.name,
+  clientId: project.clientId,
+  description: project.description,
+  isDisabled: project.isDisabled,
+  createdAt: project.createdAt,
+  startDate: project.startDate,
+  endDate: project.endDate,
+  billingType: project.billingType,
+  billingFrequency: project.billingFrequency,
+  status: project.status,
+  tipo: project.tipo,
+});
+
 export type RilProjectCatalogItem = Pick<Project, 'id' | 'name' | 'orderId'>;
 
 const mapRow = (row: typeof projects.$inferSelect): Project => ({

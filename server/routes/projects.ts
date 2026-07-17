@@ -27,7 +27,11 @@ import {
 } from '../utils/billing.ts';
 import { ForeignKeyError, NotFoundError } from '../utils/http-errors.ts';
 import { generatePrefixedId } from '../utils/order-ids.ts';
-import { requestHasPermission as hasPermission, makeAccessChecker } from '../utils/permissions.ts';
+import {
+  canViewProjectDetails,
+  requestHasPermission as hasPermission,
+  makeAccessChecker,
+} from '../utils/permissions.ts';
 import { PROJECT_STATUSES } from '../utils/projectStatus.ts';
 import { PROJECT_TIPOS } from '../utils/projectTipo.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
@@ -98,6 +102,24 @@ const projectSchema = {
     'status',
     'tipo',
     'tipoConfirmed',
+  ],
+} as const;
+
+const projectListItemSchema = {
+  ...projectSchema,
+  required: [
+    'id',
+    'name',
+    'clientId',
+    'description',
+    'isDisabled',
+    'createdAt',
+    'startDate',
+    'endDate',
+    'billingType',
+    'billingFrequency',
+    'status',
+    'tipo',
   ],
 } as const;
 
@@ -219,7 +241,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         summary: 'List projects',
         querystring: projectsListQuerySchema,
         response: {
-          200: { type: 'array', items: projectSchema },
+          200: { type: 'array', items: projectListItemSchema },
           ...standardRateLimitedErrorResponses,
         },
       },
@@ -227,20 +249,25 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       if (!assertAuthenticated(request, reply)) return;
 
-      const canViewAll = hasPermission(request, 'projects.manage_all.view');
       const query = request.query as { userId?: unknown };
       const targetUserIdResult = optionalNonEmptyString(query.userId, 'userId');
       if (!targetUserIdResult.ok) return badRequest(reply, targetUserIdResult.message);
 
       const targetUserId = targetUserIdResult.value;
-      if (targetUserId) {
-        if (!(await canListProjectsForTargetUser(request, targetUserId))) {
-          return forbidden(reply, 'Insufficient permissions');
-        }
-        return projectsRepo.listForUser(targetUserId);
+      if (targetUserId && !(await canListProjectsForTargetUser(request, targetUserId))) {
+        return forbidden(reply, 'Insufficient permissions');
       }
 
-      return canViewAll ? projectsRepo.listAll() : projectsRepo.listForUser(request.user.id);
+      const canViewAll = hasPermission(request, 'projects.manage_all.view');
+      const visibleProjects = targetUserId
+        ? await projectsRepo.listForUser(targetUserId)
+        : canViewAll
+          ? await projectsRepo.listAll()
+          : await projectsRepo.listForUser(request.user.id);
+
+      return canViewProjectDetails(request.user.permissions)
+        ? visibleProjects
+        : visibleProjects.map(projectsRepo.toProjectSummary);
     },
   );
 
@@ -323,6 +350,58 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         options.map((order) => order.clientId),
       );
       return options.filter((order) => assignedClientIds.has(order.clientId));
+    },
+  );
+
+  // GET /:id - Load the advanced project detail payload
+  fastify.get(
+    '/:id',
+    {
+      onRequest: [
+        fastify.rateLimit(STANDARD_ROUTE_RATE_LIMIT),
+        authenticateToken,
+        requireScopedPermission('projects.manage', 'view'),
+        requirePermission('projects.details.view'),
+      ],
+      schema: {
+        tags: ['projects'],
+        summary: 'Get project details',
+        params: idParamSchema,
+        response: {
+          200: projectSchema,
+          ...standardRateLimitedErrorResponses,
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      if (!assertAuthenticated(request, reply)) return;
+
+      const { id } = request.params as { id: string };
+      const idResult = requireNonEmptyString(id, 'id');
+      if (!idResult.ok) return badRequest(reply, idResult.message);
+
+      if (!(await canAccessProject(request, idResult.value))) {
+        return replyError(request, reply, {
+          statusCode: 403,
+          message: 'Insufficient permissions',
+          action: 'project.detail_view.denied',
+          entityType: 'project',
+          entityId: idResult.value,
+          details: { secondaryLabel: 'project_access_denied' },
+        });
+      }
+
+      const project = await projectsRepo.findById(idResult.value);
+      if (!project) {
+        return replyError(request, reply, {
+          statusCode: 404,
+          message: 'Project not found',
+          action: 'project.detail_view.not_found',
+          entityType: 'project',
+          entityId: idResult.value,
+        });
+      }
+      return project;
     },
   );
 

@@ -15,6 +15,8 @@ Le righe di permesso con ambito **All** concedono accesso trasversale a tutti i 
 
 Il permesso `timesheets.expired_projects.create` abilita la registrazione di ore su progetti scaduti. I ruoli di sistema **Manager** e **Top Manager** lo ricevono per impostazione predefinita; per gli altri ruoli assegnalo solo quando è necessario consentire consuntivazioni tardive o rettifiche operative su progetti già conclusi.
 
+Il permesso di sola lettura `projects.details.view` separa l'archivio commesse dai dati avanzati della singola commessa. Per aprire il dettaglio servono anche `projects.manage.view` o `projects.manage_all.view`; Manager e Top Manager ricevono il nuovo permesso per impostazione predefinita, mentre User e Admin no. I ruoli personalizzati possono riceverlo manualmente.
+
 Il ruolo di sistema **Top Manager** include tutti i permessi Competence Center, compreso l'ambito **All** per visualizzare, creare, aggiornare ed eliminare. Gli altri ruoli non possono ricevere permessi Competence Center.
 
 Quando modifichi un ruolo, considera l'impatto su tutti gli utenti assegnati. Praetor impedisce l'eliminazione di un ruolo ancora assegnato a un utente, sia come ruolo principale sia come ruolo aggiuntivo. Dopo modifiche importanti, verifica l'accesso con un profilo di prova o con un utente rappresentativo.

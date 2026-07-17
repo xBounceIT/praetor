@@ -58,6 +58,7 @@ export const PERMISSION_DEFINITIONS: PermissionDefinition[] = [
   // Projects
   { id: 'projects.manage', actions: CRUD, module: 'projects' },
   { id: 'projects.manage_all', actions: CRUD, isScope: true, module: 'projects' },
+  { id: 'projects.details', actions: VIEW_ONLY, module: 'projects' },
   { id: 'projects.resales', actions: CRUD, module: 'projects' },
   { id: 'projects.tasks', actions: CRUD, module: 'projects' },
   { id: 'projects.tasks_all', actions: CRUD, isScope: true, module: 'projects' },
@@ -171,6 +172,9 @@ export const hasScopedActionPermission = (
   resource: PermissionResource,
   action: PermissionAction,
 ) => hasAnyPermission(permissions, equivalentPermissionsFor(resource, action));
+export const canViewProjectDetails = (permissions: Permission[] | undefined) =>
+  hasScopedActionPermission(permissions, 'projects.manage', 'view') &&
+  hasPermission(permissions, buildPermission('projects.details', 'view'));
 
 export const VIEW_PERMISSION_MAP: Record<View, Permission> = {
   'timesheets/tracker': buildPermission('timesheets.tracker', 'view'),
@@ -194,7 +198,7 @@ export const VIEW_PERMISSION_MAP: Record<View, Permission> = {
   'accounting/supplier-orders': buildPermission('accounting.supplier_orders', 'view'),
   'accounting/supplier-invoices': buildPermission('accounting.supplier_invoices', 'view'),
   'projects/manage': buildPermission('projects.manage', 'view'),
-  'projects/detail': buildPermission('projects.manage', 'view'),
+  'projects/detail': buildPermission('projects.details', 'view'),
   'projects/resales': buildPermission('projects.resales', 'view'),
   'projects/tasks': buildPermission('projects.tasks', 'view'),
   'hr/internal': buildPermission('hr.internal', 'view'),
@@ -219,7 +223,9 @@ const VIEW_PERMISSION_OPTIONS: Record<View, Permission[]> = Object.fromEntries(
 ) as Record<View, Permission[]>;
 
 export const hasViewAccess = (permissions: Permission[] | undefined, view: View) =>
-  hasAnyPermission(permissions, VIEW_PERMISSION_OPTIONS[view] ?? []);
+  view === 'projects/detail'
+    ? canViewProjectDetails(permissions)
+    : hasAnyPermission(permissions, VIEW_PERMISSION_OPTIONS[view] ?? []);
 
 export const getDefaultViewForPermissions = (
   permissions: Permission[] | undefined,
