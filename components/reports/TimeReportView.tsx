@@ -250,13 +250,15 @@ const TimeReportView = ({
     updateDefinition({ periodPreset: preset, ...periodRange(preset, startOfWeek) });
   };
 
-  const visibleProjects = useMemo(
-    () =>
-      options?.projects.filter(
-        (project) => definition.clientId === null || project.clientId === definition.clientId,
-      ) ?? [],
-    [definition.clientId, options],
-  );
+  const visibleProjects = useMemo(() => {
+    const seenProjectIds = new Set<string>();
+    return (options?.projects ?? []).filter((project) => {
+      if (definition.clientId !== null && project.clientId !== definition.clientId) return false;
+      if (seenProjectIds.has(project.id)) return false;
+      seenProjectIds.add(project.id);
+      return true;
+    });
+  }, [definition.clientId, options]);
 
   const visibleTasks = useMemo(() => {
     const visibleProjectIds =
@@ -274,7 +276,7 @@ const TimeReportView = ({
         .filter((project) => clientId === null || project.clientId === clientId)
         .map((project) => project.id) ?? [],
     );
-    const projectIds = definition.projectIds.filter((id) => allowedProjects.has(id));
+    const projectIds = definition.projectIds.filter((id) => allowedProjects.has(id)).slice(0, 1);
     updateDefinition({
       clientId,
       projectIds,
@@ -284,11 +286,13 @@ const TimeReportView = ({
   };
 
   const handleProjectChange = (value: string | string[]) => {
-    if (!Array.isArray(value)) return;
+    if (Array.isArray(value)) return;
+    const projectIds = value ? [value] : [];
     updateDefinition({
-      projectIds: value,
+      projectIds,
       task:
-        definition.task && (value.length === 0 || value.includes(definition.task.projectId))
+        definition.task &&
+        (projectIds.length === 0 || projectIds.includes(definition.task.projectId))
           ? definition.task
           : null,
     });
@@ -719,15 +723,14 @@ const TimeReportView = ({
               value={definition.clientId ?? ''}
               onChange={handleClientChange}
               label={t('timeReport.filters.client')}
+              searchable
             />
             <SelectControl
-              options={visibleProjects}
-              value={definition.projectIds}
+              options={[{ id: '', name: t('timeReport.filters.allProjects') }, ...visibleProjects]}
+              value={definition.projectIds[0] ?? ''}
               onChange={handleProjectChange}
               label={t('timeReport.filters.projects')}
-              placeholder={t('timeReport.filters.allProjects')}
               searchable
-              isMulti
             />
             <SelectControl
               options={[

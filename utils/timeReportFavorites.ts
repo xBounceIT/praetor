@@ -23,7 +23,7 @@ export const sanitizeTimeReportFavorite = (
       .filter((project) => clientId === null || project.clientId === clientId)
       .map((project) => project.id),
   );
-  const projectIds = saved.projectIds.filter((id) => eligibleProjectIds.has(id));
+  const projectIds = saved.projectIds.filter((id) => eligibleProjectIds.has(id)).slice(0, 1);
   const visibleTasks = new Set(
     options.tasks
       .filter(

@@ -113,4 +113,31 @@ describe('sanitizeTimeReportFavorite', () => {
 
     expect(sanitized.task).toEqual(legacySaved.task);
   });
+
+  test('reduces legacy multi-project favorites to one project and its tasks', () => {
+    const options: TimeReportOptions = {
+      editableUserIds: [],
+      users: [{ id: 'user-1', name: 'Current user' }],
+      clients: [],
+      projects: [
+        { id: 'project-1', name: 'Project 1', clientId: 'client-1' },
+        { id: 'project-2', name: 'Project 2', clientId: 'client-1' },
+      ],
+      tasks: [{ key: 'task-2', projectId: 'project-2', taskId: 'task-2', name: 'Task 2' }],
+    };
+    const legacySaved: TimeReportDefinition = {
+      ...saved,
+      projectIds: ['project-1', 'project-2'],
+      task: { projectId: 'project-2', taskId: 'task-2', name: 'Task 2' },
+    };
+
+    const sanitized = sanitizeTimeReportFavorite(legacySaved, options, {
+      canSelectUsers: false,
+      canViewCost: false,
+      currentUserId: 'user-1',
+    });
+
+    expect(sanitized.projectIds).toEqual(['project-1']);
+    expect(sanitized.task).toBeNull();
+  });
 });

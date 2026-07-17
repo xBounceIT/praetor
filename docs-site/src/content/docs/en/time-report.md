@@ -9,7 +9,9 @@ The **Reporting > Report** page builds tables from Time Tracker entries. The cur
 
 ## Filters and fields
 
-Choose a relative period (today, yesterday, current/previous week, month, or year) or a custom range. You can filter by one client, multiple projects, one task, and text contained in notes. Start and end dates are inclusive.
+Choose a relative period (today, yesterday, current/previous week, month, or year) or a custom range. You can filter by one client, one project, one task, and text contained in notes. Client, project, and task controls are searchable and include an option that leaves the corresponding filter unrestricted. Start and end dates are inclusive.
+
+Client, project, and task filters include both items assigned to users in the visible report scope and values found in their historical entries. You can therefore select an assigned item before its first time entry while retaining access to data for items that are no longer assigned. If a project is moved to another client, its historical client-project pair remains available under the original client.
 
 Date is always shown. You can add or remove user, client, project, task, duration, note, and cost. Cost is available only with `reports.cost.view` and uses the historical hourly cost stored on each entry.
 

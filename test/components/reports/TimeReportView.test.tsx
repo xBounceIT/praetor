@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, mock } from 'bun:test';
-import { act, fireEvent, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import TimeReportView, {
   type TimeReportViewProps,
@@ -211,6 +211,54 @@ describe('TimeReportView', () => {
     await screen.findByText('timeReport.filters.title');
     expect(screen.getByText('timeReport.filters.users')).toBeTruthy();
     expect(screen.getByText('timeReport.columns.cost')).toBeTruthy();
+  });
+  test('searches clients and limits the project filter to all or one project', async () => {
+    const user = userEvent.setup();
+    optionsMock.mockResolvedValue({
+      editableUserIds: ['u1'],
+      users: [{ id: 'u1', name: 'Alice' }],
+      clients: [
+        { id: 'c1', name: 'Acme' },
+        { id: 'c2', name: 'Beta' },
+      ],
+      projects: [
+        { id: 'p1', name: 'Migration', clientId: 'c1' },
+        { id: 'p1', name: 'Migration', clientId: 'c2' },
+        { id: 'p2', name: 'Portal', clientId: 'c2' },
+      ],
+      tasks: [],
+    });
+    renderView(['reports.time_report.view']);
+
+    await user.click(await screen.findByRole('button', { name: 'timeReport.filters.allProjects' }));
+    const projectDialog = screen.getByRole('dialog');
+    expect(within(projectDialog).getAllByText('Migration')).toHaveLength(1);
+    await user.click(within(projectDialog).getByText('timeReport.filters.allProjects'));
+
+    await user.click(await screen.findByRole('button', { name: 'timeReport.filters.allClients' }));
+    await user.type(screen.getByPlaceholderText('select.search'), 'beta');
+    expect(screen.queryByText('Acme')).toBeNull();
+    await user.click(screen.getByText('Beta'));
+
+    await user.click(screen.getByRole('button', { name: 'timeReport.filters.allProjects' }));
+    expect(screen.queryByRole('button', { name: 'select.selectAll' })).toBeNull();
+    await user.click(screen.getByText('Migration'));
+    await user.click(screen.getByRole('button', { name: 'Migration' }));
+    await user.click(screen.getByText('Portal'));
+    await user.click(screen.getByText('timeReport.actions.generate'));
+
+    await waitFor(() => expect(generateMock).toHaveBeenCalledTimes(1));
+    expect(generateMock.mock.calls[0]?.[0]).toMatchObject({
+      clientId: 'c2',
+      projectIds: ['p2'],
+    });
+
+    await user.click(screen.getByRole('button', { name: 'Portal' }));
+    await user.click(screen.getByText('timeReport.filters.allProjects'));
+    await user.click(screen.getByText('timeReport.actions.generate'));
+
+    await waitFor(() => expect(generateMock).toHaveBeenCalledTimes(2));
+    expect(generateMock.mock.calls[1]?.[0]).toMatchObject({ projectIds: [] });
   });
 
   test('shows the edit action in the row actions menu for an owned detail entry', async () => {
