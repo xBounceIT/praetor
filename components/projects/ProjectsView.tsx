@@ -41,6 +41,7 @@ import { formatNumber } from '../../utils/numbers';
 import { buildPermission, hasPermission, hasScopedActionPermission } from '../../utils/permissions';
 import DateField from '../shared/DateField';
 import DeleteConfirmModal from '../shared/DeleteConfirmModal';
+import FieldTooltip from '../shared/FieldTooltip';
 import HeaderAddButton from '../shared/HeaderAddButton';
 import Modal from '../shared/Modal';
 import {
@@ -1315,16 +1316,21 @@ const ProjectClientOrderFields: React.FC<{ controller: ProjectsController }> = (
     )}
     {controller.isInternalProject ? (
       <Field>
-        <FieldLabel htmlFor="project-client">
-          {controller.t('projects:projects.client')} <RequiredMark />
-        </FieldLabel>
+        <div className="flex w-fit items-center gap-1">
+          <FieldLabel htmlFor="project-client" required>
+            {controller.t('projects:projects.client')}
+          </FieldLabel>
+          <FieldTooltip
+            description={controller.t('projects:projects.internalClientHint')}
+            icon="info"
+          />
+        </div>
         <output
           id="project-client"
           className="flex min-h-9 cursor-default select-none items-center rounded-md bg-muted/50 px-3 py-2 text-sm font-medium text-foreground"
         >
           {controller.companyDisplayName}
         </output>
-        <FieldDescription>{controller.t('projects:projects.internalClientHint')}</FieldDescription>
       </Field>
     ) : (
       <div className="space-y-1.5">

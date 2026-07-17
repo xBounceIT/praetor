@@ -94,18 +94,35 @@ describe('<Tooltip />', () => {
   });
 
   test('renders FieldTooltip content with native tooltip primitives', async () => {
-    const { container } = render(
+    render(
       <TooltipProvider>
         <FieldTooltip description="Current field status" status="Active" />
       </TooltipProvider>,
     );
-    const trigger = container.querySelector('span');
-    expect(trigger).toBeInTheDocument();
+    const trigger = screen.getByRole('button', { name: 'Current field status' });
+    expect(trigger).toHaveAttribute('type', 'button');
+    expect(trigger.querySelector('i')).toHaveClass('fa-circle-question');
 
-    await userEvent.hover(trigger as HTMLElement);
+    await userEvent.hover(trigger);
 
     expect(await screen.findByRole('tooltip')).toHaveTextContent('Current field status');
     expect(screen.getByRole('tooltip')).toHaveTextContent('Status: Active');
+  });
+
+  test('renders an info button and omits the status row when status is not provided', async () => {
+    render(
+      <TooltipProvider>
+        <FieldTooltip description="Automatic company" icon="info" />
+      </TooltipProvider>,
+    );
+    const trigger = screen.getByRole('button', { name: 'Automatic company' });
+    expect(trigger.querySelector('i')).toHaveClass('fa-circle-info');
+
+    await userEvent.hover(trigger);
+
+    const tooltip = await screen.findByRole('tooltip');
+    expect(tooltip).toHaveTextContent('Automatic company');
+    expect(tooltip).not.toHaveTextContent('Status:');
   });
 
   test('uses one app-level TooltipProvider instead of wrapping every tooltip root', async () => {

@@ -29,13 +29,7 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from '@/components/ui/empty';
-import {
-  Field,
-  FieldDescription,
-  FieldError,
-  FieldLabel,
-  RequiredMark,
-} from '@/components/ui/field';
+import { Field, FieldError, FieldLabel, RequiredMark } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -70,6 +64,7 @@ import { formatNumber } from '../../utils/numbers';
 import { hasPermission, hasScopedActionPermission } from '../../utils/permissions';
 import DateField from '../shared/DateField';
 import DeleteConfirmModal from '../shared/DeleteConfirmModal';
+import FieldTooltip from '../shared/FieldTooltip';
 import Modal from '../shared/Modal';
 import {
   ModalBody,
@@ -1534,16 +1529,21 @@ const ProjectDetailClientField: React.FC<{ controller: ProjectDetailController }
   if (controller.isInternalProject) {
     return (
       <Field>
-        <FieldLabel htmlFor="detail-client">
-          {controller.t('projects:projects.client')} <RequiredMark />
-        </FieldLabel>
+        <div className="flex w-fit items-center gap-1">
+          <FieldLabel htmlFor="detail-client" required>
+            {controller.t('projects:projects.client')}
+          </FieldLabel>
+          <FieldTooltip
+            description={controller.t('projects:projects.internalClientHint')}
+            icon="info"
+          />
+        </div>
         <output
           id="detail-client"
           className="flex min-h-9 cursor-default select-none items-center rounded-md bg-muted/50 px-3 py-2 text-sm font-medium text-foreground"
         >
           {controller.companyDisplayName}
         </output>
-        <FieldDescription>{controller.t('projects:projects.internalClientHint')}</FieldDescription>
       </Field>
     );
   }

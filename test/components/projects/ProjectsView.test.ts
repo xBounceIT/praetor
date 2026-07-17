@@ -150,6 +150,11 @@ describe('ProjectsView create-form validation', () => {
     expect(source).not.toContain('<Input\n          id="project-client"');
     expect(source).not.toContain('aria-readonly="true"');
     expect(source).toContain("t('projects:projects.internalClientHint')");
+    expect(source).toContain('<FieldTooltip');
+    expect(source).toContain('icon="info"');
+    expect(source).not.toContain(
+      "<FieldDescription>{controller.t('projects:projects.internalClientHint')}",
+    );
     expect(source).toContain("if (nextTipo === 'interno')");
     expect(source).toContain("controller.dispatch({ type: 'setOrderId', value: '' })");
     expect(source).toContain("controller.dispatch({ type: 'setOfferId', value: '' })");

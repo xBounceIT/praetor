@@ -177,6 +177,11 @@ describe('ProjectDetailView wiring', () => {
     expect(source).not.toContain('<Input\n          id="detail-client"');
     expect(source).not.toContain('aria-readonly="true"');
     expect(source).toContain("t('projects:projects.internalClientHint')");
+    expect(source).toContain('<FieldTooltip');
+    expect(source).toContain('icon="info"');
+    expect(source).not.toContain(
+      "<FieldDescription>{controller.t('projects:projects.internalClientHint')}",
+    );
     expect(source).toContain('offerId: isInternalProject ? null : offerId || null,');
     expect(source).toContain("label={t('projects:projects.offerOptionalLabel')}");
     expect(source).toContain("{ id: '', name: t('projects:projects.noOfferLinked') }");
