@@ -11,6 +11,8 @@ La pagina **Reporting > Report** genera tabelle a partire dalle registrazioni de
 
 Puoi scegliere un periodo relativo (oggi, ieri, settimana, mese o anno corrente/precedente) oppure un intervallo personalizzato. Sono disponibili filtri per cliente, più progetti, attività e testo contenuto nelle note. Le date iniziale e finale sono incluse.
 
+I filtri cliente, progetto e attività includono sia gli elementi assegnati agli utenti visibili nel report sia i valori presenti nelle loro registrazioni storiche. Puoi quindi selezionare un elemento assegnato anche prima che sia stata registrata la prima ora, senza perdere la possibilità di consultare dati relativi a elementi non più assegnati.
+
 La data è sempre visibile. Puoi aggiungere o rimuovere utente, cliente, progetto, attività, durata, nota e costo. Il costo appare solo con il permesso `reports.cost.view` ed è calcolato usando il costo orario storico salvato sulla registrazione.
 
 ## Utenti e visibilità

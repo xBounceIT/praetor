@@ -158,36 +158,117 @@ export const listOptions = async (
     ),
     executeRows<{ id: string; name: string }>(
       exec,
-      sql`SELECT DISTINCT ON (te.client_id)
-                  te.client_id AS id, te.client_name AS name
-            FROM time_entries te
-           WHERE te.user_id = ANY(${ids}::text[])
-           ORDER BY te.client_id, te.date DESC, te.created_at DESC NULLS LAST`,
+      sql`SELECT DISTINCT ON (available.id)
+                  available.id, available.name
+            FROM (
+              SELECT c.id,
+                     c.name,
+                     0 AS source_order,
+                     NULL::date AS entry_date,
+                     NULL::timestamp AS entry_created_at
+                FROM (
+                  SELECT uc.client_id AS id
+                    FROM user_clients uc
+                   WHERE uc.user_id = ANY(${ids}::text[])
+                  UNION
+                  SELECT p.client_id AS id
+                    FROM user_projects up
+                    JOIN projects p ON p.id = up.project_id
+                   WHERE up.user_id = ANY(${ids}::text[])
+                  UNION
+                  SELECT p.client_id AS id
+                    FROM user_tasks ut
+                    JOIN tasks t ON t.id = ut.task_id
+                    JOIN projects p ON p.id = t.project_id
+                   WHERE ut.user_id = ANY(${ids}::text[])
+                ) assigned
+                JOIN clients c ON c.id = assigned.id
+              UNION ALL
+              SELECT te.client_id AS id,
+                     te.client_name AS name,
+                     1 AS source_order,
+                     te.date AS entry_date,
+                     te.created_at AS entry_created_at
+                FROM time_entries te
+               WHERE te.user_id = ANY(${ids}::text[])
+            ) available
+           ORDER BY available.id,
+                    available.source_order,
+                    available.entry_date DESC NULLS LAST,
+                    available.entry_created_at DESC NULLS LAST`,
     ),
     executeRows<{ id: string; name: string; clientId: string }>(
       exec,
-      sql`SELECT DISTINCT ON (te.project_id)
-                  te.project_id AS id,
-                  te.project_name AS name,
-                  te.client_id AS "clientId"
-            FROM time_entries te
-           WHERE te.user_id = ANY(${ids}::text[])
-           ORDER BY te.project_id, te.date DESC, te.created_at DESC NULLS LAST`,
+      sql`SELECT DISTINCT ON (available.id)
+                  available.id,
+                  available.name,
+                  available.client_id AS "clientId"
+            FROM (
+              SELECT p.id,
+                     p.name,
+                     p.client_id,
+                     0 AS source_order,
+                     NULL::date AS entry_date,
+                     NULL::timestamp AS entry_created_at
+                FROM (
+                  SELECT up.project_id AS id
+                    FROM user_projects up
+                   WHERE up.user_id = ANY(${ids}::text[])
+                  UNION
+                  SELECT t.project_id AS id
+                    FROM user_tasks ut
+                    JOIN tasks t ON t.id = ut.task_id
+                   WHERE ut.user_id = ANY(${ids}::text[])
+                ) assigned
+                JOIN projects p ON p.id = assigned.id
+              UNION ALL
+              SELECT te.project_id AS id,
+                     te.project_name AS name,
+                     te.client_id,
+                     1 AS source_order,
+                     te.date AS entry_date,
+                     te.created_at AS entry_created_at
+                FROM time_entries te
+               WHERE te.user_id = ANY(${ids}::text[])
+            ) available
+           ORDER BY available.id,
+                    available.source_order,
+                    available.entry_date DESC NULLS LAST,
+                    available.entry_created_at DESC NULLS LAST`,
     ),
     executeRows<{ projectId: string; taskId: string | null; name: string }>(
       exec,
       sql`SELECT DISTINCT ON (
-                  te.project_id,
-                  COALESCE(te.task_id, 'legacy:' || lower(te.task))
-                ) te.project_id AS "projectId",
-                  te.task_id AS "taskId",
-                  te.task AS name
-            FROM time_entries te
-           WHERE te.user_id = ANY(${ids}::text[])
-           ORDER BY te.project_id,
-                    COALESCE(te.task_id, 'legacy:' || lower(te.task)),
-                    te.date DESC,
-                    te.created_at DESC NULLS LAST`,
+                  available.project_id,
+                  COALESCE(available.task_id, 'legacy:' || lower(available.name))
+                ) available.project_id AS "projectId",
+                  available.task_id AS "taskId",
+                  available.name
+            FROM (
+              SELECT t.project_id,
+                     t.id AS task_id,
+                     t.name,
+                     0 AS source_order,
+                     NULL::date AS entry_date,
+                     NULL::timestamp AS entry_created_at
+                FROM user_tasks ut
+                JOIN tasks t ON t.id = ut.task_id
+               WHERE ut.user_id = ANY(${ids}::text[])
+              UNION ALL
+              SELECT te.project_id,
+                     te.task_id,
+                     te.task AS name,
+                     1 AS source_order,
+                     te.date AS entry_date,
+                     te.created_at AS entry_created_at
+                FROM time_entries te
+               WHERE te.user_id = ANY(${ids}::text[])
+            ) available
+           ORDER BY available.project_id,
+                    COALESCE(available.task_id, 'legacy:' || lower(available.name)),
+                    available.source_order,
+                    available.entry_date DESC NULLS LAST,
+                    available.entry_created_at DESC NULLS LAST`,
     ),
   ]);
   return {

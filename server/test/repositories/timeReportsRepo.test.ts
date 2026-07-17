@@ -105,7 +105,7 @@ describe('timeReportsRepo', () => {
     expect(totals).toEqual({ count: 6000, duration: 125.5, cost: 333.34 });
   });
 
-  test('deduplicates renamed persisted tasks by stable task identity', async () => {
+  test('combines assigned tracker catalog hierarchies with historical filter values', async () => {
     exec.enqueue({ rows: [] });
     exec.enqueue({ rows: [] });
     exec.enqueue({ rows: [] });
@@ -113,11 +113,34 @@ describe('timeReportsRepo', () => {
 
     await repo.listOptions(['u1'], testDb);
 
+    for (const [callIndex, assignmentTable, scopeCount] of [
+      [1, 'user_clients', 4],
+      [2, 'user_projects', 3],
+      [3, 'user_tasks', 2],
+    ] as const) {
+      const query = exec.calls[callIndex];
+      expect(query.sql).toContain(`FROM ${assignmentTable}`);
+      expect(query.sql).toContain('FROM time_entries');
+      expect(query.sql).toContain('UNION ALL');
+      expect(query.sql).toContain('available.source_order');
+      expect(query.params).toEqual(Array.from({ length: scopeCount }, () => ['u1']));
+    }
+
+    const clientQuery = exec.calls[1];
+    expect(clientQuery.sql).toContain('FROM user_projects');
+    expect(clientQuery.sql).toContain('FROM user_tasks');
+
+    const projectQuery = exec.calls[2];
+    expect(projectQuery.sql).toContain('FROM user_tasks');
+
     const taskQuery = exec.calls[3];
     expect(taskQuery.sql).toContain('SELECT DISTINCT ON');
-    expect(taskQuery.sql).toContain("COALESCE(te.task_id, 'legacy:' || lower(te.task))");
-    expect(taskQuery.sql).toContain('te.date DESC');
-    expect(taskQuery.sql).toContain('te.created_at DESC NULLS LAST');
+    expect(taskQuery.sql).toContain(
+      "COALESCE(available.task_id, 'legacy:' || lower(available.name))",
+    );
+    expect(taskQuery.sql).toContain('available.source_order');
+    expect(taskQuery.sql).toContain('available.entry_date DESC NULLS LAST');
+    expect(taskQuery.sql).toContain('available.entry_created_at DESC NULLS LAST');
   });
 
   test('filters only candidate IDs when excluding administrators', async () => {
