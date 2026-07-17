@@ -949,11 +949,7 @@ const useProjectsController = ({
       header: t('projects:projects.tableHeaders.description'),
       accessorKey: 'description',
       cell: ({ row }) => (
-        <p
-          className={`text-xs max-w-md italic line-clamp-1 ${
-            row.isDisabled ? 'text-zinc-400' : 'text-zinc-500'
-          }`}
-        >
+        <p className={`text-xs italic ${row.isDisabled ? 'text-zinc-400' : 'text-zinc-500'}`}>
           {row.description || t('projects:projects.noDescriptionProvided')}
         </p>
       ),
