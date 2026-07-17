@@ -270,7 +270,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           ? await projectsRepo.listAll()
           : await projectsRepo.listForUser(request.user.id);
 
-      return canViewProjectDetails(request.user.permissions)
+      const canReturnFullDetails =
+        canViewProjectDetails(request.user.permissions) &&
+        (!targetUserId || targetUserId === request.user.id || canViewAll);
+      return canReturnFullDetails
         ? visibleProjects
         : visibleProjects.map(projectsRepo.toProjectSummary);
     },

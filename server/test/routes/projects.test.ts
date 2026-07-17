@@ -404,6 +404,43 @@ describe('GET /api/projects', () => {
     expect(listAllMock).not.toHaveBeenCalled();
   });
 
+  test('200: redacts target-user projects without manage_all even with detail access', async () => {
+    getRolePermissionsMock.mockResolvedValue([
+      'projects.manage.view',
+      'projects.details.view',
+      'timesheets.tracker_all.view',
+    ]);
+    listForUserMock.mockResolvedValue([SAMPLE_PROJECT]);
+
+    const res = await testApp.inject({
+      method: 'GET',
+      url: '/api/projects?userId=u2',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(isUserManagedByMock).not.toHaveBeenCalled();
+    expect(listForUserMock).toHaveBeenCalledWith('u2');
+    const [project] = res.json() as Array<Record<string, unknown>>;
+    expectProjectDetailsRedacted(project);
+  });
+
+  test('200: manage_all detail viewers receive full target-user projects', async () => {
+    getRolePermissionsMock.mockResolvedValue(['projects.manage_all.view', 'projects.details.view']);
+    listForUserMock.mockResolvedValue([SAMPLE_PROJECT]);
+
+    const res = await testApp.inject({
+      method: 'GET',
+      url: '/api/projects?userId=u2',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(isUserManagedByMock).not.toHaveBeenCalled();
+    expect(listForUserMock).toHaveBeenCalledWith('u2');
+    expect(res.json() as (typeof SAMPLE_PROJECT)[]).toEqual([SAMPLE_PROJECT]);
+  });
+
   test('403: RIL viewer cannot list projects for an unmanaged user', async () => {
     getRolePermissionsMock.mockResolvedValue(['timesheets.ril.view']);
     isUserManagedByMock.mockResolvedValue(false);
