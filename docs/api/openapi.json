@@ -11377,10 +11377,18 @@
                     ]
                   },
                   "startDate": {
-                    "type": "string"
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "description": "Required for Active/Passive projects; optional for Internal projects."
                   },
                   "endDate": {
-                    "type": "string"
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "description": "Required for Active/Passive projects; optional for Internal projects."
                   },
                   "revenue": {
                     "type": [
@@ -11422,8 +11430,6 @@
                 },
                 "required": [
                   "name",
-                  "startDate",
-                  "endDate",
                   "tipo"
                 ]
               }

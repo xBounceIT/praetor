@@ -998,7 +998,17 @@ const useProjectDetailController = ({
       return;
     }
     setTipo(nextTipo);
-    if (errors.tipo) setErrors((previous) => ({ ...previous, tipo: '' }));
+    if (nextTipo === 'interno') {
+      setErrors((previous) => ({
+        ...previous,
+        tipo: '',
+        startDate: '',
+        endDate: '',
+        dateRange: '',
+      }));
+    } else if (errors.tipo) {
+      setErrors((previous) => ({ ...previous, tipo: '' }));
+    }
   };
 
   const confirmInternalConversion = () => {
@@ -1010,6 +1020,9 @@ const useProjectDetailController = ({
       tipo: '',
       orderId: '',
       offerId: '',
+      startDate: '',
+      endDate: '',
+      dateRange: '',
     }));
     setIsInternalConversionOpen(false);
   };
@@ -1028,14 +1041,18 @@ const useProjectDetailController = ({
     if (!name.trim()) newErrors.name = t('common:validation.projectNameRequired');
     if (!isInternalProject && !clientId) newErrors.clientId = t('projects:projects.clientRequired');
     if (!isInternalProject && !orderId) newErrors.orderId = t('projects:projects.orderRequired');
-    // Only enforce required dates on projects that already carry them. Legacy projects
-    // predating the dates-required rule still allow null dates on the PATCH endpoint;
-    // forcing dates here would block unrelated edits (rename, disable) until the
-    // user invented a planning window.
-    if (project.startDate && !startDate) {
+    // Existing commercial projects keep the legacy-compatible rule: a missing stored date does
+    // not block unrelated edits. Internal projects may always clear dates, while converting one
+    // back to a commercial type requires a complete planning window in the same save.
+    const isConvertingInternalToCommercial = project.tipo === 'interno' && !isInternalProject;
+    if (
+      !isInternalProject &&
+      (project.startDate || isConvertingInternalToCommercial) &&
+      !startDate
+    ) {
       newErrors.startDate = t('projects:projects.startDateRequired');
     }
-    if (project.endDate && !endDate) {
+    if (!isInternalProject && (project.endDate || isConvertingInternalToCommercial) && !endDate) {
       newErrors.endDate = t('projects:projects.endDateRequired');
     }
     if (startDate && endDate && startDate > endDate) {
@@ -1630,16 +1647,28 @@ const ProjectDetailDescriptionField: React.FC<{ controller: ProjectDetailControl
 const ProjectDetailStartDateField: React.FC<{ controller: ProjectDetailController }> = ({
   controller,
 }) => {
-  const { t, project, startDate, setStartDate, canUpdateProjects, errors, setErrors } = controller;
+  const {
+    t,
+    project,
+    startDate,
+    setStartDate,
+    canUpdateProjects,
+    errors,
+    setErrors,
+    isInternalProject,
+  } = controller;
+  const isRequired =
+    !isInternalProject && (Boolean(project.startDate) || project.tipo === 'interno');
 
   return (
     <Field data-invalid={Boolean(errors.startDate || errors.dateRange)}>
       <FieldLabel htmlFor="detail-start-date">
-        {t('projects:projects.startDate')} {project.startDate && <RequiredMark />}
+        {t('projects:projects.startDate')} {isRequired && <RequiredMark />}
       </FieldLabel>
       <DateField
         id="detail-start-date"
         value={startDate}
+        required={isRequired}
         disabled={!canUpdateProjects}
         aria-invalid={Boolean(errors.startDate || errors.dateRange)}
         onChange={(value) => {
@@ -1657,16 +1686,27 @@ const ProjectDetailStartDateField: React.FC<{ controller: ProjectDetailControlle
 const ProjectDetailEndDateField: React.FC<{ controller: ProjectDetailController }> = ({
   controller,
 }) => {
-  const { t, project, endDate, setEndDate, canUpdateProjects, errors, setErrors } = controller;
+  const {
+    t,
+    project,
+    endDate,
+    setEndDate,
+    canUpdateProjects,
+    errors,
+    setErrors,
+    isInternalProject,
+  } = controller;
+  const isRequired = !isInternalProject && (Boolean(project.endDate) || project.tipo === 'interno');
 
   return (
     <Field data-invalid={Boolean(errors.endDate || errors.dateRange)}>
       <FieldLabel htmlFor="detail-end-date">
-        {t('projects:projects.endDate')} {project.endDate && <RequiredMark />}
+        {t('projects:projects.endDate')} {isRequired && <RequiredMark />}
       </FieldLabel>
       <DateField
         id="detail-end-date"
         value={endDate}
+        required={isRequired}
         disabled={!canUpdateProjects}
         aria-invalid={Boolean(errors.endDate || errors.dateRange)}
         onChange={(value) => {

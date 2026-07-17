@@ -144,6 +144,8 @@ describe('seed.sql demo projects link to their offer/order chain', () => {
     expect(project?.clientId).toBe('praetor-own-company');
     expect(project?.orderId).toBeNull();
     expect(project?.offerId).toBeNull();
+    expect(project?.startOffset).toBeNull();
+    expect(project?.endOffset).toBeNull();
 
     const projectTasks = tasks.filter((task) => task.project_id === 'p3');
     expect(projectTasks.map((task) => task.id).sort()).toEqual(['t4', 't5']);
@@ -169,11 +171,12 @@ describe('seed.sql demo time entries fall within their project window', () => {
     expect(timeEntries.length).toBeGreaterThanOrEqual(25);
   });
 
-  test('every project that owns time entries declares a start/end window', () => {
+  test('every commercial project that owns time entries declares a start/end window', () => {
     const projectsWithEntries = new Set(timeEntries.map((entry) => entry.projectId));
     for (const projectId of projectsWithEntries) {
       const project = projects.get(projectId);
       expect(project, `time entries reference unknown project ${projectId}`).toBeDefined();
+      if (project?.tipo === 'interno') continue;
       expect(project?.startOffset, `${projectId} missing start_date`).not.toBeNull();
       expect(project?.endOffset, `${projectId} missing end_date`).not.toBeNull();
       expect(project?.startOffset ?? 0).toBeLessThanOrEqual(project?.endOffset ?? 0);
@@ -187,7 +190,7 @@ describe('seed.sql demo time entries fall within their project window', () => {
     const project = projects.get(projectId);
     expect(project).toBeDefined();
     expect(dateOffset).not.toBeNull();
-    if (!project || dateOffset === null) return;
+    if (!project || project.tipo === 'interno' || dateOffset === null) return;
     expect(dateOffset).toBeGreaterThanOrEqual(project.startOffset ?? 0);
     expect(dateOffset).toBeLessThanOrEqual(project.endOffset ?? 0);
   });

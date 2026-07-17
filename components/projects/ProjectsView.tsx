@@ -509,8 +509,12 @@ const useProjectsController = ({
     if (!name?.trim()) newErrors.name = t('common:validation.projectNameRequired');
     if (!isInternalProject && !clientId) newErrors.clientId = t('projects:projects.clientRequired');
     if (!isInternalProject && !orderId) newErrors.orderId = t('projects:projects.orderRequired');
-    if (!startDate) newErrors.startDate = t('projects:projects.startDateRequired');
-    if (!endDate) newErrors.endDate = t('projects:projects.endDateRequired');
+    if (!isInternalProject && !startDate) {
+      newErrors.startDate = t('projects:projects.startDateRequired');
+    }
+    if (!isInternalProject && !endDate) {
+      newErrors.endDate = t('projects:projects.endDateRequired');
+    }
     if (!tipo) newErrors.tipo = t('projects:projects.tipoRequired');
     if (startDate && endDate && startDate > endDate) {
       newErrors.dateRange = t('projects:projects.dateRangeInvalid');
@@ -1421,11 +1425,11 @@ const ProjectDateField: React.FC<{
   return (
     <Field data-invalid={Boolean(controller.errors[errorKey] || controller.errors.dateRange)}>
       <FieldLabel htmlFor={id}>
-        {label} <RequiredMark />
+        {label} {!controller.isInternalProject && <RequiredMark />}
       </FieldLabel>
       <DateField
         id={id}
-        required
+        required={!controller.isInternalProject}
         value={value}
         aria-invalid={Boolean(controller.errors[errorKey] || controller.errors.dateRange)}
         onChange={(nextValue) => {
@@ -1517,7 +1521,14 @@ const ProjectTipoField: React.FC<{ controller: ProjectsController }> = ({ contro
             controller.dispatch({ type: 'setClientId', value: '' });
             controller.dispatch({
               type: 'patchErrors',
-              value: { clientId: '', orderId: '', offerId: '' },
+              value: {
+                clientId: '',
+                orderId: '',
+                offerId: '',
+                startDate: '',
+                endDate: '',
+                dateRange: '',
+              },
             });
           }
           if (controller.errors.tipo) {

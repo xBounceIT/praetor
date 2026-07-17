@@ -85,7 +85,7 @@ describe('ProjectsView (create-only dialog after detail-page revamp)', () => {
 });
 
 describe('ProjectsView create-form validation', () => {
-  test('create form requires client and order only for commercial jobs', async () => {
+  test('create form requires client, order, and dates only for commercial jobs', async () => {
     const source = await Bun.file(
       new URL('../../../components/projects/ProjectsView.tsx', import.meta.url),
     ).text();
@@ -98,12 +98,10 @@ describe('ProjectsView create-form validation', () => {
     expect(source).toContain(
       "if (!isInternalProject && !orderId) newErrors.orderId = t('projects:projects.orderRequired')",
     );
-    expect(source).toContain(
-      "if (!startDate) newErrors.startDate = t('projects:projects.startDateRequired');",
-    );
-    expect(source).toContain(
-      "if (!endDate) newErrors.endDate = t('projects:projects.endDateRequired');",
-    );
+    expect(source).toContain('if (!isInternalProject && !startDate) {');
+    expect(source).toContain('if (!isInternalProject && !endDate) {');
+    expect(source).toContain('required={!controller.isInternalProject}');
+    expect(source).toContain('{!controller.isInternalProject && <RequiredMark />}');
     expect(source).toContain("newErrors.dateRange = t('projects:projects.dateRangeInvalid')");
   });
 

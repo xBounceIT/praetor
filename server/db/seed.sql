@@ -111,12 +111,12 @@ INSERT INTO clients (
     )
 ON CONFLICT (id) DO NOTHING;
 
--- start_date/end_date bracket the demo time entries logged against each project
--- (see the first time_entries block below) so every entry falls inside its project window.
+-- Commercial project dates bracket their demo time entries. Internal Research is deliberately
+-- open-ended to exercise the Internal-project contract: neither planning date is required.
 INSERT INTO projects (id, name, client_id, description, start_date, end_date, tipo, tipo_confirmed) VALUES
     ('p1', 'Website Redesign', 'c1', 'Complete overhaul of the main marketing site.', (CURRENT_DATE - INTERVAL '30 days')::date, (CURRENT_DATE + INTERVAL '30 days')::date, 'attivo', TRUE),
     ('p2', 'Mobile App', 'c1', 'Native iOS and Android application development.', (CURRENT_DATE - INTERVAL '28 days')::date, (CURRENT_DATE + INTERVAL '28 days')::date, 'attivo', TRUE),
-    ('p3', 'Internal Research', 'praetor-own-company', 'Ongoing research into new market trends.', (CURRENT_DATE - INTERVAL '25 days')::date, (CURRENT_DATE + INTERVAL '25 days')::date, 'interno', TRUE)
+    ('p3', 'Internal Research', 'praetor-own-company', 'Ongoing research into new market trends.', NULL, NULL, 'interno', TRUE)
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO tasks (id, name, project_id, description) VALUES

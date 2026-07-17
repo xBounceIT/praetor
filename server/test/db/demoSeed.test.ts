@@ -147,7 +147,7 @@ describe('insertCompatibilityDefaults', () => {
     expect(calls[2]?.sql).toContain('description = EXCLUDED.description');
     expect(calls[2]?.sql).toContain('tipo_confirmed = EXCLUDED.tipo_confirmed');
     expect(calls[2]?.sql).toMatch(
-      /\('p3', 'Internal Research', 'praetor-own-company'[\s\S]*?'interno', TRUE\)/,
+      /\('p3', 'Internal Research', 'praetor-own-company', [^,]+, NULL, NULL, 'interno', TRUE\)/,
     );
     expect(calls[2]?.sql).toContain('order_id = NULL');
     expect(calls[2]?.sql).toContain('offer_id = NULL');

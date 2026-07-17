@@ -161,15 +161,21 @@ const projectCreateBodySchema = {
     description: { type: ['string', 'null'] },
     orderId: { type: ['string', 'null'] },
     offerId: { type: ['string', 'null'] },
-    startDate: { type: 'string' },
-    endDate: { type: 'string' },
+    startDate: {
+      type: ['string', 'null'],
+      description: 'Required for Active/Passive projects; optional for Internal projects.',
+    },
+    endDate: {
+      type: ['string', 'null'],
+      description: 'Required for Active/Passive projects; optional for Internal projects.',
+    },
     revenue: { type: ['number', 'null'] },
     billingType: { type: 'string', enum: STORED_BILLING_TYPES },
     billingFrequency: { type: 'string', enum: BILLING_FREQUENCIES },
     status: { type: 'string', enum: PROJECT_STATUSES },
     tipo: { type: 'string', enum: PROJECT_TIPOS },
   },
-  required: ['name', 'startDate', 'endDate', 'tipo'],
+  required: ['name', 'tipo'],
 } as const;
 
 const projectUpdateBodySchema = {
@@ -445,8 +451,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         billingType?: string;
         billingFrequency?: string;
         offerId?: string | null;
-        startDate?: string;
-        endDate?: string;
+        startDate?: string | null;
+        endDate?: string | null;
         revenue?: number | string | null;
         tipo?: string;
         status?: string;
@@ -492,11 +498,19 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return badRequest(reply, 'internal projects cannot link an order or offer');
       }
 
-      const startDateResult = parseDateString(body.startDate, 'startDate');
+      const startDateResult = isInternalProject
+        ? optionalDateString(body.startDate, 'startDate')
+        : parseDateString(body.startDate, 'startDate');
       if (!startDateResult.ok) return badRequest(reply, startDateResult.message);
-      const endDateResult = parseDateString(body.endDate, 'endDate');
+      const endDateResult = isInternalProject
+        ? optionalDateString(body.endDate, 'endDate')
+        : parseDateString(body.endDate, 'endDate');
       if (!endDateResult.ok) return badRequest(reply, endDateResult.message);
-      if (startDateResult.value > endDateResult.value) {
+      if (
+        startDateResult.value &&
+        endDateResult.value &&
+        startDateResult.value > endDateResult.value
+      ) {
         return badRequest(reply, 'startDate must be on or before endDate');
       }
 
@@ -814,10 +828,18 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             throw new NotFoundError('Project');
           }
           const previousTipo = existingLinks.tipo ?? DEFAULT_PROJECT_TIPO;
+          const finalTipo = tipoResult.value ?? previousTipo;
+          const isConvertingInternalToCommercial =
+            previousTipo === 'interno' && finalTipo !== 'interno';
 
           // Validate the final date range against the locked row so a concurrent writer can't
-          // sneak past us. The DB CHECK constraint is still the ultimate guard.
-          if (startDatePatch.provided || endDatePatch.provided) {
+          // sneak past us. Converting an open-ended Internal project back to a commercial type
+          // requires both planning dates in the same save.
+          if (
+            startDatePatch.provided ||
+            endDatePatch.provided ||
+            isConvertingInternalToCommercial
+          ) {
             const existing = await projectsRepo.findDateRangeById(idResult.value, tx);
             const nextStart = startDatePatch.provided
               ? startDatePatch.value
@@ -825,6 +847,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             const nextEnd = endDatePatch.provided
               ? endDatePatch.value
               : (existing?.endDate ?? null);
+            if (isConvertingInternalToCommercial && (!nextStart || !nextEnd)) {
+              throw new DateRangeError(
+                'startDate and endDate are required when converting an internal project to a commercial type',
+              );
+            }
             if (nextStart && nextEnd && nextStart > nextEnd) {
               throw new DateRangeError('startDate must be on or before endDate');
             }
@@ -833,7 +860,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           // Resolve the final commercial state from the locked row plus this patch.
           const finalOrderId = orderIdPatch.provided ? orderIdPatch.value : existingLinks.orderId;
           const finalOfferId = offerIdPatch.provided ? offerIdPatch.value : existingLinks.offerId;
-          const finalTipo = tipoResult.value ?? previousTipo;
           if (finalTipo === 'interno' && (finalOrderId || finalOfferId)) {
             throw new InternalProjectLinksError('internal projects cannot link an order or offer');
           }

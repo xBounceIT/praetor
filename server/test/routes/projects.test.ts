@@ -1114,12 +1114,21 @@ describe('POST /api/projects', () => {
         tipo: 'interno',
         orderId: undefined,
         offerId: undefined,
+        startDate: undefined,
+        endDate: undefined,
       },
     });
 
     expect(res.statusCode).toBe(201);
     expect(createMock).toHaveBeenCalledWith(
-      expect.objectContaining({ clientId: 'c-own', orderId: null, offerId: null, tipo: 'interno' }),
+      expect.objectContaining({
+        clientId: 'c-own',
+        orderId: null,
+        offerId: null,
+        startDate: null,
+        endDate: null,
+        tipo: 'interno',
+      }),
       TX_SENTINEL,
     );
     expect(findOrderProjectLinkByIdMock).not.toHaveBeenCalled();
@@ -1271,7 +1280,7 @@ describe('POST /api/projects', () => {
     });
 
     expect(res.statusCode).toBe(400);
-    expect(JSON.parse(res.body).error).toBe('Bad Request');
+    expect(JSON.parse(res.body).error).toBe('startDate must be a date string');
     expect(createMock).not.toHaveBeenCalled();
   });
 
@@ -1284,7 +1293,7 @@ describe('POST /api/projects', () => {
     });
 
     expect(res.statusCode).toBe(400);
-    expect(JSON.parse(res.body).error).toBe('Bad Request');
+    expect(JSON.parse(res.body).error).toBe('endDate must be a date string');
     expect(createMock).not.toHaveBeenCalled();
   });
 
@@ -2136,6 +2145,10 @@ describe('PUT /api/projects/:id', () => {
   test('400: converting an internal project to commercial requires an order', async () => {
     lockClientIdByIdMock.mockResolvedValue('c-1');
     findClientLinksByIdMock.mockResolvedValue({ orderId: null, offerId: null, tipo: 'interno' });
+    findDateRangeByIdMock.mockResolvedValue({
+      startDate: '2026-01-01',
+      endDate: '2026-12-31',
+    });
 
     const res = await testApp.inject({
       method: 'PUT',
@@ -2149,9 +2162,30 @@ describe('PUT /api/projects/:id', () => {
     expect(updateMock).not.toHaveBeenCalled();
   });
 
+  test('400: converting an open-ended internal project to commercial requires both dates', async () => {
+    lockClientIdByIdMock.mockResolvedValue('c-1');
+    findClientLinksByIdMock.mockResolvedValue({ orderId: null, offerId: null, tipo: 'interno' });
+    findDateRangeByIdMock.mockResolvedValue({ startDate: null, endDate: null });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/projects/p-1',
+      headers: authHeader(),
+      payload: { tipo: 'attivo', orderId: 'co-9' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body)).toEqual({
+      error:
+        'startDate and endDate are required when converting an internal project to a commercial type',
+    });
+    expect(updateMock).not.toHaveBeenCalled();
+  });
+
   test('200: converts an internal project to commercial with a confirmed matching order', async () => {
     lockClientIdByIdMock.mockResolvedValue('c-1');
     findClientLinksByIdMock.mockResolvedValue({ orderId: null, offerId: null, tipo: 'interno' });
+    findDateRangeByIdMock.mockResolvedValue({ startDate: null, endDate: null });
     findOrderClientIdByIdMock.mockResolvedValue('c-1');
     findOrderStatusByIdMock.mockResolvedValue('confirmed');
     updateMock.mockResolvedValue({
@@ -2164,14 +2198,24 @@ describe('PUT /api/projects/:id', () => {
       method: 'PUT',
       url: '/api/projects/p-1',
       headers: authHeader(),
-      payload: { tipo: 'passivo', orderId: 'co-9' },
+      payload: {
+        tipo: 'passivo',
+        orderId: 'co-9',
+        startDate: '2026-01-01',
+        endDate: '2026-12-31',
+      },
     });
 
     expect(res.statusCode).toBe(200);
     expect(findOrderProjectLinkByIdMock).toHaveBeenCalledWith('co-9', TX_SENTINEL);
     expect(updateMock).toHaveBeenCalledWith(
       'p-1',
-      expect.objectContaining({ tipo: 'passivo', orderId: 'co-9' }),
+      expect.objectContaining({
+        tipo: 'passivo',
+        orderId: 'co-9',
+        startDate: '2026-01-01',
+        endDate: '2026-12-31',
+      }),
       TX_SENTINEL,
     );
   });

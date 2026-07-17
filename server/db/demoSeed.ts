@@ -395,12 +395,11 @@ export const insertCompatibilityDefaults = async (
 
   const projectsResult = await executeStatement(
     client,
-    // start_date/end_date bracket the demo time entries logged against each project so every
-    // entry falls inside its project window (kept in sync with seed.sql).
+    // Commercial dates bracket their demo entries; Internal Research is deliberately open-ended.
     `INSERT INTO projects (id, name, client_id, description, start_date, end_date, tipo, tipo_confirmed) VALUES
         ('p1', 'Website Redesign', 'c1', 'Complete overhaul of the main marketing site.', (CURRENT_DATE - INTERVAL '30 days')::date, (CURRENT_DATE + INTERVAL '30 days')::date, 'attivo', TRUE),
         ('p2', 'Mobile App', 'c1', 'Native iOS and Android application development.', (CURRENT_DATE - INTERVAL '28 days')::date, (CURRENT_DATE + INTERVAL '28 days')::date, 'attivo', TRUE),
-        ('p3', 'Internal Research', 'praetor-own-company', 'Ongoing research into new market trends.', (CURRENT_DATE - INTERVAL '25 days')::date, (CURRENT_DATE + INTERVAL '25 days')::date, 'interno', TRUE)
+        ('p3', 'Internal Research', 'praetor-own-company', 'Ongoing research into new market trends.', NULL, NULL, 'interno', TRUE)
      ON CONFLICT (id) DO UPDATE SET
        name = EXCLUDED.name,
        client_id = EXCLUDED.client_id,

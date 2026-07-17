@@ -115,16 +115,17 @@ describe('ProjectDetailView wiring', () => {
     expect(source).toMatch(/onDeleteProject\(project\.id\);[\s\S]{0,80}onBack\(\)/);
   });
 
-  test('date-required validation skips legacy projects without stored dates', async () => {
-    // Hard-requiring dates on save would block rename/disable for projects
-    // created before the dates-required rule. Validation only fires when the project
-    // already carries the corresponding date.
+  test('date validation stays legacy-compatible and allows open-ended internal projects', async () => {
     const source = await readSource();
-    expect(source).toContain('if (project.startDate && !startDate)');
-    expect(source).toContain('if (project.endDate && !endDate)');
-    // Required marker also tracks the stored value so the UI doesn't lie.
-    expect(source).toContain('{project.startDate && <RequiredMark />}');
-    expect(source).toContain('{project.endDate && <RequiredMark />}');
+    expect(source).toContain("project.tipo === 'interno' && !isInternalProject");
+    expect(source).toMatch(
+      /if \(\s*!isInternalProject &&\s*\(project\.startDate \|\| isConvertingInternalToCommercial\) &&\s*!startDate\s*\)/,
+    );
+    expect(source).toMatch(
+      /if \(\s*!isInternalProject &&\s*\(project\.endDate \|\| isConvertingInternalToCommercial\) &&\s*!endDate\s*\)/,
+    );
+    expect(source).toContain('{isRequired && <RequiredMark />}');
+    expect(source).toContain('required={isRequired}');
   });
 
   test('forces an explicit tipo confirmation on first edit of a rollout-defaulted project (issue #784)', async () => {
