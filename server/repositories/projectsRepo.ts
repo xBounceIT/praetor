@@ -471,9 +471,9 @@ export const findDateRangeById = async (
 export const findClientLinksById = async (
   id: string,
   exec: DbExecutor = db,
-): Promise<{ orderId: string | null; offerId: string | null } | null> => {
+): Promise<{ orderId: string | null; offerId: string | null; tipo: ProjectTipo } | null> => {
   const rows = await exec
-    .select({ orderId: projects.orderId, offerId: projects.offerId })
+    .select({ orderId: projects.orderId, offerId: projects.offerId, tipo: projects.tipo })
     .from(projects)
     .where(eq(projects.id, id));
   return rows[0] ?? null;

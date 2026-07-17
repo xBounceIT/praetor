@@ -237,6 +237,22 @@ describe('lockNameAndClientById', () => {
   });
 });
 
+describe('findClientLinksById', () => {
+  test('returns an internal project with no commercial links', async () => {
+    exec.enqueue({ rows: [makeRow([null, null, 'interno'])] });
+
+    const result = await projectsRepo.findClientLinksById('p-1', testDb);
+
+    expect(result).toEqual({ orderId: null, offerId: null, tipo: 'interno' });
+  });
+
+  test('returns null when the project is missing', async () => {
+    exec.enqueue({ rows: [] });
+
+    expect(await projectsRepo.findClientLinksById('p-missing', testDb)).toBeNull();
+  });
+});
+
 describe('findBillingById', () => {
   test('returns stored billing fields without deriving mixed', async () => {
     exec.enqueue({ rows: [makeRow(['retainer', 'one_time'])] });

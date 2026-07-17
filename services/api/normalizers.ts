@@ -335,7 +335,7 @@ export const normalizeProject = (p: Project): Project => ({
   ...normalizeProjectBilling(p.billingType, p.billingFrequency),
   // `tipo` defaults to 'attivo' (the rollout default); `tipoConfirmed` to false so a
   // payload missing the flag is treated as "needs confirmation" rather than confirmed.
-  tipo: p.tipo === 'passivo' ? 'passivo' : 'attivo',
+  tipo: p.tipo === 'passivo' || p.tipo === 'interno' ? p.tipo : 'attivo',
   status: normalizeProjectStatus(p.status),
   tipoConfirmed: p.tipoConfirmed === true,
 });

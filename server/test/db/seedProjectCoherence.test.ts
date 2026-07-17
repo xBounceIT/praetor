@@ -30,6 +30,7 @@ const isNullCell = (value: string | undefined) =>
 type ProjectRow = {
   id: string;
   clientId: string;
+  tipo: string;
   orderId: string | null;
   offerId: string | null;
   startOffset: number | null;
@@ -43,6 +44,7 @@ const projects = new Map(
     {
       id: row.id,
       clientId: row.client_id,
+      tipo: row.tipo,
       orderId: isNullCell(row.order_id) ? null : row.order_id,
       offerId: isNullCell(row.offer_id) ? null : row.offer_id,
       startOffset: dateOffsetDays(row.start_date),
@@ -51,6 +53,8 @@ const projects = new Map(
     },
   ]),
 );
+
+const tasks = parseInsertValuesBlocks(SEED_SQL, 'tasks');
 
 const offers = new Map(
   parseInsertValuesBlocks(SEED_SQL, 'customer_offers').map((row) => [
@@ -131,6 +135,21 @@ describe('seed.sql demo projects link to their offer/order chain', () => {
     const orderTotal = orderNetTotal(orderId as string) * (1 - (order?.discount ?? 0) / 100);
     expect(projectRevenue).toBeGreaterThan(0);
     expect(orderTotal).toBeGreaterThan(0);
+  });
+
+  test('Internal Research is internal, keeps activities, and has no commercial links', () => {
+    const project = projects.get('p3');
+    expect(project).toBeDefined();
+    expect(project?.tipo).toBe('interno');
+    expect(project?.clientId).toBe('c2');
+    expect(project?.orderId).toBeNull();
+    expect(project?.offerId).toBeNull();
+
+    const projectTasks = tasks.filter((task) => task.project_id === 'p3');
+    expect(projectTasks.map((task) => task.id).sort()).toEqual(['t4', 't5']);
+
+    const projectEntries = timeEntries.filter((entry) => entry.projectId === 'p3');
+    expect(projectEntries.length).toBeGreaterThan(0);
   });
 
   test('linked invoice total reconciles with the order total', () => {

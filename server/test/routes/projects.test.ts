@@ -297,7 +297,11 @@ beforeEach(async () => {
     async (_userId: string, clientIds: string[]) => new Set(clientIds),
   );
   findOfferClientIdByIdMock.mockResolvedValue(null);
-  findClientLinksByIdMock.mockResolvedValue({ orderId: 'co-existing', offerId: null });
+  findClientLinksByIdMock.mockResolvedValue({
+    orderId: 'co-existing',
+    offerId: null,
+    tipo: 'attivo',
+  });
 
   testApp = await buildRouteTestApp(routePlugin, '/api/projects');
 });
@@ -898,6 +902,78 @@ describe('POST /api/projects', () => {
     });
 
     expect(res.statusCode).toBe(400);
+    expect(createMock).not.toHaveBeenCalled();
+  });
+
+  test('201: creates an internal project without an order or offer', async () => {
+    createMock.mockResolvedValue({
+      ...SAMPLE_PROJECT,
+      name: 'Internal Research',
+      orderId: null,
+      offerId: null,
+      tipo: 'interno',
+    });
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/projects',
+      headers: authHeader(),
+      payload: {
+        ...VALID_CREATE_PAYLOAD,
+        name: 'Internal Research',
+        tipo: 'interno',
+        orderId: undefined,
+        offerId: undefined,
+      },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(createMock).toHaveBeenCalledWith(
+      expect.objectContaining({ orderId: null, offerId: null, tipo: 'interno' }),
+      TX_SENTINEL,
+    );
+    expect(findOrderProjectLinkByIdMock).not.toHaveBeenCalled();
+    expect(findOfferClientIdByIdMock).not.toHaveBeenCalled();
+    expect(JSON.parse(res.body)).toMatchObject({ tipo: 'interno', orderId: null, offerId: null });
+  });
+
+  test('400: internal project cannot link an order', async () => {
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/projects',
+      headers: authHeader(),
+      payload: {
+        ...VALID_CREATE_PAYLOAD,
+        tipo: 'interno',
+        orderId: 'co-1',
+        offerId: null,
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body)).toEqual({
+      error: 'internal projects cannot link an order or offer',
+    });
+    expect(createMock).not.toHaveBeenCalled();
+  });
+
+  test('400: internal project cannot link an offer', async () => {
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/projects',
+      headers: authHeader(),
+      payload: {
+        ...VALID_CREATE_PAYLOAD,
+        tipo: 'interno',
+        orderId: null,
+        offerId: 'of-1',
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body)).toEqual({
+      error: 'internal projects cannot link an order or offer',
+    });
     expect(createMock).not.toHaveBeenCalled();
   });
 
@@ -1562,6 +1638,28 @@ describe('PUT /api/projects/:id', () => {
     expect(findOrderClientIdByIdMock).not.toHaveBeenCalled();
   });
 
+  test('200: trims orderId before validating and updating', async () => {
+    lockClientIdByIdMock.mockResolvedValue('c-1');
+    findOrderClientIdByIdMock.mockResolvedValue('c-1');
+    findOrderStatusByIdMock.mockResolvedValue('confirmed');
+    updateMock.mockResolvedValue({ ...SAMPLE_PROJECT, orderId: 'co-trimmed' });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/projects/p-1',
+      headers: authHeader(),
+      payload: { orderId: '  co-trimmed  ' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(findOrderProjectLinkByIdMock).toHaveBeenCalledWith('co-trimmed', TX_SENTINEL);
+    expect(updateMock).toHaveBeenCalledWith(
+      'p-1',
+      expect.objectContaining({ orderId: 'co-trimmed' }),
+      TX_SENTINEL,
+    );
+  });
+
   test('400: clearing orderId with null is rejected', async () => {
     lockClientIdByIdMock.mockResolvedValue('c-1');
     updateMock.mockResolvedValue({ ...SAMPLE_PROJECT, orderId: null });
@@ -1702,6 +1800,147 @@ describe('PUT /api/projects/:id', () => {
       TX_SENTINEL,
     );
     expect(JSON.parse(res.body)).toMatchObject({ tipo: 'passivo' });
+  });
+
+  test('400: converting a linked project to internal requires clearing both links', async () => {
+    lockClientIdByIdMock.mockResolvedValue('c-1');
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/projects/p-1',
+      headers: authHeader(),
+      payload: { tipo: 'interno' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body)).toEqual({
+      error: 'internal projects cannot link an order or offer',
+    });
+    expect(updateMock).not.toHaveBeenCalled();
+  });
+
+  test('200: converts a linked project to internal while explicitly clearing links', async () => {
+    lockClientIdByIdMock.mockResolvedValue('c-1');
+    findClientLinksByIdMock.mockResolvedValue({
+      orderId: 'co-existing',
+      offerId: 'of-existing',
+      tipo: 'attivo',
+    });
+    updateMock.mockResolvedValue({
+      ...SAMPLE_PROJECT,
+      orderId: null,
+      offerId: null,
+      tipo: 'interno',
+    });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/projects/p-1',
+      headers: authHeader(),
+      payload: { tipo: 'interno', orderId: null, offerId: null },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(updateMock).toHaveBeenCalledWith(
+      'p-1',
+      expect.objectContaining({ tipo: 'interno', orderId: null, offerId: null }),
+      TX_SENTINEL,
+    );
+    expect(findOrderProjectLinkByIdMock).not.toHaveBeenCalled();
+    expect(findOfferClientIdByIdMock).not.toHaveBeenCalled();
+  });
+
+  for (const [field, value] of [
+    ['orderId', 'co-9'],
+    ['offerId', 'of-9'],
+  ] as const) {
+    test(`400: existing internal project cannot add ${field}`, async () => {
+      lockClientIdByIdMock.mockResolvedValue('c-1');
+      findClientLinksByIdMock.mockResolvedValue({
+        orderId: null,
+        offerId: null,
+        tipo: 'interno',
+      });
+
+      const res = await testApp.inject({
+        method: 'PUT',
+        url: '/api/projects/p-1',
+        headers: authHeader(),
+        payload: { [field]: value },
+      });
+
+      expect(res.statusCode).toBe(400);
+      expect(JSON.parse(res.body)).toEqual({
+        error: 'internal projects cannot link an order or offer',
+      });
+      expect(updateMock).not.toHaveBeenCalled();
+      expect(findOrderProjectLinkByIdMock).not.toHaveBeenCalled();
+      expect(findOfferClientIdByIdMock).not.toHaveBeenCalled();
+    });
+  }
+
+  test('200: updates an existing internal project without requiring an order', async () => {
+    lockClientIdByIdMock.mockResolvedValue('c-1');
+    findClientLinksByIdMock.mockResolvedValue({ orderId: null, offerId: null, tipo: 'interno' });
+    updateMock.mockResolvedValue({
+      ...SAMPLE_PROJECT,
+      name: 'Internal Research Updated',
+      tipo: 'interno',
+    });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/projects/p-1',
+      headers: authHeader(),
+      payload: { name: 'Internal Research Updated' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(updateMock).toHaveBeenCalled();
+    expect(findOrderProjectLinkByIdMock).not.toHaveBeenCalled();
+  });
+
+  test('400: converting an internal project to commercial requires an order', async () => {
+    lockClientIdByIdMock.mockResolvedValue('c-1');
+    findClientLinksByIdMock.mockResolvedValue({ orderId: null, offerId: null, tipo: 'interno' });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/projects/p-1',
+      headers: authHeader(),
+      payload: { tipo: 'attivo' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body)).toEqual({ error: 'orderId is required' });
+    expect(updateMock).not.toHaveBeenCalled();
+  });
+
+  test('200: converts an internal project to commercial with a confirmed matching order', async () => {
+    lockClientIdByIdMock.mockResolvedValue('c-1');
+    findClientLinksByIdMock.mockResolvedValue({ orderId: null, offerId: null, tipo: 'interno' });
+    findOrderClientIdByIdMock.mockResolvedValue('c-1');
+    findOrderStatusByIdMock.mockResolvedValue('confirmed');
+    updateMock.mockResolvedValue({
+      ...SAMPLE_PROJECT,
+      orderId: 'co-9',
+      tipo: 'passivo',
+    });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/projects/p-1',
+      headers: authHeader(),
+      payload: { tipo: 'passivo', orderId: 'co-9' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(findOrderProjectLinkByIdMock).toHaveBeenCalledWith('co-9', TX_SENTINEL);
+    expect(updateMock).toHaveBeenCalledWith(
+      'p-1',
+      expect.objectContaining({ tipo: 'passivo', orderId: 'co-9' }),
+      TX_SENTINEL,
+    );
   });
 
   test('200: forwards status to the repo on update', async () => {

@@ -11149,7 +11149,8 @@
                         "type": "string",
                         "enum": [
                           "attivo",
-                          "passivo"
+                          "passivo",
+                          "interno"
                         ]
                       },
                       "tipoConfirmed": {
@@ -11346,7 +11347,10 @@
                     ]
                   },
                   "orderId": {
-                    "type": "string"
+                    "type": [
+                      "string",
+                      "null"
+                    ]
                   },
                   "offerId": {
                     "type": [
@@ -11393,14 +11397,14 @@
                     "type": "string",
                     "enum": [
                       "attivo",
-                      "passivo"
+                      "passivo",
+                      "interno"
                     ]
                   }
                 },
                 "required": [
                   "name",
                   "clientId",
-                  "orderId",
                   "startDate",
                   "endDate",
                   "tipo"
@@ -11496,7 +11500,8 @@
                       "type": "string",
                       "enum": [
                         "attivo",
-                        "passivo"
+                        "passivo",
+                        "interno"
                       ]
                     },
                     "tipoConfirmed": {
@@ -12276,7 +12281,8 @@
                     "type": "string",
                     "enum": [
                       "attivo",
-                      "passivo"
+                      "passivo",
+                      "interno"
                     ]
                   }
                 }
@@ -12381,7 +12387,8 @@
                       "type": "string",
                       "enum": [
                         "attivo",
-                        "passivo"
+                        "passivo",
+                        "interno"
                       ]
                     },
                     "tipoConfirmed": {
@@ -54048,6 +54055,14 @@
             },
             "in": "query",
             "name": "before",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "query",
+            "name": "beforeId",
             "required": false
           },
           {

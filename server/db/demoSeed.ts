@@ -345,7 +345,7 @@ export const insertCompatibilityDefaults = async (
           'research@global-tech.demo',
           '+39 011 5550 6202',
           'Corso Vittorio Emanuele II 74, 10121 Torino (TO), Italia',
-          'Compatibility client used by the legacy Internal Research demo project.',
+          'Client used to group the Internal Research demo project.',
           '72.19.09',
           'https://global-tech.demo',
           'SERVICES',
@@ -400,7 +400,7 @@ export const insertCompatibilityDefaults = async (
     `INSERT INTO projects (id, name, client_id, description, start_date, end_date, tipo, tipo_confirmed) VALUES
         ('p1', 'Website Redesign', 'c1', 'Complete overhaul of the main marketing site.', (CURRENT_DATE - INTERVAL '30 days')::date, (CURRENT_DATE + INTERVAL '30 days')::date, 'attivo', TRUE),
         ('p2', 'Mobile App', 'c1', 'Native iOS and Android application development.', (CURRENT_DATE - INTERVAL '28 days')::date, (CURRENT_DATE + INTERVAL '28 days')::date, 'attivo', TRUE),
-        ('p3', 'Internal Research', 'c2', 'Ongoing research into new market trends.', (CURRENT_DATE - INTERVAL '25 days')::date, (CURRENT_DATE + INTERVAL '25 days')::date, 'attivo', TRUE)
+        ('p3', 'Internal Research', 'c2', 'Ongoing research into new market trends.', (CURRENT_DATE - INTERVAL '25 days')::date, (CURRENT_DATE + INTERVAL '25 days')::date, 'interno', TRUE)
      ON CONFLICT (id) DO UPDATE SET
        name = EXCLUDED.name,
        client_id = EXCLUDED.client_id,

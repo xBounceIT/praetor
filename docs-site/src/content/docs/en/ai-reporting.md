@@ -41,7 +41,7 @@ For every request, AI Reporting builds a fresh dataset restricted to the view pe
 
 - **Timesheets** — hours, authorized costs, and distributions by period, location, user, client, project, and task.
 - **Clients** — master data and related activity.
-- **Projects** — status, active/passive type, dates, revenue, billing, linked documents, hours, and authorized costs.
+- **Projects** — status, active/passive/internal type, dates, revenue, billing, optional linked documents, hours, and authorized costs.
 - **Tasks** — recurrence, duration, effort, revenue, billing, and recorded hours.
 - **Client quotes** and **client offers** — amounts, statuses, expiry dates, and leading clients.
 - **Client orders** and **client invoices** — values, statuses, payments, outstanding amounts, and aging.
