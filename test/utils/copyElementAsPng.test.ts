@@ -72,7 +72,7 @@ describe('copyElementAsPng', () => {
     expect(toBlobMock).toHaveBeenCalledTimes(1);
     const options = toBlobMock.mock.calls[0]?.[1] as {
       backgroundColor: string;
-      filter: (node: HTMLElement) => boolean;
+      filter: (node: Node) => boolean;
       pixelRatio: number;
     };
     expect(typeof options.backgroundColor).toBe('string');
@@ -83,6 +83,7 @@ describe('copyElementAsPng', () => {
     copyButton.dataset.exportExclude = 'true';
     expect(options.filter(copyButton)).toBe(false);
     expect(options.filter(document.createElement('div'))).toBe(true);
+    expect(options.filter(document.createTextNode('Chart title'))).toBe(true);
 
     expect(write).toHaveBeenCalledTimes(1);
     expect(await copiedItem?.data['image/png']).toBe(pngBlob);

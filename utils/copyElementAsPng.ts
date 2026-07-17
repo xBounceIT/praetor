@@ -1,6 +1,7 @@
 const PNG_MIME_TYPE = 'image/png';
 
-const includeInImage = (node: HTMLElement) => node.dataset.exportExclude !== 'true';
+const includeInImage = (node: Node) =>
+  !(node instanceof Element) || node.getAttribute('data-export-exclude') !== 'true';
 
 export const copyElementAsPng = async (element: HTMLElement) => {
   if (typeof ClipboardItem === 'undefined' || typeof navigator.clipboard?.write !== 'function') {
