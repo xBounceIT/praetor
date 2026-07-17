@@ -141,7 +141,7 @@ describe('seed.sql demo projects link to their offer/order chain', () => {
     const project = projects.get('p3');
     expect(project).toBeDefined();
     expect(project?.tipo).toBe('interno');
-    expect(project?.clientId).toBe('c2');
+    expect(project?.clientId).toBe('praetor-own-company');
     expect(project?.orderId).toBeNull();
     expect(project?.offerId).toBeNull();
 

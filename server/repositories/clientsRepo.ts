@@ -4,6 +4,7 @@ import { clients } from '../db/schema/clients.ts';
 import { formatClientAddress } from '../utils/client-address.ts';
 import { getUniqueViolation } from '../utils/db-errors.ts';
 import { parseDbNumber } from '../utils/parse.ts';
+export const OWN_COMPANY_CLIENT_ID = 'praetor-own-company';
 
 export type ClientContact = {
   fullName: string;
@@ -17,6 +18,7 @@ export type Client = {
   name: string;
   description: string | null;
   isDisabled: boolean;
+  isOwnCompany: boolean;
   type: string;
   contacts: ClientContact[];
   contactName: string | null;
@@ -135,6 +137,7 @@ export const mapClientRow = (c: Record<string, unknown>): Client => {
     name: typeof c.name === 'string' ? c.name : '',
     description: stringOrNull(c.description),
     isDisabled: c.is_disabled === true,
+    isOwnCompany: c.is_own_company === true,
     type: typeof c.type === 'string' ? c.type : '',
     contacts,
     contactName: stringOrNull(c.contact_name) || primary?.fullName || null,
@@ -217,7 +220,7 @@ export const list = async (options: ListOptions, exec: DbExecutor = db): Promise
 
   const rows = await executeRows<Record<string, unknown>>(
     exec,
-    sql`SELECT c.id, c.name, c.description, c.is_disabled, c.type,
+    sql`SELECT c.id, c.name, c.description, c.is_disabled, c.is_own_company, c.type,
         c.contacts, c.contact_name, c.client_code, c.email, c.phone, c.address,
         c.address_country, c.address_state, c.address_cap, c.address_province,
         c.address_civic_number, c.address_line,
@@ -277,6 +280,45 @@ export const existsById = async (id: string, exec: DbExecutor = db): Promise<boo
 export const findName = async (id: string, exec: DbExecutor = db): Promise<string | null> => {
   const rows = await exec.select({ name: clients.name }).from(clients).where(eq(clients.id, id));
   return rows[0]?.name ?? null;
+};
+
+export const ensureOwnCompanyClient = async (
+  companyName: string | null,
+  exec: DbExecutor = db,
+): Promise<{ id: string; name: string }> => {
+  const name = companyName?.trim() || 'PRAETOR';
+  const existing = await exec
+    .select({ id: clients.id, name: clients.name })
+    .from(clients)
+    .where(eq(clients.isOwnCompany, true))
+    .limit(1);
+
+  if (existing[0]) {
+    if (existing[0].name === name) return existing[0];
+    const updated = await exec
+      .update(clients)
+      .set({ name, isDisabled: false })
+      .where(eq(clients.id, existing[0].id))
+      .returning({ id: clients.id, name: clients.name });
+    return updated[0];
+  }
+
+  const inserted = await exec
+    .insert(clients)
+    .values({
+      id: OWN_COMPANY_CLIENT_ID,
+      name,
+      type: 'company',
+      isDisabled: false,
+      isOwnCompany: true,
+      description: 'Company identified by Praetor for internal projects.',
+    })
+    .onConflictDoUpdate({
+      target: clients.id,
+      set: { name, isDisabled: false, isOwnCompany: true },
+    })
+    .returning({ id: clients.id, name: clients.name });
+  return inserted[0];
 };
 
 export const findByFiscalCode = async (
@@ -415,6 +457,7 @@ export const create = async (input: NewClient, exec: DbExecutor = db): Promise<C
     id: row.id,
     name: row.name,
     is_disabled: row.isDisabled,
+    is_own_company: row.isOwnCompany,
     created_at: row.createdAt,
     type: row.type,
     contact_name: row.contactName,

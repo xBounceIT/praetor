@@ -2,7 +2,9 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, mock, tes
 import { Readable } from 'node:stream';
 import multipart from '@fastify/multipart';
 import Fastify, { type FastifyInstance, type FastifyPluginAsync } from 'fastify';
+import * as realDrizzle from '../../db/drizzle.ts';
 import * as realBrandingRepo from '../../repositories/brandingRepo.ts';
+import * as realClientsRepo from '../../repositories/clientsRepo.ts';
 import * as realRolesRepo from '../../repositories/rolesRepo.ts';
 import * as realUsersRepo from '../../repositories/usersRepo.ts';
 import { ajvFormatsPlugin, ajvFormatsPluginOptions } from '../../utils/ajv-formats.ts';
@@ -14,7 +16,11 @@ import {
   restoreAuthMiddlewareMock,
 } from '../helpers/authMiddlewareMock.ts';
 import { signToken } from '../helpers/jwt.ts';
+import { TX_SENTINEL } from '../helpers/txSentinel.ts';
+import { makeWithDbTransactionMock } from '../helpers/withDbTransactionMock.ts';
 
+const clientsRepoSnap = { ...realClientsRepo };
+const drizzleSnap = { ...realDrizzle };
 const usersRepoSnap = { ...realUsersRepo };
 const rolesRepoSnap = { ...realRolesRepo };
 const permissionsSnap = { ...realPermissions };
@@ -22,6 +28,8 @@ const brandingRepoSnap = { ...realBrandingRepo };
 const fileStorageSnap = { ...realFileStorage };
 const auditSnap = { ...realAudit };
 
+const ensureOwnCompanyClientMock = mock();
+const { withDbTransactionMock, resetWithDbTransactionMock } = makeWithDbTransactionMock();
 const findAuthUserByIdMock = mock();
 const userHasRoleMock = mock();
 const getRolePermissionsMock = mock();
@@ -64,6 +72,14 @@ beforeAll(async () => {
     clearLogo: clearLogoMock,
     clearLogoWithPrevious: clearLogoWithPreviousMock,
   }));
+  mock.module('../../repositories/clientsRepo.ts', () => ({
+    ...clientsRepoSnap,
+    ensureOwnCompanyClient: ensureOwnCompanyClientMock,
+  }));
+  mock.module('../../db/drizzle.ts', () => ({
+    ...drizzleSnap,
+    withDbTransaction: withDbTransactionMock,
+  }));
   mock.module('../../utils/fileStorage.ts', () => ({
     ...fileStorageSnap,
     BRANDING_LOGO_MAX_BYTES: TEST_MAX_BYTES,
@@ -86,6 +102,8 @@ afterAll(() => {
   mock.module('../../repositories/rolesRepo.ts', () => rolesRepoSnap);
   mock.module('../../utils/permissions.ts', () => permissionsSnap);
   mock.module('../../repositories/brandingRepo.ts', () => brandingRepoSnap);
+  mock.module('../../repositories/clientsRepo.ts', () => clientsRepoSnap);
+  mock.module('../../db/drizzle.ts', () => drizzleSnap);
   mock.module('../../utils/fileStorage.ts', () => fileStorageSnap);
   mock.module('../../utils/audit.ts', () => auditSnap);
 });
@@ -96,6 +114,7 @@ const allMocks = [
   getRolePermissionsMock,
   getMock,
   setCompanyNameMock,
+  ensureOwnCompanyClientMock,
   setLogoMock,
   clearLogoMock,
   clearLogoWithPreviousMock,
@@ -134,6 +153,8 @@ beforeEach(async () => {
   for (const m of allMocks) m.mockReset();
   findAuthUserByIdMock.mockResolvedValue(HAPPY_USER);
   userHasRoleMock.mockResolvedValue(true);
+  resetWithDbTransactionMock();
+  ensureOwnCompanyClientMock.mockResolvedValue({ id: 'c-own', name: 'PRAETOR' });
   getRolePermissionsMock.mockResolvedValue(['administration.general.update']);
   logAuditMock.mockImplementation(async () => undefined);
   testApp = await buildApp();
@@ -283,7 +304,8 @@ describe('PUT /api/branding', () => {
     });
 
     expect(res.statusCode).toBe(200);
-    expect(setCompanyNameMock).toHaveBeenCalledWith('Acme');
+    expect(setCompanyNameMock).toHaveBeenCalledWith('Acme', TX_SENTINEL);
+    expect(ensureOwnCompanyClientMock).toHaveBeenCalledWith('Acme', TX_SENTINEL);
     expect(JSON.parse(res.body)).toEqual({
       companyName: 'Acme',
       hasLogo: false,
@@ -311,7 +333,8 @@ describe('PUT /api/branding', () => {
     });
 
     expect(res.statusCode).toBe(200);
-    expect(setCompanyNameMock).toHaveBeenCalledWith(null);
+    expect(setCompanyNameMock).toHaveBeenCalledWith(null, TX_SENTINEL);
+    expect(ensureOwnCompanyClientMock).toHaveBeenCalledWith(null, TX_SENTINEL);
   });
 });
 

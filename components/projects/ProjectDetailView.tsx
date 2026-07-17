@@ -29,7 +29,13 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from '@/components/ui/empty';
-import { Field, FieldError, FieldLabel, RequiredMark } from '@/components/ui/field';
+import {
+  Field,
+  FieldDescription,
+  FieldError,
+  FieldLabel,
+  RequiredMark,
+} from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -178,6 +184,7 @@ const resolveRevenueSource = (activitiesSum: number): RevenueSource => {
 export interface ProjectDetailViewProps {
   project: Project;
   clients: Client[];
+  companyName: string | null;
   orders: ClientsOrder[];
   offers: ClientOffer[];
   users: User[];
@@ -317,6 +324,7 @@ const projectDetailUiReducer = (
 
 const useProjectDetailController = ({
   project,
+  companyName,
   clients,
   orders,
   offers,
@@ -896,6 +904,7 @@ const useProjectDetailController = ({
     billingTypeDraft !== null ||
     (billingFrequencyDraft !== null &&
       billingFrequencyDraft !== (project.billingFrequency ?? DEFAULT_BILLING_FREQUENCY));
+  const companyDisplayName = companyName?.trim() || 'PRAETOR';
 
   const isInternalProject = tipo === 'interno';
   const linkedOrder = orderId ? orders.find((o) => o.id === orderId) : undefined;
@@ -1017,7 +1026,7 @@ const useProjectDetailController = ({
     if (!canUpdateProjects) return;
     const newErrors: Record<string, string> = {};
     if (!name.trim()) newErrors.name = t('common:validation.projectNameRequired');
-    if (!clientId) newErrors.clientId = t('projects:projects.clientRequired');
+    if (!isInternalProject && !clientId) newErrors.clientId = t('projects:projects.clientRequired');
     if (!isInternalProject && !orderId) newErrors.orderId = t('projects:projects.orderRequired');
     // Only enforce required dates on projects that already carry them. Legacy projects
     // predating the dates-required rule still allow null dates on the PATCH endpoint;
@@ -1041,7 +1050,7 @@ const useProjectDetailController = ({
     }
     const updates: Partial<Project> = {
       name,
-      clientId,
+      clientId: isInternalProject ? undefined : clientId,
       description,
       isDisabled: tempIsDisabled,
       orderId: isInternalProject ? null : orderId,
@@ -1188,6 +1197,7 @@ const useProjectDetailController = ({
     canUpdateTasks,
     canDeleteTasks,
     canManageAssignments,
+    companyDisplayName,
     canViewCost,
     name,
     clientId,
@@ -1504,6 +1514,23 @@ const ProjectDetailOrderField: React.FC<{ controller: ProjectDetailController }>
 const ProjectDetailClientField: React.FC<{ controller: ProjectDetailController }> = ({
   controller,
 }) => {
+  if (controller.isInternalProject) {
+    return (
+      <Field>
+        <FieldLabel htmlFor="detail-client">
+          {controller.t('projects:projects.client')} <RequiredMark />
+        </FieldLabel>
+        <Input
+          id="detail-client"
+          value={controller.companyDisplayName}
+          readOnly
+          aria-readonly="true"
+          className="bg-muted/40 text-foreground"
+        />
+        <FieldDescription>{controller.t('projects:projects.internalClientHint')}</FieldDescription>
+      </Field>
+    );
+  }
   const {
     t,
     clientOptions,

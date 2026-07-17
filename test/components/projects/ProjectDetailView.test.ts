@@ -19,6 +19,7 @@ describe('ProjectDetailView wiring', () => {
     for (const field of [
       'project: Project',
       'clients: Client[]',
+      'companyName: string | null',
       'orders: ClientsOrder[]',
       'offers: ClientOffer[]',
       'users: User[]',
@@ -166,6 +167,10 @@ describe('ProjectDetailView wiring', () => {
     );
     expect(source).toContain("orderId !== (project.orderId ?? '')");
     expect(source).toContain('orderId: isInternalProject ? null : orderId,');
+    expect(source).toContain('clientId: isInternalProject ? undefined : clientId');
+    expect(source).toContain("const companyDisplayName = companyName?.trim() || 'PRAETOR'");
+    expect(source).toContain('value={controller.companyDisplayName}');
+    expect(source).toContain("t('projects:projects.internalClientHint')");
     expect(source).toContain('offerId: isInternalProject ? null : offerId || null,');
     expect(source).toContain("label={t('projects:projects.offerOptionalLabel')}");
     expect(source).toContain("{ id: '', name: t('projects:projects.noOfferLinked') }");

@@ -128,7 +128,7 @@ const formatDraftNumber = (value: number, minimumFractionDigits = 0) =>
 
 export type AddProjectFormInput = {
   name: string;
-  clientId: string;
+  clientId?: string;
   orderId?: string | null;
   offerId?: string | null;
   description?: string;
@@ -147,6 +147,7 @@ export type ProjectsViewTab = 'commissions' | 'tasks';
 export interface ProjectsViewProps {
   projects: Project[];
   clients: Client[];
+  companyName: string | null;
   orders: ClientsOrder[];
   offers: ClientOffer[];
   permissions: string[];
@@ -315,6 +316,7 @@ const projectsViewReducer = (
 
 const useProjectsController = ({
   projects,
+  companyName,
   clients,
   orders,
   offers,
@@ -367,6 +369,7 @@ const useProjectsController = ({
     draftTasks,
   } = state;
   const isInternalProject = tipo === 'interno';
+  const companyDisplayName = companyName?.trim() || 'PRAETOR';
 
   const clientById = useMemo(
     () => new Map(clients.map((client) => [client.id, client])),
@@ -504,7 +507,7 @@ const useProjectsController = ({
 
     const newErrors: Record<string, string> = {};
     if (!name?.trim()) newErrors.name = t('common:validation.projectNameRequired');
-    if (!clientId) newErrors.clientId = t('projects:projects.clientRequired');
+    if (!isInternalProject && !clientId) newErrors.clientId = t('projects:projects.clientRequired');
     if (!isInternalProject && !orderId) newErrors.orderId = t('projects:projects.orderRequired');
     if (!startDate) newErrors.startDate = t('projects:projects.startDateRequired');
     if (!endDate) newErrors.endDate = t('projects:projects.endDateRequired');
@@ -533,7 +536,7 @@ const useProjectsController = ({
     }
     const result = await onAddProject({
       name,
-      clientId,
+      clientId: isInternalProject ? undefined : clientId,
       orderId: isInternalProject ? null : orderId,
       offerId: isInternalProject ? null : offerId || null,
       description,
@@ -876,11 +879,15 @@ const useProjectsController = ({
     {
       header: t('projects:projects.tableHeaders.client'),
       id: 'client',
-      accessorFn: (row) => clientById.get(row.clientId)?.name || t('projects:projects.unknown'),
+      accessorFn: (row) =>
+        row.tipo === 'interno'
+          ? companyDisplayName
+          : clientById.get(row.clientId)?.name || t('projects:projects.unknown'),
       cell: ({ row }) => {
         const client = clientById.get(row.clientId);
-        const isClientDisabled = client?.isDisabled || false;
-        return client ? (
+        const clientName = row.tipo === 'interno' ? companyDisplayName : client?.name;
+        const isClientDisabled = row.tipo !== 'interno' && Boolean(client?.isDisabled);
+        return clientName ? (
           <span
             className={`text-sm font-bold ${
               isClientDisabled
@@ -890,7 +897,7 @@ const useProjectsController = ({
                   : 'text-zinc-700'
             }`}
           >
-            {client.name}
+            {clientName}
             {isClientDisabled && ` ${t('projects:projects.disabledLabel')}`}
           </span>
         ) : (
@@ -1024,7 +1031,7 @@ const useProjectsController = ({
       accessorFn: (row) => formatProjectStatus(row.status),
       cell: ({ row }) => {
         const client = clientById.get(row.clientId);
-        const isClientDisabled = client?.isDisabled || false;
+        const isClientDisabled = row.tipo !== 'interno' && Boolean(client?.isDisabled);
         return (
           <div className="flex flex-wrap items-center gap-1.5">
             <StatusBadge
@@ -1147,6 +1154,7 @@ const useProjectsController = ({
     canCreateProjects,
     canManageAssignments,
     canViewCommissions,
+    companyDisplayName,
     canViewTasks,
     clearStaleClientLinks,
     clientId,
@@ -1301,35 +1309,51 @@ const ProjectClientOrderFields: React.FC<{ controller: ProjectsController }> = (
         <FieldError className="text-xs">{controller.errors.orderId}</FieldError>
       </div>
     )}
-    <div className="space-y-1.5">
-      <SelectControl
-        id="project-client"
-        options={controller.clientOptions}
-        value={controller.clientId}
-        onChange={(value) => controller.applyClientChange(value as string)}
-        label={
-          <>
-            {controller.t('projects:projects.client')} <RequiredMark />
-          </>
-        }
-        placeholder={controller.t('projects:projects.selectClient')}
-        searchable={true}
-        disabled={Boolean(controller.selectedOrder)}
-        buttonClassName="h-9"
-      />
-      <FieldError className="text-xs">{controller.errors.clientId}</FieldError>
-      {controller.selectedOrder && (
-        <div className="mt-1.5 flex items-center gap-2 rounded-md border border-border bg-muted/30 px-3 py-2">
-          <i className="fa-solid fa-link text-xs text-muted-foreground" aria-hidden="true"></i>
-          <span className="text-xs text-muted-foreground">
-            {controller.t('projects:projects.inheritedClientLabel')}:
-          </span>
-          <span className="text-xs font-medium text-foreground">
-            {controller.selectedOrder.clientName}
-          </span>
-        </div>
-      )}
-    </div>
+    {controller.isInternalProject ? (
+      <Field>
+        <FieldLabel htmlFor="project-client">
+          {controller.t('projects:projects.client')} <RequiredMark />
+        </FieldLabel>
+        <Input
+          id="project-client"
+          value={controller.companyDisplayName}
+          readOnly
+          aria-readonly="true"
+          className="bg-muted/40 text-foreground"
+        />
+        <FieldDescription>{controller.t('projects:projects.internalClientHint')}</FieldDescription>
+      </Field>
+    ) : (
+      <div className="space-y-1.5">
+        <SelectControl
+          id="project-client"
+          options={controller.clientOptions}
+          value={controller.clientId}
+          onChange={(value) => controller.applyClientChange(value as string)}
+          label={
+            <>
+              {controller.t('projects:projects.client')} <RequiredMark />
+            </>
+          }
+          placeholder={controller.t('projects:projects.selectClient')}
+          searchable={true}
+          disabled={Boolean(controller.selectedOrder)}
+          buttonClassName="h-9"
+        />
+        <FieldError className="text-xs">{controller.errors.clientId}</FieldError>
+        {controller.selectedOrder && (
+          <div className="mt-1.5 flex items-center gap-2 rounded-md border border-border bg-muted/30 px-3 py-2">
+            <i className="fa-solid fa-link text-xs text-muted-foreground" aria-hidden="true"></i>
+            <span className="text-xs text-muted-foreground">
+              {controller.t('projects:projects.inheritedClientLabel')}:
+            </span>
+            <span className="text-xs font-medium text-foreground">
+              {controller.selectedOrder.clientName}
+            </span>
+          </div>
+        )}
+      </div>
+    )}
     <Field data-invalid={Boolean(controller.errors.name)} className="md:col-span-2">
       <FieldLabel htmlFor="project-name">
         {controller.t('projects:projects.name')} <RequiredMark />
@@ -1490,7 +1514,11 @@ const ProjectTipoField: React.FC<{ controller: ProjectsController }> = ({ contro
           if (nextTipo === 'interno') {
             controller.dispatch({ type: 'setOrderId', value: '' });
             controller.dispatch({ type: 'setOfferId', value: '' });
-            controller.dispatch({ type: 'patchErrors', value: { orderId: '', offerId: '' } });
+            controller.dispatch({ type: 'setClientId', value: '' });
+            controller.dispatch({
+              type: 'patchErrors',
+              value: { clientId: '', orderId: '', offerId: '' },
+            });
           }
           if (controller.errors.tipo) {
             controller.dispatch({ type: 'patchErrors', value: { tipo: '' } });

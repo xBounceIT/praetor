@@ -140,7 +140,6 @@ describe('makeProjectHandlers', () => {
 
     await handlers.add({
       name: 'Internal Research',
-      clientId: 'client-B',
       orderId: 'stale-order',
       offerId: 'stale-offer',
       tipo: 'interno',
@@ -150,7 +149,7 @@ describe('makeProjectHandlers', () => {
     expect(apiMocks.projectsCreate).toHaveBeenCalledTimes(1);
     expect(apiMocks.projectsCreate.mock.calls[0]?.[0]).toEqual(
       expect.objectContaining({
-        clientId: 'client-B',
+        clientId: undefined,
         tipo: 'interno',
         orderId: null,
         offerId: null,

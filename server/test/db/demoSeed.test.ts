@@ -146,7 +146,9 @@ describe('insertCompatibilityDefaults', () => {
     expect(calls[1]?.sql).toContain('address_line = EXCLUDED.address_line');
     expect(calls[2]?.sql).toContain('description = EXCLUDED.description');
     expect(calls[2]?.sql).toContain('tipo_confirmed = EXCLUDED.tipo_confirmed');
-    expect(calls[2]?.sql).toMatch(/\('p3', 'Internal Research'[\s\S]*?'interno', TRUE\)/);
+    expect(calls[2]?.sql).toMatch(
+      /\('p3', 'Internal Research', 'praetor-own-company'[\s\S]*?'interno', TRUE\)/,
+    );
     expect(calls[2]?.sql).toContain('order_id = NULL');
     expect(calls[2]?.sql).toContain('offer_id = NULL');
     expect(calls[2]?.sql).toContain('billing_type = DEFAULT');

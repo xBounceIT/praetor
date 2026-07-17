@@ -6,8 +6,10 @@ import {
   requirePermission,
   requireScopedPermission,
 } from '../middleware/auth.ts';
+import * as brandingRepo from '../repositories/brandingRepo.ts';
 import * as clientOffersRepo from '../repositories/clientOffersRepo.ts';
 import * as clientsOrdersRepo from '../repositories/clientsOrdersRepo.ts';
+import * as clientsRepo from '../repositories/clientsRepo.ts';
 import * as projectsRepo from '../repositories/projectsRepo.ts';
 import * as userAssignmentsRepo from '../repositories/userAssignmentsRepo.ts';
 import * as workUnitsRepo from '../repositories/workUnitsRepo.ts';
@@ -128,7 +130,7 @@ const projectCreateBodySchema = {
   type: 'object',
   properties: {
     name: { type: 'string' },
-    clientId: { type: 'string' },
+    clientId: { type: ['string', 'null'] },
     description: { type: ['string', 'null'] },
     orderId: { type: ['string', 'null'] },
     offerId: { type: ['string', 'null'] },
@@ -140,14 +142,14 @@ const projectCreateBodySchema = {
     status: { type: 'string', enum: PROJECT_STATUSES },
     tipo: { type: 'string', enum: PROJECT_TIPOS },
   },
-  required: ['name', 'clientId', 'startDate', 'endDate', 'tipo'],
+  required: ['name', 'startDate', 'endDate', 'tipo'],
 } as const;
 
 const projectUpdateBodySchema = {
   type: 'object',
   properties: {
     name: { type: 'string' },
-    clientId: { type: 'string' },
+    clientId: { type: ['string', 'null'] },
     description: { type: ['string', 'null'] },
     isDisabled: { type: 'boolean' },
     orderId: { type: ['string', 'null'] },
@@ -346,7 +348,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!assertAuthenticated(request, reply)) return;
       const { name, clientId, description, orderId } = request.body as {
         name: string;
-        clientId: string;
+        clientId?: string | null;
         description?: string | null;
         orderId?: string | null;
         billingType?: string;
@@ -366,26 +368,31 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const nameResult = requireNonEmptyString(name, 'name');
       if (!nameResult.ok) return badRequest(reply, nameResult.message);
 
-      const clientIdResult = requireNonEmptyString(clientId, 'clientId');
+      // `tipo` is mandatory on create (issue #784): the form requires a deliberate choice.
+      const tipoResult = validateEnum(body.tipo, PROJECT_TIPOS, 'tipo');
+      if (!tipoResult.ok) return badRequest(reply, tipoResult.message);
+      const isInternalProject = tipoResult.value === 'interno';
+
+      const clientIdResult = isInternalProject
+        ? optionalNonEmptyString(clientId, 'clientId')
+        : requireNonEmptyString(clientId, 'clientId');
       if (!clientIdResult.ok) return badRequest(reply, clientIdResult.message);
+      const requestedClientId = clientIdResult.value;
       if (
+        !isInternalProject &&
+        requestedClientId !== null &&
         !hasPermission(request, 'projects.manage_all.create') &&
-        !(await canAccessClient(request, clientIdResult.value))
+        !(await canAccessClient(request, requestedClientId))
       ) {
         return replyError(request, reply, {
           statusCode: 403,
           message: 'Insufficient permissions',
           action: 'project.create.denied',
           entityType: 'client',
-          entityId: clientIdResult.value,
+          entityId: requestedClientId,
           details: { secondaryLabel: 'client_access_denied' },
         });
       }
-
-      // `tipo` is mandatory on create (issue #784): the form requires a deliberate choice.
-      const tipoResult = validateEnum(body.tipo, PROJECT_TIPOS, 'tipo');
-      if (!tipoResult.ok) return badRequest(reply, tipoResult.message);
-      const isInternalProject = tipoResult.value === 'interno';
 
       const orderIdResult = isInternalProject
         ? optionalNonEmptyString(orderId, 'orderId')
@@ -433,17 +440,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             ? clientOffersRepo.findClientIdById(offerIdResult.value)
             : Promise.resolve(null),
         ]);
-        if (orderLink === null || orderLink.clientId !== clientIdResult.value) {
+        if (orderLink === null || orderLink.clientId !== requestedClientId) {
           return badRequest(reply, 'orderId does not belong to the specified clientId');
         }
         if (orderLink.status !== 'confirmed') {
           return badRequest(reply, 'orderId must reference a confirmed client order');
         }
-        if (
-          offerIdResult.value &&
-          offerClientId !== null &&
-          offerClientId !== clientIdResult.value
-        ) {
+        if (offerIdResult.value && offerClientId !== null && offerClientId !== requestedClientId) {
           return badRequest(reply, 'offerId does not belong to the specified clientId');
         }
       }
@@ -453,11 +456,19 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         // Without the transaction, an assignment failure left the project committed but
         // unassigned (orphan) while the handler still returned 500.
         const created = await withDbTransaction(async (tx) => {
+          const projectClientId = isInternalProject
+            ? (
+                await clientsRepo.ensureOwnCompanyClient(
+                  (await brandingRepo.get(tx))?.companyName ?? null,
+                  tx,
+                )
+              ).id
+            : (requestedClientId as string);
           const project = await projectsRepo.create(
             {
               id,
               name: nameResult.value,
-              clientId: clientIdResult.value,
+              clientId: projectClientId,
               description: description || null,
               isDisabled: false,
               orderId: orderIdResult.value,
@@ -474,14 +485,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           );
 
           await Promise.all([
-            userAssignmentsRepo.assignClientToUser(
-              request.user.id,
-              clientIdResult.value,
-              undefined,
-              tx,
-            ),
+            userAssignmentsRepo.assignClientToUser(request.user.id, projectClientId, undefined, tx),
             userAssignmentsRepo.assignProjectToUser(request.user.id, id, undefined, tx),
-            userAssignmentsRepo.assignClientToTopManagers(clientIdResult.value, tx),
+            userAssignmentsRepo.assignClientToTopManagers(projectClientId, tx),
             userAssignmentsRepo.assignProjectToTopManagers(id, tx),
           ]);
 
@@ -497,7 +503,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           entityId: id,
           details: {
             targetLabel: nameResult.value,
-            secondaryLabel: clientIdResult.value,
+            secondaryLabel: created.clientId,
           },
         });
         return reply.code(201).send(created);
@@ -608,7 +614,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const { id } = request.params as { id: string };
       const body = request.body as {
         name?: string;
-        clientId?: string;
+        clientId?: string | null;
         description?: string | null;
         isDisabled?: boolean;
         orderId?: string | null;
@@ -735,9 +741,27 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             }
           }
 
+          // Resolve the final commercial state from the locked row plus this patch.
+          const finalOrderId = orderIdPatch.provided ? orderIdPatch.value : existingLinks.orderId;
+          const finalOfferId = offerIdPatch.provided ? offerIdPatch.value : existingLinks.offerId;
+          const finalTipo = tipoResult.value ?? previousTipo;
+          if (finalTipo === 'interno' && (finalOrderId || finalOfferId)) {
+            throw new InternalProjectLinksError('internal projects cannot link an order or offer');
+          }
+
           const requestedClientId =
-            typeof clientId === 'string' && clientId !== '' ? clientId : previousClientId;
+            finalTipo === 'interno'
+              ? (
+                  await clientsRepo.ensureOwnCompanyClient(
+                    (await brandingRepo.get(tx))?.companyName ?? null,
+                    tx,
+                  )
+                ).id
+              : typeof clientId === 'string' && clientId !== ''
+                ? clientId
+                : previousClientId;
           if (
+            finalTipo !== 'interno' &&
             requestedClientId !== previousClientId &&
             !hasPermission(request, 'projects.manage_all.update') &&
             !(await canAccessClient(request, requestedClientId))
@@ -745,18 +769,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             throw new PermissionError();
           }
           const clientChanged = requestedClientId !== previousClientId;
-          // Resolve the final commercial state from the locked row plus this patch.
-          const finalOrderId = orderIdPatch.provided ? orderIdPatch.value : existingLinks.orderId;
-          const finalOfferId = offerIdPatch.provided ? offerIdPatch.value : existingLinks.offerId;
-          const finalTipo = tipoResult.value ?? previousTipo;
 
-          if (finalTipo === 'interno') {
-            if (finalOrderId || finalOfferId) {
-              throw new InternalProjectLinksError(
-                'internal projects cannot link an order or offer',
-              );
-            }
-          } else {
+          if (finalTipo !== 'interno') {
             if (!finalOrderId) {
               throw new OrderRequiredError('orderId is required');
             }

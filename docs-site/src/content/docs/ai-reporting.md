@@ -41,7 +41,7 @@ AI Reporting costruisce per ogni richiesta un dataset aggiornato e limitato ai p
 
 - **Consuntivi** — ore, costi autorizzati e distribuzioni per periodo, luogo, utente, cliente, progetto e attività.
 - **Clienti** — anagrafica e attività collegate.
-- **Progetti** — stato, tipo attivo/passivo/interno, periodo, ricavi, fatturazione, eventuali documenti collegati, ore e costi autorizzati.
+- **Progetti** — stato, tipo attivo/passivo/interno, cliente (per gli interni coincide con l'azienda configurata in Praetor), periodo, ricavi, fatturazione, eventuali documenti collegati, ore e costi autorizzati.
 - **Attività** — ricorrenza, durata, effort, ricavi, fatturazione e ore consuntivate.
 - **Preventivi cliente** e **offerte cliente** — importi, stati, scadenze e clienti principali.
 - **Ordini cliente** e **fatture cliente** — valori, stati, incassi, insoluti e scadenzario.

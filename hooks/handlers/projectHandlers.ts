@@ -19,7 +19,7 @@ export const makeProjectHandlers = (deps: ProjectHandlersDeps) => {
 
   const add = async (input: AddProjectInput): Promise<Project | null> => {
     try {
-      if (!input.clientId) throw new Error('Client is required');
+      if (input.tipo !== 'interno' && !input.clientId) throw new Error('Client is required');
       if (input.tipo !== 'interno' && !input.orderId) throw new Error('Order is required');
 
       const project = await api.projects.create({

@@ -70,6 +70,7 @@
     "selectOrder": "Select Order...",
     "orderRequired": "Client order is required",
     "inheritedClientLabel": "Client (inherited from order)",
+    "internalClientHint": "Internal projects automatically use the company identified in Praetor.",
     "startDate": "Job start date",
     "endDate": "Job end date",
     "startDateRequired": "Job start date is required",

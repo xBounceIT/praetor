@@ -975,6 +975,21 @@ describe('PUT /api/clients/:id', () => {
     );
   });
 
+  test('409 prevents editing the Branding-managed company client', async () => {
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/clients/praetor-own-company',
+      headers: authHeader(),
+      payload: { name: 'Renamed outside Branding' },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(JSON.parse(res.body)).toEqual({
+      error: 'The company client is managed through Branding',
+    });
+    expect(updateClientMock).not.toHaveBeenCalled();
+  });
+
   test('200 isDisabled=true alone audits as client.disabled', async () => {
     findContactsForUpdateMock.mockResolvedValue({ contacts: [] });
     updateClientMock.mockResolvedValue({ ...SAMPLE_CLIENT, isDisabled: true });
@@ -1203,6 +1218,20 @@ describe('DELETE /api/clients/:id', () => {
     expect(logAuditMock).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'client.deleted', entityId: 'c-1' }),
     );
+  });
+
+  test('409 prevents deleting the Branding-managed company client', async () => {
+    const res = await testApp.inject({
+      method: 'DELETE',
+      url: '/api/clients/praetor-own-company',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(JSON.parse(res.body)).toEqual({
+      error: 'The company client is managed through Branding',
+    });
+    expect(deleteClientByIdMock).not.toHaveBeenCalled();
   });
 
   test('204 crm.clients_all.delete bypasses assigned-client check', async () => {

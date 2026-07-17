@@ -260,6 +260,7 @@ export interface Client {
   name: string;
   createdAt?: number;
   isDisabled?: boolean;
+  isOwnCompany?: boolean;
   type?: 'individual' | 'company';
   contacts?: ClientContact[];
   contactName?: string | null;

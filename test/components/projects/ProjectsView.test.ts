@@ -85,7 +85,7 @@ describe('ProjectsView (create-only dialog after detail-page revamp)', () => {
 });
 
 describe('ProjectsView create-form validation', () => {
-  test('create form requires name, client, dates, and an order only for commercial jobs', async () => {
+  test('create form requires client and order only for commercial jobs', async () => {
     const source = await Bun.file(
       new URL('../../../components/projects/ProjectsView.tsx', import.meta.url),
     ).text();
@@ -93,7 +93,7 @@ describe('ProjectsView create-form validation', () => {
       "if (!name?.trim()) newErrors.name = t('common:validation.projectNameRequired')",
     );
     expect(source).toContain(
-      "if (!clientId) newErrors.clientId = t('projects:projects.clientRequired')",
+      "if (!isInternalProject && !clientId) newErrors.clientId = t('projects:projects.clientRequired')",
     );
     expect(source).toContain(
       "if (!isInternalProject && !orderId) newErrors.orderId = t('projects:projects.orderRequired')",
@@ -136,6 +136,10 @@ describe('ProjectsView create-form validation', () => {
     expect(source).toContain('{!controller.isInternalProject && (');
     expect(source).toContain('orderId: isInternalProject ? null : orderId');
     expect(source).toContain('offerId: isInternalProject ? null : offerId || null');
+    expect(source).toContain('clientId: isInternalProject ? undefined : clientId');
+    expect(source).toContain("const companyDisplayName = companyName?.trim() || 'PRAETOR'");
+    expect(source).toContain('value={controller.companyDisplayName}');
+    expect(source).toContain("t('projects:projects.internalClientHint')");
     expect(source).toContain("if (nextTipo === 'interno')");
     expect(source).toContain("controller.dispatch({ type: 'setOrderId', value: '' })");
     expect(source).toContain("controller.dispatch({ type: 'setOfferId', value: '' })");

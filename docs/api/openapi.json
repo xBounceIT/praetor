@@ -8224,6 +8224,9 @@
                           "isDisabled": {
                             "type": "boolean"
                           },
+                          "isOwnCompany": {
+                            "type": "boolean"
+                          },
                           "type": {
                             "type": "string"
                           },
@@ -8715,6 +8718,9 @@
                     "isDisabled": {
                       "type": "boolean"
                     },
+                    "isOwnCompany": {
+                      "type": "boolean"
+                    },
                     "type": {
                       "type": "string"
                     },
@@ -9174,6 +9180,9 @@
                                     ]
                                   },
                                   "isDisabled": {
+                                    "type": "boolean"
+                                  },
+                                  "isOwnCompany": {
                                     "type": "boolean"
                                   },
                                   "type": {
@@ -9769,6 +9778,9 @@
                       ]
                     },
                     "isDisabled": {
+                      "type": "boolean"
+                    },
+                    "isOwnCompany": {
                       "type": "boolean"
                     },
                     "type": {
@@ -11338,7 +11350,10 @@
                     "type": "string"
                   },
                   "clientId": {
-                    "type": "string"
+                    "type": [
+                      "string",
+                      "null"
+                    ]
                   },
                   "description": {
                     "type": [
@@ -11404,7 +11419,6 @@
                 },
                 "required": [
                   "name",
-                  "clientId",
                   "startDate",
                   "endDate",
                   "tipo"
@@ -12213,7 +12227,10 @@
                     "type": "string"
                   },
                   "clientId": {
-                    "type": "string"
+                    "type": [
+                      "string",
+                      "null"
+                    ]
                   },
                   "description": {
                     "type": [

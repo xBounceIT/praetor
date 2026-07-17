@@ -70,6 +70,7 @@
     "selectOrder": "Seleziona Ordine...",
     "orderRequired": "L'ordine cliente è obbligatorio",
     "inheritedClientLabel": "Cliente (ereditato dall'ordine)",
+    "internalClientHint": "Per le commesse interne viene utilizzata automaticamente l'azienda identificata in Praetor.",
     "startDate": "Data inizio commessa",
     "endDate": "Data fine commessa",
     "startDateRequired": "La data di inizio commessa è obbligatoria",

@@ -91,7 +91,7 @@ INSERT INTO clients (
         'research@global-tech.demo',
         '+39 011 5550 6202',
         'Corso Vittorio Emanuele II 74, 10121 Torino (TO), Italia',
-        'Client used to group the Internal Research demo project.',
+        'Demo customer for commercial projects and CRM workflows.',
         '72.19.09',
         'https://global-tech.demo',
         'SERVICES',
@@ -116,7 +116,7 @@ ON CONFLICT (id) DO NOTHING;
 INSERT INTO projects (id, name, client_id, description, start_date, end_date, tipo, tipo_confirmed) VALUES
     ('p1', 'Website Redesign', 'c1', 'Complete overhaul of the main marketing site.', (CURRENT_DATE - INTERVAL '30 days')::date, (CURRENT_DATE + INTERVAL '30 days')::date, 'attivo', TRUE),
     ('p2', 'Mobile App', 'c1', 'Native iOS and Android application development.', (CURRENT_DATE - INTERVAL '28 days')::date, (CURRENT_DATE + INTERVAL '28 days')::date, 'attivo', TRUE),
-    ('p3', 'Internal Research', 'c2', 'Ongoing research into new market trends.', (CURRENT_DATE - INTERVAL '25 days')::date, (CURRENT_DATE + INTERVAL '25 days')::date, 'interno', TRUE)
+    ('p3', 'Internal Research', 'praetor-own-company', 'Ongoing research into new market trends.', (CURRENT_DATE - INTERVAL '25 days')::date, (CURRENT_DATE + INTERVAL '25 days')::date, 'interno', TRUE)
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO tasks (id, name, project_id, description) VALUES
@@ -1533,6 +1533,13 @@ ON CONFLICT (id) DO UPDATE SET
     hourly_cost = EXCLUDED.hourly_cost,
     is_placeholder = EXCLUDED.is_placeholder,
     location = EXCLUDED.location;
+
+UPDATE time_entries te
+SET client_id = own_company.id,
+    client_name = own_company.name
+FROM clients own_company
+WHERE own_company.id = 'praetor-own-company'
+  AND te.project_id = 'p3';
 
 INSERT INTO time_entries (
     id, user_id, date, client_id, client_name, project_id, project_name,
