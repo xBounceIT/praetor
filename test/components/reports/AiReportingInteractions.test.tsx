@@ -1005,13 +1005,6 @@ describe('<AiReportingView /> interactions', () => {
       '```',
     ].join('\n');
     const secondChartJson = JSON.stringify(secondChartDefinition);
-    const secondChartSplitIndex = Math.floor(secondChartJson.length / 2);
-    const secondChartStart = [
-      'Margin analysis is ready.',
-      '```praetor-visualization',
-      secondChartJson.slice(0, secondChartSplitIndex),
-    ].join('\n');
-    const secondChartEnd = `${secondChartJson.slice(secondChartSplitIndex)}\n\`\`\``;
     const chartContent = [
       firstChartContent,
       'Margin analysis is ready.',
@@ -1036,16 +1029,14 @@ describe('<AiReportingView /> interactions', () => {
         createdAt: 1_752_493_600_003,
       },
     ];
-    getSessionMessagesMock.mockResolvedValueOnce(messages).mockResolvedValueOnce(completedMessages);
+    let resolveCanonicalMessages: ((value: ReportChatMessage[]) => void) | undefined;
+    const canonicalMessages = new Promise<ReportChatMessage[]>((resolve) => {
+      resolveCanonicalMessages = resolve;
+    });
+    getSessionMessagesMock
+      .mockResolvedValueOnce(messages)
+      .mockImplementationOnce(() => canonicalMessages);
 
-    let releaseSecondChart: (() => void) | undefined;
-    const secondChartGate = new Promise<void>((resolve) => {
-      releaseSecondChart = resolve;
-    });
-    let releaseCompletion: (() => void) | undefined;
-    const completionGate = new Promise<void>((resolve) => {
-      releaseCompletion = resolve;
-    });
     chatStreamMock.mockImplementationOnce(
       async (
         _payload: unknown,
@@ -1055,10 +1046,7 @@ describe('<AiReportingView /> interactions', () => {
         },
       ) => {
         handlers?.onStart?.({ sessionId: 'revenue', messageId: 'assistant-streaming-chart' });
-        handlers?.onAnswerDelta?.(`${firstChartContent}\n${secondChartStart}`);
-        await secondChartGate;
-        handlers?.onAnswerDelta?.(secondChartEnd);
-        await completionGate;
+        handlers?.onAnswerDelta?.(chartContent);
         return { sessionId: 'revenue', text: chartContent };
       },
     );
@@ -1086,17 +1074,16 @@ describe('<AiReportingView /> interactions', () => {
     ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
     expect(screen.queryByRole('figure', { name: 'Streaming margin trend' })).toBeNull();
 
-    await act(async () => releaseSecondChart?.());
-
     expect(
-      await screen.findByRole('figure', { name: 'Streaming margin trend' }),
+      await screen.findByRole('figure', { name: 'Streaming margin trend' }, { timeout: 2_000 }),
     ).toBeInTheDocument();
     expect(screen.queryByRole('status', { name: 'Building visualization...' })).toBeNull();
 
-    await act(async () => releaseCompletion?.());
     expect(
       await screen.findByRole('figure', { name: 'Streaming revenue trend' }),
     ).toBeInTheDocument();
     expect(screen.getByRole('figure', { name: 'Streaming margin trend' })).toBeInTheDocument();
+
+    await act(async () => resolveCanonicalMessages?.(completedMessages));
   });
 });

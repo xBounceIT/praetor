@@ -519,9 +519,18 @@ const useAiReportingController = ({
   const abortRef = useRef<AbortController | null>(null);
   const sendRunIdRef = useRef(0);
   const activeAssistantMessageIdRef = useRef('');
+  const progressiveVisualizationMessageIdsRef = useRef(new Set<string>());
   const pendingEmptySessionIdRef = useRef('');
   const loadedMessagesSessionIdRef = useRef('');
   const initiallyRenderedMessageGroupIdsRef = useRef<Set<string>>(new Set());
+  const shouldRevealVisualizationsProgressively = useCallback(
+    (messageId: string) => progressiveVisualizationMessageIdsRef.current.has(messageId),
+    [],
+  );
+  const completeProgressiveVisualizationReveal = useCallback((messageId: string) => {
+    progressiveVisualizationMessageIdsRef.current.delete(messageId);
+  }, []);
+
   const [pendingRetryAutoSelectGroupId, setPendingRetryAutoSelectGroupId] = useState('');
   const tableRefs = useRef<Record<string, HTMLTableElement | null>>({});
   const [loadedActiveSessionId, setLoadedActiveSessionId] = useState(activeSessionId);
@@ -1049,8 +1058,12 @@ const useAiReportingController = ({
             language: i18n.language,
           },
           {
-            onStart: ({ sessionId }) => {
+            onStart: ({ sessionId, messageId }) => {
               if (!isRunActive()) return;
+              if (messageId) {
+                progressiveVisualizationMessageIdsRef.current.add(messageId);
+                progressiveVisualizationMessageIdsRef.current.delete(assistantMessageId);
+              }
               streamStarted = true;
               syncAssistantSession(sessionId);
               if (!hadSession && sessionId) {
@@ -1406,6 +1419,10 @@ const useAiReportingController = ({
         {
           onStart: ({ messageId }) => {
             if (!isRunActive()) return;
+            if (messageId) {
+              progressiveVisualizationMessageIdsRef.current.add(messageId);
+              progressiveVisualizationMessageIdsRef.current.delete(placeholderId);
+            }
             // Replace placeholder ID with the real assistant message ID from server
             if (messageId && messageId !== placeholderId) {
               setMessages((prev) =>
@@ -1732,6 +1749,8 @@ const useAiReportingController = ({
     loadOlderMessages,
     isSending,
     activeAssistantMessageId: activeAssistantMessageIdRef.current,
+    shouldRevealVisualizationsProgressively,
+    completeProgressiveVisualizationReveal,
     editingMessageId,
     editingDraft,
     setEditingDraft,
@@ -1808,6 +1827,8 @@ const AiReportingLayout: React.FC<{ controller: AiReportingController }> = ({ co
     loadOlderMessages,
     isSending,
     activeAssistantMessageId,
+    shouldRevealVisualizationsProgressively,
+    completeProgressiveVisualizationReveal,
     editingMessageId,
     editingDraft,
     setEditingDraft,
@@ -1928,6 +1949,8 @@ const AiReportingLayout: React.FC<{ controller: AiReportingController }> = ({ co
                   canSend: canInteractWithConversation,
                   isSending,
                   activeAssistantMessageId,
+                  shouldRevealVisualizationsProgressively,
+                  completeProgressiveVisualizationReveal,
                   editingMessageId,
                   editingDraft,
                   setEditingDraft,
@@ -2498,6 +2521,8 @@ interface AiReportingMessageInteractions {
   canSend: boolean;
   isSending: boolean;
   activeAssistantMessageId: string;
+  shouldRevealVisualizationsProgressively: (messageId: string) => boolean;
+  completeProgressiveVisualizationReveal: (messageId: string) => void;
   editingMessageId: string;
   editingDraft: string;
   setEditingDraft: AiReportingSetter<'editingDraft'>;
@@ -2935,6 +2960,8 @@ const AiReportingAssistantMessage: React.FC<AiReportingAssistantMessageProps> = 
     interactions;
   const allowPendingVisualization =
     interactions.isSending && message.id === interactions.activeAssistantMessageId;
+  const shouldRevealVisualizationsProgressively =
+    allowPendingVisualization || interactions.shouldRevealVisualizationsProgressively(message.id);
   const parsedContent = useMemo(
     () =>
       parseAiReportingVisualizations(message.content, {
@@ -2978,10 +3005,13 @@ const AiReportingAssistantMessage: React.FC<AiReportingAssistantMessageProps> = 
           />
         )}
         <AiMarkdownMessage
+          key={message.id}
           message={message}
           interactions={interactions}
           parsedContent={parsedContent}
           blocks={stableContentBlocks}
+          isStreaming={allowPendingVisualization}
+          shouldRevealVisualizationsProgressively={shouldRevealVisualizationsProgressively}
         />
         <div className="mt-2 flex justify-start items-center gap-1.5">
           <Tooltip>
@@ -3082,18 +3112,97 @@ const AiReportingThoughtPanel: React.FC<AiReportingThoughtPanelProps> = ({
   </Card>
 );
 
+const AI_REPORTING_VISUALIZATION_REVEAL_DELAY_MS = 600;
+
+const getProgressivelyRevealedVisualizationBlocks = (
+  blocks: AiReportingVisualizationContentBlock[],
+  revealedVisualizationCount: number,
+) => {
+  const visibleBlocks: AiReportingVisualizationContentBlock[] = [];
+  let visualizationIndex = 0;
+
+  for (const block of blocks) {
+    if (block.type === 'visualization') {
+      if (visualizationIndex >= revealedVisualizationCount) {
+        visibleBlocks.push({
+          type: 'pending',
+          visualizationIndex: block.visualizationIndex,
+        });
+        break;
+      }
+      visualizationIndex += 1;
+    }
+
+    visibleBlocks.push(block);
+    if (block.type === 'pending') break;
+  }
+
+  return visibleBlocks;
+};
+
 const AiMarkdownMessage: React.FC<{
   message: ReportChatMessage;
   interactions: AiReportingMessageInteractions;
   parsedContent: AiReportingVisualizationParseResult;
   blocks: AiReportingVisualizationContentBlock[];
-}> = ({ message, interactions, parsedContent, blocks }) => {
-  const { t, language, resolveTableMarkdown, tableRefs } = interactions;
+  isStreaming: boolean;
+  shouldRevealVisualizationsProgressively: boolean;
+}> = ({
+  message,
+  interactions,
+  parsedContent,
+  blocks,
+  isStreaming,
+  shouldRevealVisualizationsProgressively,
+}) => {
+  const { t, language, resolveTableMarkdown, tableRefs, completeProgressiveVisualizationReveal } =
+    interactions;
   let tableRenderIndex = 0;
+
+  const revealVisualizationsProgressivelyRef = useRef(shouldRevealVisualizationsProgressively);
+  const revealVisualizationsProgressively = revealVisualizationsProgressivelyRef.current;
+  const [revealedVisualizationCount, setRevealedVisualizationCount] = useState(1);
+  const visualizationCount = parsedContent.visualizations.length;
+
+  useEffect(() => {
+    if (!revealVisualizationsProgressively || revealedVisualizationCount >= visualizationCount) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setRevealedVisualizationCount((current) => Math.min(current + 1, visualizationCount));
+    }, AI_REPORTING_VISUALIZATION_REVEAL_DELAY_MS);
+    return () => window.clearTimeout(timeoutId);
+  }, [revealVisualizationsProgressively, revealedVisualizationCount, visualizationCount]);
+  useEffect(() => {
+    if (
+      !revealVisualizationsProgressively ||
+      isStreaming ||
+      revealedVisualizationCount < visualizationCount
+    ) {
+      return;
+    }
+    completeProgressiveVisualizationReveal(message.id);
+  }, [
+    completeProgressiveVisualizationReveal,
+    isStreaming,
+    message.id,
+    revealVisualizationsProgressively,
+    revealedVisualizationCount,
+    visualizationCount,
+  ]);
+
+  const visibleBlocks = useMemo(
+    () =>
+      revealVisualizationsProgressively
+        ? getProgressivelyRevealedVisualizationBlocks(blocks, revealedVisualizationCount)
+        : blocks,
+    [blocks, revealVisualizationsProgressively, revealedVisualizationCount],
+  );
 
   return (
     <>
-      {blocks.map((block, blockIndex) => {
+      {visibleBlocks.map((block, blockIndex) => {
         if (block.type === 'visualization') {
           return (
             <AiReportingVisualization
