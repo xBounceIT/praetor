@@ -1358,13 +1358,12 @@ const ProjectClientOrderFields: React.FC<{ controller: ProjectsController }> = (
       </div>
     )}
     <Field data-invalid={Boolean(controller.errors.name)} className="md:col-span-2">
-      <FieldLabel htmlFor="project-name">
-        {controller.t('projects:projects.name')} <RequiredMark />
+      <FieldLabel htmlFor="project-name" required>
+        {controller.t('projects:projects.name')}
       </FieldLabel>
       <Input
         id="project-name"
         type="text"
-        required
         value={controller.name}
         aria-invalid={Boolean(controller.errors.name)}
         onChange={(event) => {

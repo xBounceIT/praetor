@@ -1602,8 +1602,8 @@ const ProjectDetailNameField: React.FC<{ controller: ProjectDetailController }> 
 
   return (
     <Field data-invalid={Boolean(errors.name)}>
-      <FieldLabel htmlFor="detail-name">
-        {t('projects:projects.name')} <RequiredMark />
+      <FieldLabel htmlFor="detail-name" required>
+        {t('projects:projects.name')}
       </FieldLabel>
       <Input
         id="detail-name"

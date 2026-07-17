@@ -126,6 +126,7 @@ describe('ProjectDetailView wiring', () => {
     );
     expect(source).toContain('{isRequired && <RequiredMark />}');
     expect(source).toContain('required={isRequired}');
+    expect(source).toContain('<FieldLabel htmlFor="detail-name" required>');
   });
 
   test('forces an explicit tipo confirmation on first edit of a rollout-defaulted project (issue #784)', async () => {

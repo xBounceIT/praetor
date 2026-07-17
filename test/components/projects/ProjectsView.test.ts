@@ -105,6 +105,14 @@ describe('ProjectsView create-form validation', () => {
     expect(source).toContain("newErrors.dateRange = t('projects:projects.dateRangeInvalid')");
   });
 
+  test('uses shadcn required state instead of native browser validation for the project name', async () => {
+    const source = await Bun.file(
+      new URL('../../../components/projects/ProjectsView.tsx', import.meta.url),
+    ).text();
+    expect(source).toContain('<FieldLabel htmlFor="project-name" required>');
+    expect(source).not.toMatch(/id="project-name"[\s\S]{0,80}\brequired\b/);
+  });
+
   test('exposes start date, end date, order, optional offer, and revenue inputs', async () => {
     const source = await Bun.file(
       new URL('../../../components/projects/ProjectsView.tsx', import.meta.url),
