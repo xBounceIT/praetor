@@ -6,6 +6,7 @@ import * as generalSettingsRepo from '../repositories/generalSettingsRepo.ts';
 import * as projectsRepo from '../repositories/projectsRepo.ts';
 import * as tasksRepo from '../repositories/tasksRepo.ts';
 import * as userAssignmentsRepo from '../repositories/userAssignmentsRepo.ts';
+import * as userHourlyCostPeriodsRepo from '../repositories/userHourlyCostPeriodsRepo.ts';
 import * as usersRepo from '../repositories/usersRepo.ts';
 import * as workUnitsRepo from '../repositories/workUnitsRepo.ts';
 import { formatLocalDateOnly, parseLocalDateOnly, todayLocalDateOnly } from '../utils/date.ts';
@@ -308,8 +309,7 @@ export const createTimeEntry = async (
     }
   }
 
-  const [hourlyCost, resolvedTaskId, projectHeader] = await Promise.all([
-    usersRepo.findCostPerHour(targetUserId),
+  const [resolvedTaskId, projectHeader] = await Promise.all([
     tasksRepo.findIdByProjectAndName(projectId, task),
     projectsRepo.findClientIdAndEndDate(projectId),
   ]);
@@ -336,6 +336,8 @@ export const createTimeEntry = async (
   const parsedIsPlaceholder = requireValid(parseBooleanField(input, 'isPlaceholder'));
 
   const created = await withSerializableWriteTransaction(async (tx) => {
+    await usersRepo.lockById(targetUserId, tx);
+    const hourlyCost = await userHourlyCostPeriodsRepo.findCostForDate(targetUserId, date, tx);
     const duplicateExists = await entriesRepo.existsForEntryKey(
       { userId: targetUserId, date, projectId, task },
       tx,
@@ -505,20 +507,36 @@ export const updateTimeEntry = async (
 
   const parsedIsPlaceholder = requireValid(parseBooleanField(input, 'isPlaceholder'));
 
-  const updated = await entriesRepo.update(entryId, {
-    version,
-    date,
-    clientId,
-    clientName: resolvedClientName,
-    projectId,
-    projectName: resolvedProjectName,
-    task,
-    duration: parsedDuration,
-    notes: validatedNotes,
-    isPlaceholder: parsedIsPlaceholder,
-    location: parseOptionalLocation(input.location, fail),
-    taskId: resolvedTaskId,
-  });
+  const applyUpdate = (hourlyCost?: number, exec?: DbExecutor) => {
+    const update = {
+      version,
+      date,
+      clientId,
+      clientName: resolvedClientName,
+      projectId,
+      projectName: resolvedProjectName,
+      task,
+      duration: parsedDuration,
+      hourlyCost,
+      notes: validatedNotes,
+      isPlaceholder: parsedIsPlaceholder,
+      location: parseOptionalLocation(input.location, fail),
+      taskId: resolvedTaskId,
+    };
+    return exec ? entriesRepo.update(entryId, update, exec) : entriesRepo.update(entryId, update);
+  };
+
+  const updated = dateChanging
+    ? await withSerializableWriteTransaction(async (tx) => {
+        await usersRepo.lockById(context.userId, tx);
+        const hourlyCost = await userHourlyCostPeriodsRepo.findCostForDate(
+          context.userId,
+          date as string,
+          tx,
+        );
+        return applyUpdate(hourlyCost, tx);
+      })
+    : await applyUpdate();
 
   if (updated === null) {
     // Repo returns null for both "row deleted" and "version mismatch" — disambiguate
@@ -641,10 +659,9 @@ export const generateRecurringEntries = async (
     }
   }
 
-  const [recurringTasks, settings, hourlyCost] = await Promise.all([
+  const [recurringTasks, settings] = await Promise.all([
     tasksRepo.listRecurringForUser(targetUserId),
     generalSettingsRepo.get(),
-    usersRepo.findCostPerHour(targetUserId),
   ]);
   if (recurringTasks.length === 0) {
     return {
@@ -709,7 +726,6 @@ export const generateRecurringEntries = async (
     };
   }
 
-  type PendingEntry = ReturnType<typeof buildPendingEntry>;
   const buildPendingEntry = (
     task: (typeof allowedTasks)[number],
     project: NonNullable<ReturnType<typeof projectsByProjectId.get>>,
@@ -726,12 +742,13 @@ export const generateRecurringEntries = async (
     taskId: task.id,
     notes: null,
     duration: task.recurrenceDuration ?? 0,
-    hourlyCost,
     isPlaceholder: true,
     location: settings?.defaultLocation ?? 'remote',
   });
+  type PendingEntryCandidate = ReturnType<typeof buildPendingEntry>;
+  type PendingEntry = PendingEntryCandidate & { hourlyCost: number };
 
-  type CandidateEntry = { key: string; entry: PendingEntry };
+  type CandidateEntry = { key: string; entry: PendingEntryCandidate };
   const candidates: CandidateEntry[] = [];
   // Track keys staged in this run so two recurring templates with the same (date, projectId,
   // task) tuple don't become duplicate insert candidates in a single generation pass.
@@ -780,6 +797,8 @@ export const generateRecurringEntries = async (
   }
 
   const { inserted, skippedExistingCount } = await withSerializableWriteTransaction(async (tx) => {
+    await usersRepo.lockById(targetUserId, tx);
+    const lockedCostPeriods = await userHourlyCostPeriodsRepo.listInputsForUser(targetUserId, tx);
     const existingKeys = await entriesRepo.findExistingRecurringKeys(
       targetUserId,
       fromDate,
@@ -787,7 +806,15 @@ export const generateRecurringEntries = async (
       tx,
     );
     const pending = candidates.reduce<PendingEntry[]>((entries, candidate) => {
-      if (!existingKeys.has(candidate.key)) entries.push(candidate.entry);
+      if (!existingKeys.has(candidate.key)) {
+        entries.push({
+          ...candidate.entry,
+          hourlyCost: userHourlyCostPeriodsRepo.resolveCostForDate(
+            lockedCostPeriods,
+            candidate.entry.date,
+          ),
+        });
+      }
       return entries;
     }, []);
 

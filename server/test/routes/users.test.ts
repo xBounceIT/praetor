@@ -11,6 +11,7 @@ import * as realSettingsRepo from '../../repositories/settingsRepo.ts';
 import * as realSsoProvidersRepo from '../../repositories/ssoProvidersRepo.ts';
 import * as realTasksRepo from '../../repositories/tasksRepo.ts';
 import * as realUserAssignmentsRepo from '../../repositories/userAssignmentsRepo.ts';
+import * as realUserHourlyCostPeriodsRepo from '../../repositories/userHourlyCostPeriodsRepo.ts';
 import * as realUsersRepo from '../../repositories/usersRepo.ts';
 import * as realExternalAuth from '../../services/external-auth.ts';
 import realLdapService from '../../services/ldap.ts';
@@ -41,6 +42,7 @@ const tasksRepoSnap = { ...realTasksRepo };
 const rolesRepoSnap = { ...realRolesRepo };
 const settingsRepoSnap = { ...realSettingsRepo };
 const ssoProvidersRepoSnap = { ...realSsoProvidersRepo };
+const userHourlyCostPeriodsRepoSnap = { ...realUserHourlyCostPeriodsRepo };
 const userAssignmentsRepoSnap = { ...realUserAssignmentsRepo };
 const externalAuthSnap = { ...realExternalAuth };
 const ldapServiceSnap = realLdapService;
@@ -76,6 +78,7 @@ const setPrimaryRoleMock = mock();
 const replaceUserRolesAndSetPrimaryMock = mock();
 const getUserRoleIdsMock = mock();
 const canManageUserMock = mock();
+const lockByIdMock = mock();
 const getAssignmentsMock = mock();
 const disableTotpMock = mock();
 const revokeUserCredentialsMock = mock();
@@ -96,6 +99,12 @@ const listClientsByIdsMock = mock();
 const listProjectsForUserMock = mock();
 const listProjectsByIdsMock = mock();
 const listTasksForUserMock = mock();
+
+// userHourlyCostPeriodsRepo
+const listHourlyCostPeriodsForUserMock = mock();
+const listHourlyCostsForDateMock = mock();
+const replaceHourlyCostPeriodsForUserMock = mock();
+const recalculateHourlyCostTimeEntriesMock = mock();
 
 // rolesRepo
 const rolesFindByIdMock = mock();
@@ -150,6 +159,7 @@ beforeAll(async () => {
     findCoreById: findCoreByIdMock,
     findById: findByIdMock,
     existsByUsername: existsByUsernameMock,
+    lockById: lockByIdMock,
     insertUser: insertUserMock,
     deleteById: deleteByIdMock,
     updateUserDynamic: updateUserDynamicMock,
@@ -164,6 +174,13 @@ beforeAll(async () => {
     disableTotp: disableTotpMock,
     revokeUserCredentials: revokeUserCredentialsMock,
     getTotpState: getTotpStateMock,
+  }));
+  mock.module('../../repositories/userHourlyCostPeriodsRepo.ts', () => ({
+    ...userHourlyCostPeriodsRepoSnap,
+    listForUser: listHourlyCostPeriodsForUserMock,
+    listCostsForDate: listHourlyCostsForDateMock,
+    replaceForUser: replaceHourlyCostPeriodsForUserMock,
+    recalculateTimeEntries: recalculateHourlyCostTimeEntriesMock,
   }));
   mock.module('../../repositories/personalAccessTokensRepo.ts', () => ({
     ...personalAccessTokensRepoSnap,
@@ -258,6 +275,10 @@ afterAll(() => {
   mock.module('../../repositories/personalAccessTokensRepo.ts', () => personalAccessTokensRepoSnap);
   mock.module('../../repositories/settingsRepo.ts', () => settingsRepoSnap);
   mock.module('../../repositories/ssoProvidersRepo.ts', () => ssoProvidersRepoSnap);
+  mock.module(
+    '../../repositories/userHourlyCostPeriodsRepo.ts',
+    () => userHourlyCostPeriodsRepoSnap,
+  );
   mock.module('../../repositories/userAssignmentsRepo.ts', () => userAssignmentsRepoSnap);
   mock.module('../../utils/permissions.ts', () => permissionsSnap);
   mock.module('../../utils/audit.ts', () => auditSnap);
@@ -376,9 +397,14 @@ const allMocks = [
   isActiveAppUserMock,
   findCoreByIdMock,
   findByIdMock,
+  lockByIdMock,
   existsByUsernameMock,
   insertUserMock,
   deleteByIdMock,
+  listHourlyCostPeriodsForUserMock,
+  listHourlyCostsForDateMock,
+  replaceHourlyCostPeriodsForUserMock,
+  recalculateHourlyCostTimeEntriesMock,
   updateUserDynamicMock,
   updateAuthMethodMock,
   addUserRoleMock,
@@ -431,6 +457,11 @@ beforeEach(async () => {
   findAuthUserByIdMock.mockResolvedValue(ADMIN_USER);
   userHasRoleMock.mockResolvedValue(true);
   getRolePermissionsMock.mockResolvedValue(ALL_USER_PERMS);
+  lockByIdMock.mockResolvedValue(SAMPLE_USER_CORE);
+  listHourlyCostPeriodsForUserMock.mockResolvedValue([]);
+  listHourlyCostsForDateMock.mockResolvedValue(new Map());
+  replaceHourlyCostPeriodsForUserMock.mockResolvedValue([]);
+  recalculateHourlyCostTimeEntriesMock.mockResolvedValue(0);
   resetWithDbTransactionMock();
   logAuditMock.mockImplementation(async () => undefined);
   getTotpStateMock.mockResolvedValue(null);
@@ -612,6 +643,7 @@ describe('GET /api/users', () => {
     expect(body[0]).not.toHaveProperty('phone');
     expect(body[0]).not.toHaveProperty('employeeCode');
     expect(body[0]).not.toHaveProperty('employmentStatus');
+    expect(listHourlyCostsForDateMock).toHaveBeenCalledWith([], expect.any(String));
   });
 
   test('200 with ONLY hr.costs.view → caller sees own cost, other rows masked to 0', async () => {
@@ -637,6 +669,7 @@ describe('GET /api/users', () => {
     const otherRow = body.find((row) => row.id === 'u-other');
     expect(ownRow?.costPerHour).toBe(42);
     expect(otherRow?.costPerHour).toBe(0);
+    expect(listHourlyCostsForDateMock).toHaveBeenCalledWith([REGULAR_USER.id], expect.any(String));
   });
 
   test('200 with ONLY hr.costs_all.view → caller sees OTHER rows, own row masked to 0', async () => {
@@ -664,6 +697,7 @@ describe('GET /api/users', () => {
     const otherRow = body.find((row) => row.id === 'u-other');
     expect(ownRow?.costPerHour).toBe(0);
     expect(otherRow?.costPerHour).toBe(999);
+    expect(listHourlyCostsForDateMock).toHaveBeenCalledWith(['u-other'], expect.any(String));
   });
 
   test('401 missing token', async () => {
@@ -3962,5 +3996,115 @@ describe('POST /api/users/:id/assignments', () => {
     expect(replaceUserTasksMock).not.toHaveBeenCalled();
     expect(applyProjectCascadeToClientsMock).not.toHaveBeenCalled();
     expect(logAuditMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('hourly cost periods API', () => {
+  test('GET returns the derived calendar when the caller may view the target cost', async () => {
+    findCoreByIdMock.mockResolvedValue(SAMPLE_USER_CORE);
+    listHourlyCostPeriodsForUserMock.mockResolvedValue([
+      { id: 1, effectiveFrom: null, effectiveTo: '2024-12-31', costPerHour: 40 },
+      { id: 2, effectiveFrom: '2025-01-01', effectiveTo: null, costPerHour: 50 },
+    ]);
+
+    const res = await testApp.inject({
+      method: 'GET',
+      url: '/api/users/u-target/hourly-cost-periods',
+      headers: adminAuth(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body)).toEqual([
+      { id: 1, effectiveFrom: null, effectiveTo: '2024-12-31', costPerHour: 40 },
+      { id: 2, effectiveFrom: '2025-01-01', effectiveTo: null, costPerHour: 50 },
+    ]);
+  });
+
+  test('GET keeps own-cost and all-cost visibility scopes independent', async () => {
+    findAuthUserByIdMock.mockResolvedValue(REGULAR_USER);
+    getRolePermissionsMock.mockResolvedValue(['hr.costs.view']);
+
+    const res = await testApp.inject({
+      method: 'GET',
+      url: '/api/users/u-target/hourly-cost-periods',
+      headers: userAuth(),
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(listHourlyCostPeriodsForUserMock).not.toHaveBeenCalled();
+  });
+
+  test('PUT rejects ambiguous legacy and calendar cost payloads', async () => {
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/users/u-target',
+      headers: adminAuth(),
+      payload: {
+        costPerHour: 40,
+        hourlyCostPeriods: [{ effectiveFrom: null, costPerHour: 40 }],
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(replaceHourlyCostPeriodsForUserMock).not.toHaveBeenCalled();
+  });
+
+  test('PUT replaces the calendar and recalculates changed entries in one transaction', async () => {
+    findCoreByIdMock.mockResolvedValue(SAMPLE_USER_CORE);
+    updateUserDynamicMock.mockResolvedValue({ ...SAMPLE_USER_ROW, costPerHour: 45 });
+    findByIdMock.mockResolvedValue({ ...SAMPLE_USER_ROW, costPerHour: 45 });
+
+    const hourlyCostPeriods = [
+      { effectiveFrom: null, costPerHour: 45 },
+      { effectiveFrom: '2099-01-01', costPerHour: 70 },
+    ];
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/users/u-target',
+      headers: adminAuth(),
+      payload: { hourlyCostPeriods },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(lockByIdMock).toHaveBeenCalledWith('u-target', TX_SENTINEL);
+    expect(replaceHourlyCostPeriodsForUserMock).toHaveBeenCalledWith(
+      'u-target',
+      hourlyCostPeriods,
+      TX_SENTINEL,
+    );
+    expect(recalculateHourlyCostTimeEntriesMock).toHaveBeenCalledWith('u-target', TX_SENTINEL);
+    expect(updateUserDynamicMock).toHaveBeenCalledWith(
+      'u-target',
+      expect.objectContaining({ costPerHour: 45 }),
+      TX_SENTINEL,
+    );
+  });
+});
+
+describe('POST /api/users hourly cost periods', () => {
+  test('creates the employee and cost calendar in the same transaction', async () => {
+    insertUserMock.mockResolvedValue(undefined);
+    const hourlyCostPeriods = [
+      { effectiveFrom: null, costPerHour: 45 },
+      { effectiveFrom: '2099-01-01', costPerHour: 70 },
+    ];
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/users',
+      headers: adminAuth(),
+      payload: { name: 'Costed Employee', employeeType: 'internal', hourlyCostPeriods },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(insertUserMock).toHaveBeenCalledWith(
+      expect.objectContaining({ costPerHour: 45 }),
+      TX_SENTINEL,
+    );
+    expect(replaceHourlyCostPeriodsForUserMock).toHaveBeenCalledWith(
+      expect.any(String),
+      hourlyCostPeriods,
+      TX_SENTINEL,
+    );
   });
 });

@@ -13,7 +13,7 @@ Puoi scegliere un periodo relativo (oggi, ieri, settimana, mese o anno corrente/
 
 I filtri cliente, progetto e attività includono sia gli elementi assegnati agli utenti visibili nel report sia i valori presenti nelle loro registrazioni storiche. Puoi quindi selezionare un elemento assegnato anche prima che sia stata registrata la prima ora, senza perdere la possibilità di consultare dati relativi a elementi non più assegnati. Se un progetto viene spostato a un altro cliente, la coppia storica cliente-progetto rimane disponibile sotto il cliente originario.
 
-La data è sempre visibile. Puoi aggiungere o rimuovere utente, cliente, progetto, attività, durata, nota e costo. Il costo appare solo con il permesso `reports.cost.view` ed è calcolato usando il costo orario storico salvato sulla registrazione.
+La data è sempre visibile. Puoi aggiungere o rimuovere utente, cliente, progetto, attività, durata, nota e costo. Il costo appare solo con il permesso `reports.cost.view` ed è calcolato usando il costo orario risolto dal calendario del dipendente per la data della registrazione.
 
 ## Utenti e visibilità
 

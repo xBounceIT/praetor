@@ -100,6 +100,16 @@ export interface RoleSummary {
   isAdmin?: boolean;
 }
 
+export interface HourlyCostPeriodInput {
+  effectiveFrom: string | null;
+  costPerHour: number;
+}
+
+export interface HourlyCostPeriod extends HourlyCostPeriodInput {
+  id: number;
+  effectiveTo: string | null;
+}
+
 export interface User {
   id: string;
   name: string;
@@ -115,6 +125,7 @@ export interface User {
   email?: string;
   password?: string;
   costPerHour?: number;
+  hourlyCostPeriods?: HourlyCostPeriodInput[];
   isDisabled?: boolean;
   employeeType?: EmployeeType;
   phone?: string | null;

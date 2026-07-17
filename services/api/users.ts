@@ -1,5 +1,6 @@
 import type {
   Client,
+  HourlyCostPeriod,
   MfaExemptionUser,
   Project,
   ProjectTask,
@@ -21,6 +22,9 @@ export const usersApi = {
 
   getResponsibleOptions: (): Promise<ResponsibleUserOption[]> =>
     fetchApi<ResponsibleUserOption[]>('/users/responsible-options'),
+
+  getHourlyCostPeriods: (id: string): Promise<HourlyCostPeriod[]> =>
+    fetchApi<HourlyCostPeriod[]>(`/users/${id}/hourly-cost-periods`),
 
   create: (
     name: string,

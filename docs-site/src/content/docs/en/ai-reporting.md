@@ -80,7 +80,7 @@ Use results as analytical support, not as a replacement for official data. Befor
 
 ## Cost in reports
 
-Praetor computes the cost of each time entry as `duration * hourly cost`, using the same currency precision as invoices. The hourly cost stored on the entry is the rate that was in effect when the entry was logged, so retroactive changes to a user's hourly cost do not rewrite history.
+Praetor computes each time entry cost as `duration * hourly cost`, using the same currency precision as invoices. The stored hourly cost comes from the employee calendar on the entry date; changing that calendar retroactively updates affected entries and their aggregates.
 
 Cost aggregates per project, client, user, and period are included in AI reporting datasets only when your role has the `reports.cost` permission. Without it:
 

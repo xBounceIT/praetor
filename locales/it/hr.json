@@ -173,6 +173,21 @@
     "roleTitle": "Ruolo",
     "hrStatus": "Stato HR",
     "dateRangeInvalid": "La data di cessazione deve essere successiva o uguale alla data di assunzione",
+    "costPeriods": {
+      "title": "Costi orari per periodo",
+      "description": "La nuova tariffa chiude automaticamente la precedente al giorno prima. Il salvataggio aggiorna le entry timesheet in base alla loro data.",
+      "tableTitle": "Decorrenze costo orario",
+      "from": "Dal",
+      "to": "Al",
+      "costPerHour": "Costo orario",
+      "fromBeginning": "Dall’inizio",
+      "toPresent": "Ad oggi",
+      "add": "Aggiungi periodo",
+      "delete": "Elimina periodo",
+      "loadError": "Impossibile caricare i costi orari. Riprova prima di salvare.",
+      "duplicateDate": "Esiste già una tariffa con questa decorrenza",
+      "nonNegativeCost": "Il costo deve essere maggiore o uguale a zero"
+    },
     "contractTypes": {
       "permanent": "Tempo indeterminato",
       "fixed_term": "Tempo determinato",

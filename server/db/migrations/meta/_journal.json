@@ -785,6 +785,13 @@
       "when": 1784299615993,
       "tag": "0111_add_project_details_permission",
       "breakpoints": true
+    },
+    {
+      "idx": 112,
+      "version": "7",
+      "when": 1784316411854,
+      "tag": "0112_add_user_hourly_cost_periods",
+      "breakpoints": true
     }
   ]
 }

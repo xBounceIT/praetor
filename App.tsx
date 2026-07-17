@@ -512,19 +512,6 @@ const appLocalStateReducer = (state: AppLocalState, action: AppLocalStateAction)
   }
 };
 
-const getCurrencySymbol = (currency: string) => {
-  switch (currency) {
-    case 'USD':
-      return '$';
-    case 'EUR':
-      return '€';
-    case 'GBP':
-      return '£';
-    default:
-      return currency;
-  }
-};
-
 const getModuleFromView = (view: View | '404'): string | null => {
   if (view === '404') return null;
   if (view.startsWith('timesheets/')) return 'timesheets';
@@ -4610,7 +4597,6 @@ const AdministrationRoutes: React.FC<{ controller: AuthenticatedAppContentContro
             permissions={currentUser.permissions || []}
             roles={roles}
             ssoProviders={ssoProviders}
-            currency={getCurrencySymbol(generalSettings.currency)}
           />
         )}
       {hasPermission(currentUser.permissions, VIEW_PERMISSION_MAP['administration/general']) &&

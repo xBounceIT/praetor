@@ -625,6 +625,7 @@ const countSeededAssignmentsWithTopManagers = (
 
 export const DEMO_EXPECTED_COUNTS = {
   users: DEMO_USERS.length,
+  user_hourly_cost_periods: DEMO_USERS.length,
   settings: DEMO_USERS.length,
   clients: COMPATIBILITY_DEFAULTS.clients.length + DEMO_CLIENTS.length,
   suppliers: DEMO_SUPPLIERS.length,

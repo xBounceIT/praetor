@@ -2,8 +2,12 @@ import { describe, expect, test } from 'bun:test';
 import {
   buildEmployeeCreatePayload,
   buildEmployeeHrPayload,
+  buildHourlyCostPeriodInputs,
   createEmployeeHrForm,
+  createHourlyCostPeriodDrafts,
+  createInitialHourlyCostPeriods,
   getEmployeeDepartmentDisplay,
+  validateHourlyCostPeriods,
 } from '../../../components/HR/employeeHrProfile';
 import type { User, WorkUnit } from '../../../types';
 
@@ -34,28 +38,28 @@ describe('employeeHrProfile first/last name', () => {
 
   test('buildEmployeeHrPayload includes trimmed first/last name when identity is editable', () => {
     const form = createEmployeeHrForm(buildUser({ firstName: '  Bob  ', lastName: '  Jones  ' }));
-    const payload = buildEmployeeHrPayload(form, { includeIdentity: true, includeCost: false });
+    const payload = buildEmployeeHrPayload(form, { includeIdentity: true });
     expect(payload.firstName).toBe('Bob');
     expect(payload.lastName).toBe('Jones');
   });
 
   test('buildEmployeeHrPayload maps blank first/last name to null', () => {
     const form = createEmployeeHrForm(buildUser({ firstName: '', lastName: '   ' }));
-    const payload = buildEmployeeHrPayload(form, { includeIdentity: true, includeCost: false });
+    const payload = buildEmployeeHrPayload(form, { includeIdentity: true });
     expect(payload.firstName).toBeNull();
     expect(payload.lastName).toBeNull();
   });
 
   test('buildEmployeeHrPayload omits first/last name when identity is read-only (LDAP/SSO-managed)', () => {
     const form = createEmployeeHrForm(buildUser());
-    const payload = buildEmployeeHrPayload(form, { includeIdentity: false, includeCost: false });
+    const payload = buildEmployeeHrPayload(form, { includeIdentity: false });
     expect(payload.firstName).toBeUndefined();
     expect(payload.lastName).toBeUndefined();
   });
 
   test('buildEmployeeCreatePayload always includes first/last name', () => {
     const form = createEmployeeHrForm(buildUser({ firstName: 'Carol', lastName: 'Doe' }));
-    const payload = buildEmployeeCreatePayload(form, { includeCost: false });
+    const payload = buildEmployeeCreatePayload(form);
     expect(payload.firstName).toBe('Carol');
     expect(payload.lastName).toBe('Doe');
     expect(payload.name).toBe('Alice Smith');
@@ -76,7 +80,6 @@ describe('employeeHrProfile first/last name', () => {
       costPerHour: 80,
     });
     const payload = buildEmployeeCreatePayload(form, {
-      includeCost: false,
       includeHrDetails: false,
     });
 
@@ -93,7 +96,7 @@ describe('employeeHrProfile first/last name', () => {
         address: '  Via Roma 1  ',
       }),
     );
-    const payload = buildEmployeeHrPayload(form, { includeIdentity: false, includeCost: false });
+    const payload = buildEmployeeHrPayload(form, { includeIdentity: false });
 
     expect(payload.responsibleUserId).toBe('u-manager');
     expect(payload.address).toBe('Via Roma 1');
@@ -104,7 +107,7 @@ describe('employeeHrProfile first/last name', () => {
     const form = createEmployeeHrForm(buildUser({ responsibleUserId: 'u-manager' }));
     form.responsibleUserId = '   ';
 
-    const payload = buildEmployeeHrPayload(form, { includeIdentity: false, includeCost: false });
+    const payload = buildEmployeeHrPayload(form, { includeIdentity: false });
 
     expect(payload.responsibleUserId).toBeNull();
   });
@@ -150,5 +153,47 @@ describe('employeeHrProfile department display', () => {
     ];
 
     expect(getEmployeeDepartmentDisplay(employee, scopedWorkUnits)).toBe('API Department');
+  });
+});
+
+describe('employee hourly cost periods', () => {
+  test('keeps persisted and unsaved row keys in separate namespaces', () => {
+    const [unsaved] = createInitialHourlyCostPeriods(40);
+    const [persisted] = createHourlyCostPeriodDrafts([
+      { id: 1, effectiveFrom: null, effectiveTo: null, costPerHour: 50 },
+    ]);
+
+    expect(unsaved.key).not.toBe(persisted.key);
+  });
+
+  test('sorts the baseline first and serializes dated rates chronologically', () => {
+    const payload = buildHourlyCostPeriodInputs([
+      { key: 'later', effectiveFrom: '2025-07-01', costPerHour: '60' },
+      { key: 'baseline', effectiveFrom: null, costPerHour: '40' },
+      { key: 'earlier', effectiveFrom: '2025-01-01', costPerHour: '50' },
+    ]);
+
+    expect(payload).toEqual([
+      { effectiveFrom: null, costPerHour: 40 },
+      { effectiveFrom: '2025-01-01', costPerHour: 50 },
+      { effectiveFrom: '2025-07-01', costPerHour: 60 },
+    ]);
+  });
+
+  test('rejects duplicate dates, missing values, and negative costs', () => {
+    const errors = validateHourlyCostPeriods(
+      [
+        { key: 'baseline', effectiveFrom: null, costPerHour: '-1' },
+        { key: 'first', effectiveFrom: '2025-01-01', costPerHour: '50' },
+        { key: 'duplicate', effectiveFrom: '2025-01-01', costPerHour: '' },
+        { key: 'missing-date', effectiveFrom: '', costPerHour: '60' },
+      ],
+      { required: 'required', duplicateDate: 'duplicate', nonNegativeCost: 'non-negative' },
+    );
+
+    expect(errors['hourlyCostPeriods.baseline.costPerHour']).toBe('non-negative');
+    expect(errors['hourlyCostPeriods.duplicate.effectiveFrom']).toBe('duplicate');
+    expect(errors['hourlyCostPeriods.duplicate.costPerHour']).toBe('required');
+    expect(errors['hourlyCostPeriods.missing-date.effectiveFrom']).toBe('required');
   });
 });

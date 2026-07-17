@@ -3,6 +3,7 @@ import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { usersApi } from '../../services/api/users';
 import type {
   Client,
   Project,
@@ -36,11 +37,13 @@ import {
 import {
   buildEmployeeCreatePayload,
   buildEmployeeHrPayload,
+  buildHourlyCostPeriodInputs,
   type EmployeeCreatePayload,
   getEmployeeDepartmentDisplay,
   getEmployeeHrStatusBadgeType,
   getResponsibleUserDisplay,
   validateEmployeeHrForm,
+  validateHourlyCostPeriods,
 } from './employeeHrProfile';
 import { useEmployeeViewState } from './useEmployeeViewState';
 
@@ -52,7 +55,7 @@ export interface InternalEmployeesViewProps {
   workUnits: WorkUnit[];
   responsibleUserOptions: ResponsibleUserOption[];
   onAddEmployee: (employee: EmployeeCreatePayload) => Promise<{ success: boolean; error?: string }>;
-  onUpdateEmployee: (id: string, updates: Partial<User>) => void;
+  onUpdateEmployee: (id: string, updates: Partial<User>) => void | Promise<void>;
   onDeleteEmployee: (id: string) => void;
   currency: string;
   permissions: string[];
@@ -393,6 +396,7 @@ const InternalEmployeesView: React.FC<InternalEmployeesViewProps> = ({
   const {
     state,
     setFormData,
+    setHourlyCostPeriods,
     openAddEmployeeModal,
     openEditEmployeeModal,
     closeEmployeeModal,
@@ -403,6 +407,9 @@ const InternalEmployeesView: React.FC<InternalEmployeesViewProps> = ({
     startEmployeeSubmit,
     finishEmployeeSubmit,
     completeEmployeeSubmit,
+    startHourlyCostPeriodsLoad,
+    completeHourlyCostPeriodsLoad,
+    failHourlyCostPeriodsLoad,
   } = useEmployeeViewState();
   const {
     isModalOpen,
@@ -413,6 +420,9 @@ const InternalEmployeesView: React.FC<InternalEmployeesViewProps> = ({
     errors,
     isSubmitting,
     formData,
+    hourlyCostPeriods,
+    isHourlyCostPeriodsLoading,
+    hourlyCostPeriodsLoadError,
   } = state;
 
   // Combine and sort all employees by surname ascending
@@ -439,6 +449,15 @@ const InternalEmployeesView: React.FC<InternalEmployeesViewProps> = ({
   const openEditModal = (employee: User) => {
     if (!canUpdateEmployees) return;
     openEditEmployeeModal(employee);
+    if (!canViewCosts) return;
+
+    startHourlyCostPeriodsLoad(employee.id);
+    void usersApi
+      .getHourlyCostPeriods(employee.id)
+      .then((periods) => completeHourlyCostPeriodsLoad(employee.id, periods))
+      .catch(() =>
+        failHourlyCostPeriodsLoad(employee.id, t('employeeProfile.costPeriods.loadError')),
+      );
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -455,6 +474,20 @@ const InternalEmployeesView: React.FC<InternalEmployeesViewProps> = ({
       dateRangeMessage: t('employeeProfile.dateRangeInvalid'),
     });
 
+    if (canViewCosts && canUpdateCosts) {
+      Object.assign(
+        newErrors,
+        validateHourlyCostPeriods(hourlyCostPeriods, {
+          required: t('common:validation.required'),
+          duplicateDate: t('employeeProfile.costPeriods.duplicateDate'),
+          nonNegativeCost: t('employeeProfile.costPeriods.nonNegativeCost'),
+        }),
+      );
+      if (isHourlyCostPeriodsLoading || hourlyCostPeriodsLoadError) {
+        newErrors.hourlyCostPeriods = hourlyCostPeriodsLoadError || t('common:states.loading');
+      }
+    }
+
     if (Object.keys(newErrors).length > 0) {
       setEmployeeErrors(newErrors);
       return;
@@ -466,17 +499,20 @@ const InternalEmployeesView: React.FC<InternalEmployeesViewProps> = ({
       if (editingEmployee) {
         const updates = buildEmployeeHrPayload(formData, {
           includeIdentity: !identityReadOnly,
-          includeCost: canViewCosts && canUpdateCosts,
         });
-        onUpdateEmployee(editingEmployee.id, updates);
+        if (canViewCosts && canUpdateCosts) {
+          updates.hourlyCostPeriods = buildHourlyCostPeriodInputs(hourlyCostPeriods);
+        }
+        await onUpdateEmployee(editingEmployee.id, updates);
         completeEmployeeSubmit();
       } else {
-        const result = await onAddEmployee(
-          buildEmployeeCreatePayload(formData, {
-            includeCost: canViewCosts && canUpdateCosts,
-            includeHrDetails: canUpdateEmployees,
-          }),
-        );
+        const payload = buildEmployeeCreatePayload(formData, {
+          includeHrDetails: canUpdateEmployees,
+        });
+        if (canViewCosts && canUpdateCosts) {
+          payload.hourlyCostPeriods = buildHourlyCostPeriodInputs(hourlyCostPeriods);
+        }
+        const result = await onAddEmployee(payload);
         if (result.success) {
           completeEmployeeSubmit();
         } else {
@@ -534,6 +570,10 @@ const InternalEmployeesView: React.FC<InternalEmployeesViewProps> = ({
                 errors={errors}
                 setFormData={setFormData}
                 currency={currency}
+                hourlyCostPeriods={hourlyCostPeriods}
+                setHourlyCostPeriods={setHourlyCostPeriods}
+                isHourlyCostPeriodsLoading={isHourlyCostPeriodsLoading}
+                hourlyCostPeriodsLoadError={hourlyCostPeriodsLoadError}
                 canViewCosts={canViewCosts}
                 canUpdateCosts={canUpdateCosts}
                 identityReadOnly={Boolean(
@@ -550,7 +590,14 @@ const InternalEmployeesView: React.FC<InternalEmployeesViewProps> = ({
               <Button type="button" variant="outline" onClick={closeEmployeeModal}>
                 {t('common:buttons.cancel')}
               </Button>
-              <Button type="submit" disabled={isSubmitting}>
+              <Button
+                type="submit"
+                disabled={
+                  isSubmitting ||
+                  (canUpdateCosts &&
+                    (isHourlyCostPeriodsLoading || Boolean(hourlyCostPeriodsLoadError)))
+                }
+              >
                 {isSubmitting ? (
                   <i className="fa-solid fa-spinner fa-spin" aria-hidden="true"></i>
                 ) : (

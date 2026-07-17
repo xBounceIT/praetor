@@ -19,10 +19,7 @@ export type TimeEntry = {
   notes: string | null;
   duration: number;
   hourlyCost: number;
-  // `cost` is computed on read as `duration * hourlyCost` (rounded to currency precision)
-  // so retroactive `hourly_cost` changes never rewrite historical entry costs - the per-row
-  // `hourly_cost` we already store on insert is the "as of the day the entry was logged"
-  // rate that we want to preserve here.
+  // `cost` is computed on read; hourlyCost follows the effective-dated HR cost calendar.
   cost: number;
   isPlaceholder: boolean;
   location: string;
@@ -522,6 +519,7 @@ export type EntryUpdate = {
   projectName?: string;
   task?: string;
   duration?: number;
+  hourlyCost?: number;
   /** `null` clears the column (the schema allows NULL); `undefined` leaves it untouched. */
   notes?: string | null;
   isPlaceholder?: boolean;
@@ -546,6 +544,7 @@ export const update = async (
   if (patch.projectName !== undefined) setValues.projectName = patch.projectName;
   if (patch.task !== undefined) setValues.task = patch.task;
   if (patch.duration !== undefined) setValues.duration = numericForDb(patch.duration);
+  if (patch.hourlyCost !== undefined) setValues.hourlyCost = numericForDb(patch.hourlyCost);
   if (patch.notes !== undefined) setValues.notes = patch.notes;
   if (patch.isPlaceholder !== undefined) setValues.isPlaceholder = patch.isPlaceholder;
   if (patch.location !== undefined) setValues.location = patch.location;

@@ -111,7 +111,6 @@ const renderUserManagement = (overrides: Partial<ComponentProps<typeof UserManag
         endSessionEnabled: false,
       },
     ],
-    currency: '$',
     ...overrides,
   };
 
@@ -603,12 +602,12 @@ describe('<UserManagement />', () => {
       await screen.findByText('hr:workforce.editUser');
     };
 
-    test('shows cost input when editing self with hr.costs.update only', async () => {
+    test('does not show cost input when editing self with hr.costs.update', async () => {
       await openEditDialog('Mary Manager', {
         permissions: [updatePermission, 'hr.costs_all.view', 'hr.costs.update'],
       });
 
-      expect(screen.getByText('hr:workforce.costPerHour')).toBeInTheDocument();
+      expect(screen.queryByText('hr:workforce.costPerHour')).not.toBeInTheDocument();
     });
 
     test('hides cost input when editing another user with only hr.costs.update', async () => {
@@ -620,12 +619,12 @@ describe('<UserManagement />', () => {
       expect(screen.queryByText('hr:workforce.costPerHour')).not.toBeInTheDocument();
     });
 
-    test('shows cost input when editing another user with hr.costs_all.update', async () => {
+    test('does not show cost input when editing another user with hr.costs_all.update', async () => {
       await openEditDialog('Bob Brown', {
         permissions: [updatePermission, 'hr.costs_all.view', 'hr.costs_all.update'],
       });
 
-      expect(screen.getByText('hr:workforce.costPerHour')).toBeInTheDocument();
+      expect(screen.queryByText('hr:workforce.costPerHour')).not.toBeInTheDocument();
     });
 
     test('hides cost input entirely without hr.costs_all.view', async () => {
@@ -658,7 +657,6 @@ describe('<UserManagement />', () => {
         permissions: [updatePermission, 'hr.costs.update'], // No view-all.
         roles: [],
         ssoProviders: [],
-        currency: '$',
       };
       render(<UserManagement {...props} />);
       fireEvent.click(screen.getByText('Mary Manager'));

@@ -49,7 +49,6 @@ import Modal from '../shared/Modal';
 import SelectControl from '../shared/SelectControl';
 import StandardTable, { type Column } from '../shared/StandardTable';
 import StatusBadge, { type StatusType } from '../shared/StatusBadge';
-import ValidatedNumberInput from '../shared/ValidatedNumberInput';
 
 const isSsoAuthMethod = (authMethod: UserAuthMethod): authMethod is 'oidc' | 'saml' =>
   authMethod === 'oidc' || authMethod === 'saml';
@@ -142,7 +141,6 @@ export interface UserManagementProps {
   permissions: string[];
   roles: Role[];
   ssoProviders: SsoProvider[];
-  currency: string;
 }
 
 interface AssignmentSelection {
@@ -194,7 +192,6 @@ interface UserManagementState {
   isLoadingEditRoles: boolean;
   editRolesError: string;
   editFormErrors: Record<string, string>;
-  editCostPerHour: string;
   editIsDisabled: boolean;
   // Auth-method dialog
   authMethodUser: User | null;
@@ -241,7 +238,6 @@ const getInitialUserManagementState = (defaultRole: string): UserManagementState
   isLoadingEditRoles: false,
   editRolesError: '',
   editFormErrors: {},
-  editCostPerHour: '0',
   editIsDisabled: false,
   authMethodUser: null,
   authMethodDraft: 'local',
@@ -300,7 +296,6 @@ const useUserManagementController = ({
   permissions,
   roles,
   ssoProviders,
-  currency,
 }: UserManagementProps) => {
   const { t } = useTranslation(['hr', 'common']);
 
@@ -349,7 +344,6 @@ const useUserManagementController = ({
     editPrimaryRoleId,
     initialEditAssignedRoleIds,
     initialEditPrimaryRoleId,
-    editCostPerHour,
     editIsDisabled,
     authMethodUser,
     authMethodDraft,
@@ -371,19 +365,6 @@ const useUserManagementController = ({
     permissions,
     buildPermission('administration.user_management', 'delete'),
   );
-  // Column-visibility flag: show the costPerHour column if the caller has at
-  // least one of the cost-view grants. With the explicit self/other split, the
-  // API masks per row — a user with only `hr.costs.view` sees their own cost
-  // populated and others as 0; a user with only `hr.costs_all.view` sees the
-  // reverse. Hiding the column entirely is only correct when neither grant is
-  // held.
-  const canViewOwnCost = hasPermission(permissions, buildPermission('hr.costs', 'view'));
-  const canViewAllCosts = hasPermission(permissions, buildPermission('hr.costs_all', 'view'));
-  const canViewCosts = canViewOwnCost || canViewAllCosts;
-  const canUpdateAllCosts = hasPermission(permissions, buildPermission('hr.costs_all', 'update'));
-  const canUpdateOwnCost = hasPermission(permissions, buildPermission('hr.costs', 'update'));
-  const canEditCostFor = (targetUserId: string) =>
-    canUpdateAllCosts || (canUpdateOwnCost && targetUserId === currentUserId);
   const canManageAssignments = canUpdateUsers;
   if (!newRole && roleOptions[0]?.id) {
     dispatch({ type: 'set', values: { newRole: roleOptions[0].id } });
@@ -647,7 +628,6 @@ const useUserManagementController = ({
           editSurname: surname,
           editEmail: user.email || '',
           editRole: user.role,
-          editCostPerHour: user.costPerHour?.toString() || '0',
           editIsDisabled: !!user.isDisabled,
           editFormErrors: {},
           editRolesError: '',
@@ -668,7 +648,6 @@ const useUserManagementController = ({
         editSurname: surname,
         editEmail: user.email || '',
         editRole: user.role,
-        editCostPerHour: user.costPerHour?.toString() || '0',
         editIsDisabled: !!user.isDisabled,
         editFormErrors: {},
         editRolesError: '',
@@ -868,16 +847,6 @@ const useUserManagementController = ({
         }
       }
 
-      // Only include costPerHour when the input was actually rendered for the
-      // caller; otherwise the value comes from the masked GET response (0) and
-      // would silently overwrite the real DB cost on an unrelated edit.
-      if (canViewCosts && canEditCostFor(editingUser.id)) {
-        const costPerHour = parseFloat(editCostPerHour) || 0;
-        if (costPerHour !== (editingUser.costPerHour || 0)) {
-          updates.costPerHour = costPerHour;
-        }
-      }
-
       if (Object.keys(updates).length > 0) {
         onUpdateUser(editingUser.id, updates);
       }
@@ -904,9 +873,6 @@ const useUserManagementController = ({
     !!editingUser &&
     (hasIdentityChanges ||
       editIsDisabled !== !!editingUser.isDisabled ||
-      (canViewCosts &&
-        canEditCostFor(editingUser.id) &&
-        parseFloat(editCostPerHour) !== (editingUser.costPerHour || 0)) ||
       (canEditRole && editRole !== editingUser.role) ||
       hasAssignedRoleChanges);
 
@@ -1294,10 +1260,8 @@ const useUserManagementController = ({
     authMethodOptions,
     canCreateUsers,
     canEditAssignedRoles,
-    canEditCostFor,
     canManageAssignments,
     canUpdateUsers,
-    canViewCosts,
     cancelDelete,
     clientFilterOptions,
     clients,
@@ -1307,7 +1271,6 @@ const useUserManagementController = ({
     closeEditModal,
     closeTotpResetDialog,
     confirmTotpReset,
-    currency,
     currentUserId,
     dispatch,
     editIdentityReadOnly,
@@ -1823,11 +1786,6 @@ const UserEditModal: React.FC<{ controller: UserManagementController }> = ({ con
           </div>
           <UserEditTextField controller={controller} field="email" />
           {controller.canUpdateUsers && <UserEditRolesField controller={controller} />}
-          {controller.canViewCosts &&
-            state.editingUser &&
-            controller.canEditCostFor(state.editingUser.id) && (
-              <UserEditCostField controller={controller} />
-            )}
           {state.editingUser?.id !== controller.currentUserId && (
             <Field className="flex-row items-center justify-between gap-4 rounded-md border border-border bg-muted/40 p-3">
               <FieldLabel htmlFor="edit-user-disabled" className="text-sm font-semibold">
@@ -2072,31 +2030,6 @@ const UserEditRoleOption: React.FC<{
     </div>
   );
 };
-
-const UserEditCostField: React.FC<{ controller: UserManagementController }> = ({ controller }) => (
-  <Field>
-    <FieldLabel
-      htmlFor="edit-user-cost-per-hour"
-      className="text-xs font-semibold uppercase tracking-wide text-muted-foreground"
-    >
-      {controller.t('hr:workforce.costPerHour')}
-    </FieldLabel>
-    <div className="flex items-center overflow-hidden rounded-md border border-input bg-transparent transition-[color,box-shadow] focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50 dark:bg-input/30">
-      <div className="w-16 flex items-center justify-center text-muted-foreground text-sm font-bold border-r border-input py-2 bg-muted/50">
-        {controller.currency}
-      </div>
-      <ValidatedNumberInput
-        id="edit-user-cost-per-hour"
-        value={controller.state.editCostPerHour}
-        onValueChange={(value) =>
-          controller.dispatch({ type: 'set', values: { editCostPerHour: value } })
-        }
-        className="h-9 flex-1 border-0 bg-transparent px-3 py-1 text-sm font-medium shadow-none outline-none focus-visible:ring-0"
-        placeholder="0,00"
-      />
-    </div>
-  </Field>
-);
 
 const UserAssignmentsModal: React.FC<{ controller: UserManagementController }> = ({
   controller,
