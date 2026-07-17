@@ -1,8 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 import { readMigrationFile } from '../helpers/schemaFiles.ts';
 
-describe('migration 0111: add internal projects', () => {
-  const migration = readMigrationFile('0111_add_internal_projects.sql');
+describe('migration 0112: add internal projects', () => {
+  const migration = readMigrationFile('0112_add_internal_projects.sql');
 
   test('expands the project type check without rewriting existing rows', () => {
     expect(migration).toContain(

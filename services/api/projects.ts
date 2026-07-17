@@ -33,6 +33,9 @@ export const projectsApi = {
     );
   },
 
+  get: (id: string, signal?: AbortSignal): Promise<Project> =>
+    fetchApi<Project>(`/projects/${encodeURIComponent(id)}`, { signal }).then(normalizeProject),
+
   listRilCatalog: (userId: string): Promise<RilProjectReference[]> => {
     const params = new URLSearchParams({ userId });
     return fetchApi<RilProjectReference[]>(`/projects/ril-catalog?${params.toString()}`);

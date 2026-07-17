@@ -6,6 +6,7 @@ import {
   ALWAYS_GRANTED_NOTIFICATION_PERMISSIONS,
   buildPermission,
   buildPermissions,
+  canViewProjectDetails,
   equivalentPermissionsFor,
   filterAdminExplicitPermissions,
   hasAnyPermission,
@@ -46,6 +47,7 @@ describe('PERMISSION_DEFINITIONS / ALL_PERMISSIONS', () => {
     expect(ALL_PERMISSIONS).toContain('crm.suppliers_all.update');
     expect(ALL_PERMISSIONS).toContain('projects.manage_all.delete');
     expect(ALL_PERMISSIONS).toContain('projects.tasks_all.create');
+    expect(ALL_PERMISSIONS).toContain('projects.details.view');
     expect(ALL_PERMISSIONS).toContain('timesheets.ril.view');
     expect(ALL_PERMISSIONS).toContain('projects.rules.view');
     expect(ALL_PERMISSIONS).toContain('projects.rules.create');
@@ -250,6 +252,13 @@ describe('equivalentPermissionsFor / hasScopedActionPermission', () => {
     expect(
       hasScopedActionPermission(['projects.tasks_all.update'], 'projects.tasks', 'update'),
     ).toBe(true);
+  });
+
+  test('requires project visibility together with the advanced-data permission', () => {
+    expect(canViewProjectDetails(['projects.manage.view', 'projects.details.view'])).toBe(true);
+    expect(canViewProjectDetails(['projects.manage_all.view', 'projects.details.view'])).toBe(true);
+    expect(canViewProjectDetails(['projects.manage.view'])).toBe(false);
+    expect(canViewProjectDetails(['projects.details.view'])).toBe(false);
   });
 });
 

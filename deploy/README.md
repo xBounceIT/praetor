@@ -77,12 +77,13 @@ re-running the same `up -d` command is safe when a deployment is interrupted aft
 the migration journal was applied. If startup still fails, inspect the backend logs before
 rolling back; the service exits rather than serving against a partially upgraded schema.
 
-### Upgrade introducing internal jobs (migration 0111)
+### Upgrade introducing internal jobs (migrations 0112 and 0113)
 
 Take a PostgreSQL backup before deploying the release that adds the `interno` project type.
-Deploy the new application image so startup applies migration 0111, wait for readiness, and
-complete a project create/edit smoke test before users create internal jobs. Existing Active and
-Passive projects are not reclassified by the migration.
+Deploy the new application image so startup applies migrations 0112 and 0113, wait for readiness,
+and complete a project create/edit smoke test before users create internal jobs. Existing Active
+and Passive projects are not reclassified. Migration 0113 intentionally moves existing Internal
+projects to the Branding-managed company client.
 
 The compatibility window closes after the first project is stored with `tipo = 'interno'`: older
 application images only understand Active and Passive projects and are no longer a safe

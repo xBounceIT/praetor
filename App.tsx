@@ -146,6 +146,7 @@ import { formatDecimal } from './utils/numbers';
 import {
   ADMIN_ROLE_ID,
   buildPermission,
+  canViewProjectDetails,
   equivalentPermissionsFor,
   getDefaultViewForPermissions,
   getNotFoundReturnView,
@@ -4383,6 +4384,7 @@ const ProjectsListRoute: React.FC<{
     setSelectedProjectId,
     setProjectsViewTab,
   } = controller;
+  const canOpenProjectDetails = canViewProjectDetails(currentUser.permissions);
 
   return (
     <ProjectsView
@@ -4408,10 +4410,14 @@ const ProjectsListRoute: React.FC<{
         setClientsOrderFilterId(orderId);
         setActiveView('accounting/clients-orders');
       }}
-      onNavigateToProject={(projectId) => {
-        setSelectedProjectId(projectId);
-        setActiveView('projects/detail');
-      }}
+      onNavigateToProject={
+        canOpenProjectDetails
+          ? (projectId) => {
+              setSelectedProjectId(projectId);
+              setActiveView('projects/detail');
+            }
+          : undefined
+      }
     />
   );
 };
@@ -4419,8 +4425,8 @@ const ProjectsListRoute: React.FC<{
 const ProjectDetailRoute: React.FC<{ controller: AuthenticatedAppContentController }> = ({
   controller,
 }) => {
+  const { t } = useTranslation('projects');
   const {
-    addProject,
     addProjectTask,
     availableUsers,
     branding,
@@ -4431,63 +4437,62 @@ const ProjectDetailRoute: React.FC<{ controller: AuthenticatedAppContentControll
     generalSettings,
     handleDeleteProject,
     handleDeleteProjectTask,
-    handleDeleteProjectTaskWithToast,
     handleUpdateProject,
     handleUpdateTask,
     projectTasks,
-    projects,
     roles,
     selectedProjectId,
     setActiveView,
     setClientsOrderFilterId,
-    setSelectedProjectId,
-    setProjectsViewTab,
   } = controller;
-  const selectedProject = selectedProjectId
-    ? projects.find((p) => p.id === selectedProjectId)
-    : undefined;
+  const [loadedProject, setLoadedProject] = useState<{
+    projectId: string;
+    project: Project;
+  } | null>(null);
 
-  if (!selectedProject) {
-    // Project unavailable (e.g. just deleted, or refresh) — fall back to list.
-    return (
-      <ProjectsView
-        projects={projects}
-        clients={clients}
-        companyName={branding.companyName}
-        orders={clientsOrders}
-        offers={clientOffers}
-        currency={generalSettings.currency}
-        permissions={currentUser.permissions || EMPTY_PERMISSIONS}
-        users={availableUsers}
-        roles={roles}
-        tasks={projectTasks}
-        onAddProject={addProject}
-        onUpdateProject={handleUpdateProject}
-        onDeleteProject={handleDeleteProject}
-        onAddTask={addProjectTask}
-        onUpdateTask={handleUpdateTask}
-        onDeleteTask={handleDeleteProjectTaskWithToast}
-        activeTab="commissions"
-        onTabChange={setProjectsViewTab}
-        onViewOrder={(orderId) => {
-          setClientsOrderFilterId(orderId);
-          setActiveView('accounting/clients-orders');
-        }}
-        onNavigateToProject={(projectId) => {
-          setSelectedProjectId(projectId);
-          setActiveView('projects/detail');
-        }}
-      />
-    );
-  }
+  useEffect(() => {
+    if (!selectedProjectId) {
+      setActiveView('projects/manage');
+      return;
+    }
+
+    const abortController = new AbortController();
+    api.projects
+      .get(selectedProjectId, abortController.signal)
+      .then((project) => {
+        if (!abortController.signal.aborted) {
+          setLoadedProject({ projectId: selectedProjectId, project });
+        }
+      })
+      .catch((error) => {
+        if (abortController.signal.aborted) return;
+        console.error('Failed to load project details:', error);
+        toastError(t('projects:detail.loadFailed'));
+        setActiveView('projects/manage');
+      });
+
+    return () => abortController.abort();
+  }, [selectedProjectId, setActiveView, t]);
+
+  const updateLoadedProject = useCallback(
+    async (id: string, updates: Partial<Project>) => {
+      const updated = await handleUpdateProject(id, updates);
+      if (updated) {
+        setLoadedProject((current) =>
+          current?.projectId === id ? { projectId: id, project: updated } : current,
+        );
+      }
+      return updated;
+    },
+    [handleUpdateProject],
+  );
+
+  const selectedProject =
+    loadedProject?.projectId === selectedProjectId ? loadedProject.project : null;
+  if (!selectedProject) return <ModulePendingScreen />;
 
   return (
-    // key={selectedProject.id} remounts the component on project switch
-    // so all local state (form fields, entries fetch, assignments) resets
-    // cleanly without an in-component prop-sync useEffect.
-    // Suspense fallback covers the lazy() chunk fetch the first time the
-    // user enters the detail page.
-    <Suspense fallback={null}>
+    <Suspense fallback={<ModulePendingScreen />}>
       <ProjectDetailView
         key={selectedProject.id}
         project={selectedProject}
@@ -4501,7 +4506,7 @@ const ProjectDetailRoute: React.FC<{ controller: AuthenticatedAppContentControll
         currency={generalSettings.currency}
         tasks={projectTasks}
         onBack={() => setActiveView('projects/manage')}
-        onUpdateProject={handleUpdateProject}
+        onUpdateProject={updateLoadedProject}
         onDeleteProject={handleDeleteProject}
         onAddTask={addProjectTask}
         onUpdateTask={handleUpdateTask}

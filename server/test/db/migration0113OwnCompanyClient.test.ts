@@ -1,8 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 import { readMigrationFile } from '../helpers/schemaFiles.ts';
 
-describe('migration 0112: own-company client', () => {
-  const migration = readMigrationFile('0112_own-company-client.sql');
+describe('migration 0113: own-company client', () => {
+  const migration = readMigrationFile('0113_own-company-client.sql');
 
   test('adds an explicit, unique own-company marker', () => {
     expect(migration).toContain('ADD COLUMN "is_own_company" boolean DEFAULT false NOT NULL');

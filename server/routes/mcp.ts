@@ -27,6 +27,7 @@ import {
   updateTimeEntry,
 } from '../services/timeEntries.ts';
 import { APP_VERSION } from '../utils/app-version.ts';
+import { canViewProjectDetails, equivalentPermissionsFor } from '../utils/permissions.ts';
 import {
   effectiveQuoteStatusFromDate,
   effectiveSupplierQuoteStatusFromDate,
@@ -66,7 +67,7 @@ const SUPPLIER_LIST_PERMISSIONS = [
 ] as const;
 
 const PROJECT_LIST_PERMISSIONS = [
-  'projects.manage.view',
+  ...equivalentPermissionsFor('projects.manage', 'view'),
   'projects.tasks.view',
   'timesheets.tracker.view',
   'timesheets.recurring.view',
@@ -314,7 +315,10 @@ const buildServer = () => {
       const projects = hasPermission(user, 'projects.manage_all.view')
         ? await projectsRepo.listAll()
         : await projectsRepo.listForUser(user.id);
-      return jsonResult({ projects });
+      const visibleProjects = canViewProjectDetails(user.permissions)
+        ? projects
+        : projects.map(projectsRepo.toProjectSummary);
+      return jsonResult({ projects: visibleProjects });
     },
   );
 

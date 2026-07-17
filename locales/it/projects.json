@@ -145,6 +145,7 @@
     "createdOn": "Creato il {{date}}",
     "unsavedChanges": "Ci sono modifiche non salvate.",
     "newTaskDefaultName": "Nuova Attività",
+    "loadFailed": "Impossibile caricare i dati avanzati della commessa.",
     "actions": {
       "back": "Torna alle commesse"
     },

@@ -620,6 +620,16 @@ describe('ProjectDetailView wired into App.tsx', () => {
     expect(source).toContain('selectedProjectId');
   });
 
+  test('gates row navigation and loads the full project from the detail endpoint', async () => {
+    const source = await Bun.file(new URL('../../../App.tsx', import.meta.url)).text();
+    expect(source).toContain('const canOpenProjectDetails = canViewProjectDetails');
+    expect(source).toMatch(/onNavigateToProject=\{[\s\S]*canOpenProjectDetails/);
+    expect(source).toContain('.get(selectedProjectId, abortController.signal)');
+    expect(source).toContain('if (!selectedProject) return <ModulePendingScreen />');
+    expect(source).toContain("toastError(t('projects:detail.loadFailed'))");
+    expect(source).toContain("setActiveView('projects/manage')");
+  });
+
   test('App.tsx clears selectedProjectId on navigation away from projects/detail', async () => {
     const source = await Bun.file(new URL('../../../App.tsx', import.meta.url)).text();
     expect(source).toContain("if (resolved !== 'projects/detail')");

@@ -1,6 +1,6 @@
 {
-  "id": "6102dca2-e9e7-4b3d-9ea5-c966b50c4be0",
-  "prevId": "62a3119c-2c20-4ed6-8537-9d139d3d67de",
+  "id": "62a3119c-2c20-4ed6-8537-9d139d3d67de",
+  "prevId": "5ed7f5cc-4210-448a-9909-f0c11a315fe5",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -314,13 +314,6 @@
           "notNull": false,
           "default": false
         },
-        "is_own_company": {
-          "name": "is_own_company",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": false
-        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp",
@@ -530,22 +523,6 @@
           ],
           "isUnique": true,
           "where": "\"clients\".\"client_code\" IS NOT NULL AND \"clients\".\"client_code\" <> ''",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "idx_clients_one_own_company": {
-          "name": "idx_clients_one_own_company",
-          "columns": [
-            {
-              "expression": "is_own_company",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "where": "\"clients\".\"is_own_company\" = TRUE",
           "concurrently": false,
           "method": "btree",
           "with": {}

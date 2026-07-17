@@ -145,6 +145,7 @@
     "createdOn": "Created on {{date}}",
     "unsavedChanges": "You have unsaved changes.",
     "newTaskDefaultName": "New Task",
+    "loadFailed": "Unable to load the advanced project data.",
     "actions": {
       "back": "Back to jobs"
     },

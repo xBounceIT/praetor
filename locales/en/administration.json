@@ -48,6 +48,7 @@
     "projects": {
       "manage": "Projects",
       "manage_all": "Projects (All)",
+      "details": "Advanced project data",
       "tasks": "Tasks",
       "tasks_all": "Tasks (All)",
       "resales": "Resales",

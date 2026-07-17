@@ -52,6 +52,7 @@ export const PERMISSION_DEFINITIONS: PermissionDefinition[] = [
   // Projects
   { id: 'projects.manage', actions: CRUD },
   { id: 'projects.manage_all', actions: CRUD, isScope: true },
+  { id: 'projects.details', actions: VIEW_ONLY },
   { id: 'projects.resales', actions: CRUD },
   { id: 'projects.tasks', actions: CRUD },
   { id: 'projects.tasks_all', actions: CRUD, isScope: true },
@@ -239,6 +240,9 @@ export const hasScopedActionPermission = (
   resource: PermissionResource,
   action: PermissionAction,
 ) => hasAnyPermission(permissions, equivalentPermissionsFor(resource, action));
+export const canViewProjectDetails = (permissions: string[] | undefined) =>
+  hasScopedActionPermission(permissions, 'projects.manage', 'view') &&
+  hasPermission(permissions, buildPermission('projects.details', 'view'));
 
 export const requestHasPermission = (
   request: { user?: { permissions?: string[] } },
