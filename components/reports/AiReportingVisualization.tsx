@@ -54,6 +54,7 @@ import {
   CHART_COLORS,
   getBarPointColor,
   getCircularTooltipLabel,
+  normalizeBarRectangle,
 } from './aiReportingChartPresentation';
 import type {
   AiReportingVisualization as AiReportingVisualizationDefinition,
@@ -150,17 +151,18 @@ const VisualizationTooltip = ({
 );
 
 const DistinctBarShape = ({ height, index, width, x, y }: BarShapeProps) => {
-  const radius = Math.min(5, Math.abs(width) / 2, Math.abs(height) / 2);
+  const geometry = normalizeBarRectangle({ height, width, x, y });
+  const radius = Math.min(5, geometry.width / 2, geometry.height / 2);
 
   return (
     <rect
       fill={getBarPointColor(index)}
-      height={height}
+      height={geometry.height}
       rx={radius}
       ry={radius}
-      width={width}
-      x={x}
-      y={y}
+      width={geometry.width}
+      x={geometry.x}
+      y={geometry.y}
     />
   );
 };

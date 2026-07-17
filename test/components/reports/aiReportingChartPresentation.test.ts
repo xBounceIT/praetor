@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import {
   getBarPointColor,
   getCircularTooltipLabel,
+  normalizeBarRectangle,
 } from '@/components/reports/aiReportingChartPresentation';
 
 describe('AI reporting chart presentation', () => {
@@ -23,5 +24,20 @@ describe('AI reporting chart presentation', () => {
   test('rejects missing or non-scalar circular tooltip labels', () => {
     expect(getCircularTooltipLabel({ amount: 6303 }, 'status')).toBeNull();
     expect(getCircularTooltipLabel({ status: { label: 'paid' } }, 'status')).toBeNull();
+  });
+
+  test('normalizes negative bar dimensions without changing the occupied area', () => {
+    expect(normalizeBarRectangle({ x: 12, y: 40, width: 30, height: -18 })).toEqual({
+      x: 12,
+      y: 22,
+      width: 30,
+      height: 18,
+    });
+    expect(normalizeBarRectangle({ x: 70, y: 8, width: -25, height: 16 })).toEqual({
+      x: 45,
+      y: 8,
+      width: 25,
+      height: 16,
+    });
   });
 });

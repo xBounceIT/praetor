@@ -26,6 +26,25 @@ export const getBarPointColor = (index: number) => {
   return `color-mix(in oklch, ${BASE_CHART_COLORS[baseIndex]} ${mixPercentage}%, ${nextColor})`;
 };
 
+interface BarRectangleGeometry {
+  height: number;
+  width: number;
+  x: number;
+  y: number;
+}
+
+export const normalizeBarRectangle = ({
+  height,
+  width,
+  x,
+  y,
+}: BarRectangleGeometry): BarRectangleGeometry => ({
+  height: Math.abs(height),
+  width: Math.abs(width),
+  x: width < 0 ? x + width : x,
+  y: height < 0 ? y + height : y,
+});
+
 export const getCircularTooltipLabel = (payload: unknown, categoryKey: string) => {
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return null;
   const value = (payload as Record<string, unknown>)[categoryKey];
