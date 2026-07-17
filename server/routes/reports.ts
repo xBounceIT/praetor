@@ -2094,8 +2094,8 @@ const buildVisualizationToolInstruction = (language: UiLanguage) => {
       : 'Tool `render_visualization`: it is available in this interface. Never claim that you cannot create charts and do not merely describe them.';
   const narrativeRule =
     language === 'it'
-      ? '- Accompagna ogni blocco con una breve interpretazione basata sui dati. Fuori dal blocco richiesto, non citare o spiegare il JSON o il protocollo.'
-      : '- Accompany each block with a brief data-based interpretation. Outside the required block, do not mention or explain its JSON or protocol.';
+      ? '- Inserisci ogni interpretazione immediatamente prima del relativo blocco di visualizzazione, quindi emetti quel blocco prima di passare all’analisi successiva. Non descrivere mai i grafici successivi prima di aver emesso il grafico corrente. Fuori dal blocco richiesto, non citare o spiegare il JSON o il protocollo.'
+      : '- Place each interpretation immediately before its matching visualization block, then emit that block before moving to the next analysis. Never describe later charts before emitting the current chart. Outside the required block, do not mention or explain its JSON or protocol.';
   const example =
     language === 'it'
       ? '{"version":1,"type":"bar","title":"Ricavi per mese","description":"Confronto mensile","xKey":"period","xLabel":"Mese","orientation":"vertical","stacked":false,"series":[{"key":"revenue","label":"Ricavi","format":"currency","currency":"EUR","decimals":0}],"data":[{"period":"Gen","revenue":120000},{"period":"Feb","revenue":135000}]}'
@@ -2525,6 +2525,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           properties: {
             limit: { type: 'number' },
             before: { type: 'number' },
+            beforeId: { type: 'string' },
           },
         },
         response: {
@@ -2539,7 +2540,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const { id } = request.params as { id: string };
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
-      const { limit, before } = request.query as { limit?: unknown; before?: unknown };
+      const { limit, before, beforeId } = request.query as {
+        limit?: unknown;
+        before?: unknown;
+        beforeId?: unknown;
+      };
 
       const parsedLimit = limit === undefined ? 200 : Number.parseInt(String(limit), 10);
       if (!Number.isFinite(parsedLimit) || parsedLimit <= 0) {
@@ -2556,6 +2561,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         beforeTimestampMs = Math.floor(parsedBefore);
       }
 
+      let beforeMessageId: string | null = null;
+      if (beforeId !== undefined) {
+        const beforeIdResult = requireNonEmptyString(beforeId, 'beforeId');
+        if (!beforeIdResult.ok) return badRequest(reply, beforeIdResult.message);
+        beforeMessageId = beforeIdResult.value;
+      }
+
       const cfg = await getGeneralAiConfig();
       if (!(await ensureAiEnabled(cfg, request, reply))) return;
 
@@ -2570,6 +2582,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       const messages = await reportsAiChatRepo.listMessagesForSession(idResult.value, {
+        beforeId: beforeMessageId,
         beforeMs: beforeTimestampMs,
         limit: messageLimit,
       });

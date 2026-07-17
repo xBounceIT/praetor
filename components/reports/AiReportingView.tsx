@@ -87,6 +87,8 @@ import {
   filterAndGroupAiReportingSessions,
 } from './aiReportingSessions';
 import {
+  type AiReportingVisualizationContentBlock,
+  type AiReportingVisualization as AiReportingVisualizationDefinition,
   type AiReportingVisualizationParseResult,
   getAiReportingAssistantCopyText,
   parseAiReportingVisualizations,
@@ -178,7 +180,9 @@ type AssistantAttemptGroup = {
   assistantAttempts: ReportChatMessage[];
 };
 
-const MESSAGES_PAGE_SIZE = 200;
+const MESSAGES_PAGE_SIZE = 20;
+const MESSAGE_GROUP_OVERSCAN_PX = 600;
+const ESTIMATED_MESSAGE_GROUP_HEIGHT_PX = 320;
 
 const mergeLoadedMessages = (
   loadedMessages: ReportChatMessage[],
@@ -515,7 +519,18 @@ const useAiReportingController = ({
   const abortRef = useRef<AbortController | null>(null);
   const sendRunIdRef = useRef(0);
   const activeAssistantMessageIdRef = useRef('');
+  const progressiveVisualizationMessageIdsRef = useRef(new Set<string>());
   const pendingEmptySessionIdRef = useRef('');
+  const loadedMessagesSessionIdRef = useRef('');
+  const initiallyRenderedMessageGroupIdsRef = useRef<Set<string>>(new Set());
+  const shouldRevealVisualizationsProgressively = useCallback(
+    (messageId: string) => progressiveVisualizationMessageIdsRef.current.has(messageId),
+    [],
+  );
+  const completeProgressiveVisualizationReveal = useCallback((messageId: string) => {
+    progressiveVisualizationMessageIdsRef.current.delete(messageId);
+  }, []);
+
   const [pendingRetryAutoSelectGroupId, setPendingRetryAutoSelectGroupId] = useState('');
   const tableRefs = useRef<Record<string, HTMLTableElement | null>>({});
   const [loadedActiveSessionId, setLoadedActiveSessionId] = useState(activeSessionId);
@@ -524,6 +539,11 @@ const useAiReportingController = ({
     dispatchAttemptSelection({ type: 'reset' });
     dispatchReportingState({ type: 'syncLoadedActiveSession', activeSessionId });
   }
+  const isChangingSession = Boolean(
+    activeSessionId &&
+      loadedMessagesSessionIdRef.current !== activeSessionId &&
+      !activeAssistantMessageIdRef.current,
+  );
 
   useEffect(() => {
     void activeSessionId;
@@ -591,12 +611,23 @@ const useAiReportingController = ({
     if (next) setHasNewText(false);
   }, [getIsAtBottom, setHasNewText, setIsAtBottom]);
 
-  const scrollToBottom = useCallback(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-    el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
-    requestAnimationFrame(updateAtBottom);
-  }, [updateAtBottom]);
+  const scrollToBottomWithBehavior = useCallback(
+    (behavior: ScrollBehavior) => {
+      const el = scrollRef.current;
+      if (!el) return;
+      el.scrollTo({ top: el.scrollHeight, behavior });
+      requestAnimationFrame(updateAtBottom);
+    },
+    [updateAtBottom],
+  );
+  const scrollToBottom = useCallback(
+    () => scrollToBottomWithBehavior('smooth'),
+    [scrollToBottomWithBehavior],
+  );
+  const jumpToBottom = useCallback(
+    () => scrollToBottomWithBehavior('auto'),
+    [scrollToBottomWithBehavior],
+  );
 
   const typeAssistantMessage = useCallback(
     async (
@@ -751,6 +782,10 @@ const useAiReportingController = ({
           ) {
             pendingEmptySessionIdRef.current = '';
           }
+          if (!opts.preserveLoadedHistory) {
+            initiallyRenderedMessageGroupIdsRef.current = new Set();
+          }
+          loadedMessagesSessionIdRef.current = sessionId;
           setMessages((currentMessages) =>
             opts.preserveLoadedHistory ? mergeLoadedMessages(currentMessages, data) : data,
           );
@@ -759,7 +794,7 @@ const useAiReportingController = ({
           }
           queueMicrotask(() => {
             if (opts.forceScroll || isAtBottomRef.current) {
-              scrollToBottom();
+              jumpToBottom();
               setHasNewText(false);
             } else {
               setHasNewText(true);
@@ -769,6 +804,10 @@ const useAiReportingController = ({
         }
       } catch (err) {
         if (token === loadTokenRef.current) {
+          if (loadedMessagesSessionIdRef.current !== sessionId) {
+            loadedMessagesSessionIdRef.current = sessionId;
+            setMessages([]);
+          }
           setError((err as Error).message || t('aiReporting.error'));
           setHasOlderMessages(false);
         }
@@ -778,7 +817,7 @@ const useAiReportingController = ({
     },
     [
       t,
-      scrollToBottom,
+      jumpToBottom,
       setError,
       setHasNewText,
       setHasOlderMessages,
@@ -806,9 +845,13 @@ const useAiReportingController = ({
     try {
       const older = await api.reports.getSessionMessages(activeSessionId, {
         limit: MESSAGES_PAGE_SIZE,
-        before: oldestLoaded.createdAt,
+        beforeId: oldestLoaded.id,
       });
       if (token !== loadTokenRef.current) return;
+      const nearestOlderGroup = buildAssistantAttemptGroups(older).at(-1);
+      initiallyRenderedMessageGroupIdsRef.current = new Set(
+        nearestOlderGroup ? [nearestOlderGroup.id] : [],
+      );
       setMessages((prev) => {
         if (older.length === 0) return prev;
         const existingIds = new Set(prev.map((m) => m.id));
@@ -839,7 +882,15 @@ const useAiReportingController = ({
 
   const handleNewChat = async () => {
     if (!enableAiReporting) return;
-    if (!canSend || isCreatingSession || isSending || isLoadingMessages || isEmptySession) return;
+    if (
+      !canSend ||
+      isCreatingSession ||
+      isSending ||
+      isLoadingMessages ||
+      isChangingSession ||
+      isEmptySession
+    )
+      return;
 
     const pendingEmptySessionId = pendingEmptySessionIdRef.current;
     if (pendingEmptySessionId && sessions.some((session) => session.id === pendingEmptySessionId)) {
@@ -869,6 +920,7 @@ const useAiReportingController = ({
 
       // Optimistically insert so it shows up immediately in the dropdown, then refresh canonical list.
       setSessions((prev) => [session, ...prev.filter((s) => s.id !== session.id)]);
+      loadedMessagesSessionIdRef.current = session.id;
       setMessages([]);
       setIsNewChat(false);
       setActiveSessionId(session.id);
@@ -887,7 +939,15 @@ const useAiReportingController = ({
   ): Promise<boolean> => {
     if (!enableAiReporting) return false;
     const content = rawContent.trim();
-    if (!content || isSending || abortRef.current || !canSend) return false;
+    if (
+      !content ||
+      isSending ||
+      isLoadingMessages ||
+      isChangingSession ||
+      abortRef.current ||
+      !canSend
+    )
+      return false;
 
     const abortController = new AbortController();
     const runId = ++sendRunIdRef.current;
@@ -977,6 +1037,7 @@ const useAiReportingController = ({
       const syncAssistantSession = (sessionId: string) => {
         if (!sessionId || !isRunActive()) return;
         resolvedSessionId = sessionId;
+        loadedMessagesSessionIdRef.current = sessionId;
         setMessages((prev) =>
           prev.map((m) => (m.id === assistantMessageId ? { ...m, sessionId } : m)),
         );
@@ -997,8 +1058,12 @@ const useAiReportingController = ({
             language: i18n.language,
           },
           {
-            onStart: ({ sessionId }) => {
+            onStart: ({ sessionId, messageId }) => {
               if (!isRunActive()) return;
+              if (messageId) {
+                progressiveVisualizationMessageIdsRef.current.add(messageId);
+                progressiveVisualizationMessageIdsRef.current.delete(assistantMessageId);
+              }
               streamStarted = true;
               syncAssistantSession(sessionId);
               if (!hadSession && sessionId) {
@@ -1139,6 +1204,7 @@ const useAiReportingController = ({
           );
           if (isRunActive()) {
             if (!hadSession) {
+              loadedMessagesSessionIdRef.current = fallback.sessionId;
               setActiveSessionId(fallback.sessionId);
               setIsNewChat(false);
             }
@@ -1353,6 +1419,10 @@ const useAiReportingController = ({
         {
           onStart: ({ messageId }) => {
             if (!isRunActive()) return;
+            if (messageId) {
+              progressiveVisualizationMessageIdsRef.current.add(messageId);
+              progressiveVisualizationMessageIdsRef.current.delete(placeholderId);
+            }
             // Replace placeholder ID with the real assistant message ID from server
             if (messageId && messageId !== placeholderId) {
               setMessages((prev) =>
@@ -1624,13 +1694,15 @@ const useAiReportingController = ({
     ? t('aiReporting.newChat', { defaultValue: 'New Chat' })
     : activeSession?.title || t('aiReporting.newChat', { defaultValue: 'New Chat' });
   const isEmptySession = Boolean(activeSessionId) && !isLoadingMessages && messages.length === 0;
-  const isNewChatDisabled = !canSend || isCreatingSession || isEmptySession || isLoadingMessages;
+  const isNewChatDisabled =
+    !canSend || isCreatingSession || isEmptySession || isLoadingMessages || isChangingSession;
   const showLoadOlderButton =
     enableAiReporting &&
+    !isChangingSession &&
     Boolean(activeSessionId) &&
     messages.length > 0 &&
     (hasOlderMessages || isLoadingOlderMessages);
-  const showGoToBottom = messages.length > 0 && (!isAtBottom || hasNewText);
+  const showGoToBottom = !isChangingSession && messages.length > 0 && (!isAtBottom || hasNewText);
   const footerHint = t('aiReporting.footerHint', {
     defaultValue: 'Enter to send, Shift+Enter for a new line.',
   });
@@ -1668,13 +1740,17 @@ const useAiReportingController = ({
     showLoadOlderButton,
     isLoadingOlderMessages,
     isLoadingMessages,
+    isChangingSession,
     messages,
     assistantAttemptGroups,
+    initiallyRenderedMessageGroupIds: initiallyRenderedMessageGroupIdsRef.current,
     selectedAttemptIndexByGroup,
     expandedThoughtMessageIds,
     loadOlderMessages,
     isSending,
     activeAssistantMessageId: activeAssistantMessageIdRef.current,
+    shouldRevealVisualizationsProgressively,
+    completeProgressiveVisualizationReveal,
     editingMessageId,
     editingDraft,
     setEditingDraft,
@@ -1742,13 +1818,17 @@ const AiReportingLayout: React.FC<{ controller: AiReportingController }> = ({ co
     showLoadOlderButton,
     isLoadingOlderMessages,
     isLoadingMessages,
+    isChangingSession,
     messages,
     assistantAttemptGroups,
+    initiallyRenderedMessageGroupIds,
     selectedAttemptIndexByGroup,
     expandedThoughtMessageIds,
     loadOlderMessages,
     isSending,
     activeAssistantMessageId,
+    shouldRevealVisualizationsProgressively,
+    completeProgressiveVisualizationReveal,
     editingMessageId,
     editingDraft,
     setEditingDraft,
@@ -1780,11 +1860,17 @@ const AiReportingLayout: React.FC<{ controller: AiReportingController }> = ({ co
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [showTechnicalInfo, setShowTechnicalInfo] = useState(false);
   const latestTechnicalInfo = useMemo(() => {
+    if (isChangingSession) return undefined;
     for (let index = messages.length - 1; index >= 0; index -= 1) {
-      if (messages[index].role === 'assistant') return messages[index].technicalInfo;
+      if (messages[index].role === 'assistant') {
+        return messages[index].technicalInfo;
+      }
     }
     return undefined;
-  }, [messages]);
+  }, [isChangingSession, messages]);
+  const visibleMessages = isChangingSession ? [] : messages;
+  const visibleAssistantAttemptGroups = isChangingSession ? [] : assistantAttemptGroups;
+  const canInteractWithConversation = canSend && !isLoadingMessages && !isChangingSession;
 
   const handleSelectSession = (sessionId: string) => {
     setIsNewChat(false);
@@ -1843,22 +1929,28 @@ const AiReportingLayout: React.FC<{ controller: AiReportingController }> = ({ co
                   isEnabled: enableAiReporting,
                   showLoadOlderButton,
                   isLoadingOlderMessages,
-                  isLoadingMessages,
+                  isLoadingMessages:
+                    isLoadingMessages ||
+                    isChangingSession ||
+                    (isLoadingSessions && sessions.length === 0),
                 }}
                 scrollRef={scrollRef}
                 endRef={endRef}
                 onScroll={updateAtBottom}
-                messages={messages}
-                assistantAttemptGroups={assistantAttemptGroups}
+                messages={visibleMessages}
+                assistantAttemptGroups={visibleAssistantAttemptGroups}
+                initiallyRenderedMessageGroupIds={initiallyRenderedMessageGroupIds}
                 selectedAttemptIndexByGroup={selectedAttemptIndexByGroup}
                 expandedThoughtMessageIds={expandedThoughtMessageIds}
                 onLoadOlderMessages={() => void loadOlderMessages()}
                 interactions={{
                   t,
                   language,
-                  canSend,
+                  canSend: canInteractWithConversation,
                   isSending,
                   activeAssistantMessageId,
+                  shouldRevealVisualizationsProgressively,
+                  completeProgressiveVisualizationReveal,
                   editingMessageId,
                   editingDraft,
                   setEditingDraft,
@@ -1903,7 +1995,7 @@ const AiReportingLayout: React.FC<{ controller: AiReportingController }> = ({ co
                         <AiReportingComposer
                           t={t}
                           draft={draft}
-                          canSend={canSend}
+                          canSend={canInteractWithConversation}
                           isSending={isSending}
                           footerHintWithPeriod={footerHintWithPeriod}
                           aiWarning={aiWarning}
@@ -2429,6 +2521,8 @@ interface AiReportingMessageInteractions {
   canSend: boolean;
   isSending: boolean;
   activeAssistantMessageId: string;
+  shouldRevealVisualizationsProgressively: (messageId: string) => boolean;
+  completeProgressiveVisualizationReveal: (messageId: string) => void;
   editingMessageId: string;
   editingDraft: string;
   setEditingDraft: AiReportingSetter<'editingDraft'>;
@@ -2455,6 +2549,7 @@ interface AiReportingConversationProps {
   onScroll: () => void;
   messages: ReportChatMessage[];
   assistantAttemptGroups: AssistantAttemptGroup[];
+  initiallyRenderedMessageGroupIds: ReadonlySet<string>;
   selectedAttemptIndexByGroup: Record<string, number>;
   expandedThoughtMessageIds: string[];
   onLoadOlderMessages: () => void;
@@ -2469,6 +2564,7 @@ const AiReportingConversation: React.FC<AiReportingConversationProps> = ({
   onScroll,
   messages,
   assistantAttemptGroups,
+  initiallyRenderedMessageGroupIds,
   selectedAttemptIndexByGroup,
   expandedThoughtMessageIds,
   onLoadOlderMessages,
@@ -2512,13 +2608,18 @@ const AiReportingConversation: React.FC<AiReportingConversationProps> = ({
         {!isLoadingMessages && messages.length === 0 && <AiReportingEmptyState t={t} />}
 
         <div className="space-y-7">
-          {assistantAttemptGroups.map((group) => (
-            <AiReportingMessageGroup
+          {assistantAttemptGroups.map((group, index) => (
+            <AiReportingVirtualMessageGroup
               key={group.id}
               group={group}
               selectedAttemptIndex={selectedAttemptIndexByGroup[group.id] ?? 0}
               expandedThoughtMessageIds={expandedThoughtMessageIds}
               interactions={interactions}
+              scrollRootRef={scrollRef}
+              initiallyRender={
+                index === assistantAttemptGroups.length - 1 ||
+                initiallyRenderedMessageGroupIds.has(group.id)
+              }
             />
           ))}
         </div>
@@ -2580,6 +2681,72 @@ interface AiReportingMessageGroupProps {
   expandedThoughtMessageIds: string[];
   interactions: AiReportingMessageInteractions;
 }
+
+interface AiReportingVirtualMessageGroupProps extends AiReportingMessageGroupProps {
+  scrollRootRef: React.RefObject<HTMLDivElement | null>;
+  initiallyRender: boolean;
+}
+
+const AiReportingVirtualMessageGroup: React.FC<AiReportingVirtualMessageGroupProps> = ({
+  scrollRootRef,
+  initiallyRender,
+  ...messageGroupProps
+}) => {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const measuredHeightRef = useRef(ESTIMATED_MESSAGE_GROUP_HEIGHT_PX);
+  const [isNearViewport, setIsNearViewport] = useState(
+    () => typeof IntersectionObserver === 'undefined' || initiallyRender,
+  );
+
+  const rememberHeight = useCallback(() => {
+    const height = Math.ceil(containerRef.current?.getBoundingClientRect().height ?? 0);
+    if (height > 0) measuredHeightRef.current = height;
+  }, []);
+
+  useEffect(() => {
+    const element = containerRef.current;
+    const root = scrollRootRef.current;
+    if (!element || !root || typeof IntersectionObserver === 'undefined') return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        const nextIsNearViewport = Boolean(entry?.isIntersecting);
+        if (!nextIsNearViewport) rememberHeight();
+        setIsNearViewport(nextIsNearViewport);
+      },
+      {
+        root,
+        rootMargin: `${MESSAGE_GROUP_OVERSCAN_PX}px 0px`,
+      },
+    );
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [rememberHeight, scrollRootRef]);
+
+  useEffect(() => {
+    if (!isNearViewport) return;
+    const element = containerRef.current;
+    if (!element) return;
+
+    rememberHeight();
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(rememberHeight);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [isNearViewport, rememberHeight]);
+
+  return (
+    <div
+      ref={containerRef}
+      data-slot="ai-reporting-virtual-message-group"
+      data-message-group-id={messageGroupProps.group.id}
+      data-rendered={isNearViewport ? 'true' : 'false'}
+      style={isNearViewport ? undefined : { height: measuredHeightRef.current }}
+    >
+      {isNearViewport ? <AiReportingMessageGroup {...messageGroupProps} /> : null}
+    </div>
+  );
+};
 
 const AiReportingMessageGroup: React.FC<AiReportingMessageGroupProps> = ({
   group,
@@ -2793,12 +2960,36 @@ const AiReportingAssistantMessage: React.FC<AiReportingAssistantMessageProps> = 
     interactions;
   const allowPendingVisualization =
     interactions.isSending && message.id === interactions.activeAssistantMessageId;
+  const shouldRevealVisualizationsProgressively =
+    allowPendingVisualization || interactions.shouldRevealVisualizationsProgressively(message.id);
   const parsedContent = useMemo(
     () =>
       parseAiReportingVisualizations(message.content, {
         allowPending: allowPendingVisualization,
       }),
     [allowPendingVisualization, message.content],
+  );
+  const visualizationCacheRef = useRef(
+    new Map<string, { signature: string; visualization: AiReportingVisualizationDefinition }>(),
+  );
+  const stableContentBlocks = useMemo(
+    () =>
+      parsedContent.blocks.map((block) => {
+        if (block.type !== 'visualization') return block;
+
+        const cacheKey = `${message.id}:${block.visualizationIndex}`;
+        const cached = visualizationCacheRef.current.get(cacheKey);
+        if (cached?.signature === block.source) {
+          return { ...block, visualization: cached.visualization };
+        }
+
+        visualizationCacheRef.current.set(cacheKey, {
+          signature: block.source,
+          visualization: block.visualization,
+        });
+        return block;
+      }),
+    [message.id, parsedContent.blocks],
   );
   const copyText = useMemo(() => getAiReportingAssistantCopyText(parsedContent), [parsedContent]);
 
@@ -2814,9 +3005,13 @@ const AiReportingAssistantMessage: React.FC<AiReportingAssistantMessageProps> = 
           />
         )}
         <AiMarkdownMessage
+          key={message.id}
           message={message}
           interactions={interactions}
           parsedContent={parsedContent}
+          blocks={stableContentBlocks}
+          isStreaming={allowPendingVisualization}
+          shouldRevealVisualizationsProgressively={shouldRevealVisualizationsProgressively}
         />
         <div className="mt-2 flex justify-start items-center gap-1.5">
           <Tooltip>
@@ -2917,153 +3112,247 @@ const AiReportingThoughtPanel: React.FC<AiReportingThoughtPanelProps> = ({
   </Card>
 );
 
+const AI_REPORTING_VISUALIZATION_REVEAL_DELAY_MS = 600;
+
+const getProgressivelyRevealedVisualizationBlocks = (
+  blocks: AiReportingVisualizationContentBlock[],
+  revealedVisualizationCount: number,
+) => {
+  const visibleBlocks: AiReportingVisualizationContentBlock[] = [];
+  let visualizationIndex = 0;
+
+  for (const block of blocks) {
+    if (block.type === 'visualization') {
+      if (visualizationIndex >= revealedVisualizationCount) {
+        visibleBlocks.push({
+          type: 'pending',
+          visualizationIndex: block.visualizationIndex,
+        });
+        break;
+      }
+      visualizationIndex += 1;
+    }
+
+    visibleBlocks.push(block);
+    if (block.type === 'pending') break;
+  }
+
+  return visibleBlocks;
+};
+
 const AiMarkdownMessage: React.FC<{
   message: ReportChatMessage;
   interactions: AiReportingMessageInteractions;
   parsedContent: AiReportingVisualizationParseResult;
-}> = ({ message, interactions, parsedContent }) => {
-  const { t, language, resolveTableMarkdown, tableRefs } = interactions;
+  blocks: AiReportingVisualizationContentBlock[];
+  isStreaming: boolean;
+  shouldRevealVisualizationsProgressively: boolean;
+}> = ({
+  message,
+  interactions,
+  parsedContent,
+  blocks,
+  isStreaming,
+  shouldRevealVisualizationsProgressively,
+}) => {
+  const { t, language, resolveTableMarkdown, tableRefs, completeProgressiveVisualizationReveal } =
+    interactions;
   let tableRenderIndex = 0;
+
+  const revealVisualizationsProgressivelyRef = useRef(shouldRevealVisualizationsProgressively);
+  const revealVisualizationsProgressively = revealVisualizationsProgressivelyRef.current;
+  const [revealedVisualizationCount, setRevealedVisualizationCount] = useState(1);
+  const visualizationCount = parsedContent.visualizations.length;
+
+  useEffect(() => {
+    if (!revealVisualizationsProgressively || revealedVisualizationCount >= visualizationCount) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setRevealedVisualizationCount((current) => Math.min(current + 1, visualizationCount));
+    }, AI_REPORTING_VISUALIZATION_REVEAL_DELAY_MS);
+    return () => window.clearTimeout(timeoutId);
+  }, [revealVisualizationsProgressively, revealedVisualizationCount, visualizationCount]);
+  useEffect(() => {
+    if (
+      !revealVisualizationsProgressively ||
+      isStreaming ||
+      revealedVisualizationCount < visualizationCount
+    ) {
+      return;
+    }
+    completeProgressiveVisualizationReveal(message.id);
+  }, [
+    completeProgressiveVisualizationReveal,
+    isStreaming,
+    message.id,
+    revealVisualizationsProgressively,
+    revealedVisualizationCount,
+    visualizationCount,
+  ]);
+
+  const visibleBlocks = useMemo(
+    () =>
+      revealVisualizationsProgressively
+        ? getProgressivelyRevealedVisualizationBlocks(blocks, revealedVisualizationCount)
+        : blocks,
+    [blocks, revealVisualizationsProgressively, revealedVisualizationCount],
+  );
 
   return (
     <>
-      {parsedContent.markdown ? (
-        <ReactMarkdown
-          remarkPlugins={[remarkGfm, remarkBreaks]}
-          components={{
-            a: ({ children, href }: MarkdownRendererProps<'a'>) => {
-              const safe = safeHref(href);
-              if (!safe) return <>{children}</>;
-              return (
-                <a
-                  href={safe}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="font-semibold text-foreground underline underline-offset-2 hover:text-foreground/80"
-                >
+      {visibleBlocks.map((block, blockIndex) => {
+        if (block.type === 'visualization') {
+          return (
+            <AiReportingVisualization
+              key={`${message.id}-visualization-${block.visualizationIndex}`}
+              visualization={block.visualization}
+              language={language}
+            />
+          );
+        }
+        if (block.type === 'pending') {
+          return (
+            <AiReportingVisualizationPending
+              key={`${message.id}-visualization-pending-${block.visualizationIndex}`}
+            />
+          );
+        }
+
+        return (
+          <ReactMarkdown
+            key={`${message.id}-markdown-${blockIndex}`}
+            remarkPlugins={[remarkGfm, remarkBreaks]}
+            components={{
+              a: ({ children, href }: MarkdownRendererProps<'a'>) => {
+                const safe = safeHref(href);
+                if (!safe) return <>{children}</>;
+                return (
+                  <a
+                    href={safe}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-semibold text-foreground underline underline-offset-2 hover:text-foreground/80"
+                  >
+                    {children}
+                  </a>
+                );
+              },
+              img: ({ alt, src }: MarkdownRendererProps<'img'>) => {
+                const safe = safeHref(src);
+                const label = alt?.trim() ? alt.trim() : src || 'image';
+                if (!safe) return <span className="text-muted-foreground">[Image: {label}]</span>;
+                return (
+                  <a
+                    href={safe}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-semibold text-foreground underline underline-offset-2 hover:text-foreground/80"
+                  >
+                    [Image: {label}]
+                  </a>
+                );
+              },
+              p: ({ children }: MarkdownRendererProps<'p'>) => (
+                <p className="my-2 first:mt-0 last:mb-0">{children}</p>
+              ),
+              h1: ({ children }: MarkdownRendererProps<'h1'>) => (
+                <h1 className="mt-4 mb-2 text-lg font-semibold text-foreground">{children}</h1>
+              ),
+              h2: ({ children }: MarkdownRendererProps<'h2'>) => (
+                <h2 className="mt-4 mb-2 text-base font-semibold text-foreground">{children}</h2>
+              ),
+              h3: ({ children }: MarkdownRendererProps<'h3'>) => (
+                <h3 className="mt-3 mb-1 text-sm font-semibold text-foreground">{children}</h3>
+              ),
+              ul: ({ children }: MarkdownRendererProps<'ul'>) => (
+                <ul className="my-2 list-disc pl-5 marker:text-muted-foreground">{children}</ul>
+              ),
+              ol: ({ children }: MarkdownRendererProps<'ol'>) => (
+                <ol className="my-2 list-decimal pl-5 marker:text-muted-foreground">{children}</ol>
+              ),
+              li: ({ children }: MarkdownRendererProps<'li'>) => (
+                <li className="my-1">{children}</li>
+              ),
+              blockquote: ({ children }: MarkdownRendererProps<'blockquote'>) => (
+                <blockquote className="my-2 border-l-4 border-border pl-3 text-muted-foreground">
                   {children}
-                </a>
-              );
-            },
-            img: ({ alt, src }: MarkdownRendererProps<'img'>) => {
-              const safe = safeHref(src);
-              const label = alt?.trim() ? alt.trim() : src || 'image';
-              if (!safe) return <span className="text-muted-foreground">[Image: {label}]</span>;
-              return (
-                <a
-                  href={safe}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="font-semibold text-foreground underline underline-offset-2 hover:text-foreground/80"
-                >
-                  [Image: {label}]
-                </a>
-              );
-            },
-            p: ({ children }: MarkdownRendererProps<'p'>) => (
-              <p className="my-2 first:mt-0 last:mb-0">{children}</p>
-            ),
-            h1: ({ children }: MarkdownRendererProps<'h1'>) => (
-              <h1 className="mt-4 mb-2 text-lg font-semibold text-foreground">{children}</h1>
-            ),
-            h2: ({ children }: MarkdownRendererProps<'h2'>) => (
-              <h2 className="mt-4 mb-2 text-base font-semibold text-foreground">{children}</h2>
-            ),
-            h3: ({ children }: MarkdownRendererProps<'h3'>) => (
-              <h3 className="mt-3 mb-1 text-sm font-semibold text-foreground">{children}</h3>
-            ),
-            ul: ({ children }: MarkdownRendererProps<'ul'>) => (
-              <ul className="my-2 list-disc pl-5 marker:text-muted-foreground">{children}</ul>
-            ),
-            ol: ({ children }: MarkdownRendererProps<'ol'>) => (
-              <ol className="my-2 list-decimal pl-5 marker:text-muted-foreground">{children}</ol>
-            ),
-            li: ({ children }: MarkdownRendererProps<'li'>) => <li className="my-1">{children}</li>,
-            blockquote: ({ children }: MarkdownRendererProps<'blockquote'>) => (
-              <blockquote className="my-2 border-l-4 border-border pl-3 text-muted-foreground">
-                {children}
-              </blockquote>
-            ),
-            hr: () => <hr className="my-3 border-border" />,
-            table: ({ children }: MarkdownRendererProps<'table'>) => {
-              tableRenderIndex += 1;
-              const tableId = `${message.id}-table-${tableRenderIndex}`;
-              return (
-                <Card className="my-3 gap-0 overflow-hidden rounded-2xl py-0">
-                  <div className="flex items-center justify-end border-b border-border px-2 py-1.5">
-                    <CopyButton
-                      iconOnly
-                      variant="ghost"
-                      size="icon-xs"
-                      value={() => resolveTableMarkdown(tableId)}
-                      aria-label={t('aiReporting.copyTable', { defaultValue: 'Copy table' })}
-                      className="text-muted-foreground hover:bg-accent hover:text-foreground"
-                    />
-                  </div>
-                  <div className="max-w-full overflow-x-auto">
-                    <table
-                      ref={(tableElement) => {
-                        if (tableElement) {
-                          tableRefs.current[tableId] = tableElement;
-                        } else {
-                          delete tableRefs.current[tableId];
-                        }
-                      }}
-                      className="w-max min-w-full border-collapse text-left text-[13px] leading-relaxed text-foreground"
+                </blockquote>
+              ),
+              hr: () => <hr className="my-3 border-border" />,
+              table: ({ children }: MarkdownRendererProps<'table'>) => {
+                tableRenderIndex += 1;
+                const tableId = `${message.id}-block-${blockIndex}-table-${tableRenderIndex}`;
+                return (
+                  <Card className="my-3 gap-0 overflow-hidden rounded-2xl py-0">
+                    <div className="flex items-center justify-end border-b border-border px-2 py-1.5">
+                      <CopyButton
+                        iconOnly
+                        variant="ghost"
+                        size="icon-xs"
+                        value={() => resolveTableMarkdown(tableId)}
+                        aria-label={t('aiReporting.copyTable', { defaultValue: 'Copy table' })}
+                        className="text-muted-foreground hover:bg-accent hover:text-foreground"
+                      />
+                    </div>
+                    <div className="max-w-full overflow-x-auto">
+                      <table
+                        ref={(tableElement) => {
+                          if (tableElement) {
+                            tableRefs.current[tableId] = tableElement;
+                          } else {
+                            delete tableRefs.current[tableId];
+                          }
+                        }}
+                        className="w-max min-w-full border-collapse text-left text-[13px] leading-relaxed text-foreground"
+                      >
+                        {children}
+                      </table>
+                    </div>
+                  </Card>
+                );
+              },
+              th: ({ children }: MarkdownRendererProps<'th'>) => (
+                <th className="align-top whitespace-nowrap border border-border bg-muted px-3 py-2 font-semibold text-foreground">
+                  {children}
+                </th>
+              ),
+              td: ({ children }: MarkdownRendererProps<'td'>) => (
+                <td className="align-top break-words border border-border px-3 py-2">{children}</td>
+              ),
+              pre: ({ children }: MarkdownRendererProps<'pre'>) => (
+                <pre className="my-2 overflow-x-auto rounded-xl bg-muted p-3 text-foreground">
+                  {children}
+                </pre>
+              ),
+              code: (props: MarkdownRendererProps<'code'> & { inline?: boolean }) => {
+                // react-markdown provides `inline` here, but it is not represented in the
+                // published `Components` typing (intrinsic `code` props only).
+                const { inline, className, children } = props;
+
+                if (inline === false) {
+                  return (
+                    <code
+                      className={`font-mono text-[12px] leading-relaxed text-foreground ${className ?? ''}`}
                     >
                       {children}
-                    </table>
-                  </div>
-                </Card>
-              );
-            },
-            th: ({ children }: MarkdownRendererProps<'th'>) => (
-              <th className="align-top whitespace-nowrap border border-border bg-muted px-3 py-2 font-semibold text-foreground">
-                {children}
-              </th>
-            ),
-            td: ({ children }: MarkdownRendererProps<'td'>) => (
-              <td className="align-top break-words border border-border px-3 py-2">{children}</td>
-            ),
-            pre: ({ children }: MarkdownRendererProps<'pre'>) => (
-              <pre className="my-2 overflow-x-auto rounded-xl bg-muted p-3 text-foreground">
-                {children}
-              </pre>
-            ),
-            code: (props: MarkdownRendererProps<'code'> & { inline?: boolean }) => {
-              // react-markdown provides `inline` here, but it is not represented in the
-              // published `Components` typing (intrinsic `code` props only).
-              const { inline, className, children } = props;
+                    </code>
+                  );
+                }
 
-              if (inline === false) {
                 return (
-                  <code
-                    className={`font-mono text-[12px] leading-relaxed text-foreground ${className ?? ''}`}
-                  >
+                  <code className="rounded bg-muted px-1 py-0.5 font-mono text-[12px] text-foreground">
                     {children}
                   </code>
                 );
-              }
-
-              return (
-                <code className="rounded bg-muted px-1 py-0.5 font-mono text-[12px] text-foreground">
-                  {children}
-                </code>
-              );
-            },
-          }}
-        >
-          {parsedContent.markdown}
-        </ReactMarkdown>
-      ) : null}
-      {parsedContent.visualizations.map((visualization, index) => (
-        <AiReportingVisualization
-          key={`${message.id}-visualization-${index}`}
-          visualization={visualization}
-          language={language}
-        />
-      ))}
-      {parsedContent.hasPendingVisualization ? <AiReportingVisualizationPending /> : null}
+              },
+            }}
+          >
+            {block.markdown}
+          </ReactMarkdown>
+        );
+      })}
       {parsedContent.invalidVisualizationCount > 0 ? (
         <Alert variant="destructive" className="my-3">
           <TriangleAlert aria-hidden="true" />

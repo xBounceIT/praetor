@@ -19,6 +19,10 @@ Su desktop AI Reporting mostra la cronologia nella colonna sinistra e la convers
 
 Usa il campo di ricerca per filtrare le chat in base al titolo. Seleziona una voce per riprendere la conversazione oppure premi **Nuova Chat** in fondo alla cronologia per iniziarne una nuova.
 
+Quando apri una conversazione, Praetor carica solo i messaggi più recenti. Usa **Carica messaggi precedenti** per recuperare progressivamente le parti più vecchie senza rallentare l'apertura della pagina.
+
+Nel browser vengono renderizzati soltanto i messaggi visibili e una piccola fascia sopra e sotto l'area di scorrimento. I contenuti più lontani restano come segnaposto leggeri e vengono materializzati solo quando ti avvicini.
+
 Su dispositivi mobili, apri la cronologia con il pulsante nella barra superiore della conversazione.
 
 Le azioni della chat sono integrate nella sua riga: usa la matita per rinominare il titolo oppure il cestino per rimuovere la conversazione e conferma l'operazione.
@@ -55,6 +59,8 @@ Puoi chiedere esplicitamente un grafico, ad esempio “mostra l'andamento mensil
 Quando la richiesta menziona esplicitamente un grafico, una visualizzazione, una dashboard o un report di dati, l'assistente usa il renderer integrato invece di sostituire il risultato con una semplice descrizione o tabella. Se i dati necessari non sono disponibili, indica quali mancano e chiede un chiarimento senza inventarli.
 
 Una singola risposta può includere fino a sette visualizzazioni, quando più grafici migliorano concretamente la comprensione dell'analisi.
+
+Nelle risposte con più visualizzazioni, ogni breve interpretazione precede il grafico a cui si riferisce. Durante la generazione, i grafici completati compaiono progressivamente uno alla volta, mentre quello ancora in costruzione resta indicato da un segnaposto.
 
 Passa il puntatore o usa la navigazione da tastiera sul grafico per leggere i valori, consulta la legenda quando sono presenti più serie e premi **Mostra dati** per aprire la tabella accessibile usata dalla visualizzazione. Colori e superfici si adattano automaticamente al tema chiaro o scuro.
 

@@ -1,5 +1,5 @@
 import { BarChart3, ChevronDown, ChevronUp, Table2 } from 'lucide-react';
-import { useId, useMemo, useState } from 'react';
+import { memo, useId, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -334,7 +334,7 @@ const VisualizationDataTable = ({
   </div>
 );
 
-export const AiReportingVisualization = ({
+const AiReportingVisualizationContent = ({
   visualization,
   language,
 }: AiReportingVisualizationProps) => {
@@ -412,6 +412,9 @@ export const AiReportingVisualization = ({
     </Card>
   );
 };
+
+export const AiReportingVisualization = memo(AiReportingVisualizationContent);
+AiReportingVisualization.displayName = 'AiReportingVisualization';
 
 export const AiReportingVisualizationPending = () => {
   const { t } = useTranslation('reports');

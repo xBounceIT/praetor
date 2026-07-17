@@ -50,9 +50,20 @@ export interface AiReportingVisualization {
   data: AiReportingVisualizationDatum[];
 }
 
+export type AiReportingVisualizationContentBlock =
+  | { type: 'markdown'; markdown: string }
+  | {
+      type: 'visualization';
+      visualization: AiReportingVisualization;
+      visualizationIndex: number;
+      source: string;
+    }
+  | { type: 'pending'; visualizationIndex: number };
+
 export interface AiReportingVisualizationParseResult {
   markdown: string;
   visualizations: AiReportingVisualization[];
+  blocks: AiReportingVisualizationContentBlock[];
   invalidVisualizationCount: number;
   hasPendingVisualization: boolean;
 }
@@ -220,9 +231,22 @@ export const parseAiReportingVisualizations = (
 ): AiReportingVisualizationParseResult => {
   const lines = content.replace(/\r\n?/g, '\n').split('\n');
   const markdownLines: string[] = [];
+  let currentMarkdownLines: string[] = [];
   const visualizations: AiReportingVisualization[] = [];
+  const blocks: AiReportingVisualizationContentBlock[] = [];
   let invalidVisualizationCount = 0;
   let hasPendingVisualization = false;
+
+  const flushMarkdownBlock = () => {
+    const markdown = currentMarkdownLines.join('\n').trim();
+    currentMarkdownLines = [];
+    if (markdown) blocks.push({ type: 'markdown', markdown });
+  };
+
+  const markPendingVisualization = () => {
+    hasPendingVisualization = true;
+    blocks.push({ type: 'pending', visualizationIndex: visualizations.length });
+  };
 
   for (let index = 0; index < lines.length; index += 1) {
     const line = lines[index];
@@ -233,13 +257,17 @@ export const parseAiReportingVisualizations = (
         possibleFence.startsWith('```p') &&
         VISUALIZATION_FENCE_PREFIX.startsWith(possibleFence)
       ) {
-        if (options.allowPending) hasPendingVisualization = true;
+        flushMarkdownBlock();
+        if (options.allowPending) markPendingVisualization();
         else invalidVisualizationCount += 1;
         break;
       }
       markdownLines.push(line);
+      currentMarkdownLines.push(line);
       continue;
     }
+
+    flushMarkdownBlock();
 
     const jsonLines: string[] = [];
     let closingIndex = index + 1;
@@ -252,7 +280,7 @@ export const parseAiReportingVisualizations = (
     }
 
     if (closingIndex >= lines.length) {
-      if (options.allowPending) hasPendingVisualization = true;
+      if (options.allowPending) markPendingVisualization();
       else invalidVisualizationCount += 1;
       break;
     }
@@ -270,7 +298,14 @@ export const parseAiReportingVisualizations = (
     try {
       const visualization = validateAiReportingVisualization(JSON.parse(rawJson));
       if (visualization && visualizations.length < AI_REPORTING_MAX_VISUALIZATIONS) {
+        const visualizationIndex = visualizations.length;
         visualizations.push(visualization);
+        blocks.push({
+          type: 'visualization',
+          visualization,
+          visualizationIndex,
+          source: rawJson,
+        });
       } else {
         invalidVisualizationCount += 1;
       }
@@ -279,9 +314,12 @@ export const parseAiReportingVisualizations = (
     }
   }
 
+  flushMarkdownBlock();
+
   return {
     markdown: markdownLines.join('\n').trim(),
     visualizations,
+    blocks,
     invalidVisualizationCount,
     hasPendingVisualization,
   };
@@ -316,7 +354,14 @@ export const aiReportingVisualizationToMarkdown = (visualization: AiReportingVis
 };
 
 export const getAiReportingAssistantCopyText = (parsed: AiReportingVisualizationParseResult) => {
-  return [parsed.markdown, ...parsed.visualizations.map(aiReportingVisualizationToMarkdown)]
+  return parsed.blocks
+    .map((block) => {
+      if (block.type === 'markdown') return block.markdown;
+      if (block.type === 'visualization') {
+        return aiReportingVisualizationToMarkdown(block.visualization);
+      }
+      return '';
+    })
     .filter(Boolean)
     .join('\n\n');
 };

@@ -197,6 +197,157 @@ beforeEach(() => {
 });
 
 describe('<AiReportingView /> interactions', () => {
+  test('keeps startup stable and loads only the latest history page', async () => {
+    let resolveSessions: ((value: ReportChatSessionSummary[]) => void) | undefined;
+    listSessionsMock.mockImplementationOnce(
+      () =>
+        new Promise<ReportChatSessionSummary[]>((resolve) => {
+          resolveSessions = resolve;
+        }),
+    );
+
+    renderView();
+
+    expect(screen.queryByText('What should we build together now?')).toBeNull();
+
+    await act(async () => resolveSessions?.(sessions));
+    await waitFor(() =>
+      expect(getSessionMessagesMock).toHaveBeenCalledWith('revenue', {
+        limit: 20,
+      }),
+    );
+  });
+
+  test('jumps directly to loaded history without animating through it', async () => {
+    const originalScrollTo = HTMLElement.prototype.scrollTo;
+    const scrollToMock = mock(() => {});
+    HTMLElement.prototype.scrollTo =
+      scrollToMock as unknown as typeof HTMLElement.prototype.scrollTo;
+
+    try {
+      renderView();
+
+      await screen.findByText('Quarterly revenue is available.');
+      await waitFor(() =>
+        expect(scrollToMock).toHaveBeenCalledWith(expect.objectContaining({ behavior: 'auto' })),
+      );
+      expect(scrollToMock).not.toHaveBeenCalledWith(
+        expect.objectContaining({ behavior: 'smooth' }),
+      );
+    } finally {
+      HTMLElement.prototype.scrollTo = originalScrollTo;
+    }
+  });
+
+  test('hides the previous conversation while the selected history page is loading', async () => {
+    let resolveCapacityMessages: ((value: ReportChatMessage[]) => void) | undefined;
+    getSessionMessagesMock.mockImplementation((sessionId: string) => {
+      if (sessionId === 'revenue') return Promise.resolve(messages);
+      return new Promise<ReportChatMessage[]>((resolve) => {
+        resolveCapacityMessages = resolve;
+      });
+    });
+
+    renderView();
+
+    await screen.findByText('Quarterly revenue is available.');
+    fireEvent.click(screen.getByRole('button', { name: 'Project capacity' }));
+
+    const composer = screen.getByRole('textbox', {
+      name: 'Ask a question about your business data...',
+    });
+    const newChatButton = screen.getByRole('button', { name: 'New Chat' });
+    expect(screen.queryByText('Quarterly revenue is available.')).toBeNull();
+    expect(screen.queryByText('What should we build together now?')).toBeNull();
+    expect(composer).toBeDisabled();
+    expect(newChatButton).toBeDisabled();
+
+    await act(async () =>
+      resolveCapacityMessages?.([
+        {
+          id: 'capacity-assistant',
+          sessionId: 'capacity',
+          role: 'assistant',
+          content: 'Capacity is ready.',
+          createdAt: 20_001,
+        },
+      ]),
+    );
+    expect(await screen.findByText('Capacity is ready.')).toBeInTheDocument();
+    expect(composer).toBeEnabled();
+    expect(newChatButton).toBeEnabled();
+  });
+
+  test('mounts message bodies only when they are near the viewport', async () => {
+    const originalIntersectionObserver = globalThis.IntersectionObserver;
+    const callbacks = new Map<Element, IntersectionObserverCallback>();
+
+    class TestIntersectionObserver {
+      readonly root = null;
+      readonly rootMargin = '';
+      readonly thresholds = [0];
+      private readonly callback: IntersectionObserverCallback;
+
+      constructor(callback: IntersectionObserverCallback) {
+        this.callback = callback;
+      }
+
+      observe(target: Element) {
+        callbacks.set(target, this.callback);
+      }
+
+      unobserve(target: Element) {
+        callbacks.delete(target);
+      }
+
+      disconnect() {}
+
+      takeRecords(): IntersectionObserverEntry[] {
+        return [];
+      }
+    }
+
+    Object.defineProperty(globalThis, 'IntersectionObserver', {
+      configurable: true,
+      writable: true,
+      value: TestIntersectionObserver as unknown as typeof IntersectionObserver,
+    });
+
+    try {
+      getSessionMessagesMock.mockResolvedValueOnce(
+        createMessageHistory('virtual', 'Virtual question', 'Virtual answer').slice(0, 10),
+      );
+      renderView();
+
+      await screen.findByText('Virtual answer 4');
+      expect(screen.queryByText('Virtual question 0')).toBeNull();
+      expect(screen.queryByText('Virtual question 2')).toBeNull();
+
+      const placeholder = document.querySelector<HTMLElement>(
+        '[data-message-group-id="virtual-user-0"]',
+      );
+      expect(placeholder).not.toBeNull();
+      expect(placeholder?.dataset.rendered).toBe('false');
+      await waitFor(() => expect(callbacks.has(placeholder as HTMLElement)).toBe(true));
+
+      await act(async () => {
+        callbacks.get(placeholder as HTMLElement)?.(
+          [{ target: placeholder, isIntersecting: true } as unknown as IntersectionObserverEntry],
+          {} as IntersectionObserver,
+        );
+      });
+
+      expect(await screen.findByText('Virtual question 0')).toBeInTheDocument();
+      expect(placeholder?.dataset.rendered).toBe('true');
+    } finally {
+      Object.defineProperty(globalThis, 'IntersectionObserver', {
+        configurable: true,
+        writable: true,
+        value: originalIntersectionObserver,
+      });
+    }
+  });
+
   test('shows the experimental badge only in the chat sidebar', async () => {
     renderView();
 
@@ -392,7 +543,7 @@ describe('<AiReportingView /> interactions', () => {
     expect(screen.getByText('Run the first analysis')).toBeInTheDocument();
     await waitFor(() =>
       expect(getSessionMessagesMock).toHaveBeenCalledWith('fresh-session', {
-        limit: 200,
+        limit: 20,
       }),
     );
     expect(screen.getByRole('button', { name: 'Retry' })).toBeEnabled();
@@ -451,9 +602,9 @@ describe('<AiReportingView /> interactions', () => {
     ];
     let resolveOlderMessages: ((messages: ReportChatMessage[]) => void) | undefined;
     getSessionMessagesMock.mockImplementation(
-      (sessionId: string, options?: { before?: number }) => {
+      (sessionId: string, options?: { beforeId?: string }) => {
         if (sessionId === 'capacity') return Promise.resolve(capacityMessages);
-        if (options?.before) {
+        if (options?.beforeId) {
           return new Promise<ReportChatMessage[]>((resolve) => {
             resolveOlderMessages = resolve;
           });
@@ -487,8 +638,9 @@ describe('<AiReportingView /> interactions', () => {
   test('preserves loaded history after editing an older message', async () => {
     const latestHistory = createMessageHistory('latest', 'Latest question', 'Latest answer');
 
-    getSessionMessagesMock.mockImplementation((_sessionId: string, options?: { before?: number }) =>
-      Promise.resolve(options?.before ? olderEditableHistory : latestHistory),
+    getSessionMessagesMock.mockImplementation(
+      (_sessionId: string, options?: { beforeId?: string }) =>
+        Promise.resolve(options?.beforeId ? olderEditableHistory : latestHistory),
     );
     editMessageStreamMock.mockImplementation(
       async (
@@ -523,8 +675,9 @@ describe('<AiReportingView /> interactions', () => {
 
   test('restores loaded history when editing an older message fails', async () => {
     const latestHistory = createMessageHistory('latest', 'Latest question', 'Latest answer');
-    getSessionMessagesMock.mockImplementation((_sessionId: string, options?: { before?: number }) =>
-      Promise.resolve(options?.before ? olderEditableHistory : latestHistory),
+    getSessionMessagesMock.mockImplementation(
+      (_sessionId: string, options?: { beforeId?: string }) =>
+        Promise.resolve(options?.beforeId ? olderEditableHistory : latestHistory),
     );
     editMessageStreamMock.mockImplementation(
       async (
@@ -826,5 +979,111 @@ describe('<AiReportingView /> interactions', () => {
     expect(within(table).getByText('January')).toBeInTheDocument();
     expect(within(table).getByText('€1,200.00')).toBeInTheDocument();
     expect(within(table).getByText('12% pts')).toBeInTheDocument();
+  });
+
+  test('reveals streamed visualizations progressively in narrative order', async () => {
+    const firstChartDefinition = {
+      version: 1,
+      type: 'bar',
+      title: 'Streaming revenue trend',
+      xKey: 'month',
+      series: [{ key: 'revenue', label: 'Revenue', format: 'number' }],
+      data: [{ month: 'January', revenue: 1200 }],
+    };
+    const secondChartDefinition = {
+      version: 1,
+      type: 'bar',
+      title: 'Streaming margin trend',
+      xKey: 'month',
+      series: [{ key: 'margin', label: 'Margin', format: 'percent' }],
+      data: [{ month: 'January', margin: 12 }],
+    };
+    const firstChartContent = [
+      'Revenue analysis is ready.',
+      '```praetor-visualization',
+      JSON.stringify(firstChartDefinition),
+      '```',
+    ].join('\n');
+    const secondChartJson = JSON.stringify(secondChartDefinition);
+    const chartContent = [
+      firstChartContent,
+      'Margin analysis is ready.',
+      '```praetor-visualization',
+      secondChartJson,
+      '```',
+    ].join('\n');
+    const completedMessages: ReportChatMessage[] = [
+      ...messages,
+      {
+        id: 'user-streaming-chart',
+        sessionId: 'revenue',
+        role: 'user',
+        content: 'Chart the revenue',
+        createdAt: 1_752_493_600_002,
+      },
+      {
+        id: 'assistant-streaming-chart',
+        sessionId: 'revenue',
+        role: 'assistant',
+        content: chartContent,
+        createdAt: 1_752_493_600_003,
+      },
+    ];
+    let resolveCanonicalMessages: ((value: ReportChatMessage[]) => void) | undefined;
+    const canonicalMessages = new Promise<ReportChatMessage[]>((resolve) => {
+      resolveCanonicalMessages = resolve;
+    });
+    getSessionMessagesMock
+      .mockResolvedValueOnce(messages)
+      .mockImplementationOnce(() => canonicalMessages);
+
+    chatStreamMock.mockImplementationOnce(
+      async (
+        _payload: unknown,
+        handlers?: {
+          onStart?: (event: { sessionId: string; messageId: string }) => void;
+          onAnswerDelta?: (delta: string) => void;
+        },
+      ) => {
+        handlers?.onStart?.({ sessionId: 'revenue', messageId: 'assistant-streaming-chart' });
+        handlers?.onAnswerDelta?.(chartContent);
+        return { sessionId: 'revenue', text: chartContent };
+      },
+    );
+
+    renderView();
+
+    const composer = await screen.findByRole('textbox', {
+      name: 'Ask a question about your business data...',
+    });
+    fireEvent.change(composer, { target: { value: 'Chart the revenue' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    const firstAnalysis = await screen.findByText('Revenue analysis is ready.');
+    const firstChart = await screen.findByRole('figure', { name: 'Streaming revenue trend' });
+    const secondAnalysis = screen.getByText('Margin analysis is ready.');
+    const pendingChart = screen.getByRole('status', { name: 'Building visualization...' });
+    expect(
+      firstAnalysis.compareDocumentPosition(firstChart) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(
+      firstChart.compareDocumentPosition(secondAnalysis) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(
+      secondAnalysis.compareDocumentPosition(pendingChart) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(screen.queryByRole('figure', { name: 'Streaming margin trend' })).toBeNull();
+
+    expect(
+      await screen.findByRole('figure', { name: 'Streaming margin trend' }, { timeout: 2_000 }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('status', { name: 'Building visualization...' })).toBeNull();
+
+    expect(
+      await screen.findByRole('figure', { name: 'Streaming revenue trend' }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('figure', { name: 'Streaming margin trend' })).toBeInTheDocument();
+
+    await act(async () => resolveCanonicalMessages?.(completedMessages));
   });
 });
