@@ -170,7 +170,11 @@ describe('ProjectDetailView wiring', () => {
     expect(source).toContain('orderId: isInternalProject ? null : orderId,');
     expect(source).toContain('clientId: isInternalProject ? undefined : clientId');
     expect(source).toContain("const companyDisplayName = companyName?.trim() || 'PRAETOR'");
-    expect(source).toContain('value={controller.companyDisplayName}');
+    expect(source).toContain('<output\n          id="detail-client"');
+    expect(source).toContain('cursor-default select-none');
+    expect(source).toContain('{controller.companyDisplayName}');
+    expect(source).not.toContain('<Input\n          id="detail-client"');
+    expect(source).not.toContain('aria-readonly="true"');
     expect(source).toContain("t('projects:projects.internalClientHint')");
     expect(source).toContain('offerId: isInternalProject ? null : offerId || null,');
     expect(source).toContain("label={t('projects:projects.offerOptionalLabel')}");

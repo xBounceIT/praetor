@@ -1537,13 +1537,12 @@ const ProjectDetailClientField: React.FC<{ controller: ProjectDetailController }
         <FieldLabel htmlFor="detail-client">
           {controller.t('projects:projects.client')} <RequiredMark />
         </FieldLabel>
-        <Input
+        <output
           id="detail-client"
-          value={controller.companyDisplayName}
-          readOnly
-          aria-readonly="true"
-          className="bg-muted/40 text-foreground"
-        />
+          className="flex min-h-9 cursor-default select-none items-center rounded-md bg-muted/50 px-3 py-2 text-sm font-medium text-foreground"
+        >
+          {controller.companyDisplayName}
+        </output>
         <FieldDescription>{controller.t('projects:projects.internalClientHint')}</FieldDescription>
       </Field>
     );

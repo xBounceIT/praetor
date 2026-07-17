@@ -136,7 +136,11 @@ describe('ProjectsView create-form validation', () => {
     expect(source).toContain('offerId: isInternalProject ? null : offerId || null');
     expect(source).toContain('clientId: isInternalProject ? undefined : clientId');
     expect(source).toContain("const companyDisplayName = companyName?.trim() || 'PRAETOR'");
-    expect(source).toContain('value={controller.companyDisplayName}');
+    expect(source).toContain('<output\n          id="project-client"');
+    expect(source).toContain('cursor-default select-none');
+    expect(source).toContain('{controller.companyDisplayName}');
+    expect(source).not.toContain('<Input\n          id="project-client"');
+    expect(source).not.toContain('aria-readonly="true"');
     expect(source).toContain("t('projects:projects.internalClientHint')");
     expect(source).toContain("if (nextTipo === 'interno')");
     expect(source).toContain("controller.dispatch({ type: 'setOrderId', value: '' })");
