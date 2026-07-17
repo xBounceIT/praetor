@@ -11510,12 +11510,15 @@
                     "id",
                     "name",
                     "clientId",
+                    "description",
                     "isDisabled",
+                    "createdAt",
+                    "startDate",
+                    "endDate",
                     "billingType",
                     "billingFrequency",
                     "status",
-                    "tipo",
-                    "tipoConfirmed"
+                    "tipo"
                   ]
                 }
               }
@@ -12668,12 +12671,15 @@
                     "id",
                     "name",
                     "clientId",
+                    "description",
                     "isDisabled",
+                    "createdAt",
+                    "startDate",
+                    "endDate",
                     "billingType",
                     "billingFrequency",
                     "status",
-                    "tipo",
-                    "tipoConfirmed"
+                    "tipo"
                   ]
                 }
               }

@@ -217,6 +217,12 @@ const SAMPLE_PROJECT = {
   tipoConfirmed: true,
 };
 
+const expectProjectDetailsRedacted = (project: Record<string, unknown>) => {
+  for (const field of ['orderId', 'offerId', 'revenue', 'tipoConfirmed']) {
+    expect(project).not.toHaveProperty(field);
+  }
+};
+
 const VALID_CREATE_PAYLOAD = {
   name: 'Site',
   clientId: 'c-1',
@@ -364,10 +370,7 @@ describe('GET /api/projects', () => {
       status: SAMPLE_PROJECT.status,
       tipo: SAMPLE_PROJECT.tipo,
     });
-    expect(project).not.toHaveProperty('orderId');
-    expect(project).not.toHaveProperty('offerId');
-    expect(project).not.toHaveProperty('revenue');
-    expect(project).not.toHaveProperty('tipoConfirmed');
+    expectProjectDetailsRedacted(project);
   });
 
   test('200: RIL viewer can list scoped projects for RIL order codes', async () => {
@@ -724,6 +727,28 @@ describe('POST /api/projects', () => {
     expect(logAuditMock).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'project.created', entityType: 'project' }),
     );
+  });
+
+  test('201: redacts advanced fields for creators without detail access', async () => {
+    getRolePermissionsMock.mockResolvedValue(['projects.manage.create']);
+    createMock.mockResolvedValue({
+      ...SAMPLE_PROJECT,
+      orderId: 'co-1',
+      offerId: 'of-1',
+      revenue: 12345.5,
+    });
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/projects',
+      headers: authHeader(),
+      payload: VALID_CREATE_PAYLOAD,
+    });
+
+    expect(res.statusCode).toBe(201);
+    const project = res.json() as Record<string, unknown>;
+    expect(project).toMatchObject({ id: 'p-1', name: 'Website', tipo: 'attivo' });
+    expectProjectDetailsRedacted(project);
   });
 
   test('201: accepts an explicitly null description', async () => {
@@ -1365,6 +1390,30 @@ describe('PUT /api/projects/:id', () => {
     expect(logAuditMock).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'project.updated' }),
     );
+  });
+
+  test('200: redacts advanced fields for updaters without detail access', async () => {
+    getRolePermissionsMock.mockResolvedValue(['projects.manage.update']);
+    lockClientIdByIdMock.mockResolvedValue('c-1');
+    updateMock.mockResolvedValue({
+      ...SAMPLE_PROJECT,
+      name: 'Renamed',
+      orderId: 'co-1',
+      offerId: 'of-1',
+      revenue: 12345.5,
+    });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/projects/p-1',
+      headers: authHeader(),
+      payload: { name: 'Renamed' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const project = res.json() as Record<string, unknown>;
+    expect(project).toMatchObject({ id: 'p-1', name: 'Renamed', tipo: 'attivo' });
+    expectProjectDetailsRedacted(project);
   });
 
   test('200: clears the description when explicitly set to null', async () => {

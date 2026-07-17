@@ -123,6 +123,11 @@ const projectListItemSchema = {
   ],
 } as const;
 
+const projectResponseForPermissions = (
+  project: projectsRepo.Project,
+  permissions: string[] | undefined,
+) => (canViewProjectDetails(permissions) ? project : projectsRepo.toProjectSummary(project));
+
 const projectOrderOptionSchema = {
   type: 'object',
   properties: {
@@ -415,7 +420,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         summary: 'Create project',
         body: projectCreateBodySchema,
         response: {
-          201: projectSchema,
+          201: projectListItemSchema,
           ...standardErrorResponses,
         },
       },
@@ -565,7 +570,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             secondaryLabel: clientIdResult.value,
           },
         });
-        return reply.code(201).send(created);
+        return reply
+          .code(201)
+          .send(projectResponseForPermissions(created, request.user.permissions));
       } catch (err) {
         if (err instanceof ForeignKeyError) {
           return replyError(request, reply, {
@@ -664,7 +671,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         params: idParamSchema,
         body: projectUpdateBodySchema,
         response: {
-          200: projectSchema,
+          200: projectListItemSchema,
           ...standardErrorResponses,
         },
       },
@@ -981,7 +988,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           secondaryLabel: updatedProject.updated.clientId,
         },
       });
-      return updatedProject.updated;
+      return projectResponseForPermissions(updatedProject.updated, request.user?.permissions);
     },
   );
 
