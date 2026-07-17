@@ -453,12 +453,15 @@ const LogsView: React.FC<LogsViewProps> = ({
       </div>
 
       <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'audit' | 'siem')}>
-        <TabsList variant="line" className="justify-start">
-          <TabsTrigger value="audit">
+        <TabsList
+          variant="line"
+          className="w-full justify-start overflow-x-auto overflow-y-hidden border-b px-0"
+        >
+          <TabsTrigger value="audit" className="flex-none rounded-none pb-3">
             <ShieldCheck />
             {t('logs.tabs.audit')}
           </TabsTrigger>
-          <TabsTrigger value="siem">
+          <TabsTrigger value="siem" className="flex-none rounded-none pb-3">
             <RadioTower />
             {t('logs.tabs.siem')}
           </TabsTrigger>

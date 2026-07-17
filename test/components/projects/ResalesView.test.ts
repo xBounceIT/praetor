@@ -118,6 +118,14 @@ describe('ResalesView wiring', () => {
     expect(source).toContain('resales.selectResaleForActivities');
   });
 
+  test('keeps the resales tab bar horizontally scrollable without vertical overflow', async () => {
+    const source = await readSource();
+
+    expect(source).toContain(
+      'className="w-full justify-start overflow-x-auto overflow-y-hidden border-b px-0"',
+    );
+  });
+
   test('opens the activities tab after a resale is created', async () => {
     const source = await readSource();
 

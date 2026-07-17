@@ -144,6 +144,23 @@ describe('<LogsView />', () => {
     toastError.mockClear();
   });
 
+  test('renders a full-width tab divider without vertical overflow', () => {
+    render(<LogsView />);
+
+    expect(screen.getByRole('tablist')).toHaveClass(
+      'w-full',
+      'justify-start',
+      'overflow-x-auto',
+      'overflow-y-hidden',
+      'border-b',
+      'px-0',
+    );
+
+    for (const name of ['logs.tabs.audit', 'logs.tabs.siem']) {
+      expect(screen.getByRole('tab', { name })).toHaveClass('flex-none', 'rounded-none', 'pb-3');
+    }
+  });
+
   test('ignores stale audit log responses after rapid date range changes', async () => {
     render(<LogsView />);
 
