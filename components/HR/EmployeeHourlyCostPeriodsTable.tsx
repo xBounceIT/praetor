@@ -1,10 +1,12 @@
-import { Plus, Trash2 } from 'lucide-react';
+import { Check, Info, Pencil, Plus, Trash2 } from 'lucide-react';
 import type React from 'react';
-import { useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Column } from '@/components/shared/StandardTable';
 import { Button } from '@/components/ui/button';
 import { FieldError } from '@/components/ui/field';
+import { InputGroup, InputGroupAddon } from '@/components/ui/input-group';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { addDaysToDateOnly, formatDateOnlyForLocale } from '../../utils/date';
 import { formatDecimal } from '../../utils/numbers';
 import DateField from '../shared/DateField';
@@ -36,6 +38,7 @@ const EmployeeHourlyCostPeriodsTable: React.FC<EmployeeHourlyCostPeriodsTablePro
   loadError,
 }) => {
   const { t, i18n } = useTranslation(['hr', 'common']);
+  const [editingKey, setEditingKey] = useState<string | null>(null);
   const sortedPeriods = useMemo(() => sortHourlyCostPeriodDrafts(periods), [periods]);
 
   const patchPeriod = useCallback(
@@ -50,9 +53,34 @@ const EmployeeHourlyCostPeriodsTable: React.FC<EmployeeHourlyCostPeriodsTablePro
   );
 
   const removePeriod = useCallback(
-    (key: string) => onChange((current) => current.filter((period) => period.key !== key)),
+    (key: string) => {
+      setEditingKey((current) => (current === key ? null : current));
+      onChange((current) => current.filter((period) => period.key !== key));
+    },
     [onChange],
   );
+
+  const patchEffectiveTo = useCallback(
+    (key: string, effectiveTo: string) =>
+      onChange((current) => {
+        const ordered = sortHourlyCostPeriodDrafts(current);
+        const index = ordered.findIndex((period) => period.key === key);
+        const nextPeriod = ordered[index + 1];
+        if (!nextPeriod || !effectiveTo) return current;
+
+        const nextEffectiveFrom = addDaysToDateOnly(effectiveTo, 1);
+        return current.map((period) =>
+          period.key === nextPeriod.key ? { ...period, effectiveFrom: nextEffectiveFrom } : period,
+        );
+      }),
+    [onChange],
+  );
+
+  const addPeriod = useCallback(() => {
+    const period = createEmptyHourlyCostPeriodDraft();
+    setEditingKey(period.key);
+    onChange((current) => [...current, period]);
+  }, [onChange]);
 
   const columns = useMemo<Column<EmployeeHourlyCostPeriodDraft>[]>(
     () => [
@@ -73,7 +101,7 @@ const EmployeeHourlyCostPeriodsTable: React.FC<EmployeeHourlyCostPeriodsTablePro
           }
 
           const error = errors[`hourlyCostPeriods.${row.key}.effectiveFrom`];
-          if (!canUpdate) {
+          if (!canUpdate || editingKey !== row.key) {
             return row.effectiveFrom
               ? formatDateOnlyForLocale(row.effectiveFrom, i18n.language)
               : '—';
@@ -107,6 +135,19 @@ const EmployeeHourlyCostPeriodsTable: React.FC<EmployeeHourlyCostPeriodsTablePro
         cell: ({ row }) => {
           const index = sortedPeriods.findIndex((candidate) => candidate.key === row.key);
           const nextFrom = sortedPeriods[index + 1]?.effectiveFrom;
+          if (canUpdate && editingKey === row.key && nextFrom) {
+            return (
+              <div className="min-w-44">
+                <DateField
+                  value={addDaysToDateOnly(nextFrom, -1)}
+                  onChange={(effectiveTo) => patchEffectiveTo(row.key, effectiveTo)}
+                  required
+                  aria-label={t('employeeProfile.costPeriods.to')}
+                />
+              </div>
+            );
+          }
+
           return nextFrom
             ? formatDateOnlyForLocale(addDaysToDateOnly(nextFrom, -1), i18n.language)
             : t('employeeProfile.costPeriods.toPresent');
@@ -121,27 +162,26 @@ const EmployeeHourlyCostPeriodsTable: React.FC<EmployeeHourlyCostPeriodsTablePro
         disableSorting: true,
         cell: ({ row }) => {
           const error = errors[`hourlyCostPeriods.${row.key}.costPerHour`];
-          if (!canUpdate) {
+          if (!canUpdate || editingKey !== row.key) {
             const cost = Number(row.costPerHour);
             return `${currency} ${Number.isFinite(cost) ? formatDecimal(cost, 2) : '—'}`;
           }
 
           return (
             <div className="min-w-40 space-y-1">
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium text-muted-foreground">
-                  {currency}
-                </span>
+              <InputGroup>
+                <InputGroupAddon align="inline-start">{currency}</InputGroupAddon>
                 <ValidatedNumberInput
+                  data-slot="input-group-control"
                   min="0"
                   value={row.costPerHour}
                   onValueChange={(costPerHour) => patchPeriod(row.key, { costPerHour })}
-                  className="pl-8"
+                  className="h-9 min-w-0 flex-1 rounded-none border-0 bg-transparent px-2 shadow-none focus-visible:ring-0 dark:bg-transparent"
                   placeholder="0,00"
                   aria-invalid={Boolean(error)}
                   aria-label={t('employeeProfile.costPeriods.costPerHour')}
                 />
-              </div>
+              </InputGroup>
               <FieldError className="text-xs">{error}</FieldError>
             </div>
           );
@@ -155,32 +195,88 @@ const EmployeeHourlyCostPeriodsTable: React.FC<EmployeeHourlyCostPeriodsTablePro
         minWidth: 90,
         disableFiltering: true,
         disableSorting: true,
-        cell: ({ row }) =>
-          canUpdate && row.effectiveFrom !== null ? (
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-xs"
-              onClick={() => removePeriod(row.key)}
-              aria-label={t('employeeProfile.costPeriods.delete')}
-            >
-              <Trash2 className="size-3.5 text-destructive" aria-hidden="true" />
-            </Button>
-          ) : null,
+        cell: ({ row }) => {
+          if (!canUpdate) return null;
+          const isEditing = editingKey === row.key;
+          const editLabel = t(isEditing ? 'common:buttons.done' : 'common:buttons.edit');
+
+          return (
+            <div className="flex items-center justify-end gap-1">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-xs"
+                    onClick={() => setEditingKey(isEditing ? null : row.key)}
+                    aria-label={editLabel}
+                  >
+                    {isEditing ? (
+                      <Check className="size-3.5 text-primary" aria-hidden="true" />
+                    ) : (
+                      <Pencil className="size-3.5 text-primary" aria-hidden="true" />
+                    )}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>{editLabel}</TooltipContent>
+              </Tooltip>
+              {row.effectiveFrom !== null && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-xs"
+                      onClick={() => removePeriod(row.key)}
+                      aria-label={t('employeeProfile.costPeriods.delete')}
+                    >
+                      <Trash2 className="size-3.5 text-destructive" aria-hidden="true" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>{t('employeeProfile.costPeriods.delete')}</TooltipContent>
+                </Tooltip>
+              )}
+            </div>
+          );
+        },
       },
     ],
-    [canUpdate, currency, errors, i18n.language, patchPeriod, removePeriod, sortedPeriods, t],
+    [
+      canUpdate,
+      currency,
+      editingKey,
+      errors,
+      i18n.language,
+      patchEffectiveTo,
+      patchPeriod,
+      removePeriod,
+      sortedPeriods,
+      t,
+    ],
   );
 
   return (
     <section className="space-y-3">
-      <div>
+      <div className="flex items-center gap-1.5">
         <h3 className="text-sm font-semibold text-foreground">
           {t('employeeProfile.costPeriods.title')}
         </h3>
-        <p className="mt-1 text-sm text-muted-foreground">
-          {t('employeeProfile.costPeriods.description')}
-        </p>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-xs"
+              className="rounded-full text-muted-foreground hover:text-foreground"
+              aria-label={t('employeeProfile.costPeriods.description')}
+            >
+              <Info className="size-3.5" aria-hidden="true" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="right">
+            {t('employeeProfile.costPeriods.description')}
+          </TooltipContent>
+        </Tooltip>
       </div>
 
       {loadError && (
@@ -210,9 +306,7 @@ const EmployeeHourlyCostPeriodsTable: React.FC<EmployeeHourlyCostPeriodsTablePro
             <Button
               type="button"
               size="sm"
-              onClick={() =>
-                onChange((current) => [...current, createEmptyHourlyCostPeriodDraft()])
-              }
+              onClick={addPeriod}
               disabled={isLoading || Boolean(loadError)}
             >
               <Plus className="size-4" aria-hidden="true" />

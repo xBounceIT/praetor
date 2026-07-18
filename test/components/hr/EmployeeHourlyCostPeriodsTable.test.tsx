@@ -30,13 +30,59 @@ export const Harness = ({ canUpdate }: { canUpdate: boolean }) => {
 };
 
 describe('<EmployeeHourlyCostPeriodsTable />', () => {
-  test('derives the previous end date and labels the open boundaries', () => {
+  test('derives the previous end date and labels the open boundaries', async () => {
+    const user = userEvent.setup();
     render(<Harness canUpdate={false} />);
 
     expect(screen.getByText('employeeProfile.costPeriods.fromBeginning')).toBeInTheDocument();
     expect(screen.getByText('12/31/2024')).toBeInTheDocument();
     expect(screen.getByText('employeeProfile.costPeriods.toPresent')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'employeeProfile.costPeriods.add' })).toBeNull();
+
+    const infoButton = screen.getByRole('button', {
+      name: 'employeeProfile.costPeriods.description',
+    });
+    expect(screen.queryByRole('tooltip')).toBeNull();
+    await user.hover(infoButton);
+    expect(await screen.findByRole('tooltip')).toHaveTextContent(
+      'employeeProfile.costPeriods.description',
+    );
+  });
+
+  test('edits both effective boundaries with the shared date picker and separates currency', async () => {
+    const user = userEvent.setup();
+    render(<Harness canUpdate />);
+
+    expect(
+      screen.queryByLabelText('employeeProfile.costPeriods.costPerHour'),
+    ).not.toBeInTheDocument();
+
+    await user.click(screen.getAllByRole('button', { name: 'table.rowActions' })[0]);
+    await user.click(await screen.findByRole('button', { name: 'common:buttons.edit' }));
+
+    const costInput = screen.getByLabelText('employeeProfile.costPeriods.costPerHour');
+    const inputGroup = costInput.closest('[data-slot="input-group"]');
+    expect(inputGroup).toHaveTextContent('€');
+    expect(inputGroup?.querySelector('[data-slot="input-group-addon"]')).toHaveTextContent('€');
+
+    expect(
+      screen.queryByRole('combobox', { name: 'employeeProfile.costPeriods.from' }),
+    ).not.toBeInTheDocument();
+    const effectiveTo = screen.getByRole('combobox', {
+      name: 'employeeProfile.costPeriods.to',
+    });
+    await user.click(effectiveTo);
+    await user.click(await screen.findByRole('button', { name: '30' }));
+    expect(screen.getByText('12/30/2024')).toBeInTheDocument();
+
+    await user.click(screen.getAllByRole('button', { name: 'table.rowActions' })[1]);
+    await user.click(await screen.findByRole('button', { name: 'common:buttons.edit' }));
+    expect(
+      screen.getByRole('combobox', { name: 'employeeProfile.costPeriods.from' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('combobox', { name: 'employeeProfile.costPeriods.to' }),
+    ).not.toBeInTheDocument();
   });
 
   test('allows adding and deleting every period after the fixed baseline', async () => {
@@ -44,15 +90,24 @@ describe('<EmployeeHourlyCostPeriodsTable />', () => {
     render(<Harness canUpdate />);
 
     await user.click(screen.getByRole('button', { name: 'employeeProfile.costPeriods.add' }));
-    expect(screen.getAllByLabelText('employeeProfile.costPeriods.costPerHour')).toHaveLength(3);
+    expect(screen.getAllByLabelText('employeeProfile.costPeriods.costPerHour')).toHaveLength(1);
 
     const actionMenus = screen.getAllByRole('button', { name: 'table.rowActions' });
+    expect(actionMenus).toHaveLength(3);
     await user.click(actionMenus[actionMenus.length - 1]);
     await user.click(
       await screen.findByRole('button', { name: 'employeeProfile.costPeriods.delete' }),
     );
-    expect(screen.getAllByLabelText('employeeProfile.costPeriods.costPerHour')).toHaveLength(2);
-    expect(actionMenus).toHaveLength(2);
+    expect(
+      screen.queryByLabelText('employeeProfile.costPeriods.costPerHour'),
+    ).not.toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'table.rowActions' })).toHaveLength(2);
+
+    await user.click(screen.getAllByRole('button', { name: 'table.rowActions' })[1]);
+    await user.click(
+      await screen.findByRole('button', { name: 'employeeProfile.costPeriods.delete' }),
+    );
+    expect(screen.getAllByRole('button', { name: 'table.rowActions' })).toHaveLength(1);
     expect(screen.getAllByText('employeeProfile.costPeriods.toPresent').length).toBeGreaterThan(0);
   });
 });
