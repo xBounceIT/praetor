@@ -54,6 +54,8 @@ describe('<EmployeeHourlyCostPeriodsTable />', () => {
     expect(screen.getByText('employeeProfile.costPeriods.fromBeginning')).toBeInTheDocument();
     expect(screen.getByText('12/31/2024')).toBeInTheDocument();
     expect(screen.getByText('employeeProfile.costPeriods.toPresent')).toBeInTheDocument();
+    expect(screen.queryByRole('combobox', { name: 'employeeProfile.costPeriods.from' })).toBeNull();
+    expect(screen.queryByRole('combobox', { name: 'employeeProfile.costPeriods.to' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'employeeProfile.costPeriods.add' })).toBeNull();
 
     const infoButton = screen.getByRole('button', {
@@ -85,6 +87,11 @@ describe('<EmployeeHourlyCostPeriodsTable />', () => {
     await user.click(effectiveTo);
     await user.click(await screen.findByRole('button', { name: '30' }));
     expect(effectiveFrom).toHaveTextContent('12/31/2024');
+
+    await user.click(effectiveFrom);
+    await user.click(await screen.findByRole('button', { name: '29' }));
+    expect(effectiveFrom).toHaveTextContent('12/29/2024');
+    expect(effectiveTo).toHaveTextContent('12/28/2024');
 
     await user.click(screen.getAllByRole('button', { name: 'table.rowActions' })[0]);
     await user.click(await screen.findByRole('button', { name: 'common:buttons.edit' }));
