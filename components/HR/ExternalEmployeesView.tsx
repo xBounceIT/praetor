@@ -105,6 +105,7 @@ interface ExternalEmployeesTableProps {
   currency: string;
   permissions: {
     canViewCosts: boolean;
+    canEditCosts: boolean;
     canManageEmployeeAssignments: boolean;
     canUpdateEmployees: boolean;
     canDeleteEmployees: boolean;
@@ -136,8 +137,15 @@ const ExternalEmployeesTable: React.FC<ExternalEmployeesTableProps> = ({
       })),
     [employees, responsibleUserOptions, workUnits],
   );
-  const { canViewCosts, canManageEmployeeAssignments, canUpdateEmployees, canDeleteEmployees } =
-    permissions;
+  const {
+    canViewCosts,
+    canEditCosts,
+    canManageEmployeeAssignments,
+    canUpdateEmployees,
+    canDeleteEmployees,
+  } = permissions;
+  const canOpenEmployee = canUpdateEmployees || canViewCosts;
+  const canEditEmployee = canUpdateEmployees || canEditCosts;
   const columns = useMemo<Column<User>[]>(
     () => [
       {
@@ -276,21 +284,27 @@ const ExternalEmployeesTable: React.FC<ExternalEmployeesTableProps> = ({
                   <TooltipContent>{t('workforce.manageAssignments')}</TooltipContent>
                 </Tooltip>
               )}
-            {canUpdateEmployees && (
+            {canOpenEmployee && (
               <Tooltip>
                 <TooltipTrigger asChild>
                   <span className="inline-flex">
                     <button
                       type="button"
                       onClick={() => onEditEmployee(row)}
-                      aria-label={t('externalEmployees.editEmployee')}
+                      aria-label={t(
+                        canEditEmployee ? 'externalEmployees.editEmployee' : 'common:buttons.view',
+                      )}
                       className="p-2 text-muted-foreground hover:text-primary hover:bg-primary/5 rounded-lg transition-colors"
                     >
-                      <i className="fa-solid fa-pen-to-square"></i>
+                      <i
+                        className={`fa-solid ${canEditEmployee ? 'fa-pen-to-square' : 'fa-eye'}`}
+                      ></i>
                     </button>
                   </span>
                 </TooltipTrigger>
-                <TooltipContent>{t('externalEmployees.editEmployee')}</TooltipContent>
+                <TooltipContent>
+                  {t(canEditEmployee ? 'externalEmployees.editEmployee' : 'common:buttons.view')}
+                </TooltipContent>
               </Tooltip>
             )}
             {canDeleteEmployees && (
@@ -318,8 +332,9 @@ const ExternalEmployeesTable: React.FC<ExternalEmployeesTableProps> = ({
     ],
     [
       canDeleteEmployees,
+      canEditEmployee,
       canManageEmployeeAssignments,
-      canUpdateEmployees,
+      canOpenEmployee,
       canViewCosts,
       currency,
       notSetLabel,
@@ -335,7 +350,7 @@ const ExternalEmployeesTable: React.FC<ExternalEmployeesTableProps> = ({
       title={t('externalEmployees.title')}
       data={displayEmployees}
       columns={columns}
-      onRowClick={canUpdateEmployees ? onEditEmployee : undefined}
+      onRowClick={canOpenEmployee ? onEditEmployee : undefined}
       emptyState={
         <EmptyState
           title={t('externalEmployees.noEmployees')}
@@ -365,6 +380,8 @@ const ExternalEmployeesView: React.FC<ExternalEmployeesViewProps> = ({
   const canDeleteEmployees = hasPermission(permissions, buildPermission('hr.external', 'delete'));
   const canViewCosts = hasPermission(permissions, buildPermission('hr.costs_all', 'view'));
   const canUpdateCosts = hasPermission(permissions, buildPermission('hr.costs_all', 'update'));
+  const canEditCosts = canViewCosts && canUpdateCosts;
+  const canOpenEmployee = canUpdateEmployees || canViewCosts;
   const canManageEmployeeAssignments = hasPermission(
     permissions,
     buildPermission('hr.employee_assignments', 'update'),
@@ -418,7 +435,7 @@ const ExternalEmployeesView: React.FC<ExternalEmployeesViewProps> = ({
   };
 
   const openEditModal = (employee: User) => {
-    if (!canUpdateEmployees) return;
+    if (!canOpenEmployee) return;
     openEditEmployeeModal(employee);
     if (!canViewCosts) return;
 
@@ -434,18 +451,21 @@ const ExternalEmployeesView: React.FC<ExternalEmployeesViewProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (editingEmployee && !canUpdateEmployees) return;
+    if (editingEmployee && !canUpdateEmployees && !canEditCosts) return;
     if (!editingEmployee && !canCreateEmployees) return;
 
     const identityReadOnly = Boolean(editingEmployee && editingEmployee.authMethod !== 'local');
-    const newErrors = validateEmployeeHrForm(formData, {
-      identityReadOnly,
-      requiredMessage: t('common:validation.required'),
-      invalidEmailMessage: t('common:validation.invalidEmail'),
-      dateRangeMessage: t('employeeProfile.dateRangeInvalid'),
-    });
+    const newErrors =
+      editingEmployee && !canUpdateEmployees
+        ? {}
+        : validateEmployeeHrForm(formData, {
+            identityReadOnly,
+            requiredMessage: t('common:validation.required'),
+            invalidEmailMessage: t('common:validation.invalidEmail'),
+            dateRangeMessage: t('employeeProfile.dateRangeInvalid'),
+          });
 
-    if (canViewCosts && canUpdateCosts) {
+    if (canEditCosts) {
       Object.assign(
         newErrors,
         validateHourlyCostPeriods(hourlyCostPeriods, {
@@ -468,17 +488,19 @@ const ExternalEmployeesView: React.FC<ExternalEmployeesViewProps> = ({
 
     try {
       if (editingEmployee) {
-        const updates = buildEmployeeHrPayload(formData, {
-          includeIdentity: !identityReadOnly,
-        });
-        if (canViewCosts && canUpdateCosts) {
+        const updates: Partial<User> = canUpdateEmployees
+          ? buildEmployeeHrPayload(formData, {
+              includeIdentity: !identityReadOnly,
+            })
+          : {};
+        if (canEditCosts) {
           updates.hourlyCostPeriods = buildHourlyCostPeriodInputs(hourlyCostPeriods);
         }
         await onUpdateEmployee(editingEmployee.id, updates);
         completeEmployeeSubmit();
       } else {
         const payload = buildEmployeeCreatePayload(formData);
-        if (canViewCosts && canUpdateCosts) {
+        if (canEditCosts) {
           payload.hourlyCostPeriods = buildHourlyCostPeriodInputs(hourlyCostPeriods);
         }
         const result = await onAddEmployee(payload);
@@ -559,20 +581,22 @@ const ExternalEmployeesView: React.FC<ExternalEmployeesViewProps> = ({
               <Button type="button" variant="outline" onClick={closeEmployeeModal}>
                 {t('common:buttons.cancel')}
               </Button>
-              <Button
-                type="submit"
-                disabled={
-                  isSubmitting ||
-                  (canUpdateCosts &&
-                    (isHourlyCostPeriodsLoading || Boolean(hourlyCostPeriodsLoadError)))
-                }
-              >
-                {isSubmitting ? (
-                  <i className="fa-solid fa-spinner fa-spin" aria-hidden="true"></i>
-                ) : (
-                  t('externalEmployees.saveChanges')
-                )}
-              </Button>
+              {(!editingEmployee || canUpdateEmployees || canEditCosts) && (
+                <Button
+                  type="submit"
+                  disabled={
+                    isSubmitting ||
+                    (canEditCosts &&
+                      (isHourlyCostPeriodsLoading || Boolean(hourlyCostPeriodsLoadError)))
+                  }
+                >
+                  {isSubmitting ? (
+                    <i className="fa-solid fa-spinner fa-spin" aria-hidden="true"></i>
+                  ) : (
+                    t('externalEmployees.saveChanges')
+                  )}
+                </Button>
+              )}
             </ModalFooter>
           </form>
         </ModalContent>
@@ -607,6 +631,7 @@ const ExternalEmployeesView: React.FC<ExternalEmployeesViewProps> = ({
         currency={currency}
         permissions={{
           canViewCosts,
+          canEditCosts,
           canManageEmployeeAssignments,
           canUpdateEmployees,
           canDeleteEmployees,
