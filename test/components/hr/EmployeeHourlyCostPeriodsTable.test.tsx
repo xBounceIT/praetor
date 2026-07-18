@@ -29,6 +29,23 @@ export const Harness = ({ canUpdate }: { canUpdate: boolean }) => {
   );
 };
 
+const EmptyCostHarness = () => {
+  const [periods, setPeriods] = useState<EmployeeHourlyCostPeriodDraft[]>([
+    { key: 'baseline', effectiveFrom: null, costPerHour: '' },
+  ]);
+  return (
+    <EmployeeHourlyCostPeriodsTable
+      periods={periods}
+      onChange={setPeriods}
+      errors={{ 'hourlyCostPeriods.baseline.costPerHour': 'required' }}
+      currency="€"
+      canUpdate
+      isLoading={false}
+      loadError={null}
+    />
+  );
+};
+
 describe('<EmployeeHourlyCostPeriodsTable />', () => {
   test('derives the previous end date and labels the open boundaries', async () => {
     const user = userEvent.setup();
@@ -79,7 +96,7 @@ describe('<EmployeeHourlyCostPeriodsTable />', () => {
     await user.click(await screen.findByRole('button', { name: 'common:buttons.edit' }));
     expect(
       screen.getByRole('combobox', { name: 'employeeProfile.costPeriods.from' }),
-    ).toBeInTheDocument();
+    ).toHaveTextContent('12/31/2024');
     expect(
       screen.queryByRole('combobox', { name: 'employeeProfile.costPeriods.to' }),
     ).not.toBeInTheDocument();
@@ -109,5 +126,12 @@ describe('<EmployeeHourlyCostPeriodsTable />', () => {
     );
     expect(screen.getAllByRole('button', { name: 'table.rowActions' })).toHaveLength(1);
     expect(screen.getAllByText('employeeProfile.costPeriods.toPresent').length).toBeGreaterThan(0);
+  });
+
+  test('keeps empty costs and their validation visible outside edit mode', () => {
+    render(<EmptyCostHarness />);
+
+    expect(screen.getByText('€ —')).toBeInTheDocument();
+    expect(screen.getByText('required')).toBeInTheDocument();
   });
 });

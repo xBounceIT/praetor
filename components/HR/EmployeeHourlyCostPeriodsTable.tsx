@@ -28,61 +28,35 @@ type EmployeeHourlyCostPeriodsTableProps = {
   loadError: string | null;
 };
 
-const EmployeeHourlyCostPeriodsTable: React.FC<EmployeeHourlyCostPeriodsTableProps> = ({
-  periods,
-  onChange,
+type HourlyCostPeriodColumnsOptions = {
+  errors: Record<string, string>;
+  currency: string;
+  canUpdate: boolean;
+  editingKey: string | null;
+  setEditingKey: React.Dispatch<React.SetStateAction<string | null>>;
+  nextEffectiveFromByKey: ReadonlyMap<string, string>;
+  patchPeriod: (
+    key: string,
+    update: Partial<Pick<EmployeeHourlyCostPeriodDraft, 'effectiveFrom' | 'costPerHour'>>,
+  ) => void;
+  patchEffectiveTo: (key: string, effectiveTo: string) => void;
+  removePeriod: (key: string) => void;
+};
+
+const useHourlyCostPeriodColumns = ({
   errors,
   currency,
   canUpdate,
-  isLoading,
-  loadError,
-}) => {
+  editingKey,
+  setEditingKey,
+  nextEffectiveFromByKey,
+  patchPeriod,
+  patchEffectiveTo,
+  removePeriod,
+}: HourlyCostPeriodColumnsOptions): Column<EmployeeHourlyCostPeriodDraft>[] => {
   const { t, i18n } = useTranslation(['hr', 'common']);
-  const [editingKey, setEditingKey] = useState<string | null>(null);
-  const sortedPeriods = useMemo(() => sortHourlyCostPeriodDrafts(periods), [periods]);
 
-  const patchPeriod = useCallback(
-    (
-      key: string,
-      update: Partial<Pick<EmployeeHourlyCostPeriodDraft, 'effectiveFrom' | 'costPerHour'>>,
-    ) =>
-      onChange((current) =>
-        current.map((period) => (period.key === key ? { ...period, ...update } : period)),
-      ),
-    [onChange],
-  );
-
-  const removePeriod = useCallback(
-    (key: string) => {
-      setEditingKey((current) => (current === key ? null : current));
-      onChange((current) => current.filter((period) => period.key !== key));
-    },
-    [onChange],
-  );
-
-  const patchEffectiveTo = useCallback(
-    (key: string, effectiveTo: string) =>
-      onChange((current) => {
-        const ordered = sortHourlyCostPeriodDrafts(current);
-        const index = ordered.findIndex((period) => period.key === key);
-        const nextPeriod = ordered[index + 1];
-        if (!nextPeriod || !effectiveTo) return current;
-
-        const nextEffectiveFrom = addDaysToDateOnly(effectiveTo, 1);
-        return current.map((period) =>
-          period.key === nextPeriod.key ? { ...period, effectiveFrom: nextEffectiveFrom } : period,
-        );
-      }),
-    [onChange],
-  );
-
-  const addPeriod = useCallback(() => {
-    const period = createEmptyHourlyCostPeriodDraft();
-    setEditingKey(period.key);
-    onChange((current) => [...current, period]);
-  }, [onChange]);
-
-  const columns = useMemo<Column<EmployeeHourlyCostPeriodDraft>[]>(
+  return useMemo(
     () => [
       {
         id: 'effectiveFrom',
@@ -102,9 +76,16 @@ const EmployeeHourlyCostPeriodsTable: React.FC<EmployeeHourlyCostPeriodsTablePro
 
           const error = errors[`hourlyCostPeriods.${row.key}.effectiveFrom`];
           if (!canUpdate || editingKey !== row.key) {
-            return row.effectiveFrom
-              ? formatDateOnlyForLocale(row.effectiveFrom, i18n.language)
-              : '—';
+            return (
+              <div className="space-y-1">
+                <span>
+                  {row.effectiveFrom
+                    ? formatDateOnlyForLocale(row.effectiveFrom, i18n.language)
+                    : '—'}
+                </span>
+                <FieldError className="text-xs">{error}</FieldError>
+              </div>
+            );
           }
 
           return (
@@ -125,16 +106,14 @@ const EmployeeHourlyCostPeriodsTable: React.FC<EmployeeHourlyCostPeriodsTablePro
         id: 'effectiveTo',
         header: t('employeeProfile.costPeriods.to'),
         accessorFn: (period) => {
-          const index = sortedPeriods.findIndex((candidate) => candidate.key === period.key);
-          const nextFrom = sortedPeriods[index + 1]?.effectiveFrom;
-          return nextFrom || '';
+          const nextEffectiveFrom = nextEffectiveFromByKey.get(period.key);
+          return nextEffectiveFrom ? addDaysToDateOnly(nextEffectiveFrom, -1) : '';
         },
         minWidth: 150,
         disableFiltering: true,
         disableSorting: true,
         cell: ({ row }) => {
-          const index = sortedPeriods.findIndex((candidate) => candidate.key === row.key);
-          const nextFrom = sortedPeriods[index + 1]?.effectiveFrom;
+          const nextFrom = nextEffectiveFromByKey.get(row.key);
           if (canUpdate && editingKey === row.key && nextFrom) {
             return (
               <div className="min-w-44">
@@ -156,15 +135,23 @@ const EmployeeHourlyCostPeriodsTable: React.FC<EmployeeHourlyCostPeriodsTablePro
       {
         id: 'costPerHour',
         header: t('employeeProfile.costPeriods.costPerHour'),
-        accessorFn: (period) => Number(period.costPerHour),
+        accessorFn: (period) =>
+          period.costPerHour.trim() === '' ? '' : Number(period.costPerHour),
         minWidth: 190,
         disableFiltering: true,
         disableSorting: true,
         cell: ({ row }) => {
           const error = errors[`hourlyCostPeriods.${row.key}.costPerHour`];
           if (!canUpdate || editingKey !== row.key) {
-            const cost = Number(row.costPerHour);
-            return `${currency} ${Number.isFinite(cost) ? formatDecimal(cost, 2) : '—'}`;
+            const cost = row.costPerHour.trim() === '' ? Number.NaN : Number(row.costPerHour);
+            return (
+              <div className="space-y-1">
+                <span>
+                  {currency} {Number.isFinite(cost) ? formatDecimal(cost, 2) : '—'}
+                </span>
+                <FieldError className="text-xs">{error}</FieldError>
+              </div>
+            );
           }
 
           return (
@@ -247,13 +234,89 @@ const EmployeeHourlyCostPeriodsTable: React.FC<EmployeeHourlyCostPeriodsTablePro
       editingKey,
       errors,
       i18n.language,
+      nextEffectiveFromByKey,
       patchEffectiveTo,
       patchPeriod,
       removePeriod,
-      sortedPeriods,
+      setEditingKey,
       t,
     ],
   );
+};
+
+const EmployeeHourlyCostPeriodsTable: React.FC<EmployeeHourlyCostPeriodsTableProps> = ({
+  periods,
+  onChange,
+  errors,
+  currency,
+  canUpdate,
+  isLoading,
+  loadError,
+}) => {
+  const { t } = useTranslation(['hr', 'common']);
+  const [editingKey, setEditingKey] = useState<string | null>(null);
+  const sortedPeriods = useMemo(() => sortHourlyCostPeriodDrafts(periods), [periods]);
+  const nextEffectiveFromByKey = useMemo(() => {
+    const result = new Map<string, string>();
+    for (let index = 0; index < sortedPeriods.length - 1; index += 1) {
+      const nextEffectiveFrom = sortedPeriods[index + 1]?.effectiveFrom;
+      if (nextEffectiveFrom) result.set(sortedPeriods[index].key, nextEffectiveFrom);
+    }
+    return result;
+  }, [sortedPeriods]);
+
+  const patchPeriod = useCallback(
+    (
+      key: string,
+      update: Partial<Pick<EmployeeHourlyCostPeriodDraft, 'effectiveFrom' | 'costPerHour'>>,
+    ) =>
+      onChange((current) =>
+        current.map((period) => (period.key === key ? { ...period, ...update } : period)),
+      ),
+    [onChange],
+  );
+
+  const removePeriod = useCallback(
+    (key: string) => {
+      setEditingKey((current) => (current === key ? null : current));
+      onChange((current) => current.filter((period) => period.key !== key));
+    },
+    [onChange],
+  );
+
+  const patchEffectiveTo = useCallback(
+    (key: string, effectiveTo: string) =>
+      onChange((current) => {
+        const ordered = sortHourlyCostPeriodDrafts(current);
+        const index = ordered.findIndex((period) => period.key === key);
+        const nextPeriod = ordered[index + 1];
+        if (!nextPeriod || !effectiveTo) return current;
+
+        const nextEffectiveFrom = addDaysToDateOnly(effectiveTo, 1);
+        return current.map((period) =>
+          period.key === nextPeriod.key ? { ...period, effectiveFrom: nextEffectiveFrom } : period,
+        );
+      }),
+    [onChange],
+  );
+
+  const addPeriod = useCallback(() => {
+    const period = createEmptyHourlyCostPeriodDraft();
+    setEditingKey(period.key);
+    onChange((current) => [...current, period]);
+  }, [onChange]);
+
+  const columns = useHourlyCostPeriodColumns({
+    errors,
+    currency,
+    canUpdate,
+    editingKey,
+    setEditingKey,
+    nextEffectiveFromByKey,
+    patchPeriod,
+    patchEffectiveTo,
+    removePeriod,
+  });
 
   return (
     <section className="space-y-3">
