@@ -10,6 +10,10 @@ ALTER TABLE "user_hourly_cost_periods" ADD CONSTRAINT "user_hourly_cost_periods_
 CREATE UNIQUE INDEX "idx_user_hourly_cost_periods_user_from_unique" ON "user_hourly_cost_periods" USING btree ("user_id","effective_from");--> statement-breakpoint
 CREATE UNIQUE INDEX "idx_user_hourly_cost_periods_baseline_unique" ON "user_hourly_cost_periods" USING btree ("user_id") WHERE "user_hourly_cost_periods"."effective_from" IS NULL;--> statement-breakpoint
 CREATE INDEX "idx_user_hourly_cost_periods_lookup" ON "user_hourly_cost_periods" USING btree ("user_id","effective_from" DESC NULLS LAST);--> statement-breakpoint
+UPDATE "users"
+SET "cost_per_hour" = 0
+WHERE "cost_per_hour" IS NULL OR "cost_per_hour" < 0;
+--> statement-breakpoint
 INSERT INTO "user_hourly_cost_periods" ("user_id", "effective_from", "cost_per_hour")
 SELECT "id", NULL, COALESCE("cost_per_hour", 0)
 FROM "users"

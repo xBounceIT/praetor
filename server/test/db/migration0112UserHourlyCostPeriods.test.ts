@@ -23,6 +23,9 @@ describe('migration 0112 user hourly cost periods', () => {
   });
 
   test('backfills every legacy user without rewriting timesheet history', () => {
+    expect(migrationSql).toContain('UPDATE "users"');
+    expect(migrationSql).toContain('SET "cost_per_hour" = 0');
+    expect(migrationSql).toContain('WHERE "cost_per_hour" IS NULL OR "cost_per_hour" < 0');
     expect(migrationSql).toContain('SELECT "id", NULL, COALESCE("cost_per_hour", 0)');
     expect(migrationSql).toContain('FROM "users"');
     expect(migrationSql).not.toContain('UPDATE time_entries');

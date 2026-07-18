@@ -1261,6 +1261,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             if (!periodsResult.ok) return badRequest(reply, periodsResult.message);
             costPeriodsToApply = periodsResult.value;
           } else {
+            // Compatibility contract: a legacy scalar write intentionally replaces the
+            // effective-dated calendar with one global baseline period. Calendar-aware
+            // clients must send hourlyCostPeriods instead (and never both fields).
             const costPerHourResult = optionalLocalizedNonNegativeNumber(
               costPerHour,
               'costPerHour',

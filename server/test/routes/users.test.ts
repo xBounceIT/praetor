@@ -4049,6 +4049,28 @@ describe('hourly cost periods API', () => {
     expect(replaceHourlyCostPeriodsForUserMock).not.toHaveBeenCalled();
   });
 
+  test('PUT legacy scalar cost intentionally replaces the calendar with one baseline', async () => {
+    findCoreByIdMock.mockResolvedValue(SAMPLE_USER_CORE);
+    updateUserDynamicMock.mockResolvedValue({ ...SAMPLE_USER_ROW, costPerHour: 42 });
+    findByIdMock.mockResolvedValue({ ...SAMPLE_USER_ROW, costPerHour: 42 });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/users/u-target',
+      headers: adminAuth(),
+      payload: { costPerHour: 42 },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(lockByIdMock).toHaveBeenCalledWith('u-target', TX_SENTINEL);
+    expect(replaceHourlyCostPeriodsForUserMock).toHaveBeenCalledWith(
+      'u-target',
+      [{ effectiveFrom: null, costPerHour: 42 }],
+      TX_SENTINEL,
+    );
+    expect(recalculateHourlyCostTimeEntriesMock).toHaveBeenCalledWith('u-target', TX_SENTINEL);
+  });
+
   test('PUT replaces the calendar and recalculates changed entries in one transaction', async () => {
     findCoreByIdMock.mockResolvedValue(SAMPLE_USER_CORE);
     updateUserDynamicMock.mockResolvedValue({ ...SAMPLE_USER_ROW, costPerHour: 45 });
