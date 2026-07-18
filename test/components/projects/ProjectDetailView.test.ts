@@ -19,6 +19,7 @@ describe('ProjectDetailView wiring', () => {
     for (const field of [
       'project: Project',
       'clients: Client[]',
+      'companyName: string | null',
       'orders: ClientsOrder[]',
       'offers: ClientOffer[]',
       'users: User[]',
@@ -114,16 +115,18 @@ describe('ProjectDetailView wiring', () => {
     expect(source).toMatch(/onDeleteProject\(project\.id\);[\s\S]{0,80}onBack\(\)/);
   });
 
-  test('date-required validation skips legacy projects without stored dates', async () => {
-    // Hard-requiring dates on save would block rename/disable for projects
-    // created before the dates-required rule. Validation only fires when the project
-    // already carries the corresponding date.
+  test('date validation stays legacy-compatible and allows open-ended internal projects', async () => {
     const source = await readSource();
-    expect(source).toContain('if (project.startDate && !startDate)');
-    expect(source).toContain('if (project.endDate && !endDate)');
-    // Required marker also tracks the stored value so the UI doesn't lie.
-    expect(source).toContain('{project.startDate && <RequiredMark />}');
-    expect(source).toContain('{project.endDate && <RequiredMark />}');
+    expect(source).toContain("project.tipo === 'interno' && !isInternalProject");
+    expect(source).toMatch(
+      /if \(\s*!isInternalProject &&\s*\(project\.startDate \|\| isConvertingInternalToCommercial\) &&\s*!startDate\s*\)/,
+    );
+    expect(source).toMatch(
+      /if \(\s*!isInternalProject &&\s*\(project\.endDate \|\| isConvertingInternalToCommercial\) &&\s*!endDate\s*\)/,
+    );
+    expect(source).toContain('{isRequired && <RequiredMark />}');
+    expect(source).toContain('required={isRequired}');
+    expect(source).toContain('<FieldLabel htmlFor="detail-name" required>');
   });
 
   test('forces an explicit tipo confirmation on first edit of a rollout-defaulted project (issue #784)', async () => {
@@ -131,9 +134,7 @@ describe('ProjectDetailView wiring', () => {
     // Unconfirmed (rollout-defaulted) projects need a deliberate choice; the selector
     // baseline starts EMPTY rather than silently pre-filling the 'attivo' default.
     expect(source).toContain('const tipoNeedsConfirmation = !project.tipoConfirmed;');
-    expect(source).toContain(
-      "const baselineTipo: ProjectTipo | '' = project.tipoConfirmed ? (project.tipo ?? '') : '';",
-    );
+    expect(source).toContain('const baselineTipo = getProjectDetailBaselineTipo(project);');
     // Save is blocked until a tipo is chosen.
     expect(source).toContain(
       "if (!tipo) newErrors.tipo = t('projects:projects.tipoConfirmRequired')",
@@ -159,18 +160,47 @@ describe('ProjectDetailView wiring', () => {
     expect(source).toContain('type={getProjectStatusBadgeType(project.status)}');
     expect(source).toContain("icon={getProjectStatusIcon(project.status, 'size-[1em]')}");
   });
-  test('requires a linked client order and keeps offer optional on save', async () => {
+  test('requires commercial links conditionally and confirms their removal for internal jobs', async () => {
     const source = await readSource();
     expect(source).toContain("const [orderId, setOrderId] = useState(project.orderId ?? '')");
     expect(source).toContain('id="detail-order"');
     expect(source).toContain(
-      "if (!orderId) newErrors.orderId = t('projects:projects.orderRequired')",
+      "if (!isInternalProject && !orderId) newErrors.orderId = t('projects:projects.orderRequired')",
     );
     expect(source).toContain("orderId !== (project.orderId ?? '')");
-    expect(source).toContain('orderId,');
-    expect(source).toContain('offerId: offerId || null,');
+    expect(source).toContain('orderId: isInternalProject ? null : orderId,');
+    expect(source).toContain('clientId: isInternalProject ? undefined : clientId');
+    expect(source).toContain("const companyDisplayName = companyName?.trim() || 'PRAETOR'");
+    expect(source).toContain('<output\n          id="detail-client"');
+    expect(source).toContain('cursor-default select-none');
+    expect(source).toContain('{controller.companyDisplayName}');
+    expect(source).not.toContain('<Input\n          id="detail-client"');
+    expect(source).not.toContain('aria-readonly="true"');
+    expect(source).toContain("t('projects:projects.internalClientHint')");
+    expect(source).toContain('<FieldTooltip');
+    expect(source).toContain('icon="info"');
+    expect(source).toContain('className="absolute top-1/2 left-full ml-1 -translate-y-1/2"');
+    expect(source).not.toContain(
+      "<FieldDescription>{controller.t('projects:projects.internalClientHint')}",
+    );
+    expect(source).toContain('offerId: isInternalProject ? null : offerId || null,');
     expect(source).toContain("label={t('projects:projects.offerOptionalLabel')}");
     expect(source).toContain("{ id: '', name: t('projects:projects.noOfferLinked') }");
+    expect(source).toContain("if (nextTipo === 'interno')");
+    expect(source).toContain('if (orderId || offerId)');
+    expect(source).toContain('onChange={(val) => requestTipoChange(val as ProjectTipo)}');
+    expect(source).toContain('<ModalDescription className="mt-0">');
+    expect(source).not.toContain('requestTipoChange(val as ProjectTipo);');
+    expect(source).toContain('(!isInternalProject && clientId !== project.clientId)');
+    expect(source).toContain('const applyInternalTipo = () => {');
+    expect(source).toContain("setTipo('interno')");
+    expect(source).toContain("setClientId('')");
+    expect(source).toContain("setOrderId('')");
+    expect(source).toContain("setOfferId('')");
+    expect(source.match(/applyInternalTipo\(\);/g)).toHaveLength(2);
+    expect(source).toContain('isOpen={isInternalConversionOpen}');
+    expect(source).toContain('internalConversionDescription');
+    expect(source).toContain('isInternalProject || !linkedOrder');
   });
 
   test('project revenue no longer falls back to the linked order total', async () => {

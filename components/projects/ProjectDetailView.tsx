@@ -58,12 +58,23 @@ import type {
   TimeEntry,
   User,
 } from '../../types';
-import { LEGACY_PROJECT_STATUS } from '../../types';
+import { LEGACY_PROJECT_STATUS, PROJECT_TIPOS } from '../../types';
 import { formatInsertDate } from '../../utils/date';
 import { formatNumber } from '../../utils/numbers';
 import { hasPermission, hasScopedActionPermission } from '../../utils/permissions';
 import DateField from '../shared/DateField';
 import DeleteConfirmModal from '../shared/DeleteConfirmModal';
+import FieldTooltip from '../shared/FieldTooltip';
+import Modal from '../shared/Modal';
+import {
+  ModalBody,
+  ModalCloseButton,
+  ModalContent,
+  ModalDescription,
+  ModalFooter,
+  ModalHeader,
+  ModalTitle,
+} from '../shared/ModalLayout';
 import SelectControl from '../shared/SelectControl';
 import StatusBadge from '../shared/StatusBadge';
 import Toggle from '../shared/Toggle';
@@ -118,10 +129,10 @@ const DASHBOARD_WIDGETS: readonly DashboardWidgetDef[] = [
 const formatOrderId = (id: string) => `#${id.replace('co-', '')}`;
 const formatOneDecimal = (value: number) => formatNumber(value, { maximumFractionDigits: 1 });
 
-const tipoOptions = [
-  { id: 'attivo', name: 'projects:projects.tipoValues.attivo' },
-  { id: 'passivo', name: 'projects:projects.tipoValues.passivo' },
-];
+const tipoOptions = PROJECT_TIPOS.map((id) => ({
+  id,
+  name: `projects:projects.tipoValues.${id}`,
+}));
 
 const getInitials = (name: string): string => {
   const parts = name.trim().split(/\s+/).slice(0, 2);
@@ -168,6 +179,7 @@ const resolveRevenueSource = (activitiesSum: number): RevenueSource => {
 export interface ProjectDetailViewProps {
   project: Project;
   clients: Client[];
+  companyName: string | null;
   orders: ClientsOrder[];
   offers: ClientOffer[];
   users: User[];
@@ -232,6 +244,7 @@ type ProjectDetailUiState = {
   taskToDelete: ProjectTask | null;
   isTaskDeleteConfirmOpen: boolean;
   isAssignmentsOpen: boolean;
+  isInternalConversionOpen: boolean;
 };
 
 type ProjectDetailUiAction = {
@@ -290,6 +303,7 @@ const createProjectDetailUiState = (): ProjectDetailUiState => ({
   taskToDelete: null,
   isTaskDeleteConfirmOpen: false,
   isAssignmentsOpen: false,
+  isInternalConversionOpen: false,
 });
 
 const projectDetailUiReducer = (
@@ -305,6 +319,7 @@ const projectDetailUiReducer = (
 
 const useProjectDetailController = ({
   project,
+  companyName,
   clients,
   orders,
   offers,
@@ -395,6 +410,7 @@ const useProjectDetailController = ({
     taskToDelete,
     isTaskDeleteConfirmOpen,
     isAssignmentsOpen,
+    isInternalConversionOpen,
   } = uiState;
   const setUiState = useCallback(
     <Key extends keyof ProjectDetailUiState>(
@@ -464,11 +480,16 @@ const useProjectDetailController = ({
       setUiState('isAssignmentsOpen', value),
     [setUiState],
   );
+  const setIsInternalConversionOpen = useCallback(
+    (value: React.SetStateAction<ProjectDetailUiState['isInternalConversionOpen']>) =>
+      setUiState('isInternalConversionOpen', value),
+    [setUiState],
+  );
   // `tipo` (issue #784). A rollout-defaulted project (`tipoConfirmed === false`) starts with an
   // EMPTY selector so the user must make a deliberate first choice before saving — we don't
   // pre-fill the silent 'attivo' default. A confirmed project shows its stored value.
   const tipoNeedsConfirmation = !project.tipoConfirmed;
-  const baselineTipo: ProjectTipo | '' = project.tipoConfirmed ? (project.tipo ?? '') : '';
+  const baselineTipo = getProjectDetailBaselineTipo(project);
   const baselineStatus = project.status ?? LEGACY_PROJECT_STATUS;
 
   // No prop-sync useEffect: the parent passes `key={project.id}` so this component
@@ -878,7 +899,9 @@ const useProjectDetailController = ({
     billingTypeDraft !== null ||
     (billingFrequencyDraft !== null &&
       billingFrequencyDraft !== (project.billingFrequency ?? DEFAULT_BILLING_FREQUENCY));
+  const companyDisplayName = companyName?.trim() || 'PRAETOR';
 
+  const isInternalProject = tipo === 'interno';
   const linkedOrder = orderId ? orders.find((o) => o.id === orderId) : undefined;
   const client = clients.find((c) => c.id === clientId);
   const isClientDisabled = client?.isDisabled ?? false;
@@ -914,7 +937,7 @@ const useProjectDetailController = ({
 
   // Order locks the client — server enforces FK against the order's client, so let the UI
   // mirror it instead of allowing a save that the API will reject.
-  const isClientLockedByOrder = Boolean(orderId);
+  const isClientLockedByOrder = !isInternalProject && Boolean(orderId);
 
   // A manager who lacks `timesheets.tracker_all.view` only sees entries from themselves and
   // their managed users, so chart totals exclude any teammate outside that scope. Surface a
@@ -933,7 +956,7 @@ const useProjectDetailController = ({
       : true; // non-numeric input is a "change" that will surface its own validation later
   const hasChanges =
     name !== project.name ||
-    clientId !== project.clientId ||
+    (!isInternalProject && clientId !== project.clientId) ||
     description !== (project.description ?? '') ||
     startDate !== (project.startDate ?? '') ||
     endDate !== (project.endDate ?? '') ||
@@ -964,27 +987,67 @@ const useProjectDetailController = ({
     }
   };
 
+  const applyInternalTipo = () => {
+    setTipo('interno');
+    setClientId('');
+    setOrderId('');
+    setOfferId('');
+    setErrors((previous) => ({
+      ...previous,
+      tipo: '',
+      clientId: '',
+      orderId: '',
+      offerId: '',
+      startDate: '',
+      endDate: '',
+      dateRange: '',
+    }));
+  };
+
+  const requestTipoChange = (nextTipo: ProjectTipo) => {
+    if (nextTipo === 'interno') {
+      if (orderId || offerId) {
+        setIsInternalConversionOpen(true);
+        return;
+      }
+      applyInternalTipo();
+      return;
+    }
+    setTipo(nextTipo);
+    if (errors.tipo) setErrors((previous) => ({ ...previous, tipo: '' }));
+  };
+
+  const confirmInternalConversion = () => {
+    applyInternalTipo();
+    setIsInternalConversionOpen(false);
+  };
+
   const handleDiscard = () => {
     dispatchForm({ type: 'reset', project });
     setOrderId(project.orderId ?? '');
     setBillingTypeDraft(null);
     setBillingFrequencyDraft(null);
+    setIsInternalConversionOpen(false);
   };
 
   const handleSave = async () => {
     if (!canUpdateProjects) return;
     const newErrors: Record<string, string> = {};
     if (!name.trim()) newErrors.name = t('common:validation.projectNameRequired');
-    if (!clientId) newErrors.clientId = t('projects:projects.clientRequired');
-    if (!orderId) newErrors.orderId = t('projects:projects.orderRequired');
-    // Only enforce required dates on projects that already carry them. Legacy projects
-    // predating the dates-required rule still allow null dates on the PATCH endpoint;
-    // forcing dates here would block unrelated edits (rename, disable) until the
-    // user invented a planning window.
-    if (project.startDate && !startDate) {
+    if (!isInternalProject && !clientId) newErrors.clientId = t('projects:projects.clientRequired');
+    if (!isInternalProject && !orderId) newErrors.orderId = t('projects:projects.orderRequired');
+    // Existing commercial projects keep the legacy-compatible rule: a missing stored date does
+    // not block unrelated edits. Internal projects may always clear dates, while converting one
+    // back to a commercial type requires a complete planning window in the same save.
+    const isConvertingInternalToCommercial = project.tipo === 'interno' && !isInternalProject;
+    if (
+      !isInternalProject &&
+      (project.startDate || isConvertingInternalToCommercial) &&
+      !startDate
+    ) {
       newErrors.startDate = t('projects:projects.startDateRequired');
     }
-    if (project.endDate && !endDate) {
+    if (!isInternalProject && (project.endDate || isConvertingInternalToCommercial) && !endDate) {
       newErrors.endDate = t('projects:projects.endDateRequired');
     }
     if (startDate && endDate && startDate > endDate) {
@@ -999,11 +1062,11 @@ const useProjectDetailController = ({
     }
     const updates: Partial<Project> = {
       name,
-      clientId,
+      clientId: isInternalProject ? undefined : clientId,
       description,
       isDisabled: tempIsDisabled,
-      orderId,
-      offerId: offerId || null,
+      orderId: isInternalProject ? null : orderId,
+      offerId: isInternalProject ? null : offerId || null,
       startDate: startDate || null,
       endDate: endDate || null,
       // Guaranteed non-empty by the `!tipo` guard above. Sending it confirms the field
@@ -1146,6 +1209,7 @@ const useProjectDetailController = ({
     canUpdateTasks,
     canDeleteTasks,
     canManageAssignments,
+    companyDisplayName,
     canViewCost,
     name,
     clientId,
@@ -1169,7 +1233,6 @@ const useProjectDetailController = ({
     setRevenue,
     setTempIsDisabled,
     setStatus,
-    setTipo,
     setErrors,
     entries,
     entriesLoading,
@@ -1184,7 +1247,12 @@ const useProjectDetailController = ({
     setIsTaskDeleteConfirmOpen,
     isAssignmentsOpen,
     setIsAssignmentsOpen,
+    isInternalConversionOpen,
+    setIsInternalConversionOpen,
+    confirmInternalConversion,
     setAssignedUserIds,
+    isInternalProject,
+    requestTipoChange,
     isClientDisabled,
     linkedOrder,
     orderOptions,
@@ -1370,8 +1438,8 @@ const ProjectDetailFormIntro: React.FC<{ controller: ProjectDetailController }> 
 const ProjectDetailLinkedOrderBanner: React.FC<{ controller: ProjectDetailController }> = ({
   controller,
 }) => {
-  const { t, linkedOrder, onViewOrder } = controller;
-  if (!linkedOrder) return null;
+  const { t, linkedOrder, onViewOrder, isInternalProject } = controller;
+  if (isInternalProject || !linkedOrder) return null;
 
   return (
     <LinkedRecordBanner
@@ -1393,16 +1461,16 @@ const ProjectDetailFieldsGrid: React.FC<{ controller: ProjectDetailController }>
   controller,
 }) => (
   <div className="grid gap-4 md:grid-cols-2">
-    <ProjectDetailOrderField controller={controller} />
+    <ProjectDetailTipoField controller={controller} />
+    {!controller.isInternalProject && <ProjectDetailOrderField controller={controller} />}
     <ProjectDetailClientField controller={controller} />
     <ProjectDetailNameField controller={controller} />
     <ProjectDetailDescriptionField controller={controller} />
     <ProjectDetailStartDateField controller={controller} />
     <ProjectDetailEndDateField controller={controller} />
     <ProjectDetailDateRangeError controller={controller} />
-    <ProjectDetailOfferField controller={controller} />
+    {!controller.isInternalProject && <ProjectDetailOfferField controller={controller} />}
     <ProjectDetailRevenueField controller={controller} />
-    <ProjectDetailTipoField controller={controller} />
     <ProjectDetailStatusField controller={controller} />
     <ProjectDetailBillingTypeField controller={controller} />
     <ProjectDetailBillingFrequencyField controller={controller} />
@@ -1458,6 +1526,28 @@ const ProjectDetailOrderField: React.FC<{ controller: ProjectDetailController }>
 const ProjectDetailClientField: React.FC<{ controller: ProjectDetailController }> = ({
   controller,
 }) => {
+  if (controller.isInternalProject) {
+    return (
+      <Field>
+        <div className="relative w-fit">
+          <FieldLabel htmlFor="detail-client" required>
+            {controller.t('projects:projects.client')}
+          </FieldLabel>
+          <FieldTooltip
+            description={controller.t('projects:projects.internalClientHint')}
+            icon="info"
+            className="absolute top-1/2 left-full ml-1 -translate-y-1/2"
+          />
+        </div>
+        <output
+          id="detail-client"
+          className="flex min-h-9 cursor-default select-none items-center rounded-md bg-muted/50 px-3 py-2 text-sm font-medium text-foreground"
+        >
+          {controller.companyDisplayName}
+        </output>
+      </Field>
+    );
+  }
   const {
     t,
     clientOptions,
@@ -1513,8 +1603,8 @@ const ProjectDetailNameField: React.FC<{ controller: ProjectDetailController }> 
 
   return (
     <Field data-invalid={Boolean(errors.name)}>
-      <FieldLabel htmlFor="detail-name">
-        {t('projects:projects.name')} <RequiredMark />
+      <FieldLabel htmlFor="detail-name" required>
+        {t('projects:projects.name')}
       </FieldLabel>
       <Input
         id="detail-name"
@@ -1557,16 +1647,28 @@ const ProjectDetailDescriptionField: React.FC<{ controller: ProjectDetailControl
 const ProjectDetailStartDateField: React.FC<{ controller: ProjectDetailController }> = ({
   controller,
 }) => {
-  const { t, project, startDate, setStartDate, canUpdateProjects, errors, setErrors } = controller;
+  const {
+    t,
+    project,
+    startDate,
+    setStartDate,
+    canUpdateProjects,
+    errors,
+    setErrors,
+    isInternalProject,
+  } = controller;
+  const isRequired =
+    !isInternalProject && (Boolean(project.startDate) || project.tipo === 'interno');
 
   return (
     <Field data-invalid={Boolean(errors.startDate || errors.dateRange)}>
       <FieldLabel htmlFor="detail-start-date">
-        {t('projects:projects.startDate')} {project.startDate && <RequiredMark />}
+        {t('projects:projects.startDate')} {isRequired && <RequiredMark />}
       </FieldLabel>
       <DateField
         id="detail-start-date"
         value={startDate}
+        required={isRequired}
         disabled={!canUpdateProjects}
         aria-invalid={Boolean(errors.startDate || errors.dateRange)}
         onChange={(value) => {
@@ -1584,16 +1686,27 @@ const ProjectDetailStartDateField: React.FC<{ controller: ProjectDetailControlle
 const ProjectDetailEndDateField: React.FC<{ controller: ProjectDetailController }> = ({
   controller,
 }) => {
-  const { t, project, endDate, setEndDate, canUpdateProjects, errors, setErrors } = controller;
+  const {
+    t,
+    project,
+    endDate,
+    setEndDate,
+    canUpdateProjects,
+    errors,
+    setErrors,
+    isInternalProject,
+  } = controller;
+  const isRequired = !isInternalProject && (Boolean(project.endDate) || project.tipo === 'interno');
 
   return (
     <Field data-invalid={Boolean(errors.endDate || errors.dateRange)}>
       <FieldLabel htmlFor="detail-end-date">
-        {t('projects:projects.endDate')} {project.endDate && <RequiredMark />}
+        {t('projects:projects.endDate')} {isRequired && <RequiredMark />}
       </FieldLabel>
       <DateField
         id="detail-end-date"
         value={endDate}
+        required={isRequired}
         disabled={!canUpdateProjects}
         aria-invalid={Boolean(errors.endDate || errors.dateRange)}
         onChange={(value) => {
@@ -1683,9 +1796,8 @@ const ProjectDetailTipoField: React.FC<{ controller: ProjectDetailController }> 
     t,
     translatedTipoOptions,
     tipo,
-    setTipo,
+    requestTipoChange,
     errors,
-    setErrors,
     tipoNeedsConfirmation,
     canUpdateProjects,
   } = controller;
@@ -1695,10 +1807,7 @@ const ProjectDetailTipoField: React.FC<{ controller: ProjectDetailController }> 
         id="detail-tipo"
         options={translatedTipoOptions}
         value={tipo}
-        onChange={(val) => {
-          setTipo(val as ProjectTipo);
-          if (errors.tipo) setErrors((prev) => ({ ...prev, tipo: '' }));
-        }}
+        onChange={(val) => requestTipoChange(val as ProjectTipo)}
         label={
           <>
             {t('projects:projects.tipo')} <RequiredMark />
@@ -2709,9 +2818,33 @@ const ProjectDetailModals: React.FC<{ controller: ProjectDetailController }> = (
     setIsAssignmentsOpen,
     assignableUsers,
     setAssignedUserIds,
+    isInternalConversionOpen,
+    setIsInternalConversionOpen,
+    confirmInternalConversion,
   } = controller;
   return (
     <>
+      <Modal isOpen={isInternalConversionOpen} onClose={() => setIsInternalConversionOpen(false)}>
+        <ModalContent size="md">
+          <ModalHeader>
+            <ModalTitle>{t('projects:projects.internalConversionTitle')}</ModalTitle>
+            <ModalCloseButton onClick={() => setIsInternalConversionOpen(false)} />
+          </ModalHeader>
+          <ModalBody>
+            <ModalDescription className="mt-0">
+              {t('projects:projects.internalConversionDescription')}
+            </ModalDescription>
+          </ModalBody>
+          <ModalFooter>
+            <Button variant="outline" onClick={() => setIsInternalConversionOpen(false)}>
+              {t('common:buttons.cancel')}
+            </Button>
+            <Button onClick={confirmInternalConversion}>
+              {t('projects:projects.internalConversionConfirm')}
+            </Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
       <DeleteConfirmModal
         isOpen={isDeleteConfirmOpen}
         onClose={() => setIsDeleteConfirmOpen(false)}

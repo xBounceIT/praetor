@@ -127,6 +127,37 @@ describe('makeProjectHandlers', () => {
     expect(projects.get()).toHaveLength(1);
   });
 
+  test('add creates an internal project without commercial links', async () => {
+    apiMocks.projectsCreate.mockImplementation((data: unknown) =>
+      Promise.resolve({ id: 'proj-internal', ...(data as object) }),
+    );
+    const projects = makeStubSetter<ProjectLike>([]);
+    const handlers = makeProjectHandlers({
+      setProjects: projects.setter,
+      setProjectTasks: makeStubSetter<TaskLike>([]).setter,
+      setEntries: makeStubSetter<EntryLike>([]).setter,
+    });
+
+    await handlers.add({
+      name: 'Internal Research',
+      orderId: 'stale-order',
+      offerId: 'stale-offer',
+      tipo: 'interno',
+      status: 'da_fare',
+    });
+
+    expect(apiMocks.projectsCreate).toHaveBeenCalledTimes(1);
+    expect(apiMocks.projectsCreate.mock.calls[0]?.[0]).toEqual(
+      expect.objectContaining({
+        clientId: undefined,
+        tipo: 'interno',
+        orderId: null,
+        offerId: null,
+      }),
+    );
+    expect(projects.get()).toHaveLength(1);
+  });
+
   test('add forwards new lifecycle fields', async () => {
     apiMocks.projectsCreate.mockImplementation((data: unknown) =>
       Promise.resolve({ id: 'proj-new', ...(data as object) }),

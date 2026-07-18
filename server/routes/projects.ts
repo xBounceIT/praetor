@@ -6,8 +6,11 @@ import {
   requirePermission,
   requireScopedPermission,
 } from '../middleware/auth.ts';
+import * as brandingRepo from '../repositories/brandingRepo.ts';
 import * as clientOffersRepo from '../repositories/clientOffersRepo.ts';
 import * as clientsOrdersRepo from '../repositories/clientsOrdersRepo.ts';
+import * as clientsRepo from '../repositories/clientsRepo.ts';
+import * as entriesRepo from '../repositories/entriesRepo.ts';
 import * as projectsRepo from '../repositories/projectsRepo.ts';
 import * as userAssignmentsRepo from '../repositories/userAssignmentsRepo.ts';
 import * as workUnitsRepo from '../repositories/workUnitsRepo.ts';
@@ -33,7 +36,7 @@ import {
   makeAccessChecker,
 } from '../utils/permissions.ts';
 import { PROJECT_STATUSES } from '../utils/projectStatus.ts';
-import { PROJECT_TIPOS } from '../utils/projectTipo.ts';
+import { DEFAULT_PROJECT_TIPO, PROJECT_TIPOS } from '../utils/projectTipo.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { replyError } from '../utils/replyError.ts';
 import {
@@ -155,26 +158,32 @@ const projectCreateBodySchema = {
   type: 'object',
   properties: {
     name: { type: 'string' },
-    clientId: { type: 'string' },
+    clientId: { type: ['string', 'null'] },
     description: { type: ['string', 'null'] },
-    orderId: { type: 'string' },
+    orderId: { type: ['string', 'null'] },
     offerId: { type: ['string', 'null'] },
-    startDate: { type: 'string' },
-    endDate: { type: 'string' },
+    startDate: {
+      type: ['string', 'null'],
+      description: 'Required for Active/Passive projects; optional for Internal projects.',
+    },
+    endDate: {
+      type: ['string', 'null'],
+      description: 'Required for Active/Passive projects; optional for Internal projects.',
+    },
     revenue: { type: ['number', 'null'] },
     billingType: { type: 'string', enum: STORED_BILLING_TYPES },
     billingFrequency: { type: 'string', enum: BILLING_FREQUENCIES },
     status: { type: 'string', enum: PROJECT_STATUSES },
     tipo: { type: 'string', enum: PROJECT_TIPOS },
   },
-  required: ['name', 'clientId', 'orderId', 'startDate', 'endDate', 'tipo'],
+  required: ['name', 'tipo'],
 } as const;
 
 const projectUpdateBodySchema = {
   type: 'object',
   properties: {
     name: { type: 'string' },
-    clientId: { type: 'string' },
+    clientId: { type: ['string', 'null'] },
     description: { type: ['string', 'null'] },
     isDisabled: { type: 'boolean' },
     orderId: { type: ['string', 'null'] },
@@ -194,6 +203,7 @@ class OrderRequiredError extends Error {}
 class OrderClientMismatchError extends Error {}
 class OrderStatusError extends Error {}
 class OfferClientMismatchError extends Error {}
+class InternalProjectLinksError extends Error {}
 class DateRangeError extends Error {}
 
 const canAccessClient = makeAccessChecker(
@@ -432,9 +442,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!assertAuthenticated(request, reply)) return;
       const { name, clientId, description, orderId } = request.body as {
         name: string;
-        clientId: string;
+        clientId?: string | null;
         description?: string | null;
-        orderId?: string;
+        orderId?: string | null;
         billingType?: string;
         billingFrequency?: string;
       };
@@ -442,8 +452,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         billingType?: string;
         billingFrequency?: string;
         offerId?: string | null;
-        startDate?: string;
-        endDate?: string;
+        startDate?: string | null;
+        endDate?: string | null;
         revenue?: number | string | null;
         tipo?: string;
         status?: string;
@@ -452,33 +462,56 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const nameResult = requireNonEmptyString(name, 'name');
       if (!nameResult.ok) return badRequest(reply, nameResult.message);
 
-      const clientIdResult = requireNonEmptyString(clientId, 'clientId');
+      // `tipo` is mandatory on create (issue #784): the form requires a deliberate choice.
+      const tipoResult = validateEnum(body.tipo, PROJECT_TIPOS, 'tipo');
+      if (!tipoResult.ok) return badRequest(reply, tipoResult.message);
+      const isInternalProject = tipoResult.value === 'interno';
+
+      const clientIdResult = isInternalProject
+        ? optionalNonEmptyString(clientId, 'clientId')
+        : requireNonEmptyString(clientId, 'clientId');
       if (!clientIdResult.ok) return badRequest(reply, clientIdResult.message);
+      const requestedClientId = clientIdResult.value;
       if (
+        !isInternalProject &&
+        requestedClientId !== null &&
         !hasPermission(request, 'projects.manage_all.create') &&
-        !(await canAccessClient(request, clientIdResult.value))
+        !(await canAccessClient(request, requestedClientId))
       ) {
         return replyError(request, reply, {
           statusCode: 403,
           message: 'Insufficient permissions',
           action: 'project.create.denied',
           entityType: 'client',
-          entityId: clientIdResult.value,
+          entityId: requestedClientId,
           details: { secondaryLabel: 'client_access_denied' },
         });
       }
 
-      const orderIdResult = requireNonEmptyString(orderId, 'orderId');
+      const orderIdResult = isInternalProject
+        ? optionalNonEmptyString(orderId, 'orderId')
+        : requireNonEmptyString(orderId, 'orderId');
       if (!orderIdResult.ok) return badRequest(reply, orderIdResult.message);
 
       const offerIdResult = optionalNonEmptyString(body.offerId, 'offerId');
       if (!offerIdResult.ok) return badRequest(reply, offerIdResult.message);
+      if (isInternalProject && (orderIdResult.value || offerIdResult.value)) {
+        return badRequest(reply, 'internal projects cannot link an order or offer');
+      }
 
-      const startDateResult = parseDateString(body.startDate, 'startDate');
+      const startDateResult = isInternalProject
+        ? optionalDateString(body.startDate, 'startDate')
+        : parseDateString(body.startDate, 'startDate');
       if (!startDateResult.ok) return badRequest(reply, startDateResult.message);
-      const endDateResult = parseDateString(body.endDate, 'endDate');
+      const endDateResult = isInternalProject
+        ? optionalDateString(body.endDate, 'endDate')
+        : parseDateString(body.endDate, 'endDate');
       if (!endDateResult.ok) return badRequest(reply, endDateResult.message);
-      if (startDateResult.value > endDateResult.value) {
+      if (
+        startDateResult.value &&
+        endDateResult.value &&
+        startDateResult.value > endDateResult.value
+      ) {
         return badRequest(reply, 'startDate must be on or before endDate');
       }
 
@@ -496,29 +529,28 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!billingFrequencyResult.ok) return badRequest(reply, billingFrequencyResult.message);
       const billingFrequency = normalizeBillingFrequency(billingFrequencyResult.value);
 
-      // `tipo` is mandatory on create (issue #784): the form requires a deliberate choice.
-      const tipoResult = validateEnum(body.tipo, PROJECT_TIPOS, 'tipo');
-      if (!tipoResult.ok) return badRequest(reply, tipoResult.message);
       const statusResult = optionalEnum(body.status, PROJECT_STATUSES, 'status');
       if (!statusResult.ok) return badRequest(reply, statusResult.message);
 
       const id = generatePrefixedId('p');
 
-      // The two FK lookups are independent — run them concurrently.
-      const [orderLink, offerClientId] = await Promise.all([
-        clientsOrdersRepo.findProjectLinkById(orderIdResult.value),
-        offerIdResult.value
-          ? clientOffersRepo.findClientIdById(offerIdResult.value)
-          : Promise.resolve(null),
-      ]);
-      if (orderLink === null || orderLink.clientId !== clientIdResult.value) {
-        return badRequest(reply, 'orderId does not belong to the specified clientId');
-      }
-      if (orderLink.status !== 'confirmed') {
-        return badRequest(reply, 'orderId must reference a confirmed client order');
-      }
-      if (offerIdResult.value && offerClientId !== null && offerClientId !== clientIdResult.value) {
-        return badRequest(reply, 'offerId does not belong to the specified clientId');
+      if (!isInternalProject) {
+        // The two FK lookups are independent — run them concurrently.
+        const [orderLink, offerClientId] = await Promise.all([
+          clientsOrdersRepo.findProjectLinkById(orderIdResult.value as string),
+          offerIdResult.value
+            ? clientOffersRepo.findClientIdById(offerIdResult.value)
+            : Promise.resolve(null),
+        ]);
+        if (orderLink === null || orderLink.clientId !== requestedClientId) {
+          return badRequest(reply, 'orderId does not belong to the specified clientId');
+        }
+        if (orderLink.status !== 'confirmed') {
+          return badRequest(reply, 'orderId must reference a confirmed client order');
+        }
+        if (offerIdResult.value && offerClientId !== null && offerClientId !== requestedClientId) {
+          return badRequest(reply, 'offerId does not belong to the specified clientId');
+        }
       }
 
       try {
@@ -526,11 +558,19 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         // Without the transaction, an assignment failure left the project committed but
         // unassigned (orphan) while the handler still returned 500.
         const created = await withDbTransaction(async (tx) => {
+          const projectClientId = isInternalProject
+            ? (
+                await clientsRepo.ensureOwnCompanyClient(
+                  (await brandingRepo.get(tx))?.companyName ?? null,
+                  tx,
+                )
+              ).id
+            : (requestedClientId as string);
           const project = await projectsRepo.create(
             {
               id,
               name: nameResult.value,
-              clientId: clientIdResult.value,
+              clientId: projectClientId,
               description: description || null,
               isDisabled: false,
               orderId: orderIdResult.value,
@@ -547,14 +587,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           );
 
           await Promise.all([
-            userAssignmentsRepo.assignClientToUser(
-              request.user.id,
-              clientIdResult.value,
-              undefined,
-              tx,
-            ),
+            userAssignmentsRepo.assignClientToUser(request.user.id, projectClientId, undefined, tx),
             userAssignmentsRepo.assignProjectToUser(request.user.id, id, undefined, tx),
-            userAssignmentsRepo.assignClientToTopManagers(clientIdResult.value, tx),
+            userAssignmentsRepo.assignClientToTopManagers(projectClientId, tx),
             userAssignmentsRepo.assignProjectToTopManagers(id, tx),
           ]);
 
@@ -570,7 +605,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           entityId: id,
           details: {
             targetLabel: nameResult.value,
-            secondaryLabel: clientIdResult.value,
+            secondaryLabel: created.clientId,
           },
         });
         return reply
@@ -683,7 +718,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const { id } = request.params as { id: string };
       const body = request.body as {
         name?: string;
-        clientId?: string;
+        clientId?: string | null;
         description?: string | null;
         isDisabled?: boolean;
         orderId?: string | null;
@@ -701,7 +736,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         clientId,
         description,
         isDisabled,
-        orderId,
         billingType,
         billingFrequency,
         tipo,
@@ -739,7 +773,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       // "absent from body" (skip) from "explicitly null" (clear) in the repo call below.
       type Patch<T> = { provided: true; value: T | null } | { provided: false };
       const parsePatch = <T>(
-        key: 'offerId' | 'startDate' | 'endDate' | 'revenue',
+        key: 'orderId' | 'offerId' | 'startDate' | 'endDate' | 'revenue',
         parse: (raw: unknown) => { ok: true; value: T | null } | { ok: false; message: string },
       ): { ok: true; patch: Patch<T> } | { ok: false; error: string } => {
         if (!Object.hasOwn(body, key)) return { ok: true, patch: { provided: false } };
@@ -748,6 +782,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           ? { ok: true, patch: { provided: true, value: r.value } }
           : { ok: false, error: r.message };
       };
+
+      const orderIdResult = parsePatch<string>('orderId', (v) =>
+        optionalNonEmptyString(v, 'orderId'),
+      );
+      if (!orderIdResult.ok) return badRequest(reply, orderIdResult.error);
+      const orderIdPatch = orderIdResult.patch;
 
       const offerIdResult = parsePatch<string>('offerId', (v) =>
         optionalNonEmptyString(v, 'offerId'),
@@ -784,9 +824,23 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             throw new NotFoundError('Project');
           }
 
+          const existingLinks = await projectsRepo.findClientLinksById(idResult.value, tx);
+          if (!existingLinks) {
+            throw new NotFoundError('Project');
+          }
+          const previousTipo = existingLinks.tipo ?? DEFAULT_PROJECT_TIPO;
+          const finalTipo = tipoResult.value ?? previousTipo;
+          const isConvertingInternalToCommercial =
+            previousTipo === 'interno' && finalTipo !== 'interno';
+
           // Validate the final date range against the locked row so a concurrent writer can't
-          // sneak past us. The DB CHECK constraint is still the ultimate guard.
-          if (startDatePatch.provided || endDatePatch.provided) {
+          // sneak past us. Converting an open-ended Internal project back to a commercial type
+          // requires both planning dates in the same save.
+          if (
+            startDatePatch.provided ||
+            endDatePatch.provided ||
+            isConvertingInternalToCommercial
+          ) {
             const existing = await projectsRepo.findDateRangeById(idResult.value, tx);
             const nextStart = startDatePatch.provided
               ? startDatePatch.value
@@ -794,14 +848,35 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             const nextEnd = endDatePatch.provided
               ? endDatePatch.value
               : (existing?.endDate ?? null);
+            if (isConvertingInternalToCommercial && (!nextStart || !nextEnd)) {
+              throw new DateRangeError(
+                'startDate and endDate are required when converting an internal project to a commercial type',
+              );
+            }
             if (nextStart && nextEnd && nextStart > nextEnd) {
               throw new DateRangeError('startDate must be on or before endDate');
             }
           }
 
+          // Resolve the final commercial state from the locked row plus this patch.
+          const finalOrderId = orderIdPatch.provided ? orderIdPatch.value : existingLinks.orderId;
+          const finalOfferId = offerIdPatch.provided ? offerIdPatch.value : existingLinks.offerId;
+          if (finalTipo === 'interno' && (finalOrderId || finalOfferId)) {
+            throw new InternalProjectLinksError('internal projects cannot link an order or offer');
+          }
+
+          const ownCompanyClient =
+            finalTipo === 'interno'
+              ? await clientsRepo.ensureOwnCompanyClient(
+                  (await brandingRepo.get(tx))?.companyName ?? null,
+                  tx,
+                )
+              : null;
           const requestedClientId =
-            typeof clientId === 'string' && clientId !== '' ? clientId : previousClientId;
+            ownCompanyClient?.id ??
+            (typeof clientId === 'string' && clientId !== '' ? clientId : previousClientId);
           if (
+            finalTipo !== 'interno' &&
             requestedClientId !== previousClientId &&
             !hasPermission(request, 'projects.manage_all.update') &&
             !(await canAccessClient(request, requestedClientId))
@@ -809,45 +884,31 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             throw new PermissionError();
           }
           const clientChanged = requestedClientId !== previousClientId;
-          const assignedUserIds = clientChanged
-            ? await projectsRepo.findNonTopManagerUserIds(idResult.value, tx)
-            : [];
 
-          // Final orderId/offerId after this patch lands: the patch value if specified,
-          // otherwise the existing column value. We only need the existing values when the
-          // client is also changing (an unchanged client means the existing link was already
-          // valid). Cross-checking both is otherwise the same lookup that previously ran
-          // only against patch values; keep the reads serialized on this transaction
-          // connection.
-          const orderIdPatch = orderId === undefined ? undefined : orderId || null;
-          const orderPatchPresent = orderIdPatch !== undefined;
-          const existingLinks =
-            !orderPatchPresent || (clientChanged && !offerIdPatch.provided)
-              ? await projectsRepo.findClientLinksById(idResult.value, tx)
-              : null;
-          const finalOrderId = orderPatchPresent ? orderIdPatch : (existingLinks?.orderId ?? null);
-          const finalOfferId = offerIdPatch.provided
-            ? offerIdPatch.value
-            : clientChanged
-              ? (existingLinks?.offerId ?? null)
-              : null;
+          if (finalTipo !== 'interno') {
+            if (!finalOrderId) {
+              throw new OrderRequiredError('orderId is required');
+            }
 
-          if (!finalOrderId) {
-            throw new OrderRequiredError('orderId is required');
-          }
-
-          const orderLink = await clientsOrdersRepo.findProjectLinkById(finalOrderId, tx);
-          const offerClientId = finalOfferId
-            ? await clientOffersRepo.findClientIdById(finalOfferId, tx)
-            : null;
-          if (orderLink === null || orderLink.clientId !== requestedClientId) {
-            throw new OrderClientMismatchError('orderId does not belong to the specified clientId');
-          }
-          if (orderLink.status !== 'confirmed') {
-            throw new OrderStatusError('orderId must reference a confirmed client order');
-          }
-          if (finalOfferId && offerClientId !== null && offerClientId !== requestedClientId) {
-            throw new OfferClientMismatchError('offerId does not belong to the specified clientId');
+            const orderLink = await clientsOrdersRepo.findProjectLinkById(finalOrderId, tx);
+            if (orderLink === null || orderLink.clientId !== requestedClientId) {
+              throw new OrderClientMismatchError(
+                'orderId does not belong to the specified clientId',
+              );
+            }
+            if (orderLink.status !== 'confirmed') {
+              throw new OrderStatusError('orderId must reference a confirmed client order');
+            }
+            const shouldValidateOffer = clientChanged || offerIdPatch.provided;
+            const offerClientId =
+              shouldValidateOffer && finalOfferId
+                ? await clientOffersRepo.findClientIdById(finalOfferId, tx)
+                : null;
+            if (finalOfferId && offerClientId !== null && offerClientId !== requestedClientId) {
+              throw new OfferClientMismatchError(
+                'offerId does not belong to the specified clientId',
+              );
+            }
           }
 
           const updated = await projectsRepo.update(
@@ -857,7 +918,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               clientId: clientChanged ? requestedClientId : undefined,
               description: description === null ? null : description || undefined,
               isDisabled,
-              orderId: orderIdPatch,
+              orderId: orderIdPatch.provided ? orderIdPatch.value : undefined,
               offerId: offerIdPatch.provided ? offerIdPatch.value : undefined,
               startDate: startDatePatch.provided ? startDatePatch.value : undefined,
               endDate: endDatePatch.provided ? endDatePatch.value : undefined,
@@ -875,6 +936,18 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           }
 
           if (clientChanged) {
+            const updatedClientName =
+              ownCompanyClient?.name ?? (await clientsRepo.findName(updated.clientId, tx));
+            if (updatedClientName === null) {
+              throw new NotFoundError('Client');
+            }
+            await entriesRepo.reassignProjectClient(
+              idResult.value,
+              { id: updated.clientId, name: updatedClientName },
+              tx,
+            );
+
+            const assignedUserIds = await projectsRepo.findNonTopManagerUserIds(idResult.value, tx);
             await projectsRepo.ensureClientCascadeAssignments(
               assignedUserIds,
               updated.clientId,
@@ -926,6 +999,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             entityType: 'project',
             entityId: idResult.value,
             details: { secondaryLabel: 'order_required' },
+          });
+        }
+        if (err instanceof InternalProjectLinksError) {
+          return replyError(request, reply, {
+            statusCode: 400,
+            message: err.message,
+            action: 'project.update.invalid',
+            entityType: 'project',
+            entityId: idResult.value,
+            details: { secondaryLabel: 'internal_project_links' },
           });
         }
         if (err instanceof OrderClientMismatchError) {

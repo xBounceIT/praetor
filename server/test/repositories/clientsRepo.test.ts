@@ -17,6 +17,7 @@ const baseRow = {
   description: 'desc',
   is_disabled: false,
   type: 'company',
+  is_own_company: false,
   contacts: [{ fullName: 'Alice', email: 'a@x.com', phone: '555', role: 'CEO' }],
   contact_name: null,
   client_code: 'AC-1',
@@ -46,7 +47,7 @@ const baseRow = {
 // Schema column declaration order for builder INSERT/RETURNING (.returning() with no
 // projection returns all schema columns in declaration order):
 //
-// id, name, is_disabled, created_at, type, contact_name, client_code, email, phone,
+// id, name, is_disabled, is_own_company, created_at, type, contact_name, client_code, email, phone,
 // address, description, ateco_code, website, sector, number_of_employees, revenue,
 // fiscal_code, vat_number, tax_code, office_count_range, contacts, address_country,
 // address_state, address_cap, address_province, address_civic_number, address_line
@@ -54,6 +55,7 @@ const POSITIONAL_CLIENT_ROW: readonly unknown[] = [
   'c-1',
   'Acme',
   false,
+  false, // is_own_company
   new Date('2026-01-15T00:00:00Z'),
   'company',
   null, // contact_name
@@ -88,6 +90,8 @@ describe('mapClientRow', () => {
     ]);
     expect(result.contactName).toBe('Alice');
     expect(result.email).toBe('a@x.com');
+    expect(result.isOwnCompany).toBe(false);
+    expect(clientsRepo.mapClientRow({ ...baseRow, is_own_company: true }).isOwnCompany).toBe(true);
     expect(result.phone).toBe('555');
   });
 
@@ -191,6 +195,38 @@ describe('mapClientRow', () => {
   });
 });
 
+describe('ensureOwnCompanyClient', () => {
+  test('reuses the marked company client when its name is already current', async () => {
+    exec.enqueue({ rows: [['c-own', 'Praetor S.r.l.']] });
+
+    const result = await clientsRepo.ensureOwnCompanyClient('Praetor S.r.l.', testDb);
+
+    expect(result).toEqual({ id: 'c-own', name: 'Praetor S.r.l.' });
+    expect(exec.calls).toHaveLength(1);
+  });
+
+  test('renames the marked company client when branding changes', async () => {
+    exec.enqueue({ rows: [['c-own', 'Old Name']] });
+    exec.enqueue({ rows: [['c-own', 'New Name']] });
+
+    const result = await clientsRepo.ensureOwnCompanyClient('  New Name  ', testDb);
+
+    expect(result).toEqual({ id: 'c-own', name: 'New Name' });
+    expect(exec.calls[1].sql).toContain('update "clients"');
+    expect(exec.calls[1].params).toContain('New Name');
+  });
+
+  test('creates the reserved company client with the Praetor fallback', async () => {
+    exec.enqueue({ rows: [] });
+    exec.enqueue({ rows: [['praetor-own-company', 'PRAETOR']] });
+
+    const result = await clientsRepo.ensureOwnCompanyClient(null, testDb);
+
+    expect(result).toEqual({ id: 'praetor-own-company', name: 'PRAETOR' });
+    expect(exec.calls[1].sql).toContain('insert into "clients"');
+  });
+});
+
 describe('list', () => {
   test('runs the privileged query with no params when canViewAllClients=true', async () => {
     exec.enqueue({ rows: [baseRow] });
@@ -217,6 +253,8 @@ describe('list', () => {
     // identifiers in /api/clients responses for non-admin users.
     exec.enqueue({ rows: [{ ...baseRow, total_sent_quotes: null, total_accepted_orders: null }] });
     const result = await clientsRepo.list({ canViewAllClients: false, userId: 'u-1' }, testDb);
+    expect(exec.calls[0].sql).toContain('c.is_own_company');
+    expect(result[0].isOwnCompany).toBe(false);
     expect(exec.calls[0].sql).toContain('c.vat_number');
     expect(exec.calls[0].sql).toContain('c.tax_code');
     expect(result[0].vatNumber).toBe('IT01234567890');

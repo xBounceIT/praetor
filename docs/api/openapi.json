@@ -8224,6 +8224,9 @@
                           "isDisabled": {
                             "type": "boolean"
                           },
+                          "isOwnCompany": {
+                            "type": "boolean"
+                          },
                           "type": {
                             "type": "string"
                           },
@@ -8715,6 +8718,9 @@
                     "isDisabled": {
                       "type": "boolean"
                     },
+                    "isOwnCompany": {
+                      "type": "boolean"
+                    },
                     "type": {
                       "type": "string"
                     },
@@ -9174,6 +9180,9 @@
                                     ]
                                   },
                                   "isDisabled": {
+                                    "type": "boolean"
+                                  },
+                                  "isOwnCompany": {
                                     "type": "boolean"
                                   },
                                   "type": {
@@ -9769,6 +9778,9 @@
                       ]
                     },
                     "isDisabled": {
+                      "type": "boolean"
+                    },
+                    "isOwnCompany": {
                       "type": "boolean"
                     },
                     "type": {
@@ -11149,7 +11161,8 @@
                         "type": "string",
                         "enum": [
                           "attivo",
-                          "passivo"
+                          "passivo",
+                          "interno"
                         ]
                       },
                       "tipoConfirmed": {
@@ -11340,7 +11353,10 @@
                     "type": "string"
                   },
                   "clientId": {
-                    "type": "string"
+                    "type": [
+                      "string",
+                      "null"
+                    ]
                   },
                   "description": {
                     "type": [
@@ -11349,7 +11365,10 @@
                     ]
                   },
                   "orderId": {
-                    "type": "string"
+                    "type": [
+                      "string",
+                      "null"
+                    ]
                   },
                   "offerId": {
                     "type": [
@@ -11358,10 +11377,18 @@
                     ]
                   },
                   "startDate": {
-                    "type": "string"
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "description": "Required for Active/Passive projects; optional for Internal projects."
                   },
                   "endDate": {
-                    "type": "string"
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "description": "Required for Active/Passive projects; optional for Internal projects."
                   },
                   "revenue": {
                     "type": [
@@ -11396,16 +11423,13 @@
                     "type": "string",
                     "enum": [
                       "attivo",
-                      "passivo"
+                      "passivo",
+                      "interno"
                     ]
                   }
                 },
                 "required": [
                   "name",
-                  "clientId",
-                  "orderId",
-                  "startDate",
-                  "endDate",
                   "tipo"
                 ]
               }
@@ -11499,7 +11523,8 @@
                       "type": "string",
                       "enum": [
                         "attivo",
-                        "passivo"
+                        "passivo",
+                        "interno"
                       ]
                     },
                     "tipoConfirmed": {
@@ -12153,7 +12178,8 @@
                       "type": "string",
                       "enum": [
                         "attivo",
-                        "passivo"
+                        "passivo",
+                        "interno"
                       ]
                     },
                     "tipoConfirmed": {
@@ -12487,7 +12513,10 @@
                     "type": "string"
                   },
                   "clientId": {
-                    "type": "string"
+                    "type": [
+                      "string",
+                      "null"
+                    ]
                   },
                   "description": {
                     "type": [
@@ -12555,7 +12584,8 @@
                     "type": "string",
                     "enum": [
                       "attivo",
-                      "passivo"
+                      "passivo",
+                      "interno"
                     ]
                   }
                 }
@@ -12660,7 +12690,8 @@
                       "type": "string",
                       "enum": [
                         "attivo",
-                        "passivo"
+                        "passivo",
+                        "interno"
                       ]
                     },
                     "tipoConfirmed": {
@@ -54330,6 +54361,14 @@
             },
             "in": "query",
             "name": "before",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "query",
+            "name": "beforeId",
             "required": false
           },
           {

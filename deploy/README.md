@@ -77,8 +77,22 @@ re-running the same `up -d` command is safe when a deployment is interrupted aft
 the migration journal was applied. If startup still fails, inspect the backend logs before
 rolling back; the service exits rather than serving against a partially upgraded schema.
 
+### Upgrade introducing internal jobs (migrations 0112 and 0113)
+
+Take a PostgreSQL backup before deploying the release that adds the `interno` project type.
+Deploy the new application image so startup applies migrations 0112 and 0113, wait for readiness,
+and complete a project create/edit smoke test before users create internal jobs. Existing Active
+and Passive projects are not reclassified. Migration 0113 intentionally moves existing Internal
+projects to the Branding-managed company client.
+
+The compatibility window closes after the first project is stored with `tipo = 'interno'`: older
+application images only understand Active and Passive projects and are no longer a safe
+application-only rollback. From that point, recover by rolling forward to a compatible image or
+restore the pre-deploy database backup before starting the previous image.
+
 ## Rollback
 
 Set `PRAETOR_VERSION` back to the previous tag and run the same pull/up commands.
 This rollback guidance applies to the application images only, assuming the same PostgreSQL 18
-cluster is still in use.
+cluster is still in use. Schema-specific exceptions, including the internal-jobs compatibility
+window above, take precedence.

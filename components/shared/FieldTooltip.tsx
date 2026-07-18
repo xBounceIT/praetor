@@ -1,36 +1,43 @@
 import type React from 'react';
+import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 export interface FieldTooltipProps {
   description: string;
-  status: string;
+  status?: string;
   statusLabel?: string;
   className?: string;
+  icon?: 'info' | 'question';
 }
-
-const TooltipIcon = () => (
-  <i className="fa-solid fa-circle-question text-zinc-300 hover:text-zinc-500 text-[10px] cursor-help transition-colors" />
-);
 
 const FieldTooltip: React.FC<FieldTooltipProps> = ({
   description,
   status,
   statusLabel = 'Status:',
   className = '',
+  icon = 'question',
 }) => {
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <span className={`inline-flex ${className}`}>
-          <TooltipIcon />
-        </span>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-xs"
+          aria-label={description}
+          className={`size-5 cursor-help text-muted-foreground hover:text-foreground ${className}`}
+        >
+          <i className={`fa-solid fa-circle-${icon} text-[10px]`} aria-hidden="true" />
+        </Button>
       </TooltipTrigger>
-      <TooltipContent side="top">
+      <TooltipContent side="top" className="max-w-72">
         <div className="space-y-1">
           <div>{description}</div>
-          <div className="opacity-70">
-            {statusLabel} {status}
-          </div>
+          {status && (
+            <div className="opacity-70">
+              {statusLabel} {status}
+            </div>
+          )}
         </div>
       </TooltipContent>
     </Tooltip>

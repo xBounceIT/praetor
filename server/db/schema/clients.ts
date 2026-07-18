@@ -27,6 +27,7 @@ export const clients = pgTable(
     id: varchar('id', { length: 50 }).primaryKey(),
     name: varchar('name', { length: 255 }).notNull(),
     isDisabled: boolean('is_disabled').default(false),
+    isOwnCompany: boolean('is_own_company').notNull().default(false),
     createdAt: timestamp('created_at').default(sql`CURRENT_TIMESTAMP`),
     type: varchar('type', { length: 20 }).default('company'),
     contactName: varchar('contact_name', { length: 255 }),
@@ -68,6 +69,9 @@ export const clients = pgTable(
     clientCodeUnique: uniqueIndex('idx_clients_client_code_unique')
       .on(table.clientCode)
       .where(sql`${table.clientCode} IS NOT NULL AND ${table.clientCode} <> ''`),
+    oneOwnCompany: uniqueIndex('idx_clients_one_own_company')
+      .on(table.isOwnCompany)
+      .where(sql`${table.isOwnCompany} = TRUE`),
   }),
 );
 

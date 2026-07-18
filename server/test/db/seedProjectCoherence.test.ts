@@ -30,6 +30,7 @@ const isNullCell = (value: string | undefined) =>
 type ProjectRow = {
   id: string;
   clientId: string;
+  tipo: string;
   orderId: string | null;
   offerId: string | null;
   startOffset: number | null;
@@ -43,6 +44,7 @@ const projects = new Map(
     {
       id: row.id,
       clientId: row.client_id,
+      tipo: row.tipo,
       orderId: isNullCell(row.order_id) ? null : row.order_id,
       offerId: isNullCell(row.offer_id) ? null : row.offer_id,
       startOffset: dateOffsetDays(row.start_date),
@@ -51,6 +53,10 @@ const projects = new Map(
     },
   ]),
 );
+
+const tasks = parseInsertValuesBlocks(SEED_SQL, 'tasks');
+const userClientAssignments = parseInsertValuesBlocks(SEED_SQL, 'user_clients');
+const userProjectAssignments = parseInsertValuesBlocks(SEED_SQL, 'user_projects');
 
 const offers = new Map(
   parseInsertValuesBlocks(SEED_SQL, 'customer_offers').map((row) => [
@@ -133,6 +139,46 @@ describe('seed.sql demo projects link to their offer/order chain', () => {
     expect(orderTotal).toBeGreaterThan(0);
   });
 
+  test('Internal Research is internal, keeps activities, and has no commercial links', () => {
+    const project = projects.get('p3');
+    expect(project).toBeDefined();
+    expect(project?.tipo).toBe('interno');
+    expect(project?.clientId).toBe('praetor-own-company');
+    expect(project?.orderId).toBeNull();
+    expect(project?.offerId).toBeNull();
+    expect(project?.startOffset).toBeNull();
+    expect(project?.endOffset).toBeNull();
+
+    const projectTasks = tasks.filter((task) => task.project_id === 'p3');
+    expect(projectTasks.map((task) => task.id).sort()).toEqual(['t4', 't5']);
+
+    const projectEntries = timeEntries.filter((entry) => entry.projectId === 'p3');
+    expect(projectEntries.length).toBeGreaterThan(0);
+  });
+
+  test('Internal Research assignees inherit access to the own-company client', () => {
+    const project = projects.get('p3');
+    expect(project).toBeDefined();
+    if (!project) return;
+
+    const assigneeIds = userProjectAssignments
+      .filter((assignment) => assignment.project_id === project.id)
+      .map((assignment) => assignment.user_id);
+    expect(assigneeIds.length).toBeGreaterThan(0);
+
+    for (const userId of assigneeIds) {
+      expect(
+        userClientAssignments.some(
+          (assignment) =>
+            assignment.user_id === userId &&
+            assignment.client_id === project.clientId &&
+            assignment.assignment_source === 'project_cascade',
+        ),
+        `${userId} is missing the own-company project cascade`,
+      ).toBe(true);
+    }
+  });
+
   test('linked invoice total reconciles with the order total', () => {
     const orderId = projects.get('dm_proj_01')?.orderId;
     const order = orderId ? sales.get(orderId) : undefined;
@@ -150,11 +196,12 @@ describe('seed.sql demo time entries fall within their project window', () => {
     expect(timeEntries.length).toBeGreaterThanOrEqual(25);
   });
 
-  test('every project that owns time entries declares a start/end window', () => {
+  test('every commercial project that owns time entries declares a start/end window', () => {
     const projectsWithEntries = new Set(timeEntries.map((entry) => entry.projectId));
     for (const projectId of projectsWithEntries) {
       const project = projects.get(projectId);
       expect(project, `time entries reference unknown project ${projectId}`).toBeDefined();
+      if (project?.tipo === 'interno') continue;
       expect(project?.startOffset, `${projectId} missing start_date`).not.toBeNull();
       expect(project?.endOffset, `${projectId} missing end_date`).not.toBeNull();
       expect(project?.startOffset ?? 0).toBeLessThanOrEqual(project?.endOffset ?? 0);
@@ -168,7 +215,7 @@ describe('seed.sql demo time entries fall within their project window', () => {
     const project = projects.get(projectId);
     expect(project).toBeDefined();
     expect(dateOffset).not.toBeNull();
-    if (!project || dateOffset === null) return;
+    if (!project || project.tipo === 'interno' || dateOffset === null) return;
     expect(dateOffset).toBeGreaterThanOrEqual(project.startOffset ?? 0);
     expect(dateOffset).toBeLessThanOrEqual(project.endOffset ?? 0);
   });

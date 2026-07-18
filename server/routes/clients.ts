@@ -136,6 +136,7 @@ const clientSchema = {
     name: { type: 'string' },
     description: { type: ['string', 'null'] },
     isDisabled: { type: 'boolean' },
+    isOwnCompany: { type: 'boolean' },
     type: { type: 'string' },
     contacts: { type: 'array', items: clientContactSchema },
     contactName: { type: ['string', 'null'] },
@@ -765,6 +766,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           details: { secondaryLabel: 'client_access_denied' },
         });
       }
+      if (idResult.value === clientsRepo.OWN_COMPANY_CLIENT_ID) {
+        return replyError(request, reply, {
+          statusCode: 409,
+          message: 'The company client is managed through Branding',
+          action: 'client.update.conflict',
+          entityType: 'client',
+          entityId: idResult.value,
+          details: { secondaryLabel: 'own_company_managed_by_branding' },
+        });
+      }
 
       const hasName = Object.hasOwn(body, 'name');
       const hasClientCode = Object.hasOwn(body, 'clientCode');
@@ -1026,6 +1037,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           entityType: 'client',
           entityId: idResult.value,
           details: { secondaryLabel: 'client_access_denied' },
+        });
+      }
+      if (idResult.value === clientsRepo.OWN_COMPANY_CLIENT_ID) {
+        return replyError(request, reply, {
+          statusCode: 409,
+          message: 'The company client is managed through Branding',
+          action: 'client.delete.conflict',
+          entityType: 'client',
+          entityId: idResult.value,
+          details: { secondaryLabel: 'own_company_managed_by_branding' },
         });
       }
 

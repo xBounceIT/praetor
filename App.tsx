@@ -4366,6 +4366,7 @@ const ProjectsListRoute: React.FC<{
     addProject,
     addProjectTask,
     availableUsers,
+    branding,
     clientOffers,
     clients,
     clientsOrders,
@@ -4389,6 +4390,7 @@ const ProjectsListRoute: React.FC<{
     <ProjectsView
       projects={projects}
       clients={clients}
+      companyName={branding.companyName}
       orders={clientsOrders}
       offers={clientOffers}
       currency={generalSettings.currency}
@@ -4427,6 +4429,7 @@ const ProjectDetailRoute: React.FC<{ controller: AuthenticatedAppContentControll
   const {
     addProjectTask,
     availableUsers,
+    branding,
     clientOffers,
     clients,
     clientsOrders,
@@ -4494,6 +4497,7 @@ const ProjectDetailRoute: React.FC<{ controller: AuthenticatedAppContentControll
         key={selectedProject.id}
         project={selectedProject}
         clients={clients}
+        companyName={branding.companyName}
         orders={clientsOrders}
         offers={clientOffers}
         users={availableUsers}

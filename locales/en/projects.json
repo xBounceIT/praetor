@@ -70,6 +70,7 @@
     "selectOrder": "Select Order...",
     "orderRequired": "Client order is required",
     "inheritedClientLabel": "Client (inherited from order)",
+    "internalClientHint": "Internal projects automatically use the company identified in Praetor.",
     "startDate": "Job start date",
     "endDate": "Job end date",
     "startDateRequired": "Job start date is required",
@@ -104,9 +105,13 @@
     "tipoRequired": "Type is required",
     "tipoConfirmRequired": "Confirm the job type before saving",
     "tipoConfirmHint": "This job was set to \"Active\" automatically. Confirm or update the type before saving.",
+    "internalConversionTitle": "Convert to an internal job?",
+    "internalConversionDescription": "The conversion will remove the linked order and offer. The change will be applied when you save the job.",
+    "internalConversionConfirm": "Convert and remove links",
     "tipoValues": {
       "attivo": "Active",
-      "passivo": "Passive"
+      "passivo": "Passive",
+      "interno": "Internal"
     },
     "taskRevenue": "Revenue",
     "taskTotalRevenue": "Total revenue",

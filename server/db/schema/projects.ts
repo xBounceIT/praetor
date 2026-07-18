@@ -11,6 +11,7 @@ import {
   varchar,
 } from 'drizzle-orm/pg-core';
 import { DEFAULT_PROJECT_STATUS, type ProjectStatus } from '../../utils/projectStatus.ts';
+import type { ProjectTipo } from '../../utils/projectTipo.ts';
 import { defineUserAssignmentTable } from './_userAssignmentTable.ts';
 import { clients } from './clients.ts';
 import { customerOffers } from './customerOffers.ts';
@@ -57,10 +58,10 @@ export const projects = pgTable(
       .$type<ProjectStatus>()
       .notNull()
       .default(DEFAULT_PROJECT_STATUS),
-    // `tipo` (issue #784): mandatory active/passive classification. Existing rows are
+    // `tipo` (issue #784): mandatory active/passive/internal classification. Existing rows are
     // defaulted to 'attivo' by the rollout migration; `tipo_confirmed` stays false until a
     // user explicitly chooses a value, so the edit form can force a deliberate first choice.
-    tipo: varchar('tipo', { length: 20 }).$type<'attivo' | 'passivo'>().notNull().default('attivo'),
+    tipo: varchar('tipo', { length: 20 }).$type<ProjectTipo>().notNull().default('attivo'),
     tipoConfirmed: boolean('tipo_confirmed').notNull().default(false),
   },
   (table) => [
@@ -69,7 +70,11 @@ export const projects = pgTable(
       'projects_billing_type_check',
       sql`${table.billingType} IN ('retainer', 'time_and_materials')`,
     ),
-    check('projects_tipo_check', sql`${table.tipo} IN ('attivo', 'passivo')`),
+    check('projects_tipo_check', sql`${table.tipo} IN ('attivo', 'passivo', 'interno')`),
+    check(
+      'projects_internal_links_check',
+      sql`${table.tipo} <> 'interno' OR (${table.orderId} IS NULL AND ${table.offerId} IS NULL)`,
+    ),
     check(
       'projects_status_check',
       sql`${table.status} IN ('da_fare', 'in_corso', 'in_pausa', 'terminato')`,

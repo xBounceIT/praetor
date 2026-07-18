@@ -35,12 +35,13 @@ import type {
   StoredBillingType,
   User,
 } from '../../types';
-import { DEFAULT_PROJECT_STATUS, LEGACY_PROJECT_STATUS } from '../../types';
+import { DEFAULT_PROJECT_STATUS, LEGACY_PROJECT_STATUS, PROJECT_TIPOS } from '../../types';
 import { formatDateOnlyForLocale, formatInsertDate } from '../../utils/date';
 import { formatNumber } from '../../utils/numbers';
 import { buildPermission, hasPermission, hasScopedActionPermission } from '../../utils/permissions';
 import DateField from '../shared/DateField';
 import DeleteConfirmModal from '../shared/DeleteConfirmModal';
+import FieldTooltip from '../shared/FieldTooltip';
 import HeaderAddButton from '../shared/HeaderAddButton';
 import Modal from '../shared/Modal';
 import {
@@ -89,11 +90,10 @@ export type DraftTaskInput = {
   notes?: string;
 };
 
-const tipoOptions = [
-  { id: 'attivo', name: 'projects:projects.tipoValues.attivo' },
-  { id: 'passivo', name: 'projects:projects.tipoValues.passivo' },
-];
-
+const tipoOptions = PROJECT_TIPOS.map((id) => ({
+  id,
+  name: `projects:projects.tipoValues.${id}`,
+}));
 type RevenueSource = 'activities' | 'manual';
 type RevenueLike = {
   revenue?: number | string | null;
@@ -129,8 +129,8 @@ const formatDraftNumber = (value: number, minimumFractionDigits = 0) =>
 
 export type AddProjectFormInput = {
   name: string;
-  clientId: string;
-  orderId: string;
+  clientId?: string;
+  orderId?: string | null;
   offerId?: string | null;
   description?: string;
   draftTasks?: DraftTaskInput[];
@@ -148,6 +148,7 @@ export type ProjectsViewTab = 'commissions' | 'tasks';
 export interface ProjectsViewProps {
   projects: Project[];
   clients: Client[];
+  companyName: string | null;
   orders: ClientsOrder[];
   offers: ClientOffer[];
   permissions: string[];
@@ -193,7 +194,7 @@ interface ProjectsViewState {
   startDate: string;
   endDate: string;
   revenue: string;
-  // '' = no choice yet; the create form requires a deliberate Attivo/Passivo pick (issue #784).
+  // '' = no choice yet; the create form requires a deliberate project-type choice.
   tipo: ProjectTipo | '';
   status: ProjectStatus;
   errors: Record<string, string>;
@@ -316,6 +317,7 @@ const projectsViewReducer = (
 
 const useProjectsController = ({
   projects,
+  companyName,
   clients,
   orders,
   offers,
@@ -367,6 +369,8 @@ const useProjectsController = ({
     errors,
     draftTasks,
   } = state;
+  const isInternalProject = tipo === 'interno';
+  const companyDisplayName = companyName?.trim() || 'PRAETOR';
 
   const clientById = useMemo(
     () => new Map(clients.map((client) => [client.id, client])),
@@ -504,10 +508,14 @@ const useProjectsController = ({
 
     const newErrors: Record<string, string> = {};
     if (!name?.trim()) newErrors.name = t('common:validation.projectNameRequired');
-    if (!clientId) newErrors.clientId = t('projects:projects.clientRequired');
-    if (!orderId) newErrors.orderId = t('projects:projects.orderRequired');
-    if (!startDate) newErrors.startDate = t('projects:projects.startDateRequired');
-    if (!endDate) newErrors.endDate = t('projects:projects.endDateRequired');
+    if (!isInternalProject && !clientId) newErrors.clientId = t('projects:projects.clientRequired');
+    if (!isInternalProject && !orderId) newErrors.orderId = t('projects:projects.orderRequired');
+    if (!isInternalProject && !startDate) {
+      newErrors.startDate = t('projects:projects.startDateRequired');
+    }
+    if (!isInternalProject && !endDate) {
+      newErrors.endDate = t('projects:projects.endDateRequired');
+    }
     if (!tipo) newErrors.tipo = t('projects:projects.tipoRequired');
     if (startDate && endDate && startDate > endDate) {
       newErrors.dateRange = t('projects:projects.dateRangeInvalid');
@@ -533,9 +541,9 @@ const useProjectsController = ({
     }
     const result = await onAddProject({
       name,
-      clientId,
-      orderId,
-      offerId: offerId || null,
+      clientId: isInternalProject ? undefined : clientId,
+      orderId: isInternalProject ? null : orderId,
+      offerId: isInternalProject ? null : offerId || null,
       description,
       draftTasks: taskInputs.length > 0 ? taskInputs : undefined,
       billingType,
@@ -876,11 +884,15 @@ const useProjectsController = ({
     {
       header: t('projects:projects.tableHeaders.client'),
       id: 'client',
-      accessorFn: (row) => clientById.get(row.clientId)?.name || t('projects:projects.unknown'),
+      accessorFn: (row) =>
+        row.tipo === 'interno'
+          ? companyDisplayName
+          : clientById.get(row.clientId)?.name || t('projects:projects.unknown'),
       cell: ({ row }) => {
         const client = clientById.get(row.clientId);
-        const isClientDisabled = client?.isDisabled || false;
-        return client ? (
+        const clientName = row.tipo === 'interno' ? companyDisplayName : client?.name;
+        const isClientDisabled = row.tipo !== 'interno' && Boolean(client?.isDisabled);
+        return clientName ? (
           <span
             className={`text-sm font-bold ${
               isClientDisabled
@@ -890,7 +902,7 @@ const useProjectsController = ({
                   : 'text-zinc-700'
             }`}
           >
-            {client.name}
+            {clientName}
             {isClientDisabled && ` ${t('projects:projects.disabledLabel')}`}
           </span>
         ) : (
@@ -1024,7 +1036,7 @@ const useProjectsController = ({
       accessorFn: (row) => formatProjectStatus(row.status),
       cell: ({ row }) => {
         const client = clientById.get(row.clientId);
-        const isClientDisabled = client?.isDisabled || false;
+        const isClientDisabled = row.tipo !== 'interno' && Boolean(client?.isDisabled);
         return (
           <div className="flex flex-wrap items-center gap-1.5">
             <StatusBadge
@@ -1147,6 +1159,7 @@ const useProjectsController = ({
     canCreateProjects,
     canManageAssignments,
     canViewCommissions,
+    companyDisplayName,
     canViewTasks,
     clearStaleClientLinks,
     clientId,
@@ -1167,6 +1180,7 @@ const useProjectsController = ({
     handleTabChange,
     isDeleteConfirmOpen,
     isModalOpen,
+    isInternalProject,
     managingProject,
     managingProjectId,
     name,
@@ -1255,11 +1269,11 @@ const CreateProjectModal: React.FC<{ controller: ProjectsController }> = ({ cont
 
 const CreateProjectFormFields: React.FC<{ controller: ProjectsController }> = ({ controller }) => (
   <div className="space-y-4">
+    <ProjectTipoField controller={controller} />
     <ProjectClientOrderFields controller={controller} />
     <ProjectDescriptionField controller={controller} />
     <ProjectDateFields controller={controller} />
     <ProjectOfferRevenueFields controller={controller} />
-    <ProjectTipoField controller={controller} />
     <ProjectStatusField controller={controller} />
     <ProjectBillingFields controller={controller} />
     <ProjectDraftTasksTable controller={controller} />
@@ -1268,73 +1282,95 @@ const CreateProjectFormFields: React.FC<{ controller: ProjectsController }> = ({
 
 const ProjectClientOrderFields: React.FC<{ controller: ProjectsController }> = ({ controller }) => (
   <div className="grid gap-4 md:grid-cols-2">
-    <div className="space-y-1.5">
-      <SelectControl
-        id="project-order"
-        options={controller.orderOptions}
-        value={controller.orderId}
-        onChange={(value) => {
-          const nextOrderId = value as string;
-          controller.dispatch({ type: 'setOrderId', value: nextOrderId });
-          if (controller.errors.orderId) {
-            controller.dispatch({ type: 'patchErrors', value: { orderId: '' } });
+    {!controller.isInternalProject && (
+      <div className="space-y-1.5">
+        <SelectControl
+          id="project-order"
+          options={controller.orderOptions}
+          value={controller.orderId}
+          onChange={(value) => {
+            const nextOrderId = value as string;
+            controller.dispatch({ type: 'setOrderId', value: nextOrderId });
+            if (controller.errors.orderId) {
+              controller.dispatch({ type: 'patchErrors', value: { orderId: '' } });
+            }
+            const nextOrder = controller.orders.find((order) => order.id === nextOrderId);
+            if (!nextOrder) return;
+            controller.dispatch({ type: 'setClientId', value: nextOrder.clientId });
+            if (controller.errors.clientId) {
+              controller.dispatch({ type: 'patchErrors', value: { clientId: '' } });
+            }
+            controller.clearStaleClientLinks(nextOrder.clientId, 'order');
+          }}
+          label={
+            <>
+              {controller.t('projects:projects.order')} <RequiredMark />
+            </>
           }
-          const nextOrder = controller.orders.find((order) => order.id === nextOrderId);
-          if (!nextOrder) return;
-          controller.dispatch({ type: 'setClientId', value: nextOrder.clientId });
-          if (controller.errors.clientId) {
-            controller.dispatch({ type: 'patchErrors', value: { clientId: '' } });
-          }
-          controller.clearStaleClientLinks(nextOrder.clientId, 'order');
-        }}
-        label={
-          <>
-            {controller.t('projects:projects.order')} <RequiredMark />
-          </>
-        }
-        placeholder={controller.t('projects:projects.selectOrder')}
-        searchable={true}
-        buttonClassName="h-9"
-      />
-      <FieldError className="text-xs">{controller.errors.orderId}</FieldError>
-    </div>
-    <div className="space-y-1.5">
-      <SelectControl
-        id="project-client"
-        options={controller.clientOptions}
-        value={controller.clientId}
-        onChange={(value) => controller.applyClientChange(value as string)}
-        label={
-          <>
-            {controller.t('projects:projects.client')} <RequiredMark />
-          </>
-        }
-        placeholder={controller.t('projects:projects.selectClient')}
-        searchable={true}
-        disabled={Boolean(controller.selectedOrder)}
-        buttonClassName="h-9"
-      />
-      <FieldError className="text-xs">{controller.errors.clientId}</FieldError>
-      {controller.selectedOrder && (
-        <div className="mt-1.5 flex items-center gap-2 rounded-md border border-border bg-muted/30 px-3 py-2">
-          <i className="fa-solid fa-link text-xs text-muted-foreground" aria-hidden="true"></i>
-          <span className="text-xs text-muted-foreground">
-            {controller.t('projects:projects.inheritedClientLabel')}:
-          </span>
-          <span className="text-xs font-medium text-foreground">
-            {controller.selectedOrder.clientName}
-          </span>
+          placeholder={controller.t('projects:projects.selectOrder')}
+          searchable={true}
+          buttonClassName="h-9"
+        />
+        <FieldError className="text-xs">{controller.errors.orderId}</FieldError>
+      </div>
+    )}
+    {controller.isInternalProject ? (
+      <Field>
+        <div className="relative w-fit">
+          <FieldLabel htmlFor="project-client" required>
+            {controller.t('projects:projects.client')}
+          </FieldLabel>
+          <FieldTooltip
+            description={controller.t('projects:projects.internalClientHint')}
+            icon="info"
+            className="absolute top-1/2 left-full ml-1 -translate-y-1/2"
+          />
         </div>
-      )}
-    </div>
+        <output
+          id="project-client"
+          className="flex min-h-9 cursor-default select-none items-center rounded-md bg-muted/50 px-3 py-2 text-sm font-medium text-foreground"
+        >
+          {controller.companyDisplayName}
+        </output>
+      </Field>
+    ) : (
+      <div className="space-y-1.5">
+        <SelectControl
+          id="project-client"
+          options={controller.clientOptions}
+          value={controller.clientId}
+          onChange={(value) => controller.applyClientChange(value as string)}
+          label={
+            <>
+              {controller.t('projects:projects.client')} <RequiredMark />
+            </>
+          }
+          placeholder={controller.t('projects:projects.selectClient')}
+          searchable={true}
+          disabled={Boolean(controller.selectedOrder)}
+          buttonClassName="h-9"
+        />
+        <FieldError className="text-xs">{controller.errors.clientId}</FieldError>
+        {controller.selectedOrder && (
+          <div className="mt-1.5 flex items-center gap-2 rounded-md border border-border bg-muted/30 px-3 py-2">
+            <i className="fa-solid fa-link text-xs text-muted-foreground" aria-hidden="true"></i>
+            <span className="text-xs text-muted-foreground">
+              {controller.t('projects:projects.inheritedClientLabel')}:
+            </span>
+            <span className="text-xs font-medium text-foreground">
+              {controller.selectedOrder.clientName}
+            </span>
+          </div>
+        )}
+      </div>
+    )}
     <Field data-invalid={Boolean(controller.errors.name)} className="md:col-span-2">
-      <FieldLabel htmlFor="project-name">
-        {controller.t('projects:projects.name')} <RequiredMark />
+      <FieldLabel htmlFor="project-name" required>
+        {controller.t('projects:projects.name')}
       </FieldLabel>
       <Input
         id="project-name"
         type="text"
-        required
         value={controller.name}
         aria-invalid={Boolean(controller.errors.name)}
         onChange={(event) => {
@@ -1394,11 +1430,11 @@ const ProjectDateField: React.FC<{
   return (
     <Field data-invalid={Boolean(controller.errors[errorKey] || controller.errors.dateRange)}>
       <FieldLabel htmlFor={id}>
-        {label} <RequiredMark />
+        {label} {!controller.isInternalProject && <RequiredMark />}
       </FieldLabel>
       <DateField
         id={id}
-        required
+        required={!controller.isInternalProject}
         value={value}
         aria-invalid={Boolean(controller.errors[errorKey] || controller.errors.dateRange)}
         onChange={(nextValue) => {
@@ -1420,34 +1456,36 @@ const ProjectOfferRevenueFields: React.FC<{ controller: ProjectsController }> = 
   controller,
 }) => (
   <div className="grid gap-4 md:grid-cols-2">
-    <div className="space-y-1.5">
-      <SelectControl
-        id="project-offer"
-        options={controller.offerOptions}
-        value={controller.offerId}
-        onChange={(value) => {
-          const nextOfferId = value as string;
-          controller.dispatch({ type: 'setOfferId', value: nextOfferId });
-          if (controller.errors.offerId) {
-            controller.dispatch({ type: 'patchErrors', value: { offerId: '' } });
-          }
-          const nextOffer = controller.offers.find((offer) => offer.id === nextOfferId);
-          if (!nextOffer) return;
-          if (nextOffer.clientId !== controller.clientId) {
-            controller.dispatch({ type: 'setClientId', value: nextOffer.clientId });
-            if (controller.errors.clientId) {
-              controller.dispatch({ type: 'patchErrors', value: { clientId: '' } });
+    {!controller.isInternalProject && (
+      <div className="space-y-1.5">
+        <SelectControl
+          id="project-offer"
+          options={controller.offerOptions}
+          value={controller.offerId}
+          onChange={(value) => {
+            const nextOfferId = value as string;
+            controller.dispatch({ type: 'setOfferId', value: nextOfferId });
+            if (controller.errors.offerId) {
+              controller.dispatch({ type: 'patchErrors', value: { offerId: '' } });
             }
-          }
-          controller.clearStaleClientLinks(nextOffer.clientId, 'offer');
-        }}
-        label={controller.t('projects:projects.offerOptionalLabel')}
-        placeholder={controller.t('projects:projects.selectOffer')}
-        searchable={true}
-        buttonClassName="h-9"
-      />
-      <FieldError className="text-xs">{controller.errors.offerId}</FieldError>
-    </div>
+            const nextOffer = controller.offers.find((offer) => offer.id === nextOfferId);
+            if (!nextOffer) return;
+            if (nextOffer.clientId !== controller.clientId) {
+              controller.dispatch({ type: 'setClientId', value: nextOffer.clientId });
+              if (controller.errors.clientId) {
+                controller.dispatch({ type: 'patchErrors', value: { clientId: '' } });
+              }
+            }
+            controller.clearStaleClientLinks(nextOffer.clientId, 'offer');
+          }}
+          label={controller.t('projects:projects.offerOptionalLabel')}
+          placeholder={controller.t('projects:projects.selectOffer')}
+          searchable={true}
+          buttonClassName="h-9"
+        />
+        <FieldError className="text-xs">{controller.errors.offerId}</FieldError>
+      </div>
+    )}
     <Field>
       <FieldLabel htmlFor="project-revenue">
         {`${controller.t('projects:projects.projectRevenue')} (${controller.currency})`}
@@ -1480,7 +1518,24 @@ const ProjectTipoField: React.FC<{ controller: ProjectsController }> = ({ contro
         options={controller.translatedTipoOptions}
         value={controller.tipo}
         onChange={(value) => {
-          controller.dispatch({ type: 'setTipo', value: value as ProjectTipo });
+          const nextTipo = value as ProjectTipo;
+          controller.dispatch({ type: 'setTipo', value: nextTipo });
+          if (nextTipo === 'interno') {
+            controller.dispatch({ type: 'setOrderId', value: '' });
+            controller.dispatch({ type: 'setOfferId', value: '' });
+            controller.dispatch({ type: 'setClientId', value: '' });
+            controller.dispatch({
+              type: 'patchErrors',
+              value: {
+                clientId: '',
+                orderId: '',
+                offerId: '',
+                startDate: '',
+                endDate: '',
+                dateRange: '',
+              },
+            });
+          }
           if (controller.errors.tipo) {
             controller.dispatch({ type: 'patchErrors', value: { tipo: '' } });
           }

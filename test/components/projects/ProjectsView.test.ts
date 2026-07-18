@@ -85,7 +85,7 @@ describe('ProjectsView (create-only dialog after detail-page revamp)', () => {
 });
 
 describe('ProjectsView create-form validation', () => {
-  test('create form requires name, client, order, and a date range', async () => {
+  test('create form requires client, order, and dates only for commercial jobs', async () => {
     const source = await Bun.file(
       new URL('../../../components/projects/ProjectsView.tsx', import.meta.url),
     ).text();
@@ -93,18 +93,24 @@ describe('ProjectsView create-form validation', () => {
       "if (!name?.trim()) newErrors.name = t('common:validation.projectNameRequired')",
     );
     expect(source).toContain(
-      "if (!clientId) newErrors.clientId = t('projects:projects.clientRequired')",
+      "if (!isInternalProject && !clientId) newErrors.clientId = t('projects:projects.clientRequired')",
     );
     expect(source).toContain(
-      "if (!orderId) newErrors.orderId = t('projects:projects.orderRequired')",
+      "if (!isInternalProject && !orderId) newErrors.orderId = t('projects:projects.orderRequired')",
     );
-    expect(source).toContain(
-      "if (!startDate) newErrors.startDate = t('projects:projects.startDateRequired');",
-    );
-    expect(source).toContain(
-      "if (!endDate) newErrors.endDate = t('projects:projects.endDateRequired');",
-    );
+    expect(source).toContain('if (!isInternalProject && !startDate) {');
+    expect(source).toContain('if (!isInternalProject && !endDate) {');
+    expect(source).toContain('required={!controller.isInternalProject}');
+    expect(source).toContain('{!controller.isInternalProject && <RequiredMark />}');
     expect(source).toContain("newErrors.dateRange = t('projects:projects.dateRangeInvalid')");
+  });
+
+  test('uses shadcn required state instead of native browser validation for the project name', async () => {
+    const source = await Bun.file(
+      new URL('../../../components/projects/ProjectsView.tsx', import.meta.url),
+    ).text();
+    expect(source).toContain('<FieldLabel htmlFor="project-name" required>');
+    expect(source).not.toMatch(/id="project-name"[\s\S]{0,80}\brequired\b/);
   });
 
   test('exposes start date, end date, order, optional offer, and revenue inputs', async () => {
@@ -119,7 +125,7 @@ describe('ProjectsView create-form validation', () => {
     expect(source).toContain("label={controller.t('projects:projects.offerOptionalLabel')}");
   });
 
-  test('requires a Tipo (Attivo/Passivo), exposes the selector, and forwards it (issue #784)', async () => {
+  test('requires a Tipo (Attivo/Passivo/Interna), exposes the selector, and forwards it', async () => {
     const source = await Bun.file(
       new URL('../../../components/projects/ProjectsView.tsx', import.meta.url),
     ).text();
@@ -132,6 +138,27 @@ describe('ProjectsView create-form validation', () => {
     expect(source).toContain('tipo: tipo as ProjectTipo,');
     // And the projects list surfaces the value in its own column.
     expect(source).toContain('accessorFn: (row) => formatTipo(row.tipo)');
+    expect(source).toContain('const tipoOptions = PROJECT_TIPOS.map((id) => ({');
+    expect(source).toContain('{!controller.isInternalProject && (');
+    expect(source).toContain('orderId: isInternalProject ? null : orderId');
+    expect(source).toContain('offerId: isInternalProject ? null : offerId || null');
+    expect(source).toContain('clientId: isInternalProject ? undefined : clientId');
+    expect(source).toContain("const companyDisplayName = companyName?.trim() || 'PRAETOR'");
+    expect(source).toContain('<output\n          id="project-client"');
+    expect(source).toContain('cursor-default select-none');
+    expect(source).toContain('{controller.companyDisplayName}');
+    expect(source).not.toContain('<Input\n          id="project-client"');
+    expect(source).not.toContain('aria-readonly="true"');
+    expect(source).toContain("t('projects:projects.internalClientHint')");
+    expect(source).toContain('<FieldTooltip');
+    expect(source).toContain('icon="info"');
+    expect(source).toContain('className="absolute top-1/2 left-full ml-1 -translate-y-1/2"');
+    expect(source).not.toContain(
+      "<FieldDescription>{controller.t('projects:projects.internalClientHint')}",
+    );
+    expect(source).toContain("if (nextTipo === 'interno')");
+    expect(source).toContain("controller.dispatch({ type: 'setOrderId', value: '' })");
+    expect(source).toContain("controller.dispatch({ type: 'setOfferId', value: '' })");
   });
 
   test('shows localized start and end dates in the commissions archive', async () => {
@@ -206,6 +233,7 @@ describe('ProjectsView create-form validation', () => {
       expect(loc.tabs.tasks).toBeTruthy();
       expect(loc.projects.tipoValues.attivo).toBeTruthy();
       expect(loc.projects.tipoValues.passivo).toBeTruthy();
+      expect(loc.projects.tipoValues.interno).toBeTruthy();
       expect(loc.resales.columns.startDate).toBeTruthy();
       expect(loc.resales.columns.endDate).toBeTruthy();
       expect(loc.resales.tabs.activities).toBeTruthy();
