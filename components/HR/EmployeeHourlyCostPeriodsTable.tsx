@@ -75,7 +75,7 @@ const useHourlyCostPeriodColumns = ({
           }
 
           const error = errors[`hourlyCostPeriods.${row.key}.effectiveFrom`];
-          if (!canUpdate || editingKey !== row.key) {
+          if (!canUpdate) {
             return (
               <div className="space-y-1">
                 <span>
@@ -114,7 +114,7 @@ const useHourlyCostPeriodColumns = ({
         disableSorting: true,
         cell: ({ row }) => {
           const nextFrom = nextEffectiveFromByKey.get(row.key);
-          if (canUpdate && editingKey === row.key && nextFrom) {
+          if (canUpdate && nextFrom) {
             return (
               <div className="min-w-44">
                 <DateField

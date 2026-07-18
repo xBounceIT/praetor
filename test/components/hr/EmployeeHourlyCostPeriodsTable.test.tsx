@@ -74,6 +74,18 @@ describe('<EmployeeHourlyCostPeriodsTable />', () => {
       screen.queryByLabelText('employeeProfile.costPeriods.costPerHour'),
     ).not.toBeInTheDocument();
 
+    const effectiveFrom = screen.getByRole('combobox', {
+      name: 'employeeProfile.costPeriods.from',
+    });
+    expect(effectiveFrom).toHaveTextContent('01/01/2025');
+
+    const effectiveTo = screen.getByRole('combobox', {
+      name: 'employeeProfile.costPeriods.to',
+    });
+    await user.click(effectiveTo);
+    await user.click(await screen.findByRole('button', { name: '30' }));
+    expect(effectiveFrom).toHaveTextContent('12/31/2024');
+
     await user.click(screen.getAllByRole('button', { name: 'table.rowActions' })[0]);
     await user.click(await screen.findByRole('button', { name: 'common:buttons.edit' }));
 
@@ -81,25 +93,9 @@ describe('<EmployeeHourlyCostPeriodsTable />', () => {
     const inputGroup = costInput.closest('[data-slot="input-group"]');
     expect(inputGroup).toHaveTextContent('€');
     expect(inputGroup?.querySelector('[data-slot="input-group-addon"]')).toHaveTextContent('€');
-
-    expect(
-      screen.queryByRole('combobox', { name: 'employeeProfile.costPeriods.from' }),
-    ).not.toBeInTheDocument();
-    const effectiveTo = screen.getByRole('combobox', {
-      name: 'employeeProfile.costPeriods.to',
-    });
-    await user.click(effectiveTo);
-    await user.click(await screen.findByRole('button', { name: '30' }));
-    expect(screen.getByText('12/30/2024')).toBeInTheDocument();
-
-    await user.click(screen.getAllByRole('button', { name: 'table.rowActions' })[1]);
-    await user.click(await screen.findByRole('button', { name: 'common:buttons.edit' }));
-    expect(
-      screen.getByRole('combobox', { name: 'employeeProfile.costPeriods.from' }),
-    ).toHaveTextContent('12/31/2024');
     expect(
       screen.queryByRole('combobox', { name: 'employeeProfile.costPeriods.to' }),
-    ).not.toBeInTheDocument();
+    ).toBeInTheDocument();
   });
 
   test('allows adding and deleting every period after the fixed baseline', async () => {
