@@ -43,6 +43,7 @@ const findAuthUserByIdMock = mock();
 // branding/client mocks used to resolve the company for internal projects
 const getBrandingMock = mock();
 const ensureOwnCompanyClientMock = mock();
+const findClientNameMock = mock();
 const reassignProjectClientMock = mock(async () => undefined);
 
 const userHasRoleMock = mock();
@@ -122,6 +123,7 @@ beforeAll(async () => {
   mock.module('../../repositories/clientsRepo.ts', () => ({
     ...clientsRepoSnap,
     ensureOwnCompanyClient: ensureOwnCompanyClientMock,
+    findName: findClientNameMock,
   }));
   mock.module('../../repositories/entriesRepo.ts', () => ({
     ...entriesRepoSnap,
@@ -266,6 +268,7 @@ const allMocks = [
   getRolePermissionsMock,
   getBrandingMock,
   ensureOwnCompanyClientMock,
+  findClientNameMock,
   reassignProjectClientMock,
   listAllMock,
   listForUserMock,
@@ -311,6 +314,7 @@ beforeEach(async () => {
   userHasRoleMock.mockResolvedValue(true);
   getBrandingMock.mockResolvedValue({ companyName: 'Praetor S.r.l.' });
   ensureOwnCompanyClientMock.mockResolvedValue({ id: 'c-own', name: 'Praetor S.r.l.' });
+  findClientNameMock.mockResolvedValue('Acme Corp');
   getRolePermissionsMock.mockResolvedValue(MANAGE_PERMS);
   resetWithDbTransactionMock();
   logAuditMock.mockImplementation(async () => undefined);
@@ -2197,7 +2201,7 @@ describe('PUT /api/projects/:id', () => {
   });
 
   test('200: converts an internal project to commercial with a confirmed matching order', async () => {
-    lockClientIdByIdMock.mockResolvedValue('c-1');
+    lockClientIdByIdMock.mockResolvedValue('c-own');
     findClientLinksByIdMock.mockResolvedValue({ orderId: null, offerId: null, tipo: 'interno' });
     findDateRangeByIdMock.mockResolvedValue({ startDate: null, endDate: null });
     findOrderClientIdByIdMock.mockResolvedValue('c-1');
@@ -2214,6 +2218,7 @@ describe('PUT /api/projects/:id', () => {
       headers: authHeader(),
       payload: {
         tipo: 'passivo',
+        clientId: 'c-1',
         orderId: 'co-9',
         startDate: '2026-01-01',
         endDate: '2026-12-31',
@@ -2230,6 +2235,12 @@ describe('PUT /api/projects/:id', () => {
         startDate: '2026-01-01',
         endDate: '2026-12-31',
       }),
+      TX_SENTINEL,
+    );
+    expect(findClientNameMock).toHaveBeenCalledWith('c-1', TX_SENTINEL);
+    expect(reassignProjectClientMock).toHaveBeenCalledWith(
+      'p-1',
+      { id: 'c-1', name: 'Acme Corp' },
       TX_SENTINEL,
     );
   });

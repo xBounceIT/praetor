@@ -830,7 +830,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           }
           const previousTipo = existingLinks.tipo ?? DEFAULT_PROJECT_TIPO;
           const finalTipo = tipoResult.value ?? previousTipo;
-          const isConvertingToInternal = previousTipo !== 'interno' && finalTipo === 'interno';
           const isConvertingInternalToCommercial =
             previousTipo === 'interno' && finalTipo !== 'interno';
 
@@ -936,11 +935,18 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             throw new NotFoundError('Project');
           }
 
-          if (isConvertingToInternal && ownCompanyClient) {
-            await entriesRepo.reassignProjectClient(idResult.value, ownCompanyClient, tx);
-          }
-
           if (clientChanged) {
+            const updatedClientName =
+              ownCompanyClient?.name ?? (await clientsRepo.findName(updated.clientId, tx));
+            if (updatedClientName === null) {
+              throw new NotFoundError('Client');
+            }
+            await entriesRepo.reassignProjectClient(
+              idResult.value,
+              { id: updated.clientId, name: updatedClientName },
+              tx,
+            );
+
             const assignedUserIds = await projectsRepo.findNonTopManagerUserIds(idResult.value, tx);
             await projectsRepo.ensureClientCascadeAssignments(
               assignedUserIds,
