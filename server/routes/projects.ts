@@ -10,6 +10,7 @@ import * as brandingRepo from '../repositories/brandingRepo.ts';
 import * as clientOffersRepo from '../repositories/clientOffersRepo.ts';
 import * as clientsOrdersRepo from '../repositories/clientsOrdersRepo.ts';
 import * as clientsRepo from '../repositories/clientsRepo.ts';
+import * as entriesRepo from '../repositories/entriesRepo.ts';
 import * as projectsRepo from '../repositories/projectsRepo.ts';
 import * as userAssignmentsRepo from '../repositories/userAssignmentsRepo.ts';
 import * as workUnitsRepo from '../repositories/workUnitsRepo.ts';
@@ -829,6 +830,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           }
           const previousTipo = existingLinks.tipo ?? DEFAULT_PROJECT_TIPO;
           const finalTipo = tipoResult.value ?? previousTipo;
+          const isConvertingToInternal = previousTipo !== 'interno' && finalTipo === 'interno';
           const isConvertingInternalToCommercial =
             previousTipo === 'interno' && finalTipo !== 'interno';
 
@@ -864,17 +866,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             throw new InternalProjectLinksError('internal projects cannot link an order or offer');
           }
 
-          const requestedClientId =
+          const ownCompanyClient =
             finalTipo === 'interno'
-              ? (
-                  await clientsRepo.ensureOwnCompanyClient(
-                    (await brandingRepo.get(tx))?.companyName ?? null,
-                    tx,
-                  )
-                ).id
-              : typeof clientId === 'string' && clientId !== ''
-                ? clientId
-                : previousClientId;
+              ? await clientsRepo.ensureOwnCompanyClient(
+                  (await brandingRepo.get(tx))?.companyName ?? null,
+                  tx,
+                )
+              : null;
+          const requestedClientId =
+            ownCompanyClient?.id ??
+            (typeof clientId === 'string' && clientId !== '' ? clientId : previousClientId);
           if (
             finalTipo !== 'interno' &&
             requestedClientId !== previousClientId &&
@@ -933,6 +934,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
           if (!updated) {
             throw new NotFoundError('Project');
+          }
+
+          if (isConvertingToInternal && ownCompanyClient) {
+            await entriesRepo.reassignProjectClient(idResult.value, ownCompanyClient, tx);
           }
 
           if (clientChanged) {

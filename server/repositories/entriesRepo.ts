@@ -567,6 +567,21 @@ export const update = async (
   return row ? mapBuilderRow(row) : null;
 };
 
+export const reassignProjectClient = async (
+  projectId: string,
+  client: { id: string; name: string },
+  exec: DbExecutor = db,
+): Promise<void> => {
+  await exec
+    .update(timeEntries)
+    .set({
+      clientId: client.id,
+      clientName: client.name,
+      version: sql`${timeEntries.version} + 1`,
+    })
+    .where(eq(timeEntries.projectId, projectId));
+};
+
 export const deleteById = async (id: string, exec: DbExecutor = db): Promise<void> => {
   await exec.delete(timeEntries).where(eq(timeEntries.id, id));
 };

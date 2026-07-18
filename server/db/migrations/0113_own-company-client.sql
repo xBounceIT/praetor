@@ -31,6 +31,18 @@ BEGIN
   WHERE tipo = 'interno'
     AND client_id <> own_company_client_id;
 
+  UPDATE time_entries te
+  SET client_id = own_company_client_id,
+      client_name = company_display_name,
+      version = te.version + 1
+  FROM projects p
+  WHERE p.id = te.project_id
+    AND p.tipo = 'interno'
+    AND (
+      te.client_id IS DISTINCT FROM own_company_client_id
+      OR te.client_name IS DISTINCT FROM company_display_name
+    );
+
   INSERT INTO user_clients (user_id, client_id, assignment_source)
   SELECT DISTINCT up.user_id, own_company_client_id, 'project_cascade'
   FROM user_projects up

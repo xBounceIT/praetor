@@ -26,4 +26,13 @@ describe('migration 0113: own-company client', () => {
       /DELETE FROM user_clients uc[\s\S]*uc\.assignment_source = 'project_cascade'[\s\S]*NOT EXISTS/,
     );
   });
+
+  test('moves internal project time entries to the own-company client', () => {
+    expect(migration).toMatch(
+      /UPDATE time_entries te[\s\S]*client_id = own_company_client_id[\s\S]*client_name = company_display_name[\s\S]*version = te\.version \+ 1/,
+    );
+    expect(migration).toMatch(
+      /FROM projects p[\s\S]*p\.id = te\.project_id[\s\S]*p\.tipo = 'interno'/,
+    );
+  });
 });

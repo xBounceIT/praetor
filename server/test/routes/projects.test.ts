@@ -5,6 +5,7 @@ import * as realBrandingRepo from '../../repositories/brandingRepo.ts';
 import * as realClientOffersRepo from '../../repositories/clientOffersRepo.ts';
 import * as realClientsOrdersRepo from '../../repositories/clientsOrdersRepo.ts';
 import * as realClientsRepo from '../../repositories/clientsRepo.ts';
+import * as realEntriesRepo from '../../repositories/entriesRepo.ts';
 import * as realProjectsRepo from '../../repositories/projectsRepo.ts';
 import * as realRolesRepo from '../../repositories/rolesRepo.ts';
 import * as realUserAssignmentsRepo from '../../repositories/userAssignmentsRepo.ts';
@@ -31,6 +32,7 @@ const permissionsSnap = { ...realPermissions };
 const projectsRepoSnap = { ...realProjectsRepo };
 const clientsOrdersRepoSnap = { ...realClientsOrdersRepo };
 const clientOffersRepoSnap = { ...realClientOffersRepo };
+const entriesRepoSnap = { ...realEntriesRepo };
 const userAssignmentsRepoSnap = { ...realUserAssignmentsRepo };
 const auditSnap = { ...realAudit };
 const workUnitsRepoSnap = { ...realWorkUnitsRepo };
@@ -41,6 +43,7 @@ const findAuthUserByIdMock = mock();
 // branding/client mocks used to resolve the company for internal projects
 const getBrandingMock = mock();
 const ensureOwnCompanyClientMock = mock();
+const reassignProjectClientMock = mock(async () => undefined);
 
 const userHasRoleMock = mock();
 const getRolePermissionsMock = mock();
@@ -120,6 +123,10 @@ beforeAll(async () => {
     ...clientsRepoSnap,
     ensureOwnCompanyClient: ensureOwnCompanyClientMock,
   }));
+  mock.module('../../repositories/entriesRepo.ts', () => ({
+    ...entriesRepoSnap,
+    reassignProjectClient: reassignProjectClientMock,
+  }));
   mock.module('../../repositories/projectsRepo.ts', () => ({
     ...projectsRepoSnap,
     listAll: listAllMock,
@@ -185,6 +192,7 @@ afterAll(() => {
   mock.module('../../utils/permissions.ts', () => permissionsSnap);
   mock.module('../../repositories/brandingRepo.ts', () => brandingRepoSnap);
   mock.module('../../repositories/clientsRepo.ts', () => clientsRepoSnap);
+  mock.module('../../repositories/entriesRepo.ts', () => entriesRepoSnap);
   mock.module('../../repositories/projectsRepo.ts', () => projectsRepoSnap);
   mock.module('../../repositories/clientsOrdersRepo.ts', () => clientsOrdersRepoSnap);
   mock.module('../../repositories/clientOffersRepo.ts', () => clientOffersRepoSnap);
@@ -258,6 +266,7 @@ const allMocks = [
   getRolePermissionsMock,
   getBrandingMock,
   ensureOwnCompanyClientMock,
+  reassignProjectClientMock,
   listAllMock,
   listForUserMock,
   listRilCatalogForUserMock,
@@ -2089,6 +2098,11 @@ describe('PUT /api/projects/:id', () => {
     );
     expect(findOrderProjectLinkByIdMock).not.toHaveBeenCalled();
     expect(findOfferClientIdByIdMock).not.toHaveBeenCalled();
+    expect(reassignProjectClientMock).toHaveBeenCalledWith(
+      'p-1',
+      { id: 'c-own', name: 'Praetor S.r.l.' },
+      TX_SENTINEL,
+    );
   });
 
   for (const [field, value] of [

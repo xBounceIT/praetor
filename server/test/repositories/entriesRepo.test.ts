@@ -784,6 +784,21 @@ describe('update', () => {
   });
 });
 
+describe('reassignProjectClient', () => {
+  test('updates the denormalized client fields and version for every project entry', async () => {
+    exec.enqueue({ rows: [], rowCount: 2 });
+
+    await entriesRepo.reassignProjectClient('p-1', { id: 'c-own', name: 'Praetor S.r.l.' }, testDb);
+
+    expect(exec.calls[0].sql).toContain('update "time_entries"');
+    expect(exec.calls[0].sql).toContain('"client_id" = $1');
+    expect(exec.calls[0].sql).toContain('"client_name" = $2');
+    expect(exec.calls[0].sql).toContain('"version" = "time_entries"."version" + 1');
+    expect(exec.calls[0].sql).toContain('"project_id" = $3');
+    expect(exec.calls[0].params).toEqual(['c-own', 'Praetor S.r.l.', 'p-1']);
+  });
+});
+
 describe('deleteById', () => {
   test('passes id as $1 against time_entries', async () => {
     exec.enqueue({ rows: [] });

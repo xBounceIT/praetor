@@ -956,7 +956,7 @@ const useProjectDetailController = ({
       : true; // non-numeric input is a "change" that will surface its own validation later
   const hasChanges =
     name !== project.name ||
-    clientId !== project.clientId ||
+    (!isInternalProject && clientId !== project.clientId) ||
     description !== (project.description ?? '') ||
     startDate !== (project.startDate ?? '') ||
     endDate !== (project.endDate ?? '') ||
@@ -987,38 +987,38 @@ const useProjectDetailController = ({
     }
   };
 
-  const requestTipoChange = (nextTipo: ProjectTipo) => {
-    if (nextTipo === 'interno' && (orderId || offerId)) {
-      setIsInternalConversionOpen(true);
-      return;
-    }
-    setTipo(nextTipo);
-    if (nextTipo === 'interno') {
-      setErrors((previous) => ({
-        ...previous,
-        tipo: '',
-        startDate: '',
-        endDate: '',
-        dateRange: '',
-      }));
-    } else if (errors.tipo) {
-      setErrors((previous) => ({ ...previous, tipo: '' }));
-    }
-  };
-
-  const confirmInternalConversion = () => {
+  const applyInternalTipo = () => {
     setTipo('interno');
+    setClientId('');
     setOrderId('');
     setOfferId('');
     setErrors((previous) => ({
       ...previous,
       tipo: '',
+      clientId: '',
       orderId: '',
       offerId: '',
       startDate: '',
       endDate: '',
       dateRange: '',
     }));
+  };
+
+  const requestTipoChange = (nextTipo: ProjectTipo) => {
+    if (nextTipo === 'interno') {
+      if (orderId || offerId) {
+        setIsInternalConversionOpen(true);
+        return;
+      }
+      applyInternalTipo();
+      return;
+    }
+    setTipo(nextTipo);
+    if (errors.tipo) setErrors((previous) => ({ ...previous, tipo: '' }));
+  };
+
+  const confirmInternalConversion = () => {
+    applyInternalTipo();
     setIsInternalConversionOpen(false);
   };
 
