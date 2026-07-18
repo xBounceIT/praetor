@@ -201,7 +201,7 @@ const EmployeeHrFields: React.FC<EmployeeHrFieldsProps> = ({
         <div className="grid gap-4 md:grid-cols-3">
           <Field data-invalid={Boolean(errors.name)}>
             <FieldLabel htmlFor={`${prefix}-name`} required>
-              {t(`${section}.name`)}
+              {t('common:labels.fullName')}
             </FieldLabel>
             <Input
               id={`${prefix}-name`}
@@ -209,7 +209,7 @@ const EmployeeHrFields: React.FC<EmployeeHrFieldsProps> = ({
               value={formData.name}
               onChange={(e) => setField('name', e.target.value)}
               aria-invalid={Boolean(errors.name)}
-              placeholder={t(`${section}.name`)}
+              placeholder={t('common:labels.fullName')}
               disabled={identityReadOnly}
             />
             <FieldError className="text-xs">{errors.name}</FieldError>

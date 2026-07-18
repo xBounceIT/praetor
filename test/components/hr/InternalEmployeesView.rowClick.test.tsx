@@ -25,6 +25,7 @@ const employee: User = {
   avatarInitials: 'MR',
   username: 'mrossi',
   employeeType: 'internal',
+  authMethod: 'local',
   costPerHour: 25,
   email: 'mario@example.com',
   phone: '+39 02 1234',
@@ -109,6 +110,11 @@ describe('<InternalEmployeesView /> row click', () => {
     fireEvent.click(row);
 
     expect(screen.getByDisplayValue('Mario Rossi')).toBeInTheDocument();
+    expect(screen.getByLabelText('common:labels.fullName *')).toBeEnabled();
+    expect(screen.getByLabelText('employeeProfile.firstName')).toBeEnabled();
+    expect(screen.getByLabelText('employeeProfile.lastName')).toBeEnabled();
+    expect(screen.getByLabelText('employeeProfile.email')).toBeEnabled();
+    expect(screen.getByLabelText('employeeProfile.phone')).toBeEnabled();
     expect(screen.getByDisplayValue('mario@example.com')).toBeInTheDocument();
     expect(screen.getByDisplayValue('+39 02 1234')).toBeInTheDocument();
     expect(screen.getByDisplayValue('EMP-001')).toBeInTheDocument();
@@ -201,7 +207,7 @@ describe('<InternalEmployeesView /> row click', () => {
     });
 
     fireEvent.click(screen.getByText('internalEmployees.addEmployee'));
-    fireEvent.change(screen.getByLabelText('internalEmployees.name *'), {
+    fireEvent.change(screen.getByLabelText('common:labels.fullName *'), {
       target: { value: 'Luisa Bianchi' },
     });
     fireEvent.change(screen.getByLabelText('employeeProfile.email'), {
@@ -251,7 +257,7 @@ describe('<InternalEmployeesView /> row click', () => {
     expect(screen.getByLabelText('employeeProfile.phone')).toBeDisabled();
     expect(screen.getByLabelText('employeeProfile.employeeCode')).toBeDisabled();
 
-    fireEvent.change(screen.getByLabelText('internalEmployees.name *'), {
+    fireEvent.change(screen.getByLabelText('common:labels.fullName *'), {
       target: { value: 'Luisa Bianchi' },
     });
     fireEvent.click(screen.getByText('internalEmployees.saveChanges'));
@@ -298,10 +304,14 @@ describe('<InternalEmployeesView /> row click', () => {
     expect(screen.queryByRole('button', { name: 'common:buttons.delete' })).not.toBeInTheDocument();
   });
 
-  test('keeps provider-managed name and email read-only on edit', async () => {
+  test.each([
+    'ldap',
+    'oidc',
+    'saml',
+  ] as const)('keeps %s-managed identity disabled while allowing phone edits', async (authMethod) => {
     const onUpdateEmployee = mock<(id: string, updates: Partial<User>) => void>(() => {});
     renderView({
-      users: [{ ...employee, employeeType: 'app_user', authMethod: 'ldap' }],
+      users: [{ ...employee, employeeType: 'app_user', authMethod }],
       onUpdateEmployee,
     });
 
@@ -309,12 +319,13 @@ describe('<InternalEmployeesView /> row click', () => {
     if (!row) throw new Error('employee row not found');
     fireEvent.click(row);
 
-    expect(screen.getByLabelText('internalEmployees.name *')).toBeDisabled();
+    expect(screen.getByLabelText('common:labels.fullName *')).toBeDisabled();
     expect(screen.getByLabelText('employeeProfile.email')).toBeDisabled();
-    // First/last name are directory-managed identity too — read-only for LDAP-bound users.
     expect(screen.getByLabelText('employeeProfile.firstName')).toBeDisabled();
     expect(screen.getByLabelText('employeeProfile.lastName')).toBeDisabled();
-    fireEvent.change(screen.getByLabelText('employeeProfile.phone'), {
+    const phoneInput = screen.getByLabelText('employeeProfile.phone');
+    expect(phoneInput).toBeEnabled();
+    fireEvent.change(phoneInput, {
       target: { value: '+39 02 9999' },
     });
     fireEvent.click(screen.getByText('internalEmployees.saveChanges'));

@@ -390,6 +390,7 @@ const ExternalEmployeesView: React.FC<ExternalEmployeesViewProps> = ({
     isSubmitting,
     formData,
   } = state;
+  const identityReadOnly = Boolean(editingEmployee && editingEmployee.authMethod !== 'local');
 
   // Filter for external employees only, sorted by surname ascending
   const externalEmployees = useMemo(() => {
@@ -418,7 +419,6 @@ const ExternalEmployeesView: React.FC<ExternalEmployeesViewProps> = ({
     if (editingEmployee && !canUpdateEmployees) return;
     if (!editingEmployee && !canCreateEmployees) return;
 
-    const identityReadOnly = Boolean(editingEmployee && editingEmployee.authMethod !== 'local');
     const newErrors = validateEmployeeHrForm(formData, {
       identityReadOnly,
       requiredMessage: t('common:validation.required'),
@@ -506,9 +506,7 @@ const ExternalEmployeesView: React.FC<ExternalEmployeesViewProps> = ({
                 currency={currency}
                 canViewCosts={canViewCosts}
                 canUpdateCosts={canUpdateCosts}
-                identityReadOnly={Boolean(
-                  editingEmployee && editingEmployee.authMethod !== 'local',
-                )}
+                identityReadOnly={identityReadOnly}
                 canEditHrDetails={editingEmployee ? canUpdateEmployees : canCreateEmployees}
                 departmentValue={getEmployeeDepartmentDisplay(editingEmployee, workUnits)}
                 responsibleUserOptions={responsibleUserOptions}

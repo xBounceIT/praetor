@@ -414,6 +414,7 @@ const InternalEmployeesView: React.FC<InternalEmployeesViewProps> = ({
     isSubmitting,
     formData,
   } = state;
+  const identityReadOnly = Boolean(editingEmployee && editingEmployee.authMethod !== 'local');
 
   // Combine and sort all employees by surname ascending
   const allEmployees = useMemo(() => {
@@ -447,7 +448,6 @@ const InternalEmployeesView: React.FC<InternalEmployeesViewProps> = ({
     if (editingEmployee && !canUpdateEmployees) return;
     if (!editingEmployee && !canCreateEmployees) return;
 
-    const identityReadOnly = Boolean(editingEmployee && editingEmployee.authMethod !== 'local');
     const newErrors = validateEmployeeHrForm(formData, {
       identityReadOnly,
       requiredMessage: t('common:validation.required'),
@@ -536,9 +536,7 @@ const InternalEmployeesView: React.FC<InternalEmployeesViewProps> = ({
                 currency={currency}
                 canViewCosts={canViewCosts}
                 canUpdateCosts={canUpdateCosts}
-                identityReadOnly={Boolean(
-                  editingEmployee && editingEmployee.authMethod !== 'local',
-                )}
+                identityReadOnly={identityReadOnly}
                 canEditHrDetails={canUpdateEmployees}
                 departmentValue={getEmployeeDepartmentDisplay(editingEmployee, workUnits)}
                 responsibleUserOptions={responsibleUserOptions}
