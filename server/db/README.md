@@ -133,6 +133,12 @@ propagate as normal Node exceptions.
 
 `drizzle-kit push` skips the migration files entirely and applies schema diffs directly to the DB. That bypasses `__drizzle_migrations` and creates trivial paths to prod drift. We deliberately don't ship it as a script. If you want it for local prototyping, run `bunx drizzle-kit push` manually with full awareness — but commit a real migration before merging.
 
+## Hourly-cost calendar rollout (migration 0114)
+
+Deploy migration `0114_add_user_hourly_cost_periods.sql` before the application image. It is additive: it keeps `users.cost_per_hour`, normalizes null or negative legacy costs to `0` before the constrained backfill, creates one baseline period per existing user, and deliberately does not rewrite `time_entries` during migration. A compatibility trigger creates a baseline for inserts made by an older image and turns legacy scalar cost updates into a single global period. The new application continues to maintain `users.cost_per_hour` as today's compatibility value while date-based reads use the calendar.
+
+If application rollback is required during the compatibility window, the previous image can continue reading `users.cost_per_hour`; leave the new table in place. Before rollback, reconcile that column to the rate effective on the rollback date if calendar edits were accepted. Rolling the schema back requires restoring a pre-migration backup because dropping the calendar would discard effective-dated rates. Prefer roll-forward after fixing the application and run `db:ready` plus a comparison of current calendar rates against `users.cost_per_hour`.
+
 ## Conventions for schema authors
 
 - **One file per table cluster.** `quotes.ts` defines both `quotes` and `quoteItems`; `tasks.ts` defines `tasks` and `userTasks`. Re-export everything from `schema/index.ts`.

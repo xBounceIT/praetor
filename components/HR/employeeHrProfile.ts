@@ -1,4 +1,6 @@
 import type {
+  HourlyCostPeriod,
+  HourlyCostPeriodInput,
   ResponsibleUserOption,
   User,
   UserContractType,
@@ -28,10 +30,15 @@ export type EmployeeHrFormData = {
   emergencyContactPhone: string;
   address: string;
   notes: string;
+};
+
+export type EmployeeHourlyCostPeriodDraft = {
+  key: string;
+  effectiveFrom: string | null;
   costPerHour: string;
 };
 
-export type EmployeeHrSubmitPayload = Partial<User> & { costPerHour?: number };
+export type EmployeeHrSubmitPayload = Partial<User>;
 export type EmployeeCreatePayload = EmployeeHrSubmitPayload & { name: string };
 
 export type EmployeeSectionKey = 'internalEmployees' | 'externalEmployees';
@@ -80,7 +87,6 @@ export const createEmptyEmployeeHrForm = (): EmployeeHrFormData => ({
   emergencyContactPhone: '',
   address: '',
   notes: '',
-  costPerHour: '',
 });
 
 export const createEmployeeHrForm = (employee: User): EmployeeHrFormData => ({
@@ -103,8 +109,93 @@ export const createEmployeeHrForm = (employee: User): EmployeeHrFormData => ({
   emergencyContactPhone: employee.emergencyContactPhone || '',
   address: employee.address || '',
   notes: employee.notes || '',
-  costPerHour: employee.costPerHour?.toString() || '',
 });
+
+let hourlyCostPeriodSequence = 0;
+
+const nextHourlyCostPeriodKey = () => {
+  hourlyCostPeriodSequence += 1;
+  return `hourly-cost-period:draft:${hourlyCostPeriodSequence}`;
+};
+
+export const createInitialHourlyCostPeriods = (
+  costPerHour: number | string = '',
+): EmployeeHourlyCostPeriodDraft[] => [
+  {
+    key: nextHourlyCostPeriodKey(),
+    effectiveFrom: null,
+    costPerHour: String(costPerHour),
+  },
+];
+
+export const createHourlyCostPeriodDrafts = (
+  periods: HourlyCostPeriod[],
+): EmployeeHourlyCostPeriodDraft[] =>
+  periods.map((period) => ({
+    key: `hourly-cost-period:persisted:${period.id}`,
+    effectiveFrom: period.effectiveFrom,
+    costPerHour: String(period.costPerHour),
+  }));
+
+export const createEmptyHourlyCostPeriodDraft = (): EmployeeHourlyCostPeriodDraft => ({
+  key: nextHourlyCostPeriodKey(),
+  effectiveFrom: '',
+  costPerHour: '',
+});
+
+export const sortHourlyCostPeriodDrafts = (
+  periods: EmployeeHourlyCostPeriodDraft[],
+): EmployeeHourlyCostPeriodDraft[] =>
+  [...periods].sort((left, right) => {
+    if (left.effectiveFrom === null) return -1;
+    if (right.effectiveFrom === null) return 1;
+    if (!left.effectiveFrom) return 1;
+    if (!right.effectiveFrom) return -1;
+    return left.effectiveFrom.localeCompare(right.effectiveFrom);
+  });
+
+export const buildHourlyCostPeriodInputs = (
+  periods: EmployeeHourlyCostPeriodDraft[],
+): HourlyCostPeriodInput[] =>
+  sortHourlyCostPeriodDrafts(periods).map((period) => ({
+    effectiveFrom: period.effectiveFrom || null,
+    costPerHour: Number(period.costPerHour),
+  }));
+
+export const validateHourlyCostPeriods = (
+  periods: EmployeeHourlyCostPeriodDraft[],
+  messages: { required: string; duplicateDate: string; nonNegativeCost: string },
+): Record<string, string> => {
+  const errors: Record<string, string> = {};
+  const dates = new Set<string>();
+
+  if (periods.filter((period) => period.effectiveFrom === null).length !== 1) {
+    errors.hourlyCostPeriods = messages.required;
+  }
+
+  for (const period of periods) {
+    if (period.effectiveFrom !== null) {
+      if (!period.effectiveFrom) {
+        errors[`hourlyCostPeriods.${period.key}.effectiveFrom`] = messages.required;
+      } else if (dates.has(period.effectiveFrom)) {
+        errors[`hourlyCostPeriods.${period.key}.effectiveFrom`] = messages.duplicateDate;
+      } else {
+        dates.add(period.effectiveFrom);
+      }
+    }
+
+    if (period.costPerHour.trim() === '') {
+      errors[`hourlyCostPeriods.${period.key}.costPerHour`] = messages.required;
+    } else {
+      const cost = Number(period.costPerHour);
+      if (!Number.isFinite(cost) || cost < 0) {
+        errors[`hourlyCostPeriods.${period.key}.costPerHour`] = messages.nonNegativeCost;
+      }
+    }
+  }
+
+  return errors;
+};
 
 const nullableText = (value: string): string | null => {
   const trimmed = value.trim();
@@ -113,7 +204,7 @@ const nullableText = (value: string): string | null => {
 
 export const buildEmployeeHrPayload = (
   formData: EmployeeHrFormData,
-  options: { includeIdentity: boolean; includeCost: boolean },
+  options: { includeIdentity: boolean },
 ): EmployeeHrSubmitPayload => {
   const payload: EmployeeHrSubmitPayload = {
     phone: nullableText(formData.phone),
@@ -138,16 +229,12 @@ export const buildEmployeeHrPayload = (
     payload.email = formData.email.trim();
   }
 
-  if (options.includeCost) {
-    payload.costPerHour = formData.costPerHour ? parseFloat(formData.costPerHour) : 0;
-  }
-
   return payload;
 };
 
 export const buildEmployeeCreatePayload = (
   formData: EmployeeHrFormData,
-  options: { includeCost: boolean; includeHrDetails?: boolean },
+  options: { includeHrDetails?: boolean } = {},
 ): EmployeeCreatePayload => {
   const payload: EmployeeCreatePayload = {
     name: formData.name.trim(),
@@ -158,7 +245,6 @@ export const buildEmployeeCreatePayload = (
       payload,
       buildEmployeeHrPayload(formData, {
         includeIdentity: false,
-        includeCost: options.includeCost,
       }),
       {
         firstName: nullableText(formData.firstName),
@@ -166,8 +252,6 @@ export const buildEmployeeCreatePayload = (
         email: formData.email.trim(),
       },
     );
-  } else if (options.includeCost) {
-    payload.costPerHour = formData.costPerHour ? parseFloat(formData.costPerHour) : 0;
   }
 
   return payload;

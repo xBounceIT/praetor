@@ -8,6 +8,7 @@ import * as realProjectsRepo from '../../repositories/projectsRepo.ts';
 import * as realRolesRepo from '../../repositories/rolesRepo.ts';
 import * as realTasksRepo from '../../repositories/tasksRepo.ts';
 import * as realUserAssignmentsRepo from '../../repositories/userAssignmentsRepo.ts';
+import * as realUserHourlyCostPeriodsRepo from '../../repositories/userHourlyCostPeriodsRepo.ts';
 import * as realUsersRepo from '../../repositories/usersRepo.ts';
 import * as realWorkUnitsRepo from '../../repositories/workUnitsRepo.ts';
 import * as realOvertimeNotifications from '../../services/overtimeNotifications.ts';
@@ -31,6 +32,7 @@ const tasksRepoSnap = { ...realTasksRepo };
 const projectsRepoSnap = { ...realProjectsRepo };
 const clientsRepoSnap = { ...realClientsRepo };
 const userAssignmentsRepoSnap = { ...realUserAssignmentsRepo };
+const userHourlyCostPeriodsRepoSnap = { ...realUserHourlyCostPeriodsRepo };
 const workUnitsRepoSnap = { ...realWorkUnitsRepo };
 const drizzleSnap = { ...realDrizzle };
 const overtimeNotificationsSnap = { ...realOvertimeNotifications };
@@ -42,6 +44,9 @@ const getRolePermissionsMock = mock();
 
 // Route deps
 const findCostPerHourMock = mock();
+const findHourlyCostForDateMock = mock();
+const listHourlyCostPeriodsForUserMock = mock();
+const lockUserByIdMock = mock();
 const findIdByProjectAndNameMock = mock();
 const listRecurringForUserMock = mock();
 const isUserManagedByMock = mock();
@@ -86,7 +91,13 @@ beforeAll(async () => {
   mock.module('../../repositories/usersRepo.ts', () => ({
     ...usersRepoSnap,
     findAuthUserById: findAuthUserByIdMock,
+    lockById: lockUserByIdMock,
     findCostPerHour: findCostPerHourMock,
+  }));
+  mock.module('../../repositories/userHourlyCostPeriodsRepo.ts', () => ({
+    ...userHourlyCostPeriodsRepoSnap,
+    findCostForDate: findHourlyCostForDateMock,
+    listInputsForUser: listHourlyCostPeriodsForUserMock,
   }));
   mock.module('../../repositories/rolesRepo.ts', () => ({
     ...rolesRepoSnap,
@@ -174,6 +185,10 @@ afterAll(() => {
   mock.module('../../repositories/projectsRepo.ts', () => projectsRepoSnap);
   mock.module('../../repositories/clientsRepo.ts', () => clientsRepoSnap);
   mock.module('../../repositories/userAssignmentsRepo.ts', () => userAssignmentsRepoSnap);
+  mock.module(
+    '../../repositories/userHourlyCostPeriodsRepo.ts',
+    () => userHourlyCostPeriodsRepoSnap,
+  );
   mock.module('../../repositories/workUnitsRepo.ts', () => workUnitsRepoSnap);
   mock.module('../../db/drizzle.ts', () => drizzleSnap);
   mock.module('../../services/overtimeNotifications.ts', () => overtimeNotificationsSnap);
@@ -250,7 +265,10 @@ const allMocks = [
   findAuthUserByIdMock,
   userHasRoleMock,
   getRolePermissionsMock,
+  lockUserByIdMock,
   findCostPerHourMock,
+  findHourlyCostForDateMock,
+  listHourlyCostPeriodsForUserMock,
   findIdByProjectAndNameMock,
   listRecurringForUserMock,
   isUserManagedByMock,
@@ -300,6 +318,12 @@ beforeEach(async () => {
   // a distinguishable last-arg in tests; see helpers/txSentinel.ts.
   resetWithDbTransactionMock();
 
+  findCostPerHourMock.mockResolvedValue(0);
+  lockUserByIdMock.mockResolvedValue(HAPPY_USER);
+  findHourlyCostForDateMock.mockImplementation((userId: string) => findCostPerHourMock(userId));
+  listHourlyCostPeriodsForUserMock.mockImplementation(async (userId: string) => [
+    { effectiveFrom: null, costPerHour: await findCostPerHourMock(userId) },
+  ]);
   findAuthUserByIdMock.mockResolvedValue(HAPPY_USER);
   userHasRoleMock.mockResolvedValue(true);
   getRolePermissionsMock.mockResolvedValue(TRACKER_PERMS);
@@ -1729,7 +1753,8 @@ describe('PUT /api/entries/:id', () => {
     expect(res.statusCode).toBe(200);
     expect(entriesUpdateMock).toHaveBeenCalledWith(
       'te-1',
-      expect.objectContaining({ date: '2025-06-03' }),
+      expect.objectContaining({ date: '2025-06-03', hourlyCost: 0 }),
+      TX_SENTINEL,
     );
   });
 
@@ -2053,6 +2078,28 @@ describe('POST /api/entries/recurring/generate', () => {
         location: 'remote',
       });
     }
+  });
+
+  test('200: resolves each generated date across an hourly-cost period boundary', async () => {
+    setupHappyPath();
+    listHourlyCostPeriodsForUserMock.mockResolvedValue([
+      { effectiveFrom: null, costPerHour: 40 },
+      { effectiveFrom: '2025-06-11', costPerHour: 55 },
+    ]);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/entries/recurring/generate',
+      headers: authHeader(),
+      payload: { fromDate: '2025-06-09', toDate: '2025-06-13' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const inserted = entriesCreateManyMock.mock.calls[0][0] as Array<Record<string, unknown>>;
+    expect(inserted.map((entry) => entry.hourlyCost)).toEqual([40, 40, 55, 55, 55]);
+    expect(lockUserByIdMock).toHaveBeenCalledWith('u1', TX_SENTINEL);
+    expect(listHourlyCostPeriodsForUserMock).toHaveBeenLastCalledWith('u1', TX_SENTINEL);
+    expect(listHourlyCostPeriodsForUserMock).toHaveBeenCalledTimes(1);
   });
 
   test('200: notifies tracker overtime once per generated date', async () => {

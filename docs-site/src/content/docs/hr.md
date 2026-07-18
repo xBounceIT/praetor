@@ -27,6 +27,14 @@ Negli ambienti demo, il seed dati include profili HR realistici per utenti appli
 
 Per utenti locali, HR può aggiornare nome ed email direttamente dall'**Anagrafica Aziendale** del profilo dipendente. L'email viene salvata tramite lo stesso percorso usato dalle impostazioni personali, quindi resta coerente con le altre funzioni dell'applicazione.
 
+## Costi orari per periodo
+
+Con il permesso costi, l’anagrafica mostra una tabella con **Dal**, **Al** e **Costo orario**. Il primo periodo parte sempre **Dall’inizio**; l’ultimo termina **Ad oggi**. Quando aggiungi una decorrenza, Praetor chiude il periodo precedente al giorno prima. Puoi modificare data e importo oppure eliminare un periodo successivo al primo; in questo caso il periodo precedente si estende automaticamente.
+
+Il salvataggio del profilo e del calendario è atomico. Se il calendario cambia, Praetor ricalcola le registrazioni timesheet della persona usando la tariffa valida alla data di ciascuna entry, comprese quelle storiche. Anche nuove entry, cambi di data e generazioni ricorrenti risolvono il costo dalla data.
+
+Le tabelle HR continuano a mostrare come riepilogo il costo valido oggi. **Amministrazione > Utenti** non mostra né modifica i costi: la gestione avviene esclusivamente nell’anagrafica HR. I permessi `hr.costs.view` e `hr.costs_all.view` governano la lettura; i corrispondenti permessi `update` governano la modifica.
+
 Per utenti gestiti da LDAP, OIDC o SAML, nome ed email sono controllati dal provider aziendale. Praetor li mostra in sola lettura nelle schermate HR e rifiuta modifiche manuali inviate al server. A ogni login o sincronizzazione, valori non vuoti provenienti dal provider aggiornano nome, iniziali avatar ed email; valori mancanti non cancellano i dati locali esistenti.
 
 ## Permessi

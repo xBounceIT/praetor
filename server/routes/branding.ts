@@ -111,8 +111,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const trimmed = typeof body.companyName === 'string' ? body.companyName.trim() : '';
       const companyName = trimmed.length > 0 ? trimmed.slice(0, COMPANY_NAME_MAX_LENGTH) : null;
       const updated = await withDbTransaction(async (tx) => {
-        const record = await brandingRepo.setCompanyName(companyName, tx);
-        const ownCompanyClient = await clientsRepo.ensureOwnCompanyClient(companyName, tx);
+        const [record, ownCompanyClient] = await Promise.all([
+          brandingRepo.setCompanyName(companyName, tx),
+          clientsRepo.ensureOwnCompanyClient(companyName, tx),
+        ]);
         await entriesRepo.reassignInternalProjectClients(ownCompanyClient, tx);
         return record;
       });

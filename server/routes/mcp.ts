@@ -15,6 +15,7 @@ import * as supplierOrdersRepo from '../repositories/supplierOrdersRepo.ts';
 import * as supplierQuotesRepo from '../repositories/supplierQuotesRepo.ts';
 import * as suppliersRepo from '../repositories/suppliersRepo.ts';
 import * as tasksRepo from '../repositories/tasksRepo.ts';
+import * as userHourlyCostPeriodsRepo from '../repositories/userHourlyCostPeriodsRepo.ts';
 import * as usersRepo from '../repositories/usersRepo.ts';
 import * as workUnitsRepo from '../repositories/workUnitsRepo.ts';
 import {
@@ -27,6 +28,7 @@ import {
   updateTimeEntry,
 } from '../services/timeEntries.ts';
 import { APP_VERSION } from '../utils/app-version.ts';
+import { todayLocalDateOnly } from '../utils/date.ts';
 import { canViewProjectDetails, equivalentPermissionsFor } from '../utils/permissions.ts';
 import {
   effectiveQuoteStatusFromDate,
@@ -547,6 +549,10 @@ const buildServer = () => {
             canViewExternal: hasPermission(user, 'hr.external.view'),
           });
 
+      const currentCosts = await userHourlyCostPeriodsRepo.listCostsForDate(
+        users.filter((entry) => canViewCostFor(user, entry.id)).map((entry) => entry.id),
+        todayLocalDateOnly(),
+      );
       const visibleWorkUnits = hasWorkUnitsView
         ? hasAllWorkUnitsView
           ? await workUnitsRepo.listAll()
@@ -555,10 +561,13 @@ const buildServer = () => {
 
       return jsonResult({
         users: users.map((entry) =>
-          maskUser(entry, {
-            canViewCosts: canViewCostFor(user, entry.id),
-            canViewEmails: hasEmailView,
-          }),
+          maskUser(
+            { ...entry, costPerHour: currentCosts.get(entry.id) ?? entry.costPerHour },
+            {
+              canViewCosts: canViewCostFor(user, entry.id),
+              canViewEmails: hasEmailView,
+            },
+          ),
         ),
         // Expose only member user IDs, derived from the members the repo already returns
         // (no second user_work_units query). The member display names are deliberately
