@@ -99,7 +99,7 @@ INSERT INTO clients (
         'research@global-tech.demo',
         '+39 011 5550 6202',
         'Corso Vittorio Emanuele II 74, 10121 Torino (TO), Italia',
-        'Compatibility client used by the legacy Internal Research demo project.',
+        'Demo customer for commercial projects and CRM workflows.',
         '72.19.09',
         'https://global-tech.demo',
         'SERVICES',
@@ -119,12 +119,12 @@ INSERT INTO clients (
     )
 ON CONFLICT (id) DO NOTHING;
 
--- start_date/end_date bracket the demo time entries logged against each project
--- (see the first time_entries block below) so every entry falls inside its project window.
+-- Commercial project dates bracket their demo time entries. Internal Research is deliberately
+-- open-ended to exercise the Internal-project contract: neither planning date is required.
 INSERT INTO projects (id, name, client_id, description, start_date, end_date, tipo, tipo_confirmed) VALUES
     ('p1', 'Website Redesign', 'c1', 'Complete overhaul of the main marketing site.', (CURRENT_DATE - INTERVAL '30 days')::date, (CURRENT_DATE + INTERVAL '30 days')::date, 'attivo', TRUE),
     ('p2', 'Mobile App', 'c1', 'Native iOS and Android application development.', (CURRENT_DATE - INTERVAL '28 days')::date, (CURRENT_DATE + INTERVAL '28 days')::date, 'attivo', TRUE),
-    ('p3', 'Internal Research', 'c2', 'Ongoing research into new market trends.', (CURRENT_DATE - INTERVAL '25 days')::date, (CURRENT_DATE + INTERVAL '25 days')::date, 'attivo', TRUE)
+    ('p3', 'Internal Research', 'praetor-own-company', 'Ongoing research into new market trends.', NULL, NULL, 'interno', TRUE)
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO tasks (id, name, project_id, description) VALUES
@@ -1426,18 +1426,22 @@ ON CONFLICT (user_id, work_unit_id) DO NOTHING;
 INSERT INTO user_clients (user_id, client_id, assignment_source) VALUES
     ('u2', 'c1',        'manual'),
     ('u2', 'c2',        'manual'),
+    ('u2', 'praetor-own-company', 'project_cascade'),
     ('u2', 'dm_cli_01', 'manual'),
     ('u3', 'c1',        'manual'),
     ('u3', 'dm_cli_01', 'manual'),
     ('u4', 'c1',        'manual'),
     ('u4', 'c2',        'manual'),
+    ('u4', 'praetor-own-company', 'project_cascade'),
     ('u4', 'dm_cli_01', 'manual'),
     ('u5', 'c1',        'manual'),
     ('u5', 'dm_cli_01', 'manual'),
     ('u6', 'c1',        'manual'),
     ('u6', 'dm_cli_01', 'manual'),
     ('u7', 'c2',        'manual'),
-    ('u8', 'c2',        'manual')
+    ('u7', 'praetor-own-company', 'project_cascade'),
+    ('u8', 'c2',        'manual'),
+    ('u8', 'praetor-own-company', 'project_cascade')
 ON CONFLICT (user_id, client_id) DO NOTHING;
 
 INSERT INTO user_projects (user_id, project_id, assignment_source) VALUES
@@ -1541,6 +1545,13 @@ ON CONFLICT (id) DO UPDATE SET
     hourly_cost = EXCLUDED.hourly_cost,
     is_placeholder = EXCLUDED.is_placeholder,
     location = EXCLUDED.location;
+
+UPDATE time_entries te
+SET client_id = own_company.id,
+    client_name = own_company.name
+FROM clients own_company
+WHERE own_company.id = 'praetor-own-company'
+  AND te.project_id = 'p3';
 
 INSERT INTO time_entries (
     id, user_id, date, client_id, client_name, project_id, project_name,

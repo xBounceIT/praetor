@@ -1,5 +1,5 @@
 {
-  "id": "2c1762f8-b2b2-4dc5-9dee-2d9fc6ec599c",
+  "id": "62a3119c-2c20-4ed6-8537-9d139d3d67de",
   "prevId": "5ed7f5cc-4210-448a-9909-f0c11a315fe5",
   "version": "7",
   "dialect": "postgresql",
@@ -3395,7 +3395,11 @@
         },
         "projects_tipo_check": {
           "name": "projects_tipo_check",
-          "value": "\"projects\".\"tipo\" IN ('attivo', 'passivo')"
+          "value": "\"projects\".\"tipo\" IN ('attivo', 'passivo', 'interno')"
+        },
+        "projects_internal_links_check": {
+          "name": "projects_internal_links_check",
+          "value": "\"projects\".\"tipo\" <> 'interno' OR (\"projects\".\"order_id\" IS NULL AND \"projects\".\"offer_id\" IS NULL)"
         },
         "projects_status_check": {
           "name": "projects_status_check",
@@ -8679,117 +8683,6 @@
         "time_entries_duration_max_check": {
           "name": "time_entries_duration_max_check",
           "value": "\"time_entries\".\"duration\" >= 0 AND \"time_entries\".\"duration\" <= 24"
-        }
-      },
-      "isRLSEnabled": false
-    },
-    "public.user_hourly_cost_periods": {
-      "name": "user_hourly_cost_periods",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "serial",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "user_id": {
-          "name": "user_id",
-          "type": "varchar(50)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "effective_from": {
-          "name": "effective_from",
-          "type": "date",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "cost_per_hour": {
-          "name": "cost_per_hour",
-          "type": "numeric(10, 2)",
-          "primaryKey": false,
-          "notNull": true
-        }
-      },
-      "indexes": {
-        "idx_user_hourly_cost_periods_user_from_unique": {
-          "name": "idx_user_hourly_cost_periods_user_from_unique",
-          "columns": [
-            {
-              "expression": "user_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "effective_from",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "idx_user_hourly_cost_periods_baseline_unique": {
-          "name": "idx_user_hourly_cost_periods_baseline_unique",
-          "columns": [
-            {
-              "expression": "user_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "where": "\"user_hourly_cost_periods\".\"effective_from\" IS NULL",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "idx_user_hourly_cost_periods_lookup": {
-          "name": "idx_user_hourly_cost_periods_lookup",
-          "columns": [
-            {
-              "expression": "user_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "effective_from",
-              "isExpression": false,
-              "asc": false,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "user_hourly_cost_periods_user_id_users_id_fk": {
-          "name": "user_hourly_cost_periods_user_id_users_id_fk",
-          "tableFrom": "user_hourly_cost_periods",
-          "tableTo": "users",
-          "columnsFrom": ["user_id"],
-          "columnsTo": ["id"],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {
-        "user_hourly_cost_periods_cost_non_negative": {
-          "name": "user_hourly_cost_periods_cost_non_negative",
-          "value": "\"user_hourly_cost_periods\".\"cost_per_hour\" >= 0"
         }
       },
       "isRLSEnabled": false

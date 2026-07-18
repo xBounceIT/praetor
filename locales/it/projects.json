@@ -70,6 +70,7 @@
     "selectOrder": "Seleziona Ordine...",
     "orderRequired": "L'ordine cliente è obbligatorio",
     "inheritedClientLabel": "Cliente (ereditato dall'ordine)",
+    "internalClientHint": "Per le commesse interne viene utilizzata automaticamente l'azienda identificata in Praetor.",
     "startDate": "Data inizio commessa",
     "endDate": "Data fine commessa",
     "startDateRequired": "La data di inizio commessa è obbligatoria",
@@ -104,9 +105,13 @@
     "tipoRequired": "Il tipo è obbligatorio",
     "tipoConfirmRequired": "Conferma il tipo della commessa prima di salvare",
     "tipoConfirmHint": "Questa commessa è stata impostata su \"Attivo\" automaticamente. Conferma o aggiorna il tipo prima di salvare.",
+    "internalConversionTitle": "Convertire in commessa interna?",
+    "internalConversionDescription": "La conversione rimuoverà l'ordine e l'offerta collegati. La modifica sarà applicata quando salvi la commessa.",
+    "internalConversionConfirm": "Converti e rimuovi collegamenti",
     "tipoValues": {
       "attivo": "Attivo",
-      "passivo": "Passivo"
+      "passivo": "Passivo",
+      "interno": "Interna"
     },
     "taskRevenue": "Ricavo",
     "taskTotalRevenue": "Ricavo totale",

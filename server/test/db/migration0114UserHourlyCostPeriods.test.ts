@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
 const migrationSql = await Bun.file(
-  new URL('../../db/migrations/0112_add_user_hourly_cost_periods.sql', import.meta.url),
+  new URL('../../db/migrations/0114_add_user_hourly_cost_periods.sql', import.meta.url),
 ).text();
 const schemaSource = await Bun.file(
   new URL('../../db/schema/userHourlyCostPeriods.ts', import.meta.url),
@@ -11,7 +11,7 @@ const repositorySource = await Bun.file(
   new URL('../../repositories/userHourlyCostPeriodsRepo.ts', import.meta.url),
 ).text();
 
-describe('migration 0112 user hourly cost periods', () => {
+describe('migration 0114 user hourly cost periods', () => {
   test('creates effective-dated rates with one baseline and non-negative costs', () => {
     expect(migrationSql).toContain('CREATE TABLE "user_hourly_cost_periods"');
     expect(migrationSql).toContain('"effective_from" date');

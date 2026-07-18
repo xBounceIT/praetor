@@ -486,18 +486,22 @@ export const DEMO_USER_WORK_UNITS = [
 export const DEMO_USER_CLIENT_ASSIGNMENTS = [
   { userId: 'u2', targetId: 'c1' },
   { userId: 'u2', targetId: 'c2' },
+  { userId: 'u2', targetId: 'praetor-own-company' },
   { userId: 'u2', targetId: 'dm_cli_01' },
   { userId: 'u3', targetId: 'c1' },
   { userId: 'u3', targetId: 'dm_cli_01' },
   { userId: 'u4', targetId: 'c1' },
   { userId: 'u4', targetId: 'c2' },
+  { userId: 'u4', targetId: 'praetor-own-company' },
   { userId: 'u4', targetId: 'dm_cli_01' },
   { userId: 'u5', targetId: 'c1' },
   { userId: 'u5', targetId: 'dm_cli_01' },
   { userId: 'u6', targetId: 'c1' },
   { userId: 'u6', targetId: 'dm_cli_01' },
   { userId: 'u7', targetId: 'c2' },
+  { userId: 'u7', targetId: 'praetor-own-company' },
   { userId: 'u8', targetId: 'c2' },
+  { userId: 'u8', targetId: 'praetor-own-company' },
 ] as const;
 
 export const DEMO_USER_PROJECT_ASSIGNMENTS = [
@@ -598,7 +602,7 @@ export const buildDemoIds = (seedYear = getDemoSeedYear()) => {
 export const DEMO_IDS = buildDemoIds(currentYear);
 
 export const buildDemoAssignmentTargetIds = (demoIds = DEMO_IDS) => ({
-  clients: [...COMPATIBILITY_DEFAULTS.clients, ...demoIds.clients],
+  clients: [...COMPATIBILITY_DEFAULTS.clients, 'praetor-own-company', ...demoIds.clients],
   projects: [...COMPATIBILITY_DEFAULTS.projects, ...demoIds.projects],
   tasks: [...COMPATIBILITY_DEFAULTS.tasks, ...demoIds.tasks],
 });

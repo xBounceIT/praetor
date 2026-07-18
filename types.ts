@@ -78,9 +78,9 @@ export type TimeEntryLocation = 'office' | 'customer_premise' | 'remote' | 'tran
 export type StoredBillingType = 'retainer' | 'time_and_materials';
 export type BillingType = StoredBillingType | 'mixed';
 export type BillingFrequency = 'monthly' | 'one_time';
-// Project `tipo` (issue #784): mandatory active/passive classification, kept in sync with the
-// server `PROJECT_TIPOS` allow-list in server/utils/projectTipo.ts.
-export const PROJECT_TIPOS = ['attivo', 'passivo'] as const;
+// Project `tipo`: mandatory active/passive/internal classification, kept in sync with the
+// server allow-list in server/utils/projectTipo.ts.
+export const PROJECT_TIPOS = ['attivo', 'passivo', 'interno'] as const;
 export type ProjectTipo = (typeof PROJECT_TIPOS)[number];
 
 export const PROJECT_STATUSES = ['da_fare', 'in_corso', 'in_pausa', 'terminato'] as const;
@@ -272,6 +272,7 @@ export interface Client {
   name: string;
   createdAt?: number;
   isDisabled?: boolean;
+  isOwnCompany?: boolean;
   type?: 'individual' | 'company';
   contacts?: ClientContact[];
   contactName?: string | null;

@@ -1038,6 +1038,14 @@ describe('normalizeProject', () => {
       endDate: '2026-04-30',
     });
   });
+
+  test('preserves the internal project type', () => {
+    const project = make<Project>(baseProject, { tipo: 'interno' });
+
+    expect(normalizeProject(project)).toMatchObject({
+      tipo: 'interno',
+    });
+  });
 });
 
 describe('normalizeResale', () => {

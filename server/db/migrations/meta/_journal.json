@@ -789,8 +789,22 @@
     {
       "idx": 112,
       "version": "7",
-      "when": 1784316411854,
-      "tag": "0112_add_user_hourly_cost_periods",
+      "when": 1784301562869,
+      "tag": "0112_add_internal_projects",
+      "breakpoints": true
+    },
+    {
+      "idx": 113,
+      "version": "7",
+      "when": 1784318309846,
+      "tag": "0113_own-company-client",
+      "breakpoints": true
+    },
+    {
+      "idx": 114,
+      "version": "7",
+      "when": 1784394207345,
+      "tag": "0114_add_user_hourly_cost_periods",
       "breakpoints": true
     }
   ]

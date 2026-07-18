@@ -1,5 +1,6 @@
-import { and, eq, gte, lte, type SQL, sql } from 'drizzle-orm';
+import { and, eq, gte, inArray, lte, ne, or, type SQL, sql } from 'drizzle-orm';
 import { type DbExecutor, db, executeRows } from '../db/drizzle.ts';
+import { projects } from '../db/schema/projects.ts';
 import { timeEntries } from '../db/schema/timeEntries.ts';
 import { computeEntryCost } from '../utils/billing.ts';
 import { normalizeNullableDateOnly } from '../utils/date.ts';
@@ -564,6 +565,44 @@ export const update = async (
     .where(and(eq(timeEntries.id, id), eq(timeEntries.version, patch.version)))
     .returning();
   return row ? mapBuilderRow(row) : null;
+};
+
+type EntryClient = { id: string; name: string };
+
+const reassignEntryClients = async (
+  client: EntryClient,
+  scope: SQL,
+  exec: DbExecutor = db,
+): Promise<void> => {
+  await exec
+    .update(timeEntries)
+    .set({
+      clientId: client.id,
+      clientName: client.name,
+      version: sql`${timeEntries.version} + 1`,
+    })
+    .where(
+      and(scope, or(ne(timeEntries.clientId, client.id), ne(timeEntries.clientName, client.name))),
+    );
+};
+
+export const reassignProjectClient = async (
+  projectId: string,
+  client: EntryClient,
+  exec: DbExecutor = db,
+): Promise<void> => {
+  await reassignEntryClients(client, eq(timeEntries.projectId, projectId), exec);
+};
+
+export const reassignInternalProjectClients = async (
+  client: EntryClient,
+  exec: DbExecutor = db,
+): Promise<void> => {
+  const internalProjectIds = exec
+    .select({ id: projects.id })
+    .from(projects)
+    .where(eq(projects.tipo, 'interno'));
+  await reassignEntryClients(client, inArray(timeEntries.projectId, internalProjectIds), exec);
 };
 
 export const deleteById = async (id: string, exec: DbExecutor = db): Promise<void> => {
