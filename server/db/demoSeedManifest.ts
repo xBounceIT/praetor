@@ -602,7 +602,7 @@ export const buildDemoIds = (seedYear = getDemoSeedYear()) => {
 export const DEMO_IDS = buildDemoIds(currentYear);
 
 export const buildDemoAssignmentTargetIds = (demoIds = DEMO_IDS) => ({
-  clients: [...COMPATIBILITY_DEFAULTS.clients, ...demoIds.clients],
+  clients: [...COMPATIBILITY_DEFAULTS.clients, 'praetor-own-company', ...demoIds.clients],
   projects: [...COMPATIBILITY_DEFAULTS.projects, ...demoIds.projects],
   tasks: [...COMPATIBILITY_DEFAULTS.tasks, ...demoIds.tasks],
 });

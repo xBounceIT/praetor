@@ -12,6 +12,7 @@ import {
   buildDemoIds,
   COMPATIBILITY_DEFAULT_CLIENTS,
   COMPATIBILITY_DEFAULTS,
+  DEMO_ASSIGNMENT_TARGET_IDS,
   DEMO_CLIENTS,
   DEMO_CUSTOMER_OFFERS,
   DEMO_EXPECTED_COUNTS,
@@ -632,19 +633,34 @@ describe('demoSeedManifest assignment coverage', () => {
     expect(DEMO_TOP_MANAGER_USER_IDS).toEqual(['u9']);
     expect(DEMO_EXPECTED_COUNTS.user_clients).toBe(
       DEMO_USER_CLIENT_ASSIGNMENTS.length +
-        DEMO_TOP_MANAGER_USER_IDS.length *
-          (COMPATIBILITY_DEFAULTS.clients.length + DEMO_IDS.clients.length),
+        DEMO_TOP_MANAGER_USER_IDS.length * DEMO_ASSIGNMENT_TARGET_IDS.clients.length,
     );
     expect(DEMO_EXPECTED_COUNTS.user_projects).toBe(
       DEMO_USER_PROJECT_ASSIGNMENTS.length +
-        DEMO_TOP_MANAGER_USER_IDS.length *
-          (COMPATIBILITY_DEFAULTS.projects.length + DEMO_IDS.projects.length),
+        DEMO_TOP_MANAGER_USER_IDS.length * DEMO_ASSIGNMENT_TARGET_IDS.projects.length,
     );
     expect(DEMO_EXPECTED_COUNTS.user_tasks).toBe(
       DEMO_USER_TASK_ASSIGNMENTS.length +
-        DEMO_TOP_MANAGER_USER_IDS.length *
-          (COMPATIBILITY_DEFAULTS.tasks.length + DEMO_IDS.tasks.length),
+        DEMO_TOP_MANAGER_USER_IDS.length * DEMO_ASSIGNMENT_TARGET_IDS.tasks.length,
     );
+  });
+
+  test('assignment verification targets include every explicit seed assignment', () => {
+    expect(
+      DEMO_USER_CLIENT_ASSIGNMENTS.every((assignment) =>
+        DEMO_ASSIGNMENT_TARGET_IDS.clients.includes(assignment.targetId),
+      ),
+    ).toBe(true);
+    expect(
+      DEMO_USER_PROJECT_ASSIGNMENTS.every((assignment) =>
+        DEMO_ASSIGNMENT_TARGET_IDS.projects.includes(assignment.targetId),
+      ),
+    ).toBe(true);
+    expect(
+      DEMO_USER_TASK_ASSIGNMENTS.every((assignment) =>
+        DEMO_ASSIGNMENT_TARGET_IDS.tasks.includes(assignment.targetId),
+      ),
+    ).toBe(true);
   });
 });
 
