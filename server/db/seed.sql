@@ -1418,18 +1418,22 @@ ON CONFLICT (user_id, work_unit_id) DO NOTHING;
 INSERT INTO user_clients (user_id, client_id, assignment_source) VALUES
     ('u2', 'c1',        'manual'),
     ('u2', 'c2',        'manual'),
+    ('u2', 'praetor-own-company', 'project_cascade'),
     ('u2', 'dm_cli_01', 'manual'),
     ('u3', 'c1',        'manual'),
     ('u3', 'dm_cli_01', 'manual'),
     ('u4', 'c1',        'manual'),
     ('u4', 'c2',        'manual'),
+    ('u4', 'praetor-own-company', 'project_cascade'),
     ('u4', 'dm_cli_01', 'manual'),
     ('u5', 'c1',        'manual'),
     ('u5', 'dm_cli_01', 'manual'),
     ('u6', 'c1',        'manual'),
     ('u6', 'dm_cli_01', 'manual'),
     ('u7', 'c2',        'manual'),
-    ('u8', 'c2',        'manual')
+    ('u7', 'praetor-own-company', 'project_cascade'),
+    ('u8', 'c2',        'manual'),
+    ('u8', 'praetor-own-company', 'project_cascade')
 ON CONFLICT (user_id, client_id) DO NOTHING;
 
 INSERT INTO user_projects (user_id, project_id, assignment_source) VALUES

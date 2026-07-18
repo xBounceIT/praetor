@@ -55,6 +55,8 @@ const projects = new Map(
 );
 
 const tasks = parseInsertValuesBlocks(SEED_SQL, 'tasks');
+const userClientAssignments = parseInsertValuesBlocks(SEED_SQL, 'user_clients');
+const userProjectAssignments = parseInsertValuesBlocks(SEED_SQL, 'user_projects');
 
 const offers = new Map(
   parseInsertValuesBlocks(SEED_SQL, 'customer_offers').map((row) => [
@@ -152,6 +154,29 @@ describe('seed.sql demo projects link to their offer/order chain', () => {
 
     const projectEntries = timeEntries.filter((entry) => entry.projectId === 'p3');
     expect(projectEntries.length).toBeGreaterThan(0);
+  });
+
+  test('Internal Research assignees inherit access to the own-company client', () => {
+    const project = projects.get('p3');
+    expect(project).toBeDefined();
+    if (!project) return;
+
+    const assigneeIds = userProjectAssignments
+      .filter((assignment) => assignment.project_id === project.id)
+      .map((assignment) => assignment.user_id);
+    expect(assigneeIds.length).toBeGreaterThan(0);
+
+    for (const userId of assigneeIds) {
+      expect(
+        userClientAssignments.some(
+          (assignment) =>
+            assignment.user_id === userId &&
+            assignment.client_id === project.clientId &&
+            assignment.assignment_source === 'project_cascade',
+        ),
+        `${userId} is missing the own-company project cascade`,
+      ).toBe(true);
+    }
   });
 
   test('linked invoice total reconciles with the order total', () => {

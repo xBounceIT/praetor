@@ -4,6 +4,7 @@ import { authenticateToken, requirePermission } from '../middleware/auth.ts';
 import type { AppBrandingRecord } from '../repositories/brandingRepo.ts';
 import * as brandingRepo from '../repositories/brandingRepo.ts';
 import * as clientsRepo from '../repositories/clientsRepo.ts';
+import * as entriesRepo from '../repositories/entriesRepo.ts';
 import { logAudit } from '../utils/audit.ts';
 import {
   BRANDING_LOGO_MAX_BYTES,
@@ -111,7 +112,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const companyName = trimmed.length > 0 ? trimmed.slice(0, COMPANY_NAME_MAX_LENGTH) : null;
       const updated = await withDbTransaction(async (tx) => {
         const record = await brandingRepo.setCompanyName(companyName, tx);
-        await clientsRepo.ensureOwnCompanyClient(companyName, tx);
+        const ownCompanyClient = await clientsRepo.ensureOwnCompanyClient(companyName, tx);
+        await entriesRepo.reassignInternalProjectClients(ownCompanyClient, tx);
         return record;
       });
       await logAudit({ request, action: 'branding.updated', entityType: 'app_branding' });

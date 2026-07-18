@@ -784,8 +784,8 @@ describe('update', () => {
   });
 });
 
-describe('reassignProjectClient', () => {
-  test('updates the denormalized client fields and version for every project entry', async () => {
+describe('entry client reassignment', () => {
+  test('updates outdated client snapshots for one project', async () => {
     exec.enqueue({ rows: [], rowCount: 2 });
 
     await entriesRepo.reassignProjectClient('p-1', { id: 'c-own', name: 'Praetor S.r.l.' }, testDb);
@@ -795,7 +795,37 @@ describe('reassignProjectClient', () => {
     expect(exec.calls[0].sql).toContain('"client_name" = $2');
     expect(exec.calls[0].sql).toContain('"version" = "time_entries"."version" + 1');
     expect(exec.calls[0].sql).toContain('"project_id" = $3');
-    expect(exec.calls[0].params).toEqual(['c-own', 'Praetor S.r.l.', 'p-1']);
+    expect(exec.calls[0].sql).toContain('"client_id" <> $4');
+    expect(exec.calls[0].sql).toContain('"client_name" <> $5');
+    expect(exec.calls[0].params).toEqual([
+      'c-own',
+      'Praetor S.r.l.',
+      'p-1',
+      'c-own',
+      'Praetor S.r.l.',
+    ]);
+  });
+
+  test('updates outdated client snapshots for every internal project', async () => {
+    exec.enqueue({ rows: [], rowCount: 3 });
+
+    await entriesRepo.reassignInternalProjectClients(
+      { id: 'c-own', name: 'Praetor S.r.l.' },
+      testDb,
+    );
+
+    expect(exec.calls[0].sql).toContain('update "time_entries"');
+    expect(exec.calls[0].sql).toContain('"project_id" in (select "id" from "projects"');
+    expect(exec.calls[0].sql).toContain('"projects"."tipo" = $3');
+    expect(exec.calls[0].sql).toContain('"client_id" <> $4');
+    expect(exec.calls[0].sql).toContain('"client_name" <> $5');
+    expect(exec.calls[0].params).toEqual([
+      'c-own',
+      'Praetor S.r.l.',
+      'interno',
+      'c-own',
+      'Praetor S.r.l.',
+    ]);
   });
 });
 
