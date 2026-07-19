@@ -103,13 +103,15 @@ For complete customer deployment details, see `deploy/README.md`.
 
 ### Publishing release images
 
-This repository includes GitHub Actions workflow `publish-images.yml` that pushes:
+This repository includes GitHub Actions workflow `create-release.yml` that pushes:
 
 - `ghcr.io/<owner>/praetor-frontend:<version>`
 - `ghcr.io/<owner>/praetor-backend:<version>`
 - `latest` tags for both images
 
-The workflow runs on `v*` git tags and can also be run manually.
+The workflow runs on `v*` git tags and can also be run manually. The resolved version must use
+`vMAJOR.MINOR.PATCH` with an optional `-prerelease` suffix; invalid values stop the workflow before
+release creation or registry authentication.
 
 ## Usage Guide
 
