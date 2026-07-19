@@ -22819,7 +22819,7 @@
         }
       },
       "post": {
-        "summary": "Create current user MCP token",
+        "summary": "Create current user MCP token (session-only)",
         "tags": [
           "settings"
         ],
@@ -23058,7 +23058,7 @@
     },
     "/api/settings/mcp-tokens/{id}": {
       "delete": {
-        "summary": "Revoke current user MCP token",
+        "summary": "Revoke current user MCP token (session-only)",
         "tags": [
           "settings"
         ],

@@ -95,6 +95,8 @@ Praetor exposes a remote MCP endpoint at `/api/mcp` for Model Context Protocol c
 
 The token is shown only once when it is created. Praetor stores only a hash, so revoke and recreate the token if it is lost.
 
+Creating and revoking MCP tokens requires an active interactive session: sign in to Praetor in the browser to perform either operation. Personal access tokens (PATs) cannot create or revoke MCP tokens.
+
 > Upgrade note: the release that introduces cryptographic key separation (issue #416) changes the HMAC key used for MCP-token hashes. After the upgrade, existing MCP tokens stop working and must be regenerated from Settings > MCP.
 
 MCP tools always respect the permissions of your current role. The first release includes tools for the current user, users and hierarchy, clients, suppliers, projects, tasks, quotes, offers, orders, invoices, time entries, and notifications.
