@@ -174,6 +174,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       schema: {
         tags: ['tasks'],
         summary: 'Create task',
+        description:
+          'Requires projects.tasks.create and assignment to the parent project, or projects.tasks_all.create for creation in any project. Project-wide view permissions do not authorize task creation.',
         body: taskCreateBodySchema,
         response: {
           201: taskSchema,
@@ -218,8 +220,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const projectIdResult = requireNonEmptyString(projectId, 'projectId');
       if (!projectIdResult.ok) return badRequest(reply, projectIdResult.message);
       if (
-        !hasPermission(request, 'projects.tasks_all.create') &&
-        !(await canAccessProject(request, projectIdResult.value))
+        !(await canAccessProject(
+          request,
+          projectIdResult.value,
+          'projects.tasks_all.create',
+        ))
       ) {
         return replyError(request, reply, {
           statusCode: 403,
