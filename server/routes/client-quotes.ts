@@ -12,6 +12,12 @@ import * as supplierQuotesRepo from '../repositories/supplierQuotesRepo.ts';
 import { clientOfferSchema } from '../schemas/clientOffers.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import {
+  createDocumentDiscountConstraint,
+  documentDiscountTypeSchema,
+  documentDiscountValueSchema,
+  updateDocumentDiscountConstraint,
+} from '../schemas/documentDiscount.ts';
+import {
   allocateDocumentCode,
   reserveDocumentCodeCounterFromCode,
 } from '../services/documentCodes.ts';
@@ -28,6 +34,7 @@ import { isPastLocalDate } from '../utils/date.ts';
 import { getUniqueViolation } from '../utils/db-errors.ts';
 import { replyDocumentCodeCollision } from '../utils/document-code-replies.ts';
 import { type DurationUnit, effectiveDurationMonths } from '../utils/duration-unit.ts';
+import { getDocumentDiscountAmount } from '../utils/invoice-math.ts';
 import { normalizeNullableString } from '../utils/normalize.ts';
 import { generatePrefixedId, ITEM_ID_PREFIXES } from '../utils/order-ids.ts';
 import {
@@ -54,6 +61,7 @@ import {
   optionalDateString,
   optionalDurationMonths,
   optionalDurationUnit,
+  optionalLocalizedDocumentDiscount,
   optionalLocalizedNonNegativeNumber,
   optionalLocalizedNumber,
   optionalLocalizedPercentage,
@@ -346,10 +354,11 @@ const calculateQuoteTotals = (
     subtotal += lineNet;
   }
 
-  const discountAmount =
-    discountType === 'currency'
-      ? Math.min(Math.max(normalizedGlobalDiscount, 0), subtotal)
-      : subtotal * (normalizedGlobalDiscount / 100);
+  const discountAmount = getDocumentDiscountAmount(
+    subtotal,
+    normalizedGlobalDiscount,
+    discountType,
+  );
   const total = subtotal - discountAmount;
   return { total, subtotal };
 };
@@ -664,13 +673,14 @@ const quoteItemBodySchema = {
 
 const quoteCandidateBodySchema = {
   type: 'object',
+  allOf: [createDocumentDiscountConstraint],
   properties: {
     id: { type: 'string' },
     name: { type: 'string', maxLength: MAX_CANDIDATE_NAME_LENGTH },
     items: { type: 'array', items: quoteItemBodySchema },
     paymentTerms: { type: 'string' },
-    discount: { type: 'number' },
-    discountType: { type: 'string', enum: ['percentage', 'currency'] },
+    discount: documentDiscountValueSchema,
+    discountType: documentDiscountTypeSchema,
     expirationDate: { type: 'string', format: 'date' },
     communicationChannelId: { type: 'string' },
     notes: { type: ['string', 'null'] },
@@ -680,6 +690,7 @@ const quoteCandidateBodySchema = {
 
 const quoteCreateBodySchema = {
   type: 'object',
+  allOf: [createDocumentDiscountConstraint],
   properties: {
     id: { type: 'string' },
     clientId: { type: 'string' },
@@ -687,8 +698,8 @@ const quoteCreateBodySchema = {
     items: { type: 'array', items: quoteItemBodySchema },
     candidates: { type: 'array', items: quoteCandidateBodySchema },
     paymentTerms: { type: 'string' },
-    discount: { type: 'number' },
-    discountType: { type: 'string', enum: ['percentage', 'currency'] },
+    discount: documentDiscountValueSchema,
+    discountType: documentDiscountTypeSchema,
     status: { type: 'string' },
     expirationDate: { type: 'string', format: 'date' },
     communicationChannelId: { type: 'string' },
@@ -701,6 +712,7 @@ const quoteCreateBodySchema = {
 
 const quoteUpdateBodySchema = {
   type: 'object',
+  allOf: [updateDocumentDiscountConstraint],
   properties: {
     id: { type: 'string' },
     clientId: { type: 'string' },
@@ -708,8 +720,8 @@ const quoteUpdateBodySchema = {
     items: { type: 'array', items: quoteItemBodySchema },
     candidates: { type: 'array', items: quoteCandidateBodySchema },
     paymentTerms: { type: 'string' },
-    discount: { type: 'number' },
-    discountType: { type: 'string', enum: ['percentage', 'currency'] },
+    discount: documentDiscountValueSchema,
+    discountType: documentDiscountTypeSchema,
     status: { type: 'string' },
     expirationDate: { type: 'string', format: 'date' },
     communicationChannelId: { type: 'string' },
@@ -934,8 +946,10 @@ const prepareCandidateBody = async (
     required: true,
   });
   if (!channel) return null;
-  const discountResult = optionalLocalizedNonNegativeNumber(
+  const discountType = candidate.discountType === 'currency' ? 'currency' : 'percentage';
+  const discountResult = optionalLocalizedDocumentDiscount(
     candidate.discount,
+    discountType,
     'candidates[' + index + '].discount',
   );
   if (!discountResult.ok) {
@@ -943,7 +957,6 @@ const prepareCandidateBody = async (
     return null;
   }
   const discount = discountResult.value ?? 0;
-  const discountType = candidate.discountType === 'currency' ? 'currency' : 'percentage';
   const existingItemsById =
     existingSnapshots && candidateId
       ? indexExistingQuoteItems(existingSnapshots, candidateId)
@@ -2131,19 +2144,20 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         expirationDateValue = expirationDateResult.value;
       }
 
-      let discountValue = discount;
-      if (discount !== undefined) {
-        const discountResult = optionalLocalizedNonNegativeNumber(discount, 'discount');
-        if (!discountResult.ok) return badRequest(reply, discountResult.message);
-        discountValue = discountResult.value;
-      }
-
       const discountTypeValue: 'currency' | 'percentage' | undefined =
         discountType === undefined
           ? undefined
           : discountType === 'currency'
             ? 'currency'
             : 'percentage';
+      const effectiveDiscountType = discountTypeValue ?? existingDiscountType;
+      const discountResult = optionalLocalizedDocumentDiscount(
+        discount === undefined ? existingDiscount : discount,
+        effectiveDiscountType,
+        'discount',
+      );
+      if (!discountResult.ok) return badRequest(reply, discountResult.message);
+      const discountValue = discount === undefined ? undefined : discountResult.value;
 
       const communicationChannel = await resolveCommunicationChannel(
         communicationChannelId,
@@ -2651,6 +2665,17 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               'candidate_expired',
             );
           }
+          const lockedDiscountResult = optionalLocalizedDocumentDiscount(
+            lockedCandidate.discount,
+            lockedCandidate.discountType,
+            'discount',
+          );
+          if (!lockedDiscountResult.ok) {
+            throw new LinkedOfferRollbackError(
+              lockedDiscountResult.message,
+              'candidate_discount_invalid',
+            );
+          }
           const items = await clientQuotesRepo.findItemsForCandidate(
             idResult.value,
             lockedCandidate.id,
@@ -3115,6 +3140,22 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               action: 'client_quote.restore.conflict',
               secondaryLabel: 'snapshot_candidate_invalid',
             };
+          }
+          for (const candidate of snapshotCandidates) {
+            const snapshotDiscountResult = optionalLocalizedDocumentDiscount(
+              candidate.discount,
+              candidate.discountType,
+              'discount',
+            );
+            if (!snapshotDiscountResult.ok) {
+              return {
+                ok: false,
+                statusCode: 409,
+                message: `Snapshot candidate "${candidate.name}" has an invalid discount: ${snapshotDiscountResult.message}`,
+                action: 'client_quote.restore.conflict',
+                secondaryLabel: 'snapshot_discount_invalid',
+              };
+            }
           }
           const channelIds = Array.from(
             new Set(snapshotCandidates.map((candidate) => candidate.communicationChannelId)),

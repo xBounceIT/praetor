@@ -532,6 +532,13 @@ describe('calculatePricingTotals', () => {
     expect(t.total).toBe(45);
   });
 
+  test('caps a percentage global discount at 100% so totals cannot become negative', () => {
+    const items: PricingItem[] = [{ unitPrice: 50, quantity: 1 }];
+    const t = calculatePricingTotals(items, 150, 'hours', 'percentage');
+    expect(t.discountAmount).toBe(50);
+    expect(t.total).toBe(0);
+  });
+
   test('caps a currency-type global discount at the subtotal (no negative totals)', () => {
     const items: PricingItem[] = [{ unitPrice: 50, quantity: 1 }];
     const t = calculatePricingTotals(items, 999, 'hours', 'currency');

@@ -424,6 +424,28 @@ describe('POST /api/sales/client-offers/:id/versions/:versionId/restore', () => 
     );
   });
 
+  test('409 rejects restoring a snapshot with a percentage discount above 100%', async () => {
+    setupHappyPath();
+    ovFindByIdMock.mockResolvedValue({
+      ...SAMPLE_VERSION,
+      snapshot: {
+        ...SAMPLE_SNAPSHOT,
+        offer: { ...SAMPLE_OFFER, discount: 100.01, discountType: 'percentage' as const },
+      },
+    });
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/sales/client-offers/off-1/versions/ov-1/restore',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(JSON.parse(res.body).error).toContain('invalid discount');
+    expect(coRestoreSnapshotOfferMock).not.toHaveBeenCalled();
+    expect(ovInsertMock).not.toHaveBeenCalled();
+  });
+
   test('404 when current offer does not exist', async () => {
     coLockExistingByIdMock.mockResolvedValue(null);
 

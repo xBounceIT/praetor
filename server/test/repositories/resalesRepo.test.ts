@@ -81,6 +81,15 @@ describe('computeSupplierOrderTotal', () => {
     expect(total).toBe(0);
   });
 
+  test('caps percentage order discount at 100% for legacy invalid data', () => {
+    const total = computeSupplierOrderTotal(
+      makeOrder({ discount: 150, discountType: 'percentage' }),
+      [makeItem({ quantity: 1, unitPrice: 120 })],
+    );
+
+    expect(total).toBe(0);
+  });
+
   test('rounds the discounted unit price before multiplying quantity', () => {
     const total = computeSupplierOrderTotal(makeOrder({}), [
       makeItem({ quantity: 100, unitPrice: 10.01, discount: 10 }),

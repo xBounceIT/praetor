@@ -276,6 +276,26 @@ afterEach(async () => {
 
 const authHeader = () => ({ authorization: `Bearer ${signToken({ userId: 'u1' })}` });
 
+describe('PUT /api/clients-orders/:id document discount validation', () => {
+  test('400 rejects changing an over-100 currency discount to percentage', async () => {
+    coFindExistingMock.mockResolvedValue({
+      ...SAMPLE_ORDER,
+      discount: 150,
+      discountType: 'currency',
+    });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/clients-orders/o-1',
+      headers: authHeader(),
+      payload: { discountType: 'percentage' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(coUpdateMock).not.toHaveBeenCalled();
+  });
+});
+
 describe('GET /api/clients-orders/:id/versions', () => {
   test('200 returns versions newest-first when order exists', async () => {
     coExistsByIdMock.mockResolvedValue(true);
@@ -452,6 +472,28 @@ describe('POST /api/clients-orders/:id/versions/:versionId/restore', () => {
         details: expect.objectContaining({ toValue: 'ov-1' }),
       }),
     );
+  });
+
+  test('409 rejects restoring a snapshot with a percentage discount above 100%', async () => {
+    setupHappyPath();
+    ovFindByIdMock.mockResolvedValue({
+      ...SAMPLE_VERSION,
+      snapshot: {
+        ...SAMPLE_SNAPSHOT,
+        order: { ...SAMPLE_ORDER, discount: 100.01, discountType: 'percentage' as const },
+      },
+    });
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/clients-orders/o-1/versions/ov-1/restore',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(JSON.parse(res.body).error).toContain('invalid discount');
+    expect(coRestoreSnapshotOrderMock).not.toHaveBeenCalled();
+    expect(ovInsertMock).not.toHaveBeenCalled();
   });
 
   test('200 restores a snapshot line with no productId (issue #783)', async () => {

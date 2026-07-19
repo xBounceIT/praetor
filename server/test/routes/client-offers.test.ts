@@ -262,6 +262,8 @@ const baseGate = () => ({
   linkedQuoteCandidateId: null as string | null,
   clientId: 'c1',
   clientName: 'Client',
+  discount: 0,
+  discountType: 'percentage' as 'percentage' | 'currency',
   status: 'draft',
   deliveryDate: null as string | null,
   // Far future: the effective-status guards compare against the real clock, so a near date would
@@ -482,6 +484,44 @@ const putOffer = (body: Record<string, unknown>) =>
     headers: authHeader(),
     payload: body,
   });
+
+describe('client-offer document discount validation', () => {
+  test('400 rejects a percentage document discount above 100%', async () => {
+    coFindExistingMock.mockResolvedValue(gate());
+    coUpdateMock.mockResolvedValue(updatedOffer({ discount: 100.01 }));
+
+    const res = await putOffer({ discount: 100.01, discountType: 'percentage' });
+
+    expect(res.statusCode).toBe(400);
+    expect(coUpdateMock).not.toHaveBeenCalled();
+  });
+
+  test('400 rejects changing an over-100 currency discount to percentage', async () => {
+    coFindExistingMock.mockResolvedValue(
+      gate({ discount: 150, discountType: 'currency' as const }),
+    );
+    coUpdateMock.mockResolvedValue(updatedOffer({ discount: 150, discountType: 'percentage' }));
+
+    const res = await putOffer({ discountType: 'percentage' });
+
+    expect(res.statusCode).toBe(400);
+    expect(coUpdateMock).not.toHaveBeenCalled();
+  });
+
+  test('200 preserves a fixed-currency document discount above 100', async () => {
+    coFindExistingMock.mockResolvedValue(gate());
+    coUpdateMock.mockResolvedValue(updatedOffer({ discount: 150, discountType: 'currency' }));
+
+    const res = await putOffer({ discount: 150, discountType: 'currency' });
+
+    expect(res.statusCode).toBe(200);
+    expect(coUpdateMock).toHaveBeenCalledWith(
+      'off-1',
+      expect.objectContaining({ discount: 150, discountType: 'currency' }),
+      expect.anything(),
+    );
+  });
+});
 
 describe('PUT /api/sales/client-offers/:id expired rules (issue #779)', () => {
   test('200 extends an expired sent offer via its expiration date and derives effectiveStatus', async () => {

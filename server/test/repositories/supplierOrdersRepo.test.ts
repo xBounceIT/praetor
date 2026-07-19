@@ -80,12 +80,14 @@ describe('findById', () => {
 
 describe('findExisting', () => {
   test('returns mapped object with linkedQuoteId', async () => {
-    exec.enqueue({ rows: [['so-1', 'q-1', 's-1', 'Acme', 'draft']] });
+    exec.enqueue({ rows: [['so-1', 'q-1', 's-1', 'Acme', '125.50', 'currency', 'draft']] });
     expect(await supplierOrdersRepo.findExisting('so-1', testDb)).toEqual({
       id: 'so-1',
       linkedQuoteId: 'q-1',
       supplierId: 's-1',
       supplierName: 'Acme',
+      discount: 125.5,
+      discountType: 'currency',
       status: 'draft',
     });
   });
@@ -98,14 +100,14 @@ describe('findExisting', () => {
 
 describe('lockExistingById', () => {
   test('uses FOR UPDATE in the emitted SQL', async () => {
-    exec.enqueue({ rows: [['so-1', 'q-1', 's-1', 'Acme', 'draft']] });
+    exec.enqueue({ rows: [['so-1', 'q-1', 's-1', 'Acme', '0', 'percentage', 'draft']] });
     await supplierOrdersRepo.lockExistingById('so-1', testDb);
     expect(exec.calls[0].sql.toLowerCase()).toContain('for update');
     expect(exec.calls[0].params).toContain('so-1');
   });
 
   test('returns mapped row when present', async () => {
-    exec.enqueue({ rows: [['so-1', 'q-1', 's-1', 'Acme', 'sent']] });
+    exec.enqueue({ rows: [['so-1', 'q-1', 's-1', 'Acme', '0', 'percentage', 'sent']] });
     const result = await supplierOrdersRepo.lockExistingById('so-1', testDb);
     expect(result?.id).toBe('so-1');
     expect(result?.status).toBe('sent');

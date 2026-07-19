@@ -24,6 +24,7 @@ import {
   formatDecimal,
   getDiscountedLineTotal,
   getDiscountedUnitPrice,
+  getDocumentDiscountAmount,
   getDurationInputValue,
   getEffectiveDurationMonths,
   isFiniteNumber,
@@ -91,10 +92,7 @@ const calculateTotals = (
     subtotal += getDiscountedLineTotal(item);
   });
 
-  const discountAmount =
-    discountType === 'currency'
-      ? Math.min(Math.max(globalDiscount, 0), subtotal)
-      : subtotal * (globalDiscount / 100);
+  const discountAmount = getDocumentDiscountAmount(subtotal, globalDiscount, discountType);
   const total = subtotal - discountAmount;
   const totalDiscountPercentage =
     grossSubtotal > 0 ? ((grossSubtotal - total) / grossSubtotal) * 100 : 0;

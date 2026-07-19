@@ -317,6 +317,17 @@ export const EMPTY_PRICING_TOTALS: Readonly<PricingTotals> = {
   marginPercentage: 0,
 };
 
+export const getDocumentDiscountAmount = (
+  subtotal: number,
+  discount: number,
+  discountType: DiscountType = 'percentage',
+): number => {
+  const nonNegativeDiscount = Math.max(discount, 0);
+  return discountType === 'currency'
+    ? Math.min(nonNegativeDiscount, subtotal)
+    : subtotal * (Math.min(nonNegativeDiscount, 100) / 100);
+};
+
 export const calculatePricingTotals = (
   items: PricingItem[],
   globalDiscount: number,
@@ -334,10 +345,7 @@ export const calculatePricingTotals = (
     totalCost += line.lineCost;
   });
 
-  const discountAmount =
-    discountType === 'currency'
-      ? Math.min(Math.max(globalDiscount, 0), subtotal)
-      : subtotal * (globalDiscount / 100);
+  const discountAmount = getDocumentDiscountAmount(subtotal, globalDiscount, discountType);
   const total = subtotal - discountAmount;
   const margin = total - totalCost;
   const marginPercentage = total > 0 ? (margin / total) * 100 : 0;

@@ -32420,6 +32420,32 @@
             "application/json": {
               "schema": {
                 "type": "object",
+                "allOf": [
+                  {
+                    "anyOf": [
+                      {
+                        "properties": {
+                          "discountType": {
+                            "enum": [
+                              "currency"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "discountType"
+                        ]
+                      },
+                      {
+                        "properties": {
+                          "discount": {
+                            "type": "number",
+                            "maximum": 100
+                          }
+                        }
+                      }
+                    ]
+                  }
+                ],
                 "properties": {
                   "id": {
                     "type": "string"
@@ -32524,6 +32550,32 @@
                     "type": "array",
                     "items": {
                       "type": "object",
+                      "allOf": [
+                        {
+                          "anyOf": [
+                            {
+                              "properties": {
+                                "discountType": {
+                                  "enum": [
+                                    "currency"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "discountType"
+                              ]
+                            },
+                            {
+                              "properties": {
+                                "discount": {
+                                  "type": "number",
+                                  "maximum": 100
+                                }
+                              }
+                            }
+                          ]
+                        }
+                      ],
                       "properties": {
                         "id": {
                           "type": "string"
@@ -32626,7 +32678,8 @@
                           "type": "string"
                         },
                         "discount": {
-                          "type": "number"
+                          "type": "number",
+                          "minimum": 0
                         },
                         "discountType": {
                           "type": "string",
@@ -32661,7 +32714,8 @@
                     "type": "string"
                   },
                   "discount": {
-                    "type": "number"
+                    "type": "number",
+                    "minimum": 0
                   },
                   "discountType": {
                     "type": "string",
@@ -33242,6 +33296,27 @@
             "application/json": {
               "schema": {
                 "type": "object",
+                "allOf": [
+                  {
+                    "not": {
+                      "properties": {
+                        "discountType": {
+                          "enum": [
+                            "percentage"
+                          ]
+                        },
+                        "discount": {
+                          "type": "number",
+                          "exclusiveMinimum": 100
+                        }
+                      },
+                      "required": [
+                        "discountType",
+                        "discount"
+                      ]
+                    }
+                  }
+                ],
                 "properties": {
                   "id": {
                     "type": "string"
@@ -33346,6 +33421,32 @@
                     "type": "array",
                     "items": {
                       "type": "object",
+                      "allOf": [
+                        {
+                          "anyOf": [
+                            {
+                              "properties": {
+                                "discountType": {
+                                  "enum": [
+                                    "currency"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "discountType"
+                              ]
+                            },
+                            {
+                              "properties": {
+                                "discount": {
+                                  "type": "number",
+                                  "maximum": 100
+                                }
+                              }
+                            }
+                          ]
+                        }
+                      ],
                       "properties": {
                         "id": {
                           "type": "string"
@@ -33448,7 +33549,8 @@
                           "type": "string"
                         },
                         "discount": {
-                          "type": "number"
+                          "type": "number",
+                          "minimum": 0
                         },
                         "discountType": {
                           "type": "string",
@@ -33483,7 +33585,8 @@
                     "type": "string"
                   },
                   "discount": {
-                    "type": "number"
+                    "type": "number",
+                    "minimum": 0
                   },
                   "discountType": {
                     "type": "string",
@@ -36982,6 +37085,32 @@
             "application/json": {
               "schema": {
                 "type": "object",
+                "allOf": [
+                  {
+                    "anyOf": [
+                      {
+                        "properties": {
+                          "discountType": {
+                            "enum": [
+                              "currency"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "discountType"
+                        ]
+                      },
+                      {
+                        "properties": {
+                          "discount": {
+                            "type": "number",
+                            "maximum": 100
+                          }
+                        }
+                      }
+                    ]
+                  }
+                ],
                 "properties": {
                   "id": {
                     "type": "string"
@@ -37100,7 +37229,8 @@
                     "type": "string"
                   },
                   "discount": {
-                    "type": "number"
+                    "type": "number",
+                    "minimum": 0
                   },
                   "discountType": {
                     "type": "string",
@@ -37527,6 +37657,27 @@
             "application/json": {
               "schema": {
                 "type": "object",
+                "allOf": [
+                  {
+                    "not": {
+                      "properties": {
+                        "discountType": {
+                          "enum": [
+                            "percentage"
+                          ]
+                        },
+                        "discount": {
+                          "type": "number",
+                          "exclusiveMinimum": 100
+                        }
+                      },
+                      "required": [
+                        "discountType",
+                        "discount"
+                      ]
+                    }
+                  }
+                ],
                 "properties": {
                   "id": {
                     "type": "string"
@@ -37642,7 +37793,8 @@
                     "type": "string"
                   },
                   "discount": {
-                    "type": "number"
+                    "type": "number",
+                    "minimum": 0
                   },
                   "discountType": {
                     "type": "string",
@@ -41144,6 +41296,32 @@
             "application/json": {
               "schema": {
                 "type": "object",
+                "allOf": [
+                  {
+                    "anyOf": [
+                      {
+                        "properties": {
+                          "discountType": {
+                            "enum": [
+                              "currency"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "discountType"
+                        ]
+                      },
+                      {
+                        "properties": {
+                          "discount": {
+                            "type": "number",
+                            "maximum": 100
+                          }
+                        }
+                      }
+                    ]
+                  }
+                ],
                 "properties": {
                   "id": {
                     "type": "string"
@@ -41276,7 +41454,8 @@
                     "type": "string"
                   },
                   "discount": {
-                    "type": "number"
+                    "type": "number",
+                    "minimum": 0
                   },
                   "discountType": {
                     "type": "string",
@@ -41665,6 +41844,27 @@
             "application/json": {
               "schema": {
                 "type": "object",
+                "allOf": [
+                  {
+                    "not": {
+                      "properties": {
+                        "discountType": {
+                          "enum": [
+                            "percentage"
+                          ]
+                        },
+                        "discount": {
+                          "type": "number",
+                          "exclusiveMinimum": 100
+                        }
+                      },
+                      "required": [
+                        "discountType",
+                        "discount"
+                      ]
+                    }
+                  }
+                ],
                 "properties": {
                   "id": {
                     "type": "string"
@@ -41794,7 +41994,8 @@
                     "type": "string"
                   },
                   "discount": {
-                    "type": "number"
+                    "type": "number",
+                    "minimum": 0
                   },
                   "discountType": {
                     "type": "string",
@@ -48922,6 +49123,32 @@
             "application/json": {
               "schema": {
                 "type": "object",
+                "allOf": [
+                  {
+                    "anyOf": [
+                      {
+                        "properties": {
+                          "discountType": {
+                            "enum": [
+                              "currency"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "discountType"
+                        ]
+                      },
+                      {
+                        "properties": {
+                          "discount": {
+                            "type": "number",
+                            "maximum": 100
+                          }
+                        }
+                      }
+                    ]
+                  }
+                ],
                 "properties": {
                   "id": {
                     "type": "string"
@@ -48991,7 +49218,8 @@
                     "type": "string"
                   },
                   "discount": {
-                    "type": "number"
+                    "type": "number",
+                    "minimum": 0
                   },
                   "discountType": {
                     "type": "string",
@@ -49303,6 +49531,27 @@
             "application/json": {
               "schema": {
                 "type": "object",
+                "allOf": [
+                  {
+                    "not": {
+                      "properties": {
+                        "discountType": {
+                          "enum": [
+                            "percentage"
+                          ]
+                        },
+                        "discount": {
+                          "type": "number",
+                          "exclusiveMinimum": 100
+                        }
+                      },
+                      "required": [
+                        "discountType",
+                        "discount"
+                      ]
+                    }
+                  }
+                ],
                 "properties": {
                   "id": {
                     "type": "string"
@@ -49369,7 +49618,8 @@
                     "type": "string"
                   },
                   "discount": {
-                    "type": "number"
+                    "type": "number",
+                    "minimum": 0
                   },
                   "discountType": {
                     "type": "string",

@@ -246,6 +246,21 @@ export function optionalLocalizedPercentage(
 }
 
 /**
+ * Validate an optional document-level discount using its effective type. Percentage discounts
+ * are inclusive 0–100 values; fixed-currency discounts are non-negative and intentionally have
+ * no percentage-style upper bound.
+ */
+export function optionalLocalizedDocumentDiscount(
+  value: unknown,
+  discountType: 'percentage' | 'currency',
+  fieldName: string = 'discount',
+): { ok: true; value: number | null } | { ok: false; message: string } {
+  return discountType === 'currency'
+    ? optionalLocalizedNonNegativeNumber(value, fieldName)
+    : optionalLocalizedPercentage(value, fieldName);
+}
+
+/**
  * Parse a positive number (> 0)
  */
 export function parsePositiveNumber(
