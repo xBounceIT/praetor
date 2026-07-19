@@ -13,6 +13,14 @@ INSERT INTO users (id, name, username, password_hash, role, avatar_initials, fir
     ('u9', 'Top Manager', 'topmanager', '$2a$12$z5H7VrzTpLImYWSH3xufKufCiGB0n9CSlNMOrRBRIxq.6mvuVS7uy', 'top_manager', 'TM', NULL)
 ON CONFLICT DO NOTHING;
 
+-- Every seeded user must have the required baseline hourly-cost period.
+INSERT INTO user_hourly_cost_periods (user_id, effective_from, cost_per_hour)
+SELECT u.id, NULL, COALESCE(u.cost_per_hour, 0)
+FROM users u
+WHERE u.id IN ('u1', 'u2', 'u3', 'u9')
+ON CONFLICT (user_id) WHERE effective_from IS NULL
+DO UPDATE SET cost_per_hour = EXCLUDED.cost_per_hour;
+
 -- Ensure default users have matching rows in user_roles
 INSERT INTO user_roles (user_id, role_id)
 SELECT u.id, u.role

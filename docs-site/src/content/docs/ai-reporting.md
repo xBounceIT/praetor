@@ -80,7 +80,7 @@ Usa i risultati come supporto all'analisi, non come sostituto dei dati ufficiali
 
 ## Costi nei report
 
-Praetor calcola il costo di ogni voce di consuntivo come `durata * costo orario` con la stessa precisione decimale usata per le fatture. Il costo orario salvato sulla voce è quello in vigore al momento dell'inserimento, quindi le modifiche retroattive al costo orario di un dipendente non riscrivono lo storico.
+Praetor calcola il costo di ogni voce di consuntivo come `durata * costo orario` con la stessa precisione decimale usata per le fatture. Il costo orario salvato sulla voce deriva dal calendario del dipendente alla data della registrazione; quando il calendario cambia, Praetor aggiorna retroattivamente le entry interessate e i relativi aggregati.
 
 Gli aggregati di costo per progetto, cliente, utente e periodo sono inclusi nei dataset di AI reporting solo se il tuo ruolo ha il permesso `reports.cost`. Senza questo permesso:
 

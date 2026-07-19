@@ -16,6 +16,7 @@ import * as settingsRepo from '../repositories/settingsRepo.ts';
 import * as ssoProvidersRepo from '../repositories/ssoProvidersRepo.ts';
 import * as tasksRepo from '../repositories/tasksRepo.ts';
 import * as userAssignmentsRepo from '../repositories/userAssignmentsRepo.ts';
+import * as userHourlyCostPeriodsRepo from '../repositories/userHourlyCostPeriodsRepo.ts';
 import * as usersRepo from '../repositories/usersRepo.ts';
 import {
   messageResponseSchema,
@@ -29,6 +30,7 @@ import {
 import { requiresTotpEnrollment } from '../services/totpEnforcement.ts';
 import { getAuditChangedFields, getAuditCounts, logAudit } from '../utils/audit.ts';
 import { assertAuthenticated } from '../utils/auth-assert.ts';
+import { todayLocalDateOnly } from '../utils/date.ts';
 import { getUniqueViolation } from '../utils/db-errors.ts';
 import { computeAvatarInitials } from '../utils/initials.ts';
 import { generatePrefixedId } from '../utils/order-ids.ts';
@@ -81,6 +83,27 @@ const nullableEmploymentStatusSchema = {
 } as const;
 const nullableWorkLocationSchema = {
   anyOf: [{ type: 'string', enum: WORK_LOCATIONS }, { type: 'null' }],
+} as const;
+
+const hourlyCostPeriodInputSchema = {
+  type: 'object',
+  properties: {
+    effectiveFrom: nullableDateSchema,
+    costPerHour: { type: 'number', minimum: 0 },
+  },
+  required: ['effectiveFrom', 'costPerHour'],
+  additionalProperties: false,
+} as const;
+
+const hourlyCostPeriodSchema = {
+  type: 'object',
+  properties: {
+    id: { type: 'number' },
+    effectiveFrom: nullableDateSchema,
+    effectiveTo: nullableDateSchema,
+    costPerHour: { type: 'number' },
+  },
+  required: ['id', 'effectiveFrom', 'effectiveTo', 'costPerHour'],
 } as const;
 
 const userSchema = {
@@ -156,6 +179,7 @@ const userCreateBodySchema = {
     role: { type: 'string' },
     email: { type: 'string' },
     costPerHour: { type: 'number' },
+    hourlyCostPeriods: { type: 'array', items: hourlyCostPeriodInputSchema, minItems: 1 },
     employeeType: { type: 'string', enum: ['app_user', 'internal', 'external'] },
     firstName: nullableStringSchema,
     lastName: nullableStringSchema,
@@ -183,6 +207,7 @@ const userUpdateBodySchema = {
     name: { type: 'string' },
     isDisabled: { type: 'boolean' },
     costPerHour: { type: 'number' },
+    hourlyCostPeriods: { type: 'array', items: hourlyCostPeriodInputSchema, minItems: 1 },
     role: { type: 'string' },
     email: { type: 'string' },
     firstName: nullableStringSchema,
@@ -465,6 +490,70 @@ const parseNullableHrEnum = <T extends string>(
   return { ok: true, value: result.value };
 };
 
+type HourlyCostPeriodsParseResult =
+  | { ok: true; value: userHourlyCostPeriodsRepo.HourlyCostPeriodInput[] }
+  | { ok: false; message: string };
+
+const parseHourlyCostPeriods = (value: unknown): HourlyCostPeriodsParseResult => {
+  if (!Array.isArray(value) || value.length === 0) {
+    return { ok: false, message: 'hourlyCostPeriods must contain at least one period' };
+  }
+
+  const periods: userHourlyCostPeriodsRepo.HourlyCostPeriodInput[] = [];
+  const effectiveDates = new Set<string>();
+  let baselineCount = 0;
+
+  for (const [index, rawPeriod] of value.entries()) {
+    if (rawPeriod === null || typeof rawPeriod !== 'object' || Array.isArray(rawPeriod)) {
+      return { ok: false, message: `hourlyCostPeriods[${index}] must be an object` };
+    }
+    const period = rawPeriod as Record<string, unknown>;
+    const dateResult = optionalDateString(
+      period.effectiveFrom,
+      `hourlyCostPeriods[${index}].effectiveFrom`,
+    );
+    if (!dateResult.ok) return dateResult;
+    const costResult = optionalLocalizedNonNegativeNumber(
+      period.costPerHour,
+      `hourlyCostPeriods[${index}].costPerHour`,
+    );
+    if (!costResult.ok) return costResult;
+    if (costResult.value === null) {
+      return {
+        ok: false,
+        message: `hourlyCostPeriods[${index}].costPerHour is required`,
+      };
+    }
+
+    if (dateResult.value === null) {
+      baselineCount += 1;
+    } else {
+      if (effectiveDates.has(dateResult.value)) {
+        return { ok: false, message: 'hourlyCostPeriods contains duplicate effective dates' };
+      }
+      effectiveDates.add(dateResult.value);
+    }
+    periods.push({
+      effectiveFrom: dateResult.value,
+      costPerHour: costResult.value,
+    });
+  }
+
+  if (baselineCount !== 1) {
+    return {
+      ok: false,
+      message: 'hourlyCostPeriods must contain exactly one baseline period',
+    };
+  }
+
+  periods.sort((left, right) => {
+    if (left.effectiveFrom === null) return -1;
+    if (right.effectiveFrom === null) return 1;
+    return left.effectiveFrom.localeCompare(right.effectiveFrom);
+  });
+  return { ok: true, value: periods };
+};
+
 const parseHrDetails = (
   body: Record<string, unknown>,
 ): { ok: true; fields: usersRepo.UserHrFields } | { ok: false; message: string } => {
@@ -687,7 +776,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             canViewExternal,
           });
 
-      return users.map((u) => maskUserForRequest(request, u));
+      const currentCosts = await userHourlyCostPeriodsRepo.listCostsForDate(
+        users.filter((user) => canViewCostFor(request, user.id)).map((user) => user.id),
+        todayLocalDateOnly(),
+      );
+      return users.map((user) =>
+        maskUserForRequest(request, {
+          ...user,
+          costPerHour: currentCosts.get(user.id) ?? user.costPerHour,
+        }),
+      );
     },
   );
 
@@ -741,6 +839,47 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     async () => usersRepo.listResponsibleOptions(),
   );
 
+  // GET /:id/hourly-cost-periods - Effective-dated HR cost calendar.
+  fastify.get(
+    '/:id/hourly-cost-periods',
+    {
+      onRequest: [authenticateToken, requireAnyPermission('hr.costs.view', 'hr.costs_all.view')],
+      schema: {
+        tags: ['users'],
+        summary: 'List hourly cost periods for a user',
+        params: idParamSchema,
+        response: {
+          200: { type: 'array', items: hourlyCostPeriodSchema },
+          ...standardErrorResponses,
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { id } = request.params as { id: string };
+      const idResult = requireNonEmptyString(id, 'id');
+      if (!idResult.ok) return badRequest(reply, idResult.message);
+      if (!canViewCostFor(request, idResult.value)) {
+        return replyError(request, reply, {
+          statusCode: 403,
+          message: 'Insufficient permissions',
+          action: 'user.hourly_cost_periods.read.denied',
+          entityType: 'user',
+          entityId: idResult.value,
+        });
+      }
+      if (!(await usersRepo.findCoreById(idResult.value))) {
+        return replyError(request, reply, {
+          statusCode: 404,
+          message: 'User not found',
+          action: 'user.hourly_cost_periods.read.not_found',
+          entityType: 'user',
+          entityId: idResult.value,
+        });
+      }
+      return userHourlyCostPeriodsRepo.listForUser(idResult.value);
+    },
+  );
+
   // POST / - Create user (admin only for app_user/internal, manager can create external)
   fastify.post(
     '/',
@@ -761,6 +900,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const body = request.body as Record<string, unknown>;
+      const hourlyCostPeriods = body.hourlyCostPeriods;
       const { name, username, password, role, email, costPerHour, employeeType } = body as {
         name: string;
         username?: string;
@@ -799,9 +939,38 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       // Validate `costPerHour` regardless of permission so malformed input still
       // returns 400 — matches the pre-split contract. The permission gate only
       // decides whether the validated value is *applied* to the new row.
+      if (costPerHour !== undefined && hourlyCostPeriods !== undefined) {
+        return badRequest(reply, 'costPerHour and hourlyCostPeriods cannot be submitted together');
+      }
       const costPerHourResult = optionalLocalizedNonNegativeNumber(costPerHour, 'costPerHour');
       if (!costPerHourResult.ok) return badRequest(reply, costPerHourResult.message);
+
+      let parsedHourlyCostPeriods: userHourlyCostPeriodsRepo.HourlyCostPeriodInput[] | undefined;
+      if (hourlyCostPeriods !== undefined) {
+        const periodsResult = parseHourlyCostPeriods(hourlyCostPeriods);
+        if (!periodsResult.ok) return badRequest(reply, periodsResult.message);
+        parsedHourlyCostPeriods = periodsResult.value;
+      }
+
       const canApplyCost = hasPermission(request, 'hr.costs_all.update');
+      if (parsedHourlyCostPeriods && !canApplyCost) {
+        return replyError(request, reply, {
+          statusCode: 403,
+          message: 'Insufficient permissions',
+          action: 'user.hourly_cost_periods.create.denied',
+          entityType: 'user',
+        });
+      }
+      const appliedHourlyCostPeriods = parsedHourlyCostPeriods ?? [
+        {
+          effectiveFrom: null,
+          costPerHour: canApplyCost ? (costPerHourResult.value ?? 0) : 0,
+        },
+      ];
+      const currentCostPerHour = userHourlyCostPeriodsRepo.resolveCostForDate(
+        appliedHourlyCostPeriods,
+        todayLocalDateOnly(),
+      );
       const hrDetailsResult = parseHrDetails(body);
       if (!hrDetailsResult.ok) return badRequest(reply, hrDetailsResult.message);
       const hasNonEmptyHrDetails = hasNonEmptyHrDetailPatch(hrDetailsResult.fields);
@@ -875,13 +1044,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               passwordHash,
               role: roleValue,
               avatarInitials,
-              costPerHour: canApplyCost ? costPerHourResult.value || 0 : 0,
+              costPerHour: currentCostPerHour,
               isDisabled: false,
               employeeType: effectiveEmployeeType,
               ...hrDetails,
             },
             tx,
           );
+          await userHourlyCostPeriodsRepo.replaceForUser(id, appliedHourlyCostPeriods, tx);
 
           // Keep user_roles in sync with users.role (primary/default role).
           await Promise.all([
@@ -926,9 +1096,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           // the newly-created user is, by construction, never the caller, so
           // the self-only personal-scope view can never apply on this branch.
           costPerHour:
-            hasPermission(request, 'hr.costs_all.view') && canApplyCost
-              ? costPerHourResult.value || 0
-              : 0,
+            hasPermission(request, 'hr.costs_all.view') && canApplyCost ? currentCostPerHour : 0,
           isDisabled: false,
           employeeType: effectiveEmployeeType,
           ...hrDetails,
@@ -1057,6 +1225,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id } = request.params as { id: string };
       const body = request.body as Record<string, unknown>;
+      const hourlyCostPeriods = body.hourlyCostPeriods;
       const { name, email, isDisabled, costPerHour, role } = body as {
         name?: string;
         email?: string;
@@ -1076,18 +1245,46 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         fields.name = nameResult.value;
       }
 
-      if (costPerHour !== undefined) {
+      let costPeriodsToApply: userHourlyCostPeriodsRepo.HourlyCostPeriodInput[] | undefined;
+      if (costPerHour !== undefined && hourlyCostPeriods !== undefined) {
+        return badRequest(reply, 'costPerHour and hourlyCostPeriods cannot be submitted together');
+      }
+      if (costPerHour !== undefined || hourlyCostPeriods !== undefined) {
         // Strict self/other split: self-edit needs hr.costs.update; cross-user
-        // edit needs hr.costs_all.update. The all-scope grant intentionally
-        // does NOT cover self anymore — see canViewCostFor for the symmetric
-        // view-side rule.
+        // edit needs hr.costs_all.update.
         const canEditCost = isSelf
           ? hasPermission(request, 'hr.costs.update')
           : hasPermission(request, 'hr.costs_all.update');
         if (canEditCost) {
-          const costPerHourResult = optionalLocalizedNonNegativeNumber(costPerHour, 'costPerHour');
-          if (!costPerHourResult.ok) return badRequest(reply, costPerHourResult.message);
-          fields.costPerHour = costPerHourResult.value;
+          if (hourlyCostPeriods !== undefined) {
+            const periodsResult = parseHourlyCostPeriods(hourlyCostPeriods);
+            if (!periodsResult.ok) return badRequest(reply, periodsResult.message);
+            costPeriodsToApply = periodsResult.value;
+          } else {
+            // Compatibility contract: a legacy scalar write intentionally replaces the
+            // effective-dated calendar with one global baseline period. Calendar-aware
+            // clients must send hourlyCostPeriods instead (and never both fields).
+            const costPerHourResult = optionalLocalizedNonNegativeNumber(
+              costPerHour,
+              'costPerHour',
+            );
+            if (!costPerHourResult.ok) return badRequest(reply, costPerHourResult.message);
+            costPeriodsToApply = [
+              { effectiveFrom: null, costPerHour: costPerHourResult.value ?? 0 },
+            ];
+          }
+          fields.costPerHour = userHourlyCostPeriodsRepo.resolveCostForDate(
+            costPeriodsToApply,
+            todayLocalDateOnly(),
+          );
+        } else if (hourlyCostPeriods !== undefined) {
+          return replyError(request, reply, {
+            statusCode: 403,
+            message: 'Insufficient permissions',
+            action: 'user.hourly_cost_periods.update.denied',
+            entityType: 'user',
+            entityId: idResult.value,
+          });
         }
       }
 
@@ -1147,8 +1344,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       // costPerHour is the sole field being touched. Other fields fall through
       // to the standard permission check below. Mirrors the strict self/other
       // split in the costPerHour-applying branch above.
+      const hasCostPayload = costPerHour !== undefined || hourlyCostPeriods !== undefined;
       const onlyEditingCost =
-        costPerHour !== undefined &&
+        hasCostPayload &&
         name === undefined &&
         email === undefined &&
         isDisabled === undefined &&
@@ -1283,6 +1481,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         let txResult: { userExists: boolean };
         try {
           txResult = await withDbTransaction(async (tx) => {
+            if (costPeriodsToApply && !(await usersRepo.lockById(idResult.value, tx))) {
+              return { userExists: false };
+            }
             if (hasFieldUpdates) {
               const row = await usersRepo.updateUserDynamic(idResult.value, fields, tx);
               if (!row) return { userExists: false };
@@ -1322,6 +1523,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                 tx,
               );
             }
+            if (costPeriodsToApply) {
+              await userHourlyCostPeriodsRepo.replaceForUser(
+                idResult.value,
+                costPeriodsToApply,
+                tx,
+              );
+              await userHourlyCostPeriodsRepo.recalculateTimeEntries(idResult.value, tx);
+            }
             return { userExists: true };
           });
         } catch (err) {
@@ -1350,6 +1559,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         // user + all scope). Anything else was silently dropped above, so it must
         // not appear in the audit diff either.
         costPerHour: fields.costPerHour,
+        hourlyCostPeriods: costPeriodsToApply ? costPeriodsToApply.length : undefined,
         role: fields.role,
         firstName: fields.firstName,
         lastName: fields.lastName,

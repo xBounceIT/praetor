@@ -447,6 +447,15 @@ export const findCostPerHour = async (userId: string, exec: DbExecutor = db): Pr
   return parseDbNumber(rows[0]?.costPerHour, 0);
 };
 
+export const lockById = async (userId: string, exec: DbExecutor = db): Promise<boolean> => {
+  const rows = await exec
+    .select({ id: users.id })
+    .from(users)
+    .where(eq(users.id, userId))
+    .for('update');
+  return rows.length > 0;
+};
+
 export const updateNameByUsername = async (
   username: string,
   name: string,

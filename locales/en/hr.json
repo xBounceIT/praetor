@@ -173,6 +173,21 @@
     "roleTitle": "Role",
     "hrStatus": "HR Status",
     "dateRangeInvalid": "Termination date must be on or after hire date",
+    "costPeriods": {
+      "title": "Hourly costs by period",
+      "description": "Each new rate automatically closes the previous one on the day before. Saving updates timesheet entries according to their date.",
+      "tableTitle": "Hourly cost effective dates",
+      "from": "From",
+      "to": "To",
+      "costPerHour": "Hourly cost",
+      "fromBeginning": "From the beginning",
+      "toPresent": "Present",
+      "add": "Add period",
+      "delete": "Delete period",
+      "loadError": "Hourly costs could not be loaded. Try again before saving.",
+      "duplicateDate": "A rate already exists with this effective date",
+      "nonNegativeCost": "Cost must be greater than or equal to zero"
+    },
     "contractTypes": {
       "permanent": "Permanent",
       "fixed_term": "Fixed-term",

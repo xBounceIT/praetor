@@ -526,6 +526,27 @@ const insertDemoUsersAndSettings = async (client: PoolClient, counts: Record<str
   );
   incrementCount(counts, 'users', usersResult.rowCount ?? 0);
 
+  await executeStatement(
+    client,
+    'DELETE FROM user_hourly_cost_periods WHERE user_id = ANY($1::text[])',
+    [DEMO_USER_IDS],
+  );
+  const costPeriodValues: unknown[] = [];
+  const costPeriodTuples = DEMO_USERS.map((user) => {
+    costPeriodValues.push(user.id, user.costPerHour);
+    const index = costPeriodValues.length - 1;
+    return `($${index}, NULL, $${index + 1})`;
+  });
+  const costPeriodsResult = await executeStatement(
+    client,
+    `INSERT INTO user_hourly_cost_periods (user_id, effective_from, cost_per_hour)
+     VALUES ${costPeriodTuples.join(', ')}
+     ON CONFLICT (user_id) WHERE effective_from IS NULL
+     DO UPDATE SET cost_per_hour = EXCLUDED.cost_per_hour`,
+    costPeriodValues,
+  );
+  incrementCount(counts, 'user_hourly_cost_periods', costPeriodsResult.rowCount ?? 0);
+
   const userRolesValues: unknown[] = [];
   const userRolesTuples = DEMO_USERS.map((user) => {
     userRolesValues.push(user.id, user.role);
@@ -1147,6 +1168,12 @@ const buildVerificationSteps = (
   assignmentTargetIds: RuntimeDemoAssignmentTargetIds,
 ): VerificationStep[] => [
   { table: 'users', countColumn: 'id', ids: DEMO_USER_IDS, expected: DEMO_EXPECTED_COUNTS.users },
+  {
+    table: 'user_hourly_cost_periods',
+    countColumn: 'user_id',
+    ids: DEMO_USER_IDS,
+    expected: DEMO_EXPECTED_COUNTS.user_hourly_cost_periods,
+  },
   {
     table: 'settings',
     countColumn: 'user_id',

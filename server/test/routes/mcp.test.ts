@@ -14,6 +14,7 @@ import * as realSupplierOrdersRepo from '../../repositories/supplierOrdersRepo.t
 import * as realSupplierQuotesRepo from '../../repositories/supplierQuotesRepo.ts';
 import * as realSuppliersRepo from '../../repositories/suppliersRepo.ts';
 import * as realTasksRepo from '../../repositories/tasksRepo.ts';
+import * as realUserHourlyCostPeriodsRepo from '../../repositories/userHourlyCostPeriodsRepo.ts';
 import * as realUsersRepo from '../../repositories/usersRepo.ts';
 import * as realWorkUnitsRepo from '../../repositories/workUnitsRepo.ts';
 import * as realTimeEntriesService from '../../services/timeEntries.ts';
@@ -33,6 +34,7 @@ const supplierOrdersRepoSnap = { ...realSupplierOrdersRepo };
 const supplierQuotesRepoSnap = { ...realSupplierQuotesRepo };
 const tasksRepoSnap = { ...realTasksRepo };
 const usersRepoSnap = { ...realUsersRepo };
+const userHourlyCostPeriodsRepoSnap = { ...realUserHourlyCostPeriodsRepo };
 const workUnitsRepoSnap = { ...realWorkUnitsRepo };
 const notificationsRepoSnap = { ...realNotificationsRepo };
 const timeEntriesServiceSnap = { ...realTimeEntriesService };
@@ -58,6 +60,7 @@ const tasksListAllMock = mock();
 const tasksListForUserMock = mock();
 const usersListAllForAdminMock = mock();
 const usersListScopedForManagerMock = mock();
+const listHourlyCostsForDateMock = mock();
 const workUnitsListAllMock = mock();
 const workUnitsListManagedByMock = mock();
 const workUnitsListUserIdsByUnitIdsMock = mock();
@@ -161,6 +164,10 @@ beforeAll(async () => {
     listAllForAdmin: usersListAllForAdminMock,
     listScopedForManager: usersListScopedForManagerMock,
   }));
+  mock.module('../../repositories/userHourlyCostPeriodsRepo.ts', () => ({
+    ...userHourlyCostPeriodsRepoSnap,
+    listCostsForDate: listHourlyCostsForDateMock,
+  }));
   mock.module('../../repositories/workUnitsRepo.ts', () => ({
     ...workUnitsRepoSnap,
     listAll: workUnitsListAllMock,
@@ -199,6 +206,10 @@ afterAll(() => {
   mock.module('../../repositories/projectsRepo.ts', () => projectsRepoSnap);
   mock.module('../../repositories/tasksRepo.ts', () => tasksRepoSnap);
   mock.module('../../repositories/usersRepo.ts', () => usersRepoSnap);
+  mock.module(
+    '../../repositories/userHourlyCostPeriodsRepo.ts',
+    () => userHourlyCostPeriodsRepoSnap,
+  );
   mock.module('../../repositories/workUnitsRepo.ts', () => workUnitsRepoSnap);
   mock.module('../../repositories/notificationsRepo.ts', () => notificationsRepoSnap);
   mock.module('../../services/timeEntries.ts', () => timeEntriesServiceSnap);
@@ -228,6 +239,7 @@ beforeEach(async () => {
     tasksListForUserMock,
     usersListAllForAdminMock,
     usersListScopedForManagerMock,
+    listHourlyCostsForDateMock,
     workUnitsListAllMock,
     workUnitsListManagedByMock,
     workUnitsListUserIdsByUnitIdsMock,
@@ -263,6 +275,7 @@ beforeEach(async () => {
   projectsListForUserMock.mockResolvedValue([{ id: 'p1', name: 'Project One', clientId: 'c1' }]);
   tasksListAllMock.mockResolvedValue([]);
   tasksListForUserMock.mockResolvedValue([{ id: 't1', name: 'Task One', projectId: 'p1' }]);
+  listHourlyCostsForDateMock.mockResolvedValue(new Map());
   usersListAllForAdminMock.mockResolvedValue([]);
   usersListScopedForManagerMock.mockResolvedValue([
     {
@@ -745,6 +758,7 @@ describe('/api/mcp', () => {
     const other = users.find((u) => u.id === 'u2');
     expect(own?.costPerHour).toBe(42);
     expect(other?.costPerHour).toBe(0);
+    expect(listHourlyCostsForDateMock).toHaveBeenCalledWith(['u1'], expect.any(String));
     // `scope.includesCosts` reflects the broader all-scope grant only — false here.
     expect(body.result.structuredContent.scope.includesCosts).toBe(false);
   });
@@ -800,6 +814,7 @@ describe('/api/mcp', () => {
     const other = users.find((u) => u.id === 'u2');
     expect(own?.costPerHour).toBe(0);
     expect(other?.costPerHour).toBe(99);
+    expect(listHourlyCostsForDateMock).toHaveBeenCalledWith(['u2'], expect.any(String));
     // `scope.includesCosts=true` is still correct here: the meaning is "every
     // cost the response can include is included", and with hr.costs_all.view
     // every cross-user cost is unmasked. The own-row mask is the strict

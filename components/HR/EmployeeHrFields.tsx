@@ -14,12 +14,12 @@ import { Textarea } from '@/components/ui/textarea';
 import type { ResponsibleUserOption } from '../../types';
 import DateField from '../shared/DateField';
 import SelectControl, { type Option } from '../shared/SelectControl';
-import ValidatedNumberInput from '../shared/ValidatedNumberInput';
+import EmployeeHourlyCostPeriodsTable from './EmployeeHourlyCostPeriodsTable';
 import {
   CONTRACT_TYPE_OPTIONS,
   EMPLOYMENT_STATUS_OPTIONS,
+  type EmployeeHourlyCostPeriodDraft,
   type EmployeeHrFormData,
-  type EmployeeSectionKey,
   WORK_LOCATION_OPTIONS,
 } from './employeeHrProfile';
 
@@ -27,12 +27,15 @@ const NONE_SELECT_VALUE = '__none__';
 const EMPTY_RESPONSIBLE_USER_OPTIONS: ResponsibleUserOption[] = [];
 
 type EmployeeHrFieldsProps = {
-  section: EmployeeSectionKey;
   prefix: string;
   formData: EmployeeHrFormData;
   errors: Record<string, string>;
   setFormData: React.Dispatch<React.SetStateAction<EmployeeHrFormData>>;
   currency: string;
+  hourlyCostPeriods: EmployeeHourlyCostPeriodDraft[];
+  setHourlyCostPeriods: React.Dispatch<React.SetStateAction<EmployeeHourlyCostPeriodDraft[]>>;
+  isHourlyCostPeriodsLoading: boolean;
+  hourlyCostPeriodsLoadError: string | null;
   canViewCosts: boolean;
   canUpdateCosts: boolean;
   identityReadOnly: boolean;
@@ -163,12 +166,15 @@ const useResponsibleSelect = ({
 };
 
 const EmployeeHrFields: React.FC<EmployeeHrFieldsProps> = ({
-  section,
   prefix,
   formData,
   errors,
   setFormData,
   currency,
+  hourlyCostPeriods,
+  setHourlyCostPeriods,
+  isHourlyCostPeriodsLoading,
+  hourlyCostPeriodsLoadError,
   canViewCosts,
   canUpdateCosts,
   identityReadOnly,
@@ -210,7 +216,7 @@ const EmployeeHrFields: React.FC<EmployeeHrFieldsProps> = ({
               onChange={(e) => setField('name', e.target.value)}
               aria-invalid={Boolean(errors.name)}
               placeholder={t('common:labels.fullName')}
-              disabled={identityReadOnly}
+              disabled={identityReadOnly || !canEditHrDetails}
             />
             <FieldError className="text-xs">{errors.name}</FieldError>
           </Field>
@@ -372,28 +378,20 @@ const EmployeeHrFields: React.FC<EmployeeHrFieldsProps> = ({
             onChange={(value) => setField('workLocation', value)}
             disabled={!canEditHrDetails}
           />
-
-          {canViewCosts && (
-            <Field>
-              <FieldLabel htmlFor={`${prefix}-cost`}>{t(`${section}.costPerHour`)}</FieldLabel>
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium text-muted-foreground">
-                  {currency}
-                </span>
-                <ValidatedNumberInput
-                  id={`${prefix}-cost`}
-                  min="0"
-                  value={formData.costPerHour}
-                  onValueChange={(value) => setField('costPerHour', value)}
-                  className="pl-8"
-                  placeholder="0,00"
-                  disabled={!canUpdateCosts}
-                />
-              </div>
-            </Field>
-          )}
         </div>
       </section>
+
+      {canViewCosts && (
+        <EmployeeHourlyCostPeriodsTable
+          periods={hourlyCostPeriods}
+          onChange={setHourlyCostPeriods}
+          errors={errors}
+          currency={currency}
+          canUpdate={canUpdateCosts}
+          isLoading={isHourlyCostPeriodsLoading}
+          loadError={hourlyCostPeriodsLoadError}
+        />
+      )}
 
       <section className="space-y-3">
         <h3 className="text-sm font-semibold text-foreground">

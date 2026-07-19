@@ -1,4 +1,4 @@
-import { describe, expect, mock, test } from 'bun:test';
+import { beforeEach, describe, expect, mock, test } from 'bun:test';
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ComponentProps } from 'react';
@@ -8,9 +8,15 @@ import { render } from '../../helpers/render';
 
 installI18nMock();
 
-// The view only touches services/api transitively via the assignments modal,
-// which this test never opens. Stub it so the view has no API dependency, which
-// also avoids cross-file mock-leak fragility in the shared test runner.
+const getHourlyCostPeriodsMock = mock(async () => [
+  { id: 1, effectiveFrom: null, effectiveTo: null, costPerHour: 31.5 },
+]);
+
+mock.module('../../../services/api/users', () => ({
+  usersApi: { getHourlyCostPeriods: getHourlyCostPeriodsMock },
+}));
+
+// The assignments modal is outside this view's responsibility in these tests.
 mock.module('../../../components/HR/EmployeeAssignmentsModal', () => ({
   default: () => null,
 }));
@@ -77,6 +83,10 @@ const renderView = (overrides: Partial<ComponentProps<typeof InternalEmployeesVi
 };
 
 describe('<InternalEmployeesView /> row click', () => {
+  beforeEach(() => {
+    getHourlyCostPeriodsMock.mockClear();
+  });
+
   test('renders email and phone as separate table columns', () => {
     renderView();
 
@@ -151,6 +161,45 @@ describe('<InternalEmployeesView /> row click', () => {
     fireEvent.click(row);
 
     expect(screen.queryByDisplayValue('Mario Rossi')).not.toBeInTheDocument();
+  });
+
+  test('cost-only editor opens the calendar and submits only hourly cost periods', async () => {
+    const onUpdateEmployee = mock<(id: string, updates: Partial<User>) => void>(() => {});
+    renderView({
+      onUpdateEmployee,
+      permissions: ['hr.internal.view', 'hr.costs_all.view', 'hr.costs_all.update'],
+    });
+
+    const row = screen.getByText('Mario Rossi').closest('tr');
+    if (!row) throw new Error('employee row not found');
+    expect(row).toHaveClass('cursor-pointer');
+    fireEvent.click(row);
+
+    expect(screen.getByLabelText('common:labels.fullName *')).toBeDisabled();
+    await waitFor(() => expect(getHourlyCostPeriodsMock).toHaveBeenCalledWith('u1'));
+    await screen.findByText('€ 31,50');
+
+    const saveButton = screen.getByText('internalEmployees.saveChanges');
+    await waitFor(() => expect(saveButton).toBeEnabled());
+    fireEvent.click(saveButton);
+
+    await waitFor(() => expect(onUpdateEmployee).toHaveBeenCalledTimes(1));
+    expect(onUpdateEmployee).toHaveBeenCalledWith('u1', {
+      hourlyCostPeriods: [{ effectiveFrom: null, costPerHour: 31.5 }],
+    });
+  });
+
+  test('cost viewer opens the calendar in read-only mode', async () => {
+    renderView({ permissions: ['hr.internal.view', 'hr.costs_all.view'] });
+
+    const row = screen.getByText('Mario Rossi').closest('tr');
+    if (!row) throw new Error('employee row not found');
+    expect(row).toHaveClass('cursor-pointer');
+    fireEvent.click(row);
+
+    await waitFor(() => expect(getHourlyCostPeriodsMock).toHaveBeenCalledWith('u1'));
+    expect(screen.getByLabelText('common:labels.fullName *')).toBeDisabled();
+    expect(screen.queryByText('internalEmployees.saveChanges')).not.toBeInTheDocument();
   });
 
   test('does not synthesize table values for unset HR profile fields', () => {

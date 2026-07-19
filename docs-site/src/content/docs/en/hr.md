@@ -27,6 +27,14 @@ In demo environments, the data seed includes realistic HR profiles for applicati
 
 For local users, HR can update name and email directly from the employee profile's **Company Profile** section. Email is saved through the same settings-backed path used by personal settings, so it stays consistent with the rest of the application.
 
+## Hourly costs by period
+
+With cost visibility permission, the employee record shows a table with **From**, **To**, and **Hourly cost**. The first period always starts **From the beginning** and the last ends at **Present**. Adding an effective date closes the preceding period on the day before it. You can edit a date or rate, or delete any period after the first; deleting one automatically extends the preceding period.
+
+The employee profile and cost calendar are saved atomically. When the calendar changes, Praetor recalculates that person's timesheet entries using the rate effective on each entry date, including historical entries. New entries, date changes, and recurring generation also resolve cost from the entry date.
+
+HR tables continue to summarize the rate effective today. **Administration > Users** does not display or edit costs: rates are managed only in the HR employee record. `hr.costs.view` and `hr.costs_all.view` control reading, while their matching `update` permissions control editing.
+
 For users managed by LDAP, OIDC, or SAML, name and email are controlled by the company provider. Praetor shows those fields as read-only in HR screens and rejects manual server-side changes. On each login or synchronization, non-empty provider values refresh the user's name, avatar initials, and email; missing provider values do not erase existing local data.
 
 ## Permissions

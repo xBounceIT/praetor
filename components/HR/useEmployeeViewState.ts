@@ -1,9 +1,12 @@
 import type React from 'react';
 import { useCallback, useReducer } from 'react';
-import type { User } from '../../types';
+import type { HourlyCostPeriod, User } from '../../types';
 import {
   createEmployeeHrForm,
   createEmptyEmployeeHrForm,
+  createHourlyCostPeriodDrafts,
+  createInitialHourlyCostPeriods,
+  type EmployeeHourlyCostPeriodDraft,
   type EmployeeHrFormData,
 } from './employeeHrProfile';
 
@@ -16,6 +19,10 @@ type EmployeeViewState = {
   errors: Record<string, string>;
   isSubmitting: boolean;
   formData: EmployeeHrFormData;
+  hourlyCostPeriods: EmployeeHourlyCostPeriodDraft[];
+  isHourlyCostPeriodsLoading: boolean;
+  hourlyCostPeriodsLoadingUserId: string | null;
+  hourlyCostPeriodsLoadError: string | null;
 };
 
 type EmployeeViewAction =
@@ -29,7 +36,14 @@ type EmployeeViewAction =
   | { type: 'submitStart' }
   | { type: 'submitDone' }
   | { type: 'submitSuccess' }
-  | { type: 'setFormData'; update: React.SetStateAction<EmployeeHrFormData> };
+  | { type: 'setFormData'; update: React.SetStateAction<EmployeeHrFormData> }
+  | { type: 'hourlyCostPeriodsLoadStart'; userId: string }
+  | { type: 'hourlyCostPeriodsLoadSuccess'; userId: string; periods: HourlyCostPeriod[] }
+  | { type: 'hourlyCostPeriodsLoadError'; userId: string; error: string }
+  | {
+      type: 'setHourlyCostPeriods';
+      update: React.SetStateAction<EmployeeHourlyCostPeriodDraft[]>;
+    };
 
 const createEmployeeViewState = (): EmployeeViewState => ({
   isModalOpen: false,
@@ -40,12 +54,21 @@ const createEmployeeViewState = (): EmployeeViewState => ({
   errors: {},
   isSubmitting: false,
   formData: createEmptyEmployeeHrForm(),
+  hourlyCostPeriods: createInitialHourlyCostPeriods(),
+  isHourlyCostPeriodsLoading: false,
+  hourlyCostPeriodsLoadError: null,
+  hourlyCostPeriodsLoadingUserId: null,
 });
 
 const resolveFormDataUpdate = (
   update: React.SetStateAction<EmployeeHrFormData>,
   current: EmployeeHrFormData,
 ): EmployeeHrFormData => (typeof update === 'function' ? update(current) : update);
+
+const resolveHourlyCostPeriodsUpdate = (
+  update: React.SetStateAction<EmployeeHourlyCostPeriodDraft[]>,
+  current: EmployeeHourlyCostPeriodDraft[],
+): EmployeeHourlyCostPeriodDraft[] => (typeof update === 'function' ? update(current) : update);
 
 const employeeViewReducer = (
   state: EmployeeViewState,
@@ -58,7 +81,11 @@ const employeeViewReducer = (
         isModalOpen: true,
         editingEmployee: null,
         formData: createEmptyEmployeeHrForm(),
+        hourlyCostPeriods: createInitialHourlyCostPeriods(),
+        isHourlyCostPeriodsLoading: false,
+        hourlyCostPeriodsLoadError: null,
         errors: {},
+        hourlyCostPeriodsLoadingUserId: null,
       };
     case 'openEdit':
       return {
@@ -66,10 +93,19 @@ const employeeViewReducer = (
         isModalOpen: true,
         editingEmployee: action.employee,
         formData: createEmployeeHrForm(action.employee),
+        hourlyCostPeriods: createInitialHourlyCostPeriods(action.employee.costPerHour ?? ''),
+        isHourlyCostPeriodsLoading: false,
+        hourlyCostPeriodsLoadError: null,
         errors: {},
+        hourlyCostPeriodsLoadingUserId: null,
       };
     case 'closeModal':
-      return { ...state, isModalOpen: false };
+      return {
+        ...state,
+        isModalOpen: false,
+        isHourlyCostPeriodsLoading: false,
+        hourlyCostPeriodsLoadingUserId: null,
+      };
     case 'setManagingEmployee':
       return { ...state, managingEmployee: action.employee };
     case 'confirmDelete':
@@ -83,9 +119,44 @@ const employeeViewReducer = (
     case 'submitDone':
       return { ...state, isSubmitting: false };
     case 'submitSuccess':
-      return { ...state, isModalOpen: false };
+      return {
+        ...state,
+        isModalOpen: false,
+        isHourlyCostPeriodsLoading: false,
+        hourlyCostPeriodsLoadingUserId: null,
+      };
     case 'setFormData':
       return { ...state, formData: resolveFormDataUpdate(action.update, state.formData) };
+    case 'hourlyCostPeriodsLoadStart':
+      if (!state.isModalOpen || state.editingEmployee?.id !== action.userId) return state;
+      return {
+        ...state,
+        isHourlyCostPeriodsLoading: true,
+        hourlyCostPeriodsLoadingUserId: action.userId,
+        hourlyCostPeriodsLoadError: null,
+      };
+    case 'hourlyCostPeriodsLoadSuccess':
+      if (state.hourlyCostPeriodsLoadingUserId !== action.userId) return state;
+      return {
+        ...state,
+        hourlyCostPeriods: createHourlyCostPeriodDrafts(action.periods),
+        isHourlyCostPeriodsLoading: false,
+        hourlyCostPeriodsLoadingUserId: null,
+        hourlyCostPeriodsLoadError: null,
+      };
+    case 'hourlyCostPeriodsLoadError':
+      if (state.hourlyCostPeriodsLoadingUserId !== action.userId) return state;
+      return {
+        ...state,
+        isHourlyCostPeriodsLoading: false,
+        hourlyCostPeriodsLoadingUserId: null,
+        hourlyCostPeriodsLoadError: action.error,
+      };
+    case 'setHourlyCostPeriods':
+      return {
+        ...state,
+        hourlyCostPeriods: resolveHourlyCostPeriodsUpdate(action.update, state.hourlyCostPeriods),
+      };
     default:
       return state;
   }
@@ -98,10 +169,14 @@ export const useEmployeeViewState = () => {
     (update) => dispatch({ type: 'setFormData', update }),
     [],
   );
+  const setHourlyCostPeriods = useCallback<
+    React.Dispatch<React.SetStateAction<EmployeeHourlyCostPeriodDraft[]>>
+  >((update) => dispatch({ type: 'setHourlyCostPeriods', update }), []);
 
   return {
     state,
     setFormData,
+    setHourlyCostPeriods,
     openAddEmployeeModal: useCallback(() => dispatch({ type: 'openAdd' }), []),
     openEditEmployeeModal: useCallback(
       (employee: User) => dispatch({ type: 'openEdit', employee }),
@@ -124,5 +199,19 @@ export const useEmployeeViewState = () => {
     startEmployeeSubmit: useCallback(() => dispatch({ type: 'submitStart' }), []),
     finishEmployeeSubmit: useCallback(() => dispatch({ type: 'submitDone' }), []),
     completeEmployeeSubmit: useCallback(() => dispatch({ type: 'submitSuccess' }), []),
+    startHourlyCostPeriodsLoad: useCallback(
+      (userId: string) => dispatch({ type: 'hourlyCostPeriodsLoadStart', userId }),
+      [],
+    ),
+    completeHourlyCostPeriodsLoad: useCallback(
+      (userId: string, periods: HourlyCostPeriod[]) =>
+        dispatch({ type: 'hourlyCostPeriodsLoadSuccess', userId, periods }),
+      [],
+    ),
+    failHourlyCostPeriodsLoad: useCallback(
+      (userId: string, error: string) =>
+        dispatch({ type: 'hourlyCostPeriodsLoadError', userId, error }),
+      [],
+    ),
   };
 };
