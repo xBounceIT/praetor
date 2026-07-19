@@ -219,13 +219,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const projectIdResult = requireNonEmptyString(projectId, 'projectId');
       if (!projectIdResult.ok) return badRequest(reply, projectIdResult.message);
-      if (
-        !(await canAccessProject(
-          request,
-          projectIdResult.value,
-          'projects.tasks_all.create',
-        ))
-      ) {
+      if (!(await canAccessProject(request, projectIdResult.value, 'projects.tasks_all.create'))) {
         return replyError(request, reply, {
           statusCode: 403,
           message: 'Insufficient permissions',

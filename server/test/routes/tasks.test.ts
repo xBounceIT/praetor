@@ -614,10 +614,7 @@ describe('POST /api/tasks', () => {
   });
 
   test('403: project-wide view does not let a scoped creator create under an unassigned project', async () => {
-    getRolePermissionsMock.mockResolvedValue([
-      'projects.tasks.create',
-      'projects.manage_all.view',
-    ]);
+    getRolePermissionsMock.mockResolvedValue(['projects.tasks.create', 'projects.manage_all.view']);
     isProjectAssignedToUserMock.mockResolvedValue(false);
 
     const res = await testApp.inject({
