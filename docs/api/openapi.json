@@ -18513,6 +18513,7 @@
         "tags": [
           "tasks"
         ],
+        "description": "Requires projects.tasks.create and assignment to the parent project, or projects.tasks_all.create for creation in any project. Project-wide view permissions do not authorize task creation.",
         "requestBody": {
           "required": true,
           "content": {

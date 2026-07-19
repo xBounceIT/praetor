@@ -53,6 +53,8 @@ For each job and task, you can set the billing type (retainer or time and materi
 
 Use estimated monthly effort to plan recurring load and task duration as a generic multiplier. Total effort is calculated automatically as monthly effort × duration and is used to track progress against the overall expected hours. Task total revenue is calculated the same way: revenue × duration.
 
+Creating a task in an assigned job requires both **Tasks - Create** (`projects.tasks.create`) and assignment to that job. The global **All tasks - Create** permission (`projects.tasks_all.create`) allows task creation in any job. Global job-view permissions alone do not authorize task creation and do not extend the user's assignments.
+
 The **Add Job** action opens a focused creation dialog. **Type** appears first: Active and Passive jobs include the client order, client, name, dates, optional offer, status, billing, optional revenue, and draft tasks; Internal jobs hide order and offer, automatically use the company name configured in Praetor as their client, and make both dates optional. After submission, users with advanced-data access are taken to the job detail page; other roles remain in the archive.
 
 The jobs archive remains available through the **Projects** permission (`projects.manage.view`). Clicking a row and opening the **job detail page** additionally requires **Advanced project data** (`projects.details.view`), granted to Managers and Top Managers by default. Without it, the table keeps all operational columns but rows are not interactive, and the linked order, offer, revenue, and internal detail fields are withheld from API responses. The detail page replaces the legacy edit dialog and is laid out in two areas:

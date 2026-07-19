@@ -613,6 +613,43 @@ describe('POST /api/tasks', () => {
     expect(createMock).not.toHaveBeenCalled();
   });
 
+  test('403: project-wide view does not let a scoped creator create under an unassigned project', async () => {
+    getRolePermissionsMock.mockResolvedValue(['projects.tasks.create', 'projects.manage_all.view']);
+    isProjectAssignedToUserMock.mockResolvedValue(false);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/tasks',
+      headers: authHeader(),
+      payload: { name: 'X', projectId: 'p-1' },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(isProjectAssignedToUserMock).toHaveBeenCalledWith('u1', 'p-1');
+    expect(createMock).not.toHaveBeenCalled();
+    expect(assignProjectToUserMock).not.toHaveBeenCalled();
+    expect(assignTaskToUserMock).not.toHaveBeenCalled();
+    expect(assignClientToUserMock).not.toHaveBeenCalled();
+  });
+
+  test('201: tasks_all.create can create under an unassigned project', async () => {
+    getRolePermissionsMock.mockResolvedValue(['projects.tasks_all.create']);
+    isProjectAssignedToUserMock.mockResolvedValue(false);
+    createMock.mockResolvedValue(SAMPLE_TASK);
+    findClientIdMock.mockResolvedValue(null);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/tasks',
+      headers: authHeader(),
+      payload: { name: 'X', projectId: 'p-1' },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(createMock).toHaveBeenCalledTimes(1);
+    expect(isProjectAssignedToUserMock).not.toHaveBeenCalled();
+  });
+
   test('500: failing auto-assignment rolls back task insert (atomic)', async () => {
     // Simulate a real transaction: if the callback rejects, nothing is committed.
     // The fake `withDbTransaction` here runs the callback and lets the rejection
