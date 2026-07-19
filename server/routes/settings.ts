@@ -1,6 +1,10 @@
 import bcrypt from 'bcryptjs';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { authenticateToken, generateTokenWithCurrentIdleTimeout } from '../middleware/auth.ts';
+import {
+  authenticateToken,
+  generateTokenWithCurrentIdleTimeout,
+  requireSessionAuth,
+} from '../middleware/auth.ts';
 import * as mcpTokensRepo from '../repositories/mcpTokensRepo.ts';
 import * as notificationsRepo from '../repositories/notificationsRepo.ts';
 import * as personalAccessTokensRepo from '../repositories/personalAccessTokensRepo.ts';
@@ -279,10 +283,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.post(
     '/mcp-tokens',
     {
-      onRequest: [fastify.rateLimit(STANDARD_ROUTE_RATE_LIMIT), authenticateToken],
+      onRequest: [
+        fastify.rateLimit(STANDARD_ROUTE_RATE_LIMIT),
+        authenticateToken,
+        requireSessionAuth,
+      ],
       schema: {
         tags: ['settings'],
-        summary: 'Create current user MCP token',
+        summary: 'Create current user MCP token (session-only)',
         body: mcpTokenCreateBodySchema,
         response: {
           201: mcpTokenCreateResponseSchema,
@@ -328,10 +336,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.delete(
     '/mcp-tokens/:id',
     {
-      onRequest: [fastify.rateLimit(STANDARD_ROUTE_RATE_LIMIT), authenticateToken],
+      onRequest: [
+        fastify.rateLimit(STANDARD_ROUTE_RATE_LIMIT),
+        authenticateToken,
+        requireSessionAuth,
+      ],
       schema: {
         tags: ['settings'],
-        summary: 'Revoke current user MCP token',
+        summary: 'Revoke current user MCP token (session-only)',
         params: {
           type: 'object',
           properties: { id: { type: 'string' } },

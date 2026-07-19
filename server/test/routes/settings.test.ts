@@ -45,8 +45,10 @@ const generateRawMcpTokenMock = mock();
 const createMcpTokenForUserMock = mock();
 const revokeMcpTokenForUserMock = mock();
 const findPersonalAccessTokenByUserIdMock = mock();
+const findPersonalAccessTokenByTokenHashMock = mock();
 const createPersonalAccessTokenIfMissingMock = mock();
 const renewPersonalAccessTokenForUserMock = mock();
+const markPersonalAccessTokenUsedMock = mock(async () => undefined);
 const bcryptCompareMock = mock();
 const bcryptHashMock = mock();
 const logAuditMock = mock(async () => undefined);
@@ -91,8 +93,10 @@ beforeAll(async () => {
   mock.module('../../repositories/personalAccessTokensRepo.ts', () => ({
     ...personalAccessTokensRepoSnap,
     findByUserId: findPersonalAccessTokenByUserIdMock,
+    findByTokenHash: findPersonalAccessTokenByTokenHashMock,
     createForUserIfMissing: createPersonalAccessTokenIfMissingMock,
     renewForUser: renewPersonalAccessTokenForUserMock,
+    markUsed: markPersonalAccessTokenUsedMock,
   }));
   mock.module('../../utils/audit.ts', () => ({
     ...auditSnap,
@@ -130,6 +134,7 @@ const HAPPY_USER = {
   avatarInitials: 'AL',
   isDisabled: false,
   sessionVersion: 1,
+  tokenVersion: 0,
 };
 
 const HAPPY_SETTINGS = {
@@ -164,8 +169,10 @@ const allMocks = [
   createMcpTokenForUserMock,
   revokeMcpTokenForUserMock,
   findPersonalAccessTokenByUserIdMock,
+  findPersonalAccessTokenByTokenHashMock,
   createPersonalAccessTokenIfMissingMock,
   renewPersonalAccessTokenForUserMock,
+  markPersonalAccessTokenUsedMock,
   bcryptCompareMock,
   bcryptHashMock,
   logAuditMock,
@@ -203,6 +210,12 @@ beforeEach(async () => {
   });
   revokeMcpTokenForUserMock.mockResolvedValue(true);
   findPersonalAccessTokenByUserIdMock.mockResolvedValue(HAPPY_PERSONAL_ACCESS_TOKEN);
+  findPersonalAccessTokenByTokenHashMock.mockResolvedValue({
+    userId: 'u1',
+    tokenVersionAtIssue: HAPPY_USER.tokenVersion,
+    lastUsedAt: null,
+    updatedAt: new Date(),
+  });
   createPersonalAccessTokenIfMissingMock.mockResolvedValue({
     record: HAPPY_PERSONAL_ACCESS_TOKEN,
     created: false,
@@ -218,6 +231,7 @@ afterEach(async () => {
 });
 
 const authHeader = () => ({ authorization: `Bearer ${signToken({ userId: 'u1' })}` });
+const patHeader = () => ({ authorization: 'Bearer praetor_pat_forged-test-token' });
 
 describe('GET /api/settings', () => {
   test('200 returns settings via getOrCreateForUser with defaults', async () => {
@@ -485,6 +499,20 @@ describe('MCP token settings routes', () => {
     );
   });
 
+  test('POST /api/settings/mcp-tokens rejects personal access token authentication', async () => {
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/settings/mcp-tokens',
+      headers: patHeader(),
+      payload: { name: 'Persistence token' },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(JSON.parse(res.body).error).toBe('Session authentication required');
+    expect(listMcpTokensForUserMock).not.toHaveBeenCalled();
+    expect(createMcpTokenForUserMock).not.toHaveBeenCalled();
+  });
+
   test('POST /api/settings/mcp-tokens defaults scope to full when omitted', async () => {
     const res = await testApp.inject({
       method: 'POST',
@@ -578,6 +606,18 @@ describe('MCP token settings routes', () => {
     expect(res.statusCode).toBe(204);
     expect(res.body).toBe('');
     expect(revokeMcpTokenForUserMock).toHaveBeenCalledWith('mcp-token-1', 'u1');
+  });
+
+  test('DELETE /api/settings/mcp-tokens/:id rejects personal access token authentication', async () => {
+    const res = await testApp.inject({
+      method: 'DELETE',
+      url: '/api/settings/mcp-tokens/mcp-token-1',
+      headers: patHeader(),
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(JSON.parse(res.body).error).toBe('Session authentication required');
+    expect(revokeMcpTokenForUserMock).not.toHaveBeenCalled();
   });
 
   test('DELETE /api/settings/mcp-tokens/:id returns 404 for missing token (audits the denial)', async () => {
