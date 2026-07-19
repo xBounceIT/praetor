@@ -303,6 +303,7 @@ describe('<InternalEmployeesView /> row click', () => {
     });
 
     fireEvent.click(screen.getByText('internalEmployees.addEmployee'));
+    expect(screen.getByLabelText('common:labels.fullName *')).toBeEnabled();
     expect(screen.getByLabelText('employeeProfile.phone')).toBeDisabled();
     expect(screen.getByLabelText('employeeProfile.employeeCode')).toBeDisabled();
 

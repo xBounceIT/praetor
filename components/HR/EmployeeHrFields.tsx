@@ -40,6 +40,7 @@ type EmployeeHrFieldsProps = {
   canUpdateCosts: boolean;
   identityReadOnly: boolean;
   canEditHrDetails?: boolean;
+  canEditFullName?: boolean;
   departmentValue?: string;
   responsibleUserOptions?: ResponsibleUserOption[];
   currentEmployeeId?: string | null;
@@ -179,6 +180,7 @@ const EmployeeHrFields: React.FC<EmployeeHrFieldsProps> = ({
   canUpdateCosts,
   identityReadOnly,
   canEditHrDetails = true,
+  canEditFullName = canEditHrDetails,
   departmentValue,
   responsibleUserOptions = EMPTY_RESPONSIBLE_USER_OPTIONS,
   currentEmployeeId = null,
@@ -216,7 +218,7 @@ const EmployeeHrFields: React.FC<EmployeeHrFieldsProps> = ({
               onChange={(e) => setField('name', e.target.value)}
               aria-invalid={Boolean(errors.name)}
               placeholder={t('common:labels.fullName')}
-              disabled={identityReadOnly || !canEditHrDetails}
+              disabled={identityReadOnly || !canEditFullName}
             />
             <FieldError className="text-xs">{errors.name}</FieldError>
           </Field>

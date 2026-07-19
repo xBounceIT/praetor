@@ -599,6 +599,7 @@ const InternalEmployeesView: React.FC<InternalEmployeesViewProps> = ({
                 canUpdateCosts={canUpdateCosts}
                 identityReadOnly={identityReadOnly}
                 canEditHrDetails={canUpdateEmployees}
+                canEditFullName={editingEmployee ? canUpdateEmployees : canCreateEmployees}
                 departmentValue={getEmployeeDepartmentDisplay(editingEmployee, workUnits)}
                 responsibleUserOptions={responsibleUserOptions}
                 currentEmployeeId={editingEmployee?.id ?? null}
