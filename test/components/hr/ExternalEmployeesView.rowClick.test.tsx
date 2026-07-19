@@ -31,6 +31,7 @@ const employee: User = {
   avatarInitials: 'MR',
   username: 'mrossi',
   employeeType: 'external',
+  authMethod: 'local',
   costPerHour: 25,
   email: 'mario.contractor@example.com',
   phone: '+39 02 9876',
@@ -115,6 +116,11 @@ describe('<ExternalEmployeesView /> row click', () => {
     fireEvent.click(row);
 
     expect(screen.getByDisplayValue('Mario Rossi')).toBeInTheDocument();
+    expect(screen.getByLabelText('common:labels.fullName *')).toBeEnabled();
+    expect(screen.getByLabelText('employeeProfile.firstName')).toBeEnabled();
+    expect(screen.getByLabelText('employeeProfile.lastName')).toBeEnabled();
+    expect(screen.getByLabelText('employeeProfile.email')).toBeEnabled();
+    expect(screen.getByLabelText('employeeProfile.phone')).toBeEnabled();
   });
 
   test('shows derived department in table and edit form', () => {
@@ -157,7 +163,7 @@ describe('<ExternalEmployeesView /> row click', () => {
     expect(row).toHaveClass('cursor-pointer');
     fireEvent.click(row);
 
-    expect(screen.getByLabelText('externalEmployees.name *')).toBeDisabled();
+    expect(screen.getByLabelText('common:labels.fullName *')).toBeDisabled();
     await waitFor(() => expect(getHourlyCostPeriodsMock).toHaveBeenCalledWith('u1'));
     await screen.findByText('€ 31,50');
 
@@ -219,7 +225,7 @@ describe('<ExternalEmployeesView /> row click', () => {
     });
 
     fireEvent.click(screen.getByText('externalEmployees.addEmployee'));
-    fireEvent.change(screen.getByLabelText('externalEmployees.name *'), {
+    fireEvent.change(screen.getByLabelText('common:labels.fullName *'), {
       target: { value: 'Luisa Bianchi' },
     });
     fireEvent.change(screen.getByLabelText('employeeProfile.email'), {
@@ -251,5 +257,19 @@ describe('<ExternalEmployeesView /> row click', () => {
       }),
     );
     expect(onAddEmployee.mock.calls[0][0]).not.toHaveProperty('department');
+  });
+
+  test('disables provider-managed identity while keeping phone enabled', () => {
+    renderView({ users: [{ ...employee, authMethod: 'saml' }] });
+
+    const row = screen.getByText('Mario Rossi').closest('tr');
+    if (!row) throw new Error('employee row not found');
+    fireEvent.click(row);
+
+    expect(screen.getByLabelText('common:labels.fullName *')).toBeDisabled();
+    expect(screen.getByLabelText('employeeProfile.firstName')).toBeDisabled();
+    expect(screen.getByLabelText('employeeProfile.lastName')).toBeDisabled();
+    expect(screen.getByLabelText('employeeProfile.email')).toBeDisabled();
+    expect(screen.getByLabelText('employeeProfile.phone')).toBeEnabled();
   });
 });

@@ -441,6 +441,7 @@ const InternalEmployeesView: React.FC<InternalEmployeesViewProps> = ({
     isHourlyCostPeriodsLoading,
     hourlyCostPeriodsLoadError,
   } = state;
+  const identityReadOnly = Boolean(editingEmployee && editingEmployee.authMethod !== 'local');
 
   // Combine and sort all employees by surname ascending
   const allEmployees = useMemo(() => {
@@ -483,7 +484,6 @@ const InternalEmployeesView: React.FC<InternalEmployeesViewProps> = ({
     if (editingEmployee && !canUpdateEmployees && !canEditCosts) return;
     if (!editingEmployee && !canCreateEmployees) return;
 
-    const identityReadOnly = Boolean(editingEmployee && editingEmployee.authMethod !== 'local');
     const newErrors =
       editingEmployee && !canUpdateEmployees
         ? {}
@@ -586,7 +586,6 @@ const InternalEmployeesView: React.FC<InternalEmployeesViewProps> = ({
               )}
 
               <EmployeeHrFields
-                section="internalEmployees"
                 prefix="internal-employee"
                 formData={formData}
                 errors={errors}
@@ -598,10 +597,9 @@ const InternalEmployeesView: React.FC<InternalEmployeesViewProps> = ({
                 hourlyCostPeriodsLoadError={hourlyCostPeriodsLoadError}
                 canViewCosts={canViewCosts}
                 canUpdateCosts={canUpdateCosts}
-                identityReadOnly={Boolean(
-                  editingEmployee && editingEmployee.authMethod !== 'local',
-                )}
+                identityReadOnly={identityReadOnly}
                 canEditHrDetails={canUpdateEmployees}
+                canEditFullName={editingEmployee ? canUpdateEmployees : canCreateEmployees}
                 departmentValue={getEmployeeDepartmentDisplay(editingEmployee, workUnits)}
                 responsibleUserOptions={responsibleUserOptions}
                 currentEmployeeId={editingEmployee?.id ?? null}

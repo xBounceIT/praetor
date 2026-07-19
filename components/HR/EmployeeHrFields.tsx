@@ -20,7 +20,6 @@ import {
   EMPLOYMENT_STATUS_OPTIONS,
   type EmployeeHourlyCostPeriodDraft,
   type EmployeeHrFormData,
-  type EmployeeSectionKey,
   WORK_LOCATION_OPTIONS,
 } from './employeeHrProfile';
 
@@ -28,7 +27,6 @@ const NONE_SELECT_VALUE = '__none__';
 const EMPTY_RESPONSIBLE_USER_OPTIONS: ResponsibleUserOption[] = [];
 
 type EmployeeHrFieldsProps = {
-  section: EmployeeSectionKey;
   prefix: string;
   formData: EmployeeHrFormData;
   errors: Record<string, string>;
@@ -42,6 +40,7 @@ type EmployeeHrFieldsProps = {
   canUpdateCosts: boolean;
   identityReadOnly: boolean;
   canEditHrDetails?: boolean;
+  canEditFullName?: boolean;
   departmentValue?: string;
   responsibleUserOptions?: ResponsibleUserOption[];
   currentEmployeeId?: string | null;
@@ -168,7 +167,6 @@ const useResponsibleSelect = ({
 };
 
 const EmployeeHrFields: React.FC<EmployeeHrFieldsProps> = ({
-  section,
   prefix,
   formData,
   errors,
@@ -182,6 +180,7 @@ const EmployeeHrFields: React.FC<EmployeeHrFieldsProps> = ({
   canUpdateCosts,
   identityReadOnly,
   canEditHrDetails = true,
+  canEditFullName = canEditHrDetails,
   departmentValue,
   responsibleUserOptions = EMPTY_RESPONSIBLE_USER_OPTIONS,
   currentEmployeeId = null,
@@ -210,7 +209,7 @@ const EmployeeHrFields: React.FC<EmployeeHrFieldsProps> = ({
         <div className="grid gap-4 md:grid-cols-3">
           <Field data-invalid={Boolean(errors.name)}>
             <FieldLabel htmlFor={`${prefix}-name`} required>
-              {t(`${section}.name`)}
+              {t('common:labels.fullName')}
             </FieldLabel>
             <Input
               id={`${prefix}-name`}
@@ -218,8 +217,8 @@ const EmployeeHrFields: React.FC<EmployeeHrFieldsProps> = ({
               value={formData.name}
               onChange={(e) => setField('name', e.target.value)}
               aria-invalid={Boolean(errors.name)}
-              placeholder={t(`${section}.name`)}
-              disabled={identityReadOnly}
+              placeholder={t('common:labels.fullName')}
+              disabled={identityReadOnly || !canEditFullName}
             />
             <FieldError className="text-xs">{errors.name}</FieldError>
           </Field>
