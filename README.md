@@ -110,8 +110,8 @@ This repository includes GitHub Actions workflow `create-release.yml` that pushe
 - `latest` tags for both images
 
 The workflow runs on `v*` git tags and can also be run manually. The resolved version must use
-`vMAJOR.MINOR.PATCH` with an optional `-prerelease` suffix; invalid values stop the workflow before
-release creation or registry authentication.
+`vMAJOR.MINOR.PATCH` with an optional `-prerelease` suffix and cannot exceed 128 characters; invalid
+values stop the workflow before release creation or registry authentication.
 
 ## Usage Guide
 

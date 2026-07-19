@@ -24,9 +24,11 @@ describe('release workflow image metadata', () => {
   });
 
   test('rejects versions outside the supported release-tag format', () => {
+    expect(metadataScript).toContain(`(( \${#VERSION} > 128 ))`);
     expect(metadataScript).toContain(
       `[[ ! "\${VERSION}" =~ ^v[0-9]+\\.[0-9]+\\.[0-9]+(-[A-Za-z0-9.-]+)?$ ]]`,
     );
+    expect(metadataScript).not.toContain(`echo "Invalid version '\${VERSION}'`);
     expect(metadataScript).toContain('exit 1');
   });
 

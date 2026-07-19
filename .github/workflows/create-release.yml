@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version to publish (vMAJOR.MINOR.PATCH or vMAJOR.MINOR.PATCH-prerelease)'
+        description: 'Version to publish (vMAJOR.MINOR.PATCH[-prerelease], max 128 characters)'
         required: true
         type: string
 
@@ -36,8 +36,8 @@ jobs:
             VERSION="${GITHUB_REF_NAME}"
           fi
 
-          if [[ ! "${VERSION}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9.-]+)?$ ]]; then
-            echo "Invalid version '${VERSION}'. Expected vMAJOR.MINOR.PATCH with an optional prerelease suffix." >&2
+          if (( ${#VERSION} > 128 )) || [[ ! "${VERSION}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9.-]+)?$ ]]; then
+            echo "Invalid version. Expected at most 128 characters in vMAJOR.MINOR.PATCH[-prerelease] format." >&2
             exit 1
           fi
 
