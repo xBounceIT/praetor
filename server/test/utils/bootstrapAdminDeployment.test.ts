@@ -30,4 +30,11 @@ describe('bootstrap admin deployment configuration', () => {
       /ADMIN_DEFAULT_PASSWORD:\s+'\$\{ADMIN_DEFAULT_PASSWORD:-\}'/,
     );
   });
+
+  test('committed frontend docs do not advertise the removed password fallback', () => {
+    const source = readRepositoryFile('docs/frontend/index.html');
+
+    expect(source).not.toContain('falls back to <code>password</code>');
+    expect(source).toContain('blank and published legacy defaults are rejected');
+  });
 });
