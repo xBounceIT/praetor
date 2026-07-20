@@ -51,7 +51,8 @@ describe('commercial document datasets', () => {
     expect(exec.calls[0].sql).toContain('COALESCE(ssi.duration_months, 1)');
     expect(exec.calls[0].sql).toContain("ssi.duration_unit = 'na'");
     expect(exec.calls[0].sql).toContain('ssi.unit_price * (1 - COALESCE(ssi.discount, 0) / 100.0)');
-    expect(exec.calls[0].sql).not.toContain(
+    expect(exec.calls[0].sql).toContain('COALESCE(ssi.legacy_discount_rounding, FALSE)');
+    expect(exec.calls[0].sql).toContain(
       'ROUND(ssi.unit_price * (1 - COALESCE(ssi.discount, 0) / 100.0), 2)',
     );
     expect(exec.calls[0].sql).toMatch(/ROUND\(\s*GREATEST\([\s\S]*\), 2\)/);

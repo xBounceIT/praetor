@@ -13,11 +13,18 @@ const lineNetValueSql = (
   durationUnit: SQL,
   durationMonths: SQL,
   discount: SQL,
+  legacyDiscountRounding?: SQL,
 ) => {
   const discountedUnitPrice = sql`${unitPrice} * (1 - COALESCE(${discount}, 0) / 100.0)`;
+  const calculationUnitPrice = legacyDiscountRounding
+    ? sql`CASE
+        WHEN COALESCE(${legacyDiscountRounding}, FALSE) THEN ROUND(${discountedUnitPrice}, 2)
+        ELSE ${discountedUnitPrice}
+      END`
+    : discountedUnitPrice;
 
   return sql`
-    ${quantity} * ${discountedUnitPrice} * ${effectiveDurationSql(durationUnit, durationMonths)}`;
+    ${quantity} * ${calculationUnitPrice} * ${effectiveDurationSql(durationUnit, durationMonths)}`;
 };
 
 const documentNetValueSql = (lineNetValue: SQL, discountType: SQL, discount: SQL) => sql`
@@ -60,6 +67,7 @@ const supplierOrderLineNetValueSql = lineNetValueSql(
   sql`ssi.duration_unit`,
   sql`ssi.duration_months`,
   sql`ssi.discount`,
+  sql`ssi.legacy_discount_rounding`,
 );
 
 // Prefer the selected quote candidate, then the first active one. The candidate-id fallback keeps

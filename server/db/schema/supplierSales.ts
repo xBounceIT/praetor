@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm';
 import {
+  boolean,
   check,
   index,
   integer,
@@ -66,6 +67,9 @@ export const supplierSaleItems = pgTable(
     unitType: varchar('unit_type', { length: 10 }).$type<UnitType>().notNull().default('hours'),
     unitPrice: numeric('unit_price', { precision: 15, scale: 2 }).notNull().default('0'),
     discount: numeric('discount', { precision: 5, scale: 2 }).default('0'),
+    // Rows created before precise supplier pricing rounded the discounted unit before applying
+    // quantity/duration. Keep that calculation provenance without discarding gross price/discount.
+    legacyDiscountRounding: boolean('legacy_discount_rounding').notNull().default(false),
     note: text('note'),
     createdAt: timestamp('created_at').default(sql`CURRENT_TIMESTAMP`),
     // Number of months the line runs (issue #776). Multiplies the line total alongside `quantity`;

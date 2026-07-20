@@ -1474,6 +1474,8 @@ export interface SupplierSaleOrderItem {
   unitPrice: number;
   // Supplier discount to us, as an inclusive 0-100 percentage.
   discount?: number;
+  // True only for migrated historical rows that used currency-rounded discounted units.
+  legacyDiscountRounding?: boolean;
   note?: string;
   // Number of months the line runs (issue #776). Multiplies the line total alongside quantity;
   // carried over from the originating supplier quote so the order total matches the quote.
@@ -1537,6 +1539,7 @@ export interface SupplierInvoiceItem {
   quantity: number;
   unitPrice: number;
   discount?: number;
+  legacyDiscountRounding?: boolean;
   durationMonths?: number; // months the service runs; multiplies the line total (issue #776/#775)
   durationUnit?: DurationUnit; // display unit: 'months' (default), 'years', or 'na' (N/A, no duration)
 }

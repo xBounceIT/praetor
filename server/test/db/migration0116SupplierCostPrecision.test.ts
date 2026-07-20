@@ -38,45 +38,18 @@ describe('migration 0116 supplier-cost precision', () => {
     expect(Math.round(restoredUnitCost * 150 * 100) / 100).toBe(4813.13);
   });
 
-  test('freezes existing supplier order and invoice lines at their historical unit cost', async () => {
+  test('does not discard existing supplier order and invoice discount data', async () => {
     const sql = await readMigration();
 
-    for (const table of ['supplier_sale_items', 'supplier_invoice_items']) {
-      expect(sql).toContain(`UPDATE "${table}"`);
-    }
-    expect(
-      sql.match(
-        /SET "unit_price" = ROUND\("unit_price" \* \(1 - COALESCE\("discount", 0\) \/ 100\.0\), 2\),/g,
-      ),
-    ).toHaveLength(2);
-    expect(sql.match(/WHERE COALESCE\("discount", 0\) <> 0/g)).toHaveLength(2);
-
-    const historicalUnitCost = Math.round(37.75 * (1 - 15 / 100) * 100) / 100;
-    expect(historicalUnitCost).toBe(32.09);
-    expect(Math.round(historicalUnitCost * 150 * 100) / 100).toBe(4813.5);
+    expect(sql).not.toContain('SET "unit_price" = ROUND("unit_price"');
+    expect(sql).not.toContain('"discount" = 0');
   });
 
-  test('freezes discounted lines inside historical supplier order snapshots', async () => {
+  test('does not flatten discounted lines inside historical supplier order snapshots', async () => {
     const sql = await readMigration();
 
-    expect(sql).toContain('UPDATE "supplier_order_versions"');
-    expect(sql).toContain('jsonb_set(');
-    expect(sql).toContain('jsonb_array_elements("snapshot" -> \'items\') WITH ORDINALITY');
-    expect(sql).toContain("'unitPrice'");
-    expect(sql).toContain("'discount', 0");
-    expect(sql).toContain('ORDER BY ordinality');
-    expect(sql).toContain("WHERE jsonb_typeof(\"snapshot\" -> 'items') = 'array'");
-    expect(sql).toContain("WHERE COALESCE(NULLIF(item ->> 'discount', '')::numeric, 0) <> 0");
-
-    const restoreSnapshotLine = (unitPrice: number, discount: number) =>
-      discount === 0
-        ? { unitPrice, discount }
-        : {
-            unitPrice: Math.round(unitPrice * (1 - discount / 100) * 100) / 100,
-            discount: 0,
-          };
-    expect(restoreSnapshotLine(37.75, 15)).toEqual({ unitPrice: 32.09, discount: 0 });
-    expect(restoreSnapshotLine(32.09, 0)).toEqual({ unitPrice: 32.09, discount: 0 });
+    expect(sql).not.toContain('UPDATE "supplier_order_versions"');
+    expect(sql).not.toContain("'discount', 0");
   });
 
   test('preserves manual and client-synced unit costs during the backfill', async () => {

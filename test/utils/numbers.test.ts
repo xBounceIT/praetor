@@ -51,6 +51,18 @@ describe('getDiscountedLineTotal', () => {
       }),
     ).toBe(4813.125);
   });
+
+  test('uses currency-rounded net units only for migrated historical document lines', () => {
+    const item = {
+      unitPrice: 37.75,
+      discount: 15,
+      quantity: 150,
+      durationMonths: 1,
+    };
+
+    expect(getDiscountedLineTotal({ ...item, legacyDiscountRounding: true })).toBeCloseTo(4813.5);
+    expect(getDiscountedLineTotal({ ...item, legacyDiscountRounding: false })).toBe(4813.125);
+  });
 });
 
 describe('parseNumberInputValue', () => {

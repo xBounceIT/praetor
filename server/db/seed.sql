@@ -1170,6 +1170,7 @@ INSERT INTO supplier_sale_items (
     unit_type,
     unit_price,
     discount,
+    legacy_discount_rounding,
     note
 )
 SELECT
@@ -1181,6 +1182,7 @@ SELECT
     v.unit_type,
     v.unit_price,
     v.discount,
+    false,
     v.note
 FROM (
     VALUES
@@ -1200,6 +1202,7 @@ ON CONFLICT (id) DO UPDATE SET
     unit_type = EXCLUDED.unit_type,
     unit_price = EXCLUDED.unit_price,
     discount = EXCLUDED.discount,
+    legacy_discount_rounding = EXCLUDED.legacy_discount_rounding,
     note = EXCLUDED.note;
 
 INSERT INTO supplier_invoices (
@@ -1243,21 +1246,23 @@ INSERT INTO supplier_invoice_items (
     description,
     quantity,
     unit_price,
-    discount
+    discount,
+    legacy_discount_rounding
 ) VALUES
-    ('dm_sinv_item_01', pg_temp.demo_document_code('supplier_invoice', 1), 'dm_prd_05', 'Business Laptop Bundle', 2.00, 960.00, 0.00),
-    ('dm_sinv_item_02', pg_temp.demo_document_code('supplier_invoice', 2), 'dm_prd_06', 'Microsoft 365 Annual Seat', 80.00, 182.00, 0.00),
-    ('dm_sinv_item_03', pg_temp.demo_document_code('supplier_invoice', 3), 'dm_prd_07', 'Managed Firewall Appliance', 1.00, 1410.00, 0.00),
-    ('dm_sinv_item_04', pg_temp.demo_document_code('supplier_invoice', 3), 'dm_prd_08', 'Branded Print Kit', 40.00, 118.00, 0.00),
-    ('dm_sinv_item_05', pg_temp.demo_document_code('supplier_invoice', 4), 'dm_prd_08', 'Branded Print Kit', 200.00, 118.00, 0.00),
-    ('dm_sinv_item_06', pg_temp.demo_document_code('supplier_invoice', 5), 'dm_prd_05', 'Business Laptop Bundle', 1.00, 960.00, 0.00)
+    ('dm_sinv_item_01', pg_temp.demo_document_code('supplier_invoice', 1), 'dm_prd_05', 'Business Laptop Bundle', 2.00, 960.00, 0.00, false),
+    ('dm_sinv_item_02', pg_temp.demo_document_code('supplier_invoice', 2), 'dm_prd_06', 'Microsoft 365 Annual Seat', 80.00, 182.00, 0.00, false),
+    ('dm_sinv_item_03', pg_temp.demo_document_code('supplier_invoice', 3), 'dm_prd_07', 'Managed Firewall Appliance', 1.00, 1410.00, 0.00, false),
+    ('dm_sinv_item_04', pg_temp.demo_document_code('supplier_invoice', 3), 'dm_prd_08', 'Branded Print Kit', 40.00, 118.00, 0.00, false),
+    ('dm_sinv_item_05', pg_temp.demo_document_code('supplier_invoice', 4), 'dm_prd_08', 'Branded Print Kit', 200.00, 118.00, 0.00, false),
+    ('dm_sinv_item_06', pg_temp.demo_document_code('supplier_invoice', 5), 'dm_prd_05', 'Business Laptop Bundle', 1.00, 960.00, 0.00, false)
 ON CONFLICT (id) DO UPDATE SET
     invoice_id = EXCLUDED.invoice_id,
     product_id = EXCLUDED.product_id,
     description = EXCLUDED.description,
     quantity = EXCLUDED.quantity,
     unit_price = EXCLUDED.unit_price,
-    discount = EXCLUDED.discount;
+    discount = EXCLUDED.discount,
+    legacy_discount_rounding = EXCLUDED.legacy_discount_rounding;
 
 -- Demo delivery projects generated from the confirmed client order #04 (offer #03 <-
 -- quote #06), all for client dm_cli_01. order_id/offer_id mirror the chain the app

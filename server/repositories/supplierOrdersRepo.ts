@@ -29,6 +29,7 @@ export type SupplierOrderItem = {
   unitType: UnitType;
   unitPrice: number;
   discount: number;
+  legacyDiscountRounding: boolean;
   note: string | null;
   durationMonths: number;
   durationUnit: DurationUnit;
@@ -57,6 +58,7 @@ const mapItem = (row: typeof supplierSaleItems.$inferSelect): SupplierOrderItem 
   unitType: normalizeUnitType(row.unitType),
   unitPrice: parseDbNumber(row.unitPrice, 0),
   discount: parseDbNumber(row.discount, 0),
+  legacyDiscountRounding: row.legacyDiscountRounding,
   note: row.note,
   durationMonths: row.durationMonths ?? 1,
   durationUnit: normalizeDurationUnit(row.durationUnit),
@@ -355,6 +357,7 @@ export type NewSupplierOrderItem = {
   unitType?: UnitType;
   unitPrice: number;
   discount: number;
+  legacyDiscountRounding?: boolean;
   note: string | null;
   durationMonths: number;
   durationUnit: DurationUnit;
@@ -378,6 +381,7 @@ export const insertItems = async (
         unitType: normalizeUnitType(item.unitType),
         unitPrice: numericForDb(item.unitPrice),
         discount: numericForDb(item.discount),
+        legacyDiscountRounding: item.legacyDiscountRounding ?? false,
         note: item.note,
         durationMonths: item.durationMonths,
         durationUnit: item.durationUnit,

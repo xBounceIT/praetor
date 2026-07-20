@@ -29,8 +29,8 @@ const ORDER_BASE: readonly unknown[] = [
 const orderRow = (overrides: Record<number, unknown> = {}) => makeRow(ORDER_BASE, overrides);
 
 // Column order in db/schema/supplierSales.ts (supplier_sale_items):
-//   [id, saleId, productId, productName, quantity, unitType, unitPrice, discount, note,
-//    createdAt, durationMonths, durationUnit]
+//   [id, saleId, productId, productName, quantity, unitType, unitPrice, discount,
+//    legacyDiscountRounding, note, createdAt, durationMonths, durationUnit]
 const ITEM_BASE: readonly unknown[] = [
   'ssi-1',
   'so-1',
@@ -40,6 +40,7 @@ const ITEM_BASE: readonly unknown[] = [
   'days',
   '10',
   '0',
+  false,
   null,
   new Date(1735689600000),
   1,
@@ -202,7 +203,7 @@ describe('rename', () => {
 });
 
 describe('replaceItems', () => {
-  test('issues DELETE then a single multi-row INSERT', async () => {
+  test('issues DELETE then a single multi-row INSERT and preserves calculation provenance', async () => {
     exec.enqueue({ rows: [] });
     exec.enqueue({ rows: [itemRow({ 0: 'ssi-a' })] });
     const result = await supplierOrdersRepo.replaceItems(
@@ -215,6 +216,7 @@ describe('replaceItems', () => {
           quantity: 1,
           unitPrice: 5,
           discount: 0,
+          legacyDiscountRounding: true,
           note: null,
           durationMonths: 9,
           durationUnit: 'years' as const,
@@ -228,8 +230,10 @@ describe('replaceItems', () => {
     // Duration is written to the INSERT (issue #776).
     expect(exec.calls[1].params).toContain(9);
     expect(exec.calls[1].params).toContain('years');
+    expect(exec.calls[1].params).toContain(true);
     expect(result).toHaveLength(1);
     expect(result[0].id).toBe('ssi-a');
+    expect(result[0].legacyDiscountRounding).toBe(false);
   });
 
   test('with empty items, deletes existing and skips INSERT', async () => {
@@ -271,7 +275,7 @@ describe('listAllItems', () => {
   });
 
   test('maps the duration columns (issue #776)', async () => {
-    exec.enqueue({ rows: [itemRow({ 10: 18, 11: 'years' })] });
+    exec.enqueue({ rows: [itemRow({ 11: 18, 12: 'years' })] });
     const result = await supplierOrdersRepo.listAllItems(testDb);
     expect(result[0].durationMonths).toBe(18);
     expect(result[0].durationUnit).toBe('years');

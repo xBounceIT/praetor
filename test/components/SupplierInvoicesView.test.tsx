@@ -216,6 +216,54 @@ describe('<SupplierInvoicesView /> line item duration (issue #776/#775)', () => 
       expect.objectContaining({ subtotal: 4813.13, total: 4813.13, amountPaid: 4813.13 }),
     );
   });
+
+  test('preserves migrated totals without discarding historical gross price or discount', async () => {
+    const onUpdateInvoice = mock((_id: string, _updates: Partial<SupplierInvoice>) => {});
+    const invoice = buildInvoice({
+      id: 'SINV-LEGACY-ROUNDING',
+      amountPaid: 4813.5,
+      items: [
+        {
+          id: 'sii-legacy-rounding',
+          invoiceId: 'SINV-LEGACY-ROUNDING',
+          productId: '',
+          description: 'Historical discounted service',
+          quantity: 150,
+          unitPrice: 37.75,
+          discount: 15,
+          legacyDiscountRounding: true,
+          durationMonths: 1,
+          durationUnit: 'months',
+        },
+      ],
+    });
+
+    render(
+      <SupplierInvoicesView
+        {...baseProps}
+        invoices={[invoice]}
+        onUpdateInvoice={onUpdateInvoice}
+      />,
+    );
+    fireEvent.click(screen.getByText('SINV-LEGACY-ROUNDING'));
+
+    expect(screen.getAllByText('5.662,50 EUR').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('-849,00 EUR').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('4.813,50 EUR').length).toBeGreaterThan(0);
+    await act(async () => fireEvent.click(screen.getByText('common:buttons.update')));
+
+    const updates = onUpdateInvoice.mock.calls[0]?.[1];
+    expect(updates).toEqual(
+      expect.objectContaining({ subtotal: 4813.5, total: 4813.5, amountPaid: 4813.5 }),
+    );
+    expect(updates?.items?.[0]).toEqual(
+      expect.objectContaining({
+        unitPrice: 37.75,
+        discount: 15,
+        legacyDiscountRounding: true,
+      }),
+    );
+  });
 });
 
 describe('<SupplierInvoicesView /> line-item table', () => {

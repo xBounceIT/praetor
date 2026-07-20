@@ -651,6 +651,7 @@ describe('POST /api/accounting/supplier-orders/:id/versions/:versionId/restore',
       ...SAMPLE_ITEM,
       id: 'ssi-dur',
       unitType: 'days' as const,
+      legacyDiscountRounding: true,
       durationMonths: 24,
       durationUnit: 'years' as const,
     };
@@ -670,7 +671,12 @@ describe('POST /api/accounting/supplier-orders/:id/versions/:versionId/restore',
     expect(res.statusCode).toBe(200);
     const restoredItems = soReplaceItemsMock.mock.calls[0]?.[1] as Array<Record<string, unknown>>;
     expect(restoredItems[0]).toEqual(
-      expect.objectContaining({ unitType: 'days', durationMonths: 24, durationUnit: 'years' }),
+      expect.objectContaining({
+        unitType: 'days',
+        legacyDiscountRounding: true,
+        durationMonths: 24,
+        durationUnit: 'years',
+      }),
     );
     expect(restoredItems[1]).toEqual(
       expect.objectContaining({ unitType: 'hours', durationMonths: 1, durationUnit: 'months' }),

@@ -128,6 +128,9 @@ export const calcProductMolPercentage = (cost: number, salePrice: number): numbe
 export interface PricingItem {
   unitPrice?: number;
   discount?: number;
+  // Migrated supplier order/invoice lines retain the pre-precision behavior that rounded the
+  // discounted unit before quantity/duration. New lines omit this and use the precise chain.
+  legacyDiscountRounding?: boolean;
   supplierQuoteItemId?: string | null;
   supplierQuoteUnitPrice?: number | null;
   productCost?: number;
@@ -186,10 +189,22 @@ export const getDiscountedUnitPrice = (unitPrice?: number, discount?: number): n
   return roundCurrency((Number(unitPrice) || 0) * (1 - percentage / 100));
 };
 
+const getDiscountedUnitPriceForCalculation = (
+  unitPrice: number,
+  discount: number,
+  legacyDiscountRounding = false,
+): number => {
+  const discountedUnitPrice = unitPrice * (1 - discount / 100);
+  return legacyDiscountRounding ? roundCurrency(discountedUnitPrice) : discountedUnitPrice;
+};
+
 export const getDiscountedLineTotal = (item: PricingItem): number =>
   (Number(item.quantity) || 0) *
-  (Number(item.unitPrice) || 0) *
-  (1 - (Number(item.discount) || 0) / 100) *
+  getDiscountedUnitPriceForCalculation(
+    Number(item.unitPrice) || 0,
+    Number(item.discount) || 0,
+    item.legacyDiscountRounding,
+  ) *
   getEffectiveDurationMonths(item);
 
 export const getDiscountedDocumentTotal = (items: PricingItem[]): number =>
@@ -277,9 +292,17 @@ export const getItemPricingContext = (
   const durationMonths = getEffectiveDurationMonths(item);
   const lineCost = unitCost * quantity * durationMonths;
   const discountPercentage = Math.min(100, Math.max(0, Number(item.discount || 0)));
-  const grossRevenue = Number(item.unitPrice || 0) * quantity * durationMonths;
-  const lineDiscount = (grossRevenue * discountPercentage) / 100;
-  const netRevenue = grossRevenue - lineDiscount;
+  const unitPrice = Number(item.unitPrice || 0);
+  const grossRevenue = unitPrice * quantity * durationMonths;
+  const netRevenue =
+    getDiscountedUnitPriceForCalculation(
+      unitPrice,
+      discountPercentage,
+      item.legacyDiscountRounding,
+    ) *
+    quantity *
+    durationMonths;
+  const lineDiscount = grossRevenue - netRevenue;
   const lineMargin = netRevenue - lineCost;
   return {
     baseCost,

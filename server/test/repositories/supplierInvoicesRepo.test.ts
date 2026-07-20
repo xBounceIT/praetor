@@ -39,6 +39,7 @@ const ITEM_BASE: readonly unknown[] = [
   '2',
   '50',
   null,
+  false,
   new Date(1735689600000),
 ];
 
@@ -83,6 +84,7 @@ describe('listAllItems', () => {
     expect(result[0].quantity).toBe(2);
     expect(result[0].unitPrice).toBe(50);
     expect(result[0].discount).toBe(0);
+    expect(result[0].legacyDiscountRounding).toBe(false);
   });
 });
 
@@ -296,7 +298,7 @@ describe('rename', () => {
 });
 
 describe('replaceItems', () => {
-  test('issues DELETE then a single multi-row INSERT', async () => {
+  test('issues DELETE then a single multi-row INSERT and preserves calculation provenance', async () => {
     exec.enqueue({ rows: [] });
     exec.enqueue({ rows: [itemRow({ 0: 'sinv-item-a', 3: 'A', 4: '1', 5: '5' })] });
     await supplierInvoicesRepo.replaceItems(
@@ -309,6 +311,7 @@ describe('replaceItems', () => {
           quantity: 1,
           unitPrice: 5,
           discount: 0,
+          legacyDiscountRounding: true,
           durationMonths: 1,
           durationUnit: 'months',
         },
@@ -318,6 +321,7 @@ describe('replaceItems', () => {
     expect(exec.calls).toHaveLength(2);
     expect(exec.calls[0].sql).toContain('delete from "supplier_invoice_items"');
     expect(exec.calls[1].sql).toContain('insert into "supplier_invoice_items"');
+    expect(exec.calls[1].params).toContain(true);
   });
 
   test('with empty items, deletes existing and skips INSERT', async () => {

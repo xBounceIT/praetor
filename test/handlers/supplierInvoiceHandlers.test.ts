@@ -162,6 +162,7 @@ describe('makeSupplierInvoiceHandlers', () => {
           quantity: 2,
           unitPrice: 100,
           discount: 10,
+          legacyDiscountRounding: true,
         },
         {
           productId: 'p2',
@@ -191,6 +192,7 @@ describe('makeSupplierInvoiceHandlers', () => {
     const items = callArg.items as Array<Record<string, unknown>>;
     expect(items).toHaveLength(2);
     expect(items[0].discount).toBe(10);
+    expect(items[0].legacyDiscountRounding).toBe(true);
     expect(items[1].discount).toBe(0);
 
     expect(invoices.get()[0].id).toBe('si-new');

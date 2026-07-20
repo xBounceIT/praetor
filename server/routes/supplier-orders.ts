@@ -60,6 +60,7 @@ const itemSchema = {
     unitPrice: { type: 'number' },
     note: { type: ['string', 'null'] },
     discount: { type: 'number' },
+    legacyDiscountRounding: { type: 'boolean' },
     durationMonths: { type: 'number' },
     durationUnit: { type: 'string', enum: ['months', 'years', 'na'] },
   },
@@ -105,6 +106,7 @@ const itemBodySchema = {
     unitType: { type: 'string', enum: ['hours', 'days', 'unit'] },
     unitPrice: { type: 'number' },
     discount: { type: 'number', minimum: 0, maximum: 100 },
+    legacyDiscountRounding: { type: 'boolean' },
     note: { type: 'string' },
     durationMonths: { type: 'number' },
     durationUnit: { type: 'string', enum: ['months', 'years', 'na'] },
@@ -152,6 +154,7 @@ type SupplierOrderItemInput = {
   unitType?: UnitType;
   unitPrice?: string | number;
   discount?: string | number;
+  legacyDiscountRounding?: boolean;
   note?: string;
   durationMonths?: string | number;
   durationUnit?: DurationUnit;
@@ -211,6 +214,7 @@ const normalizeItems = (
       unitType,
       unitPrice: unitPriceResult.value,
       discount: discountResult.value || 0,
+      legacyDiscountRounding: item.legacyDiscountRounding === true,
       note: item.note || null,
       durationMonths: durationMonthsResult.value ?? 1,
       durationUnit: durationUnitResult.value ?? 'months',

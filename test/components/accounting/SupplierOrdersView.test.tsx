@@ -299,6 +299,33 @@ describe('<SupplierOrdersView /> item pricing columns', () => {
     expect(screen.queryByText('901,00 EUR')).not.toBeInTheDocument();
   });
 
+  test('preserves migrated totals while keeping the historical gross price and discount visible', async () => {
+    renderView([
+      {
+        ...baseOrder,
+        items: [
+          {
+            ...baseOrder.items[0],
+            quantity: 150,
+            unitPrice: 37.75,
+            discount: 15,
+            legacyDiscountRounding: true,
+            durationMonths: 1,
+          },
+        ],
+      },
+    ]);
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('dm_ss_01'));
+      await Promise.resolve();
+    });
+
+    expect(screen.getByText('32,09')).toBeInTheDocument();
+    expect(screen.getAllByText('4.813,50 EUR').length).toBeGreaterThan(0);
+    expect(screen.queryByText('4.813,13 EUR')).not.toBeInTheDocument();
+  });
+
   test('converts a replacement product hourly cost into the retained day unit', async () => {
     const onUpdateOrder = mock((_id: string, _updates: Partial<SupplierSaleOrder>) => {});
     const products: Product[] = [

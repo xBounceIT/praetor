@@ -4,6 +4,7 @@ type ItemMath = {
   quantity?: number;
   unitPrice?: number;
   discount?: number;
+  legacyDiscountRounding?: boolean;
   // Per-item Italian VAT (IVA) rate in percent. Optional so pre-tax-feature data still computes.
   taxRate?: number;
   // Months the line's service runs (issue #757). Multiplies the taxable amount alongside
@@ -46,7 +47,11 @@ export const getDiscountedLineTotal = (item: ItemMath): number => {
   const unitPrice = item.unitPrice ?? 0;
   const discount = item.discount ?? 0;
   const duration = effectiveDurationMonths(item.durationUnit, item.durationMonths);
-  return quantity * unitPrice * (1 - discount / 100) * duration;
+  const discountedUnitPrice = unitPrice * (1 - discount / 100);
+  const calculationUnitPrice = item.legacyDiscountRounding
+    ? roundCurrency(discountedUnitPrice)
+    : discountedUnitPrice;
+  return quantity * calculationUnitPrice * duration;
 };
 
 export const getDocumentDiscountAmount = (

@@ -82,6 +82,15 @@ describe('computeInvoiceTotals', () => {
     });
   });
 
+  test('preserves historical unit rounding only for migrated supplier lines', () => {
+    const item = { quantity: 150, unitPrice: 37.75, discount: 15 };
+
+    expect(computeInvoiceTotals([{ ...item, legacyDiscountRounding: true }]).subtotal).toBe(4813.5);
+    expect(computeInvoiceTotals([{ ...item, legacyDiscountRounding: false }]).subtotal).toBe(
+      4813.13,
+    );
+  });
+
   test('Italian standard 22% VAT', () => {
     // taxable 100 * 22% = 22 tax, total 122
     expect(

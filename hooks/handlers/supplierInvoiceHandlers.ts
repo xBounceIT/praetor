@@ -47,6 +47,7 @@ export const makeSupplierInvoiceHandlers = (deps: SupplierInvoiceHandlersDeps) =
         quantity: item.quantity,
         unitPrice: item.unitPrice,
         discount: item.discount || 0,
+        legacyDiscountRounding: item.legacyDiscountRounding === true,
         // Carry the order line's duration so the invoice total matches the order (issue #776/#775);
         // 'na' lines never multiply (effectiveDurationMonths returns 1).
         durationMonths: item.durationMonths ?? 1,

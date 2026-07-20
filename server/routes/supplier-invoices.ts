@@ -66,6 +66,7 @@ const invoiceItemSchema = {
     quantity: { type: 'number' },
     unitPrice: { type: 'number' },
     discount: { type: 'number' },
+    legacyDiscountRounding: { type: 'boolean' },
     durationMonths: { type: 'number' },
     durationUnit: { type: 'string', enum: ['months', 'years', 'na'] },
   },
@@ -114,6 +115,7 @@ const invoiceItemBodySchema = {
     quantity: { type: 'number' },
     unitPrice: { type: 'number' },
     discount: { type: 'number' },
+    legacyDiscountRounding: { type: 'boolean' },
     durationMonths: { type: 'number' },
     durationUnit: { type: 'string', enum: ['months', 'years', 'na'] },
   },
@@ -162,6 +164,7 @@ type SupplierInvoiceItemInput = {
   quantity?: string | number;
   unitPrice?: string | number;
   discount?: string | number;
+  legacyDiscountRounding?: boolean;
   durationMonths?: string | number;
   durationUnit?: string;
 };
@@ -219,6 +222,7 @@ const normalizeItems = (
       quantity: quantityResult.value,
       unitPrice: unitPriceResult.value,
       discount: discountResult.value || 0,
+      legacyDiscountRounding: item.legacyDiscountRounding === true,
       // Duration applies to every line type (issue #775); 'na' is gated via effectiveDurationMonths.
       durationMonths: durationMonthsResult.value ?? 1,
       durationUnit: durationUnitResult.value ?? 'months',
