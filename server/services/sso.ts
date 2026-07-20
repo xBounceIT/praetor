@@ -483,7 +483,7 @@ const parseSamlMetadata = (xml: string): SamlMetadataConfig => {
 
 const safeOidcFetch: oidc.CustomFetch = async (url, options) => {
   const parsed = new URL(url);
-  const addresses = await resolveSafeRemoteAddresses(parsed);
+  const addresses = await resolveSafeRemoteAddresses(parsed, options.signal);
   const response = await fetchPinnedRemoteUrl(parsed, addresses, options);
   return responseWithBoundedBody(response, options.method);
 };
@@ -598,7 +598,7 @@ const safeFetchRemoteUrl = async (url: string): Promise<Response> => {
   try {
     for (let hops = 0; hops <= REMOTE_FETCH_REDIRECT_LIMIT; hops++) {
       const parsed = new URL(current);
-      const addresses = await resolveSafeRemoteAddresses(parsed);
+      const addresses = await resolveSafeRemoteAddresses(parsed, controller.signal);
       const response = await fetchPinnedRemoteUrl(parsed, addresses, {
         signal: controller.signal,
         redirect: 'manual',

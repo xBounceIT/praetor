@@ -10,6 +10,26 @@ type AutoSelectingHttpsRequestOptions = HttpsRequestOptions & { autoSelectFamily
 
 const remoteUrlHostname = (url: URL): string => url.hostname.replace(/^\[|\]$/g, '');
 
+const runWithAbortSignal = <T>(operation: () => Promise<T>, signal?: AbortSignal): Promise<T> => {
+  if (!signal) return operation();
+  if (signal.aborted) return Promise.reject(signal.reason);
+
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () => reject(signal.reason);
+    signal.addEventListener('abort', onAbort, { once: true });
+    void operation().then(
+      (value) => {
+        signal.removeEventListener('abort', onAbort);
+        resolve(value);
+      },
+      (error) => {
+        signal.removeEventListener('abort', onAbort);
+        reject(error);
+      },
+    );
+  });
+};
+
 const parseIpv4 = (ip: string): [number, number, number, number] | null => {
   if (isIP(ip) !== 4) return null;
   return ip.split('.').map(Number) as [number, number, number, number];
@@ -92,7 +112,10 @@ export const isPrivateIp = (ip: string): boolean => {
  * Resolve the destination exactly once and return only addresses that the subsequent connection
  * may use. Rejecting the whole result when any answer is unsafe prevents mixed-answer rebinding.
  */
-export const resolveSafeRemoteAddresses = async (url: URL): Promise<LookupAddress[]> => {
+export const resolveSafeRemoteAddresses = async (
+  url: URL,
+  signal?: AbortSignal,
+): Promise<LookupAddress[]> => {
   if (url.protocol !== 'https:') {
     throw new Error(`Refusing to fetch non-HTTPS URL: ${url.protocol}//...`);
   }
@@ -100,7 +123,7 @@ export const resolveSafeRemoteAddresses = async (url: URL): Promise<LookupAddres
     throw new Error('Refusing to fetch URL with embedded credentials');
   }
   const hostname = remoteUrlHostname(url);
-  const addresses = await dns.lookup(hostname, { all: true });
+  const addresses = await runWithAbortSignal(() => dns.lookup(hostname, { all: true }), signal);
   if (addresses.length === 0) {
     throw new Error(`Could not resolve host ${url.hostname}`);
   }

@@ -212,7 +212,7 @@ export const dispatchWebhook = async (
 
   try {
     const url = new URL(webhook.url);
-    const addresses = await resolveSafeRemoteAddresses(url);
+    const addresses = await resolveSafeRemoteAddresses(url, controller.signal);
     const authSecret = webhook.authSecret ? decrypt(webhook.authSecret) : '';
     const response = await fetchPinnedRemoteUrl(url, addresses, {
       method: webhook.httpMethod,

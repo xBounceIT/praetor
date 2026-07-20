@@ -99,6 +99,7 @@ class StubSaml {
 }
 
 let sso: typeof import('../../services/sso.ts');
+let safeRemoteFetch: typeof import('../../utils/safe-remote-fetch.ts');
 
 beforeAll(async () => {
   mock.module('node:dns/promises', () => ({
@@ -153,6 +154,7 @@ beforeAll(async () => {
   }));
 
   sso = await import('../../services/sso.ts');
+  safeRemoteFetch = await import('../../utils/safe-remote-fetch.ts');
 });
 
 afterAll(() => {
@@ -194,6 +196,36 @@ beforeEach(() => {
   ])
     m.mockReset();
   lastSamlOptions = null;
+});
+
+describe('resolveSafeRemoteAddresses', () => {
+  test('does not start DNS resolution when its signal is already aborted', async () => {
+    const controller = new AbortController();
+    const abortReason = new Error('DNS resolution already timed out');
+    controller.abort(abortReason);
+
+    await expect(
+      safeRemoteFetch.resolveSafeRemoteAddresses(
+        new URL('https://idp.example.com'),
+        controller.signal,
+      ),
+    ).rejects.toBe(abortReason);
+    expect(dnsLookupMock).not.toHaveBeenCalled();
+  });
+
+  test('rejects a stalled DNS lookup when its signal is aborted', async () => {
+    dnsLookupMock.mockReturnValue(new Promise<LookupAddress[]>(() => undefined));
+    const controller = new AbortController();
+    const abortReason = new Error('DNS resolution timed out');
+
+    const resolution = safeRemoteFetch.resolveSafeRemoteAddresses(
+      new URL('https://idp.example.com'),
+      controller.signal,
+    );
+    controller.abort(abortReason);
+
+    await expect(resolution).rejects.toBe(abortReason);
+  });
 });
 
 describe('isPrivateIp', () => {

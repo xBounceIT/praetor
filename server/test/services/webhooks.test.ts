@@ -396,6 +396,23 @@ describe('dispatchWebhook', () => {
       webhooksService.dispatchWebhook(existingWebhook(), {}, { timeoutMs: 1 }),
     ).rejects.toThrow('aborted');
   });
+
+  test('aborts DNS resolution when the timeout elapses', async () => {
+    resolveSafeRemoteAddressesMock.mockImplementation((_url: URL, signal?: AbortSignal) => {
+      if (!signal) return Promise.reject(new Error('missing DNS abort signal'));
+      return new Promise<LookupAddress[]>((_resolve, reject) => {
+        signal.addEventListener('abort', () => reject(new Error('aborted DNS resolution')), {
+          once: true,
+        });
+      });
+    });
+
+    await expect(
+      webhooksService.dispatchWebhook(existingWebhook(), {}, { timeoutMs: 1 }),
+    ).rejects.toThrow('aborted DNS resolution');
+    expect(fetchPinnedRemoteUrlMock).not.toHaveBeenCalled();
+    expect(decryptMock).not.toHaveBeenCalled();
+  });
 });
 
 describe('dispatchWebhookById', () => {
