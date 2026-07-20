@@ -63,6 +63,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { cn } from '@/lib/utils';
 import api from '../../services/api';
 import type { ReportChatMessage, ReportChatSessionSummary } from '../../types';
+import { formatNumber } from '../../utils/numbers';
 import { buildPermission, hasPermission } from '../../utils/permissions';
 import {
   AiReportingVisualization,
@@ -109,8 +110,6 @@ const toOptionLabel = (session: ReportChatSessionSummary) => {
   const title = session.title?.trim() ? session.title.trim() : '';
   return title;
 };
-
-const AI_REPORTING_NUMBER_FORMATTER = new Intl.NumberFormat();
 
 const safeHref = (href: string | undefined) => {
   if (!href) return null;
@@ -2436,9 +2435,8 @@ const AiReportingHeader: React.FC<AiReportingHeaderProps> = ({
                   className="gap-1.5 font-normal tabular-nums"
                 >
                   {t('aiReporting.contextWindow', { defaultValue: 'Context' })}{' '}
-                  {AI_REPORTING_NUMBER_FORMATTER.format(technicalInfo.contextTokensUsed)} /{' '}
-                  {AI_REPORTING_NUMBER_FORMATTER.format(technicalInfo.contextWindowTokens)} (
-                  {contextPercentage}%)
+                  {formatNumber(technicalInfo.contextTokensUsed)} /{' '}
+                  {formatNumber(technicalInfo.contextWindowTokens)} ({contextPercentage}%)
                   {isContextWarning && (
                     <Tooltip>
                       <TooltipTrigger asChild>
@@ -3155,7 +3153,7 @@ const AiMarkdownMessage: React.FC<{
   isStreaming,
   shouldRevealVisualizationsProgressively,
 }) => {
-  const { t, language, resolveTableMarkdown, tableRefs, completeProgressiveVisualizationReveal } =
+  const { t, resolveTableMarkdown, tableRefs, completeProgressiveVisualizationReveal } =
     interactions;
   let tableRenderIndex = 0;
 
@@ -3208,7 +3206,6 @@ const AiMarkdownMessage: React.FC<{
             <AiReportingVisualization
               key={`${message.id}-visualization-${block.visualizationIndex}`}
               visualization={block.visualization}
-              language={language}
             />
           );
         }
