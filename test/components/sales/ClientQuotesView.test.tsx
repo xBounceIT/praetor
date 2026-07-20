@@ -3,6 +3,7 @@ import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event';
 import { ApiError } from '../../../services/api/client';
 import type { Client, Quote, QuoteMutation, SupplierQuote } from '../../../types';
+import { addMonthsToDateOnly, getLocalDateString } from '../../../utils/date';
 import { installI18nMock } from '../../helpers/i18n';
 import { LineDeleteConfirmStub } from '../../helpers/lineItemDeleteConfirm';
 import { reactTest as test } from '../../helpers/reactTest';
@@ -1098,7 +1099,7 @@ describe('<ClientQuotesView />', () => {
   });
 });
 
-describe('<ClientQuotesView /> edit action gating (#812 round 13)', () => {
+describe('<ClientQuotesView /> row actions and edit gating (#812 round 13)', () => {
   const renderQuote = (quote: Quote) =>
     render(
       <ClientQuotesView
@@ -1124,6 +1125,302 @@ describe('<ClientQuotesView /> edit action gating (#812 round 13)', () => {
       ).not.toBeNull();
     });
   };
+
+  test('opens a clean create draft from Duplicate and saves every reactivated variant', async () => {
+    const user = userEvent.setup();
+    const onAddQuote = mock((_data: QuoteMutation) => Promise.resolve());
+    const quote = withSingleCandidate(
+      {
+        ...quotes[0],
+        id: 'Q-DUPLICATE-SOURCE',
+        status: 'accepted',
+        linkedOfferId: 'OFF-001',
+      },
+      'candidate-selected',
+    );
+    const [firstCandidate] = quote.candidates ?? [];
+    if (!firstCandidate) throw new Error('Expected candidate fixture');
+    const sourcedItem = {
+      ...firstCandidate.items[0],
+      quantity: 3,
+      unitPrice: 150,
+      productCost: 90,
+      productMolPercentage: 40,
+      discount: 10,
+      durationMonths: 12,
+      durationUnit: 'years' as const,
+      supplierQuoteId: 'SQ-SOURCE',
+      supplierQuoteItemId: 'SQI-SOURCE',
+      supplierQuoteSupplierName: 'Source Supplier',
+      supplierQuoteUnitPrice: 60,
+      supplierQuoteBaseQuantity: 2,
+      supplierQuoteBaseUnitPrice: 60,
+    };
+    quote.items = [sourcedItem];
+    quote.selectedCandidateId = firstCandidate.id;
+    quote.candidates = [
+      {
+        ...firstCandidate,
+        state: 'selected',
+        items: [sourcedItem],
+      },
+      {
+        ...firstCandidate,
+        id: 'candidate-discarded',
+        name: 'Variante B',
+        position: 1,
+        state: 'discarded',
+        notes: 'Second variant notes',
+        items: [
+          {
+            ...sourcedItem,
+            id: 'item-second',
+            candidateId: 'candidate-discarded',
+            unitPrice: 120,
+          },
+        ],
+      },
+    ];
+
+    render(
+      <ClientQuotesView
+        quotes={[quote]}
+        clients={[]}
+        products={[]}
+        supplierQuotes={[]}
+        communicationChannels={communicationChannels}
+        currency="EUR"
+        onAddQuote={onAddQuote}
+        onUpdateQuote={mock(() => Promise.resolve())}
+        onDeleteQuote={mock(() => Promise.resolve())}
+      />,
+    );
+
+    await openRowActions(user);
+    await user.click(
+      await screen.findByRole('button', { name: 'sales:clientQuotes.duplicateQuote' }),
+    );
+
+    expect(onAddQuote).not.toHaveBeenCalled();
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText('sales:clientQuotes.createNewQuote')).toBeInTheDocument();
+    expect(within(dialog).getByLabelText('sales:clientQuotes.quoteCode')).toHaveValue('');
+    expect(document.getElementById('client-quote-client')).toHaveTextContent(quote.clientName);
+    await user.click(document.getElementById('client-quote-client') as HTMLElement);
+    await user.click(await screen.findByRole('option', { name: quote.clientName }));
+    expect(within(dialog).getByRole('tab', { name: /Variante A/ })).toBeInTheDocument();
+    expect(within(dialog).getByRole('tab', { name: /Variante B/ })).toBeInTheDocument();
+    const expectedExpiration = addMonthsToDateOnly(getLocalDateString(), 1);
+
+    await user.click(within(dialog).getByRole('tab', { name: /Variante B/ }));
+    expect(
+      within(dialog).getAllByRole('button', { name: 'sales:clientQuotes.candidates.rename' }),
+    ).toHaveLength(2);
+
+    await user.click(
+      within(dialog).getByRole('button', { name: 'sales:clientQuotes.createQuote' }),
+    );
+    await waitFor(() => expect(onAddQuote).toHaveBeenCalledTimes(1));
+
+    const payload = onAddQuote.mock.calls[0]?.[0] as QuoteMutation;
+    expect(payload.id).toBeUndefined();
+    expect(payload.description).toBe(quote.description);
+    expect(payload.status).toBe('draft');
+    expect(payload.clientName).toBe(quote.clientName);
+    expect(payload.expirationDate).toBe(expectedExpiration);
+    expect(payload).not.toHaveProperty('linkedOfferId');
+    expect(payload.candidates).toHaveLength(2);
+    expect(payload.candidates?.map((candidate) => candidate.name)).toEqual([
+      'Variante A',
+      'Variante B',
+    ]);
+    expect(payload.candidates?.[0]).toMatchObject({
+      paymentTerms: firstCandidate.paymentTerms,
+      discount: firstCandidate.discount,
+      discountType: firstCandidate.discountType,
+      communicationChannelId: firstCandidate.communicationChannelId,
+    });
+    expect(payload.candidates?.[0]?.items[0]).toMatchObject({
+      quantity: 3,
+      unitPrice: 150,
+      productCost: 90,
+      productMolPercentage: 40,
+      discount: 10,
+      durationMonths: 12,
+      durationUnit: 'years',
+    });
+    expect(payload.candidates?.[1]?.notes).toBe('Second variant notes');
+    for (const candidate of payload.candidates ?? []) {
+      expect(candidate).not.toHaveProperty('id');
+      expect(candidate.expirationDate).toBe(expectedExpiration);
+      expect(candidate.items[0]?.id).toStartWith('temp-');
+      expect(candidate.items[0]?.supplierQuoteId).toBeNull();
+      expect(candidate.items[0]?.supplierQuoteItemId).toBeNull();
+      expect(candidate.items[0]?.supplierQuoteSupplierName).toBeNull();
+      expect(candidate.items[0]?.supplierQuoteUnitPrice).toBeNull();
+      expect(candidate.items[0]?.supplierQuoteBaseQuantity).toBeNull();
+      expect(candidate.items[0]?.supplierQuoteBaseUnitPrice).toBeNull();
+    }
+  });
+
+  test('submits the selected source variant first as the duplicate primary', async () => {
+    const user = userEvent.setup();
+    const onAddQuote = mock((_data: QuoteMutation) => Promise.resolve());
+    const quote = withSingleCandidate(
+      {
+        ...quotes[0],
+        id: 'Q-DUPLICATE-SELECTED',
+        status: 'accepted',
+        linkedOfferId: 'OFF-SELECTED',
+      },
+      'candidate-first',
+    );
+    const [firstCandidate] = quote.candidates ?? [];
+    const firstItem = firstCandidate?.items[0];
+    if (!firstCandidate || !firstItem) throw new Error('Expected candidate fixture');
+
+    const selectedItem = {
+      ...firstItem,
+      id: 'item-selected',
+      candidateId: 'candidate-selected',
+      unitPrice: 275,
+    };
+    quote.candidates = [
+      {
+        ...firstCandidate,
+        state: 'discarded',
+        items: [{ ...firstItem, unitPrice: 125 }],
+      },
+      {
+        ...firstCandidate,
+        id: 'candidate-selected',
+        name: 'Variante B',
+        position: 1,
+        state: 'selected',
+        paymentTerms: '90gg',
+        discount: 15,
+        notes: 'Winning variant notes',
+        items: [selectedItem],
+      },
+    ];
+    quote.selectedCandidateId = 'candidate-selected';
+    quote.items = [selectedItem];
+    quote.paymentTerms = '90gg';
+    quote.discount = 15;
+    quote.notes = 'Winning variant notes';
+
+    render(
+      <ClientQuotesView
+        quotes={[quote]}
+        clients={clients}
+        products={[]}
+        supplierQuotes={[]}
+        communicationChannels={communicationChannels}
+        currency="EUR"
+        onAddQuote={onAddQuote}
+        onUpdateQuote={mock(() => Promise.resolve())}
+        onDeleteQuote={mock(() => Promise.resolve())}
+      />,
+    );
+
+    await openRowActions(user);
+    await user.click(
+      await screen.findByRole('button', { name: 'sales:clientQuotes.duplicateQuote' }),
+    );
+
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByRole('tab', { name: /Variante B/ })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+
+    await user.click(
+      within(dialog).getByRole('button', { name: 'sales:clientQuotes.createQuote' }),
+    );
+    await waitFor(() => expect(onAddQuote).toHaveBeenCalledTimes(1));
+
+    const payload = onAddQuote.mock.calls[0]?.[0] as QuoteMutation;
+    expect(payload.candidates?.map((candidate) => candidate.name)).toEqual([
+      'Variante B',
+      'Variante A',
+    ]);
+    expect(payload).toMatchObject({
+      paymentTerms: '90gg',
+      discount: 15,
+      notes: 'Winning variant notes',
+    });
+    expect(payload.items?.[0]?.unitPrice).toBe(275);
+    expect(payload.candidates?.[0]?.items[0]?.unitPrice).toBe(275);
+    expect(payload.candidates?.[1]?.items[0]?.unitPrice).toBe(125);
+  });
+
+  test('blocks a duplicated source-only line in a non-active variant until it is relinked', async () => {
+    const user = userEvent.setup();
+    const onAddQuote = mock((_data: QuoteMutation) => Promise.resolve());
+    const quote = withSingleCandidate(
+      {
+        ...quotes[0],
+        id: 'Q-DUPLICATE-SOURCE-ONLY',
+      },
+      'candidate-primary',
+    );
+    const [primaryCandidate] = quote.candidates ?? [];
+    const primaryItem = primaryCandidate?.items[0];
+    if (!primaryCandidate || !primaryItem) throw new Error('Expected candidate fixture');
+    quote.candidates = [
+      primaryCandidate,
+      {
+        ...primaryCandidate,
+        id: 'candidate-source-only',
+        name: 'Variante B',
+        position: 1,
+        items: [
+          {
+            ...primaryItem,
+            id: 'item-source-only',
+            candidateId: 'candidate-source-only',
+            productId: '',
+            productName: 'Supplier-only service',
+            supplierQuoteId: 'SQ-SOURCE',
+            supplierQuoteItemId: 'SQI-SOURCE',
+            supplierQuoteSupplierName: 'Source Supplier',
+            supplierQuoteUnitPrice: 60,
+          },
+        ],
+      },
+    ];
+
+    render(
+      <ClientQuotesView
+        quotes={[quote]}
+        clients={clients}
+        products={[]}
+        supplierQuotes={[]}
+        communicationChannels={communicationChannels}
+        currency="EUR"
+        onAddQuote={onAddQuote}
+        onUpdateQuote={mock(() => Promise.resolve())}
+        onDeleteQuote={mock(() => Promise.resolve())}
+      />,
+    );
+
+    await openRowActions(user);
+    await user.click(
+      await screen.findByRole('button', { name: 'sales:clientQuotes.duplicateQuote' }),
+    );
+    const dialog = await screen.findByRole('dialog');
+    await user.click(within(dialog).getByRole('tab', { name: /Variante B/ }));
+    expect(within(dialog).getByText('Supplier-only service')).toBeInTheDocument();
+    await user.click(within(dialog).getByRole('tab', { name: /Variante A/ }));
+    await user.click(
+      within(dialog).getByRole('button', { name: 'sales:clientQuotes.createQuote' }),
+    );
+
+    expect(onAddQuote).not.toHaveBeenCalled();
+    expect(
+      within(dialog).getByText('sales:clientQuotes.errors.productOrSupplierRequired'),
+    ).toBeInTheDocument();
+  });
 
   test('keeps the one-time offer action for an accepted legacy quote without an offer', async () => {
     const user = userEvent.setup();

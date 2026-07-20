@@ -882,6 +882,16 @@ describe('DELETE /api/sales/client-quotes/:id', () => {
     expect(cqDeleteByIdMock).toHaveBeenCalledWith('q-1');
   });
 
+  test('204 keeps a traversal-shaped legacy quote operable through one encoded segment', async () => {
+    cqFindStatusAndClientNameMock.mockResolvedValue({ status: 'draft', clientName: 'Client' });
+    cqDeleteByIdMock.mockResolvedValue(undefined);
+
+    const res = await deleteQuote('legacy%2F..%2Fclient-quote');
+
+    expect(res.statusCode).toBe(204);
+    expect(cqDeleteByIdMock).toHaveBeenCalledWith('legacy/../client-quote');
+  });
+
   test('409 when an offer was created from the quote', async () => {
     cqFindLinkedOfferIdMock.mockResolvedValue('of-1');
 
@@ -1719,14 +1729,18 @@ describe('client quote candidate-family create and update', () => {
     });
   };
 
-  const setupLegacyCandidateUpdate = () => {
+  const setupLegacyCandidateUpdate = (quoteId = 'q-1') => {
     setupCreate();
-    const legacyCandidate = activeCandidate({ discount: 150 });
-    const current = gate({ status: 'draft', discount: 150, discountType: 'percentage' as const });
-    const updated = updatedQuote({ id: 'q-1', discount: 150, notes: 'edited' });
+    const legacyCandidate = activeCandidate({ quoteId, discount: 150 });
+    const current = gate({
+      status: 'draft',
+      discount: 150,
+      discountType: 'percentage' as const,
+    });
+    const updated = updatedQuote({ id: quoteId, discount: 150, notes: 'edited' });
     const existingItem = {
       id: 'qi-local',
-      quoteId: 'q-1',
+      quoteId,
       candidateId: 'qc-local',
       productId: '',
       productName: 'Service',
@@ -1767,6 +1781,89 @@ describe('client quote candidate-family create and update', () => {
     qcListForQuoteMock.mockResolvedValue([legacyCandidate]);
     qcUpdateMock.mockResolvedValue({ ...legacyCandidate, notes: 'edited' });
   };
+
+  test('rejects literal and percent-encoded traversal components in a new quote code', async () => {
+    for (const id of [
+      '../../products/product-1',
+      '%2e%2e/products/product-1',
+      ' ../../products/product-1',
+      'products/.. ',
+    ]) {
+      const res = await postQuote([freshLine()], { id });
+
+      expect(res.statusCode).toBe(400);
+    }
+    expect(cqCreateMock).not.toHaveBeenCalled();
+  });
+
+  test('rejects traversal components when renaming a quote', async () => {
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/sales/client-quotes/q-1',
+      headers: authHeader(),
+      payload: {
+        id: '../../products/product-1',
+        candidates: [
+          {
+            id: 'qc-local',
+            name: 'Variante A',
+            items: [freshLine()],
+            expirationDate: '2999-12-31',
+            communicationChannelId: 'qcc_email',
+          },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(cqRenameMock).not.toHaveBeenCalled();
+  });
+
+  test('accepts a route-safe manual code for a new quote', async () => {
+    setupCreate();
+
+    const res = await postQuote([freshLine()], { id: 'PREV-2026-001' });
+
+    expect(res.statusCode).toBe(201);
+    expect(cqCreateMock).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'PREV-2026-001' }),
+      expect.anything(),
+    );
+  });
+
+  test('lets an unchanged legacy quote code be resubmitted without renaming it', async () => {
+    const legacyId = 'legacy/../client-quote';
+    setupLegacyCandidateUpdate(legacyId);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: `/api/sales/client-quotes/${encodeURIComponent(legacyId)}`,
+      headers: authHeader(),
+      payload: {
+        id: legacyId,
+        clientId: 'c1',
+        clientName: 'Client',
+        status: 'draft',
+        candidates: [
+          {
+            id: 'qc-local',
+            name: 'Variante A',
+            items: [freshLine({ id: 'qi-local' })],
+            paymentTerms: 'immediate',
+            discount: 150,
+            discountType: 'percentage',
+            expirationDate: '2999-12-31',
+            communicationChannelId: 'qcc_email',
+            notes: 'edited',
+          },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(cqFindCurrentMock).toHaveBeenCalledWith(legacyId);
+    expect(cqRenameMock).not.toHaveBeenCalled();
+  });
 
   test('creates multiple nested candidates without consuming additional document codes', async () => {
     setupCreate();

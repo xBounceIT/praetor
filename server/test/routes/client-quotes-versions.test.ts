@@ -474,6 +474,20 @@ describe('GET /api/sales/client-quotes/:id/versions/:versionId', () => {
     expect(qvFindByIdMock).toHaveBeenCalledWith('q-1', 'qv-1');
   });
 
+  test('decodes dot-only quote and version transport values before repository access', async () => {
+    qvFindByIdMock.mockResolvedValue(SAMPLE_VERSION);
+    const escapePrefix = '~'.repeat(101);
+
+    const res = await testApp.inject({
+      method: 'GET',
+      url: `/api/sales/client-quotes/${escapePrefix}./versions/${escapePrefix}..`,
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(qvFindByIdMock).toHaveBeenCalledWith('.', '..');
+  });
+
   test('404 when version not found (also covers cross-quote ids)', async () => {
     qvFindByIdMock.mockResolvedValue(null);
 

@@ -32473,7 +32473,10 @@
                 ],
                 "properties": {
                   "id": {
-                    "type": "string"
+                    "type": "string",
+                    "maxLength": 100,
+                    "pattern": "^[A-Za-z0-9_-]*$",
+                    "description": "Optional manual quote code. Letters, numbers, underscores, and hyphens only; blank allocates the configured automatic code."
                   },
                   "description": {
                     "type": "string"
@@ -33332,7 +33335,9 @@
                 "type": "object",
                 "properties": {
                   "id": {
-                    "type": "string"
+                    "type": "string",
+                    "maxLength": 100,
+                    "description": "Quote code. A renamed code must use at most 100 letters, numbers, underscores, or hyphens; an unchanged legacy code remains accepted."
                   },
                   "description": {
                     "type": [
