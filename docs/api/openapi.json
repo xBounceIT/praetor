@@ -13822,7 +13822,8 @@
                           "webhookIds",
                           "actions"
                         ],
-                        "additionalProperties": false
+                        "additionalProperties": false,
+                        "description": "Webhook IDs and actions are omitted unless the caller has administration.webhooks.view."
                       },
                       "isEnabled": {
                         "type": "boolean"
@@ -14289,7 +14290,8 @@
                         "webhookIds",
                         "actions"
                       ],
-                      "additionalProperties": false
+                      "additionalProperties": false,
+                      "description": "Webhook IDs and actions are omitted unless the caller has administration.webhooks.view."
                     },
                     "isEnabled": {
                       "type": "boolean"
@@ -14761,7 +14763,8 @@
                         "webhookIds",
                         "actions"
                       ],
-                      "additionalProperties": false
+                      "additionalProperties": false,
+                      "description": "Webhook IDs and actions are omitted unless the caller has administration.webhooks.view."
                     },
                     "isEnabled": {
                       "type": "boolean"

@@ -100,7 +100,11 @@ const projectRuleSchema = {
     conditionLogic: { type: 'string', enum: ['and', 'or'] },
     conditions: { type: 'array', items: projectRuleConditionSchema },
     actionType: { type: 'string' },
-    actionConfig: actionConfigResponseSchema,
+    actionConfig: {
+      ...actionConfigResponseSchema,
+      description:
+        'Webhook IDs and actions are omitted unless the caller has administration.webhooks.view.',
+    },
     isEnabled: { type: 'boolean' },
     conditionMet: { type: 'boolean' },
     lastTriggeredAt: { type: ['number', 'null'] },
@@ -203,6 +207,15 @@ const WEBHOOK_USE_PERMISSION = 'administration.webhooks.view';
 
 const canUseRuleWebhooks = (permissions: readonly string[]) =>
   permissions.includes(WEBHOOK_USE_PERMISSION);
+
+const redactRuleWebhooks = (rule: projectRulesRepo.ProjectRule): projectRulesRepo.ProjectRule => ({
+  ...rule,
+  actionConfig: {
+    ...rule.actionConfig,
+    webhookIds: [],
+    actions: rule.actionConfig.actions.filter((action) => action.type !== 'webhook'),
+  },
+});
 
 const canAccessProject = makeAccessChecker(
   (userId, projectId) => userAssignmentsRepo.isProjectAssignedToUser(userId, projectId),
@@ -679,7 +692,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!id.ok) return badRequest(reply, id.message);
       if (!(await ensureProjectAccess(request, reply, id.value, 'project_rule.list.denied')))
         return;
-      return projectRulesRepo.listByProject(id.value);
+      const rules = await projectRulesRepo.listByProject(id.value);
+      return canUseRuleWebhooks(request.user?.permissions ?? [])
+        ? rules
+        : rules.map(redactRuleWebhooks);
     },
   );
 

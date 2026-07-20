@@ -211,6 +211,58 @@ describe('project rule routes', () => {
     expect(listRulesMock).not.toHaveBeenCalled();
   });
 
+  test('GET rules redacts webhook identifiers without administration.webhooks.view', async () => {
+    currentPermissions = ['projects.rules.view'];
+    listRulesMock.mockResolvedValue([
+      {
+        ...SAMPLE_RULE,
+        actionConfig: {
+          ...SAMPLE_RULE.actionConfig,
+          webhookIds: ['webhook-1'],
+          actions: [
+            ...SAMPLE_RULE.actionConfig.actions,
+            { type: 'webhook', webhookId: 'webhook-1' },
+          ],
+        },
+      },
+    ]);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/projects/p1/rules',
+      headers: authHeaders(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body)[0].actionConfig).toEqual({
+      ...SAMPLE_RULE.actionConfig,
+      webhookIds: [],
+      actions: SAMPLE_RULE.actionConfig.actions,
+    });
+  });
+
+  test('GET rules retains webhook identifiers for authorized callers', async () => {
+    currentPermissions = ['projects.rules.view', 'administration.webhooks.view'];
+    const rule = {
+      ...SAMPLE_RULE,
+      actionConfig: {
+        ...SAMPLE_RULE.actionConfig,
+        webhookIds: ['webhook-1'],
+        actions: [...SAMPLE_RULE.actionConfig.actions, { type: 'webhook', webhookId: 'webhook-1' }],
+      },
+    };
+    listRulesMock.mockResolvedValue([rule]);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/projects/p1/rules',
+      headers: authHeaders(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body)[0].actionConfig).toEqual(rule.actionConfig);
+  });
+
   test('GET recipients returns webhook options to authorized callers', async () => {
     currentPermissions = ['projects.rules.view', 'administration.webhooks.view'];
     listRecipientOptionsMock.mockResolvedValue({
