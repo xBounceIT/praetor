@@ -6,6 +6,7 @@ import type {
 import * as webhooksRepo from '../repositories/webhooksRepo.ts';
 import { decrypt, encrypt } from '../utils/crypto.ts';
 import { generatePrefixedId } from '../utils/order-ids.ts';
+import { fetchPinnedRemoteUrl, resolveSafeRemoteAddresses } from '../utils/safe-remote-fetch.ts';
 
 // Plaintext input from the route. `authSecret` carries the raw credential the admin typed, or
 // `undefined` (the field omitted) to mean "keep the stored value". The UI signals "unchanged" by
@@ -151,7 +152,6 @@ export type WebhookDispatchResult = {
 };
 
 export type WebhookDispatchOptions = {
-  fetchFn?: typeof fetch;
   timeoutMs?: number;
 };
 
@@ -204,7 +204,6 @@ export const dispatchWebhook = async (
   options: WebhookDispatchOptions = {},
 ): Promise<WebhookDispatchResult> => {
   const hasJsonBody = jsonBodyAllowed(webhook.httpMethod);
-  const authSecret = webhook.authSecret ? decrypt(webhook.authSecret) : '';
   const controller = new AbortController();
   const timer = setTimeout(
     () => controller.abort(),
@@ -212,12 +211,17 @@ export const dispatchWebhook = async (
   );
 
   try {
-    const response = await (options.fetchFn ?? fetch)(webhook.url, {
+    const url = new URL(webhook.url);
+    const addresses = await resolveSafeRemoteAddresses(url, controller.signal);
+    const authSecret = webhook.authSecret ? decrypt(webhook.authSecret) : '';
+    const response = await fetchPinnedRemoteUrl(url, addresses, {
       method: webhook.httpMethod,
       headers: buildDispatchHeaders(webhook, authSecret, hasJsonBody),
       ...(hasJsonBody ? { body: JSON.stringify(payload) } : {}),
+      redirect: 'manual',
       signal: controller.signal,
     });
+    await response.body?.cancel().catch(() => undefined);
     if (!response.ok) {
       throw new Error(`Webhook ${webhook.id} dispatch failed: HTTP ${response.status}`);
     }

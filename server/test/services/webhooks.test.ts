@@ -1,16 +1,21 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, mock, test } from 'bun:test';
+import type { LookupAddress } from 'node:dns';
 import * as realWebhooksRepo from '../../repositories/webhooksRepo.ts';
 import * as realCrypto from '../../utils/crypto.ts';
+import * as realSafeRemoteFetch from '../../utils/safe-remote-fetch.ts';
 
 // Snapshot real exports BEFORE registering mocks (mock.module inside beforeAll is not hoisted).
 const cryptoSnapshot = { ...realCrypto };
 const repoSnapshot = { ...realWebhooksRepo };
+const safeRemoteFetchSnapshot = { ...realSafeRemoteFetch };
 
 const encryptMock = mock((plaintext: string) => `enc(${plaintext})`);
 const decryptMock = mock((ciphertext: string) => `dec(${ciphertext})`);
 const insertMock = mock();
 const updateMock = mock();
 const findByIdMock = mock();
+const resolveSafeRemoteAddressesMock = mock();
+const fetchPinnedRemoteUrlMock = mock();
 
 let webhooksService: typeof import('../../services/webhooks.ts');
 
@@ -27,12 +32,18 @@ beforeAll(async () => {
     update: updateMock,
     findById: findByIdMock,
   }));
+  mock.module('../../utils/safe-remote-fetch.ts', () => ({
+    ...safeRemoteFetchSnapshot,
+    resolveSafeRemoteAddresses: resolveSafeRemoteAddressesMock,
+    fetchPinnedRemoteUrl: fetchPinnedRemoteUrlMock,
+  }));
   webhooksService = await import('../../services/webhooks.ts');
 });
 
 afterAll(() => {
   mock.module('../../utils/crypto.ts', () => cryptoSnapshot);
   mock.module('../../repositories/webhooksRepo.ts', () => repoSnapshot);
+  mock.module('../../utils/safe-remote-fetch.ts', () => safeRemoteFetchSnapshot);
 });
 
 const existingWebhook = (
@@ -52,7 +63,7 @@ const existingWebhook = (
   ...overrides,
 });
 
-const asFetch = (fn: unknown): typeof fetch => fn as typeof fetch;
+const PUBLIC_ADDRESSES: LookupAddress[] = [{ address: '8.8.8.8', family: 4 }];
 
 const insertedArg = () => insertMock.mock.calls[0]?.[0] as realWebhooksRepo.NewWebhook;
 const updatedPatch = () => updateMock.mock.calls[0]?.[1] as realWebhooksRepo.WebhookPatch;
@@ -63,8 +74,12 @@ beforeEach(() => {
   insertMock.mockReset();
   updateMock.mockReset();
   findByIdMock.mockReset();
+  resolveSafeRemoteAddressesMock.mockReset();
+  fetchPinnedRemoteUrlMock.mockReset();
   insertMock.mockImplementation(async (webhook) => webhook);
   updateMock.mockImplementation(async (_id, patch) => ({ ...existingWebhook(), ...patch }));
+  resolveSafeRemoteAddressesMock.mockResolvedValue(PUBLIC_ADDRESSES);
+  fetchPinnedRemoteUrlMock.mockImplementation(async () => new Response(null, { status: 204 }));
 });
 
 describe('createWebhook', () => {
@@ -274,29 +289,40 @@ describe('updateWebhook', () => {
 });
 
 describe('dispatchWebhook', () => {
-  test('sends a JSON body with custom headers and bearer auth', async () => {
-    const fetchMock = mock(
-      async (_input: Parameters<typeof fetch>[0], _init?: Parameters<typeof fetch>[1]) =>
-        new Response(null, { status: 204 }),
+  test('rejects loopback targets before issuing the webhook request', async () => {
+    resolveSafeRemoteAddressesMock.mockRejectedValue(
+      new Error('Refusing to fetch URL with private/loopback/reserved host'),
     );
+
+    await expect(
+      webhooksService.dispatchWebhook(
+        existingWebhook({ url: 'https://127.0.0.1/latest/meta-data' }),
+        {},
+      ),
+    ).rejects.toThrow(/private|loopback/i);
+    expect(fetchPinnedRemoteUrlMock).not.toHaveBeenCalled();
+    expect(decryptMock).not.toHaveBeenCalled();
+  });
+
+  test('sends a JSON body with custom headers and bearer auth', async () => {
     const webhook = existingWebhook({
       authType: 'bearer',
       authSecret: 'enc(tok)',
       customHeaders: [{ key: 'X-Custom', value: '1' }],
     });
 
-    const result = await webhooksService.dispatchWebhook(
-      webhook,
-      { eventType: 'project_rule_triggered' },
-      { fetchFn: asFetch(fetchMock) },
-    );
+    const result = await webhooksService.dispatchWebhook(webhook, {
+      eventType: 'project_rule_triggered',
+    });
 
     expect(result).toEqual({ delivered: true, skipped: false, status: 204 });
     expect(decryptMock).toHaveBeenCalledWith('enc(tok)');
-    expect(fetchMock).toHaveBeenCalledWith(
-      'https://example.com/hook',
+    expect(fetchPinnedRemoteUrlMock).toHaveBeenCalledWith(
+      expect.objectContaining({ href: 'https://example.com/hook' }),
+      PUBLIC_ADDRESSES,
       expect.objectContaining({
         method: 'POST',
+        redirect: 'manual',
         body: JSON.stringify({ eventType: 'project_rule_triggered' }),
         headers: expect.objectContaining({
           'Content-Type': 'application/json',
@@ -308,19 +334,15 @@ describe('dispatchWebhook', () => {
   });
 
   test('sends api key auth under the configured header', async () => {
-    const fetchMock = mock(
-      async (_input: Parameters<typeof fetch>[0], _init?: Parameters<typeof fetch>[1]) =>
-        new Response(null, { status: 200 }),
-    );
     const webhook = existingWebhook({
       authType: 'api_key',
       authHeaderName: 'X-API-Key',
       authSecret: 'enc(key)',
     });
 
-    await webhooksService.dispatchWebhook(webhook, { ok: true }, { fetchFn: asFetch(fetchMock) });
+    await webhooksService.dispatchWebhook(webhook, { ok: true });
 
-    expect(fetchMock.mock.calls[0][1]).toEqual(
+    expect(fetchPinnedRemoteUrlMock.mock.calls[0][2]).toEqual(
       expect.objectContaining({
         headers: expect.objectContaining({ 'X-API-Key': 'dec(enc(key))' }),
       }),
@@ -328,20 +350,12 @@ describe('dispatchWebhook', () => {
   });
 
   test('does not send a body for GET webhooks', async () => {
-    const fetchMock = mock(
-      async (_input: Parameters<typeof fetch>[0], _init?: Parameters<typeof fetch>[1]) =>
-        new Response(null, { status: 200 }),
-    );
     const webhook = existingWebhook({ httpMethod: 'GET', authType: 'none', authSecret: '' });
 
-    await webhooksService.dispatchWebhook(
-      webhook,
-      { ignored: true },
-      { fetchFn: asFetch(fetchMock) },
-    );
+    await webhooksService.dispatchWebhook(webhook, { ignored: true });
 
-    expect(fetchMock.mock.calls[0][1]).not.toHaveProperty('body');
-    expect(fetchMock.mock.calls[0][1]).not.toEqual(
+    expect(fetchPinnedRemoteUrlMock.mock.calls[0][2]).not.toHaveProperty('body');
+    expect(fetchPinnedRemoteUrlMock.mock.calls[0][2]).not.toEqual(
       expect.objectContaining({
         headers: expect.objectContaining({ 'Content-Type': 'application/json' }),
       }),
@@ -349,34 +363,55 @@ describe('dispatchWebhook', () => {
   });
 
   test('throws when the remote endpoint returns a non-2xx response', async () => {
-    const fetchMock = mock(
-      async (_input: Parameters<typeof fetch>[0], _init?: Parameters<typeof fetch>[1]) =>
-        new Response(null, { status: 500 }),
+    fetchPinnedRemoteUrlMock.mockResolvedValueOnce(new Response(null, { status: 500 }));
+
+    await expect(webhooksService.dispatchWebhook(existingWebhook(), {})).rejects.toThrow(
+      'HTTP 500',
+    );
+  });
+
+  test('does not follow redirects from a webhook target', async () => {
+    fetchPinnedRemoteUrlMock.mockResolvedValueOnce(
+      new Response(null, {
+        status: 302,
+        headers: { location: 'https://internal.example/latest/meta-data' },
+      }),
     );
 
-    await expect(
-      webhooksService.dispatchWebhook(existingWebhook(), {}, { fetchFn: asFetch(fetchMock) }),
-    ).rejects.toThrow('HTTP 500');
+    await expect(webhooksService.dispatchWebhook(existingWebhook(), {})).rejects.toThrow(
+      'HTTP 302',
+    );
+    expect(fetchPinnedRemoteUrlMock).toHaveBeenCalledTimes(1);
   });
 
   test('aborts the fetch when the timeout elapses', async () => {
-    const fetchMock = mock(
-      (_input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) =>
+    fetchPinnedRemoteUrlMock.mockImplementation(
+      (_url: URL, _addresses: LookupAddress[], init?: RequestInit) =>
         new Promise<Response>((_resolve, reject) => {
           init?.signal?.addEventListener('abort', () => reject(new Error('aborted')));
         }),
     );
 
     await expect(
-      webhooksService.dispatchWebhook(
-        existingWebhook(),
-        {},
-        {
-          fetchFn: asFetch(fetchMock),
-          timeoutMs: 1,
-        },
-      ),
+      webhooksService.dispatchWebhook(existingWebhook(), {}, { timeoutMs: 1 }),
     ).rejects.toThrow('aborted');
+  });
+
+  test('aborts DNS resolution when the timeout elapses', async () => {
+    resolveSafeRemoteAddressesMock.mockImplementation((_url: URL, signal?: AbortSignal) => {
+      if (!signal) return Promise.reject(new Error('missing DNS abort signal'));
+      return new Promise<LookupAddress[]>((_resolve, reject) => {
+        signal.addEventListener('abort', () => reject(new Error('aborted DNS resolution')), {
+          once: true,
+        });
+      });
+    });
+
+    await expect(
+      webhooksService.dispatchWebhook(existingWebhook(), {}, { timeoutMs: 1 }),
+    ).rejects.toThrow('aborted DNS resolution');
+    expect(fetchPinnedRemoteUrlMock).not.toHaveBeenCalled();
+    expect(decryptMock).not.toHaveBeenCalled();
   });
 });
 

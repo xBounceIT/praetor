@@ -138,12 +138,12 @@ The PostgreSQL queue preserves events across failures and restarts and retries w
 
 ## Webhooks
 
-Webhooks let administrators register outbound HTTP targets that Praetor can call to notify external systems. The **Webhooks** page lists every configured target and is available to administrators with the matching `administration.webhooks` permissions.
+Webhooks let administrators register public outbound HTTPS targets that Praetor can call to notify external systems. The **Webhooks** page lists every configured target and is available to administrators with the matching `administration.webhooks` permissions.
 
 Each target defines:
 
 - **Name** and an optional **Description** to identify the integration.
-- **URL** — the endpoint Praetor calls. Only `http` and `https` URLs are accepted.
+- **URL** — the public HTTPS endpoint Praetor calls. URLs with embedded credentials and loopback, private, link-local, or reserved destinations are rejected. Praetor resolves and pins the address before connecting and does not follow redirects.
 - **HTTP method** — `GET`, `POST` (default), `PUT`, `PATCH`, or `DELETE`.
 - **Authentication** — how Praetor authenticates to the target: **None**, **Bearer token**, **Basic** (username and password), or **API key** (a value sent under a custom header you name). The secret credential is encrypted at rest and never returned to the browser; when editing it shows a **Stored — Replace** badge, and the same Keep / Replace behavior as the other secret fields preserves it unless you explicitly replace or clear it.
 - **Custom headers** — optional key/value pairs attached to every request, layered on top of the authentication header. Use these for non-secret routing values such as a tenant id.
@@ -152,3 +152,5 @@ Each target defines:
 Create, edit, and delete actions are gated by the create, update, and delete permissions respectively, and every change is written to the audit log.
 
 This page configures targets only; the events that trigger each webhook are wired up separately, for example in job-rule actions.
+
+> Upgrade note: `http://` targets saved by earlier versions are no longer dispatched. Update them to a public HTTPS endpoint before re-enabling rules that use them.

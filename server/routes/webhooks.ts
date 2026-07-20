@@ -72,7 +72,11 @@ const webhookResponseSchema = {
 const webhookBodyProperties = {
   name: { type: 'string', maxLength: MAX_NAME_LEN },
   description: { type: 'string' },
-  url: { type: 'string', maxLength: MAX_URL_LEN },
+  url: {
+    type: 'string',
+    maxLength: MAX_URL_LEN,
+    description: 'HTTPS target URL without embedded credentials',
+  },
   httpMethod: { type: 'string', enum: [...WEBHOOK_HTTP_METHODS] },
   authType: { type: 'string', enum: [...WEBHOOK_AUTH_TYPES] },
   authUsername: { type: 'string', maxLength: MAX_AUTH_FIELD_LEN },
@@ -109,7 +113,7 @@ const idParamsSchema = {
 const isValidWebhookUrl = (value: string): boolean => {
   try {
     const url = new URL(value);
-    return url.protocol === 'http:' || url.protocol === 'https:';
+    return url.protocol === 'https:' && !url.username && !url.password;
   } catch {
     return false;
   }
@@ -165,7 +169,7 @@ const validateWebhookBody = (
       return null;
     }
     if (!isValidWebhookUrl(url.value)) {
-      badRequest(reply, 'url must be a valid http(s) URL');
+      badRequest(reply, 'url must be a valid HTTPS URL without embedded credentials');
       return null;
     }
     input.url = url.value;

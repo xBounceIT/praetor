@@ -58005,7 +58005,8 @@
                   },
                   "url": {
                     "type": "string",
-                    "maxLength": 2000
+                    "maxLength": 2000,
+                    "description": "HTTPS target URL without embedded credentials"
                   },
                   "httpMethod": {
                     "type": "string",
@@ -58582,7 +58583,8 @@
                   },
                   "url": {
                     "type": "string",
-                    "maxLength": 2000
+                    "maxLength": 2000,
+                    "description": "HTTPS target URL without embedded credentials"
                   },
                   "httpMethod": {
                     "type": "string",

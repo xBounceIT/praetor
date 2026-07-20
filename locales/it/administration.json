@@ -382,7 +382,7 @@
     },
     "errors": {
       "urlRequired": "L'URL è obbligatorio.",
-      "urlInvalid": "Inserisci un URL http(s) valido.",
+      "urlInvalid": "Inserisci un URL HTTPS valido senza credenziali incorporate.",
       "headerNameRequired": "Il nome header è obbligatorio per l'autenticazione con chiave API.",
       "headerKeyRequired": "La chiave dell'header è obbligatoria."
     },
