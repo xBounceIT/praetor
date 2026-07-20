@@ -369,8 +369,14 @@ describe('<ClientQuotesView />', () => {
     expect(lineDiscountInputs.length).toBeGreaterThan(0);
     fireEvent.change(lineDiscountInputs[0], { target: { value: '150' } });
     expect(lineDiscountInputs[0]).toHaveValue('100,00');
+    const revenueInputs = within(dialog)
+      .getAllByRole('textbox', { name: 'sales:clientQuotes.revenue' })
+      .filter((input): input is HTMLInputElement => input instanceof HTMLInputElement);
+    expect(revenueInputs.length).toBeGreaterThan(0);
+    expect(revenueInputs.every((input) => input.disabled)).toBe(true);
     fireEvent.change(lineDiscountInputs[0], { target: { value: '10' } });
-    expect(within(dialog).getAllByText('180,00 EUR').length).toBeGreaterThan(0);
+    expect(revenueInputs.every((input) => !input.disabled)).toBe(true);
+    expect(revenueInputs.some((input) => input.value === '180,00')).toBe(true);
     expect(within(dialog).getAllByText('60,00 EUR').length).toBeGreaterThan(0);
 
     fireEvent.click(within(dialog).getByRole('button', { name: 'sales:clientQuotes.updateQuote' }));
@@ -942,6 +948,68 @@ describe('<ClientQuotesView />', () => {
     expect(molInput.checkValidity()).toBe(true);
   });
 
+  test('edits net revenue and recalculates sale price and MOL without changing cost', async () => {
+    const revenueQuote: Quote = {
+      ...quotes[0],
+      id: 'Q-REVENUE',
+      discount: 0,
+      items: [
+        {
+          ...quotes[0].items[0],
+          quoteId: 'Q-REVENUE',
+          quantity: 2,
+          durationMonths: 3,
+          discount: 20,
+        },
+      ],
+    };
+    render(
+      <ClientQuotesView
+        quotes={[revenueQuote]}
+        clients={clients}
+        products={[]}
+        supplierQuotes={[]}
+        currency="EUR"
+        onAddQuote={mock(() => Promise.resolve())}
+        onUpdateQuote={mock(() => Promise.resolve())}
+        onDeleteQuote={mock(() => Promise.resolve())}
+      />,
+    );
+
+    fireEvent.click(screen.getByText('Q-REVENUE'));
+    const dialog = await screen.findByRole('dialog');
+    const revenueInput = within(dialog).getAllByLabelText(
+      'sales:clientQuotes.revenue',
+    )[0] as HTMLInputElement;
+    const salePriceInput = within(dialog).getAllByLabelText(
+      'crm:internalListing.salePrice',
+    )[0] as HTMLInputElement;
+    const costInput = within(dialog).getAllByLabelText(
+      'crm:internalListing.cost',
+    )[0] as HTMLInputElement;
+    const quantityInput = within(dialog).getAllByLabelText(
+      'sales:clientQuotes.qty',
+    )[0] as HTMLInputElement;
+    const molInput = within(dialog).getAllByLabelText(
+      'sales:clientQuotes.molLabel',
+    )[0] as HTMLInputElement;
+
+    expect(revenueInput).not.toBeDisabled();
+    expect(revenueInput).toHaveValue('480,00');
+    fireEvent.focus(revenueInput);
+    fireEvent.change(revenueInput, { target: { value: '720' } });
+
+    await waitFor(() => {
+      expect(salePriceInput).toHaveValue('150,00');
+      expect(molInput).toHaveValue('60,00');
+      expect(costInput).toHaveValue('60,00');
+      expect(within(dialog).getAllByText('360,00 EUR').length).toBeGreaterThan(0);
+    });
+
+    fireEvent.change(quantityInput, { target: { value: '' } });
+    expect(revenueInput).toBeDisabled();
+  });
+
   test('the read-only banner renders dark-mode-compatible amber, not a light slab (issue #768)', async () => {
     // A finalized (accepted) quote opens the dialog read-only and surfaces the warning banner.
     const acceptedQuote: Quote = { ...quotes[0], id: 'Q-ACCEPTED', status: 'accepted' };
@@ -967,6 +1035,11 @@ describe('<ClientQuotesView />', () => {
       .filter((input): input is HTMLInputElement => input instanceof HTMLInputElement);
     expect(lineDiscountInputs.length).toBeGreaterThan(0);
     expect(lineDiscountInputs.every((input) => input.disabled)).toBe(true);
+    const revenueInputs = within(dialog)
+      .getAllByRole('textbox', { name: 'sales:clientQuotes.revenue' })
+      .filter((input): input is HTMLInputElement => input instanceof HTMLInputElement);
+    expect(revenueInputs.length).toBeGreaterThan(0);
+    expect(revenueInputs.every((input) => input.disabled)).toBe(true);
 
     const label = screen.getByText('sales:clientQuotes.readOnlyBecauseFinal');
     // The label carries an explicit dark-mode color so it stays legible on the dark dialog.

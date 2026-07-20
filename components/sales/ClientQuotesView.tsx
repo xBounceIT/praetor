@@ -81,7 +81,12 @@ import {
   parseOptionalNumberInputValue,
 } from '../../utils/numbers';
 import { getPaymentTermsOptions } from '../../utils/options';
-import { makeCostUpdater, makeMolUpdater, makeUnitPriceUpdater } from '../../utils/pricingHandlers';
+import {
+  makeCostUpdater,
+  makeMolUpdater,
+  makeRevenueUpdater,
+  makeUnitPriceUpdater,
+} from '../../utils/pricingHandlers';
 import {
   buildProductQuickViewHref,
   buildSupplierQuoteQuickViewHref,
@@ -3174,9 +3179,9 @@ const ClientQuoteItemsSection: React.FC<{ controller: ClientQuotesController }> 
       accessorFn: getClientQuoteItemRevenue,
       align: 'right',
       cell: ({ row }) => (
-        <span className="font-semibold tabular-nums">
-          {formatDecimal(getClientQuoteItemRevenue(row))} {currency}
-        </span>
+        <div className="min-w-[130px]">
+          <ClientQuoteRevenueEditor controller={controller} line={getLine(row)} />
+        </div>
       ),
     },
     {
@@ -3293,6 +3298,7 @@ const getClientQuoteLineContext = (
     lineCost,
     netRevenue: lineSalePrice,
     lineMargin,
+    revenueMultiplier,
   } = getClientQuoteItemPricingContext(item);
   const rawCost = item.supplierQuoteItemId ? item.supplierQuoteUnitPrice : item.productCost;
   const cost =
@@ -3303,6 +3309,8 @@ const getClientQuoteLineContext = (
         : convertUnitPrice(Number(rawCost), 'hours', item.unitType || 'hours');
   const molPercentage = item.productMolPercentage ?? undefined;
   const unitPrice = Number.isFinite(Number(item.unitPrice)) ? Number(item.unitPrice) : undefined;
+  const revenue = unitPrice === undefined ? undefined : lineSalePrice;
+  const canEditRevenue = Number.isFinite(revenueMultiplier) && revenueMultiplier > 0;
   const durationUnit = normalizeDurationUnit(item.durationUnit);
   const durationValue = getDurationInputValue(item);
   const product = products.find((p) => p.id === item.productId);
@@ -3342,11 +3350,18 @@ const getClientQuoteLineContext = (
     setFormData(makeUnitPriceUpdater<Partial<Quote>>(index, value));
   };
 
+  const handleRevenueChange = (value: string) => {
+    if (isReadOnly || !canEditRevenue) return;
+    setFormData(makeRevenueUpdater<Partial<Quote>>(index, value));
+  };
+
   return {
     cost,
     unitPrice,
+    revenue,
     molPercentage,
     lineCost,
+    canEditRevenue,
     durationUnit,
     durationValue,
     isSupply,
@@ -3362,6 +3377,7 @@ const getClientQuoteLineContext = (
     handleCostChange,
     handleUnitPriceChange,
     handleMolChange,
+    handleRevenueChange,
   };
 };
 
@@ -3590,6 +3606,27 @@ const ClientQuoteSalePriceEditor: React.FC<{
       formatDecimals={2}
       onValueChange={line.handleUnitPriceChange}
       disabled={controller.isReadOnly}
+      className="w-full max-w-[5rem] flex-none border-border bg-background px-1 py-2 text-right text-sm text-foreground"
+    />
+    <span className="shrink-0 text-[9px] font-semibold text-muted-foreground">
+      {controller.currency}
+    </span>
+  </div>
+);
+
+const ClientQuoteRevenueEditor: React.FC<{
+  controller: ClientQuotesController;
+  line: ClientQuoteLineContext;
+}> = ({ controller, line }) => (
+  <div className="flex w-full items-center justify-end gap-1">
+    <ValidatedNumberInput
+      value={line.revenue}
+      placeholder="0,00"
+      min={0}
+      aria-label={controller.t('sales:clientQuotes.revenue')}
+      formatDecimals={2}
+      onValueChange={line.handleRevenueChange}
+      disabled={controller.isReadOnly || !line.canEditRevenue}
       className="w-full max-w-[5rem] flex-none border-border bg-background px-1 py-2 text-right text-sm text-foreground"
     />
     <span className="shrink-0 text-[9px] font-semibold text-muted-foreground">
