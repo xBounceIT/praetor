@@ -46392,7 +46392,9 @@
                 "type": "object",
                 "properties": {
                   "id": {
-                    "type": "string"
+                    "type": "string",
+                    "maxLength": 100,
+                    "description": "Leave blank to allocate automatically. Manual values may contain letters, numbers, underscores, and hyphens."
                   },
                   "supplierId": {
                     "type": "string"
@@ -46793,7 +46795,9 @@
                 "type": "object",
                 "properties": {
                   "id": {
-                    "type": "string"
+                    "type": "string",
+                    "maxLength": 100,
+                    "description": "When changed, may contain letters, numbers, underscores, and hyphens. An unchanged legacy id remains accepted."
                   },
                   "supplierId": {
                     "type": "string"
