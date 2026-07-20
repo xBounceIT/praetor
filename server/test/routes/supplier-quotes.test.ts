@@ -161,6 +161,7 @@ const FULL_PERMS = [
 
 const DRAFT_QUOTE = {
   id: 'sq-1',
+  description: 'Hardware procurement',
   supplierId: 's1',
   supplierName: 'Acme',
   paymentTerms: 'immediate',
@@ -267,6 +268,7 @@ const authHeader = () => ({ authorization: `Bearer ${signToken({ userId: 'u1' })
 
 const CREATE_PAYLOAD = {
   id: 'sq-new',
+  description: 'Annual hardware procurement',
   supplierId: 's1',
   supplierName: 'Acme',
   clientId: null,
@@ -360,7 +362,10 @@ describe('POST /api/sales/supplier-quotes', () => {
     expect(res.statusCode).toBe(201);
     expect(allocateDocumentCodeMock).not.toHaveBeenCalled();
     expect(sqCreateMock).toHaveBeenCalledWith(
-      expect.objectContaining({ id: 'sq-new' }),
+      expect.objectContaining({
+        id: 'sq-new',
+        description: 'Annual hardware procurement',
+      }),
       expect.anything(),
     );
   });
@@ -397,19 +402,26 @@ describe('PUT /api/sales/supplier-quotes/:id', () => {
   test('200 updates a draft quote with content edits', async () => {
     sqFindByIdMock.mockResolvedValue(DRAFT_QUOTE);
     sqFindLinkedOrderIdMock.mockResolvedValue(null);
-    sqUpdateMock.mockResolvedValue({ ...DRAFT_QUOTE, paymentTerms: '30 days' });
+    sqUpdateMock.mockResolvedValue({
+      ...DRAFT_QUOTE,
+      description: 'Updated procurement',
+      paymentTerms: '30 days',
+    });
 
     const res = await testApp.inject({
       method: 'PUT',
       url: '/api/sales/supplier-quotes/sq-1',
       headers: authHeader(),
-      payload: { paymentTerms: '30 days' },
+      payload: { description: 'Updated procurement', paymentTerms: '30 days' },
     });
 
     expect(res.statusCode).toBe(200);
     expect(sqUpdateMock).toHaveBeenCalledTimes(1);
     expect(sqUpdateMock.mock.calls[0]?.[1]).toEqual(
-      expect.objectContaining({ paymentTerms: '30 days' }),
+      expect.objectContaining({
+        description: 'Updated procurement',
+        paymentTerms: '30 days',
+      }),
     );
     expect(logAuditMock).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'supplier_quote.updated' }),

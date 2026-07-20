@@ -26,6 +26,7 @@ export const clientOfferSchema = {
   type: 'object',
   properties: {
     id: { type: 'string' },
+    description: { type: ['string', 'null'] },
     linkedQuoteId: { type: 'string' },
     linkedQuoteCandidateId: { type: ['string', 'null'] },
     clientId: { type: 'string' },

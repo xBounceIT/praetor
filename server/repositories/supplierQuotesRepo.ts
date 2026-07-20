@@ -15,6 +15,7 @@ import {
 
 export type SupplierQuote = {
   id: string;
+  description: string | null;
   supplierId: string;
   supplierName: string;
   clientId: string | null;
@@ -238,6 +239,7 @@ type QuoteRow = typeof supplierQuotes.$inferSelect & {
 
 const mapQuote = (row: QuoteRow): SupplierQuote => ({
   id: row.id,
+  description: row.description,
   supplierId: row.supplierId,
   supplierName: row.supplierName,
   clientId: row.clientId ?? null,
@@ -572,6 +574,7 @@ export const findIdConflict = async (
 
 export type NewSupplierQuote = {
   id: string;
+  description?: string | null;
   supplierId: string;
   supplierName: string;
   clientId: string | null;
@@ -591,6 +594,7 @@ export const create = async (
     .insert(supplierQuotes)
     .values({
       id: input.id,
+      description: input.description ?? null,
       supplierId: input.supplierId,
       supplierName: input.supplierName,
       clientId: input.clientId,
@@ -606,6 +610,7 @@ export const create = async (
 };
 
 export type SupplierQuoteUpdate = {
+  description?: string | null;
   supplierId?: string | null;
   supplierName?: string | null;
   // clientId/clientName accept an explicit `null` to clear the customer link. Unlike the
@@ -635,6 +640,8 @@ export const update = async (
   const [row] = await exec
     .update(supplierQuotes)
     .set({
+      description:
+        patch.description === undefined ? sql`${supplierQuotes.description}` : patch.description,
       supplierId: sql`COALESCE(${patch.supplierId ?? null}, ${supplierQuotes.supplierId})`,
       supplierName: sql`COALESCE(${patch.supplierName ?? null}, ${supplierQuotes.supplierName})`,
       // Direct write (not COALESCE) so an explicit null clears the link; `undefined` keeps it.
@@ -668,6 +675,7 @@ export const rename = async (
 };
 
 export type SupplierQuoteRestoreFields = {
+  description?: string | null;
   supplierId: string;
   supplierName: string;
   clientId: string | null;
@@ -684,9 +692,13 @@ export const restoreSnapshotQuote = async (
   snapshot: SupplierQuoteRestoreFields,
   exec: DbExecutor = db,
 ): Promise<SupplierQuote | null> => {
+  const description = Object.hasOwn(snapshot, 'description')
+    ? { description: snapshot.description ?? null }
+    : {};
   const [row] = await exec
     .update(supplierQuotes)
     .set({
+      ...description,
       supplierId: snapshot.supplierId,
       supplierName: snapshot.supplierName,
       clientId: snapshot.clientId,

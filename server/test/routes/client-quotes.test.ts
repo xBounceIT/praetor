@@ -260,6 +260,7 @@ const baseGate = () => ({
 // update() returns a mapped ClientQuote (BASE projection shape).
 const updatedQuote = (over: Record<string, unknown> = {}) => ({
   id: 'q-1',
+  description: 'Managed renewal',
   linkedOfferId: null,
   clientId: 'c1',
   clientName: 'Client',
@@ -995,6 +996,7 @@ describe('POST /api/sales/client-quotes/:id promotion lifecycle', () => {
     expect(JSON.parse(res.body).offer.effectiveStatus).toBe('draft');
     expect(coCreateMock).toHaveBeenCalledWith(
       expect.objectContaining({
+        description: 'Managed renewal',
         linkedQuoteId: 'q-1',
         linkedQuoteCandidateId: 'qc-a',
         paymentTerms: '30gg',

@@ -9,6 +9,7 @@
     "orderCreatedToast": "Ordine cliente creato",
     "updateOrder": "Aggiorna Ordine",
     "orderDetails": "Dettagli Ordine",
+    "description": "Descrizione",
     "linkedQuote": "Preventivo Collegato",
     "linkedQuoteInfo": "Questo ordine è stato creato dal preventivo #{{number}}",
     "quoteDetailsReadOnly": "(I dettagli del preventivo sono in sola lettura)",

@@ -274,6 +274,7 @@ const baseGate = () => ({
 // update() returns the full mapped ClientOffer row.
 const updatedOffer = (over: Record<string, unknown> = {}) => ({
   id: 'off-1',
+  description: 'Managed renewal',
   linkedQuoteId: 'q-1',
   clientId: 'c1',
   clientName: 'Client',
@@ -698,6 +699,7 @@ describe('PUT /api/sales/client-offers/:id expired rules (issue #779)', () => {
     expect(clientOrderCreateMock).toHaveBeenCalledWith(
       expect.objectContaining({
         id: 'ORD-2999-0001',
+        description: 'Managed renewal',
         linkedQuoteId: 'q-1',
         linkedOfferId: 'off-1',
         clientId: 'c1',

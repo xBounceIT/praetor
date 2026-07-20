@@ -23,6 +23,7 @@ export const supplierQuotes = pgTable(
   'supplier_quotes',
   {
     id: varchar('id', { length: 100 }).primaryKey(),
+    description: text('description'),
     // RESTRICT (not CASCADE): deleting a supplier must not silently destroy supplier quotes
     // (financial documents). Callers must remove quotes explicitly before deleting the supplier.
     supplierId: varchar('supplier_id', { length: 50 })

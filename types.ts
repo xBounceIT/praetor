@@ -773,6 +773,7 @@ export interface QuoteCandidate {
 
 export interface Quote {
   id: string;
+  description?: string | null;
   clientId: string;
   clientName: string;
   items: QuoteItem[];
@@ -889,6 +890,7 @@ export interface ClientOfferItem {
 
 export interface ClientOffer {
   id: string;
+  description?: string | null;
   linkedQuoteId: string;
   linkedQuoteCandidateId?: string | null;
   clientId: string;
@@ -983,6 +985,7 @@ export interface ClientsOrderItem {
 
 export interface ClientsOrder {
   id: string;
+  description?: string | null;
   linkedQuoteId?: string; // Reference to source quote
   linkedOfferId?: string;
   clientId: string;
@@ -1386,6 +1389,7 @@ export interface SupplierQuoteItem {
 
 export interface SupplierQuote {
   id: string;
+  description?: string | null;
   supplierId: string;
   supplierName: string;
   // Optional customer association (issue #759). Absent/null when no customer is linked.

@@ -37,6 +37,7 @@ const products: Product[] = [];
 
 const buildQuote = (overrides: Partial<SupplierQuote>): SupplierQuote => ({
   id: 'SQ-base',
+  description: 'Managed hardware procurement',
   supplierId: 'sup-1',
   supplierName: 'Acme Supplies',
   // Every supplier quote is associated with a customer (issue #777); default to one so edit/submit
@@ -99,6 +100,20 @@ afterEach(() => {
 });
 
 describe('<SupplierQuotesView /> list columns', () => {
+  test('renders description immediately after the quote code', () => {
+    const { container } = render(<SupplierQuotesView {...baseProps} />);
+
+    const headerLabels = Array.from(container.querySelectorAll('[data-column-header-label]')).map(
+      (header) => header.textContent?.trim(),
+    );
+
+    expect(headerLabels.slice(0, 2)).toEqual([
+      'sales:supplierQuotes.quoteCode',
+      'sales:supplierQuotes.description',
+    ]);
+    expect(screen.getAllByText('Managed hardware procurement').length).toBeGreaterThan(0);
+  });
+
   test('renders the communication channel column between payment terms and expiration', () => {
     const { container } = render(<SupplierQuotesView {...baseProps} />);
 
@@ -114,6 +129,23 @@ describe('<SupplierQuotesView /> list columns', () => {
       headerLabels.indexOf('sales:supplierQuotes.expirationDate'),
     );
     expect(screen.getAllByText('Email').length).toBeGreaterThan(0);
+  });
+});
+
+describe('<SupplierQuotesView /> description', () => {
+  test('allows a free-text description while creating a quote', () => {
+    render(<SupplierQuotesView {...baseProps} quotes={[]} />);
+    fireEvent.click(screen.getByText('sales:supplierQuotes.addQuote'));
+
+    const description = screen.getByRole('textbox', {
+      name: 'sales:supplierQuotes.description',
+    });
+    fireEvent.change(description, { target: { value: 'Annual hardware procurement' } });
+
+    expect(description).toBeEnabled();
+    expect(description).toHaveValue('Annual hardware procurement');
+    expect(description.closest('[data-slot="field"]')).toHaveClass('w-full');
+    expect(description.closest('.grid')).toBeNull();
   });
 });
 
@@ -182,6 +214,7 @@ describe('<SupplierQuotesView /> Duplicate row action', () => {
 
     const payload = onAddQuote.mock.calls[0]?.[0] as Partial<SupplierQuote>;
     expect(payload.id).toBeUndefined();
+    expect(payload.description).toBe(source.description);
     expect(payload.status).toBe('draft');
     expect(payload.expirationDate).toBe(expectedExpiration);
     expect(payload.supplierId).toBe(source.supplierId);

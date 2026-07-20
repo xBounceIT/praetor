@@ -81,6 +81,7 @@ const clientOrderSchema = {
   type: 'object',
   properties: {
     id: { type: 'string' },
+    description: { type: ['string', 'null'] },
     linkedQuoteId: { type: ['string', 'null'] },
     linkedOfferId: { type: ['string', 'null'] },
     clientId: { type: 'string' },
@@ -169,6 +170,7 @@ const clientOrderCreateBodySchema = {
   allOf: [createDocumentDiscountConstraint],
   properties: {
     id: { type: 'string' },
+    description: { type: 'string' },
     linkedQuoteId: { type: 'string' },
     linkedOfferId: { type: 'string' },
     clientId: { type: 'string' },
@@ -187,6 +189,7 @@ const clientOrderUpdateBodySchema = {
   type: 'object',
   properties: {
     id: { type: 'string' },
+    description: { type: ['string', 'null'] },
     linkedOfferId: { type: 'string' },
     clientId: { type: 'string' },
     clientName: { type: 'string' },
@@ -670,6 +673,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       const {
         id: nextId,
+        description,
         linkedQuoteId,
         linkedOfferId,
         clientId,
@@ -682,6 +686,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         notes,
       } = request.body as {
         id?: unknown;
+        description?: unknown;
         linkedQuoteId: unknown;
         linkedOfferId: unknown;
         clientId: unknown;
@@ -858,6 +863,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           const { order, items } = await createClientOrderRows(
             {
               id: nextIdResult.value,
+              description: (description as string | null | undefined) ?? null,
               linkedQuoteId: linkedQuoteIdValue,
               linkedOfferId: linkedOfferIdResult.value || null,
               clientId: clientIdResult.value,
@@ -958,6 +964,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const { id } = request.params as { id: string };
       const {
         id: nextId,
+        description,
         linkedOfferId,
         clientId,
         clientName,
@@ -969,6 +976,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         notes,
       } = request.body as {
         id?: unknown;
+        description: unknown;
         linkedOfferId: unknown;
         clientId: unknown;
         clientName: unknown;
@@ -1067,6 +1075,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const requestedOrderIdChanged = nextIdValue !== null && nextIdValue !== idResult.value;
       const hasLockedFieldUpdates =
+        description !== undefined ||
         linkedOfferId !== undefined ||
         clientIdValue !== undefined ||
         clientNameValue !== undefined ||
@@ -1338,6 +1347,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       let hasContentChanges = false;
       if ((!isSourceLinkedOrder || allowSourceLinkedEdit) && hasLockedFieldUpdates) {
         if (
+          (description !== undefined &&
+            normalizeNotesValue(description) !== normalizeNotesValue(existingOrder.description)) ||
           nextLinkedOfferId !== null ||
           (clientIdValue !== undefined &&
             clientIdValue !== null &&
@@ -1376,6 +1387,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             await snapshotPreState(idResult.value, 'update', request, tx);
           }
           const patch: clientsOrdersRepo.ClientOrderUpdate = {};
+          if (description !== undefined) patch.description = description as string | null;
           if (nextLinkedOfferId !== null) {
             patch.linkedOfferId = nextLinkedOfferId;
             patch.linkedQuoteId = linkedQuoteIdValue;
@@ -1706,6 +1718,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           const order = await clientsOrdersRepo.restoreSnapshotOrder(
             idResult.value,
             {
+              ...(Object.hasOwn(version.snapshot.order, 'description')
+                ? { description: version.snapshot.order.description ?? null }
+                : {}),
               clientId: version.snapshot.order.clientId,
               clientName: version.snapshot.order.clientName,
               paymentTerms: version.snapshot.order.paymentTerms,

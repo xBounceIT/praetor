@@ -622,6 +622,7 @@ const quoteSchema = {
   type: 'object',
   properties: {
     id: { type: 'string' },
+    description: { type: ['string', 'null'] },
     linkedOfferId: { type: ['string', 'null'] },
     clientId: { type: 'string' },
     clientName: { type: 'string' },
@@ -729,6 +730,7 @@ const quoteCreateBodySchema = {
   allOf: [createDocumentDiscountConstraint],
   properties: {
     id: manualQuoteCodeCreateSchema,
+    description: { type: 'string' },
     clientId: { type: 'string' },
     clientName: { type: 'string' },
     items: { type: 'array', items: quoteItemBodySchema },
@@ -750,6 +752,7 @@ const quoteUpdateBodySchema = {
   type: 'object',
   properties: {
     id: manualQuoteCodeUpdateSchema,
+    description: { type: ['string', 'null'] },
     clientId: { type: 'string' },
     clientName: { type: 'string' },
     items: { type: 'array', items: quoteItemBodySchema },
@@ -879,6 +882,7 @@ const isExpirationOnlyCandidateFamilyUpdate = (args: {
   quoteId: string;
   nextQuoteId: string;
   parent: clientQuotesRepo.ClientQuote;
+  description?: string | null;
   clientId: string;
   clientName: string;
   requestedStatus: string;
@@ -888,6 +892,8 @@ const isExpirationOnlyCandidateFamilyUpdate = (args: {
 }): boolean => {
   if (
     args.nextQuoteId !== args.quoteId ||
+    (args.description !== undefined &&
+      !sameNullableValue(args.parent.description, args.description)) ||
     args.parent.clientId !== args.clientId ||
     args.parent.clientName !== args.clientName ||
     normalizeQuoteStatus(args.parent.status) !== normalizeQuoteStatus(args.requestedStatus) ||
@@ -1475,12 +1481,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       const {
         id: nextId,
+        description,
         clientId,
         clientName,
         candidates,
         status,
       } = request.body as {
         id?: unknown;
+        description?: unknown;
         clientId: unknown;
         clientName: unknown;
         candidates: unknown;
@@ -1540,6 +1548,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           const created = await clientQuotesRepo.create(
             {
               id: quoteId,
+              description: (description as string | null | undefined) ?? null,
               clientId: clientIdResult.value,
               clientName: clientNameResult.value,
               paymentTerms: primaryCandidate.paymentTerms,
@@ -1671,6 +1680,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const { id } = request.params as { id: string };
       const {
         id: nextId,
+        description,
         clientId,
         clientName,
         items,
@@ -1684,6 +1694,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         notes,
       } = request.body as {
         id: unknown;
+        description: unknown;
         clientId: unknown;
         clientName: unknown;
         items: unknown;
@@ -1710,6 +1721,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       // (transitions and id renames stay allowed), and `isIdOnlyUpdate` further excludes status.
       // Deriving keeps the three in lock-step when a PUT body field is added.
       const hasNonExpirationContentUpdate =
+        description !== undefined ||
         clientId !== undefined ||
         clientName !== undefined ||
         items !== undefined ||
@@ -1944,6 +1956,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                   quoteId: idResult.value,
                   nextQuoteId: candidateFamilyId,
                   parent: lockedParent,
+                  description: description as string | null | undefined,
                   clientId: clientIdValue.value,
                   clientName: clientNameValue.value,
                   requestedStatus,
@@ -1965,6 +1978,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             const parent = await clientQuotesRepo.update(
               idResult.value,
               {
+                description: description as string | null | undefined,
                 clientId: clientIdValue.value,
                 clientName: clientNameValue.value,
                 paymentTerms: first.paymentTerms,
@@ -2455,6 +2469,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               : await clientQuotesRepo.update(
                   renamedQuote?.id ?? idResult.value,
                   {
+                    description: description as string | null | undefined,
                     clientId: (clientIdValue as string | null | undefined) ?? null,
                     clientName: (clientNameValue as string | null | undefined) ?? null,
                     paymentTerms: (paymentTerms as string | null | undefined) ?? null,
@@ -2796,6 +2811,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           const offer = await clientOffersRepo.create(
             {
               id: offerId,
+              description: currentQuote.description ?? null,
               linkedQuoteId: currentQuote.id,
               linkedQuoteCandidateId: lockedCandidate.id,
               clientId: currentQuote.clientId,
@@ -3309,6 +3325,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           const quote = await clientQuotesRepo.restoreSnapshotQuote(
             idResult.value,
             {
+              ...(Object.hasOwn(version.snapshot.quote, 'description')
+                ? { description: version.snapshot.quote.description ?? null }
+                : {}),
               clientId: version.snapshot.quote.clientId,
               clientName: version.snapshot.quote.clientName,
               paymentTerms: primarySnapshotCandidate.paymentTerms,

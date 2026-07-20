@@ -526,6 +526,41 @@ describe('POST /api/clients-orders/:id/versions/:versionId/restore', () => {
     );
   });
 
+  test('restores description from a new snapshot', async () => {
+    setupHappyPath();
+    ovFindByIdMock.mockResolvedValue({
+      ...SAMPLE_VERSION,
+      snapshot: {
+        ...SAMPLE_SNAPSHOT,
+        order: { ...SAMPLE_ORDER, description: 'Restored order description' },
+      },
+    });
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/clients-orders/o-1/versions/ov-1/restore',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(coRestoreSnapshotOrderMock.mock.calls[0]?.[1]).toEqual(
+      expect.objectContaining({ description: 'Restored order description' }),
+    );
+  });
+
+  test('does not clear description when a legacy snapshot omits it', async () => {
+    setupHappyPath();
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/clients-orders/o-1/versions/ov-1/restore',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(Object.hasOwn(coRestoreSnapshotOrderMock.mock.calls[0]?.[1], 'description')).toBe(false);
+  });
+
   test('409 rejects restoring a snapshot with a percentage discount above 100%', async () => {
     setupHappyPath();
     ovFindByIdMock.mockResolvedValue({

@@ -162,6 +162,7 @@ export interface SupplierQuotesViewProps {
 }
 
 const getDefaultFormData = (): Partial<SupplierQuote> => ({
+  description: '',
   supplierId: '',
   supplierName: '',
   clientId: null,
@@ -177,6 +178,7 @@ const getDefaultFormData = (): Partial<SupplierQuote> => ({
 
 const buildDuplicatedSupplierQuoteFormData = (quote: SupplierQuote): Partial<SupplierQuote> => ({
   id: '',
+  description: quote.description ?? '',
   supplierId: quote.supplierId,
   supplierName: quote.supplierName,
   clientId: quote.clientId ?? null,
@@ -790,6 +792,14 @@ const useSupplierQuotesController = ({
         className: 'whitespace-nowrap',
         headerClassName: 'min-w-[8rem]',
         cell: ({ row }) => <span className="font-bold text-zinc-700">{row.id}</span>,
+      },
+      {
+        header: t('sales:supplierQuotes.description', { defaultValue: 'Description' }),
+        accessorKey: 'description',
+        headerClassName: 'min-w-[12rem]',
+        cell: ({ row }) => (
+          <span className="text-sm text-foreground">{row.description?.trim() || '-'}</span>
+        ),
       },
       {
         header: t('crm:clients.tableHeaders.insertDate'),
@@ -1427,7 +1437,7 @@ const SupplierQuoteDetailsSection: React.FC<{ controller: SupplierQuotesControll
         defaultValue: 'Supplier Information',
       })}
     </SupplierQuoteSectionTitle>
-    <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+    <div className="grid grid-cols-2 gap-3 lg:grid-cols-6">
       <SupplierQuoteSupplierField controller={controller} />
       <SupplierQuoteClientField controller={controller} />
       <SupplierQuoteCodeField controller={controller} />
@@ -1435,6 +1445,7 @@ const SupplierQuoteDetailsSection: React.FC<{ controller: SupplierQuotesControll
       <SupplierQuoteCommunicationField controller={controller} />
       <SupplierQuoteExpirationField controller={controller} />
     </div>
+    <SupplierQuoteDescriptionField controller={controller} />
   </div>
 );
 
@@ -1524,6 +1535,28 @@ const SupplierQuoteCodeField: React.FC<{ controller: SupplierQuotesController }>
             })}
       </FieldDescription>
     )}
+  </Field>
+);
+
+const SupplierQuoteDescriptionField: React.FC<{ controller: SupplierQuotesController }> = ({
+  controller,
+}) => (
+  <Field className="w-full">
+    <FieldLabel htmlFor="supplier-quote-description">
+      {controller.t('sales:supplierQuotes.description', { defaultValue: 'Description' })}
+    </FieldLabel>
+    <Input
+      id="supplier-quote-description"
+      type="text"
+      value={controller.formData.description ?? ''}
+      disabled={controller.isReadOnly}
+      onChange={(event) =>
+        controller.dispatch({
+          type: 'patchFormData',
+          value: { description: event.target.value },
+        })
+      }
+    />
   </Field>
 );
 
