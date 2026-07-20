@@ -25,6 +25,7 @@ import {
 } from '../utils/personal-access-token.ts';
 import { LOGIN_RATE_LIMIT, STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { replyError } from '../utils/replyError.ts';
+import { INSECURE_DEFAULT_ADMIN_PASSWORDS, isInsecureEnvValue } from '../utils/runtimeConfig.ts';
 import {
   badRequest,
   forbidden,
@@ -35,7 +36,6 @@ import {
 } from '../utils/validation.ts';
 
 const ADMIN_USERNAME = 'admin';
-const DEFAULT_ADMIN_PASSWORD = 'password';
 
 const MAX_RIL_TRANSFER_VALUE_LENGTH = 64;
 
@@ -468,7 +468,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       });
 
       if (request.user.username === ADMIN_USERNAME) {
-        if (newPasswordResult.value === DEFAULT_ADMIN_PASSWORD) {
+        if (isInsecureEnvValue(newPasswordResult.value, INSECURE_DEFAULT_ADMIN_PASSWORDS)) {
           await notificationsRepo.upsertAdminPasswordWarning(request.user.id);
         } else {
           await notificationsRepo.deleteAdminPasswordWarning(request.user.id);
