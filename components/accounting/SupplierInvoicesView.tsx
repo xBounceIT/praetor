@@ -23,6 +23,7 @@ import { createLineItemIndexResolver } from '../../utils/lineItemIndex';
 import {
   durationValueToMonths,
   formatDecimal,
+  getDiscountedDocumentTotal,
   getDiscountedLineTotal,
   getDurationInputValue,
   getEffectiveDurationMonths,
@@ -70,8 +71,7 @@ const getStatusLabel = (
 ) => t(statusLabelMap[status] ?? String(status));
 
 const calculateTotals = (items: SupplierInvoiceItem[]) => {
-  // Duration multiplies each line alongside quantity; 'na' lines use a neutral multiplier of 1.
-  const subtotal = items.reduce((sum, item) => sum + getDiscountedLineTotal(item), 0);
+  const subtotal = getDiscountedDocumentTotal(items);
 
   return { subtotal, total: subtotal };
 };

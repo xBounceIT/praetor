@@ -12,6 +12,7 @@ import {
 import { logAudit } from '../utils/audit.ts';
 import { type DatabaseError, getUniqueViolation } from '../utils/db-errors.ts';
 import { replyDocumentCodeCollision } from '../utils/document-code-replies.ts';
+import { roundCurrency } from '../utils/invoice-math.ts';
 import { generatePrefixedId, ITEM_ID_PREFIXES } from '../utils/order-ids.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { replyError } from '../utils/replyError.ts';
@@ -339,8 +340,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!totalResult.ok) return badRequest(reply, totalResult.message);
       const amountPaidResult = optionalLocalizedNonNegativeNumber(amountPaid, 'amountPaid');
       if (!amountPaidResult.ok) return badRequest(reply, amountPaidResult.message);
-      const totalValue = totalResult.value ?? 0;
-      const amountPaidValue = amountPaidResult.value ?? 0;
+      const subtotalValue = roundCurrency(subtotalResult.value ?? 0);
+      const totalValue = roundCurrency(totalResult.value ?? 0);
+      const amountPaidValue = roundCurrency(amountPaidResult.value ?? 0);
       const statusValue = typeof status === 'string' && status.length > 0 ? status : 'draft';
 
       if (amountPaidValue > totalValue) {
@@ -456,7 +458,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               issueDate: issueDateResult.value,
               dueDate: dueDateResult.value,
               status: statusValue,
-              subtotal: subtotalResult.value ?? 0,
+              subtotal: subtotalValue,
               total: totalValue,
               amountPaid: amountPaidValue,
               notes: typeof notes === 'string' ? notes : null,
@@ -650,19 +652,20 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (subtotal !== undefined) {
         const subtotalResult = optionalLocalizedNonNegativeNumber(subtotal, 'subtotal');
         if (!subtotalResult.ok) return badRequest(reply, subtotalResult.message);
-        if (subtotalResult.value !== null) patch.subtotal = subtotalResult.value;
+        if (subtotalResult.value !== null) patch.subtotal = roundCurrency(subtotalResult.value);
       }
 
       if (total !== undefined) {
         const totalResult = optionalLocalizedNonNegativeNumber(total, 'total');
         if (!totalResult.ok) return badRequest(reply, totalResult.message);
-        if (totalResult.value !== null) patch.total = totalResult.value;
+        if (totalResult.value !== null) patch.total = roundCurrency(totalResult.value);
       }
 
       if (amountPaid !== undefined) {
         const amountPaidResult = optionalLocalizedNonNegativeNumber(amountPaid, 'amountPaid');
         if (!amountPaidResult.ok) return badRequest(reply, amountPaidResult.message);
-        if (amountPaidResult.value !== null) patch.amountPaid = amountPaidResult.value;
+        if (amountPaidResult.value !== null)
+          patch.amountPaid = roundCurrency(amountPaidResult.value);
       }
 
       if (typeof status === 'string') patch.status = status;

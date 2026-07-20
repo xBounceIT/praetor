@@ -175,6 +175,44 @@ describe('<SupplierInvoicesView /> line item duration (issue #776/#775)', () => 
     expect(screen.getAllByText('900,90 EUR').length).toBeGreaterThan(0);
     expect(screen.queryByText('901,00 EUR')).not.toBeInTheDocument();
   });
+
+  test('submits currency-scale totals that match the displayed amount', async () => {
+    const onUpdateInvoice = mock((_id: string, _updates: Partial<SupplierInvoice>) => {});
+    const invoice = buildInvoice({
+      id: 'SINV-DOCUMENT-ROUNDING',
+      amountPaid: 4813.13,
+      items: [
+        {
+          id: 'sii-document-rounding',
+          invoiceId: 'SINV-DOCUMENT-ROUNDING',
+          productId: '',
+          description: 'Discounted service',
+          quantity: 150,
+          unitPrice: 37.75,
+          discount: 15,
+          durationMonths: 1,
+          durationUnit: 'months',
+        },
+      ],
+    });
+
+    render(
+      <SupplierInvoicesView
+        {...baseProps}
+        invoices={[invoice]}
+        onUpdateInvoice={onUpdateInvoice}
+      />,
+    );
+    fireEvent.click(screen.getByText('SINV-DOCUMENT-ROUNDING'));
+
+    expect(screen.getAllByText('4.813,13 EUR').length).toBeGreaterThan(0);
+    await act(async () => fireEvent.click(screen.getByText('common:buttons.update')));
+
+    const updates = onUpdateInvoice.mock.calls[0]?.[1];
+    expect(updates).toEqual(
+      expect.objectContaining({ subtotal: 4813.13, total: 4813.13, amountPaid: 4813.13 }),
+    );
+  });
 });
 
 describe('<SupplierInvoicesView /> line-item table', () => {

@@ -2,7 +2,7 @@ import type React from 'react';
 import api from '../../services/api';
 import type { SupplierInvoice, SupplierSaleOrder, View } from '../../types';
 import { addDaysToDateOnly, getLocalDateString } from '../../utils/date';
-import { getDiscountedLineTotal } from '../../utils/numbers';
+import { getDiscountedDocumentTotal } from '../../utils/numbers';
 import { makeTempId } from '../../utils/tempId';
 import { toastError } from '../../utils/toast';
 
@@ -52,13 +52,7 @@ export const makeSupplierInvoiceHandlers = (deps: SupplierInvoiceHandlersDeps) =
         durationMonths: item.durationMonths ?? 1,
         durationUnit: item.durationUnit ?? 'months',
       }));
-      const totals = items.reduce(
-        (acc, item) => {
-          acc.subtotal += getDiscountedLineTotal(item);
-          return acc;
-        },
-        { subtotal: 0 },
-      );
+      const subtotal = getDiscountedDocumentTotal(items);
       const invoice = await api.supplierInvoices.create({
         linkedSaleId: order.id,
         supplierId: order.supplierId,
@@ -66,8 +60,8 @@ export const makeSupplierInvoiceHandlers = (deps: SupplierInvoiceHandlersDeps) =
         issueDate,
         dueDate,
         status: 'draft',
-        subtotal: totals.subtotal,
-        total: totals.subtotal,
+        subtotal,
+        total: subtotal,
         amountPaid: 0,
         notes: order.notes,
         items,

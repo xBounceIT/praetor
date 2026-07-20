@@ -178,8 +178,9 @@ export const getEffectiveDurationMonths = (item: PricingItem): number => {
 };
 
 // Supplier documents persist the gross/list unit price plus an inclusive 0-100 line discount.
-// This currency-scale helper is for displaying the derived unit cost. Line/document totals use
-// the unrounded pricing chain below so fractional cents are not multiplied into a material error.
+// This currency-scale helper is for displaying the derived unit cost. Line totals keep the
+// unrounded pricing chain so fractional cents are not multiplied into a material error; only the
+// aggregate returned by getDiscountedDocumentTotal is rounded to currency precision.
 export const getDiscountedUnitPrice = (unitPrice?: number, discount?: number): number => {
   const percentage = Number(discount) || 0;
   return roundCurrency((Number(unitPrice) || 0) * (1 - percentage / 100));
@@ -190,6 +191,9 @@ export const getDiscountedLineTotal = (item: PricingItem): number =>
   (Number(item.unitPrice) || 0) *
   (1 - (Number(item.discount) || 0) / 100) *
   getEffectiveDurationMonths(item);
+
+export const getDiscountedDocumentTotal = (items: PricingItem[]): number =>
+  roundCurrency(items.reduce((sum, item) => sum + getDiscountedLineTotal(item), 0));
 
 // Coerce an arbitrary value to a valid duration unit, defaulting to 'months' (issue #757).
 // 'na' (N/A) marks a line where duration does not apply (issue #775).
