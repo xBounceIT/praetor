@@ -18,6 +18,7 @@ import {
   type SiemConfigUpdate,
   type SiemStatus,
 } from '../../services/api/logs';
+import { formatNumber } from '../../utils/numbers';
 import SecretField from '../shared/SecretField';
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
@@ -884,9 +885,7 @@ const SiemLogsTab: React.FC<Props> = ({ canUpdate }) => {
               </div>
               <div>
                 <div className="text-xs text-muted-foreground">{t('logs.siem.status.pending')}</div>
-                <div className="mt-1 font-medium">
-                  {(status?.pendingCount ?? 0).toLocaleString(i18n.language)}
-                </div>
+                <div className="mt-1 font-medium">{formatNumber(status?.pendingCount ?? 0)}</div>
               </div>
               <div>
                 <div className="text-xs text-muted-foreground">
@@ -899,9 +898,7 @@ const SiemLogsTab: React.FC<Props> = ({ canUpdate }) => {
               <div>
                 <div className="text-xs text-muted-foreground">{t('logs.siem.status.dropped')}</div>
                 <div className="mt-1 font-medium">
-                  {(
-                    (status?.droppedCapacity ?? 0) + (status?.droppedRetention ?? 0)
-                  ).toLocaleString(i18n.language)}
+                  {formatNumber((status?.droppedCapacity ?? 0) + (status?.droppedRetention ?? 0))}
                 </div>
               </div>
             </div>

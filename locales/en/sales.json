@@ -10,6 +10,7 @@
     "mol": "Margin overhead loading percentage",
     "notes": "Additional notes for the entire document",
     "clientInformation": "Client and document details",
+    "variants": "Configure alternatives for the same quote: each variant keeps its own items, prices, discounts, and terms.",
     "productsServices": "Products and services for this quote",
     "items": "Line items for this offer",
     "supplierInformation": "Supplier and document details",

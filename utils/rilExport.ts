@@ -1,5 +1,6 @@
 import type { Cell, Workbook } from 'exceljs';
 import { downloadBlob } from './download';
+import { formatDecimal } from './numbers';
 import type { RilRow } from './ril';
 import {
   calculateRilTotals,
@@ -80,10 +81,6 @@ const setFill = (cell: Cell, argb: string) => {
 };
 
 const MONTH_NAME_FORMAT = new Intl.DateTimeFormat('it-IT', { month: 'long' });
-const PICAP_FORMAT = new Intl.NumberFormat('it-IT', {
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-});
 
 // Renders minutes as H:MM with an unpadded hour, to read like the reference form (e.g. 160:00).
 const formatMinutesClock = (minutes: number): string => {
@@ -98,7 +95,7 @@ const formatMonthLabel = (year: number, month: number) => {
   return `${monthName}-${String(year).slice(-2)}`;
 };
 
-const formatPicap = (value: number) => PICAP_FORMAT.format(value);
+const formatPicap = (value: number) => formatDecimal(value);
 
 const normalizeRows = (rows: RilRow[]): RilRow[] => {
   const byDay = new Map(rows.map((row) => [row.day, row]));
