@@ -9,6 +9,11 @@ import { normalizeNullableDateOnly } from '../utils/date.ts';
 import { type DurationUnit, normalizeDurationUnit } from '../utils/duration-unit.ts';
 import { numericForDb, parseDbNumber } from '../utils/parse.ts';
 import {
+  normalizeHistoricalPricingSemanticsVersion,
+  type PricingSemanticsVersion,
+  preservePricingSemanticsVersions,
+} from '../utils/pricing-semantics.ts';
+import {
   effectiveSupplierQuoteStatusFromDate,
   isTerminalQuoteStatus,
 } from '../utils/quote-status.ts';
@@ -224,6 +229,7 @@ export type SupplierQuoteItem = {
   unitType: string;
   durationMonths: number;
   durationUnit: DurationUnit;
+  pricingSemanticsVersion: PricingSemanticsVersion;
 };
 
 type QuoteRow = typeof supplierQuotes.$inferSelect & {
@@ -271,6 +277,7 @@ const mapItem = (row: typeof supplierQuoteItems.$inferSelect): SupplierQuoteItem
   unitType: row.unitType ?? 'unit',
   durationMonths: row.durationMonths ?? 1,
   durationUnit: normalizeDurationUnit(row.durationUnit),
+  pricingSemanticsVersion: normalizeHistoricalPricingSemanticsVersion(row.pricingSemanticsVersion),
 });
 
 export const listAll = async (exec: DbExecutor = db): Promise<SupplierQuote[]> => {
@@ -760,6 +767,7 @@ export type NewSupplierQuoteItem = {
   unitType: string;
   durationMonths: number;
   durationUnit: DurationUnit;
+  pricingSemanticsVersion?: PricingSemanticsVersion;
 };
 
 export type QuoteItemSnapshot = {
@@ -914,6 +922,7 @@ export const insertItems = async (
         // and is interpreted by the pricing multiplier, so the canonical value is persisted here.
         durationMonths: item.durationMonths ?? 1,
         durationUnit: item.durationUnit ?? 'months',
+        pricingSemanticsVersion: item.pricingSemanticsVersion,
       })),
     )
     .returning();
@@ -926,8 +935,15 @@ export const replaceItems = async (
   exec: DbExecutor = db,
 ): Promise<SupplierQuoteItem[]> =>
   runAtomically(exec, async (tx) => {
-    await tx.delete(supplierQuoteItems).where(eq(supplierQuoteItems.quoteId, quoteId));
-    return insertItems(quoteId, items, tx);
+    const storedItems = await tx
+      .delete(supplierQuoteItems)
+      .where(eq(supplierQuoteItems.quoteId, quoteId))
+      .returning({
+        id: supplierQuoteItems.id,
+        pricingSemanticsVersion: supplierQuoteItems.pricingSemanticsVersion,
+      });
+    const versionedItems = preservePricingSemanticsVersions(items, storedItems);
+    return insertItems(quoteId, versionedItems, tx);
   });
 
 // Identity-preserving counterpart of replaceItems for the PUT route (user report after #812):

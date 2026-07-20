@@ -22,7 +22,7 @@ describe('commercial report duration multiplier', () => {
     const { sql: text } = dialect.sqlToQuery(expression as SQL);
     const normalizedSql = text.replace(/\s+/g, ' ');
     expect(normalizedSql).toMatch(
-      /CASE WHEN \w+\.duration_unit = 'na' THEN 1 WHEN \w+\.duration_unit = 'years' THEN COALESCE\(\w+\.duration_months, 12\) \/ 12\.0 ELSE COALESCE\(\w+\.duration_months, 1\) END/i,
+      /CASE WHEN \w+\.duration_unit = 'na' THEN 1 WHEN \w+\.pricing_semantics_version = 1 THEN COALESCE\(\w+\.duration_months, 1\) WHEN \w+\.duration_unit = 'years' THEN COALESCE\(\w+\.duration_months, 12\) \/ 12\.0 ELSE COALESCE\(\w+\.duration_months, 1\) END/i,
     );
   });
 });

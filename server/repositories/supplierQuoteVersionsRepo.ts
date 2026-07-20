@@ -5,6 +5,7 @@ import {
   supplierQuoteVersions,
 } from '../db/schema/supplierQuoteVersions.ts';
 import { generatePrefixedId } from '../utils/order-ids.ts';
+import { normalizeHistoricalPricingSemanticsItems } from '../utils/pricing-semantics.ts';
 import type { SupplierQuote, SupplierQuoteItem } from './supplierQuotesRepo.ts';
 
 export type { SupplierQuoteVersionSnapshot } from '../db/schema/supplierQuoteVersions.ts';
@@ -38,7 +39,10 @@ const mapRow = (row: SupplierQuoteVersionRowSelect): SupplierQuoteVersionRow => 
 
 const mapVersion = (row: typeof supplierQuoteVersions.$inferSelect): SupplierQuoteVersion => ({
   ...mapRow(row),
-  snapshot: row.snapshot,
+  snapshot: {
+    ...row.snapshot,
+    items: normalizeHistoricalPricingSemanticsItems(row.snapshot.items),
+  },
 });
 
 // Record `linkedOrderId` on the snapshot so the saved version is a complete historical record.

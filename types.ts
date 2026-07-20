@@ -747,6 +747,7 @@ export interface QuoteItem {
   unitType?: SupplierUnitType;
   durationMonths?: number; // canonical stored months; pricing uses the displayed duration value
   durationUnit?: DurationUnit; // display unit: 'months' (default), 'years', or 'na' (N/A, no duration)
+  pricingSemanticsVersion?: PricingSemanticsVersion;
 }
 
 export type QuoteCandidateState = 'active' | 'selected' | 'discarded';
@@ -885,6 +886,7 @@ export interface ClientOfferItem {
   unitType?: SupplierUnitType;
   durationMonths?: number; // canonical stored months; pricing uses the displayed duration value
   durationUnit?: DurationUnit; // display unit: 'months' (default), 'years', or 'na' (N/A, no duration)
+  pricingSemanticsVersion?: PricingSemanticsVersion;
 }
 
 export interface ClientOffer {
@@ -979,6 +981,7 @@ export interface ClientsOrderItem {
   unitType?: SupplierUnitType;
   durationMonths?: number; // canonical stored months; pricing uses the displayed duration value
   durationUnit?: DurationUnit; // display unit: 'months' (default), 'years', or 'na' (N/A, no duration)
+  pricingSemanticsVersion?: PricingSemanticsVersion;
 }
 
 export interface ClientsOrder {
@@ -1268,6 +1271,7 @@ export interface InvoiceItem {
   taxRate?: number;
   durationMonths?: number; // canonical stored months; pricing uses the displayed duration value
   durationUnit?: DurationUnit; // display unit: 'months' (default), 'years', or 'na' (N/A, no duration)
+  pricingSemanticsVersion?: PricingSemanticsVersion;
 }
 
 export interface Invoice {
@@ -1359,6 +1363,7 @@ export type SupplierUnitType = 'hours' | 'days' | 'unit';
 // while pricing uses the numeric value shown in `durationUnit`: 12 months multiply by 12, whereas
 // the same stored value shown as 1 year multiplies by 1. 'na' marks a neutral ×1 duration.
 export type DurationUnit = 'months' | 'years' | 'na';
+export type PricingSemanticsVersion = 1 | 2;
 
 export interface SupplierQuoteItem {
   id: string;
@@ -1378,6 +1383,7 @@ export interface SupplierQuoteItem {
   durationMonths?: number;
   // Pricing uses the numeric duration value shown in this unit.
   durationUnit?: DurationUnit;
+  pricingSemanticsVersion?: PricingSemanticsVersion;
 }
 
 export interface SupplierQuote {
@@ -1474,6 +1480,7 @@ export interface SupplierSaleOrderItem {
   durationMonths?: number;
   // Pricing uses the numeric duration value shown in this unit.
   durationUnit?: DurationUnit;
+  pricingSemanticsVersion?: PricingSemanticsVersion;
 }
 
 export interface SupplierSaleOrder {
@@ -1532,6 +1539,7 @@ export interface SupplierInvoiceItem {
   discount?: number;
   durationMonths?: number; // canonical stored months; pricing uses the displayed duration value
   durationUnit?: DurationUnit; // display unit: 'months' (default), 'years', or 'na' (N/A, no duration)
+  pricingSemanticsVersion?: PricingSemanticsVersion;
 }
 
 export interface SupplierInvoice {

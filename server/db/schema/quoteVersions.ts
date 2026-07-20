@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm';
 import { check, index, jsonb, pgTable, timestamp, varchar } from 'drizzle-orm/pg-core';
+import type { PricingSemanticsVersion } from '../../utils/pricing-semantics.ts';
 import { quotes } from './quotes.ts';
 import { users } from './users.ts';
 
@@ -49,9 +50,13 @@ export interface LegacySnapshotQuoteItem {
   unitType: 'hours' | 'days' | 'unit';
   durationMonths: number;
   durationUnit: 'months' | 'years' | 'na';
+  pricingSemanticsVersion?: PricingSemanticsVersion;
 }
 
-export type SnapshotQuoteItem = LegacySnapshotQuoteItem & { candidateId: string };
+export type SnapshotQuoteItem = LegacySnapshotQuoteItem & {
+  candidateId: string;
+  pricingSemanticsVersion: PricingSemanticsVersion;
+};
 export interface LegacyQuoteVersionSnapshot {
   schemaVersion: 1;
   quote: SnapshotQuote;

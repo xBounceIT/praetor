@@ -41,6 +41,11 @@ import { getDocumentDiscountAmount } from '../utils/invoice-math.ts';
 import { normalizeNullableString } from '../utils/normalize.ts';
 import { generatePrefixedId, ITEM_ID_PREFIXES } from '../utils/order-ids.ts';
 import {
+  CURRENT_PRICING_SEMANTICS_VERSION,
+  type PricingSemanticsVersion,
+  pricingSemanticsVersionForDocument,
+} from '../utils/pricing-semantics.ts';
+import {
   canTransitionClientQuote,
   effectiveQuoteStatusFromDate,
   isTerminalQuoteStatus,
@@ -109,6 +114,7 @@ type QuoteItemSnapshot = {
   supplierQuoteItemId: string | null;
   supplierQuoteSupplierName: string | null;
   supplierQuoteUnitPrice: number | null;
+  pricingSemanticsVersion: PricingSemanticsVersion;
 };
 
 type ResolvedQuoteItem = IncomingQuoteItem & QuoteItemSnapshot;
@@ -138,6 +144,7 @@ const indexExistingQuoteItems = (
       supplierQuoteSupplierName: snapshot.supplierQuoteSupplierName,
       supplierQuoteUnitPrice: snapshot.supplierQuoteUnitPrice,
       unitType: snapshot.unitType,
+      pricingSemanticsVersion: snapshot.pricingSemanticsVersion,
     });
   }
   return indexed;
@@ -325,6 +332,7 @@ const calculateQuoteTotals = (
     discount?: number;
     durationMonths?: number;
     durationUnit?: string;
+    pricingSemanticsVersion?: PricingSemanticsVersion;
   }>,
   globalDiscount: number,
   discountType: 'percentage' | 'currency' = 'percentage',
@@ -350,7 +358,11 @@ const calculateQuoteTotals = (
     }
     // Pricing uses the numeric duration value shown in the selected unit. N/A lines remain neutral,
     // and a non-positive value falls back to 1 so it cannot zero out the total gate.
-    const durationMultiplier = effectiveDurationMultiplier(item.durationUnit, durationMonths);
+    const durationMultiplier = effectiveDurationMultiplier(
+      item.durationUnit,
+      durationMonths,
+      item.pricingSemanticsVersion,
+    );
     const lineSubtotal = quantity * unitPrice * durationMultiplier;
     const lineDiscount = lineSubtotal * (itemDiscount / 100);
     const lineNet = lineSubtotal - lineDiscount;
@@ -369,6 +381,7 @@ const calculateQuoteTotals = (
 const resolveQuoteItemSnapshots = async (
   items: IncomingQuoteItem[],
   existingItemsById?: Map<string, IncomingQuoteItem & QuoteItemSnapshot>,
+  documentPricingSemanticsVersion: PricingSemanticsVersion = CURRENT_PRICING_SEMANTICS_VERSION,
 ): Promise<ResolvedQuoteItem[]> => {
   const itemsNeedingRecalc = items.filter((item) => {
     if (!existingItemsById || !item.id) return true;
@@ -420,6 +433,7 @@ const resolveQuoteItemSnapshots = async (
         resolvedItems.push(
           withCalculatedClientLineMol({
             ...item,
+            pricingSemanticsVersion: existingItem.pricingSemanticsVersion,
             supplierQuoteItemId: normalizedSupplierQuoteItemId,
             productCost: existingItem.productCost,
             productMolPercentage: existingItem.productMolPercentage ?? null,
@@ -508,6 +522,8 @@ const resolveQuoteItemSnapshots = async (
     resolvedItems.push(
       withCalculatedClientLineMol({
         ...item,
+        pricingSemanticsVersion:
+          existingItem?.pricingSemanticsVersion ?? documentPricingSemanticsVersion,
         productId: resolvedProductId,
         supplierQuoteItemId: normalizedSupplierQuoteItemId,
         productCost,
@@ -559,6 +575,11 @@ const quoteItemSchema = {
       enum: ['months', 'years', 'na'],
       description:
         'Display unit only: the displayed number multiplies pricing; na applies a neutral x1.',
+    },
+    pricingSemanticsVersion: {
+      type: 'integer',
+      enum: [1, 2],
+      description: 'Read-only pricing compatibility marker; 1 preserves historical totals.',
     },
   },
   required: [
@@ -772,6 +793,7 @@ const buildItemsForInsert = (items: ResolvedQuoteItem[]): clientQuotesRepo.NewCl
     unitType: item.unitType ?? 'hours',
     durationMonths: item.durationMonths ?? 1,
     durationUnit: item.durationUnit ?? 'months',
+    pricingSemanticsVersion: item.pricingSemanticsVersion,
   }));
 
 const resolveCommunicationChannel = async (
@@ -805,7 +827,10 @@ const buildOfferItemsFromQuoteItems = (
     quantity: item.quantity,
     unitPrice: item.unitPrice,
     productCost: item.productCost,
-    productMolPercentage: calculateClientLineMol(item),
+    productMolPercentage: calculateClientLineMol({
+      ...item,
+      pricingSemanticsVersion: CURRENT_PRICING_SEMANTICS_VERSION,
+    }),
     discount: item.discount,
     note: item.note,
     supplierQuoteId: item.supplierQuoteId,
@@ -932,6 +957,7 @@ const prepareCandidateBody = async (
   existingSnapshots?: clientQuotesRepo.ExistingQuoteItemSnapshot[],
   existingCandidatesById?: ReadonlyMap<string, quoteCandidatesRepo.QuoteCandidate>,
   existingItemsByCandidateId?: ReadonlyMap<string, clientQuotesRepo.ClientQuoteItem[]>,
+  documentPricingSemanticsVersion: PricingSemanticsVersion = CURRENT_PRICING_SEMANTICS_VERSION,
 ): Promise<PreparedCandidate | null> => {
   if (!raw || typeof raw !== 'object') {
     badRequest(reply, 'candidates[' + index + '] must be an object');
@@ -1005,7 +1031,11 @@ const prepareCandidateBody = async (
       : undefined;
   let resolvedItems: ResolvedQuoteItem[];
   try {
-    resolvedItems = await resolveQuoteItemSnapshots(itemResult.items, existingItemsById);
+    resolvedItems = await resolveQuoteItemSnapshots(
+      itemResult.items,
+      existingItemsById,
+      documentPricingSemanticsVersion,
+    );
   } catch (error) {
     badRequest(reply, (error as Error).message);
     return null;
@@ -1774,6 +1804,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           existingCandidates.map((candidate) => [candidate.id, candidate]),
         );
         const existingItemsByCandidateId = indexQuoteItemsByCandidateId(existingItems);
+        const documentPricingSemanticsVersion = pricingSemanticsVersionForDocument(existingItems);
         const preparedCandidates: PreparedCandidate[] = [];
         const names = new Set<string>();
         for (let index = 0; index < candidates.length; index++) {
@@ -1784,6 +1815,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             existingSnapshots,
             existingCandidatesById,
             existingItemsByCandidateId,
+            documentPricingSemanticsVersion,
           );
           if (!prepared) return;
           const normalizedName = prepared.name.toLocaleLowerCase();
@@ -2357,7 +2389,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         previousSyncLines = existingSnapshots;
 
         try {
-          normalizedItems = await resolveQuoteItemSnapshots(incomingItems, existingItemsById);
+          normalizedItems = await resolveQuoteItemSnapshots(
+            incomingItems,
+            existingItemsById,
+            pricingSemanticsVersionForDocument(existingSnapshots),
+          );
         } catch (err) {
           return badRequest(reply, (err as Error).message);
         }

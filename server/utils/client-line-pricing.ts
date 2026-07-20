@@ -1,4 +1,10 @@
 import { roundCurrency } from './invoice-math.ts';
+import {
+  LEGACY_PRICING_SEMANTICS_VERSION,
+  normalizePricingSemanticsVersion,
+  type PricingSemanticsVersion,
+} from './pricing-semantics.ts';
+import type { UnitType } from './unit-type.ts';
 export const MIN_CLIENT_LINE_MOL_PERCENTAGE = -999.99;
 export const MAX_CLIENT_LINE_MOL_PERCENTAGE = 99.99;
 
@@ -8,6 +14,8 @@ export type ClientLinePricingInput = {
   productMolPercentage: number | null;
   supplierQuoteItemId?: string | null;
   supplierQuoteUnitPrice?: number | null;
+  unitType?: UnitType;
+  pricingSemanticsVersion?: PricingSemanticsVersion;
 };
 
 export const calculateClientLineMol = ({
@@ -15,11 +23,18 @@ export const calculateClientLineMol = ({
   productCost,
   supplierQuoteItemId,
   supplierQuoteUnitPrice,
+  unitType,
+  pricingSemanticsVersion,
 }: ClientLinePricingInput): number | null => {
   const baseCost = supplierQuoteItemId
     ? Number(supplierQuoteUnitPrice ?? 0)
     : Number(productCost ?? 0);
-  const unitCost = baseCost;
+  const unitCost =
+    !supplierQuoteItemId &&
+    unitType === 'days' &&
+    normalizePricingSemanticsVersion(pricingSemanticsVersion) === LEGACY_PRICING_SEMANTICS_VERSION
+      ? baseCost * 8
+      : baseCost;
   const salePrice = Number(unitPrice);
 
   if (!Number.isFinite(unitCost) || !Number.isFinite(salePrice) || unitCost < 0 || salePrice < 0) {

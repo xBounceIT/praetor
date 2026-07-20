@@ -168,6 +168,7 @@ const SAMPLE_ITEM = {
   unitPrice: 100,
   discount: 0,
   taxRate: 22,
+  pricingSemanticsVersion: 2 as const,
 };
 
 const allMocks = [
@@ -206,6 +207,7 @@ beforeEach(async () => {
   getRolePermissionsMock.mockResolvedValue(FULL_PERMS);
   findStatusMock.mockResolvedValue('draft');
   findStatusAndClientNameMock.mockResolvedValue({ status: 'draft', clientName: 'Client' });
+  findItemsForInvoiceMock.mockResolvedValue([SAMPLE_ITEM]);
   findClientOrderExistingMock.mockResolvedValue(null);
   findInvoiceForLinkedSaleMock.mockResolvedValue(null);
   allocateDocumentCodeMock.mockResolvedValue('inv-1');
@@ -858,12 +860,49 @@ describe('PUT /api/invoices/:id', () => {
 
     expect(res.statusCode).toBe(200);
     expect(replaceItemsMock).toHaveBeenCalled();
-    expect(findItemsForInvoiceMock).not.toHaveBeenCalled();
+    expect(findItemsForInvoiceMock).toHaveBeenCalledWith('inv-1');
     // 2 * 50 = 100
     expect(updateMock).toHaveBeenCalledWith(
       'inv-1',
       expect.objectContaining({ subtotal: 100, total: 100 }),
       TX_SENTINEL,
+    );
+  });
+
+  test('recomputes an edited historical invoice with its original year multiplier', async () => {
+    findItemsForInvoiceMock.mockResolvedValue([
+      { ...SAMPLE_ITEM, pricingSemanticsVersion: 1 as const },
+    ]);
+    findAmountPaidMock.mockResolvedValue(0);
+    updateMock.mockResolvedValue(SAMPLE_INVOICE);
+    replaceItemsMock.mockResolvedValue([SAMPLE_ITEM]);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/invoices/inv-1',
+      headers: authHeader(),
+      payload: {
+        items: [
+          {
+            description: 'Historical annual line',
+            unitOfMeasure: 'unit',
+            quantity: 1,
+            unitPrice: 10,
+            durationMonths: 12,
+            durationUnit: 'years',
+          },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(updateMock).toHaveBeenCalledWith(
+      'inv-1',
+      expect.objectContaining({ subtotal: 120, total: 120 }),
+      TX_SENTINEL,
+    );
+    expect(replaceItemsMock.mock.calls[0][1][0]).toEqual(
+      expect.objectContaining({ pricingSemanticsVersion: 1 }),
     );
   });
 

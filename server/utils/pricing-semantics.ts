@@ -1,0 +1,76 @@
+export const LEGACY_PRICING_SEMANTICS_VERSION = 1 as const;
+export const CURRENT_PRICING_SEMANTICS_VERSION = 2 as const;
+
+export type PricingSemanticsVersion =
+  | typeof LEGACY_PRICING_SEMANTICS_VERSION
+  | typeof CURRENT_PRICING_SEMANTICS_VERSION;
+
+export const normalizePricingSemanticsVersion = (
+  value: unknown,
+  fallback: PricingSemanticsVersion = CURRENT_PRICING_SEMANTICS_VERSION,
+): PricingSemanticsVersion =>
+  value === LEGACY_PRICING_SEMANTICS_VERSION
+    ? LEGACY_PRICING_SEMANTICS_VERSION
+    : value === CURRENT_PRICING_SEMANTICS_VERSION
+      ? CURRENT_PRICING_SEMANTICS_VERSION
+      : fallback;
+
+export const normalizeHistoricalPricingSemanticsVersion = (
+  value: unknown,
+): PricingSemanticsVersion =>
+  normalizePricingSemanticsVersion(value, LEGACY_PRICING_SEMANTICS_VERSION);
+
+export const normalizeHistoricalPricingSemanticsItems = <
+  T extends { pricingSemanticsVersion?: unknown },
+>(
+  items: readonly T[],
+): Array<T & { pricingSemanticsVersion: PricingSemanticsVersion }> =>
+  items.map((item) => ({
+    ...item,
+    pricingSemanticsVersion: normalizeHistoricalPricingSemanticsVersion(
+      item.pricingSemanticsVersion,
+    ),
+  }));
+
+type VersionedItem = {
+  id: string;
+  pricingSemanticsVersion?: PricingSemanticsVersion;
+};
+
+export const pricingSemanticsVersionForDocument = (
+  storedItems: Array<{ pricingSemanticsVersion?: unknown }>,
+): PricingSemanticsVersion =>
+  storedItems.reduce<PricingSemanticsVersion>(
+    (oldest, item) =>
+      Math.min(
+        oldest,
+        normalizeHistoricalPricingSemanticsVersion(item.pricingSemanticsVersion),
+      ) as PricingSemanticsVersion,
+    CURRENT_PRICING_SEMANTICS_VERSION,
+  );
+
+/**
+ * A document keeps the pricing contract under which it was created. Existing row ids retain their
+ * own marker; freshly generated ids inherit the document's oldest stored marker. New documents
+ * have no stored rows and therefore use the current database default.
+ */
+export const preservePricingSemanticsVersions = <T extends VersionedItem>(
+  items: T[],
+  storedItems: Array<{ id: string; pricingSemanticsVersion: unknown }>,
+): T[] => {
+  if (storedItems.length === 0) return items;
+
+  const storedById = new Map(
+    storedItems.map((item) => [
+      item.id,
+      normalizeHistoricalPricingSemanticsVersion(item.pricingSemanticsVersion),
+    ]),
+  );
+  const documentVersion = pricingSemanticsVersionForDocument(storedItems);
+
+  return items.map((item) => ({
+    ...item,
+    pricingSemanticsVersion:
+      item.pricingSemanticsVersion ?? storedById.get(item.id) ?? documentVersion,
+  }));
+};

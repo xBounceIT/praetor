@@ -111,6 +111,11 @@ const supplierQuoteItemSchema = {
       description:
         'Display unit only: the displayed number multiplies pricing; na applies a neutral x1.',
     },
+    pricingSemanticsVersion: {
+      type: 'integer',
+      enum: [1, 2],
+      description: 'Read-only pricing compatibility marker; 1 preserves historical totals.',
+    },
   },
   required: ['id', 'quoteId', 'productName', 'quantity', 'unitPrice'],
 } as const;

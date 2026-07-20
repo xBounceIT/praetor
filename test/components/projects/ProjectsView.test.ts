@@ -4,7 +4,9 @@ describe('ProjectsView (create-only dialog after detail-page revamp)', () => {
   test('renders commesse and task tabs while reusing the task view internally', async () => {
     const source = await Bun.file(
       new URL('../../../components/projects/ProjectsView.tsx', import.meta.url),
-    ).text();
+    )
+      .text()
+      .then((value) => value.replaceAll('\r\n', '\n'));
 
     expect(source).toContain('import { Tabs, TabsContent, TabsList, TabsTrigger }');
     expect(source).toContain("import { Folder, ListChecks } from 'lucide-react'");
@@ -128,7 +130,9 @@ describe('ProjectsView create-form validation', () => {
   test('requires a Tipo (Attivo/Passivo/Interna), exposes the selector, and forwards it', async () => {
     const source = await Bun.file(
       new URL('../../../components/projects/ProjectsView.tsx', import.meta.url),
-    ).text();
+    )
+      .text()
+      .then((value) => value.replaceAll('\r\n', '\n'));
     // Mandatory: submit is blocked until a value is chosen.
     expect(source).toContain("if (!tipo) newErrors.tipo = t('projects:projects.tipoRequired')");
     // The create dialog renders the required Tipo selector with a placeholder (starts empty).

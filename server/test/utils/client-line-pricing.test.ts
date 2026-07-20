@@ -25,6 +25,19 @@ describe('calculateClientLineMol', () => {
     ).toBe(90);
   });
 
+  test('preserves the historical day x8 cost only for legacy product lines', () => {
+    expect(
+      calculateClientLineMol(
+        productLine({
+          unitPrice: 100,
+          productCost: 10,
+          unitType: 'days',
+          pricingSemanticsVersion: 1,
+        }),
+      ),
+    ).toBe(20);
+  });
+
   test('uses the supplier quote cost as already expressed in the line unit', () => {
     expect(
       calculateClientLineMol(

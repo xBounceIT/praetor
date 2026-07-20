@@ -228,6 +228,30 @@ const baseSupplierInvoiceItem: SupplierInvoiceItem = {
   unitPrice: 5,
 };
 
+describe('commercial item pricing semantics compatibility', () => {
+  test('treats a missing marker as historical and preserves the current marker', () => {
+    const expectCompatibility = <T extends { pricingSemanticsVersion?: 1 | 2 }>(
+      normalize: (item: T) => T,
+      item: T,
+    ) => {
+      expect(normalize(make(item, { pricingSemanticsVersion: undefined }))).toMatchObject({
+        pricingSemanticsVersion: 1,
+      });
+      expect(normalize(make(item, { pricingSemanticsVersion: 2 }))).toMatchObject({
+        pricingSemanticsVersion: 2,
+      });
+    };
+
+    expectCompatibility(normalizeQuoteItem, baseQuoteItem);
+    expectCompatibility(normalizeClientOfferItem, baseOfferItem);
+    expectCompatibility(normalizeClientsOrderItem, baseClientsOrderItem);
+    expectCompatibility(normalizeInvoiceItem, baseInvoiceItem);
+    expectCompatibility(normalizeSupplierQuoteItem, baseSupplierQuoteItem);
+    expectCompatibility(normalizeSupplierSaleOrderItem, baseSupplierSaleOrderItem);
+    expectCompatibility(normalizeSupplierInvoiceItem, baseSupplierInvoiceItem);
+  });
+});
+
 const baseUser: User = {
   id: 'u-1',
   name: 'Alice',

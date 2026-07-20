@@ -217,6 +217,16 @@ describe('getEffectiveDurationMultiplier', () => {
     expect(getEffectiveDurationMultiplier({})).toBe(1);
     expect(getEffectiveDurationMultiplier({ durationUnit: 'years' })).toBe(1);
   });
+
+  test('preserves canonical-month multiplication for legacy rows', () => {
+    expect(
+      getEffectiveDurationMultiplier({
+        durationMonths: 12,
+        durationUnit: 'years',
+        pricingSemanticsVersion: 1,
+      }),
+    ).toBe(12);
+  });
 });
 
 describe('normalizeDurationUnit', () => {
@@ -403,6 +413,17 @@ describe('getItemPricingContext', () => {
     expect(ctx.quantity).toBe(2);
     expect(ctx.durationMonths).toBe(1);
     expect(ctx.lineCost).toBe(160);
+  });
+
+  test('preserves the historical day x8 product cost for legacy rows', () => {
+    const item: PricingItem = {
+      productCost: 80,
+      unitType: 'days',
+      quantity: 2,
+      pricingSemanticsVersion: 1,
+    };
+    expect(getItemPricingContext(item).unitCost).toBe(640);
+    expect(getItemPricingContext(item).lineCost).toBe(1280);
   });
 
   test('multiplies line cost by durationMonths (issue #757)', () => {

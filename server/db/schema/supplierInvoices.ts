@@ -11,6 +11,7 @@ import {
   uniqueIndex,
   varchar,
 } from 'drizzle-orm/pg-core';
+import type { PricingSemanticsVersion } from '../../utils/pricing-semantics.ts';
 import { products } from './products.ts';
 import { supplierSales } from './supplierSales.ts';
 import { suppliers } from './suppliers.ts';
@@ -73,6 +74,10 @@ export const supplierInvoiceItems = pgTable(
     // Display unit for `durationMonths`: pricing uses its displayed numeric value; 'na' is neutral.
     durationUnit: text('duration_unit').notNull().default('months'),
     createdAt: timestamp('created_at').default(sql`CURRENT_TIMESTAMP`),
+    pricingSemanticsVersion: integer('pricing_semantics_version')
+      .$type<PricingSemanticsVersion>()
+      .notNull()
+      .default(2),
   },
   (table) => [
     index('idx_supplier_invoice_items_invoice_id').on(table.invoiceId),
@@ -80,6 +85,10 @@ export const supplierInvoiceItems = pgTable(
     check(
       'chk_supplier_invoice_items_duration_unit',
       sql`${table.durationUnit} IN ('months', 'years', 'na')`,
+    ),
+    check(
+      'chk_supplier_invoice_items_pricing_semantics_version',
+      sql`${table.pricingSemanticsVersion} IN (1, 2)`,
     ),
   ],
 );

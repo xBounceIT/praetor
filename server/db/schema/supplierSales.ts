@@ -9,6 +9,7 @@ import {
   timestamp,
   varchar,
 } from 'drizzle-orm/pg-core';
+import type { PricingSemanticsVersion } from '../../utils/pricing-semantics.ts';
 import type { UnitType } from '../../utils/unit-type.ts';
 import { products } from './products.ts';
 import { supplierQuotes } from './supplierQuotes.ts';
@@ -72,6 +73,10 @@ export const supplierSaleItems = pgTable(
     durationMonths: integer('duration_months').notNull().default(1),
     // Unit shown beside the duration: pricing uses that displayed value and 'na' is neutral.
     durationUnit: text('duration_unit').notNull().default('months'),
+    pricingSemanticsVersion: integer('pricing_semantics_version')
+      .$type<PricingSemanticsVersion>()
+      .notNull()
+      .default(2),
   },
   (table) => [
     index('idx_supplier_sale_items_sale_id').on(table.saleId),
@@ -80,6 +85,10 @@ export const supplierSaleItems = pgTable(
     check(
       'chk_supplier_sale_items_duration_unit',
       sql`${table.durationUnit} IN ('months', 'years', 'na')`,
+    ),
+    check(
+      'chk_supplier_sale_items_pricing_semantics_version',
+      sql`${table.pricingSemanticsVersion} IN (1, 2)`,
     ),
   ],
 );

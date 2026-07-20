@@ -6,6 +6,11 @@ import { sales } from '../db/schema/sales.ts';
 import { normalizeNullableDateOnly } from '../utils/date.ts';
 import { type DurationUnit, normalizeDurationUnit } from '../utils/duration-unit.ts';
 import { numericForDb, parseDbNumber, parseNullableDbNumber } from '../utils/parse.ts';
+import {
+  normalizeHistoricalPricingSemanticsVersion,
+  type PricingSemanticsVersion,
+  preservePricingSemanticsVersions,
+} from '../utils/pricing-semantics.ts';
 import { normalizeUnitType, type UnitType } from '../utils/unit-type.ts';
 
 export type ClientOffer = {
@@ -43,6 +48,7 @@ export type ClientOfferItem = {
   discount: number;
   durationMonths: number;
   durationUnit: DurationUnit;
+  pricingSemanticsVersion: PricingSemanticsVersion;
 };
 
 const mapOffer = (row: typeof customerOffers.$inferSelect): ClientOffer => ({
@@ -80,6 +86,7 @@ const mapItem = (row: typeof customerOfferItems.$inferSelect): ClientOfferItem =
   discount: parseDbNumber(row.discount, 0),
   durationMonths: row.durationMonths ?? 1,
   durationUnit: normalizeDurationUnit(row.durationUnit),
+  pricingSemanticsVersion: normalizeHistoricalPricingSemanticsVersion(row.pricingSemanticsVersion),
 });
 
 export const listAll = async (exec: DbExecutor = db): Promise<ClientOffer[]> => {
@@ -412,6 +419,7 @@ export type NewClientOfferItem = {
   unitType: UnitType;
   durationMonths: number;
   durationUnit: DurationUnit;
+  pricingSemanticsVersion?: PricingSemanticsVersion;
 };
 
 export const insertItems = async (
@@ -441,6 +449,7 @@ export const insertItems = async (
         unitType: item.unitType,
         durationMonths: item.durationMonths ?? 1,
         durationUnit: item.durationUnit ?? 'months',
+        pricingSemanticsVersion: item.pricingSemanticsVersion,
       })),
     )
     .returning();
@@ -453,8 +462,15 @@ export const replaceItems = async (
   exec: DbExecutor = db,
 ): Promise<ClientOfferItem[]> =>
   runAtomically(exec, async (tx) => {
-    await tx.delete(customerOfferItems).where(eq(customerOfferItems.offerId, offerId));
-    return insertItems(offerId, items, tx);
+    const storedItems = await tx
+      .delete(customerOfferItems)
+      .where(eq(customerOfferItems.offerId, offerId))
+      .returning({
+        id: customerOfferItems.id,
+        pricingSemanticsVersion: customerOfferItems.pricingSemanticsVersion,
+      });
+    const versionedItems = preservePricingSemanticsVersions(items, storedItems);
+    return insertItems(offerId, versionedItems, tx);
   });
 
 export const deleteById = async (id: string, exec: DbExecutor = db): Promise<boolean> => {

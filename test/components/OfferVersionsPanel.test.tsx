@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
+import { afterAll, afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 import { fireEvent, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import type { ClientOffer, OfferVersion, OfferVersionRow } from '../../types';
@@ -27,13 +27,23 @@ const restoreVersionMock = mock<(id: string, versionId: string) => Promise<Clien
   Promise.reject(new Error('not configured')),
 );
 
+const realClientOffersModule = await import('../../services/api/clientOffers');
+const realClientOffersApi = { ...realClientOffersModule.clientOffersApi };
+const mockedClientOffersApi = {
+  ...realClientOffersApi,
+  listVersions: (id: string) => listVersionsMock(id),
+  getVersion: (id: string, vid: string) => getVersionMock(id, vid),
+  restoreVersion: (id: string, vid: string) => restoreVersionMock(id, vid),
+};
+
 mock.module('../../services/api/clientOffers', () => ({
-  clientOffersApi: {
-    listVersions: (id: string) => listVersionsMock(id),
-    getVersion: (id: string, vid: string) => getVersionMock(id, vid),
-    restoreVersion: (id: string, vid: string) => restoreVersionMock(id, vid),
-  },
+  ...realClientOffersModule,
+  clientOffersApi: mockedClientOffersApi,
 }));
+
+afterAll(() => {
+  Object.assign(mockedClientOffersApi, realClientOffersApi);
+});
 
 // Stable rendering for createdAt; the panel passes (timestamp, language). Spread the real
 // module so unrelated date helpers stay available if the panel grows new imports.

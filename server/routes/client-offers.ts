@@ -48,6 +48,12 @@ import { normalizeNullableNumber, normalizeNullableString } from '../utils/norma
 import { generatePrefixedId, ITEM_ID_PREFIXES } from '../utils/order-ids.ts';
 import { ADMIN_ROLE_ID, requestHasPermission, TOP_MANAGER_ROLE_ID } from '../utils/permissions.ts';
 import {
+  CURRENT_PRICING_SEMANTICS_VERSION,
+  LEGACY_PRICING_SEMANTICS_VERSION,
+  type PricingSemanticsVersion,
+  pricingSemanticsVersionForDocument,
+} from '../utils/pricing-semantics.ts';
+import {
   effectiveQuoteStatusFromDate,
   normalizeQuoteStatus,
   parseQuoteStatusInput,
@@ -269,6 +275,7 @@ type NormalizedOfferItem = {
   note: string | null;
   durationMonths: number;
   durationUnit: DurationUnit;
+  pricingSemanticsVersion?: PricingSemanticsVersion;
 };
 
 const normalizeItems = (
@@ -386,10 +393,14 @@ const resolveOfferItemSupplierLinks = async (
   existingItems: clientOffersRepo.ClientOfferItem[] | null,
   inheritedItemIds: ReadonlySet<string>,
 ): Promise<NormalizedOfferItem[]> => {
-  const linkedIds = items
+  const pricingSemanticsVersion = existingItems?.length
+    ? pricingSemanticsVersionForDocument(existingItems)
+    : CURRENT_PRICING_SEMANTICS_VERSION;
+  const versionedItems = items.map((item) => ({ ...item, pricingSemanticsVersion }));
+  const linkedIds = versionedItems
     .map((item) => item.supplierQuoteItemId)
     .filter((id): id is string => id !== null);
-  if (linkedIds.length === 0) return items.map(withCalculatedClientLineMol);
+  if (linkedIds.length === 0) return versionedItems.map(withCalculatedClientLineMol);
   const snapshots = await supplierQuotesRepo.getQuoteItemSnapshots(linkedIds);
   const existingByLink = new Map<string, clientOffersRepo.ClientOfferItem>();
   for (const existing of existingItems ?? []) {
@@ -397,7 +408,7 @@ const resolveOfferItemSupplierLinks = async (
       existingByLink.set(existing.supplierQuoteItemId, existing);
     }
   }
-  const resolvedItems = items.map((item) => {
+  const resolvedItems = versionedItems.map((item) => {
     if (!item.supplierQuoteItemId) return item;
     const snapshot = snapshots.get(item.supplierQuoteItemId);
     const existing = existingByLink.get(item.supplierQuoteItemId);
@@ -482,6 +493,7 @@ const buildItemsForInsert = (items: NormalizedOfferItem[]): clientOffersRepo.New
     unitType: item.unitType,
     durationMonths: item.durationMonths,
     durationUnit: item.durationUnit,
+    pricingSemanticsVersion: item.pricingSemanticsVersion,
   }));
 
 const buildOrderItemsFromOfferItems = (
@@ -494,7 +506,10 @@ const buildOrderItemsFromOfferItems = (
     quantity: item.quantity,
     unitPrice: item.unitPrice,
     productCost: item.productCost,
-    productMolPercentage: calculateClientLineMol(item),
+    productMolPercentage: calculateClientLineMol({
+      ...item,
+      pricingSemanticsVersion: CURRENT_PRICING_SEMANTICS_VERSION,
+    }),
     discount: item.discount,
     note: item.note,
     supplierQuoteId: item.supplierQuoteId,
@@ -1995,11 +2010,19 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         const snapshotDeliveryDate = version.snapshot.offer.deliveryDate ?? null;
 
         const snapshotItems: clientOffersRepo.NewClientOfferItem[] = version.snapshot.items.map(
-          ({ id: _itemId, offerId: _offerId, ...rest }) => ({
-            ...rest,
-            id: generatePrefixedId(ITEM_ID_PREFIXES.clientOfferItem),
-            productMolPercentage: calculateClientLineMol(rest),
-          }),
+          ({ id: _itemId, offerId: _offerId, ...rest }) => {
+            const pricingSemanticsVersion =
+              rest.pricingSemanticsVersion ?? LEGACY_PRICING_SEMANTICS_VERSION;
+            return {
+              ...rest,
+              id: generatePrefixedId(ITEM_ID_PREFIXES.clientOfferItem),
+              pricingSemanticsVersion,
+              productMolPercentage: calculateClientLineMol({
+                ...rest,
+                pricingSemanticsVersion,
+              }),
+            };
+          },
         );
 
         await snapshotPreState(idResult.value, 'restore', request, tx);

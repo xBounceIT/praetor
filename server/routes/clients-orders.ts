@@ -27,6 +27,11 @@ import { type DurationUnit, defaultDurationMonthsForUnit } from '../utils/durati
 import { normalizeNullableNumber, normalizeNullableString } from '../utils/normalize.ts';
 import { generatePrefixedId, ITEM_ID_PREFIXES } from '../utils/order-ids.ts';
 import { requestHasPermission } from '../utils/permissions.ts';
+import {
+  LEGACY_PRICING_SEMANTICS_VERSION,
+  type PricingSemanticsVersion,
+  pricingSemanticsVersionForDocument,
+} from '../utils/pricing-semantics.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { replyError } from '../utils/replyError.ts';
 import { normalizeUnitType, type UnitType } from '../utils/unit-type.ts';
@@ -81,6 +86,11 @@ const clientOrderItemSchema = {
       enum: ['months', 'years', 'na'],
       description:
         'Display unit only: the displayed number multiplies pricing; na applies a neutral x1.',
+    },
+    pricingSemanticsVersion: {
+      type: 'integer',
+      enum: [1, 2],
+      description: 'Read-only pricing compatibility marker; 1 preserves historical totals.',
     },
   },
   required: ['id', 'orderId', 'productName', 'quantity', 'unitPrice', 'productCost', 'discount'],
@@ -237,6 +247,7 @@ type NormalizedOrderItem = {
   discount: number;
   durationMonths: number;
   durationUnit: DurationUnit;
+  pricingSemanticsVersion?: PricingSemanticsVersion;
 };
 
 const normalizeIncomingItems = (
@@ -443,6 +454,7 @@ const buildItemsForInsert = (
     unitType: item.unitType,
     durationMonths: item.durationMonths,
     durationUnit: item.durationUnit,
+    pricingSemanticsVersion: item.pricingSemanticsVersion,
   }));
 
 const normalizeNotesValue = (value: unknown) => String(value ?? '');
@@ -1145,19 +1157,24 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           request,
           'accounting.supplier_orders.create',
         );
-        const hasSupplierQuoteRefs = parsedItemsForUpdate.some(
+        existingItems = await clientsOrdersRepo.findItemsForOrder(idResult.value);
+        const pricingSemanticsVersion = pricingSemanticsVersionForDocument(existingItems);
+        const versionedItems = parsedItemsForUpdate.map((item) => ({
+          ...item,
+          pricingSemanticsVersion,
+        }));
+        const hasSupplierQuoteRefs = versionedItems.some(
           (item) => item.supplierQuoteItemId !== null,
         );
         let retainedSupplierItemsByLineId:
           | ReadonlyMap<string, clientsOrdersRepo.ClientOrderItem>
           | undefined;
         if (hasSupplierQuoteRefs) {
-          existingItems = await clientsOrdersRepo.findItemsForOrder(idResult.value);
           retainedSupplierItemsByLineId = new Map(
             existingItems.map((item) => [item.id, item] as const),
           );
         }
-        normalizedItems = await resolveSupplierQuoteRefs(parsedItemsForUpdate, reply, {
+        normalizedItems = await resolveSupplierQuoteRefs(versionedItems, reply, {
           allowedSupplierQuoteItemCounts: canCreateSupplierOrders ? undefined : new Map(),
           retainedSupplierItemsByLineId,
         });
@@ -1701,6 +1718,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             : undefined;
           return withCalculatedClientLineMol({
             ...rest,
+            pricingSemanticsVersion:
+              rest.pricingSemanticsVersion ?? LEGACY_PRICING_SEMANTICS_VERSION,
             id: generatePrefixedId(ITEM_ID_PREFIXES.saleItem),
             // Supplier sourcing metadata is authoritative and product-less quote items must stay
             // product-less. A quote id without an item reference is not a sourcing relationship.

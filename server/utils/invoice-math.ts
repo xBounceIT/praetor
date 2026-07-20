@@ -1,4 +1,5 @@
 import { effectiveDurationMultiplier } from './duration-unit.ts';
+import type { PricingSemanticsVersion } from './pricing-semantics.ts';
 
 type ItemMath = {
   quantity?: number;
@@ -12,6 +13,7 @@ type ItemMath = {
   // Display unit for the duration; 'na' (N/A) marks a line where duration does not apply and
   // never multiplies, regardless of `durationMonths` (issue #775).
   durationUnit?: string;
+  pricingSemanticsVersion?: PricingSemanticsVersion;
 };
 
 const CURRENCY_DECIMAL_PLACES = 2;
@@ -60,7 +62,11 @@ export const computeInvoiceTotals = (
     const unitPrice = item.unitPrice ?? 0;
     const discount = item.discount ?? 0;
     // 'N/A' lines never multiply by duration (issue #775); absent/non-positive months fall to 1.
-    const effectiveDuration = effectiveDurationMultiplier(item.durationUnit, item.durationMonths);
+    const effectiveDuration = effectiveDurationMultiplier(
+      item.durationUnit,
+      item.durationMonths,
+      item.pricingSemanticsVersion,
+    );
     const discountFactor = 1 - discount / 100;
     const taxableAmount = quantity * unitPrice * discountFactor * effectiveDuration;
     const taxRate = item.taxRate ?? 0;

@@ -11,6 +11,7 @@ import {
   uniqueIndex,
   varchar,
 } from 'drizzle-orm/pg-core';
+import type { PricingSemanticsVersion } from '../../utils/pricing-semantics.ts';
 import { clients } from './clients.ts';
 import { products } from './products.ts';
 import { quoteCommunicationChannels } from './quoteCommunicationChannels.ts';
@@ -170,6 +171,10 @@ export const quoteItems = pgTable(
       onDelete: 'cascade',
       onUpdate: 'cascade',
     }),
+    pricingSemanticsVersion: integer('pricing_semantics_version')
+      .$type<PricingSemanticsVersion>()
+      .notNull()
+      .default(2),
   },
   (table) => [
     index('idx_quote_items_quote_id').on(table.quoteId),
@@ -185,5 +190,9 @@ export const quoteItems = pgTable(
     check('chk_quote_items_unit_type', sql`${table.unitType} IN ('hours', 'days', 'unit')`),
     check('chk_quote_items_duration_months', sql`${table.durationMonths} >= 1`),
     check('chk_quote_items_duration_unit', sql`${table.durationUnit} IN ('months', 'years', 'na')`),
+    check(
+      'chk_quote_items_pricing_semantics_version',
+      sql`${table.pricingSemanticsVersion} IN (1, 2)`,
+    ),
   ],
 );

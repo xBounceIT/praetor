@@ -76,6 +76,10 @@ type PricingItemBase = {
   note?: string;
 };
 
+// A payload without the marker came from a server/snapshot that still used the historical unit
+// conversions. Current servers always serialize 1 or 2 for persisted commercial lines.
+const normalizePricingSemanticsVersion = (value: unknown): 1 | 2 => (value === 2 ? 2 : 1);
+
 const normalizePricingItemFields = <T extends PricingItemBase>(item: T): T => ({
   ...item,
   quantity: Number(item.quantity || 0),
@@ -385,6 +389,7 @@ export const normalizeQuoteItem = (item: QuoteItem): QuoteItem => ({
   ...normalizePricingItemFields(item),
   durationMonths: Number(item.durationMonths ?? 1) || 1,
   durationUnit: normalizeDurationUnit(item.durationUnit),
+  pricingSemanticsVersion: normalizePricingSemanticsVersion(item.pricingSemanticsVersion),
   note: item.note || '',
 });
 
@@ -446,6 +451,7 @@ export const normalizeClientOfferItem = (item: ClientOfferItem): ClientOfferItem
   ...normalizePricingItemFields(item),
   durationMonths: Number(item.durationMonths ?? 1) || 1,
   durationUnit: normalizeDurationUnit(item.durationUnit),
+  pricingSemanticsVersion: normalizePricingSemanticsVersion(item.pricingSemanticsVersion),
   note: item.note || '',
 });
 
@@ -460,6 +466,7 @@ export const normalizeClientsOrderItem = (item: ClientsOrderItem): ClientsOrderI
   ...normalizePricingItemFields(item),
   durationMonths: Number(item.durationMonths ?? 1) || 1,
   durationUnit: normalizeDurationUnit(item.durationUnit),
+  pricingSemanticsVersion: normalizePricingSemanticsVersion(item.pricingSemanticsVersion),
 });
 
 export const normalizeClientsOrder = (o: ClientsOrder): ClientsOrder => ({
@@ -563,6 +570,7 @@ export const normalizeInvoiceItem = (item: InvoiceItem): InvoiceItem => ({
   // Default 1 keeps legacy items (pre-duration feature) at their original totals.
   durationMonths: Number(item.durationMonths ?? 1) || 1,
   durationUnit: normalizeDurationUnit(item.durationUnit),
+  pricingSemanticsVersion: normalizePricingSemanticsVersion(item.pricingSemanticsVersion),
 });
 
 export const normalizeInvoice = (i: Invoice): Invoice => ({
@@ -589,6 +597,7 @@ export const normalizeSupplierQuoteItem = (item: SupplierQuoteItem): SupplierQuo
     // never feed a NaN into calculateTotals.
     durationMonths: Number(item.durationMonths ?? 1) || 1,
     durationUnit: normalizeDurationUnit(item.durationUnit),
+    pricingSemanticsVersion: normalizePricingSemanticsVersion(item.pricingSemanticsVersion),
     note: item.note || '',
   };
 };
@@ -614,6 +623,7 @@ export const normalizeSupplierSaleOrderItem = (
   // item normalizers do so a missing/non-numeric value can never feed a NaN into the order total.
   durationMonths: Number(item.durationMonths ?? 1) || 1,
   durationUnit: normalizeDurationUnit(item.durationUnit),
+  pricingSemanticsVersion: normalizePricingSemanticsVersion(item.pricingSemanticsVersion),
   note: item.note || '',
 });
 
@@ -630,6 +640,7 @@ export const normalizeSupplierInvoiceItem = (item: SupplierInvoiceItem): Supplie
   discount: Number(item.discount || 0),
   durationMonths: Number(item.durationMonths ?? 1) || 1,
   durationUnit: normalizeDurationUnit(item.durationUnit),
+  pricingSemanticsVersion: normalizePricingSemanticsVersion(item.pricingSemanticsVersion),
 });
 
 export const normalizeSupplierInvoice = (invoice: SupplierInvoice): SupplierInvoice => ({

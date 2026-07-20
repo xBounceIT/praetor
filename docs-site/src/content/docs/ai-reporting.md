@@ -50,7 +50,7 @@ AI Reporting costruisce per ogni richiesta un dataset aggiornato e limitato ai p
 - **Catalogo** — prodotti, tipologie, categorie, fornitori e utilizzo nei documenti.
 - **Rivendite** — costi, ricavi, margini, frequenze di fatturazione, categorie e stato di rilascio delle attività.
 
-Le sezioni non autorizzate non vengono inserite nel contesto AI. Se la domanda riguarda un'area specifica, Praetor carica soltanto le sezioni pertinenti; una richiesta di panoramica usa tutte quelle disponibili. Gli importi dei documenti con righe a durata includono il valore visualizzato come moltiplicatore, senza conversioni tra mesi e anni; per i preventivi con più candidati viene analizzato il candidato selezionato oppure il primo candidato attivo.
+Le sezioni non autorizzate non vengono inserite nel contesto AI. Se la domanda riguarda un'area specifica, Praetor carica soltanto le sezioni pertinenti; una richiesta di panoramica usa tutte quelle disponibili. Gli importi dei documenti con righe a durata includono il valore visualizzato come moltiplicatore, senza conversioni tra mesi e anni; i documenti storici conservano invece il contratto di calcolo attivo quando sono stati salvati. Per i preventivi con più candidati viene analizzato il candidato selezionato oppure il primo candidato attivo.
 
 Nel dataset fornitori, i dettagli dell'anagrafica sono inclusi solo con `crm.suppliers_all.view`. Con un permesso base fornitori o con la sola visualizzazione di documenti fornitore, AI Reporting e lo strumento MCP `praetor_list_suppliers` ricevono soltanto identificativo, nome e stato del fornitore.
 

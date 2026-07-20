@@ -1,4 +1,9 @@
-import type { DiscountType, DurationUnit, SupplierUnitType } from '../types';
+import type {
+  DiscountType,
+  DurationUnit,
+  PricingSemanticsVersion,
+  SupplierUnitType,
+} from '../types';
 
 const CURRENCY_DECIMAL_PLACES = 2;
 
@@ -22,6 +27,7 @@ export const MIN_MOL_PERCENTAGE = -999.99;
 export const NUMBER_LOCALE = 'it-IT';
 
 const MONTHS_PER_YEAR = 12;
+const LEGACY_PRICING_SEMANTICS_VERSION = 1;
 
 const shiftDecimal = (value: number, decimalPlaces: number): number => {
   const [coefficient, exponent = '0'] = value.toString().split('e');
@@ -127,6 +133,8 @@ export interface PricingItem {
   durationMonths?: number;
   // Pricing uses the numeric duration value rendered in this unit.
   durationUnit?: DurationUnit;
+  /** Version 1 preserves totals saved before unit labels stopped converting prices. */
+  pricingSemanticsVersion?: PricingSemanticsVersion;
 }
 
 export const getEffectiveCost = (item: PricingItem): number => {
@@ -137,7 +145,14 @@ export const getEffectiveCost = (item: PricingItem): number => {
 // Quantity units are labels and never reprice a line. Product and supplier-sourced costs therefore
 // keep the exact numeric value entered or copied, regardless of whether the line uses hours, days,
 // or units.
-export const getEffectiveUnitCost = (item: PricingItem): number => getEffectiveCost(item);
+export const getEffectiveUnitCost = (item: PricingItem): number => {
+  const cost = getEffectiveCost(item);
+  return !item.supplierQuoteItemId &&
+    item.unitType === 'days' &&
+    item.pricingSemanticsVersion === LEGACY_PRICING_SEMANTICS_VERSION
+    ? cost * 8
+    : cost;
+};
 
 export const getEffectiveMol = (item: PricingItem): number => {
   return item.productMolPercentage ? Number(item.productMolPercentage) : 0;
@@ -161,6 +176,7 @@ export const getEffectiveDurationMultiplier = (item: PricingItem): number => {
   if (durationUnit === 'na') return 1;
   const storedMonths = Number(item.durationMonths);
   if (!Number.isFinite(storedMonths) || storedMonths <= 0) return 1;
+  if (item.pricingSemanticsVersion === LEGACY_PRICING_SEMANTICS_VERSION) return storedMonths;
   return durationUnit === 'years' ? storedMonths / MONTHS_PER_YEAR : storedMonths;
 };
 

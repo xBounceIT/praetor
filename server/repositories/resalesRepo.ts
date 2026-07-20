@@ -130,7 +130,11 @@ export const computeSupplierOrderTotal = (
   items: SupplierOrderItem[],
 ): number => {
   const subtotal = items.reduce((sum, item) => {
-    const duration = effectiveDurationMultiplier(item.durationUnit, item.durationMonths);
+    const duration = effectiveDurationMultiplier(
+      item.durationUnit,
+      item.durationMonths,
+      item.pricingSemanticsVersion,
+    );
     const discountedUnitPrice = getDiscountedUnitPrice(
       Number(item.unitPrice || 0),
       Number(item.discount || 0),

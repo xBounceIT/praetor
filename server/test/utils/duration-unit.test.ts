@@ -85,4 +85,11 @@ describe('effectiveDurationMultiplier', () => {
     expect(effectiveDurationMultiplier('months', undefined)).toBe(1);
     expect(effectiveDurationMultiplier('years', undefined)).toBe(1);
   });
+
+  test('preserves canonical-month multiplication for legacy rows', () => {
+    expect(effectiveDurationMultiplier('years', 12, 1)).toBe(12);
+    expect(effectiveDurationMultiplier('years', 18, 1)).toBe(18);
+    expect(effectiveDurationMultiplier('months', 12, 1)).toBe(12);
+    expect(effectiveDurationMultiplier('na', 24, 1)).toBe(1);
+  });
 });

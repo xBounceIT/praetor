@@ -1262,6 +1262,7 @@ describe('PUT /api/sales/client-quotes/:id supplier-item forward sync (#779)', (
     supplierQuoteSupplierName: 'Acme',
     supplierQuoteUnitPrice: 50,
     unitType: 'hours',
+    pricingSemanticsVersion: 2,
   };
   const SUPPLIER_ITEM = {
     id: 'sqi-9',
@@ -1276,6 +1277,7 @@ describe('PUT /api/sales/client-quotes/:id supplier-item forward sync (#779)', (
     unitType: 'hours',
     durationMonths: 1,
     durationUnit: 'months',
+    pricingSemanticsVersion: 2,
   };
   const lineItem = (quantity: number, cost: number, over: Record<string, unknown> = {}) => ({
     id: 'qi-1',
@@ -1395,7 +1397,7 @@ describe('PUT /api/sales/client-quotes/:id supplier-item forward sync (#779)', (
     expect(replaced[0].productMolPercentage).toBe(50);
   });
 
-  test('does not convert product cost before deriving a day-line MOL', async () => {
+  test('does not convert product cost before deriving a current day-line MOL', async () => {
     setupDraftQuote();
     cqFindItemSnapshotsForQuoteMock.mockResolvedValue([
       {
@@ -1409,6 +1411,7 @@ describe('PUT /api/sales/client-quotes/:id supplier-item forward sync (#779)', (
         supplierQuoteSupplierName: null,
         supplierQuoteUnitPrice: null,
         unitType: 'days',
+        pricingSemanticsVersion: 2,
       },
     ]);
 
@@ -1436,6 +1439,63 @@ describe('PUT /api/sales/client-quotes/:id supplier-item forward sync (#779)', (
     const replaced = cqReplaceItemsMock.mock.calls[0][1] as Array<Record<string, unknown>>;
     expect(replaced[0].unitPrice).toBe(10);
     expect(replaced[0].productMolPercentage).toBe(0);
+  });
+
+  test('makes a new day line inherit the historical document pricing contract', async () => {
+    setupDraftQuote();
+    cqFindItemSnapshotsForQuoteMock.mockResolvedValue([
+      {
+        id: 'qi-legacy',
+        productId: 'p-1',
+        productCost: 10,
+        productMolPercentage: null,
+        supplierQuoteId: null,
+        supplierQuoteItemId: null,
+        supplierQuoteSupplierName: null,
+        supplierQuoteUnitPrice: null,
+        unitType: 'days',
+        pricingSemanticsVersion: 1,
+      },
+    ]);
+    sqGetQuoteItemSnapshotsMock.mockResolvedValue(
+      new Map([
+        [
+          'sqi-9',
+          {
+            supplierQuoteId: 'sq-9',
+            supplierName: 'Acme',
+            productId: null,
+            netCost: 10,
+            sourceable: true,
+          },
+        ],
+      ]),
+    );
+
+    const res = await putStatus({
+      items: [
+        {
+          id: 'qi-new',
+          productId: null,
+          productName: 'Consulting day',
+          supplierQuoteItemId: 'sqi-9',
+          quantity: 1,
+          unitPrice: 100,
+          productCost: 10,
+          productMolPercentage: 0,
+          supplierQuoteUnitPrice: 10,
+          discount: 0,
+          unitType: 'days',
+          durationMonths: 1,
+          durationUnit: 'months',
+        },
+      ],
+    });
+
+    expect(res.statusCode).toBe(200);
+    const replaced = cqReplaceItemsMock.mock.calls[0][1] as Array<Record<string, unknown>>;
+    expect(replaced[0].pricingSemanticsVersion).toBe(1);
+    expect(replaced[0].productMolPercentage).toBe(90);
   });
 
   test('derives MOL from an edited sale price on a retained supplier-sourced line', async () => {

@@ -18,6 +18,11 @@ export const clientOfferItemSchema = {
     discount: { type: 'number', minimum: 0, maximum: 100 },
     durationMonths: { type: 'number' },
     durationUnit: { type: 'string', enum: ['months', 'years', 'na'] },
+    pricingSemanticsVersion: {
+      type: 'integer',
+      enum: [1, 2],
+      description: 'Read-only pricing compatibility marker; 1 preserves historical totals.',
+    },
   },
   required: ['id', 'offerId', 'productName', 'quantity', 'unitPrice', 'productCost', 'discount'],
 } as const;

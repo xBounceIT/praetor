@@ -19,6 +19,10 @@ import { replyDocumentCodeCollision } from '../utils/document-code-replies.ts';
 import { type DurationUnit, defaultDurationMonthsForUnit } from '../utils/duration-unit.ts';
 import { computeInvoiceTotals, roundCurrency } from '../utils/invoice-math.ts';
 import { generatePrefixedId, ITEM_ID_PREFIXES } from '../utils/order-ids.ts';
+import {
+  type PricingSemanticsVersion,
+  pricingSemanticsVersionForDocument,
+} from '../utils/pricing-semantics.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { replyError } from '../utils/replyError.ts';
 import {
@@ -72,6 +76,11 @@ const invoiceItemSchema = {
       enum: ['months', 'years', 'na'],
       description:
         'Display unit only: the displayed number multiplies pricing; na applies a neutral x1.',
+    },
+    pricingSemanticsVersion: {
+      type: 'integer',
+      enum: [1, 2],
+      description: 'Read-only pricing compatibility marker; 1 preserves historical totals.',
     },
   },
   required: [
@@ -190,6 +199,7 @@ type NormalizedInvoiceItemInput = {
   taxRate: number;
   durationMonths: number;
   durationUnit: DurationUnit;
+  pricingSemanticsVersion?: PricingSemanticsVersion;
 };
 
 const validateAndNormalizeItems = (
@@ -312,6 +322,7 @@ const buildItemsForInsert = (items: NormalizedInvoiceItemInput[]): invoicesRepo.
     taxRate: item.taxRate,
     durationMonths: item.durationMonths,
     durationUnit: item.durationUnit,
+    pricingSemanticsVersion: item.pricingSemanticsVersion,
   }));
 
 export default async function (fastify: FastifyInstance, _opts: unknown) {
@@ -679,6 +690,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         }
         normalizedItemsForUpdate = validateAndNormalizeItems(items, reply);
         if (!normalizedItemsForUpdate) return;
+        const existingItems = await invoicesRepo.findItemsForInvoice(idResult.value);
+        const pricingSemanticsVersion = pricingSemanticsVersionForDocument(existingItems);
+        normalizedItemsForUpdate = normalizedItemsForUpdate.map((item) => ({
+          ...item,
+          pricingSemanticsVersion,
+        }));
         const computed = computeInvoiceTotals(normalizedItemsForUpdate);
         patch.subtotal = computed.subtotal;
         patch.taxTotal = computed.taxTotal;

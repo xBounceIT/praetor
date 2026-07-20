@@ -203,6 +203,21 @@ describe('computeInvoiceTotals', () => {
       ]),
     ).toEqual({ subtotal: 100, taxTotal: 22, total: 122 });
   });
+
+  test('preserves the historical year total for legacy invoice rows', () => {
+    expect(
+      computeInvoiceTotals([
+        {
+          quantity: 2,
+          unitPrice: 50,
+          taxRate: 22,
+          durationMonths: 12,
+          durationUnit: 'years',
+          pricingSemanticsVersion: 1,
+        },
+      ]),
+    ).toEqual({ subtotal: 1200, taxTotal: 264, total: 1464 });
+  });
 });
 
 describe('roundCurrency', () => {

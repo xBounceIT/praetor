@@ -4,6 +4,11 @@ import { supplierInvoices } from '../db/schema/supplierInvoices.ts';
 import { supplierSaleItems, supplierSales } from '../db/schema/supplierSales.ts';
 import { type DurationUnit, normalizeDurationUnit } from '../utils/duration-unit.ts';
 import { numericForDb, parseDbNumber } from '../utils/parse.ts';
+import {
+  normalizeHistoricalPricingSemanticsVersion,
+  type PricingSemanticsVersion,
+  preservePricingSemanticsVersions,
+} from '../utils/pricing-semantics.ts';
 import { normalizeUnitType, type UnitType } from '../utils/unit-type.ts';
 
 export type SupplierOrder = {
@@ -32,6 +37,7 @@ export type SupplierOrderItem = {
   note: string | null;
   durationMonths: number;
   durationUnit: DurationUnit;
+  pricingSemanticsVersion: PricingSemanticsVersion;
 };
 
 const mapOrder = (row: typeof supplierSales.$inferSelect): SupplierOrder => ({
@@ -60,6 +66,7 @@ const mapItem = (row: typeof supplierSaleItems.$inferSelect): SupplierOrderItem 
   note: row.note,
   durationMonths: row.durationMonths ?? 1,
   durationUnit: normalizeDurationUnit(row.durationUnit),
+  pricingSemanticsVersion: normalizeHistoricalPricingSemanticsVersion(row.pricingSemanticsVersion),
 });
 
 export const listAll = async (exec: DbExecutor = db): Promise<SupplierOrder[]> => {
@@ -358,6 +365,7 @@ export type NewSupplierOrderItem = {
   note: string | null;
   durationMonths: number;
   durationUnit: DurationUnit;
+  pricingSemanticsVersion?: PricingSemanticsVersion;
 };
 
 export const insertItems = async (
@@ -381,6 +389,7 @@ export const insertItems = async (
         note: item.note,
         durationMonths: item.durationMonths,
         durationUnit: item.durationUnit,
+        pricingSemanticsVersion: item.pricingSemanticsVersion,
       })),
     )
     .returning();
@@ -393,6 +402,13 @@ export const replaceItems = async (
   exec: DbExecutor = db,
 ): Promise<SupplierOrderItem[]> =>
   runAtomically(exec, async (tx) => {
-    await tx.delete(supplierSaleItems).where(eq(supplierSaleItems.saleId, orderId));
-    return insertItems(orderId, items, tx);
+    const storedItems = await tx
+      .delete(supplierSaleItems)
+      .where(eq(supplierSaleItems.saleId, orderId))
+      .returning({
+        id: supplierSaleItems.id,
+        pricingSemanticsVersion: supplierSaleItems.pricingSemanticsVersion,
+      });
+    const versionedItems = preservePricingSemanticsVersions(items, storedItems);
+    return insertItems(orderId, versionedItems, tx);
   });

@@ -5,6 +5,11 @@ import { requireDateOnly } from '../utils/date.ts';
 import { type DurationUnit, normalizeDurationUnit } from '../utils/duration-unit.ts';
 import { formatSequenceSuffix } from '../utils/order-ids.ts';
 import { numericForDb, parseDbNumber } from '../utils/parse.ts';
+import {
+  normalizeHistoricalPricingSemanticsVersion,
+  type PricingSemanticsVersion,
+  preservePricingSemanticsVersions,
+} from '../utils/pricing-semantics.ts';
 
 export type Invoice = {
   id: string;
@@ -38,6 +43,7 @@ export type InvoiceItem = {
   durationMonths: number;
   // Display unit for `durationMonths`: 'months' (default) or 'years'.
   durationUnit: DurationUnit;
+  pricingSemanticsVersion: PricingSemanticsVersion;
 };
 
 export type InvoiceWithItems = Invoice & { items: InvoiceItem[] };
@@ -71,6 +77,7 @@ const mapItem = (row: typeof invoiceItems.$inferSelect): InvoiceItem => ({
   taxRate: parseDbNumber(row.taxRate, 0),
   durationMonths: row.durationMonths ?? 1,
   durationUnit: normalizeDurationUnit(row.durationUnit),
+  pricingSemanticsVersion: normalizeHistoricalPricingSemanticsVersion(row.pricingSemanticsVersion),
 });
 
 export const generateNextId = async (year: string, exec: DbExecutor = db): Promise<string> => {
@@ -337,6 +344,7 @@ export type NewInvoiceItem = {
   taxRate: number;
   durationMonths: number;
   durationUnit: DurationUnit;
+  pricingSemanticsVersion?: PricingSemanticsVersion;
 };
 
 export const insertItems = async (
@@ -360,6 +368,7 @@ export const insertItems = async (
         taxRate: numericForDb(item.taxRate),
         durationMonths: item.durationMonths ?? 1,
         durationUnit: item.durationUnit ?? 'months',
+        pricingSemanticsVersion: item.pricingSemanticsVersion,
       })),
     )
     .returning();
@@ -372,8 +381,15 @@ export const replaceItems = async (
   exec: DbExecutor = db,
 ): Promise<InvoiceItem[]> =>
   runAtomically(exec, async (tx) => {
-    await tx.delete(invoiceItems).where(eq(invoiceItems.invoiceId, invoiceId));
-    return insertItems(invoiceId, items, tx);
+    const storedItems = await tx
+      .delete(invoiceItems)
+      .where(eq(invoiceItems.invoiceId, invoiceId))
+      .returning({
+        id: invoiceItems.id,
+        pricingSemanticsVersion: invoiceItems.pricingSemanticsVersion,
+      });
+    const versionedItems = preservePricingSemanticsVersions(items, storedItems);
+    return insertItems(invoiceId, versionedItems, tx);
   });
 
 export const deleteById = async (

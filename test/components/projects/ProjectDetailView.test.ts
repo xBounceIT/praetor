@@ -1,15 +1,17 @@
 import { describe, expect, test } from 'bun:test';
 
 const readSource = async () => {
-  return Bun.file(
+  const source = await Bun.file(
     new URL('../../../components/projects/ProjectDetailView.tsx', import.meta.url),
   ).text();
+  return source.replaceAll('\r\n', '\n');
 };
 
 const readProjectTasksTableSource = async () => {
-  return Bun.file(
+  const source = await Bun.file(
     new URL('../../../components/projects/ProjectTasksTable.tsx', import.meta.url),
   ).text();
+  return source.replaceAll('\r\n', '\n');
 };
 
 describe('ProjectDetailView wiring', () => {

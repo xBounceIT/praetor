@@ -6,6 +6,11 @@ import { sales } from '../db/schema/sales.ts';
 import { normalizeNullableDateOnly } from '../utils/date.ts';
 import { type DurationUnit, normalizeDurationUnit } from '../utils/duration-unit.ts';
 import { numericForDb, parseDbNumber, parseNullableDbNumber } from '../utils/parse.ts';
+import {
+  normalizeHistoricalPricingSemanticsVersion,
+  type PricingSemanticsVersion,
+  preservePricingSemanticsVersions,
+} from '../utils/pricing-semantics.ts';
 import { normalizeUnitType, type UnitType } from '../utils/unit-type.ts';
 
 export type ClientQuote = {
@@ -51,6 +56,7 @@ export type ClientQuoteItem = {
   unitType: UnitType;
   durationMonths: number;
   durationUnit: DurationUnit;
+  pricingSemanticsVersion: PricingSemanticsVersion;
 };
 
 // Correlated subquery used by list/find projections. create/update use `null::varchar`
@@ -211,6 +217,7 @@ const mapItem = (row: typeof quoteItems.$inferSelect): ClientQuoteItem => ({
   unitType: normalizeUnitType(row.unitType),
   durationMonths: row.durationMonths ?? 1,
   durationUnit: normalizeDurationUnit(row.durationUnit),
+  pricingSemanticsVersion: normalizeHistoricalPricingSemanticsVersion(row.pricingSemanticsVersion),
 });
 
 const candidateItemsPredicate = (quoteId: string, candidateId: string) =>
@@ -428,6 +435,7 @@ export type ExistingQuoteItemSnapshot = {
   supplierQuoteSupplierName: string | null;
   supplierQuoteUnitPrice: number | null;
   unitType: UnitType;
+  pricingSemanticsVersion: PricingSemanticsVersion;
 };
 
 export const findItemSnapshotsForQuote = async (
@@ -447,6 +455,7 @@ export const findItemSnapshotsForQuote = async (
       supplierQuoteSupplierName: quoteItems.supplierQuoteSupplierName,
       supplierQuoteUnitPrice: quoteItems.supplierQuoteUnitPrice,
       unitType: quoteItems.unitType,
+      pricingSemanticsVersion: quoteItems.pricingSemanticsVersion,
     })
     .from(quoteItems)
     .where(eq(quoteItems.quoteId, quoteId));
@@ -462,6 +471,9 @@ export const findItemSnapshotsForQuote = async (
     supplierQuoteSupplierName: row.supplierQuoteSupplierName,
     supplierQuoteUnitPrice: parseNullableDbNumber(row.supplierQuoteUnitPrice),
     unitType: normalizeUnitType(row.unitType),
+    pricingSemanticsVersion: normalizeHistoricalPricingSemanticsVersion(
+      row.pricingSemanticsVersion,
+    ),
   }));
 };
 
@@ -475,6 +487,7 @@ export const findItemTotals = async (
     discount: number;
     durationMonths: number;
     durationUnit: DurationUnit;
+    pricingSemanticsVersion: PricingSemanticsVersion;
   }>
 > => {
   const rows = await exec
@@ -484,6 +497,7 @@ export const findItemTotals = async (
       discount: quoteItems.discount,
       durationMonths: quoteItems.durationMonths,
       durationUnit: quoteItems.durationUnit,
+      pricingSemanticsVersion: quoteItems.pricingSemanticsVersion,
     })
     .from(quoteItems)
     .where(eq(quoteItems.quoteId, quoteId));
@@ -493,6 +507,9 @@ export const findItemTotals = async (
     discount: parseDbNumber(row.discount, 0),
     durationMonths: row.durationMonths ?? 1,
     durationUnit: normalizeDurationUnit(row.durationUnit),
+    pricingSemanticsVersion: normalizeHistoricalPricingSemanticsVersion(
+      row.pricingSemanticsVersion,
+    ),
   }));
 };
 
@@ -690,6 +707,7 @@ export type NewClientQuoteItem = {
   unitType: UnitType;
   durationMonths: number;
   durationUnit: DurationUnit;
+  pricingSemanticsVersion?: PricingSemanticsVersion;
 };
 
 export const insertItems = async (
@@ -723,6 +741,7 @@ export const insertItems = async (
         unitType: item.unitType,
         durationMonths: item.durationMonths ?? 1,
         durationUnit: item.durationUnit ?? 'months',
+        pricingSemanticsVersion: item.pricingSemanticsVersion,
       })),
     )
     .returning();
@@ -737,8 +756,15 @@ export const replaceItems = async (
 ): Promise<ClientQuoteItem[]> =>
   runAtomically(exec, async (tx) => {
     const resolvedCandidateId = candidateId ?? (await resolvePrimaryCandidateId(quoteId, tx));
-    await tx.delete(quoteItems).where(candidateItemsPredicate(quoteId, resolvedCandidateId));
-    return insertItems(quoteId, items, tx, resolvedCandidateId);
+    const storedItems = await tx
+      .delete(quoteItems)
+      .where(candidateItemsPredicate(quoteId, resolvedCandidateId))
+      .returning({
+        id: quoteItems.id,
+        pricingSemanticsVersion: quoteItems.pricingSemanticsVersion,
+      });
+    const versionedItems = preservePricingSemanticsVersions(items, storedItems);
+    return insertItems(quoteId, versionedItems, tx, resolvedCandidateId);
   });
 
 export const deleteById = async (id: string, exec: DbExecutor = db): Promise<boolean> => {

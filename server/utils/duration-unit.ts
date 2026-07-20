@@ -3,6 +3,12 @@
 export const DURATION_UNITS = ['months', 'years', 'na'] as const;
 export type DurationUnit = (typeof DURATION_UNITS)[number];
 
+import {
+  LEGACY_PRICING_SEMANTICS_VERSION,
+  normalizePricingSemanticsVersion,
+  type PricingSemanticsVersion,
+} from './pricing-semantics.ts';
+
 export const normalizeDurationUnit = (value: unknown): DurationUnit =>
   value === 'years' ? 'years' : value === 'na' ? 'na' : 'months';
 
@@ -25,10 +31,16 @@ export const effectiveDurationMonths = (durationUnit: unknown, durationMonths: u
 export const effectiveDurationMultiplier = (
   durationUnit: unknown,
   durationMonths: unknown,
+  pricingSemanticsVersion?: PricingSemanticsVersion,
 ): number => {
   const normalizedUnit = normalizeDurationUnit(durationUnit);
   if (normalizedUnit === 'na') return 1;
   const storedMonths = Number(durationMonths);
   if (!Number.isFinite(storedMonths) || storedMonths <= 0) return 1;
+  if (
+    normalizePricingSemanticsVersion(pricingSemanticsVersion) === LEGACY_PRICING_SEMANTICS_VERSION
+  ) {
+    return storedMonths;
+  }
   return normalizedUnit === 'years' ? storedMonths / 12 : storedMonths;
 };
