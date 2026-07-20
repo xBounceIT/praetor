@@ -110,7 +110,7 @@ import CostSummaryPanel from '../shared/CostSummaryPanel';
 import DateField from '../shared/DateField';
 import DeleteConfirmModal from '../shared/DeleteConfirmModal';
 import DurationUnitSelector from '../shared/DurationUnitSelector';
-import FieldTooltip from '../shared/FieldTooltip';
+import FieldTooltip, { type FieldTooltipProps } from '../shared/FieldTooltip';
 import HeaderAddButton from '../shared/HeaderAddButton';
 import {
   LINE_ITEM_NOTE_CELL_CLASSNAME,
@@ -2339,6 +2339,8 @@ const ClientQuoteCandidatesBar: React.FC<{ controller: ClientQuotesController }>
     editingQuote,
     isReadOnly,
     errors,
+    readOnlyStatus,
+    statusLabel,
   } = controller;
   const [renamingCandidateId, setRenamingCandidateId] = useState<string | null>(null);
   const [renameDraft, setRenameDraft] = useState('');
@@ -2362,7 +2364,17 @@ const ClientQuoteCandidatesBar: React.FC<{ controller: ClientQuotesController }>
   };
 
   return (
-    <div className="space-y-1">
+    <div className="space-y-2">
+      <ClientQuoteSectionHeading
+        label={t('sales:clientQuotes.candidates.column', { defaultValue: 'Varianti' })}
+        description={t('sales:fieldInfo.variants', {
+          defaultValue:
+            'Configure alternatives for the same quote: each variant keeps its own items, prices, discounts, and terms.',
+        })}
+        status={readOnlyStatus}
+        statusLabel={statusLabel}
+        tooltipIcon="info"
+      />
       <div
         data-testid="quote-candidate-tabs-scroll"
         className="overflow-x-auto overflow-y-hidden border-b border-border pt-1"
@@ -2781,12 +2793,18 @@ const ClientQuoteSectionHeading: React.FC<{
   description?: string;
   status?: string;
   statusLabel?: string;
-}> = ({ label, description, status, statusLabel }) => (
+  tooltipIcon?: FieldTooltipProps['icon'];
+}> = ({ label, description, status, statusLabel, tooltipIcon }) => (
   <h4 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-primary">
     <span className="size-1.5 rounded-full bg-primary"></span>
     {label}
     {description && status && statusLabel && (
-      <FieldTooltip description={description} status={status} statusLabel={statusLabel} />
+      <FieldTooltip
+        description={description}
+        status={status}
+        statusLabel={statusLabel}
+        icon={tooltipIcon}
+      />
     )}
   </h4>
 );
