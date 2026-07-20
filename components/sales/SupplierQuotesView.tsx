@@ -1487,36 +1487,36 @@ const SupplierQuoteCodeField: React.FC<{ controller: SupplierQuotesController }>
   controller,
 }) => (
   <Field data-invalid={Boolean(controller.errors.id)}>
-    <FieldLabel htmlFor="supplier-quote-code" required={Boolean(controller.editingQuote)}>
-      {controller.t('sales:supplierQuotes.quoteCode', { defaultValue: 'Quote Code' })}
-    </FieldLabel>
     <div className="flex items-center gap-2">
-      <Input
-        id="supplier-quote-code"
-        type="text"
-        value={controller.formData.id || ''}
-        disabled={controller.isReadOnly}
-        onChange={(event) => {
-          controller.dispatch({ type: 'patchFormData', value: { id: event.target.value } });
-          if (controller.errors.id) {
-            controller.dispatch({ type: 'clearError', key: 'id' });
-          }
-        }}
-        placeholder={
-          controller.supplierQuoteCodePreview ??
-          controller.t('sales:supplierQuotes.autoCodePlaceholder', {
-            defaultValue: 'Auto-generated',
-          })
-        }
-        className={controller.errors.id ? 'border-red-300' : ''}
-        aria-invalid={Boolean(controller.errors.id)}
-      />
+      <FieldLabel htmlFor="supplier-quote-code" required={Boolean(controller.editingQuote)}>
+        {controller.t('sales:supplierQuotes.quoteCode', { defaultValue: 'Quote Code' })}
+      </FieldLabel>
       {controller.editingQuote?.revisionCode && (
         <Badge variant="secondary" className="shrink-0 font-mono">
           {controller.editingQuote.revisionCode}
         </Badge>
       )}
     </div>
+    <Input
+      id="supplier-quote-code"
+      type="text"
+      value={controller.formData.id || ''}
+      disabled={controller.isReadOnly}
+      onChange={(event) => {
+        controller.dispatch({ type: 'patchFormData', value: { id: event.target.value } });
+        if (controller.errors.id) {
+          controller.dispatch({ type: 'clearError', key: 'id' });
+        }
+      }}
+      placeholder={
+        controller.supplierQuoteCodePreview ??
+        controller.t('sales:supplierQuotes.autoCodePlaceholder', {
+          defaultValue: 'Auto-generated',
+        })
+      }
+      className={controller.errors.id ? 'border-red-300' : ''}
+      aria-invalid={Boolean(controller.errors.id)}
+    />
     <FieldError className="text-xs">{controller.errors.id}</FieldError>
     {!controller.editingQuote && (
       <FieldDescription className="text-xs">

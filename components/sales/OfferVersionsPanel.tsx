@@ -95,6 +95,7 @@ const OfferVersionsPanel: React.FC<OfferVersionsPanelProps> = ({
     <>
       <VersionHistoryPanel
         embedded={embedded}
+        persistenceKey="clientOffers.versions"
         rows={historyState.rows}
         selectedVersionId={selectedVersionId}
         isLoading={historyState.isLoading}
@@ -118,6 +119,7 @@ const OfferVersionsPanel: React.FC<OfferVersionsPanelProps> = ({
         isOpen={confirmOpen}
         onClose={() => setConfirmOpen(false)}
         onConfirm={handleRestoreConfirmed}
+        zIndex={70}
         title={t('clientOffers.versionHistory.restoreConfirmTitle')}
         description={t('clientOffers.versionHistory.restoreConfirmDescription')}
       />

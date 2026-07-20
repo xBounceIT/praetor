@@ -95,6 +95,7 @@ const SupplierQuoteVersionsPanel: React.FC<SupplierQuoteVersionsPanelProps> = ({
     <>
       <VersionHistoryPanel
         embedded={embedded}
+        persistenceKey="supplierQuotes.versions"
         rows={historyState.rows}
         selectedVersionId={selectedVersionId}
         isLoading={historyState.isLoading}
@@ -118,6 +119,7 @@ const SupplierQuoteVersionsPanel: React.FC<SupplierQuoteVersionsPanelProps> = ({
         isOpen={confirmOpen}
         onClose={() => setConfirmOpen(false)}
         onConfirm={handleRestoreConfirmed}
+        zIndex={70}
         title={t('supplierQuotes.versionHistory.restoreConfirmTitle')}
         description={t('supplierQuotes.versionHistory.restoreConfirmDescription')}
       />

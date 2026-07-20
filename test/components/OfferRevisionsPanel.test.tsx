@@ -28,9 +28,17 @@ mock.module('../../utils/date', () => ({
 }));
 
 mock.module('../../components/shared/DeleteConfirmModal', () => ({
-  default: ({ isOpen, onConfirm }: { isOpen: boolean; onConfirm: () => void }) =>
+  default: ({
+    isOpen,
+    onConfirm,
+    zIndex,
+  }: {
+    isOpen: boolean;
+    onConfirm: () => void;
+    zIndex?: number;
+  }) =>
     isOpen ? (
-      <button type="button" onClick={onConfirm}>
+      <button type="button" data-z-index={zIndex} onClick={onConfirm}>
         confirm-restore
       </button>
     ) : null,
@@ -137,7 +145,9 @@ describe('<OfferRevisionsPanel />', () => {
       expect(screen.getByText('clientOffers.revisionHistory.restoreButton')).toBeInTheDocument(),
     );
     fireEvent.click(screen.getByText('clientOffers.revisionHistory.restoreButton'));
-    fireEvent.click(await screen.findByText('confirm-restore'));
+    const confirmButton = await screen.findByText('confirm-restore');
+    expect(confirmButton).toHaveAttribute('data-z-index', '70');
+    fireEvent.click(confirmButton);
 
     await waitFor(() => expect(restoreRevisionMock).toHaveBeenCalledWith('OFF_26_001', 'or-2'));
     expect(onRestored).toHaveBeenCalledWith(RESTORED_OFFER);

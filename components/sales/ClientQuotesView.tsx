@@ -2930,38 +2930,38 @@ const ClientQuoteCodeField: React.FC<{ controller: ClientQuotesController }> = (
 
   return (
     <Field data-invalid={Boolean(errors.id)}>
-      <FieldLabel htmlFor="client-quote-code" required={Boolean(editingQuote)}>
-        {t('sales:clientQuotes.quoteCode', { defaultValue: 'Quote Code' })}
-      </FieldLabel>
       <div className="flex items-center gap-2">
-        <Input
-          id="client-quote-code"
-          type="text"
-          value={formData.id || ''}
-          onChange={(e) => {
-            setFormData((prev) => ({ ...prev, id: e.target.value }));
-            if (errors.id) {
-              setErrors((prev) => {
-                const next = { ...prev };
-                delete next.id;
-                return next;
-              });
-            }
-          }}
-          placeholder={
-            clientQuoteCodePreview ??
-            t('sales:clientQuotes.autoCodePlaceholder', { defaultValue: 'Auto-generated' })
-          }
-          disabled={isReadOnly}
-          className={errors.id ? 'border-red-300 font-medium' : 'font-medium'}
-          aria-invalid={Boolean(errors.id)}
-        />
+        <FieldLabel htmlFor="client-quote-code" required={Boolean(editingQuote)}>
+          {t('sales:clientQuotes.quoteCode', { defaultValue: 'Quote Code' })}
+        </FieldLabel>
         {editingQuote?.revisionCode && (
           <Badge variant="secondary" className="shrink-0 font-mono">
             {editingQuote.revisionCode}
           </Badge>
         )}
       </div>
+      <Input
+        id="client-quote-code"
+        type="text"
+        value={formData.id || ''}
+        onChange={(e) => {
+          setFormData((prev) => ({ ...prev, id: e.target.value }));
+          if (errors.id) {
+            setErrors((prev) => {
+              const next = { ...prev };
+              delete next.id;
+              return next;
+            });
+          }
+        }}
+        placeholder={
+          clientQuoteCodePreview ??
+          t('sales:clientQuotes.autoCodePlaceholder', { defaultValue: 'Auto-generated' })
+        }
+        disabled={isReadOnly}
+        className={errors.id ? 'border-red-300 font-medium' : 'font-medium'}
+        aria-invalid={Boolean(errors.id)}
+      />
       <FieldError className="text-xs">{errors.id}</FieldError>
       {!editingQuote && (
         <FieldDescription className="text-xs">

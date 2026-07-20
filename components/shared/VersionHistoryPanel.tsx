@@ -35,7 +35,35 @@ interface VersionHistoryPanelProps<Row extends VersionHistoryPanelRow> {
   onClearPreview: () => void;
   onRestore: () => void;
   embedded?: boolean;
+  persistenceKey?: string;
 }
+
+const HISTORY_PANEL_STORAGE_PREFIX = 'praetor.history-panel.';
+
+const readPersistedOpenState = (persistenceKey?: string) => {
+  if (!persistenceKey || typeof window === 'undefined') return true;
+
+  try {
+    return (
+      window.localStorage.getItem(`${HISTORY_PANEL_STORAGE_PREFIX}${persistenceKey}`) !== 'closed'
+    );
+  } catch {
+    return true;
+  }
+};
+
+const persistOpenState = (persistenceKey: string | undefined, isOpen: boolean) => {
+  if (!persistenceKey || typeof window === 'undefined') return;
+
+  try {
+    window.localStorage.setItem(
+      `${HISTORY_PANEL_STORAGE_PREFIX}${persistenceKey}`,
+      isOpen ? 'open' : 'closed',
+    );
+  } catch {
+    // Storage can be unavailable in restricted browser contexts; local state still works.
+  }
+};
 
 export function VersionHistoryPanel<Row extends VersionHistoryPanelRow>({
   rows,
@@ -50,13 +78,19 @@ export function VersionHistoryPanel<Row extends VersionHistoryPanelRow>({
   onClearPreview,
   onRestore,
   embedded = false,
+  persistenceKey,
 }: VersionHistoryPanelProps<Row>) {
-  const [isOpen, setIsOpen] = useState(true);
+  const [isOpen, setIsOpen] = useState(() => readPersistedOpenState(persistenceKey));
+
+  const handleOpenChange = (nextIsOpen: boolean) => {
+    setIsOpen(nextIsOpen);
+    persistOpenState(persistenceKey, nextIsOpen);
+  };
 
   return (
     <Collapsible
       open={isOpen}
-      onOpenChange={setIsOpen}
+      onOpenChange={handleOpenChange}
       className={cn(
         'max-h-[90vh] flex-shrink-0 flex-col overflow-hidden rounded-lg border border-border bg-background text-foreground shadow-lg animate-in fade-in slide-in-from-right',
         embedded

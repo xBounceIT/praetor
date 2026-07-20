@@ -1708,33 +1708,33 @@ const ClientOfferCodeField: React.FC<{ controller: ClientOffersController }> = (
 
   return (
     <Field data-invalid={Boolean(errors.id)}>
-      <FieldLabel htmlFor="client-offer-code" required={Boolean(editingOffer)}>
-        {t('sales:clientOffers.offerCode', { defaultValue: 'Offer code' })}
-      </FieldLabel>
       <div className="flex items-center gap-2">
-        <Input
-          id="client-offer-code"
-          type="text"
-          value={formData.id || ''}
-          disabled={isReadOnly}
-          onChange={(event) => setFormData((prev) => ({ ...prev, id: event.target.value }))}
-          placeholder={
-            isSourcedCreate
-              ? t('sales:clientOffers.inheritedCodePlaceholder', {
-                  defaultValue: 'Inherited from source quote',
-                })
-              : (clientOfferCodePreview ??
-                t('sales:clientOffers.autoCodePlaceholder', { defaultValue: 'Auto-generated' }))
-          }
-          className={errors.id ? 'border-red-300 font-medium' : 'font-medium'}
-          aria-invalid={Boolean(errors.id)}
-        />
+        <FieldLabel htmlFor="client-offer-code" required={Boolean(editingOffer)}>
+          {t('sales:clientOffers.offerCode', { defaultValue: 'Offer code' })}
+        </FieldLabel>
         {editingOffer?.revisionCode && (
           <Badge variant="secondary" className="shrink-0 font-mono">
             {editingOffer.revisionCode}
           </Badge>
         )}
       </div>
+      <Input
+        id="client-offer-code"
+        type="text"
+        value={formData.id || ''}
+        disabled={isReadOnly}
+        onChange={(event) => setFormData((prev) => ({ ...prev, id: event.target.value }))}
+        placeholder={
+          isSourcedCreate
+            ? t('sales:clientOffers.inheritedCodePlaceholder', {
+                defaultValue: 'Inherited from source quote',
+              })
+            : (clientOfferCodePreview ??
+              t('sales:clientOffers.autoCodePlaceholder', { defaultValue: 'Auto-generated' }))
+        }
+        className={errors.id ? 'border-red-300 font-medium' : 'font-medium'}
+        aria-invalid={Boolean(errors.id)}
+      />
       <FieldError className="text-xs">{errors.id}</FieldError>
       {!editingOffer && (
         <FieldDescription className="text-xs">

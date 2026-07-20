@@ -105,6 +105,7 @@ export function RevisionHistoryPanel<TRevision extends RevisionWithSnapshot, TRe
     <>
       <VersionHistoryPanel
         embedded
+        persistenceKey={`${translationPrefix}.revisions`}
         rows={rows}
         selectedVersionId={selectedRevisionId}
         isLoading={state.isLoading}
@@ -136,6 +137,7 @@ export function RevisionHistoryPanel<TRevision extends RevisionWithSnapshot, TRe
         isOpen={confirmOpen}
         onClose={() => setConfirmOpen(false)}
         onConfirm={handleRestore}
+        zIndex={70}
         title={t(`${translationPrefix}.revisionHistory.restoreConfirmTitle`, {
           defaultValue: 'Ripristinare la revisione?',
         })}
