@@ -647,10 +647,15 @@ const useSupplierQuotesController = ({
       const supplier = suppliers.find((item) => item.id === supplierId);
       dispatch({
         type: 'patchFormData',
-        value: { supplierId, supplierName: supplier?.name || '' },
+        value: {
+          supplierId,
+          supplierName:
+            supplier?.name ??
+            (supplierId === formData.supplierId ? (formData.supplierName ?? '') : ''),
+        },
       });
     },
-    [suppliers],
+    [formData.supplierId, formData.supplierName, suppliers],
   );
 
   // The customer link is mandatory (issue #777): every supplier quote must name a customer, so

@@ -170,6 +170,8 @@ describe('<SupplierQuotesView /> Duplicate row action', () => {
     expect(document.getElementById('supplier-quote-supplier')).toHaveTextContent(
       source.supplierName,
     );
+    await user.click(document.getElementById('supplier-quote-supplier') as HTMLElement);
+    await user.click(await screen.findByRole('option', { name: source.supplierName }));
     if (!source.clientName) throw new Error('Expected linked customer name');
     expect(document.getElementById('supplier-quote-client')).toHaveTextContent(source.clientName);
     expect(within(dialog).getByText('supplierQuotes.attachments.dropHere')).toBeInTheDocument();
@@ -183,6 +185,7 @@ describe('<SupplierQuotesView /> Duplicate row action', () => {
     expect(payload.status).toBe('draft');
     expect(payload.expirationDate).toBe(expectedExpiration);
     expect(payload.supplierId).toBe(source.supplierId);
+    expect(payload.supplierName).toBe(source.supplierName);
     expect(payload.clientId).toBe(source.clientId);
     expect(payload.paymentTerms).toBe(source.paymentTerms);
     expect(payload.communicationChannelId).toBe(source.communicationChannelId);
