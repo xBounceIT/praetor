@@ -10,6 +10,7 @@ import {
   MIN_MOL_PERCENTAGE,
   type PricingItem,
   parseOptionalNumberInputValue,
+  roundCurrency,
 } from './numbers';
 
 export const makeCostUpdater =
@@ -124,7 +125,7 @@ export const makeRevenueUpdater =
     if (!Number.isFinite(revenueMultiplier) || revenueMultiplier <= 0) return prev;
     if (Number.isFinite(cur.unitPrice) && newRevenue === netRevenue) return prev;
 
-    const newUnitPrice = newRevenue / revenueMultiplier;
+    const newUnitPrice = roundCurrency(newRevenue / revenueMultiplier);
     const updated = [...items];
     updated[index] = {
       ...cur,

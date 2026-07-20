@@ -187,6 +187,16 @@ describe('makeRevenueUpdater', () => {
     expect(next.items?.[0].unitPrice).toBe(100);
   });
 
+  test('rounds the derived unit price to persisted currency precision', () => {
+    const state: FormState = { items: [baseItem({ productCost: 10, quantity: 3 })] };
+    const next = makeRevenueUpdater<FormState>(0, '100')(state);
+    const updated = next.items?.[0];
+
+    expect(updated?.unitPrice).toBe(33.33);
+    expect(updated?.productMolPercentage).toBe(70);
+    expect((updated?.unitPrice ?? 0) * 3).toBeCloseTo(99.99, 10);
+  });
+
   test('clears sale price and MOL when revenue is cleared', () => {
     const state: FormState = { items: [baseItem({ productMolPercentage: 50 })] };
     const next = makeRevenueUpdater<FormState>(0, '')(state);
