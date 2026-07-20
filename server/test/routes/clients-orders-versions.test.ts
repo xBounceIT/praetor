@@ -581,6 +581,58 @@ describe('POST /api/clients-orders/:id/versions/:versionId/restore', () => {
     expect(replacedItems[0].productId).toBeNull();
   });
 
+  test('200 restores authoritative supplier metadata instead of snapshot values', async () => {
+    setupHappyPath();
+    sqGetQuoteItemSnapshotsMock.mockResolvedValue(
+      new Map([
+        [
+          'sqi-1',
+          {
+            supplierQuoteId: 'sq-1',
+            supplierName: 'ACME',
+            productId: 'p-1',
+            unitPrice: 50,
+            netCost: 50,
+          },
+        ],
+      ]),
+    );
+    ovFindByIdMock.mockResolvedValue({
+      ...SAMPLE_VERSION,
+      snapshot: {
+        ...SAMPLE_SNAPSHOT,
+        items: [
+          {
+            ...SAMPLE_ITEM,
+            supplierQuoteId: 'sq-client-lie',
+            supplierQuoteItemId: 'sqi-1',
+            supplierQuoteSupplierName: 'Spoofed Supplier',
+            supplierQuoteUnitPrice: 999,
+          },
+        ],
+      },
+    });
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/clients-orders/o-1/versions/ov-1/restore',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    const restoredItem = coReplaceItemsMock.mock.calls[0]?.[1]?.[0];
+    expect(restoredItem).toEqual(
+      expect.objectContaining({
+        productId: 'p-1',
+        supplierQuoteId: 'sq-1',
+        supplierQuoteItemId: 'sqi-1',
+        supplierQuoteSupplierName: 'ACME',
+        supplierQuoteUnitPrice: 50,
+        productMolPercentage: 50,
+      }),
+    );
+  });
+
   test('409 when restoring a snapshot with an orphaned product-less item (issue #783)', async () => {
     setupHappyPath();
     // No catalog product AND no supplier-quote reference — the same invariant POST/PUT enforce.
@@ -633,6 +685,40 @@ describe('POST /api/clients-orders/:id/versions/:versionId/restore', () => {
             ...SAMPLE_ITEM,
             id: 'si-stale',
             productId: null,
+            supplierQuoteId: 'sq-1',
+            supplierQuoteItemId: 'sqi-gone',
+          },
+        ],
+      },
+    });
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/clients-orders/o-1/versions/ov-1/restore',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(JSON.parse(res.body).error).toContain(
+      'references a supplier quote item that no longer exists',
+    );
+    expect(sqGetQuoteItemSnapshotsMock).toHaveBeenCalledWith(['sqi-gone']);
+    expect(coRestoreSnapshotOrderMock).not.toHaveBeenCalled();
+    expect(coReplaceItemsMock).not.toHaveBeenCalled();
+  });
+
+  test('409 when restoring a product-backed line whose supplier quote item is stale', async () => {
+    setupHappyPath();
+    sqGetQuoteItemSnapshotsMock.mockResolvedValue(new Map());
+    ovFindByIdMock.mockResolvedValue({
+      ...SAMPLE_VERSION,
+      snapshot: {
+        ...SAMPLE_SNAPSHOT,
+        items: [
+          {
+            ...SAMPLE_ITEM,
+            id: 'si-stale-product',
+            productId: 'p-1',
             supplierQuoteId: 'sq-1',
             supplierQuoteItemId: 'sqi-gone',
           },
