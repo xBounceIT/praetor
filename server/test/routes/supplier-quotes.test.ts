@@ -834,6 +834,81 @@ describe('PUT /api/sales/supplier-quotes/:id', () => {
     expect(item.unitPrice).toBe(expectedNet);
   });
 
+  test('200 preserves an existing client-synced cost when pricing inputs are unchanged', async () => {
+    const syncedItem = {
+      ...SAMPLE_ITEM,
+      listPrice: 37.75,
+      discountPercent: 15,
+      unitPrice: 32.09,
+    };
+    sqFindByIdMock.mockResolvedValue(DRAFT_QUOTE);
+    sqFindLinkedOrderIdMock.mockResolvedValue(null);
+    sqFindItemsForQuoteMock.mockResolvedValue([syncedItem]);
+    sqUpdateMock.mockResolvedValue(DRAFT_QUOTE);
+    sqUpsertItemsMock.mockResolvedValue([syncedItem]);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/sales/supplier-quotes/sq-1',
+      headers: authHeader(),
+      payload: {
+        notes: 'Notes-only edit from the full form',
+        items: [
+          {
+            id: 'sqi-1',
+            productId: 'p-1',
+            productName: 'Service',
+            quantity: 2,
+            listPrice: 37.75,
+            discountPercent: 15,
+            unitPrice: 32.09,
+          },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const itemsArg = sqUpsertItemsMock.mock.calls[0]?.[1] as Array<Record<string, unknown>>;
+    expect(itemsArg[0]).toEqual(expect.objectContaining({ unitPrice: 32.09 }));
+  });
+
+  test('200 rederives a client-synced cost when a pricing input changes', async () => {
+    const syncedItem = {
+      ...SAMPLE_ITEM,
+      listPrice: 37.75,
+      discountPercent: 15,
+      unitPrice: 32.09,
+    };
+    sqFindByIdMock.mockResolvedValue(DRAFT_QUOTE);
+    sqFindLinkedOrderIdMock.mockResolvedValue(null);
+    sqFindItemsForQuoteMock.mockResolvedValue([syncedItem]);
+    sqUpdateMock.mockResolvedValue(DRAFT_QUOTE);
+    sqUpsertItemsMock.mockResolvedValue([{ ...syncedItem, listPrice: 40, unitPrice: 34 }]);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/sales/supplier-quotes/sq-1',
+      headers: authHeader(),
+      payload: {
+        items: [
+          {
+            id: 'sqi-1',
+            productId: 'p-1',
+            productName: 'Service',
+            quantity: 2,
+            listPrice: 40,
+            discountPercent: 15,
+            unitPrice: 32.09,
+          },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const itemsArg = sqUpsertItemsMock.mock.calls[0]?.[1] as Array<Record<string, unknown>>;
+    expect(itemsArg[0]).toEqual(expect.objectContaining({ unitPrice: 34 }));
+  });
+
   test('200 falls back to legacy unitPrice as list price when no list price is sent', async () => {
     sqFindByIdMock.mockResolvedValue(DRAFT_QUOTE);
     sqFindLinkedOrderIdMock.mockResolvedValue(null);

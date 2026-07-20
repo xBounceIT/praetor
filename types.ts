@@ -1371,7 +1371,8 @@ export interface SupplierQuoteItem {
   listPrice: number;
   // Discount the supplier grants us, as a percentage (Sconto a noi %).
   discountPercent: number;
-  // Net unit cost (Costo unitario) = listPrice * (1 - discountPercent / 100).
+  // Net unit cost (Costo unitario), normally derived from list price and discount. Client-document
+  // synchronization may preserve an explicit authoritative cost that differs by fractional cents.
   unitPrice: number;
   note?: string;
   unitType?: SupplierUnitType;

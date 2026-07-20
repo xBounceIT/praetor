@@ -282,10 +282,9 @@ const validateAndNormalizeItems = (
       badRequest(reply, durationUnitResult.message);
       return null;
     }
-    // Round both inputs to the persisted DB scale and derive the net cost (Costo unitario) from the
-    // rounded values, so the stored row always satisfies unitPrice = listPrice × (1 − discount/100)
-    // even when a caller submits more than two decimals. Derived server-side so it can never drift
-    // from what the client computed; totals downstream read this net unit price.
+    // Round both inputs to the persisted DB scale and derive the candidate net cost (Costo
+    // unitario) from them. New rows and genuine pricing edits use this value; update reconciliation
+    // below can retain an existing synced override when list price and discount are unchanged.
     const pricing = deriveSupplierLinePricing(listPrice, discountPercent);
     // Reject amounts that would overflow either the NUMERIC(15,2) list price or the NUMERIC(19,6)
     // derived unit cost, so the caller gets a clean 400 instead of a database error. Both keep 13
@@ -787,7 +786,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       // deleting a referenced item, and repointing a referenced item to a different product (the
       // client-line snapshot resolver hard-fails its next edit on a product mismatch).
       if (normalizedItems && existingItems) {
-        const existingIds = new Set(existingItems.map((item) => item.id));
+        const existingItemById = new Map(existingItems.map((item) => [item.id, item] as const));
+        const existingIds = new Set(existingItemById.keys());
         // Keep each persisted id claimed by the payload (first occurrence wins — a duplicate or
         // foreign id keeps its freshly minted one and inserts as a new row).
         const claimedIds = new Set<string>();
@@ -796,6 +796,18 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           if (incomingId && existingIds.has(incomingId) && !claimedIds.has(incomingId)) {
             normalized.id = incomingId;
             claimedIds.add(incomingId);
+            const existing = existingItemById.get(incomingId);
+            // Client syncs may intentionally persist an authoritative cost that differs from the
+            // rounded list-price/discount formula. When those pricing inputs are unchanged, keep
+            // the stored cost across full-form or notes-only saves. A genuine pricing edit still
+            // uses the freshly derived value produced during validation above.
+            if (
+              existing &&
+              normalized.listPrice === existing.listPrice &&
+              normalized.discountPercent === existing.discountPercent
+            ) {
+              normalized.unitPrice = normalizeSupplierUnitPrice(existing.unitPrice);
+            }
           }
         });
         const existingProductById = new Map(

@@ -11,6 +11,11 @@ export type SupplierLinePricing = {
   unitPrice: number;
 };
 
+export type SupplierDocumentLinePricing = {
+  unitPrice: number;
+  discount: number;
+};
+
 const UNIT_PRICE_DECIMAL_PLACES = 6;
 
 export const normalizeSupplierUnitPrice = (unitPrice: number): number =>
@@ -24,8 +29,9 @@ export const normalizeSupplierUnitPrice = (unitPrice: number): number =>
 // Rounding the inputs before deriving the cost is essential: a caller may submit more than two
 // decimals (e.g. listPrice 10.005), which PostgreSQL would round on insert. Deriving unitPrice from
 // the raw value would leave the persisted row violating unitPrice = listPrice × (1 − discount/100)
-// — a later save could then silently shift totals. Centralising the formula here keeps every write
-// path (create, update, snapshot restore) enforcing the same invariant.
+// — a later save could then silently shift totals. Centralising the formula here keeps new and
+// price-edited rows consistent; update and restore may instead retain an explicit authoritative
+// cost when the canonical list price and discount have not changed.
 export const deriveSupplierLinePricing = (
   listPrice: number,
   discountPercent: number,
@@ -40,4 +46,20 @@ export const deriveSupplierLinePricing = (
     discountPercent: roundedDiscountPercent,
     unitPrice,
   };
+};
+
+// Supplier orders and invoices store a gross unit price plus a line discount at currency scale.
+// Keep that richer pricing chain when it reproduces the quote's authoritative net cost. A
+// client-to-supplier sync can intentionally preserve a scale-2 client cost that differs from the
+// quote formula by fractional cents; flatten that exceptional value to net price + zero discount
+// so downstream documents round-trip the accepted cost instead of silently re-deriving it.
+export const toSupplierDocumentLinePricing = (
+  pricing: SupplierLinePricing,
+): SupplierDocumentLinePricing => {
+  const canonical = deriveSupplierLinePricing(pricing.listPrice, pricing.discountPercent);
+  const authoritativeUnitPrice = normalizeSupplierUnitPrice(pricing.unitPrice);
+  if (canonical.unitPrice === authoritativeUnitPrice) {
+    return { unitPrice: canonical.listPrice, discount: canonical.discountPercent };
+  }
+  return { unitPrice: roundCurrency(authoritativeUnitPrice), discount: 0 };
 };

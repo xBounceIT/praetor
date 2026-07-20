@@ -1,6 +1,10 @@
 import { describe, expect, test } from 'bun:test';
 import { roundCurrency, roundToDecimalPlaces } from '../../utils/invoice-math.ts';
-import { deriveSupplierLinePricing, MAX_LINE_AMOUNT } from '../../utils/supplier-quote-pricing.ts';
+import {
+  deriveSupplierLinePricing,
+  MAX_LINE_AMOUNT,
+  toSupplierDocumentLinePricing,
+} from '../../utils/supplier-quote-pricing.ts';
 
 describe('MAX_LINE_AMOUNT', () => {
   test('equals the NUMERIC(15,2) maximum (13 integer digits + 2 decimals)', () => {
@@ -69,5 +73,19 @@ describe('deriveSupplierLinePricing', () => {
         expect(p.unitPrice).toBeGreaterThanOrEqual(0);
       }
     }
+  });
+});
+
+describe('toSupplierDocumentLinePricing', () => {
+  test('keeps gross price and discount when they reproduce the authoritative cost', () => {
+    expect(
+      toSupplierDocumentLinePricing({ listPrice: 37.75, discountPercent: 15, unitPrice: 32.0875 }),
+    ).toEqual({ unitPrice: 37.75, discount: 15 });
+  });
+
+  test('flattens a client-synced cost that intentionally differs from the formula', () => {
+    expect(
+      toSupplierDocumentLinePricing({ listPrice: 37.75, discountPercent: 15, unitPrice: 32.09 }),
+    ).toEqual({ unitPrice: 32.09, discount: 0 });
   });
 });
