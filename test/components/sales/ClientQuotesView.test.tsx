@@ -1231,7 +1231,7 @@ describe('<ClientQuotesView /> row actions and edit gating (#812 round 13)', () 
     }
   });
 
-  test('uses the selected source variant as duplicate primary without reordering variants', async () => {
+  test('submits the selected source variant first as the duplicate primary', async () => {
     const user = userEvent.setup();
     const onAddQuote = mock((_data: QuoteMutation) => Promise.resolve());
     const quote = withSingleCandidate(
@@ -1309,8 +1309,8 @@ describe('<ClientQuotesView /> row actions and edit gating (#812 round 13)', () 
 
     const payload = onAddQuote.mock.calls[0]?.[0] as QuoteMutation;
     expect(payload.candidates?.map((candidate) => candidate.name)).toEqual([
-      'Variante A',
       'Variante B',
+      'Variante A',
     ]);
     expect(payload).toMatchObject({
       paymentTerms: '90gg',
@@ -1318,8 +1318,8 @@ describe('<ClientQuotesView /> row actions and edit gating (#812 round 13)', () 
       notes: 'Winning variant notes',
     });
     expect(payload.items?.[0]?.unitPrice).toBe(275);
-    expect(payload.candidates?.[0]?.items[0]?.unitPrice).toBe(125);
-    expect(payload.candidates?.[1]?.items[0]?.unitPrice).toBe(275);
+    expect(payload.candidates?.[0]?.items[0]?.unitPrice).toBe(275);
+    expect(payload.candidates?.[1]?.items[0]?.unitPrice).toBe(125);
   });
 
   test('blocks a duplicated source-only line in a non-active variant until it is relinked', async () => {

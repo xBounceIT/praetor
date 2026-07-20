@@ -1112,6 +1112,14 @@ const useClientQuotesController = ({
       : 0;
     const primaryCandidate =
       candidatePayloads[duplicatePrimaryCandidateIndex] ?? candidatePayloads[0];
+    const submittedCandidatePayloads =
+      duplicatePrimaryCandidateId && duplicatePrimaryCandidateIndex > 0
+        ? [
+            primaryCandidate,
+            ...candidatePayloads.slice(0, duplicatePrimaryCandidateIndex),
+            ...candidatePayloads.slice(duplicatePrimaryCandidateIndex + 1),
+          ]
+        : candidatePayloads;
 
     const payload = {
       ...formData,
@@ -1123,7 +1131,7 @@ const useClientQuotesController = ({
       communicationChannelId: primaryCandidate.communicationChannelId,
       notes: primaryCandidate.notes,
       items: primaryCandidate.items,
-      candidates: candidatePayloads,
+      candidates: submittedCandidatePayloads,
     };
 
     dispatch({ type: 'setIsSubmitting', value: true });
