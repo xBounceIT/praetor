@@ -1178,6 +1178,8 @@ describe('<ClientQuotesView /> row actions and edit gating (#812 round 13)', () 
     expect(within(dialog).getByText('sales:clientQuotes.createNewQuote')).toBeInTheDocument();
     expect(within(dialog).getByLabelText('sales:clientQuotes.quoteCode')).toHaveValue('');
     expect(document.getElementById('client-quote-client')).toHaveTextContent(quote.clientName);
+    await user.click(document.getElementById('client-quote-client') as HTMLElement);
+    await user.click(await screen.findByRole('option', { name: quote.clientName }));
     expect(within(dialog).getByRole('tab', { name: /Variante A/ })).toBeInTheDocument();
     expect(within(dialog).getByRole('tab', { name: /Variante B/ })).toBeInTheDocument();
     const expectedExpiration = addMonthsToDateOnly(getLocalDateString(), 1);
@@ -1195,6 +1197,7 @@ describe('<ClientQuotesView /> row actions and edit gating (#812 round 13)', () 
     const payload = onAddQuote.mock.calls[0]?.[0] as QuoteMutation;
     expect(payload.id).toBeUndefined();
     expect(payload.status).toBe('draft');
+    expect(payload.clientName).toBe(quote.clientName);
     expect(payload.expirationDate).toBe(expectedExpiration);
     expect(payload).not.toHaveProperty('linkedOfferId');
     expect(payload.candidates).toHaveLength(2);

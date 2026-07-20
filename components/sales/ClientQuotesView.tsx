@@ -1266,7 +1266,8 @@ const useClientQuotesController = ({
   const handleClientChange = (clientId: string) => {
     if (isReadOnly) return;
     const client = clients.find((c) => c.id === clientId);
-    const nextClientName = client?.name || '';
+    const nextClientName =
+      client?.name ?? (clientId === formData.clientId ? (formData.clientName ?? '') : '');
     const shouldPromptReprice =
       Boolean(editingQuote) &&
       clientId !== formData.clientId &&
