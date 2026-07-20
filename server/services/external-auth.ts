@@ -83,6 +83,18 @@ const isUsernameUniqueViolation = (err: unknown): boolean => {
 export const normalizeExternalUsername = (username: string): string =>
   username.trim().toLowerCase();
 
+export const canonicalUsernameMatchesUser = (
+  canonicalUsername: string | undefined,
+  username: string,
+): boolean => {
+  if (canonicalUsername === undefined) return false;
+  const normalizedCanonicalUsername = normalizeExternalUsername(canonicalUsername);
+  return (
+    normalizedCanonicalUsername.length > 0 &&
+    normalizedCanonicalUsername === normalizeExternalUsername(username)
+  );
+};
+
 const normalizeGroup = (value: string): string => value.trim().toLowerCase();
 
 const getGroupAliases = (group: string): string[] => {

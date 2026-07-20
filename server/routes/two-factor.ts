@@ -11,6 +11,7 @@ import {
 import * as usersRepo from '../repositories/usersRepo.ts';
 import { standardErrorResponses } from '../schemas/common.ts';
 import { redeemBackupCode } from '../services/backupCodes.ts';
+import { canonicalUsernameMatchesUser } from '../services/external-auth.ts';
 import { authUserSchema, buildSessionSuccess } from '../services/sessionResponse.ts';
 import { isTotpFeatureEnabled, isTotpMandatory } from '../services/totpEnforcement.ts';
 import { logAudit } from '../utils/audit.ts';
@@ -216,7 +217,19 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             userCore.username,
             passwordResult.value,
           );
-          reauthed = result.authenticated;
+          reauthed =
+            result.authenticated &&
+            canonicalUsernameMatchesUser(result.canonicalUsername, userCore.username);
+          if (result.authenticated && !reauthed) {
+            request.log.warn(
+              {
+                userId,
+                username: userCore.username,
+                ldapCanonicalUsername: result.canonicalUsername,
+              },
+              'LDAP reauthentication identity did not match the current Praetor user',
+            );
+          }
         }
         if (!reauthed) {
           return replyError(request, reply, {

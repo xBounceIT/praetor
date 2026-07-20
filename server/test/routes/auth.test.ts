@@ -373,6 +373,7 @@ describe('POST /api/auth/login', () => {
     findLoginUserByNormalizedUsernameMock.mockResolvedValue({ ...LOGIN_USER, authMethod: 'ldap' });
     ldapAuthenticateWithProfileMock.mockResolvedValue({
       authenticated: true,
+      canonicalUsername: 'alice',
       groups: ['admins'],
       matchedRoleIds: ['admin'],
       roleMappings: [{ externalGroup: 'admins', role: 'admin' }],
@@ -391,6 +392,35 @@ describe('POST /api/auth/login', () => {
     expect(body.user.role).toBe('manager');
   });
 
+  test('401: LDAP canonical identity must match the preselected Praetor user', async () => {
+    findLoginUserByNormalizedUsernameMock.mockResolvedValue({
+      ...LOGIN_USER,
+      username: 'victim',
+      authMethod: 'ldap',
+    });
+    ldapAuthenticateWithProfileMock.mockResolvedValue({
+      authenticated: true,
+      canonicalUsername: 'attacker',
+      groups: [],
+      matchedRoleIds: [],
+      roleMappings: [],
+      displayName: 'Attacker Profile',
+      email: 'attacker@example.com',
+    });
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/auth/login',
+      payload: { username: 'victim', password: 'attacker-password' },
+    });
+
+    expect(res.statusCode).toBe(401);
+    expect(JSON.parse(res.body)).toEqual({ error: 'Invalid username or password' });
+    expect(updateDirectoryProfileMock).not.toHaveBeenCalled();
+    expect(settingsUpsertForUserMock).not.toHaveBeenCalled();
+    expect(logAuditMock).not.toHaveBeenCalled();
+  });
+
   test('200: LDAP success refreshes provider-managed name and email', async () => {
     findLoginUserByNormalizedUsernameMock.mockResolvedValue({
       ...LOGIN_USER,
@@ -400,6 +430,7 @@ describe('POST /api/auth/login', () => {
     });
     ldapAuthenticateWithProfileMock.mockResolvedValue({
       authenticated: true,
+      canonicalUsername: 'alice',
       groups: [],
       matchedRoleIds: [],
       roleMappings: [],
@@ -434,6 +465,7 @@ describe('POST /api/auth/login', () => {
     findLoginUserByNormalizedUsernameMock.mockResolvedValue({ ...LOGIN_USER, authMethod: 'ldap' });
     ldapAuthenticateWithProfileMock.mockResolvedValue({
       authenticated: true,
+      canonicalUsername: 'alice',
       groups: [],
       matchedRoleIds: [],
       roleMappings: [],
@@ -456,6 +488,7 @@ describe('POST /api/auth/login', () => {
     // LDAP authenticates but the user's groups don't map to any configured role.
     ldapAuthenticateWithProfileMock.mockResolvedValue({
       authenticated: true,
+      canonicalUsername: 'alice',
       groups: ['cn=other,dc=corp,dc=local'],
       matchedRoleIds: [],
       roleMappings: [{ externalGroup: 'admins', role: 'admin' }],
@@ -480,6 +513,7 @@ describe('POST /api/auth/login', () => {
     findLoginUserByNormalizedUsernameMock.mockResolvedValue({ ...LOGIN_USER, authMethod: 'ldap' });
     ldapAuthenticateWithProfileMock.mockResolvedValue({
       authenticated: true,
+      canonicalUsername: 'alice',
       groups: ['cn=admins,dc=corp,dc=local'],
       matchedRoleIds: ['ghost-admin'],
       roleMappings: [{ externalGroup: 'admins', role: 'ghost-admin' }],
@@ -773,6 +807,7 @@ describe('POST /api/auth/login', () => {
     );
     ldapAuthenticateWithProfileMock.mockResolvedValue({
       authenticated: true,
+      canonicalUsername: 'jdoe',
       groups: [],
       matchedRoleIds: [],
     });
@@ -878,6 +913,7 @@ describe('POST /api/auth/login', () => {
     });
     ldapAuthenticateWithProfileMock.mockResolvedValue({
       authenticated: true,
+      canonicalUsername: 'alice',
       groups: [],
       matchedRoleIds: [],
       roleMappings: [],
