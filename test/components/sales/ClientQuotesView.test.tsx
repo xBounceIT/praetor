@@ -1617,8 +1617,10 @@ describe('<ClientQuotesView /> line-item delete confirmation', () => {
     });
     expect(rowDeleteButtons(dialog)).toHaveLength(rowDeletes.length);
   });
+});
 
-  test('chooses the first unused default variant name after renames', async () => {
+describe('<ClientQuotesView /> candidate variants', () => {
+  const openCreateQuote = async () => {
     const user = userEvent.setup();
     render(
       <ClientQuotesView
@@ -1635,6 +1637,12 @@ describe('<ClientQuotesView /> line-item delete confirmation', () => {
     );
 
     await user.click(screen.getByRole('button', { name: 'sales:clientQuotes.createNewQuote' }));
+    return user;
+  };
+
+  test('chooses the first unused default variant name after renames', async () => {
+    const user = await openCreateQuote();
+
     await user.click(screen.getByRole('button', { name: 'sales:clientQuotes.candidates.addMenu' }));
     await user.click(
       await screen.findByRole('menuitem', { name: 'sales:clientQuotes.candidates.add' }),
@@ -1654,23 +1662,22 @@ describe('<ClientQuotesView /> line-item delete confirmation', () => {
     expect(screen.getByRole('tab', { name: /Variante C/ })).toBeInTheDocument();
   });
 
-  test('keeps validation errors visible when renaming the active candidate', async () => {
-    const user = userEvent.setup();
-    render(
-      <ClientQuotesView
-        quotes={[]}
-        clients={clients}
-        products={[]}
-        supplierQuotes={[]}
-        communicationChannels={communicationChannels}
-        currency="EUR"
-        onAddQuote={mock(() => Promise.resolve())}
-        onUpdateQuote={mock(() => Promise.resolve())}
-        onDeleteQuote={mock(() => Promise.resolve())}
-      />,
-    );
+  test('shows the variants section heading and information tooltip above the tabs', async () => {
+    await openCreateQuote();
 
-    await user.click(screen.getByRole('button', { name: 'sales:clientQuotes.createNewQuote' }));
+    const heading = screen.getByRole('heading', {
+      name: /sales:clientQuotes.candidates.column/,
+    });
+    const tabs = screen.getByTestId('quote-candidate-tabs-scroll');
+    const tooltip = screen.getByRole('button', { name: 'sales:fieldInfo.variants' });
+
+    expect(heading.nextElementSibling).toBe(tabs);
+    expect(tooltip.querySelector('.fa-circle-info')).toBeInTheDocument();
+  });
+
+  test('keeps validation errors visible when renaming the active candidate', async () => {
+    const user = await openCreateQuote();
+
     await user.click(screen.getByRole('button', { name: 'sales:clientQuotes.createQuote' }));
     expect(screen.getByText('sales:clientQuotes.errors.clientRequired')).toBeInTheDocument();
 
@@ -1681,22 +1688,8 @@ describe('<ClientQuotesView /> line-item delete confirmation', () => {
   });
 
   test('manages browser-style candidate tabs from inline and contextual actions', async () => {
-    const user = userEvent.setup();
-    render(
-      <ClientQuotesView
-        quotes={[]}
-        clients={clients}
-        products={[]}
-        supplierQuotes={[]}
-        communicationChannels={communicationChannels}
-        currency="EUR"
-        onAddQuote={mock(() => Promise.resolve())}
-        onUpdateQuote={mock(() => Promise.resolve())}
-        onDeleteQuote={mock(() => Promise.resolve())}
-      />,
-    );
+    const user = await openCreateQuote();
 
-    await user.click(screen.getByRole('button', { name: 'sales:clientQuotes.createNewQuote' }));
     expect(screen.getByText('Variante A')).toBeInTheDocument();
     expect(screen.getByTestId('quote-candidate-tabs-scroll')).toHaveClass(
       'overflow-x-auto',
