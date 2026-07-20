@@ -1014,6 +1014,7 @@ describe('client-offers supplier-link resolution + forward sync (#779)', () => {
         productId: null,
         unitPrice: 50,
         netCost: 50,
+        pricingSemanticsVersion: 2,
       },
     ],
   ]);
@@ -1097,6 +1098,21 @@ describe('client-offers supplier-link resolution + forward sync (#779)', () => {
   test('PUT: a FRESH link stores server-resolved supplier values and never pushes', async () => {
     setupDraftOffer();
     coFindItemsForOfferMock.mockResolvedValue([]);
+    sqGetQuoteItemSnapshotsMock.mockResolvedValue(
+      new Map([
+        [
+          'sqi-9',
+          {
+            supplierQuoteId: 'sq-9',
+            supplierName: 'Snapshot Co',
+            productId: null,
+            unitPrice: 50,
+            netCost: 50,
+            pricingSemanticsVersion: 1,
+          },
+        ],
+      ]),
+    );
 
     const res = await putOffer({ items: [lineItem(5, 80)] });
     expect(res.statusCode).toBe(200);
@@ -1106,6 +1122,7 @@ describe('client-offers supplier-link resolution + forward sync (#779)', () => {
     expect(inserted[0].supplierQuoteId).toBe('sq-9');
     expect(inserted[0].supplierQuoteSupplierName).toBe('Snapshot Co');
     expect(inserted[0].productMolPercentage).toBe(50);
+    expect(inserted[0].pricingSemanticsVersion).toBe(1);
     expect(sqSyncItemPricingMock).not.toHaveBeenCalled();
   });
 

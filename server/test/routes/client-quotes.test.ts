@@ -1737,7 +1737,7 @@ describe('client quote candidate-family create and update', () => {
       },
     });
 
-  const setupCreate = (netCost = 50) => {
+  const setupCreate = (netCost = 50, pricingSemanticsVersion = 2) => {
     sqGetQuoteItemSnapshotsMock.mockResolvedValue(
       new Map([
         [
@@ -1748,6 +1748,7 @@ describe('client quote candidate-family create and update', () => {
             productId: null,
             unitPrice: netCost,
             netCost,
+            pricingSemanticsVersion,
             sourceable: true,
           },
         ],
@@ -2857,6 +2858,16 @@ describe('client quote candidate-family create and update', () => {
     const inserted = cqInsertItemsMock.mock.calls[0][1] as Array<Record<string, unknown>>;
     expect(inserted[0].productMolPercentage).toBe(50);
     expect(inserted[0].unitPrice).toBe(100);
+  });
+
+  test('a new quote inherits legacy pricing from a sourced supplier line', async () => {
+    setupCreate(50, 1);
+
+    const res = await postQuote([freshLine({ durationMonths: 12, durationUnit: 'years' })]);
+
+    expect(res.statusCode).toBe(201);
+    const inserted = cqInsertItemsMock.mock.calls[0][1] as Array<Record<string, unknown>>;
+    expect(inserted[0].pricingSemanticsVersion).toBe(1);
   });
 
   test('replaces a stale submitted MOL with the value derived from cost and sale price', async () => {

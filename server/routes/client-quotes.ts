@@ -452,6 +452,7 @@ const resolveQuoteItemSnapshots = async (
     let supplierQuoteId: string | null = null;
     let supplierQuoteSupplierName: string | null = null;
     let supplierQuoteUnitPrice: number | null = null;
+    let supplierPricingSemanticsVersion: PricingSemanticsVersion | null = null;
 
     if (normalizedSupplierQuoteItemId) {
       const supplierQuoteSnapshot = supplierQuoteSnapshots.get(normalizedSupplierQuoteItemId);
@@ -489,6 +490,7 @@ const resolveQuoteItemSnapshots = async (
       supplierQuoteId = supplierQuoteSnapshot.supplierQuoteId;
       supplierQuoteSupplierName = supplierQuoteSnapshot.supplierName;
       supplierQuoteUnitPrice = supplierQuoteSnapshot.netCost;
+      supplierPricingSemanticsVersion = supplierQuoteSnapshot.pricingSemanticsVersion;
       // Same link RETAINED but other snapshot inputs changed (e.g. product/cost/MOL): the
       // client's live cost still wins (#779 bidirectional sync — it is pushed back onto the
       // supplier item after the write).
@@ -523,7 +525,10 @@ const resolveQuoteItemSnapshots = async (
       withCalculatedClientLineMol({
         ...item,
         pricingSemanticsVersion:
-          existingItem?.pricingSemanticsVersion ?? documentPricingSemanticsVersion,
+          existingItem?.pricingSemanticsVersion ??
+          (existingItemsById
+            ? documentPricingSemanticsVersion
+            : (supplierPricingSemanticsVersion ?? documentPricingSemanticsVersion)),
         productId: resolvedProductId,
         supplierQuoteItemId: normalizedSupplierQuoteItemId,
         productCost,

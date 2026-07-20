@@ -393,6 +393,7 @@ const resolveOfferItemSupplierLinks = async (
   existingItems: clientOffersRepo.ClientOfferItem[] | null,
   inheritedItemIds: ReadonlySet<string>,
   inheritedPricingSemanticsVersion: PricingSemanticsVersion = CURRENT_PRICING_SEMANTICS_VERSION,
+  preserveInheritedPricingSemantics = false,
 ): Promise<NormalizedOfferItem[]> => {
   const pricingSemanticsVersion = existingItems?.length
     ? pricingSemanticsVersionForDocument(existingItems)
@@ -453,6 +454,10 @@ const resolveOfferItemSupplierLinks = async (
         : null;
     return {
       ...item,
+      pricingSemanticsVersion:
+        !existing && !existingItems?.length && !preserveInheritedPricingSemantics
+          ? snapshot.pricingSemanticsVersion
+          : item.pricingSemanticsVersion,
       supplierQuoteId: snapshot.supplierQuoteId,
       supplierQuoteSupplierName: snapshot.supplierName,
       supplierQuoteUnitPrice: existing
@@ -758,6 +763,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           null,
           linkedQuote.sourcedItemIds,
           linkedQuote.pricingSemanticsVersion,
+          linkedQuoteIdResult.value !== null,
         );
       } catch (err) {
         return badRequest(reply, (err as Error).message);

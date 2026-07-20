@@ -62,6 +62,23 @@ describe('makeCostUpdater', () => {
     expect(next.items?.[0].productMolPercentage).toBe(20);
   });
 
+  test('keeps hourly storage when editing a legacy product-backed day cost', () => {
+    const state: FormState = {
+      items: [
+        baseItem({
+          unitType: 'days',
+          productCost: 50,
+          pricingSemanticsVersion: 1,
+        }),
+      ],
+    };
+
+    const next = makeCostUpdater<FormState>(0, '480')(state);
+
+    expect(next.items?.[0].productCost).toBe(60);
+    expect(next.items?.[0].productMolPercentage).toBe(-380);
+  });
+
   test("writes supplierQuoteUnitPrice in the LINE's unit when item is linked to a quote", () => {
     const state: FormState = {
       items: [
@@ -85,6 +102,7 @@ describe('makeCostUpdater', () => {
           supplierQuoteItemId: 'q1',
           supplierQuoteUnitPrice: 70,
           unitType: 'days',
+          pricingSemanticsVersion: 1,
           productCost: undefined,
         }),
       ],

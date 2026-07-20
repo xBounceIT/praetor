@@ -778,6 +778,7 @@ export type QuoteItemSnapshot = {
   productId: string | null;
   unitPrice: number;
   netCost: number;
+  pricingSemanticsVersion: PricingSemanticsVersion;
   // Whether the parent supplier quote is currently offered for NEW sourcing (the same rule the
   // UI pickers apply): derived effective status `draft` and no linked supplier order. Routes use
   // this to reject FRESHLY-picked links from a stale tab / raw API client (#812 round 15) while
@@ -808,6 +809,7 @@ export const getQuoteItemSnapshots = async (
       supplierName: supplierQuotes.supplierName,
       productId: supplierQuoteItems.productId,
       unitPrice: supplierQuoteItems.unitPrice,
+      pricingSemanticsVersion: supplierQuoteItems.pricingSemanticsVersion,
       expirationDate: supplierQuotes.expirationDate,
       linkedOrderId: sql<string | null>`(
         SELECT ss.id FROM supplier_sales ss
@@ -842,6 +844,9 @@ export const getQuoteItemSnapshots = async (
       productId: row.productId,
       unitPrice,
       netCost: unitPrice,
+      pricingSemanticsVersion: normalizeHistoricalPricingSemanticsVersion(
+        row.pricingSemanticsVersion,
+      ),
       sourceable: effective === 'draft' && row.linkedOrderId === null,
     });
   }

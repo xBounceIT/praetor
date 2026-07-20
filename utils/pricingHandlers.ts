@@ -11,6 +11,9 @@ import {
   roundCurrency,
 } from './numbers';
 
+const LEGACY_PRICING_SEMANTICS_VERSION = 1;
+const HOURS_PER_DAY = 8;
+
 export const makeCostUpdater =
   <T extends { items?: PricingItem[] }>(index: number, value: string) =>
   (prev: T): T => {
@@ -22,15 +25,22 @@ export const makeCostUpdater =
     if (newCost === curUnitCost && value !== '') return prev;
     const newMol =
       newCost === undefined ? null : calcProductMolPercentage(newCost, Number(cur.unitPrice ?? 0));
+    const storedProductCost =
+      newCost !== undefined &&
+      cur.unitType === 'days' &&
+      cur.pricingSemanticsVersion === LEGACY_PRICING_SEMANTICS_VERSION
+        ? newCost / HOURS_PER_DAY
+        : newCost;
     const updated = [...items];
     updated[index] = {
       ...cur,
       productMolPercentage: newMol,
-      // Quantity units never reprice a line. Preserve the entered numeric cost for both product
-      // snapshots and supplier-sourced costs.
+      // New lines and supplier-sourced costs store the displayed numeric value. Historical
+      // product-backed day lines retain their hourly storage contract so an edit cannot make the
+      // legacy x8 read path multiply an already-daily value again.
       ...(cur.supplierQuoteItemId
         ? { supplierQuoteUnitPrice: newCost ?? null }
-        : { productCost: newCost }),
+        : { productCost: storedProductCost }),
     };
     return { ...prev, items: updated };
   };

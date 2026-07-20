@@ -250,6 +250,7 @@ beforeEach(async () => {
           productId: null,
           unitPrice: 50,
           netCost: 50,
+          pricingSemanticsVersion: 2,
         },
       ],
     ]),
@@ -1129,6 +1130,7 @@ describe('POST /api/clients-orders product-less supplier lines (issue #783)', ()
             productId: 'p-1',
             unitPrice: 75,
             netCost: 75,
+            pricingSemanticsVersion: 1,
           },
         ],
       ]),
@@ -1170,10 +1172,12 @@ describe('POST /api/clients-orders product-less supplier lines (issue #783)', ()
       supplierQuoteId: unknown;
       supplierQuoteSupplierName: unknown;
       supplierQuoteUnitPrice: unknown;
+      pricingSemanticsVersion: unknown;
     }>;
     expect(inserted[0].supplierQuoteId).toBe('sq-real');
     expect(inserted[0].supplierQuoteSupplierName).toBe('Real Supplier');
     expect(inserted[0].supplierQuoteUnitPrice).toBe(75);
+    expect(inserted[0].pricingSemanticsVersion).toBe(1);
     expect(sqFindByIdMock).toHaveBeenCalledWith('sq-real');
     expect(sqFindByIdMock).not.toHaveBeenCalledWith('sq-client-lie');
   });

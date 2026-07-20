@@ -346,6 +346,7 @@ const normalizeIncomingItems = (
 type SupplierQuoteResolutionOptions = {
   allowedSupplierQuoteItemCounts?: ReadonlyMap<string, number>;
   retainedSupplierItemsByLineId?: ReadonlyMap<string, clientsOrdersRepo.ClientOrderItem>;
+  preservePricingSemanticsVersion?: boolean;
 };
 
 // `sale_items.supplier_quote_*` has no FK, so resolve every fresh supplier item against the live
@@ -426,6 +427,9 @@ const resolveSupplierQuoteRefs = async (
       supplierQuoteId: snapshot.supplierQuoteId,
       supplierQuoteSupplierName: snapshot.supplierName,
       supplierQuoteUnitPrice: snapshot.netCost,
+      pricingSemanticsVersion: options.preservePricingSemanticsVersion
+        ? item.pricingSemanticsVersion
+        : snapshot.pricingSemanticsVersion,
     };
   }
   return items.map(withCalculatedClientLineMol);
@@ -840,6 +844,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         allowedSupplierQuoteItemCounts: canCreateSupplierOrders
           ? undefined
           : sourceOfferSupplierQuoteItemCounts,
+        preservePricingSemanticsVersion: linkedOfferIdResult.value !== null,
       });
       if (!normalizedItems) return;
       const trustedSupplierQuoteItemIds = new Set(
@@ -1183,6 +1188,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         normalizedItems = await resolveSupplierQuoteRefs(versionedItems, reply, {
           allowedSupplierQuoteItemCounts: canCreateSupplierOrders ? undefined : new Map(),
           retainedSupplierItemsByLineId,
+          preservePricingSemanticsVersion: true,
         });
         if (!normalizedItems) return;
       }

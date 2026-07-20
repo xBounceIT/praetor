@@ -607,11 +607,13 @@ describe('getQuoteItemSnapshots', () => {
   });
 
   // Row shape mirrors the select order: [itemId, quoteId, supplierName, productId, unitPrice,
-  // expirationDate, linkedOrderId, linkedClientQuoteStatus, linkedClientQuoteExpiration,
-  // linkedOfferStatus, linkedOfferExpiration].
+  // pricingSemanticsVersion, expirationDate, linkedOrderId, linkedClientQuoteStatus,
+  // linkedClientQuoteExpiration, linkedOfferStatus, linkedOfferExpiration].
   test('maps row fields into snapshot shape with netCost mirroring unitPrice', async () => {
     exec.enqueue({
-      rows: [['sqi-1', 'sq-1', 'Acme', 'p-1', '12.5', '2999-12-31', null, null, null, null, null]],
+      rows: [
+        ['sqi-1', 'sq-1', 'Acme', 'p-1', '12.5', 1, '2999-12-31', null, null, null, null, null],
+      ],
     });
     const result = await supplierQuotesRepo.getQuoteItemSnapshots(['sqi-1'], testDb);
     expect(result.get('sqi-1')).toEqual({
@@ -620,6 +622,7 @@ describe('getQuoteItemSnapshots', () => {
       productId: 'p-1',
       unitPrice: 12.5,
       netCost: 12.5,
+      pricingSemanticsVersion: 1,
       // Unsourced live quote → derived draft, no linked order → offered for NEW sourcing.
       sourceable: true,
     });
@@ -629,7 +632,7 @@ describe('getQuoteItemSnapshots', () => {
     exec.enqueue({
       rows: [
         // Accepted chain → derived accepted (frozen).
-        ['sqi-a', 'sq-a', 'Acme', null, '10', '2999-12-31', null, 'accepted', null, null, null],
+        ['sqi-a', 'sq-a', 'Acme', null, '10', 2, '2999-12-31', null, 'accepted', null, null, null],
         // Order-locked, even though the chain is live.
         [
           'sqi-b',
@@ -637,6 +640,7 @@ describe('getQuoteItemSnapshots', () => {
           'Acme',
           null,
           '10',
+          2,
           '2999-12-31',
           'so-1',
           'sent',
@@ -645,9 +649,9 @@ describe('getQuoteItemSnapshots', () => {
           null,
         ],
         // Own expiration past on a live chain → derived expired.
-        ['sqi-c', 'sq-c', 'Acme', null, '10', '2000-01-01', null, null, null, null, null],
+        ['sqi-c', 'sq-c', 'Acme', null, '10', 2, '2000-01-01', null, null, null, null, null],
         // Draft-derived, unlocked, live → sourceable.
-        ['sqi-d', 'sq-d', 'Acme', null, '10', '2999-12-31', null, null, null, null, null],
+        ['sqi-d', 'sq-d', 'Acme', null, '10', 2, '2999-12-31', null, null, null, null, null],
       ],
     });
     const result = await supplierQuotesRepo.getQuoteItemSnapshots(
