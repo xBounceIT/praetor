@@ -961,6 +961,47 @@ describe('POST /api/clients-orders product-less supplier lines (issue #783)', ()
     expect(sqFindByIdMock).not.toHaveBeenCalledWith('sq-client-lie');
   });
 
+  test('rejects duplicate supplier references beyond the source offer line count', async () => {
+    getRolePermissionsMock.mockResolvedValue(['accounting.clients_orders.create']);
+    clientOfferFindItemsForOfferMock.mockResolvedValue([{ supplierQuoteItemId: 'sqi-1' }]);
+    coInsertItemsMock.mockImplementation((orderId: string, items: Array<Record<string, unknown>>) =>
+      Promise.resolve(items.map((item) => insertedItem({ ...item, orderId }))),
+    );
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/clients-orders',
+      headers: authHeader(),
+      payload: {
+        id: 'co-1',
+        linkedOfferId: 'OFF_26_0045_manual',
+        clientId: 'c1',
+        clientName: 'Acme',
+        items: [
+          {
+            productId: 'p-1',
+            productName: 'Offer product line',
+            quantity: 1,
+            unitPrice: 100,
+            supplierQuoteItemId: 'sqi-1',
+          },
+          {
+            productId: 'p-1',
+            productName: 'Cloned procurement line',
+            quantity: 1,
+            unitPrice: 100,
+            supplierQuoteItemId: 'sqi-1',
+          },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(coCreateMock).not.toHaveBeenCalled();
+    expect(coInsertItemsMock).not.toHaveBeenCalled();
+    expect(coCreateSupplierOrderMock).not.toHaveBeenCalled();
+  });
+
   test('201 still creates a normal catalog-product line', async () => {
     coInsertItemsMock.mockResolvedValue([insertedItem()]);
 

@@ -145,7 +145,7 @@ const clientOrderItemBodySchema = {
     supplierQuoteItemId: {
       type: ['string', 'null'],
       description:
-        'Supplier quote item source. Without accounting.supplier_orders.create, creates require the accepted same-client source offer and updates may only retain references already stored on the order. Retained updates preserve stored supplier metadata. Version restore revalidates the live item and refreshes its supplier metadata.',
+        'Supplier quote item source. Without accounting.supplier_orders.create, creates require the accepted same-client source offer and may use each item only as many times as that offer does; updates may only retain references already stored on the order. Retained updates preserve stored supplier metadata. Version restore revalidates the live item and refreshes its supplier metadata.',
     },
     supplierQuoteSupplierName: { type: ['string', 'null'] },
     supplierQuoteUnitPrice: { type: ['number', 'null'] },
@@ -315,7 +315,7 @@ const normalizeIncomingItems = (
 };
 
 type SupplierQuoteResolutionOptions = {
-  allowedSupplierQuoteItemIds?: ReadonlySet<string>;
+  allowedSupplierQuoteItemCounts?: ReadonlyMap<string, number>;
   retainedSupplierItemsByLineId?: ReadonlyMap<string, clientsOrdersRepo.ClientOrderItem>;
 };
 
@@ -342,13 +342,19 @@ const resolveSupplierQuoteRefs = async (
     item.supplierQuoteItemId && !retainedSupplierItemFor(item) ? [item.supplierQuoteItemId] : [],
   );
 
-  const forbiddenIndex = items.findIndex(
-    (item) =>
-      item.supplierQuoteItemId &&
-      !retainedSupplierItemFor(item) &&
-      options.allowedSupplierQuoteItemIds !== undefined &&
-      !options.allowedSupplierQuoteItemIds.has(item.supplierQuoteItemId),
-  );
+  const usedSupplierQuoteItemCounts = new Map<string, number>();
+  const forbiddenIndex = items.findIndex((item) => {
+    if (
+      !item.supplierQuoteItemId ||
+      retainedSupplierItemFor(item) ||
+      options.allowedSupplierQuoteItemCounts === undefined
+    ) {
+      return false;
+    }
+    const usedCount = (usedSupplierQuoteItemCounts.get(item.supplierQuoteItemId) ?? 0) + 1;
+    usedSupplierQuoteItemCounts.set(item.supplierQuoteItemId, usedCount);
+    return usedCount > (options.allowedSupplierQuoteItemCounts.get(item.supplierQuoteItemId) ?? 0);
+  });
   if (forbiddenIndex >= 0) {
     reply.code(403).send({
       error: `items[${forbiddenIndex}].supplierQuoteItemId requires an accepted source offer or accounting.supplier_orders.create permission`,
@@ -721,7 +727,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         'accounting.supplier_orders.create',
       );
       let linkedQuoteIdValue = linkedQuoteIdResult.value;
-      let sourceOfferSupplierQuoteItemIds = new Set<string>();
+      const sourceOfferSupplierQuoteItemCounts = new Map<string, number>();
       if (linkedOfferIdResult.value) {
         const offer = await clientsOrdersRepo.findOfferDetails(linkedOfferIdResult.value);
         if (!offer) {
@@ -784,18 +790,20 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           const sourceOfferItems = await clientOffersRepo.findItemsForOffer(
             linkedOfferIdResult.value,
           );
-          sourceOfferSupplierQuoteItemIds = new Set(
-            sourceOfferItems.flatMap((item) =>
-              item.supplierQuoteItemId ? [item.supplierQuoteItemId] : [],
-            ),
-          );
+          for (const item of sourceOfferItems) {
+            if (!item.supplierQuoteItemId) continue;
+            sourceOfferSupplierQuoteItemCounts.set(
+              item.supplierQuoteItemId,
+              (sourceOfferSupplierQuoteItemCounts.get(item.supplierQuoteItemId) ?? 0) + 1,
+            );
+          }
         }
       }
 
       const normalizedItems = await resolveSupplierQuoteRefs(parsedItems, reply, {
-        allowedSupplierQuoteItemIds: canCreateSupplierOrders
+        allowedSupplierQuoteItemCounts: canCreateSupplierOrders
           ? undefined
-          : sourceOfferSupplierQuoteItemIds,
+          : sourceOfferSupplierQuoteItemCounts,
       });
       if (!normalizedItems) return;
       const trustedSupplierQuoteItemIds = new Set(
@@ -1132,7 +1140,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           );
         }
         normalizedItems = await resolveSupplierQuoteRefs(parsedItemsForUpdate, reply, {
-          allowedSupplierQuoteItemIds: canCreateSupplierOrders ? undefined : new Set(),
+          allowedSupplierQuoteItemCounts: canCreateSupplierOrders ? undefined : new Map(),
           retainedSupplierItemsByLineId,
         });
         if (!normalizedItems) return;
