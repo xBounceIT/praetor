@@ -38,6 +38,11 @@ import {
 import { todayLocalDateOnly } from '../utils/date.ts';
 import { getUniqueViolation } from '../utils/db-errors.ts';
 import { replyDocumentCodeCollision } from '../utils/document-code-replies.ts';
+import {
+  DOCUMENT_CODE_MAX_LENGTH,
+  OPTIONAL_DOCUMENT_CODE_VALUE_PATTERN,
+  validateOptionalDocumentCode,
+} from '../utils/document-codes.ts';
 import type { DurationUnit } from '../utils/duration-unit.ts';
 import { normalizeNullableNumber, normalizeNullableString } from '../utils/normalize.ts';
 import { generatePrefixedId, ITEM_ID_PREFIXES } from '../utils/order-ids.ts';
@@ -123,6 +128,20 @@ const idParamSchema = {
   required: ['id'],
 } as const;
 
+const manualOfferCodeCreateSchema = {
+  type: 'string',
+  maxLength: DOCUMENT_CODE_MAX_LENGTH,
+  pattern: OPTIONAL_DOCUMENT_CODE_VALUE_PATTERN,
+  description:
+    'Optional manual offer code. Letters, numbers, underscores, and hyphens only; blank allocates the configured automatic code.',
+} as const;
+
+const manualOfferCodeUpdateSchema = {
+  type: 'string',
+  description:
+    'Offer code. A renamed code must use at most 100 letters, numbers, underscores, or hyphens; an unchanged legacy code remains accepted.',
+} as const;
+
 const offerItemBodySchema = {
   type: 'object',
   properties: {
@@ -159,7 +178,7 @@ const offerCreateBodySchema = {
   type: 'object',
   allOf: [createDocumentDiscountConstraint],
   properties: {
-    id: { type: 'string' },
+    id: manualOfferCodeCreateSchema,
     linkedQuoteId: { type: 'string' },
     clientId: { type: 'string' },
     clientName: { type: 'string' },
@@ -178,7 +197,7 @@ const offerCreateBodySchema = {
 const offerUpdateBodySchema = {
   type: 'object',
   properties: {
-    id: { type: 'string' },
+    id: manualOfferCodeUpdateSchema,
     clientId: { type: 'string' },
     clientName: { type: 'string' },
     items: { type: 'array', items: offerItemBodySchema },
@@ -607,7 +626,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         notes: unknown;
       };
 
-      const nextIdResult = optionalNonEmptyString(nextId, 'id');
+      const nextIdResult = validateOptionalDocumentCode(nextId, 'id');
       if (!nextIdResult.ok) return badRequest(reply, nextIdResult.message);
       const linkedQuoteIdResult = requireNonEmptyString(linkedQuoteId, 'linkedQuoteId');
       if (!linkedQuoteIdResult.ok) return badRequest(reply, linkedQuoteIdResult.message);
@@ -1085,7 +1104,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       let nextIdValue: string | undefined | null = nextId as string | undefined | null;
       if (nextId !== undefined) {
-        const nextIdResult = optionalNonEmptyString(nextId, 'id');
+        const nextIdResult =
+          typeof nextId === 'string' && nextId.trim() === idResult.value
+            ? ({ ok: true, value: idResult.value } as const)
+            : validateOptionalDocumentCode(nextId, 'id');
         if (!nextIdResult.ok) return badRequest(reply, nextIdResult.message);
         nextIdValue = nextIdResult.value;
         if (nextIdResult.value) {
