@@ -52,6 +52,6 @@ Without the matching HR permissions, HR fields are omitted from user API respons
 
 Competence centers connect people, costs, and assignments. Keep competence-center memberships current because they feed the **Department** field shown in HR profiles, as well as cost, availability, and project team composition analysis.
 
-Competence-center permissions without the **All** scope remain limited to centers the user manages: updating, deleting, and managing members require the user to be a center manager. When creating a center, the user must include themselves as a manager and may add only people already in their managed HR scope as additional managers. The matching **All** action permission enables the operation across scopes.
+Competence-center permissions without the **All** scope remain limited to centers the user manages: updating, deleting, and managing members require the user to be a center manager. When creating a center or changing its managers, the user must keep themselves as a manager and may add only people already in their managed HR scope as additional managers. The matching **All** action permission enables the operation across scopes.
 
 Each competence center card shows the initials of its assigned members; hover an initial to read the full name. When members exceed the space available, a `+N` badge sums up the rest and, on hover, lists the complete membership so you can see it without opening the card.

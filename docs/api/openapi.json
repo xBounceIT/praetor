@@ -39682,7 +39682,7 @@
         "tags": [
           "work-units"
         ],
-        "description": "Without hr.work_units_all.create, the caller must be a manager and can assign only users already in their managed HR scope.",
+        "description": "Without hr.work_units_all.create, the caller must remain a manager and can assign only users already in their managed HR scope.",
         "requestBody": {
           "required": true,
           "content": {
@@ -39941,7 +39941,7 @@
         "tags": [
           "work-units"
         ],
-        "description": "Without hr.work_units_all.update, the caller must manage the target work unit.",
+        "description": "Without hr.work_units_all.update, the caller must manage the target work unit and, when changing managers, must remain a manager and assign only users in their managed HR scope.",
         "requestBody": {
           "required": true,
           "content": {

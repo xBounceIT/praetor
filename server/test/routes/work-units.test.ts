@@ -435,6 +435,56 @@ describe('PUT /api/work-units/:id', () => {
     expect(isUserManagerOfUnitMock).toHaveBeenCalledWith('u1', 'wu-1');
   });
 
+  test('200 scoped updater can retain themselves and assign a managed user as manager', async () => {
+    getRolePermissionsMock.mockResolvedValue(['hr.work_units.update']);
+    isUserManagerOfUnitMock.mockResolvedValue(true);
+    listManagedUserIdsMock.mockResolvedValue(['u2']);
+    lockByIdMock.mockResolvedValue(true);
+    findByIdMock.mockResolvedValue(SAMPLE_UNIT);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/work-units/wu-1',
+      headers: authHeader(),
+      payload: { managerIds: ['u1', 'u2'] },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(listManagedUserIdsMock).toHaveBeenCalledWith('u1');
+  });
+
+  test('403 scoped updater cannot assign an out-of-scope manager', async () => {
+    getRolePermissionsMock.mockResolvedValue(['hr.work_units.update']);
+    isUserManagerOfUnitMock.mockResolvedValue(true);
+    listManagedUserIdsMock.mockResolvedValue(['u2']);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/work-units/wu-1',
+      headers: authHeader(),
+      payload: { managerIds: ['u1', 'u3'] },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(lockByIdMock).not.toHaveBeenCalled();
+  });
+
+  test('403 scoped updater cannot remove themselves from the manager list', async () => {
+    getRolePermissionsMock.mockResolvedValue(['hr.work_units.update']);
+    isUserManagerOfUnitMock.mockResolvedValue(true);
+    listManagedUserIdsMock.mockResolvedValue(['u2']);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/work-units/wu-1',
+      headers: authHeader(),
+      payload: { managerIds: ['u2'] },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(lockByIdMock).not.toHaveBeenCalled();
+  });
+
   test('403 scoped updater cannot mutate a unit they do not manage', async () => {
     getRolePermissionsMock.mockResolvedValue(['hr.work_units.update', 'hr.work_units_all.view']);
     isUserManagerOfUnitMock.mockResolvedValue(false);

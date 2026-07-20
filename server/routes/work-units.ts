@@ -81,11 +81,12 @@ const canAccessWorkUnit = makeAccessChecker(
   'hr.work_units_all.view',
 );
 
-const canCreateWithManagers = async (
+const canAssignManagers = async (
   request: FastifyRequest,
   managerIds: string[],
+  allScopePermission: string,
 ): Promise<boolean> => {
-  if (hasPermission(request, 'hr.work_units_all.create')) return true;
+  if (hasPermission(request, allScopePermission)) return true;
 
   const actorId = request.user?.id;
   if (!actorId || !managerIds.includes(actorId)) return false;
@@ -130,7 +131,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         tags: ['work-units'],
         summary: 'Create work unit',
         description:
-          'Without hr.work_units_all.create, the caller must be a manager and can assign only users already in their managed HR scope.',
+          'Without hr.work_units_all.create, the caller must remain a manager and can assign only users already in their managed HR scope.',
         body: workUnitCreateBodySchema,
         response: {
           201: workUnitSchema,
@@ -152,7 +153,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const managerIdsResult = requireNonEmptyArrayOfStrings(managerIds, 'managerIds');
       if (!managerIdsResult.ok) return badRequest(reply, managerIdsResult.message);
 
-      if (!(await canCreateWithManagers(request, managerIdsResult.value))) {
+      if (!(await canAssignManagers(request, managerIdsResult.value, 'hr.work_units_all.create'))) {
         return replyError(request, reply, {
           statusCode: 403,
           message: 'Access denied',
@@ -200,7 +201,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         tags: ['work-units'],
         summary: 'Update work unit',
         description:
-          'Without hr.work_units_all.update, the caller must manage the target work unit.',
+          'Without hr.work_units_all.update, the caller must manage the target work unit and, when changing managers, must remain a manager and assign only users in their managed HR scope.',
         params: idParamSchema,
         body: workUnitUpdateBodySchema,
         response: {
@@ -238,6 +239,20 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         managerIds !== undefined ? ensureArrayOfStrings(managerIds, 'managerIds') : null;
       if (managerIdsResult && !managerIdsResult.ok) {
         return badRequest(reply, managerIdsResult.message);
+      }
+
+      if (
+        managerIdsResult?.ok &&
+        !(await canAssignManagers(request, managerIdsResult.value, 'hr.work_units_all.update'))
+      ) {
+        return replyError(request, reply, {
+          statusCode: 403,
+          message: 'Access denied',
+          action: 'work_unit.update.denied',
+          entityType: 'work_unit',
+          entityId: idResult.value,
+          details: { secondaryLabel: 'manager_scope_denied' },
+        });
       }
 
       let w: workUnitsRepo.WorkUnit | null;
