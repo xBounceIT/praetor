@@ -263,6 +263,40 @@ describe('project rule routes', () => {
     expect(JSON.parse(res.body)[0].actionConfig).toEqual(rule.actionConfig);
   });
 
+  test('GET rules marks a redacted legacy webhook-only config as webhook', async () => {
+    currentPermissions = ['projects.rules.view'];
+    listRulesMock.mockResolvedValue([
+      {
+        ...SAMPLE_RULE,
+        actionConfig: {
+          recipientUserIds: [],
+          recipientRoleIds: [],
+          webhookIds: ['webhook-1'],
+          actions: [{ type: 'webhook', webhookId: 'webhook-1' }],
+        },
+      },
+    ]);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/projects/p1/rules',
+      headers: authHeaders(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body)[0]).toEqual(
+      expect.objectContaining({
+        actionType: 'webhook',
+        actionConfig: {
+          recipientUserIds: [],
+          recipientRoleIds: [],
+          webhookIds: [],
+          actions: [],
+        },
+      }),
+    );
+  });
+
   test('GET recipients returns webhook options to authorized callers', async () => {
     currentPermissions = ['projects.rules.view', 'administration.webhooks.view'];
     listRecipientOptionsMock.mockResolvedValue({
@@ -743,6 +777,55 @@ describe('project rule routes', () => {
       webhookIds: [],
       actions: [],
     });
+  });
+
+  test('PUT marks a rule as webhook-only when no visible actions remain', async () => {
+    currentPermissions = ['projects.rules.update', 'reports.cost.view'];
+    const existingRule = {
+      ...SAMPLE_RULE,
+      actionConfig: {
+        ...SAMPLE_RULE.actionConfig,
+        webhookIds: ['webhook-1'],
+        actions: [...SAMPLE_RULE.actionConfig.actions, { type: 'webhook', webhookId: 'webhook-1' }],
+      },
+    };
+    findRuleMock.mockResolvedValue(existingRule);
+    updateRuleMock.mockImplementation(async (_projectId, _ruleId, patch) => ({
+      ...existingRule,
+      ...patch,
+    }));
+
+    const res = await app.inject({
+      method: 'PUT',
+      url: '/api/projects/p1/rules/pr-1',
+      headers: authHeaders(),
+      payload: {
+        actionType: 'notify',
+        actionConfig: {
+          recipientUserIds: [],
+          recipientRoleIds: [],
+          webhookIds: [],
+          actions: [],
+        },
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(updateRuleMock).toHaveBeenCalledWith(
+      'p1',
+      'pr-1',
+      expect.objectContaining({
+        actionType: 'webhook',
+        actionConfig: {
+          recipientUserIds: [],
+          recipientRoleIds: [],
+          webhookIds: ['webhook-1'],
+          actions: [{ type: 'webhook', webhookId: 'webhook-1' }],
+        },
+      }),
+      TX_SENTINEL,
+    );
+    expect(JSON.parse(res.body).actionType).toBe('webhook');
   });
 
   test('PUT resets condition state when condition fields change', async () => {

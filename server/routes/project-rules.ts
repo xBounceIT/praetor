@@ -208,14 +208,21 @@ const WEBHOOK_USE_PERMISSION = 'administration.webhooks.view';
 const canUseRuleWebhooks = (permissions: readonly string[]) =>
   permissions.includes(WEBHOOK_USE_PERMISSION);
 
-const redactRuleWebhooks = (rule: projectRulesRepo.ProjectRule): projectRulesRepo.ProjectRule => ({
-  ...rule,
-  actionConfig: {
-    ...rule.actionConfig,
-    webhookIds: [],
-    actions: rule.actionConfig.actions.filter((action) => action.type !== 'webhook'),
-  },
-});
+const redactRuleWebhooks = (rule: projectRulesRepo.ProjectRule): projectRulesRepo.ProjectRule => {
+  const actions = rule.actionConfig.actions.filter((action) => action.type !== 'webhook');
+  const hasHiddenWebhooks =
+    rule.actionConfig.webhookIds.length > 0 ||
+    rule.actionConfig.actions.some((action) => action.type === 'webhook');
+  return {
+    ...rule,
+    actionType: actions[0]?.type ?? (hasHiddenWebhooks ? 'webhook' : rule.actionType),
+    actionConfig: {
+      ...rule.actionConfig,
+      webhookIds: [],
+      actions,
+    },
+  };
+};
 
 const preserveExistingRuleWebhooks = (
   actionConfig: projectRulesRepo.ProjectRule['actionConfig'],
@@ -863,7 +870,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             existingActionConfig.webhookIds.length > 0 &&
             parsed.value.actionType !== undefined
           ) {
-            updatePatch.actionType = existing.actionType;
+            updatePatch.actionType =
+              parsed.value.actionConfig === undefined
+                ? existing.actionType
+                : (actionConfig.actions[0]?.type ?? existing.actionType);
           }
 
           const finalConditions = mergeRuleConditions(existing, parsed.value);
