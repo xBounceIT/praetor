@@ -13,6 +13,8 @@ The **Users** page stays focused on application access: username, role, permissi
 
 Permission rows marked **All** grant cross-record access for the same area, such as all clients, suppliers, projects, tasks, time entries, or competence centers. **View** opens the matching view and allows reading every matching record; when selected, **Create**, **Update**, and **Delete** are real write permissions and can operate on records that are not assigned to the user. Non-**All** permissions keep the user's assigned-record scope.
 
+Deleting a user requires the **Delete** permission for that employee type. Without `administration.user_management_all.view`, the caller may delete only users they manage through a shared competence center; **All** scope permits deletion of any otherwise eligible user except the caller's own account.
+
 The `timesheets.expired_projects.create` permission allows time entry logging on expired projects. The built-in **Manager** and **Top Manager** roles receive it by default; grant it to other roles only when they need late timesheet corrections or operational logging on completed projects.
 
 The view-only `projects.details.view` permission separates the jobs archive from an individual job's advanced data. Opening the detail also requires `projects.manage.view` or `projects.manage_all.view`; Manager and Top Manager receive the new permission by default, while User and Admin do not. Custom roles can be granted it explicitly.

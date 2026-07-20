@@ -1129,6 +1129,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       schema: {
         tags: ['users'],
         summary: 'Delete user',
+        description:
+          'Requires delete permission for the target employee type. Callers without administration.user_management_all.view must manage the target through a shared work unit.',
         params: idParamSchema,
         response: {
           204: { type: 'null' },
@@ -1162,6 +1164,20 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           entityType: 'user',
           entityId: id,
           details: { secondaryLabel: `employee_type_${user.employeeType}` },
+        });
+      }
+
+      if (
+        !hasPermission(request, 'administration.user_management_all.view') &&
+        !(await usersRepo.canManageUser(id, request.user?.id ?? ''))
+      ) {
+        return replyError(request, reply, {
+          statusCode: 403,
+          message: 'Insufficient permissions',
+          action: 'user.delete.denied',
+          entityType: 'user',
+          entityId: id,
+          details: { secondaryLabel: 'cannot_manage_user' },
         });
       }
 

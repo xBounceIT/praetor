@@ -13,6 +13,8 @@ La pagina **Utenti** resta focalizzata sull'accesso applicativo: username, ruolo
 
 Le righe di permesso con ambito **All** concedono accesso trasversale a tutti i record della stessa area, ad esempio tutti i clienti, fornitori, progetti, task, consuntivi o Competence Center. L'azione **View** abilita la vista e la consultazione su tutti i record; quando selezionate, anche **Create**, **Update** e **Delete** sono permessi reali e consentono scritture su record non assegnati. I permessi senza **All** mantengono l'ambito assegnato all'utente.
 
+L'eliminazione di un utente richiede il permesso **Delete** adatto al tipo di dipendente. Senza `administration.user_management_all.view`, il chiamante può eliminare soltanto utenti che gestisce tramite un Competence Center condiviso; l'ambito **All** consente invece di eliminare qualsiasi utente idoneo, escluso il proprio account.
+
 Il permesso `timesheets.expired_projects.create` abilita la registrazione di ore su progetti scaduti. I ruoli di sistema **Manager** e **Top Manager** lo ricevono per impostazione predefinita; per gli altri ruoli assegnalo solo quando è necessario consentire consuntivazioni tardive o rettifiche operative su progetti già conclusi.
 
 Il permesso di sola lettura `projects.details.view` separa l'archivio commesse dai dati avanzati della singola commessa. Per aprire il dettaglio servono anche `projects.manage.view` o `projects.manage_all.view`; Manager e Top Manager ricevono il nuovo permesso per impostazione predefinita, mentre User e Admin no. I ruoli personalizzati possono riceverlo manualmente.

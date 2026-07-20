@@ -1320,6 +1320,7 @@ describe('DELETE /api/users/:id', () => {
     expect(res.statusCode).toBe(204);
     expect(res.body).toBe('');
     expect(deleteByIdMock).toHaveBeenCalledWith('u-target');
+    expect(canManageUserMock).not.toHaveBeenCalled();
     expect(logAuditMock).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'user.deleted', entityId: 'u-target' }),
     );
@@ -1336,6 +1337,50 @@ describe('DELETE /api/users/:id', () => {
     });
 
     expect(res.statusCode).toBe(204);
+    expect(deleteByIdMock).toHaveBeenCalledWith('u-target');
+  });
+
+  test('403 scoped user manager cannot delete an unmanaged app user', async () => {
+    findAuthUserByIdMock.mockResolvedValue(MANAGER_USER);
+    getRolePermissionsMock.mockResolvedValue(['administration.user_management.delete']);
+    findCoreByIdMock.mockResolvedValue(SAMPLE_USER_CORE);
+    canManageUserMock.mockResolvedValue(false);
+    deleteByIdMock.mockResolvedValue(true);
+
+    const res = await testApp.inject({
+      method: 'DELETE',
+      url: '/api/users/u-target',
+      headers: managerAuth(),
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(canManageUserMock).toHaveBeenCalledWith('u-target', MANAGER_USER.id);
+    expect(deleteByIdMock).not.toHaveBeenCalled();
+    expect(logAuditMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'user.delete.denied',
+        entityType: 'user',
+        entityId: 'u-target',
+        details: { secondaryLabel: 'cannot_manage_user' },
+      }),
+    );
+  });
+
+  test('204 scoped user manager deletes a managed app user', async () => {
+    findAuthUserByIdMock.mockResolvedValue(MANAGER_USER);
+    getRolePermissionsMock.mockResolvedValue(['administration.user_management.delete']);
+    findCoreByIdMock.mockResolvedValue(SAMPLE_USER_CORE);
+    canManageUserMock.mockResolvedValue(true);
+    deleteByIdMock.mockResolvedValue(true);
+
+    const res = await testApp.inject({
+      method: 'DELETE',
+      url: '/api/users/u-target',
+      headers: managerAuth(),
+    });
+
+    expect(res.statusCode).toBe(204);
+    expect(canManageUserMock).toHaveBeenCalledWith('u-target', MANAGER_USER.id);
     expect(deleteByIdMock).toHaveBeenCalledWith('u-target');
   });
 
