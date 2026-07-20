@@ -43,7 +43,7 @@ Da **Inviato**, usa **Scegli il candidato da promuovere** per confrontare totale
 
 Un preventivo cliente è associato ai preventivi fornitore solo tramite le sue **righe prodotto** — ogni riga può essere agganciata a una voce di un preventivo fornitore (non esiste più un campo header dedicato). Se un preventivo fornitore agganciato da una riga è **Scaduto**, il preventivo cliente mostra un indicatore e non può avanzare a **Inviato**, **Offerta** o **Accettato** finché non estendi la validità di quel preventivo fornitore.
 
-Durante la creazione o la modifica di una bozza, le voci fornitore già usate in una riga dello stesso preventivo appaiono in grigio nella selezione e non possono essere scelte di nuovo; scollegando o rimuovendo la riga, la voce torna immediatamente disponibile.
+Durante la creazione o la modifica di un preventivo, le voci fornitore già usate da un altro preventivo cliente, comprese le sue varianti salvate, non compaiono nella selezione. Le altre voci dello stesso preventivo fornitore restano disponibili. Una voce usata in una variante resta disponibile nelle altre varianti dello stesso preventivo. Nella variante aperta, le voci già scelte in un'altra riga appaiono invece in grigio e non possono essere selezionate di nuovo; scollegando o rimuovendo la riga, la voce torna immediatamente disponibile.
 
 Ogni opzione della selezione mostra all'inizio il codice del preventivo fornitore tra parentesi quadrate, per esempio `[PF-001]`.
 

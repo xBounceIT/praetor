@@ -1461,10 +1461,28 @@ const useClientQuotesController = ({
     return ids;
   }, [formData.items]);
 
+  const supplierQuoteItemIdsUsedByOtherQuotes = useMemo(() => {
+    const ids = new Set<string>();
+    for (const quote of quotes) {
+      if (quote.id === editingQuote?.id) continue;
+
+      for (const item of quote.items) {
+        if (item.supplierQuoteItemId) ids.add(item.supplierQuoteItemId);
+      }
+      for (const candidate of quote.candidates ?? []) {
+        for (const item of candidate.items) {
+          if (item.supplierQuoteItemId) ids.add(item.supplierQuoteItemId);
+        }
+      }
+    }
+    return ids;
+  }, [editingQuote?.id, quotes]);
+
   const supplierQuoteItemOptions = useMemo(() => {
     const options: Option[] = [];
     for (const quote of sourceableSupplierQuotes) {
       for (const item of quote.items) {
+        if (supplierQuoteItemIdsUsedByOtherQuotes.has(item.id)) continue;
         options.push({
           id: item.id,
           name: supplierQuoteItemLabel(quote, item),
@@ -1473,7 +1491,7 @@ const useClientQuotesController = ({
       }
     }
     return options;
-  }, [sourceableSupplierQuotes, usedSupplierQuoteItemIds]);
+  }, [sourceableSupplierQuotes, supplierQuoteItemIdsUsedByOtherQuotes, usedSupplierQuoteItemIds]);
 
   // item-id → its CURRENT supplier quote + item, across ALL supplier quotes (not just the
   // selectable ones), for the bidirectional-sync affordances (#779): lock detection

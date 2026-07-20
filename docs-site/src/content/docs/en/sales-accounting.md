@@ -43,7 +43,7 @@ From **Sent**, use **Choose the candidate to promote** to compare total, margin,
 
 A client quote is associated with supplier quotes purely through its **product lines** — each line can be sourced from a supplier quote item (there is no separate header field). While any supplier quote a line sources is **Expired**, the client quote shows an indicator and cannot progress to **Sent**, **Offer**, or **Accepted** until you extend that supplier quote's validity.
 
-While creating or editing a draft, supplier items already used by a line in the same quote appear greyed out in the picker and cannot be selected again; unlinking or removing the line makes the item immediately available.
+When creating or editing a quote, supplier items already used by another customer quote, including its saved variants, do not appear in the picker. Other items from the same supplier quote remain available. An item used in one variant remains available to the other variants of the same quote. In the open variant, items already selected by another line instead appear greyed out and cannot be selected again; unlinking or removing the line makes the item immediately available.
 
 Each picker option starts with the supplier quote code in square brackets, for example `[SQ-001]`.
 
