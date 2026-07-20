@@ -1146,6 +1146,39 @@ describe('<ClientQuotesView /> edit action gating (#812 round 13)', () => {
     expect(onPromoteCandidate).not.toHaveBeenCalled();
   });
 
+  test('promotes the only candidate directly without opening the comparison dialog', async () => {
+    const user = userEvent.setup();
+    const onPromoteCandidate = mock((_quoteId: string, _candidateId: string) => Promise.resolve());
+    const quote = withSingleCandidate(
+      { ...quotes[0], id: 'Q-SINGLE-CANDIDATE', status: 'sent' },
+      'candidate-only',
+    );
+
+    render(
+      <ClientQuotesView
+        quotes={[quote]}
+        clients={clients}
+        products={[]}
+        supplierQuotes={[]}
+        currency="EUR"
+        onAddQuote={mock(() => Promise.resolve())}
+        onUpdateQuote={mock(() => Promise.resolve())}
+        onDeleteQuote={mock(() => Promise.resolve())}
+        onPromoteCandidate={onPromoteCandidate}
+      />,
+    );
+
+    await openRowActions(user);
+    await user.click(
+      await screen.findByRole('button', { name: 'sales:clientQuotes.candidates.chooseTitle' }),
+    );
+
+    await waitFor(() =>
+      expect(onPromoteCandidate).toHaveBeenCalledWith('Q-SINGLE-CANDIDATE', 'candidate-only'),
+    );
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
   test('opens candidate comparison when at least one variant remains promotable', async () => {
     const user = userEvent.setup();
     const quote = withSingleCandidate(
@@ -1241,6 +1274,19 @@ describe('<ClientQuotesView /> edit action gating (#812 round 13)', () => {
         updatedAt: Date.now(),
       },
     ];
+    const [firstCandidate] = staleQuote.candidates;
+    if (!firstCandidate) throw new Error('Expected candidate fixture');
+    staleQuote.candidates.push({
+      ...firstCandidate,
+      id: 'candidate-b',
+      name: 'Variante B',
+      position: 1,
+      items: firstCandidate.items.map((item) => ({
+        ...item,
+        id: `${item.id}-b`,
+        candidateId: 'candidate-b',
+      })),
+    });
 
     render(
       <ClientQuotesView
@@ -1262,12 +1308,12 @@ describe('<ClientQuotesView /> edit action gating (#812 round 13)', () => {
     );
     const comparisonDialog = await screen.findByRole('dialog');
     expect(comparisonDialog.querySelector('[data-slot="modal-content"]')).toHaveClass('max-w-6xl');
-    expect(within(comparisonDialog).getByText('sales:clientQuotes.molLabel')).toBeInTheDocument();
-    expect(within(comparisonDialog).getByText('11,11%')).toBeInTheDocument();
-    expect(within(comparisonDialog).getByText('sales:clientQuotes.notesLabel')).toBeInTheDocument();
-    expect(
-      within(comparisonDialog).getByText('Customer prefers annual billing.'),
-    ).toBeInTheDocument();
+    expect(within(comparisonDialog).getAllByText('sales:clientQuotes.molLabel')).toHaveLength(2);
+    expect(within(comparisonDialog).getAllByText('11,11%')).toHaveLength(2);
+    expect(within(comparisonDialog).getAllByText('sales:clientQuotes.notesLabel')).toHaveLength(2);
+    expect(within(comparisonDialog).getAllByText('Customer prefers annual billing.')).toHaveLength(
+      2,
+    );
     await user.click(
       await screen.findByRole('button', { name: 'sales:clientQuotes.candidates.promote' }),
     );

@@ -780,18 +780,11 @@ const useClientQuotesController = ({
     );
   };
 
-  const openPromotionDialog = (quote: Quote) => {
-    const eligible = (quote.candidates || []).find(isCandidatePromotable);
-    // react-doctor-disable-next-line react-doctor/no-impure-state-updater -- Dialog event handler queues independent state transitions.
-    setPromotionQuote(quote);
-    setPromotionCandidateId(eligible?.id ?? null);
-  };
-
-  const confirmCandidatePromotion = async () => {
-    if (!promotionQuote || !promotionCandidateId || !onPromoteCandidate || isPromoting) return;
+  const promoteCandidate = async (quoteId: string, candidateId: string) => {
+    if (!onPromoteCandidate || isPromoting) return;
     setIsPromoting(true);
     try {
-      await onPromoteCandidate(promotionQuote.id, promotionCandidateId);
+      await onPromoteCandidate(quoteId, candidateId);
       setPromotionQuote(null);
       setPromotionCandidateId(null);
     } catch (error) {
@@ -799,6 +792,25 @@ const useClientQuotesController = ({
     } finally {
       setIsPromoting(false);
     }
+  };
+
+  const openPromotionDialog = (quote: Quote) => {
+    const activeCandidates = (quote.candidates || []).filter(
+      (candidate) => candidate.state === 'active',
+    );
+    const eligible = activeCandidates.find(isCandidatePromotable);
+    if (activeCandidates.length === 1 && eligible) {
+      void promoteCandidate(quote.id, eligible.id);
+      return;
+    }
+    // react-doctor-disable-next-line react-doctor/no-impure-state-updater -- Dialog event handler queues independent state transitions.
+    setPromotionQuote(quote);
+    setPromotionCandidateId(eligible?.id ?? null);
+  };
+
+  const confirmCandidatePromotion = async () => {
+    if (!promotionQuote || !promotionCandidateId) return;
+    await promoteCandidate(promotionQuote.id, promotionCandidateId);
   };
 
   const rollbackCandidatePromotion = async (quoteId: string) => {
@@ -1861,7 +1873,9 @@ const useClientQuotesController = ({
         // Promotion chooses exactly one winner, so the comparison must remain reachable whenever
         // at least one candidate is eligible.
         const promotionDisabled =
-          history || (hasCandidateMetadata ? !hasPromotableCandidate : supplierExpired);
+          isPromoting ||
+          history ||
+          (hasCandidateMetadata ? !hasPromotableCandidate : supplierExpired);
         const progressBlockedTitle = t('sales:clientQuotes.linkedSupplierQuoteExpiredBlocks', {
           defaultValue:
             'The linked supplier quote has expired — extend it before progressing this quote.',
