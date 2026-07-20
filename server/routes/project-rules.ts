@@ -217,6 +217,15 @@ const redactRuleWebhooks = (rule: projectRulesRepo.ProjectRule): projectRulesRep
   },
 });
 
+const preserveExistingRuleWebhooks = (
+  actionConfig: projectRulesRepo.ProjectRule['actionConfig'],
+  existingWebhookIds: readonly string[],
+) =>
+  projectRulesRepo.normalizeProjectRuleActionConfig({
+    ...actionConfig,
+    webhookIds: [...existingWebhookIds],
+  });
+
 const canAccessProject = makeAccessChecker(
   (userId, projectId) => userAssignmentsRepo.isProjectAssignedToUser(userId, projectId),
   'projects.manage_all.view',
@@ -815,6 +824,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
       const parsed = parseUpdateBody(request.body as ProjectRuleBody);
       if (!parsed.ok) return badRequest(reply, parsed.message);
+      const permissions = request.user?.permissions ?? [];
+      const mayUseRuleWebhooks = canUseRuleWebhooks(permissions);
 
       let updated: projectRulesRepo.ProjectRule;
       let projectName = '';
@@ -826,28 +837,57 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           ]);
           if (!project) throw new NotFoundError('Project');
           if (!existing) throw new NotFoundError('Project rule');
+          if (!mayUseRuleWebhooks && parsed.value.actionConfig?.webhookIds.length) {
+            throw new RecipientValidationError(
+              'actionConfig contains invalid recipients or webhooks',
+            );
+          }
+
+          const existingActionConfig = projectRulesRepo.normalizeProjectRuleActionConfig(
+            existing.actionConfig,
+          );
+          const actionConfig =
+            parsed.value.actionConfig === undefined
+              ? existingActionConfig
+              : mayUseRuleWebhooks
+                ? parsed.value.actionConfig
+                : preserveExistingRuleWebhooks(
+                    parsed.value.actionConfig,
+                    existingActionConfig.webhookIds,
+                  );
+          const updatePatch = { ...parsed.value };
+          if (parsed.value.actionConfig !== undefined) updatePatch.actionConfig = actionConfig;
+          if (
+            !mayUseRuleWebhooks &&
+            existingActionConfig.webhookIds.length > 0 &&
+            parsed.value.actionType !== undefined
+          ) {
+            updatePatch.actionType = existing.actionType;
+          }
 
           const finalConditions = mergeRuleConditions(existing, parsed.value);
           const primary = finalConditions[0];
           const finalConditionLogic = parsed.value.conditionLogic ?? existing.conditionLogic;
+          const reEnabled = parsed.value.isEnabled === true && existing.isEnabled === false;
           const finalRule = {
             ...existing,
-            ...parsed.value,
+            ...updatePatch,
             field: primary.field,
             operator: primary.operator,
             value: primary.value,
             conditionLogic: finalConditionLogic,
             conditions: finalConditions,
-            actionConfig: parsed.value.actionConfig ?? existing.actionConfig,
+            actionConfig,
           };
           await validateFinalRule({
             projectId: projectIdResult.value,
             rule: finalRule,
-            permissions: request.user?.permissions ?? [],
+            permissions,
             exec: tx,
-            allowedDisabledWebhookIds: finalRule.isEnabled
-              ? []
-              : projectRulesRepo.normalizeProjectRuleActionConfig(existing.actionConfig).webhookIds,
+            allowedDisabledWebhookIds:
+              !reEnabled && (!mayUseRuleWebhooks || !finalRule.isEnabled)
+                ? existingActionConfig.webhookIds
+                : [],
           });
 
           const conditionChanged =
@@ -856,13 +896,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             parsed.value.value !== undefined ||
             parsed.value.conditions !== undefined ||
             parsed.value.conditionLogic !== undefined;
-          const reEnabled = parsed.value.isEnabled === true && existing.isEnabled === false;
           projectName = project.name;
           const result = await projectRulesRepo.update(
             projectIdResult.value,
             ruleIdResult.value,
             {
-              ...parsed.value,
+              ...updatePatch,
               field: primary.field,
               operator: primary.operator,
               value: primary.value,
@@ -908,7 +947,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           changedFields,
         },
       });
-      return updated;
+      return mayUseRuleWebhooks ? updated : redactRuleWebhooks(updated);
     },
   );
 

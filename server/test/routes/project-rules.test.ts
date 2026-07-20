@@ -646,6 +646,52 @@ describe('project rule routes', () => {
     expect(updateRuleMock).not.toHaveBeenCalled();
   });
 
+  test('PUT preserves hidden webhook actions when updating visible recipients', async () => {
+    currentPermissions = ['projects.rules.update', 'reports.cost.view'];
+    const existingRule = {
+      ...SAMPLE_RULE,
+      actionConfig: {
+        ...SAMPLE_RULE.actionConfig,
+        webhookIds: ['webhook-1'],
+        actions: [...SAMPLE_RULE.actionConfig.actions, { type: 'webhook', webhookId: 'webhook-1' }],
+      },
+    };
+    findRuleMock.mockResolvedValue(existingRule);
+    updateRuleMock.mockImplementation(async (_projectId, _ruleId, patch) => ({
+      ...existingRule,
+      ...patch,
+    }));
+
+    const res = await app.inject({
+      method: 'PUT',
+      url: '/api/projects/p1/rules/pr-1',
+      headers: authHeaders(),
+      payload: {
+        actionConfig: {
+          actions: [{ type: 'notify', recipientType: 'role', recipientRoleIds: ['manager'] }],
+        },
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(updateRuleMock).toHaveBeenCalledWith(
+      'p1',
+      'pr-1',
+      expect.objectContaining({
+        actionConfig: {
+          recipientUserIds: [],
+          recipientRoleIds: ['manager'],
+          webhookIds: ['webhook-1'],
+          actions: [
+            { type: 'notify', recipientType: 'role', recipientRoleIds: ['manager'] },
+            { type: 'webhook', webhookId: 'webhook-1' },
+          ],
+        },
+      }),
+      TX_SENTINEL,
+    );
+  });
+
   test('PUT resets condition state when condition fields change', async () => {
     currentPermissions = ['projects.rules.update'];
     const existingRule = {
@@ -782,6 +828,12 @@ describe('project rule routes', () => {
       expect.objectContaining({ isEnabled: false, resetCondition: false }),
       TX_SENTINEL,
     );
+    expect(JSON.parse(res.body).actionConfig).toEqual({
+      recipientUserIds: [],
+      recipientRoleIds: [],
+      webhookIds: [],
+      actions: [],
+    });
   });
 
   test('PUT rejects newly added inactive webhooks on disabled rules', async () => {
