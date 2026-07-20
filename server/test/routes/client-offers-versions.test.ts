@@ -314,6 +314,19 @@ describe('GET /api/sales/client-offers/:id/versions/:versionId', () => {
     expect(ovFindByIdMock).toHaveBeenCalledWith('off-1', 'ov-1');
   });
 
+  test('200 preserves encoded legacy offer and version ids as opaque parameters', async () => {
+    ovFindByIdMock.mockResolvedValue(SAMPLE_VERSION);
+
+    const res = await testApp.inject({
+      method: 'GET',
+      url: '/api/sales/client-offers/..%2F..%2Fclients%2Flegacy/versions/..%2Fversion',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(ovFindByIdMock).toHaveBeenCalledWith('../../clients/legacy', '../version');
+  });
+
   test('404 when version not found (also covers cross-offer ids)', async () => {
     ovFindByIdMock.mockResolvedValue(null);
 
@@ -780,6 +793,26 @@ describe('PUT /api/sales/client-offers/:id snapshots pre-update state', () => {
     // PK rename goes through the dedicated repo call (issue #621), not the generic update().
     expect(coRenameMock).toHaveBeenCalledWith('off-1', 'off-1-renamed', TX_SENTINEL);
     expect(coUpdateMock).not.toHaveBeenCalled();
+  });
+
+  test('PUT rejects a traversal-shaped rename target', async () => {
+    coFindExistingMock.mockResolvedValue({
+      id: 'off-1',
+      linkedQuoteId: 'q-1',
+      clientId: 'c1',
+      clientName: 'Client',
+      status: 'draft',
+    });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/sales/client-offers/off-1',
+      headers: authHeader(),
+      payload: { id: '../../clients/victim' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(coRenameMock).not.toHaveBeenCalled();
   });
 
   test('PUT terminal-to-draft rejects ordinary manager before generic update', async () => {
