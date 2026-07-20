@@ -1382,15 +1382,15 @@ const SupplierQuoteDetailsSection: React.FC<{ controller: SupplierQuotesControll
         defaultValue: 'Supplier Information',
       })}
     </SupplierQuoteSectionTitle>
-    <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+    <div className="grid grid-cols-2 gap-3 lg:grid-cols-6">
       <SupplierQuoteSupplierField controller={controller} />
       <SupplierQuoteClientField controller={controller} />
       <SupplierQuoteCodeField controller={controller} />
-      <SupplierQuoteDescriptionField controller={controller} />
       <SupplierQuotePaymentTermsField controller={controller} />
       <SupplierQuoteCommunicationField controller={controller} />
       <SupplierQuoteExpirationField controller={controller} />
     </div>
+    <SupplierQuoteDescriptionField controller={controller} />
   </div>
 );
 
@@ -1489,7 +1489,7 @@ const SupplierQuoteCodeField: React.FC<{ controller: SupplierQuotesController }>
 const SupplierQuoteDescriptionField: React.FC<{ controller: SupplierQuotesController }> = ({
   controller,
 }) => (
-  <Field>
+  <Field className="w-full">
     <FieldLabel htmlFor="supplier-quote-description">
       {controller.t('sales:supplierQuotes.description', { defaultValue: 'Description' })}
     </FieldLabel>

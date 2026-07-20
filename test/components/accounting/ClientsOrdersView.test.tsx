@@ -121,6 +121,8 @@ describe('<ClientsOrdersView />', () => {
 
     expect(description).toHaveValue('Managed consulting order');
     expect(description).toBeEnabled();
+    expect(description.closest('[data-slot="field"]')).toHaveClass('w-full');
+    expect(description.closest('.grid')).toBeNull();
   });
 
   test('shows description immediately after the order number', () => {

@@ -1171,7 +1171,7 @@ const OrderSectionTitle: React.FC<{ children: React.ReactNode }> = ({ children }
 const OrderDetailsSection: React.FC<{ controller: ClientsOrdersController }> = ({ controller }) => (
   <div className="space-y-2">
     <OrderSectionTitle>{controller.t('accounting:clientsOrders.orderDetails')}</OrderSectionTitle>
-    <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
       <Field data-invalid={Boolean(controller.errors.clientId)}>
         <SelectControl
           id="client-order-client"
@@ -1202,25 +1202,6 @@ const OrderDetailsSection: React.FC<{ controller: ClientsOrdersController }> = (
         >
           {controller.editingOrder?.id || '-'}
         </div>
-      </Field>
-      <Field>
-        <FieldLabel htmlFor="client-order-description">
-          {controller.t('accounting:clientsOrders.description', {
-            defaultValue: 'Description',
-          })}
-        </FieldLabel>
-        <Input
-          id="client-order-description"
-          type="text"
-          value={controller.formData.description ?? ''}
-          onChange={(event) =>
-            controller.setFormData((previous) => ({
-              ...previous,
-              description: event.target.value,
-            }))
-          }
-          disabled={controller.isReadOnly}
-        />
       </Field>
       <Field>
         <SelectControl
@@ -1254,6 +1235,25 @@ const OrderDetailsSection: React.FC<{ controller: ClientsOrdersController }> = (
         </div>
       </Field>
     </div>
+    <Field className="w-full">
+      <FieldLabel htmlFor="client-order-description">
+        {controller.t('accounting:clientsOrders.description', {
+          defaultValue: 'Description',
+        })}
+      </FieldLabel>
+      <Input
+        id="client-order-description"
+        type="text"
+        value={controller.formData.description ?? ''}
+        onChange={(event) =>
+          controller.setFormData((previous) => ({
+            ...previous,
+            description: event.target.value,
+          }))
+        }
+        disabled={controller.isReadOnly}
+      />
+    </Field>
   </div>
 );
 

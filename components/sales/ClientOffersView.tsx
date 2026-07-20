@@ -1614,13 +1614,13 @@ const ClientOfferClientSection: React.FC<{ controller: ClientOffersController }>
         status={clientStatus}
         statusLabel={statusLabel}
       />
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <ClientOfferClientField controller={controller} />
         <ClientOfferCodeField controller={controller} />
-        <ClientOfferDescriptionField controller={controller} />
         <ClientOfferPaymentTermsField controller={controller} />
         <ClientOfferExpirationField controller={controller} />
       </div>
+      <ClientOfferDescriptionField controller={controller} />
     </div>
   );
 };
@@ -1710,7 +1710,7 @@ const ClientOfferCodeField: React.FC<{ controller: ClientOffersController }> = (
 const ClientOfferDescriptionField: React.FC<{ controller: ClientOffersController }> = ({
   controller,
 }) => (
-  <Field>
+  <Field className="w-full">
     <FieldLabel htmlFor="client-offer-description">
       {controller.t('sales:clientOffers.description', { defaultValue: 'Description' })}
     </FieldLabel>

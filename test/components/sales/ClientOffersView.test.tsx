@@ -124,6 +124,8 @@ describe('<ClientOffersView /> list', () => {
 
     expect(description).toHaveValue('Managed service renewal');
     expect(description).toBeEnabled();
+    expect(description.closest('[data-slot="field"]')).toHaveClass('w-full');
+    expect(description.closest('.grid')).toBeNull();
   });
 
   test('renders issue 461 offer-list columns in the requested order', () => {

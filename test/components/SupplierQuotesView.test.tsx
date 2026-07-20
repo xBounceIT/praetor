@@ -139,6 +139,8 @@ describe('<SupplierQuotesView /> description', () => {
 
     expect(description).toBeEnabled();
     expect(description).toHaveValue('Annual hardware procurement');
+    expect(description.closest('[data-slot="field"]')).toHaveClass('w-full');
+    expect(description.closest('.grid')).toBeNull();
   });
 });
 

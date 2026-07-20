@@ -2838,14 +2838,14 @@ const ClientQuoteClientSection: React.FC<{ controller: ClientQuotesController }>
         status={readOnlyStatus}
         statusLabel={statusLabel}
       />
-      <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
         <ClientQuoteClientField controller={controller} />
         <ClientQuoteCodeField controller={controller} />
-        <ClientQuoteDescriptionField controller={controller} />
         <ClientQuotePaymentTermsField controller={controller} />
         <ClientQuoteCommunicationField controller={controller} />
         <ClientQuoteExpirationField controller={controller} />
       </div>
+      <ClientQuoteDescriptionField controller={controller} />
     </div>
   );
 };
@@ -2935,7 +2935,7 @@ const ClientQuoteCodeField: React.FC<{ controller: ClientQuotesController }> = (
 const ClientQuoteDescriptionField: React.FC<{ controller: ClientQuotesController }> = ({
   controller,
 }) => (
-  <Field>
+  <Field className="w-full">
     <FieldLabel htmlFor="client-quote-description">
       {controller.t('sales:clientQuotes.description', { defaultValue: 'Description' })}
     </FieldLabel>
