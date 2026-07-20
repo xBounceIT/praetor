@@ -21,7 +21,11 @@ import type {
   SupplierSaleOrder,
 } from '../../types';
 import { formatInsertDate } from '../../utils/date';
-import { formatDecimal, getDiscountedLineTotal } from '../../utils/numbers';
+import {
+  formatDecimal,
+  getDiscountedLineTotal,
+  getDocumentDiscountAmount,
+} from '../../utils/numbers';
 import { hasScopedActionPermission } from '../../utils/permissions';
 import { toastError } from '../../utils/toast';
 import DeleteConfirmModal from '../shared/DeleteConfirmModal';
@@ -56,10 +60,7 @@ export interface SuppliersViewProps {
 const calculateOrderTotal = (order: SupplierSaleOrder): number => {
   const subtotal = order.items.reduce((sum, item) => sum + getDiscountedLineTotal(item), 0);
   const discount = Number(order.discount) || 0;
-  const discountAmount =
-    order.discountType === 'currency'
-      ? Math.min(Math.max(discount, 0), subtotal)
-      : subtotal * (discount / 100);
+  const discountAmount = getDocumentDiscountAmount(subtotal, discount, order.discountType);
   return subtotal - discountAmount;
 };
 

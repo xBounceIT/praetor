@@ -12,6 +12,11 @@ import * as supplierQuotesRepo from '../repositories/supplierQuotesRepo.ts';
 import { clientOfferSchema } from '../schemas/clientOffers.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import {
+  createDocumentDiscountConstraint,
+  documentDiscountTypeSchema,
+  documentDiscountValueSchema,
+} from '../schemas/documentDiscount.ts';
+import {
   allocateDocumentCode,
   reserveDocumentCodeCounterFromCode,
 } from '../services/documentCodes.ts';
@@ -28,6 +33,7 @@ import { isPastLocalDate } from '../utils/date.ts';
 import { getUniqueViolation } from '../utils/db-errors.ts';
 import { replyDocumentCodeCollision } from '../utils/document-code-replies.ts';
 import { type DurationUnit, effectiveDurationMonths } from '../utils/duration-unit.ts';
+import { getDocumentDiscountAmount } from '../utils/invoice-math.ts';
 import { normalizeNullableString } from '../utils/normalize.ts';
 import { generatePrefixedId, ITEM_ID_PREFIXES } from '../utils/order-ids.ts';
 import {
@@ -54,6 +60,7 @@ import {
   optionalDateString,
   optionalDurationMonths,
   optionalDurationUnit,
+  optionalLocalizedDocumentDiscount,
   optionalLocalizedNonNegativeNumber,
   optionalLocalizedNumber,
   optionalLocalizedPercentage,
@@ -346,10 +353,11 @@ const calculateQuoteTotals = (
     subtotal += lineNet;
   }
 
-  const discountAmount =
-    discountType === 'currency'
-      ? Math.min(Math.max(normalizedGlobalDiscount, 0), subtotal)
-      : subtotal * (normalizedGlobalDiscount / 100);
+  const discountAmount = getDocumentDiscountAmount(
+    subtotal,
+    normalizedGlobalDiscount,
+    discountType,
+  );
   const total = subtotal - discountAmount;
   return { total, subtotal };
 };
@@ -669,8 +677,8 @@ const quoteCandidateBodySchema = {
     name: { type: 'string', maxLength: MAX_CANDIDATE_NAME_LENGTH },
     items: { type: 'array', items: quoteItemBodySchema },
     paymentTerms: { type: 'string' },
-    discount: { type: 'number' },
-    discountType: { type: 'string', enum: ['percentage', 'currency'] },
+    discount: documentDiscountValueSchema,
+    discountType: documentDiscountTypeSchema,
     expirationDate: { type: 'string', format: 'date' },
     communicationChannelId: { type: 'string' },
     notes: { type: ['string', 'null'] },
@@ -678,17 +686,23 @@ const quoteCandidateBodySchema = {
   required: ['name', 'items', 'expirationDate', 'communicationChannelId'],
 } as const;
 
+const quoteCreateCandidateBodySchema = {
+  ...quoteCandidateBodySchema,
+  allOf: [createDocumentDiscountConstraint],
+} as const;
+
 const quoteCreateBodySchema = {
   type: 'object',
+  allOf: [createDocumentDiscountConstraint],
   properties: {
     id: { type: 'string' },
     clientId: { type: 'string' },
     clientName: { type: 'string' },
     items: { type: 'array', items: quoteItemBodySchema },
-    candidates: { type: 'array', items: quoteCandidateBodySchema },
+    candidates: { type: 'array', items: quoteCreateCandidateBodySchema },
     paymentTerms: { type: 'string' },
-    discount: { type: 'number' },
-    discountType: { type: 'string', enum: ['percentage', 'currency'] },
+    discount: documentDiscountValueSchema,
+    discountType: documentDiscountTypeSchema,
     status: { type: 'string' },
     expirationDate: { type: 'string', format: 'date' },
     communicationChannelId: { type: 'string' },
@@ -708,8 +722,8 @@ const quoteUpdateBodySchema = {
     items: { type: 'array', items: quoteItemBodySchema },
     candidates: { type: 'array', items: quoteCandidateBodySchema },
     paymentTerms: { type: 'string' },
-    discount: { type: 'number' },
-    discountType: { type: 'string', enum: ['percentage', 'currency'] },
+    discount: documentDiscountValueSchema,
+    discountType: documentDiscountTypeSchema,
     status: { type: 'string' },
     expirationDate: { type: 'string', format: 'date' },
     communicationChannelId: { type: 'string' },
@@ -818,6 +832,16 @@ const isSameCandidateItem = (
   submitted.durationMonths === existing.durationMonths &&
   submitted.durationUnit === existing.durationUnit;
 
+const indexQuoteItemsByCandidateId = (items: clientQuotesRepo.ClientQuoteItem[]) => {
+  const itemsByCandidateId = new Map<string, clientQuotesRepo.ClientQuoteItem[]>();
+  for (const item of items) {
+    const candidateItems = itemsByCandidateId.get(item.candidateId) ?? [];
+    candidateItems.push(item);
+    itemsByCandidateId.set(item.candidateId, candidateItems);
+  }
+  return itemsByCandidateId;
+};
+
 const isExpirationOnlyCandidateFamilyUpdate = (args: {
   quoteId: string;
   nextQuoteId: string;
@@ -844,12 +868,7 @@ const isExpirationOnlyCandidateFamilyUpdate = (args: {
   );
   if (existingActive.length !== args.submittedCandidates.length) return false;
   const existingActiveById = new Map(existingActive.map((candidate) => [candidate.id, candidate]));
-  const existingItemsByCandidateId = new Map<string, clientQuotesRepo.ClientQuoteItem[]>();
-  for (const item of args.existingItems) {
-    const candidateItems = existingItemsByCandidateId.get(item.candidateId) ?? [];
-    candidateItems.push(item);
-    existingItemsByCandidateId.set(item.candidateId, candidateItems);
-  }
+  const existingItemsByCandidateId = indexQuoteItemsByCandidateId(args.existingItems);
 
   let extended = false;
   for (let index = 0; index < args.submittedCandidates.length; index++) {
@@ -889,6 +908,8 @@ const prepareCandidateBody = async (
   index: number,
   reply: FastifyReply,
   existingSnapshots?: clientQuotesRepo.ExistingQuoteItemSnapshot[],
+  existingCandidatesById?: ReadonlyMap<string, quoteCandidatesRepo.QuoteCandidate>,
+  existingItemsByCandidateId?: ReadonlyMap<string, clientQuotesRepo.ClientQuoteItem[]>,
 ): Promise<PreparedCandidate | null> => {
   if (!raw || typeof raw !== 'object') {
     badRequest(reply, 'candidates[' + index + '] must be an object');
@@ -934,16 +955,28 @@ const prepareCandidateBody = async (
     required: true,
   });
   if (!channel) return null;
-  const discountResult = optionalLocalizedNonNegativeNumber(
-    candidate.discount,
-    'candidates[' + index + '].discount',
-  );
-  if (!discountResult.ok) {
-    badRequest(reply, discountResult.message);
-    return null;
-  }
-  const discount = discountResult.value ?? 0;
   const discountType = candidate.discountType === 'currency' ? 'currency' : 'percentage';
+  const existingCandidate = candidateId ? existingCandidatesById?.get(candidateId) : undefined;
+  const preservesLegacyDiscount =
+    existingCandidate?.discountType === 'percentage' &&
+    existingCandidate.discount > 100 &&
+    candidate.discount === existingCandidate.discount &&
+    discountType === existingCandidate.discountType;
+  let discount: number;
+  if (preservesLegacyDiscount) {
+    discount = existingCandidate.discount;
+  } else {
+    const discountResult = optionalLocalizedDocumentDiscount(
+      candidate.discount,
+      discountType,
+      'candidates[' + index + '].discount',
+    );
+    if (!discountResult.ok) {
+      badRequest(reply, discountResult.message);
+      return null;
+    }
+    discount = discountResult.value ?? 0;
+  }
   const existingItemsById =
     existingSnapshots && candidateId
       ? indexExistingQuoteItems(existingSnapshots, candidateId)
@@ -955,8 +988,14 @@ const prepareCandidateBody = async (
     badRequest(reply, (error as Error).message);
     return null;
   }
+  const existingItems = candidateId ? existingItemsByCandidateId?.get(candidateId) : undefined;
+  const preservesLegacyItems =
+    preservesLegacyDiscount &&
+    existingItems !== undefined &&
+    existingItems.length === resolvedItems.length &&
+    resolvedItems.every((item, itemIndex) => isSameCandidateItem(item, existingItems[itemIndex]));
   const totals = calculateQuoteTotals(resolvedItems, discount, discountType);
-  if (!Number.isFinite(totals.total) || totals.total <= 0) {
+  if (!preservesLegacyItems && (!Number.isFinite(totals.total) || totals.total <= 0)) {
     badRequest(reply, 'candidates[' + index + '].total must be greater than 0');
     return null;
   }
@@ -1704,10 +1743,15 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             });
           }
         }
-        const [existingCandidates, existingSnapshots] = await Promise.all([
+        const [existingCandidates, existingSnapshots, existingItems] = await Promise.all([
           quoteCandidatesRepo.listForQuote(idResult.value),
           clientQuotesRepo.findItemSnapshotsForQuote(idResult.value),
+          clientQuotesRepo.findItemsForQuote(idResult.value),
         ]);
+        const existingCandidatesById = new Map(
+          existingCandidates.map((candidate) => [candidate.id, candidate]),
+        );
+        const existingItemsByCandidateId = indexQuoteItemsByCandidateId(existingItems);
         const preparedCandidates: PreparedCandidate[] = [];
         const names = new Set<string>();
         for (let index = 0; index < candidates.length; index++) {
@@ -1716,6 +1760,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             index,
             reply,
             existingSnapshots,
+            existingCandidatesById,
+            existingItemsByCandidateId,
           );
           if (!prepared) return;
           const normalizedName = prepared.name.toLocaleLowerCase();
@@ -2131,19 +2177,26 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         expirationDateValue = expirationDateResult.value;
       }
 
-      let discountValue = discount;
-      if (discount !== undefined) {
-        const discountResult = optionalLocalizedNonNegativeNumber(discount, 'discount');
-        if (!discountResult.ok) return badRequest(reply, discountResult.message);
-        discountValue = discountResult.value;
-      }
-
       const discountTypeValue: 'currency' | 'percentage' | undefined =
         discountType === undefined
           ? undefined
           : discountType === 'currency'
             ? 'currency'
             : 'percentage';
+      const effectiveDiscountType = discountTypeValue ?? existingDiscountType;
+      const discountPairChanged =
+        (discount !== undefined && discount !== existingDiscount) ||
+        (discountTypeValue !== undefined && discountTypeValue !== existingDiscountType);
+      let discountValue: number | null | undefined;
+      if (discountPairChanged) {
+        const discountResult = optionalLocalizedDocumentDiscount(
+          discount === undefined ? existingDiscount : discount,
+          effectiveDiscountType,
+          'discount',
+        );
+        if (!discountResult.ok) return badRequest(reply, discountResult.message);
+        discountValue = discount === undefined ? undefined : discountResult.value;
+      }
 
       const communicationChannel = await resolveCommunicationChannel(
         communicationChannelId,
@@ -2296,7 +2349,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         if (!Number.isFinite(totals.total) || totals.total <= 0) {
           return badRequest(reply, 'Total must be greater than 0');
         }
-      } else if (discount !== undefined) {
+      } else if (discountPairChanged) {
         const itemTotals = await clientQuotesRepo.findItemTotals(idResult.value);
         const effectiveDiscountType = discountTypeValue ?? existingDiscountType;
         const totals = calculateQuoteTotals(
@@ -2649,6 +2702,17 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             throw new LinkedOfferRollbackError(
               'The selected candidate has expired',
               'candidate_expired',
+            );
+          }
+          const lockedDiscountResult = optionalLocalizedDocumentDiscount(
+            lockedCandidate.discount,
+            lockedCandidate.discountType,
+            'discount',
+          );
+          if (!lockedDiscountResult.ok) {
+            throw new LinkedOfferRollbackError(
+              lockedDiscountResult.message,
+              'candidate_discount_invalid',
             );
           }
           const items = await clientQuotesRepo.findItemsForCandidate(
@@ -3115,6 +3179,22 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               action: 'client_quote.restore.conflict',
               secondaryLabel: 'snapshot_candidate_invalid',
             };
+          }
+          for (const candidate of snapshotCandidates) {
+            const snapshotDiscountResult = optionalLocalizedDocumentDiscount(
+              candidate.discount,
+              candidate.discountType,
+              'discount',
+            );
+            if (!snapshotDiscountResult.ok) {
+              return {
+                ok: false,
+                statusCode: 409,
+                message: `Snapshot candidate "${candidate.name}" has an invalid discount: ${snapshotDiscountResult.message}`,
+                action: 'client_quote.restore.conflict',
+                secondaryLabel: 'snapshot_discount_invalid',
+              };
+            }
           }
           const channelIds = Array.from(
             new Set(snapshotCandidates.map((candidate) => candidate.communicationChannelId)),

@@ -39,6 +39,17 @@ export const roundCurrency = (value: number): number => {
 export const getDiscountedUnitPrice = (unitPrice: number, discount: number): number =>
   roundCurrency(unitPrice * (1 - discount / 100));
 
+export const getDocumentDiscountAmount = (
+  subtotal: number,
+  discount: number,
+  discountType: 'percentage' | 'currency' = 'percentage',
+): number => {
+  const nonNegativeDiscount = Math.max(discount, 0);
+  return discountType === 'currency'
+    ? Math.min(nonNegativeDiscount, subtotal)
+    : subtotal * (Math.min(nonNegativeDiscount, 100) / 100);
+};
+
 export const computeInvoiceTotals = (
   items: ItemMath[],
 ): { subtotal: number; taxTotal: number; total: number } => {

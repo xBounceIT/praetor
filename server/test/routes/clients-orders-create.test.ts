@@ -260,6 +260,50 @@ afterEach(async () => {
 const authHeader = () => ({ authorization: `Bearer ${signToken({ userId: 'u1' })}` });
 
 describe('POST /api/clients-orders product-less supplier lines (issue #783)', () => {
+  test('400 rejects a percentage document discount above 100%', async () => {
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/clients-orders',
+      headers: authHeader(),
+      payload: {
+        clientId: 'c1',
+        clientName: 'Acme',
+        discount: 100.01,
+        discountType: 'percentage',
+        items: [{ productId: 'p-1', productName: 'Service', quantity: 1, unitPrice: 100 }],
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(coCreateMock).not.toHaveBeenCalled();
+  });
+
+  test('201 accepts a fixed-currency document discount above 100', async () => {
+    coCreateMock.mockImplementation((input: Record<string, unknown>) =>
+      Promise.resolve({ ...CREATED_ORDER, ...input }),
+    );
+    coInsertItemsMock.mockResolvedValue([insertedItem()]);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/clients-orders',
+      headers: authHeader(),
+      payload: {
+        clientId: 'c1',
+        clientName: 'Acme',
+        discount: 150,
+        discountType: 'currency',
+        items: [{ productId: 'p-1', productName: 'Service', quantity: 1, unitPrice: 100 }],
+      },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(coCreateMock).toHaveBeenCalledWith(
+      expect.objectContaining({ discount: 150, discountType: 'currency' }),
+      expect.anything(),
+    );
+  });
+
   test('201 accepts the inclusive 100% line-discount boundary', async () => {
     coCreateMock.mockImplementation((input: Record<string, unknown>) =>
       Promise.resolve({ ...CREATED_ORDER, id: input.id }),

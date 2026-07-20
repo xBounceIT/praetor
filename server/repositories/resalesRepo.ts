@@ -11,7 +11,11 @@ import { supplierSales } from '../db/schema/supplierSales.ts';
 import type { SupplierOrder, SupplierOrderItem } from '../repositories/supplierOrdersRepo.ts';
 import * as supplierOrdersRepo from '../repositories/supplierOrdersRepo.ts';
 import { effectiveDurationMonths } from '../utils/duration-unit.ts';
-import { getDiscountedUnitPrice, roundCurrency } from '../utils/invoice-math.ts';
+import {
+  getDiscountedUnitPrice,
+  getDocumentDiscountAmount,
+  roundCurrency,
+} from '../utils/invoice-math.ts';
 import { numericForDb, parseDbNumber } from '../utils/parse.ts';
 
 const epochMs = (value: unknown): number => {
@@ -135,10 +139,7 @@ export const computeSupplierOrderTotal = (
   }, 0);
 
   const discount = Number(order.discount || 0);
-  const discountAmount =
-    order.discountType === 'currency'
-      ? Math.min(Math.max(discount, 0), subtotal)
-      : (subtotal * discount) / 100;
+  const discountAmount = getDocumentDiscountAmount(subtotal, discount, order.discountType);
 
   return roundCurrency(subtotal - discountAmount);
 };

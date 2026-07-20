@@ -13,6 +13,7 @@ import {
   optionalDurationUnit,
   optionalEmail,
   optionalEnum,
+  optionalLocalizedDocumentDiscount,
   optionalLocalizedNonNegativeNumber,
   optionalLocalizedNumber,
   optionalLocalizedPercentage,
@@ -396,6 +397,23 @@ describe('optionalLocalizedPercentage', () => {
     expect(optionalLocalizedPercentage(100.01, 'discount')).toEqual({
       ok: false,
       message: 'discount must be between 0 and 100',
+    });
+  });
+});
+
+describe('optionalLocalizedDocumentDiscount', () => {
+  test('bounds percentage discounts but allows fixed-currency values above 100', () => {
+    expect(optionalLocalizedDocumentDiscount(100, 'percentage')).toEqual({
+      ok: true,
+      value: 100,
+    });
+    expect(optionalLocalizedDocumentDiscount(100.01, 'percentage')).toEqual({
+      ok: false,
+      message: 'discount must be between 0 and 100',
+    });
+    expect(optionalLocalizedDocumentDiscount(150, 'currency')).toEqual({
+      ok: true,
+      value: 150,
     });
   });
 });

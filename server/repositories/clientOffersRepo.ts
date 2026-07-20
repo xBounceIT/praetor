@@ -121,11 +121,24 @@ export type ExistingOffer = {
   linkedQuoteCandidateId: string | null;
   clientId: string;
   clientName: string;
+  discount: number;
+  discountType: 'percentage' | 'currency';
   status: string;
   deliveryDate: string | null;
   // Needed by the #779 expired guards: the derived `expired` status comes from this date.
   expirationDate: string;
 };
+
+type ExistingOfferRow = Omit<ExistingOffer, 'discount' | 'discountType'> & {
+  discount: string;
+  discountType: string;
+};
+
+const mapExistingOffer = (row: ExistingOfferRow): ExistingOffer => ({
+  ...row,
+  discount: Number(row.discount),
+  discountType: row.discountType === 'currency' ? 'currency' : 'percentage',
+});
 
 // Reads the minimal set of fields needed to gate updates / restores. Does not acquire a row
 // lock - safe for non-mutating reads, but TOCTOU-prone when a write decision depends on it.
@@ -141,13 +154,15 @@ export const findExisting = async (
       linkedQuoteCandidateId: customerOffers.linkedQuoteCandidateId,
       clientId: customerOffers.clientId,
       clientName: customerOffers.clientName,
+      discount: customerOffers.discount,
+      discountType: customerOffers.discountType,
       status: customerOffers.status,
       deliveryDate: customerOffers.deliveryDate,
       expirationDate: customerOffers.expirationDate,
     })
     .from(customerOffers)
     .where(eq(customerOffers.id, id));
-  return rows[0] ?? null;
+  return rows[0] ? mapExistingOffer(rows[0]) : null;
 };
 
 // SELECT ... FOR UPDATE variant of `findExisting`. Must be called inside a transaction.
@@ -162,6 +177,8 @@ export const lockExistingById = async (
       linkedQuoteCandidateId: customerOffers.linkedQuoteCandidateId,
       clientId: customerOffers.clientId,
       clientName: customerOffers.clientName,
+      discount: customerOffers.discount,
+      discountType: customerOffers.discountType,
       status: customerOffers.status,
       deliveryDate: customerOffers.deliveryDate,
       expirationDate: customerOffers.expirationDate,
@@ -169,7 +186,7 @@ export const lockExistingById = async (
     .from(customerOffers)
     .where(eq(customerOffers.id, id))
     .for('update');
-  return rows[0] ?? null;
+  return rows[0] ? mapExistingOffer(rows[0]) : null;
 };
 
 export const findStatusAndClientName = async (

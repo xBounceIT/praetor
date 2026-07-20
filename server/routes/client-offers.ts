@@ -12,6 +12,11 @@ import * as supplierQuotesRepo from '../repositories/supplierQuotesRepo.ts';
 import { clientOfferSchema } from '../schemas/clientOffers.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import {
+  createDocumentDiscountConstraint,
+  documentDiscountTypeSchema,
+  documentDiscountValueSchema,
+} from '../schemas/documentDiscount.ts';
+import {
   autoCreateSupplierOrdersForClientOrder,
   type CreatedSupplierOrderSummary,
   createClientOrderRows,
@@ -58,6 +63,7 @@ import {
   optionalDateString,
   optionalDurationMonths,
   optionalDurationUnit,
+  optionalLocalizedDocumentDiscount,
   optionalLocalizedNonNegativeNumber,
   optionalLocalizedPercentage,
   optionalNonEmptyString,
@@ -151,6 +157,7 @@ const offerItemBodySchema = {
 
 const offerCreateBodySchema = {
   type: 'object',
+  allOf: [createDocumentDiscountConstraint],
   properties: {
     id: { type: 'string' },
     linkedQuoteId: { type: 'string' },
@@ -158,8 +165,8 @@ const offerCreateBodySchema = {
     clientName: { type: 'string' },
     items: { type: 'array', items: offerItemBodySchema },
     paymentTerms: { type: 'string' },
-    discount: { type: 'number' },
-    discountType: { type: 'string', enum: ['percentage', 'currency'] },
+    discount: documentDiscountValueSchema,
+    discountType: documentDiscountTypeSchema,
     status: { type: 'string' },
     deliveryDate: { type: ['string', 'null'], format: 'date' },
     expirationDate: { type: 'string', format: 'date' },
@@ -176,8 +183,8 @@ const offerUpdateBodySchema = {
     clientName: { type: 'string' },
     items: { type: 'array', items: offerItemBodySchema },
     paymentTerms: { type: 'string' },
-    discount: { type: 'number' },
-    discountType: { type: 'string', enum: ['percentage', 'currency'] },
+    discount: documentDiscountValueSchema,
+    discountType: documentDiscountTypeSchema,
     status: { type: 'string' },
     deliveryDate: { type: ['string', 'null'], format: 'date' },
     expirationDate: { type: 'string', format: 'date' },
@@ -667,9 +674,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!expirationDateResult.ok) return badRequest(reply, expirationDateResult.message);
       const deliveryDateResult = optionalDateString(deliveryDate, 'deliveryDate');
       if (!deliveryDateResult.ok) return badRequest(reply, deliveryDateResult.message);
-      const discountResult = optionalLocalizedNonNegativeNumber(discount, 'discount');
-      if (!discountResult.ok) return badRequest(reply, discountResult.message);
       const discountTypeValue = discountType === 'currency' ? 'currency' : 'percentage';
+      const discountResult = optionalLocalizedDocumentDiscount(
+        discount,
+        discountTypeValue,
+        'discount',
+      );
+      if (!discountResult.ok) return badRequest(reply, discountResult.message);
       // Strict write-path parse (issue #779), mirroring the quote routes: unknown spellings 400
       // instead of 500ing on the DB CHECK constraint; legacy spellings fold to canonical.
       const statusValue = parseQuoteStatusInput(
@@ -1145,19 +1156,27 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         expirationDateValue = expirationDateResult.value;
       }
 
-      let discountValue = discount;
-      if (discount !== undefined) {
-        const discountResult = optionalLocalizedNonNegativeNumber(discount, 'discount');
-        if (!discountResult.ok) return badRequest(reply, discountResult.message);
-        discountValue = discountResult.value;
-      }
-
       const discountTypeValue: 'currency' | 'percentage' | undefined =
         discountType === undefined
           ? undefined
           : discountType === 'currency'
             ? 'currency'
             : 'percentage';
+      const effectiveDiscountType = discountTypeValue ?? existingOffer.discountType;
+      const discountPairChanged =
+        (discount !== undefined && discount !== existingOffer.discount) ||
+        (discountTypeValue !== undefined && discountTypeValue !== existingOffer.discountType);
+      const createsClientOrder = statusChanged && targetStatus === 'accepted';
+      let discountValue: number | null | undefined;
+      if (discountPairChanged || createsClientOrder) {
+        const discountResult = optionalLocalizedDocumentDiscount(
+          discount === undefined ? existingOffer.discount : discount,
+          effectiveDiscountType,
+          'discount',
+        );
+        if (!discountResult.ok) return badRequest(reply, discountResult.message);
+        discountValue = discount === undefined ? undefined : discountResult.value;
+      }
 
       let deliveryDateValue = deliveryDate;
       if (deliveryDate !== undefined) {
@@ -1263,7 +1282,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                 items: clientsOrdersRepo.ClientOrderItem[];
               }
             | undefined;
-          if (statusChanged && targetStatus === 'accepted') {
+          if (createsClientOrder) {
             const existingOrder = await clientsOrdersRepo.findExistingForOffer(offer.id, null, tx);
             if (existingOrder) {
               throw new AutoClientOrderConflictError('A sale order already exists for this offer');
@@ -1901,6 +1920,20 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             message: 'Version not found',
             action: 'client_offer.restore.not_found',
             secondaryLabel: versionIdResult.value,
+          };
+        }
+        const snapshotDiscountResult = optionalLocalizedDocumentDiscount(
+          version.snapshot.offer.discount,
+          version.snapshot.offer.discountType,
+          'discount',
+        );
+        if (!snapshotDiscountResult.ok) {
+          return {
+            ok: false,
+            statusCode: 409,
+            message: `Snapshot has an invalid discount: ${snapshotDiscountResult.message}`,
+            action: 'client_offer.restore.conflict',
+            secondaryLabel: 'snapshot_discount_invalid',
           };
         }
         const missingSnapshotReference = await findMissingSnapshotReference(version.snapshot, tx);

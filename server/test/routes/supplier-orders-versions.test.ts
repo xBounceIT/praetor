@@ -295,6 +295,64 @@ afterEach(async () => {
 
 const authHeader = () => ({ authorization: `Bearer ${signToken({ userId: 'u1' })}` });
 
+describe('PUT /api/accounting/supplier-orders/:id document discount validation', () => {
+  test('200 allows unrelated updates to preserve a legacy percentage discount above 100', async () => {
+    soFindExistingMock.mockResolvedValue({
+      ...SAMPLE_ORDER,
+      discount: 150,
+      discountType: 'percentage',
+    });
+    soUpdateMock.mockResolvedValue({ ...SAMPLE_ORDER, discount: 150, notes: 'edited' });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/accounting/supplier-orders/so-1',
+      headers: authHeader(),
+      payload: { notes: 'edited' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(soUpdateMock).toHaveBeenCalled();
+  });
+
+  test('200 allows updates that resend an unchanged legacy percentage discount above 100', async () => {
+    soFindExistingMock.mockResolvedValue({
+      ...SAMPLE_ORDER,
+      discount: 150,
+      discountType: 'percentage',
+    });
+    soUpdateMock.mockResolvedValue({ ...SAMPLE_ORDER, discount: 150, notes: 'edited' });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/accounting/supplier-orders/so-1',
+      headers: authHeader(),
+      payload: { discount: 150, discountType: 'percentage', notes: 'edited' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(soUpdateMock).toHaveBeenCalled();
+  });
+
+  test('400 rejects changing an over-100 currency discount to percentage', async () => {
+    soFindExistingMock.mockResolvedValue({
+      ...SAMPLE_ORDER,
+      discount: 150,
+      discountType: 'currency',
+    });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/accounting/supplier-orders/so-1',
+      headers: authHeader(),
+      payload: { discountType: 'percentage' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(soUpdateMock).not.toHaveBeenCalled();
+  });
+});
+
 describe('POST /api/accounting/supplier-orders', () => {
   const validBody = {
     linkedQuoteId: 'sq-1',
@@ -302,6 +360,33 @@ describe('POST /api/accounting/supplier-orders', () => {
     supplierName: 'Acme',
     items: [{ productName: 'Widget', quantity: 2, unitPrice: 100 }],
   };
+
+  test('400 rejects a percentage document discount above 100%', async () => {
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/accounting/supplier-orders',
+      headers: authHeader(),
+      payload: { ...validBody, discount: 100.01, discountType: 'percentage' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(soCreateMock).not.toHaveBeenCalled();
+  });
+
+  test('201 accepts a fixed-currency document discount above 100', async () => {
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/accounting/supplier-orders',
+      headers: authHeader(),
+      payload: { ...validBody, discount: 150, discountType: 'currency' },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(soCreateMock).toHaveBeenCalledWith(
+      expect.objectContaining({ discount: 150, discountType: 'currency' }),
+      expect.anything(),
+    );
+  });
 
   test('201 auto-generates an order id when omitted', async () => {
     const res = await testApp.inject({
@@ -535,6 +620,28 @@ describe('POST /api/accounting/supplier-orders/:id/versions/:versionId/restore',
         details: expect.objectContaining({ toValue: 'sov-1' }),
       }),
     );
+  });
+
+  test('409 rejects restoring a snapshot with a percentage discount above 100%', async () => {
+    setupHappyPath();
+    sovFindByIdMock.mockResolvedValue({
+      ...SAMPLE_VERSION,
+      snapshot: {
+        ...SAMPLE_SNAPSHOT,
+        order: { ...SAMPLE_ORDER, discount: 100.01, discountType: 'percentage' as const },
+      },
+    });
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/accounting/supplier-orders/so-1/versions/sov-1/restore',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(JSON.parse(res.body).error).toContain('invalid discount');
+    expect(soRestoreSnapshotOrderMock).not.toHaveBeenCalled();
+    expect(sovInsertMock).not.toHaveBeenCalled();
   });
 
   test('restores quantity/duration units and defaults legacy snapshot fields', async () => {

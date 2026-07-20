@@ -446,6 +446,40 @@ const putStatus = (body: Record<string, unknown>) =>
     payload: body,
   });
 
+describe('PUT /api/sales/client-quotes/:id document discount validation', () => {
+  test('200 allows unrelated updates to preserve a legacy percentage discount above 100', async () => {
+    cqFindCurrentMock.mockResolvedValue(
+      gate({ discount: 150, discountType: 'percentage' as const }),
+    );
+    cqUpdateMock.mockResolvedValue(
+      updatedQuote({ discount: 150, discountType: 'percentage', notes: 'edited' }),
+    );
+
+    const res = await putStatus({ notes: 'edited' });
+
+    expect(res.statusCode).toBe(200);
+    expect(cqUpdateMock).toHaveBeenCalled();
+  });
+
+  test('200 allows updates that resend an unchanged legacy percentage discount above 100', async () => {
+    cqFindCurrentMock.mockResolvedValue(
+      gate({ discount: 150, discountType: 'percentage' as const }),
+    );
+    cqUpdateMock.mockResolvedValue(
+      updatedQuote({ discount: 150, discountType: 'percentage', notes: 'edited' }),
+    );
+
+    const res = await putStatus({
+      discount: 150,
+      discountType: 'percentage',
+      notes: 'edited',
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(cqUpdateMock).toHaveBeenCalled();
+  });
+});
+
 describe('PUT /api/sales/client-quotes/:id status rules (issue #779)', () => {
   test('200 allows draft → sent and returns derived fields', async () => {
     cqFindCurrentMock.mockResolvedValue(gate({ status: 'draft' }));
@@ -1612,6 +1646,30 @@ describe('client quote candidate-family create and update', () => {
         ...over,
       },
     });
+  const putCandidateFamily = (discount: number, itemOverrides: Record<string, unknown> = {}) =>
+    testApp.inject({
+      method: 'PUT',
+      url: '/api/sales/client-quotes/q-1',
+      headers: authHeader(),
+      payload: {
+        clientId: 'c1',
+        clientName: 'Client',
+        status: 'draft',
+        candidates: [
+          {
+            id: 'qc-local',
+            name: 'Variante A',
+            items: [freshLine({ id: 'qi-local', ...itemOverrides })],
+            paymentTerms: 'immediate',
+            discount,
+            discountType: 'percentage',
+            expirationDate: '2999-12-31',
+            communicationChannelId: 'qcc_email',
+            notes: 'edited',
+          },
+        ],
+      },
+    });
 
   const setupCreate = (netCost = 50) => {
     sqGetQuoteItemSnapshotsMock.mockResolvedValue(
@@ -1657,6 +1715,55 @@ describe('client quote candidate-family create and update', () => {
       quote: { id: 'sq-9' },
       items: [SUPPLIER_ITEM],
     });
+  };
+
+  const setupLegacyCandidateUpdate = () => {
+    setupCreate();
+    const legacyCandidate = activeCandidate({ discount: 150 });
+    const current = gate({ status: 'draft', discount: 150, discountType: 'percentage' as const });
+    const updated = updatedQuote({ id: 'q-1', discount: 150, notes: 'edited' });
+    const existingItem = {
+      id: 'qi-local',
+      quoteId: 'q-1',
+      candidateId: 'qc-local',
+      productId: '',
+      productName: 'Service',
+      quantity: 2,
+      unitPrice: 100,
+      productCost: 50,
+      productMolPercentage: 50,
+      supplierQuoteId: 'sq-9',
+      supplierQuoteItemId: 'sqi-9',
+      supplierQuoteSupplierName: 'Acme',
+      supplierQuoteUnitPrice: 50,
+      discount: 0,
+      note: null,
+      unitType: 'hours' as const,
+      durationMonths: 1,
+      durationUnit: 'months' as const,
+    };
+    cqFindCurrentMock.mockResolvedValue(current);
+    cqLockCurrentByIdMock.mockResolvedValue(current);
+    cqUpdateMock.mockResolvedValue(updated);
+    cqFindByIdMock.mockResolvedValue(updated);
+    cqFindItemsForQuoteMock.mockResolvedValue([existingItem]);
+    cqFindItemSnapshotsForQuoteMock.mockResolvedValue([
+      {
+        id: existingItem.id,
+        candidateId: existingItem.candidateId,
+        productId: existingItem.productId,
+        quantity: existingItem.quantity,
+        productCost: existingItem.productCost,
+        productMolPercentage: existingItem.productMolPercentage,
+        supplierQuoteId: existingItem.supplierQuoteId,
+        supplierQuoteItemId: existingItem.supplierQuoteItemId,
+        supplierQuoteSupplierName: existingItem.supplierQuoteSupplierName,
+        supplierQuoteUnitPrice: existingItem.supplierQuoteUnitPrice,
+        unitType: existingItem.unitType,
+      },
+    ]);
+    qcListForQuoteMock.mockResolvedValue([legacyCandidate]);
+    qcUpdateMock.mockResolvedValue({ ...legacyCandidate, notes: 'edited' });
   };
 
   test('creates multiple nested candidates without consuming additional document codes', async () => {
@@ -1728,6 +1835,51 @@ describe('client quote candidate-family create and update', () => {
       }),
       expect.anything(),
     );
+  });
+
+  test('rejects an over-100 percentage discount on a new candidate', async () => {
+    const res = await postQuote([freshLine()], {
+      candidates: [
+        {
+          name: 'Variante A',
+          items: [freshLine()],
+          discount: 100.01,
+          discountType: 'percentage',
+          expirationDate: '2999-12-31',
+          communicationChannelId: 'qcc_email',
+        },
+      ],
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(cqCreateMock).not.toHaveBeenCalled();
+  });
+
+  test('preserves an unchanged legacy candidate discount during an unrelated family update', async () => {
+    setupLegacyCandidateUpdate();
+
+    const res = await putCandidateFamily(150);
+
+    expect(res.statusCode).toBe(200);
+    expect(qcUpdateMock).toHaveBeenCalled();
+  });
+
+  test('keeps the total guard when a legacy candidate resubmits changed zero-total items', async () => {
+    setupLegacyCandidateUpdate();
+
+    const res = await putCandidateFamily(150, { unitPrice: 0 });
+
+    expect(res.statusCode).toBe(400);
+    expect(cqUpdateMock).not.toHaveBeenCalled();
+  });
+
+  test('rejects changing an existing legacy candidate to another over-100 percentage', async () => {
+    setupLegacyCandidateUpdate();
+
+    const res = await putCandidateFamily(151);
+
+    expect(res.statusCode).toBe(400);
+    expect(cqUpdateMock).not.toHaveBeenCalled();
   });
 
   test('rejects duplicate candidate names case-insensitively', async () => {

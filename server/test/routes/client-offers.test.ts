@@ -262,6 +262,8 @@ const baseGate = () => ({
   linkedQuoteCandidateId: null as string | null,
   clientId: 'c1',
   clientName: 'Client',
+  discount: 0,
+  discountType: 'percentage' as 'percentage' | 'currency',
   status: 'draft',
   deliveryDate: null as string | null,
   // Far future: the effective-status guards compare against the real clock, so a near date would
@@ -483,6 +485,76 @@ const putOffer = (body: Record<string, unknown>) =>
     payload: body,
   });
 
+describe('client-offer document discount validation', () => {
+  test('200 allows unrelated updates to preserve a legacy percentage discount above 100', async () => {
+    coFindExistingMock.mockResolvedValue(
+      gate({ discount: 150, discountType: 'percentage' as const }),
+    );
+    coUpdateMock.mockResolvedValue(
+      updatedOffer({ discount: 150, discountType: 'percentage', notes: 'edited' }),
+    );
+
+    const res = await putOffer({ notes: 'edited' });
+
+    expect(res.statusCode).toBe(200);
+    expect(coUpdateMock).toHaveBeenCalled();
+  });
+
+  test('200 allows updates that resend an unchanged legacy percentage discount above 100', async () => {
+    coFindExistingMock.mockResolvedValue(
+      gate({ discount: 150, discountType: 'percentage' as const }),
+    );
+    coUpdateMock.mockResolvedValue(
+      updatedOffer({ discount: 150, discountType: 'percentage', notes: 'edited' }),
+    );
+
+    const res = await putOffer({
+      discount: 150,
+      discountType: 'percentage',
+      notes: 'edited',
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(coUpdateMock).toHaveBeenCalled();
+  });
+
+  test('400 rejects a percentage document discount above 100%', async () => {
+    coFindExistingMock.mockResolvedValue(gate());
+    coUpdateMock.mockResolvedValue(updatedOffer({ discount: 100.01 }));
+
+    const res = await putOffer({ discount: 100.01, discountType: 'percentage' });
+
+    expect(res.statusCode).toBe(400);
+    expect(coUpdateMock).not.toHaveBeenCalled();
+  });
+
+  test('400 rejects changing an over-100 currency discount to percentage', async () => {
+    coFindExistingMock.mockResolvedValue(
+      gate({ discount: 150, discountType: 'currency' as const }),
+    );
+    coUpdateMock.mockResolvedValue(updatedOffer({ discount: 150, discountType: 'percentage' }));
+
+    const res = await putOffer({ discountType: 'percentage' });
+
+    expect(res.statusCode).toBe(400);
+    expect(coUpdateMock).not.toHaveBeenCalled();
+  });
+
+  test('200 preserves a fixed-currency document discount above 100', async () => {
+    coFindExistingMock.mockResolvedValue(gate());
+    coUpdateMock.mockResolvedValue(updatedOffer({ discount: 150, discountType: 'currency' }));
+
+    const res = await putOffer({ discount: 150, discountType: 'currency' });
+
+    expect(res.statusCode).toBe(200);
+    expect(coUpdateMock).toHaveBeenCalledWith(
+      'off-1',
+      expect.objectContaining({ discount: 150, discountType: 'currency' }),
+      expect.anything(),
+    );
+  });
+});
+
 describe('PUT /api/sales/client-offers/:id expired rules (issue #779)', () => {
   test('200 extends an expired sent offer via its expiration date and derives effectiveStatus', async () => {
     coFindExistingMock.mockResolvedValue(gate({ status: 'sent', expirationDate: '2000-01-01' }));
@@ -615,6 +687,22 @@ describe('PUT /api/sales/client-offers/:id expired rules (issue #779)', () => {
       durationMonths: 1,
       durationUnit: 'months',
     });
+  });
+
+  test('400 rejects accepting a legacy-invalid offer before it can create an order', async () => {
+    coFindExistingMock.mockResolvedValue(
+      gate({ status: 'sent', discount: 150, discountType: 'percentage' as const }),
+    );
+    coUpdateMock.mockResolvedValue(
+      updatedOffer({ status: 'accepted', discount: 150, discountType: 'percentage' }),
+    );
+    coFindItemsForOfferMock.mockResolvedValue([storedOfferItem()]);
+
+    const res = await putOffer({ status: 'accepted' });
+
+    expect(res.statusCode).toBe(400);
+    expect(coUpdateMock).not.toHaveBeenCalled();
+    expect(clientOrderCreateMock).not.toHaveBeenCalled();
   });
 
   test('409 accepting an offer with an existing sale order blocks auto-create cleanly', async () => {

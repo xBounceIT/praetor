@@ -145,52 +145,65 @@ export const findExistingByLinkedQuote = async (
 // Reads the minimal set of fields needed to gate updates / restores. Does not acquire a row
 // lock - safe for non-mutating reads, but TOCTOU-prone when a write decision depends on it.
 // For SELECT ... FOR UPDATE semantics call `lockExistingById` inside `withDbTransaction`.
-export const findExisting = async (
-  id: string,
-  exec: DbExecutor = db,
-): Promise<{
+type ExistingSupplierOrder = {
   id: string;
   linkedQuoteId: string | null;
   supplierId: string;
   supplierName: string;
+  discount: number;
+  discountType: 'percentage' | 'currency';
   status: string;
-} | null> => {
+};
+
+type ExistingSupplierOrderRow = Omit<ExistingSupplierOrder, 'discount' | 'discountType'> & {
+  discount: string;
+  discountType: string;
+};
+
+const mapExistingSupplierOrder = (row: ExistingSupplierOrderRow): ExistingSupplierOrder => ({
+  ...row,
+  discount: Number(row.discount),
+  discountType: row.discountType === 'currency' ? 'currency' : 'percentage',
+});
+
+export const findExisting = async (
+  id: string,
+  exec: DbExecutor = db,
+): Promise<ExistingSupplierOrder | null> => {
   const rows = await exec
     .select({
       id: supplierSales.id,
       linkedQuoteId: supplierSales.linkedQuoteId,
       supplierId: supplierSales.supplierId,
       supplierName: supplierSales.supplierName,
+      discount: supplierSales.discount,
+      discountType: supplierSales.discountType,
       status: supplierSales.status,
     })
     .from(supplierSales)
     .where(eq(supplierSales.id, id));
-  return rows[0] ?? null;
+  return rows[0] ? mapExistingSupplierOrder(rows[0]) : null;
 };
 
 // SELECT ... FOR UPDATE variant of `findExisting`. Must be called inside a transaction.
 export const lockExistingById = async (
   id: string,
   exec: DbExecutor = db,
-): Promise<{
-  id: string;
-  linkedQuoteId: string | null;
-  supplierId: string;
-  supplierName: string;
-  status: string;
-} | null> => {
+): Promise<ExistingSupplierOrder | null> => {
   const rows = await exec
     .select({
       id: supplierSales.id,
       linkedQuoteId: supplierSales.linkedQuoteId,
       supplierId: supplierSales.supplierId,
       supplierName: supplierSales.supplierName,
+      discount: supplierSales.discount,
+      discountType: supplierSales.discountType,
       status: supplierSales.status,
     })
     .from(supplierSales)
     .where(eq(supplierSales.id, id))
     .for('update');
-  return rows[0] ?? null;
+  return rows[0] ? mapExistingSupplierOrder(rows[0]) : null;
 };
 
 export const findStatusAndSupplierName = async (

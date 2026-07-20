@@ -8,6 +8,11 @@ import * as supplierQuotesRepo from '../repositories/supplierQuotesRepo.ts';
 import * as suppliersRepo from '../repositories/suppliersRepo.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import {
+  createDocumentDiscountConstraint,
+  documentDiscountTypeSchema,
+  documentDiscountValueSchema,
+} from '../schemas/documentDiscount.ts';
+import {
   allocateDocumentCode,
   reserveDocumentCodeCounterFromCode,
 } from '../services/documentCodes.ts';
@@ -25,7 +30,7 @@ import {
   optionalDurationMonths,
   optionalDurationUnit,
   optionalEnum,
-  optionalLocalizedNonNegativeNumber,
+  optionalLocalizedDocumentDiscount,
   optionalLocalizedPercentage,
   optionalNonEmptyString,
   parseLocalizedNonNegativeNumber,
@@ -109,6 +114,7 @@ const itemBodySchema = {
 
 const createBodySchema = {
   type: 'object',
+  allOf: [createDocumentDiscountConstraint],
   properties: {
     id: { type: 'string' },
     linkedQuoteId: { type: 'string' },
@@ -116,8 +122,8 @@ const createBodySchema = {
     supplierName: { type: 'string' },
     items: { type: 'array', items: itemBodySchema },
     paymentTerms: { type: 'string' },
-    discount: { type: 'number' },
-    discountType: { type: 'string', enum: ['percentage', 'currency'] },
+    discount: documentDiscountValueSchema,
+    discountType: documentDiscountTypeSchema,
     status: { type: 'string', enum: ['draft', 'sent'] },
     notes: { type: 'string' },
   },
@@ -132,8 +138,8 @@ const updateBodySchema = {
     supplierName: { type: 'string' },
     items: { type: 'array', items: itemBodySchema },
     paymentTerms: { type: 'string' },
-    discount: { type: 'number' },
-    discountType: { type: 'string', enum: ['percentage', 'currency'] },
+    discount: documentDiscountValueSchema,
+    discountType: documentDiscountTypeSchema,
     status: { type: 'string', enum: ['draft', 'sent'] },
     notes: { type: 'string' },
   },
@@ -395,9 +401,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         });
       }
 
-      const discountResult = optionalLocalizedNonNegativeNumber(discount, 'discount');
-      if (!discountResult.ok) return badRequest(reply, discountResult.message);
       const discountTypeValue = discountType === 'currency' ? 'currency' : 'percentage';
+      const discountResult = optionalLocalizedDocumentDiscount(
+        discount,
+        discountTypeValue,
+        'discount',
+      );
+      if (!discountResult.ok) return badRequest(reply, discountResult.message);
       const statusResult = optionalEnum(status, SUPPLIER_ORDER_STATUSES, 'status');
       if (!statusResult.ok) return badRequest(reply, statusResult.message);
       const normalizedItems = normalizeItems(items, reply);
@@ -671,15 +681,28 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         }
       }
 
-      if (discount !== undefined) {
-        const discountResult = optionalLocalizedNonNegativeNumber(discount, 'discount');
+      const discountTypeValue =
+        discountType === undefined
+          ? undefined
+          : discountType === 'currency'
+            ? 'currency'
+            : 'percentage';
+      const effectiveDiscountType = discountTypeValue ?? existingOrder.discountType;
+      const discountPairChanged =
+        (discount !== undefined && discount !== existingOrder.discount) ||
+        (discountTypeValue !== undefined && discountTypeValue !== existingOrder.discountType);
+      if (discountPairChanged) {
+        const discountResult = optionalLocalizedDocumentDiscount(
+          discount === undefined ? existingOrder.discount : discount,
+          effectiveDiscountType,
+          'discount',
+        );
         if (!discountResult.ok) return badRequest(reply, discountResult.message);
-        if (discountResult.value !== null) patch.discount = discountResult.value;
+        if (discount !== undefined && discountResult.value !== null) {
+          patch.discount = discountResult.value;
+        }
       }
-
-      if (discountType !== undefined) {
-        patch.discountType = discountType === 'currency' ? 'currency' : 'percentage';
-      }
+      if (discountTypeValue !== undefined) patch.discountType = discountTypeValue;
 
       const statusResult = optionalEnum(status, SUPPLIER_ORDER_STATUSES, 'status');
       if (!statusResult.ok) return badRequest(reply, statusResult.message);
@@ -972,6 +995,20 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             message: 'Version not found',
             action: 'supplier_order.restore.not_found',
             secondaryLabel: versionIdResult.value,
+          };
+        }
+        const snapshotDiscountResult = optionalLocalizedDocumentDiscount(
+          version.snapshot.order.discount,
+          version.snapshot.order.discountType,
+          'discount',
+        );
+        if (!snapshotDiscountResult.ok) {
+          return {
+            ok: false,
+            statusCode: 409,
+            message: `Snapshot has an invalid discount: ${snapshotDiscountResult.message}`,
+            action: 'supplier_order.restore.conflict',
+            secondaryLabel: 'snapshot_discount_invalid',
           };
         }
         const missingSnapshotReference = await findMissingSnapshotReference(version.snapshot, tx);

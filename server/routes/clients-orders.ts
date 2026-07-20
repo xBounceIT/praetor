@@ -9,6 +9,11 @@ import * as productsRepo from '../repositories/productsRepo.ts';
 import * as supplierQuotesRepo from '../repositories/supplierQuotesRepo.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import {
+  createDocumentDiscountConstraint,
+  documentDiscountTypeSchema,
+  documentDiscountValueSchema,
+} from '../schemas/documentDiscount.ts';
+import {
   autoCreateSupplierOrdersForClientOrder,
   createClientOrderRows,
   logClientOrderCreated,
@@ -31,7 +36,7 @@ import {
   badRequest,
   optionalDurationMonths,
   optionalDurationUnit,
-  optionalLocalizedNonNegativeNumber,
+  optionalLocalizedDocumentDiscount,
   optionalLocalizedPercentage,
   optionalNonEmptyString,
   parseLocalizedNonNegativeNumber,
@@ -155,6 +160,7 @@ const clientOrderItemBodySchema = {
 
 const clientOrderCreateBodySchema = {
   type: 'object',
+  allOf: [createDocumentDiscountConstraint],
   properties: {
     id: { type: 'string' },
     linkedQuoteId: { type: 'string' },
@@ -163,8 +169,8 @@ const clientOrderCreateBodySchema = {
     clientName: { type: 'string' },
     items: { type: 'array', items: clientOrderItemBodySchema },
     paymentTerms: { type: 'string' },
-    discount: { type: 'number' },
-    discountType: { type: 'string', enum: ['percentage', 'currency'] },
+    discount: documentDiscountValueSchema,
+    discountType: documentDiscountTypeSchema,
     status: { type: 'string' },
     notes: { type: 'string' },
   },
@@ -180,8 +186,8 @@ const clientOrderUpdateBodySchema = {
     clientName: { type: 'string' },
     items: { type: 'array', items: clientOrderItemBodySchema },
     paymentTerms: { type: 'string' },
-    discount: { type: 'number' },
-    discountType: { type: 'string', enum: ['percentage', 'currency'] },
+    discount: documentDiscountValueSchema,
+    discountType: documentDiscountTypeSchema,
     status: { type: 'string' },
     notes: { type: ['string', 'null'] },
   },
@@ -644,9 +650,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const normalizedItems = await resolveSupplierQuoteRefs(parsedItems, reply);
       if (!normalizedItems) return;
 
-      const discountResult = optionalLocalizedNonNegativeNumber(discount, 'discount');
-      if (!discountResult.ok) return badRequest(reply, discountResult.message);
       const discountTypeValue = discountType === 'currency' ? 'currency' : 'percentage';
+      const discountResult = optionalLocalizedDocumentDiscount(
+        discount,
+        discountTypeValue,
+        'discount',
+      );
+      if (!discountResult.ok) return badRequest(reply, discountResult.message);
 
       let linkedQuoteIdValue = linkedQuoteIdResult.value;
       if (linkedOfferIdResult.value) {
@@ -901,13 +911,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         clientNameValue = clientNameResult.value;
       }
 
-      let discountValue: number | null | undefined = discount as number | null | undefined;
-      if (discount !== undefined) {
-        const discountResult = optionalLocalizedNonNegativeNumber(discount, 'discount');
-        if (!discountResult.ok) return badRequest(reply, discountResult.message);
-        discountValue = discountResult.value;
-      }
-
       let discountTypeValue: 'currency' | 'percentage' | undefined;
       if (discountType !== undefined) {
         discountTypeValue = discountType === 'currency' ? 'currency' : 'percentage';
@@ -943,6 +946,21 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           entityType: 'client_order',
           entityId: idResult.value,
         });
+      }
+
+      const effectiveDiscountType = discountTypeValue ?? existingOrder.discountType;
+      const discountPairChanged =
+        (discount !== undefined && discount !== existingOrder.discount) ||
+        (discountTypeValue !== undefined && discountTypeValue !== existingOrder.discountType);
+      let discountValue: number | null | undefined;
+      if (discountPairChanged) {
+        const discountResult = optionalLocalizedDocumentDiscount(
+          discount === undefined ? existingOrder.discount : discount,
+          effectiveDiscountType,
+          'discount',
+        );
+        if (!discountResult.ok) return badRequest(reply, discountResult.message);
+        discountValue = discount === undefined ? undefined : discountResult.value;
       }
 
       const requestedOrderIdChanged = nextIdValue !== null && nextIdValue !== idResult.value;
@@ -1502,6 +1520,21 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           entityType: 'client_order',
           entityId: idResult.value,
           details: { secondaryLabel: versionIdResult.value },
+        });
+      }
+      const snapshotDiscountResult = optionalLocalizedDocumentDiscount(
+        version.snapshot.order.discount,
+        version.snapshot.order.discountType,
+        'discount',
+      );
+      if (!snapshotDiscountResult.ok) {
+        return replyError(request, reply, {
+          statusCode: 409,
+          message: `Snapshot has an invalid discount: ${snapshotDiscountResult.message}`,
+          action: 'client_order.restore.conflict',
+          entityType: 'client_order',
+          entityId: idResult.value,
+          details: { secondaryLabel: 'snapshot_discount_invalid' },
         });
       }
       const missingSnapshotReference = await findMissingSnapshotReference(version.snapshot);
