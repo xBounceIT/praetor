@@ -327,6 +327,19 @@ describe('GET /api/sales/client-offers/:id/versions/:versionId', () => {
     expect(ovFindByIdMock).toHaveBeenCalledWith('../../clients/legacy', '../version');
   });
 
+  test('200 keeps dot-only and marker-like offer version ids distinct', async () => {
+    ovFindByIdMock.mockResolvedValue(SAMPLE_VERSION);
+
+    const res = await testApp.inject({
+      method: 'GET',
+      url: `/api/sales/client-offers/${'~'.repeat(101)}../versions/%40..`,
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(ovFindByIdMock).toHaveBeenCalledWith('..', '@..');
+  });
+
   test('404 when version not found (also covers cross-offer ids)', async () => {
     ovFindByIdMock.mockResolvedValue(null);
 

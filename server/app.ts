@@ -45,6 +45,7 @@ import workUnitsRoutes from './routes/work-units.ts';
 import { ajvFormatsPlugin, ajvFormatsPluginOptions } from './utils/ajv-formats.ts';
 import { APP_VERSION } from './utils/app-version.ts';
 import { logger, serializeError } from './utils/logger.ts';
+import { PATH_PARAMETER_MAX_LENGTH } from './utils/path-segments.ts';
 import { GLOBAL_RATE_LIMIT } from './utils/rate-limit.ts';
 
 dotenv.config({ quiet: true });
@@ -116,6 +117,7 @@ export const registerErrorHandler = (fastify: FastifyInstance) => {
 export const buildApp = async () => {
   const fastify = Fastify({
     loggerInstance: logger as FastifyBaseLogger,
+    routerOptions: { maxParamLength: PATH_PARAMETER_MAX_LENGTH },
     trustProxy: parseTrustProxyEnv(process.env.TRUST_PROXY),
     // Register `ajv-formats` so JSON-schema `format` keywords (`date-time`, `date`, `email`, ...)
     // are actually validated. Without this, schemas like `{ type: 'string', format: 'date-time' }`

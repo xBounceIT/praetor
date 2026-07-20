@@ -503,6 +503,23 @@ describe('client-offer document discount validation', () => {
     expect(coRenameMock).not.toHaveBeenCalled();
   });
 
+  test('200 lets an existing dot-only offer code be resubmitted through its transport escape', async () => {
+    const legacyId = '..';
+    coFindExistingMock.mockResolvedValue(gate({ id: legacyId }));
+    coUpdateMock.mockResolvedValue(updatedOffer({ id: legacyId, notes: 'updated' }));
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: `/api/sales/client-offers/${'~'.repeat(101)}..`,
+      headers: authHeader(),
+      payload: { id: legacyId, notes: 'updated' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(coFindExistingMock).toHaveBeenCalledWith(legacyId);
+    expect(coRenameMock).not.toHaveBeenCalled();
+  });
+
   test('200 allows unrelated updates to preserve a legacy percentage discount above 100', async () => {
     coFindExistingMock.mockResolvedValue(
       gate({ discount: 150, discountType: 'percentage' as const }),

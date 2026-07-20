@@ -16,6 +16,11 @@ import {
 import { logAudit } from '../utils/audit.ts';
 import { getUniqueViolation } from '../utils/db-errors.ts';
 import { replyDocumentCodeCollision } from '../utils/document-code-replies.ts';
+import {
+  DOCUMENT_CODE_MAX_LENGTH,
+  OPTIONAL_DOCUMENT_CODE_VALUE_PATTERN,
+  validateOptionalDocumentCode,
+} from '../utils/document-codes.ts';
 import type { DurationUnit } from '../utils/duration-unit.ts';
 import {
   ATTACHMENT_MAX_BYTES,
@@ -27,6 +32,7 @@ import {
 } from '../utils/fileStorage.ts';
 import { createChildLogger } from '../utils/logger.ts';
 import { generatePrefixedId, ITEM_ID_PREFIXES } from '../utils/order-ids.ts';
+import { requirePathSegment } from '../utils/path-segments.ts';
 import {
   effectiveSupplierQuoteStatusFromDate,
   normalizeQuoteStatus,
@@ -165,7 +171,13 @@ const supplierQuoteItemBodySchema = {
 const supplierQuoteCreateBodySchema = {
   type: 'object',
   properties: {
-    id: { type: 'string' },
+    id: {
+      type: 'string',
+      maxLength: DOCUMENT_CODE_MAX_LENGTH,
+      pattern: OPTIONAL_DOCUMENT_CODE_VALUE_PATTERN,
+      description:
+        'Leave blank to allocate automatically. Manual values may contain letters, numbers, underscores, and hyphens.',
+    },
     supplierId: { type: 'string' },
     supplierName: { type: 'string' },
     // clientName is resolved server-side from clientId; the body only carries the id.
@@ -183,7 +195,12 @@ const supplierQuoteCreateBodySchema = {
 const supplierQuoteUpdateBodySchema = {
   type: 'object',
   properties: {
-    id: { type: 'string' },
+    id: {
+      type: 'string',
+      maxLength: DOCUMENT_CODE_MAX_LENGTH,
+      description:
+        'When changed, may contain letters, numbers, underscores, and hyphens. An unchanged legacy id remains accepted.',
+    },
     supplierId: { type: 'string' },
     supplierName: { type: 'string' },
     // clientName is resolved server-side from clientId; the body only carries the id.
@@ -483,7 +500,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const supplierNameResult = requireNonEmptyString(supplierName, 'supplierName');
       if (!supplierNameResult.ok) return badRequest(reply, supplierNameResult.message);
-      const nextIdResult = optionalNonEmptyString(nextId, 'id');
+      const nextIdResult = validateOptionalDocumentCode(nextId, 'id');
       if (!nextIdResult.ok) return badRequest(reply, nextIdResult.message);
 
       if (!Array.isArray(items) || items.length === 0) {
@@ -625,7 +642,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         notes?: string;
       };
 
-      const idResult = requireNonEmptyString(id, 'id');
+      const idResult = requirePathSegment(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
       // Two related flags with different jobs (issue #779): `hasNonExpirationContentUpdate` drives
@@ -674,7 +691,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       let nextIdValue: string | null = null;
       if (nextId !== undefined) {
-        const nextIdResult = optionalNonEmptyString(nextId, 'id');
+        const nextIdResult =
+          typeof nextId === 'string' && nextId.trim() === idResult.value
+            ? ({ ok: true, value: idResult.value } as const)
+            : validateOptionalDocumentCode(nextId, 'id');
         if (!nextIdResult.ok) return badRequest(reply, nextIdResult.message);
         nextIdValue = nextIdResult.value;
       }
@@ -1002,7 +1022,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id } = request.params as { id: string };
-      const idResult = requireNonEmptyString(id, 'id');
+      const idResult = requirePathSegment(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
       const [exists, versions] = await Promise.all([
@@ -1041,9 +1061,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id, versionId } = request.params as { id: string; versionId: string };
-      const idResult = requireNonEmptyString(id, 'id');
+      const idResult = requirePathSegment(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
-      const versionIdResult = requireNonEmptyString(versionId, 'versionId');
+      const versionIdResult = requirePathSegment(versionId, 'versionId');
       if (!versionIdResult.ok) return badRequest(reply, versionIdResult.message);
 
       const version = await supplierQuoteVersionsRepo.findById(
@@ -1080,9 +1100,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id, versionId } = request.params as { id: string; versionId: string };
-      const idResult = requireNonEmptyString(id, 'id');
+      const idResult = requirePathSegment(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
-      const versionIdResult = requireNonEmptyString(versionId, 'versionId');
+      const versionIdResult = requirePathSegment(versionId, 'versionId');
       if (!versionIdResult.ok) return badRequest(reply, versionIdResult.message);
 
       const [linkedOrderId, current, version, sourcedByClientDocuments] = await Promise.all([
@@ -1395,7 +1415,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id } = request.params as { id: string };
-      const idResult = requireNonEmptyString(id, 'id');
+      const idResult = requirePathSegment(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
       const exists = await supplierQuotesRepo.existsById(idResult.value);
@@ -1432,7 +1452,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id } = request.params as { id: string };
-      const idResult = requireNonEmptyString(id, 'id');
+      const idResult = requirePathSegment(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
       if (!request.isMultipart()) {
@@ -1566,9 +1586,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id, attachmentId } = request.params as { id: string; attachmentId: string };
-      const idResult = requireNonEmptyString(id, 'id');
+      const idResult = requirePathSegment(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
-      const attachmentIdResult = requireNonEmptyString(attachmentId, 'attachmentId');
+      const attachmentIdResult = requirePathSegment(attachmentId, 'attachmentId');
       if (!attachmentIdResult.ok) return badRequest(reply, attachmentIdResult.message);
 
       const attachment = await supplierQuoteAttachmentsRepo.findById(attachmentIdResult.value);
@@ -1637,9 +1657,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id, attachmentId } = request.params as { id: string; attachmentId: string };
-      const idResult = requireNonEmptyString(id, 'id');
+      const idResult = requirePathSegment(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
-      const attachmentIdResult = requireNonEmptyString(attachmentId, 'attachmentId');
+      const attachmentIdResult = requirePathSegment(attachmentId, 'attachmentId');
       if (!attachmentIdResult.ok) return badRequest(reply, attachmentIdResult.message);
 
       const quote = await assertQuoteEditableForAttachments(idResult.value, request, reply);
@@ -1696,7 +1716,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id } = request.params as { id: string };
-      const idResult = requireNonEmptyString(id, 'id');
+      const idResult = requirePathSegment(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
       const linkedOrderId = await supplierQuotesRepo.findLinkedOrderId(idResult.value);
