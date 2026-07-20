@@ -307,6 +307,7 @@ const storedOfferItem = (over: Record<string, unknown> = {}) => ({
   discount: 0,
   durationMonths: 1,
   durationUnit: 'months' as const,
+  pricingSemanticsVersion: 2 as const,
   ...over,
 });
 
@@ -664,7 +665,9 @@ describe('PUT /api/sales/client-offers/:id expired rules (issue #779)', () => {
   test('200 accepting an offer auto-creates the linked draft client order', async () => {
     coFindExistingMock.mockResolvedValue(gate({ status: 'sent' }));
     coUpdateMock.mockResolvedValue(updatedOffer({ status: 'accepted' }));
-    coFindItemsForOfferMock.mockResolvedValue([storedOfferItem({ discount: 12.5 })]);
+    coFindItemsForOfferMock.mockResolvedValue([
+      storedOfferItem({ discount: 12.5, pricingSemanticsVersion: 1 }),
+    ]);
 
     const res = await putOffer({ status: 'accepted' });
 
@@ -703,6 +706,7 @@ describe('PUT /api/sales/client-offers/:id expired rules (issue #779)', () => {
       discount: 12.5,
       durationMonths: 1,
       durationUnit: 'months',
+      pricingSemanticsVersion: 1,
     });
   });
 
@@ -792,6 +796,7 @@ describe('PUT /api/sales/client-offers/:id expired rules (issue #779)', () => {
         note: null,
         durationMonths: 1,
         durationUnit: 'months',
+        pricingSemanticsVersion: 1,
       },
     ]);
 
@@ -815,7 +820,14 @@ describe('PUT /api/sales/client-offers/:id expired rules (issue #779)', () => {
     );
     expect(clientOrderBulkInsertSupplierOrderItemsMock).toHaveBeenCalledWith(
       'SORD-2999-0001',
-      [expect.objectContaining({ unitPrice: 62.5, discount: 20, unitType: 'days' })],
+      [
+        expect.objectContaining({
+          unitPrice: 62.5,
+          discount: 20,
+          unitType: 'days',
+          pricingSemanticsVersion: 1,
+        }),
+      ],
       expect.anything(),
     );
     expect(clientOrderLinkSaleItemsToSupplierOrderAndItemsMock).toHaveBeenCalledWith(

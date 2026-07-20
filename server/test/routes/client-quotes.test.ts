@@ -943,6 +943,7 @@ describe('POST /api/sales/client-quotes/:id promotion lifecycle', () => {
     unitType: 'hours' as const,
     durationMonths: 12,
     durationUnit: 'months' as const,
+    pricingSemanticsVersion: 2 as const,
   });
 
   test('requires permission to create the generated offer', async () => {
@@ -960,9 +961,13 @@ describe('POST /api/sales/client-quotes/:id promotion lifecycle', () => {
     expect(coCreateMock).not.toHaveBeenCalled();
   });
 
-  test('promotes exactly the selected active candidate and archives its siblings atomically', async () => {
+  test('promotes exactly the selected active candidate and preserves its pricing contract', async () => {
     const winningCandidate = candidate();
-    const winningItem = { ...item(), productMolPercentage: 5 };
+    const winningItem = {
+      ...item(),
+      productMolPercentage: 5,
+      pricingSemanticsVersion: 1 as const,
+    };
     cqFindByIdMock
       .mockResolvedValueOnce(updatedQuote({ status: 'sent' }))
       .mockResolvedValueOnce(updatedQuote({ status: 'offer', linkedOfferId: 'OFF-2999-0001' }));
@@ -999,6 +1004,7 @@ describe('POST /api/sales/client-quotes/:id promotion lifecycle', () => {
       unitPrice: 100,
       productMolPercentage: 50,
       durationMonths: 12,
+      pricingSemanticsVersion: 1,
     });
     expect(qcMarkPromotedMock).toHaveBeenCalledWith('q-1', 'qc-a', expect.anything());
     expect(cqUpdateMock).toHaveBeenCalledWith(

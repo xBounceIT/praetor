@@ -757,6 +757,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         'accounting.supplier_orders.create',
       );
       let linkedQuoteIdValue = linkedQuoteIdResult.value;
+      let itemsForResolution = parsedItems;
       const sourceOfferSupplierQuoteItemCounts = new Map<string, number>();
       if (linkedOfferIdResult.value) {
         const offer = await clientsOrdersRepo.findOfferDetails(linkedOfferIdResult.value);
@@ -816,10 +817,15 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         }
 
         linkedQuoteIdValue = offer.linkedQuoteId || null;
+        const sourceOfferItems = await clientOffersRepo.findItemsForOffer(
+          linkedOfferIdResult.value,
+        );
+        const sourcePricingSemanticsVersion = pricingSemanticsVersionForDocument(sourceOfferItems);
+        itemsForResolution = parsedItems.map((item) => ({
+          ...item,
+          pricingSemanticsVersion: sourcePricingSemanticsVersion,
+        }));
         if (!canCreateSupplierOrders) {
-          const sourceOfferItems = await clientOffersRepo.findItemsForOffer(
-            linkedOfferIdResult.value,
-          );
           for (const item of sourceOfferItems) {
             if (!item.supplierQuoteItemId) continue;
             sourceOfferSupplierQuoteItemCounts.set(
@@ -830,7 +836,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         }
       }
 
-      const normalizedItems = await resolveSupplierQuoteRefs(parsedItems, reply, {
+      const normalizedItems = await resolveSupplierQuoteRefs(itemsForResolution, reply, {
         allowedSupplierQuoteItemCounts: canCreateSupplierOrders
           ? undefined
           : sourceOfferSupplierQuoteItemCounts,

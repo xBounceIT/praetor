@@ -48,6 +48,7 @@ const allocateDocumentCodeMock = mock();
 
 const findOrderByIdMock = mock();
 const lockOrderExistingByIdMock = mock();
+const findOrderItemsMock = mock();
 
 const logAuditMock = mock(async () => undefined);
 const { withDbTransactionMock, resetWithDbTransactionMock } = makeWithDbTransactionMock();
@@ -90,6 +91,7 @@ beforeAll(async () => {
     ...supplierOrdersRepoSnap,
     findById: findOrderByIdMock,
     lockExistingById: lockOrderExistingByIdMock,
+    findItemsForOrder: findOrderItemsMock,
   }));
   mock.module('../../utils/audit.ts', () => ({
     ...auditSnap,
@@ -202,6 +204,7 @@ const allMocks = [
   allocateDocumentCodeMock,
   findOrderByIdMock,
   lockOrderExistingByIdMock,
+  findOrderItemsMock,
   logAuditMock,
   withDbTransactionMock,
 ];
@@ -217,6 +220,7 @@ beforeEach(async () => {
   logAuditMock.mockImplementation(async () => undefined);
   allocateDocumentCodeMock.mockResolvedValue('SINV-2025-0001');
   lockOrderExistingByIdMock.mockResolvedValue(null);
+  findOrderItemsMock.mockResolvedValue([]);
 
   testApp = await buildRouteTestApp(routePlugin, '/api/supplier-invoices');
 });
@@ -312,6 +316,7 @@ describe('POST /api/supplier-invoices', () => {
   });
 
   test('201 inherits the automatic invoice code from a parseable linked supplier order id', async () => {
+    findOrderItemsMock.mockResolvedValue([{ pricingSemanticsVersion: 1 }]);
     findOrderByIdMock.mockResolvedValue({
       id: 'SORD_26_0045_manual',
       supplierId: 's1',
@@ -336,6 +341,9 @@ describe('POST /api/supplier-invoices', () => {
       exec: expect.anything(),
       sourceCodes: ['SORD_26_0045_manual'],
     });
+    expect(insertItemsMock.mock.calls[0][1][0]).toEqual(
+      expect.objectContaining({ pricingSemanticsVersion: 1 }),
+    );
   });
 
   test('201 inherits from linked supplier quote when the source order id is not parseable', async () => {

@@ -423,6 +423,7 @@ describe('POST /api/clients-orders product-less supplier lines (issue #783)', ()
   });
 
   test('201 inherits from linked offer when linked quote id is not parseable', async () => {
+    clientOfferFindItemsForOfferMock.mockResolvedValue([{ pricingSemanticsVersion: 1 }]);
     coCreateMock.mockImplementation((input: Record<string, unknown>) =>
       Promise.resolve({
         ...CREATED_ORDER,
@@ -453,6 +454,9 @@ describe('POST /api/clients-orders product-less supplier lines (issue #783)', ()
       exec: expect.anything(),
       sourceCodes: ['legacy-quote-id', 'OFF_26_0045_manual'],
     });
+    expect(coInsertItemsMock.mock.calls[0][1][0]).toEqual(
+      expect.objectContaining({ pricingSemanticsVersion: 1 }),
+    );
   });
 
   test('409 when the submitted client does not match the accepted source offer', async () => {

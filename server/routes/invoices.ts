@@ -410,8 +410,21 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!Array.isArray(items) || items.length === 0) {
         return badRequest(reply, 'Items must be a non-empty array');
       }
-      const normalizedItems = validateAndNormalizeItems(items, reply);
+      let normalizedItems = validateAndNormalizeItems(items, reply);
       if (!normalizedItems) return;
+
+      const linkedSaleIdResult = optionalNonEmptyString(linkedSaleId, 'linkedSaleId');
+      if (!linkedSaleIdResult.ok) return badRequest(reply, linkedSaleIdResult.message);
+      if (linkedSaleIdResult.value) {
+        const sourceOrderItems = await clientsOrdersRepo.findItemsForOrder(
+          linkedSaleIdResult.value,
+        );
+        const pricingSemanticsVersion = pricingSemanticsVersionForDocument(sourceOrderItems);
+        normalizedItems = normalizedItems.map((item) => ({
+          ...item,
+          pricingSemanticsVersion,
+        }));
+      }
 
       const {
         subtotal: computedSubtotal,
@@ -432,8 +445,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const nextIdResult = optionalNonEmptyString(nextId, 'id');
       if (!nextIdResult.ok) return badRequest(reply, nextIdResult.message);
-      const linkedSaleIdResult = optionalNonEmptyString(linkedSaleId, 'linkedSaleId');
-      if (!linkedSaleIdResult.ok) return badRequest(reply, linkedSaleIdResult.message);
 
       let result: { invoice: invoicesRepo.Invoice; items: invoicesRepo.InvoiceItem[] } | null =
         null;

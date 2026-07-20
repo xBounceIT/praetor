@@ -51,6 +51,7 @@ export const makeSupplierInvoiceHandlers = (deps: SupplierInvoiceHandlersDeps) =
         // pricing uses the displayed numeric value and 'na' lines use the neutral multiplier 1.
         durationMonths: item.durationMonths ?? 1,
         durationUnit: item.durationUnit ?? 'months',
+        pricingSemanticsVersion: item.pricingSemanticsVersion,
       }));
       const totals = items.reduce(
         (acc, item) => {

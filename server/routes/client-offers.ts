@@ -392,10 +392,11 @@ const resolveOfferItemSupplierLinks = async (
   items: NormalizedOfferItem[],
   existingItems: clientOffersRepo.ClientOfferItem[] | null,
   inheritedItemIds: ReadonlySet<string>,
+  inheritedPricingSemanticsVersion: PricingSemanticsVersion = CURRENT_PRICING_SEMANTICS_VERSION,
 ): Promise<NormalizedOfferItem[]> => {
   const pricingSemanticsVersion = existingItems?.length
     ? pricingSemanticsVersionForDocument(existingItems)
-    : CURRENT_PRICING_SEMANTICS_VERSION;
+    : inheritedPricingSemanticsVersion;
   const versionedItems = items.map((item) => ({ ...item, pricingSemanticsVersion }));
   const linkedIds = versionedItems
     .map((item) => item.supplierQuoteItemId)
@@ -462,17 +463,28 @@ const resolveOfferItemSupplierLinks = async (
   return resolvedItems.map(withCalculatedClientLineMol);
 };
 
-// The linked quote's sourced supplier item ids (the conversion-inheritance exemption above).
-const linkedQuoteSourcedItemIds = async (
+// A promotion inherits both the supplier-link exemption and the quote's pricing contract.
+const linkedQuoteContext = async (
   linkedQuoteId: string | null | undefined,
-): Promise<ReadonlySet<string>> => {
-  if (!linkedQuoteId) return new Set<string>();
+): Promise<{
+  sourcedItemIds: ReadonlySet<string>;
+  pricingSemanticsVersion: PricingSemanticsVersion;
+}> => {
+  if (!linkedQuoteId) {
+    return {
+      sourcedItemIds: new Set<string>(),
+      pricingSemanticsVersion: CURRENT_PRICING_SEMANTICS_VERSION,
+    };
+  }
   const snapshots = await clientQuotesRepo.findItemSnapshotsForQuote(linkedQuoteId);
-  return new Set(
-    snapshots
-      .map((snapshot) => snapshot.supplierQuoteItemId)
-      .filter((id): id is string => id != null),
-  );
+  return {
+    sourcedItemIds: new Set(
+      snapshots
+        .map((snapshot) => snapshot.supplierQuoteItemId)
+        .filter((id): id is string => id != null),
+    ),
+    pricingSemanticsVersion: pricingSemanticsVersionForDocument(snapshots),
+  };
 };
 
 const buildItemsForInsert = (items: NormalizedOfferItem[]): clientOffersRepo.NewClientOfferItem[] =>
@@ -506,10 +518,7 @@ const buildOrderItemsFromOfferItems = (
     quantity: item.quantity,
     unitPrice: item.unitPrice,
     productCost: item.productCost,
-    productMolPercentage: calculateClientLineMol({
-      ...item,
-      pricingSemanticsVersion: CURRENT_PRICING_SEMANTICS_VERSION,
-    }),
+    productMolPercentage: calculateClientLineMol(item),
     discount: item.discount,
     note: item.note,
     supplierQuoteId: item.supplierQuoteId,
@@ -522,6 +531,7 @@ const buildOrderItemsFromOfferItems = (
     unitType: item.unitType,
     durationMonths: item.durationMonths,
     durationUnit: item.durationUnit,
+    pricingSemanticsVersion: item.pricingSemanticsVersion,
   }));
 
 export default async function (fastify: FastifyInstance, _opts: unknown) {
@@ -742,10 +752,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       // quote legitimately derives offer/accepted by now); any OTHER fresh link must still
       // reference a pickable quote (#812 round 15).
       try {
+        const linkedQuote = await linkedQuoteContext(linkedQuoteIdResult.value);
         normalizedItems = await resolveOfferItemSupplierLinks(
           normalizedItems,
           null,
-          await linkedQuoteSourcedItemIds(linkedQuoteIdResult.value),
+          linkedQuote.sourcedItemIds,
+          linkedQuote.pricingSemanticsVersion,
         );
       } catch (err) {
         return badRequest(reply, (err as Error).message);
@@ -1253,7 +1265,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             existingOfferItems,
             // Re-adding a line the linked quote sources stays allowed (it was inherited via the
             // conversion); only genuinely new picks must be sourceable (#812 round 15).
-            await linkedQuoteSourcedItemIds(existingOffer.linkedQuoteId),
+            (await linkedQuoteContext(existingOffer.linkedQuoteId)).sourcedItemIds,
           );
         } catch (err) {
           return badRequest(reply, (err as Error).message);

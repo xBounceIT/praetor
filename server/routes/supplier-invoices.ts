@@ -14,6 +14,7 @@ import { type DatabaseError, getUniqueViolation } from '../utils/db-errors.ts';
 import { replyDocumentCodeCollision } from '../utils/document-code-replies.ts';
 import { defaultDurationMonthsForUnit } from '../utils/duration-unit.ts';
 import { generatePrefixedId, ITEM_ID_PREFIXES } from '../utils/order-ids.ts';
+import { pricingSemanticsVersionForDocument } from '../utils/pricing-semantics.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { replyError } from '../utils/replyError.ts';
 import {
@@ -426,6 +427,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             };
         const txResult = await withDbTransaction(async (tx): Promise<CreateOutcome> => {
           let lockedSourceOrder: { id: string; linkedQuoteId: string | null } | null = null;
+          let versionedItems = normalizedItems;
           // Lock the linked supplier order so a concurrent supplier-order restore
           // (which gates on "no linked invoice exists") serializes against this insert.
           if (linkedSaleIdResult.value) {
@@ -455,6 +457,15 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               };
             }
             lockedSourceOrder = lockedOrder;
+            const sourceOrderItems = await supplierOrdersRepo.findItemsForOrder(
+              linkedSaleIdResult.value,
+              tx,
+            );
+            const pricingSemanticsVersion = pricingSemanticsVersionForDocument(sourceOrderItems);
+            versionedItems = normalizedItems.map((item) => ({
+              ...item,
+              pricingSemanticsVersion,
+            }));
           }
 
           let invoiceId: string;
@@ -490,7 +501,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           );
           const createdItems = await supplierInvoicesRepo.insertItems(
             invoice.id,
-            normalizedItems,
+            versionedItems,
             tx,
           );
           return { ok: true, invoice, items: createdItems };

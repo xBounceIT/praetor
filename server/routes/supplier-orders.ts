@@ -21,6 +21,7 @@ import { getUniqueViolation } from '../utils/db-errors.ts';
 import { replyDocumentCodeCollision } from '../utils/document-code-replies.ts';
 import { type DurationUnit, defaultDurationMonthsForUnit } from '../utils/duration-unit.ts';
 import { generatePrefixedId, ITEM_ID_PREFIXES } from '../utils/order-ids.ts';
+import { pricingSemanticsVersionForDocument } from '../utils/pricing-semantics.ts';
 import { effectiveSupplierQuoteStatusFromDate } from '../utils/quote-status.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { replyError } from '../utils/replyError.ts';
@@ -483,6 +484,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             };
           }
 
+          const sourceQuoteItems = await supplierQuotesRepo.findItemsForQuote(
+            linkedQuoteIdResult.value,
+            tx,
+          );
+          const pricingSemanticsVersion = pricingSemanticsVersionForDocument(sourceQuoteItems);
+          const versionedItems = normalizedItems.map((item) => ({
+            ...item,
+            pricingSemanticsVersion,
+          }));
+
           let orderId: string;
           if (nextIdResult.value) {
             await reserveDocumentCodeCounterFromCode('supplier_order', nextIdResult.value, tx);
@@ -510,7 +521,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             },
             tx,
           );
-          const createdItems = await supplierOrdersRepo.insertItems(order.id, normalizedItems, tx);
+          const createdItems = await supplierOrdersRepo.insertItems(order.id, versionedItems, tx);
           return { ok: true, order, items: createdItems };
         });
       } catch (error) {

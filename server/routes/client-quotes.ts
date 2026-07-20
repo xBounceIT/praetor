@@ -827,10 +827,7 @@ const buildOfferItemsFromQuoteItems = (
     quantity: item.quantity,
     unitPrice: item.unitPrice,
     productCost: item.productCost,
-    productMolPercentage: calculateClientLineMol({
-      ...item,
-      pricingSemanticsVersion: CURRENT_PRICING_SEMANTICS_VERSION,
-    }),
+    productMolPercentage: calculateClientLineMol(item),
     discount: item.discount,
     note: item.note,
     supplierQuoteId: item.supplierQuoteId,
@@ -840,6 +837,7 @@ const buildOfferItemsFromQuoteItems = (
     unitType: item.unitType,
     durationMonths: item.durationMonths,
     durationUnit: item.durationUnit,
+    pricingSemanticsVersion: item.pricingSemanticsVersion,
   }));
 
 type PreparedCandidate = {

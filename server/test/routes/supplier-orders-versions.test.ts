@@ -55,6 +55,7 @@ const suppliersExistsByIdMock = mock();
 const productsGetSnapshotsMock = mock();
 const sqFindByIdMock = mock();
 const sqLockEffectiveStatusByIdMock = mock();
+const sqFindItemsForQuoteMock = mock();
 
 const sovListForOrderMock = mock();
 const sovFindByIdMock = mock();
@@ -118,6 +119,7 @@ beforeAll(async () => {
     ...supplierQuotesRepoSnap,
     findById: sqFindByIdMock,
     lockEffectiveStatusById: sqLockEffectiveStatusByIdMock,
+    findItemsForQuote: sqFindItemsForQuoteMock,
   }));
   mock.module('../../services/documentCodes.ts', () => ({
     ...documentCodesSnap,
@@ -234,6 +236,7 @@ const allMocks = [
   productsGetSnapshotsMock,
   sqFindByIdMock,
   sqLockEffectiveStatusByIdMock,
+  sqFindItemsForQuoteMock,
   sovListForOrderMock,
   sovFindByIdMock,
   sovInsertMock,
@@ -252,6 +255,7 @@ beforeEach(async () => {
   getRolePermissionsMock.mockResolvedValue(FULL_PERMS);
   resetWithDbTransactionMock();
   logAuditMock.mockImplementation(async () => undefined);
+  sqFindItemsForQuoteMock.mockResolvedValue([]);
   sovBuildSnapshotMock.mockImplementation((order, items) => ({
     schemaVersion: 1,
     order,
@@ -389,6 +393,7 @@ describe('POST /api/accounting/supplier-orders', () => {
   });
 
   test('201 auto-generates an order id when omitted', async () => {
+    sqFindItemsForQuoteMock.mockResolvedValue([{ pricingSemanticsVersion: 1 }]);
     const res = await testApp.inject({
       method: 'POST',
       url: '/api/accounting/supplier-orders',
@@ -404,6 +409,9 @@ describe('POST /api/accounting/supplier-orders', () => {
     expect(soCreateMock).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'SORD-2999-0001' }),
       expect.anything(),
+    );
+    expect(soInsertItemsMock.mock.calls[0][1][0]).toEqual(
+      expect.objectContaining({ pricingSemanticsVersion: 1 }),
     );
     expect(JSON.parse(res.body).id).toBe('SORD-2999-0001');
   });
