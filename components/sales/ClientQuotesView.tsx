@@ -99,6 +99,7 @@ import {
 } from '../../utils/quoteStatus';
 import {
   buildSupplierQuoteItemIndex,
+  getDocumentPricingSemanticsVersion,
   isSupplierLineLocked,
   isSupplierLineStale,
   pickedSupplierLineFields,
@@ -1223,6 +1224,9 @@ const useClientQuotesController = ({
       unitType: 'hours',
       unitPrice: Number.NaN,
       productMolPercentage: null,
+      pricingSemanticsVersion: editingQuote
+        ? getDocumentPricingSemanticsVersion(formData.items)
+        : undefined,
       // Supplier quote fields
       supplierQuoteId: null,
       supplierQuoteItemId: null,

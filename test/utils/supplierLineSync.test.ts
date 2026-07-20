@@ -1,7 +1,9 @@
 import { describe, expect, test } from 'bun:test';
 import type { SupplierQuote } from '../../types';
+import { getEffectiveDurationMultiplier } from '../../utils/numbers';
 import {
   buildSupplierQuoteItemIndex,
+  getDocumentPricingSemanticsVersion,
   isSupplierLineLocked,
   isSupplierLineStale,
   pickedSupplierLineFields,
@@ -42,6 +44,18 @@ describe('buildSupplierQuoteItemIndex', () => {
     expect(index.get('sqi-1')?.quote.id).toBe('SQ-1');
     expect(index.get('sqi-1')?.item.unitPrice).toBe(80);
     expect(index.get('missing')).toBeUndefined();
+  });
+});
+
+describe('getDocumentPricingSemanticsVersion', () => {
+  test('returns the oldest stored line contract and leaves an empty document unset', () => {
+    expect(
+      getDocumentPricingSemanticsVersion([
+        { pricingSemanticsVersion: 2 },
+        { pricingSemanticsVersion: 1 },
+      ]),
+    ).toBe(1);
+    expect(getDocumentPricingSemanticsVersion([])).toBeUndefined();
   });
 });
 
@@ -181,14 +195,38 @@ describe('refreshedSupplierLineFields', () => {
 });
 
 describe('pickedSupplierLineFields', () => {
-  test('inherits the supplier duration value and display unit on initial selection', () => {
+  test('inherits the supplier duration and pricing contract on initial selection', () => {
     const fields = pickedSupplierLineFields(
       { productMolPercentage: 20, unitType: 'hours' },
-      supplierItem({ durationMonths: 24, durationUnit: 'years' }),
+      supplierItem({
+        durationMonths: 24,
+        durationUnit: 'years',
+        pricingSemanticsVersion: 1,
+      }),
     );
 
     expect(fields.durationMonths).toBe(24);
     expect(fields.durationUnit).toBe('years');
+    expect(fields.pricingSemanticsVersion).toBe(1);
+    expect(getEffectiveDurationMultiplier(fields)).toBe(24);
     expect(fields.unitPrice).toBe(100);
+  });
+
+  test('keeps a destination document contract when picking a legacy supplier line', () => {
+    const fields = pickedSupplierLineFields(
+      {
+        productMolPercentage: 20,
+        unitType: 'hours',
+        pricingSemanticsVersion: 2,
+      },
+      supplierItem({
+        durationMonths: 12,
+        durationUnit: 'years',
+        pricingSemanticsVersion: 1,
+      }),
+    );
+
+    expect(fields.pricingSemanticsVersion).toBe(2);
+    expect(getEffectiveDurationMultiplier(fields)).toBe(1);
   });
 });

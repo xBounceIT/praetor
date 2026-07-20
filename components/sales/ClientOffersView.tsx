@@ -71,6 +71,7 @@ import {
 import { effectiveQuoteStatus } from '../../utils/quoteStatus';
 import {
   buildSupplierQuoteItemIndex,
+  getDocumentPricingSemanticsVersion,
   isSupplierLineLocked,
   isSupplierLineStale,
   pickedSupplierLineFields,
@@ -1109,6 +1110,10 @@ const useClientOffersController = ({
       unitType: 'hours',
       unitPrice: Number.NaN,
       productMolPercentage: null,
+      pricingSemanticsVersion:
+        editingOffer || formData.linkedQuoteId
+          ? getDocumentPricingSemanticsVersion(formData.items)
+          : undefined,
       supplierQuoteId: null,
       supplierQuoteItemId: null,
       supplierQuoteSupplierName: null,

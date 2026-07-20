@@ -1,4 +1,4 @@
-import type { SupplierQuote, SupplierUnitType } from '../types';
+import type { PricingSemanticsVersion, SupplierQuote, SupplierUnitType } from '../types';
 import {
   calcProductMolPercentage,
   calcProductSalePrice,
@@ -33,6 +33,15 @@ export const sourcesSupplierQuote = (doc?: SupplierSourcingDocument | null): boo
     candidate.items?.some((item) => item.supplierQuoteItemId != null),
   ) ??
     false);
+
+export const getDocumentPricingSemanticsVersion = (
+  items: ReadonlyArray<{ pricingSemanticsVersion?: PricingSemanticsVersion }> | undefined,
+): PricingSemanticsVersion | undefined =>
+  items?.reduce<PricingSemanticsVersion | undefined>((oldest, item) => {
+    const version = item.pricingSemanticsVersion;
+    if (version === undefined) return oldest;
+    return oldest === undefined || version < oldest ? version : oldest;
+  }, undefined);
 
 // item id → its CURRENT supplier quote + item, across ALL supplier quotes (not just the
 // sourceable ones), so order-lock and staleness resolve even for a line whose quote has since
@@ -126,7 +135,11 @@ export const refreshedSupplierLineFields = (
 // while duration is only inherited when the supplier item is selected and can then be customized
 // independently on the client document.
 export const pickedSupplierLineFields = (
-  line: { productMolPercentage?: number | string | null; unitType?: SupplierUnitType },
+  line: {
+    productMolPercentage?: number | string | null;
+    unitType?: SupplierUnitType;
+    pricingSemanticsVersion?: PricingSemanticsVersion;
+  },
   source: SupplierQuote['items'][number],
 ) => {
   const mol = line.productMolPercentage ? Number(line.productMolPercentage) : 0;
@@ -139,5 +152,6 @@ export const pickedSupplierLineFields = (
     unitPrice: calcProductSalePrice(source.unitPrice, mol),
     durationMonths: getEffectiveDurationMonths(source),
     durationUnit: normalizeDurationUnit(source.durationUnit),
+    pricingSemanticsVersion: line.pricingSemanticsVersion ?? source.pricingSemanticsVersion,
   };
 };
