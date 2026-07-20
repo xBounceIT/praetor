@@ -32,6 +32,7 @@ import type {
   ProjectRuleNotifyRecipientType,
   ProjectRuleRecipientOptions,
 } from '../../types';
+import { hasPermission } from '../../utils/permissions';
 import SelectControl from '../shared/SelectControl';
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
 import {
@@ -155,7 +156,10 @@ const createActionRow = (
   };
 };
 
-const actionRowsForRule = (rule: ProjectRule | null | undefined): ProjectRuleFormActionRow[] => {
+const actionRowsForRule = (
+  rule: ProjectRule | null | undefined,
+  hasHiddenWebhookAction: boolean,
+): ProjectRuleFormActionRow[] => {
   const config = rule?.actionConfig;
   const rows: ProjectRuleFormActionRow[] = [];
 
@@ -207,8 +211,21 @@ const actionRowsForRule = (rule: ProjectRule | null | undefined): ProjectRuleFor
     rows.push(createActionRow({ type: 'webhook', webhookId }));
   }
 
-  return rows.length > 0 ? rows : [createActionRow()];
+  return rows.length > 0 || hasHiddenWebhookAction ? rows : [createActionRow()];
 };
+
+const hasRedactedWebhookOnlyAction = (
+  rule: ProjectRule | null | undefined,
+  permissions: string[],
+) =>
+  Boolean(
+    rule?.actionType === 'webhook' &&
+      !hasPermission(permissions, 'administration.webhooks.view') &&
+      rule.actionConfig.actions.length === 0 &&
+      rule.actionConfig.recipientUserIds.length === 0 &&
+      rule.actionConfig.recipientRoleIds.length === 0 &&
+      rule.actionConfig.webhookIds.length === 0,
+  );
 
 const buildActionConfigFromRows = (
   actions: ProjectRuleFormActionRow[],
@@ -277,11 +294,12 @@ const enumValueLabelKey = (field: string, value: string) => {
 const createProjectRuleFormState = (
   rule: ProjectRule | null | undefined,
   initialField: string,
+  hasHiddenWebhookAction: boolean,
 ): ProjectRuleFormState => ({
   name: rule?.name ?? '',
   conditionLogic: rule?.conditionLogic ?? 'and',
   conditions: conditionsForRule(rule, initialField),
-  actions: actionRowsForRule(rule),
+  actions: actionRowsForRule(rule, hasHiddenWebhookAction),
   isEnabled: rule?.isEnabled ?? true,
   errors: {},
   submitting: false,
@@ -864,9 +882,10 @@ const ProjectRuleFormModalSession: React.FC<ProjectRuleFormModalSessionProps> = 
   initialField,
 }) => {
   const { t } = useTranslation(['projects', 'common']);
+  const hasHiddenWebhookAction = hasRedactedWebhookOnlyAction(rule, permissions);
   const availableFields = useMemo(() => getAvailableProjectRuleFields(permissions), [permissions]);
   const [formState, dispatch] = useReducer(projectRuleFormReducer, undefined, () =>
-    createProjectRuleFormState(rule, initialField),
+    createProjectRuleFormState(rule, initialField, hasHiddenWebhookAction),
   );
   const { name, conditionLogic, conditions, actions, isEnabled, errors, submitting } = formState;
 
@@ -956,7 +975,7 @@ const ProjectRuleFormModalSession: React.FC<ProjectRuleFormModalSessionProps> = 
         nextErrors[`value-${index}`] = t('projects:detail.rules.errors.valueInvalid');
       }
     });
-    if (actions.length === 0) {
+    if (actions.length === 0 && !hasHiddenWebhookAction) {
       nextErrors.actions = t('projects:detail.rules.errors.actionsRequired');
     }
     actions.forEach((action, index) => {
@@ -990,7 +1009,8 @@ const ProjectRuleFormModalSession: React.FC<ProjectRuleFormModalSessionProps> = 
       const firstCondition = normalizedConditions[0] ?? primary;
       if (!firstCondition) return;
       const actionConfig = buildActionConfigFromRows(actions);
-      const actionType = actionConfig.actions[0]?.type ?? 'notify';
+      const actionType =
+        actionConfig.actions[0]?.type ?? (hasHiddenWebhookAction ? 'webhook' : 'notify');
       await onSubmit({
         name: name.trim(),
         field: firstCondition.field,

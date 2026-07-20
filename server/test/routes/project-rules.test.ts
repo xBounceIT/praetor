@@ -692,6 +692,59 @@ describe('project rule routes', () => {
     );
   });
 
+  test('PUT preserves a hidden webhook-only action when visible actions are empty', async () => {
+    currentPermissions = ['projects.rules.update', 'reports.cost.view'];
+    const existingRule = {
+      ...SAMPLE_RULE,
+      actionType: 'webhook' as const,
+      actionConfig: {
+        recipientUserIds: [],
+        recipientRoleIds: [],
+        webhookIds: ['webhook-1'],
+        actions: [{ type: 'webhook' as const, webhookId: 'webhook-1' }],
+      },
+    };
+    findRuleMock.mockResolvedValue(existingRule);
+    updateRuleMock.mockImplementation(async (_projectId, _ruleId, patch) => ({
+      ...existingRule,
+      ...patch,
+    }));
+
+    const res = await app.inject({
+      method: 'PUT',
+      url: '/api/projects/p1/rules/pr-1',
+      headers: authHeaders(),
+      payload: {
+        name: 'Renamed webhook rule',
+        actionType: 'webhook',
+        actionConfig: {
+          recipientUserIds: [],
+          recipientRoleIds: [],
+          webhookIds: [],
+          actions: [],
+        },
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(updateRuleMock).toHaveBeenCalledWith(
+      'p1',
+      'pr-1',
+      expect.objectContaining({
+        name: 'Renamed webhook rule',
+        actionType: 'webhook',
+        actionConfig: existingRule.actionConfig,
+      }),
+      TX_SENTINEL,
+    );
+    expect(JSON.parse(res.body).actionConfig).toEqual({
+      recipientUserIds: [],
+      recipientRoleIds: [],
+      webhookIds: [],
+      actions: [],
+    });
+  });
+
   test('PUT resets condition state when condition fields change', async () => {
     currentPermissions = ['projects.rules.update'];
     const existingRule = {

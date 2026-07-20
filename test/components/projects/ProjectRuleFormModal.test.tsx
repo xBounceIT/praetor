@@ -259,6 +259,45 @@ describe('<ProjectRuleFormModal />', () => {
     expect(onSubmit).not.toHaveBeenCalled();
   });
 
+  test('submits edits for a redacted webhook-only rule without visible recipients', async () => {
+    const onSubmit = mock(() => Promise.resolve());
+    const redactedWebhookRule: ProjectRule = {
+      ...rule,
+      actionType: 'webhook',
+      actionConfig: { recipientUserIds: [], recipientRoleIds: [], webhookIds: [], actions: [] },
+    };
+
+    render(
+      <ProjectRuleFormModal
+        open
+        onOpenChange={() => {}}
+        rule={redactedWebhookRule}
+        recipients={{ ...recipients, webhooks: [] }}
+        permissions={['projects.rules.update']}
+        onSubmit={onSubmit}
+      />,
+    );
+
+    fireEvent.change(document.getElementById('project-rule-name') as HTMLInputElement, {
+      target: { value: 'Renamed webhook rule' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'common:buttons.save' }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    expect(onSubmit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: 'Renamed webhook rule',
+        actionType: 'webhook',
+        actionConfig: {
+          recipientUserIds: [],
+          recipientRoleIds: [],
+          webhookIds: [],
+          actions: [],
+        },
+      }),
+    );
+  });
+
   test('submits a notification action addressed to a role', async () => {
     const onSubmit = mock(() => Promise.resolve());
     const roleRule: ProjectRule = {

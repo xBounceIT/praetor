@@ -233,6 +233,7 @@ const canAccessProject = makeAccessChecker(
 
 const parseActionConfig = (
   value: unknown,
+  { allowEmpty = false }: { allowEmpty?: boolean } = {},
 ):
   | { ok: true; value: projectRulesRepo.ProjectRule['actionConfig'] }
   | { ok: false; message: string } => {
@@ -322,7 +323,7 @@ const parseActionConfig = (
     webhookIds: webhookIds.value,
     actions,
   });
-  if (normalized.actions.length === 0) {
+  if (!allowEmpty && normalized.actions.length === 0) {
     return { ok: false, message: 'At least one rule action is required' };
   }
   return { ok: true, value: normalized };
@@ -511,7 +512,7 @@ const parseUpdateBody = (
     patch.actionType = result.value;
   }
   if (Object.hasOwn(body, 'actionConfig')) {
-    const result = parseActionConfig(body.actionConfig);
+    const result = parseActionConfig(body.actionConfig, { allowEmpty: true });
     if (!result.ok) return result;
     patch.actionConfig = result.value;
     if (!Object.hasOwn(body, 'actionType')) {
