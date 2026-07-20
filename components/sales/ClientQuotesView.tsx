@@ -784,18 +784,11 @@ const useClientQuotesController = ({
     );
   };
 
-  const openPromotionDialog = (quote: Quote) => {
-    const eligible = (quote.candidates || []).find(isCandidatePromotable);
-    // react-doctor-disable-next-line react-doctor/no-impure-state-updater -- Dialog event handler queues independent state transitions.
-    setPromotionQuote(quote);
-    setPromotionCandidateId(eligible?.id ?? null);
-  };
-
-  const confirmCandidatePromotion = async () => {
-    if (!promotionQuote || !promotionCandidateId || !onPromoteCandidate || isPromoting) return;
+  const promoteCandidate = async (quoteId: string, candidateId: string) => {
+    if (!onPromoteCandidate || isPromoting) return;
     setIsPromoting(true);
     try {
-      await onPromoteCandidate(promotionQuote.id, promotionCandidateId);
+      await onPromoteCandidate(quoteId, candidateId);
       setPromotionQuote(null);
       setPromotionCandidateId(null);
     } catch (error) {
@@ -803,6 +796,25 @@ const useClientQuotesController = ({
     } finally {
       setIsPromoting(false);
     }
+  };
+
+  const openPromotionDialog = (quote: Quote) => {
+    const activeCandidates = (quote.candidates || []).filter(
+      (candidate) => candidate.state === 'active',
+    );
+    const eligible = activeCandidates.find(isCandidatePromotable);
+    if (activeCandidates.length === 1 && eligible) {
+      void promoteCandidate(quote.id, eligible.id);
+      return;
+    }
+    // react-doctor-disable-next-line react-doctor/no-impure-state-updater -- Dialog event handler queues independent state transitions.
+    setPromotionQuote(quote);
+    setPromotionCandidateId(eligible?.id ?? null);
+  };
+
+  const confirmCandidatePromotion = async () => {
+    if (!promotionQuote || !promotionCandidateId) return;
+    await promoteCandidate(promotionQuote.id, promotionCandidateId);
   };
 
   const rollbackCandidatePromotion = async (quoteId: string) => {
@@ -1863,13 +1875,16 @@ const useClientQuotesController = ({
         // A linked, expired supplier quote blocks progression to sent/offer/accepted (#779).
         const supplierExpired = Boolean(row.linkedSupplierQuoteExpired);
         const sendDisabled = history || supplierExpired;
+        const denyDisabled = isPromoting || history;
         const hasCandidateMetadata = Boolean(row.candidates?.length);
         const hasPromotableCandidate = row.candidates?.some(isCandidatePromotable);
         // Sending presents every active variant, so one blocked supplier source blocks the family.
         // Promotion chooses exactly one winner, so the comparison must remain reachable whenever
         // at least one candidate is eligible.
         const promotionDisabled =
-          history || (hasCandidateMetadata ? !hasPromotableCandidate : supplierExpired);
+          isPromoting ||
+          history ||
+          (hasCandidateMetadata ? !hasPromotableCandidate : supplierExpired);
         const progressBlockedTitle = t('sales:clientQuotes.linkedSupplierQuoteExpiredBlocks', {
           defaultValue:
             'The linked supplier quote has expired — extend it before progressing this quote.',
@@ -1890,7 +1905,8 @@ const useClientQuotesController = ({
         // Back-to-draft is rejected by the server from accepted/denied/expired, and history rows are
         // immutable — so a sent/offer row whose EFFECTIVE status is expired must not show an enabled
         // restore button (it would 409). `history` already folds in the expired check.
-        const restoreDisabled = !canRestore || (history && (!canRollbackDraftOffer || expired));
+        const restoreDisabled =
+          isPromoting || !canRestore || (history && (!canRollbackDraftOffer || expired));
         const restoreTitle = !canRestore
           ? t('sales:clientQuotes.restoreDisabledOfferStatus', {
               defaultValue: 'Restore is only possible when the linked offer is in draft status.',
@@ -2056,12 +2072,12 @@ const useClientQuotesController = ({
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
-                        if (history) return;
+                        if (denyDisabled) return;
                         handleStatusUpdate(row.id, { status: 'denied' });
                       }}
-                      disabled={history}
+                      disabled={denyDisabled}
                       aria-label={t('sales:clientQuotes.markAsDenied')}
-                      className={`p-2 rounded-lg transition-all ${history ? 'cursor-not-allowed opacity-50 text-red-600' : 'text-red-600 hover:text-red-600 hover:bg-red-50'}`}
+                      className={`p-2 rounded-lg transition-all ${denyDisabled ? 'cursor-not-allowed opacity-50 text-red-600' : 'text-red-600 hover:text-red-600 hover:bg-red-50'}`}
                     >
                       <i className="fa-solid fa-xmark"></i>
                     </button>

@@ -74,6 +74,7 @@ const allMocks = [
 ];
 
 const ADMIN_PASSWORD_ENV = 'ADMIN_DEFAULT_PASSWORD';
+const SECURE_ADMIN_PASSWORD = 'op-chosen-strong-pw';
 const originalAdminPasswordEnv = process.env[ADMIN_PASSWORD_ENV];
 
 beforeEach(() => {
@@ -89,7 +90,7 @@ beforeEach(() => {
   addUserRoleMock.mockResolvedValue(undefined);
   upsertAdminPasswordWarningMock.mockResolvedValue(undefined);
   deleteAdminPasswordWarningMock.mockResolvedValue(undefined);
-  delete process.env[ADMIN_PASSWORD_ENV];
+  process.env[ADMIN_PASSWORD_ENV] = SECURE_ADMIN_PASSWORD;
 });
 
 afterEach(() => {
@@ -101,6 +102,18 @@ afterEach(() => {
 });
 
 describe('ensureBootstrapAdmin', () => {
+  test('refuses to create the bootstrap admin without an operator-provided password', async () => {
+    delete process.env[ADMIN_PASSWORD_ENV];
+    bcryptHashMock.mockResolvedValue('$2a$password-hash');
+
+    await expect(bootstrapAdmin.ensureBootstrapAdmin()).rejects.toThrow(
+      'ADMIN_DEFAULT_PASSWORD must be set to a non-default value before creating the bootstrap admin.',
+    );
+
+    expect(bcryptHashMock).not.toHaveBeenCalled();
+    expect(createUserMock).not.toHaveBeenCalled();
+  });
+
   test('concurrent startup creates the bootstrap admin only once', async () => {
     let admin: { id: string; passwordHash: string } | null = null;
     let lockTail = Promise.resolve();
@@ -142,20 +155,20 @@ describe('ensureBootstrapAdmin', () => {
     expect(addUserRoleMock).toHaveBeenCalledTimes(2);
   });
 
-  test('creates a fresh admin with the literal default password', async () => {
-    bcryptHashMock.mockResolvedValue('$2a$password-hash');
-    bcryptCompareMock.mockResolvedValue(true);
+  test('creates a fresh admin with the configured password', async () => {
+    bcryptHashMock.mockResolvedValue('$2a$operator-password-hash');
+    bcryptCompareMock.mockResolvedValue(false);
 
     const adminId = await bootstrapAdmin.ensureBootstrapAdmin();
 
     expect(adminId).toBe('u1');
-    expect(bcryptHashMock).toHaveBeenCalledWith('password', 12);
+    expect(bcryptHashMock).toHaveBeenCalledWith(SECURE_ADMIN_PASSWORD, 12);
     expect(createUserMock).toHaveBeenCalledWith(
       {
         id: 'u1',
         name: 'Admin User',
         username: 'admin',
-        passwordHash: '$2a$password-hash',
+        passwordHash: '$2a$operator-password-hash',
         role: 'admin',
         avatarInitials: 'AD',
       },
@@ -164,7 +177,7 @@ describe('ensureBootstrapAdmin', () => {
     const transaction = createUserMock.mock.calls[0][1];
     expect(addUserRoleMock).toHaveBeenCalledWith('u1', 'admin', transaction);
     expect(advisoryLockMock).toHaveBeenCalledTimes(1);
-    expect(upsertAdminPasswordWarningMock).toHaveBeenCalledWith('u1');
+    expect(deleteAdminPasswordWarningMock).toHaveBeenCalledWith('u1');
   });
 
   test('keeps user creation and role assignment in the same transaction', async () => {
@@ -180,6 +193,7 @@ describe('ensureBootstrapAdmin', () => {
   });
 
   test('existing admin with default password gets the warning', async () => {
+    delete process.env[ADMIN_PASSWORD_ENV];
     findLoginUserByExactUsernameMock.mockResolvedValue({
       id: 'u1',
       passwordHash: '$2a$existing',
@@ -217,13 +231,13 @@ describe('ensureBootstrapAdmin', () => {
   });
 
   test('fresh admin uses ADMIN_DEFAULT_PASSWORD when set', async () => {
-    process.env[ADMIN_PASSWORD_ENV] = 'op-chosen-strong-pw';
+    process.env[ADMIN_PASSWORD_ENV] = 'another-op-chosen-strong-pw';
     bcryptHashMock.mockResolvedValue('$2a$op-hash');
     bcryptCompareMock.mockResolvedValue(false);
 
     await bootstrapAdmin.ensureBootstrapAdmin();
 
-    expect(bcryptHashMock).toHaveBeenCalledWith('op-chosen-strong-pw', 12);
+    expect(bcryptHashMock).toHaveBeenCalledWith('another-op-chosen-strong-pw', 12);
     expect(bcryptHashMock).not.toHaveBeenCalledWith('password', 12);
     expect(createUserMock).toHaveBeenCalledWith(
       expect.objectContaining({ passwordHash: '$2a$op-hash' }),
@@ -234,14 +248,43 @@ describe('ensureBootstrapAdmin', () => {
     expect(deleteAdminPasswordWarningMock).toHaveBeenCalledWith('u1');
   });
 
-  test('fresh admin falls back to literal default when env var is whitespace', async () => {
+  test('refuses to create the bootstrap admin when the configured password is whitespace', async () => {
     process.env[ADMIN_PASSWORD_ENV] = '   ';
-    bcryptHashMock.mockResolvedValue('$2a$password-hash');
-    bcryptCompareMock.mockResolvedValue(true);
 
-    await bootstrapAdmin.ensureBootstrapAdmin();
+    await expect(bootstrapAdmin.ensureBootstrapAdmin()).rejects.toThrow(
+      'ADMIN_DEFAULT_PASSWORD must be set to a non-default value before creating the bootstrap admin.',
+    );
 
-    expect(bcryptHashMock).toHaveBeenCalledWith('password', 12);
+    expect(bcryptHashMock).not.toHaveBeenCalled();
+    expect(createUserMock).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    'password',
+    'change-me-strong-admin-password',
+  ])('refuses to create the bootstrap admin with the known password %s', async (knownPassword) => {
+    process.env[ADMIN_PASSWORD_ENV] = knownPassword;
+
+    await expect(bootstrapAdmin.ensureBootstrapAdmin()).rejects.toThrow(
+      'ADMIN_DEFAULT_PASSWORD must be set to a non-default value before creating the bootstrap admin.',
+    );
+
+    expect(bcryptHashMock).not.toHaveBeenCalled();
+    expect(createUserMock).not.toHaveBeenCalled();
+  });
+
+  test('does not require ADMIN_DEFAULT_PASSWORD when the bootstrap admin already exists', async () => {
+    delete process.env[ADMIN_PASSWORD_ENV];
+    findLoginUserByExactUsernameMock.mockResolvedValue({
+      id: 'u1',
+      passwordHash: '$2a$changed',
+    });
+    bcryptCompareMock.mockResolvedValue(false);
+
+    await expect(bootstrapAdmin.ensureBootstrapAdmin()).resolves.toBe('u1');
+
+    expect(bcryptHashMock).not.toHaveBeenCalled();
+    expect(createUserMock).not.toHaveBeenCalled();
   });
 
   test('existing admin still using the .env.example placeholder gets the warning', async () => {

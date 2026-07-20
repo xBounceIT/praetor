@@ -7,9 +7,28 @@ import {
   parseDocumentCodeCounterFromTemplate,
   renderDocumentCode,
   validateDocumentCodeTemplate,
+  validateOptionalDocumentCode,
 } from '../../utils/document-codes.ts';
 
 describe('document code templates', () => {
+  test('validates route-safe optional manual document codes', () => {
+    expect(validateOptionalDocumentCode(undefined, 'id')).toEqual({ ok: true, value: null });
+    expect(validateOptionalDocumentCode('', 'id')).toEqual({ ok: true, value: null });
+    expect(validateOptionalDocumentCode(' OFF_26-0001 ', 'id')).toEqual({
+      ok: true,
+      value: 'OFF_26-0001',
+    });
+
+    for (const code of ['../../clients/victim', 'OFF/26/0001', 'OFF?admin', 'OFF#details']) {
+      expect(validateOptionalDocumentCode(code, 'id')).toEqual(
+        expect.objectContaining({ ok: false }),
+      );
+    }
+    expect(validateOptionalDocumentCode('A'.repeat(101), 'id')).toEqual(
+      expect.objectContaining({ ok: false }),
+    );
+  });
+
   test('renders default module templates with short year and padded sequence', () => {
     expect(
       renderDocumentCode(DOCUMENT_CODE_MODULES.client_quote, {
