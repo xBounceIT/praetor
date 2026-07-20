@@ -101,7 +101,7 @@ describe('migration 0116 supplier-cost precision', () => {
     expect(shouldRebuild(31.5, false)).toBe(false);
   });
 
-  test('upgrades only current two-decimal snapshots and preserves stale or edited history', async () => {
+  test('upgrades current client snapshots but preserves linked orders and edited history', async () => {
     const sql = await readMigration();
 
     for (const table of ['quote_items', 'customer_offer_items', 'sale_items']) {
@@ -111,11 +111,17 @@ describe('migration 0116 supplier-cost precision', () => {
     expect(
       sql.match(/"supplier_quote_unit_price" IS DISTINCT FROM "source"\."unit_price"/g),
     ).toHaveLength(3);
+    const saleItemsBackfill = sql.slice(sql.indexOf('UPDATE "sale_items" AS "target"'));
+    expect(saleItemsBackfill).toContain('"target"."supplier_sale_id" IS NULL');
+    expect(saleItemsBackfill).toContain('"target"."supplier_sale_item_id" IS NULL');
 
     const preciseSource = 32.0875;
-    const upgradeSnapshot = (snapshot: number) =>
-      snapshot === Math.round(preciseSource * 100) / 100 ? preciseSource : snapshot;
+    const upgradeSnapshot = (snapshot: number, linkedSupplierOrder = false) =>
+      !linkedSupplierOrder && snapshot === Math.round(preciseSource * 100) / 100
+        ? preciseSource
+        : snapshot;
     expect(upgradeSnapshot(32.09)).toBe(32.0875);
+    expect(upgradeSnapshot(32.09, true)).toBe(32.09);
     expect(upgradeSnapshot(31.5)).toBe(31.5);
   });
 

@@ -92,9 +92,13 @@ FROM "supplier_quote_items" AS "source"
 WHERE "target"."supplier_quote_item_id" = "source"."id"
   AND "target"."supplier_quote_unit_price" = ROUND("source"."unit_price", 2)
   AND "target"."supplier_quote_unit_price" IS DISTINCT FROM "source"."unit_price";--> statement-breakpoint
+-- A client-order line already materialized into a supplier order is a historical cost snapshot.
+-- Keep it aligned with the frozen supplier order/invoice instead of repricing its margin.
 UPDATE "sale_items" AS "target"
 SET "supplier_quote_unit_price" = "source"."unit_price"
 FROM "supplier_quote_items" AS "source"
 WHERE "target"."supplier_quote_item_id" = "source"."id"
   AND "target"."supplier_quote_unit_price" = ROUND("source"."unit_price", 2)
+  AND "target"."supplier_sale_id" IS NULL
+  AND "target"."supplier_sale_item_id" IS NULL
   AND "target"."supplier_quote_unit_price" IS DISTINCT FROM "source"."unit_price";
