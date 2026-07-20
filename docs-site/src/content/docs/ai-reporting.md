@@ -52,6 +52,8 @@ AI Reporting costruisce per ogni richiesta un dataset aggiornato e limitato ai p
 
 Le sezioni non autorizzate non vengono inserite nel contesto AI. Se la domanda riguarda un'area specifica, Praetor carica soltanto le sezioni pertinenti; una richiesta di panoramica usa tutte quelle disponibili. Gli importi dei documenti con righe a durata includono il moltiplicatore in mesi e, per i preventivi con più candidati, viene analizzato il candidato selezionato oppure il primo candidato attivo.
 
+Nel dataset fornitori, i dettagli dell'anagrafica sono inclusi solo con `crm.suppliers_all.view`. Con un permesso base fornitori o con la sola visualizzazione di documenti fornitore, AI Reporting e lo strumento MCP `praetor_list_suppliers` ricevono soltanto identificativo, nome e stato del fornitore.
+
 ## Visualizzazioni interattive
 
 Puoi chiedere esplicitamente un grafico, ad esempio “mostra l'andamento mensile delle ore per progetto” oppure “confronta i ricavi dei primi cinque clienti”. AI Reporting può rispondere con grafici a barre, linee, area, torta o anello, scegliendo la forma più adatta ai dati disponibili.

@@ -13,6 +13,8 @@ The **Users** page stays focused on application access: username, role, permissi
 
 Permission rows marked **All** grant cross-record access for the same area, such as all clients, suppliers, projects, tasks, time entries, or competence centers. **View** opens the matching view and allows reading every matching record; when selected, **Create**, **Update**, and **Delete** are real write permissions and can operate on records that are not assigned to the user. Non-**All** permissions keep the user's assigned-record scope.
 
+Suppliers have no per-user assignment boundary. The complete directory therefore requires `crm.suppliers_all.view`, while global changes and deletions require `crm.suppliers_all.update` and `crm.suppliers_all.delete`, respectively. Base supplier permissions and supplier quote, order, or invoice view permissions can load only the selector containing the identifier, name, and status; contacts, tax data, address, payment terms, and notes remain hidden.
+
 Deleting a user requires the **Delete** permission for that employee type. Without `administration.user_management_all.view`, the caller may delete only users they manage through a shared competence center; **All** scope permits deletion of any otherwise eligible user except the caller's own account.
 
 Viewing and changing assigned roles follows the same scope: with **User Management - Update** but without `administration.user_management_all.view`, you may act only on users managed through a shared competence center. Role changes also require an interactive browser session, reject personal API tokens, and never allow callers to change their own roles.

@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import {
   authenticateToken,
   requireAnyPermission,
+  requirePermission,
   requireScopedPermission,
 } from '../middleware/auth.ts';
 import * as suppliersRepo from '../repositories/suppliersRepo.ts';
@@ -15,6 +16,7 @@ import {
 import { logAudit } from '../utils/audit.ts';
 import { mapWithConcurrency } from '../utils/concurrency.ts';
 import { getForeignKeyViolation } from '../utils/db-errors.ts';
+import { requestHasPermission } from '../utils/permissions.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { replyError } from '../utils/replyError.ts';
 import {
@@ -277,13 +279,18 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       schema: {
         tags: ['suppliers'],
         summary: 'List suppliers',
+        description:
+          'Returns full supplier records only with crm.suppliers_all.view. Other authorized callers receive only id, name, and isDisabled selector fields.',
         response: {
           200: { type: 'array', items: supplierSchema },
           ...standardRateLimitedErrorResponses,
         },
       },
     },
-    async () => suppliersRepo.listAll(),
+    async (request: FastifyRequest) =>
+      requestHasPermission(request, 'crm.suppliers_all.view')
+        ? suppliersRepo.listAll()
+        : suppliersRepo.listOptions(),
   );
 
   fastify.post(
@@ -542,7 +549,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.put(
     '/:id',
     {
-      onRequest: [requireScopedPermission('crm.suppliers', 'update')],
+      onRequest: [requirePermission('crm.suppliers_all.update')],
       schema: {
         tags: ['suppliers'],
         summary: 'Update supplier',
@@ -721,7 +728,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.delete(
     '/:id',
     {
-      onRequest: [requireScopedPermission('crm.suppliers', 'delete')],
+      onRequest: [requirePermission('crm.suppliers_all.delete')],
       schema: {
         tags: ['suppliers'],
         summary: 'Delete supplier',

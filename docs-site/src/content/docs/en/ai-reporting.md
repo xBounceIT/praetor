@@ -52,6 +52,8 @@ For every request, AI Reporting builds a fresh dataset restricted to the view pe
 
 Unauthorized sections are never added to the AI context. When a question targets one area, Praetor loads only the relevant sections; an overview request uses every available section. Document totals for duration-based lines include the month multiplier and, for quotes with multiple candidates, reporting analyzes the selected candidate or the first active candidate.
 
+Within the supplier dataset, master-data details are included only with `crm.suppliers_all.view`. With a base supplier permission or supplier-document view permission alone, AI Reporting and the `praetor_list_suppliers` MCP tool receive only the supplier identifier, name, and status.
+
 ## Interactive visualizations
 
 You can explicitly request a chart, for example “show the monthly trend of hours by project” or “compare revenue for the top five customers.” AI Reporting can answer with bar, line, area, pie, or donut charts and select the shape that best fits the available data.

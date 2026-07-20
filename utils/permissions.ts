@@ -188,7 +188,7 @@ export const VIEW_PERMISSION_MAP: Record<View, Permission> = {
   'administration/logs': buildPermission('administration.logs', 'view'),
   'administration/webhooks': buildPermission('administration.webhooks', 'view'),
   'crm/clients': buildPermission('crm.clients', 'view'),
-  'crm/suppliers': buildPermission('crm.suppliers', 'view'),
+  'crm/suppliers': buildPermission('crm.suppliers_all', 'view'),
   'sales/client-quotes': buildPermission('sales.client_quotes', 'view'),
   'sales/client-offers': buildPermission('sales.client_offers', 'view'),
   'sales/supplier-quotes': buildPermission('sales.supplier_quotes', 'view'),

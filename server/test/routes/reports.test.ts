@@ -9,6 +9,7 @@ import * as realReportsClientsRepo from '../../repositories/reportsClientsRepo.t
 import * as realReportsHoursRepo from '../../repositories/reportsHoursRepo.ts';
 import * as realReportsRevenueRepo from '../../repositories/reportsRevenueRepo.ts';
 import * as realRolesRepo from '../../repositories/rolesRepo.ts';
+import * as realSuppliersRepo from '../../repositories/suppliersRepo.ts';
 import * as realUsersRepo from '../../repositories/usersRepo.ts';
 import * as realWorkUnitsRepo from '../../repositories/workUnitsRepo.ts';
 import * as realLocalAiEndpoint from '../../utils/local-ai-endpoint.ts';
@@ -32,6 +33,7 @@ const reportsBusinessDocsSnap = { ...realReportsBusinessDocsRepo };
 const reportsClientsSnap = { ...realReportsClientsRepo };
 const reportsHoursSnap = { ...realReportsHoursRepo };
 const reportsRevenueSnap = { ...realReportsRevenueRepo };
+const suppliersRepoSnap = { ...realSuppliersRepo };
 const workUnitsSnap = { ...realWorkUnitsRepo };
 const drizzleSnap = { ...realDrizzle };
 const localAiEndpointSnap = { ...realLocalAiEndpoint };
@@ -76,6 +78,7 @@ const getClientOffersSectionMock = mock(async () => ({}));
 const getSupplierOrdersSectionMock = mock(async () => ({}));
 const getSupplierInvoicesSectionMock = mock(async () => ({}));
 const getResalesSectionMock = mock(async () => ({}));
+const listSupplierOptionsMock = mock(async (): Promise<realSuppliersRepo.SupplierOption[]> => []);
 const listManagedUserIdsMock = mock(async () => [] as string[]);
 
 let originalFetch: typeof fetch;
@@ -159,6 +162,10 @@ beforeAll(async () => {
     getOrdersSection: getOrdersSectionMock,
     getInvoicesSection: getInvoicesSectionMock,
   }));
+  mock.module('../../repositories/suppliersRepo.ts', () => ({
+    ...suppliersRepoSnap,
+    listOptions: listSupplierOptionsMock,
+  }));
   mock.module('../../repositories/workUnitsRepo.ts', () => ({
     ...workUnitsSnap,
     listManagedUserIds: listManagedUserIdsMock,
@@ -193,6 +200,7 @@ afterAll(() => {
   mock.module('../../repositories/reportsClientsRepo.ts', () => reportsClientsSnap);
   mock.module('../../repositories/reportsHoursRepo.ts', () => reportsHoursSnap);
   mock.module('../../repositories/reportsRevenueRepo.ts', () => reportsRevenueSnap);
+  mock.module('../../repositories/suppliersRepo.ts', () => suppliersRepoSnap);
   mock.module('../../repositories/workUnitsRepo.ts', () => workUnitsSnap);
   mock.module('../../db/drizzle.ts', () => drizzleSnap);
   mock.module('../../utils/local-ai-endpoint.ts', () => localAiEndpointSnap);
@@ -265,6 +273,7 @@ const allMocks = [
   getSupplierOrdersSectionMock,
   getSupplierInvoicesSectionMock,
   getResalesSectionMock,
+  listSupplierOptionsMock,
   listManagedUserIdsMock,
   fetchMock,
   withDbTransactionMock,
@@ -281,6 +290,7 @@ beforeEach(async () => {
   getRolePermissionsMock.mockResolvedValue(FULL_PERMS);
   getGeneralSettingsMock.mockResolvedValue(AI_ENABLED_SETTINGS);
   listManagedUserIdsMock.mockResolvedValue([]);
+  listSupplierOptionsMock.mockResolvedValue([]);
 
   testApp = await buildRouteTestApp(routePlugin, '/api/reports');
 });
@@ -443,6 +453,13 @@ describe('buildBusinessDataset modern sections', () => {
     getSupplierOrdersSectionMock.mockResolvedValue({ source: 'supplier-orders' });
     getSupplierInvoicesSectionMock.mockResolvedValue({ source: 'supplier-invoices' });
     getResalesSectionMock.mockResolvedValue({ source: 'resales' });
+    getSuppliersSectionMock.mockResolvedValue({
+      count: 0,
+      activeCount: 0,
+      disabledCount: 0,
+      items: [],
+      activitySummary: [],
+    });
 
     const result = await buildBusinessDataset(
       {
@@ -480,6 +497,60 @@ describe('buildBusinessDataset modern sections', () => {
     expect(getSupplierOrdersSectionMock).toHaveBeenCalledTimes(1);
     expect(getSupplierInvoicesSectionMock).toHaveBeenCalledTimes(1);
     expect(getResalesSectionMock).toHaveBeenCalledTimes(1);
+  });
+
+  test('loads only supplier selector data for document-only viewers', async () => {
+    listSupplierOptionsMock.mockResolvedValue([
+      { id: 's1', name: 'Supplier One', isDisabled: false },
+    ]);
+
+    const result = await buildBusinessDataset(
+      { user: { id: 'u1', permissions: ['accounting.supplier_orders.view'] } } as never,
+      AI_ENABLED_SETTINGS as never,
+      '2026-04-01',
+      '2026-07-31',
+      new Set(['suppliers']),
+    );
+
+    expect(result.dataset.suppliers).toEqual({
+      items: [{ id: 's1', name: 'Supplier One', isDisabled: false }],
+    });
+    expect(listSupplierOptionsMock).toHaveBeenCalledTimes(1);
+    expect(getSuppliersSectionMock).not.toHaveBeenCalled();
+  });
+
+  test('preserves supplier master data for all-scope supplier viewers', async () => {
+    const supplierSection = {
+      count: 1,
+      activeCount: 1,
+      disabledCount: 0,
+      items: [
+        {
+          id: 's1',
+          name: 'Supplier One',
+          supplierCode: 'SUP-1',
+          contactName: 'Jane Doe',
+          email: 'jane@supplier.test',
+          phone: '123',
+          address: '1 Main St',
+          isDisabled: false,
+        },
+      ],
+      activitySummary: [],
+    };
+    getSuppliersSectionMock.mockResolvedValue(supplierSection);
+
+    const result = await buildBusinessDataset(
+      { user: { id: 'u1', permissions: ['crm.suppliers_all.view'] } } as never,
+      AI_ENABLED_SETTINGS as never,
+      '2026-04-01',
+      '2026-07-31',
+      new Set(['suppliers']),
+    );
+
+    expect(result.dataset.suppliers).toEqual(supplierSection);
+    expect(getSuppliersSectionMock).toHaveBeenCalledTimes(1);
+    expect(listSupplierOptionsMock).not.toHaveBeenCalled();
   });
 
   test('does not expose or load modern sections without their view permissions', async () => {

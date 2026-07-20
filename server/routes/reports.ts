@@ -11,6 +11,7 @@ import * as reportsCatalogRepo from '../repositories/reportsCatalogRepo.ts';
 import * as reportsClientsRepo from '../repositories/reportsClientsRepo.ts';
 import * as reportsHoursRepo from '../repositories/reportsHoursRepo.ts';
 import * as reportsRevenueRepo from '../repositories/reportsRevenueRepo.ts';
+import * as suppliersRepo from '../repositories/suppliersRepo.ts';
 import * as workUnitsRepo from '../repositories/workUnitsRepo.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import { normalizeGeminiModelPath } from '../utils/ai-models.ts';
@@ -1912,16 +1913,18 @@ export const buildBusinessDataset = async (
     if (canListSuppliers && shouldIncludeDatasetSection(requestedSections, 'suppliers')) {
       includedSections.add('suppliers');
       addGrantedPermissions(request, supplierListPermissions, permissionsApplied);
-      dataset.suppliers = await reportsCatalogRepo.getSuppliersSection(
-        {
-          fromDate,
-          toDate,
-          canViewSupplierQuotes,
-          canListProducts,
-          itemsLimit: listLimits.items,
-        },
-        datasetDb,
-      );
+      dataset.suppliers = hasPermission(request, 'crm.suppliers_all.view')
+        ? await reportsCatalogRepo.getSuppliersSection(
+            {
+              fromDate,
+              toDate,
+              canViewSupplierQuotes,
+              canListProducts,
+              itemsLimit: listLimits.items,
+            },
+            datasetDb,
+          )
+        : { items: await suppliersRepo.listOptions(datasetDb) };
     }
 
     if (canViewSupplierQuotes && shouldIncludeDatasetSection(requestedSections, 'supplierQuotes')) {

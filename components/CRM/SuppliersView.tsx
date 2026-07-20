@@ -26,7 +26,7 @@ import {
   getDiscountedLineTotal,
   getDocumentDiscountAmount,
 } from '../../utils/numbers';
-import { hasScopedActionPermission } from '../../utils/permissions';
+import { hasPermission, hasScopedActionPermission } from '../../utils/permissions';
 import { toastError } from '../../utils/toast';
 import DeleteConfirmModal from '../shared/DeleteConfirmModal';
 import Modal from '../shared/Modal';
@@ -882,8 +882,8 @@ const SuppliersView: React.FC<SuppliersViewProps> = ({
 }) => {
   const { t } = useTranslation(['crm', 'common']);
   const canCreateSuppliers = hasScopedActionPermission(permissions, 'crm.suppliers', 'create');
-  const canUpdateSuppliers = hasScopedActionPermission(permissions, 'crm.suppliers', 'update');
-  const canDeleteSuppliers = hasScopedActionPermission(permissions, 'crm.suppliers', 'delete');
+  const canUpdateSuppliers = hasPermission(permissions, 'crm.suppliers_all.update');
+  const canDeleteSuppliers = hasPermission(permissions, 'crm.suppliers_all.delete');
   const [state, dispatch] = useReducer(suppliersViewReducer, undefined, createSuppliersViewState);
   const {
     isModalOpen,

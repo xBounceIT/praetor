@@ -34,6 +34,7 @@ const userHasRoleMock = mock();
 const getRolePermissionsMock = mock();
 
 const listAllMock = mock();
+const listOptionsMock = mock();
 const findByIdMock = mock();
 const findExistingCodesMock = mock();
 const createMock = mock();
@@ -61,6 +62,7 @@ beforeAll(async () => {
   mock.module('../../repositories/suppliersRepo.ts', () => ({
     ...suppliersRepoSnap,
     listAll: listAllMock,
+    listOptions: listOptionsMock,
     findById: findByIdMock,
     findExistingCodes: findExistingCodesMock,
     createIfCodeAvailable: createMock,
@@ -127,6 +129,7 @@ const allMocks = [
   userHasRoleMock,
   getRolePermissionsMock,
   listAllMock,
+  listOptionsMock,
   findByIdMock,
   findExistingCodesMock,
   createMock,
@@ -156,7 +159,7 @@ afterEach(async () => {
 const authHeader = () => ({ authorization: `Bearer ${signToken({ userId: 'u1' })}` });
 
 describe('GET /api/suppliers', () => {
-  test('200 returns list', async () => {
+  test('200 returns full supplier details with crm.suppliers_all.view', async () => {
     listAllMock.mockResolvedValue([SAMPLE_SUPPLIER]);
 
     const res = await testApp.inject({
@@ -168,6 +171,32 @@ describe('GET /api/suppliers', () => {
     expect(res.statusCode).toBe(200);
     expect(JSON.parse(res.body)).toEqual([SAMPLE_SUPPLIER]);
     expect(listAllMock).toHaveBeenCalledTimes(1);
+    expect(listOptionsMock).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    'crm.suppliers.view',
+    'sales.supplier_quotes.view',
+    'accounting.supplier_orders.view',
+    'accounting.supplier_invoices.view',
+  ])('200 returns only selector fields with %s', async (permission) => {
+    getRolePermissionsMock.mockResolvedValue([permission]);
+    listOptionsMock.mockResolvedValue([
+      { id: SAMPLE_SUPPLIER.id, name: SAMPLE_SUPPLIER.name, isDisabled: false },
+    ]);
+
+    const res = await testApp.inject({
+      method: 'GET',
+      url: '/api/suppliers',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body)).toEqual([
+      { id: SAMPLE_SUPPLIER.id, name: SAMPLE_SUPPLIER.name, isDisabled: false },
+    ]);
+    expect(listOptionsMock).toHaveBeenCalledTimes(1);
+    expect(listAllMock).not.toHaveBeenCalled();
   });
 
   test('401 missing token', async () => {
@@ -707,6 +736,20 @@ describe('PUT /api/suppliers/:id', () => {
     expect(updateMock).toHaveBeenCalledWith('s-1', expect.objectContaining({ name: 'ACME 2' }));
   });
 
+  test('403 rejects global update with only crm.suppliers.update', async () => {
+    getRolePermissionsMock.mockResolvedValue(['crm.suppliers.update']);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/suppliers/s-1',
+      headers: authHeader(),
+      payload: { name: 'ACME 2' },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(updateMock).not.toHaveBeenCalled();
+  });
+
   test('200 clears optional fields when sent as empty strings', async () => {
     updateMock.mockResolvedValue({
       ...SAMPLE_SUPPLIER,
@@ -989,6 +1032,19 @@ describe('DELETE /api/suppliers/:id', () => {
 
     expect(res.statusCode).toBe(204);
     expect(deleteByIdMock).toHaveBeenCalledWith('s-1');
+  });
+
+  test('403 rejects global delete with only crm.suppliers.delete', async () => {
+    getRolePermissionsMock.mockResolvedValue(['crm.suppliers.delete']);
+
+    const res = await testApp.inject({
+      method: 'DELETE',
+      url: '/api/suppliers/s-1',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(deleteByIdMock).not.toHaveBeenCalled();
   });
 
   test('404 when not found', async () => {

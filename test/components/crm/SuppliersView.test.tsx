@@ -146,6 +146,21 @@ describe('<SuppliersView /> bulk creation actions', () => {
     ).toBeInTheDocument();
   });
 
+  test('does not grant global row updates from base supplier permissions', async () => {
+    const props = renderSuppliersView({
+      permissions: ['crm.suppliers.view', 'crm.suppliers.update', 'crm.suppliers.delete'],
+    });
+
+    await waitFor(() =>
+      expect(screen.getByText('CloudSeat Licensing').closest('tr')).not.toHaveClass(
+        'cursor-pointer',
+      ),
+    );
+    expect(screen.queryByText('crm:suppliers.editSupplier')).not.toBeInTheDocument();
+    expect(props.onUpdateSupplier).not.toHaveBeenCalled();
+    expect(props.onDeleteSupplier).not.toHaveBeenCalled();
+  });
+
   test('hides the split button without create permission', () => {
     renderSuppliersView({ permissions: ['crm.suppliers.view'] });
     expect(
@@ -401,7 +416,7 @@ describe('<SuppliersView /> multiple contacts', () => {
     };
     const props = renderSuppliersView({
       suppliers: [legacySupplier],
-      permissions: ['crm.suppliers.view', 'crm.suppliers.update'],
+      permissions: ['crm.suppliers_all.view', 'crm.suppliers_all.update'],
     });
     const user = userEvent.setup();
 
@@ -476,7 +491,7 @@ describe('<SuppliersView /> multiple contacts', () => {
 
   test('adds and edits a contact while preserving the first contact as primary', async () => {
     const props = renderSuppliersView({
-      permissions: ['crm.suppliers.view', 'crm.suppliers.update'],
+      permissions: ['crm.suppliers_all.view', 'crm.suppliers_all.update'],
     });
     const user = userEvent.setup();
 
@@ -525,7 +540,7 @@ describe('<SuppliersView /> multiple contacts', () => {
 
   test('removes a secondary contact', async () => {
     const props = renderSuppliersView({
-      permissions: ['crm.suppliers.view', 'crm.suppliers.update'],
+      permissions: ['crm.suppliers_all.view', 'crm.suppliers_all.update'],
     });
     const user = userEvent.setup();
 
