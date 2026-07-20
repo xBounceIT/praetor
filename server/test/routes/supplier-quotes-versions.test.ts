@@ -404,6 +404,37 @@ describe('POST /api/sales/supplier-quotes/:id/versions/:versionId/restore', () =
     );
   });
 
+  test('200 preserves a client-authored unit cost from the snapshot', async () => {
+    setupHappyPath();
+    sqvFindByIdMock.mockResolvedValue({
+      ...SAMPLE_VERSION,
+      snapshot: {
+        ...SAMPLE_SNAPSHOT,
+        items: [
+          {
+            ...SAMPLE_ITEM,
+            listPrice: 37.75,
+            discountPercent: 15,
+            unitPrice: 32.09,
+          },
+        ],
+      },
+    });
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/sales/supplier-quotes/sq-1/versions/sqv-1/restore',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    const restoredItems = sqReplaceItemsMock.mock.calls[0]?.[1] as Array<Record<string, unknown>>;
+    expect(restoredItems[0]).toEqual(
+      expect.objectContaining({ listPrice: 37.75, discountPercent: 15, unitPrice: 32.09 }),
+    );
+    expect(restoredItems[0]?.unitPrice).not.toBe(32.0875);
+  });
+
   test('409 when linked order exists', async () => {
     sqFindLinkedOrderIdMock.mockResolvedValue('sord-1');
     sqExistsByIdMock.mockResolvedValue(true);

@@ -33,7 +33,11 @@ import {
 } from '../utils/quote-status.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { replyError } from '../utils/replyError.ts';
-import { deriveSupplierLinePricing, MAX_LINE_AMOUNT } from '../utils/supplier-quote-pricing.ts';
+import {
+  deriveSupplierLinePricing,
+  MAX_LINE_AMOUNT,
+  normalizeSupplierUnitPrice,
+} from '../utils/supplier-quote-pricing.ts';
 import { snapshotSupplierQuotePreState } from '../utils/supplier-quote-version.ts';
 import {
   badRequest,
@@ -1179,10 +1183,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const snapshotItems: supplierQuotesRepo.NewSupplierQuoteItem[] = version.snapshot.items.map(
         ({ quoteId: _q, ...rest }) => {
           // Snapshots taken before list price / discount existed lack those keys, so seed list price
-          // from the net unit price (no discount) to keep the restored Costo unitario identical to
-          // what was saved. Re-derive through the shared helper — mirroring validateAndNormalizeItems
-          // — so every restored row satisfies unitPrice = listPrice × (1 − discount/100). Current
-          // snapshots retain scale-6 cost precision; pre-0116 snapshots are healed during restore.
+          // from the net unit price (no discount). Normalize the pricing inputs through the shared
+          // helper, but keep the snapshotted unit cost authoritative: client-to-supplier sync may
+          // intentionally store a cost that a scale-2 list price cannot reproduce exactly.
           const snapshotUnitPrice = Number(rest.unitPrice ?? 0);
           const pricing = deriveSupplierLinePricing(
             Number(rest.listPrice ?? snapshotUnitPrice),
@@ -1194,7 +1197,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             productId: rest.productId || null,
             listPrice: pricing.listPrice,
             discountPercent: pricing.discountPercent,
-            unitPrice: pricing.unitPrice,
+            unitPrice: normalizeSupplierUnitPrice(snapshotUnitPrice),
             unitType: rest.unitType ?? 'unit',
             note: rest.note ?? null,
             // Snapshots taken before duration existed (issue #776) lack these keys; default to a
