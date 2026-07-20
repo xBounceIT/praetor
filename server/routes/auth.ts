@@ -15,6 +15,7 @@ import * as usersRepo from '../repositories/usersRepo.ts';
 import { standardRateLimitedErrorResponses } from '../schemas/common.ts';
 import { redeemBackupCode } from '../services/backupCodes.ts';
 import {
+  canonicalUsernameMatchesUser,
   type ExternalRoleMapping,
   externalGroupsYieldNoKnownRole,
 } from '../services/external-auth.ts';
@@ -122,6 +123,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       schema: {
         tags: ['auth'],
         summary: 'Login',
+        description:
+          'Authenticates local or LDAP credentials. Existing LDAP users are accepted only when the directory canonical username matches the stored Praetor username.',
         body: loginBodySchema,
         security: [],
         response: {
@@ -188,10 +191,22 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             usernameResult.value,
             passwordResult.value,
           );
-          ldapAuthSuccess = ldapAuthResult.authenticated;
-          ldapGroups = ldapAuthResult.groups;
-          ldapRoleMappings = ldapAuthResult.roleMappings;
+          ldapAuthSuccess =
+            ldapAuthResult.authenticated &&
+            canonicalUsernameMatchesUser(ldapAuthResult.canonicalUsername, user.username);
+          if (ldapAuthResult.authenticated && !ldapAuthSuccess) {
+            fastify.log.warn(
+              {
+                userId: user.id,
+                username: user.username,
+                ldapCanonicalUsername: ldapAuthResult.canonicalUsername,
+              },
+              'LDAP login identity did not match the preselected Praetor user',
+            );
+          }
           if (ldapAuthSuccess) {
+            ldapGroups = ldapAuthResult.groups;
+            ldapRoleMappings = ldapAuthResult.roleMappings;
             const syncedProfile = await syncLdapLoginProfile(user.id, {
               name: ldapAuthResult.displayName,
               email: ldapAuthResult.email,

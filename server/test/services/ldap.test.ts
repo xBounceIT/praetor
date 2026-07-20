@@ -736,6 +736,30 @@ describe('authenticate', () => {
     );
   });
 
+  test('does not treat the typed alias as canonical when LDAP omits canonical attributes', async () => {
+    nextFixture = {
+      bindResponses: [null, null, null],
+      searchResponses: [
+        {
+          entries: [
+            {
+              objectName: 'cn=attacker,dc=test,dc=com',
+              object: { cn: 'Attacker', mail: 'victim' },
+            },
+          ],
+          status: 0,
+        },
+        { entries: [], status: 0 },
+        { entries: [], status: 0 },
+      ],
+    };
+
+    const result = await ldapService.authenticateWithProfile('victim', 'attacker-password');
+
+    expect(result.authenticated).toBe(true);
+    expect(result.canonicalUsername).toBeUndefined();
+  });
+
   test('rejects when any parallel group search fails (strict auth path, #637)', async () => {
     // Auth uses strict findUserGroups so a transient subtree failure surfaces as a 503
     // instead of returning [] and demoting new admins to the default role.

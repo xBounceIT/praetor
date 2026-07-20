@@ -1,10 +1,25 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 import * as realRolesRepo from '../../repositories/rolesRepo.ts';
 import {
+  canonicalUsernameMatchesUser,
   externalGroupsYieldNoKnownRole,
   mapExternalGroupsToMatchedRoleIds,
   mapExternalGroupsToRoleIds,
 } from '../../services/external-auth.ts';
+
+describe('canonicalUsernameMatchesUser', () => {
+  test('matches canonical usernames case-insensitively after trimming', () => {
+    expect(canonicalUsernameMatchesUser('  Alice  ', 'alice')).toBe(true);
+  });
+
+  test('rejects a different canonical LDAP identity', () => {
+    expect(canonicalUsernameMatchesUser('attacker', 'victim')).toBe(false);
+  });
+
+  test('fails closed when LDAP omits the canonical username', () => {
+    expect(canonicalUsernameMatchesUser(undefined, 'alice')).toBe(false);
+  });
+});
 
 describe('mapExternalGroupsToRoleIds', () => {
   test('returns all matching roles in mapping order', () => {

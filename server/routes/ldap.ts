@@ -5,7 +5,7 @@ import * as ldapRepo from '../repositories/ldapRepo.ts';
 import * as rolesRepo from '../repositories/rolesRepo.ts';
 import * as usersRepo from '../repositories/usersRepo.ts';
 import { standardRateLimitedErrorResponses } from '../schemas/common.ts';
-import { DEFAULT_ROLE_ID } from '../services/external-auth.ts';
+import { canonicalUsernameMatchesUser, DEFAULT_ROLE_ID } from '../services/external-auth.ts';
 import { getAuditCounts, logAudit } from '../utils/audit.ts';
 import { MASKED_SECRET } from '../utils/crypto.ts';
 import { validateGroupFilterTemplate, validateUserFilterTemplate } from '../utils/ldap-filter.ts';
@@ -487,8 +487,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       // Lookup order mirrors real login: auth.ts first checks the typed input via
       // `findLoginUserByNormalizedUsername`, then `authenticateAndProvision` falls back to
       // `result.canonicalUsername ?? username` so users typing aliases (UPN / email vs
-      // sAMAccountName) still resolve to their existing LDAP-bound row. Without the
-      // canonical fallback the tester would wrongly report `default` for every alias input.
+      // sAMAccountName) still resolve to their existing LDAP-bound row. A typed existing
+      // LDAP user is only preserved when the directory's canonical identity matches it.
       let roleResolution: LdapRoleResolution = 'none';
       let roleIds: string[] = [];
       if (authenticated) {
@@ -508,11 +508,19 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           roleResolution = 'rejected';
           roleIds = [];
         } else if (existingUser && existingUser.authMethod === 'ldap') {
-          // Bootstrap-only mapping: even if `result.matchedRoleIds` is non-empty, real login
-          // no longer overwrites the stored role for an existing LDAP user. Report the
-          // current role so admins can see what login will actually grant.
-          roleResolution = 'preserved';
-          roleIds = [existingUser.role];
+          if (!canonicalUsernameMatchesUser(result.canonicalUsername, existingUser.username)) {
+            // The bind succeeded for a different (or unverifiable) LDAP identity. Real login
+            // rejects this before issuing a session, so the tester must not report the stored
+            // role as preserved.
+            roleResolution = 'rejected';
+            roleIds = [];
+          } else {
+            // Bootstrap-only mapping: even if `result.matchedRoleIds` is non-empty, real login
+            // no longer overwrites the stored role for an existing LDAP user. Report the
+            // current role so admins can see what login will actually grant.
+            roleResolution = 'preserved';
+            roleIds = [existingUser.role];
+          }
         } else if (result.matchedRoleIds.length > 0) {
           // No existing LDAP-bound row → first-time provisioning would apply the mapping.
           roleResolution = 'matched';

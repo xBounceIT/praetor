@@ -22,6 +22,7 @@
         "tags": [
           "auth"
         ],
+        "description": "Authenticates local or LDAP credentials. Existing LDAP users are accepted only when the directory canonical username matches the stored Praetor username.",
         "requestBody": {
           "required": true,
           "content": {

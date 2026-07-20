@@ -182,10 +182,8 @@ const addGroupEntryAliases = (
   }
 };
 
-const deriveCanonicalUsername = (
-  attributes: Record<string, unknown>,
-  typedUsername: string,
-): string => getFirstAttributeValue(attributes, 'uid', 'sAMAccountName') ?? typedUsername;
+const deriveCanonicalUsername = (attributes: Record<string, unknown>): string | undefined =>
+  getFirstAttributeValue(attributes, 'uid', 'sAMAccountName');
 
 // Display-name fallback for directories that only populate a common name rather than
 // structured given/surname attributes.
@@ -396,7 +394,7 @@ class LDAPService {
         return { authenticated: false, groups: [], matchedRoleIds: [], roleMappings: [] };
       }
       const userDn = userEntry.dn;
-      const canonicalUsername = deriveCanonicalUsername(userEntry.attributes, username);
+      const canonicalUsername = deriveCanonicalUsername(userEntry.attributes);
 
       // Re-bind as the user to verify the supplied password before doing any further
       // (potentially N+1) work. A failure here means wrong credentials — return
@@ -431,7 +429,8 @@ class LDAPService {
       // groupFilter expects e.g. `memberUid={0}` work even when the user typed an alias
       // (email/UPN) that userFilter accepted. throwOnError: a transient subtree error
       // returning [] would silently demote new admins/managers to the default role (#637).
-      const groups = await this.findUserGroups(ldapClient, userDn, [canonicalUsername, username], {
+      const groupUsernames = canonicalUsername ? [canonicalUsername, username] : [username];
+      const groups = await this.findUserGroups(ldapClient, userDn, groupUsernames, {
         throwOnError: true,
       });
 

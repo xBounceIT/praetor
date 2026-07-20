@@ -646,6 +646,7 @@ describe('POST /api/ldap/test', () => {
       userDn: 'uid=alice,ou=people,dc=example,dc=com',
       groups: ['cn=admins,ou=groups,dc=example,dc=com'],
       matchedRoleIds: ['admin'],
+      canonicalUsername: 'alice',
     });
 
     const response = await testLdapAuth({ username: ' alice ', password: 'secret' });
@@ -713,6 +714,7 @@ describe('POST /api/ldap/test', () => {
       userDn: 'uid=alice,ou=people,dc=example,dc=com',
       groups: ['cn=admins,ou=groups,dc=example,dc=com'],
       matchedRoleIds: ['admin'],
+      canonicalUsername: 'alice',
     });
     findLoginUserByNormalizedUsernameMock.mockResolvedValue(LDAP_USER);
 
@@ -732,6 +734,7 @@ describe('POST /api/ldap/test', () => {
       userDn: 'uid=alice,ou=people,dc=example,dc=com',
       groups: ['cn=engineers,ou=groups,dc=example,dc=com'],
       matchedRoleIds: [],
+      canonicalUsername: 'alice',
     });
     findLoginUserByNormalizedUsernameMock.mockResolvedValue(LDAP_USER);
 
@@ -786,6 +789,26 @@ describe('POST /api/ldap/test', () => {
     expect(findLoginUserByNormalizedUsernameMock).toHaveBeenCalledWith('alice');
   });
 
+  test('reports roleResolution=rejected when a typed existing LDAP user differs from the canonical identity', async () => {
+    authenticateWithProfileMock.mockResolvedValue({
+      authenticated: true,
+      userDn: 'uid=attacker,ou=people,dc=example,dc=com',
+      groups: ['cn=admins,ou=groups,dc=example,dc=com'],
+      matchedRoleIds: ['admin'],
+      canonicalUsername: 'attacker',
+    });
+    findLoginUserByNormalizedUsernameMock.mockResolvedValue(LDAP_USER);
+
+    const response = await testLdapAuth({ username: 'alice', password: 'attacker-secret' });
+
+    expect(response.statusCode).toBe(200);
+    expect(JSON.parse(response.body)).toMatchObject({
+      authenticated: true,
+      roleResolution: 'rejected',
+      roleIds: [],
+    });
+  });
+
   // #638: brand-new LDAP users still fall back to DEFAULT_ROLE_ID on real login during
   // first-time provisioning, so the tester must report that for usernames with no local user.
   test('reports roleResolution=default when no group matched and no local user exists', async () => {
@@ -815,6 +838,7 @@ describe('POST /api/ldap/test', () => {
       userDn: 'uid=alice,ou=people,dc=example,dc=com',
       groups: ['cn=engineers,ou=groups,dc=example,dc=com'],
       matchedRoleIds: [],
+      canonicalUsername: 'alice',
     });
     findLoginUserByNormalizedUsernameMock.mockResolvedValue({ ...LDAP_USER, isDisabled: true });
 
@@ -832,6 +856,7 @@ describe('POST /api/ldap/test', () => {
       userDn: 'uid=alice,ou=people,dc=example,dc=com',
       groups: ['cn=engineers,ou=groups,dc=example,dc=com'],
       matchedRoleIds: [],
+      canonicalUsername: 'alice',
     });
     findLoginUserByNormalizedUsernameMock.mockResolvedValue({
       ...LDAP_USER,

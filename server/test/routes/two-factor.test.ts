@@ -8,6 +8,7 @@ import * as realPersonalAccessTokensRepo from '../../repositories/personalAccess
 import * as realRolesRepo from '../../repositories/rolesRepo.ts';
 import * as realUsersRepo from '../../repositories/usersRepo.ts';
 import * as realFirstLogin from '../../services/firstLogin.ts';
+import * as realLdapService from '../../services/ldap.ts';
 import * as realAudit from '../../utils/audit.ts';
 import { encrypt, isEncrypted } from '../../utils/crypto.ts';
 import * as realPermissions from '../../utils/permissions.ts';
@@ -39,6 +40,7 @@ const rolesRepoSnap = { ...realRolesRepo };
 const permissionsSnap = { ...realPermissions };
 const auditSnap = { ...realAudit };
 const firstLoginSnap = { ...realFirstLogin };
+const ldapServiceSnap = { ...(realLdapService as Record<string, unknown>) };
 const bcryptSnap = { ...(realBcrypt as Record<string, unknown>) };
 
 // Auth-middleware deps: the real authenticateToken / requireEnrollOrSession run end-to-end, so we
@@ -71,6 +73,7 @@ const generalSettingsGetMock = mock<
 >(async () => null);
 const logAuditMock = mock(async () => undefined);
 const bcryptCompareMock = mock();
+const ldapAuthenticateWithProfileMock = mock();
 // Personal-access-token auth path: lets tests forge a VALID PAT so authenticateToken populates
 // request.auth.source = 'personalAccessToken' and the session-only guard is what rejects it.
 const findPatByTokenHashMock = mock();
@@ -127,6 +130,9 @@ beforeAll(async () => {
     ...firstLoginSnap,
     recordFirstInteractiveLogin: recordFirstInteractiveLoginMock,
   }));
+  mock.module('../../services/ldap.ts', () => ({
+    default: { authenticateWithProfile: ldapAuthenticateWithProfileMock },
+  }));
   // Override only `compare` (the disable-flow password check we want to control); keep the REAL
   // `hash` so totp.ts `hashBackupCode` still works on the setup/regenerate paths.
   mock.module('bcryptjs', () => ({
@@ -148,6 +154,7 @@ afterAll(() => {
   mock.module('../../utils/permissions.ts', () => permissionsSnap);
   mock.module('../../utils/audit.ts', () => auditSnap);
   mock.module('../../services/firstLogin.ts', () => firstLoginSnap);
+  mock.module('../../services/ldap.ts', () => ldapServiceSnap);
   mock.module('bcryptjs', () => bcryptSnap);
 });
 
@@ -207,6 +214,7 @@ const allMocks = [
   listAvailableRolesForUserMock,
   logAuditMock,
   bcryptCompareMock,
+  ldapAuthenticateWithProfileMock,
   generalSettingsGetMock,
   findPatByTokenHashMock,
   markPatUsedMock,
@@ -239,6 +247,12 @@ beforeEach(async () => {
   revokeUserCredentialsMock.mockResolvedValue(undefined);
   findLoginUserByIdMock.mockResolvedValue(LOGIN_USER);
   bcryptCompareMock.mockResolvedValue(false);
+  ldapAuthenticateWithProfileMock.mockResolvedValue({
+    authenticated: false,
+    groups: [],
+    matchedRoleIds: [],
+    roleMappings: [],
+  });
   generalSettingsGetMock.mockResolvedValue(null);
   // A forged-but-VALID PAT for u1 (tokenVersion matches AUTH_USER), so authenticateToken accepts it
   // and the session-only guard is what rejects the request. Only consulted when a praetor_pat_ token
@@ -457,6 +471,30 @@ describe('POST /api/auth/2fa/setup', () => {
 
     expect(res.statusCode).toBe(400);
     expect(JSON.parse(res.body).errorCode).toBe('totp_setup_reauth_failed');
+    expect(setTotpEnrollmentMock).not.toHaveBeenCalled();
+  });
+
+  test('400 (session, ldap): rejects credentials for a different canonical LDAP identity', async () => {
+    getTotpStateMock.mockResolvedValue(null);
+    findCoreByIdMock.mockResolvedValue(userCore('ldap'));
+    ldapAuthenticateWithProfileMock.mockResolvedValue({
+      authenticated: true,
+      canonicalUsername: 'attacker',
+      groups: [],
+      matchedRoleIds: [],
+      roleMappings: [],
+    });
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/auth/2fa/setup',
+      headers: sessionHeader(),
+      payload: { password: 'attacker-password' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body).errorCode).toBe('totp_setup_reauth_failed');
+    expect(ldapAuthenticateWithProfileMock).toHaveBeenCalledWith('alice', 'attacker-password');
     expect(setTotpEnrollmentMock).not.toHaveBeenCalled();
   });
 
