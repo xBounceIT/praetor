@@ -291,14 +291,17 @@ const buildServer = () => {
     'praetor_list_suppliers',
     {
       title: 'List Suppliers',
-      description: 'List suppliers visible to the authenticated user.',
+      description:
+        'List suppliers visible to the authenticated user. Full details require crm.suppliers_all.view; other authorized callers receive selector fields only.',
       annotations: { readOnlyHint: true },
     },
     async (ctx) => {
       const user = requireUser(ctx);
       const denied = enforceAny(user, SUPPLIER_LIST_PERMISSIONS);
       if (denied) return denied;
-      const suppliers = await suppliersRepo.listAll();
+      const suppliers = hasPermission(user, 'crm.suppliers_all.view')
+        ? await suppliersRepo.listAll()
+        : await suppliersRepo.listOptions();
       return jsonResult({ suppliers });
     },
   );

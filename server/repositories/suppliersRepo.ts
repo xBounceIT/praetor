@@ -26,6 +26,8 @@ export type Supplier = {
   createdAt: number | undefined;
 };
 
+export type SupplierOption = Pick<Supplier, 'id' | 'name' | 'isDisabled'>;
+
 const parseContactsFromDb = (value: unknown): SupplierContact[] => {
   if (!Array.isArray(value)) return [];
   const contacts: SupplierContact[] = [];
@@ -76,6 +78,22 @@ const mapRow = (row: typeof suppliers.$inferSelect): Supplier => {
 export const listAll = async (exec: DbExecutor = db): Promise<Supplier[]> => {
   const rows = await exec.select().from(suppliers).orderBy(suppliers.name);
   return rows.map(mapRow);
+};
+
+export const listOptions = async (
+  exec: DbExecutor = db,
+  limit?: number,
+): Promise<SupplierOption[]> => {
+  const query = exec
+    .select({ id: suppliers.id, name: suppliers.name, isDisabled: suppliers.isDisabled })
+    .from(suppliers)
+    .orderBy(suppliers.name);
+  const rows = limit === undefined ? await query : await query.limit(limit);
+  return rows.map((row) => ({
+    id: row.id,
+    name: row.name,
+    isDisabled: row.isDisabled ?? false,
+  }));
 };
 
 export const findById = async (id: string, exec: DbExecutor = db): Promise<Supplier | null> => {

@@ -44544,6 +44544,7 @@
     "/api/suppliers/": {
       "get": {
         "summary": "List suppliers",
+        "description": "Returns full supplier records only with crm.suppliers_all.view. Other authorized callers receive only id, name, and isDisabled selector fields.",
         "tags": [
           "suppliers"
         ],

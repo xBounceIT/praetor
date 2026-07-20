@@ -48,6 +48,7 @@ const clientsOrdersListAllMock = mock();
 const clientsOrdersListAllItemsMock = mock();
 const invoicesListAllWithItemsMock = mock();
 const suppliersListAllMock = mock();
+const suppliersListOptionsMock = mock();
 const supplierInvoicesListAllMock = mock();
 const supplierInvoicesListAllItemsMock = mock();
 const supplierOrdersListAllMock = mock();
@@ -133,6 +134,7 @@ beforeAll(async () => {
   mock.module('../../repositories/suppliersRepo.ts', () => ({
     ...suppliersRepoSnap,
     listAll: suppliersListAllMock,
+    listOptions: suppliersListOptionsMock,
   }));
   mock.module('../../repositories/supplierInvoicesRepo.ts', () => ({
     ...supplierInvoicesRepoSnap,
@@ -227,6 +229,7 @@ beforeEach(async () => {
     clientsOrdersListAllItemsMock,
     invoicesListAllWithItemsMock,
     suppliersListAllMock,
+    suppliersListOptionsMock,
     supplierInvoicesListAllMock,
     supplierInvoicesListAllItemsMock,
     supplierOrdersListAllMock,
@@ -265,6 +268,7 @@ beforeEach(async () => {
   clientsOrdersListAllItemsMock.mockResolvedValue([]);
   invoicesListAllWithItemsMock.mockResolvedValue([]);
   suppliersListAllMock.mockResolvedValue([]);
+  suppliersListOptionsMock.mockResolvedValue([]);
   supplierInvoicesListAllMock.mockResolvedValue([]);
   supplierInvoicesListAllItemsMock.mockResolvedValue([]);
   supplierOrdersListAllMock.mockResolvedValue([]);
@@ -472,8 +476,8 @@ describe('/api/mcp', () => {
     expect(projectsListForUserMock).not.toHaveBeenCalled();
   });
 
-  test('returns multiple supplier contacts through the supplier list tool', async () => {
-    currentPermissions = ['crm.suppliers.view'];
+  test('returns multiple supplier contacts to all-scope supplier viewers', async () => {
+    currentPermissions = ['crm.suppliers_all.view'];
     suppliersListAllMock.mockResolvedValue([
       {
         id: 's1',
@@ -511,6 +515,30 @@ describe('/api/mcp', () => {
       },
       { fullName: 'Bob Smith', role: 'Support' },
     ]);
+    expect(suppliersListAllMock).toHaveBeenCalledTimes(1);
+    expect(suppliersListOptionsMock).not.toHaveBeenCalled();
+  });
+
+  test('returns only supplier selector fields to document viewers', async () => {
+    currentPermissions = ['accounting.supplier_invoices.view'];
+    suppliersListOptionsMock.mockResolvedValue([
+      { id: 's1', name: 'Supplier One', isDisabled: false },
+    ]);
+
+    const suppliersRes = await rpc({
+      jsonrpc: '2.0',
+      id: 41,
+      method: 'tools/call',
+      params: { name: 'praetor_list_suppliers', arguments: {} },
+    });
+
+    expect(suppliersRes.statusCode).toBe(200);
+    const suppliersBody = parseMcpBody(suppliersRes.body);
+    expect(suppliersBody.result.structuredContent.suppliers).toEqual([
+      { id: 's1', name: 'Supplier One', isDisabled: false },
+    ]);
+    expect(suppliersListOptionsMock).toHaveBeenCalledTimes(1);
+    expect(suppliersListAllMock).not.toHaveBeenCalled();
   });
 
   test('lists permission-scoped quotes, offers, orders, and invoices', async () => {

@@ -111,6 +111,39 @@ describe('listAll', () => {
   });
 });
 
+describe('listOptions', () => {
+  test('selects only selector fields ordered by name', async () => {
+    exec.enqueue({ rows: [['s-1', 'Acme Co', false]] });
+
+    expect(await suppliersRepo.listOptions(testDb)).toEqual([
+      { id: 's-1', name: 'Acme Co', isDisabled: false },
+    ]);
+    expect(exec.calls[0].sql.toLowerCase()).toContain('order by');
+    expect(exec.calls[0].sql).toContain('"id"');
+    expect(exec.calls[0].sql).toContain('"name"');
+    expect(exec.calls[0].sql).toContain('"is_disabled"');
+    expect(exec.calls[0].sql).not.toContain('"vat_number"');
+    expect(exec.calls[0].sql).not.toContain('"contacts"');
+  });
+
+  test('coerces a null disabled flag to false', async () => {
+    exec.enqueue({ rows: [['s-1', 'Acme Co', null]] });
+
+    expect(await suppliersRepo.listOptions(testDb)).toEqual([
+      { id: 's-1', name: 'Acme Co', isDisabled: false },
+    ]);
+  });
+
+  test('applies an optional query limit', async () => {
+    exec.enqueue({ rows: [['s-1', 'Acme Co', false]] });
+
+    await suppliersRepo.listOptions(testDb, 200);
+
+    expect(exec.calls[0].sql.toLowerCase()).toContain('limit');
+    expect(exec.calls[0].params).toContain(200);
+  });
+});
+
 describe('findById', () => {
   test('returns mapped row when found', async () => {
     exec.enqueue({ rows: [makeRow(SUPPLIER_ROW)] });

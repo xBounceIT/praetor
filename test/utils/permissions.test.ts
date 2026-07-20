@@ -249,6 +249,11 @@ describe('hasViewAccess', () => {
     expect(hasViewAccess(['crm.clients_all.update'], 'crm/clients')).toBe(false);
   });
 
+  test('requires all-scope view for the global supplier directory', () => {
+    expect(hasViewAccess(['crm.suppliers.view'], 'crm/suppliers')).toBe(false);
+    expect(hasViewAccess(['crm.suppliers_all.view'], 'crm/suppliers')).toBe(true);
+  });
+
   test('gates the RIL page behind the dedicated RIL view permission', () => {
     expect(hasViewAccess(['timesheets.ril.view'], 'timesheets/ril')).toBe(true);
     expect(hasViewAccess(['timesheets.tracker.view'], 'timesheets/ril')).toBe(false);
