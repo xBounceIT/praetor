@@ -56,6 +56,29 @@ describe('migration 0116 supplier-cost precision', () => {
     expect(Math.round(historicalUnitCost * 150 * 100) / 100).toBe(4813.5);
   });
 
+  test('freezes discounted lines inside historical supplier order snapshots', async () => {
+    const sql = await readMigration();
+
+    expect(sql).toContain('UPDATE "supplier_order_versions"');
+    expect(sql).toContain('jsonb_set(');
+    expect(sql).toContain('jsonb_array_elements("snapshot" -> \'items\') WITH ORDINALITY');
+    expect(sql).toContain("'unitPrice'");
+    expect(sql).toContain("'discount', 0");
+    expect(sql).toContain('ORDER BY ordinality');
+    expect(sql).toContain("WHERE jsonb_typeof(\"snapshot\" -> 'items') = 'array'");
+    expect(sql).toContain("WHERE COALESCE(NULLIF(item ->> 'discount', '')::numeric, 0) <> 0");
+
+    const restoreSnapshotLine = (unitPrice: number, discount: number) =>
+      discount === 0
+        ? { unitPrice, discount }
+        : {
+            unitPrice: Math.round(unitPrice * (1 - discount / 100) * 100) / 100,
+            discount: 0,
+          };
+    expect(restoreSnapshotLine(37.75, 15)).toEqual({ unitPrice: 32.09, discount: 0 });
+    expect(restoreSnapshotLine(32.09, 0)).toEqual({ unitPrice: 32.09, discount: 0 });
+  });
+
   test('preserves manual and client-synced unit costs during the backfill', async () => {
     const sql = await readMigration();
 
