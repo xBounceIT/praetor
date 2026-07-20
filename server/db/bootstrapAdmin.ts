@@ -4,15 +4,14 @@ import * as notificationsRepo from '../repositories/notificationsRepo.ts';
 import * as usersRepo from '../repositories/usersRepo.ts';
 import { createChildLogger } from '../utils/logger.ts';
 import { generatePrefixedId } from '../utils/order-ids.ts';
+import {
+  INSECURE_DEFAULT_ADMIN_PASSWORDS,
+  readRequiredNonDefaultEnv,
+} from '../utils/runtimeConfig.ts';
 import { withDbTransaction } from './drizzle.ts';
 
 export const ADMIN_USERNAME = 'admin';
 export const DEFAULT_ADMIN_USER_ID = 'u1';
-export const DEFAULT_BOOTSTRAP_ADMIN_PASSWORD = 'password';
-const INSECURE_BOOTSTRAP_ADMIN_PASSWORDS = [
-  DEFAULT_BOOTSTRAP_ADMIN_PASSWORD,
-  'change-me-strong-admin-password',
-] as const;
 
 // Dedicated two-key namespace for the transaction-level startup lock. Every replica uses the
 // same keys, so the existence check and possible creation cannot overlap across processes.
@@ -21,14 +20,17 @@ const BOOTSTRAP_ADMIN_LOCK_OBJECT = 1;
 
 const logger = createChildLogger({ module: 'db:bootstrap-admin' });
 
-const resolveBootstrapAdminPassword = (): string => {
-  const fromEnv = process.env.ADMIN_DEFAULT_PASSWORD?.trim();
-  return fromEnv && fromEnv.length > 0 ? fromEnv : DEFAULT_BOOTSTRAP_ADMIN_PASSWORD;
-};
+const resolveBootstrapAdminPassword = (): string =>
+  readRequiredNonDefaultEnv('ADMIN_DEFAULT_PASSWORD', INSECURE_DEFAULT_ADMIN_PASSWORDS, {
+    missing:
+      'ADMIN_DEFAULT_PASSWORD must be set to a non-default value before creating the bootstrap admin.',
+    defaultValue:
+      'ADMIN_DEFAULT_PASSWORD must be set to a non-default value before creating the bootstrap admin.',
+  });
 
 const matchesInsecureBootstrapPassword = async (passwordHash: string): Promise<boolean> => {
   const matches = await Promise.all(
-    INSECURE_BOOTSTRAP_ADMIN_PASSWORDS.map((candidate) => bcrypt.compare(candidate, passwordHash)),
+    INSECURE_DEFAULT_ADMIN_PASSWORDS.map((candidate) => bcrypt.compare(candidate, passwordHash)),
   );
   return matches.some(Boolean);
 };
