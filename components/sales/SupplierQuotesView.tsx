@@ -1487,12 +1487,15 @@ const SupplierQuoteCodeField: React.FC<{ controller: SupplierQuotesController }>
   controller,
 }) => (
   <Field data-invalid={Boolean(controller.errors.id)}>
-    <div className="flex items-center gap-2">
+    <div className="relative w-fit">
       <FieldLabel htmlFor="supplier-quote-code" required={Boolean(controller.editingQuote)}>
         {controller.t('sales:supplierQuotes.quoteCode', { defaultValue: 'Quote Code' })}
       </FieldLabel>
       {controller.editingQuote?.revisionCode && (
-        <Badge variant="secondary" className="shrink-0 font-mono">
+        <Badge
+          variant="secondary"
+          className="absolute top-1/2 left-full ml-2 -translate-y-1/2 font-mono"
+        >
           {controller.editingQuote.revisionCode}
         </Badge>
       )}

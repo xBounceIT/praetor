@@ -1708,12 +1708,15 @@ const ClientOfferCodeField: React.FC<{ controller: ClientOffersController }> = (
 
   return (
     <Field data-invalid={Boolean(errors.id)}>
-      <div className="flex items-center gap-2">
+      <div className="relative w-fit">
         <FieldLabel htmlFor="client-offer-code" required={Boolean(editingOffer)}>
           {t('sales:clientOffers.offerCode', { defaultValue: 'Offer code' })}
         </FieldLabel>
         {editingOffer?.revisionCode && (
-          <Badge variant="secondary" className="shrink-0 font-mono">
+          <Badge
+            variant="secondary"
+            className="absolute top-1/2 left-full ml-2 -translate-y-1/2 font-mono"
+          >
             {editingOffer.revisionCode}
           </Badge>
         )}
