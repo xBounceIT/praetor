@@ -38,9 +38,15 @@ import {
 import { todayLocalDateOnly } from '../utils/date.ts';
 import { getUniqueViolation } from '../utils/db-errors.ts';
 import { replyDocumentCodeCollision } from '../utils/document-code-replies.ts';
+import {
+  DOCUMENT_CODE_MAX_LENGTH,
+  OPTIONAL_DOCUMENT_CODE_VALUE_PATTERN,
+  validateOptionalDocumentCode,
+} from '../utils/document-codes.ts';
 import type { DurationUnit } from '../utils/duration-unit.ts';
 import { normalizeNullableNumber, normalizeNullableString } from '../utils/normalize.ts';
 import { generatePrefixedId, ITEM_ID_PREFIXES } from '../utils/order-ids.ts';
+import { requirePathSegment } from '../utils/path-segments.ts';
 import { ADMIN_ROLE_ID, requestHasPermission, TOP_MANAGER_ROLE_ID } from '../utils/permissions.ts';
 import {
   effectiveQuoteStatusFromDate,
@@ -123,6 +129,20 @@ const idParamSchema = {
   required: ['id'],
 } as const;
 
+const manualOfferCodeCreateSchema = {
+  type: 'string',
+  maxLength: DOCUMENT_CODE_MAX_LENGTH,
+  pattern: OPTIONAL_DOCUMENT_CODE_VALUE_PATTERN,
+  description:
+    'Optional manual offer code. Letters, numbers, underscores, and hyphens only; blank allocates the configured automatic code.',
+} as const;
+
+const manualOfferCodeUpdateSchema = {
+  type: 'string',
+  description:
+    'Offer code. A renamed code must use at most 100 letters, numbers, underscores, or hyphens; an unchanged legacy code remains accepted.',
+} as const;
+
 const offerItemBodySchema = {
   type: 'object',
   properties: {
@@ -159,7 +179,8 @@ const offerCreateBodySchema = {
   type: 'object',
   allOf: [createDocumentDiscountConstraint],
   properties: {
-    id: { type: 'string' },
+    id: manualOfferCodeCreateSchema,
+    description: { type: 'string' },
     linkedQuoteId: { type: 'string' },
     clientId: { type: 'string' },
     clientName: { type: 'string' },
@@ -178,7 +199,8 @@ const offerCreateBodySchema = {
 const offerUpdateBodySchema = {
   type: 'object',
   properties: {
-    id: { type: 'string' },
+    id: manualOfferCodeUpdateSchema,
+    description: { type: ['string', 'null'] },
     clientId: { type: 'string' },
     clientName: { type: 'string' },
     items: { type: 'array', items: offerItemBodySchema },
@@ -581,6 +603,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       const {
         id: nextId,
+        description,
         linkedQuoteId,
         clientId,
         clientName,
@@ -594,6 +617,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         notes,
       } = request.body as {
         id?: unknown;
+        description?: unknown;
         linkedQuoteId: unknown;
         clientId: unknown;
         clientName: unknown;
@@ -607,7 +631,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         notes: unknown;
       };
 
-      const nextIdResult = optionalNonEmptyString(nextId, 'id');
+      const nextIdResult = validateOptionalDocumentCode(nextId, 'id');
       if (!nextIdResult.ok) return badRequest(reply, nextIdResult.message);
       const linkedQuoteIdResult = requireNonEmptyString(linkedQuoteId, 'linkedQuoteId');
       if (!linkedQuoteIdResult.ok) return badRequest(reply, linkedQuoteIdResult.message);
@@ -794,6 +818,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           const offer = await clientOffersRepo.create(
             {
               id: offerId,
+              description: (description as string | null | undefined) ?? null,
               linkedQuoteId: linkedQuoteIdResult.value,
               clientId: clientIdResult.value,
               clientName: clientNameResult.value,
@@ -921,6 +946,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const { id } = request.params as { id: string };
       const {
         id: nextId,
+        description,
         clientId,
         clientName,
         items,
@@ -933,6 +959,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         notes,
       } = request.body as {
         id?: unknown;
+        description?: unknown;
         clientId?: unknown;
         clientName?: unknown;
         items?: OfferItemInput[] | unknown;
@@ -945,7 +972,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         notes?: unknown;
       };
 
-      const idResult = requireNonEmptyString(id, 'id');
+      const idResult = requirePathSegment(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
       const existingOffer = await clientOffersRepo.findExisting(idResult.value);
@@ -1010,6 +1037,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       // in the set: it stays editable on non-draft and expired offers — extending it is the only
       // exit from `expired` — and is locked again only on terminal accepted/denied offers below.
       const hasNonExpirationContentUpdate =
+        description !== undefined ||
         clientId !== undefined ||
         clientName !== undefined ||
         items !== undefined ||
@@ -1085,7 +1113,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       let nextIdValue: string | undefined | null = nextId as string | undefined | null;
       if (nextId !== undefined) {
-        const nextIdResult = optionalNonEmptyString(nextId, 'id');
+        const nextIdResult =
+          typeof nextId === 'string' && nextId.trim() === idResult.value
+            ? ({ ok: true, value: idResult.value } as const)
+            : validateOptionalDocumentCode(nextId, 'id');
         if (!nextIdResult.ok) return badRequest(reply, nextIdResult.message);
         nextIdValue = nextIdResult.value;
         if (nextIdResult.value) {
@@ -1253,6 +1284,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               : await clientOffersRepo.update(
                   renamedOffer?.id ?? idResult.value,
                   {
+                    description: description as string | null | undefined,
                     clientId: (clientIdValue as string | null | undefined) ?? null,
                     clientName: (clientNameValue as string | null | undefined) ?? null,
                     paymentTerms: (paymentTerms as string | null | undefined) ?? null,
@@ -1289,6 +1321,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             }
             createdOrder = await createClientOrderRows(
               {
+                description: offer.description ?? null,
                 linkedQuoteId: offer.linkedQuoteId || null,
                 linkedOfferId: offer.id,
                 clientId: offer.clientId,
@@ -1466,7 +1499,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id } = request.params as { id: string };
-      const idResult = requireNonEmptyString(id, 'id');
+      const idResult = requirePathSegment(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
       const { reason } = (request.body ?? {}) as { reason?: unknown };
@@ -1555,7 +1588,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id } = request.params as { id: string };
-      const idResult = requireNonEmptyString(id, 'id');
+      const idResult = requirePathSegment(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
       const offer = await clientOffersRepo.findExisting(idResult.value);
@@ -1774,7 +1807,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id } = request.params as { id: string };
-      const idResult = requireNonEmptyString(id, 'id');
+      const idResult = requirePathSegment(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
       const [exists, versions] = await Promise.all([
@@ -1813,9 +1846,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id, versionId } = request.params as { id: string; versionId: string };
-      const idResult = requireNonEmptyString(id, 'id');
+      const idResult = requirePathSegment(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
-      const versionIdResult = requireNonEmptyString(versionId, 'versionId');
+      const versionIdResult = requirePathSegment(versionId, 'versionId');
       if (!versionIdResult.ok) return badRequest(reply, versionIdResult.message);
 
       const version = await offerVersionsRepo.findById(idResult.value, versionIdResult.value);
@@ -1849,9 +1882,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id, versionId } = request.params as { id: string; versionId: string };
-      const idResult = requireNonEmptyString(id, 'id');
+      const idResult = requirePathSegment(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
-      const versionIdResult = requireNonEmptyString(versionId, 'versionId');
+      const versionIdResult = requirePathSegment(versionId, 'versionId');
       if (!versionIdResult.ok) return badRequest(reply, versionIdResult.message);
 
       type RestoreOutcome =
@@ -1976,6 +2009,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         const offer = await clientOffersRepo.restoreSnapshotOffer(
           idResult.value,
           {
+            ...(Object.hasOwn(version.snapshot.offer, 'description')
+              ? { description: version.snapshot.offer.description ?? null }
+              : {}),
             clientId: version.snapshot.offer.clientId,
             clientName: version.snapshot.offer.clientName,
             paymentTerms: version.snapshot.offer.paymentTerms ?? 'immediate',

@@ -262,7 +262,7 @@
     "export": "Esporta",
     "exportToCsv": "Esporta in CSV",
     "saveColumnOrder": "Salvare la vista personalizzata?",
-    "saveColumnOrderTip": "Vuoi salvare questo ordine in una nuova vista personalizzata?",
+    "saveColumnOrderTip": "Vuoi salvare questa configurazione delle colonne in una nuova vista personalizzata?",
     "customViews": "Viste personalizzate",
     "addCustomView": "Aggiungi vista",
     "editView": "Modifica vista",

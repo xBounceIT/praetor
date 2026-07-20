@@ -18,11 +18,13 @@ Set at least:
 - `JWT_SECRET`
 - `ENCRYPTION_KEY`
 - `FRONTEND_URL`
+- `ADMIN_DEFAULT_PASSWORD` for a fresh installation
 
-Fresh installs create the bootstrap admin as `admin` with the password from the
-`ADMIN_DEFAULT_PASSWORD` env var (falls back to `password` when unset). The app surfaces an
-in-app warning until the admin password is changed away from any insecure default; change it
-after the first login.
+Fresh installs create the bootstrap admin as `admin` with the unique password from
+`ADMIN_DEFAULT_PASSWORD`. Generate it before first startup: the backend refuses to create the
+account when the variable is blank or uses a published legacy default. An upgrade with an
+existing `admin` account does not require this variable. Store the generated password securely
+and rotate it after the first login.
 
 ### PostgreSQL TLS (optional)
 

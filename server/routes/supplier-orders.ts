@@ -24,6 +24,7 @@ import { generatePrefixedId, ITEM_ID_PREFIXES } from '../utils/order-ids.ts';
 import { effectiveSupplierQuoteStatusFromDate } from '../utils/quote-status.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { replyError } from '../utils/replyError.ts';
+import { preserveLegacyDiscountRounding } from '../utils/supplier-discount-rounding.ts';
 import { normalizeUnitType, type UnitType } from '../utils/unit-type.ts';
 import {
   badRequest,
@@ -100,6 +101,7 @@ const orderSchema = {
 const itemBodySchema = {
   type: 'object',
   properties: {
+    id: { type: 'string' },
     productId: { type: 'string' },
     productName: { type: 'string' },
     quantity: { type: 'number' },
@@ -148,6 +150,7 @@ const updateBodySchema = {
 } as const;
 
 type SupplierOrderItemInput = {
+  id?: string;
   productId?: string;
   productName?: string;
   quantity?: string | number;
@@ -243,6 +246,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       },
       tx,
     );
+    return pre;
   };
 
   const findMissingSnapshotReference = async (
@@ -716,11 +720,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (typeof notes === 'string') patch.notes = notes;
 
       let normalizedItems: supplierOrdersRepo.NewSupplierOrderItem[] | null = null;
+      let itemInputs: SupplierOrderItemInput[] | null = null;
       if (items !== undefined) {
         if (!Array.isArray(items) || items.length === 0) {
           return badRequest(reply, 'Items must be a non-empty array');
         }
-        normalizedItems = normalizeItems(items, reply);
+        itemInputs = items;
+        normalizedItems = normalizeItems(itemInputs, reply);
         if (!normalizedItems) return;
       }
 
@@ -730,9 +736,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       let resultItems: supplierOrdersRepo.SupplierOrderItem[];
       try {
         const txResult = await withDbTransaction(async (tx) => {
-          if (shouldSnapshot) {
-            await snapshotPreState(idResult.value, 'update', request, tx);
-          }
+          const preState = shouldSnapshot
+            ? await snapshotPreState(idResult.value, 'update', request, tx)
+            : null;
           let renamedOrder: supplierOrdersRepo.SupplierOrder | null = null;
           if (nextIdValue && nextIdValue !== idResult.value) {
             renamedOrder = await supplierOrdersRepo.rename(idResult.value, nextIdValue, tx);
@@ -747,8 +753,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               ? renamedOrder
               : await supplierOrdersRepo.update(renamedOrder?.id ?? idResult.value, patch, tx);
           if (!order) return { order: null, items: [] as supplierOrdersRepo.SupplierOrderItem[] };
-          const finalItems = normalizedItems
-            ? await supplierOrdersRepo.replaceItems(order.id, normalizedItems, tx)
+          const replacementItems =
+            normalizedItems && itemInputs && preState
+              ? preserveLegacyDiscountRounding(normalizedItems, itemInputs, preState.items)
+              : normalizedItems;
+          const finalItems = replacementItems
+            ? await supplierOrdersRepo.replaceItems(order.id, replacementItems, tx)
             : await supplierOrdersRepo.findItemsForOrder(order.id, tx);
           return { order, items: finalItems };
         });

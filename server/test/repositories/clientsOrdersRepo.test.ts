@@ -148,6 +148,7 @@ describe('create / update', () => {
     const result = await repo.create(
       {
         id: 'co-1',
+        description: 'Annual support order',
         linkedQuoteId: null,
         linkedOfferId: null,
         clientId: 'c-1',
@@ -161,6 +162,7 @@ describe('create / update', () => {
       testDb,
     );
     expect(exec.calls[0].sql.toLowerCase()).toContain('insert into "sales"');
+    expect(exec.calls[0].params).toContain('Annual support order');
     expect(result.id).toBe('co-1');
   });
 
@@ -606,6 +608,7 @@ describe('restoreSnapshotOrder', () => {
     const result = await repo.restoreSnapshotOrder(
       'co-1',
       {
+        description: 'Restored order description',
         clientId: 'c-1',
         clientName: 'Acme',
         paymentTerms: 'net30',
@@ -619,6 +622,8 @@ describe('restoreSnapshotOrder', () => {
     const sql = exec.calls[0].sql.toLowerCase();
     expect(sql).toContain('update "sales"');
     expect(sql).toContain('current_timestamp');
+    expect(sql.slice(sql.indexOf(' set ') + 5, sql.indexOf(' where '))).toContain('"description"');
+    expect(exec.calls[0].params).toContain('Restored order description');
     expect(exec.calls[0].params).toContain('confirmed');
     expect(exec.calls[0].params).toContain('Acme');
     expect(exec.calls[0].params).toContain('co-1');
@@ -715,7 +720,7 @@ describe('restoreSnapshotOrder', () => {
   // at all - in that case the columns must not be touched (overwriting with `null` would wipe
   // a link that is still valid on the live row). Asserting via the absence of the columns in
   // the SET clause specifically (the RETURNING clause projects them regardless).
-  test('omits linkedQuoteId / linkedOfferId from the SET clause when the snapshot omits them', async () => {
+  test('omits description and links from the SET clause when a legacy snapshot omits them', async () => {
     exec.enqueue({ rows: [orderRow()] });
     await repo.restoreSnapshotOrder(
       'co-1',
@@ -727,13 +732,14 @@ describe('restoreSnapshotOrder', () => {
         discountType: 'percentage',
         status: 'draft',
         notes: null,
-        // linkedQuoteId / linkedOfferId intentionally absent (legacy snapshot shape).
+        // description / linkedQuoteId / linkedOfferId intentionally absent (legacy snapshot shape).
       },
       testDb,
     );
     const sql = exec.calls[0].sql.toLowerCase();
     // Carve out just the SET clause (between "set " and " where").
     const setClause = sql.slice(sql.indexOf(' set ') + 5, sql.indexOf(' where '));
+    expect(setClause).not.toContain('"description"');
     expect(setClause).not.toContain('"linked_quote_id"');
     expect(setClause).not.toContain('"linked_offer_id"');
   });

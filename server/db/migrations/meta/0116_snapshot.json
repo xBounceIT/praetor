@@ -1,5 +1,5 @@
 {
-  "id": "8e59dd58-a8c8-4d61-a8f7-305b06f56ea1",
+  "id": "f7e7c55a-92a7-4992-8ad5-f5f40c175001",
   "prevId": "3b3ec021-11b7-4189-a459-f95dd94b88ef",
   "version": "7",
   "dialect": "postgresql",
@@ -728,7 +728,7 @@
         },
         "supplier_quote_unit_price": {
           "name": "supplier_quote_unit_price",
-          "type": "numeric(19, 6)",
+          "type": "numeric(15, 2)",
           "primaryKey": false,
           "notNull": false
         },
@@ -894,6 +894,12 @@
         "linked_quote_candidate_id": {
           "name": "linked_quote_candidate_id",
           "type": "varchar(100)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
           "primaryKey": false,
           "notNull": false
         }
@@ -3846,7 +3852,7 @@
         },
         "supplier_quote_unit_price": {
           "name": "supplier_quote_unit_price",
-          "type": "numeric(19, 6)",
+          "type": "numeric(15, 2)",
           "primaryKey": false,
           "notNull": false
         },
@@ -4109,6 +4115,12 @@
           "primaryKey": false,
           "notNull": false,
           "default": "CURRENT_TIMESTAMP"
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
         }
       },
       "indexes": {
@@ -5154,7 +5166,7 @@
         },
         "supplier_quote_unit_price": {
           "name": "supplier_quote_unit_price",
-          "type": "numeric(19, 6)",
+          "type": "numeric(15, 2)",
           "primaryKey": false,
           "notNull": false
         },
@@ -5350,6 +5362,12 @@
           "primaryKey": false,
           "notNull": false,
           "default": "CURRENT_TIMESTAMP"
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
         }
       },
       "indexes": {
@@ -7359,7 +7377,7 @@
         },
         "unit_price": {
           "name": "unit_price",
-          "type": "numeric(19, 6)",
+          "type": "numeric(15, 2)",
           "primaryKey": false,
           "notNull": true,
           "default": "'0'"
@@ -7482,6 +7500,12 @@
           "type": "varchar(100)",
           "primaryKey": true,
           "notNull": true
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
         },
         "supplier_id": {
           "name": "supplier_id",

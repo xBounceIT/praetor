@@ -31881,6 +31881,12 @@
                       "id": {
                         "type": "string"
                       },
+                      "description": {
+                        "type": [
+                          "null",
+                          "string"
+                        ]
+                      },
                       "linkedOfferId": {
                         "type": [
                           "null",
@@ -32467,6 +32473,12 @@
                 ],
                 "properties": {
                   "id": {
+                    "type": "string",
+                    "maxLength": 100,
+                    "pattern": "^[A-Za-z0-9_-]*$",
+                    "description": "Optional manual quote code. Letters, numbers, underscores, and hyphens only; blank allocates the configured automatic code."
+                  },
+                  "description": {
                     "type": "string"
                   },
                   "clientId": {
@@ -32569,32 +32581,6 @@
                     "type": "array",
                     "items": {
                       "type": "object",
-                      "allOf": [
-                        {
-                          "anyOf": [
-                            {
-                              "properties": {
-                                "discountType": {
-                                  "enum": [
-                                    "currency"
-                                  ]
-                                }
-                              },
-                              "required": [
-                                "discountType"
-                              ]
-                            },
-                            {
-                              "properties": {
-                                "discount": {
-                                  "type": "number",
-                                  "maximum": 100
-                                }
-                              }
-                            }
-                          ]
-                        }
-                      ],
                       "properties": {
                         "id": {
                           "type": "string"
@@ -32726,6 +32712,32 @@
                         "items",
                         "expirationDate",
                         "communicationChannelId"
+                      ],
+                      "allOf": [
+                        {
+                          "anyOf": [
+                            {
+                              "properties": {
+                                "discountType": {
+                                  "enum": [
+                                    "currency"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "discountType"
+                              ]
+                            },
+                            {
+                              "properties": {
+                                "discount": {
+                                  "type": "number",
+                                  "maximum": 100
+                                }
+                              }
+                            }
+                          ]
+                        }
                       ]
                     }
                   },
@@ -32776,6 +32788,12 @@
                   "properties": {
                     "id": {
                       "type": "string"
+                    },
+                    "description": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
                     },
                     "linkedOfferId": {
                       "type": [
@@ -33315,30 +33333,17 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "allOf": [
-                  {
-                    "not": {
-                      "properties": {
-                        "discountType": {
-                          "enum": [
-                            "percentage"
-                          ]
-                        },
-                        "discount": {
-                          "type": "number",
-                          "exclusiveMinimum": 100
-                        }
-                      },
-                      "required": [
-                        "discountType",
-                        "discount"
-                      ]
-                    }
-                  }
-                ],
                 "properties": {
                   "id": {
-                    "type": "string"
+                    "type": "string",
+                    "maxLength": 100,
+                    "description": "Quote code. A renamed code must use at most 100 letters, numbers, underscores, or hyphens; an unchanged legacy code remains accepted."
+                  },
+                  "description": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
                   },
                   "clientId": {
                     "type": "string"
@@ -33440,32 +33445,6 @@
                     "type": "array",
                     "items": {
                       "type": "object",
-                      "allOf": [
-                        {
-                          "anyOf": [
-                            {
-                              "properties": {
-                                "discountType": {
-                                  "enum": [
-                                    "currency"
-                                  ]
-                                }
-                              },
-                              "required": [
-                                "discountType"
-                              ]
-                            },
-                            {
-                              "properties": {
-                                "discount": {
-                                  "type": "number",
-                                  "maximum": 100
-                                }
-                              }
-                            }
-                          ]
-                        }
-                      ],
                       "properties": {
                         "id": {
                           "type": "string"
@@ -33652,6 +33631,12 @@
                   "properties": {
                     "id": {
                       "type": "string"
+                    },
+                    "description": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
                     },
                     "linkedOfferId": {
                       "type": [
@@ -34374,6 +34359,12 @@
                         "id": {
                           "type": "string"
                         },
+                        "description": {
+                          "type": [
+                            "null",
+                            "string"
+                          ]
+                        },
                         "linkedOfferId": {
                           "type": [
                             "null",
@@ -34774,6 +34765,12 @@
                         "id": {
                           "type": "string"
                         },
+                        "description": {
+                          "type": [
+                            "null",
+                            "string"
+                          ]
+                        },
                         "linkedQuoteId": {
                           "type": "string"
                         },
@@ -35172,6 +35169,12 @@
                   "properties": {
                     "id": {
                       "type": "string"
+                    },
+                    "description": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
                     },
                     "linkedOfferId": {
                       "type": [
@@ -36161,6 +36164,12 @@
                     "id": {
                       "type": "string"
                     },
+                    "description": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
                     "linkedOfferId": {
                       "type": [
                         "null",
@@ -36706,6 +36715,12 @@
                       "id": {
                         "type": "string"
                       },
+                      "description": {
+                        "type": [
+                          "null",
+                          "string"
+                        ]
+                      },
                       "linkedQuoteId": {
                         "type": "string"
                       },
@@ -37132,6 +37147,12 @@
                 ],
                 "properties": {
                   "id": {
+                    "type": "string",
+                    "maxLength": 100,
+                    "pattern": "^[A-Za-z0-9_-]*$",
+                    "description": "Optional manual offer code. Letters, numbers, underscores, and hyphens only; blank allocates the configured automatic code."
+                  },
+                  "description": {
                     "type": "string"
                   },
                   "linkedQuoteId": {
@@ -37297,6 +37318,12 @@
                   "properties": {
                     "id": {
                       "type": "string"
+                    },
+                    "description": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
                     },
                     "linkedQuoteId": {
                       "type": "string"
@@ -37676,30 +37703,16 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "allOf": [
-                  {
-                    "not": {
-                      "properties": {
-                        "discountType": {
-                          "enum": [
-                            "percentage"
-                          ]
-                        },
-                        "discount": {
-                          "type": "number",
-                          "exclusiveMinimum": 100
-                        }
-                      },
-                      "required": [
-                        "discountType",
-                        "discount"
-                      ]
-                    }
-                  }
-                ],
                 "properties": {
                   "id": {
-                    "type": "string"
+                    "type": "string",
+                    "description": "Offer code. A renamed code must use at most 100 letters, numbers, underscores, or hyphens; an unchanged legacy code remains accepted."
+                  },
+                  "description": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
                   },
                   "clientId": {
                     "type": "string"
@@ -37864,6 +37877,12 @@
                   "properties": {
                     "id": {
                       "type": "string"
+                    },
+                    "description": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
                     },
                     "linkedQuoteId": {
                       "type": "string"
@@ -38420,6 +38439,12 @@
                   "properties": {
                     "id": {
                       "type": "string"
+                    },
+                    "description": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
                     },
                     "linkedQuoteId": {
                       "type": "string"
@@ -39248,6 +39273,12 @@
                   "properties": {
                     "id": {
                       "type": "string"
+                    },
+                    "description": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
                     },
                     "linkedQuoteId": {
                       "type": "string"
@@ -40946,6 +40977,12 @@
                       "id": {
                         "type": "string"
                       },
+                      "description": {
+                        "type": [
+                          "null",
+                          "string"
+                        ]
+                      },
                       "linkedQuoteId": {
                         "type": [
                           "null",
@@ -41349,6 +41386,9 @@
                   "id": {
                     "type": "string"
                   },
+                  "description": {
+                    "type": "string"
+                  },
                   "linkedQuoteId": {
                     "type": "string"
                   },
@@ -41515,6 +41555,12 @@
                   "properties": {
                     "id": {
                       "type": "string"
+                    },
+                    "description": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
                     },
                     "linkedQuoteId": {
                       "type": [
@@ -41869,30 +41915,15 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "allOf": [
-                  {
-                    "not": {
-                      "properties": {
-                        "discountType": {
-                          "enum": [
-                            "percentage"
-                          ]
-                        },
-                        "discount": {
-                          "type": "number",
-                          "exclusiveMinimum": 100
-                        }
-                      },
-                      "required": [
-                        "discountType",
-                        "discount"
-                      ]
-                    }
-                  }
-                ],
                 "properties": {
                   "id": {
                     "type": "string"
+                  },
+                  "description": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
                   },
                   "linkedOfferId": {
                     "type": "string"
@@ -42065,6 +42096,12 @@
                   "properties": {
                     "id": {
                       "type": "string"
+                    },
+                    "description": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
                     },
                     "linkedQuoteId": {
                       "type": [
@@ -43015,6 +43052,12 @@
                   "properties": {
                     "id": {
                       "type": "string"
+                    },
+                    "description": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
                     },
                     "linkedQuoteId": {
                       "type": [
@@ -44556,10 +44599,10 @@
     "/api/suppliers/": {
       "get": {
         "summary": "List suppliers",
-        "description": "Returns full supplier records only with crm.suppliers_all.view. Other authorized callers receive only id, name, and isDisabled selector fields.",
         "tags": [
           "suppliers"
         ],
+        "description": "Returns full supplier records only with crm.suppliers_all.view. Other authorized callers receive only id, name, and isDisabled selector fields.",
         "responses": {
           "200": {
             "description": "Default Response",
@@ -46079,6 +46122,12 @@
                       "id": {
                         "type": "string"
                       },
+                      "description": {
+                        "type": [
+                          "null",
+                          "string"
+                        ]
+                      },
                       "supplierId": {
                         "type": "string"
                       },
@@ -46392,6 +46441,12 @@
                 "type": "object",
                 "properties": {
                   "id": {
+                    "type": "string",
+                    "maxLength": 100,
+                    "pattern": "^[A-Za-z0-9_-]*$",
+                    "description": "Leave blank to allocate automatically. Manual values may contain letters, numbers, underscores, and hyphens."
+                  },
+                  "description": {
                     "type": "string"
                   },
                   "supplierId": {
@@ -46499,6 +46554,12 @@
                   "properties": {
                     "id": {
                       "type": "string"
+                    },
+                    "description": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
                     },
                     "supplierId": {
                       "type": "string"
@@ -46793,7 +46854,15 @@
                 "type": "object",
                 "properties": {
                   "id": {
-                    "type": "string"
+                    "type": "string",
+                    "maxLength": 100,
+                    "description": "When changed, may contain letters, numbers, underscores, and hyphens. An unchanged legacy id remains accepted."
+                  },
+                  "description": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
                   },
                   "supplierId": {
                     "type": "string"
@@ -46903,6 +46972,12 @@
                   "properties": {
                     "id": {
                       "type": "string"
+                    },
+                    "description": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
                     },
                     "supplierId": {
                       "type": "string"
@@ -47791,6 +47866,12 @@
                   "properties": {
                     "id": {
                       "type": "string"
+                    },
+                    "description": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
                     },
                     "supplierId": {
                       "type": "string"
@@ -49559,27 +49640,6 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "allOf": [
-                  {
-                    "not": {
-                      "properties": {
-                        "discountType": {
-                          "enum": [
-                            "percentage"
-                          ]
-                        },
-                        "discount": {
-                          "type": "number",
-                          "exclusiveMinimum": 100
-                        }
-                      },
-                      "required": [
-                        "discountType",
-                        "discount"
-                      ]
-                    }
-                  }
-                ],
                 "properties": {
                   "id": {
                     "type": "string"

@@ -37,6 +37,7 @@ const supplierQuotes: SupplierQuote[] = [];
 
 const buildOffer = (overrides: Partial<ClientOffer>): ClientOffer => ({
   id: 'O-base',
+  description: 'Commercial support package',
   linkedQuoteId: '',
   clientId: 'c-1',
   clientName: 'Acme Corp',
@@ -114,11 +115,25 @@ afterEach(() => {
 });
 
 describe('<ClientOffersView /> list', () => {
+  test('exposes an editable free-text description in the create dialog', () => {
+    render(<ClientOffersView {...baseProps} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'sales:clientOffers.addOffer' }));
+    const description = screen.getByRole('textbox', { name: 'sales:clientOffers.description' });
+    fireEvent.change(description, { target: { value: 'Managed service renewal' } });
+
+    expect(description).toHaveValue('Managed service renewal');
+    expect(description).toBeEnabled();
+    expect(description.closest('[data-slot="field"]')).toHaveClass('w-full');
+    expect(description.closest('.grid')).toBeNull();
+  });
+
   test('renders issue 461 offer-list columns in the requested order', () => {
     render(<ClientOffersView {...baseProps} />);
     const headers = screen.getAllByRole('columnheader').map((header) => header.textContent);
-    expect(headers.slice(0, 11)).toEqual([
+    expect(headers.slice(0, 12)).toEqual([
       'sales:clientOffers.offerColumn',
+      'sales:clientOffers.description',
       'sales:clientOffers.deliveryDateColumn',
       'sales:clientOffers.clientColumn',
       'sales:clientOffers.subtotal',
@@ -130,6 +145,7 @@ describe('<ClientOffersView /> list', () => {
       'sales:clientOffers.paymentTermsColumn',
       'sales:clientOffers.statusColumn',
     ]);
+    expect(screen.getAllByText('Commercial support package').length).toBeGreaterThan(0);
   });
 
   test('renders delivery date, MOL, and payment terms in offer rows', () => {
@@ -762,6 +778,60 @@ describe('<ClientOffersView /> MOL precision (issue #780)', () => {
   });
 });
 
+describe('<ClientOffersView /> editable revenue', () => {
+  test('back-solves net revenue through duration and line discount while preserving cost', async () => {
+    const revenueOffer = buildOffer({
+      id: 'O-REVENUE',
+      items: [
+        {
+          ...acmeDraft.items[0],
+          offerId: 'O-REVENUE',
+          quantity: 2,
+          durationMonths: 3,
+          discount: 20,
+          productCost: 60,
+          unitPrice: 100,
+          productMolPercentage: 40,
+        },
+      ],
+    });
+    render(<ClientOffersView {...baseProps} offers={[revenueOffer]} />);
+
+    fireEvent.click(screen.getByText('O-REVENUE'));
+    const dialog = await screen.findByRole('dialog');
+    const revenueInput = within(dialog).getAllByLabelText(
+      'sales:clientQuotes.revenue',
+    )[0] as HTMLInputElement;
+    const salePriceInput = within(dialog).getAllByLabelText(
+      'crm:internalListing.salePrice',
+    )[0] as HTMLInputElement;
+    const costInput = within(dialog).getAllByLabelText(
+      'crm:internalListing.cost',
+    )[0] as HTMLInputElement;
+    const quantityInput = within(dialog).getAllByLabelText(
+      'sales:clientOffers.qty',
+    )[0] as HTMLInputElement;
+    const molInput = within(dialog).getAllByLabelText(
+      'sales:clientQuotes.molLabel',
+    )[0] as HTMLInputElement;
+
+    expect(revenueInput).not.toBeDisabled();
+    expect(revenueInput).toHaveValue('480,00');
+    fireEvent.focus(revenueInput);
+    fireEvent.change(revenueInput, { target: { value: '720' } });
+
+    await waitFor(() => {
+      expect(salePriceInput).toHaveValue('150,00');
+      expect(molInput).toHaveValue('60,00');
+      expect(costInput).toHaveValue('60,00');
+      expect(within(dialog).getAllByText('360,00 EUR').length).toBeGreaterThan(0);
+    });
+
+    fireEvent.change(quantityInput, { target: { value: '' } });
+    expect(revenueInput).toBeDisabled();
+  });
+});
+
 describe('<ClientOffersView /> line discounts', () => {
   test('leaves added-line discounts empty and does not inject zero into the payload', async () => {
     const onUpdateOffer = mock((_id: string, _updates: Partial<ClientOffer>) => Promise.resolve());
@@ -825,8 +895,14 @@ describe('<ClientOffersView /> line discounts', () => {
     expect(lineDiscountInputs.length).toBeGreaterThan(0);
     fireEvent.change(lineDiscountInputs[0], { target: { value: '150' } });
     expect(lineDiscountInputs[0]).toHaveValue('100,00');
+    const revenueInputs = within(dialog)
+      .getAllByRole('textbox', { name: 'sales:clientQuotes.revenue' })
+      .filter((input): input is HTMLInputElement => input instanceof HTMLInputElement);
+    expect(revenueInputs.length).toBeGreaterThan(0);
+    expect(revenueInputs.every((input) => input.disabled)).toBe(true);
     fireEvent.change(lineDiscountInputs[0], { target: { value: '10' } });
-    expect(within(dialog).getAllByText('90,00 EUR').length).toBeGreaterThan(0);
+    expect(revenueInputs.every((input) => !input.disabled)).toBe(true);
+    expect(revenueInputs.some((input) => input.value === '90,00')).toBe(true);
     expect(within(dialog).getAllByText('40,00 EUR').length).toBeGreaterThan(0);
 
     fireEvent.click(within(dialog).getByRole('button', { name: 'common:buttons.update' }));
@@ -844,6 +920,11 @@ describe('<ClientOffersView /> line discounts', () => {
       .filter((input): input is HTMLInputElement => input instanceof HTMLInputElement);
     expect(lineDiscountInputs.length).toBeGreaterThan(0);
     expect(lineDiscountInputs.every((input) => input.disabled)).toBe(true);
+    const revenueInputs = within(dialog)
+      .getAllByRole('textbox', { name: 'sales:clientQuotes.revenue' })
+      .filter((input): input is HTMLInputElement => input instanceof HTMLInputElement);
+    expect(revenueInputs.length).toBeGreaterThan(0);
+    expect(revenueInputs.every((input) => input.disabled)).toBe(true);
   });
 });
 

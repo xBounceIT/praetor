@@ -16,6 +16,7 @@ import { roundCurrency } from '../utils/invoice-math.ts';
 import { generatePrefixedId, ITEM_ID_PREFIXES } from '../utils/order-ids.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { replyError } from '../utils/replyError.ts';
+import { preserveLegacyDiscountRounding } from '../utils/supplier-discount-rounding.ts';
 import {
   badRequest,
   optionalDateString,
@@ -110,6 +111,7 @@ const invoiceSchema = {
 const invoiceItemBodySchema = {
   type: 'object',
   properties: {
+    id: { type: 'string' },
     productId: { type: 'string' },
     description: { type: 'string' },
     quantity: { type: 'number' },
@@ -159,6 +161,7 @@ const updateBodySchema = {
 } as const;
 
 type SupplierInvoiceItemInput = {
+  id?: string;
   productId?: string;
   description?: string;
   quantity?: string | number;
@@ -688,11 +691,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       let normalizedItems: supplierInvoicesRepo.NewSupplierInvoiceItem[] | null = null;
+      let itemInputs: SupplierInvoiceItemInput[] | null = null;
       if (items !== undefined) {
         if (!Array.isArray(items) || items.length === 0) {
           return badRequest(reply, 'Items must be a non-empty array');
         }
-        normalizedItems = normalizeItems(items, reply);
+        itemInputs = items;
+        normalizedItems = normalizeItems(itemInputs, reply);
         if (!normalizedItems) return;
       }
 
@@ -715,8 +720,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               : await supplierInvoicesRepo.update(renamedInvoice?.id ?? idResult.value, patch, tx);
           if (!invoice)
             return { invoice: null, items: [] as supplierInvoicesRepo.SupplierInvoiceItem[] };
-          const finalItems = normalizedItems
-            ? await supplierInvoicesRepo.replaceItems(invoice.id, normalizedItems, tx)
+          const existingItems =
+            normalizedItems && itemInputs?.some((item) => item.legacyDiscountRounding === undefined)
+              ? await supplierInvoicesRepo.findItemsForInvoice(invoice.id, tx)
+              : null;
+          const replacementItems =
+            normalizedItems && itemInputs && existingItems
+              ? preserveLegacyDiscountRounding(normalizedItems, itemInputs, existingItems)
+              : normalizedItems;
+          const finalItems = replacementItems
+            ? await supplierInvoicesRepo.replaceItems(invoice.id, replacementItems, tx)
             : await supplierInvoicesRepo.findItemsForInvoice(invoice.id, tx);
           return { invoice, items: finalItems };
         });

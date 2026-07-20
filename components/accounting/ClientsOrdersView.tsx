@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { LinkedRecordBanner } from '@/components/shared/LinkedRecordBanner';
 import { Button } from '@/components/ui/button';
 import { Field, FieldError, FieldLabel } from '@/components/ui/field';
+import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import type {
@@ -146,6 +147,7 @@ const createClientsOrdersInitialState = (): ClientsOrdersViewState => ({
   errors: {},
   previewVersion: null,
   formData: {
+    description: '',
     clientId: '',
     clientName: '',
     items: [],
@@ -291,6 +293,7 @@ const useClientsOrdersController = ({
 
   const orderToFormData = useCallback(
     (order: ClientsOrder): Partial<ClientsOrder> => ({
+      description: order.description ?? '',
       linkedQuoteId: order.linkedQuoteId,
       linkedOfferId: order.linkedOfferId,
       clientId: order.clientId,
@@ -326,6 +329,7 @@ const useClientsOrdersController = ({
     (version: OrderVersion) => {
       setPreviewVersion(version);
       setFormData({
+        description: version.snapshot.order.description ?? '',
         linkedQuoteId: editingOrder?.linkedQuoteId,
         linkedOfferId: editingOrder?.linkedOfferId,
         clientId: version.snapshot.order.clientId,
@@ -628,6 +632,15 @@ const useClientsOrdersController = ({
         accessorFn: (row: ClientsOrder) => row.id,
         cell: ({ row }: { row: ClientsOrder }) => (
           <span className="font-bold text-foreground">{row.id}</span>
+        ),
+      },
+      {
+        header: t('accounting:clientsOrders.description', { defaultValue: 'Description' }),
+        id: 'description',
+        accessorFn: (row: ClientsOrder) => row.description ?? '',
+        headerClassName: 'min-w-[12rem]',
+        cell: ({ row }: { row: ClientsOrder }) => (
+          <span className="text-sm text-foreground">{row.description?.trim() || '-'}</span>
         ),
       },
       {
@@ -1222,6 +1235,25 @@ const OrderDetailsSection: React.FC<{ controller: ClientsOrdersController }> = (
         </div>
       </Field>
     </div>
+    <Field className="w-full">
+      <FieldLabel htmlFor="client-order-description">
+        {controller.t('accounting:clientsOrders.description', {
+          defaultValue: 'Description',
+        })}
+      </FieldLabel>
+      <Input
+        id="client-order-description"
+        type="text"
+        value={controller.formData.description ?? ''}
+        onChange={(event) =>
+          controller.setFormData((previous) => ({
+            ...previous,
+            description: event.target.value,
+          }))
+        }
+        disabled={controller.isReadOnly}
+      />
+    </Field>
   </div>
 );
 

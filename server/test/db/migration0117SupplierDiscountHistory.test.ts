@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 const readMigration = async () =>
   Bun.file(
-    new URL('../../db/migrations/0117_preserve_supplier_discount_history.sql', import.meta.url),
+    new URL('../../db/migrations/0117_preserve_supplier_cost_precision.sql', import.meta.url),
   ).text();
 
 const readJournal = async () =>
@@ -28,8 +28,10 @@ describe('migration 0117 supplier discount history', () => {
     expect(sql.match(/SET "legacy_discount_rounding" = true/g)).toHaveLength(2);
     expect(sql.match(/WHERE COALESCE\("discount", 0\) <> 0/g)).toHaveLength(2);
     expect(sql.match(/AND NOT "legacy_discount_rounding"/g)).toHaveLength(2);
-    expect(sql).not.toContain('SET "unit_price"');
-    expect(sql).not.toContain('SET "discount"');
+    expect(sql).not.toContain('UPDATE "supplier_invoice_items"\nSET "unit_price"');
+    expect(sql).not.toContain('UPDATE "supplier_sale_items"\nSET "unit_price"');
+    expect(sql).not.toContain('UPDATE "supplier_invoice_items"\nSET "discount"');
+    expect(sql).not.toContain('UPDATE "supplier_sale_items"\nSET "discount"');
 
     const historicalLine = { unitPrice: 37.75, discount: 15, legacyDiscountRounding: true };
     const calculationUnitPrice = historicalLine.legacyDiscountRounding
@@ -70,19 +72,19 @@ describe('migration 0117 supplier discount history', () => {
     expect(seedSql).toContain('960.00, 0.00, false)');
   });
 
-  test('is registered immediately after migration 0116', async () => {
+  test('ships in the combined precision migration immediately after main', async () => {
     const journal = (await readJournal()) as {
       entries: Array<{ idx: number; tag: string }>;
     };
     const migrationIndex = journal.entries.findIndex(
-      ({ tag }) => tag === '0117_preserve_supplier_discount_history',
+      ({ tag }) => tag === '0117_preserve_supplier_cost_precision',
     );
 
     expect(journal.entries[migrationIndex - 1]).toEqual(
-      expect.objectContaining({ idx: 116, tag: '0116_preserve_supplier_cost_precision' }),
+      expect.objectContaining({ idx: 116, tag: '0116_add_document_descriptions' }),
     );
     expect(journal.entries[migrationIndex]).toEqual(
-      expect.objectContaining({ idx: 117, tag: '0117_preserve_supplier_discount_history' }),
+      expect.objectContaining({ idx: 117, tag: '0117_preserve_supplier_cost_precision' }),
     );
   });
 });

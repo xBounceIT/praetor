@@ -161,6 +161,7 @@ const FULL_PERMS = [
 
 const DRAFT_QUOTE = {
   id: 'sq-1',
+  description: 'Hardware procurement',
   supplierId: 's1',
   supplierName: 'Acme',
   paymentTerms: 'immediate',
@@ -267,6 +268,7 @@ const authHeader = () => ({ authorization: `Bearer ${signToken({ userId: 'u1' })
 
 const CREATE_PAYLOAD = {
   id: 'sq-new',
+  description: 'Annual hardware procurement',
   supplierId: 's1',
   supplierName: 'Acme',
   clientId: null,
@@ -360,9 +362,25 @@ describe('POST /api/sales/supplier-quotes', () => {
     expect(res.statusCode).toBe(201);
     expect(allocateDocumentCodeMock).not.toHaveBeenCalled();
     expect(sqCreateMock).toHaveBeenCalledWith(
-      expect.objectContaining({ id: 'sq-new' }),
+      expect.objectContaining({
+        id: 'sq-new',
+        description: 'Annual hardware procurement',
+      }),
       expect.anything(),
     );
+  });
+
+  test('400 rejects a manual quote id that is unsafe in a URL path segment', async () => {
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/sales/supplier-quotes',
+      headers: authHeader(),
+      payload: { ...CREATE_PAYLOAD, id: '../../products/prod-9' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body)).toEqual({ error: 'Bad Request' });
+    expect(sqCreateMock).not.toHaveBeenCalled();
   });
 });
 
@@ -384,19 +402,26 @@ describe('PUT /api/sales/supplier-quotes/:id', () => {
   test('200 updates a draft quote with content edits', async () => {
     sqFindByIdMock.mockResolvedValue(DRAFT_QUOTE);
     sqFindLinkedOrderIdMock.mockResolvedValue(null);
-    sqUpdateMock.mockResolvedValue({ ...DRAFT_QUOTE, paymentTerms: '30 days' });
+    sqUpdateMock.mockResolvedValue({
+      ...DRAFT_QUOTE,
+      description: 'Updated procurement',
+      paymentTerms: '30 days',
+    });
 
     const res = await testApp.inject({
       method: 'PUT',
       url: '/api/sales/supplier-quotes/sq-1',
       headers: authHeader(),
-      payload: { paymentTerms: '30 days' },
+      payload: { description: 'Updated procurement', paymentTerms: '30 days' },
     });
 
     expect(res.statusCode).toBe(200);
     expect(sqUpdateMock).toHaveBeenCalledTimes(1);
     expect(sqUpdateMock.mock.calls[0]?.[1]).toEqual(
-      expect.objectContaining({ paymentTerms: '30 days' }),
+      expect.objectContaining({
+        description: 'Updated procurement',
+        paymentTerms: '30 days',
+      }),
     );
     expect(logAuditMock).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'supplier_quote.updated' }),
@@ -642,6 +667,68 @@ describe('PUT /api/sales/supplier-quotes/:id', () => {
       'FORN_26_0046_manual',
       expect.anything(),
     );
+  });
+
+  test('400 rejects renaming a quote to an id that is unsafe in a URL path segment', async () => {
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/sales/supplier-quotes/sq-1',
+      headers: authHeader(),
+      payload: { id: '../products/prod-9' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body)).toEqual({
+      error: 'id can only contain letters, numbers, underscores, and hyphens',
+    });
+    expect(sqFindByIdMock).not.toHaveBeenCalled();
+    expect(sqRenameMock).not.toHaveBeenCalled();
+  });
+
+  test('200 keeps an unchanged legacy quote id operable through an encoded path segment', async () => {
+    const legacyId = 'legacy/../supplier-quote';
+    const legacyQuote = { ...DRAFT_QUOTE, id: legacyId };
+    sqFindByIdMock.mockResolvedValue(legacyQuote);
+    sqFindLinkedOrderIdMock.mockResolvedValue(null);
+    sqUpdateMock.mockResolvedValue({ ...legacyQuote, notes: 'updated' });
+    sqFindItemsForQuoteMock.mockResolvedValue([{ ...SAMPLE_ITEM, quoteId: legacyId }]);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: `/api/sales/supplier-quotes/${encodeURIComponent(legacyId)}`,
+      headers: authHeader(),
+      payload: { id: legacyId, notes: 'updated' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(sqFindByIdMock).toHaveBeenCalledWith(legacyId);
+    expect(sqRenameMock).not.toHaveBeenCalled();
+  });
+
+  test('200 keeps dot-only and marker-like legacy ids distinct and operable', async () => {
+    const dotEscapePrefix = '~'.repeat(101);
+    for (const [legacyId, routeSegment] of [
+      ['..', `${dotEscapePrefix}..`],
+      ['@..', '@..'],
+    ] as const) {
+      const legacyQuote = { ...DRAFT_QUOTE, id: legacyId };
+      sqFindByIdMock.mockClear();
+      sqFindByIdMock.mockResolvedValue(legacyQuote);
+      sqFindLinkedOrderIdMock.mockResolvedValue(null);
+      sqUpdateMock.mockResolvedValue({ ...legacyQuote, notes: 'updated' });
+      sqFindItemsForQuoteMock.mockResolvedValue([{ ...SAMPLE_ITEM, quoteId: legacyId }]);
+
+      const res = await testApp.inject({
+        method: 'PUT',
+        url: `/api/sales/supplier-quotes/${encodeURIComponent(routeSegment)}`,
+        headers: authHeader(),
+        payload: { id: legacyId, notes: 'updated' },
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(sqFindByIdMock).toHaveBeenCalledWith(legacyId);
+      expect(sqRenameMock).not.toHaveBeenCalled();
+    }
   });
 
   test('409 rejects supplier reassignment when the derived status is accepted', async () => {

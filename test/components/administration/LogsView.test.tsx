@@ -204,6 +204,21 @@ describe('<LogsView />', () => {
     expect(await screen.findByDisplayValue('siem.example.test')).toBeInTheDocument();
   });
 
+  test('uses the shared Italian thousands separator for SIEM status counters', async () => {
+    logsApiMock.getSiemStatus.mockResolvedValueOnce({
+      ...siemStatus,
+      pendingCount: 7000,
+      droppedRetention: 3000,
+      droppedCapacity: 4000,
+    });
+    const user = userEvent.setup();
+    render(<LogsView canUpdateSiem />);
+
+    await user.click(screen.getByRole('tab', { name: 'logs.tabs.siem' }));
+
+    expect(await screen.findAllByText('7.000')).toHaveLength(2);
+  });
+
   test('keeps the SIEM layout width stable while configuration loads', async () => {
     const user = userEvent.setup();
     const configRequest = createDeferred<SiemConfig>();

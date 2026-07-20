@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 const readMigration = async () =>
   Bun.file(
-    new URL('../../db/migrations/0116_preserve_supplier_cost_precision.sql', import.meta.url),
+    new URL('../../db/migrations/0117_preserve_supplier_cost_precision.sql', import.meta.url),
   ).text();
 
 const readJournal = async () =>
@@ -10,7 +10,7 @@ const readJournal = async () =>
 
 const readSeed = async () => Bun.file(new URL('../../db/seed.sql', import.meta.url)).text();
 
-describe('migration 0116 supplier-cost precision', () => {
+describe('migration 0117 supplier-cost precision', () => {
   test('widens the derived supplier cost and every downstream client snapshot', async () => {
     const sql = await readMigration();
 
@@ -48,7 +48,7 @@ describe('migration 0116 supplier-cost precision', () => {
   test('does not flatten discounted lines inside historical supplier order snapshots', async () => {
     const sql = await readMigration();
 
-    expect(sql).not.toContain('UPDATE "supplier_order_versions"');
+    expect(sql).not.toContain("jsonb_build_object('unitPrice'");
     expect(sql).not.toContain("'discount', 0");
   });
 
@@ -144,17 +144,19 @@ describe('migration 0116 supplier-cost precision', () => {
     expect(block).toContain('8.00, 1200.00, 20.00, 960.000000');
   });
 
-  test('is registered after migration 0115', async () => {
+  test('is registered after the document-description migration from main', async () => {
     const journal = (await readJournal()) as {
       entries: Array<{ idx: number; tag: string }>;
     };
     const migrationIndex = journal.entries.findIndex(
-      ({ tag }) => tag === '0116_preserve_supplier_cost_precision',
+      ({ tag }) => tag === '0117_preserve_supplier_cost_precision',
     );
 
-    expect(journal.entries[migrationIndex - 1]).toEqual(expect.objectContaining({ idx: 115 }));
+    expect(journal.entries[migrationIndex - 1]).toEqual(
+      expect.objectContaining({ idx: 116, tag: '0116_add_document_descriptions' }),
+    );
     expect(journal.entries[migrationIndex]).toEqual(
-      expect.objectContaining({ idx: 116, tag: '0116_preserve_supplier_cost_precision' }),
+      expect.objectContaining({ idx: 117, tag: '0117_preserve_supplier_cost_precision' }),
     );
   });
 });

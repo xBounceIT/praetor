@@ -116,7 +116,7 @@ values stop the workflow before release creation or registry authentication.
 ## Usage Guide
 
 - **Login**:
-  - Bootstrap Admin: `admin` / value of `ADMIN_DEFAULT_PASSWORD` (falls back to `password` when the env var is unset; an in-app warning surfaces until the admin password is changed away from any insecure default)
+  - Bootstrap Admin: `admin` / unique value of `ADMIN_DEFAULT_PASSWORD`. It is required before a fresh install can create the account; blank and published legacy defaults are rejected. Existing installations with an `admin` account do not need it during upgrades.
   - Demo Manager: `manager` / `password` when `DEMO_SEEDING=true`
   - Demo User: `user` / `password` when `DEMO_SEEDING=true`
   

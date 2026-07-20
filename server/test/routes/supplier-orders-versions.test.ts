@@ -831,6 +831,36 @@ describe('POST /api/accounting/supplier-orders/:id/versions/:versionId/restore',
 });
 
 describe('PUT /api/accounting/supplier-orders/:id snapshots pre-update state', () => {
+  test('preserves migrated rounding when an older client omits the additive marker', async () => {
+    const legacyItem = { ...SAMPLE_ITEM, legacyDiscountRounding: true };
+    soFindExistingMock.mockResolvedValue(SAMPLE_ORDER);
+    soFindFullForSnapshotMock.mockResolvedValue({ order: SAMPLE_ORDER, items: [legacyItem] });
+    soUpdateMock.mockResolvedValue(SAMPLE_ORDER);
+    soReplaceItemsMock.mockResolvedValue([legacyItem]);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/accounting/supplier-orders/so-1',
+      headers: authHeader(),
+      payload: {
+        items: [
+          {
+            id: SAMPLE_ITEM.id,
+            productName: SAMPLE_ITEM.productName,
+            quantity: 150,
+            unitPrice: 37.75,
+            discount: 15,
+          },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(soReplaceItemsMock.mock.calls[0]?.[1]?.[0]).toEqual(
+      expect.objectContaining({ legacyDiscountRounding: true }),
+    );
+  });
+
   test('PUT with content changes inserts a snapshot inside the transaction', async () => {
     soFindExistingMock.mockResolvedValue({
       id: 'so-1',

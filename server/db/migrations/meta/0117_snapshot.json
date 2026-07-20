@@ -1,6 +1,6 @@
 {
-  "id": "e8a75ba7-455a-4588-8d51-df5f62428570",
-  "prevId": "8e59dd58-a8c8-4d61-a8f7-305b06f56ea1",
+  "id": "5c0c24aa-4527-4680-8af6-e9bc16dc965e",
+  "prevId": "f7e7c55a-92a7-4992-8ad5-f5f40c175001",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -894,6 +894,12 @@
         "linked_quote_candidate_id": {
           "name": "linked_quote_candidate_id",
           "type": "varchar(100)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
           "primaryKey": false,
           "notNull": false
         }
@@ -4109,6 +4115,12 @@
           "primaryKey": false,
           "notNull": false,
           "default": "CURRENT_TIMESTAMP"
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
         }
       },
       "indexes": {
@@ -5350,6 +5362,12 @@
           "primaryKey": false,
           "notNull": false,
           "default": "CURRENT_TIMESTAMP"
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
         }
       },
       "indexes": {
@@ -7489,6 +7507,12 @@
           "type": "varchar(100)",
           "primaryKey": true,
           "notNull": true
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
         },
         "supplier_id": {
           "name": "supplier_id",

@@ -45,6 +45,7 @@ export const customerOffers = pgTable(
       () => quoteCandidates.id,
       { onDelete: 'restrict', onUpdate: 'cascade' },
     ),
+    description: text('description'),
   },
   (table) => [
     uniqueIndex('idx_customer_offers_linked_quote_id').on(table.linkedQuoteId),

@@ -474,6 +474,20 @@ describe('GET /api/sales/client-quotes/:id/versions/:versionId', () => {
     expect(qvFindByIdMock).toHaveBeenCalledWith('q-1', 'qv-1');
   });
 
+  test('decodes dot-only quote and version transport values before repository access', async () => {
+    qvFindByIdMock.mockResolvedValue(SAMPLE_VERSION);
+    const escapePrefix = '~'.repeat(101);
+
+    const res = await testApp.inject({
+      method: 'GET',
+      url: `/api/sales/client-quotes/${escapePrefix}./versions/${escapePrefix}..`,
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(qvFindByIdMock).toHaveBeenCalledWith('.', '..');
+  });
+
   test('404 when version not found (also covers cross-quote ids)', async () => {
     qvFindByIdMock.mockResolvedValue(null);
 
@@ -556,6 +570,41 @@ describe('POST /api/sales/client-quotes/:id/versions/:versionId/restore', () => 
         details: expect.objectContaining({ toValue: 'qv-1' }),
       }),
     );
+  });
+
+  test('restores description from a new snapshot', async () => {
+    setupHappyPath();
+    qvFindByIdMock.mockResolvedValue({
+      ...SAMPLE_VERSION,
+      snapshot: {
+        ...SAMPLE_SNAPSHOT,
+        quote: { ...SAMPLE_QUOTE, description: 'Restored quote description' },
+      },
+    });
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/sales/client-quotes/q-1/versions/qv-1/restore',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(cqRestoreSnapshotQuoteMock.mock.calls[0]?.[1]).toEqual(
+      expect.objectContaining({ description: 'Restored quote description' }),
+    );
+  });
+
+  test('does not clear description when a legacy snapshot omits it', async () => {
+    setupHappyPath();
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/sales/client-quotes/q-1/versions/qv-1/restore',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(Object.hasOwn(cqRestoreSnapshotQuoteMock.mock.calls[0]?.[1], 'description')).toBe(false);
   });
 
   test('200 restores a draft snapshot by deleting a linked draft offer', async () => {

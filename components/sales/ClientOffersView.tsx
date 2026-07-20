@@ -58,7 +58,12 @@ import {
   parseOptionalNumberInputValue,
 } from '../../utils/numbers';
 import { getPaymentTermsOptions } from '../../utils/options';
-import { makeCostUpdater, makeMolUpdater, makeUnitPriceUpdater } from '../../utils/pricingHandlers';
+import {
+  makeCostUpdater,
+  makeMolUpdater,
+  makeRevenueUpdater,
+  makeUnitPriceUpdater,
+} from '../../utils/pricingHandlers';
 import {
   buildProductQuickViewHref,
   buildSupplierQuoteQuickViewHref,
@@ -131,6 +136,7 @@ const offerToFormData = (offer: ClientOffer): Partial<ClientOffer> => ({
 
 const getDefaultFormData = (): Partial<ClientOffer> => ({
   id: '',
+  description: '',
   linkedQuoteId: '',
   clientId: '',
   clientName: '',
@@ -639,6 +645,14 @@ const useClientOffersController = ({
       className: 'whitespace-nowrap',
       headerClassName: 'min-w-[8rem]',
       cell: ({ row }) => <span className="font-bold text-zinc-700">{row.id}</span>,
+    },
+    {
+      header: t('sales:clientOffers.description', { defaultValue: 'Description' }),
+      accessorKey: 'description',
+      headerClassName: 'min-w-[12rem]',
+      cell: ({ row }) => (
+        <span className="text-sm text-foreground">{row.description?.trim() || '-'}</span>
+      ),
     },
     {
       header: t('sales:clientOffers.deliveryDateColumn', { defaultValue: 'Delivery date' }),
@@ -1600,12 +1614,13 @@ const ClientOfferClientSection: React.FC<{ controller: ClientOffersController }>
         status={clientStatus}
         statusLabel={statusLabel}
       />
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <ClientOfferClientField controller={controller} />
         <ClientOfferCodeField controller={controller} />
         <ClientOfferPaymentTermsField controller={controller} />
         <ClientOfferExpirationField controller={controller} />
       </div>
+      <ClientOfferDescriptionField controller={controller} />
     </div>
   );
 };
@@ -1691,6 +1706,28 @@ const ClientOfferCodeField: React.FC<{ controller: ClientOffersController }> = (
     </Field>
   );
 };
+
+const ClientOfferDescriptionField: React.FC<{ controller: ClientOffersController }> = ({
+  controller,
+}) => (
+  <Field className="w-full">
+    <FieldLabel htmlFor="client-offer-description">
+      {controller.t('sales:clientOffers.description', { defaultValue: 'Description' })}
+    </FieldLabel>
+    <Input
+      id="client-offer-description"
+      type="text"
+      value={controller.formData.description ?? ''}
+      onChange={(event) =>
+        controller.setFormData((previous) => ({
+          ...previous,
+          description: event.target.value,
+        }))
+      }
+      disabled={controller.isReadOnly}
+    />
+  </Field>
+);
 
 const ClientOfferPaymentTermsField: React.FC<{ controller: ClientOffersController }> = ({
   controller,
@@ -1924,9 +1961,9 @@ const ClientOfferItemsSection: React.FC<{ controller: ClientOffersController }> 
       accessorFn: getClientOfferItemRevenue,
       align: 'right',
       cell: ({ row }) => (
-        <span className="font-semibold tabular-nums">
-          {formatDecimal(getClientOfferItemRevenue(row))} {currency}
-        </span>
+        <div className="min-w-[130px]">
+          <ClientOfferRevenueEditor controller={controller} line={getLine(row)} />
+        </div>
       ),
     },
     {
@@ -2030,7 +2067,12 @@ const getClientOfferLineContext = (
     quoteIdBySupplierQuoteItemId,
     setFormData,
   } = controller;
-  const { lineCost, netRevenue: lineSalePrice, lineMargin } = getItemPricingContext(item);
+  const {
+    lineCost,
+    netRevenue: lineSalePrice,
+    lineMargin,
+    revenueMultiplier,
+  } = getItemPricingContext(item);
   const rawCost = item.supplierQuoteItemId ? item.supplierQuoteUnitPrice : item.productCost;
   const cost =
     rawCost === undefined || rawCost === null || !Number.isFinite(Number(rawCost))
@@ -2040,6 +2082,8 @@ const getClientOfferLineContext = (
         : convertUnitPrice(Number(rawCost), 'hours', item.unitType || 'hours');
   const molPercentage = item.productMolPercentage ?? undefined;
   const unitPrice = Number.isFinite(Number(item.unitPrice)) ? Number(item.unitPrice) : undefined;
+  const revenue = unitPrice === undefined ? undefined : lineSalePrice;
+  const canEditRevenue = Number.isFinite(revenueMultiplier) && revenueMultiplier > 0;
   const durationUnit = normalizeDurationUnit(item.durationUnit);
   const durationValue = getDurationInputValue(item);
   const product = products.find((p) => p.id === item.productId);
@@ -2079,11 +2123,18 @@ const getClientOfferLineContext = (
     setFormData(makeUnitPriceUpdater<Partial<ClientOffer>>(index, value));
   };
 
+  const handleRevenueChange = (value: string) => {
+    if (isReadOnly || !canEditRevenue) return;
+    setFormData(makeRevenueUpdater<Partial<ClientOffer>>(index, value));
+  };
+
   return {
     cost,
     unitPrice,
+    revenue,
     molPercentage,
     lineCost,
+    canEditRevenue,
     durationUnit,
     durationValue,
     isSupply,
@@ -2099,6 +2150,7 @@ const getClientOfferLineContext = (
     handleCostChange,
     handleUnitPriceChange,
     handleMolChange,
+    handleRevenueChange,
   };
 };
 
@@ -2319,6 +2371,27 @@ const ClientOfferSalePriceEditor: React.FC<{
       formatDecimals={2}
       onValueChange={line.handleUnitPriceChange}
       disabled={controller.isReadOnly}
+      className="w-full max-w-[5rem] flex-none border-border bg-background px-1 py-2 text-right text-sm text-foreground"
+    />
+    <span className="shrink-0 text-[9px] font-semibold text-muted-foreground">
+      {controller.currency}
+    </span>
+  </div>
+);
+
+const ClientOfferRevenueEditor: React.FC<{
+  controller: ClientOffersController;
+  line: ClientOfferLineContext;
+}> = ({ controller, line }) => (
+  <div className="flex w-full items-center justify-end gap-1">
+    <ValidatedNumberInput
+      value={line.revenue}
+      placeholder="0,00"
+      min={0}
+      aria-label={controller.t('sales:clientQuotes.revenue')}
+      formatDecimals={2}
+      onValueChange={line.handleRevenueChange}
+      disabled={controller.isReadOnly || !line.canEditRevenue}
       className="w-full max-w-[5rem] flex-none border-border bg-background px-1 py-2 text-right text-sm text-foreground"
     />
     <span className="shrink-0 text-[9px] font-semibold text-muted-foreground">

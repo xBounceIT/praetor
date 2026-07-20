@@ -33,6 +33,7 @@ import type {
 } from '../../types';
 import { getLocalDateString } from '../../utils/date';
 import { downloadBlob } from '../../utils/download';
+import { formatDecimal } from '../../utils/numbers';
 import { hasPermission } from '../../utils/permissions';
 import {
   finalizeTimeReportFavorite,
@@ -135,11 +136,7 @@ const formatDuration = (hours: number) => {
   return `${Math.floor(totalMinutes / 60)}:${String(Math.abs(totalMinutes % 60)).padStart(2, '0')}`;
 };
 
-const formatCost = (value: number, currency: string, language: string) =>
-  `${new Intl.NumberFormat(language, {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(value)} ${currency}`;
+const formatCost = (value: number, currency: string) => `${formatDecimal(value)} ${currency}`;
 
 export interface TimeReportViewProps {
   permissions: string[];
@@ -529,7 +526,7 @@ const TimeReportView = ({
             <span
               className={row.kind === 'subtotal' ? 'font-semibold tabular-nums' : 'tabular-nums'}
             >
-              {formatCost(row.cost, currency, i18n.language)}
+              {formatCost(row.cost, currency)}
             </span>
           ),
         align: 'right',
@@ -568,7 +565,7 @@ const TimeReportView = ({
       });
     }
     return columns;
-  }, [currency, generatedDefinition, i18n.language, openEntryEditor, options?.editableUserIds, t]);
+  }, [currency, generatedDefinition, openEntryEditor, options?.editableUserIds, t]);
 
   const saveEditedEntry = async (
     id: string,
@@ -882,8 +879,7 @@ const TimeReportView = ({
                 </span>
                 {result.totals.cost !== null && (
                   <span>
-                    {t('timeReport.results.totalCost')}:{' '}
-                    {formatCost(result.totals.cost, currency, i18n.language)}
+                    {t('timeReport.results.totalCost')}: {formatCost(result.totals.cost, currency)}
                   </span>
                 )}
               </div>

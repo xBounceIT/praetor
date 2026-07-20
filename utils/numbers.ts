@@ -82,10 +82,16 @@ export const formatNumber = (
 ): string => {
   const finiteValue = Number.isFinite(value) ? (value as number) : 0;
   const displayValue = Object.is(finiteValue, -0) ? 0 : finiteValue;
+  // Some ICU/CLDR versions default Italian formatting to `min2`, which leaves four-digit
+  // values ungrouped (7000) while grouping five-digit values (10.000). Default to grouping
+  // from the first thousands group while allowing editable inputs to opt out explicitly.
   const cacheKey = JSON.stringify(options);
   let formatter = numberFormatters.get(cacheKey);
   if (!formatter) {
-    formatter = new Intl.NumberFormat(NUMBER_LOCALE, options);
+    formatter = new Intl.NumberFormat(NUMBER_LOCALE, {
+      ...options,
+      useGrouping: options.useGrouping ?? 'always',
+    });
     numberFormatters.set(cacheKey, formatter);
   }
   return formatter.format(displayValue);
@@ -275,6 +281,7 @@ export interface ItemPricingContext {
   durationMonths: number;
   lineCost: number;
   discountPercentage: number;
+  revenueMultiplier: number;
   grossRevenue: number;
   lineDiscount: number;
   netRevenue: number;
@@ -292,6 +299,7 @@ export const getItemPricingContext = (
   const durationMonths = getEffectiveDurationMonths(item);
   const lineCost = unitCost * quantity * durationMonths;
   const discountPercentage = Math.min(100, Math.max(0, Number(item.discount || 0)));
+  const revenueMultiplier = quantity * durationMonths * (1 - discountPercentage / 100);
   const unitPrice = Number(item.unitPrice || 0);
   const grossRevenue = unitPrice * quantity * durationMonths;
   const netRevenue =
@@ -312,6 +320,7 @@ export const getItemPricingContext = (
     durationMonths,
     lineCost,
     discountPercentage,
+    revenueMultiplier,
     grossRevenue,
     lineDiscount,
     netRevenue,

@@ -43,6 +43,7 @@ export const sales = pgTable(
     notes: text('notes'),
     createdAt: timestamp('created_at').default(sql`CURRENT_TIMESTAMP`),
     updatedAt: timestamp('updated_at').default(sql`CURRENT_TIMESTAMP`),
+    description: text('description'),
   },
   (table) => [
     index('idx_sales_client_id').on(table.clientId),

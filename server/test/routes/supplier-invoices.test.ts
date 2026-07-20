@@ -646,6 +646,36 @@ describe('PUT /api/supplier-invoices/:id', () => {
     expect(replaceItemsMock).toHaveBeenCalled();
   });
 
+  test('preserves migrated rounding when an older client omits the additive marker', async () => {
+    const legacyItem = { ...SAMPLE_ITEM, legacyDiscountRounding: true };
+    findExistingMock.mockResolvedValue(existingInvoiceForUpdate());
+    updateMock.mockResolvedValue(SAMPLE_INVOICE);
+    findItemsForInvoiceMock.mockResolvedValue([legacyItem]);
+    replaceItemsMock.mockResolvedValue([legacyItem]);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/supplier-invoices/SINV-2025-0001',
+      headers: authHeader(),
+      payload: {
+        items: [
+          {
+            id: SAMPLE_ITEM.id,
+            description: SAMPLE_ITEM.description,
+            quantity: 150,
+            unitPrice: 37.75,
+            discount: 15,
+          },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(replaceItemsMock.mock.calls[0]?.[1]?.[0]).toEqual(
+      expect.objectContaining({ legacyDiscountRounding: true }),
+    );
+  });
+
   test('404 invoice not found', async () => {
     findExistingMock.mockResolvedValue(null);
 

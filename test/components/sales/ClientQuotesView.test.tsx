@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, expect, mock } from 'bun:test';
-import { fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ApiError } from '../../../services/api/client';
 import type { Client, Quote, QuoteMutation, SupplierQuote } from '../../../types';
+import { addMonthsToDateOnly, getLocalDateString } from '../../../utils/date';
 import { installI18nMock } from '../../helpers/i18n';
 import { LineDeleteConfirmStub } from '../../helpers/lineItemDeleteConfirm';
 import { reactTest as test } from '../../helpers/reactTest';
@@ -90,6 +91,7 @@ const communicationChannels = [
 const quotes: Quote[] = [
   {
     id: 'Q-001',
+    description: 'Managed consulting',
     clientId: 'client-1',
     clientName: 'Helios Energy Services',
     items: [
@@ -116,6 +118,7 @@ const quotes: Quote[] = [
   },
   {
     id: 'Q-002',
+    description: 'Infrastructure renewal',
     clientId: 'client-1',
     clientName: 'Helios Energy Services',
     items: [
@@ -200,6 +203,30 @@ const withSingleCandidate = (quote: Quote, candidateId: string): Quote => {
 };
 
 describe('<ClientQuotesView />', () => {
+  test('exposes an editable free-text description in the create dialog', () => {
+    render(
+      <ClientQuotesView
+        quotes={[]}
+        clients={clients}
+        products={[]}
+        supplierQuotes={[]}
+        currency="EUR"
+        onAddQuote={mock(() => Promise.resolve())}
+        onUpdateQuote={mock(() => Promise.resolve())}
+        onDeleteQuote={mock(() => Promise.resolve())}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'sales:clientQuotes.createNewQuote' }));
+    const description = screen.getByRole('textbox', { name: 'sales:clientQuotes.description' });
+    fireEvent.change(description, { target: { value: 'Managed service renewal' } });
+
+    expect(description).toHaveValue('Managed service renewal');
+    expect(description).toBeEnabled();
+    expect(description.closest('[data-slot="field"]')).toHaveClass('w-full');
+    expect(description.closest('.grid')).toBeNull();
+  });
+
   test('renders the quote list columns in the requested order with MOL next to margin', () => {
     const { container } = render(
       <ClientQuotesView
@@ -220,6 +247,7 @@ describe('<ClientQuotesView />', () => {
 
     expect(headerLabels).toEqual([
       'sales:clientQuotes.quoteCodeColumn',
+      'sales:clientQuotes.description',
       'crm:clients.tableHeaders.insertDate',
       'sales:clientQuotes.clientColumn',
       'sales:clientQuotes.candidates.column',
@@ -237,7 +265,8 @@ describe('<ClientQuotesView />', () => {
     ]);
     const firstQuoteRow = screen.getByText('Q-001').closest('tr');
     if (!firstQuoteRow) throw new Error('Expected Q-001 table row');
-    const variantCell = within(firstQuoteRow).getAllByRole('cell')[3];
+    expect(within(firstQuoteRow).getByText('Managed consulting')).toBeInTheDocument();
+    const variantCell = within(firstQuoteRow).getAllByRole('cell')[4];
     expect(variantCell).toHaveTextContent('sales:clientQuotes.candidates.notApplicable');
     expect(variantCell).not.toHaveTextContent('sales:clientQuotes.candidates.count');
     expect(variantCell).not.toHaveTextContent('EUR');
@@ -369,8 +398,14 @@ describe('<ClientQuotesView />', () => {
     expect(lineDiscountInputs.length).toBeGreaterThan(0);
     fireEvent.change(lineDiscountInputs[0], { target: { value: '150' } });
     expect(lineDiscountInputs[0]).toHaveValue('100,00');
+    const revenueInputs = within(dialog)
+      .getAllByRole('textbox', { name: 'sales:clientQuotes.revenue' })
+      .filter((input): input is HTMLInputElement => input instanceof HTMLInputElement);
+    expect(revenueInputs.length).toBeGreaterThan(0);
+    expect(revenueInputs.every((input) => input.disabled)).toBe(true);
     fireEvent.change(lineDiscountInputs[0], { target: { value: '10' } });
-    expect(within(dialog).getAllByText('180,00 EUR').length).toBeGreaterThan(0);
+    expect(revenueInputs.every((input) => !input.disabled)).toBe(true);
+    expect(revenueInputs.some((input) => input.value === '180,00')).toBe(true);
     expect(within(dialog).getAllByText('60,00 EUR').length).toBeGreaterThan(0);
 
     fireEvent.click(within(dialog).getByRole('button', { name: 'sales:clientQuotes.updateQuote' }));
@@ -942,6 +977,68 @@ describe('<ClientQuotesView />', () => {
     expect(molInput.checkValidity()).toBe(true);
   });
 
+  test('edits net revenue and recalculates sale price and MOL without changing cost', async () => {
+    const revenueQuote: Quote = {
+      ...quotes[0],
+      id: 'Q-REVENUE',
+      discount: 0,
+      items: [
+        {
+          ...quotes[0].items[0],
+          quoteId: 'Q-REVENUE',
+          quantity: 2,
+          durationMonths: 3,
+          discount: 20,
+        },
+      ],
+    };
+    render(
+      <ClientQuotesView
+        quotes={[revenueQuote]}
+        clients={clients}
+        products={[]}
+        supplierQuotes={[]}
+        currency="EUR"
+        onAddQuote={mock(() => Promise.resolve())}
+        onUpdateQuote={mock(() => Promise.resolve())}
+        onDeleteQuote={mock(() => Promise.resolve())}
+      />,
+    );
+
+    fireEvent.click(screen.getByText('Q-REVENUE'));
+    const dialog = await screen.findByRole('dialog');
+    const revenueInput = within(dialog).getAllByLabelText(
+      'sales:clientQuotes.revenue',
+    )[0] as HTMLInputElement;
+    const salePriceInput = within(dialog).getAllByLabelText(
+      'crm:internalListing.salePrice',
+    )[0] as HTMLInputElement;
+    const costInput = within(dialog).getAllByLabelText(
+      'crm:internalListing.cost',
+    )[0] as HTMLInputElement;
+    const quantityInput = within(dialog).getAllByLabelText(
+      'sales:clientQuotes.qty',
+    )[0] as HTMLInputElement;
+    const molInput = within(dialog).getAllByLabelText(
+      'sales:clientQuotes.molLabel',
+    )[0] as HTMLInputElement;
+
+    expect(revenueInput).not.toBeDisabled();
+    expect(revenueInput).toHaveValue('480,00');
+    fireEvent.focus(revenueInput);
+    fireEvent.change(revenueInput, { target: { value: '720' } });
+
+    await waitFor(() => {
+      expect(salePriceInput).toHaveValue('150,00');
+      expect(molInput).toHaveValue('60,00');
+      expect(costInput).toHaveValue('60,00');
+      expect(within(dialog).getAllByText('360,00 EUR').length).toBeGreaterThan(0);
+    });
+
+    fireEvent.change(quantityInput, { target: { value: '' } });
+    expect(revenueInput).toBeDisabled();
+  });
+
   test('the read-only banner renders dark-mode-compatible amber, not a light slab (issue #768)', async () => {
     // A finalized (accepted) quote opens the dialog read-only and surfaces the warning banner.
     const acceptedQuote: Quote = { ...quotes[0], id: 'Q-ACCEPTED', status: 'accepted' };
@@ -967,6 +1064,11 @@ describe('<ClientQuotesView />', () => {
       .filter((input): input is HTMLInputElement => input instanceof HTMLInputElement);
     expect(lineDiscountInputs.length).toBeGreaterThan(0);
     expect(lineDiscountInputs.every((input) => input.disabled)).toBe(true);
+    const revenueInputs = within(dialog)
+      .getAllByRole('textbox', { name: 'sales:clientQuotes.revenue' })
+      .filter((input): input is HTMLInputElement => input instanceof HTMLInputElement);
+    expect(revenueInputs.length).toBeGreaterThan(0);
+    expect(revenueInputs.every((input) => input.disabled)).toBe(true);
 
     const label = screen.getByText('sales:clientQuotes.readOnlyBecauseFinal');
     // The label carries an explicit dark-mode color so it stays legible on the dark dialog.
@@ -997,7 +1099,7 @@ describe('<ClientQuotesView />', () => {
   });
 });
 
-describe('<ClientQuotesView /> edit action gating (#812 round 13)', () => {
+describe('<ClientQuotesView /> row actions and edit gating (#812 round 13)', () => {
   const renderQuote = (quote: Quote) =>
     render(
       <ClientQuotesView
@@ -1023,6 +1125,302 @@ describe('<ClientQuotesView /> edit action gating (#812 round 13)', () => {
       ).not.toBeNull();
     });
   };
+
+  test('opens a clean create draft from Duplicate and saves every reactivated variant', async () => {
+    const user = userEvent.setup();
+    const onAddQuote = mock((_data: QuoteMutation) => Promise.resolve());
+    const quote = withSingleCandidate(
+      {
+        ...quotes[0],
+        id: 'Q-DUPLICATE-SOURCE',
+        status: 'accepted',
+        linkedOfferId: 'OFF-001',
+      },
+      'candidate-selected',
+    );
+    const [firstCandidate] = quote.candidates ?? [];
+    if (!firstCandidate) throw new Error('Expected candidate fixture');
+    const sourcedItem = {
+      ...firstCandidate.items[0],
+      quantity: 3,
+      unitPrice: 150,
+      productCost: 90,
+      productMolPercentage: 40,
+      discount: 10,
+      durationMonths: 12,
+      durationUnit: 'years' as const,
+      supplierQuoteId: 'SQ-SOURCE',
+      supplierQuoteItemId: 'SQI-SOURCE',
+      supplierQuoteSupplierName: 'Source Supplier',
+      supplierQuoteUnitPrice: 60,
+      supplierQuoteBaseQuantity: 2,
+      supplierQuoteBaseUnitPrice: 60,
+    };
+    quote.items = [sourcedItem];
+    quote.selectedCandidateId = firstCandidate.id;
+    quote.candidates = [
+      {
+        ...firstCandidate,
+        state: 'selected',
+        items: [sourcedItem],
+      },
+      {
+        ...firstCandidate,
+        id: 'candidate-discarded',
+        name: 'Variante B',
+        position: 1,
+        state: 'discarded',
+        notes: 'Second variant notes',
+        items: [
+          {
+            ...sourcedItem,
+            id: 'item-second',
+            candidateId: 'candidate-discarded',
+            unitPrice: 120,
+          },
+        ],
+      },
+    ];
+
+    render(
+      <ClientQuotesView
+        quotes={[quote]}
+        clients={[]}
+        products={[]}
+        supplierQuotes={[]}
+        communicationChannels={communicationChannels}
+        currency="EUR"
+        onAddQuote={onAddQuote}
+        onUpdateQuote={mock(() => Promise.resolve())}
+        onDeleteQuote={mock(() => Promise.resolve())}
+      />,
+    );
+
+    await openRowActions(user);
+    await user.click(
+      await screen.findByRole('button', { name: 'sales:clientQuotes.duplicateQuote' }),
+    );
+
+    expect(onAddQuote).not.toHaveBeenCalled();
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText('sales:clientQuotes.createNewQuote')).toBeInTheDocument();
+    expect(within(dialog).getByLabelText('sales:clientQuotes.quoteCode')).toHaveValue('');
+    expect(document.getElementById('client-quote-client')).toHaveTextContent(quote.clientName);
+    await user.click(document.getElementById('client-quote-client') as HTMLElement);
+    await user.click(await screen.findByRole('option', { name: quote.clientName }));
+    expect(within(dialog).getByRole('tab', { name: /Variante A/ })).toBeInTheDocument();
+    expect(within(dialog).getByRole('tab', { name: /Variante B/ })).toBeInTheDocument();
+    const expectedExpiration = addMonthsToDateOnly(getLocalDateString(), 1);
+
+    await user.click(within(dialog).getByRole('tab', { name: /Variante B/ }));
+    expect(
+      within(dialog).getAllByRole('button', { name: 'sales:clientQuotes.candidates.rename' }),
+    ).toHaveLength(2);
+
+    await user.click(
+      within(dialog).getByRole('button', { name: 'sales:clientQuotes.createQuote' }),
+    );
+    await waitFor(() => expect(onAddQuote).toHaveBeenCalledTimes(1));
+
+    const payload = onAddQuote.mock.calls[0]?.[0] as QuoteMutation;
+    expect(payload.id).toBeUndefined();
+    expect(payload.description).toBe(quote.description);
+    expect(payload.status).toBe('draft');
+    expect(payload.clientName).toBe(quote.clientName);
+    expect(payload.expirationDate).toBe(expectedExpiration);
+    expect(payload).not.toHaveProperty('linkedOfferId');
+    expect(payload.candidates).toHaveLength(2);
+    expect(payload.candidates?.map((candidate) => candidate.name)).toEqual([
+      'Variante A',
+      'Variante B',
+    ]);
+    expect(payload.candidates?.[0]).toMatchObject({
+      paymentTerms: firstCandidate.paymentTerms,
+      discount: firstCandidate.discount,
+      discountType: firstCandidate.discountType,
+      communicationChannelId: firstCandidate.communicationChannelId,
+    });
+    expect(payload.candidates?.[0]?.items[0]).toMatchObject({
+      quantity: 3,
+      unitPrice: 150,
+      productCost: 90,
+      productMolPercentage: 40,
+      discount: 10,
+      durationMonths: 12,
+      durationUnit: 'years',
+    });
+    expect(payload.candidates?.[1]?.notes).toBe('Second variant notes');
+    for (const candidate of payload.candidates ?? []) {
+      expect(candidate).not.toHaveProperty('id');
+      expect(candidate.expirationDate).toBe(expectedExpiration);
+      expect(candidate.items[0]?.id).toStartWith('temp-');
+      expect(candidate.items[0]?.supplierQuoteId).toBeNull();
+      expect(candidate.items[0]?.supplierQuoteItemId).toBeNull();
+      expect(candidate.items[0]?.supplierQuoteSupplierName).toBeNull();
+      expect(candidate.items[0]?.supplierQuoteUnitPrice).toBeNull();
+      expect(candidate.items[0]?.supplierQuoteBaseQuantity).toBeNull();
+      expect(candidate.items[0]?.supplierQuoteBaseUnitPrice).toBeNull();
+    }
+  });
+
+  test('submits the selected source variant first as the duplicate primary', async () => {
+    const user = userEvent.setup();
+    const onAddQuote = mock((_data: QuoteMutation) => Promise.resolve());
+    const quote = withSingleCandidate(
+      {
+        ...quotes[0],
+        id: 'Q-DUPLICATE-SELECTED',
+        status: 'accepted',
+        linkedOfferId: 'OFF-SELECTED',
+      },
+      'candidate-first',
+    );
+    const [firstCandidate] = quote.candidates ?? [];
+    const firstItem = firstCandidate?.items[0];
+    if (!firstCandidate || !firstItem) throw new Error('Expected candidate fixture');
+
+    const selectedItem = {
+      ...firstItem,
+      id: 'item-selected',
+      candidateId: 'candidate-selected',
+      unitPrice: 275,
+    };
+    quote.candidates = [
+      {
+        ...firstCandidate,
+        state: 'discarded',
+        items: [{ ...firstItem, unitPrice: 125 }],
+      },
+      {
+        ...firstCandidate,
+        id: 'candidate-selected',
+        name: 'Variante B',
+        position: 1,
+        state: 'selected',
+        paymentTerms: '90gg',
+        discount: 15,
+        notes: 'Winning variant notes',
+        items: [selectedItem],
+      },
+    ];
+    quote.selectedCandidateId = 'candidate-selected';
+    quote.items = [selectedItem];
+    quote.paymentTerms = '90gg';
+    quote.discount = 15;
+    quote.notes = 'Winning variant notes';
+
+    render(
+      <ClientQuotesView
+        quotes={[quote]}
+        clients={clients}
+        products={[]}
+        supplierQuotes={[]}
+        communicationChannels={communicationChannels}
+        currency="EUR"
+        onAddQuote={onAddQuote}
+        onUpdateQuote={mock(() => Promise.resolve())}
+        onDeleteQuote={mock(() => Promise.resolve())}
+      />,
+    );
+
+    await openRowActions(user);
+    await user.click(
+      await screen.findByRole('button', { name: 'sales:clientQuotes.duplicateQuote' }),
+    );
+
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByRole('tab', { name: /Variante B/ })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+
+    await user.click(
+      within(dialog).getByRole('button', { name: 'sales:clientQuotes.createQuote' }),
+    );
+    await waitFor(() => expect(onAddQuote).toHaveBeenCalledTimes(1));
+
+    const payload = onAddQuote.mock.calls[0]?.[0] as QuoteMutation;
+    expect(payload.candidates?.map((candidate) => candidate.name)).toEqual([
+      'Variante B',
+      'Variante A',
+    ]);
+    expect(payload).toMatchObject({
+      paymentTerms: '90gg',
+      discount: 15,
+      notes: 'Winning variant notes',
+    });
+    expect(payload.items?.[0]?.unitPrice).toBe(275);
+    expect(payload.candidates?.[0]?.items[0]?.unitPrice).toBe(275);
+    expect(payload.candidates?.[1]?.items[0]?.unitPrice).toBe(125);
+  });
+
+  test('blocks a duplicated source-only line in a non-active variant until it is relinked', async () => {
+    const user = userEvent.setup();
+    const onAddQuote = mock((_data: QuoteMutation) => Promise.resolve());
+    const quote = withSingleCandidate(
+      {
+        ...quotes[0],
+        id: 'Q-DUPLICATE-SOURCE-ONLY',
+      },
+      'candidate-primary',
+    );
+    const [primaryCandidate] = quote.candidates ?? [];
+    const primaryItem = primaryCandidate?.items[0];
+    if (!primaryCandidate || !primaryItem) throw new Error('Expected candidate fixture');
+    quote.candidates = [
+      primaryCandidate,
+      {
+        ...primaryCandidate,
+        id: 'candidate-source-only',
+        name: 'Variante B',
+        position: 1,
+        items: [
+          {
+            ...primaryItem,
+            id: 'item-source-only',
+            candidateId: 'candidate-source-only',
+            productId: '',
+            productName: 'Supplier-only service',
+            supplierQuoteId: 'SQ-SOURCE',
+            supplierQuoteItemId: 'SQI-SOURCE',
+            supplierQuoteSupplierName: 'Source Supplier',
+            supplierQuoteUnitPrice: 60,
+          },
+        ],
+      },
+    ];
+
+    render(
+      <ClientQuotesView
+        quotes={[quote]}
+        clients={clients}
+        products={[]}
+        supplierQuotes={[]}
+        communicationChannels={communicationChannels}
+        currency="EUR"
+        onAddQuote={onAddQuote}
+        onUpdateQuote={mock(() => Promise.resolve())}
+        onDeleteQuote={mock(() => Promise.resolve())}
+      />,
+    );
+
+    await openRowActions(user);
+    await user.click(
+      await screen.findByRole('button', { name: 'sales:clientQuotes.duplicateQuote' }),
+    );
+    const dialog = await screen.findByRole('dialog');
+    await user.click(within(dialog).getByRole('tab', { name: /Variante B/ }));
+    expect(within(dialog).getByText('Supplier-only service')).toBeInTheDocument();
+    await user.click(within(dialog).getByRole('tab', { name: /Variante A/ }));
+    await user.click(
+      within(dialog).getByRole('button', { name: 'sales:clientQuotes.createQuote' }),
+    );
+
+    expect(onAddQuote).not.toHaveBeenCalled();
+    expect(
+      within(dialog).getByText('sales:clientQuotes.errors.productOrSupplierRequired'),
+    ).toBeInTheDocument();
+  });
 
   test('keeps the one-time offer action for an accepted legacy quote without an offer', async () => {
     const user = userEvent.setup();
@@ -1146,6 +1544,53 @@ describe('<ClientQuotesView /> edit action gating (#812 round 13)', () => {
     expect(onPromoteCandidate).not.toHaveBeenCalled();
   });
 
+  test('promotes the only candidate directly without opening the comparison dialog', async () => {
+    const user = userEvent.setup();
+    let finishPromotion = () => {};
+    const onPromoteCandidate = mock(
+      (_quoteId: string, _candidateId: string) =>
+        new Promise<void>((resolve) => {
+          finishPromotion = resolve;
+        }),
+    );
+    const quote = withSingleCandidate(
+      { ...quotes[0], id: 'Q-SINGLE-CANDIDATE', status: 'sent' },
+      'candidate-only',
+    );
+
+    render(
+      <ClientQuotesView
+        quotes={[quote]}
+        clients={clients}
+        products={[]}
+        supplierQuotes={[]}
+        currency="EUR"
+        onAddQuote={mock(() => Promise.resolve())}
+        onUpdateQuote={mock(() => Promise.resolve())}
+        onDeleteQuote={mock(() => Promise.resolve())}
+        onPromoteCandidate={onPromoteCandidate}
+      />,
+    );
+
+    await openRowActions(user);
+    await user.click(
+      await screen.findByRole('button', { name: 'sales:clientQuotes.candidates.chooseTitle' }),
+    );
+
+    await waitFor(() =>
+      expect(onPromoteCandidate).toHaveBeenCalledWith('Q-SINGLE-CANDIDATE', 'candidate-only'),
+    );
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    await openRowActions(user);
+    const deny = screen.getByRole('button', { name: 'sales:clientQuotes.markAsDenied' });
+    const restore = screen.getByRole('button', { name: 'sales:clientQuotes.restoreQuote' });
+    expect(deny).toBeDisabled();
+    expect(restore).toBeDisabled();
+
+    await act(async () => finishPromotion());
+    await waitFor(() => expect(deny).not.toBeDisabled());
+  });
+
   test('opens candidate comparison when at least one variant remains promotable', async () => {
     const user = userEvent.setup();
     const quote = withSingleCandidate(
@@ -1241,6 +1686,19 @@ describe('<ClientQuotesView /> edit action gating (#812 round 13)', () => {
         updatedAt: Date.now(),
       },
     ];
+    const [firstCandidate] = staleQuote.candidates;
+    if (!firstCandidate) throw new Error('Expected candidate fixture');
+    staleQuote.candidates.push({
+      ...firstCandidate,
+      id: 'candidate-b',
+      name: 'Variante B',
+      position: 1,
+      items: firstCandidate.items.map((item) => ({
+        ...item,
+        id: `${item.id}-b`,
+        candidateId: 'candidate-b',
+      })),
+    });
 
     render(
       <ClientQuotesView
@@ -1262,12 +1720,12 @@ describe('<ClientQuotesView /> edit action gating (#812 round 13)', () => {
     );
     const comparisonDialog = await screen.findByRole('dialog');
     expect(comparisonDialog.querySelector('[data-slot="modal-content"]')).toHaveClass('max-w-6xl');
-    expect(within(comparisonDialog).getByText('sales:clientQuotes.molLabel')).toBeInTheDocument();
-    expect(within(comparisonDialog).getByText('11,11%')).toBeInTheDocument();
-    expect(within(comparisonDialog).getByText('sales:clientQuotes.notesLabel')).toBeInTheDocument();
-    expect(
-      within(comparisonDialog).getByText('Customer prefers annual billing.'),
-    ).toBeInTheDocument();
+    expect(within(comparisonDialog).getAllByText('sales:clientQuotes.molLabel')).toHaveLength(2);
+    expect(within(comparisonDialog).getAllByText('11,11%')).toHaveLength(2);
+    expect(within(comparisonDialog).getAllByText('sales:clientQuotes.notesLabel')).toHaveLength(2);
+    expect(within(comparisonDialog).getAllByText('Customer prefers annual billing.')).toHaveLength(
+      2,
+    );
     await user.click(
       await screen.findByRole('button', { name: 'sales:clientQuotes.candidates.promote' }),
     );
@@ -1484,8 +1942,10 @@ describe('<ClientQuotesView /> line-item delete confirmation', () => {
     });
     expect(rowDeleteButtons(dialog)).toHaveLength(rowDeletes.length);
   });
+});
 
-  test('chooses the first unused default variant name after renames', async () => {
+describe('<ClientQuotesView /> candidate variants', () => {
+  const openCreateQuote = async () => {
     const user = userEvent.setup();
     render(
       <ClientQuotesView
@@ -1502,6 +1962,12 @@ describe('<ClientQuotesView /> line-item delete confirmation', () => {
     );
 
     await user.click(screen.getByRole('button', { name: 'sales:clientQuotes.createNewQuote' }));
+    return user;
+  };
+
+  test('chooses the first unused default variant name after renames', async () => {
+    const user = await openCreateQuote();
+
     await user.click(screen.getByRole('button', { name: 'sales:clientQuotes.candidates.addMenu' }));
     await user.click(
       await screen.findByRole('menuitem', { name: 'sales:clientQuotes.candidates.add' }),
@@ -1521,23 +1987,22 @@ describe('<ClientQuotesView /> line-item delete confirmation', () => {
     expect(screen.getByRole('tab', { name: /Variante C/ })).toBeInTheDocument();
   });
 
-  test('keeps validation errors visible when renaming the active candidate', async () => {
-    const user = userEvent.setup();
-    render(
-      <ClientQuotesView
-        quotes={[]}
-        clients={clients}
-        products={[]}
-        supplierQuotes={[]}
-        communicationChannels={communicationChannels}
-        currency="EUR"
-        onAddQuote={mock(() => Promise.resolve())}
-        onUpdateQuote={mock(() => Promise.resolve())}
-        onDeleteQuote={mock(() => Promise.resolve())}
-      />,
-    );
+  test('shows the variants section heading and information tooltip above the tabs', async () => {
+    await openCreateQuote();
 
-    await user.click(screen.getByRole('button', { name: 'sales:clientQuotes.createNewQuote' }));
+    const heading = screen.getByRole('heading', {
+      name: /sales:clientQuotes.candidates.column/,
+    });
+    const tabs = screen.getByTestId('quote-candidate-tabs-scroll');
+    const tooltip = screen.getByRole('button', { name: 'sales:fieldInfo.variants' });
+
+    expect(heading.nextElementSibling).toBe(tabs);
+    expect(tooltip.querySelector('.fa-circle-info')).toBeInTheDocument();
+  });
+
+  test('keeps validation errors visible when renaming the active candidate', async () => {
+    const user = await openCreateQuote();
+
     await user.click(screen.getByRole('button', { name: 'sales:clientQuotes.createQuote' }));
     expect(screen.getByText('sales:clientQuotes.errors.clientRequired')).toBeInTheDocument();
 
@@ -1548,22 +2013,8 @@ describe('<ClientQuotesView /> line-item delete confirmation', () => {
   });
 
   test('manages browser-style candidate tabs from inline and contextual actions', async () => {
-    const user = userEvent.setup();
-    render(
-      <ClientQuotesView
-        quotes={[]}
-        clients={clients}
-        products={[]}
-        supplierQuotes={[]}
-        communicationChannels={communicationChannels}
-        currency="EUR"
-        onAddQuote={mock(() => Promise.resolve())}
-        onUpdateQuote={mock(() => Promise.resolve())}
-        onDeleteQuote={mock(() => Promise.resolve())}
-      />,
-    );
+    const user = await openCreateQuote();
 
-    await user.click(screen.getByRole('button', { name: 'sales:clientQuotes.createNewQuote' }));
     expect(screen.getByText('Variante A')).toBeInTheDocument();
     expect(screen.getByTestId('quote-candidate-tabs-scroll')).toHaveClass(
       'overflow-x-auto',

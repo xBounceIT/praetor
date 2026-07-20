@@ -80,8 +80,13 @@ import {
   parseNumberInputValue,
   parseOptionalNumberInputValue,
 } from '../../utils/numbers';
-import { getPaymentTermsOptions } from '../../utils/options';
-import { makeCostUpdater, makeMolUpdater, makeUnitPriceUpdater } from '../../utils/pricingHandlers';
+import { getPaymentTermsOptions, includeSelectedOption } from '../../utils/options';
+import {
+  makeCostUpdater,
+  makeMolUpdater,
+  makeRevenueUpdater,
+  makeUnitPriceUpdater,
+} from '../../utils/pricingHandlers';
 import {
   buildProductQuickViewHref,
   buildSupplierQuoteQuickViewHref,
@@ -105,7 +110,7 @@ import CostSummaryPanel from '../shared/CostSummaryPanel';
 import DateField from '../shared/DateField';
 import DeleteConfirmModal from '../shared/DeleteConfirmModal';
 import DurationUnitSelector from '../shared/DurationUnitSelector';
-import FieldTooltip from '../shared/FieldTooltip';
+import FieldTooltip, { type FieldTooltipProps } from '../shared/FieldTooltip';
 import HeaderAddButton from '../shared/HeaderAddButton';
 import {
   LINE_ITEM_NOTE_CELL_CLASSNAME,
@@ -193,6 +198,7 @@ const moveQuoteItem = (items: QuoteItem[], fromIndex: number, toIndex: number): 
 
 const getDefaultFormData = (): Partial<Quote> => ({
   id: '',
+  description: '',
   clientId: '',
   clientName: '',
   items: [],
@@ -230,10 +236,11 @@ const nextCandidateName = (candidates: QuoteCandidate[]): string => {
 };
 
 const candidateToFormData = (
-  quote: Pick<Quote, 'id' | 'clientId' | 'clientName' | 'status'>,
+  quote: Pick<Quote, 'id' | 'description' | 'clientId' | 'clientName' | 'status'>,
   candidate: QuoteCandidate,
 ): Partial<Quote> => ({
   id: quote.id,
+  description: quote.description ?? '',
   clientId: quote.clientId,
   clientName: quote.clientName,
   status: quote.status,
@@ -269,6 +276,71 @@ const quoteCandidatesForForm = (quote: Quote): QuoteCandidate[] =>
           updatedAt: quote.updatedAt,
         },
       ];
+
+const hasMissingProductOrSupplierSource = (items: QuoteItem[]) =>
+  items.some((item) => !item.productId && !item.supplierQuoteItemId);
+
+const getPrimaryCandidateIndex = (quote: Quote, candidates: QuoteCandidate[]) => {
+  const selectedCandidateIndex = candidates.findIndex(
+    (candidate) => candidate.id === quote.selectedCandidateId,
+  );
+  if (selectedCandidateIndex >= 0) return selectedCandidateIndex;
+
+  const selectedStateIndex = candidates.findIndex((candidate) => candidate.state === 'selected');
+  if (selectedStateIndex >= 0) return selectedStateIndex;
+
+  const activeStateIndex = candidates.findIndex((candidate) => candidate.state === 'active');
+  return activeStateIndex >= 0 ? activeStateIndex : 0;
+};
+
+const buildDuplicatedClientQuoteDraft = (quote: Quote) => {
+  const expirationDate = addMonthsToDateOnly(getLocalDateString(), 1);
+  const sourceCandidates = quoteCandidatesForForm(quote);
+  const primaryCandidateIndex = getPrimaryCandidateIndex(quote, sourceCandidates);
+  const candidates = sourceCandidates.map((candidate, position) => {
+    const candidateId = makeCandidateDraftId();
+    return {
+      ...candidate,
+      id: candidateId,
+      quoteId: '',
+      position,
+      state: 'active' as const,
+      expirationDate,
+      isExpired: false,
+      linkedSupplierQuoteExpired: false,
+      createdAt: 0,
+      updatedAt: 0,
+      items: candidate.items.map((item) => ({
+        ...item,
+        id: createTemporaryLineItemId(),
+        quoteId: '',
+        candidateId,
+        supplierQuoteId: null,
+        supplierQuoteItemId: null,
+        supplierQuoteSupplierName: null,
+        supplierQuoteUnitPrice: null,
+        supplierQuoteBaseQuantity: null,
+        supplierQuoteBaseUnitPrice: null,
+      })),
+    } satisfies QuoteCandidate;
+  });
+  const primaryCandidate = candidates[primaryCandidateIndex] ?? candidates[0];
+
+  return {
+    candidates,
+    activeCandidateId: primaryCandidate.id,
+    formData: candidateToFormData(
+      {
+        id: '',
+        description: quote.description ?? '',
+        clientId: quote.clientId,
+        clientName: quote.clientName,
+        status: 'draft',
+      },
+      primaryCandidate,
+    ),
+  };
+};
 
 const formDataIntoCandidate = (
   candidate: QuoteCandidate,
@@ -529,6 +601,9 @@ const useClientQuotesController = ({
   const [formData, setFormData] = useState<Partial<Quote>>(() => getDefaultFormData());
   const [candidateDrafts, setCandidateDrafts] = useState<QuoteCandidate[]>([]);
   const [activeCandidateId, setActiveCandidateId] = useState<string | null>(null);
+  const [duplicatePrimaryCandidateId, setDuplicatePrimaryCandidateId] = useState<string | null>(
+    null,
+  );
   const [promotionQuote, setPromotionQuote] = useState<Quote | null>(null);
   const [promotionCandidateId, setPromotionCandidateId] = useState<string | null>(null);
   const [isPromoting, setIsPromoting] = useState(false);
@@ -610,6 +685,7 @@ const useClientQuotesController = ({
 
   const closeModal = useCallback(() => {
     dispatch({ type: 'closeModal' });
+    setDuplicatePrimaryCandidateId(null);
     setPreviewVersion(null);
     setProductRowToDelete(null);
     setCandidateToDeleteId(null);
@@ -641,6 +717,7 @@ const useClientQuotesController = ({
     };
     setCandidateDrafts([candidate]);
     setActiveCandidateId(candidate.id);
+    setDuplicatePrimaryCandidateId(null);
     setFormData(defaults);
     setErrors({});
     setPreviewVersion(null);
@@ -648,12 +725,10 @@ const useClientQuotesController = ({
 
   const applyQuoteToCandidateForm = useCallback((quote: Quote) => {
     const candidates = quoteCandidatesForForm(quote);
-    const primary =
-      candidates.find((candidate) => candidate.state === 'selected') ??
-      candidates.find((candidate) => candidate.state === 'active') ??
-      candidates[0];
+    const primary = candidates[getPrimaryCandidateIndex(quote, candidates)] ?? candidates[0];
     setCandidateDrafts(candidates);
     setActiveCandidateId(primary.id);
+    setDuplicatePrimaryCandidateId(null);
     setFormData(candidateToFormData(quote, primary));
     setErrors({});
   }, []);
@@ -667,6 +742,17 @@ const useClientQuotesController = ({
     },
     [applyQuoteToCandidateForm],
   );
+
+  const openDuplicateModal = useCallback((quote: Quote) => {
+    const duplicate = buildDuplicatedClientQuoteDraft(quote);
+    dispatch({ type: 'openAddModal' });
+    setCandidateDrafts(duplicate.candidates);
+    setActiveCandidateId(duplicate.activeCandidateId);
+    setDuplicatePrimaryCandidateId(duplicate.activeCandidateId);
+    setFormData(duplicate.formData);
+    setErrors({});
+    setPreviewVersion(null);
+  }, []);
 
   const currentCandidateDrafts = () =>
     candidateDrafts.map((candidate) =>
@@ -685,6 +771,7 @@ const useClientQuotesController = ({
       candidateToFormData(
         {
           id: formData.id || editingQuote?.id || '',
+          description: formData.description ?? editingQuote?.description ?? '',
           clientId: formData.clientId || editingQuote?.clientId || '',
           clientName: formData.clientName || editingQuote?.clientName || '',
           status: formData.status || editingQuote?.status || 'draft',
@@ -734,6 +821,7 @@ const useClientQuotesController = ({
       candidateToFormData(
         {
           id: formData.id || editingQuote?.id || '',
+          description: formData.description ?? editingQuote?.description ?? '',
           clientId: formData.clientId || editingQuote?.clientId || '',
           clientName: formData.clientName || editingQuote?.clientName || '',
           status: formData.status || editingQuote?.status || 'draft',
@@ -771,6 +859,7 @@ const useClientQuotesController = ({
       candidateToFormData(
         {
           id: formData.id || editingQuote?.id || '',
+          description: formData.description ?? editingQuote?.description ?? '',
           clientId: formData.clientId || editingQuote?.clientId || '',
           clientName: formData.clientName || editingQuote?.clientName || '',
           status: formData.status || editingQuote?.status || 'draft',
@@ -780,18 +869,11 @@ const useClientQuotesController = ({
     );
   };
 
-  const openPromotionDialog = (quote: Quote) => {
-    const eligible = (quote.candidates || []).find(isCandidatePromotable);
-    // react-doctor-disable-next-line react-doctor/no-impure-state-updater -- Dialog event handler queues independent state transitions.
-    setPromotionQuote(quote);
-    setPromotionCandidateId(eligible?.id ?? null);
-  };
-
-  const confirmCandidatePromotion = async () => {
-    if (!promotionQuote || !promotionCandidateId || !onPromoteCandidate || isPromoting) return;
+  const promoteCandidate = async (quoteId: string, candidateId: string) => {
+    if (!onPromoteCandidate || isPromoting) return;
     setIsPromoting(true);
     try {
-      await onPromoteCandidate(promotionQuote.id, promotionCandidateId);
+      await onPromoteCandidate(quoteId, candidateId);
       setPromotionQuote(null);
       setPromotionCandidateId(null);
     } catch (error) {
@@ -799,6 +881,25 @@ const useClientQuotesController = ({
     } finally {
       setIsPromoting(false);
     }
+  };
+
+  const openPromotionDialog = (quote: Quote) => {
+    const activeCandidates = (quote.candidates || []).filter(
+      (candidate) => candidate.state === 'active',
+    );
+    const eligible = activeCandidates.find(isCandidatePromotable);
+    if (activeCandidates.length === 1 && eligible) {
+      void promoteCandidate(quote.id, eligible.id);
+      return;
+    }
+    // react-doctor-disable-next-line react-doctor/no-impure-state-updater -- Dialog event handler queues independent state transitions.
+    setPromotionQuote(quote);
+    setPromotionCandidateId(eligible?.id ?? null);
+  };
+
+  const confirmCandidatePromotion = async () => {
+    if (!promotionQuote || !promotionCandidateId) return;
+    await promoteCandidate(promotionQuote.id, promotionCandidateId);
   };
 
   const rollbackCandidatePromotion = async (quoteId: string) => {
@@ -917,10 +1018,7 @@ const useClientQuotesController = ({
     if (!formData.items || formData.items.length === 0) {
       newErrors.items = t('sales:clientQuotes.errors.itemsRequired');
     } else {
-      const invalidItem = formData.items.find(
-        (item) => !item.productId && !item.supplierQuoteItemId,
-      );
-      if (invalidItem) {
+      if (hasMissingProductOrSupplierSource(formData.items)) {
         newErrors.items = t('sales:clientQuotes.errors.productOrSupplierRequired', {
           defaultValue: 'Each item must have a product or a linked supplier quote',
         });
@@ -964,6 +1062,15 @@ const useClientQuotesController = ({
         });
         break;
       }
+      if (
+        candidate.id !== activeCandidateId &&
+        hasMissingProductOrSupplierSource(candidate.items)
+      ) {
+        newErrors.candidates = t('sales:clientQuotes.errors.productOrSupplierRequired', {
+          defaultValue: 'Each item must have a product or a linked supplier quote',
+        });
+        break;
+      }
     }
 
     if (Object.keys(newErrors).length > 0) {
@@ -1004,7 +1111,21 @@ const useClientQuotesController = ({
       items:
         candidate.id === activeCandidateId ? itemsWithSnapshots : serializeItems(candidate.items),
     }));
-    const primaryCandidate = candidatePayloads[0];
+    const duplicatePrimaryCandidateIndex = duplicatePrimaryCandidateId
+      ? pendingCandidateDrafts.findIndex(
+          (candidate) => candidate.id === duplicatePrimaryCandidateId,
+        )
+      : 0;
+    const primaryCandidate =
+      candidatePayloads[duplicatePrimaryCandidateIndex] ?? candidatePayloads[0];
+    const submittedCandidatePayloads =
+      duplicatePrimaryCandidateId && duplicatePrimaryCandidateIndex > 0
+        ? [
+            primaryCandidate,
+            ...candidatePayloads.slice(0, duplicatePrimaryCandidateIndex),
+            ...candidatePayloads.slice(duplicatePrimaryCandidateIndex + 1),
+          ]
+        : candidatePayloads;
 
     const payload = {
       ...formData,
@@ -1016,7 +1137,7 @@ const useClientQuotesController = ({
       communicationChannelId: primaryCandidate.communicationChannelId,
       notes: primaryCandidate.notes,
       items: primaryCandidate.items,
-      candidates: candidatePayloads,
+      candidates: submittedCandidatePayloads,
     };
 
     dispatch({ type: 'setIsSubmitting', value: true });
@@ -1054,6 +1175,7 @@ const useClientQuotesController = ({
       if (updates.status === 'sent' && quote?.candidates?.length) {
         await onUpdateQuote(id, {
           id: quote.id,
+          description: quote.description,
           clientId: quote.clientId,
           clientName: quote.clientName,
           status: updates.status,
@@ -1151,7 +1273,8 @@ const useClientQuotesController = ({
   const handleClientChange = (clientId: string) => {
     if (isReadOnly) return;
     const client = clients.find((c) => c.id === clientId);
-    const nextClientName = client?.name || '';
+    const nextClientName =
+      client?.name ?? (clientId === formData.clientId ? (formData.clientName ?? '') : '');
     const shouldPromptReprice =
       Boolean(editingQuote) &&
       clientId !== formData.clientId &&
@@ -1416,7 +1539,17 @@ const useClientQuotesController = ({
     setFormData((prev) => ({ ...prev, items: newItems }));
   };
 
-  const activeClients = useMemo(() => clients.filter((c) => !c.isDisabled), [clients]);
+  const clientOptions = useMemo(
+    () =>
+      includeSelectedOption(
+        clients.flatMap((client) =>
+          client.isDisabled ? [] : [{ id: client.id, name: client.name }],
+        ),
+        formData.clientId,
+        clients.find((client) => client.id === formData.clientId)?.name || formData.clientName,
+      ),
+    [clients, formData.clientId, formData.clientName],
+  );
   const activeProducts = useMemo(() => products.filter((p) => !p.isDisabled), [products]);
   const activeProductOptions = useMemo(
     () => activeProducts.map((p) => ({ id: p.id, name: p.name })),
@@ -1461,10 +1594,28 @@ const useClientQuotesController = ({
     return ids;
   }, [formData.items]);
 
+  const supplierQuoteItemIdsUsedByOtherQuotes = useMemo(() => {
+    const ids = new Set<string>();
+    for (const quote of quotes) {
+      if (quote.id === editingQuote?.id) continue;
+
+      for (const item of quote.items) {
+        if (item.supplierQuoteItemId) ids.add(item.supplierQuoteItemId);
+      }
+      for (const candidate of quote.candidates ?? []) {
+        for (const item of candidate.items) {
+          if (item.supplierQuoteItemId) ids.add(item.supplierQuoteItemId);
+        }
+      }
+    }
+    return ids;
+  }, [editingQuote?.id, quotes]);
+
   const supplierQuoteItemOptions = useMemo(() => {
     const options: Option[] = [];
     for (const quote of sourceableSupplierQuotes) {
       for (const item of quote.items) {
+        if (supplierQuoteItemIdsUsedByOtherQuotes.has(item.id)) continue;
         options.push({
           id: item.id,
           name: supplierQuoteItemLabel(quote, item),
@@ -1473,7 +1624,7 @@ const useClientQuotesController = ({
       }
     }
     return options;
-  }, [sourceableSupplierQuotes, usedSupplierQuoteItemIds]);
+  }, [sourceableSupplierQuotes, supplierQuoteItemIdsUsedByOtherQuotes, usedSupplierQuoteItemIds]);
 
   // item-id → its CURRENT supplier quote + item, across ALL supplier quotes (not just the
   // selectable ones), for the bidirectional-sync affordances (#779): lock detection
@@ -1579,6 +1730,14 @@ const useClientQuotesController = ({
       className: 'whitespace-nowrap',
       headerClassName: 'min-w-[8rem]',
       cell: ({ row }) => <span className="font-bold text-zinc-700">{row.id}</span>,
+    },
+    {
+      header: t('sales:clientQuotes.description', { defaultValue: 'Description' }),
+      accessorKey: 'description',
+      headerClassName: 'min-w-[12rem]',
+      cell: ({ row }) => (
+        <span className="text-sm text-foreground">{row.description?.trim() || '-'}</span>
+      ),
     },
     {
       header: t('crm:clients.tableHeaders.insertDate'),
@@ -1855,13 +2014,16 @@ const useClientQuotesController = ({
         // A linked, expired supplier quote blocks progression to sent/offer/accepted (#779).
         const supplierExpired = Boolean(row.linkedSupplierQuoteExpired);
         const sendDisabled = history || supplierExpired;
+        const denyDisabled = isPromoting || history;
         const hasCandidateMetadata = Boolean(row.candidates?.length);
         const hasPromotableCandidate = row.candidates?.some(isCandidatePromotable);
         // Sending presents every active variant, so one blocked supplier source blocks the family.
         // Promotion chooses exactly one winner, so the comparison must remain reachable whenever
         // at least one candidate is eligible.
         const promotionDisabled =
-          history || (hasCandidateMetadata ? !hasPromotableCandidate : supplierExpired);
+          isPromoting ||
+          history ||
+          (hasCandidateMetadata ? !hasPromotableCandidate : supplierExpired);
         const progressBlockedTitle = t('sales:clientQuotes.linkedSupplierQuoteExpiredBlocks', {
           defaultValue:
             'The linked supplier quote has expired — extend it before progressing this quote.',
@@ -1882,7 +2044,8 @@ const useClientQuotesController = ({
         // Back-to-draft is rejected by the server from accepted/denied/expired, and history rows are
         // immutable — so a sent/offer row whose EFFECTIVE status is expired must not show an enabled
         // restore button (it would 409). `history` already folds in the expired check.
-        const restoreDisabled = !canRestore || (history && (!canRollbackDraftOffer || expired));
+        const restoreDisabled =
+          isPromoting || !canRestore || (history && (!canRollbackDraftOffer || expired));
         const restoreTitle = !canRestore
           ? t('sales:clientQuotes.restoreDisabledOfferStatus', {
               defaultValue: 'Restore is only possible when the linked offer is in draft status.',
@@ -1924,6 +2087,24 @@ const useClientQuotesController = ({
                       defaultValue: 'History entries cannot be modified.',
                     })}
               </TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    openDuplicateModal(row);
+                  }}
+                  aria-label={t('sales:clientQuotes.duplicateQuote')}
+                  className="rounded-lg text-muted-foreground hover:text-foreground"
+                >
+                  <i className="fa-solid fa-copy" aria-hidden="true"></i>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>{t('sales:clientQuotes.duplicateQuote')}</TooltipContent>
             </Tooltip>
             {row.linkedOfferId && onViewOffer && (
               <Tooltip>
@@ -2048,12 +2229,12 @@ const useClientQuotesController = ({
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
-                        if (history) return;
+                        if (denyDisabled) return;
                         handleStatusUpdate(row.id, { status: 'denied' });
                       }}
-                      disabled={history}
+                      disabled={denyDisabled}
                       aria-label={t('sales:clientQuotes.markAsDenied')}
-                      className={`p-2 rounded-lg transition-all ${history ? 'cursor-not-allowed opacity-50 text-red-600' : 'text-red-600 hover:text-red-600 hover:bg-red-50'}`}
+                      className={`p-2 rounded-lg transition-all ${denyDisabled ? 'cursor-not-allowed opacity-50 text-red-600' : 'text-red-600 hover:text-red-600 hover:bg-red-50'}`}
                     >
                       <i className="fa-solid fa-xmark"></i>
                     </button>
@@ -2191,7 +2372,7 @@ const useClientQuotesController = ({
     handleProductRowDragEnd,
     handleProductRowKeyDown,
     updateProductRow,
-    activeClients,
+    clientOptions,
     activeProductOptions,
     allProductIds,
     allSupplierQuoteIds,
@@ -2300,6 +2481,8 @@ const ClientQuoteCandidatesBar: React.FC<{ controller: ClientQuotesController }>
     editingQuote,
     isReadOnly,
     errors,
+    readOnlyStatus,
+    statusLabel,
   } = controller;
   const [renamingCandidateId, setRenamingCandidateId] = useState<string | null>(null);
   const [renameDraft, setRenameDraft] = useState('');
@@ -2323,7 +2506,17 @@ const ClientQuoteCandidatesBar: React.FC<{ controller: ClientQuotesController }>
   };
 
   return (
-    <div className="space-y-1">
+    <div className="space-y-2">
+      <ClientQuoteSectionHeading
+        label={t('sales:clientQuotes.candidates.column', { defaultValue: 'Varianti' })}
+        description={t('sales:fieldInfo.variants', {
+          defaultValue:
+            'Configure alternatives for the same quote: each variant keeps its own items, prices, discounts, and terms.',
+        })}
+        status={readOnlyStatus}
+        statusLabel={statusLabel}
+        tooltipIcon="info"
+      />
       <div
         data-testid="quote-candidate-tabs-scroll"
         className="overflow-x-auto overflow-y-hidden border-b border-border pt-1"
@@ -2742,12 +2935,18 @@ const ClientQuoteSectionHeading: React.FC<{
   description?: string;
   status?: string;
   statusLabel?: string;
-}> = ({ label, description, status, statusLabel }) => (
+  tooltipIcon?: FieldTooltipProps['icon'];
+}> = ({ label, description, status, statusLabel, tooltipIcon }) => (
   <h4 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-primary">
     <span className="size-1.5 rounded-full bg-primary"></span>
     {label}
     {description && status && statusLabel && (
-      <FieldTooltip description={description} status={status} statusLabel={statusLabel} />
+      <FieldTooltip
+        description={description}
+        status={status}
+        statusLabel={statusLabel}
+        icon={tooltipIcon}
+      />
     )}
   </h4>
 );
@@ -2767,13 +2966,14 @@ const ClientQuoteClientSection: React.FC<{ controller: ClientQuotesController }>
         status={readOnlyStatus}
         statusLabel={statusLabel}
       />
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
         <ClientQuoteClientField controller={controller} />
         <ClientQuoteCodeField controller={controller} />
         <ClientQuotePaymentTermsField controller={controller} />
         <ClientQuoteCommunicationField controller={controller} />
         <ClientQuoteExpirationField controller={controller} />
       </div>
+      <ClientQuoteDescriptionField controller={controller} />
     </div>
   );
 };
@@ -2781,13 +2981,13 @@ const ClientQuoteClientSection: React.FC<{ controller: ClientQuotesController }>
 const ClientQuoteClientField: React.FC<{ controller: ClientQuotesController }> = ({
   controller,
 }) => {
-  const { t, errors, activeClients, formData, handleClientChange, isReadOnly } = controller;
+  const { t, errors, clientOptions, formData, handleClientChange, isReadOnly } = controller;
 
   return (
     <Field data-invalid={Boolean(errors.clientId)}>
       <SelectControl
         id="client-quote-client"
-        options={activeClients.map((c) => ({ id: c.id, name: c.name }))}
+        options={clientOptions}
         value={formData.clientId || ''}
         onChange={(val) => handleClientChange(val as string)}
         placeholder={t('sales:clientQuotes.selectAClient')}
@@ -2859,6 +3059,28 @@ const ClientQuoteCodeField: React.FC<{ controller: ClientQuotesController }> = (
     </Field>
   );
 };
+
+const ClientQuoteDescriptionField: React.FC<{ controller: ClientQuotesController }> = ({
+  controller,
+}) => (
+  <Field className="w-full">
+    <FieldLabel htmlFor="client-quote-description">
+      {controller.t('sales:clientQuotes.description', { defaultValue: 'Description' })}
+    </FieldLabel>
+    <Input
+      id="client-quote-description"
+      type="text"
+      value={controller.formData.description ?? ''}
+      onChange={(event) =>
+        controller.setFormData((previous) => ({
+          ...previous,
+          description: event.target.value,
+        }))
+      }
+      disabled={controller.isReadOnly}
+    />
+  </Field>
+);
 
 const ClientQuotePaymentTermsField: React.FC<{ controller: ClientQuotesController }> = ({
   controller,
@@ -3174,9 +3396,9 @@ const ClientQuoteItemsSection: React.FC<{ controller: ClientQuotesController }> 
       accessorFn: getClientQuoteItemRevenue,
       align: 'right',
       cell: ({ row }) => (
-        <span className="font-semibold tabular-nums">
-          {formatDecimal(getClientQuoteItemRevenue(row))} {currency}
-        </span>
+        <div className="min-w-[130px]">
+          <ClientQuoteRevenueEditor controller={controller} line={getLine(row)} />
+        </div>
       ),
     },
     {
@@ -3293,6 +3515,7 @@ const getClientQuoteLineContext = (
     lineCost,
     netRevenue: lineSalePrice,
     lineMargin,
+    revenueMultiplier,
   } = getClientQuoteItemPricingContext(item);
   const rawCost = item.supplierQuoteItemId ? item.supplierQuoteUnitPrice : item.productCost;
   const cost =
@@ -3303,6 +3526,8 @@ const getClientQuoteLineContext = (
         : convertUnitPrice(Number(rawCost), 'hours', item.unitType || 'hours');
   const molPercentage = item.productMolPercentage ?? undefined;
   const unitPrice = Number.isFinite(Number(item.unitPrice)) ? Number(item.unitPrice) : undefined;
+  const revenue = unitPrice === undefined ? undefined : lineSalePrice;
+  const canEditRevenue = Number.isFinite(revenueMultiplier) && revenueMultiplier > 0;
   const durationUnit = normalizeDurationUnit(item.durationUnit);
   const durationValue = getDurationInputValue(item);
   const product = products.find((p) => p.id === item.productId);
@@ -3342,11 +3567,18 @@ const getClientQuoteLineContext = (
     setFormData(makeUnitPriceUpdater<Partial<Quote>>(index, value));
   };
 
+  const handleRevenueChange = (value: string) => {
+    if (isReadOnly || !canEditRevenue) return;
+    setFormData(makeRevenueUpdater<Partial<Quote>>(index, value));
+  };
+
   return {
     cost,
     unitPrice,
+    revenue,
     molPercentage,
     lineCost,
+    canEditRevenue,
     durationUnit,
     durationValue,
     isSupply,
@@ -3362,6 +3594,7 @@ const getClientQuoteLineContext = (
     handleCostChange,
     handleUnitPriceChange,
     handleMolChange,
+    handleRevenueChange,
   };
 };
 
@@ -3423,6 +3656,7 @@ const ClientQuoteProductPicker: React.FC<{
       isReadOnly={isReadOnly}
       ariaLabel={t('sales:clientQuotes.selectProduct', { defaultValue: 'Select product' })}
       placeholder={t('sales:clientQuotes.selectProduct')}
+      preserveUnavailableProductName
       onProductChange={updateProductSelection}
       className={className}
       buttonClassName={buttonClassName}
@@ -3590,6 +3824,27 @@ const ClientQuoteSalePriceEditor: React.FC<{
       formatDecimals={2}
       onValueChange={line.handleUnitPriceChange}
       disabled={controller.isReadOnly}
+      className="w-full max-w-[5rem] flex-none border-border bg-background px-1 py-2 text-right text-sm text-foreground"
+    />
+    <span className="shrink-0 text-[9px] font-semibold text-muted-foreground">
+      {controller.currency}
+    </span>
+  </div>
+);
+
+const ClientQuoteRevenueEditor: React.FC<{
+  controller: ClientQuotesController;
+  line: ClientQuoteLineContext;
+}> = ({ controller, line }) => (
+  <div className="flex w-full items-center justify-end gap-1">
+    <ValidatedNumberInput
+      value={line.revenue}
+      placeholder="0,00"
+      min={0}
+      aria-label={controller.t('sales:clientQuotes.revenue')}
+      formatDecimals={2}
+      onValueChange={line.handleRevenueChange}
+      disabled={controller.isReadOnly || !line.canEditRevenue}
       className="w-full max-w-[5rem] flex-none border-border bg-background px-1 py-2 text-right text-sm text-foreground"
     />
     <span className="shrink-0 text-[9px] font-semibold text-muted-foreground">

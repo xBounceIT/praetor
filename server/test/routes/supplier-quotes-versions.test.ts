@@ -172,6 +172,7 @@ const FULL_PERMS = [
 
 const SAMPLE_QUOTE = {
   id: 'sq-1',
+  description: 'Hardware procurement',
   supplierId: 's1',
   supplierName: 'Acme',
   paymentTerms: 'immediate',
@@ -452,7 +453,11 @@ describe('POST /api/sales/supplier-quotes/:id/versions/:versionId/restore', () =
     expect(sqHasClientSyncedCostsMock).toHaveBeenCalledWith('sq-1', SAMPLE_VERSION.createdAt);
     expect(sqRestoreSnapshotQuoteMock).toHaveBeenCalledWith(
       'sq-1',
-      expect.objectContaining({ supplierId: 's1', notes: null }),
+      expect.objectContaining({
+        description: 'Hardware procurement',
+        supplierId: 's1',
+        notes: null,
+      }),
       TX_SENTINEL,
     );
     expect(sqReplaceItemsMock).toHaveBeenCalled();
@@ -528,6 +533,25 @@ describe('POST /api/sales/supplier-quotes/:id/versions/:versionId/restore', () =
       expect.objectContaining({ listPrice: 37.75, discountPercent: 15, unitPrice: 32.0875 }),
     );
     expect(sqHasClientSyncedCostsMock).toHaveBeenCalledWith('sq-1', SAMPLE_VERSION.createdAt);
+  });
+
+  test('200 preserves description when restoring a legacy snapshot without the field', async () => {
+    setupHappyPath();
+    const { description: _description, ...legacyQuote } = SAMPLE_QUOTE;
+    sqvFindByIdMock.mockResolvedValue({
+      ...SAMPLE_VERSION,
+      snapshot: { ...SAMPLE_SNAPSHOT, quote: legacyQuote },
+    });
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/sales/supplier-quotes/sq-1/versions/sqv-1/restore',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    const restoreFields = sqRestoreSnapshotQuoteMock.mock.calls[0]?.[1];
+    expect(restoreFields).not.toHaveProperty('description');
   });
 
   test('409 when linked order exists', async () => {
