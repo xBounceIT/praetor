@@ -694,9 +694,10 @@ describe('PUT /api/sales/supplier-quotes/:id', () => {
   });
 
   test('200 keeps dot-only and marker-like legacy ids distinct and operable', async () => {
+    const dotEscapePrefix = '~'.repeat(101);
     for (const [legacyId, routeSegment] of [
-      ['..', '@..'],
-      ['@..', '@@..'],
+      ['..', `${dotEscapePrefix}..`],
+      ['@..', '@..'],
     ] as const) {
       const legacyQuote = { ...DRAFT_QUOTE, id: legacyId };
       sqFindByIdMock.mockClear();

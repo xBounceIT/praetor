@@ -510,7 +510,7 @@ describe('client-offer document discount validation', () => {
 
     const res = await testApp.inject({
       method: 'PUT',
-      url: '/api/sales/client-offers/%40..',
+      url: `/api/sales/client-offers/${'~'.repeat(101)}..`,
       headers: authHeader(),
       payload: { id: legacyId, notes: 'updated' },
     });

@@ -1,5 +1,6 @@
 import Fastify, { type FastifyInstance, type FastifyPluginAsync } from 'fastify';
 import { ajvFormatsPlugin, ajvFormatsPluginOptions } from '../../utils/ajv-formats.ts';
+import { PATH_PARAMETER_MAX_LENGTH } from '../../utils/path-segments.ts';
 
 // Why no `@fastify/rate-limit`: the plugin's onResponse hook double-writes after
 // `authMiddlewareMock` hijacks an early-401/403 reply. Decorating `rateLimit` as a no-op gives
@@ -14,6 +15,7 @@ export const buildRouteTestApp = async (
 ): Promise<FastifyInstance> => {
   const app = Fastify({
     logger: false,
+    routerOptions: { maxParamLength: PATH_PARAMETER_MAX_LENGTH },
     ajv: {
       customOptions: {},
       plugins: [[ajvFormatsPlugin, ajvFormatsPluginOptions]],

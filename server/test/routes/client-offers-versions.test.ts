@@ -332,7 +332,7 @@ describe('GET /api/sales/client-offers/:id/versions/:versionId', () => {
 
     const res = await testApp.inject({
       method: 'GET',
-      url: '/api/sales/client-offers/%40../versions/%40%40..',
+      url: `/api/sales/client-offers/${'~'.repeat(101)}../versions/%40..`,
       headers: authHeader(),
     });
 
