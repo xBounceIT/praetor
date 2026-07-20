@@ -62,6 +62,21 @@ describe('TasksView', () => {
   });
 
   describe('assignment modal user list (issue #720)', () => {
+    test('uses the dedicated assignment update permission for task membership changes', async () => {
+      const source = await readTasksViewSource();
+
+      expect(source).toMatch(
+        /const canManageAssignments = hasScopedActionPermission\(\s*permissions,\s*'projects\.assignments',\s*'update',\s*\);/,
+      );
+      expect(source).toMatch(
+        /const openAssignments = useCallback\(\s*\(taskId: string\) => \{\s*if \(!canManageAssignments\) return;/,
+      );
+      expect(source).toMatch(
+        /\{canManageAssignments && \(\s*<Tooltip>[\s\S]*?onOpenAssignments\(row\.id\)/,
+      );
+      expect(source).toContain('disabled={!canManageAssignments}');
+    });
+
     test('filters top managers, admin-only, and disabled users out of the assignable list', async () => {
       const source = await readTasksViewSource();
 

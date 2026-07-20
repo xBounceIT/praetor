@@ -121,6 +121,7 @@ export interface TasksViewProps {
 type TaskColumnsInput = {
   projects: Project[];
   clients: Client[];
+  canManageAssignments: boolean;
   canUpdateTasks: boolean;
   canDeleteTasks: boolean;
   currency: string;
@@ -137,6 +138,7 @@ type TaskColumnsInput = {
 const useTaskColumns = ({
   projects,
   clients,
+  canManageAssignments,
   canUpdateTasks,
   canDeleteTasks,
   currency,
@@ -415,7 +417,7 @@ const useTaskColumns = ({
         disableSorting: true,
         disableFiltering: true,
         cell: ({ row }) => {
-          if (!canUpdateTasks && !canDeleteTasks) return null;
+          if (!canManageAssignments && !canUpdateTasks && !canDeleteTasks) return null;
           const project = projects.find((p) => p.id === row.projectId);
           const client = clients.find((c) => c.id === project?.clientId);
           const isInheritedDisabled = project?.isDisabled || client?.isDisabled;
@@ -423,26 +425,28 @@ const useTaskColumns = ({
 
           return (
             <div className="flex items-center justify-end gap-2">
+              {canManageAssignments && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="inline-flex">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onOpenAssignments(row.id);
+                        }}
+                        aria-label={t('tasks.manageMembers')}
+                        className="p-2 text-zinc-400 hover:text-praetor hover:bg-zinc-100 rounded-lg transition-all"
+                      >
+                        <i className="fa-solid fa-users"></i>
+                      </button>
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent>{t('tasks.manageMembers')}</TooltipContent>
+                </Tooltip>
+              )}
               {canUpdateTasks && (
                 <>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <span className="inline-flex">
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onOpenAssignments(row.id);
-                          }}
-                          aria-label={t('tasks.manageMembers')}
-                          className="p-2 text-zinc-400 hover:text-praetor hover:bg-zinc-100 rounded-lg transition-all"
-                        >
-                          <i className="fa-solid fa-users"></i>
-                        </button>
-                      </span>
-                    </TooltipTrigger>
-                    <TooltipContent>{t('tasks.manageMembers')}</TooltipContent>
-                  </Tooltip>
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <span className="inline-flex">
@@ -522,6 +526,7 @@ const useTaskColumns = ({
       t,
       projects,
       clients,
+      canManageAssignments,
       canUpdateTasks,
       canDeleteTasks,
       onUpdateTask,
@@ -556,6 +561,11 @@ const TasksView: React.FC<TasksViewProps> = ({
   const canCreateTasks = hasScopedActionPermission(permissions, 'projects.tasks', 'create');
   const canUpdateTasks = hasScopedActionPermission(permissions, 'projects.tasks', 'update');
   const canDeleteTasks = hasScopedActionPermission(permissions, 'projects.tasks', 'delete');
+  const canManageAssignments = hasScopedActionPermission(
+    permissions,
+    'projects.assignments',
+    'update',
+  );
   const [state, dispatch] = useReducer(tasksViewReducer, undefined, createTasksViewState);
   const {
     editingTask,
@@ -636,15 +646,16 @@ const TasksView: React.FC<TasksViewProps> = ({
 
   const openAssignments = useCallback(
     (taskId: string) => {
-      if (!canUpdateTasks) return;
+      if (!canManageAssignments) return;
       dispatch({ type: 'manageTask', taskId });
     },
-    [canUpdateTasks],
+    [canManageAssignments],
   );
 
   const columns = useTaskColumns({
     projects,
     clients,
+    canManageAssignments,
     canUpdateTasks,
     canDeleteTasks,
     currency,
@@ -722,7 +733,7 @@ const TasksView: React.FC<TasksViewProps> = ({
         saveAssignedUserIds={(ids) => tasksApi.updateUsers(managingTaskId as string, ids)}
         entityLabel={t('common:labels.task')}
         entityName={managingTask?.name || ''}
-        disabled={!canUpdateTasks}
+        disabled={!canManageAssignments}
       />
 
       <TaskFormModal

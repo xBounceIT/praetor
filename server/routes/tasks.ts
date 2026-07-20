@@ -3,6 +3,7 @@ import { withDbTransaction } from '../db/drizzle.ts';
 import {
   authenticateToken,
   requireAnyPermission,
+  requirePermission,
   requireScopedPermission,
 } from '../middleware/auth.ts';
 import * as projectsRepo from '../repositories/projectsRepo.ts';
@@ -760,17 +761,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.post(
     '/:id/users',
     {
-      onRequest: [
-        authenticateToken,
-        requireAnyPermission(
-          'projects.assignments.update',
-          'projects.tasks.update',
-          'projects.tasks_all.update',
-        ),
-      ],
+      onRequest: [authenticateToken, requirePermission('projects.assignments.update')],
       schema: {
         tags: ['tasks'],
         summary: 'Update task user assignments',
+        description:
+          'Requires projects.assignments.update. Task update permissions do not authorize assignment changes.',
         params: idParamSchema,
         body: userIdsSchema,
         response: {

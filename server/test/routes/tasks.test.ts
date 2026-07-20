@@ -150,6 +150,7 @@ const TASKS_PERMS = [
   'projects.tasks.delete',
   'projects.tasks_all.view',
   'projects.manage.view',
+  'projects.assignments.update',
 ];
 
 const USER_PERMS = ['projects.tasks.view'];
@@ -1191,7 +1192,7 @@ describe('POST /api/tasks/:id/users', () => {
     expect(res.statusCode).toBe(401);
   });
 
-  test('403: missing tasks.update permission', async () => {
+  test('403: missing assignments.update permission', async () => {
     getRolePermissionsMock.mockResolvedValue(USER_PERMS);
 
     const res = await testApp.inject({
@@ -1202,6 +1203,25 @@ describe('POST /api/tasks/:id/users', () => {
     });
 
     expect(res.statusCode).toBe(403);
+  });
+
+  test.each([
+    'projects.tasks.update',
+    'projects.tasks_all.update',
+  ])('403: %s cannot mutate task assignments without assignments.update', async (permission) => {
+    getRolePermissionsMock.mockResolvedValue([permission]);
+    findNameAndProjectIdMock.mockResolvedValue({ name: 'Implement feature', projectId: 'p-1' });
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/tasks/t-1/users',
+      headers: authHeader(),
+      payload: { userIds: ['u2'] },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(clearNonTopManagerAssignmentsMock).not.toHaveBeenCalled();
+    expect(addManualAssignmentsMock).not.toHaveBeenCalled();
   });
 
   // Issue #720: the assignments view+update grants (seeded to manager/top_manager) permit editing

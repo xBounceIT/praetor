@@ -19750,6 +19750,7 @@
         "tags": [
           "tasks"
         ],
+        "description": "Requires projects.assignments.update. Task update permissions do not authorize assignment changes.",
         "requestBody": {
           "required": true,
           "content": {
