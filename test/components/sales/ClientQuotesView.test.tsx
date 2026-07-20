@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, mock } from 'bun:test';
-import { fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ApiError } from '../../../services/api/client';
 import type { Client, Quote, QuoteMutation, SupplierQuote } from '../../../types';
@@ -1148,7 +1148,13 @@ describe('<ClientQuotesView /> edit action gating (#812 round 13)', () => {
 
   test('promotes the only candidate directly without opening the comparison dialog', async () => {
     const user = userEvent.setup();
-    const onPromoteCandidate = mock((_quoteId: string, _candidateId: string) => Promise.resolve());
+    let finishPromotion = () => {};
+    const onPromoteCandidate = mock(
+      (_quoteId: string, _candidateId: string) =>
+        new Promise<void>((resolve) => {
+          finishPromotion = resolve;
+        }),
+    );
     const quote = withSingleCandidate(
       { ...quotes[0], id: 'Q-SINGLE-CANDIDATE', status: 'sent' },
       'candidate-only',
@@ -1177,6 +1183,14 @@ describe('<ClientQuotesView /> edit action gating (#812 round 13)', () => {
       expect(onPromoteCandidate).toHaveBeenCalledWith('Q-SINGLE-CANDIDATE', 'candidate-only'),
     );
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    await openRowActions(user);
+    const deny = screen.getByRole('button', { name: 'sales:clientQuotes.markAsDenied' });
+    const restore = screen.getByRole('button', { name: 'sales:clientQuotes.restoreQuote' });
+    expect(deny).toBeDisabled();
+    expect(restore).toBeDisabled();
+
+    await act(async () => finishPromotion());
+    await waitFor(() => expect(deny).not.toBeDisabled());
   });
 
   test('opens candidate comparison when at least one variant remains promotable', async () => {

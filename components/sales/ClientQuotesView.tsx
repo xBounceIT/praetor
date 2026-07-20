@@ -1867,6 +1867,7 @@ const useClientQuotesController = ({
         // A linked, expired supplier quote blocks progression to sent/offer/accepted (#779).
         const supplierExpired = Boolean(row.linkedSupplierQuoteExpired);
         const sendDisabled = history || supplierExpired;
+        const denyDisabled = isPromoting || history;
         const hasCandidateMetadata = Boolean(row.candidates?.length);
         const hasPromotableCandidate = row.candidates?.some(isCandidatePromotable);
         // Sending presents every active variant, so one blocked supplier source blocks the family.
@@ -1896,7 +1897,8 @@ const useClientQuotesController = ({
         // Back-to-draft is rejected by the server from accepted/denied/expired, and history rows are
         // immutable — so a sent/offer row whose EFFECTIVE status is expired must not show an enabled
         // restore button (it would 409). `history` already folds in the expired check.
-        const restoreDisabled = !canRestore || (history && (!canRollbackDraftOffer || expired));
+        const restoreDisabled =
+          isPromoting || !canRestore || (history && (!canRollbackDraftOffer || expired));
         const restoreTitle = !canRestore
           ? t('sales:clientQuotes.restoreDisabledOfferStatus', {
               defaultValue: 'Restore is only possible when the linked offer is in draft status.',
@@ -2062,12 +2064,12 @@ const useClientQuotesController = ({
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
-                        if (history) return;
+                        if (denyDisabled) return;
                         handleStatusUpdate(row.id, { status: 'denied' });
                       }}
-                      disabled={history}
+                      disabled={denyDisabled}
                       aria-label={t('sales:clientQuotes.markAsDenied')}
-                      className={`p-2 rounded-lg transition-all ${history ? 'cursor-not-allowed opacity-50 text-red-600' : 'text-red-600 hover:text-red-600 hover:bg-red-50'}`}
+                      className={`p-2 rounded-lg transition-all ${denyDisabled ? 'cursor-not-allowed opacity-50 text-red-600' : 'text-red-600 hover:text-red-600 hover:bg-red-50'}`}
                     >
                       <i className="fa-solid fa-xmark"></i>
                     </button>
