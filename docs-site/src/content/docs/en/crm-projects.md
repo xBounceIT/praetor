@@ -95,7 +95,7 @@ The **Job rules** section on the detail page lets you create automatic controls 
 
 ### Assigning users
 
-The **Assign Users** command manages who is assigned to a job or one of its activities. Access to this dialog is governed by the **Project Assignments** permission: the **View** action lets a role open the assignments of any job or activity regardless of its own membership, while **Update** lets it edit them. Managers and Top Managers hold both by default, so they can manage assignments even when they are not members of the job or activity.
+The **Assign Users** command manages who is assigned to a job or one of its activities. Access to this dialog is governed by the **Project Assignments** permission: the **View** action lets a role open the assignments of any job or activity regardless of its own membership, while **Update** lets it edit them. Task-edit permissions do not grant assignment-management access. Managers and Top Managers hold both assignment permissions by default, so they can manage assignments even when they are not members of the job or activity.
 
 ## Competence centers
 
