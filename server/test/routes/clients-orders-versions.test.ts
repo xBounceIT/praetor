@@ -266,6 +266,20 @@ beforeEach(async () => {
     status: 'accepted',
   });
   coFindExistingForOfferMock.mockResolvedValue(null);
+  sqGetQuoteItemSnapshotsMock.mockResolvedValue(
+    new Map([
+      [
+        'sqi-1',
+        {
+          supplierQuoteId: 'sq-1',
+          supplierName: 'ACME',
+          productId: 'p-1',
+          unitPrice: 50,
+          netCost: 50,
+        },
+      ],
+    ]),
+  );
 
   testApp = await buildRouteTestApp(routePlugin, '/api/clients-orders');
 });
@@ -567,6 +581,100 @@ describe('POST /api/clients-orders/:id/versions/:versionId/restore', () => {
     expect(replacedItems[0].productId).toBeNull();
   });
 
+  test('200 restores authoritative supplier metadata instead of snapshot values', async () => {
+    setupHappyPath();
+    sqGetQuoteItemSnapshotsMock.mockResolvedValue(
+      new Map([
+        [
+          'sqi-1',
+          {
+            supplierQuoteId: 'sq-1',
+            supplierName: 'ACME',
+            productId: 'p-1',
+            unitPrice: 50,
+            netCost: 50,
+          },
+        ],
+      ]),
+    );
+    ovFindByIdMock.mockResolvedValue({
+      ...SAMPLE_VERSION,
+      snapshot: {
+        ...SAMPLE_SNAPSHOT,
+        items: [
+          {
+            ...SAMPLE_ITEM,
+            supplierQuoteId: 'sq-client-lie',
+            supplierQuoteItemId: 'sqi-1',
+            supplierQuoteSupplierName: 'Spoofed Supplier',
+            supplierQuoteUnitPrice: 999,
+          },
+        ],
+      },
+    });
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/clients-orders/o-1/versions/ov-1/restore',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    const restoredItem = coReplaceItemsMock.mock.calls[0]?.[1]?.[0];
+    expect(restoredItem).toEqual(
+      expect.objectContaining({
+        productId: 'p-1',
+        supplierQuoteId: 'sq-1',
+        supplierQuoteItemId: 'sqi-1',
+        supplierQuoteSupplierName: 'ACME',
+        supplierQuoteUnitPrice: 50,
+        productMolPercentage: 50,
+      }),
+    );
+  });
+
+  test('200 ignores a stale snapshot product replaced by the live supplier item', async () => {
+    setupHappyPath();
+    sqGetQuoteItemSnapshotsMock.mockResolvedValue(
+      new Map([
+        [
+          'sqi-1',
+          {
+            supplierQuoteId: 'sq-1',
+            supplierName: 'ACME',
+            productId: 'p-1',
+            unitPrice: 50,
+            netCost: 50,
+          },
+        ],
+      ]),
+    );
+    ovFindByIdMock.mockResolvedValue({
+      ...SAMPLE_VERSION,
+      snapshot: {
+        ...SAMPLE_SNAPSHOT,
+        items: [
+          {
+            ...SAMPLE_ITEM,
+            productId: 'p-old',
+            supplierQuoteId: 'sq-1',
+            supplierQuoteItemId: 'sqi-1',
+          },
+        ],
+      },
+    });
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/clients-orders/o-1/versions/ov-1/restore',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(productsGetSnapshotsMock).not.toHaveBeenCalledWith(['p-old']);
+    expect(coReplaceItemsMock.mock.calls[0]?.[1]?.[0].productId).toBe('p-1');
+  });
+
   test('409 when restoring a snapshot with an orphaned product-less item (issue #783)', async () => {
     setupHappyPath();
     // No catalog product AND no supplier-quote reference — the same invariant POST/PUT enforce.
@@ -619,6 +727,40 @@ describe('POST /api/clients-orders/:id/versions/:versionId/restore', () => {
             ...SAMPLE_ITEM,
             id: 'si-stale',
             productId: null,
+            supplierQuoteId: 'sq-1',
+            supplierQuoteItemId: 'sqi-gone',
+          },
+        ],
+      },
+    });
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/clients-orders/o-1/versions/ov-1/restore',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(JSON.parse(res.body).error).toContain(
+      'references a supplier quote item that no longer exists',
+    );
+    expect(sqGetQuoteItemSnapshotsMock).toHaveBeenCalledWith(['sqi-gone']);
+    expect(coRestoreSnapshotOrderMock).not.toHaveBeenCalled();
+    expect(coReplaceItemsMock).not.toHaveBeenCalled();
+  });
+
+  test('409 when restoring a product-backed line whose supplier quote item is stale', async () => {
+    setupHappyPath();
+    sqGetQuoteItemSnapshotsMock.mockResolvedValue(new Map());
+    ovFindByIdMock.mockResolvedValue({
+      ...SAMPLE_VERSION,
+      snapshot: {
+        ...SAMPLE_SNAPSHOT,
+        items: [
+          {
+            ...SAMPLE_ITEM,
+            id: 'si-stale-product',
+            productId: 'p-1',
             supplierQuoteId: 'sq-1',
             supplierQuoteItemId: 'sqi-gone',
           },
@@ -1187,6 +1329,184 @@ describe('PUT /api/clients-orders/:id snapshots pre-update state', () => {
     expect(coReplaceItemsMock).toHaveBeenCalled();
     expect(coReplaceItemsMock.mock.calls[0]?.at(-1)).toBe(TX_SENTINEL);
     expect(logAuditMock).not.toHaveBeenCalled();
+  });
+
+  test('PUT rejects a fresh supplier quote item without supplier-order create permission', async () => {
+    coFindExistingMock.mockResolvedValue(SAMPLE_ORDER);
+    coFindItemsForOrderMock.mockResolvedValue([SAMPLE_ITEM]);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/clients-orders/o-1',
+      headers: authHeader(),
+      payload: {
+        items: [
+          {
+            id: SAMPLE_ITEM.id,
+            productId: SAMPLE_ITEM.productId,
+            productName: SAMPLE_ITEM.productName,
+            quantity: SAMPLE_ITEM.quantity,
+            unitPrice: SAMPLE_ITEM.unitPrice,
+            productCost: SAMPLE_ITEM.productCost,
+            discount: SAMPLE_ITEM.discount,
+            unitType: SAMPLE_ITEM.unitType,
+            supplierQuoteId: 'sq-1',
+            supplierQuoteItemId: 'sqi-1',
+          },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(JSON.parse(res.body).error).toContain('accounting.supplier_orders.create');
+    expect(sqGetQuoteItemSnapshotsMock).not.toHaveBeenCalled();
+    expect(coReplaceItemsMock).not.toHaveBeenCalled();
+  });
+
+  test('PUT preserves the stored cost for a retained supplier quote item', async () => {
+    const retainedSupplierItem = {
+      ...SAMPLE_ITEM,
+      supplierQuoteId: 'sq-1',
+      supplierQuoteItemId: 'sqi-1',
+      supplierQuoteSupplierName: 'ACME',
+      supplierQuoteUnitPrice: 50,
+    };
+    coFindExistingMock.mockResolvedValue(SAMPLE_ORDER);
+    coFindItemsForOrderMock.mockResolvedValue([retainedSupplierItem]);
+    coFindFullForSnapshotMock.mockResolvedValue({
+      order: SAMPLE_ORDER,
+      items: [retainedSupplierItem],
+    });
+    sqGetQuoteItemSnapshotsMock.mockResolvedValue(
+      new Map([
+        [
+          'sqi-1',
+          {
+            supplierQuoteId: 'sq-1',
+            supplierName: 'ACME',
+            productId: 'p-1',
+            unitPrice: 75,
+            netCost: 75,
+          },
+        ],
+      ]),
+    );
+    coUpdateMock.mockResolvedValue(SAMPLE_ORDER);
+    coReplaceItemsMock.mockResolvedValue([{ ...retainedSupplierItem, unitPrice: 101 }]);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/clients-orders/o-1',
+      headers: authHeader(),
+      payload: {
+        items: [
+          {
+            id: retainedSupplierItem.id,
+            productId: retainedSupplierItem.productId,
+            productName: retainedSupplierItem.productName,
+            quantity: retainedSupplierItem.quantity,
+            unitPrice: 101,
+            productCost: retainedSupplierItem.productCost,
+            discount: retainedSupplierItem.discount,
+            unitType: retainedSupplierItem.unitType,
+            supplierQuoteId: retainedSupplierItem.supplierQuoteId,
+            supplierQuoteItemId: retainedSupplierItem.supplierQuoteItemId,
+          },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(sqGetQuoteItemSnapshotsMock).not.toHaveBeenCalled();
+    expect(coReplaceItemsMock.mock.calls[0]?.[1]?.[0]).toEqual(
+      expect.objectContaining({
+        supplierQuoteUnitPrice: 50,
+        productMolPercentage: 50.5,
+      }),
+    );
+  });
+
+  test('PUT rejects moving a retained supplier quote item onto a new sale line', async () => {
+    const retainedSupplierItem = {
+      ...SAMPLE_ITEM,
+      supplierQuoteId: 'sq-1',
+      supplierQuoteItemId: 'sqi-1',
+      supplierQuoteSupplierName: 'ACME',
+      supplierQuoteUnitPrice: 50,
+    };
+    coFindExistingMock.mockResolvedValue(SAMPLE_ORDER);
+    coFindItemsForOrderMock.mockResolvedValue([retainedSupplierItem]);
+    coFindFullForSnapshotMock.mockResolvedValue({
+      order: SAMPLE_ORDER,
+      items: [retainedSupplierItem],
+    });
+    coUpdateMock.mockResolvedValue(SAMPLE_ORDER);
+    coReplaceItemsMock.mockResolvedValue([{ ...retainedSupplierItem, id: 'si-new' }]);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/clients-orders/o-1',
+      headers: authHeader(),
+      payload: {
+        items: [
+          {
+            id: 'si-new',
+            productId: retainedSupplierItem.productId,
+            productName: retainedSupplierItem.productName,
+            quantity: retainedSupplierItem.quantity,
+            unitPrice: retainedSupplierItem.unitPrice,
+            productCost: retainedSupplierItem.productCost,
+            discount: retainedSupplierItem.discount,
+            unitType: retainedSupplierItem.unitType,
+            supplierQuoteId: retainedSupplierItem.supplierQuoteId,
+            supplierQuoteItemId: retainedSupplierItem.supplierQuoteItemId,
+          },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(coReplaceItemsMock).not.toHaveBeenCalled();
+  });
+
+  test('PUT rejects cloning a retained supplier reference through a repeated line id', async () => {
+    const retainedSupplierItem = {
+      ...SAMPLE_ITEM,
+      supplierQuoteId: 'sq-1',
+      supplierQuoteItemId: 'sqi-1',
+      supplierQuoteSupplierName: 'ACME',
+      supplierQuoteUnitPrice: 50,
+    };
+    coFindExistingMock.mockResolvedValue(SAMPLE_ORDER);
+    coFindItemsForOrderMock.mockResolvedValue([retainedSupplierItem]);
+    coFindFullForSnapshotMock.mockResolvedValue({
+      order: SAMPLE_ORDER,
+      items: [retainedSupplierItem],
+    });
+    coUpdateMock.mockResolvedValue(SAMPLE_ORDER);
+    coReplaceItemsMock.mockResolvedValue([retainedSupplierItem, retainedSupplierItem]);
+
+    const repeatedItem = {
+      id: retainedSupplierItem.id,
+      productId: retainedSupplierItem.productId,
+      productName: retainedSupplierItem.productName,
+      quantity: retainedSupplierItem.quantity,
+      unitPrice: retainedSupplierItem.unitPrice,
+      productCost: retainedSupplierItem.productCost,
+      discount: retainedSupplierItem.discount,
+      unitType: retainedSupplierItem.unitType,
+      supplierQuoteId: retainedSupplierItem.supplierQuoteId,
+      supplierQuoteItemId: retainedSupplierItem.supplierQuoteItemId,
+    };
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/clients-orders/o-1',
+      headers: authHeader(),
+      payload: { items: [repeatedItem, repeatedItem] },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(coReplaceItemsMock).not.toHaveBeenCalled();
   });
 });
 

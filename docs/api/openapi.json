@@ -41381,13 +41381,15 @@
                           "type": [
                             "string",
                             "null"
-                          ]
+                          ],
+                          "description": "Supplier quote id snapshot. The server derives this from supplierQuoteItemId and clears an id supplied without an item reference."
                         },
                         "supplierQuoteItemId": {
                           "type": [
                             "string",
                             "null"
-                          ]
+                          ],
+                          "description": "Supplier quote item source. Without accounting.supplier_orders.create, creates require the accepted same-client source offer and may use each item only as many times as that offer does; updates may only retain references already stored on the order. Retained updates preserve stored supplier metadata. Version restore revalidates the live item and refreshes its supplier metadata."
                         },
                         "supplierQuoteSupplierName": {
                           "type": [
@@ -41921,13 +41923,15 @@
                           "type": [
                             "string",
                             "null"
-                          ]
+                          ],
+                          "description": "Supplier quote id snapshot. The server derives this from supplierQuoteItemId and clears an id supplied without an item reference."
                         },
                         "supplierQuoteItemId": {
                           "type": [
                             "string",
                             "null"
-                          ]
+                          ],
+                          "description": "Supplier quote item source. Without accounting.supplier_orders.create, creates require the accepted same-client source offer and may use each item only as many times as that offer does; updates may only retain references already stored on the order. Retained updates preserve stored supplier metadata. Version restore revalidates the live item and refreshes its supplier metadata."
                         },
                         "supplierQuoteSupplierName": {
                           "type": [

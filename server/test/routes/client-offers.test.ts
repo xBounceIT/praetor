@@ -729,6 +729,20 @@ describe('PUT /api/sales/client-offers/:id expired rules (issue #779)', () => {
         supplierQuoteUnitPrice: 50,
       }),
     ]);
+    sqGetQuoteItemSnapshotsMock.mockResolvedValue(
+      new Map([
+        [
+          'sqi-1',
+          {
+            supplierQuoteId: 'sq-1',
+            supplierName: 'Supplier Co',
+            productId: 'p-1',
+            unitPrice: 50,
+            netCost: 50,
+          },
+        ],
+      ]),
+    );
     sqFindByIdMock.mockResolvedValue({
       id: 'sq-1',
       supplierId: 'sup-1',
@@ -809,6 +823,20 @@ describe('PUT /api/sales/client-offers/:id expired rules (issue #779)', () => {
         supplierQuoteUnitPrice: 50,
       }),
     ]);
+    sqGetQuoteItemSnapshotsMock.mockResolvedValue(
+      new Map([
+        [
+          'sqi-1',
+          {
+            supplierQuoteId: 'sq-1',
+            supplierName: 'Supplier Co',
+            productId: 'p-1',
+            unitPrice: 50,
+            netCost: 50,
+          },
+        ],
+      ]),
+    );
     sqFindByIdMock.mockResolvedValue({
       id: 'sq-1',
       supplierId: 'sup-1',

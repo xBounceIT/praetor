@@ -20,15 +20,13 @@ import {
 } from '../services/clientOrderCreation.ts';
 import { reserveDocumentCodeCounterFromCode } from '../services/documentCodes.ts';
 import { logAudit } from '../utils/audit.ts';
-import {
-  calculateClientLineMol,
-  withCalculatedClientLineMol,
-} from '../utils/client-line-pricing.ts';
+import { withCalculatedClientLineMol } from '../utils/client-line-pricing.ts';
 import { getForeignKeyViolation, getUniqueViolation } from '../utils/db-errors.ts';
 import { replyDocumentCodeCollision } from '../utils/document-code-replies.ts';
 import type { DurationUnit } from '../utils/duration-unit.ts';
 import { normalizeNullableNumber, normalizeNullableString } from '../utils/normalize.ts';
 import { generatePrefixedId, ITEM_ID_PREFIXES } from '../utils/order-ids.ts';
+import { requestHasPermission } from '../utils/permissions.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { replyError } from '../utils/replyError.ts';
 import { normalizeUnitType, type UnitType } from '../utils/unit-type.ts';
@@ -139,8 +137,16 @@ const clientOrderItemBodySchema = {
     // non-product / non-supplier lines. Declaring them nullable (instead of relying on Ajv's
     // coerceTypes to turn null→''/0) keeps the null "unset" semantic through normalizeIncomingItems.
     productMolPercentage: { type: ['number', 'null'] },
-    supplierQuoteId: { type: ['string', 'null'] },
-    supplierQuoteItemId: { type: ['string', 'null'] },
+    supplierQuoteId: {
+      type: ['string', 'null'],
+      description:
+        'Supplier quote id snapshot. The server derives this from supplierQuoteItemId and clears an id supplied without an item reference.',
+    },
+    supplierQuoteItemId: {
+      type: ['string', 'null'],
+      description:
+        'Supplier quote item source. Without accounting.supplier_orders.create, creates require the accepted same-client source offer and may use each item only as many times as that offer does; updates may only retain references already stored on the order. Retained updates preserve stored supplier metadata. Version restore revalidates the live item and refreshes its supplier metadata.',
+    },
     supplierQuoteSupplierName: { type: ['string', 'null'] },
     supplierQuoteUnitPrice: { type: ['number', 'null'] },
     supplierSaleId: { type: ['string', 'null'] },
@@ -285,11 +291,16 @@ const normalizeIncomingItems = (
       unitPrice: unitPriceResult.value,
       productCost: Number(item.productCost ?? 0),
       productMolPercentage: normalizeNullableNumber(item.productMolPercentage),
-      // Normalized above so the stored values match the productId-vs-supplier-quote gate.
-      supplierQuoteId,
+      // A quote id without its item reference is not an authoritative sourcing relationship.
+      // Clear all quote metadata in that case so a raw client cannot manufacture one.
+      supplierQuoteId: supplierQuoteItemId ? supplierQuoteId : null,
       supplierQuoteItemId,
-      supplierQuoteSupplierName: normalizeNullableString(item.supplierQuoteSupplierName),
-      supplierQuoteUnitPrice: normalizeNullableNumber(item.supplierQuoteUnitPrice),
+      supplierQuoteSupplierName: supplierQuoteItemId
+        ? normalizeNullableString(item.supplierQuoteSupplierName)
+        : null,
+      supplierQuoteUnitPrice: supplierQuoteItemId
+        ? normalizeNullableNumber(item.supplierQuoteUnitPrice)
+        : null,
       supplierSaleId: normalizeNullableString(item.supplierSaleId),
       supplierSaleItemId: normalizeNullableString(item.supplierSaleItemId),
       supplierSaleSupplierName: normalizeNullableString(item.supplierSaleSupplierName),
@@ -303,26 +314,72 @@ const normalizeIncomingItems = (
   return normalized;
 };
 
-// A product-less line (`productId === null`) has the supplier-quote reference as its only anchor,
-// and `sale_items.supplier_quote_*` has no FK. Resolve each referenced item against the live
-// supplier-quote items — the same authoritative source the client-quotes route trusts (NOT
-// status-gated: under the #779 derived model, lines legitimately source supplier quotes that
-// derive `draft`) — and stamp the supplier fields from the snapshot. Without this, a direct
-// POST/PUT could persist a line with bogus refs that the UI still locks as supplier-backed.
-// Returns null after replying 400 if a reference can't be resolved.
+type SupplierQuoteResolutionOptions = {
+  allowedSupplierQuoteItemCounts?: ReadonlyMap<string, number>;
+  retainedSupplierItemsByLineId?: ReadonlyMap<string, clientsOrdersRepo.ClientOrderItem>;
+};
+
+// `sale_items.supplier_quote_*` has no FK, so resolve every fresh supplier item against the live
+// quote item. Exact retained update refs instead reuse the order's stored sourcing snapshot: an
+// unrelated edit must not rewrite historical cost because the supplier quote changed later.
 const resolveSupplierQuoteRefs = async (
   items: NormalizedOrderItem[],
   reply: FastifyReply,
+  options: SupplierQuoteResolutionOptions = {},
 ): Promise<NormalizedOrderItem[] | null> => {
-  const productlessItemIds = items.flatMap((item) =>
-    item.productId === null && item.supplierQuoteItemId ? [item.supplierQuoteItemId] : [],
+  const lineIdCounts = new Map<string, number>();
+  for (const item of items) {
+    if (item.id) lineIdCounts.set(item.id, (lineIdCounts.get(item.id) ?? 0) + 1);
+  }
+  const retainedSupplierItemFor = (item: NormalizedOrderItem) => {
+    const retained =
+      item.id && lineIdCounts.get(item.id) === 1
+        ? options.retainedSupplierItemsByLineId?.get(item.id)
+        : undefined;
+    return retained?.supplierQuoteItemId === item.supplierQuoteItemId ? retained : undefined;
+  };
+  const referencedItemIds = items.flatMap((item) =>
+    item.supplierQuoteItemId && !retainedSupplierItemFor(item) ? [item.supplierQuoteItemId] : [],
   );
-  if (productlessItemIds.length === 0) return items.map(withCalculatedClientLineMol);
 
-  const snapshots = await supplierQuotesRepo.getQuoteItemSnapshots(productlessItemIds);
+  const usedSupplierQuoteItemCounts = new Map<string, number>();
+  const forbiddenIndex = items.findIndex((item) => {
+    if (
+      !item.supplierQuoteItemId ||
+      retainedSupplierItemFor(item) ||
+      options.allowedSupplierQuoteItemCounts === undefined
+    ) {
+      return false;
+    }
+    const usedCount = (usedSupplierQuoteItemCounts.get(item.supplierQuoteItemId) ?? 0) + 1;
+    usedSupplierQuoteItemCounts.set(item.supplierQuoteItemId, usedCount);
+    return usedCount > (options.allowedSupplierQuoteItemCounts.get(item.supplierQuoteItemId) ?? 0);
+  });
+  if (forbiddenIndex >= 0) {
+    reply.code(403).send({
+      error: `items[${forbiddenIndex}].supplierQuoteItemId requires an accepted source offer or accounting.supplier_orders.create permission`,
+    });
+    return null;
+  }
+
+  const snapshots =
+    referencedItemIds.length > 0
+      ? await supplierQuotesRepo.getQuoteItemSnapshots(referencedItemIds)
+      : new Map<string, supplierQuotesRepo.QuoteItemSnapshot>();
   for (let i = 0; i < items.length; i++) {
     const item = items[i];
-    if (item.productId !== null || !item.supplierQuoteItemId) continue;
+    if (!item.supplierQuoteItemId) continue;
+    const retained = retainedSupplierItemFor(item);
+    if (retained) {
+      items[i] = {
+        ...item,
+        productId: retained.productId,
+        supplierQuoteId: retained.supplierQuoteId,
+        supplierQuoteSupplierName: retained.supplierQuoteSupplierName,
+        supplierQuoteUnitPrice: retained.supplierQuoteUnitPrice,
+      };
+      continue;
+    }
     const snapshot = snapshots.get(item.supplierQuoteItemId);
     if (!snapshot) {
       badRequest(
@@ -332,13 +389,11 @@ const resolveSupplierQuoteRefs = async (
       return null;
     }
     // Trust the snapshot, not the client: stamp the authoritative quote id, supplier name and unit
-    // price so the persisted line is tied to the real accepted quote and the supplier-order
-    // auto-create keys off a valid supplierQuoteId. A catalog-backed supplier-quote item also
-    // carries a real productId — adopt it (mirroring the client-quotes resolver) so the sale isn't
-    // stored product-less and stays visible to product quick-links and catalog usage/revenue reports.
+    // price. A catalog-backed supplier-quote item also carries a real productId — adopt it so the
+    // sale stays visible to product quick-links and catalog usage/revenue reports.
     items[i] = {
       ...item,
-      productId: snapshot.productId ?? item.productId,
+      productId: snapshot.productId,
       supplierQuoteId: snapshot.supplierQuoteId,
       supplierQuoteSupplierName: snapshot.supplierName,
       supplierQuoteUnitPrice: snapshot.netCost,
@@ -492,63 +547,74 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     );
   };
 
-  const findMissingSnapshotReference = async (
+  const validateSnapshotReferences = async (
     snapshot: orderVersionsRepo.OrderVersionSnapshot,
-  ): Promise<string | null> => {
+  ): Promise<{
+    error: string | null;
+    supplierQuoteItems: Map<string, supplierQuotesRepo.QuoteItemSnapshot>;
+  }> => {
+    // Supplier-backed lines adopt the live supplier item's product below, so only validate a
+    // snapshot product id when that product is the one restore will actually persist.
     const productIds = Array.from(
       new Set(
         snapshot.items
+          .filter((item) => !normalizeNullableString(item.supplierQuoteItemId))
           .map((item) => item.productId)
           .filter((id): id is string => typeof id === 'string' && id.length > 0),
       ),
     );
-    const [clientExists, products] = await Promise.all([
+    const supplierReferencedItems = snapshot.items.filter((item) =>
+      normalizeNullableString(item.supplierQuoteItemId),
+    );
+    const supplierQuoteItemIds = supplierReferencedItems
+      .map((item) => normalizeNullableString(item.supplierQuoteItemId))
+      .filter((id): id is string => id !== null);
+    const [clientExists, products, supplierQuoteItems] = await Promise.all([
       clientsRepo.existsById(snapshot.order.clientId),
       productIds.length > 0 ? productsRepo.getSnapshots(productIds) : Promise.resolve(new Map()),
+      supplierQuoteItemIds.length > 0
+        ? supplierQuotesRepo.getQuoteItemSnapshots(supplierQuoteItemIds)
+        : Promise.resolve(new Map<string, supplierQuotesRepo.QuoteItemSnapshot>()),
     ]);
     if (!clientExists) {
-      return `Snapshot client "${snapshot.order.clientId}" no longer exists`;
+      return {
+        error: `Snapshot client "${snapshot.order.clientId}" no longer exists`,
+        supplierQuoteItems,
+      };
     }
     const missingProductId = productIds.find((id) => !products.has(id));
     if (missingProductId) {
-      return `Snapshot product "${missingProductId}" no longer exists`;
+      return {
+        error: `Snapshot product "${missingProductId}" no longer exists`,
+        supplierQuoteItems,
+      };
     }
-    // A product-less snapshot item (no catalog product) must resolve to a LIVE supplier-quote
-    // item — the same invariant POST/PUT enforce (not status-gated; see resolveSupplierQuoteRefs).
-    // Two failure modes are rejected before any write:
-    //  - orphaned: missing either supplier-quote id, so it could never be re-saved through the
-    //    POST/PUT presence gate and is invisible to product-based reporting;
-    //  - stale: the referenced item was deleted, so restoring it persists a dead reference that
-    //    the next draft edit (which re-runs `resolveSupplierQuoteRefs`) rejects, stranding the
-    //    order in an un-saveable state.
+    // A product-less snapshot item needs a supplier-quote item as its alternative source anchor.
+    // Every supplier-quote item reference, including on product-backed lines, must still resolve
+    // so restore cannot reintroduce a dead or client-controlled relationship that POST/PUT reject.
     const productlessItems = snapshot.items.filter(
       (item) => !normalizeNullableString(item.productId),
     );
     const orphanedItem = productlessItems.find(
-      (item) =>
-        !(
-          normalizeNullableString(item.supplierQuoteId) &&
-          normalizeNullableString(item.supplierQuoteItemId)
-        ),
+      (item) => !normalizeNullableString(item.supplierQuoteItemId),
     );
     if (orphanedItem) {
-      return `Snapshot item "${orphanedItem.productName}" has no catalog product and no supplier-quote reference`;
+      return {
+        error: `Snapshot item "${orphanedItem.productName}" has no catalog product and no supplier-quote reference`,
+        supplierQuoteItems,
+      };
     }
-    const supplierQuoteItemIds = productlessItems
-      .map((item) => normalizeNullableString(item.supplierQuoteItemId))
-      .filter((id): id is string => id !== null);
-    if (supplierQuoteItemIds.length > 0) {
-      const quoteItemSnapshots =
-        await supplierQuotesRepo.getQuoteItemSnapshots(supplierQuoteItemIds);
-      const staleItem = productlessItems.find((item) => {
-        const itemId = normalizeNullableString(item.supplierQuoteItemId);
-        return itemId !== null && !quoteItemSnapshots.has(itemId);
-      });
-      if (staleItem) {
-        return `Snapshot item "${staleItem.productName}" references a supplier quote item that no longer exists`;
-      }
+    const staleItem = supplierReferencedItems.find((item) => {
+      const itemId = normalizeNullableString(item.supplierQuoteItemId);
+      return itemId !== null && !supplierQuoteItems.has(itemId);
+    });
+    if (staleItem) {
+      return {
+        error: `Snapshot item "${staleItem.productName}" references a supplier quote item that no longer exists`,
+        supplierQuoteItems,
+      };
     }
-    return null;
+    return { error: null, supplierQuoteItems };
   };
 
   fastify.get(
@@ -647,8 +713,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const parsedItems = normalizeIncomingItems(items, reply);
       if (!parsedItems) return;
-      const normalizedItems = await resolveSupplierQuoteRefs(parsedItems, reply);
-      if (!normalizedItems) return;
 
       const discountTypeValue = discountType === 'currency' ? 'currency' : 'percentage';
       const discountResult = optionalLocalizedDocumentDiscount(
@@ -658,7 +722,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       );
       if (!discountResult.ok) return badRequest(reply, discountResult.message);
 
+      const canCreateSupplierOrders = requestHasPermission(
+        request,
+        'accounting.supplier_orders.create',
+      );
       let linkedQuoteIdValue = linkedQuoteIdResult.value;
+      const sourceOfferSupplierQuoteItemCounts = new Map<string, number>();
       if (linkedOfferIdResult.value) {
         const offer = await clientsOrdersRepo.findOfferDetails(linkedOfferIdResult.value);
         if (!offer) {
@@ -678,6 +747,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             entityType: 'client_offer',
             entityId: linkedOfferIdResult.value,
             details: { secondaryLabel: 'source_offer_not_accepted', fromValue: offer.status },
+          });
+        }
+        if (offer.clientId !== clientIdResult.value) {
+          return replyError(request, reply, {
+            statusCode: 409,
+            message: 'clientId must match the source offer client',
+            action: 'client_order.create.conflict',
+            entityType: 'client_offer',
+            entityId: linkedOfferIdResult.value,
+            details: { secondaryLabel: 'client_mismatch' },
           });
         }
 
@@ -707,7 +786,31 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         }
 
         linkedQuoteIdValue = offer.linkedQuoteId || null;
+        if (!canCreateSupplierOrders) {
+          const sourceOfferItems = await clientOffersRepo.findItemsForOffer(
+            linkedOfferIdResult.value,
+          );
+          for (const item of sourceOfferItems) {
+            if (!item.supplierQuoteItemId) continue;
+            sourceOfferSupplierQuoteItemCounts.set(
+              item.supplierQuoteItemId,
+              (sourceOfferSupplierQuoteItemCounts.get(item.supplierQuoteItemId) ?? 0) + 1,
+            );
+          }
+        }
       }
+
+      const normalizedItems = await resolveSupplierQuoteRefs(parsedItems, reply, {
+        allowedSupplierQuoteItemCounts: canCreateSupplierOrders
+          ? undefined
+          : sourceOfferSupplierQuoteItemCounts,
+      });
+      if (!normalizedItems) return;
+      const trustedSupplierQuoteItemIds = new Set(
+        normalizedItems.flatMap((item) =>
+          item.supplierQuoteItemId ? [item.supplierQuoteItemId] : [],
+        ),
+      );
 
       type CreateOutcome =
         | { ok: false; status: number; body: Record<string, unknown> }
@@ -817,6 +920,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         request,
         createdOrder,
         insertedItems,
+        trustedSupplierQuoteItemIds,
         withDbTransaction,
       );
 
@@ -926,15 +1030,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         linkedOfferIdValue = linkedOfferIdResult.value;
       }
 
-      let normalizedItems: NormalizedOrderItem[] | null = null;
+      let parsedItemsForUpdate: NormalizedOrderItem[] | null = null;
       if (items !== undefined) {
         if (!Array.isArray(items) || items.length === 0) {
           return badRequest(reply, 'Items must be a non-empty array');
         }
-        const parsedItems = normalizeIncomingItems(items, reply);
-        if (!parsedItems) return;
-        normalizedItems = await resolveSupplierQuoteRefs(parsedItems, reply);
-        if (!normalizedItems) return;
+        parsedItemsForUpdate = normalizeIncomingItems(items, reply);
+        if (!parsedItemsForUpdate) return;
       }
 
       const existingOrder = await clientsOrdersRepo.findExisting(idResult.value);
@@ -1018,6 +1120,32 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         }
       }
 
+      let existingItems: clientsOrdersRepo.ClientOrderItem[] | null = null;
+      let normalizedItems: NormalizedOrderItem[] | null = null;
+      if (parsedItemsForUpdate) {
+        const canCreateSupplierOrders = requestHasPermission(
+          request,
+          'accounting.supplier_orders.create',
+        );
+        const hasSupplierQuoteRefs = parsedItemsForUpdate.some(
+          (item) => item.supplierQuoteItemId !== null,
+        );
+        let retainedSupplierItemsByLineId:
+          | ReadonlyMap<string, clientsOrdersRepo.ClientOrderItem>
+          | undefined;
+        if (hasSupplierQuoteRefs) {
+          existingItems = await clientsOrdersRepo.findItemsForOrder(idResult.value);
+          retainedSupplierItemsByLineId = new Map(
+            existingItems.map((item) => [item.id, item] as const),
+          );
+        }
+        normalizedItems = await resolveSupplierQuoteRefs(parsedItemsForUpdate, reply, {
+          allowedSupplierQuoteItemCounts: canCreateSupplierOrders ? undefined : new Map(),
+          retainedSupplierItemsByLineId,
+        });
+        if (!normalizedItems) return;
+      }
+
       const nextLinkedOfferId =
         typeof linkedOfferIdValue === 'string' && linkedOfferIdValue !== existingOrder.linkedOfferId
           ? linkedOfferIdValue
@@ -1030,8 +1158,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       // line edits still flow through this source-linked path.
       const allowSourceLinkedEdit =
         existingOrder.status === 'draft' || existingOrder.status === 'confirmed';
-
-      let existingItems: clientsOrdersRepo.ClientOrderItem[] | null = null;
 
       if (isSourceLinkedOrder && !allowSourceLinkedEdit) {
         const lockedFields: string[] = [];
@@ -1537,11 +1663,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           details: { secondaryLabel: 'snapshot_discount_invalid' },
         });
       }
-      const missingSnapshotReference = await findMissingSnapshotReference(version.snapshot);
-      if (missingSnapshotReference) {
+      const snapshotReferenceValidation = await validateSnapshotReferences(version.snapshot);
+      if (snapshotReferenceValidation.error) {
         return replyError(request, reply, {
           statusCode: 409,
-          message: missingSnapshotReference,
+          message: snapshotReferenceValidation.error,
           action: 'client_order.restore.conflict',
           entityType: 'client_order',
           entityId: idResult.value,
@@ -1549,17 +1675,24 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         });
       }
 
-      // `sale_items.product_id` is nullable (issue #783), so a product-less supplier line in the
-      // snapshot restores as-is. `findMissingSnapshotReference` above already rejected stale
-      // productIds and orphaned product-less items (no product AND no supplier-quote reference).
       const snapshotItems: clientsOrdersRepo.NewClientOrderItem[] = version.snapshot.items.map(
-        ({ orderId: _o, id: _i, ...rest }) => ({
-          ...rest,
-          id: generatePrefixedId(ITEM_ID_PREFIXES.saleItem),
-          // Empty-string productIds slip through some snapshots; the DB column needs NULL.
-          productId: rest.productId || null,
-          productMolPercentage: calculateClientLineMol(rest),
-        }),
+        ({ orderId: _o, id: _i, ...rest }) => {
+          const supplierQuoteItemId = normalizeNullableString(rest.supplierQuoteItemId);
+          const supplierQuoteItem = supplierQuoteItemId
+            ? snapshotReferenceValidation.supplierQuoteItems.get(supplierQuoteItemId)
+            : undefined;
+          return withCalculatedClientLineMol({
+            ...rest,
+            id: generatePrefixedId(ITEM_ID_PREFIXES.saleItem),
+            // Supplier sourcing metadata is authoritative and product-less quote items must stay
+            // product-less. A quote id without an item reference is not a sourcing relationship.
+            productId: supplierQuoteItem ? supplierQuoteItem.productId : rest.productId || null,
+            supplierQuoteId: supplierQuoteItem?.supplierQuoteId ?? null,
+            supplierQuoteItemId,
+            supplierQuoteSupplierName: supplierQuoteItem?.supplierName ?? null,
+            supplierQuoteUnitPrice: supplierQuoteItem?.netCost ?? null,
+          });
+        },
       );
 
       let restored: {

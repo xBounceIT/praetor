@@ -228,6 +228,7 @@ export const findStatusAndClientName = async (
 export type OfferLink = {
   id: string;
   linkedQuoteId: string | null;
+  clientId: string;
   status: string;
 };
 
@@ -239,6 +240,7 @@ export const findOfferDetails = async (
     .select({
       id: customerOffers.id,
       linkedQuoteId: customerOffers.linkedQuoteId,
+      clientId: customerOffers.clientId,
       status: customerOffers.status,
     })
     .from(customerOffers)
