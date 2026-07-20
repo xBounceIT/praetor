@@ -9,6 +9,8 @@ sidebar:
 
 Accedi con le credenziali fornite dall'amministratore. Se l'azienda usa LDAP o single sign-on, potresti essere reindirizzato al provider aziendale prima di entrare nella piattaforma.
 
+In una nuova installazione, l'operatore deve generare una password univoca e impostarla in `ADMIN_DEFAULT_PASSWORD` prima del primo avvio. Praetor non crea l'account `admin` se il valore è vuoto o corrisponde a una credenziale predefinita pubblicata in precedenza. Negli aggiornamenti, la variabile non è necessaria quando l'account `admin` esiste già.
+
 Se la sessione resta inattiva troppo a lungo, Praetor richiede un nuovo accesso. Questa protezione evita che una sessione lasciata aperta venga usata da altri.
 
 ## Navigazione

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from 'bun:test';
-import * as runtimeConfig from '../../utils/runtimeConfig.ts';
 import {
+  INSECURE_DEFAULT_ADMIN_PASSWORDS,
   INSECURE_DEFAULT_JWT_SECRETS,
   readRequiredNonDefaultEnv,
   validateRequiredNonDefaultEnv,
@@ -33,7 +33,10 @@ describe('runtimeConfig', () => {
     );
   });
 
-  test('does not maintain a separate admin default password denylist', () => {
-    expect('INSECURE_DEFAULT_ADMIN_PASSWORDS' in runtimeConfig).toBe(false);
+  test('maintains the bootstrap admin password denylist with every published legacy default', () => {
+    expect(INSECURE_DEFAULT_ADMIN_PASSWORDS).toEqual([
+      'password',
+      'change-me-strong-admin-password',
+    ]);
   });
 });
