@@ -904,7 +904,9 @@ const ProjectRuleFormModalSession: React.FC<ProjectRuleFormModalSessionProps> = 
   }));
   const actionTypeOptions: Array<{ id: ProjectRuleActionType; name: string }> = [
     { id: 'notify', name: t('projects:detail.rules.form.actionTypes.notify') },
-    { id: 'webhook', name: t('projects:detail.rules.form.actionTypes.webhook') },
+    ...(hasPermission(permissions, 'administration.webhooks.view')
+      ? [{ id: 'webhook' as const, name: t('projects:detail.rules.form.actionTypes.webhook') }]
+      : []),
   ];
   const recipientTypeOptions: Array<{ id: ProjectRuleNotifyRecipientType; name: string }> = [
     { id: 'user', name: t('projects:detail.rules.form.recipientTypes.user') },

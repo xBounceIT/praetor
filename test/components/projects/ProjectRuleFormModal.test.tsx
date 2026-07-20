@@ -298,6 +298,32 @@ describe('<ProjectRuleFormModal />', () => {
     );
   });
 
+  test('hides the webhook action type without administration.webhooks.view', async () => {
+    render(
+      <ProjectRuleFormModal
+        open
+        onOpenChange={() => {}}
+        rule={rule}
+        recipients={{ ...recipients, webhooks: [] }}
+        permissions={['projects.rules.update']}
+        onSubmit={() => Promise.resolve()}
+      />,
+    );
+
+    fireEvent.click(document.getElementById('project-rule-action-type-0') as HTMLButtonElement);
+
+    expect(
+      await screen.findByRole('option', {
+        name: 'projects:detail.rules.form.actionTypes.notify',
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('option', {
+        name: 'projects:detail.rules.form.actionTypes.webhook',
+      }),
+    ).not.toBeInTheDocument();
+  });
+
   test('submits a notification action addressed to a role', async () => {
     const onSubmit = mock(() => Promise.resolve());
     const roleRule: ProjectRule = {
@@ -355,7 +381,7 @@ describe('<ProjectRuleFormModal />', () => {
         onOpenChange={() => {}}
         rule={webhookRule}
         recipients={recipients}
-        permissions={['projects.rules.update']}
+        permissions={['projects.rules.update', 'administration.webhooks.view']}
         onSubmit={onSubmit}
       />,
     );
