@@ -41389,7 +41389,7 @@
                             "string",
                             "null"
                           ],
-                          "description": "Supplier quote item source. Without accounting.supplier_orders.create, creates require the accepted same-client source offer and updates may only retain references already stored on the order. Version restore revalidates the live item and refreshes its supplier metadata."
+                          "description": "Supplier quote item source. Without accounting.supplier_orders.create, creates require the accepted same-client source offer and updates may only retain references already stored on the order. Retained updates preserve stored supplier metadata. Version restore revalidates the live item and refreshes its supplier metadata."
                         },
                         "supplierQuoteSupplierName": {
                           "type": [
@@ -41931,7 +41931,7 @@
                             "string",
                             "null"
                           ],
-                          "description": "Supplier quote item source. Without accounting.supplier_orders.create, creates require the accepted same-client source offer and updates may only retain references already stored on the order. Version restore revalidates the live item and refreshes its supplier metadata."
+                          "description": "Supplier quote item source. Without accounting.supplier_orders.create, creates require the accepted same-client source offer and updates may only retain references already stored on the order. Retained updates preserve stored supplier metadata. Version restore revalidates the live item and refreshes its supplier metadata."
                         },
                         "supplierQuoteSupplierName": {
                           "type": [

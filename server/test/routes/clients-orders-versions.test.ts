@@ -633,6 +633,48 @@ describe('POST /api/clients-orders/:id/versions/:versionId/restore', () => {
     );
   });
 
+  test('200 ignores a stale snapshot product replaced by the live supplier item', async () => {
+    setupHappyPath();
+    sqGetQuoteItemSnapshotsMock.mockResolvedValue(
+      new Map([
+        [
+          'sqi-1',
+          {
+            supplierQuoteId: 'sq-1',
+            supplierName: 'ACME',
+            productId: 'p-1',
+            unitPrice: 50,
+            netCost: 50,
+          },
+        ],
+      ]),
+    );
+    ovFindByIdMock.mockResolvedValue({
+      ...SAMPLE_VERSION,
+      snapshot: {
+        ...SAMPLE_SNAPSHOT,
+        items: [
+          {
+            ...SAMPLE_ITEM,
+            productId: 'p-old',
+            supplierQuoteId: 'sq-1',
+            supplierQuoteItemId: 'sqi-1',
+          },
+        ],
+      },
+    });
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/clients-orders/o-1/versions/ov-1/restore',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(productsGetSnapshotsMock).not.toHaveBeenCalledWith(['p-old']);
+    expect(coReplaceItemsMock.mock.calls[0]?.[1]?.[0].productId).toBe('p-1');
+  });
+
   test('409 when restoring a snapshot with an orphaned product-less item (issue #783)', async () => {
     setupHappyPath();
     // No catalog product AND no supplier-quote reference — the same invariant POST/PUT enforce.
@@ -1321,7 +1363,7 @@ describe('PUT /api/clients-orders/:id snapshots pre-update state', () => {
     expect(coReplaceItemsMock).not.toHaveBeenCalled();
   });
 
-  test('PUT lets an unprivileged caller retain a validated supplier quote item', async () => {
+  test('PUT preserves the stored cost for a retained supplier quote item', async () => {
     const retainedSupplierItem = {
       ...SAMPLE_ITEM,
       supplierQuoteId: 'sq-1',
@@ -1335,6 +1377,20 @@ describe('PUT /api/clients-orders/:id snapshots pre-update state', () => {
       order: SAMPLE_ORDER,
       items: [retainedSupplierItem],
     });
+    sqGetQuoteItemSnapshotsMock.mockResolvedValue(
+      new Map([
+        [
+          'sqi-1',
+          {
+            supplierQuoteId: 'sq-1',
+            supplierName: 'ACME',
+            productId: 'p-1',
+            unitPrice: 75,
+            netCost: 75,
+          },
+        ],
+      ]),
+    );
     coUpdateMock.mockResolvedValue(SAMPLE_ORDER);
     coReplaceItemsMock.mockResolvedValue([{ ...retainedSupplierItem, unitPrice: 101 }]);
 
@@ -1361,8 +1417,13 @@ describe('PUT /api/clients-orders/:id snapshots pre-update state', () => {
     });
 
     expect(res.statusCode).toBe(200);
-    expect(sqGetQuoteItemSnapshotsMock).toHaveBeenCalledWith(['sqi-1']);
-    expect(coReplaceItemsMock).toHaveBeenCalled();
+    expect(sqGetQuoteItemSnapshotsMock).not.toHaveBeenCalled();
+    expect(coReplaceItemsMock.mock.calls[0]?.[1]?.[0]).toEqual(
+      expect.objectContaining({
+        supplierQuoteUnitPrice: 50,
+        productMolPercentage: 50.5,
+      }),
+    );
   });
 
   test('PUT rejects moving a retained supplier quote item onto a new sale line', async () => {
@@ -1402,6 +1463,46 @@ describe('PUT /api/clients-orders/:id snapshots pre-update state', () => {
           },
         ],
       },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(coReplaceItemsMock).not.toHaveBeenCalled();
+  });
+
+  test('PUT rejects cloning a retained supplier reference through a repeated line id', async () => {
+    const retainedSupplierItem = {
+      ...SAMPLE_ITEM,
+      supplierQuoteId: 'sq-1',
+      supplierQuoteItemId: 'sqi-1',
+      supplierQuoteSupplierName: 'ACME',
+      supplierQuoteUnitPrice: 50,
+    };
+    coFindExistingMock.mockResolvedValue(SAMPLE_ORDER);
+    coFindItemsForOrderMock.mockResolvedValue([retainedSupplierItem]);
+    coFindFullForSnapshotMock.mockResolvedValue({
+      order: SAMPLE_ORDER,
+      items: [retainedSupplierItem],
+    });
+    coUpdateMock.mockResolvedValue(SAMPLE_ORDER);
+    coReplaceItemsMock.mockResolvedValue([retainedSupplierItem, retainedSupplierItem]);
+
+    const repeatedItem = {
+      id: retainedSupplierItem.id,
+      productId: retainedSupplierItem.productId,
+      productName: retainedSupplierItem.productName,
+      quantity: retainedSupplierItem.quantity,
+      unitPrice: retainedSupplierItem.unitPrice,
+      productCost: retainedSupplierItem.productCost,
+      discount: retainedSupplierItem.discount,
+      unitType: retainedSupplierItem.unitType,
+      supplierQuoteId: retainedSupplierItem.supplierQuoteId,
+      supplierQuoteItemId: retainedSupplierItem.supplierQuoteItemId,
+    };
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/clients-orders/o-1',
+      headers: authHeader(),
+      payload: { items: [repeatedItem, repeatedItem] },
     });
 
     expect(res.statusCode).toBe(403);

@@ -145,7 +145,7 @@ const clientOrderItemBodySchema = {
     supplierQuoteItemId: {
       type: ['string', 'null'],
       description:
-        'Supplier quote item source. Without accounting.supplier_orders.create, creates require the accepted same-client source offer and updates may only retain references already stored on the order. Version restore revalidates the live item and refreshes its supplier metadata.',
+        'Supplier quote item source. Without accounting.supplier_orders.create, creates require the accepted same-client source offer and updates may only retain references already stored on the order. Retained updates preserve stored supplier metadata. Version restore revalidates the live item and refreshes its supplier metadata.',
     },
     supplierQuoteSupplierName: { type: ['string', 'null'] },
     supplierQuoteUnitPrice: { type: ['number', 'null'] },
@@ -314,24 +314,40 @@ const normalizeIncomingItems = (
   return normalized;
 };
 
-// `sale_items.supplier_quote_*` has no FK, so resolve every referenced supplier item against the
-// live supplier-quote items, including catalog-backed lines. The optional allowlist binds create
-// requests to a server-validated source offer unless the caller may create supplier orders.
+type SupplierQuoteResolutionOptions = {
+  allowedSupplierQuoteItemIds?: ReadonlySet<string>;
+  retainedSupplierItemsByLineId?: ReadonlyMap<string, clientsOrdersRepo.ClientOrderItem>;
+};
+
+// `sale_items.supplier_quote_*` has no FK, so resolve every fresh supplier item against the live
+// quote item. Exact retained update refs instead reuse the order's stored sourcing snapshot: an
+// unrelated edit must not rewrite historical cost because the supplier quote changed later.
 const resolveSupplierQuoteRefs = async (
   items: NormalizedOrderItem[],
   reply: FastifyReply,
-  allowedSupplierQuoteItemIds?: ReadonlySet<string>,
+  options: SupplierQuoteResolutionOptions = {},
 ): Promise<NormalizedOrderItem[] | null> => {
+  const lineIdCounts = new Map<string, number>();
+  for (const item of items) {
+    if (item.id) lineIdCounts.set(item.id, (lineIdCounts.get(item.id) ?? 0) + 1);
+  }
+  const retainedSupplierItemFor = (item: NormalizedOrderItem) => {
+    const retained =
+      item.id && lineIdCounts.get(item.id) === 1
+        ? options.retainedSupplierItemsByLineId?.get(item.id)
+        : undefined;
+    return retained?.supplierQuoteItemId === item.supplierQuoteItemId ? retained : undefined;
+  };
   const referencedItemIds = items.flatMap((item) =>
-    item.supplierQuoteItemId ? [item.supplierQuoteItemId] : [],
+    item.supplierQuoteItemId && !retainedSupplierItemFor(item) ? [item.supplierQuoteItemId] : [],
   );
-  if (referencedItemIds.length === 0) return items.map(withCalculatedClientLineMol);
 
   const forbiddenIndex = items.findIndex(
     (item) =>
       item.supplierQuoteItemId &&
-      allowedSupplierQuoteItemIds !== undefined &&
-      !allowedSupplierQuoteItemIds.has(item.supplierQuoteItemId),
+      !retainedSupplierItemFor(item) &&
+      options.allowedSupplierQuoteItemIds !== undefined &&
+      !options.allowedSupplierQuoteItemIds.has(item.supplierQuoteItemId),
   );
   if (forbiddenIndex >= 0) {
     reply.code(403).send({
@@ -340,10 +356,24 @@ const resolveSupplierQuoteRefs = async (
     return null;
   }
 
-  const snapshots = await supplierQuotesRepo.getQuoteItemSnapshots(referencedItemIds);
+  const snapshots =
+    referencedItemIds.length > 0
+      ? await supplierQuotesRepo.getQuoteItemSnapshots(referencedItemIds)
+      : new Map<string, supplierQuotesRepo.QuoteItemSnapshot>();
   for (let i = 0; i < items.length; i++) {
     const item = items[i];
     if (!item.supplierQuoteItemId) continue;
+    const retained = retainedSupplierItemFor(item);
+    if (retained) {
+      items[i] = {
+        ...item,
+        productId: retained.productId,
+        supplierQuoteId: retained.supplierQuoteId,
+        supplierQuoteSupplierName: retained.supplierQuoteSupplierName,
+        supplierQuoteUnitPrice: retained.supplierQuoteUnitPrice,
+      };
+      continue;
+    }
     const snapshot = snapshots.get(item.supplierQuoteItemId);
     if (!snapshot) {
       badRequest(
@@ -517,9 +547,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     error: string | null;
     supplierQuoteItems: Map<string, supplierQuotesRepo.QuoteItemSnapshot>;
   }> => {
+    // Supplier-backed lines adopt the live supplier item's product below, so only validate a
+    // snapshot product id when that product is the one restore will actually persist.
     const productIds = Array.from(
       new Set(
         snapshot.items
+          .filter((item) => !normalizeNullableString(item.supplierQuoteItemId))
           .map((item) => item.productId)
           .filter((id): id is string => typeof id === 'string' && id.length > 0),
       ),
@@ -759,11 +792,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         }
       }
 
-      const normalizedItems = await resolveSupplierQuoteRefs(
-        parsedItems,
-        reply,
-        canCreateSupplierOrders ? undefined : sourceOfferSupplierQuoteItemIds,
-      );
+      const normalizedItems = await resolveSupplierQuoteRefs(parsedItems, reply, {
+        allowedSupplierQuoteItemIds: canCreateSupplierOrders
+          ? undefined
+          : sourceOfferSupplierQuoteItemIds,
+      });
       if (!normalizedItems) return;
       const trustedSupplierQuoteItemIds = new Set(
         normalizedItems.flatMap((item) =>
@@ -1086,36 +1119,22 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           request,
           'accounting.supplier_orders.create',
         );
-        let allowedSupplierQuoteItemIds: ReadonlySet<string> | undefined;
         const hasSupplierQuoteRefs = parsedItemsForUpdate.some(
           (item) => item.supplierQuoteItemId !== null,
         );
-        if (!canCreateSupplierOrders && hasSupplierQuoteRefs) {
+        let retainedSupplierItemsByLineId:
+          | ReadonlyMap<string, clientsOrdersRepo.ClientOrderItem>
+          | undefined;
+        if (hasSupplierQuoteRefs) {
           existingItems = await clientsOrdersRepo.findItemsForOrder(idResult.value);
-          const retainedSupplierQuoteItemIdByLineId = new Map(
-            existingItems.flatMap((item) =>
-              item.supplierQuoteItemId ? [[item.id, item.supplierQuoteItemId] as const] : [],
-            ),
+          retainedSupplierItemsByLineId = new Map(
+            existingItems.map((item) => [item.id, item] as const),
           );
-          const forbiddenIndex = parsedItemsForUpdate.findIndex(
-            (item) =>
-              item.supplierQuoteItemId !== null &&
-              (!item.id ||
-                retainedSupplierQuoteItemIdByLineId.get(item.id) !== item.supplierQuoteItemId),
-          );
-          if (forbiddenIndex >= 0) {
-            reply.code(403).send({
-              error: `items[${forbiddenIndex}].supplierQuoteItemId cannot be added or moved without accounting.supplier_orders.create permission`,
-            });
-            return;
-          }
-          allowedSupplierQuoteItemIds = new Set(retainedSupplierQuoteItemIdByLineId.values());
         }
-        normalizedItems = await resolveSupplierQuoteRefs(
-          parsedItemsForUpdate,
-          reply,
-          allowedSupplierQuoteItemIds,
-        );
+        normalizedItems = await resolveSupplierQuoteRefs(parsedItemsForUpdate, reply, {
+          allowedSupplierQuoteItemIds: canCreateSupplierOrders ? undefined : new Set(),
+          retainedSupplierItemsByLineId,
+        });
         if (!normalizedItems) return;
       }
 
