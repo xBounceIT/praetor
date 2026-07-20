@@ -52,4 +52,6 @@ Senza i permessi HR corretti, i campi HR non vengono restituiti dalle API utenti
 
 I Competence Center collegano persone, costi e assegnazioni. Mantieni aggiornate le membership dei Competence Center perché alimentano il campo **Dipartimento** mostrato nelle anagrafiche HR, oltre alle analisi su costi, disponibilità e composizione dei team sui progetti.
 
+I permessi Competence Center senza ambito **All** restano limitati ai centri gestiti dall'utente: modifica, eliminazione e gestione dei membri richiedono che l'utente sia responsabile del centro. Durante la creazione, l'utente deve includere sé stesso tra i responsabili e può aggiungere come ulteriori responsabili solo persone già comprese nel proprio ambito HR gestito. Il permesso **All** della singola azione abilita invece l'operazione trasversale.
+
 Ogni scheda Competence Center mostra le iniziali dei membri assegnati: passa il mouse su un'iniziale per vederne il nome completo. Quando i membri superano lo spazio disponibile, un badge `+N` riassume i restanti e, al passaggio del mouse, ne elenca l'intera composizione senza dover aprire la scheda.

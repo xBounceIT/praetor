@@ -39682,6 +39682,7 @@
         "tags": [
           "work-units"
         ],
+        "description": "Without hr.work_units_all.create, the caller must be a manager and can assign only users already in their managed HR scope.",
         "requestBody": {
           "required": true,
           "content": {
@@ -39940,6 +39941,7 @@
         "tags": [
           "work-units"
         ],
+        "description": "Without hr.work_units_all.update, the caller must manage the target work unit.",
         "requestBody": {
           "required": true,
           "content": {
@@ -40205,6 +40207,7 @@
         "tags": [
           "work-units"
         ],
+        "description": "Without hr.work_units_all.delete, the caller must manage the target work unit.",
         "parameters": [
           {
             "schema": {
@@ -40553,6 +40556,7 @@
         "tags": [
           "work-units"
         ],
+        "description": "Without hr.work_units_all.update, the caller must manage the target work unit.",
         "requestBody": {
           "required": true,
           "content": {

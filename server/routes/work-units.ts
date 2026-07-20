@@ -7,7 +7,7 @@ import { deriveToggleAction, getAuditChangedFields, logAudit } from '../utils/au
 import { assertAuthenticated } from '../utils/auth-assert.ts';
 import { NotFoundError } from '../utils/http-errors.ts';
 import { generatePrefixedId } from '../utils/order-ids.ts';
-import { requestHasPermission as hasPermission } from '../utils/permissions.ts';
+import { requestHasPermission as hasPermission, makeAccessChecker } from '../utils/permissions.ts';
 import { replyError } from '../utils/replyError.ts';
 import {
   badRequest,
@@ -76,6 +76,27 @@ const workUnitUsersBodySchema = {
   required: ['userIds'],
 } as const;
 
+const canAccessWorkUnit = makeAccessChecker(
+  (userId, unitId) => workUnitsRepo.isUserManagerOfUnit(userId, unitId),
+  'hr.work_units_all.view',
+);
+
+const canCreateWithManagers = async (
+  request: FastifyRequest,
+  managerIds: string[],
+): Promise<boolean> => {
+  if (hasPermission(request, 'hr.work_units_all.create')) return true;
+
+  const actorId = request.user?.id;
+  if (!actorId || !managerIds.includes(actorId)) return false;
+
+  const allowedManagerIds = new Set([
+    actorId,
+    ...(await workUnitsRepo.listManagedUserIds(actorId)),
+  ]);
+  return managerIds.every((managerId) => allowedManagerIds.has(managerId));
+};
+
 export default async function (fastify: FastifyInstance, _opts: unknown) {
   // GET / - List work units
   fastify.get(
@@ -108,6 +129,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       schema: {
         tags: ['work-units'],
         summary: 'Create work unit',
+        description:
+          'Without hr.work_units_all.create, the caller must be a manager and can assign only users already in their managed HR scope.',
         body: workUnitCreateBodySchema,
         response: {
           201: workUnitSchema,
@@ -116,6 +139,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
+      if (!assertAuthenticated(request, reply)) return;
       const { name, managerIds, description } = request.body as {
         name?: string;
         managerIds?: string[];
@@ -127,6 +151,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const managerIdsResult = requireNonEmptyArrayOfStrings(managerIds, 'managerIds');
       if (!managerIdsResult.ok) return badRequest(reply, managerIdsResult.message);
+
+      if (!(await canCreateWithManagers(request, managerIdsResult.value))) {
+        return replyError(request, reply, {
+          statusCode: 403,
+          message: 'Access denied',
+          action: 'work_unit.create.denied',
+          entityType: 'work_unit',
+          details: { secondaryLabel: 'manager_scope_denied' },
+        });
+      }
 
       const id = generatePrefixedId('wu');
       const w = await withDbTransaction(async (tx) => {
@@ -165,6 +199,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       schema: {
         tags: ['work-units'],
         summary: 'Update work unit',
+        description:
+          'Without hr.work_units_all.update, the caller must manage the target work unit.',
         params: idParamSchema,
         body: workUnitUpdateBodySchema,
         response: {
@@ -183,6 +219,17 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       };
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
+
+      if (!(await canAccessWorkUnit(request, idResult.value, 'hr.work_units_all.update'))) {
+        return replyError(request, reply, {
+          statusCode: 403,
+          message: 'Access denied',
+          action: 'work_unit.update.denied',
+          entityType: 'work_unit',
+          entityId: idResult.value,
+          details: { secondaryLabel: 'not_unit_manager' },
+        });
+      }
 
       const nameResult = name !== undefined ? optionalNonEmptyString(name, 'name') : null;
       if (nameResult && !nameResult.ok) return badRequest(reply, nameResult.message);
@@ -273,6 +320,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       schema: {
         tags: ['work-units'],
         summary: 'Delete work unit',
+        description:
+          'Without hr.work_units_all.delete, the caller must manage the target work unit.',
         params: idParamSchema,
         response: {
           204: { type: 'null' },
@@ -284,6 +333,17 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const { id } = request.params as { id: string };
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
+
+      if (!(await canAccessWorkUnit(request, idResult.value, 'hr.work_units_all.delete'))) {
+        return replyError(request, reply, {
+          statusCode: 403,
+          message: 'Access denied',
+          action: 'work_unit.delete.denied',
+          entityType: 'work_unit',
+          entityId: idResult.value,
+          details: { secondaryLabel: 'not_unit_manager' },
+        });
+      }
 
       const deleted = await workUnitsRepo.deleteById(idResult.value);
       if (!deleted) {
@@ -356,6 +416,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       schema: {
         tags: ['work-units'],
         summary: 'Update work unit users',
+        description:
+          'Without hr.work_units_all.update, the caller must manage the target work unit.',
         params: idParamSchema,
         body: workUnitUsersBodySchema,
         response: {
@@ -369,6 +431,17 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const { userIds } = request.body as { userIds?: string[] };
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
+
+      if (!(await canAccessWorkUnit(request, idResult.value, 'hr.work_units_all.update'))) {
+        return replyError(request, reply, {
+          statusCode: 403,
+          message: 'Access denied',
+          action: 'work_unit.assign_users.denied',
+          entityType: 'work_unit',
+          entityId: idResult.value,
+          details: { secondaryLabel: 'not_unit_manager' },
+        });
+      }
 
       const userIdsResult = ensureArrayOfStrings(userIds, 'userIds');
       if (!userIdsResult.ok) return badRequest(reply, userIdsResult.message);
