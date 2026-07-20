@@ -3343,6 +3343,42 @@ describe('GET /api/users/:id/roles', () => {
     const body = JSON.parse(res.body);
     expect(body.primaryRoleId).toBe('user');
     expect(body.roleIds.sort()).toEqual(['manager', 'user']);
+    expect(canManageUserMock).not.toHaveBeenCalled();
+  });
+
+  test('200 manager can view roles for a managed user', async () => {
+    findAuthUserByIdMock.mockResolvedValue(MANAGER_USER);
+    getRolePermissionsMock.mockResolvedValue(['administration.user_management.update']);
+    findCoreByIdMock.mockResolvedValue({ ...SAMPLE_USER_CORE, role: 'user' });
+    getUserRoleIdsMock.mockResolvedValue(['user', 'manager']);
+    canManageUserMock.mockResolvedValue(true);
+
+    const res = await testApp.inject({
+      method: 'GET',
+      url: '/api/users/u-target/roles',
+      headers: managerAuth(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(canManageUserMock).toHaveBeenCalledWith('u-target', MANAGER_USER.id);
+  });
+
+  test('403 manager cannot view roles for an unmanaged user', async () => {
+    findAuthUserByIdMock.mockResolvedValue(MANAGER_USER);
+    getRolePermissionsMock.mockResolvedValue(['administration.user_management.update']);
+    findCoreByIdMock.mockResolvedValue({ ...SAMPLE_USER_CORE, role: 'user' });
+    getUserRoleIdsMock.mockResolvedValue(['user', 'admin']);
+    canManageUserMock.mockResolvedValue(false);
+
+    const res = await testApp.inject({
+      method: 'GET',
+      url: '/api/users/u-target/roles',
+      headers: managerAuth(),
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(canManageUserMock).toHaveBeenCalledWith('u-target', MANAGER_USER.id);
+    expect(getUserRoleIdsMock).not.toHaveBeenCalled();
   });
 
   test('404 user not found', async () => {
@@ -3398,6 +3434,46 @@ describe('PUT /api/users/:id/roles', () => {
     expect(logAuditMock).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'user.roles_updated' }),
     );
+    expect(canManageUserMock).not.toHaveBeenCalled();
+  });
+
+  test('200 manager can replace roles for a managed user', async () => {
+    findAuthUserByIdMock.mockResolvedValue(MANAGER_USER);
+    getRolePermissionsMock.mockResolvedValue(['administration.user_management.update']);
+    findCoreByIdMock.mockResolvedValue(SAMPLE_USER_CORE);
+    rolesFindExistingIdsMock.mockResolvedValue(new Set(['user', 'manager']));
+    canManageUserMock.mockResolvedValue(true);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/users/u-target/roles',
+      headers: managerAuth(),
+      payload: { roleIds: ['user', 'manager'], primaryRoleId: 'manager' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(canManageUserMock).toHaveBeenCalledWith('u-target', MANAGER_USER.id);
+    expect(replaceUserRolesAndSetPrimaryMock).toHaveBeenCalled();
+  });
+
+  test('403 manager cannot replace roles for an unmanaged user', async () => {
+    findAuthUserByIdMock.mockResolvedValue(MANAGER_USER);
+    getRolePermissionsMock.mockResolvedValue(['administration.user_management.update']);
+    findCoreByIdMock.mockResolvedValue(SAMPLE_USER_CORE);
+    rolesFindExistingIdsMock.mockResolvedValue(new Set(['user', 'admin']));
+    canManageUserMock.mockResolvedValue(false);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/users/u-target/roles',
+      headers: managerAuth(),
+      payload: { roleIds: ['user', 'admin'], primaryRoleId: 'admin' },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(canManageUserMock).toHaveBeenCalledWith('u-target', MANAGER_USER.id);
+    expect(rolesFindExistingIdsMock).not.toHaveBeenCalled();
+    expect(replaceUserRolesAndSetPrimaryMock).not.toHaveBeenCalled();
   });
 
   test('200 granting an admin role to an unenrolled user revokes sessions when 2FA is enforced', async () => {
@@ -3534,6 +3610,22 @@ describe('PUT /api/users/:id/roles', () => {
     });
 
     expect(res.statusCode).toBe(403);
+  });
+
+  test("403 (PAT): a personal-access token cannot replace another user's roles", async () => {
+    findCoreByIdMock.mockResolvedValue(SAMPLE_USER_CORE);
+    rolesFindExistingIdsMock.mockResolvedValue(new Set(['user', 'admin']));
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/users/u-target/roles',
+      headers: patHeader(),
+      payload: { roleIds: ['user', 'admin'], primaryRoleId: 'admin' },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(JSON.parse(res.body).error).toBe('Session authentication required');
+    expect(replaceUserRolesAndSetPrimaryMock).not.toHaveBeenCalled();
   });
 
   // Regression: replaceUserRolesAndSetPrimary + syncTopManagerAssignmentsForUser

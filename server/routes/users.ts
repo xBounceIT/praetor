@@ -1948,6 +1948,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       schema: {
         tags: ['users'],
         summary: 'Get user roles',
+        description:
+          'Requires user-management update permission. Callers without administration.user_management_all.view may inspect only users they manage through a shared work unit.',
         params: idParamSchema,
         response: {
           200: userRolesSchema,
@@ -1960,10 +1962,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
-      const [user, assignedRoleIds] = await Promise.all([
-        usersRepo.findCoreById(idResult.value),
-        usersRepo.getUserRoleIds(idResult.value),
-      ]);
+      const user = await usersRepo.findCoreById(idResult.value);
       if (!user) {
         return replyError(request, reply, {
           statusCode: 404,
@@ -1973,6 +1972,21 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           entityId: idResult.value,
         });
       }
+      if (
+        !hasPermission(request, 'administration.user_management_all.view') &&
+        !(await usersRepo.canManageUser(idResult.value, request.user?.id ?? ''))
+      ) {
+        return replyError(request, reply, {
+          statusCode: 403,
+          message: 'Insufficient permissions',
+          action: 'user.roles_view.denied',
+          entityType: 'user',
+          entityId: idResult.value,
+          details: { secondaryLabel: 'cannot_manage_user' },
+        });
+      }
+
+      const assignedRoleIds = await usersRepo.getUserRoleIds(idResult.value);
 
       const primaryRoleId = user.role;
       const roleIds = Array.from(
@@ -1987,10 +2001,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.put(
     '/:id/roles',
     {
-      onRequest: [authenticateToken, requirePermission('administration.user_management.update')],
+      onRequest: [
+        authenticateToken,
+        requireSessionAuth,
+        requirePermission('administration.user_management.update'),
+      ],
       schema: {
         tags: ['users'],
         summary: 'Update user roles',
+        description:
+          'Requires an interactive session and user-management update permission. Callers without administration.user_management_all.view may update only users they manage through a shared work unit.',
         params: idParamSchema,
         body: userRolesUpdateBodySchema,
         response: {
@@ -2039,6 +2059,19 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           action: 'user.roles_update.not_found',
           entityType: 'user',
           entityId: idResult.value,
+        });
+      }
+      if (
+        !hasPermission(request, 'administration.user_management_all.view') &&
+        !(await usersRepo.canManageUser(idResult.value, request.user?.id ?? ''))
+      ) {
+        return replyError(request, reply, {
+          statusCode: 403,
+          message: 'Insufficient permissions',
+          action: 'user.roles_update.denied',
+          entityType: 'user',
+          entityId: idResult.value,
+          details: { secondaryLabel: 'cannot_manage_user' },
         });
       }
 
