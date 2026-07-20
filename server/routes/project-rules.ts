@@ -542,6 +542,7 @@ const validateFinalRule = async ({
   rule,
   permissions,
   exec,
+  allowedWebhookIdsWithoutPermission,
   allowedDisabledWebhookIds,
 }: {
   projectId: string;
@@ -551,6 +552,7 @@ const validateFinalRule = async ({
   >;
   permissions: readonly string[];
   exec?: DbExecutor;
+  allowedWebhookIdsWithoutPermission?: readonly string[];
   allowedDisabledWebhookIds?: readonly string[];
 }) => {
   if (rule.actionType !== 'notify' && rule.actionType !== 'webhook') {
@@ -584,10 +586,10 @@ const validateFinalRule = async ({
     }
   }
 
-  const allowedDisabledWebhookIdSet = new Set(allowedDisabledWebhookIds ?? []);
+  const allowedWebhookIdSet = new Set(allowedWebhookIdsWithoutPermission ?? []);
   if (
     !canUseRuleWebhooks(permissions) &&
-    rule.actionConfig.webhookIds.some((id) => !allowedDisabledWebhookIdSet.has(id))
+    rule.actionConfig.webhookIds.some((id) => !allowedWebhookIdSet.has(id))
   ) {
     throw new RecipientValidationError('actionConfig contains invalid recipients or webhooks');
   }
@@ -895,10 +897,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             rule: finalRule,
             permissions,
             exec: tx,
+            allowedWebhookIdsWithoutPermission:
+              !reEnabled && !mayUseRuleWebhooks ? existingActionConfig.webhookIds : [],
             allowedDisabledWebhookIds:
-              !reEnabled && (!mayUseRuleWebhooks || !finalRule.isEnabled)
-                ? existingActionConfig.webhookIds
-                : [],
+              !reEnabled && !finalRule.isEnabled ? existingActionConfig.webhookIds : [],
           });
 
           const conditionChanged =
