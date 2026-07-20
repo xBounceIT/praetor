@@ -480,6 +480,37 @@ describe('POST /api/accounting/supplier-orders', () => {
       expect.anything(),
     );
   });
+
+  test('201 treats omitted discounted markers as legacy while honoring explicit precise writes', async () => {
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/accounting/supplier-orders',
+      headers: authHeader(),
+      payload: {
+        ...validBody,
+        items: [
+          { productName: 'Legacy', quantity: 150, unitPrice: 37.75, discount: 15 },
+          {
+            productName: 'Precise',
+            quantity: 150,
+            unitPrice: 37.75,
+            discount: 15,
+            legacyDiscountRounding: false,
+          },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(soInsertItemsMock).toHaveBeenCalledWith(
+      'SORD-2999-0001',
+      [
+        expect.objectContaining({ legacyDiscountRounding: true }),
+        expect.objectContaining({ legacyDiscountRounding: false }),
+      ],
+      expect.anything(),
+    );
+  });
 });
 
 describe('GET /api/accounting/supplier-orders/:id/versions', () => {

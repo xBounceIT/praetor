@@ -316,6 +316,7 @@ const useSupplierInvoicesController = ({
           quantity: Number(item.quantity ?? 0),
           unitPrice: Number(item.unitPrice ?? 0),
           discount: Number(item.discount ?? 0),
+          legacyDiscountRounding: item.legacyDiscountRounding === true,
           ...normalizeDurationForSubmit(item),
         })),
       });

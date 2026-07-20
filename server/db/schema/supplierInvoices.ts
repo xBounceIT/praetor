@@ -69,9 +69,10 @@ export const supplierInvoiceItems = pgTable(
     quantity: numeric('quantity', { precision: 10, scale: 2 }).notNull().default('1'),
     unitPrice: numeric('unit_price', { precision: 15, scale: 2 }).notNull().default('0'),
     discount: numeric('discount', { precision: 5, scale: 2 }).default('0'),
-    // Preserves the pre-precision unit-rounding behavior for migrated historical lines while
-    // retaining their original gross price and negotiated discount.
-    legacyDiscountRounding: boolean('legacy_discount_rounding').notNull().default(false),
+    // Preserves pre-precision unit rounding for historical and compatibility-window writers.
+    // Current writers always persist false explicitly for newly authored precise lines; the
+    // legacy-safe database default can return to false after old app instances are retired.
+    legacyDiscountRounding: boolean('legacy_discount_rounding').notNull().default(true),
     // Months the line's service runs (issue #776); multiplies the line total alongside `quantity`,
     // carried over from the supplier order so the invoice total matches. Default 1 keeps legacy
     // invoices' totals identical to the pre-duration behavior.

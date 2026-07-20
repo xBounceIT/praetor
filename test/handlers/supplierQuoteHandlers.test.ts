@@ -362,7 +362,12 @@ describe('makeSupplierQuoteHandlers', () => {
     expect(callArg.supplierId).toBe('sup-1');
     expect(callArg.status).toBe('draft');
     expect(callArg.items).toEqual([
-      expect.objectContaining({ unitPrice: 12.5, discount: 20, unitType: 'days' }),
+      expect.objectContaining({
+        unitPrice: 12.5,
+        discount: 20,
+        unitType: 'days',
+        legacyDiscountRounding: false,
+      }),
     ]);
     expect(ctx.supplierQuoteFilterId.get()).toBe('sq-1');
     expect(ctx.setActiveView).toHaveBeenCalledWith('accounting/supplier-orders');

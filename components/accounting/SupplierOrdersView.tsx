@@ -445,6 +445,7 @@ const useSupplierOrdersController = ({
           ...item,
           unitPrice: Number(item.unitPrice) || 0,
           discount: item.discount === undefined ? undefined : Number(item.discount),
+          legacyDiscountRounding: item.legacyDiscountRounding === true,
           unitType: item.unitType || 'hours',
           ...normalizeDurationForSubmit(item),
         })),

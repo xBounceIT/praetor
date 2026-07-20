@@ -379,7 +379,12 @@ describe('<SupplierOrdersView /> item pricing columns', () => {
 
     const updates = onUpdateOrder.mock.calls[0]?.[1] as Partial<SupplierSaleOrder>;
     expect(updates.items?.[0]).toEqual(
-      expect.objectContaining({ productId: 'product-2', unitPrice: 800, unitType: 'days' }),
+      expect.objectContaining({
+        productId: 'product-2',
+        unitPrice: 800,
+        unitType: 'days',
+        legacyDiscountRounding: false,
+      }),
     );
   });
 });

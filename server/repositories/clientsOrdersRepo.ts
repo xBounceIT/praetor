@@ -566,6 +566,9 @@ export const bulkInsertSupplierOrderItems = async (
       unitType: item.unitType,
       unitPrice: numericForDb(item.unitPrice),
       discount: numericForDb(item.discount),
+      // This is a current-server writer, so it must not inherit the legacy-safe DB default that
+      // exists only for old binaries during the rolling-deployment compatibility window.
+      legacyDiscountRounding: false,
       note: item.note,
       // Carry the duration from the originating supplier quote (issue #776) so the auto-created
       // order's total matches the quote instead of collapsing to a single month.

@@ -24,7 +24,10 @@ import { generatePrefixedId, ITEM_ID_PREFIXES } from '../utils/order-ids.ts';
 import { effectiveSupplierQuoteStatusFromDate } from '../utils/quote-status.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { replyError } from '../utils/replyError.ts';
-import { preserveLegacyDiscountRounding } from '../utils/supplier-discount-rounding.ts';
+import {
+  legacyDiscountRoundingForWrite,
+  preserveLegacyDiscountRounding,
+} from '../utils/supplier-discount-rounding.ts';
 import { normalizeUnitType, type UnitType } from '../utils/unit-type.ts';
 import {
   badRequest,
@@ -217,7 +220,10 @@ const normalizeItems = (
       unitType,
       unitPrice: unitPriceResult.value,
       discount: discountResult.value || 0,
-      legacyDiscountRounding: item.legacyDiscountRounding === true,
+      legacyDiscountRounding: legacyDiscountRoundingForWrite(
+        item.legacyDiscountRounding,
+        discountResult.value || 0,
+      ),
       note: item.note || null,
       durationMonths: durationMonthsResult.value ?? 1,
       durationUnit: durationUnitResult.value ?? 'months',

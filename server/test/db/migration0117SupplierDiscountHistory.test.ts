@@ -11,23 +11,21 @@ const readJournal = async () =>
 const readSeed = async () => Bun.file(new URL('../../db/seed.sql', import.meta.url)).text();
 
 describe('migration 0117 supplier discount history', () => {
-  test('adds a precise-by-default calculation marker to supplier document lines', async () => {
+  test('adds a legacy-safe calculation marker to supplier document lines', async () => {
     const sql = await readMigration();
 
     for (const table of ['supplier_invoice_items', 'supplier_sale_items']) {
       expect(sql).toContain(
-        `ALTER TABLE "${table}" ADD COLUMN "legacy_discount_rounding" boolean DEFAULT false NOT NULL`,
+        `ALTER TABLE "${table}" ADD COLUMN "legacy_discount_rounding" boolean DEFAULT true NOT NULL`,
       );
-      expect(sql).toContain(`UPDATE "${table}"`);
     }
   });
 
   test('marks discounted legacy rows without overwriting gross price or discount', async () => {
     const sql = await readMigration();
 
-    expect(sql.match(/SET "legacy_discount_rounding" = true/g)).toHaveLength(2);
-    expect(sql.match(/WHERE COALESCE\("discount", 0\) <> 0/g)).toHaveLength(2);
-    expect(sql.match(/AND NOT "legacy_discount_rounding"/g)).toHaveLength(2);
+    expect(sql).toContain('old app instance during a rolling deployment');
+    expect(sql).not.toContain('SET "legacy_discount_rounding" = true');
     expect(sql).not.toContain('UPDATE "supplier_invoice_items"\nSET "unit_price"');
     expect(sql).not.toContain('UPDATE "supplier_sale_items"\nSET "unit_price"');
     expect(sql).not.toContain('UPDATE "supplier_invoice_items"\nSET "discount"');

@@ -3,8 +3,8 @@ ALTER TABLE "quote_items" ALTER COLUMN "supplier_quote_unit_price" SET DATA TYPE
 ALTER TABLE "sale_items" ALTER COLUMN "supplier_quote_unit_price" SET DATA TYPE numeric(19, 6);--> statement-breakpoint
 ALTER TABLE "supplier_quote_items" ALTER COLUMN "unit_price" SET DATA TYPE numeric(19, 6);--> statement-breakpoint
 ALTER TABLE "supplier_quote_items" ALTER COLUMN "unit_price" SET DEFAULT '0';--> statement-breakpoint
-ALTER TABLE "supplier_invoice_items" ADD COLUMN "legacy_discount_rounding" boolean DEFAULT false NOT NULL;--> statement-breakpoint
-ALTER TABLE "supplier_sale_items" ADD COLUMN "legacy_discount_rounding" boolean DEFAULT false NOT NULL;--> statement-breakpoint
+ALTER TABLE "supplier_invoice_items" ADD COLUMN "legacy_discount_rounding" boolean DEFAULT true NOT NULL;--> statement-breakpoint
+ALTER TABLE "supplier_sale_items" ADD COLUMN "legacy_discount_rounding" boolean DEFAULT true NOT NULL;--> statement-breakpoint
 
 -- Rebuild only costs that still match the old scale-2 formula. A divergent value may be a manual
 -- override and must remain authoritative. Client-to-supplier syncs are subtler: the old sync stored
@@ -159,17 +159,10 @@ WHERE "target"."supplier_quote_item_id" = "source"."id"
   AND "target"."supplier_sale_item_id" IS NULL
   AND "target"."supplier_quote_unit_price" IS DISTINCT FROM "source"."unit_price";--> statement-breakpoint
 
--- Existing discounted supplier documents used a currency-rounded net unit before applying
--- quantity/duration. Preserve that calculation provenance without overwriting the stored gross
--- price or negotiated discount. New rows keep the precise default (false).
-UPDATE "supplier_invoice_items"
-SET "legacy_discount_rounding" = true
-WHERE COALESCE("discount", 0) <> 0
-  AND NOT "legacy_discount_rounding";--> statement-breakpoint
-UPDATE "supplier_sale_items"
-SET "legacy_discount_rounding" = true
-WHERE COALESCE("discount", 0) <> 0
-  AND NOT "legacy_discount_rounding";--> statement-breakpoint
+-- Existing supplier documents used a currency-rounded net unit before applying quantity/duration.
+-- The legacy-safe default preserves their calculation provenance and also protects writes from an
+-- old app instance during a rolling deployment. Current writers explicitly persist false for newly
+-- authored precise lines. Gross prices and negotiated discounts remain untouched.
 
 -- Version snapshots must carry the same marker or restoring a pre-upgrade order would switch its
 -- total to precise line math. Preserve every original pricing field and item order.

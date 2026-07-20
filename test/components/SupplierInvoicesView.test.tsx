@@ -147,7 +147,11 @@ describe('<SupplierInvoicesView /> line item duration (issue #776/#775)', () => 
     expect(onUpdateInvoice).toHaveBeenCalledTimes(1);
     const updates = onUpdateInvoice.mock.calls[0]?.[1];
     expect(updates?.items?.[0]).toEqual(
-      expect.objectContaining({ durationMonths: undefined, durationUnit: 'months' }),
+      expect.objectContaining({
+        durationMonths: undefined,
+        durationUnit: 'months',
+        legacyDiscountRounding: false,
+      }),
     );
   });
 

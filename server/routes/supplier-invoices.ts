@@ -16,7 +16,10 @@ import { roundCurrency } from '../utils/invoice-math.ts';
 import { generatePrefixedId, ITEM_ID_PREFIXES } from '../utils/order-ids.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { replyError } from '../utils/replyError.ts';
-import { preserveLegacyDiscountRounding } from '../utils/supplier-discount-rounding.ts';
+import {
+  legacyDiscountRoundingForWrite,
+  preserveLegacyDiscountRounding,
+} from '../utils/supplier-discount-rounding.ts';
 import {
   badRequest,
   optionalDateString,
@@ -225,7 +228,10 @@ const normalizeItems = (
       quantity: quantityResult.value,
       unitPrice: unitPriceResult.value,
       discount: discountResult.value || 0,
-      legacyDiscountRounding: item.legacyDiscountRounding === true,
+      legacyDiscountRounding: legacyDiscountRoundingForWrite(
+        item.legacyDiscountRounding,
+        discountResult.value || 0,
+      ),
       // Duration applies to every line type (issue #775); 'na' is gated via effectiveDurationMonths.
       durationMonths: durationMonthsResult.value ?? 1,
       durationUnit: durationUnitResult.value ?? 'months',

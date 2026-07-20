@@ -311,6 +311,40 @@ describe('POST /api/supplier-invoices', () => {
     );
   });
 
+  test('201 treats omitted discounted markers as legacy while honoring explicit precise writes', async () => {
+    createMock.mockResolvedValue(SAMPLE_INVOICE);
+    insertItemsMock.mockResolvedValue([SAMPLE_ITEM]);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/supplier-invoices',
+      headers: authHeader(),
+      payload: {
+        ...validBody,
+        items: [
+          { description: 'Legacy', quantity: 150, unitPrice: 37.75, discount: 15 },
+          {
+            description: 'Precise',
+            quantity: 150,
+            unitPrice: 37.75,
+            discount: 15,
+            legacyDiscountRounding: false,
+          },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(insertItemsMock).toHaveBeenCalledWith(
+      'SINV-2025-0001',
+      [
+        expect.objectContaining({ legacyDiscountRounding: true }),
+        expect.objectContaining({ legacyDiscountRounding: false }),
+      ],
+      expect.anything(),
+    );
+  });
+
   test('201 inherits the automatic invoice code from a parseable linked supplier order id', async () => {
     findOrderByIdMock.mockResolvedValue({
       id: 'SORD_26_0045_manual',

@@ -152,6 +152,7 @@ export const makeSupplierQuoteHandlers = (deps: SupplierQuoteHandlersDeps) => {
             // override is flattened so the order preserves the authoritative net total.
             unitPrice: pricing.unitPrice,
             discount: pricing.discount,
+            legacyDiscountRounding: false,
             // Free-text supplier lines without a linked product are valid;
             // the server canonicalizes missing productId to NULL.
             productId: item.productId ?? '',

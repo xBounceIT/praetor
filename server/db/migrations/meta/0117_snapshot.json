@@ -6879,7 +6879,7 @@
           "type": "boolean",
           "primaryKey": false,
           "notNull": true,
-          "default": false
+          "default": true
         },
         "duration_months": {
           "name": "duration_months",
@@ -7860,7 +7860,7 @@
           "type": "boolean",
           "primaryKey": false,
           "notNull": true,
-          "default": false
+          "default": true
         },
         "note": {
           "name": "note",

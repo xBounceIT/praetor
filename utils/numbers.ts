@@ -134,8 +134,8 @@ export const calcProductMolPercentage = (cost: number, salePrice: number): numbe
 export interface PricingItem {
   unitPrice?: number;
   discount?: number;
-  // Migrated supplier order/invoice lines retain the pre-precision behavior that rounded the
-  // discounted unit before quantity/duration. New lines omit this and use the precise chain.
+  // Historical and compatibility-window supplier lines retain the pre-precision behavior that
+  // rounded the discounted unit before quantity/duration. Current writers send false explicitly.
   legacyDiscountRounding?: boolean;
   supplierQuoteItemId?: string | null;
   supplierQuoteUnitPrice?: number | null;
