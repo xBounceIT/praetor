@@ -205,7 +205,10 @@ describe('<SupplierInvoicesView /> line item duration (issue #776/#775)', () => 
     );
     fireEvent.click(screen.getByText('SINV-DOCUMENT-ROUNDING'));
 
+    expect(screen.getAllByText('5.662,50 EUR').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('-849,37 EUR').length).toBeGreaterThan(0);
     expect(screen.getAllByText('4.813,13 EUR').length).toBeGreaterThan(0);
+    expect(screen.queryByText('5.662,51 EUR')).not.toBeInTheDocument();
     await act(async () => fireEvent.click(screen.getByText('common:buttons.update')));
 
     const updates = onUpdateInvoice.mock.calls[0]?.[1];

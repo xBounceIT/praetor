@@ -21,9 +21,9 @@ import {
 } from '../../utils/date';
 import { createLineItemIndexResolver } from '../../utils/lineItemIndex';
 import {
+  calculatePricingTotals,
   durationValueToMonths,
   formatDecimal,
-  getDiscountedDocumentTotal,
   getDiscountedLineTotal,
   getDurationInputValue,
   getEffectiveDurationMonths,
@@ -31,6 +31,7 @@ import {
   normalizeDurationForSubmit,
   normalizeDurationUnit,
   parseDurationValueToMonths,
+  roundCurrency,
 } from '../../utils/numbers';
 import CostSummaryPanel from '../shared/CostSummaryPanel';
 import DateField from '../shared/DateField';
@@ -71,9 +72,14 @@ const getStatusLabel = (
 ) => t(statusLabelMap[status] ?? String(status));
 
 const calculateTotals = (items: SupplierInvoiceItem[]) => {
-  const subtotal = getDiscountedDocumentTotal(items);
+  const { grossSubtotal, subtotal } = calculatePricingTotals(items, 0);
 
-  return { subtotal, total: subtotal };
+  return {
+    grossSubtotal,
+    subtotal,
+    total: subtotal,
+    totalDiscount: roundCurrency(grossSubtotal - subtotal),
+  };
 };
 
 const createDefaultSupplierInvoiceForm = (): Partial<SupplierInvoice> => {
@@ -321,18 +327,6 @@ const useSupplierInvoicesController = ({
 
   const totals = useMemo(() => calculateTotals(formData.items || []), [formData.items]);
   const balanceDue = Number(totals.total) - Number(formData.amountPaid || 0);
-  const totalDiscount = useMemo(
-    () =>
-      (formData.items || []).reduce((sum, item) => {
-        const lineSubtotal =
-          Number(item.quantity ?? 0) *
-          Number(item.unitPrice ?? 0) *
-          getEffectiveDurationMonths(item);
-        return sum + lineSubtotal - getDiscountedLineTotal(item);
-      }, 0),
-    [formData.items],
-  );
-  const grossSubtotal = totals.subtotal + totalDiscount;
 
   const columns = useMemo(
     () => [
@@ -487,7 +481,7 @@ const useSupplierInvoicesController = ({
     currency,
     editingInvoice,
     formData,
-    grossSubtotal,
+    grossSubtotal: totals.grossSubtotal,
     handleDelete,
     handleDurationUnitChange,
     handleDurationValueChange,
@@ -504,7 +498,7 @@ const useSupplierInvoicesController = ({
     supplierOptions,
     suppliers,
     t,
-    totalDiscount,
+    totalDiscount: totals.totalDiscount,
     totals,
     updateItem,
   };

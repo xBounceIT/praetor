@@ -92,6 +92,103 @@ FROM "supplier_quote_items" AS "source"
 WHERE "target"."supplier_quote_item_id" = "source"."id"
   AND "target"."supplier_quote_unit_price" = ROUND("source"."unit_price", 2)
   AND "target"."supplier_quote_unit_price" IS DISTINCT FROM "source"."unit_price";--> statement-breakpoint
+
+-- Apply the same guarded precision upgrade to restorable client quote/offer versions. Only a
+-- numeric snapshot cost matching the current supplier cost at the former scale is rewritten;
+-- non-matching stale or manually edited costs remain untouched. Preserve item order and fields.
+UPDATE "quote_versions" AS "version"
+SET "snapshot" = jsonb_set(
+  "version"."snapshot",
+  '{items}',
+  (
+    SELECT COALESCE(
+      jsonb_agg(
+        CASE
+          WHEN "source"."id" IS NOT NULL THEN
+            item || jsonb_build_object('supplierQuoteUnitPrice', "source"."unit_price")
+          ELSE item
+        END
+        ORDER BY ordinality
+      ),
+      '[]'::jsonb
+    )
+    FROM jsonb_array_elements("version"."snapshot" -> 'items')
+      WITH ORDINALITY AS entry(item, ordinality)
+    LEFT JOIN "supplier_quote_items" AS "source"
+      ON "source"."id" = item ->> 'supplierQuoteItemId'
+      AND CASE
+        WHEN jsonb_typeof(item -> 'supplierQuoteUnitPrice') = 'number'
+          THEN (item ->> 'supplierQuoteUnitPrice')::numeric
+      END = ROUND("source"."unit_price", 2)
+      AND CASE
+        WHEN jsonb_typeof(item -> 'supplierQuoteUnitPrice') = 'number'
+          THEN (item ->> 'supplierQuoteUnitPrice')::numeric
+      END IS DISTINCT FROM "source"."unit_price"
+  ),
+  false
+)
+WHERE jsonb_typeof("version"."snapshot" -> 'items') = 'array'
+  AND EXISTS (
+    SELECT 1
+    FROM jsonb_array_elements("version"."snapshot" -> 'items') AS entry(item)
+    JOIN "supplier_quote_items" AS "source"
+      ON "source"."id" = item ->> 'supplierQuoteItemId'
+    WHERE CASE
+      WHEN jsonb_typeof(item -> 'supplierQuoteUnitPrice') = 'number'
+        THEN (item ->> 'supplierQuoteUnitPrice')::numeric
+    END = ROUND("source"."unit_price", 2)
+      AND CASE
+        WHEN jsonb_typeof(item -> 'supplierQuoteUnitPrice') = 'number'
+          THEN (item ->> 'supplierQuoteUnitPrice')::numeric
+      END IS DISTINCT FROM "source"."unit_price"
+  );--> statement-breakpoint
+UPDATE "offer_versions" AS "version"
+SET "snapshot" = jsonb_set(
+  "version"."snapshot",
+  '{items}',
+  (
+    SELECT COALESCE(
+      jsonb_agg(
+        CASE
+          WHEN "source"."id" IS NOT NULL THEN
+            item || jsonb_build_object('supplierQuoteUnitPrice', "source"."unit_price")
+          ELSE item
+        END
+        ORDER BY ordinality
+      ),
+      '[]'::jsonb
+    )
+    FROM jsonb_array_elements("version"."snapshot" -> 'items')
+      WITH ORDINALITY AS entry(item, ordinality)
+    LEFT JOIN "supplier_quote_items" AS "source"
+      ON "source"."id" = item ->> 'supplierQuoteItemId'
+      AND CASE
+        WHEN jsonb_typeof(item -> 'supplierQuoteUnitPrice') = 'number'
+          THEN (item ->> 'supplierQuoteUnitPrice')::numeric
+      END = ROUND("source"."unit_price", 2)
+      AND CASE
+        WHEN jsonb_typeof(item -> 'supplierQuoteUnitPrice') = 'number'
+          THEN (item ->> 'supplierQuoteUnitPrice')::numeric
+      END IS DISTINCT FROM "source"."unit_price"
+  ),
+  false
+)
+WHERE jsonb_typeof("version"."snapshot" -> 'items') = 'array'
+  AND EXISTS (
+    SELECT 1
+    FROM jsonb_array_elements("version"."snapshot" -> 'items') AS entry(item)
+    JOIN "supplier_quote_items" AS "source"
+      ON "source"."id" = item ->> 'supplierQuoteItemId'
+    WHERE CASE
+      WHEN jsonb_typeof(item -> 'supplierQuoteUnitPrice') = 'number'
+        THEN (item ->> 'supplierQuoteUnitPrice')::numeric
+    END = ROUND("source"."unit_price", 2)
+      AND CASE
+        WHEN jsonb_typeof(item -> 'supplierQuoteUnitPrice') = 'number'
+          THEN (item ->> 'supplierQuoteUnitPrice')::numeric
+      END IS DISTINCT FROM "source"."unit_price"
+  );--> statement-breakpoint
+
 -- A client-order line already materialized into a supplier order is a historical cost snapshot.
 -- Keep it aligned with the frozen supplier order/invoice instead of repricing its margin.
 UPDATE "sale_items" AS "target"

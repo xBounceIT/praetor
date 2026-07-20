@@ -105,12 +105,15 @@ describe('migration 0116 supplier-cost precision', () => {
     const sql = await readMigration();
 
     for (const table of ['quote_items', 'customer_offer_items', 'sale_items']) {
-      expect(sql).toContain(`UPDATE "${table}" AS "target"`);
+      const start = sql.indexOf(`UPDATE "${table}" AS "target"`);
+      const backfill = sql.slice(start, sql.indexOf(';--> statement-breakpoint', start));
+
+      expect(start).toBeGreaterThan(-1);
+      expect(backfill).toContain('= ROUND("source"."unit_price", 2)');
+      expect(backfill).toContain(
+        '"supplier_quote_unit_price" IS DISTINCT FROM "source"."unit_price"',
+      );
     }
-    expect(sql.match(/= ROUND\("source"\."unit_price", 2\)/g)).toHaveLength(3);
-    expect(
-      sql.match(/"supplier_quote_unit_price" IS DISTINCT FROM "source"\."unit_price"/g),
-    ).toHaveLength(3);
     const saleItemsBackfill = sql.slice(sql.indexOf('UPDATE "sale_items" AS "target"'));
     expect(saleItemsBackfill).toContain('"target"."supplier_sale_id" IS NULL');
     expect(saleItemsBackfill).toContain('"target"."supplier_sale_item_id" IS NULL');
@@ -123,6 +126,32 @@ describe('migration 0116 supplier-cost precision', () => {
     expect(upgradeSnapshot(32.09)).toBe(32.0875);
     expect(upgradeSnapshot(32.09, true)).toBe(32.09);
     expect(upgradeSnapshot(31.5)).toBe(31.5);
+  });
+
+  test('upgrades matching costs inside restorable client version snapshots', async () => {
+    const sql = await readMigration();
+
+    for (const table of ['quote_versions', 'offer_versions']) {
+      const start = sql.indexOf(`UPDATE "${table}" AS "version"`);
+      const backfill = sql.slice(start, sql.indexOf(';--> statement-breakpoint', start));
+
+      expect(start).toBeGreaterThan(-1);
+      expect(backfill).toContain('jsonb_array_elements("version"."snapshot" -> \'items\')');
+      expect(backfill).toContain('WITH ORDINALITY AS entry(item, ordinality)');
+      expect(backfill).toContain('"source"."id" = item ->> \'supplierQuoteItemId\'');
+      expect(backfill).toContain("jsonb_typeof(item -> 'supplierQuoteUnitPrice') = 'number'");
+      expect(backfill).toContain(
+        'item || jsonb_build_object(\'supplierQuoteUnitPrice\', "source"."unit_price")',
+      );
+      expect(backfill).toContain('ORDER BY ordinality');
+    }
+
+    const preciseSource = 32.0875;
+    const upgradeVersionSnapshot = (snapshot: number) =>
+      snapshot === Math.round(preciseSource * 100) / 100 ? preciseSource : snapshot;
+    expect(upgradeVersionSnapshot(32.09)).toBe(32.0875);
+    expect(upgradeVersionSnapshot(31.5)).toBe(31.5);
+    expect(upgradeVersionSnapshot(upgradeVersionSnapshot(32.09))).toBe(32.0875);
   });
 
   test('keeps canonical demo supplier pricing inputs explicit', async () => {
