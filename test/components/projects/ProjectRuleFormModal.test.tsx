@@ -48,6 +48,11 @@ const rule: ProjectRule = {
   updatedAt: 1700000000000,
 };
 
+const redactedMixedWebhookRule: ProjectRule = {
+  ...rule,
+  actionType: 'webhook',
+};
+
 describe('<ProjectRuleFormModal />', () => {
   test('keeps tall recipient selections inside a scrollable modal', () => {
     render(
@@ -287,6 +292,74 @@ describe('<ProjectRuleFormModal />', () => {
     expect(onSubmit).toHaveBeenCalledWith(
       expect.objectContaining({
         name: 'Renamed webhook rule',
+        actionType: 'webhook',
+        actionConfig: {
+          recipientUserIds: [],
+          recipientRoleIds: [],
+          webhookIds: [],
+          actions: [],
+        },
+      }),
+    );
+  });
+
+  test('can remove the last visible action from a redacted mixed webhook rule', async () => {
+    const onSubmit = mock(() => Promise.resolve());
+    render(
+      <ProjectRuleFormModal
+        open
+        onOpenChange={() => {}}
+        rule={redactedMixedWebhookRule}
+        recipients={{ ...recipients, webhooks: [] }}
+        permissions={['projects.rules.update']}
+        onSubmit={onSubmit}
+      />,
+    );
+
+    const removeButton = screen.getByRole('button', {
+      name: 'projects:detail.rules.actions.removeAction',
+    });
+    expect(removeButton).not.toBeDisabled();
+    fireEvent.click(removeButton);
+    fireEvent.click(screen.getByRole('button', { name: 'common:buttons.save' }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    expect(onSubmit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actionType: 'webhook',
+        actionConfig: {
+          recipientUserIds: [],
+          recipientRoleIds: [],
+          webhookIds: [],
+          actions: [],
+        },
+      }),
+    );
+  });
+
+  test('can clear the last visible action from a redacted mixed webhook rule', async () => {
+    const onSubmit = mock(() => Promise.resolve());
+    render(
+      <ProjectRuleFormModal
+        open
+        onOpenChange={() => {}}
+        rule={redactedMixedWebhookRule}
+        recipients={{ ...recipients, webhooks: [] }}
+        permissions={['projects.rules.update']}
+        onSubmit={onSubmit}
+      />,
+    );
+
+    fireEvent.click(
+      document.getElementById('project-rule-action-recipient-0') as HTMLButtonElement,
+    );
+    fireEvent.click(await screen.findByRole('option', { name: 'Alice (alice)' }));
+    fireEvent.keyDown(document, { key: 'Escape' });
+    fireEvent.click(screen.getByRole('button', { name: 'common:buttons.save' }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    expect(onSubmit).toHaveBeenCalledWith(
+      expect.objectContaining({
         actionType: 'webhook',
         actionConfig: {
           recipientUserIds: [],
