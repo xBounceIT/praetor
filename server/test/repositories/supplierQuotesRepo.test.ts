@@ -475,6 +475,27 @@ describe('replaceItems', () => {
   });
 });
 
+describe('hasClientSyncedCosts', () => {
+  test('returns true only when the durable client-sync audit marker exists', async () => {
+    exec.enqueue({ rows: [{ exists: true }] });
+
+    expect(await supplierQuotesRepo.hasClientSyncedCosts('q-1', testDb)).toBe(true);
+    expect(exec.calls[0].sql).toContain('FROM audit_logs');
+    expect(exec.calls[0].sql).toContain("details ->> 'secondaryLabel'");
+    expect(exec.calls[0].params).toEqual([
+      'supplier_quote.updated',
+      'supplier_quote',
+      'q-1',
+      'synced_from_client_line',
+    ]);
+  });
+
+  test('returns false when no marker exists', async () => {
+    exec.enqueue({ rows: [{ exists: false }] });
+    expect(await supplierQuotesRepo.hasClientSyncedCosts('q-1', testDb)).toBe(false);
+  });
+});
+
 describe('findSourcedItemIds', () => {
   // Three parallel DISTINCT probes in call order: quote_items, customer_offer_items, sale_items —
   // each restricted to supplier_quote_item_id values belonging to this quote's items.

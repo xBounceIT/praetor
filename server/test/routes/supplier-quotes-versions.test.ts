@@ -47,6 +47,7 @@ const sqRenameMock = mock();
 const sqRestoreSnapshotQuoteMock = mock();
 const sqReplaceItemsMock = mock();
 const sqIsSourcedByClientDocumentsMock = mock();
+const sqHasClientSyncedCostsMock = mock();
 
 const qccFindByIdMock = mock();
 const qccFindDefaultMock = mock();
@@ -97,6 +98,7 @@ beforeAll(async () => {
     restoreSnapshotQuote: sqRestoreSnapshotQuoteMock,
     replaceItems: sqReplaceItemsMock,
     isSourcedByClientDocuments: sqIsSourcedByClientDocumentsMock,
+    hasClientSyncedCosts: sqHasClientSyncedCostsMock,
   }));
   mock.module('../../repositories/productsRepo.ts', () => ({
     ...productsRepoSnap,
@@ -232,6 +234,7 @@ const allMocks = [
   qccFindByIdMock,
   qccFindDefaultMock,
   sqIsSourcedByClientDocumentsMock,
+  sqHasClientSyncedCostsMock,
   suppliersFindByIdMock,
   productsGetSnapshotsMock,
   clientsExistsByIdMock,
@@ -265,6 +268,7 @@ beforeEach(async () => {
   qccFindDefaultMock.mockResolvedValue({ id: 'qcc_email', name: 'Email' });
   // Default: not sourced by any client document, so the restore stranding guard stays open.
   sqIsSourcedByClientDocumentsMock.mockResolvedValue(false);
+  sqHasClientSyncedCostsMock.mockResolvedValue(false);
   // Snapshots without a client link never call existsById; default true keeps the rest happy.
   clientsExistsByIdMock.mockResolvedValue(true);
 
@@ -406,6 +410,7 @@ describe('POST /api/sales/supplier-quotes/:id/versions/:versionId/restore', () =
 
   test('200 preserves a client-authored unit cost from the snapshot', async () => {
     setupHappyPath();
+    sqHasClientSyncedCostsMock.mockResolvedValue(true);
     sqvFindByIdMock.mockResolvedValue({
       ...SAMPLE_VERSION,
       snapshot: {
@@ -433,6 +438,36 @@ describe('POST /api/sales/supplier-quotes/:id/versions/:versionId/restore', () =
       expect.objectContaining({ listPrice: 37.75, discountPercent: 15, unitPrice: 32.09 }),
     );
     expect(restoredItems[0]?.unitPrice).not.toBe(32.0875);
+  });
+
+  test('200 upgrades a legacy formula-derived unit cost from the snapshot', async () => {
+    setupHappyPath();
+    sqvFindByIdMock.mockResolvedValue({
+      ...SAMPLE_VERSION,
+      snapshot: {
+        ...SAMPLE_SNAPSHOT,
+        items: [
+          {
+            ...SAMPLE_ITEM,
+            listPrice: 37.75,
+            discountPercent: 15,
+            unitPrice: 32.09,
+          },
+        ],
+      },
+    });
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/sales/supplier-quotes/sq-1/versions/sqv-1/restore',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    const restoredItems = sqReplaceItemsMock.mock.calls[0]?.[1] as Array<Record<string, unknown>>;
+    expect(restoredItems[0]).toEqual(
+      expect.objectContaining({ listPrice: 37.75, discountPercent: 15, unitPrice: 32.0875 }),
+    );
   });
 
   test('409 when linked order exists', async () => {

@@ -37,6 +37,7 @@ import {
   deriveSupplierLinePricing,
   MAX_LINE_AMOUNT,
   normalizeSupplierUnitPrice,
+  resolveRestoredSupplierUnitPrice,
 } from '../utils/supplier-quote-pricing.ts';
 import { snapshotSupplierQuotePreState } from '../utils/supplier-quote-version.ts';
 import {
@@ -1192,12 +1193,17 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         });
       }
 
+      // Migration 0116 uses this durable marker to distinguish an old scale-2 formula result from
+      // an explicit client-authored cost with the same numeric value. Apply the same conservative
+      // quote-level provenance rule when rebuilding legacy JSON snapshots.
+      const hasClientSyncMarker = await supplierQuotesRepo.hasClientSyncedCosts(idResult.value);
+
       const snapshotItems: supplierQuotesRepo.NewSupplierQuoteItem[] = version.snapshot.items.map(
         ({ quoteId: _q, ...rest }) => {
           // Snapshots taken before list price / discount existed lack those keys, so seed list price
           // from the net unit price (no discount). Normalize the pricing inputs through the shared
-          // helper, but keep the snapshotted unit cost authoritative: client-to-supplier sync may
-          // intentionally store a cost that a scale-2 list price cannot reproduce exactly.
+          // helper. Legacy scale-2 formula results are upgraded to current precision unless the
+          // quote's client-sync audit marker makes the snapshotted cost authoritative.
           const snapshotUnitPrice = Number(rest.unitPrice ?? 0);
           const pricing = deriveSupplierLinePricing(
             Number(rest.listPrice ?? snapshotUnitPrice),
@@ -1209,7 +1215,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             productId: rest.productId || null,
             listPrice: pricing.listPrice,
             discountPercent: pricing.discountPercent,
-            unitPrice: normalizeSupplierUnitPrice(snapshotUnitPrice),
+            unitPrice: resolveRestoredSupplierUnitPrice(
+              { ...pricing, unitPrice: snapshotUnitPrice },
+              hasClientSyncMarker,
+            ),
             unitType: rest.unitType ?? 'unit',
             note: rest.note ?? null,
             // Snapshots taken before duration existed (issue #776) lack these keys; default to a

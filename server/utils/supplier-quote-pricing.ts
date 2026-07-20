@@ -63,3 +63,21 @@ export const toSupplierDocumentLinePricing = (
   }
   return { unitPrice: roundCurrency(authoritativeUnitPrice), discount: 0 };
 };
+
+// Version snapshots created before migration 0116 stored formula-derived unit costs at scale 2.
+// Upgrade that recognizable legacy shape during restore, but preserve the same value when a
+// client-sync audit proves that the rounded cost was explicit and authoritative.
+export const resolveRestoredSupplierUnitPrice = (
+  pricing: SupplierLinePricing,
+  hasClientSyncMarker: boolean,
+): number => {
+  const snapshotUnitPrice = normalizeSupplierUnitPrice(pricing.unitPrice);
+  const derivedUnitPrice = deriveSupplierLinePricing(
+    pricing.listPrice,
+    pricing.discountPercent,
+  ).unitPrice;
+  const isLegacyFormulaCost =
+    snapshotUnitPrice === roundCurrency(derivedUnitPrice) && snapshotUnitPrice !== derivedUnitPrice;
+
+  return !hasClientSyncMarker && isLegacyFormulaCost ? derivedUnitPrice : snapshotUnitPrice;
+};

@@ -3,6 +3,7 @@ import { roundCurrency, roundToDecimalPlaces } from '../../utils/invoice-math.ts
 import {
   deriveSupplierLinePricing,
   MAX_LINE_AMOUNT,
+  resolveRestoredSupplierUnitPrice,
   toSupplierDocumentLinePricing,
 } from '../../utils/supplier-quote-pricing.ts';
 
@@ -87,5 +88,27 @@ describe('toSupplierDocumentLinePricing', () => {
     expect(
       toSupplierDocumentLinePricing({ listPrice: 37.75, discountPercent: 15, unitPrice: 32.09 }),
     ).toEqual({ unitPrice: 32.09, discount: 0 });
+  });
+});
+
+describe('resolveRestoredSupplierUnitPrice', () => {
+  const legacySnapshotPricing = {
+    listPrice: 37.75,
+    discountPercent: 15,
+    unitPrice: 32.09,
+  };
+
+  test('upgrades an old scale-2 formula result when there is no sync marker', () => {
+    expect(resolveRestoredSupplierUnitPrice(legacySnapshotPricing, false)).toBe(32.0875);
+  });
+
+  test('preserves the same rounded value when client sync made it authoritative', () => {
+    expect(resolveRestoredSupplierUnitPrice(legacySnapshotPricing, true)).toBe(32.09);
+  });
+
+  test('leaves an already precise snapshot unchanged', () => {
+    expect(
+      resolveRestoredSupplierUnitPrice({ ...legacySnapshotPricing, unitPrice: 32.0875 }, false),
+    ).toBe(32.0875);
   });
 });

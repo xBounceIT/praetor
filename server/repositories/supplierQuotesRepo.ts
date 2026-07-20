@@ -395,6 +395,27 @@ export const existsById = async (id: string, exec: DbExecutor = db): Promise<boo
   return rows.length > 0;
 };
 
+// Client-document synchronization can intentionally make unit_price authoritative even when it
+// differs from the scale-2 list-price/discount formula. The durable audit marker is also used by
+// migration 0116; restore reads it so legacy JSON snapshots follow the same provenance rule.
+export const hasClientSyncedCosts = async (
+  quoteId: string,
+  exec: DbExecutor = db,
+): Promise<boolean> => {
+  const rows = await executeRows<{ exists: boolean }>(
+    exec,
+    sql`SELECT EXISTS (
+      SELECT 1
+      FROM audit_logs
+      WHERE action = ${'supplier_quote.updated'}
+        AND entity_type = ${'supplier_quote'}
+        AND entity_id = ${quoteId}
+        AND details ->> 'secondaryLabel' = ${'synced_from_client_line'}
+    ) AS "exists"`,
+  );
+  return rows[0]?.exists === true;
+};
+
 // SELECT ... FOR UPDATE (must be called inside a transaction) that also resolves the linked
 // client quote's status, so callers
 // (supplier-order create / clients-order supplier auto-create) can decide "is this supplier quote
