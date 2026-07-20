@@ -4,8 +4,10 @@ import type {
   SupplierQuoteVersion,
   SupplierQuoteVersionRow,
 } from '../../types';
-import { fetchApi, fetchApiStream } from './client';
+import { encodePathSegment, fetchApi, fetchApiStream } from './client';
 import { normalizeSupplierQuote } from './normalizers';
+
+const supplierQuotePath = (id: string): string => `/sales/supplier-quotes/${encodePathSegment(id)}`;
 
 export const supplierQuotesApi = {
   list: (): Promise<SupplierQuote[]> =>
@@ -20,34 +22,36 @@ export const supplierQuotesApi = {
     }).then(normalizeSupplierQuote),
 
   update: (id: string, updates: Partial<SupplierQuote>): Promise<SupplierQuote> =>
-    fetchApi<SupplierQuote>(`/sales/supplier-quotes/${id}`, {
+    fetchApi<SupplierQuote>(supplierQuotePath(id), {
       method: 'PUT',
       body: JSON.stringify(updates),
     }).then(normalizeSupplierQuote),
 
-  delete: (id: string): Promise<void> =>
-    fetchApi(`/sales/supplier-quotes/${id}`, { method: 'DELETE' }),
+  delete: (id: string): Promise<void> => fetchApi(supplierQuotePath(id), { method: 'DELETE' }),
 
   listVersions: (id: string): Promise<SupplierQuoteVersionRow[]> =>
-    fetchApi<SupplierQuoteVersionRow[]>(`/sales/supplier-quotes/${id}/versions`),
+    fetchApi<SupplierQuoteVersionRow[]>(`${supplierQuotePath(id)}/versions`),
 
   getVersion: (id: string, versionId: string): Promise<SupplierQuoteVersion> =>
-    fetchApi<SupplierQuoteVersion>(`/sales/supplier-quotes/${id}/versions/${versionId}`),
+    fetchApi<SupplierQuoteVersion>(
+      `${supplierQuotePath(id)}/versions/${encodePathSegment(versionId)}`,
+    ),
 
   restoreVersion: (id: string, versionId: string): Promise<SupplierQuote> =>
-    fetchApi<SupplierQuote>(`/sales/supplier-quotes/${id}/versions/${versionId}/restore`, {
-      method: 'POST',
-    }).then(normalizeSupplierQuote),
+    fetchApi<SupplierQuote>(
+      `${supplierQuotePath(id)}/versions/${encodePathSegment(versionId)}/restore`,
+      { method: 'POST' },
+    ).then(normalizeSupplierQuote),
 
   listAttachments: (id: string): Promise<SupplierQuoteAttachment[]> =>
-    fetchApi<SupplierQuoteAttachment[]>(`/sales/supplier-quotes/${id}/attachments`),
+    fetchApi<SupplierQuoteAttachment[]>(`${supplierQuotePath(id)}/attachments`),
 
   uploadAttachment: async (id: string, file: File): Promise<SupplierQuoteAttachment> => {
     const formData = new FormData();
     formData.append('file', file, file.name);
     // fetchApiStream avoids the auto Content-Type: application/json that fetchApi adds when a
     // body is present - we need fetch to set the multipart boundary itself.
-    const response = await fetchApiStream(`/sales/supplier-quotes/${id}/attachments`, {
+    const response = await fetchApiStream(`${supplierQuotePath(id)}/attachments`, {
       method: 'POST',
       body: formData,
     });
@@ -56,11 +60,13 @@ export const supplierQuotesApi = {
 
   downloadAttachment: async (id: string, attachmentId: string): Promise<Blob> => {
     const response = await fetchApiStream(
-      `/sales/supplier-quotes/${id}/attachments/${attachmentId}/download`,
+      `${supplierQuotePath(id)}/attachments/${encodePathSegment(attachmentId)}/download`,
     );
     return await response.blob();
   },
 
   deleteAttachment: (id: string, attachmentId: string): Promise<void> =>
-    fetchApi(`/sales/supplier-quotes/${id}/attachments/${attachmentId}`, { method: 'DELETE' }),
+    fetchApi(`${supplierQuotePath(id)}/attachments/${encodePathSegment(attachmentId)}`, {
+      method: 'DELETE',
+    }),
 };

@@ -30,6 +30,9 @@ export const getAuthToken = () => authToken;
 
 export const getApiBase = () => API_BASE;
 
+/** Encode untrusted identifiers before interpolating them into a single URL path segment. */
+export const encodePathSegment = (value: string): string => encodeURIComponent(value);
+
 // Error thrown by the API client. Carries the HTTP status so callers can
 // distinguish auth rejections (401/403) from transient failures (network
 // errors -> status 0, 5xx, etc).

@@ -71,6 +71,31 @@ export const DOCUMENT_CODE_MODULES: Record<DocumentCodeModuleId, DocumentCodeTem
 };
 
 export const DOCUMENT_CODE_MAX_LENGTH = 100;
+const DOCUMENT_CODE_SAFE_CHARACTERS_PATTERN = /^[A-Za-z0-9_-]+$/;
+
+export type DocumentCodeValueValidationResult =
+  | { ok: true; value: string }
+  | { ok: false; message: string };
+
+/** Validate a new manual document code without tightening persisted legacy identifiers. */
+export const validateDocumentCodeValue = (
+  value: string,
+  fieldName = 'document code',
+): DocumentCodeValueValidationResult => {
+  if (value.length > DOCUMENT_CODE_MAX_LENGTH) {
+    return {
+      ok: false,
+      message: `${fieldName} must be ${DOCUMENT_CODE_MAX_LENGTH} characters or fewer`,
+    };
+  }
+  if (!DOCUMENT_CODE_SAFE_CHARACTERS_PATTERN.test(value)) {
+    return {
+      ok: false,
+      message: `${fieldName} can only contain letters, numbers, underscores, and hyphens`,
+    };
+  }
+  return { ok: true, value };
+};
 export const DOCUMENT_CODE_TEMPLATE_MAX_LENGTH = 120;
 export const DOCUMENT_CODE_PREFIX_MAX_LENGTH = 20;
 export const DOCUMENT_CODE_SEQUENCE_PADDING_MIN = 1;
@@ -79,7 +104,6 @@ export const DOCUMENT_CODE_YEAR_MIN = 1;
 export const DOCUMENT_CODE_YEAR_MAX = 9999;
 
 const DOCUMENT_CODE_PLACEHOLDERS = new Set(['PREFIX', 'YY', 'YYYY', 'SEQ']);
-const PREFIX_PATTERN = /^[A-Za-z0-9_-]+$/;
 const TEMPLATE_LITERAL_PATTERN = /^[A-Za-z0-9_-]*$/;
 const YEAR_PLACEHOLDER_PATTERN = /\{(?:YY|YYYY)\}/;
 const DOCUMENT_CODE_COUNTER_SEPARATOR_PATTERN = /[-_]/;
@@ -304,7 +328,7 @@ export const validateDocumentCodeTemplate = (input: {
       message: `prefix must be ${DOCUMENT_CODE_PREFIX_MAX_LENGTH} characters or fewer`,
     };
   }
-  if (!PREFIX_PATTERN.test(prefix)) {
+  if (!DOCUMENT_CODE_SAFE_CHARACTERS_PATTERN.test(prefix)) {
     return {
       ok: false,
       message: 'prefix can only contain letters, numbers, underscores, and hyphens',

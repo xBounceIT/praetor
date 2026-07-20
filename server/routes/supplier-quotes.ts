@@ -16,6 +16,7 @@ import {
 import { logAudit } from '../utils/audit.ts';
 import { getUniqueViolation } from '../utils/db-errors.ts';
 import { replyDocumentCodeCollision } from '../utils/document-code-replies.ts';
+import { DOCUMENT_CODE_MAX_LENGTH, validateDocumentCodeValue } from '../utils/document-codes.ts';
 import type { DurationUnit } from '../utils/duration-unit.ts';
 import {
   ATTACHMENT_MAX_BYTES,
@@ -165,7 +166,12 @@ const supplierQuoteItemBodySchema = {
 const supplierQuoteCreateBodySchema = {
   type: 'object',
   properties: {
-    id: { type: 'string' },
+    id: {
+      type: 'string',
+      maxLength: DOCUMENT_CODE_MAX_LENGTH,
+      description:
+        'Leave blank to allocate automatically. Manual values may contain letters, numbers, underscores, and hyphens.',
+    },
     supplierId: { type: 'string' },
     supplierName: { type: 'string' },
     // clientName is resolved server-side from clientId; the body only carries the id.
@@ -183,7 +189,12 @@ const supplierQuoteCreateBodySchema = {
 const supplierQuoteUpdateBodySchema = {
   type: 'object',
   properties: {
-    id: { type: 'string' },
+    id: {
+      type: 'string',
+      maxLength: DOCUMENT_CODE_MAX_LENGTH,
+      description:
+        'When changed, may contain letters, numbers, underscores, and hyphens. An unchanged legacy id remains accepted.',
+    },
     supplierId: { type: 'string' },
     supplierName: { type: 'string' },
     // clientName is resolved server-side from clientId; the body only carries the id.
@@ -485,6 +496,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!supplierNameResult.ok) return badRequest(reply, supplierNameResult.message);
       const nextIdResult = optionalNonEmptyString(nextId, 'id');
       if (!nextIdResult.ok) return badRequest(reply, nextIdResult.message);
+      if (nextIdResult.value !== null) {
+        const nextIdValidation = validateDocumentCodeValue(nextIdResult.value, 'id');
+        if (!nextIdValidation.ok) return badRequest(reply, nextIdValidation.message);
+      }
 
       if (!Array.isArray(items) || items.length === 0) {
         return badRequest(reply, 'Items must be a non-empty array');
@@ -677,6 +692,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         const nextIdResult = optionalNonEmptyString(nextId, 'id');
         if (!nextIdResult.ok) return badRequest(reply, nextIdResult.message);
         nextIdValue = nextIdResult.value;
+        // Encoded client paths keep historical codes operable. Tighten only a genuine rename so
+        // an existing legacy code with URL delimiters can still be opened, edited, and renamed.
+        if (nextIdValue !== null && nextIdValue !== idResult.value) {
+          const nextIdValidation = validateDocumentCodeValue(nextIdValue, 'id');
+          if (!nextIdValidation.ok) return badRequest(reply, nextIdValidation.message);
+        }
       }
 
       if (paymentTerms !== undefined) patch.paymentTerms = paymentTerms;
