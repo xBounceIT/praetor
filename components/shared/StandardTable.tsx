@@ -1506,6 +1506,7 @@ const useStandardTableController = <T extends object>({
             const activeView = views.find((view) => view.id === activeId);
             if (activeView) {
               const application = getViewApplicationForColumns(activeView, columnsRef.current);
+              clearSaveColumnLayoutTip();
               dispatchTableView({ type: 'apply-view', application });
             } else {
               updateActiveViewId(null);
@@ -1525,6 +1526,7 @@ const useStandardTableController = <T extends object>({
   }, [
     isServerBacked,
     activeViewIdRef,
+    clearSaveColumnLayoutTip,
     columnsRef,
     hasResolvedColumns,
     migrateLegacyViews,
