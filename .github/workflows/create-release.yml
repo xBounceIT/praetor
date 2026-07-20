@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Image tag to publish (example: v1.2.3)'
+        description: 'Version to publish (vMAJOR.MINOR.PATCH[-prerelease], max 128 characters)'
         required: true
         type: string
 
@@ -23,6 +23,27 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Resolve image metadata
+        id: meta
+        shell: bash
+        env:
+          DISPATCH_VERSION: ${{ inputs.version }}
+        run: |
+          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
+            VERSION="${DISPATCH_VERSION}"
+          else
+            VERSION="${GITHUB_REF_NAME}"
+          fi
+
+          if (( ${#VERSION} > 128 )) || [[ ! "${VERSION}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9.-]+)?$ ]]; then
+            echo "Invalid version. Expected at most 128 characters in vMAJOR.MINOR.PATCH[-prerelease] format." >&2
+            exit 1
+          fi
+
+          OWNER_LC="$(echo "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')"
+          echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
+          echo "owner=${OWNER_LC}" >> "${GITHUB_OUTPUT}"
 
       - name: Create Release
         if: github.event_name == 'push'
@@ -42,20 +63,6 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Resolve image metadata
-        id: meta
-        shell: bash
-        run: |
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            VERSION="${{ inputs.version }}"
-          else
-            VERSION="${GITHUB_REF_NAME}"
-          fi
-
-          OWNER_LC="$(echo "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')"
-          echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
-          echo "owner=${OWNER_LC}" >> "${GITHUB_OUTPUT}"
 
       - name: Build and push frontend image
         uses: docker/build-push-action@v6
