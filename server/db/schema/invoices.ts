@@ -78,7 +78,7 @@ export const invoiceItems = pgTable(
     pricingSemanticsVersion: integer('pricing_semantics_version')
       .$type<PricingSemanticsVersion>()
       .notNull()
-      .default(2),
+      .default(1),
   },
   (table) => [
     index('idx_invoice_items_invoice_id').on(table.invoiceId),

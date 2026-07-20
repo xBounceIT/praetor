@@ -98,7 +98,7 @@ export const saleItems = pgTable(
     pricingSemanticsVersion: integer('pricing_semantics_version')
       .$type<PricingSemanticsVersion>()
       .notNull()
-      .default(2),
+      .default(1),
   },
   (table) => [
     index('idx_sale_items_sale_id').on(table.saleId),

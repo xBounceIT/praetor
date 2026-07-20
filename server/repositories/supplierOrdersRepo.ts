@@ -6,6 +6,7 @@ import { type DurationUnit, normalizeDurationUnit } from '../utils/duration-unit
 import { numericForDb, parseDbNumber } from '../utils/parse.ts';
 import {
   normalizeHistoricalPricingSemanticsVersion,
+  normalizePricingSemanticsVersion,
   type PricingSemanticsVersion,
   preservePricingSemanticsVersions,
 } from '../utils/pricing-semantics.ts';
@@ -389,7 +390,7 @@ export const insertItems = async (
         note: item.note,
         durationMonths: item.durationMonths,
         durationUnit: item.durationUnit,
-        pricingSemanticsVersion: item.pricingSemanticsVersion,
+        pricingSemanticsVersion: normalizePricingSemanticsVersion(item.pricingSemanticsVersion),
       })),
     )
     .returning();

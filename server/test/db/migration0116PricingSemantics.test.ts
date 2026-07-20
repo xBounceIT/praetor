@@ -18,15 +18,12 @@ const itemTables = [
 ];
 
 describe('migration 0116 historical pricing semantics', () => {
-  test('marks every existing commercial line legacy before switching the insert default', () => {
+  test('marks existing lines and previous-version writers with legacy semantics', () => {
     for (const table of itemTables) expect(migrationSql).toContain(`'${table}'`);
     expect(migrationSql).toContain(
       'ADD COLUMN IF NOT EXISTS pricing_semantics_version integer DEFAULT 1 NOT NULL',
     );
-    expect(migrationSql).toContain('ALTER COLUMN pricing_semantics_version SET DEFAULT 2');
-    expect(migrationSql.indexOf('DEFAULT 1 NOT NULL')).toBeLessThan(
-      migrationSql.indexOf('SET DEFAULT 2'),
-    );
+    expect(migrationSql).not.toContain('ALTER COLUMN pricing_semantics_version SET DEFAULT 2');
   });
 
   test('does not rewrite canonical durations or historical prices', () => {

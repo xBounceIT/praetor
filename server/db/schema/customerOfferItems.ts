@@ -44,7 +44,7 @@ export const customerOfferItems = pgTable(
     pricingSemanticsVersion: integer('pricing_semantics_version')
       .$type<PricingSemanticsVersion>()
       .notNull()
-      .default(2),
+      .default(1),
   },
   (table) => [
     index('idx_customer_offer_items_offer_id').on(table.offerId),

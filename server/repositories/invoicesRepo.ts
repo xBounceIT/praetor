@@ -7,6 +7,7 @@ import { formatSequenceSuffix } from '../utils/order-ids.ts';
 import { numericForDb, parseDbNumber } from '../utils/parse.ts';
 import {
   normalizeHistoricalPricingSemanticsVersion,
+  normalizePricingSemanticsVersion,
   type PricingSemanticsVersion,
   preservePricingSemanticsVersions,
 } from '../utils/pricing-semantics.ts';
@@ -368,7 +369,7 @@ export const insertItems = async (
         taxRate: numericForDb(item.taxRate),
         durationMonths: item.durationMonths ?? 1,
         durationUnit: item.durationUnit ?? 'months',
-        pricingSemanticsVersion: item.pricingSemanticsVersion,
+        pricingSemanticsVersion: normalizePricingSemanticsVersion(item.pricingSemanticsVersion),
       })),
     )
     .returning();

@@ -174,7 +174,7 @@ export const quoteItems = pgTable(
     pricingSemanticsVersion: integer('pricing_semantics_version')
       .$type<PricingSemanticsVersion>()
       .notNull()
-      .default(2),
+      .default(1),
   },
   (table) => [
     index('idx_quote_items_quote_id').on(table.quoteId),

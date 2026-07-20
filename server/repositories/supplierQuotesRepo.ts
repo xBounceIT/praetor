@@ -10,8 +10,10 @@ import { type DurationUnit, normalizeDurationUnit } from '../utils/duration-unit
 import { numericForDb, parseDbNumber } from '../utils/parse.ts';
 import {
   normalizeHistoricalPricingSemanticsVersion,
+  normalizePricingSemanticsVersion,
   type PricingSemanticsVersion,
   preservePricingSemanticsVersions,
+  pricingSemanticsVersionForDocument,
 } from '../utils/pricing-semantics.ts';
 import {
   effectiveSupplierQuoteStatusFromDate,
@@ -922,7 +924,7 @@ export const insertItems = async (
         // and is interpreted by the pricing multiplier, so the canonical value is persisted here.
         durationMonths: item.durationMonths ?? 1,
         durationUnit: item.durationUnit ?? 'months',
-        pricingSemanticsVersion: item.pricingSemanticsVersion,
+        pricingSemanticsVersion: normalizePricingSemanticsVersion(item.pricingSemanticsVersion),
       })),
     )
     .returning();
@@ -959,10 +961,14 @@ export const upsertItems = async (
 ): Promise<SupplierQuoteItem[]> =>
   runAtomically(exec, async (tx) => {
     const existingRows = await tx
-      .select({ id: supplierQuoteItems.id })
+      .select({
+        id: supplierQuoteItems.id,
+        pricingSemanticsVersion: supplierQuoteItems.pricingSemanticsVersion,
+      })
       .from(supplierQuoteItems)
       .where(eq(supplierQuoteItems.quoteId, quoteId));
     const existingIds = new Set(existingRows.map((row) => row.id));
+    const documentPricingSemanticsVersion = pricingSemanticsVersionForDocument(existingRows);
     const incomingIds = items.map((item) => item.id);
     if (incomingIds.length > 0) {
       await tx
@@ -977,7 +983,10 @@ export const upsertItems = async (
     const inserts: NewSupplierQuoteItem[] = [];
     const updateWrites = items.flatMap((item) => {
       if (!existingIds.has(item.id)) {
-        inserts.push(item);
+        inserts.push({
+          ...item,
+          pricingSemanticsVersion: item.pricingSemanticsVersion ?? documentPricingSemanticsVersion,
+        });
         return [];
       }
       return [

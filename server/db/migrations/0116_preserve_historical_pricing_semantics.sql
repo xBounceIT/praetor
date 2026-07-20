@@ -30,12 +30,8 @@ BEGIN
       'ALTER TABLE %I ADD COLUMN IF NOT EXISTS pricing_semantics_version integer DEFAULT 1 NOT NULL',
       target_table
     );
-    -- Only writes performed after this migration receive the new unit-label semantics.
-    EXECUTE format(
-      'ALTER TABLE %I ALTER COLUMN pricing_semantics_version SET DEFAULT 2',
-      target_table
-    );
-
+    -- Keep the database default legacy-safe for previous-version writers during rolling deploys.
+    -- The new application writes version 2 explicitly for every newly created line.
     IF NOT EXISTS (
       SELECT 1
       FROM pg_constraint
