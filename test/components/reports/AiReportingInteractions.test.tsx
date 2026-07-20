@@ -363,8 +363,8 @@ describe('<AiReportingView /> interactions', () => {
 
     expect(screen.getByText('gemini · gemini-2.5-pro')).toBeInTheDocument();
     const warning = screen.getByLabelText('Context window warning');
-    expect(warning.closest('[data-slot="badge"]')?.textContent).toMatch(
-      /850[.,]000 \/ 1[.,]000[.,]000 \(85%\)/,
+    expect(warning.closest('[data-slot="badge"]')?.textContent).toContain(
+      '850.000 / 1.000.000 (85%)',
     );
   });
 
@@ -978,7 +978,7 @@ describe('<AiReportingView /> interactions', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Show data' }));
     const table = await screen.findByRole('table', { name: 'Data used for Monthly revenue' });
     expect(within(table).getByText('January')).toBeInTheDocument();
-    expect(within(table).getByText('€1,200.00')).toBeInTheDocument();
+    expect(within(table).getByText('1.200,00 €')).toBeInTheDocument();
     expect(within(table).getByText('12% pts')).toBeInTheDocument();
   });
 

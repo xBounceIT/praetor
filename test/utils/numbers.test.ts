@@ -94,9 +94,31 @@ describe('localized number formatting', () => {
     expect(normalizeLocalizedNumber('1.234,56')).toBe('1234.56');
   });
 
+  test('groups four-digit thousands even on runtimes that default to min2 grouping', () => {
+    const NativeNumberFormat = Intl.NumberFormat;
+    const Min2NumberFormat = function (
+      locales?: Intl.LocalesArgument,
+      options: Intl.NumberFormatOptions = {},
+    ) {
+      return new NativeNumberFormat(locales, {
+        ...options,
+        useGrouping: options.useGrouping ?? 'min2',
+      });
+    } as typeof Intl.NumberFormat;
+    Min2NumberFormat.supportedLocalesOf = NativeNumberFormat.supportedLocalesOf;
+    Intl.NumberFormat = Min2NumberFormat;
+
+    try {
+      expect(formatNumber(7000, { numberingSystem: 'latn' })).toBe('7.000');
+    } finally {
+      Intl.NumberFormat = NativeNumberFormat;
+    }
+  });
+
   test('uses commas for decimals and dots only for thousands', () => {
     expect(formatDecimal(1234.5)).toBe('1.234,50');
     expect(formatNumber(1234567.89, { maximumFractionDigits: 2 })).toBe('1.234.567,89');
+    expect(formatNumber(7000, { useGrouping: false })).toBe('7000');
   });
 
   test('never exposes NaN or Infinity in the UI', () => {

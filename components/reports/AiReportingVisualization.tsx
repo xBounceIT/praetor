@@ -50,6 +50,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { CopyElementAsPngError, copyElementAsPng } from '@/utils/copyElementAsPng';
+import { formatNumber } from '@/utils/numbers';
 import {
   CHART_COLORS,
   getBarPointColor,
@@ -71,17 +72,12 @@ const DEFAULT_TYPE_LABELS = {
 
 interface AiReportingVisualizationProps {
   visualization: AiReportingVisualizationDefinition;
-  language: string;
 }
 
 const getFractionDigits = (series: AiReportingVisualizationSeries) =>
   series.decimals ?? (series.format === 'currency' ? 2 : series.format === 'percent' ? 1 : 2);
 
-const formatVisualizationValue = (
-  value: number,
-  series: AiReportingVisualizationSeries,
-  language: string,
-) => {
+const formatVisualizationValue = (value: number, series: AiReportingVisualizationSeries) => {
   const options: Intl.NumberFormatOptions = {
     minimumFractionDigits: series.decimals,
     maximumFractionDigits: getFractionDigits(series),
@@ -92,7 +88,7 @@ const formatVisualizationValue = (
     options.currency = series.currency;
   }
 
-  const formatted = new Intl.NumberFormat(language, options).format(value);
+  const formatted = formatNumber(value, options);
   const formattedValue = series.format === 'percent' ? `${formatted}%` : formatted;
   return series.unit ? `${formattedValue} ${series.unit}` : formattedValue;
 };
@@ -110,15 +106,10 @@ const buildChartConfig = (visualization: AiReportingVisualizationDefinition): Ch
 
 interface VisualizationTooltipProps {
   visualization: AiReportingVisualizationDefinition;
-  language: string;
   circular?: boolean;
 }
 
-const VisualizationTooltip = ({
-  visualization,
-  language,
-  circular = false,
-}: VisualizationTooltipProps) => (
+const VisualizationTooltip = ({ visualization, circular = false }: VisualizationTooltipProps) => (
   <ChartTooltip
     cursor={false}
     content={
@@ -140,7 +131,7 @@ const VisualizationTooltip = ({
             <div className="flex min-w-40 items-center justify-between gap-4">
               <span className="text-muted-foreground">{label}</span>
               <span className="font-mono font-medium tabular-nums text-foreground">
-                {formatVisualizationValue(value, series, language)}
+                {formatVisualizationValue(value, series)}
               </span>
             </div>
           );
@@ -167,15 +158,15 @@ const DistinctBarShape = ({ height, index, width, x, y }: BarShapeProps) => {
   );
 };
 
-const CartesianVisualization = ({ visualization, language }: VisualizationTooltipProps) => {
+const CartesianVisualization = ({ visualization }: VisualizationTooltipProps) => {
   const isHorizontalBar =
     visualization.type === 'bar' && visualization.orientation === 'horizontal';
   const firstSeries = visualization.series[0];
   const axisFormatter = (value: number) =>
-    new Intl.NumberFormat(language, {
+    formatNumber(value, {
       notation: 'compact',
       maximumFractionDigits: Math.min(getFractionDigits(firstSeries), 2),
-    }).format(value);
+    });
   const commonChildren = (
     <>
       <CartesianGrid vertical={isHorizontalBar} horizontal={!isHorizontalBar} />
@@ -202,7 +193,7 @@ const CartesianVisualization = ({ visualization, language }: VisualizationToolti
           <YAxis tickFormatter={axisFormatter} tickLine={false} axisLine={false} width={56} />
         </>
       )}
-      <VisualizationTooltip visualization={visualization} language={language} />
+      <VisualizationTooltip visualization={visualization} />
       {visualization.series.length > 1 ? (
         <ChartLegend content={<ChartLegendContent className="flex-wrap gap-x-4 gap-y-2" />} />
       ) : null}
@@ -278,7 +269,7 @@ interface CircularVisualizationProps extends VisualizationTooltipProps {
   config: ChartConfig;
 }
 
-const CircularVisualization = ({ visualization, language, config }: CircularVisualizationProps) => {
+const CircularVisualization = ({ visualization, config }: CircularVisualizationProps) => {
   const series = visualization.series[0];
   const pieData: Array<Record<string, number | string>> = visualization.data.map(
     (datum, index) => ({
@@ -295,7 +286,7 @@ const CircularVisualization = ({ visualization, language, config }: CircularVisu
         aria-label={visualization.title}
       >
         <PieChart accessibilityLayer>
-          <VisualizationTooltip visualization={visualization} language={language} circular />
+          <VisualizationTooltip visualization={visualization} circular />
           <Pie
             data={pieData}
             dataKey={series.key}
@@ -322,7 +313,7 @@ const CircularVisualization = ({ visualization, language, config }: CircularVisu
               <span className="truncate">{String(datum[visualization.xKey])}</span>
             </span>
             <span className="font-mono font-medium tabular-nums text-foreground">
-              {formatVisualizationValue(Number(datum[series.key]), series, language)}
+              {formatVisualizationValue(Number(datum[series.key]), series)}
             </span>
           </div>
         ))}
@@ -335,11 +326,7 @@ interface VisualizationDataTableProps extends AiReportingVisualizationProps {
   label: string;
 }
 
-const VisualizationDataTable = ({
-  visualization,
-  language,
-  label,
-}: VisualizationDataTableProps) => (
+const VisualizationDataTable = ({ visualization, label }: VisualizationDataTableProps) => (
   <div className="max-h-72 overflow-auto border-t">
     <Table aria-label={label}>
       <TableHeader className="sticky top-0 z-10 bg-card">
@@ -358,7 +345,7 @@ const VisualizationDataTable = ({
             <TableCell className="font-medium">{String(datum[visualization.xKey])}</TableCell>
             {visualization.series.map((series) => (
               <TableCell key={series.key} className="text-right font-mono tabular-nums">
-                {formatVisualizationValue(Number(datum[series.key]), series, language)}
+                {formatVisualizationValue(Number(datum[series.key]), series)}
               </TableCell>
             ))}
           </TableRow>
@@ -368,10 +355,7 @@ const VisualizationDataTable = ({
   </div>
 );
 
-const AiReportingVisualizationContent = ({
-  visualization,
-  language,
-}: AiReportingVisualizationProps) => {
+const AiReportingVisualizationContent = ({ visualization }: AiReportingVisualizationProps) => {
   const { t } = useTranslation('reports');
   const titleId = useId();
   const chartExportRef = useRef<HTMLDivElement>(null);
@@ -456,18 +440,14 @@ const AiReportingVisualizationContent = ({
         </CardHeader>
         <CardContent className="px-3 py-4 sm:px-5">
           {isCircular ? (
-            <CircularVisualization
-              visualization={visualization}
-              language={language}
-              config={config}
-            />
+            <CircularVisualization visualization={visualization} config={config} />
           ) : (
             <ChartContainer
               config={config}
               className="h-80 w-full aspect-auto"
               aria-label={visualization.title}
             >
-              <CartesianVisualization visualization={visualization} language={language} />
+              <CartesianVisualization visualization={visualization} />
             </ChartContainer>
           )}
         </CardContent>
@@ -487,7 +467,6 @@ const AiReportingVisualizationContent = ({
         <CollapsibleContent>
           <VisualizationDataTable
             visualization={visualization}
-            language={language}
             label={t('aiReporting.visualizationDataTable', {
               defaultValue: 'Data used for {{title}}',
               title: visualization.title,

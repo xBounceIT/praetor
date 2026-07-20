@@ -78,10 +78,16 @@ export const formatNumber = (
 ): string => {
   const finiteValue = Number.isFinite(value) ? (value as number) : 0;
   const displayValue = Object.is(finiteValue, -0) ? 0 : finiteValue;
+  // Some ICU/CLDR versions default Italian formatting to `min2`, which leaves four-digit
+  // values ungrouped (7000) while grouping five-digit values (10.000). Default to grouping
+  // from the first thousands group while allowing editable inputs to opt out explicitly.
   const cacheKey = JSON.stringify(options);
   let formatter = numberFormatters.get(cacheKey);
   if (!formatter) {
-    formatter = new Intl.NumberFormat(NUMBER_LOCALE, options);
+    formatter = new Intl.NumberFormat(NUMBER_LOCALE, {
+      ...options,
+      useGrouping: options.useGrouping ?? 'always',
+    });
     numberFormatters.set(cacheKey, formatter);
   }
   return formatter.format(displayValue);
