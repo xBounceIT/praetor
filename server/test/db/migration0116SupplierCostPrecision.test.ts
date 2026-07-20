@@ -89,6 +89,9 @@ describe('migration 0116 supplier-cost precision', () => {
     expect(sql).toContain('"audit"."action" = \'supplier_quote.updated\'');
     expect(sql).toContain('"audit"."entity_type" = \'supplier_quote\'');
     expect(sql).toContain('"audit"."entity_id" = "target"."quote_id"');
+    expect(sql).toContain('FROM "supplier_quote_versions" AS "version"');
+    expect(sql).toContain('"version"."quote_id" = "target"."quote_id"');
+    expect(sql).toContain('"version"."snapshot" -> \'quote\' ->> \'id\' = "audit"."entity_id"');
     expect(sql).toContain('"audit"."details" ->> \'secondaryLabel\' = \'synced_from_client_line\'');
 
     const preciseFormula = 37.75 * (1 - 15 / 100);

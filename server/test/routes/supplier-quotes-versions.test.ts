@@ -339,6 +339,64 @@ describe('GET /api/sales/supplier-quotes/:id/versions/:versionId', () => {
     expect(sqvFindByIdMock).toHaveBeenCalledWith('sq-1', 'sqv-1');
   });
 
+  test('normalizes legacy formula pricing in the preview exactly like restore', async () => {
+    sqvFindByIdMock.mockResolvedValue({
+      ...SAMPLE_VERSION,
+      snapshot: {
+        ...SAMPLE_SNAPSHOT,
+        items: [
+          {
+            ...SAMPLE_ITEM,
+            quantity: 150,
+            listPrice: 37.75,
+            discountPercent: 15,
+            unitPrice: 32.09,
+          },
+        ],
+      },
+    });
+
+    const res = await testApp.inject({
+      method: 'GET',
+      url: '/api/sales/supplier-quotes/sq-1/versions/sqv-1',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body.snapshot.items[0].unitPrice).toBe(32.0875);
+    expect(Math.round(body.snapshot.items[0].unitPrice * 150 * 100) / 100).toBe(4813.13);
+    expect(sqHasClientSyncedCostsMock).toHaveBeenCalledWith('sq-1', SAMPLE_VERSION.createdAt);
+  });
+
+  test('keeps client-synced legacy pricing authoritative in the preview', async () => {
+    sqHasClientSyncedCostsMock.mockResolvedValue(true);
+    sqvFindByIdMock.mockResolvedValue({
+      ...SAMPLE_VERSION,
+      snapshot: {
+        ...SAMPLE_SNAPSHOT,
+        items: [
+          {
+            ...SAMPLE_ITEM,
+            listPrice: 37.75,
+            discountPercent: 15,
+            unitPrice: 32.09,
+          },
+        ],
+      },
+    });
+
+    const res = await testApp.inject({
+      method: 'GET',
+      url: '/api/sales/supplier-quotes/sq-1/versions/sqv-1',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body).snapshot.items[0].unitPrice).toBe(32.09);
+    expect(sqHasClientSyncedCostsMock).toHaveBeenCalledWith('sq-1', SAMPLE_VERSION.createdAt);
+  });
+
   test('404 when version not found (also covers cross-quote ids)', async () => {
     sqvFindByIdMock.mockResolvedValue(null);
 

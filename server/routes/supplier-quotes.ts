@@ -36,8 +36,8 @@ import { replyError } from '../utils/replyError.ts';
 import {
   deriveSupplierLinePricing,
   MAX_LINE_AMOUNT,
+  normalizeSupplierQuoteSnapshotPricing,
   normalizeSupplierUnitPrice,
-  resolveRestoredSupplierUnitPrice,
 } from '../utils/supplier-quote-pricing.ts';
 import { snapshotSupplierQuotePreState } from '../utils/supplier-quote-version.ts';
 import {
@@ -1077,7 +1077,19 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           details: { secondaryLabel: versionIdResult.value },
         });
       }
-      return version;
+      const hasClientSyncMarker = await supplierQuotesRepo.hasClientSyncedCosts(
+        idResult.value,
+        version.createdAt,
+      );
+      return {
+        ...version,
+        snapshot: {
+          ...version.snapshot,
+          items: version.snapshot.items.map((item) =>
+            normalizeSupplierQuoteSnapshotPricing(item, hasClientSyncMarker),
+          ),
+        },
+      };
     },
   );
 
@@ -1204,24 +1216,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const snapshotItems: supplierQuotesRepo.NewSupplierQuoteItem[] = version.snapshot.items.map(
         ({ quoteId: _q, ...rest }) => {
           // Snapshots taken before list price / discount existed lack those keys, so seed list price
-          // from the net unit price (no discount). Normalize the pricing inputs through the shared
-          // helper. Legacy scale-2 formula results are upgraded to current precision unless the
-          // quote's client-sync audit marker makes the snapshotted cost authoritative.
-          const snapshotUnitPrice = Number(rest.unitPrice ?? 0);
-          const pricing = deriveSupplierLinePricing(
-            Number(rest.listPrice ?? snapshotUnitPrice),
-            Number(rest.discountPercent ?? 0),
-          );
+          // from the net unit price (no discount). The shared preview/restore helper upgrades a
+          // legacy scale-2 formula result unless the client-sync marker makes it authoritative.
+          const pricing = normalizeSupplierQuoteSnapshotPricing(rest, hasClientSyncMarker);
           return {
-            ...rest,
+            ...pricing,
             id: generatePrefixedId(ITEM_ID_PREFIXES.supplierQuoteItem),
             productId: rest.productId || null,
-            listPrice: pricing.listPrice,
-            discountPercent: pricing.discountPercent,
-            unitPrice: resolveRestoredSupplierUnitPrice(
-              { ...pricing, unitPrice: snapshotUnitPrice },
-              hasClientSyncMarker,
-            ),
             unitType: rest.unitType ?? 'unit',
             note: rest.note ?? null,
             // Snapshots taken before duration existed (issue #776) lack these keys; default to a

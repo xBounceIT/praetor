@@ -483,10 +483,13 @@ describe('hasClientSyncedCosts', () => {
     expect(await supplierQuotesRepo.hasClientSyncedCosts('q-1', cutoff, testDb)).toBe(true);
     expect(exec.calls[0].sql).toContain('FROM audit_logs');
     expect(exec.calls[0].sql).toContain("details ->> 'secondaryLabel'");
+    expect(exec.calls[0].sql).toContain('FROM supplier_quote_versions');
+    expect(exec.calls[0].sql).toContain("snapshot -> 'quote' ->> 'id'");
     expect(exec.calls[0].sql).toContain('created_at <=');
     expect(exec.calls[0].params).toEqual([
       'supplier_quote.updated',
       'supplier_quote',
+      'q-1',
       'q-1',
       'synced_from_client_line',
       new Date(cutoff),

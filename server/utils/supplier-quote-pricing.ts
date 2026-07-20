@@ -81,3 +81,32 @@ export const resolveRestoredSupplierUnitPrice = (
 
   return !hasClientSyncMarker && isLegacyFormulaCost ? derivedUnitPrice : snapshotUnitPrice;
 };
+
+type SupplierQuoteSnapshotPricing = {
+  listPrice?: number | null;
+  discountPercent?: number | null;
+  unitPrice?: number | null;
+};
+
+// Normalize the persisted-scale pricing shown by a version preview and later written by restore.
+// Older snapshots may lack the gross/discount keys; in that case their net unit price remains a
+// zero-discount line. Keeping this transformation shared prevents preview and restore totals from
+// disagreeing about legacy scale-2 formula costs.
+export const normalizeSupplierQuoteSnapshotPricing = <T extends SupplierQuoteSnapshotPricing>(
+  item: T,
+  hasClientSyncMarker: boolean,
+): T & SupplierLinePricing => {
+  const snapshotUnitPrice = Number(item.unitPrice ?? 0);
+  const pricing = deriveSupplierLinePricing(
+    Number(item.listPrice ?? snapshotUnitPrice),
+    Number(item.discountPercent ?? 0),
+  );
+  return {
+    ...item,
+    ...pricing,
+    unitPrice: resolveRestoredSupplierUnitPrice(
+      { ...pricing, unitPrice: snapshotUnitPrice },
+      hasClientSyncMarker,
+    ),
+  };
+};

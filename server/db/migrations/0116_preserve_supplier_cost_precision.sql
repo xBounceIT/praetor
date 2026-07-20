@@ -61,7 +61,9 @@ WHERE jsonb_typeof("snapshot" -> 'items') = 'array'
 -- override and must remain authoritative. Client-to-supplier syncs are subtler: the old sync stored
 -- the explicit client cost while also deriving a scale-2 list price, so the two cases can look
 -- identical numerically. Its durable audit marker therefore conservatively protects every item in
--- a quote that has ever received such a sync. The predicates also make this retry-safe.
+-- a quote that has ever received such a sync. Version rows follow quote-id renames through their
+-- FK while snapshot.quote.id retains the historical id, so they also resolve pre-rename markers.
+-- The predicates make this retry-safe.
 UPDATE "supplier_quote_items" AS "target"
 SET "unit_price" =
   ("target"."list_price" * (1 - "target"."discount_percent" / 100.0))::numeric(19, 6)
@@ -74,7 +76,15 @@ WHERE "target"."unit_price" =
     FROM "audit_logs" AS "audit"
     WHERE "audit"."action" = 'supplier_quote.updated'
       AND "audit"."entity_type" = 'supplier_quote'
-      AND "audit"."entity_id" = "target"."quote_id"
+      AND (
+        "audit"."entity_id" = "target"."quote_id"
+        OR EXISTS (
+          SELECT 1
+          FROM "supplier_quote_versions" AS "version"
+          WHERE "version"."quote_id" = "target"."quote_id"
+            AND "version"."snapshot" -> 'quote' ->> 'id' = "audit"."entity_id"
+        )
+      )
       AND "audit"."details" ->> 'secondaryLabel' = 'synced_from_client_line'
   );--> statement-breakpoint
 

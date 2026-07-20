@@ -3,6 +3,7 @@ import { roundCurrency, roundToDecimalPlaces } from '../../utils/invoice-math.ts
 import {
   deriveSupplierLinePricing,
   MAX_LINE_AMOUNT,
+  normalizeSupplierQuoteSnapshotPricing,
   resolveRestoredSupplierUnitPrice,
   toSupplierDocumentLinePricing,
 } from '../../utils/supplier-quote-pricing.ts';
@@ -110,5 +111,30 @@ describe('resolveRestoredSupplierUnitPrice', () => {
     expect(
       resolveRestoredSupplierUnitPrice({ ...legacySnapshotPricing, unitPrice: 32.0875 }, false),
     ).toBe(32.0875);
+  });
+});
+
+describe('normalizeSupplierQuoteSnapshotPricing', () => {
+  test('normalizes preview and restore pricing through the same legacy rule', () => {
+    const snapshot = {
+      id: 'sqi-1',
+      listPrice: 37.75,
+      discountPercent: 15,
+      unitPrice: 32.09,
+    };
+
+    expect(normalizeSupplierQuoteSnapshotPricing(snapshot, false)).toEqual({
+      ...snapshot,
+      unitPrice: 32.0875,
+    });
+    expect(normalizeSupplierQuoteSnapshotPricing(snapshot, true)).toEqual(snapshot);
+  });
+
+  test('treats snapshots predating gross pricing as zero-discount net lines', () => {
+    expect(normalizeSupplierQuoteSnapshotPricing({ unitPrice: 32.09 }, false)).toEqual({
+      listPrice: 32.09,
+      discountPercent: 0,
+      unitPrice: 32.09,
+    });
   });
 });
