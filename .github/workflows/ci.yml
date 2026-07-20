@@ -480,6 +480,7 @@ jobs:
         run: |
           unexpected_postgres_errors="$(
             grep -nE '\b(FATAL|PANIC):' logs/postgres.log \
+              | grep -vF 'the database system is starting up' \
               | grep -vF 'the database system is shutting down' \
               || true
           )"
