@@ -80,7 +80,7 @@ import {
   parseNumberInputValue,
   parseOptionalNumberInputValue,
 } from '../../utils/numbers';
-import { getPaymentTermsOptions } from '../../utils/options';
+import { getPaymentTermsOptions, includeSelectedOption } from '../../utils/options';
 import {
   makeCostUpdater,
   makeMolUpdater,
@@ -274,6 +274,55 @@ const quoteCandidatesForForm = (quote: Quote): QuoteCandidate[] =>
           updatedAt: quote.updatedAt,
         },
       ];
+
+const hasMissingProductOrSupplierSource = (items: QuoteItem[]) =>
+  items.some((item) => !item.productId && !item.supplierQuoteItemId);
+
+const buildDuplicatedClientQuoteDraft = (quote: Quote) => {
+  const expirationDate = addMonthsToDateOnly(getLocalDateString(), 1);
+  const candidates = quoteCandidatesForForm(quote).map((candidate, position) => {
+    const candidateId = makeCandidateDraftId();
+    return {
+      ...candidate,
+      id: candidateId,
+      quoteId: '',
+      position,
+      state: 'active' as const,
+      expirationDate,
+      isExpired: false,
+      linkedSupplierQuoteExpired: false,
+      createdAt: 0,
+      updatedAt: 0,
+      items: candidate.items.map((item) => ({
+        ...item,
+        id: createTemporaryLineItemId(),
+        quoteId: '',
+        candidateId,
+        supplierQuoteId: null,
+        supplierQuoteItemId: null,
+        supplierQuoteSupplierName: null,
+        supplierQuoteUnitPrice: null,
+        supplierQuoteBaseQuantity: null,
+        supplierQuoteBaseUnitPrice: null,
+      })),
+    } satisfies QuoteCandidate;
+  });
+  const primaryCandidate = candidates[0];
+
+  return {
+    candidates,
+    activeCandidateId: primaryCandidate.id,
+    formData: candidateToFormData(
+      {
+        id: '',
+        clientId: quote.clientId,
+        clientName: quote.clientName,
+        status: 'draft',
+      },
+      primaryCandidate,
+    ),
+  };
+};
 
 const formDataIntoCandidate = (
   candidate: QuoteCandidate,
@@ -673,6 +722,16 @@ const useClientQuotesController = ({
     [applyQuoteToCandidateForm],
   );
 
+  const openDuplicateModal = useCallback((quote: Quote) => {
+    const duplicate = buildDuplicatedClientQuoteDraft(quote);
+    dispatch({ type: 'openAddModal' });
+    setCandidateDrafts(duplicate.candidates);
+    setActiveCandidateId(duplicate.activeCandidateId);
+    setFormData(duplicate.formData);
+    setErrors({});
+    setPreviewVersion(null);
+  }, []);
+
   const currentCandidateDrafts = () =>
     candidateDrafts.map((candidate) =>
       candidate.id === activeCandidateId ? formDataIntoCandidate(candidate, formData) : candidate,
@@ -934,10 +993,7 @@ const useClientQuotesController = ({
     if (!formData.items || formData.items.length === 0) {
       newErrors.items = t('sales:clientQuotes.errors.itemsRequired');
     } else {
-      const invalidItem = formData.items.find(
-        (item) => !item.productId && !item.supplierQuoteItemId,
-      );
-      if (invalidItem) {
+      if (hasMissingProductOrSupplierSource(formData.items)) {
         newErrors.items = t('sales:clientQuotes.errors.productOrSupplierRequired', {
           defaultValue: 'Each item must have a product or a linked supplier quote',
         });
@@ -978,6 +1034,15 @@ const useClientQuotesController = ({
       if (!candidate.items.length) {
         newErrors.candidates = t('sales:clientQuotes.candidates.itemsRequired', {
           defaultValue: 'Every candidate needs at least one line.',
+        });
+        break;
+      }
+      if (
+        candidate.id !== activeCandidateId &&
+        hasMissingProductOrSupplierSource(candidate.items)
+      ) {
+        newErrors.candidates = t('sales:clientQuotes.errors.productOrSupplierRequired', {
+          defaultValue: 'Each item must have a product or a linked supplier quote',
         });
         break;
       }
@@ -1433,7 +1498,17 @@ const useClientQuotesController = ({
     setFormData((prev) => ({ ...prev, items: newItems }));
   };
 
-  const activeClients = useMemo(() => clients.filter((c) => !c.isDisabled), [clients]);
+  const clientOptions = useMemo(
+    () =>
+      includeSelectedOption(
+        clients.flatMap((client) =>
+          client.isDisabled ? [] : [{ id: client.id, name: client.name }],
+        ),
+        formData.clientId,
+        clients.find((client) => client.id === formData.clientId)?.name || formData.clientName,
+      ),
+    [clients, formData.clientId, formData.clientName],
+  );
   const activeProducts = useMemo(() => products.filter((p) => !p.isDisabled), [products]);
   const activeProductOptions = useMemo(
     () => activeProducts.map((p) => ({ id: p.id, name: p.name })),
@@ -1964,6 +2039,24 @@ const useClientQuotesController = ({
                     })}
               </TooltipContent>
             </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    openDuplicateModal(row);
+                  }}
+                  aria-label={t('sales:clientQuotes.duplicateQuote')}
+                  className="rounded-lg text-muted-foreground hover:text-foreground"
+                >
+                  <i className="fa-solid fa-copy" aria-hidden="true"></i>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>{t('sales:clientQuotes.duplicateQuote')}</TooltipContent>
+            </Tooltip>
             {row.linkedOfferId && onViewOffer && (
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -2230,7 +2323,7 @@ const useClientQuotesController = ({
     handleProductRowDragEnd,
     handleProductRowKeyDown,
     updateProductRow,
-    activeClients,
+    clientOptions,
     activeProductOptions,
     allProductIds,
     allSupplierQuoteIds,
@@ -2838,13 +2931,13 @@ const ClientQuoteClientSection: React.FC<{ controller: ClientQuotesController }>
 const ClientQuoteClientField: React.FC<{ controller: ClientQuotesController }> = ({
   controller,
 }) => {
-  const { t, errors, activeClients, formData, handleClientChange, isReadOnly } = controller;
+  const { t, errors, clientOptions, formData, handleClientChange, isReadOnly } = controller;
 
   return (
     <Field data-invalid={Boolean(errors.clientId)}>
       <SelectControl
         id="client-quote-client"
-        options={activeClients.map((c) => ({ id: c.id, name: c.name }))}
+        options={clientOptions}
         value={formData.clientId || ''}
         onChange={(val) => handleClientChange(val as string)}
         placeholder={t('sales:clientQuotes.selectAClient')}
@@ -3491,6 +3584,7 @@ const ClientQuoteProductPicker: React.FC<{
       isReadOnly={isReadOnly}
       ariaLabel={t('sales:clientQuotes.selectProduct', { defaultValue: 'Select product' })}
       placeholder={t('sales:clientQuotes.selectProduct')}
+      preserveUnavailableProductName
       onProductChange={updateProductSelection}
       className={className}
       buttonClassName={buttonClassName}

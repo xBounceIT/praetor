@@ -31,6 +31,8 @@ In quote, offer, and order summaries, **Subtotal** is the gross amount before di
 
 The quote list shows code, insertion date, client, gross subtotal, global discount percentage, total discounts, discounted total, margin, MOL, payment terms, due date, and status so the main values can be checked without opening each record.
 
+From each customer or supplier quote's **…** menu, **Duplicate** opens the regular creation dialog prefilled with the original document's commercial data. Nothing is saved until you confirm: the copy starts as a **Draft**, leaves its code blank for the next automatic sequence value, and sets expiration to one month from the current date. Customer quotes copy every variant, reactivate them, and detach supplier sources and downstream documents; if a line depended exclusively on a supplier source, select a product or a new source before saving. Duplicated supplier quotes do not retain the original order, synchronization, or attachments.
+
 The customer quote family follows **Draft → Sent → candidate selection → Offer**. **Expired** is derived from the active variants: the family is expired only when every active candidate has passed its expiration date. An individual expired variant remains visible but cannot be promoted.
 
 An offer can be created only with **Choose the candidate to promote**; direct status changes and direct offer creation are rejected. The winning variant supplies the lines and commercial conditions, keeps the parent quote code and counter, and is marked **Selected** while every sibling is archived as **Discarded**.
