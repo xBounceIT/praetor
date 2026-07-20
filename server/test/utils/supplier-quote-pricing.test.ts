@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { roundCurrency } from '../../utils/invoice-math.ts';
+import { roundCurrency, roundToDecimalPlaces } from '../../utils/invoice-math.ts';
 import { deriveSupplierLinePricing, MAX_LINE_AMOUNT } from '../../utils/supplier-quote-pricing.ts';
 
 describe('MAX_LINE_AMOUNT', () => {
@@ -19,12 +19,12 @@ describe('deriveSupplierLinePricing', () => {
     });
   });
 
-  test('rounds more-than-two-decimal inputs to DB scale BEFORE deriving the net cost', () => {
-    // 10.005 → 10.01 at NUMERIC(_,2); 10.01 × (1 − 10/100) = 9.009 → 9.01.
+  test('rounds inputs to DB scale but retains the derived net cost precision', () => {
+    // 10.005 → 10.01 at NUMERIC(_,2); the derived 9.009 keeps its fractional cent.
     expect(deriveSupplierLinePricing(10.005, 10)).toEqual({
       listPrice: 10.01,
       discountPercent: 10,
-      unitPrice: 9.01,
+      unitPrice: 9.009,
     });
   });
 
@@ -32,7 +32,7 @@ describe('deriveSupplierLinePricing', () => {
     // 12.345 → 12.35 at NUMERIC(5,2).
     const pricing = deriveSupplierLinePricing(100, 12.345);
     expect(pricing.discountPercent).toBe(12.35);
-    expect(pricing.unitPrice).toBe(roundCurrency(100 * (1 - 12.35 / 100)));
+    expect(pricing.unitPrice).toBe(roundToDecimalPlaces(100 * (1 - 12.35 / 100), 6));
   });
 
   test('a zero discount leaves the net cost equal to the (rounded) list price', () => {
@@ -57,8 +57,11 @@ describe('deriveSupplierLinePricing', () => {
     for (const lp of lists) {
       for (const dp of discounts) {
         const p = deriveSupplierLinePricing(lp, dp);
-        // unitPrice is exactly re-derivable from the persisted (rounded) listPrice/discountPercent.
-        expect(p.unitPrice).toBe(roundCurrency(p.listPrice * (1 - p.discountPercent / 100)));
+        // unitPrice is exactly re-derivable from the persisted (rounded) listPrice/discountPercent
+        // without discarding fractional cents.
+        expect(p.unitPrice).toBe(
+          roundToDecimalPlaces(p.listPrice * (1 - p.discountPercent / 100), 6),
+        );
         // Inputs are stored at NUMERIC(_,2): no more than two decimals survive.
         expect(p.listPrice).toBe(roundCurrency(p.listPrice));
         expect(p.discountPercent).toBe(roundCurrency(p.discountPercent));

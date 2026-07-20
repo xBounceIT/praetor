@@ -283,9 +283,9 @@ const validateAndNormalizeItems = (
     // even when a caller submits more than two decimals. Derived server-side so it can never drift
     // from what the client computed; totals downstream read this net unit price.
     const pricing = deriveSupplierLinePricing(listPrice, discountPercent);
-    // Reject amounts that would overflow the NUMERIC(15,2) columns so the caller gets a clean 400
-    // instead of a 500-level database error on INSERT. (unitPrice ≤ listPrice, but check both so a
-    // future formula change can't quietly slip an out-of-range net cost through.)
+    // Reject amounts that would overflow either the NUMERIC(15,2) list price or the NUMERIC(19,6)
+    // derived unit cost, so the caller gets a clean 400 instead of a database error. Both keep 13
+    // integer digits; unitPrice is currently ≤ listPrice, but checking both protects future changes.
     if (pricing.listPrice > MAX_LINE_AMOUNT || pricing.unitPrice > MAX_LINE_AMOUNT) {
       badRequest(reply, `items[${i}].listPrice must not exceed ${MAX_LINE_AMOUNT}`);
       return null;
@@ -1181,8 +1181,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           // Snapshots taken before list price / discount existed lack those keys, so seed list price
           // from the net unit price (no discount) to keep the restored Costo unitario identical to
           // what was saved. Re-derive through the shared helper — mirroring validateAndNormalizeItems
-          // — so every restored row satisfies unitPrice = listPrice × (1 − discount/100). For current
-          // snapshots (already at scale 2) this is a no-op; for a pre-fix snapshot it heals any drift.
+          // — so every restored row satisfies unitPrice = listPrice × (1 − discount/100). Current
+          // snapshots retain scale-6 cost precision; pre-0116 snapshots are healed during restore.
           const snapshotUnitPrice = Number(rest.unitPrice ?? 0);
           const pricing = deriveSupplierLinePricing(
             Number(rest.listPrice ?? snapshotUnitPrice),

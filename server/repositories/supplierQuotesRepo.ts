@@ -12,6 +12,10 @@ import {
   effectiveSupplierQuoteStatusFromDate,
   isTerminalQuoteStatus,
 } from '../utils/quote-status.ts';
+import {
+  deriveSupplierLinePricing,
+  normalizeSupplierUnitPrice,
+} from '../utils/supplier-quote-pricing.ts';
 
 export type SupplierQuote = {
   id: string;
@@ -858,8 +862,8 @@ export type SupplierItemSyncPatch = {
 };
 
 // Client-driven pricing sync (issue #779, client → supplier direction): writes the new quantity
-// and unit cost, recomputing the list price so the stored "discount to us" stays meaningful
-// (listPrice × (1 − discount/100) = cost). A 100% discount cannot express a non-zero cost, so it
+// and authoritative unit cost, recomputing the scale-2 list price so the stored "discount to us"
+// remains as close as that scale permits. A 100% discount cannot express a non-zero cost, so it
 // resets to 0 with listPrice = cost. Bumps the parent quote's updated_at like any content edit.
 export const syncItemPricing = async (
   quoteId: string,
@@ -873,13 +877,17 @@ export const syncItemPricing = async (
       const listPrice = keepDiscount
         ? patch.unitCost / (1 - patch.discountPercent / 100)
         : patch.unitCost;
+      const pricing = deriveSupplierLinePricing(listPrice, discountPercent);
       return exec
         .update(supplierQuoteItems)
         .set({
           quantity: numericForDb(patch.quantity),
-          unitPrice: numericForDb(patch.unitCost),
-          listPrice: numericForDb(listPrice),
-          discountPercent: numericForDb(discountPercent),
+          // Preserve the client-authored cost at supplier-unit scale. Re-deriving it from a
+          // scale-2 list price could shift it (32.09 / 85% -> 37.75 -> 32.0875) and make the
+          // client snapshot stale immediately after this atomic bidirectional sync.
+          unitPrice: numericForDb(normalizeSupplierUnitPrice(patch.unitCost)),
+          listPrice: numericForDb(pricing.listPrice),
+          discountPercent: numericForDb(pricing.discountPercent),
         })
         .where(eq(supplierQuoteItems.id, patch.itemId));
     }),

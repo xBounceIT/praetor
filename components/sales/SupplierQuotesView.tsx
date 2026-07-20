@@ -50,6 +50,7 @@ import {
   parseDurationValueToMonths,
   parseNumberInputValue,
   roundCurrency,
+  roundToDecimalPlaces,
 } from '../../utils/numbers';
 import { getPaymentTermsOptions } from '../../utils/options';
 import { isTerminalQuoteStatus } from '../../utils/quoteStatus';
@@ -91,29 +92,46 @@ import SupplierQuoteAttachmentsStaging, {
 import SupplierQuoteVersionsPanel from './SupplierQuoteVersionsPanel';
 
 interface TotalsBreakdown {
-  // Gross list total: Σ(Prezzo listino × Qtà), before the supplier discount.
+  // Gross list total: Σ(Prezzo listino × Qtà × Durata), before the supplier discount.
   subtotal: number;
   // Total "Sconto a noi" granted across all lines: subtotal − total.
   discountAmount: number;
-  // Net total: Σ(Costo unitario × Qtà).
+  // Net total: Σ(Costo unitario × Qtà × Durata).
   total: number;
 }
 
 // Derive a line's persisted-scale pricing. Mirrors the server helper
 // (server/utils/supplier-quote-pricing.ts → deriveSupplierLinePricing): round Prezzo listino and
-// Sconto a noi to the DB scale (NUMERIC(_,2)) FIRST, then derive Costo unitario from the rounded
-// values. Keeping the modal in lockstep with the server means the previewed and submitted line
-// totals match the saved quote even when the user types more than two decimals. The discount is also
-// clamped into [0, 100] so the net cost can never go negative from a legacy/out-of-range value.
+// Sconto a noi to their DB scale (NUMERIC(_,2)) FIRST, then retain the derived Costo unitario at
+// NUMERIC(_,6) precision. Keeping the modal in lockstep with the server means the previewed and
+// submitted totals match the saved quote even when the user types more than two decimals. The
+// discount is also clamped into [0, 100] so the net cost cannot become negative from legacy data.
 const deriveLinePricing = (
   listPrice: number,
   discountPercent: number,
 ): { listPrice: number; discountPercent: number; unitPrice: number } => {
   const roundedListPrice = roundCurrency(listPrice || 0);
   const roundedDiscountPercent = Math.min(100, Math.max(0, roundCurrency(discountPercent || 0)));
-  const unitPrice = roundCurrency(roundedListPrice * (1 - roundedDiscountPercent / 100));
+  const unitPrice = roundToDecimalPlaces(roundedListPrice * (1 - roundedDiscountPercent / 100), 6);
   return { listPrice: roundedListPrice, discountPercent: roundedDiscountPercent, unitPrice };
 };
+
+// Totals retain the persisted unit cost's fractional cents until quantity/duration have been
+// applied. Normal quote writes derive this value from list price and discount at scale 6; the
+// bidirectional client sync may instead preserve an explicitly edited cost at that same scale.
+const getUnroundedNetUnitCost = (item: SupplierQuoteItem): number => {
+  if (item.unitPrice !== undefined && item.unitPrice !== null) {
+    const unitPrice = Number(item.unitPrice);
+    if (Number.isFinite(unitPrice)) return unitPrice;
+  }
+
+  if (item.listPrice === undefined || item.listPrice === null) return 0;
+
+  return deriveLinePricing(Number(item.listPrice), Number(item.discountPercent)).unitPrice;
+};
+
+const calculateLineTotal = (item: SupplierQuoteItem): number =>
+  (Number(item.quantity) || 0) * getUnroundedNetUnitCost(item) * getEffectiveDurationMonths(item);
 
 const calculateTotals = (items: SupplierQuoteItem[]): TotalsBreakdown => {
   let grossListTotal = 0;
@@ -122,12 +140,11 @@ const calculateTotals = (items: SupplierQuoteItem[]): TotalsBreakdown => {
     // Legacy fallback: rows/snapshots that predate list price use the net unit price as the
     // list price (no discount), so gross == net and no discount surfaces for them.
     const listPrice = item.listPrice ?? item.unitPrice ?? 0;
-    // Duration multiplies the line total alongside quantity (issue #776). Unit-measured lines
-    // never carry a duration, so getEffectiveDurationMonths returns 1 for them.
+    // Duration multiplies quantity for every line; "N/D" is normalized to 1 (issue #775).
     const durationMonths = getEffectiveDurationMonths(item);
     const quantity = Number(item.quantity) || 0;
     grossListTotal += quantity * (Number(listPrice) || 0) * durationMonths;
-    netTotal += quantity * (Number(item.unitPrice) || 0) * durationMonths;
+    netTotal += calculateLineTotal(item);
   });
   const subtotal = roundCurrency(grossListTotal);
   const total = roundCurrency(netTotal);
@@ -1774,7 +1791,7 @@ const getSupplierQuoteItemContext = (
   const itemUnitCost = item.unitPrice ?? 0;
   const durationUnit = normalizeDurationUnit(item.durationUnit);
   const durationValue = getDurationInputValue(item);
-  const lineTotal = (Number(item.quantity) || 0) * itemUnitCost * getEffectiveDurationMonths(item);
+  const lineTotal = calculateLineTotal(item);
   const itemProduct = item.productId
     ? controller.products.find((product) => product.id === item.productId)
     : undefined;

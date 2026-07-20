@@ -227,10 +227,39 @@ describe('<SupplierQuotesView /> supplier pricing chain', () => {
 
     const updates = onUpdateQuote.mock.calls[0]?.[1] as Partial<SupplierQuote>;
     const item = updates.items?.[0];
-    // 10.005 → 10.01 at scale 2; 10.01 × (1 − 10/100) = 9.009 → 9.01 (matches deriveSupplierLinePricing).
+    // 10.005 → 10.01 at scale 2; the derived 9.009 keeps its fractional cent.
     expect(item?.listPrice).toBe(10.01);
     expect(item?.discountPercent).toBe(10);
-    expect(item?.unitPrice).toBe(9.01);
+    expect(item?.unitPrice).toBe(9.009);
+  });
+
+  test('rounds the discounted line total only after multiplying by quantity', async () => {
+    const fractionalUnitCostQuote = buildQuote({
+      id: 'SQ-FRACTIONAL-UNIT-COST',
+      items: [
+        {
+          id: 'sqi-fractional-unit-cost',
+          quoteId: 'SQ-FRACTIONAL-UNIT-COST',
+          productName: 'Widget',
+          quantity: 150,
+          listPrice: 37.75,
+          discountPercent: 15,
+          // The API persists the derived cost with fractional cents; display formatting remains
+          // at currency scale while the line total uses this precise stored value.
+          unitPrice: 32.0875,
+          unitType: 'unit',
+        },
+      ],
+    });
+
+    render(<SupplierQuotesView {...baseProps} quotes={[fractionalUnitCostQuote]} />);
+
+    // 37.75 × (1 − 15/100) × 150 = 4813.125, rounded once to 4813.13.
+    expect(screen.getByText('4.813,13 EUR')).toBeInTheDocument();
+
+    await openQuote('SQ-FRACTIONAL-UNIT-COST');
+    expect(screen.getAllByText('4.813,13 EUR').length).toBeGreaterThanOrEqual(2);
+    expect(screen.queryByText('4.813,50 EUR')).not.toBeInTheDocument();
   });
 });
 

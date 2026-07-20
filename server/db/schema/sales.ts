@@ -85,7 +85,8 @@ export const saleItems = pgTable(
     supplierQuoteId: varchar('supplier_quote_id', { length: 100 }),
     supplierQuoteItemId: varchar('supplier_quote_item_id', { length: 50 }),
     supplierQuoteSupplierName: varchar('supplier_quote_supplier_name', { length: 255 }),
-    supplierQuoteUnitPrice: numeric('supplier_quote_unit_price', { precision: 15, scale: 2 }),
+    // Supplier-derived costs retain fractional cents so quantity/duration round only at total.
+    supplierQuoteUnitPrice: numeric('supplier_quote_unit_price', { precision: 19, scale: 6 }),
     supplierSaleId: varchar('supplier_sale_id', { length: 100 }),
     supplierSaleItemId: varchar('supplier_sale_item_id', { length: 50 }),
     supplierSaleSupplierName: varchar('supplier_sale_supplier_name', { length: 255 }),

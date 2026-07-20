@@ -9,6 +9,7 @@ import {
   formatDiscountValue,
   formatMolPercentage,
   formatNumber,
+  getDiscountedLineTotal,
   getDiscountedUnitPrice,
   getDurationDisplayValue,
   getDurationInputValue,
@@ -29,13 +30,26 @@ import {
 } from '../../utils/numbers';
 
 describe('getDiscountedUnitPrice', () => {
-  test('rounds the discounted unit price before quantity and duration multiply it', () => {
+  test('rounds the discounted unit price for currency-scale display', () => {
     expect(getDiscountedUnitPrice(10.01, 10)).toBe(9.01);
   });
 
   test('handles the inclusive percentage boundaries', () => {
     expect(getDiscountedUnitPrice(10, 0)).toBe(10);
     expect(getDiscountedUnitPrice(10, 100)).toBe(0);
+  });
+});
+
+describe('getDiscountedLineTotal', () => {
+  test('keeps fractional cents until quantity and duration have been applied', () => {
+    expect(
+      getDiscountedLineTotal({
+        unitPrice: 37.75,
+        discount: 15,
+        quantity: 150,
+        durationMonths: 1,
+      }),
+    ).toBe(4813.125);
   });
 });
 

@@ -151,7 +151,7 @@ describe('<SupplierInvoicesView /> line item duration (issue #776/#775)', () => 
     );
   });
 
-  test('rounds discounted unit cost before quantity multiplies the line total', () => {
+  test('rounds the line total only after quantity multiplies the precise unit cost', () => {
     const invoice = buildInvoice({
       id: 'SINV-ROUNDING',
       items: [
@@ -172,7 +172,8 @@ describe('<SupplierInvoicesView /> line item duration (issue #776/#775)', () => 
     render(<SupplierInvoicesView {...baseProps} invoices={[invoice]} />);
     fireEvent.click(screen.getByText('SINV-ROUNDING'));
 
-    expect(screen.getAllByText('901,00 EUR').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('900,90 EUR').length).toBeGreaterThan(0);
+    expect(screen.queryByText('901,00 EUR')).not.toBeInTheDocument();
   });
 });
 

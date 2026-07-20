@@ -111,9 +111,10 @@ export const logSupplierItemSyncAudits = async (
 //   - quantity/cost differ from those previous values (a re-save of a stale snapshot — e.g. a
 //     notes-only edit while the drift chip is showing — must not revert direct supplier-side
 //     edits).
-// The cost write keeps the item's stored "discount to us" meaningful by recomputing the list
-// price so that listPrice × (1 − discount/100) equals the new cost. Guards mirror the
-// supplier-quotes PUT freeze: order-locked and frozen (accepted/denied/expired) supplier quotes
+// The cost write keeps the item's stored "discount to us" meaningful by recomputing the scale-2
+// list price as closely as that precision permits while preserving the explicit client cost.
+// Guards mirror the supplier-quotes PUT freeze: order-locked and frozen
+// (accepted/denied/expired) supplier quotes
 // are content-read-only and raise a 409 instead of silently diverging; live states
 // (draft/sent/offer) accept the sync — the linked client document is the source of truth while
 // the pipeline is open. The write also requires the supplier-quote update permission: the

@@ -90,12 +90,12 @@ describe('computeSupplierOrderTotal', () => {
     expect(total).toBe(0);
   });
 
-  test('rounds the discounted unit price before multiplying quantity', () => {
+  test('rounds only after multiplying the precise discounted price by quantity', () => {
     const total = computeSupplierOrderTotal(makeOrder({}), [
       makeItem({ quantity: 100, unitPrice: 10.01, discount: 10 }),
     ]);
 
-    expect(total).toBe(901);
+    expect(total).toBe(900.9);
   });
 });
 

@@ -21,23 +21,33 @@ const shiftDecimal = (value: number, decimalPlaces: number): number => {
   return Number(`${coefficient}e${Number(exponent) + decimalPlaces}`);
 };
 
-// Match the NUMERIC(_, 2) precision used for invoice columns so totals computed here
-// align with what would be re-derived from the persisted rows. The frontend mirrors this
-// helper in `utils/numbers.ts` so both layers agree on rendered values.
-export const roundCurrency = (value: number): number => {
+// Round a finite value to an explicit decimal scale. The frontend mirrors this helper in
+// `utils/numbers.ts` so both layers agree on persisted prices and rendered totals.
+export const roundToDecimalPlaces = (value: number, decimalPlaces: number): number => {
   if (!Number.isFinite(value)) return value;
 
   const sign = Math.sign(value);
   if (sign === 0) return 0;
 
-  const cents = Math.round(shiftDecimal(Math.abs(value), CURRENCY_DECIMAL_PLACES));
-  if (cents === 0) return 0;
+  const scaled = Math.round(shiftDecimal(Math.abs(value), decimalPlaces));
+  if (scaled === 0) return 0;
 
-  return sign * shiftDecimal(cents, -CURRENCY_DECIMAL_PLACES);
+  return sign * shiftDecimal(scaled, -decimalPlaces);
 };
 
-export const getDiscountedUnitPrice = (unitPrice: number, discount: number): number =>
-  roundCurrency(unitPrice * (1 - discount / 100));
+// Match the NUMERIC(_, 2) precision used by currency-total columns in PostgreSQL.
+export const roundCurrency = (value: number): number =>
+  roundToDecimalPlaces(value, CURRENCY_DECIMAL_PLACES);
+
+// Preserve fractional cents until every line multiplier has been applied. Currency rounding is a
+// document-boundary operation; doing it at unit level compounds the error for large quantities.
+export const getDiscountedLineTotal = (item: ItemMath): number => {
+  const quantity = item.quantity ?? 0;
+  const unitPrice = item.unitPrice ?? 0;
+  const discount = item.discount ?? 0;
+  const duration = effectiveDurationMonths(item.durationUnit, item.durationMonths);
+  return quantity * unitPrice * (1 - discount / 100) * duration;
+};
 
 export const getDocumentDiscountAmount = (
   subtotal: number,
@@ -56,13 +66,7 @@ export const computeInvoiceTotals = (
   let subtotalRaw = 0;
   let taxTotalRaw = 0;
   for (const item of items) {
-    const quantity = item.quantity ?? 0;
-    const unitPrice = item.unitPrice ?? 0;
-    const discount = item.discount ?? 0;
-    // 'N/A' lines never multiply by duration (issue #775); absent/non-positive months fall to 1.
-    const effectiveDuration = effectiveDurationMonths(item.durationUnit, item.durationMonths);
-    const discountFactor = 1 - discount / 100;
-    const taxableAmount = quantity * unitPrice * discountFactor * effectiveDuration;
+    const taxableAmount = getDiscountedLineTotal(item);
     const taxRate = item.taxRate ?? 0;
     subtotalRaw += taxableAmount;
     taxTotalRaw += (taxableAmount * taxRate) / 100;

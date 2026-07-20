@@ -273,7 +273,7 @@ describe('<SupplierOrdersView /> item pricing columns', () => {
     expect(within(dialog).getAllByText('3.840,00 EUR').length).toBeGreaterThan(0);
   });
 
-  test('rounds unit cost before quantity multiplies the line total', async () => {
+  test('rounds the line total only after quantity multiplies the precise unit cost', async () => {
     renderView([
       {
         ...baseOrder,
@@ -295,7 +295,8 @@ describe('<SupplierOrdersView /> item pricing columns', () => {
     });
 
     expect(screen.getByText('9,01')).toBeInTheDocument();
-    expect(screen.getAllByText('901,00 EUR').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('900,90 EUR').length).toBeGreaterThan(0);
+    expect(screen.queryByText('901,00 EUR')).not.toBeInTheDocument();
   });
 
   test('converts a replacement product hourly cost into the retained day unit', async () => {

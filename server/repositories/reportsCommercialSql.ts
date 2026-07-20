@@ -13,26 +13,22 @@ const lineNetValueSql = (
   durationUnit: SQL,
   durationMonths: SQL,
   discount: SQL,
-  roundDiscountedUnitPrice = false,
 ) => {
   const discountedUnitPrice = sql`${unitPrice} * (1 - COALESCE(${discount}, 0) / 100.0)`;
-  const effectiveUnitPrice = roundDiscountedUnitPrice
-    ? sql`ROUND(${discountedUnitPrice}, 2)`
-    : discountedUnitPrice;
 
   return sql`
-    ${quantity} * ${effectiveUnitPrice} * ${effectiveDurationSql(durationUnit, durationMonths)}`;
+    ${quantity} * ${discountedUnitPrice} * ${effectiveDurationSql(durationUnit, durationMonths)}`;
 };
 
 const documentNetValueSql = (lineNetValue: SQL, discountType: SQL, discount: SQL) => sql`
-  GREATEST(
+  ROUND(GREATEST(
     COALESCE(SUM(${lineNetValue}), 0)
     - CASE
         WHEN ${discountType} = 'currency' THEN COALESCE(${discount}, 0)
         ELSE COALESCE(SUM(${lineNetValue}), 0) * COALESCE(${discount}, 0) / 100.0
       END,
     0
-  )`;
+  ), 2)`;
 
 const quoteLineNetValueSql = lineNetValueSql(
   sql`qi.quantity`,
@@ -64,7 +60,6 @@ const supplierOrderLineNetValueSql = lineNetValueSql(
   sql`ssi.duration_unit`,
   sql`ssi.duration_months`,
   sql`ssi.discount`,
-  true,
 );
 
 // Prefer the selected quote candidate, then the first active one. The candidate-id fallback keeps
@@ -115,7 +110,7 @@ export const supplierOrderNetValueSql = documentNetValueSql(
 );
 
 export const supplierQuoteNetValueSql = sql`
-  COALESCE(SUM(
+  ROUND(COALESCE(SUM(
     sqi.quantity * sqi.unit_price
     * ${effectiveDurationSql(sql`sqi.duration_unit`, sql`sqi.duration_months`)}
-  ), 0)`;
+  ), 0), 2)`;

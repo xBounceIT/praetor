@@ -731,6 +731,23 @@ describe('syncItemPricing', () => {
     expect(exec.calls[1].params).toContain('q-1');
   });
 
+  test('preserves the client-authored unit cost when scale-2 list price cannot reproduce it exactly', async () => {
+    exec.enqueue({ rows: [] });
+    exec.enqueue({ rows: [] });
+    await supplierQuotesRepo.syncItemPricing(
+      'q-1',
+      [{ itemId: 'sqi-1', quantity: 150, unitCost: 32.09, discountPercent: 15 }],
+      testDb,
+    );
+
+    // 32.09 / 0.85 rounds to listPrice 37.75, whose exact discounted value is 32.0875.
+    // The bidirectional sync must keep the client-authored 32.09 authoritative; otherwise the
+    // client snapshot is stale immediately after the atomic save.
+    expect(exec.calls[0].params).toEqual(
+      expect.arrayContaining(['150', '32.09', '37.75', '15', 'sqi-1']),
+    );
+  });
+
   test('a 100% discount cannot express a non-zero cost: resets to 0 with listPrice = cost', async () => {
     exec.enqueue({ rows: [] });
     exec.enqueue({ rows: [] });

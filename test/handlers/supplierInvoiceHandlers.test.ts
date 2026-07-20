@@ -248,7 +248,7 @@ describe('makeSupplierInvoiceHandlers', () => {
     expect(items[1]).toEqual(expect.objectContaining({ durationMonths: 6, durationUnit: 'na' }));
   });
 
-  test('createFromOrder keeps the supplier-order unit-cost rounding in the invoice total', async () => {
+  test('createFromOrder rounds only after quantity multiplies the precise discounted cost', async () => {
     apiMocks.supplierInvoicesCreate.mockImplementation((data: unknown) =>
       Promise.resolve({ id: 'si-new', ...(data as object) }),
     );
@@ -277,8 +277,8 @@ describe('makeSupplierInvoiceHandlers', () => {
     } as never);
 
     const callArg = apiMocks.supplierInvoicesCreate.mock.calls[0][0] as Record<string, unknown>;
-    expect(callArg.subtotal).toBe(901);
-    expect(callArg.total).toBe(901);
+    expect(callArg.subtotal).toBe(900.9);
+    expect(callArg.total).toBe(900.9);
   });
 
   test('createFromOrder defaults paymentTerms to 30 days when missing', async () => {

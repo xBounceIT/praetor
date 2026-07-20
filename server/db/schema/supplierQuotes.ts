@@ -77,9 +77,10 @@ export const supplierQuoteItems = pgTable(
     }),
     productName: varchar('product_name', { length: 255 }).notNull(),
     quantity: numeric('quantity', { precision: 10, scale: 2 }).notNull().default('1'),
-    // `unit_price` is the net unit cost (Costo unitario) = list_price * (1 - discount_percent/100),
-    // kept as the authoritative pricing column so downstream snapshots/orders read it directly.
-    unitPrice: numeric('unit_price', { precision: 15, scale: 2 }).notNull().default('0'),
+    // `unit_price` is the scale-6 net unit cost (Costo unitario). Normal quote edits derive it from
+    // list price and discount; bidirectional client sync preserves an explicit client-authored cost.
+    // Six decimals preserve the complete result of two scale-2 operands until line totals round.
+    unitPrice: numeric('unit_price', { precision: 19, scale: 6 }).notNull().default('0'),
     note: text('note'),
     createdAt: timestamp('created_at').default(sql`CURRENT_TIMESTAMP`),
     unitType: varchar('unit_type', { length: 10 }).default('hours'),

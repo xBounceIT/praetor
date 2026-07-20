@@ -345,7 +345,7 @@ describe('<SuppliersView /> table contact columns', () => {
 });
 
 describe('<SuppliersView /> supplier-order totals', () => {
-  test('uses rounded unit cost and duration like the supplier-order view', async () => {
+  test('rounds only after applying quantity, duration, and the document discount', async () => {
     renderSuppliersView({
       supplierOrders: [
         {
@@ -375,7 +375,8 @@ describe('<SuppliersView /> supplier-order totals', () => {
       ],
     });
 
-    await waitFor(() => expect(screen.getByText('10.800,00 EUR')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('10.798,80 EUR')).toBeInTheDocument());
+    expect(screen.queryByText('10.800,00 EUR')).not.toBeInTheDocument();
   });
 });
 
