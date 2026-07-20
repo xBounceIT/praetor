@@ -293,6 +293,7 @@
         "users": "{{count}} users",
         "roles": "{{count}} roles",
         "webhooks": "Webhook: {{names}}",
+        "hiddenWebhook": "Protected webhook action",
         "none": "No actions configured"
       },
       "conditionLogic": {

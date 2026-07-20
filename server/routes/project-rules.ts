@@ -49,7 +49,10 @@ const projectRuleActionSchema = {
     recipientType: { type: 'string', enum: ['user', 'role'] },
     recipientUserIds: { type: 'array', items: { type: 'string' } },
     recipientRoleIds: { type: 'array', items: { type: 'string' } },
-    webhookId: { type: 'string' },
+    webhookId: {
+      type: 'string',
+      description: 'Requires administration.webhooks.view when supplied.',
+    },
   },
   required: ['type'],
   additionalProperties: false,
@@ -96,8 +99,16 @@ const projectRuleSchema = {
     value: { type: 'string' },
     conditionLogic: { type: 'string', enum: ['and', 'or'] },
     conditions: { type: 'array', items: projectRuleConditionSchema },
-    actionType: { type: 'string' },
-    actionConfig: actionConfigResponseSchema,
+    actionType: {
+      type: 'string',
+      description:
+        'Set to webhook when webhook actions are redacted, including rules that retain visible notification actions.',
+    },
+    actionConfig: {
+      ...actionConfigResponseSchema,
+      description:
+        'Webhook IDs and actions are omitted unless the caller has administration.webhooks.view.',
+    },
     isEnabled: { type: 'boolean' },
     conditionMet: { type: 'boolean' },
     lastTriggeredAt: { type: ['number', 'null'] },
@@ -154,6 +165,8 @@ const recipientOptionsSchema = {
     },
     webhooks: {
       type: 'array',
+      description:
+        'Enabled webhook targets. Empty unless the caller has administration.webhooks.view.',
       items: {
         type: 'object',
         properties: {
@@ -194,6 +207,36 @@ type ProjectRuleBody = Record<string, unknown>;
 
 class RecipientValidationError extends Error {}
 
+const WEBHOOK_USE_PERMISSION = 'administration.webhooks.view';
+
+const canUseRuleWebhooks = (permissions: readonly string[]) =>
+  permissions.includes(WEBHOOK_USE_PERMISSION);
+
+const redactRuleWebhooks = (rule: projectRulesRepo.ProjectRule): projectRulesRepo.ProjectRule => {
+  const actions = rule.actionConfig.actions.filter((action) => action.type !== 'webhook');
+  const hasHiddenWebhooks =
+    rule.actionConfig.webhookIds.length > 0 ||
+    rule.actionConfig.actions.some((action) => action.type === 'webhook');
+  return {
+    ...rule,
+    actionType: hasHiddenWebhooks ? 'webhook' : (actions[0]?.type ?? rule.actionType),
+    actionConfig: {
+      ...rule.actionConfig,
+      webhookIds: [],
+      actions,
+    },
+  };
+};
+
+const preserveExistingRuleWebhooks = (
+  actionConfig: projectRulesRepo.ProjectRule['actionConfig'],
+  existingWebhookIds: readonly string[],
+) =>
+  projectRulesRepo.normalizeProjectRuleActionConfig({
+    ...actionConfig,
+    webhookIds: [...existingWebhookIds],
+  });
+
 const canAccessProject = makeAccessChecker(
   (userId, projectId) => userAssignmentsRepo.isProjectAssignedToUser(userId, projectId),
   'projects.manage_all.view',
@@ -201,6 +244,7 @@ const canAccessProject = makeAccessChecker(
 
 const parseActionConfig = (
   value: unknown,
+  { allowEmpty = false }: { allowEmpty?: boolean } = {},
 ):
   | { ok: true; value: projectRulesRepo.ProjectRule['actionConfig'] }
   | { ok: false; message: string } => {
@@ -290,7 +334,7 @@ const parseActionConfig = (
     webhookIds: webhookIds.value,
     actions,
   });
-  if (normalized.actions.length === 0) {
+  if (!allowEmpty && normalized.actions.length === 0) {
     return { ok: false, message: 'At least one rule action is required' };
   }
   return { ok: true, value: normalized };
@@ -479,7 +523,7 @@ const parseUpdateBody = (
     patch.actionType = result.value;
   }
   if (Object.hasOwn(body, 'actionConfig')) {
-    const result = parseActionConfig(body.actionConfig);
+    const result = parseActionConfig(body.actionConfig, { allowEmpty: true });
     if (!result.ok) return result;
     patch.actionConfig = result.value;
     if (!Object.hasOwn(body, 'actionType')) {
@@ -502,6 +546,7 @@ const validateFinalRule = async ({
   rule,
   permissions,
   exec,
+  allowedWebhookIdsWithoutPermission,
   allowedDisabledWebhookIds,
 }: {
   projectId: string;
@@ -511,6 +556,7 @@ const validateFinalRule = async ({
   >;
   permissions: readonly string[];
   exec?: DbExecutor;
+  allowedWebhookIdsWithoutPermission?: readonly string[];
   allowedDisabledWebhookIds?: readonly string[];
 }) => {
   if (rule.actionType !== 'notify' && rule.actionType !== 'webhook') {
@@ -542,6 +588,14 @@ const validateFinalRule = async ({
         `${conditionInput.field} requires ${definition.requiresPermission}`,
       );
     }
+  }
+
+  const allowedWebhookIdSet = new Set(allowedWebhookIdsWithoutPermission ?? []);
+  if (
+    !canUseRuleWebhooks(permissions) &&
+    rule.actionConfig.webhookIds.some((id) => !allowedWebhookIdSet.has(id))
+  ) {
+    throw new RecipientValidationError('actionConfig contains invalid recipients or webhooks');
   }
 
   const invalidRecipients = await projectRuleRecipientsRepo.findInvalidRecipientIds(
@@ -634,7 +688,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       ) {
         return;
       }
-      return projectRuleRecipientsRepo.listRecipientOptions(id.value);
+      const options = await projectRuleRecipientsRepo.listRecipientOptions(id.value);
+      return canUseRuleWebhooks(request.user?.permissions ?? [])
+        ? options
+        : { ...options, webhooks: [] };
     },
   );
 
@@ -658,7 +715,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!id.ok) return badRequest(reply, id.message);
       if (!(await ensureProjectAccess(request, reply, id.value, 'project_rule.list.denied')))
         return;
-      return projectRulesRepo.listByProject(id.value);
+      const rules = await projectRulesRepo.listByProject(id.value);
+      return canUseRuleWebhooks(request.user?.permissions ?? [])
+        ? rules
+        : rules.map(redactRuleWebhooks);
     },
   );
 
@@ -778,6 +838,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
       const parsed = parseUpdateBody(request.body as ProjectRuleBody);
       if (!parsed.ok) return badRequest(reply, parsed.message);
+      const permissions = request.user?.permissions ?? [];
+      const mayUseRuleWebhooks = canUseRuleWebhooks(permissions);
 
       let updated: projectRulesRepo.ProjectRule;
       let projectName = '';
@@ -789,28 +851,60 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           ]);
           if (!project) throw new NotFoundError('Project');
           if (!existing) throw new NotFoundError('Project rule');
+          if (!mayUseRuleWebhooks && parsed.value.actionConfig?.webhookIds.length) {
+            throw new RecipientValidationError(
+              'actionConfig contains invalid recipients or webhooks',
+            );
+          }
+
+          const existingActionConfig = projectRulesRepo.normalizeProjectRuleActionConfig(
+            existing.actionConfig,
+          );
+          const actionConfig =
+            parsed.value.actionConfig === undefined
+              ? existingActionConfig
+              : mayUseRuleWebhooks
+                ? parsed.value.actionConfig
+                : preserveExistingRuleWebhooks(
+                    parsed.value.actionConfig,
+                    existingActionConfig.webhookIds,
+                  );
+          const updatePatch = { ...parsed.value };
+          if (parsed.value.actionConfig !== undefined) updatePatch.actionConfig = actionConfig;
+          if (
+            !mayUseRuleWebhooks &&
+            existingActionConfig.webhookIds.length > 0 &&
+            parsed.value.actionType !== undefined
+          ) {
+            updatePatch.actionType =
+              parsed.value.actionConfig === undefined
+                ? existing.actionType
+                : (actionConfig.actions[0]?.type ?? existing.actionType);
+          }
 
           const finalConditions = mergeRuleConditions(existing, parsed.value);
           const primary = finalConditions[0];
           const finalConditionLogic = parsed.value.conditionLogic ?? existing.conditionLogic;
+          const reEnabled = parsed.value.isEnabled === true && existing.isEnabled === false;
           const finalRule = {
             ...existing,
-            ...parsed.value,
+            ...updatePatch,
             field: primary.field,
             operator: primary.operator,
             value: primary.value,
             conditionLogic: finalConditionLogic,
             conditions: finalConditions,
-            actionConfig: parsed.value.actionConfig ?? existing.actionConfig,
+            actionConfig,
           };
           await validateFinalRule({
             projectId: projectIdResult.value,
             rule: finalRule,
-            permissions: request.user?.permissions ?? [],
+            permissions,
             exec: tx,
-            allowedDisabledWebhookIds: finalRule.isEnabled
-              ? []
-              : projectRulesRepo.normalizeProjectRuleActionConfig(existing.actionConfig).webhookIds,
+            allowedWebhookIdsWithoutPermission:
+              !reEnabled && !mayUseRuleWebhooks ? existingActionConfig.webhookIds : [],
+            allowedDisabledWebhookIds:
+              !reEnabled && !finalRule.isEnabled ? existingActionConfig.webhookIds : [],
           });
 
           const conditionChanged =
@@ -819,13 +913,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             parsed.value.value !== undefined ||
             parsed.value.conditions !== undefined ||
             parsed.value.conditionLogic !== undefined;
-          const reEnabled = parsed.value.isEnabled === true && existing.isEnabled === false;
           projectName = project.name;
           const result = await projectRulesRepo.update(
             projectIdResult.value,
             ruleIdResult.value,
             {
-              ...parsed.value,
+              ...updatePatch,
               field: primary.field,
               operator: primary.operator,
               value: primary.value,
@@ -871,7 +964,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           changedFields,
         },
       });
-      return updated;
+      return mayUseRuleWebhooks ? updated : redactRuleWebhooks(updated);
     },
   );
 

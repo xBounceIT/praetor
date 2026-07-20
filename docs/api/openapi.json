@@ -13515,6 +13515,7 @@
                     },
                     "webhooks": {
                       "type": "array",
+                      "description": "Enabled webhook targets. Empty unless the caller has administration.webhooks.view.",
                       "items": {
                         "type": "object",
                         "properties": {
@@ -13752,7 +13753,8 @@
                         }
                       },
                       "actionType": {
-                        "type": "string"
+                        "type": "string",
+                        "description": "Set to webhook when webhook actions are redacted, including rules that retain visible notification actions."
                       },
                       "actionConfig": {
                         "type": "object",
@@ -13807,7 +13809,8 @@
                                   }
                                 },
                                 "webhookId": {
-                                  "type": "string"
+                                  "type": "string",
+                                  "description": "Requires administration.webhooks.view when supplied."
                                 }
                               },
                               "required": [
@@ -13823,7 +13826,8 @@
                           "webhookIds",
                           "actions"
                         ],
-                        "additionalProperties": false
+                        "additionalProperties": false,
+                        "description": "Webhook IDs and actions are omitted unless the caller has administration.webhooks.view."
                       },
                       "isEnabled": {
                         "type": "boolean"
@@ -14118,7 +14122,8 @@
                               }
                             },
                             "webhookId": {
-                              "type": "string"
+                              "type": "string",
+                              "description": "Requires administration.webhooks.view when supplied."
                             }
                           },
                           "required": [
@@ -14217,7 +14222,8 @@
                       }
                     },
                     "actionType": {
-                      "type": "string"
+                      "type": "string",
+                      "description": "Set to webhook when webhook actions are redacted, including rules that retain visible notification actions."
                     },
                     "actionConfig": {
                       "type": "object",
@@ -14272,7 +14278,8 @@
                                 }
                               },
                               "webhookId": {
-                                "type": "string"
+                                "type": "string",
+                                "description": "Requires administration.webhooks.view when supplied."
                               }
                             },
                             "required": [
@@ -14288,7 +14295,8 @@
                         "webhookIds",
                         "actions"
                       ],
-                      "additionalProperties": false
+                      "additionalProperties": false,
+                      "description": "Webhook IDs and actions are omitted unless the caller has administration.webhooks.view."
                     },
                     "isEnabled": {
                       "type": "boolean"
@@ -14584,7 +14592,8 @@
                               }
                             },
                             "webhookId": {
-                              "type": "string"
+                              "type": "string",
+                              "description": "Requires administration.webhooks.view when supplied."
                             }
                           },
                           "required": [
@@ -14687,7 +14696,8 @@
                       }
                     },
                     "actionType": {
-                      "type": "string"
+                      "type": "string",
+                      "description": "Set to webhook when webhook actions are redacted, including rules that retain visible notification actions."
                     },
                     "actionConfig": {
                       "type": "object",
@@ -14742,7 +14752,8 @@
                                 }
                               },
                               "webhookId": {
-                                "type": "string"
+                                "type": "string",
+                                "description": "Requires administration.webhooks.view when supplied."
                               }
                             },
                             "required": [
@@ -14758,7 +14769,8 @@
                         "webhookIds",
                         "actions"
                       ],
-                      "additionalProperties": false
+                      "additionalProperties": false,
+                      "description": "Webhook IDs and actions are omitted unless the caller has administration.webhooks.view."
                     },
                     "isEnabled": {
                       "type": "boolean"

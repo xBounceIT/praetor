@@ -245,6 +245,7 @@ export interface ItemPricingContext {
   durationMultiplier: number;
   lineCost: number;
   discountPercentage: number;
+  revenueMultiplier: number;
   grossRevenue: number;
   lineDiscount: number;
   netRevenue: number;
@@ -260,6 +261,7 @@ export const getItemPricingContext = (item: PricingItem): ItemPricingContext => 
   const durationMultiplier = getEffectiveDurationMultiplier(item);
   const lineCost = unitCost * quantity * durationMultiplier;
   const discountPercentage = Math.min(100, Math.max(0, Number(item.discount || 0)));
+  const revenueMultiplier = quantity * durationMultiplier * (1 - discountPercentage / 100);
   const grossRevenue = Number(item.unitPrice || 0) * quantity * durationMultiplier;
   const lineDiscount = (grossRevenue * discountPercentage) / 100;
   const netRevenue = grossRevenue - lineDiscount;
@@ -273,6 +275,7 @@ export const getItemPricingContext = (item: PricingItem): ItemPricingContext => 
     durationMultiplier,
     lineCost,
     discountPercentage,
+    revenueMultiplier,
     grossRevenue,
     lineDiscount,
     netRevenue,

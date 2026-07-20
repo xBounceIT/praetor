@@ -234,6 +234,45 @@ describe('<ProjectRules />', () => {
     ).toBeInTheDocument();
   });
 
+  test('renders a non-sensitive summary for a redacted webhook-only rule', async () => {
+    listMock.mockResolvedValue([
+      {
+        ...RULE,
+        actionType: 'webhook',
+        actionConfig: {
+          recipientUserIds: [],
+          recipientRoleIds: [],
+          webhookIds: [],
+          actions: [],
+        },
+      },
+    ]);
+    renderProjectRules(['projects.rules.view']);
+
+    expect(
+      await screen.findByText('projects:detail.rules.actionSummary.hiddenWebhook'),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('projects:detail.rules.actionSummary.none')).not.toBeInTheDocument();
+  });
+
+  test('includes the protected webhook marker in a redacted mixed-action summary', async () => {
+    listMock.mockResolvedValue([
+      {
+        ...RULE,
+        actionType: 'webhook',
+      },
+    ]);
+    renderProjectRules(['projects.rules.view']);
+
+    expect(
+      await screen.findByText(
+        (content) =>
+          content.includes('projects:detail.rules.actionSummary.users') &&
+          content.includes('projects:detail.rules.actionSummary.hiddenWebhook'),
+      ),
+    ).toBeInTheDocument();
+  });
+
   test('hides edit and delete controls, and disables toggle without matching permissions', async () => {
     listMock.mockResolvedValue([RULE]);
     renderProjectRules(['projects.rules.view']);
