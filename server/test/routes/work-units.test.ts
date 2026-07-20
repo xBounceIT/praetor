@@ -41,6 +41,7 @@ const findNameByIdMock = mock();
 const findUserIdsMock = mock();
 const deleteByIdMock = mock();
 const isUserManagerOfUnitMock = mock();
+const listManagedUserIdsMock = mock();
 const logAuditMock = mock(async () => undefined);
 const { withDbTransactionMock, resetWithDbTransactionMock } = makeWithDbTransactionMock();
 
@@ -77,6 +78,7 @@ beforeAll(async () => {
     findUserIds: findUserIdsMock,
     deleteById: deleteByIdMock,
     isUserManagerOfUnit: isUserManagerOfUnitMock,
+    listManagedUserIds: listManagedUserIdsMock,
   }));
   mock.module('../../utils/audit.ts', () => ({
     ...auditSnap,
@@ -117,6 +119,9 @@ const ALL_PERMS = [
   'hr.work_units.update',
   'hr.work_units.delete',
   'hr.work_units_all.view',
+  'hr.work_units_all.create',
+  'hr.work_units_all.update',
+  'hr.work_units_all.delete',
 ];
 
 const SAMPLE_UNIT = {
@@ -150,6 +155,7 @@ const allMocks = [
   findUserIdsMock,
   deleteByIdMock,
   isUserManagerOfUnitMock,
+  listManagedUserIdsMock,
   logAuditMock,
   withDbTransactionMock,
 ];
@@ -273,6 +279,55 @@ describe('POST /api/work-units', () => {
     expect(res.statusCode).toBe(400);
     expect(JSON.parse(res.body).error).toMatch(/managerIds must contain at least one item/);
   });
+
+  test('201 scoped creator can assign themselves and users in their managed HR scope', async () => {
+    getRolePermissionsMock.mockResolvedValue(['hr.work_units.create']);
+    listManagedUserIdsMock.mockResolvedValue(['u2']);
+    createMock.mockResolvedValue(undefined);
+    addManagersMock.mockResolvedValue(undefined);
+    addUsersToUnitMock.mockResolvedValue(undefined);
+    findByIdMock.mockResolvedValue(SAMPLE_UNIT);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/work-units',
+      headers: authHeader(),
+      payload: { name: 'Engineering', managerIds: ['u1', 'u2'] },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(listManagedUserIdsMock).toHaveBeenCalledWith('u1');
+  });
+
+  test('403 scoped creator cannot assign managers outside their managed HR scope', async () => {
+    getRolePermissionsMock.mockResolvedValue(['hr.work_units.create']);
+    listManagedUserIdsMock.mockResolvedValue(['u2']);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/work-units',
+      headers: authHeader(),
+      payload: { name: 'Engineering', managerIds: ['u1', 'u3'] },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(createMock).not.toHaveBeenCalled();
+  });
+
+  test('403 scoped creator must remain a manager of the new unit', async () => {
+    getRolePermissionsMock.mockResolvedValue(['hr.work_units.create']);
+    listManagedUserIdsMock.mockResolvedValue(['u2']);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/work-units',
+      headers: authHeader(),
+      payload: { name: 'Engineering', managerIds: ['u2'] },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(createMock).not.toHaveBeenCalled();
+  });
 });
 
 describe('PUT /api/work-units/:id', () => {
@@ -361,6 +416,89 @@ describe('PUT /api/work-units/:id', () => {
     expect(res.statusCode).toBe(400);
     expect(JSON.parse(res.body).error).toMatch(/name must be a non-empty string/);
   });
+
+  test('200 scoped updater can mutate a unit they manage', async () => {
+    getRolePermissionsMock.mockResolvedValue(['hr.work_units.update']);
+    isUserManagerOfUnitMock.mockResolvedValue(true);
+    lockByIdMock.mockResolvedValue(true);
+    updateFieldsMock.mockResolvedValue(undefined);
+    findByIdMock.mockResolvedValue({ ...SAMPLE_UNIT, name: 'Renamed' });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/work-units/wu-1',
+      headers: authHeader(),
+      payload: { name: 'Renamed' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(isUserManagerOfUnitMock).toHaveBeenCalledWith('u1', 'wu-1');
+  });
+
+  test('200 scoped updater can retain themselves and assign a managed user as manager', async () => {
+    getRolePermissionsMock.mockResolvedValue(['hr.work_units.update']);
+    isUserManagerOfUnitMock.mockResolvedValue(true);
+    listManagedUserIdsMock.mockResolvedValue(['u2']);
+    lockByIdMock.mockResolvedValue(true);
+    findByIdMock.mockResolvedValue(SAMPLE_UNIT);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/work-units/wu-1',
+      headers: authHeader(),
+      payload: { managerIds: ['u1', 'u2'] },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(listManagedUserIdsMock).toHaveBeenCalledWith('u1');
+  });
+
+  test('403 scoped updater cannot assign an out-of-scope manager', async () => {
+    getRolePermissionsMock.mockResolvedValue(['hr.work_units.update']);
+    isUserManagerOfUnitMock.mockResolvedValue(true);
+    listManagedUserIdsMock.mockResolvedValue(['u2']);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/work-units/wu-1',
+      headers: authHeader(),
+      payload: { managerIds: ['u1', 'u3'] },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(lockByIdMock).not.toHaveBeenCalled();
+  });
+
+  test('403 scoped updater cannot remove themselves from the manager list', async () => {
+    getRolePermissionsMock.mockResolvedValue(['hr.work_units.update']);
+    isUserManagerOfUnitMock.mockResolvedValue(true);
+    listManagedUserIdsMock.mockResolvedValue(['u2']);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/work-units/wu-1',
+      headers: authHeader(),
+      payload: { managerIds: ['u2'] },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(lockByIdMock).not.toHaveBeenCalled();
+  });
+
+  test('403 scoped updater cannot mutate a unit they do not manage', async () => {
+    getRolePermissionsMock.mockResolvedValue(['hr.work_units.update', 'hr.work_units_all.view']);
+    isUserManagerOfUnitMock.mockResolvedValue(false);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/work-units/wu-other',
+      headers: authHeader(),
+      payload: { name: 'Hijacked' },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(lockByIdMock).not.toHaveBeenCalled();
+  });
 });
 
 describe('DELETE /api/work-units/:id', () => {
@@ -390,6 +528,20 @@ describe('DELETE /api/work-units/:id', () => {
     });
 
     expect(res.statusCode).toBe(404);
+  });
+
+  test('403 scoped deleter cannot delete a unit they do not manage', async () => {
+    getRolePermissionsMock.mockResolvedValue(['hr.work_units.delete', 'hr.work_units_all.view']);
+    isUserManagerOfUnitMock.mockResolvedValue(false);
+
+    const res = await testApp.inject({
+      method: 'DELETE',
+      url: '/api/work-units/wu-other',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(deleteByIdMock).not.toHaveBeenCalled();
   });
 });
 
@@ -483,5 +635,21 @@ describe('POST /api/work-units/:id/users', () => {
 
     expect(res.statusCode).toBe(404);
     expect(JSON.parse(res.body)).toEqual({ error: 'Work unit not found' });
+  });
+
+  test('403 scoped updater cannot replace members of a unit they do not manage', async () => {
+    getRolePermissionsMock.mockResolvedValue(['hr.work_units.update', 'hr.work_units_all.view']);
+    isUserManagerOfUnitMock.mockResolvedValue(false);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/work-units/wu-other/users',
+      headers: authHeader(),
+      payload: { userIds: ['u3'] },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(findNameByIdMock).not.toHaveBeenCalled();
+    expect(clearUsersMock).not.toHaveBeenCalled();
   });
 });
