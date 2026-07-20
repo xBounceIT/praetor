@@ -4370,7 +4370,6 @@
         "tags": [
           "users"
         ],
-        "description": "Requires user-management update permission. Callers without administration.user_management_all.view may inspect only users they manage through a shared work unit.",
         "parameters": [
           {
             "schema": {
@@ -4714,7 +4713,7 @@
         "tags": [
           "users"
         ],
-        "description": "Requires an interactive session and user-management update permission. Callers without administration.user_management_all.view may update only users they manage through a shared work unit.",
+        "description": "Role changes in this payload require an interactive session. Other updates follow their field-specific permissions and scope rules.",
         "requestBody": {
           "required": true,
           "content": {
@@ -6020,6 +6019,7 @@
         "tags": [
           "users"
         ],
+        "description": "Requires user-management update permission. Callers without administration.user_management_all.view may inspect only users they manage through a shared work unit.",
         "parameters": [
           {
             "schema": {
@@ -6189,6 +6189,7 @@
         "tags": [
           "users"
         ],
+        "description": "Requires an interactive session and user-management update permission. Callers without administration.user_management_all.view may update only users they manage through a shared work unit.",
         "requestBody": {
           "required": true,
           "content": {

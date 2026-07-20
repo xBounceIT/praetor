@@ -1858,6 +1858,30 @@ describe('PUT /api/users/:id', () => {
     );
   });
 
+  test('403 (PAT): a personal-access token cannot change roles through the legacy update route', async () => {
+    findCoreByIdMock.mockResolvedValue(SAMPLE_USER_CORE);
+    rolesFindByIdMock.mockResolvedValue({
+      id: 'manager',
+      name: 'Manager',
+      isSystem: true,
+      isAdmin: false,
+    });
+    updateUserDynamicMock.mockResolvedValue({ ...SAMPLE_USER_CORE, role: 'manager' });
+    findByIdMock.mockResolvedValue({ ...SAMPLE_USER_ROW, role: 'manager' });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/users/u-target',
+      headers: patHeader(),
+      payload: { role: 'manager' },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(JSON.parse(res.body).error).toBe('Session authentication required');
+    expect(findCoreByIdMock).not.toHaveBeenCalled();
+    expect(replaceUserRolesMock).not.toHaveBeenCalled();
+  });
+
   test('200 promoting to an admin role via PUT /:id revokes sessions when 2FA is enforced', async () => {
     // The legacy single-role update path must also revoke a newly-admin user's sessions under
     // enforcement — otherwise their pre-existing token keeps admin access without enrolling.

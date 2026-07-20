@@ -1230,6 +1230,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       schema: {
         tags: ['users'],
         summary: 'Update user',
+        description:
+          'Role changes in this payload require an interactive session. Other updates follow their field-specific permissions and scope rules.',
         params: idParamSchema,
         body: userUpdateBodySchema,
         response: {
@@ -1251,6 +1253,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       };
       const idResult = requireNonEmptyString(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
+      if (role !== undefined) {
+        await requireSessionAuth(request, reply);
+        if (reply.sent) return;
+      }
 
       const fields: usersRepo.UserUpdateFields = {};
       const isSelf = idResult.value === request.user?.id;
