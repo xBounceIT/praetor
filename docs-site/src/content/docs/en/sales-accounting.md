@@ -69,6 +69,8 @@ Customer offers follow the same expiration model as quotes: every offer has a ma
 
 Supplier quotes help compare purchase costs and conditions. Link rows to the correct products when possible so data remains traceable in later workflows.
 
+The free-text **Description** field provides a short identifier for the supplier quote. You can enter it in **Supplier Information** while creating or editing the document; the list shows it immediately after the quote code.
+
 In the **Supplier Information** section of the **New Supplier Quote** dialog you must link a **Customer**: every supplier quote has to be associated with a customer. The field is mandatory — it carries the `*` indicator like **Supplier** and **Quote Code**, and saving is blocked until a customer is selected; the empty *No customer* option no longer exists. The linked customer is visible both in the quote detail and in the **Customer** column of the list.
 
 The supplier quote **Status** is fully derived and can never be changed manually. A supplier quote that no client document sources is always a **Draft** (and that is when its items appear among the per-line options in the client quote form); once a client quote's lines source it, the status follows the most-advanced sourcing document: **Sent** when that client quote is sent, **Offer** once a client offer is created from it, **Accepted**/**Denied** when the quote or its offer reaches a terminal state. **Expired** appears when the supplier quote's **own Expiration Date** passes, or when the sourcing quote/offer expires. The **Expiration Date** stays editable in any status to renew validity.

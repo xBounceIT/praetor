@@ -162,6 +162,7 @@ export interface SupplierQuotesViewProps {
 }
 
 const getDefaultFormData = (): Partial<SupplierQuote> => ({
+  description: '',
   supplierId: '',
   supplierName: '',
   clientId: null,
@@ -755,6 +756,14 @@ const useSupplierQuotesController = ({
         className: 'whitespace-nowrap',
         headerClassName: 'min-w-[8rem]',
         cell: ({ row }) => <span className="font-bold text-zinc-700">{row.id}</span>,
+      },
+      {
+        header: t('sales:supplierQuotes.description', { defaultValue: 'Description' }),
+        accessorKey: 'description',
+        headerClassName: 'min-w-[12rem]',
+        cell: ({ row }) => (
+          <span className="text-sm text-foreground">{row.description?.trim() || '-'}</span>
+        ),
       },
       {
         header: t('crm:clients.tableHeaders.insertDate'),
@@ -1377,6 +1386,7 @@ const SupplierQuoteDetailsSection: React.FC<{ controller: SupplierQuotesControll
       <SupplierQuoteSupplierField controller={controller} />
       <SupplierQuoteClientField controller={controller} />
       <SupplierQuoteCodeField controller={controller} />
+      <SupplierQuoteDescriptionField controller={controller} />
       <SupplierQuotePaymentTermsField controller={controller} />
       <SupplierQuoteCommunicationField controller={controller} />
       <SupplierQuoteExpirationField controller={controller} />
@@ -1473,6 +1483,28 @@ const SupplierQuoteCodeField: React.FC<{ controller: SupplierQuotesController }>
             })}
       </FieldDescription>
     )}
+  </Field>
+);
+
+const SupplierQuoteDescriptionField: React.FC<{ controller: SupplierQuotesController }> = ({
+  controller,
+}) => (
+  <Field>
+    <FieldLabel htmlFor="supplier-quote-description">
+      {controller.t('sales:supplierQuotes.description', { defaultValue: 'Description' })}
+    </FieldLabel>
+    <Input
+      id="supplier-quote-description"
+      type="text"
+      value={controller.formData.description ?? ''}
+      disabled={controller.isReadOnly}
+      onChange={(event) =>
+        controller.dispatch({
+          type: 'patchFormData',
+          value: { description: event.target.value },
+        })
+      }
+    />
   </Field>
 );
 

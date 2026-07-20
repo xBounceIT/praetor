@@ -116,6 +116,7 @@ const supplierQuoteSchema = {
   type: 'object',
   properties: {
     id: { type: 'string' },
+    description: { type: ['string', 'null'] },
     supplierId: { type: 'string' },
     supplierName: { type: 'string' },
     clientId: { type: ['string', 'null'] },
@@ -178,6 +179,7 @@ const supplierQuoteCreateBodySchema = {
       description:
         'Leave blank to allocate automatically. Manual values may contain letters, numbers, underscores, and hyphens.',
     },
+    description: { type: 'string' },
     supplierId: { type: 'string' },
     supplierName: { type: 'string' },
     // clientName is resolved server-side from clientId; the body only carries the id.
@@ -201,6 +203,7 @@ const supplierQuoteUpdateBodySchema = {
       description:
         'When changed, may contain letters, numbers, underscores, and hyphens. An unchanged legacy id remains accepted.',
     },
+    description: { type: ['string', 'null'] },
     supplierId: { type: 'string' },
     supplierName: { type: 'string' },
     // clientName is resolved server-side from clientId; the body only carries the id.
@@ -475,6 +478,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       const {
         id: nextId,
+        description,
         supplierId,
         supplierName,
         clientId,
@@ -485,6 +489,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         notes,
       } = request.body as {
         id?: string;
+        description?: string;
         supplierId?: string;
         supplierName?: string;
         clientId?: string | null;
@@ -544,6 +549,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           const quote = await supplierQuotesRepo.create(
             {
               id: quoteId,
+              description: description ?? null,
               supplierId: supplierIdResult.value,
               supplierName: supplierNameResult.value,
               clientId: clientLink.clientId,
@@ -622,6 +628,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       // ignored if present.
       const {
         id: nextId,
+        description,
         supplierId,
         supplierName,
         clientId,
@@ -632,6 +639,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         notes,
       } = request.body as {
         id?: string;
+        description?: string | null;
         supplierId?: string;
         supplierName?: string;
         clientId?: string | null;
@@ -653,6 +661,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       // id-only renames do not. Derived from one list so the field sets can't drift. A client-sent
       // `status` is IGNORED entirely: the status is fully derived from the linked client documents.
       const hasNonExpirationContentUpdate =
+        description !== undefined ||
         supplierId !== undefined ||
         supplierName !== undefined ||
         clientId !== undefined ||
@@ -663,6 +672,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const hasContentUpdate = hasNonExpirationContentUpdate || expirationDate !== undefined;
 
       const patch: supplierQuotesRepo.SupplierQuoteUpdate = {};
+
+      if (description !== undefined) patch.description = description;
 
       if (supplierId !== undefined) {
         const supplierIdResult = optionalNonEmptyString(supplierId, 'supplierId');
@@ -1247,6 +1258,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         const quote = await supplierQuotesRepo.restoreSnapshotQuote(
           idResult.value,
           {
+            ...(Object.hasOwn(version.snapshot.quote, 'description')
+              ? { description: version.snapshot.quote.description ?? null }
+              : {}),
             supplierId: version.snapshot.quote.supplierId,
             supplierName: version.snapshot.quote.supplierName,
             // `?? null` tolerates pre-#759 snapshots that predate the customer columns.

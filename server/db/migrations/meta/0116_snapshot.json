@@ -1,5 +1,5 @@
 {
-  "id": "05b52a8e-0776-4e59-ba1a-0b38724bfc00",
+  "id": "f7e7c55a-92a7-4992-8ad5-f5f40c175001",
   "prevId": "3b3ec021-11b7-4189-a459-f95dd94b88ef",
   "version": "7",
   "dialect": "postgresql",
@@ -7500,6 +7500,12 @@
           "type": "varchar(100)",
           "primaryKey": true,
           "notNull": true
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
         },
         "supplier_id": {
           "name": "supplier_id",

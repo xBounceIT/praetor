@@ -376,6 +376,22 @@ export const buildDemoDocumentSeedManifest = (seedYear = getDemoSeedYear()) => {
     'Firewall gestito Comune di Verona',
     'Materiale promozionale Giulia Ferri',
   ] as const;
+  const supplierQuoteDescriptions = [
+    'Fornitura hardware Northwind',
+    'Rinnovo licenze Helios',
+    'Proposta sicurezza Comune di Verona',
+    'Servizi di stampa Giulia Ferri',
+    'Licenze cloud Atlas',
+    'Sistemi di sicurezza Northwind',
+    'Logistica di stampa Helios',
+    'Fornitura hardware Comune di Verona',
+    'Preventivo licenze Giulia Ferri',
+    'Preventivo stampa scaduto Atlas',
+    'Approvvigionamento hardware Northwind',
+    'Licenze annuali Helios',
+    'Firewall gestito Comune di Verona',
+    'Materiale promozionale Giulia Ferri',
+  ] as const;
 
   return {
     quotes: rangeDocumentCodes('client_quote', 14, seedYear).map((document, index) => ({
@@ -439,7 +455,10 @@ export const buildDemoDocumentSeedManifest = (seedYear = getDemoSeedYear()) => {
       { id: code('client_invoice', 4), linkedSaleId: null },
       { id: code('client_invoice', 5), linkedSaleId: null },
     ],
-    supplierQuotes: rangeDocumentCodes('supplier_quote', 14, seedYear),
+    supplierQuotes: rangeDocumentCodes('supplier_quote', 14, seedYear).map((document, index) => ({
+      ...document,
+      description: supplierQuoteDescriptions[index] as string,
+    })),
     supplierSales: [
       {
         id: code('supplier_order', 1),

@@ -1234,6 +1234,7 @@ const buildVerificationSteps = (
   },
   {
     table: 'supplier_quotes',
+    requiredNonEmptyColumn: 'description',
     ids: demoIds.supplierQuotes,
     expected: DEMO_EXPECTED_COUNTS.supplier_quotes,
   },

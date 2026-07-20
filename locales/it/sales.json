@@ -371,6 +371,7 @@
     "client": "Cliente",
     "selectClient": "Seleziona cliente",
     "quoteCode": "Codice Preventivo",
+    "description": "Descrizione",
     "autoCodePlaceholder": "Generato automaticamente",
     "autoCodeDescription": "Lascia vuoto per usare il template dei codici documento.",
     "autoCodePreviewDescription": "Lascia vuoto per generare {{preview}} dal template dei codici documento.",

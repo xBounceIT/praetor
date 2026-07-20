@@ -1389,6 +1389,7 @@ export interface SupplierQuoteItem {
 
 export interface SupplierQuote {
   id: string;
+  description?: string | null;
   supplierId: string;
   supplierName: string;
   // Optional customer association (issue #759). Absent/null when no customer is linked.

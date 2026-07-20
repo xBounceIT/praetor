@@ -371,6 +371,7 @@
     "client": "Customer",
     "selectClient": "Select a customer",
     "quoteCode": "Quote Code",
+    "description": "Description",
     "autoCodePlaceholder": "Auto-generated",
     "autoCodeDescription": "Leave blank to use the document code template.",
     "autoCodePreviewDescription": "Leave blank to generate {{preview}} from the document code template.",
