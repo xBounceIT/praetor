@@ -30,8 +30,16 @@ export const getAuthToken = () => authToken;
 
 export const getApiBase = () => API_BASE;
 
-/** Encode untrusted identifiers before interpolating them into a single URL path segment. */
-export const encodePathSegment = (value: string): string => encodeURIComponent(value);
+const PATH_SEGMENT_ESCAPE_PREFIX = '@';
+
+/** Encode an identifier as one URL segment, including dot-only values normalized by WHATWG URLs. */
+export const encodePathSegment = (value: string): string => {
+  const escapedValue =
+    value === '.' || value === '..' || value.startsWith(PATH_SEGMENT_ESCAPE_PREFIX)
+      ? `${PATH_SEGMENT_ESCAPE_PREFIX}${value}`
+      : value;
+  return encodeURIComponent(escapedValue);
+};
 
 // Error thrown by the API client. Carries the HTTP status so callers can
 // distinguish auth rejections (401/403) from transient failures (network

@@ -695,6 +695,31 @@ describe('PUT /api/sales/supplier-quotes/:id', () => {
     expect(sqRenameMock).not.toHaveBeenCalled();
   });
 
+  test('200 keeps dot-only and marker-like legacy ids distinct and operable', async () => {
+    for (const [legacyId, routeSegment] of [
+      ['..', '@..'],
+      ['@..', '@@..'],
+    ] as const) {
+      const legacyQuote = { ...DRAFT_QUOTE, id: legacyId };
+      sqFindByIdMock.mockClear();
+      sqFindByIdMock.mockResolvedValue(legacyQuote);
+      sqFindLinkedOrderIdMock.mockResolvedValue(null);
+      sqUpdateMock.mockResolvedValue({ ...legacyQuote, notes: 'updated' });
+      sqFindItemsForQuoteMock.mockResolvedValue([{ ...SAMPLE_ITEM, quoteId: legacyId }]);
+
+      const res = await testApp.inject({
+        method: 'PUT',
+        url: `/api/sales/supplier-quotes/${encodeURIComponent(routeSegment)}`,
+        headers: authHeader(),
+        payload: { id: legacyId, notes: 'updated' },
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(sqFindByIdMock).toHaveBeenCalledWith(legacyId);
+      expect(sqRenameMock).not.toHaveBeenCalled();
+    }
+  });
+
   test('409 rejects supplier reassignment when the derived status is accepted', async () => {
     sqFindByIdMock.mockResolvedValue({
       ...DRAFT_QUOTE,
