@@ -771,6 +771,102 @@ describe('<ClientQuotesView /> supplier-quote item availability', () => {
     expect(getOpenSupplierItem(firstSupplierItemLabel)).toHaveAttribute('data-disabled', 'false');
   });
 
+  test('hides items used by a saved candidate while creating a new quote', () => {
+    const candidateId = 'candidate-discarded';
+    const existingQuote = buildQuote({
+      id: 'Q-USED-SUPPLIER-ITEM',
+      candidates: [
+        {
+          id: candidateId,
+          quoteId: 'Q-USED-SUPPLIER-ITEM',
+          name: 'Variante archiviata',
+          position: 0,
+          state: 'discarded',
+          items: [
+            {
+              id: 'qi-used-supplier-item',
+              quoteId: 'Q-USED-SUPPLIER-ITEM',
+              candidateId,
+              productId: 'prod-1',
+              productName: 'Solar Panel',
+              quantity: 1,
+              unitPrice: 80,
+              supplierQuoteId: 'SQ-1',
+              supplierQuoteItemId: 'sqi-1',
+              supplierQuoteSupplierName: 'Acme Supplies',
+              supplierQuoteUnitPrice: 60,
+            },
+          ],
+          paymentTerms: 'immediate',
+          discount: 0,
+          discountType: 'percentage',
+          expirationDate: '2099-12-31',
+          createdAt: 1_700_000_000_000,
+          updatedAt: 1_700_000_000_000,
+        },
+      ],
+    });
+
+    render(
+      <ClientQuotesView
+        {...baseProps}
+        quotes={[existingQuote]}
+        supplierQuotes={[sourceableSupplierQuote]}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'sales:clientQuotes.createNewQuote' }));
+    fireEvent.click(screen.getByText('sales:clientQuotes.addProduct'));
+    fireEvent.click(screen.getByRole('button', { name: emptySupplierLabel }));
+
+    const openOptions = Array.from(
+      document.querySelectorAll<HTMLElement>('[data-slot="command-item"]'),
+    );
+    expect(openOptions.some((option) => option.textContent?.includes(firstSupplierItemLabel))).toBe(
+      false,
+    );
+    expect(getOpenSupplierItem(secondSupplierItemLabel)).toHaveAttribute('data-disabled', 'false');
+  });
+
+  test('keeps an item available when adding a new candidate to the saved quote that uses it', async () => {
+    const user = userEvent.setup();
+    const draftQuote = buildQuote({
+      id: 'Q-SAME-SUPPLIER-ITEM',
+      items: [
+        {
+          id: 'qi-same-supplier-item',
+          quoteId: 'Q-SAME-SUPPLIER-ITEM',
+          productId: 'prod-1',
+          productName: 'Solar Panel',
+          quantity: 1,
+          unitPrice: 80,
+          supplierQuoteId: 'SQ-1',
+          supplierQuoteItemId: 'sqi-1',
+          supplierQuoteSupplierName: 'Acme Supplies',
+          supplierQuoteUnitPrice: 60,
+        },
+      ],
+    });
+    render(
+      <ClientQuotesView
+        {...baseProps}
+        quotes={[draftQuote]}
+        supplierQuotes={[sourceableSupplierQuote]}
+      />,
+    );
+
+    await user.click(screen.getByText('Q-SAME-SUPPLIER-ITEM'));
+    await screen.findByRole('dialog');
+    await user.click(screen.getByRole('button', { name: 'sales:clientQuotes.candidates.addMenu' }));
+    await user.click(
+      await screen.findByRole('menuitem', { name: 'sales:clientQuotes.candidates.add' }),
+    );
+    await user.click(screen.getByText('sales:clientQuotes.addProduct'));
+    await user.click(screen.getByRole('button', { name: emptySupplierLabel }));
+
+    expect(getOpenSupplierItem(firstSupplierItemLabel)).toHaveAttribute('data-disabled', 'false');
+  });
+
   test('marks items already used by a draft as disabled while editing', async () => {
     const draftQuote = buildQuote({
       id: 'Q-SUPPLIER-AVAILABILITY',
