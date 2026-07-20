@@ -31,6 +31,8 @@ Nei riepiloghi di preventivi, offerte e ordini il **Subtotale** è l'importo lor
 
 La lista dei preventivi mostra codice, data di inserimento, cliente, subtotale lordo, sconto globale percentuale, totale sconti, totale scontato, margine, MOL, termini di pagamento, scadenza e stato per controllare rapidamente i valori principali senza aprire ogni record.
 
+Dal menu **…** di ogni preventivo cliente o fornitore, l'azione **Duplica** apre il normale dialog di creazione già compilato con i dati commerciali del documento originale. La copia non viene salvata finché non confermi: parte in **Bozza**, lascia vuoto il codice per usare il prossimo progressivo automatico e imposta la scadenza a un mese dalla data corrente. Per i preventivi cliente vengono copiate tutte le varianti, riattivate e scollegate dalle sorgenti fornitore e dai documenti successivi; se una riga dipendeva soltanto da una sorgente fornitore, devi scegliere un prodotto o una nuova sorgente prima di salvare. I preventivi fornitore duplicati non conservano ordini, sincronizzazioni o allegati dell'originale.
+
 La famiglia del preventivo cliente segue **Bozza → Inviato → scelta del candidato → Offerta**. **Scaduto** è uno stato derivato dalle varianti attive: la famiglia risulta scaduta solo quando tutte le varianti attive hanno superato la propria data di scadenza. Una singola variante scaduta resta visibile ma non può essere promossa.
 
 L'offerta può essere creata soltanto con **Scegli il candidato da promuovere**; i cambi di stato diretti e la creazione diretta di un'offerta vengono rifiutati. La variante vincente fornisce voci e condizioni commerciali, conserva codice e contatore del preventivo padre ed è marcata **Selezionata**, mentre le altre vengono archiviate come **Scartate**.

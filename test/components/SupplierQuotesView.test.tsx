@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, mock, spyOn } from 'bun:test';
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import type { Client, Product, Supplier, SupplierQuote } from '../../types';
+import { addMonthsToDateOnly, getLocalDateString } from '../../utils/date';
 import { installI18nMock } from '../helpers/i18n';
 import { reactTest as test } from '../helpers/reactTest';
 import { render } from '../helpers/render';
@@ -13,7 +15,10 @@ import {
 installI18nMock();
 
 const supplierQuotesModule = await import('../../services/api/supplierQuotes');
-spyOn(supplierQuotesModule.supplierQuotesApi, 'listAttachments').mockResolvedValue([]);
+const listAttachmentsMock = spyOn(
+  supplierQuotesModule.supplierQuotesApi,
+  'listAttachments',
+).mockResolvedValue([]);
 spyOn(supplierQuotesModule.supplierQuotesApi, 'listVersions').mockResolvedValue([]);
 
 const SupplierQuotesView = (await import('../../components/sales/SupplierQuotesView')).default;
@@ -109,6 +114,95 @@ describe('<SupplierQuotesView /> list columns', () => {
       headerLabels.indexOf('sales:supplierQuotes.expirationDate'),
     );
     expect(screen.getAllByText('Email').length).toBeGreaterThan(0);
+  });
+});
+
+describe('<SupplierQuotesView /> Duplicate row action', () => {
+  test('opens an independent create draft from a historical ordered quote and saves no attachments', async () => {
+    const user = userEvent.setup();
+    const source = buildQuote({
+      ...acceptedWithOrder,
+      id: 'SQ-DUPLICATE-SOURCE',
+      items: [
+        {
+          ...acceptedWithOrder.items[0],
+          id: 'sqi-duplicate-source',
+          quoteId: 'SQ-DUPLICATE-SOURCE',
+          listPrice: 250,
+          discountPercent: 20,
+          unitPrice: 200,
+          note: 'Keep this line note',
+          durationMonths: 12,
+          durationUnit: 'years',
+        },
+      ],
+      notes: 'Keep these quote notes',
+    });
+    const created = buildQuote({ id: 'SQ-COPY', status: 'draft' });
+    const onAddQuote = mock((_data: Partial<SupplierQuote>) => Promise.resolve(created));
+    listAttachmentsMock.mockClear();
+
+    render(
+      <SupplierQuotesView
+        {...baseProps}
+        quotes={[source]}
+        suppliers={[]}
+        clients={[]}
+        onAddQuote={onAddQuote}
+      />,
+    );
+
+    const row = screen.getByText('SQ-DUPLICATE-SOURCE').closest('tr');
+    if (!row) throw new Error('Expected supplier quote table row');
+    await user.click(within(row).getByRole('button', { name: 'table.rowActions' }));
+    await user.click(
+      await screen.findByRole('button', { name: 'sales:supplierQuotes.duplicateQuote' }),
+    );
+
+    expect(onAddQuote).not.toHaveBeenCalled();
+    expect(listAttachmentsMock).not.toHaveBeenCalled();
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText('sales:supplierQuotes.newQuote')).toBeInTheDocument();
+    expect(
+      within(dialog).queryByText('sales:supplierQuotes.readOnlyLinked'),
+    ).not.toBeInTheDocument();
+    expect(within(dialog).getByLabelText('sales:supplierQuotes.quoteCode')).toHaveValue('');
+    expect(document.getElementById('supplier-quote-supplier')).toHaveTextContent(
+      source.supplierName,
+    );
+    await user.click(document.getElementById('supplier-quote-supplier') as HTMLElement);
+    await user.click(await screen.findByRole('option', { name: source.supplierName }));
+    if (!source.clientName) throw new Error('Expected linked customer name');
+    expect(document.getElementById('supplier-quote-client')).toHaveTextContent(source.clientName);
+    expect(within(dialog).getByText('supplierQuotes.attachments.dropHere')).toBeInTheDocument();
+    const expectedExpiration = addMonthsToDateOnly(getLocalDateString(), 1);
+
+    await user.click(within(dialog).getByText('common:buttons.save'));
+    await waitFor(() => expect(onAddQuote).toHaveBeenCalledTimes(1));
+
+    const payload = onAddQuote.mock.calls[0]?.[0] as Partial<SupplierQuote>;
+    expect(payload.id).toBeUndefined();
+    expect(payload.status).toBe('draft');
+    expect(payload.expirationDate).toBe(expectedExpiration);
+    expect(payload.supplierId).toBe(source.supplierId);
+    expect(payload.supplierName).toBe(source.supplierName);
+    expect(payload.clientId).toBe(source.clientId);
+    expect(payload.paymentTerms).toBe(source.paymentTerms);
+    expect(payload.communicationChannelId).toBe(source.communicationChannelId);
+    expect(payload.notes).toBe(source.notes);
+    expect(payload).not.toHaveProperty('linkedOrderId');
+    expect(payload).not.toHaveProperty('linkedClientQuoteId');
+    expect(payload).not.toHaveProperty('isStatusSynced');
+    expect(payload.items).toHaveLength(1);
+    expect(payload.items?.[0]?.id).toStartWith('temp-');
+    expect(payload.items?.[0]?.id).not.toBe(source.items[0]?.id);
+    expect(payload.items?.[0]?.quoteId).toBe('');
+    expect(payload.items?.[0]?.listPrice).toBe(250);
+    expect(payload.items?.[0]?.discountPercent).toBe(20);
+    expect(payload.items?.[0]?.unitPrice).toBe(200);
+    expect(payload.items?.[0]?.note).toBe('Keep this line note');
+    expect(payload.items?.[0]?.durationMonths).toBe(12);
+    expect(payload.items?.[0]?.durationUnit).toBe('years');
   });
 });
 

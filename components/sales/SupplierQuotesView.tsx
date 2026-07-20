@@ -51,7 +51,7 @@ import {
   parseNumberInputValue,
   roundCurrency,
 } from '../../utils/numbers';
-import { getPaymentTermsOptions } from '../../utils/options';
+import { getPaymentTermsOptions, includeSelectedOption } from '../../utils/options';
 import { isTerminalQuoteStatus } from '../../utils/quoteStatus';
 import { uploadStagedAttachments } from '../../utils/supplierQuoteAttachments';
 import { toastError } from '../../utils/toast';
@@ -175,6 +175,25 @@ const getDefaultFormData = (): Partial<SupplierQuote> => ({
   notes: '',
 });
 
+const buildDuplicatedSupplierQuoteFormData = (quote: SupplierQuote): Partial<SupplierQuote> => ({
+  id: '',
+  supplierId: quote.supplierId,
+  supplierName: quote.supplierName,
+  clientId: quote.clientId ?? null,
+  clientName: quote.clientName ?? null,
+  items: quote.items.map((item) => ({
+    ...item,
+    id: createTemporaryLineItemId(),
+    quoteId: '',
+  })),
+  paymentTerms: quote.paymentTerms,
+  status: 'draft',
+  expirationDate: addMonthsToDateOnly(getLocalDateString(), 1),
+  communicationChannelId: quote.communicationChannelId ?? '',
+  communicationChannelName: quote.communicationChannelName ?? '',
+  notes: quote.notes ?? '',
+});
+
 interface SupplierQuotesViewState {
   editingQuote: SupplierQuote | null;
   quoteToDelete: SupplierQuote | null;
@@ -225,7 +244,7 @@ type SupplierQuotesViewAction =
   | { type: 'setIsSubmitting'; value: boolean }
   | { type: 'setIsDeleting'; value: boolean }
   | { type: 'closeModal' }
-  | { type: 'openAddModal' }
+  | { type: 'openAddModal'; formData?: Partial<SupplierQuote> }
   | { type: 'openEditModal'; quote: SupplierQuote; formData: Partial<SupplierQuote> }
   | { type: 'previewVersion'; version: SupplierQuoteVersion; formData: Partial<SupplierQuote> }
   | { type: 'restoreVersion'; quote: SupplierQuote; formData: Partial<SupplierQuote> }
@@ -287,7 +306,7 @@ const supplierQuotesViewReducer = (
       return {
         ...state,
         editingQuote: null,
-        formData: getDefaultFormData(),
+        formData: action.formData ?? getDefaultFormData(),
         errors: {},
         previewVersion: null,
         isModalOpen: true,
@@ -447,11 +466,6 @@ const useSupplierQuotesController = ({
     [t],
   );
 
-  const activeSuppliers = useMemo(
-    () => suppliers.filter((supplier) => !supplier.isDisabled),
-    [suppliers],
-  );
-
   // A quick-view deep link (or a cross-view "view quote" action) pre-filters the
   // table to one quote. It targets the visible "Codice" (id) column, so the
   // native column filter shows as active and stays clearable from its dropdown.
@@ -480,6 +494,18 @@ const useSupplierQuotesController = ({
     blankListPriceItemIds,
     stagedAttachments,
   } = state;
+  const supplierOptions = useMemo(
+    () =>
+      includeSelectedOption(
+        suppliers.flatMap((supplier) =>
+          supplier.isDisabled ? [] : [{ id: supplier.id, name: supplier.name }],
+        ),
+        formData.supplierId,
+        suppliers.find((supplier) => supplier.id === formData.supplierId)?.name ||
+          formData.supplierName,
+      ),
+    [formData.supplierId, formData.supplierName, suppliers],
+  );
   const { preview: supplierQuoteCodePreview } = useDocumentCodePreview('supplier_quote', {
     enabled: isModalOpen && !editingQuote,
   });
@@ -560,6 +586,13 @@ const useSupplierQuotesController = ({
     [quoteToFormData],
   );
 
+  const openDuplicateModal = useCallback((quote: SupplierQuote) => {
+    dispatch({
+      type: 'openAddModal',
+      formData: buildDuplicatedSupplierQuoteFormData(quote),
+    });
+  }, []);
+
   const handleVersionPreview = useCallback(
     (version: SupplierQuoteVersion) => {
       dispatch({
@@ -614,31 +647,33 @@ const useSupplierQuotesController = ({
       const supplier = suppliers.find((item) => item.id === supplierId);
       dispatch({
         type: 'patchFormData',
-        value: { supplierId, supplierName: supplier?.name || '' },
+        value: {
+          supplierId,
+          supplierName:
+            supplier?.name ??
+            (supplierId === formData.supplierId ? (formData.supplierName ?? '') : ''),
+        },
       });
     },
-    [suppliers],
+    [formData.supplierId, formData.supplierName, suppliers],
   );
 
   // The customer link is mandatory (issue #777): every supplier quote must name a customer, so
   // there is no empty "No customer" option — the field starts on the placeholder and submission is
   // blocked until one is picked (see handleSubmit). Keep an already-linked-but-now-disabled client
-  // visible so editing an existing quote doesn't hide its customer; otherwise only offer active ones.
+  // visible so editing or duplicating a quote doesn't hide its customer; otherwise only offer
+  // active ones.
   const clientOptions = useMemo(() => {
     const options = clients.flatMap((client) =>
-      !client.isDisabled || client.id === editingQuote?.clientId
+      !client.isDisabled || client.id === formData.clientId
         ? [{ id: client.id, name: client.name }]
         : [],
     );
     // The linked client may be missing from a user-scoped /clients list (no crm.clients_all.view
     // and not assigned to it). Synthesize an option from the quote's stored name so the select
     // shows the customer instead of falling back to the placeholder.
-    const linkedId = editingQuote?.clientId;
-    if (linkedId && !options.some((option) => option.id === linkedId)) {
-      options.push({ id: linkedId, name: editingQuote?.clientName || linkedId });
-    }
-    return options;
-  }, [clients, editingQuote]);
+    return includeSelectedOption(options, formData.clientId, formData.clientName);
+  }, [clients, formData.clientId, formData.clientName]);
 
   const handleClientChange = useCallback(
     (clientId: string) => {
@@ -975,6 +1010,24 @@ const useSupplierQuotesController = ({
                 </TooltipTrigger>
                 <TooltipContent>{editTitle}</TooltipContent>
               </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      openDuplicateModal(row);
+                    }}
+                    aria-label={t('sales:supplierQuotes.duplicateQuote')}
+                    className="rounded-lg text-muted-foreground hover:text-foreground"
+                  >
+                    <i className="fa-solid fa-copy" aria-hidden="true"></i>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>{t('sales:supplierQuotes.duplicateQuote')}</TooltipContent>
+              </Tooltip>
               {row.status === 'accepted' && onCreateOrder && (
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -1030,6 +1083,7 @@ const useSupplierQuotesController = ({
       getStatusLabel,
       onCreateOrder,
       onViewOrders,
+      openDuplicateModal,
       openEditModal,
       t,
       isHistoryRow,
@@ -1143,7 +1197,7 @@ const useSupplierQuotesController = ({
   };
 
   return {
-    activeSuppliers,
+    supplierOptions,
     addItem,
     baseReadOnly,
     canManageCommunicationChannels,
@@ -1390,10 +1444,7 @@ const SupplierQuoteSupplierField: React.FC<{ controller: SupplierQuotesControlle
   <Field data-invalid={Boolean(controller.errors.supplierId)}>
     <SelectControl
       id="supplier-quote-supplier"
-      options={controller.activeSuppliers.map((supplier) => ({
-        id: supplier.id,
-        name: supplier.name,
-      }))}
+      options={controller.supplierOptions}
       value={controller.formData.supplierId || ''}
       onChange={(value) => controller.handleSupplierChange(value as string)}
       placeholder={controller.t('sales:supplierQuotes.selectSupplier', {

@@ -13,3 +13,17 @@ export const getPaymentTermsOptions = (
   { id: '240gg', name: t('crm:paymentTerms.240gg') },
   { id: '365gg', name: t('crm:paymentTerms.365gg') },
 ];
+
+export interface NamedOption {
+  id: string;
+  name: string;
+}
+
+export const includeSelectedOption = (
+  options: NamedOption[],
+  selectedId?: string | null,
+  selectedName?: string | null,
+): NamedOption[] => {
+  if (!selectedId || options.some((option) => option.id === selectedId)) return options;
+  return [...options, { id: selectedId, name: selectedName || selectedId }];
+};
