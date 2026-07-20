@@ -15,6 +15,7 @@ import {
 
 export type ClientOrderCreateFields = {
   id?: string | null;
+  description: string | null;
   linkedQuoteId: string | null;
   linkedOfferId: string | null;
   clientId: string;
@@ -54,6 +55,7 @@ export const createClientOrderRows = async (
   const order = await clientsOrdersRepo.create(
     {
       id: orderId,
+      description: fields.description,
       linkedQuoteId: fields.linkedQuoteId,
       linkedOfferId: fields.linkedOfferId,
       clientId: fields.clientId,

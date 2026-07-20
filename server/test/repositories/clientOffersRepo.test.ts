@@ -225,6 +225,7 @@ describe('create', () => {
     const result = await clientOffersRepo.create(
       {
         id: 'co-1',
+        description: 'Annual support offer',
         linkedQuoteId: 'cq-1',
         clientId: 'c-1',
         clientName: 'Acme',
@@ -239,7 +240,8 @@ describe('create', () => {
       testDb,
     );
     expect(exec.calls[0].sql).toContain('insert into "customer_offers"');
-    expect(exec.calls[0].params).toHaveLength(12);
+    expect(exec.calls[0].params).toHaveLength(13);
+    expect(exec.calls[0].params).toContain('Annual support offer');
     expect(exec.calls[0].params[5]).toBe('5'); // discount via numericForDb
     expect(result.id).toBe('co-1');
   });
@@ -438,6 +440,7 @@ describe('restoreSnapshotOffer', () => {
     await clientOffersRepo.restoreSnapshotOffer(
       'co-1',
       {
+        description: 'Restored offer description',
         clientId: 'c-1',
         clientName: 'Acme',
         paymentTerms: 'net30',
@@ -453,8 +456,32 @@ describe('restoreSnapshotOffer', () => {
     const sql = exec.calls[0].sql.toLowerCase();
     expect(sql).toContain('update "customer_offers"');
     expect(sql).not.toContain('coalesce');
+    expect(sql.slice(sql.indexOf(' set ') + 5, sql.indexOf(' where '))).toContain('"description"');
+    expect(exec.calls[0].params).toContain('Restored offer description');
     expect(exec.calls[0].params).toContain(null);
     expect(exec.calls[0].params).toContain('co-1');
+  });
+
+  test('leaves description untouched when a legacy snapshot omits it', async () => {
+    exec.enqueue({ rows: [offerRow()] });
+    await clientOffersRepo.restoreSnapshotOffer(
+      'co-1',
+      {
+        clientId: 'c-1',
+        clientName: 'Acme',
+        paymentTerms: 'net30',
+        discount: 5,
+        discountType: 'percentage',
+        status: 'draft',
+        deliveryDate: null,
+        expirationDate: '2026-06-01',
+        notes: null,
+      },
+      testDb,
+    );
+    const sql = exec.calls[0].sql.toLowerCase();
+    const setClause = sql.slice(sql.indexOf(' set ') + 5, sql.indexOf(' where '));
+    expect(setClause).not.toContain('"description"');
   });
 
   test('returns null when no row is restored', async () => {

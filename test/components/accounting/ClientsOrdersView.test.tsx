@@ -76,6 +76,7 @@ const clients: Client[] = [{ id: 'client-1', name: 'Helios Energy Services' }];
 const orders: ClientsOrder[] = [
   {
     id: 'dm_so_01',
+    description: 'Managed consulting order',
     clientId: 'client-1',
     clientName: 'Helios Energy Services',
     items: [
@@ -100,6 +101,48 @@ const orders: ClientsOrder[] = [
 ];
 
 describe('<ClientsOrdersView />', () => {
+  test('shows the free-text description in the order editor', async () => {
+    render(
+      <ClientsOrdersView
+        orders={orders}
+        clients={clients}
+        products={[]}
+        currency="EUR"
+        onUpdateClientsOrder={mock(() => Promise.resolve())}
+        onDeleteClientsOrder={mock(() => Promise.resolve())}
+      />,
+    );
+
+    fireEvent.click(screen.getByText('Managed consulting order'));
+    const dialog = await screen.findByRole('dialog');
+    const description = within(dialog).getByRole('textbox', {
+      name: 'accounting:clientsOrders.description',
+    });
+
+    expect(description).toHaveValue('Managed consulting order');
+    expect(description).toBeEnabled();
+  });
+
+  test('shows description immediately after the order number', () => {
+    render(
+      <ClientsOrdersView
+        orders={orders}
+        clients={clients}
+        products={[]}
+        currency="EUR"
+        onUpdateClientsOrder={mock(() => Promise.resolve())}
+        onDeleteClientsOrder={mock(() => Promise.resolve())}
+      />,
+    );
+
+    const headers = screen.getAllByRole('columnheader').map((header) => header.textContent);
+    expect(headers.slice(0, 2)).toEqual([
+      'accounting:clientsOrders.orderNumber',
+      'accounting:clientsOrders.description',
+    ]);
+    expect(screen.getByText('Managed consulting order')).toBeInTheDocument();
+  });
+
   test('pricing amount columns keep sorting but hide StandardTable header filters', () => {
     render(
       <ClientsOrdersView

@@ -198,6 +198,7 @@ const moveQuoteItem = (items: QuoteItem[], fromIndex: number, toIndex: number): 
 
 const getDefaultFormData = (): Partial<Quote> => ({
   id: '',
+  description: '',
   clientId: '',
   clientName: '',
   items: [],
@@ -235,10 +236,11 @@ const nextCandidateName = (candidates: QuoteCandidate[]): string => {
 };
 
 const candidateToFormData = (
-  quote: Pick<Quote, 'id' | 'clientId' | 'clientName' | 'status'>,
+  quote: Pick<Quote, 'id' | 'description' | 'clientId' | 'clientName' | 'status'>,
   candidate: QuoteCandidate,
 ): Partial<Quote> => ({
   id: quote.id,
+  description: quote.description ?? '',
   clientId: quote.clientId,
   clientName: quote.clientName,
   status: quote.status,
@@ -690,6 +692,7 @@ const useClientQuotesController = ({
       candidateToFormData(
         {
           id: formData.id || editingQuote?.id || '',
+          description: formData.description ?? editingQuote?.description ?? '',
           clientId: formData.clientId || editingQuote?.clientId || '',
           clientName: formData.clientName || editingQuote?.clientName || '',
           status: formData.status || editingQuote?.status || 'draft',
@@ -739,6 +742,7 @@ const useClientQuotesController = ({
       candidateToFormData(
         {
           id: formData.id || editingQuote?.id || '',
+          description: formData.description ?? editingQuote?.description ?? '',
           clientId: formData.clientId || editingQuote?.clientId || '',
           clientName: formData.clientName || editingQuote?.clientName || '',
           status: formData.status || editingQuote?.status || 'draft',
@@ -776,6 +780,7 @@ const useClientQuotesController = ({
       candidateToFormData(
         {
           id: formData.id || editingQuote?.id || '',
+          description: formData.description ?? editingQuote?.description ?? '',
           clientId: formData.clientId || editingQuote?.clientId || '',
           clientName: formData.clientName || editingQuote?.clientName || '',
           status: formData.status || editingQuote?.status || 'draft',
@@ -1071,6 +1076,7 @@ const useClientQuotesController = ({
       if (updates.status === 'sent' && quote?.candidates?.length) {
         await onUpdateQuote(id, {
           id: quote.id,
+          description: quote.description,
           clientId: quote.clientId,
           clientName: quote.clientName,
           status: updates.status,
@@ -1614,6 +1620,14 @@ const useClientQuotesController = ({
       className: 'whitespace-nowrap',
       headerClassName: 'min-w-[8rem]',
       cell: ({ row }) => <span className="font-bold text-zinc-700">{row.id}</span>,
+    },
+    {
+      header: t('sales:clientQuotes.description', { defaultValue: 'Description' }),
+      accessorKey: 'description',
+      headerClassName: 'min-w-[12rem]',
+      cell: ({ row }) => (
+        <span className="text-sm text-foreground">{row.description?.trim() || '-'}</span>
+      ),
     },
     {
       header: t('crm:clients.tableHeaders.insertDate'),
@@ -2824,9 +2838,10 @@ const ClientQuoteClientSection: React.FC<{ controller: ClientQuotesController }>
         status={readOnlyStatus}
         statusLabel={statusLabel}
       />
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
         <ClientQuoteClientField controller={controller} />
         <ClientQuoteCodeField controller={controller} />
+        <ClientQuoteDescriptionField controller={controller} />
         <ClientQuotePaymentTermsField controller={controller} />
         <ClientQuoteCommunicationField controller={controller} />
         <ClientQuoteExpirationField controller={controller} />
@@ -2916,6 +2931,28 @@ const ClientQuoteCodeField: React.FC<{ controller: ClientQuotesController }> = (
     </Field>
   );
 };
+
+const ClientQuoteDescriptionField: React.FC<{ controller: ClientQuotesController }> = ({
+  controller,
+}) => (
+  <Field>
+    <FieldLabel htmlFor="client-quote-description">
+      {controller.t('sales:clientQuotes.description', { defaultValue: 'Description' })}
+    </FieldLabel>
+    <Input
+      id="client-quote-description"
+      type="text"
+      value={controller.formData.description ?? ''}
+      onChange={(event) =>
+        controller.setFormData((previous) => ({
+          ...previous,
+          description: event.target.value,
+        }))
+      }
+      disabled={controller.isReadOnly}
+    />
+  </Field>
+);
 
 const ClientQuotePaymentTermsField: React.FC<{ controller: ClientQuotesController }> = ({
   controller,

@@ -90,6 +90,7 @@ const communicationChannels = [
 const quotes: Quote[] = [
   {
     id: 'Q-001',
+    description: 'Managed consulting',
     clientId: 'client-1',
     clientName: 'Helios Energy Services',
     items: [
@@ -116,6 +117,7 @@ const quotes: Quote[] = [
   },
   {
     id: 'Q-002',
+    description: 'Infrastructure renewal',
     clientId: 'client-1',
     clientName: 'Helios Energy Services',
     items: [
@@ -200,6 +202,28 @@ const withSingleCandidate = (quote: Quote, candidateId: string): Quote => {
 };
 
 describe('<ClientQuotesView />', () => {
+  test('exposes an editable free-text description in the create dialog', () => {
+    render(
+      <ClientQuotesView
+        quotes={[]}
+        clients={clients}
+        products={[]}
+        supplierQuotes={[]}
+        currency="EUR"
+        onAddQuote={mock(() => Promise.resolve())}
+        onUpdateQuote={mock(() => Promise.resolve())}
+        onDeleteQuote={mock(() => Promise.resolve())}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'sales:clientQuotes.createNewQuote' }));
+    const description = screen.getByRole('textbox', { name: 'sales:clientQuotes.description' });
+    fireEvent.change(description, { target: { value: 'Managed service renewal' } });
+
+    expect(description).toHaveValue('Managed service renewal');
+    expect(description).toBeEnabled();
+  });
+
   test('renders the quote list columns in the requested order with MOL next to margin', () => {
     const { container } = render(
       <ClientQuotesView
@@ -220,6 +244,7 @@ describe('<ClientQuotesView />', () => {
 
     expect(headerLabels).toEqual([
       'sales:clientQuotes.quoteCodeColumn',
+      'sales:clientQuotes.description',
       'crm:clients.tableHeaders.insertDate',
       'sales:clientQuotes.clientColumn',
       'sales:clientQuotes.candidates.column',
@@ -237,7 +262,8 @@ describe('<ClientQuotesView />', () => {
     ]);
     const firstQuoteRow = screen.getByText('Q-001').closest('tr');
     if (!firstQuoteRow) throw new Error('Expected Q-001 table row');
-    const variantCell = within(firstQuoteRow).getAllByRole('cell')[3];
+    expect(within(firstQuoteRow).getByText('Managed consulting')).toBeInTheDocument();
+    const variantCell = within(firstQuoteRow).getAllByRole('cell')[4];
     expect(variantCell).toHaveTextContent('sales:clientQuotes.candidates.notApplicable');
     expect(variantCell).not.toHaveTextContent('sales:clientQuotes.candidates.count');
     expect(variantCell).not.toHaveTextContent('EUR');

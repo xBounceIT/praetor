@@ -294,6 +294,7 @@ describe('POST /api/clients-orders product-less supplier lines (issue #783)', ()
       url: '/api/clients-orders',
       headers: authHeader(),
       payload: {
+        description: 'Managed service renewal',
         clientId: 'c1',
         clientName: 'Acme',
         discount: 150,
@@ -304,9 +305,14 @@ describe('POST /api/clients-orders product-less supplier lines (issue #783)', ()
 
     expect(res.statusCode).toBe(201);
     expect(coCreateMock).toHaveBeenCalledWith(
-      expect.objectContaining({ discount: 150, discountType: 'currency' }),
+      expect.objectContaining({
+        description: 'Managed service renewal',
+        discount: 150,
+        discountType: 'currency',
+      }),
       expect.anything(),
     );
+    expect(JSON.parse(res.body).description).toBe('Managed service renewal');
   });
 
   test('201 accepts the inclusive 100% line-discount boundary', async () => {

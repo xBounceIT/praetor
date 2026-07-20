@@ -813,6 +813,13 @@
       "when": 1784542877616,
       "tag": "0115_grant_supplier_all_write_permissions",
       "breakpoints": true
+    },
+    {
+      "idx": 116,
+      "version": "7",
+      "when": 1784556948836,
+      "tag": "0116_add_document_descriptions",
+      "breakpoints": true
     }
   ]
 }
