@@ -2151,13 +2151,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             ? 'currency'
             : 'percentage';
       const effectiveDiscountType = discountTypeValue ?? existingDiscountType;
-      const discountResult = optionalLocalizedDocumentDiscount(
-        discount === undefined ? existingDiscount : discount,
-        effectiveDiscountType,
-        'discount',
-      );
-      if (!discountResult.ok) return badRequest(reply, discountResult.message);
-      const discountValue = discount === undefined ? undefined : discountResult.value;
+      let discountValue: number | null | undefined;
+      if (discount !== undefined || discountTypeValue !== undefined) {
+        const discountResult = optionalLocalizedDocumentDiscount(
+          discount === undefined ? existingDiscount : discount,
+          effectiveDiscountType,
+          'discount',
+        );
+        if (!discountResult.ok) return badRequest(reply, discountResult.message);
+        discountValue = discount === undefined ? undefined : discountResult.value;
+      }
 
       const communicationChannel = await resolveCommunicationChannel(
         communicationChannelId,

@@ -296,6 +296,25 @@ afterEach(async () => {
 const authHeader = () => ({ authorization: `Bearer ${signToken({ userId: 'u1' })}` });
 
 describe('PUT /api/accounting/supplier-orders/:id document discount validation', () => {
+  test('200 allows unrelated updates to preserve a legacy percentage discount above 100', async () => {
+    soFindExistingMock.mockResolvedValue({
+      ...SAMPLE_ORDER,
+      discount: 150,
+      discountType: 'percentage',
+    });
+    soUpdateMock.mockResolvedValue({ ...SAMPLE_ORDER, discount: 150, notes: 'edited' });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/accounting/supplier-orders/so-1',
+      headers: authHeader(),
+      payload: { notes: 'edited' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(soUpdateMock).toHaveBeenCalled();
+  });
+
   test('400 rejects changing an over-100 currency discount to percentage', async () => {
     soFindExistingMock.mockResolvedValue({
       ...SAMPLE_ORDER,

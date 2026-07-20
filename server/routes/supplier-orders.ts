@@ -690,14 +690,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             ? 'currency'
             : 'percentage';
       const effectiveDiscountType = discountTypeValue ?? existingOrder.discountType;
-      const discountResult = optionalLocalizedDocumentDiscount(
-        discount === undefined ? existingOrder.discount : discount,
-        effectiveDiscountType,
-        'discount',
-      );
-      if (!discountResult.ok) return badRequest(reply, discountResult.message);
-      if (discount !== undefined && discountResult.value !== null) {
-        patch.discount = discountResult.value;
+      if (discount !== undefined || discountTypeValue !== undefined) {
+        const discountResult = optionalLocalizedDocumentDiscount(
+          discount === undefined ? existingOrder.discount : discount,
+          effectiveDiscountType,
+          'discount',
+        );
+        if (!discountResult.ok) return badRequest(reply, discountResult.message);
+        if (discount !== undefined && discountResult.value !== null) {
+          patch.discount = discountResult.value;
+        }
       }
       if (discountTypeValue !== undefined) patch.discountType = discountTypeValue;
 

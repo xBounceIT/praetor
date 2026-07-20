@@ -951,14 +951,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       const effectiveDiscountType = discountTypeValue ?? existingOrder.discountType;
-      const discountResult = optionalLocalizedDocumentDiscount(
-        discount === undefined ? existingOrder.discount : discount,
-        effectiveDiscountType,
-        'discount',
-      );
-      if (!discountResult.ok) return badRequest(reply, discountResult.message);
-      const discountValue: number | null | undefined =
-        discount === undefined ? undefined : discountResult.value;
+      let discountValue: number | null | undefined;
+      if (discount !== undefined || discountTypeValue !== undefined) {
+        const discountResult = optionalLocalizedDocumentDiscount(
+          discount === undefined ? existingOrder.discount : discount,
+          effectiveDiscountType,
+          'discount',
+        );
+        if (!discountResult.ok) return badRequest(reply, discountResult.message);
+        discountValue = discount === undefined ? undefined : discountResult.value;
+      }
 
       const requestedOrderIdChanged = nextIdValue !== null && nextIdValue !== idResult.value;
       const hasLockedFieldUpdates =
