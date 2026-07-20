@@ -24,16 +24,40 @@ describe('migration 0116 supplier-cost precision', () => {
     }
   });
 
-  test('rebuilds legacy rounded costs from list price and discount without intermediate rounding', async () => {
+  test('rebuilds legacy formula-derived costs without intermediate rounding', async () => {
     const sql = await readMigration();
 
-    expect(sql).toContain('("list_price" * (1 - "discount_percent" / 100.0))::numeric(19, 6)');
-    expect(sql).toContain('"unit_price" IS DISTINCT FROM');
+    expect(sql).toContain(
+      '("target"."list_price" * (1 - "target"."discount_percent" / 100.0))::numeric(19, 6)',
+    );
+    expect(sql).toContain('"target"."unit_price" IS DISTINCT FROM');
 
     // Legacy 32.09 is restored to 32.087500, so 150 units round once to 4813.13.
     const restoredUnitCost = 37.75 * (1 - 15 / 100);
     expect(restoredUnitCost).toBe(32.0875);
     expect(Math.round(restoredUnitCost * 150 * 100) / 100).toBe(4813.13);
+  });
+
+  test('preserves manual and client-synced unit costs during the backfill', async () => {
+    const sql = await readMigration();
+
+    expect(sql).toContain(
+      '"target"."unit_price" =\n    ROUND("target"."list_price" * (1 - "target"."discount_percent" / 100.0), 2)',
+    );
+    expect(sql).toContain('AND NOT EXISTS (');
+    expect(sql).toContain('"audit"."action" = \'supplier_quote.updated\'');
+    expect(sql).toContain('"audit"."entity_type" = \'supplier_quote\'');
+    expect(sql).toContain('"audit"."entity_id" = "target"."quote_id"');
+    expect(sql).toContain('"audit"."details" ->> \'secondaryLabel\' = \'synced_from_client_line\'');
+
+    const preciseFormula = 37.75 * (1 - 15 / 100);
+    const oldRoundedFormula = Math.round(preciseFormula * 100) / 100;
+    const shouldRebuild = (unitCost: number, hasClientSyncAudit: boolean) =>
+      unitCost === oldRoundedFormula && unitCost !== preciseFormula && !hasClientSyncAudit;
+
+    expect(shouldRebuild(32.09, false)).toBe(true);
+    expect(shouldRebuild(32.09, true)).toBe(false);
+    expect(shouldRebuild(31.5, false)).toBe(false);
   });
 
   test('upgrades only current two-decimal snapshots and preserves stale or edited history', async () => {

@@ -4,12 +4,26 @@ ALTER TABLE "sale_items" ALTER COLUMN "supplier_quote_unit_price" SET DATA TYPE 
 ALTER TABLE "supplier_quote_items" ALTER COLUMN "unit_price" SET DATA TYPE numeric(19, 6);--> statement-breakpoint
 ALTER TABLE "supplier_quote_items" ALTER COLUMN "unit_price" SET DEFAULT '0';--> statement-breakpoint
 
--- Rebuild the supplier quote's derived unit cost from its scale-2 source operands. This restores
--- fractional cents lost by the old numeric(15,2) column and is retry-safe after a partial run.
-UPDATE "supplier_quote_items"
-SET "unit_price" = ("list_price" * (1 - "discount_percent" / 100.0))::numeric(19, 6)
-WHERE "unit_price" IS DISTINCT FROM
-  ("list_price" * (1 - "discount_percent" / 100.0))::numeric(19, 6);--> statement-breakpoint
+-- Rebuild only costs that still match the old scale-2 formula. A divergent value may be a manual
+-- override and must remain authoritative. Client-to-supplier syncs are subtler: the old sync stored
+-- the explicit client cost while also deriving a scale-2 list price, so the two cases can look
+-- identical numerically. Its durable audit marker therefore conservatively protects every item in
+-- a quote that has ever received such a sync. The predicates also make this retry-safe.
+UPDATE "supplier_quote_items" AS "target"
+SET "unit_price" =
+  ("target"."list_price" * (1 - "target"."discount_percent" / 100.0))::numeric(19, 6)
+WHERE "target"."unit_price" =
+    ROUND("target"."list_price" * (1 - "target"."discount_percent" / 100.0), 2)
+  AND "target"."unit_price" IS DISTINCT FROM
+    ("target"."list_price" * (1 - "target"."discount_percent" / 100.0))::numeric(19, 6)
+  AND NOT EXISTS (
+    SELECT 1
+    FROM "audit_logs" AS "audit"
+    WHERE "audit"."action" = 'supplier_quote.updated'
+      AND "audit"."entity_type" = 'supplier_quote'
+      AND "audit"."entity_id" = "target"."quote_id"
+      AND "audit"."details" ->> 'secondaryLabel' = 'synced_from_client_line'
+  );--> statement-breakpoint
 
 -- Upgrade only client-document snapshots that still match the CURRENT supplier cost at the old
 -- two-decimal scale. Deliberately preserve stale or manually edited historical snapshots.
