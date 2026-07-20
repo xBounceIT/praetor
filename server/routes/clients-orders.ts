@@ -23,7 +23,7 @@ import { logAudit } from '../utils/audit.ts';
 import { withCalculatedClientLineMol } from '../utils/client-line-pricing.ts';
 import { getForeignKeyViolation, getUniqueViolation } from '../utils/db-errors.ts';
 import { replyDocumentCodeCollision } from '../utils/document-code-replies.ts';
-import type { DurationUnit } from '../utils/duration-unit.ts';
+import { type DurationUnit, defaultDurationMonthsForUnit } from '../utils/duration-unit.ts';
 import { normalizeNullableNumber, normalizeNullableString } from '../utils/normalize.ts';
 import { generatePrefixedId, ITEM_ID_PREFIXES } from '../utils/order-ids.ts';
 import { requestHasPermission } from '../utils/permissions.ts';
@@ -71,8 +71,17 @@ const clientOrderItemSchema = {
     unitType: { type: 'string', enum: ['hours', 'days', 'unit'] },
     note: { type: ['string', 'null'] },
     discount: { type: 'number', minimum: 0, maximum: 100 },
-    durationMonths: { type: 'number' },
-    durationUnit: { type: 'string', enum: ['months', 'years', 'na'] },
+    durationMonths: {
+      type: 'number',
+      description:
+        'Canonical whole months; pricing uses the numeric value displayed by durationUnit.',
+    },
+    durationUnit: {
+      type: 'string',
+      enum: ['months', 'years', 'na'],
+      description:
+        'Display unit only: the displayed number multiplies pricing; na applies a neutral x1.',
+    },
   },
   required: ['id', 'orderId', 'productName', 'quantity', 'unitPrice', 'productCost', 'discount'],
 } as const;
@@ -155,8 +164,17 @@ const clientOrderItemBodySchema = {
     unitType: { type: 'string', enum: ['hours', 'days', 'unit'] },
     discount: { type: 'number', minimum: 0, maximum: 100 },
     note: { type: ['string', 'null'] },
-    durationMonths: { type: 'number' },
-    durationUnit: { type: 'string', enum: ['months', 'years', 'na'] },
+    durationMonths: {
+      type: 'number',
+      description:
+        'Canonical whole months; pricing uses the numeric value displayed by durationUnit.',
+    },
+    durationUnit: {
+      type: 'string',
+      enum: ['months', 'years', 'na'],
+      description:
+        'Display unit only: the displayed number multiplies pricing; na applies a neutral x1.',
+    },
   },
   // productId is intentionally NOT required so free-form supplier-quote lines (no linked product)
   // can be converted into orders (#783/#795). unitType is likewise optional here — product-less
@@ -281,8 +299,8 @@ const normalizeIncomingItems = (
       return null;
     }
     const unitType = normalizeUnitType(item.unitType);
-    const durationMonths = durationMonthsResult.value ?? 1;
     const durationUnit = durationUnitResult.value ?? 'months';
+    const durationMonths = durationMonthsResult.value ?? defaultDurationMonthsForUnit(durationUnit);
     normalized.push({
       id: typeof item.id === 'string' ? item.id : undefined,
       productId,

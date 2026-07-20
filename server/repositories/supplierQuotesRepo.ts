@@ -911,7 +911,7 @@ export const insertItems = async (
         note: item.note,
         unitType: item.unitType,
         // Duration applies to every line type (issue #775); 'na' marks a line that never multiplies
-        // and is gated through effectiveDurationMonths, so the value is persisted verbatim here.
+        // and is interpreted by the pricing multiplier, so the canonical value is persisted here.
         durationMonths: item.durationMonths ?? 1,
         durationUnit: item.durationUnit ?? 'months',
       })),

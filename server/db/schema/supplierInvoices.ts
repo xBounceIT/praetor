@@ -68,13 +68,9 @@ export const supplierInvoiceItems = pgTable(
     quantity: numeric('quantity', { precision: 10, scale: 2 }).notNull().default('1'),
     unitPrice: numeric('unit_price', { precision: 15, scale: 2 }).notNull().default('0'),
     discount: numeric('discount', { precision: 5, scale: 2 }).default('0'),
-    // Months the line's service runs (issue #776); multiplies the line total alongside `quantity`,
-    // carried over from the supplier order so the invoice total matches. Default 1 keeps legacy
-    // invoices' totals identical to the pre-duration behavior.
+    // Canonical duration in months, carried over from the supplier order for API/data compatibility.
     durationMonths: integer('duration_months').notNull().default(1),
-    // Display unit for `durationMonths`: 'months' (default), 'years', or 'na'. 'na' (N/A) marks a
-    // line where duration does not apply and never multiplies (issue #775). Pricing always uses
-    // `durationMonths`; this only controls how the value is shown/entered.
+    // Display unit for `durationMonths`: pricing uses its displayed numeric value; 'na' is neutral.
     durationUnit: text('duration_unit').notNull().default('months'),
     createdAt: timestamp('created_at').default(sql`CURRENT_TIMESTAMP`),
   },

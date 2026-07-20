@@ -6,7 +6,7 @@
     "qty": "Quantità di articoli o ore",
     "cost": "Costo unitario per questa voce",
     "discount": "Sconto percentuale applicato a questa voce",
-    "duration": "Numero di mesi in cui il servizio è valido: moltiplica costo e ricavo della riga",
+    "duration": "Valore di durata del servizio: moltiplica costo e ricavo della riga senza conversioni dell'unità",
     "mol": "Percentuale margine e oneri",
     "notes": "Note aggiuntive per l'intero documento",
     "clientInformation": "Dettagli cliente e documento",

@@ -298,7 +298,7 @@ describe('<SupplierOrdersView /> item pricing columns', () => {
     expect(screen.getAllByText('901,00 EUR').length).toBeGreaterThan(0);
   });
 
-  test('converts a replacement product hourly cost into the retained day unit', async () => {
+  test('preserves a replacement product cost in the retained day unit', async () => {
     const onUpdateOrder = mock((_id: string, _updates: Partial<SupplierSaleOrder>) => {});
     const products: Product[] = [
       {
@@ -351,7 +351,7 @@ describe('<SupplierOrdersView /> item pricing columns', () => {
 
     const updates = onUpdateOrder.mock.calls[0]?.[1] as Partial<SupplierSaleOrder>;
     expect(updates.items?.[0]).toEqual(
-      expect.objectContaining({ productId: 'product-2', unitPrice: 800, unitType: 'days' }),
+      expect.objectContaining({ productId: 'product-2', unitPrice: 100, unitType: 'days' }),
     );
   });
 });

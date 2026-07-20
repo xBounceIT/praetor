@@ -12,6 +12,7 @@ import {
 import { logAudit } from '../utils/audit.ts';
 import { type DatabaseError, getUniqueViolation } from '../utils/db-errors.ts';
 import { replyDocumentCodeCollision } from '../utils/document-code-replies.ts';
+import { defaultDurationMonthsForUnit } from '../utils/duration-unit.ts';
 import { generatePrefixedId, ITEM_ID_PREFIXES } from '../utils/order-ids.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { replyError } from '../utils/replyError.ts';
@@ -65,8 +66,17 @@ const invoiceItemSchema = {
     quantity: { type: 'number' },
     unitPrice: { type: 'number' },
     discount: { type: 'number' },
-    durationMonths: { type: 'number' },
-    durationUnit: { type: 'string', enum: ['months', 'years', 'na'] },
+    durationMonths: {
+      type: 'number',
+      description:
+        'Canonical whole months; pricing uses the numeric value displayed by durationUnit.',
+    },
+    durationUnit: {
+      type: 'string',
+      enum: ['months', 'years', 'na'],
+      description:
+        'Display unit only: the displayed number multiplies pricing; na applies a neutral x1.',
+    },
   },
   required: ['id', 'invoiceId', 'description', 'quantity', 'unitPrice', 'discount'],
 } as const;
@@ -113,8 +123,17 @@ const invoiceItemBodySchema = {
     quantity: { type: 'number' },
     unitPrice: { type: 'number' },
     discount: { type: 'number' },
-    durationMonths: { type: 'number' },
-    durationUnit: { type: 'string', enum: ['months', 'years', 'na'] },
+    durationMonths: {
+      type: 'number',
+      description:
+        'Canonical whole months; pricing uses the numeric value displayed by durationUnit.',
+    },
+    durationUnit: {
+      type: 'string',
+      enum: ['months', 'years', 'na'],
+      description:
+        'Display unit only: the displayed number multiplies pricing; na applies a neutral x1.',
+    },
   },
   required: ['description', 'quantity', 'unitPrice'],
 } as const;
@@ -218,8 +237,9 @@ const normalizeItems = (
       quantity: quantityResult.value,
       unitPrice: unitPriceResult.value,
       discount: discountResult.value || 0,
-      // Duration applies to every line type (issue #775); 'na' is gated via effectiveDurationMonths.
-      durationMonths: durationMonthsResult.value ?? 1,
+      // Duration applies to every line type; pricing derives the displayed multiplier and gates N/A.
+      durationMonths:
+        durationMonthsResult.value ?? defaultDurationMonthsForUnit(durationUnitResult.value),
       durationUnit: durationUnitResult.value ?? 'months',
     });
   }

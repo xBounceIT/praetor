@@ -1,6 +1,4 @@
 import { roundCurrency } from './invoice-math.ts';
-import type { UnitType } from './unit-type.ts';
-
 export const MIN_CLIENT_LINE_MOL_PERCENTAGE = -999.99;
 export const MAX_CLIENT_LINE_MOL_PERCENTAGE = 99.99;
 
@@ -10,7 +8,6 @@ export type ClientLinePricingInput = {
   productMolPercentage: number | null;
   supplierQuoteItemId?: string | null;
   supplierQuoteUnitPrice?: number | null;
-  unitType?: UnitType;
 };
 
 export const calculateClientLineMol = ({
@@ -18,12 +15,11 @@ export const calculateClientLineMol = ({
   productCost,
   supplierQuoteItemId,
   supplierQuoteUnitPrice,
-  unitType,
 }: ClientLinePricingInput): number | null => {
   const baseCost = supplierQuoteItemId
     ? Number(supplierQuoteUnitPrice ?? 0)
     : Number(productCost ?? 0);
-  const unitCost = !supplierQuoteItemId && unitType === 'days' ? baseCost * 8 : baseCost;
+  const unitCost = baseCost;
   const salePrice = Number(unitPrice);
 
   if (!Number.isFinite(unitCost) || !Number.isFinite(salePrice) || unitCost < 0 || salePrice < 0) {

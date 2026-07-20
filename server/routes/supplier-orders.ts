@@ -19,7 +19,7 @@ import {
 import { logAudit } from '../utils/audit.ts';
 import { getUniqueViolation } from '../utils/db-errors.ts';
 import { replyDocumentCodeCollision } from '../utils/document-code-replies.ts';
-import type { DurationUnit } from '../utils/duration-unit.ts';
+import { type DurationUnit, defaultDurationMonthsForUnit } from '../utils/duration-unit.ts';
 import { generatePrefixedId, ITEM_ID_PREFIXES } from '../utils/order-ids.ts';
 import { effectiveSupplierQuoteStatusFromDate } from '../utils/quote-status.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
@@ -60,8 +60,17 @@ const itemSchema = {
     unitPrice: { type: 'number' },
     note: { type: ['string', 'null'] },
     discount: { type: 'number' },
-    durationMonths: { type: 'number' },
-    durationUnit: { type: 'string', enum: ['months', 'years', 'na'] },
+    durationMonths: {
+      type: 'number',
+      description:
+        'Canonical whole months; pricing uses the numeric value displayed by durationUnit.',
+    },
+    durationUnit: {
+      type: 'string',
+      enum: ['months', 'years', 'na'],
+      description:
+        'Display unit only: the displayed number multiplies pricing; na applies a neutral x1.',
+    },
   },
   required: ['id', 'orderId', 'productName', 'quantity', 'unitType', 'unitPrice', 'discount'],
 } as const;
@@ -106,8 +115,17 @@ const itemBodySchema = {
     unitPrice: { type: 'number' },
     discount: { type: 'number', minimum: 0, maximum: 100 },
     note: { type: 'string' },
-    durationMonths: { type: 'number' },
-    durationUnit: { type: 'string', enum: ['months', 'years', 'na'] },
+    durationMonths: {
+      type: 'number',
+      description:
+        'Canonical whole months; pricing uses the numeric value displayed by durationUnit.',
+    },
+    durationUnit: {
+      type: 'string',
+      enum: ['months', 'years', 'na'],
+      description:
+        'Display unit only: the displayed number multiplies pricing; na applies a neutral x1.',
+    },
   },
   required: ['productName', 'quantity', 'unitPrice'],
 } as const;
@@ -212,7 +230,8 @@ const normalizeItems = (
       unitPrice: unitPriceResult.value,
       discount: discountResult.value || 0,
       note: item.note || null,
-      durationMonths: durationMonthsResult.value ?? 1,
+      durationMonths:
+        durationMonthsResult.value ?? defaultDurationMonthsForUnit(durationUnitResult.value),
       durationUnit: durationUnitResult.value ?? 'months',
     });
   }

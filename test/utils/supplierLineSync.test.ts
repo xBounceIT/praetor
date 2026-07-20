@@ -155,17 +155,15 @@ describe('refreshedSupplierLineFields', () => {
     expect(fields.supplierQuoteBaseUnitPrice).toBe(fields.supplierQuoteUnitPrice);
   });
 
-  test("converts the refreshed cost into the line's unit before deriving MOL", () => {
+  test('preserves the refreshed cost across unit labels before deriving MOL', () => {
     const fields = refreshedSupplierLineFields(
       { unitPrice: 800, productMolPercentage: null, unitType: 'days' },
       supplierItem(),
     );
-    expect(fields.productMolPercentage).toBe(20);
+    expect(fields.productMolPercentage).toBe(90);
   });
 
-  test('a days-priced source refreshed into a days line is NOT re-multiplied (#812)', () => {
-    // The supplier item is already priced per day; treating it as hourly would ×8 it even though
-    // the line is also in days. Units match → no conversion.
+  test('a days-priced source refreshed into a days line keeps its numeric cost', () => {
     const fields = refreshedSupplierLineFields(
       { unitPrice: 100, productMolPercentage: null, unitType: 'days' },
       supplierItem({ unitType: 'days', unitPrice: 80 }),
@@ -173,12 +171,12 @@ describe('refreshedSupplierLineFields', () => {
     expect(fields.productMolPercentage).toBe(20);
   });
 
-  test('converts FROM the source unit when units differ (days source → hours line = ÷8)', () => {
+  test('keeps the source price when source and line units differ', () => {
     const fields = refreshedSupplierLineFields(
       { unitPrice: 20, productMolPercentage: null, unitType: 'hours' },
       supplierItem({ unitType: 'days', unitPrice: 80 }),
     );
-    expect(fields.productMolPercentage).toBe(50);
+    expect(fields.productMolPercentage).toBe(-300);
   });
 });
 

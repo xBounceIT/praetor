@@ -1395,7 +1395,7 @@ describe('PUT /api/sales/client-quotes/:id supplier-item forward sync (#779)', (
     expect(replaced[0].productMolPercentage).toBe(50);
   });
 
-  test('converts an hourly product cost before deriving a day-line MOL', async () => {
+  test('does not convert product cost before deriving a day-line MOL', async () => {
     setupDraftQuote();
     cqFindItemSnapshotsForQuoteMock.mockResolvedValue([
       {
@@ -1435,7 +1435,7 @@ describe('PUT /api/sales/client-quotes/:id supplier-item forward sync (#779)', (
     expect(res.statusCode).toBe(200);
     const replaced = cqReplaceItemsMock.mock.calls[0][1] as Array<Record<string, unknown>>;
     expect(replaced[0].unitPrice).toBe(10);
-    expect(replaced[0].productMolPercentage).toBe(-700);
+    expect(replaced[0].productMolPercentage).toBe(0);
   });
 
   test('derives MOL from an edited sale price on a retained supplier-sourced line', async () => {

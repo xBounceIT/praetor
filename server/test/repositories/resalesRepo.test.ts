@@ -72,6 +72,14 @@ describe('computeSupplierOrderTotal', () => {
     expect(total).toBe(450);
   });
 
+  test('uses the displayed year value for supplier-order costs', () => {
+    const total = computeSupplierOrderTotal(makeOrder({}), [
+      makeItem({ quantity: 2, unitPrice: 100, durationMonths: 24, durationUnit: 'years' }),
+    ]);
+
+    expect(total).toBe(400);
+  });
+
   test('caps currency order discount at the computed subtotal', () => {
     const total = computeSupplierOrderTotal(
       makeOrder({ discount: 500, discountType: 'currency' }),

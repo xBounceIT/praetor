@@ -2,7 +2,6 @@ import type { SupplierQuote, SupplierUnitType } from '../types';
 import {
   calcProductMolPercentage,
   calcProductSalePrice,
-  convertUnitPrice,
   getEffectiveDurationMonths,
   normalizeDurationUnit,
 } from './numbers';
@@ -112,11 +111,7 @@ export const refreshedSupplierLineFields = (
   supplierQuoteBaseUnitPrice: number;
   productMolPercentage: number | null;
 } => {
-  const unitCost = convertUnitPrice(
-    source.unitPrice,
-    source.unitType || 'hours',
-    line.unitType || 'hours',
-  );
+  const unitCost = source.unitPrice;
   return {
     quantity: source.quantity,
     supplierQuoteUnitPrice: source.unitPrice,
@@ -141,11 +136,7 @@ export const pickedSupplierLineFields = (
     supplierQuoteBaseQuantity: source.quantity,
     supplierQuoteBaseUnitPrice: source.unitPrice,
     // A new link has no user-authored sale price yet, so initialize it from the line/catalog MOL.
-    unitPrice: convertUnitPrice(
-      calcProductSalePrice(source.unitPrice, mol),
-      source.unitType || 'hours',
-      line.unitType || 'hours',
-    ),
+    unitPrice: calcProductSalePrice(source.unitPrice, mol),
     durationMonths: getEffectiveDurationMonths(source),
     durationUnit: normalizeDurationUnit(source.durationUnit),
   };

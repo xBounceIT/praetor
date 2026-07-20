@@ -19,7 +19,7 @@ import {
   durationValueToMonths,
   formatDecimal,
   getDurationInputValue,
-  getEffectiveDurationMonths,
+  getEffectiveDurationMultiplier,
   isFiniteNumber,
   isPositiveFiniteNumber,
   normalizeDurationForSubmit,
@@ -65,11 +65,11 @@ const EMPTY_INVOICE_ITEMS: InvoiceItem[] = [];
 const CLIENT_INVOICE_ITEM_NUMBER_INPUT_CLASSNAME =
   'h-9 max-w-[5rem] flex-none text-right font-medium';
 
-// Months the line's service runs (issue #757); multiplies the taxable amount. The shared
-// `getEffectiveDurationMonths` clamps absent/invalid values to 1, so pre-duration invoices keep
-// their totals — matching the backend `computeInvoiceTotals`.
+// The numeric duration value shown in the selected unit multiplies the taxable amount. The shared
+// helper clamps absent/invalid values to 1, so pre-duration invoices keep their totals — matching
+// the backend `computeInvoiceTotals`.
 const getLineGross = (item: InvoiceItem) =>
-  Number(item.quantity || 0) * Number(item.unitPrice || 0) * getEffectiveDurationMonths(item);
+  Number(item.quantity || 0) * Number(item.unitPrice || 0) * getEffectiveDurationMultiplier(item);
 
 const getLineTaxable = (item: InvoiceItem) =>
   getLineGross(item) * (1 - Number(item.discount || 0) / 100);
@@ -405,7 +405,7 @@ const useClientsInvoicesController = ({
   };
 
   // Duration value entered in the item's chosen unit (issue #757). Stored canonically as whole
-  // months; 'years' multiplies by 12. Empty/invalid input falls back to 1 of the chosen unit.
+  // canonical months; pricing separately uses the numeric value shown in the selected unit.
   const handleDurationValueChange = (index: number, value: string) => {
     const unit = normalizeDurationUnit(formData.items?.[index]?.durationUnit);
     updateItemRow(
@@ -420,8 +420,8 @@ const useClientsInvoicesController = ({
   const handleDurationUnitChange = (index: number, newUnit: DurationUnit) => {
     const item = formData.items?.[index];
     if (!item || normalizeDurationUnit(item.durationUnit) === newUnit) return;
-    // 'N/A' marks the line as duration-less: reset to the neutral 1 month so it never multiplies
-    // (issue #775). Months/years instead keeps the displayed number under the new unit.
+    // 'N/A' marks the line as duration-less and applies neutral ×1 pricing. Months/years preserve
+    // the displayed number under the new unit while updating its canonical stored months.
     const durationValue = getDurationInputValue(item);
     const durationMonths =
       newUnit === 'na' || durationValue === undefined
@@ -955,7 +955,7 @@ const InvoiceItemsSection: React.FC<{ controller: ClientsInvoicesController }> =
       id: 'duration',
       header: controller.t('sales:clientQuotes.durationColumn', { defaultValue: 'Duration' }),
       minWidth: 174,
-      accessorFn: (item) => getEffectiveDurationMonths(item),
+      accessorFn: (item) => getEffectiveDurationMultiplier(item),
       align: 'right',
       cell: ({ row }) => (
         <div className="min-w-[150px]">

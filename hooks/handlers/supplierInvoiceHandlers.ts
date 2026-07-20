@@ -48,7 +48,7 @@ export const makeSupplierInvoiceHandlers = (deps: SupplierInvoiceHandlersDeps) =
         unitPrice: item.unitPrice,
         discount: item.discount || 0,
         // Carry the order line's duration so the invoice total matches the order (issue #776/#775);
-        // 'na' lines never multiply (effectiveDurationMonths returns 1).
+        // pricing uses the displayed numeric value and 'na' lines use the neutral multiplier 1.
         durationMonths: item.durationMonths ?? 1,
         durationUnit: item.durationUnit ?? 'months',
       }));

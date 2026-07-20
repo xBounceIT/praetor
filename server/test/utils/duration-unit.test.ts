@@ -2,9 +2,20 @@ import { describe, expect, test } from 'bun:test';
 import {
   DURATION_UNITS,
   type DurationUnit,
+  defaultDurationMonthsForUnit,
   effectiveDurationMonths,
+  effectiveDurationMultiplier,
   normalizeDurationUnit,
 } from '../../utils/duration-unit.ts';
+
+describe('defaultDurationMonthsForUnit', () => {
+  test('stores the canonical months that represent a neutral multiplier', () => {
+    expect(defaultDurationMonthsForUnit('months')).toBe(1);
+    expect(defaultDurationMonthsForUnit('years')).toBe(12);
+    expect(defaultDurationMonthsForUnit('na')).toBe(1);
+    expect(defaultDurationMonthsForUnit(undefined)).toBe(1);
+  });
+});
 
 describe('DURATION_UNITS', () => {
   test('is the ordered allow-list ["months", "years", "na"]', () => {
@@ -59,5 +70,19 @@ describe('effectiveDurationMonths', () => {
     expect(effectiveDurationMonths('months', 0)).toBe(1);
     expect(effectiveDurationMonths('months', -3)).toBe(1);
     expect(effectiveDurationMonths('months', Number.NaN)).toBe(1);
+  });
+});
+
+describe('effectiveDurationMultiplier', () => {
+  test('uses the value represented by months or years', () => {
+    expect(effectiveDurationMultiplier('months', 12)).toBe(12);
+    expect(effectiveDurationMultiplier('years', 12)).toBe(1);
+    expect(effectiveDurationMultiplier('years', 18)).toBe(1.5);
+  });
+
+  test('keeps N/A and invalid durations neutral', () => {
+    expect(effectiveDurationMultiplier('na', 24)).toBe(1);
+    expect(effectiveDurationMultiplier('months', undefined)).toBe(1);
+    expect(effectiveDurationMultiplier('years', undefined)).toBe(1);
   });
 });

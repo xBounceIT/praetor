@@ -497,10 +497,9 @@ describe('POST /api/invoices', () => {
     });
 
     expect(res.statusCode).toBe(201);
-    // 2 * 50 * 12 = 1200: a unit line carries a duration like any other, so the server-authoritative
-    // total scales by it.
+    // The stored 12 months are displayed as 1 year, so pricing uses multiplier 1.
     expect(createMock).toHaveBeenCalledWith(
-      expect.objectContaining({ subtotal: 1200, taxTotal: 0, total: 1200 }),
+      expect.objectContaining({ subtotal: 100, taxTotal: 0, total: 100 }),
       TX_SENTINEL,
     );
     // ...and the persisted line keeps the multi-month duration.

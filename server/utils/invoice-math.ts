@@ -1,4 +1,4 @@
-import { effectiveDurationMonths } from './duration-unit.ts';
+import { effectiveDurationMultiplier } from './duration-unit.ts';
 
 type ItemMath = {
   quantity?: number;
@@ -60,7 +60,7 @@ export const computeInvoiceTotals = (
     const unitPrice = item.unitPrice ?? 0;
     const discount = item.discount ?? 0;
     // 'N/A' lines never multiply by duration (issue #775); absent/non-positive months fall to 1.
-    const effectiveDuration = effectiveDurationMonths(item.durationUnit, item.durationMonths);
+    const effectiveDuration = effectiveDurationMultiplier(item.durationUnit, item.durationMonths);
     const discountFactor = 1 - discount / 100;
     const taxableAmount = quantity * unitPrice * discountFactor * effectiveDuration;
     const taxRate = item.taxRate ?? 0;

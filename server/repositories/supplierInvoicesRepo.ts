@@ -318,7 +318,7 @@ export const insertItems = async (
         quantity: numericForDb(item.quantity),
         unitPrice: numericForDb(item.unitPrice),
         discount: numericForDb(item.discount),
-        // Duration applies to every line type (issue #775); 'na' is gated via effectiveDurationMonths
+        // Duration applies to every line type; pricing derives the displayed multiplier and gates N/A
         // downstream, so the chosen value/unit is persisted verbatim.
         durationMonths: item.durationMonths ?? 1,
         durationUnit: item.durationUnit ?? 'months',

@@ -50,11 +50,10 @@ describe('makeCostUpdater', () => {
     expect(next.items?.[1]).toBe(b); // untouched item is the same reference
   });
 
-  test('converts user-entered cost from days back to hours when item unitType is days', () => {
-    // user enters 80 (per day) → stored productCost (hours) should be 10
+  test('preserves user-entered cost when item unitType is days', () => {
     const state: FormState = { items: [baseItem({ unitType: 'days', productCost: 0 })] };
-    const next = makeCostUpdater<FormState>(0, '80', 'hours')(state);
-    expect(next.items?.[0].productCost).toBe(10);
+    const next = makeCostUpdater<FormState>(0, '80')(state);
+    expect(next.items?.[0].productCost).toBe(80);
     expect(next.items?.[0].productMolPercentage).toBe(20);
   });
 
@@ -74,10 +73,7 @@ describe('makeCostUpdater', () => {
     expect(next.items?.[0].productCost).toBeUndefined();
   });
 
-  test('does NOT convert a supplier-sourced days cost to hours on edit (#812 round 19)', () => {
-    // supplierQuoteUnitPrice mirrors the supplier item, whose unit the line copies — the server
-    // snapshot, the #779 forward sync and the staleness compare all read it in that unit. The old
-    // hourly conversion stored 10 and pushed a ÷8 cost onto a days-priced supplier item.
+  test('preserves a supplier-sourced days cost on edit', () => {
     const state: FormState = {
       items: [
         baseItem({
@@ -111,12 +107,12 @@ describe('makeUnitPriceUpdater', () => {
     expect(next.items?.[0].productMolPercentage).toBe(25);
   });
 
-  test('uses the line-unit cost for a day-priced product', () => {
+  test('does not convert cost for a day-labelled product', () => {
     const state: FormState = {
       items: [baseItem({ productCost: 10, productMolPercentage: 0, unitType: 'days' })],
     };
     const next = makeUnitPriceUpdater<FormState>(0, '120')(state);
-    expect(next.items?.[0].productMolPercentage).toBe(33.33);
+    expect(next.items?.[0].productMolPercentage).toBe(91.67);
   });
 
   test('shows a negative MOL when the sale price is below cost', () => {

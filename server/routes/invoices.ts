@@ -16,7 +16,7 @@ import {
   getUniqueViolation,
 } from '../utils/db-errors.ts';
 import { replyDocumentCodeCollision } from '../utils/document-code-replies.ts';
-import type { DurationUnit } from '../utils/duration-unit.ts';
+import { type DurationUnit, defaultDurationMonthsForUnit } from '../utils/duration-unit.ts';
 import { computeInvoiceTotals, roundCurrency } from '../utils/invoice-math.ts';
 import { generatePrefixedId, ITEM_ID_PREFIXES } from '../utils/order-ids.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
@@ -62,8 +62,17 @@ const invoiceItemSchema = {
     unitPrice: { type: 'number' },
     discount: { type: 'number' },
     taxRate: { type: 'number' },
-    durationMonths: { type: 'number' },
-    durationUnit: { type: 'string', enum: ['months', 'years', 'na'] },
+    durationMonths: {
+      type: 'number',
+      description:
+        'Canonical whole months; pricing uses the numeric value displayed by durationUnit.',
+    },
+    durationUnit: {
+      type: 'string',
+      enum: ['months', 'years', 'na'],
+      description:
+        'Display unit only: the displayed number multiplies pricing; na applies a neutral x1.',
+    },
   },
   required: [
     'id',
@@ -123,8 +132,17 @@ const invoiceItemBodySchema = {
     unitPrice: { type: 'number' },
     discount: { type: 'number' },
     taxRate: { type: 'number' },
-    durationMonths: { type: 'number' },
-    durationUnit: { type: 'string', enum: ['months', 'years', 'na'] },
+    durationMonths: {
+      type: 'number',
+      description:
+        'Canonical whole months; pricing uses the numeric value displayed by durationUnit.',
+    },
+    durationUnit: {
+      type: 'string',
+      enum: ['months', 'years', 'na'],
+      description:
+        'Display unit only: the displayed number multiplies pricing; na applies a neutral x1.',
+    },
   },
   required: ['description', 'unitOfMeasure', 'quantity', 'unitPrice'],
 } as const;
@@ -263,8 +281,8 @@ const validateAndNormalizeItems = (
     }
 
     const unitOfMeasure = unitOfMeasureResult.value as 'unit' | 'hours';
-    const durationMonths = durationMonthsResult.value ?? 1;
     const durationUnit = durationUnitResult.value ?? 'months';
+    const durationMonths = durationMonthsResult.value ?? defaultDurationMonthsForUnit(durationUnit);
 
     normalizedItems.push({
       productId: productIdResult.value || null,

@@ -16,7 +16,7 @@ import {
 import { logAudit } from '../utils/audit.ts';
 import { getUniqueViolation } from '../utils/db-errors.ts';
 import { replyDocumentCodeCollision } from '../utils/document-code-replies.ts';
-import type { DurationUnit } from '../utils/duration-unit.ts';
+import { type DurationUnit, defaultDurationMonthsForUnit } from '../utils/duration-unit.ts';
 import {
   ATTACHMENT_MAX_BYTES,
   deleteSupplierQuoteAttachment,
@@ -100,8 +100,17 @@ const supplierQuoteItemSchema = {
     unitPrice: { type: 'number' },
     note: { type: ['string', 'null'] },
     unitType: { type: 'string', enum: ['hours', 'days', 'unit'] },
-    durationMonths: { type: 'number' },
-    durationUnit: { type: 'string', enum: ['months', 'years', 'na'] },
+    durationMonths: {
+      type: 'number',
+      description:
+        'Canonical whole months; pricing uses the numeric value displayed by durationUnit.',
+    },
+    durationUnit: {
+      type: 'string',
+      enum: ['months', 'years', 'na'],
+      description:
+        'Display unit only: the displayed number multiplies pricing; na applies a neutral x1.',
+    },
   },
   required: ['id', 'quoteId', 'productName', 'quantity', 'unitPrice'],
 } as const;
@@ -156,8 +165,17 @@ const supplierQuoteItemBodySchema = {
     unitPrice: { type: 'number' },
     note: { type: 'string' },
     unitType: { type: 'string', enum: ['hours', 'days', 'unit'] },
-    durationMonths: { type: 'number' },
-    durationUnit: { type: 'string', enum: ['months', 'years', 'na'] },
+    durationMonths: {
+      type: 'number',
+      description:
+        'Canonical whole months; pricing uses the numeric value displayed by durationUnit.',
+    },
+    durationUnit: {
+      type: 'string',
+      enum: ['months', 'years', 'na'],
+      description:
+        'Display unit only: the displayed number multiplies pricing; na applies a neutral x1.',
+    },
   },
   required: ['productName', 'quantity'],
 } as const;
@@ -292,9 +310,9 @@ const validateAndNormalizeItems = (
     }
     const unitType = normalizeUnitType(item.unitType);
     // Duration applies to every line type now (issue #775); the 'na' unit marks a line that never
-    // multiplies. The value is stored as-is and gated through effectiveDurationMonths downstream.
-    const durationMonths = durationMonthsResult.value ?? 1;
+    // multiplies. The canonical value is stored as-is; pricing derives the displayed multiplier.
     const durationUnit = durationUnitResult.value ?? 'months';
+    const durationMonths = durationMonthsResult.value ?? defaultDurationMonthsForUnit(durationUnit);
     result.push({
       id: generatePrefixedId(ITEM_ID_PREFIXES.supplierQuoteItem),
       productId: item.productId || null,
@@ -1197,8 +1215,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             unitPrice: pricing.unitPrice,
             unitType: rest.unitType ?? 'unit',
             note: rest.note ?? null,
-            // Snapshots taken before duration existed (issue #776) lack these keys; default to a
-            // single month. insertItems applies the final unit-line coercion on the way in.
+            // Snapshots taken before duration existed (issue #776) lack both keys; default to a
+            // single month so the restored line keeps its pre-duration total.
             durationMonths: rest.durationMonths ?? 1,
             durationUnit: rest.durationUnit ?? 'months',
           };

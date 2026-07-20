@@ -50,7 +50,7 @@ For every request, AI Reporting builds a fresh dataset restricted to the view pe
 - **Catalog** — products, types, categories, suppliers, and document usage.
 - **Resales** — costs, revenue, margin, billing frequencies, categories, and activity release state.
 
-Unauthorized sections are never added to the AI context. When a question targets one area, Praetor loads only the relevant sections; an overview request uses every available section. Document totals for duration-based lines include the month multiplier and, for quotes with multiple candidates, reporting analyzes the selected candidate or the first active candidate.
+Unauthorized sections are never added to the AI context. When a question targets one area, Praetor loads only the relevant sections; an overview request uses every available section. Document totals for duration-based lines use the displayed value as their multiplier without converting months and years; for quotes with multiple candidates, reporting analyzes the selected candidate or the first active candidate.
 
 Within the supplier dataset, master-data details are included only with `crm.suppliers_all.view`. With a base supplier permission or supplier-document view permission alone, AI Reporting and the `praetor_list_suppliers` MCP tool receive only the supplier identifier, name, and status.
 

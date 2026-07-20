@@ -1,9 +1,11 @@
 import { type SQL, sql } from 'drizzle-orm';
 
-// Mirrors effectiveDurationMonths: N/A lines are one-off even if legacy rows retain a month count.
+// Mirrors effectiveDurationMultiplier: pricing uses the value shown in the selected unit while the
+// database retains canonical months. N/A lines remain one-off even if legacy rows retain months.
 const effectiveDurationSql = (durationUnit: SQL, durationMonths: SQL) => sql`
   CASE
     WHEN ${durationUnit} = 'na' THEN 1
+    WHEN ${durationUnit} = 'years' THEN COALESCE(${durationMonths}, 12) / 12.0
     ELSE COALESCE(${durationMonths}, 1)
   END`;
 

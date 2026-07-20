@@ -232,6 +232,30 @@ describe('<SupplierQuotesView /> supplier pricing chain', () => {
     expect(item?.discountPercent).toBe(10);
     expect(item?.unitPrice).toBe(9.01);
   });
+
+  test('changing the quantity unit preserves list price and unit cost', async () => {
+    const onUpdateQuote = mock((_id: string, _updates: Partial<SupplierQuote>) => {});
+    render(<SupplierQuotesView {...baseProps} onUpdateQuote={onUpdateQuote} />);
+    await openQuote('SQ-DRAFT');
+
+    const unitSelector = screen
+      .getAllByRole('combobox')
+      .find((element) => element.textContent?.includes('sales:supplierQuotes.unit'));
+    expect(unitSelector).toBeDefined();
+    fireEvent.click(unitSelector as HTMLElement);
+    const dayOption = screen
+      .getAllByText('sales:supplierQuotes.day')
+      .find((element) => element.tagName === 'SPAN');
+    expect(dayOption).toBeDefined();
+    fireEvent.click(dayOption as HTMLElement);
+
+    await act(async () => fireEvent.click(screen.getByText('common:buttons.update')));
+
+    const updates = onUpdateQuote.mock.calls[0]?.[1] as Partial<SupplierQuote>;
+    expect(updates.items?.[0]).toEqual(
+      expect.objectContaining({ unitType: 'days', listPrice: 100, unitPrice: 100 }),
+    );
+  });
 });
 
 describe('<SupplierQuotesView /> summary discount line', () => {
@@ -580,6 +604,26 @@ describe('<SupplierQuotesView /> line item duration (issue #776)', () => {
     // (without the duration multiplier it would be 200.00).
     expect(screen.getAllByText('600,00 EUR').length).toBeGreaterThan(0);
     expect(screen.queryByText('200,00 EUR')).not.toBeInTheDocument();
+  });
+
+  test('prices a years duration using the displayed year value', () => {
+    const yearsQuote = buildQuote({
+      id: 'SQ-DURATION-YEARS',
+      status: 'draft',
+      items: [
+        {
+          ...daysLineQuote.items[0],
+          id: 'sqi-years',
+          quoteId: 'SQ-DURATION-YEARS',
+          durationMonths: 24,
+          durationUnit: 'years',
+        },
+      ],
+    });
+
+    render(<SupplierQuotesView {...baseProps} quotes={[yearsQuote]} />);
+    // 24 canonical months display as 2 years: 100 × 2 × 2 = 400.
+    expect(screen.getAllByText('400,00 EUR').length).toBeGreaterThan(0);
   });
 
   test('renders an editable duration for a unit-measured line (duration applies to every type)', async () => {

@@ -253,9 +253,7 @@ describe('<ClientsOrdersView />', () => {
     expect(screen.getAllByText('240,00 EUR').length).toBeGreaterThan(0);
   });
 
-  test('a years duration prices off the canonical months, matching the months equivalent (issue #757)', () => {
-    // durationUnit only controls display; pricing always uses the canonical durationMonths (24),
-    // so "2 years" (24 months) totals the same as a 24-month line.
+  test('a years duration prices using the displayed year value', () => {
     const yearsOrder: ClientsOrder = {
       id: 'dm_so_years',
       clientId: 'client-1',
@@ -293,10 +291,8 @@ describe('<ClientsOrdersView />', () => {
       />,
     );
 
-    // Subtotal (revenue) = 100 × 2 × 24 = 4800.
-    expect(screen.getAllByText('4.800,00 EUR').length).toBeGreaterThan(0);
-    // Margin = 4800 − (60 × 2 × 24 = 2880) = 1920.
-    expect(screen.getAllByText('1.920,00 EUR').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('400,00 EUR').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('160,00 EUR').length).toBeGreaterThan(0);
   });
 
   test('MOL line input keeps two decimals instead of rounding to one (issue #780)', async () => {

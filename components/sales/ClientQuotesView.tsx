@@ -61,7 +61,6 @@ import {
 import {
   calcProductSalePrice,
   calculatePricingTotals,
-  convertUnitPrice,
   durationValueToMonths,
   EMPTY_PRICING_TOTALS,
   formatDecimal,
@@ -296,7 +295,7 @@ const calculateClientQuotePricingTotals = (
   items: QuoteItem[],
   globalDiscount: number,
   discountType: Quote['discountType'],
-): PricingTotals => calculatePricingTotals(items, globalDiscount, 'hours', discountType);
+): PricingTotals => calculatePricingTotals(items, globalDiscount, discountType);
 
 const isLegacyAcceptedQuote = (quote: Quote) => {
   const candidates = quote.candidates ?? [];
@@ -1117,11 +1116,7 @@ const useClientQuotesController = ({
 
             const mol = product.molPercentage ? Number(product.molPercentage) : 0;
             const cost = Number(product.costo);
-            const unitPrice = convertUnitPrice(
-              calcProductSalePrice(cost, mol),
-              'hours',
-              item.unitType || 'hours',
-            );
+            const unitPrice = calcProductSalePrice(cost, mol);
 
             return {
               ...item,
@@ -1324,11 +1319,7 @@ const useClientQuotesController = ({
           newItems[index].unitType = 'hours';
         }
         const mol = product.molPercentage ? Number(product.molPercentage) : 0;
-        newItems[index].unitPrice = convertUnitPrice(
-          calcProductSalePrice(Number(product.costo), mol),
-          'hours',
-          newItems[index].unitType || 'hours',
-        );
+        newItems[index].unitPrice = calcProductSalePrice(Number(product.costo), mol);
         newItems[index].productCost = Number(product.costo);
         newItems[index].productMolPercentage = product.molPercentage;
       }
@@ -1350,11 +1341,7 @@ const useClientQuotesController = ({
             newItems[index].unitType = 'hours';
           }
           const mol = product.molPercentage ? Number(product.molPercentage) : 0;
-          newItems[index].unitPrice = convertUnitPrice(
-            calcProductSalePrice(Number(product.costo), mol),
-            'hours',
-            newItems[index].unitType || 'hours',
-          );
+          newItems[index].unitPrice = calcProductSalePrice(Number(product.costo), mol);
           newItems[index].productCost = Number(product.costo);
           newItems[index].productMolPercentage = product.molPercentage;
         }
@@ -1525,18 +1512,16 @@ const useClientQuotesController = ({
     if (!item) return;
     const oldType = item.unitType || 'hours';
     if (oldType === newType) return;
-    const adjustedPrice = convertUnitPrice(item.unitPrice, oldType, newType);
     const newItems = [...(formData.items || [])];
     newItems[index] = {
       ...newItems[index],
       unitType: newType,
-      unitPrice: adjustedPrice,
     };
     setFormData((prev) => ({ ...prev, items: newItems }));
   };
 
   // Duration value entered in the item's chosen unit (issue #757). Stored canonically as whole
-  // months; 'years' multiplies by 12. An empty input stays empty while pricing uses neutral ×1.
+  // canonical months; pricing separately uses the numeric value shown in the selected unit.
   const handleDurationValueChange = (index: number, value: string) => {
     if (isReadOnly) return;
     const unit = normalizeDurationUnit(formData.items?.[index]?.durationUnit);
@@ -1555,8 +1540,8 @@ const useClientQuotesController = ({
     if (isReadOnly) return;
     const item = formData.items?.[index];
     if (!item || normalizeDurationUnit(item.durationUnit) === newUnit) return;
-    // 'N/A' marks the line as duration-less: reset to the neutral 1 month so it never multiplies
-    // (issue #775). Months/years instead keeps the displayed number under the new unit.
+    // 'N/A' marks the line as duration-less and applies neutral ×1 pricing. Months/years preserve
+    // the displayed number under the new unit while updating its canonical stored months.
     const durationValue = getDurationInputValue(item);
     const durationMonths =
       newUnit === 'na' || durationValue === undefined
@@ -3080,7 +3065,7 @@ const ClientQuoteItemsSection: React.FC<{ controller: ClientQuotesController }> 
       id: 'duration',
       header: t('sales:clientQuotes.durationColumn', { defaultValue: 'Duration' }),
       minWidth: 174,
-      accessorFn: (item) => getItemPricingContext(item).durationMonths,
+      accessorFn: (item) => getItemPricingContext(item).durationMultiplier,
       align: 'right',
       cell: ({ row }) => {
         const index = getIndex(row);
@@ -3298,9 +3283,7 @@ const getClientQuoteLineContext = (
   const cost =
     rawCost === undefined || rawCost === null || !Number.isFinite(Number(rawCost))
       ? undefined
-      : item.supplierQuoteItemId
-        ? Number(rawCost)
-        : convertUnitPrice(Number(rawCost), 'hours', item.unitType || 'hours');
+      : Number(rawCost);
   const molPercentage = item.productMolPercentage ?? undefined;
   const unitPrice = Number.isFinite(Number(item.unitPrice)) ? Number(item.unitPrice) : undefined;
   const durationUnit = normalizeDurationUnit(item.durationUnit);

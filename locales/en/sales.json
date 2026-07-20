@@ -6,7 +6,7 @@
     "qty": "Quantity of items or hours",
     "cost": "Unit cost for this item",
     "discount": "Percentage discount applied to this line",
-    "duration": "Number of months the service runs: multiplies the line cost and revenue",
+    "duration": "Service duration value: multiplies line cost and revenue without unit conversion",
     "mol": "Margin overhead loading percentage",
     "notes": "Additional notes for the entire document",
     "clientInformation": "Client and document details",

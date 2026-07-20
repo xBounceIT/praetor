@@ -72,6 +72,25 @@ describe('<SupplierInvoicesView /> line item duration (issue #776/#775)', () => 
     expect(screen.queryByText('200,00 EUR')).not.toBeInTheDocument();
   });
 
+  test('prices a years duration using the displayed year value', () => {
+    const invoice = buildInvoice({
+      id: 'SINV-DUR-YEARS',
+      items: [
+        {
+          ...buildInvoice({}).items[0],
+          id: 'sii-years',
+          invoiceId: 'SINV-DUR-YEARS',
+          durationMonths: 24,
+          durationUnit: 'years',
+        },
+      ],
+    });
+
+    render(<SupplierInvoicesView {...baseProps} invoices={[invoice]} />);
+    fireEvent.click(screen.getByText('SINV-DUR-YEARS'));
+    expect(screen.getAllByText('400,00 EUR').length).toBeGreaterThan(0);
+  });
+
   test('renders the Durata column and an editable duration reflecting the stored value', () => {
     const invoice = buildInvoice({ id: 'SINV-DUR-EDIT', status: 'draft' });
     render(<SupplierInvoicesView {...baseProps} invoices={[invoice]} />);

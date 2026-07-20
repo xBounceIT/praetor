@@ -38,7 +38,7 @@ import {
 import { todayLocalDateOnly } from '../utils/date.ts';
 import { getUniqueViolation } from '../utils/db-errors.ts';
 import { replyDocumentCodeCollision } from '../utils/document-code-replies.ts';
-import type { DurationUnit } from '../utils/duration-unit.ts';
+import { type DurationUnit, defaultDurationMonthsForUnit } from '../utils/duration-unit.ts';
 import { normalizeNullableNumber, normalizeNullableString } from '../utils/normalize.ts';
 import { generatePrefixedId, ITEM_ID_PREFIXES } from '../utils/order-ids.ts';
 import { ADMIN_ROLE_ID, requestHasPermission, TOP_MANAGER_ROLE_ID } from '../utils/permissions.ts';
@@ -146,10 +146,19 @@ const offerItemBodySchema = {
     unitType: { type: 'string', enum: ['hours', 'days', 'unit'] },
     discount: { type: 'number', minimum: 0, maximum: 100 },
     note: { type: 'string' },
-    durationMonths: { type: 'number' },
-    durationUnit: { type: 'string', enum: ['months', 'years', 'na'] },
+    durationMonths: {
+      type: 'number',
+      description:
+        'Canonical whole months; pricing uses the numeric value displayed by durationUnit.',
+    },
+    durationUnit: {
+      type: 'string',
+      enum: ['months', 'years', 'na'],
+      description:
+        'Display unit only: the displayed number multiplies pricing; na applies a neutral x1.',
+    },
   },
-  // unitType is required: it drives per-unit pricing (a 'days' line bills at 8x the hourly rate)
+  // unitType is required as the quantity label; changing it never reprices the line.
   // and is stored on every line, so the API must not silently default the unit. Mirrors invoices'
   // required unitOfMeasure.
   required: ['productName', 'quantity', 'unitPrice', 'unitType'],
@@ -315,8 +324,8 @@ const normalizeItems = (
       return null;
     }
     const unitType = normalizeUnitType(item.unitType);
-    const durationMonths = durationMonthsResult.value ?? 1;
     const durationUnit = durationUnitResult.value ?? 'months';
+    const durationMonths = durationMonthsResult.value ?? defaultDurationMonthsForUnit(durationUnit);
     normalizedItems.push({
       productId: item.productId || null,
       productName: productNameResult.value,

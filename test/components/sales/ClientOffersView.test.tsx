@@ -153,7 +153,7 @@ describe('<ClientOffersView /> list', () => {
           unitPrice: 100,
           productCost: 60,
           productMolPercentage: 40,
-          // Duration applies only to non-unit lines (hours/days), so this fixture is hours-based.
+          // Keep the fixture hours-based while verifying that duration scales the displayed total.
           unitType: 'hours',
           durationMonths: 3,
         },
@@ -166,9 +166,7 @@ describe('<ClientOffersView /> list', () => {
     expect(screen.getAllByText('240,00 EUR').length).toBeGreaterThan(0);
   });
 
-  test('a years duration prices off the canonical months, matching the months equivalent (issue #757)', () => {
-    // durationUnit is display-only; pricing always uses the canonical durationMonths (24). So
-    // "2 years" (24 months) must total the same as a 24-month line.
+  test('a years duration prices using the displayed year value', () => {
     const yearsOffer = buildOffer({
       id: 'O-YEARS',
       items: [
@@ -181,7 +179,7 @@ describe('<ClientOffersView /> list', () => {
           unitPrice: 100,
           productCost: 60,
           productMolPercentage: 40,
-          // Duration applies only to non-unit lines (hours/days), so this fixture is hours-based.
+          // Keep the fixture hours-based while verifying the displayed-year multiplier.
           unitType: 'hours',
           durationMonths: 24,
           durationUnit: 'years',
@@ -189,10 +187,8 @@ describe('<ClientOffersView /> list', () => {
       ],
     });
     render(<ClientOffersView {...baseProps} offers={[yearsOffer]} />);
-    // Subtotal (revenue) = 100 × 2 × 24 = 4800.
-    expect(screen.getAllByText('4.800,00 EUR').length).toBeGreaterThan(0);
-    // Margin = 4800 − (60 × 2 × 24 = 2880) = 1920.
-    expect(screen.getAllByText('1.920,00 EUR').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('400,00 EUR').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('160,00 EUR').length).toBeGreaterThan(0);
   });
 
   test('renders fixed discounts as equivalent percentages in offer rows', () => {

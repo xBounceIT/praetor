@@ -32,7 +32,11 @@ import {
 import { isPastLocalDate } from '../utils/date.ts';
 import { getUniqueViolation } from '../utils/db-errors.ts';
 import { replyDocumentCodeCollision } from '../utils/document-code-replies.ts';
-import { type DurationUnit, effectiveDurationMonths } from '../utils/duration-unit.ts';
+import {
+  type DurationUnit,
+  defaultDurationMonthsForUnit,
+  effectiveDurationMultiplier,
+} from '../utils/duration-unit.ts';
 import { getDocumentDiscountAmount } from '../utils/invoice-math.ts';
 import { normalizeNullableString } from '../utils/normalize.ts';
 import { generatePrefixedId, ITEM_ID_PREFIXES } from '../utils/order-ids.ts';
@@ -290,8 +294,8 @@ const normalizeQuoteItems = (
     const durationUnitResult = optionalDurationUnit(item.durationUnit, `items[${i}].durationUnit`);
     if (!durationUnitResult.ok) return { ok: false, message: durationUnitResult.message };
     const unitType = normalizeUnitType(item.unitType);
-    const durationMonths = durationMonthsResult.value ?? 1;
     const durationUnit = durationUnitResult.value ?? 'months';
+    const durationMonths = durationMonthsResult.value ?? defaultDurationMonthsForUnit(durationUnit);
     result.push({
       id: normalizeNullableString(item.id) ?? undefined,
       productId: productIdValue,
@@ -344,10 +348,10 @@ const calculateQuoteTotals = (
         subtotal: Number.NaN,
       };
     }
-    // Duration multiplies the line revenue (issue #757), except 'na' lines which never multiply
-    // (issue #775); a non-positive value falls back to 1 so it can't zero out the gate.
-    const effectiveMonths = effectiveDurationMonths(item.durationUnit, durationMonths);
-    const lineSubtotal = quantity * unitPrice * effectiveMonths;
+    // Pricing uses the numeric duration value shown in the selected unit. N/A lines remain neutral,
+    // and a non-positive value falls back to 1 so it cannot zero out the total gate.
+    const durationMultiplier = effectiveDurationMultiplier(item.durationUnit, durationMonths);
+    const lineSubtotal = quantity * unitPrice * durationMultiplier;
     const lineDiscount = lineSubtotal * (itemDiscount / 100);
     const lineNet = lineSubtotal - lineDiscount;
     subtotal += lineNet;
@@ -545,8 +549,17 @@ const quoteItemSchema = {
     discount: { type: 'number', minimum: 0, maximum: 100 },
     note: { type: ['string', 'null'] },
     unitType: { type: 'string', enum: ['hours', 'days', 'unit'] },
-    durationMonths: { type: 'number' },
-    durationUnit: { type: 'string', enum: ['months', 'years', 'na'] },
+    durationMonths: {
+      type: 'number',
+      description:
+        'Canonical whole months; pricing uses the numeric value displayed by durationUnit.',
+    },
+    durationUnit: {
+      type: 'string',
+      enum: ['months', 'years', 'na'],
+      description:
+        'Display unit only: the displayed number multiplies pricing; na applies a neutral x1.',
+    },
   },
   required: [
     'id',
@@ -661,10 +674,19 @@ const quoteItemBodySchema = {
     discount: { type: 'number', minimum: 0, maximum: 100 },
     note: { type: 'string' },
     unitType: { type: 'string', enum: ['hours', 'days', 'unit'] },
-    durationMonths: { type: 'number' },
-    durationUnit: { type: 'string', enum: ['months', 'years', 'na'] },
+    durationMonths: {
+      type: 'number',
+      description:
+        'Canonical whole months; pricing uses the numeric value displayed by durationUnit.',
+    },
+    durationUnit: {
+      type: 'string',
+      enum: ['months', 'years', 'na'],
+      description:
+        'Display unit only: the displayed number multiplies pricing; na applies a neutral x1.',
+    },
   },
-  // unitType is required: it drives per-unit pricing (a 'days' line bills at 8x the hourly rate)
+  // unitType is required as the quantity label; changing it never reprices the line.
   // and is stored on every line, so the API must not silently default the unit. Mirrors invoices'
   // required unitOfMeasure.
   required: ['productId', 'productName', 'quantity', 'unitPrice', 'unitType'],

@@ -34,7 +34,7 @@ export type InvoiceItem = {
   discount: number;
   // Per-item VAT (IVA) rate in percent. 0 for exempt/legacy rows.
   taxRate: number;
-  // Months the line's service runs; multiplies the taxable amount (issue #757).
+  // Canonical stored months; pricing derives the numeric value shown in `durationUnit`.
   durationMonths: number;
   // Display unit for `durationMonths`: 'months' (default) or 'years'.
   durationUnit: DurationUnit;
