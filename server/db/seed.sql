@@ -1546,6 +1546,241 @@ ON CONFLICT (id) DO UPDATE SET
     is_placeholder = EXCLUDED.is_placeholder,
     location = EXCLUDED.location;
 
+-- Immutable REV1 snapshots for every demo document that has already crossed the
+-- draft -> sent boundary. Draft documents remain without a revision.
+UPDATE quotes
+SET revision_number = CASE WHEN status = 'draft' THEN 0 ELSE 1 END,
+    revision_code = CASE WHEN status = 'draft' THEN NULL ELSE 'REV1' END
+WHERE id IN (SELECT code FROM pg_temp.demo_document_codes WHERE module_id = 'client_quote');
+
+INSERT INTO quote_revisions (
+    id, revision_number, revision_code, created_by_user_id, created_at, quote_id, snapshot
+)
+SELECT
+    'dm_qr_' || md5(q.id), 1, 'REV1', NULL, COALESCE(q.updated_at, q.created_at), q.id,
+    jsonb_build_object(
+      'schemaVersion', 2,
+      'quote', jsonb_build_object(
+        'id', q.id,
+        'linkedOfferId', (SELECT o.id FROM customer_offers o WHERE o.linked_quote_id = q.id LIMIT 1),
+        'clientId', q.client_id,
+        'clientName', q.client_name,
+        'paymentTerms', q.payment_terms,
+        'discount', q.discount,
+        'discountType', q.discount_type,
+        'status', q.status,
+        'expirationDate', q.expiration_date,
+        'communicationChannelId', q.communication_channel_id,
+        'communicationChannelName', COALESCE((SELECT c.name FROM quote_communication_channels c WHERE c.id = q.communication_channel_id), ''),
+        'notes', q.notes,
+        'createdAt', (EXTRACT(EPOCH FROM COALESCE(q.created_at, CURRENT_TIMESTAMP)) * 1000)::bigint,
+        'updatedAt', (EXTRACT(EPOCH FROM COALESCE(q.updated_at, q.created_at, CURRENT_TIMESTAMP)) * 1000)::bigint,
+        'linkedSupplierQuoteId', q.linked_supplier_quote_id,
+        'linkedSupplierQuoteExpiration', NULL
+      ),
+      'candidates', COALESCE((
+        SELECT jsonb_agg(jsonb_build_object(
+          'id', c.id,
+          'quoteId', c.quote_id,
+          'name', c.name,
+          'position', c.position,
+          'state', c.state,
+          'paymentTerms', c.payment_terms,
+          'discount', c.discount,
+          'discountType', c.discount_type,
+          'expirationDate', c.expiration_date,
+          'communicationChannelId', c.communication_channel_id,
+          'communicationChannelName', COALESCE((SELECT cc.name FROM quote_communication_channels cc WHERE cc.id = c.communication_channel_id), ''),
+          'notes', c.notes,
+          'createdAt', (EXTRACT(EPOCH FROM COALESCE(c.created_at, CURRENT_TIMESTAMP)) * 1000)::bigint,
+          'updatedAt', (EXTRACT(EPOCH FROM COALESCE(c.updated_at, c.created_at, CURRENT_TIMESTAMP)) * 1000)::bigint
+        ) ORDER BY c.position, c.id)
+        FROM quote_candidates c WHERE c.quote_id = q.id
+      ), '[]'::jsonb),
+      'items', COALESCE((
+        SELECT jsonb_agg(jsonb_build_object(
+          'id', i.id,
+          'quoteId', i.quote_id,
+          'candidateId', COALESCE(i.candidate_id, (
+            SELECT dc.id FROM quote_candidates dc
+            WHERE dc.quote_id = i.quote_id ORDER BY dc.position, dc.id LIMIT 1
+          )),
+          'productId', i.product_id,
+          'productName', i.product_name,
+          'quantity', i.quantity,
+          'unitPrice', i.unit_price,
+          'productCost', i.product_cost,
+          'productMolPercentage', i.product_mol_percentage,
+          'supplierQuoteId', i.supplier_quote_id,
+          'supplierQuoteItemId', i.supplier_quote_item_id,
+          'supplierQuoteSupplierName', i.supplier_quote_supplier_name,
+          'supplierQuoteUnitPrice', i.supplier_quote_unit_price,
+          'discount', i.discount,
+          'note', i.note,
+          'unitType', i.unit_type,
+          'durationMonths', i.duration_months,
+          'durationUnit', i.duration_unit
+        ) ORDER BY i.position, i.id)
+        FROM quote_items i WHERE i.quote_id = q.id
+      ), '[]'::jsonb)
+    )
+FROM quotes q
+WHERE q.id IN (SELECT code FROM pg_temp.demo_document_codes WHERE module_id = 'client_quote')
+  AND q.status <> 'draft'
+ON CONFLICT (quote_id, revision_number) DO UPDATE SET
+    revision_code = EXCLUDED.revision_code,
+    created_at = EXCLUDED.created_at,
+    snapshot = EXCLUDED.snapshot;
+
+UPDATE customer_offers
+SET revision_number = CASE WHEN status = 'draft' THEN 0 ELSE 1 END,
+    revision_code = CASE WHEN status = 'draft' THEN NULL ELSE 'REV1' END
+WHERE id IN (SELECT code FROM pg_temp.demo_document_codes WHERE module_id = 'client_offer');
+
+INSERT INTO offer_revisions (
+    id, revision_number, revision_code, created_by_user_id, created_at, offer_id, snapshot
+)
+SELECT
+    'dm_or_' || md5(o.id), 1, 'REV1', NULL, COALESCE(o.updated_at, o.created_at), o.id,
+    jsonb_build_object(
+      'schemaVersion', 1,
+      'offer', jsonb_build_object(
+        'id', o.id,
+        'linkedQuoteId', o.linked_quote_id,
+        'linkedQuoteCandidateId', o.linked_quote_candidate_id,
+        'clientId', o.client_id,
+        'clientName', o.client_name,
+        'paymentTerms', o.payment_terms,
+        'discount', o.discount,
+        'discountType', o.discount_type,
+        'status', o.status,
+        'deliveryDate', o.delivery_date,
+        'expirationDate', o.expiration_date,
+        'notes', o.notes,
+        'createdAt', (EXTRACT(EPOCH FROM COALESCE(o.created_at, CURRENT_TIMESTAMP)) * 1000)::bigint,
+        'updatedAt', (EXTRACT(EPOCH FROM COALESCE(o.updated_at, o.created_at, CURRENT_TIMESTAMP)) * 1000)::bigint
+      ),
+      'items', COALESCE((
+        SELECT jsonb_agg(jsonb_build_object(
+          'id', i.id,
+          'offerId', i.offer_id,
+          'productId', i.product_id,
+          'productName', i.product_name,
+          'quantity', i.quantity,
+          'unitPrice', i.unit_price,
+          'productCost', i.product_cost,
+          'productMolPercentage', i.product_mol_percentage,
+          'supplierQuoteId', i.supplier_quote_id,
+          'supplierQuoteItemId', i.supplier_quote_item_id,
+          'supplierQuoteSupplierName', i.supplier_quote_supplier_name,
+          'supplierQuoteUnitPrice', i.supplier_quote_unit_price,
+          'unitType', i.unit_type,
+          'note', i.note,
+          'discount', i.discount,
+          'durationMonths', i.duration_months,
+          'durationUnit', i.duration_unit
+        ) ORDER BY i.created_at, i.id)
+        FROM customer_offer_items i WHERE i.offer_id = o.id
+      ), '[]'::jsonb)
+    )
+FROM customer_offers o
+WHERE o.id IN (SELECT code FROM pg_temp.demo_document_codes WHERE module_id = 'client_offer')
+  AND o.status <> 'draft'
+ON CONFLICT (offer_id, revision_number) DO UPDATE SET
+    revision_code = EXCLUDED.revision_code,
+    created_at = EXCLUDED.created_at,
+    snapshot = EXCLUDED.snapshot;
+
+WITH progressed_supplier_quotes AS (
+  SELECT DISTINCT sq.id
+  FROM supplier_quotes sq
+  WHERE sq.id IN (SELECT code FROM pg_temp.demo_document_codes WHERE module_id = 'supplier_quote')
+    AND EXISTS (
+      SELECT 1
+      FROM quotes q
+      LEFT JOIN customer_offers o ON o.linked_quote_id = q.id
+      WHERE (q.status <> 'draft' OR o.id IS NOT NULL)
+        AND (
+          EXISTS (
+            SELECT 1 FROM quote_items qi
+            WHERE qi.quote_id = q.id
+              AND (qi.supplier_quote_id = sq.id OR qi.supplier_quote_item_id IN (
+                SELECT si.id FROM supplier_quote_items si WHERE si.quote_id = sq.id
+              ))
+          )
+          OR EXISTS (
+            SELECT 1 FROM customer_offer_items oi
+            WHERE oi.offer_id = o.id
+              AND (oi.supplier_quote_id = sq.id OR oi.supplier_quote_item_id IN (
+                SELECT si.id FROM supplier_quote_items si WHERE si.quote_id = sq.id
+              ))
+          )
+        )
+    )
+)
+UPDATE supplier_quotes sq
+SET revision_number = CASE WHEN psq.progressed_id IS NULL THEN 0 ELSE 1 END,
+    revision_code = CASE WHEN psq.progressed_id IS NULL THEN NULL ELSE 'REV1' END
+FROM (SELECT target.id, progressed.id AS progressed_id
+      FROM supplier_quotes target
+      LEFT JOIN progressed_supplier_quotes progressed ON progressed.id = target.id
+      WHERE target.id IN (SELECT code FROM pg_temp.demo_document_codes WHERE module_id = 'supplier_quote')) psq
+WHERE sq.id = psq.id;
+
+INSERT INTO supplier_quote_revisions (
+    id, revision_number, revision_code, created_by_user_id, created_at, quote_id, snapshot
+)
+SELECT
+    'dm_sqr_' || md5(sq.id), 1, 'REV1', NULL, COALESCE(sq.updated_at, sq.created_at), sq.id,
+    jsonb_build_object(
+      'schemaVersion', 1,
+      'quote', jsonb_build_object(
+        'id', sq.id,
+        'supplierId', sq.supplier_id,
+        'supplierName', sq.supplier_name,
+        'clientId', sq.client_id,
+        'clientName', sq.client_name,
+        'paymentTerms', sq.payment_terms,
+        'status', sq.status,
+        'expirationDate', sq.expiration_date,
+        'communicationChannelId', sq.communication_channel_id,
+        'communicationChannelName', COALESCE((SELECT c.name FROM quote_communication_channels c WHERE c.id = sq.communication_channel_id), ''),
+        'linkedOrderId', (SELECT s.id FROM supplier_sales s WHERE s.linked_quote_id = sq.id LIMIT 1),
+        'notes', sq.notes,
+        'createdAt', (EXTRACT(EPOCH FROM COALESCE(sq.created_at, CURRENT_TIMESTAMP)) * 1000)::bigint,
+        'updatedAt', (EXTRACT(EPOCH FROM COALESCE(sq.updated_at, sq.created_at, CURRENT_TIMESTAMP)) * 1000)::bigint,
+        'linkedClientQuoteId', NULL,
+        'linkedClientQuoteStatus', NULL,
+        'linkedClientQuoteExpiration', NULL,
+        'linkedOfferStatus', NULL,
+        'linkedOfferExpiration', NULL
+      ),
+      'items', COALESCE((
+        SELECT jsonb_agg(jsonb_build_object(
+          'id', i.id,
+          'quoteId', i.quote_id,
+          'productId', i.product_id,
+          'productName', i.product_name,
+          'quantity', i.quantity,
+          'listPrice', i.list_price,
+          'discountPercent', i.discount_percent,
+          'unitPrice', i.unit_price,
+          'note', i.note,
+          'unitType', i.unit_type,
+          'durationMonths', i.duration_months,
+          'durationUnit', i.duration_unit
+        ) ORDER BY i.created_at, i.id)
+        FROM supplier_quote_items i WHERE i.quote_id = sq.id
+      ), '[]'::jsonb)
+    )
+FROM supplier_quotes sq
+WHERE sq.id IN (SELECT code FROM pg_temp.demo_document_codes WHERE module_id = 'supplier_quote')
+  AND sq.revision_number = 1
+ON CONFLICT (quote_id, revision_number) DO UPDATE SET
+    revision_code = EXCLUDED.revision_code,
+    created_at = EXCLUDED.created_at,
+    snapshot = EXCLUDED.snapshot;
+
 UPDATE time_entries te
 SET client_id = own_company.id,
     client_name = own_company.name

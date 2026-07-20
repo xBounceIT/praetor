@@ -9,6 +9,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import type {
   Client,
+  ClientOffer,
   ClientsOrder,
   ClientsOrderItem,
   DurationUnit,
@@ -24,6 +25,7 @@ import {
   formatInsertDateTime,
   getLocalDateString,
 } from '../../utils/date';
+import { formatDocumentCode } from '../../utils/document-code';
 import {
   createLineItemIndexResolver,
   createTemporaryLineItemId,
@@ -82,6 +84,7 @@ import OrderVersionsPanel from './OrderVersionsPanel';
 
 export interface ClientsOrdersViewProps {
   orders: ClientsOrder[];
+  offers?: ClientOffer[];
   clients: Client[];
   products: Product[];
   // Supplier orders behind supplier-quoted lines (only ids are read; see buildSupplierOrderQuickViewHref).
@@ -234,6 +237,7 @@ const computeDueDate = (
 
 const useClientsOrdersController = ({
   orders,
+  offers = [],
   clients,
   products,
   supplierOrders = EMPTY_SUPPLIER_ORDERS,
@@ -292,7 +296,9 @@ const useClientsOrdersController = ({
   const orderToFormData = useCallback(
     (order: ClientsOrder): Partial<ClientsOrder> => ({
       linkedQuoteId: order.linkedQuoteId,
+      linkedQuoteRevisionCode: order.linkedQuoteRevisionCode,
       linkedOfferId: order.linkedOfferId,
+      linkedOfferRevisionCode: order.linkedOfferRevisionCode,
       clientId: order.clientId,
       clientName: order.clientName,
       items: order.items,
@@ -327,7 +333,9 @@ const useClientsOrdersController = ({
       setPreviewVersion(version);
       setFormData({
         linkedQuoteId: editingOrder?.linkedQuoteId,
+        linkedQuoteRevisionCode: editingOrder?.linkedQuoteRevisionCode,
         linkedOfferId: editingOrder?.linkedOfferId,
+        linkedOfferRevisionCode: editingOrder?.linkedOfferRevisionCode,
         clientId: version.snapshot.order.clientId,
         clientName: version.snapshot.order.clientName,
         items: version.snapshot.items,
@@ -959,6 +967,7 @@ const useClientsOrdersController = ({
     isReadOnly,
     isVersionRestoreLocked,
     onViewOffer,
+    offers,
     openEditModal,
     orderToDelete,
     paymentTermsOptions,
@@ -1120,7 +1129,12 @@ const ClientsOrderModalAlerts: React.FC<{ controller: ClientsOrdersController }>
           defaultValue: 'Linked Offer',
         })}
         value={controller.t('accounting:clientsOrders.linkedOfferInfo', {
-          number: controller.formData.linkedOfferId,
+          number: formatDocumentCode(
+            controller.formData.linkedOfferId,
+            controller.formData.linkedOfferRevisionCode ??
+              controller.offers.find((offer) => offer.id === controller.formData.linkedOfferId)
+                ?.revisionCode,
+          ),
           defaultValue: 'Offer #{{number}}',
         })}
         note={

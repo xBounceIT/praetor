@@ -1,6 +1,7 @@
-import { and, asc, desc, eq, ne, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, getTableColumns, ne, sql } from 'drizzle-orm';
 import { type DbExecutor, db, runAtomically } from '../db/drizzle.ts';
 import { supplierInvoices } from '../db/schema/supplierInvoices.ts';
+import { supplierQuotes } from '../db/schema/supplierQuotes.ts';
 import { supplierSaleItems, supplierSales } from '../db/schema/supplierSales.ts';
 import { type DurationUnit, normalizeDurationUnit } from '../utils/duration-unit.ts';
 import { numericForDb, parseDbNumber } from '../utils/parse.ts';
@@ -9,6 +10,7 @@ import { normalizeUnitType, type UnitType } from '../utils/unit-type.ts';
 export type SupplierOrder = {
   id: string;
   linkedQuoteId: string | null;
+  linkedQuoteRevisionCode?: string | null;
   supplierId: string;
   supplierName: string;
   paymentTerms: string | null;
@@ -34,9 +36,14 @@ export type SupplierOrderItem = {
   durationUnit: DurationUnit;
 };
 
-const mapOrder = (row: typeof supplierSales.$inferSelect): SupplierOrder => ({
+type SupplierOrderReadRow = typeof supplierSales.$inferSelect & {
+  linkedQuoteRevisionCode?: string | null;
+};
+
+const mapOrder = (row: SupplierOrderReadRow): SupplierOrder => ({
   id: row.id,
   linkedQuoteId: row.linkedQuoteId,
+  linkedQuoteRevisionCode: row.linkedQuoteRevisionCode ?? null,
   supplierId: row.supplierId,
   supplierName: row.supplierName,
   paymentTerms: row.paymentTerms,
@@ -63,7 +70,17 @@ const mapItem = (row: typeof supplierSaleItems.$inferSelect): SupplierOrderItem 
 });
 
 export const listAll = async (exec: DbExecutor = db): Promise<SupplierOrder[]> => {
-  const rows = await exec.select().from(supplierSales).orderBy(desc(supplierSales.createdAt));
+  const rows = await exec
+    .select({
+      ...getTableColumns(supplierSales),
+      linkedQuoteRevisionCode: sql<string | null>`(
+        SELECT ${supplierQuotes.revisionCode}
+          FROM ${supplierQuotes}
+         WHERE ${supplierQuotes.id} = ${supplierSales.linkedQuoteId}
+      )`,
+    })
+    .from(supplierSales)
+    .orderBy(desc(supplierSales.createdAt));
   return rows.map(mapOrder);
 };
 

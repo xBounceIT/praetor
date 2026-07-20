@@ -235,6 +235,20 @@
         "invalidPlaceholder": "Invalid placeholder syntax",
         "templateTextPattern": "Template text can only use letters, numbers, underscores, and hyphens",
         "paddingRange": "Use a number from 1 to 9"
+      },
+      "revisions": {
+        "title": "Revision codes",
+        "description": "Configure the immutable code assigned to sent quote and offer snapshots. Changes only apply to future revisions.",
+        "loading": "Loading revision code template...",
+        "loadFailed": "Failed to load the revision code template",
+        "placeholdersDescription": "Use {PREFIX} and {SEQ}; {SEQ} is required. The counter is independent for each document and is never reused.",
+        "errors": {
+          "prefix": "The prefix may contain up to 20 letters, numbers, underscores, or hyphens",
+          "template": "The template must include {SEQ} and contain between 5 and 100 characters",
+          "placeholder": "The template contains unsupported placeholders or characters",
+          "padding": "Use a digit count from 1 to 12",
+          "length": "The generated revision code cannot exceed 50 characters"
+        }
       }
     },
     "currencyLabel": "Application Currency",

@@ -49,6 +49,8 @@ export const quotes = pgTable(
       () => supplierQuotes.id,
       { onDelete: 'set null', onUpdate: 'cascade' },
     ),
+    revisionNumber: integer('revision_number').notNull().default(0),
+    revisionCode: varchar('revision_code', { length: 50 }),
     notes: text('notes'),
     createdAt: timestamp('created_at').default(sql`CURRENT_TIMESTAMP`),
     updatedAt: timestamp('updated_at').default(sql`CURRENT_TIMESTAMP`),
@@ -69,6 +71,10 @@ export const quotes = pgTable(
       sql`${table.status} IN ('draft', 'sent', 'offer', 'accepted', 'denied')`,
     ),
     check('chk_quotes_discount_type', sql`${table.discountType} IN ('percentage', 'currency')`),
+    check(
+      'chk_quotes_revision',
+      sql`(${table.revisionNumber} = 0 AND ${table.revisionCode} IS NULL) OR (${table.revisionNumber} > 0 AND ${table.revisionCode} IS NOT NULL)`,
+    ),
   ],
 );
 

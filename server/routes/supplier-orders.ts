@@ -71,6 +71,7 @@ const orderSchema = {
   properties: {
     id: { type: 'string' },
     linkedQuoteId: { type: ['string', 'null'] },
+    linkedQuoteRevisionCode: { type: ['string', 'null'] },
     supplierId: { type: 'string' },
     supplierName: { type: 'string' },
     paymentTerms: { type: ['string', 'null'] },

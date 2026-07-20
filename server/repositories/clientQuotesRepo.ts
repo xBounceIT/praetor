@@ -10,7 +10,10 @@ import { normalizeUnitType, type UnitType } from '../utils/unit-type.ts';
 
 export type ClientQuote = {
   id: string;
+  revisionNumber: number;
+  revisionCode: string | null;
   linkedOfferId: string | null;
+  linkedOfferRevisionCode: string | null;
   clientId: string;
   clientName: string;
   paymentTerms: string | null;
@@ -67,6 +70,10 @@ const outerQuoteId = sql`${sql.identifier('quotes')}.${sql.identifier('id')}`;
 const linkedOfferIdSubquery = sql<string | null>`(
   SELECT co.id FROM customer_offers co WHERE co.linked_quote_id = ${outerQuoteId} LIMIT 1
 )`;
+const linkedOfferRevisionCodeSubquery = sql<string | null>`(
+  SELECT co.revision_code FROM customer_offers co
+  WHERE co.linked_quote_id = ${outerQuoteId} LIMIT 1
+)`;
 
 const communicationChannelNameSubquery = sql<string>`(
   SELECT qcc.name
@@ -103,7 +110,10 @@ const linkedSupplierQuoteExpirationSubquery = sql<string | null>`(
 
 const QUOTE_LIST_PROJECTION = {
   id: quotes.id,
+  revisionNumber: quotes.revisionNumber,
+  revisionCode: quotes.revisionCode,
   linkedOfferId: linkedOfferIdSubquery,
+  linkedOfferRevisionCode: linkedOfferRevisionCodeSubquery,
   clientId: quotes.clientId,
   clientName: quotes.clientName,
   paymentTerms: quotes.paymentTerms,
@@ -123,7 +133,10 @@ const QUOTE_LIST_PROJECTION = {
 
 const QUOTE_BASE_PROJECTION = {
   id: quotes.id,
+  revisionNumber: quotes.revisionNumber,
+  revisionCode: quotes.revisionCode,
   linkedOfferId: sql<string | null>`null::varchar`,
+  linkedOfferRevisionCode: sql<string | null>`null::varchar`,
   clientId: quotes.clientId,
   clientName: quotes.clientName,
   paymentTerms: quotes.paymentTerms,
@@ -144,7 +157,10 @@ const QUOTE_BASE_PROJECTION = {
 
 type ClientQuoteSelectRow = {
   id: string;
+  revisionNumber: number;
+  revisionCode: string | null;
   linkedOfferId: string | null;
+  linkedOfferRevisionCode: string | null;
   clientId: string;
   clientName: string;
   paymentTerms: string;
@@ -163,7 +179,10 @@ type ClientQuoteSelectRow = {
 
 const mapQuote = (row: ClientQuoteSelectRow): ClientQuote => ({
   id: row.id,
+  revisionNumber: row.revisionNumber,
+  revisionCode: row.revisionCode,
   linkedOfferId: row.linkedOfferId,
+  linkedOfferRevisionCode: row.linkedOfferRevisionCode,
   clientId: row.clientId,
   clientName: row.clientName,
   paymentTerms: row.paymentTerms,

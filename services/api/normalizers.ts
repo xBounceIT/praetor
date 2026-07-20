@@ -426,6 +426,9 @@ export const normalizeQuote = (q: Quote): Quote => {
     candidates[0];
   return {
     ...q,
+    revisionNumber: Number(q.revisionNumber ?? 0),
+    revisionCode: q.revisionCode ?? null,
+    linkedOfferRevisionCode: q.linkedOfferRevisionCode ?? null,
     paymentTerms: primary.paymentTerms,
     discount: primary.discount,
     discountType: primary.discountType,
@@ -451,6 +454,9 @@ export const normalizeClientOfferItem = (item: ClientOfferItem): ClientOfferItem
 
 export const normalizeClientOffer = <T extends ClientOffer>(offer: T): T => ({
   ...offer,
+  revisionNumber: Number(offer.revisionNumber ?? 0),
+  revisionCode: offer.revisionCode ?? null,
+  linkedQuoteRevisionCode: offer.linkedQuoteRevisionCode ?? null,
   discount: Number(offer.discount || 0),
   deliveryDate: offer.deliveryDate ? normalizeDateOnlyString(offer.deliveryDate) : null,
   items: (offer.items || []).map(normalizeClientOfferItem),
@@ -595,6 +601,9 @@ export const normalizeSupplierQuoteItem = (item: SupplierQuoteItem): SupplierQuo
 
 export const normalizeSupplierQuote = (q: SupplierQuote): SupplierQuote => ({
   ...q,
+  revisionNumber: Number(q.revisionNumber ?? 0),
+  revisionCode: q.revisionCode ?? null,
+  linkedClientQuoteRevisionCode: q.linkedClientQuoteRevisionCode ?? null,
   clientId: q.clientId ?? null,
   clientName: q.clientName ?? null,
   communicationChannelId: q.communicationChannelId ?? '',

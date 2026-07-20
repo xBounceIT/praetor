@@ -3,7 +3,10 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 describe('App.tsx MFA exemption datasets', () => {
-  const source = readFileSync(join(import.meta.dir, '..', 'App.tsx'), 'utf8');
+  const source = readFileSync(join(import.meta.dir, '..', 'App.tsx'), 'utf8').replace(
+    /\r\n/g,
+    '\n',
+  );
 
   test('loads MFA exemption user options for authentication admins who can update general settings', () => {
     expect(source).toContain("buildPermission('administration.general', 'update')");

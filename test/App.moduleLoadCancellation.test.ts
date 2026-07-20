@@ -4,7 +4,10 @@ import { join } from 'node:path';
 
 describe('App.tsx module-load cancellation', () => {
   test('module-loading effect invalidates stale async completions', () => {
-    const source = readFileSync(join(import.meta.dir, '..', 'App.tsx'), 'utf8');
+    const source = readFileSync(join(import.meta.dir, '..', 'App.tsx'), 'utf8').replace(
+      /\r\n/g,
+      '\n',
+    );
     const start = source.indexOf('const module = getModuleFromView(activeView);');
     expect(start).toBeGreaterThan(-1);
     const end = source.indexOf('  }, [\n    activeView,', start);

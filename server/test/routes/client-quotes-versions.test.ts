@@ -12,6 +12,7 @@ import * as realRolesRepo from '../../repositories/rolesRepo.ts';
 import * as realSupplierQuotesRepo from '../../repositories/supplierQuotesRepo.ts';
 import * as realUsersRepo from '../../repositories/usersRepo.ts';
 import * as realDocumentCodes from '../../services/documentCodes.ts';
+import * as realDocumentRevisions from '../../services/documentRevisions.ts';
 import * as realAudit from '../../utils/audit.ts';
 import * as realPermissions from '../../utils/permissions.ts';
 import {
@@ -35,6 +36,7 @@ const quoteCommunicationChannelsRepoSnap = { ...realQuoteCommunicationChannelsRe
 const quoteVersionsRepoSnap = { ...realQuoteVersionsRepo };
 const supplierQuotesRepoSnap = { ...realSupplierQuotesRepo };
 const documentCodesSnap = { ...realDocumentCodes };
+const documentRevisionsSnap = { ...realDocumentRevisions };
 const auditSnap = { ...realAudit };
 const drizzleSnap = { ...realDrizzle };
 
@@ -84,6 +86,9 @@ const qvFindByIdMock = mock();
 const qvInsertMock = mock();
 const qvBuildSnapshotMock = mock();
 const allocateDocumentCodeMock = mock();
+const createQuoteRevisionIfChangedMock = mock();
+const lockSupplierRevisionStatesMock = mock();
+const createDerivedSupplierRevisionsMock = mock();
 
 const logAuditMock = mock(async () => undefined);
 const { withDbTransactionMock, resetWithDbTransactionMock } = makeWithDbTransactionMock();
@@ -170,6 +175,12 @@ beforeAll(async () => {
     ...documentCodesSnap,
     allocateDocumentCode: allocateDocumentCodeMock,
   }));
+  mock.module('../../services/documentRevisions.ts', () => ({
+    ...documentRevisionsSnap,
+    createQuoteRevisionIfChanged: createQuoteRevisionIfChangedMock,
+    lockSupplierRevisionStates: lockSupplierRevisionStatesMock,
+    createDerivedSupplierRevisions: createDerivedSupplierRevisionsMock,
+  }));
   mock.module('../../utils/audit.ts', () => ({
     ...auditSnap,
     logAudit: logAuditMock,
@@ -199,6 +210,7 @@ afterAll(() => {
   mock.module('../../repositories/quoteVersionsRepo.ts', () => quoteVersionsRepoSnap);
   mock.module('../../repositories/supplierQuotesRepo.ts', () => supplierQuotesRepoSnap);
   mock.module('../../services/documentCodes.ts', () => documentCodesSnap);
+  mock.module('../../services/documentRevisions.ts', () => documentRevisionsSnap);
   mock.module('../../utils/audit.ts', () => auditSnap);
   mock.module('../../db/drizzle.ts', () => drizzleSnap);
 });
@@ -334,6 +346,9 @@ const allMocks = [
   qvInsertMock,
   qvBuildSnapshotMock,
   allocateDocumentCodeMock,
+  createQuoteRevisionIfChangedMock,
+  lockSupplierRevisionStatesMock,
+  createDerivedSupplierRevisionsMock,
   logAuditMock,
   withDbTransactionMock,
 ];
@@ -348,6 +363,9 @@ beforeEach(async () => {
   resetWithDbTransactionMock();
   logAuditMock.mockImplementation(async () => undefined);
   allocateDocumentCodeMock.mockResolvedValue('OFF-2999-0001');
+  createQuoteRevisionIfChangedMock.mockResolvedValue({ revisionNumber: 1, revisionCode: 'REV1' });
+  lockSupplierRevisionStatesMock.mockResolvedValue(new Map());
+  createDerivedSupplierRevisionsMock.mockResolvedValue(undefined);
   qvBuildSnapshotMock.mockImplementation((quote, items, candidates) => ({
     schemaVersion: 2,
     quote,
@@ -362,6 +380,7 @@ beforeEach(async () => {
 
   // Default safe values for repos that PUT calls but most tests don't care about.
   cqFindByIdMock.mockResolvedValue(SAMPLE_QUOTE);
+  cqLockCurrentByIdMock.mockResolvedValue(SAMPLE_QUOTE);
   cqFindItemsForQuoteMock.mockResolvedValue([SAMPLE_ITEM]);
   cqInsertItemsMock.mockResolvedValue([SAMPLE_ITEM]);
   cqFindIdConflictMock.mockResolvedValue(false);

@@ -14,6 +14,7 @@ import * as realSupplierQuotesRepo from '../../repositories/supplierQuotesRepo.t
 import * as realSupplierQuoteVersionsRepo from '../../repositories/supplierQuoteVersionsRepo.ts';
 import * as realUsersRepo from '../../repositories/usersRepo.ts';
 import * as realDocumentCodes from '../../services/documentCodes.ts';
+import * as realDocumentRevisions from '../../services/documentRevisions.ts';
 import * as realAudit from '../../utils/audit.ts';
 import * as realOrderIds from '../../utils/order-ids.ts';
 import * as realPermissions from '../../utils/permissions.ts';
@@ -43,6 +44,7 @@ const offerVersionsRepoSnap = { ...realOfferVersionsRepo };
 const supplierQuotesRepoSnap = { ...realSupplierQuotesRepo };
 const supplierQuoteVersionsRepoSnap = { ...realSupplierQuoteVersionsRepo };
 const documentCodesSnap = { ...realDocumentCodes };
+const documentRevisionsSnap = { ...realDocumentRevisions };
 const auditSnap = { ...realAudit };
 const orderIdsSnap = { ...realOrderIds };
 const drizzleSnap = { ...realDrizzle };
@@ -78,6 +80,9 @@ const clientOrderLinkSaleItemsToSupplierOrderAndItemsMock = mock();
 const generateClientOrderIdMock = mock();
 const generateSupplierOrderIdMock = mock();
 const allocateDocumentCodeMock = mock();
+const createOfferRevisionIfChangedMock = mock();
+const lockSupplierRevisionStatesMock = mock();
+const createDerivedSupplierRevisionsMock = mock();
 
 const qcListForQuoteMock = mock();
 const qcReactivateAllMock = mock();
@@ -192,6 +197,12 @@ beforeAll(async () => {
     ...documentCodesSnap,
     allocateDocumentCode: allocateDocumentCodeMock,
   }));
+  mock.module('../../services/documentRevisions.ts', () => ({
+    ...documentRevisionsSnap,
+    createOfferRevisionIfChanged: createOfferRevisionIfChangedMock,
+    lockSupplierRevisionStates: lockSupplierRevisionStatesMock,
+    createDerivedSupplierRevisions: createDerivedSupplierRevisionsMock,
+  }));
   mock.module('../../repositories/supplierQuoteVersionsRepo.ts', () => ({
     ...supplierQuoteVersionsRepoSnap,
     insert: sqvInsertMock,
@@ -230,6 +241,7 @@ afterAll(() => {
     () => supplierQuoteVersionsRepoSnap,
   );
   mock.module('../../services/documentCodes.ts', () => documentCodesSnap);
+  mock.module('../../services/documentRevisions.ts', () => documentRevisionsSnap);
   mock.module('../../repositories/productsRepo.ts', () => productsRepoSnap);
   mock.module('../../repositories/offerVersionsRepo.ts', () => offerVersionsRepoSnap);
   mock.module('../../utils/audit.ts', () => auditSnap);
@@ -339,6 +351,9 @@ const allMocks = [
   generateClientOrderIdMock,
   generateSupplierOrderIdMock,
   allocateDocumentCodeMock,
+  createOfferRevisionIfChangedMock,
+  lockSupplierRevisionStatesMock,
+  createDerivedSupplierRevisionsMock,
   qcListForQuoteMock,
   qcReactivateAllMock,
   qvInsertMock,
@@ -384,6 +399,7 @@ beforeEach(async () => {
   }));
 
   // Sensible defaults; individual tests override what they care about.
+  coLockExistingByIdMock.mockResolvedValue(gate({ status: 'draft' }));
   coFindFullForSnapshotMock.mockResolvedValue({ offer: updatedOffer(), items: [] });
   coFindItemsForOfferMock.mockResolvedValue([]);
   coFindIdConflictMock.mockResolvedValue(false);
@@ -448,6 +464,9 @@ beforeEach(async () => {
     if (moduleId === 'supplier_order') return 'SORD-2999-0001';
     return 'ORD-2999-0001';
   });
+  createOfferRevisionIfChangedMock.mockResolvedValue({ revisionNumber: 1, revisionCode: 'REV1' });
+  lockSupplierRevisionStatesMock.mockResolvedValue(new Map());
+  createDerivedSupplierRevisionsMock.mockResolvedValue(undefined);
   // Linked-quote sourced lines for the fresh-link inheritance exemption (#812 round 15).
   cqFindItemSnapshotsForQuoteMock.mockResolvedValue([]);
   sqGetQuoteItemSnapshotsMock.mockResolvedValue(new Map());
@@ -586,6 +605,27 @@ describe('client-offer document discount validation', () => {
       expect.objectContaining({ discount: 150, discountType: 'currency' }),
       expect.anything(),
     );
+  });
+});
+
+describe('client-offer immutable revisions', () => {
+  test('locks and snapshots an actual draft → sent transition', async () => {
+    coFindExistingMock.mockResolvedValue(gate({ status: 'draft' }));
+    coLockExistingByIdMock.mockResolvedValue(gate({ status: 'draft' }));
+    coUpdateMock.mockResolvedValue(updatedOffer({ status: 'sent' }));
+
+    const res = await putOffer({ status: 'sent' });
+
+    expect(res.statusCode).toBe(200);
+    expect(coLockExistingByIdMock).toHaveBeenCalled();
+    expect(createOfferRevisionIfChangedMock).toHaveBeenCalledWith(
+      'off-1',
+      HAPPY_USER.id,
+      expect.anything(),
+    );
+    expect(lockSupplierRevisionStatesMock).toHaveBeenCalled();
+    expect(createDerivedSupplierRevisionsMock).toHaveBeenCalled();
+    expect(JSON.parse(res.body).revisionCode).toBe('REV1');
   });
 });
 

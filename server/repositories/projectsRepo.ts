@@ -29,6 +29,7 @@ export type Project = {
   createdAt: number;
   orderId: string | null;
   offerId: string | null;
+  offerRevisionCode?: string | null;
   startDate: string | null;
   endDate: string | null;
   revenue: number | null;
@@ -39,7 +40,10 @@ export type Project = {
   tipoConfirmed: boolean;
 };
 
-export type ProjectSummary = Omit<Project, 'orderId' | 'offerId' | 'revenue' | 'tipoConfirmed'>;
+export type ProjectSummary = Omit<
+  Project,
+  'orderId' | 'offerId' | 'offerRevisionCode' | 'revenue' | 'tipoConfirmed'
+>;
 
 export const toProjectSummary = (project: Project): ProjectSummary => ({
   id: project.id,
@@ -69,6 +73,7 @@ const mapRow = (row: typeof projects.$inferSelect): Project => ({
   createdAt: row.createdAt?.getTime() ?? 0,
   orderId: row.orderId,
   offerId: row.offerId,
+  offerRevisionCode: null,
   startDate: row.startDate ?? null,
   endDate: row.endDate ?? null,
   revenue: parseNullableDbNumber(row.revenue),
@@ -88,6 +93,7 @@ type ProjectRawRow = {
   created_at: string | Date | null;
   order_id: string | null;
   offer_id: string | null;
+  offer_revision_code: string | null;
   start_date: string | null;
   end_date: string | null;
   revenue: string | number | null;
@@ -119,6 +125,7 @@ const mapRawRow = (row: ProjectRawRow): Project => ({
   createdAt: row.created_at ? new Date(row.created_at).getTime() : 0,
   orderId: row.order_id,
   offerId: row.offer_id,
+  offerRevisionCode: row.offer_revision_code,
   startDate: row.start_date,
   endDate: row.end_date,
   revenue: parseNullableDbNumber(row.revenue),
@@ -130,7 +137,9 @@ const mapRawRow = (row: ProjectRawRow): Project => ({
 });
 
 const projectSelectSql = sql`p.id, p.name, p.client_id, p.description, p.is_disabled, p.created_at, p.order_id,
-       p.offer_id, p.start_date::text AS start_date, p.end_date::text AS end_date, p.revenue,
+       p.offer_id,
+       (SELECT co.revision_code FROM customer_offers co WHERE co.id = p.offer_id) AS offer_revision_code,
+       p.start_date::text AS start_date, p.end_date::text AS end_date, p.revenue,
        ${derivedBillingTypeSql} AS billing_type, p.billing_frequency, p.status, p.tipo, p.tipo_confirmed`;
 
 export const listAll = async (exec: DbExecutor = db): Promise<Project[]> => {

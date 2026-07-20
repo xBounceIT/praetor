@@ -11,6 +11,7 @@ import * as realSupplierQuotesRepo from '../../repositories/supplierQuotesRepo.t
 import * as realSupplierQuoteVersionsRepo from '../../repositories/supplierQuoteVersionsRepo.ts';
 import * as realUsersRepo from '../../repositories/usersRepo.ts';
 import * as realDocumentCodes from '../../services/documentCodes.ts';
+import * as realDocumentRevisions from '../../services/documentRevisions.ts';
 import * as realAudit from '../../utils/audit.ts';
 import * as realPermissions from '../../utils/permissions.ts';
 import {
@@ -36,6 +37,7 @@ const quoteVersionsRepoSnap = { ...realQuoteVersionsRepo };
 const supplierQuotesRepoSnap = { ...realSupplierQuotesRepo };
 const supplierQuoteVersionsRepoSnap = { ...realSupplierQuoteVersionsRepo };
 const documentCodesSnap = { ...realDocumentCodes };
+const documentRevisionsSnap = { ...realDocumentRevisions };
 const auditSnap = { ...realAudit };
 const drizzleSnap = { ...realDrizzle };
 
@@ -97,6 +99,9 @@ const qvInsertMock = mock();
 const qvBuildSnapshotMock = mock();
 const allocateDocumentCodeMock = mock();
 const reserveDocumentCodeCounterFromCodeMock = mock();
+const createQuoteRevisionIfChangedMock = mock();
+const lockSupplierRevisionStatesMock = mock();
+const createDerivedSupplierRevisionsMock = mock();
 
 const logAuditMock = mock(async () => undefined);
 const { withDbTransactionMock, resetWithDbTransactionMock } = makeWithDbTransactionMock();
@@ -191,6 +196,12 @@ beforeAll(async () => {
     allocateDocumentCode: allocateDocumentCodeMock,
     reserveDocumentCodeCounterFromCode: reserveDocumentCodeCounterFromCodeMock,
   }));
+  mock.module('../../services/documentRevisions.ts', () => ({
+    ...documentRevisionsSnap,
+    createQuoteRevisionIfChanged: createQuoteRevisionIfChangedMock,
+    lockSupplierRevisionStates: lockSupplierRevisionStatesMock,
+    createDerivedSupplierRevisions: createDerivedSupplierRevisionsMock,
+  }));
   mock.module('../../utils/audit.ts', () => ({ ...auditSnap, logAudit: logAuditMock }));
   mock.module('../../db/drizzle.ts', () => ({
     ...drizzleSnap,
@@ -219,6 +230,7 @@ afterAll(() => {
   );
   mock.module('../../repositories/quoteVersionsRepo.ts', () => quoteVersionsRepoSnap);
   mock.module('../../services/documentCodes.ts', () => documentCodesSnap);
+  mock.module('../../services/documentRevisions.ts', () => documentRevisionsSnap);
   mock.module('../../utils/audit.ts', () => auditSnap);
   mock.module('../../db/drizzle.ts', () => drizzleSnap);
 });
@@ -331,6 +343,9 @@ const allMocks = [
   qvBuildSnapshotMock,
   allocateDocumentCodeMock,
   reserveDocumentCodeCounterFromCodeMock,
+  createQuoteRevisionIfChangedMock,
+  lockSupplierRevisionStatesMock,
+  createDerivedSupplierRevisionsMock,
   logAuditMock,
 ];
 
@@ -349,6 +364,9 @@ beforeEach(async () => {
     return `${moduleId}-generated`;
   });
   reserveDocumentCodeCounterFromCodeMock.mockResolvedValue(undefined);
+  createQuoteRevisionIfChangedMock.mockResolvedValue({ revisionNumber: 1, revisionCode: 'REV1' });
+  lockSupplierRevisionStatesMock.mockResolvedValue(new Map());
+  createDerivedSupplierRevisionsMock.mockResolvedValue(undefined);
   qvBuildSnapshotMock.mockImplementation((quote, items) => ({ schemaVersion: 1, quote, items }));
   qcListAllMock.mockResolvedValue([]);
   qcListForQuoteMock.mockResolvedValue([]);
@@ -365,7 +383,7 @@ beforeEach(async () => {
   // Sensible defaults; individual tests override what they care about.
   cqFindLinkedOfferIdMock.mockResolvedValue(null);
   cqFindByIdMock.mockResolvedValue(null);
-  cqLockCurrentByIdMock.mockResolvedValue(null);
+  cqLockCurrentByIdMock.mockResolvedValue(gate({ status: 'draft' }));
   cqFindItemsForCandidateMock.mockResolvedValue([]);
   cqFindAnyLinkedSaleMock.mockResolvedValue(null);
   cqFindIdConflictMock.mockResolvedValue(false);
@@ -487,6 +505,12 @@ describe('PUT /api/sales/client-quotes/:id status rules (issue #779)', () => {
 
     const res = await putStatus({ status: 'sent' });
     expect(res.statusCode).toBe(200);
+    expect(cqLockCurrentByIdMock).toHaveBeenCalled();
+    expect(createQuoteRevisionIfChangedMock).toHaveBeenCalledWith(
+      'q-1',
+      HAPPY_USER.id,
+      expect.anything(),
+    );
     const body = JSON.parse(res.body);
     expect(body.status).toBe('sent');
     expect(body.effectiveStatus).toBe('sent');

@@ -10,9 +10,10 @@ beforeEach(() => {
   ({ exec, testDb } = setupTestDb());
 });
 
-// Builder fixtures match the column order in db/schema/supplierQuotes.ts:
+// Builder fixtures match the schema columns followed by the communication-channel projection:
 //   [id, supplierId, supplierName, clientId, clientName, paymentTerms, status,
-//    expirationDate, communicationChannelId, notes, createdAt, updatedAt, communicationChannelName]
+//    expirationDate, communicationChannelId, notes, createdAt, updatedAt, revisionNumber,
+//    revisionCode, communicationChannelName]
 // `listAll` adds the linkedOrderId correlated subquery after communicationChannelName.
 const QUOTE_BASE: readonly unknown[] = [
   'q-1',
@@ -27,14 +28,25 @@ const QUOTE_BASE: readonly unknown[] = [
   null,
   new Date(1735689600000),
   new Date(1735689700000),
+  0,
+  null,
   'Email',
 ];
 
 const quoteRow = (overrides: Record<number, unknown> = {}) => makeRow(QUOTE_BASE, overrides);
 
-// listAll's projection appends linkedOrderId (13), then the reverse-lookup
-// linkedClientQuoteId/status/expiration and linked offer status/expiration (14-18).
-const QUOTE_LIST_BASE: readonly unknown[] = [...QUOTE_BASE, null, null, null, null, null, null];
+// listAll's projection appends linkedOrderId (15), then the reverse-lookup client quote
+// id/revision/status/expiration and linked offer status/expiration (16-21).
+const QUOTE_LIST_BASE: readonly unknown[] = [
+  ...QUOTE_BASE,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+];
 
 const quoteListRow = (overrides: Record<number, unknown> = {}) =>
   makeRow(QUOTE_LIST_BASE, overrides);
@@ -62,7 +74,7 @@ const itemRow = (overrides: Record<number, unknown> = {}) => makeRow(ITEM_BASE, 
 
 describe('listAll', () => {
   test('issues a query with linkedOrderId correlated subquery', async () => {
-    exec.enqueue({ rows: [quoteListRow({ 13: 'so-1' })] });
+    exec.enqueue({ rows: [quoteListRow({ 15: 'so-1' })] });
     const result = await supplierQuotesRepo.listAll(testDb);
     const sql = exec.calls[0].sql;
     expect(sql).toContain('FROM supplier_sales');
@@ -73,7 +85,7 @@ describe('listAll', () => {
   });
 
   test('resolves the linking client quote id and status via line-sourcing reverse lookup', async () => {
-    exec.enqueue({ rows: [quoteListRow({ 14: 'cq-7', 15: 'sent' })] });
+    exec.enqueue({ rows: [quoteListRow({ 16: 'cq-7', 18: 'sent' })] });
     const result = await supplierQuotesRepo.listAll(testDb);
     // The link is now resolved through product-line sourcing, not a header column (issue #779
     // follow-up): the supplier quote follows the client quote whose quote_items source it.

@@ -3,6 +3,7 @@ import type React from 'react';
 import { useCallback, useMemo, useReducer, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { LinkedRecordBanner } from '@/components/shared/LinkedRecordBanner';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
@@ -18,6 +19,7 @@ import type {
   DurationUnit,
   OfferVersion,
   Product,
+  Quote,
   SupplierQuote,
   SupplierUnitType,
 } from '../../types';
@@ -29,7 +31,9 @@ import {
   isDateOnlyBeforeToday,
   normalizeDateOnlyString,
 } from '../../utils/date';
+import { formatDocumentCode } from '../../utils/document-code';
 import { getLinkedFieldStatus } from '../../utils/fieldStatus';
+import { getHistoryPreviewIds } from '../../utils/historyPreview';
 import {
   createLineItemIndexResolver,
   createTemporaryLineItemId,
@@ -98,6 +102,7 @@ import {
   ModalTitle,
 } from '../shared/ModalLayout';
 import QuickViewLinkButton from '../shared/QuickViewLinkButton';
+import { HistoryRail } from '../shared/RevisionHistoryPanel';
 import SelectControl from '../shared/SelectControl';
 import StaleSupplierDataButton from '../shared/StaleSupplierDataButton';
 import StandardTable, { type Column } from '../shared/StandardTable';
@@ -105,11 +110,13 @@ import StatusBadge, { type StatusType } from '../shared/StatusBadge';
 import SupplierQuoteCostHint from '../shared/SupplierQuoteCostHint';
 import UnitTypeSelector from '../shared/UnitTypeSelector';
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
+import { OfferRevisionsPanel } from './OfferRevisionsPanel';
 import OfferVersionsPanel from './OfferVersionsPanel';
 import ProductSelectOrFallback from './ProductSelectOrFallback';
 
 export interface ClientOffersViewProps {
   offers: ClientOffer[];
+  quotes?: Quote[];
   clients: Client[];
   products: Product[];
   supplierQuotes: SupplierQuote[];
@@ -279,10 +286,11 @@ const clientOffersViewReducer = (
 // One label shape for a supplier-quote line item, shared by the picker options and the
 // display-value lookup so the two can never drift.
 const supplierQuoteItemLabel = (quote: SupplierQuote, item: SupplierQuote['items'][number]) =>
-  `${quote.supplierName} · ${item.productName} (${formatDecimal(item.unitPrice)})`;
+  `[${formatDocumentCode(quote.id, quote.revisionCode)}] ${quote.supplierName} · ${item.productName} (${formatDecimal(item.unitPrice)})`;
 
 const useClientOffersController = ({
   offers,
+  quotes = [],
   clients,
   products,
   supplierQuotes,
@@ -527,13 +535,14 @@ const useClientOffersController = ({
   const tableInitialFilterState = useMemo(() => {
     const filters: Record<string, string[]> = {};
     if (offerFilterId) {
-      filters.id = [offerFilterId];
+      const offer = offers.find((candidate) => candidate.id === offerFilterId);
+      filters.id = [formatDocumentCode(offerFilterId, offer?.revisionCode)];
     }
     if (quoteFilterId) {
       filters.linkedQuoteId = [quoteFilterId];
     }
     return Object.keys(filters).length > 0 ? filters : undefined;
-  }, [offerFilterId, quoteFilterId]);
+  }, [offerFilterId, offers, quoteFilterId]);
 
   const openEditModal = useCallback((offer: ClientOffer) => {
     dispatch({ type: 'openEditModal', offer });
@@ -640,10 +649,15 @@ const useClientOffersController = ({
   const columns: Column<ClientOffer>[] = [
     {
       header: t('sales:clientOffers.offerColumn', { defaultValue: 'Offer' }),
-      accessorKey: 'id',
+      id: 'id',
+      accessorFn: (row) => formatDocumentCode(row.id, row.revisionCode),
       className: 'whitespace-nowrap',
       headerClassName: 'min-w-[8rem]',
-      cell: ({ row }) => <span className="font-bold text-zinc-700">{row.id}</span>,
+      cell: ({ row }) => (
+        <span className="font-bold text-zinc-700">
+          {formatDocumentCode(row.id, row.revisionCode)}
+        </span>
+      ),
     },
     {
       header: t('sales:clientOffers.deliveryDateColumn', { defaultValue: 'Delivery date' }),
@@ -1363,6 +1377,7 @@ const useClientOffersController = ({
     t,
     i18n,
     offers,
+    quotes,
     products,
     onAddOffer,
     onViewQuote,
@@ -1465,6 +1480,10 @@ const ClientOfferFormModal: React.FC<{ controller: ClientOffersController }> = (
     handleVersionRestored,
     baseReadOnly,
   } = controller;
+  const { revisionId: selectedRevisionId, versionId: selectedVersionId } =
+    getHistoryPreviewIds(previewVersion);
+  const revisionRestoreDisabled =
+    editingOffer?.status === 'accepted' || editingOffer?.status === 'denied';
 
   return (
     <Modal isOpen={isModalOpen} onClose={closeModal}>
@@ -1482,14 +1501,31 @@ const ClientOfferFormModal: React.FC<{ controller: ClientOffersController }> = (
           </form>
         </ModalContent>
         {editingOffer?.id && (
-          <OfferVersionsPanel
-            offerId={editingOffer.id}
-            selectedVersionId={previewVersion?.id ?? null}
-            onPreview={handleVersionPreview}
-            onClearPreview={handleClearPreview}
-            onRestored={handleVersionRestored}
-            disabled={baseReadOnly}
-          />
+          <HistoryRail>
+            <OfferRevisionsPanel
+              offerId={editingOffer.id}
+              selectedRevisionId={selectedRevisionId}
+              onPreview={(revision) =>
+                handleVersionPreview({
+                  ...revision,
+                  offerId: editingOffer.id,
+                  reason: 'update',
+                })
+              }
+              onClearPreview={handleClearPreview}
+              onRestored={handleVersionRestored}
+              disabled={revisionRestoreDisabled}
+            />
+            <OfferVersionsPanel
+              embedded
+              offerId={editingOffer.id}
+              selectedVersionId={selectedVersionId}
+              onPreview={handleVersionPreview}
+              onClearPreview={handleClearPreview}
+              onRestored={handleVersionRestored}
+              disabled={baseReadOnly}
+            />
+          </HistoryRail>
         )}
       </div>
     </Modal>
@@ -1526,6 +1562,12 @@ const ClientOfferModalAlerts: React.FC<{ controller: ClientOffersController }> =
 }) => {
   const { t, i18n, previewVersion, handleClearPreview, editingOffer, onViewQuote, isReadOnly } =
     controller;
+  const previewRevisionCode =
+    previewVersion &&
+    'revisionCode' in previewVersion &&
+    typeof previewVersion.revisionCode === 'string'
+      ? previewVersion.revisionCode
+      : null;
 
   return (
     <>
@@ -1533,10 +1575,16 @@ const ClientOfferModalAlerts: React.FC<{ controller: ClientOffersController }> =
         <div className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl border border-amber-500/30 bg-amber-500/10">
           <span className="text-amber-800 dark:text-amber-300 text-xs font-bold flex items-center gap-2">
             <i className="fa-solid fa-clock-rotate-left"></i>
-            {t('sales:clientOffers.versionHistory.previewBanner', {
-              date: formatInsertDateTime(previewVersion.createdAt, i18n.language),
-              defaultValue: 'Previewing version from {{date}}',
-            })}
+            {previewRevisionCode
+              ? t('sales:clientOffers.revisionHistory.previewBanner', {
+                  code: previewRevisionCode,
+                  date: formatInsertDateTime(previewVersion.createdAt, i18n.language),
+                  defaultValue: 'Previewing {{code}} from {{date}}',
+                })
+              : t('sales:clientOffers.versionHistory.previewBanner', {
+                  date: formatInsertDateTime(previewVersion.createdAt, i18n.language),
+                  defaultValue: 'Previewing version from {{date}}',
+                })}
           </span>
           <Button
             type="button"
@@ -1553,7 +1601,12 @@ const ClientOfferModalAlerts: React.FC<{ controller: ClientOffersController }> =
       {editingOffer?.linkedQuoteId && (
         <LinkedRecordBanner
           label={t('sales:clientOffers.sourceQuote', { defaultValue: 'Source quote' })}
-          value={editingOffer.linkedQuoteId}
+          value={formatDocumentCode(
+            editingOffer.linkedQuoteId,
+            editingOffer.linkedQuoteRevisionCode ??
+              controller.quotes.find((quote) => quote.id === editingOffer.linkedQuoteId)
+                ?.revisionCode,
+          )}
           action={
             onViewQuote
               ? {
@@ -1658,23 +1711,30 @@ const ClientOfferCodeField: React.FC<{ controller: ClientOffersController }> = (
       <FieldLabel htmlFor="client-offer-code" required={Boolean(editingOffer)}>
         {t('sales:clientOffers.offerCode', { defaultValue: 'Offer code' })}
       </FieldLabel>
-      <Input
-        id="client-offer-code"
-        type="text"
-        value={formData.id || ''}
-        disabled={isReadOnly}
-        onChange={(event) => setFormData((prev) => ({ ...prev, id: event.target.value }))}
-        placeholder={
-          isSourcedCreate
-            ? t('sales:clientOffers.inheritedCodePlaceholder', {
-                defaultValue: 'Inherited from source quote',
-              })
-            : (clientOfferCodePreview ??
-              t('sales:clientOffers.autoCodePlaceholder', { defaultValue: 'Auto-generated' }))
-        }
-        className={errors.id ? 'border-red-300 font-medium' : 'font-medium'}
-        aria-invalid={Boolean(errors.id)}
-      />
+      <div className="flex items-center gap-2">
+        <Input
+          id="client-offer-code"
+          type="text"
+          value={formData.id || ''}
+          disabled={isReadOnly}
+          onChange={(event) => setFormData((prev) => ({ ...prev, id: event.target.value }))}
+          placeholder={
+            isSourcedCreate
+              ? t('sales:clientOffers.inheritedCodePlaceholder', {
+                  defaultValue: 'Inherited from source quote',
+                })
+              : (clientOfferCodePreview ??
+                t('sales:clientOffers.autoCodePlaceholder', { defaultValue: 'Auto-generated' }))
+          }
+          className={errors.id ? 'border-red-300 font-medium' : 'font-medium'}
+          aria-invalid={Boolean(errors.id)}
+        />
+        {editingOffer?.revisionCode && (
+          <Badge variant="secondary" className="shrink-0 font-mono">
+            {editingOffer.revisionCode}
+          </Badge>
+        )}
+      </div>
       <FieldError className="text-xs">{errors.id}</FieldError>
       {!editingOffer && (
         <FieldDescription className="text-xs">
@@ -2568,7 +2628,9 @@ const ClientOfferRevertModal: React.FC<{ controller: ClientOffersController }> =
               {t('sales:clientOffers.revertToDraftDescription', {
                 defaultValue:
                   'This moves {{offerId}} from {{status}} back to Draft and records the change in the audit trail.',
-                offerId: offerToRevert?.id ?? '',
+                offerId: offerToRevert
+                  ? formatDocumentCode(offerToRevert.id, offerToRevert.revisionCode)
+                  : '',
                 status: offerToRevert ? getStatusLabel(offerToRevert.status) : '',
               })}
             </p>
@@ -2644,7 +2706,9 @@ const ClientOfferDeleteDialogs: React.FC<{ controller: ClientOffersController }>
         onConfirm={handleDelete}
         isDeleting={isDeleting}
         title={t('sales:clientOffers.deleteTitle', { defaultValue: 'Delete offer?' })}
-        description={offerToDelete?.id ?? ''}
+        description={
+          offerToDelete ? formatDocumentCode(offerToDelete.id, offerToDelete.revisionCode) : ''
+        }
       />
       <DeleteConfirmModal
         isOpen={productRowToDelete !== null}

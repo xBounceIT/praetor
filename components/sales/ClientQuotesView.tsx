@@ -52,7 +52,9 @@ import {
   isDateOnlyBeforeToday,
   normalizeDateOnlyString,
 } from '../../utils/date';
+import { formatDocumentCode } from '../../utils/document-code';
 import { getLinkedFieldStatus } from '../../utils/fieldStatus';
+import { getHistoryPreviewIds } from '../../utils/historyPreview';
 import {
   createLineItemIndexResolver,
   createTemporaryLineItemId,
@@ -126,6 +128,7 @@ import {
   ModalTitle,
 } from '../shared/ModalLayout';
 import QuickViewLinkButton from '../shared/QuickViewLinkButton';
+import { HistoryRail } from '../shared/RevisionHistoryPanel';
 import SelectControl, { type Option } from '../shared/SelectControl';
 import StaleSupplierDataButton from '../shared/StaleSupplierDataButton';
 import StandardTable, { type Column } from '../shared/StandardTable';
@@ -135,6 +138,7 @@ import UnitTypeSelector from '../shared/UnitTypeSelector';
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
 import ProductSelectOrFallback from './ProductSelectOrFallback';
 import QuoteCommunicationChannelField from './QuoteCommunicationChannelField';
+import { QuoteRevisionsPanel } from './QuoteRevisionsPanel';
 import QuoteVersionsPanel from './QuoteVersionsPanel';
 import {
   DEFAULT_QUOTE_COMMUNICATION_CHANNELS,
@@ -293,7 +297,7 @@ const formDataIntoCandidate = (
 // One label shape for a supplier-quote line item, shared by the picker options and the
 // display-value lookup so the two can never drift.
 const supplierQuoteItemLabel = (quote: SupplierQuote, item: SupplierQuote['items'][number]) =>
-  `[${quote.id}] ${quote.supplierName} · ${item.productName} (${formatDecimal(item.unitPrice)})`;
+  `[${formatDocumentCode(quote.id, quote.revisionCode)}] ${quote.supplierName} · ${item.productName} (${formatDecimal(item.unitPrice)})`;
 
 const getClientQuoteItemPricingContext = (item: QuoteItem) => getItemPricingContext(item);
 
@@ -415,7 +419,6 @@ const useClientQuotesController = ({
   quoteOfferStatuses,
   onViewOffers,
   currency,
-  // biome-ignore lint/correctness/noUnusedFunctionParameters: part of public API
   offers = EMPTY_OFFERS,
   canViewSupplierQuotes = true,
   canViewInternalListing = true,
@@ -426,10 +429,11 @@ const useClientQuotesController = ({
 
   const tableInitialFilterState = useMemo(() => {
     if (quoteFilterId) {
-      return { id: [quoteFilterId] };
+      const quote = quotes.find((candidate) => candidate.id === quoteFilterId);
+      return { id: [formatDocumentCode(quoteFilterId, quote?.revisionCode)] };
     }
     return undefined;
-  }, [quoteFilterId]);
+  }, [quoteFilterId, quotes]);
 
   const STATUS_OPTIONS = useMemo(
     () => [
@@ -1610,10 +1614,15 @@ const useClientQuotesController = ({
   const columns: Column<Quote>[] = [
     {
       header: t('sales:clientQuotes.quoteCodeColumn'),
-      accessorKey: 'id',
+      id: 'id',
+      accessorFn: (row) => formatDocumentCode(row.id, row.revisionCode),
       className: 'whitespace-nowrap',
       headerClassName: 'min-w-[8rem]',
-      cell: ({ row }) => <span className="font-bold text-zinc-700">{row.id}</span>,
+      cell: ({ row }) => (
+        <span className="font-bold text-zinc-700">
+          {formatDocumentCode(row.id, row.revisionCode)}
+        </span>
+      ),
     },
     {
       header: t('crm:clients.tableHeaders.insertDate'),
@@ -2168,6 +2177,7 @@ const useClientQuotesController = ({
     t,
     i18n,
     quotes,
+    offers,
     products,
     communicationChannels,
     canManageCommunicationChannels,
@@ -2293,6 +2303,11 @@ const ClientQuoteFormModal: React.FC<{ controller: ClientQuotesController }> = (
     handleVersionRestored,
     baseReadOnly,
   } = controller;
+  const { revisionId: selectedRevisionId, versionId: selectedVersionId } =
+    getHistoryPreviewIds(previewVersion);
+  const revisionRestoreDisabled = Boolean(
+    editingQuote?.linkedOfferId || (editingQuote && isTerminalQuoteStatus(editingQuote.status)),
+  );
 
   return (
     <Modal isOpen={isModalOpen} onClose={closeModal}>
@@ -2311,14 +2326,31 @@ const ClientQuoteFormModal: React.FC<{ controller: ClientQuotesController }> = (
           </form>
         </ModalContent>
         {editingQuote?.id && (
-          <QuoteVersionsPanel
-            quoteId={editingQuote.id}
-            selectedVersionId={previewVersion?.id ?? null}
-            onPreview={handleVersionPreview}
-            onClearPreview={handleClearPreview}
-            onRestored={handleVersionRestored}
-            disabled={baseReadOnly}
-          />
+          <HistoryRail>
+            <QuoteRevisionsPanel
+              quoteId={editingQuote.id}
+              selectedRevisionId={selectedRevisionId}
+              onPreview={(revision) =>
+                handleVersionPreview({
+                  ...revision,
+                  quoteId: editingQuote.id,
+                  reason: 'update',
+                })
+              }
+              onClearPreview={handleClearPreview}
+              onRestored={handleVersionRestored}
+              disabled={revisionRestoreDisabled}
+            />
+            <QuoteVersionsPanel
+              embedded
+              quoteId={editingQuote.id}
+              selectedVersionId={selectedVersionId}
+              onPreview={handleVersionPreview}
+              onClearPreview={handleClearPreview}
+              onRestored={handleVersionRestored}
+              disabled={baseReadOnly}
+            />
+          </HistoryRail>
         )}
       </div>
     </Modal>
@@ -2714,8 +2746,22 @@ const ClientQuoteModalHeader: React.FC<{ controller: ClientQuotesController }> =
 const ClientQuoteModalAlerts: React.FC<{ controller: ClientQuotesController }> = ({
   controller,
 }) => {
-  const { t, i18n, previewVersion, handleClearPreview, baseReadOnly, editingQuote, onViewOffers } =
-    controller;
+  const {
+    t,
+    i18n,
+    previewVersion,
+    handleClearPreview,
+    baseReadOnly,
+    editingQuote,
+    offers,
+    onViewOffers,
+  } = controller;
+  const previewRevisionCode =
+    previewVersion &&
+    'revisionCode' in previewVersion &&
+    typeof previewVersion.revisionCode === 'string'
+      ? previewVersion.revisionCode
+      : null;
 
   return (
     <>
@@ -2723,10 +2769,16 @@ const ClientQuoteModalAlerts: React.FC<{ controller: ClientQuotesController }> =
         <div className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl border border-amber-500/30 bg-amber-500/10">
           <span className="text-amber-800 dark:text-amber-300 text-xs font-bold flex items-center gap-2">
             <i className="fa-solid fa-clock-rotate-left"></i>
-            {t('sales:clientQuotes.versionHistory.previewBanner', {
-              date: formatInsertDateTime(previewVersion.createdAt, i18n.language),
-              defaultValue: 'Previewing version from {{date}}',
-            })}
+            {previewRevisionCode
+              ? t('sales:clientQuotes.revisionHistory.previewBanner', {
+                  code: previewRevisionCode,
+                  date: formatInsertDateTime(previewVersion.createdAt, i18n.language),
+                  defaultValue: 'Previewing {{code}} from {{date}}',
+                })
+              : t('sales:clientQuotes.versionHistory.previewBanner', {
+                  date: formatInsertDateTime(previewVersion.createdAt, i18n.language),
+                  defaultValue: 'Previewing version from {{date}}',
+                })}
           </span>
           <Button
             type="button"
@@ -2757,7 +2809,11 @@ const ClientQuoteModalAlerts: React.FC<{ controller: ClientQuotesController }> =
         <LinkedRecordBanner
           label={t('sales:clientQuotes.linkedOffer', { defaultValue: 'Linked Offer' })}
           value={t('sales:clientQuotes.linkedOfferInfo', {
-            number: editingQuote.linkedOfferId,
+            number: formatDocumentCode(
+              editingQuote.linkedOfferId,
+              editingQuote.linkedOfferRevisionCode ??
+                offers.find((offer) => offer.id === editingQuote.linkedOfferId)?.revisionCode,
+            ),
             defaultValue: 'Offer #{{number}}',
           })}
           note={t('sales:clientQuotes.offerDetailsReadOnly', {
@@ -2877,28 +2933,35 @@ const ClientQuoteCodeField: React.FC<{ controller: ClientQuotesController }> = (
       <FieldLabel htmlFor="client-quote-code" required={Boolean(editingQuote)}>
         {t('sales:clientQuotes.quoteCode', { defaultValue: 'Quote Code' })}
       </FieldLabel>
-      <Input
-        id="client-quote-code"
-        type="text"
-        value={formData.id || ''}
-        onChange={(e) => {
-          setFormData((prev) => ({ ...prev, id: e.target.value }));
-          if (errors.id) {
-            setErrors((prev) => {
-              const next = { ...prev };
-              delete next.id;
-              return next;
-            });
+      <div className="flex items-center gap-2">
+        <Input
+          id="client-quote-code"
+          type="text"
+          value={formData.id || ''}
+          onChange={(e) => {
+            setFormData((prev) => ({ ...prev, id: e.target.value }));
+            if (errors.id) {
+              setErrors((prev) => {
+                const next = { ...prev };
+                delete next.id;
+                return next;
+              });
+            }
+          }}
+          placeholder={
+            clientQuoteCodePreview ??
+            t('sales:clientQuotes.autoCodePlaceholder', { defaultValue: 'Auto-generated' })
           }
-        }}
-        placeholder={
-          clientQuoteCodePreview ??
-          t('sales:clientQuotes.autoCodePlaceholder', { defaultValue: 'Auto-generated' })
-        }
-        disabled={isReadOnly}
-        className={errors.id ? 'border-red-300 font-medium' : 'font-medium'}
-        aria-invalid={Boolean(errors.id)}
-      />
+          disabled={isReadOnly}
+          className={errors.id ? 'border-red-300 font-medium' : 'font-medium'}
+          aria-invalid={Boolean(errors.id)}
+        />
+        {editingQuote?.revisionCode && (
+          <Badge variant="secondary" className="shrink-0 font-mono">
+            {editingQuote.revisionCode}
+          </Badge>
+        )}
+      </div>
       <FieldError className="text-xs">{errors.id}</FieldError>
       {!editingQuote && (
         <FieldDescription className="text-xs">

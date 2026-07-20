@@ -8,6 +8,7 @@ import * as productsRepo from '../repositories/productsRepo.ts';
 import * as quoteCandidatesRepo from '../repositories/quoteCandidatesRepo.ts';
 import * as quoteCommunicationChannelsRepo from '../repositories/quoteCommunicationChannelsRepo.ts';
 import * as quoteVersionsRepo from '../repositories/quoteVersionsRepo.ts';
+import * as revisionsRepo from '../repositories/revisionsRepo.ts';
 import * as supplierQuotesRepo from '../repositories/supplierQuotesRepo.ts';
 import { clientOfferSchema } from '../schemas/clientOffers.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
@@ -21,9 +22,15 @@ import {
   reserveDocumentCodeCounterFromCode,
 } from '../services/documentCodes.ts';
 import {
+  createDerivedSupplierRevisions,
+  createQuoteRevisionIfChanged,
+  lockSupplierRevisionStates,
+} from '../services/documentRevisions.ts';
+import {
   QuotePromotionRollbackError,
   rollbackQuotePromotion,
 } from '../services/quotePromotionRollback.ts';
+import { RevisionRestoreConflict, restoreQuoteRevision } from '../services/revisionRestore.ts';
 import { logAudit } from '../utils/audit.ts';
 import {
   calculateClientLineMol,
@@ -70,6 +77,7 @@ import {
   parseLocalizedPositiveNumber,
   requireNonEmptyString,
 } from '../utils/validation.ts';
+import { registerRevisionHistoryRoutes } from './revision-history.ts';
 
 const MAX_CANDIDATE_NAME_LENGTH = 100;
 
@@ -589,7 +597,10 @@ const quoteSchema = {
   type: 'object',
   properties: {
     id: { type: 'string' },
+    revisionNumber: { type: 'integer' },
+    revisionCode: { type: ['string', 'null'] },
     linkedOfferId: { type: ['string', 'null'] },
+    linkedOfferRevisionCode: { type: ['string', 'null'] },
     clientId: { type: 'string' },
     clientName: { type: 'string' },
     paymentTerms: { type: ['string', 'null'] },
@@ -1018,6 +1029,25 @@ const prepareCandidateBody = async (
 export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.addHook('onRequest', authenticateToken);
 
+  registerRevisionHistoryRoutes(fastify, {
+    entityType: 'client_quote',
+    viewPermission: 'sales.client_quotes.view',
+    updatePermission: 'sales.client_quotes.update',
+    exists: clientQuotesRepo.existsById,
+    list: revisionsRepo.listForQuote,
+    find: revisionsRepo.findQuoteById,
+    restore: async (quoteId, revision, userId, tx) => {
+      const missingReference = await findMissingSnapshotReference(revision.snapshot, tx);
+      if (missingReference) {
+        throw new RevisionRestoreConflict(missingReference, 'snapshot_reference_missing');
+      }
+      const restored = await restoreQuoteRevision(quoteId, revision, userId, tx);
+      if (!restored) return null;
+      return loadFamilyResponse(quoteId, tx);
+    },
+    responseSchema: quoteSchema,
+  });
+
   // Builds the response payload with the derived #779 fields. `sourcedExpiration` must be the
   // STATUS-AWARE earliest blocking expiration among the supplier quotes the quote SOURCES via its
   // lines (supplierQuotesRepo.findEarliestExpirationByIds / findBlockingExpirationsByIds —
@@ -1285,14 +1315,26 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     snapshot: quoteVersionsRepo.QuoteVersionSnapshot,
     exec: DbExecutor,
   ): Promise<string | null> => {
-    const clientExists = await clientsRepo.existsById(snapshot.quote.clientId, exec);
+    const normalized = quoteVersionsRepo.normalizeSnapshot(snapshot);
+    const clientExists = await clientsRepo.existsById(normalized.quote.clientId, exec);
     if (!clientExists) {
-      return `Snapshot client "${snapshot.quote.clientId}" no longer exists`;
+      return `Snapshot client "${normalized.quote.clientId}" no longer exists`;
+    }
+
+    const channelIds = Array.from(
+      new Set(normalized.candidates.map((candidate) => candidate.communicationChannelId)),
+    );
+    const channels = await Promise.all(
+      channelIds.map((channelId) => quoteCommunicationChannelsRepo.findById(channelId, exec)),
+    );
+    const missingChannelIndex = channels.findIndex((channel) => !channel);
+    if (missingChannelIndex >= 0) {
+      return `Snapshot communication channel "${channelIds[missingChannelIndex]}" no longer exists`;
     }
 
     const productIds = Array.from(
       new Set(
-        snapshot.items
+        normalized.items
           .map((item) => item.productId)
           .filter((id): id is string => typeof id === 'string' && id.length > 0),
       ),
@@ -1867,6 +1909,18 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             // Serialize family edits with promotion/restore, which lock the same parent first.
             const lockedCurrent = await clientQuotesRepo.lockCurrentById(idResult.value, tx);
             if (!lockedCurrent) return { kind: 'not_found' as const };
+            const isSending =
+              normalizeQuoteStatus(lockedCurrent.status) === 'draft' &&
+              normalizeQuoteStatus(requestedStatus) === 'sent';
+            const supplierRevisionStates = isSending
+              ? await lockSupplierRevisionStates(
+                  await sourcedSupplierQuoteIds(
+                    preparedCandidates.flatMap((candidate) => candidate.items),
+                    tx,
+                  ),
+                  tx,
+                )
+              : new Map<string, string>();
             if (
               normalizeQuoteStatus(lockedCurrent.status) !== normalizeQuoteStatus(currentStatus)
             ) {
@@ -2036,6 +2090,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                 // quantity or cost back to the source here: promotion synchronizes only the winner.
               }),
             );
+            let finalParent = parent;
             if (candidateFamilyId !== idResult.value) {
               const renamedParent = await clientQuotesRepo.rename(
                 idResult.value,
@@ -2044,9 +2099,22 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               );
               if (!renamedParent) return { kind: 'not_found' as const };
               await reserveDocumentCodeCounterFromCode('client_quote', candidateFamilyId, tx);
-              return { kind: 'success' as const, parent: renamedParent };
+              finalParent = renamedParent;
             }
-            return { kind: 'success' as const, parent };
+            if (isSending) {
+              const revision = await createQuoteRevisionIfChanged(
+                finalParent.id,
+                request.user?.id ?? null,
+                tx,
+              );
+              if (revision) finalParent = { ...finalParent, ...revision };
+              await createDerivedSupplierRevisions(
+                supplierRevisionStates,
+                request.user?.id ?? null,
+                tx,
+              );
+            }
+            return { kind: 'success' as const, parent: finalParent };
           });
         } catch (error) {
           const codeCollision = replyDocumentCodeCollision(
@@ -2400,9 +2468,36 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         quote: clientQuotesRepo.ClientQuote | null;
         items: clientQuotesRepo.ClientQuoteItem[];
         syncAudits: SupplierItemSyncAudit[];
+        revisionConflict?: boolean;
       };
       try {
         result = await withDbTransaction(async (tx) => {
+          const sendingIntent =
+            normalizeQuoteStatus(current.status) === 'draft' &&
+            normalizeQuoteStatus(targetStatus ?? current.status) === 'sent';
+          const lockedQuote = sendingIntent
+            ? await clientQuotesRepo.lockCurrentById(idResult.value, tx)
+            : current;
+          if (!lockedQuote) return { quote: null, items: [], syncAudits: [] };
+          if (sendingIntent && normalizeQuoteStatus(lockedQuote.status) !== 'draft') {
+            return {
+              quote: null,
+              items: [],
+              syncAudits: [],
+              revisionConflict: true,
+            };
+          }
+          const isSending =
+            sendingIntent && normalizeQuoteStatus(targetStatus ?? lockedQuote.status) === 'sent';
+          const supplierRevisionStates = isSending
+            ? await lockSupplierRevisionStates(
+                await sourcedSupplierQuoteIds(
+                  normalizedItems ?? (await clientQuotesRepo.findItemsForQuote(idResult.value, tx)),
+                  tx,
+                ),
+                tx,
+              )
+            : new Map<string, string>();
           // ID-only renames cascade through the FK and don't alter snapshot content, so we
           // skip them to keep the history clean.
           if (!isIdOnlyUpdate) {
@@ -2492,7 +2587,21 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                 tx,
               )
             : [];
-          return { quote, items, syncAudits };
+          let revisedQuote = quote;
+          if (isSending) {
+            const revision = await createQuoteRevisionIfChanged(
+              quote.id,
+              request.user?.id ?? null,
+              tx,
+            );
+            if (revision) revisedQuote = { ...quote, ...revision };
+            await createDerivedSupplierRevisions(
+              supplierRevisionStates,
+              request.user?.id ?? null,
+              tx,
+            );
+          }
+          return { quote: revisedQuote, items, syncAudits };
         });
       } catch (err) {
         // The client→supplier item sync refuses to write frozen/order-locked supplier quotes or
@@ -2543,6 +2652,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const updatedQuote = result.quote;
       const updatedItems = result.items;
+      if (result.revisionConflict) {
+        return replyError(request, reply, {
+          statusCode: 409,
+          message: 'The quote changed while it was being sent',
+          action: 'client_quote.update.conflict',
+          entityType: 'client_quote',
+          entityId: idResult.value,
+          details: { secondaryLabel: 'concurrent_send' },
+        });
+      }
       if (!updatedQuote) {
         return replyError(request, reply, {
           statusCode: 404,

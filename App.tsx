@@ -130,6 +130,7 @@ import type {
 import { clearAuthScopedState } from './utils/authScopedState';
 import { formatDateOnlyForLocale, getLocalDateString } from './utils/date';
 import { getTechnicalDocsViewFromPathname } from './utils/docsRoutes';
+import { formatDocumentCode } from './utils/document-code';
 import { getErrorMessage } from './utils/errors';
 import {
   type ParsedViewHash,
@@ -1697,14 +1698,14 @@ const useAppContentController = () => {
   );
 
   const notifyClientOfferCreated = useCallback(
-    (offerId: string) => {
+    (offer: Pick<ClientOffer, 'id' | 'revisionCode'>) => {
       toast.success(tApp('sales:clientQuotes.offerCreatedToast'), {
-        description: offerId,
+        description: formatDocumentCode(offer.id, offer.revisionCode),
         action: {
           label: tApp('sales:clientQuotes.viewOffer'),
           onClick: () => {
             setClientQuoteFilterId(null);
-            setClientOfferFilterId(offerId);
+            setClientOfferFilterId(offer.id);
             setActiveView('sales/client-offers');
           },
         },
@@ -4067,6 +4068,7 @@ const SalesRoutes: React.FC<{ controller: AuthenticatedAppContentController }> =
         activeView === 'sales/client-offers' && (
           <ClientOffersView
             offers={clientOffers}
+            quotes={quotes}
             clients={clients}
             products={products}
             supplierQuotes={supplierQuotes}
@@ -4135,6 +4137,7 @@ const AccountingRoutes: React.FC<{ controller: AuthenticatedAppContentController
   const {
     activeView,
     addInvoice,
+    clientOffers,
     clientOfferFilterId,
     clients,
     clientsOrderFilterId,
@@ -4162,6 +4165,7 @@ const AccountingRoutes: React.FC<{ controller: AuthenticatedAppContentController
     supplierInvoices,
     supplierOrderFilterId,
     supplierOrders,
+    supplierQuotes,
     supplierQuoteFilterId,
     suppliers,
   } = controller;
@@ -4172,6 +4176,7 @@ const AccountingRoutes: React.FC<{ controller: AuthenticatedAppContentController
         activeView === 'accounting/clients-orders' && (
           <ClientsOrdersView
             orders={clientsOrders}
+            offers={clientOffers}
             clients={clients}
             products={products}
             supplierOrders={supplierOrders}
@@ -4218,6 +4223,7 @@ const AccountingRoutes: React.FC<{ controller: AuthenticatedAppContentController
         activeView === 'accounting/supplier-orders' && (
           <SupplierOrdersView
             orders={supplierOrders}
+            quotes={supplierQuotes}
             suppliers={suppliers}
             products={products}
             orderIdsWithInvoices={orderIdsWithInvoices}

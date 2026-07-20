@@ -650,7 +650,9 @@ describe('<ClientOffersView /> supplier-quote item labels', () => {
     );
     fireEvent.click(screen.getByText('O-OLD-SOURCE'));
 
-    expect(screen.getAllByText('Acme Supplies · Widget (60,00)').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('[SQ-OLD] Acme Supplies · Widget (60,00)').length).toBeGreaterThan(
+      0,
+    );
   });
 });
 

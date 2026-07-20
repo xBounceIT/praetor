@@ -1,6 +1,8 @@
 import type {
+  RevisionRow,
   SupplierQuote,
   SupplierQuoteAttachment,
+  SupplierQuoteRevision,
   SupplierQuoteVersion,
   SupplierQuoteVersionRow,
 } from '../../types';
@@ -43,6 +45,17 @@ export const supplierQuotesApi = {
       `${supplierQuotePath(id)}/versions/${encodePathSegment(versionId)}/restore`,
       { method: 'POST' },
     ).then(normalizeSupplierQuote),
+
+  listRevisions: (id: string): Promise<RevisionRow[]> =>
+    fetchApi<RevisionRow[]>(`/sales/supplier-quotes/${id}/revisions`),
+
+  getRevision: (id: string, revisionId: string): Promise<SupplierQuoteRevision> =>
+    fetchApi<SupplierQuoteRevision>(`/sales/supplier-quotes/${id}/revisions/${revisionId}`),
+
+  restoreRevision: (id: string, revisionId: string): Promise<SupplierQuote> =>
+    fetchApi<SupplierQuote>(`/sales/supplier-quotes/${id}/revisions/${revisionId}/restore`, {
+      method: 'POST',
+    }).then(normalizeSupplierQuote),
 
   listAttachments: (id: string): Promise<SupplierQuoteAttachment[]> =>
     fetchApi<SupplierQuoteAttachment[]>(`${supplierQuotePath(id)}/attachments`),

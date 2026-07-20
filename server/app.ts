@@ -26,6 +26,7 @@ import projectsRoutes from './routes/projects.ts';
 import quoteCommunicationChannelsRoutes from './routes/quote-communication-channels.ts';
 import reportsRoutes from './routes/reports.ts';
 import resalesRoutes from './routes/resales.ts';
+import revisionCodeTemplateRoutes from './routes/revision-code-template.ts';
 import rilDraftsRoutes from './routes/ril-drafts.ts';
 import rolesRoutes from './routes/roles.ts';
 import settingsRoutes from './routes/settings.ts';
@@ -189,6 +190,7 @@ export const buildApp = async () => {
   fastify.register(ldapRoutes, { prefix: '/api/ldap' });
   fastify.register(generalSettingsRoutes, { prefix: '/api/general-settings' });
   fastify.register(documentCodeTemplatesRoutes, { prefix: '/api/document-code-templates' });
+  fastify.register(revisionCodeTemplateRoutes, { prefix: '/api/revision-code-template' });
   fastify.register(brandingRoutes, { prefix: '/api/branding' });
   fastify.register(productsRoutes, { prefix: '/api/products' });
   fastify.register(quoteCommunicationChannelsRoutes, {

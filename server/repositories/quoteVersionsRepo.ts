@@ -89,7 +89,7 @@ const mapVersion = (row: typeof quoteVersions.$inferSelect): QuoteVersion => ({
 // customer_offers.linked_quote_id is not touched. This is here for completeness / audit / data
 // portability. Older snapshots from before this change may not have the field at all.
 export const buildSnapshot = (
-  quote: ClientQuote,
+  quote: Omit<ClientQuote, 'revisionNumber' | 'revisionCode' | 'linkedOfferRevisionCode'>,
   items: ClientQuoteItem[],
   candidates: SnapshotQuoteCandidate[] = [],
 ): NormalizedQuoteVersionSnapshot => {

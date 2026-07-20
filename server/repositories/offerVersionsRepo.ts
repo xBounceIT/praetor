@@ -37,7 +37,7 @@ const mapVersion = (row: typeof offerVersions.$inferSelect): OfferVersion => ({
 });
 
 export const buildSnapshot = (
-  offer: ClientOffer,
+  offer: Omit<ClientOffer, 'revisionNumber' | 'revisionCode' | 'linkedQuoteRevisionCode'>,
   items: ClientOfferItem[],
 ): OfferVersionSnapshot => ({ schemaVersion: 1, offer, items });
 

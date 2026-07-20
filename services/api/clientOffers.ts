@@ -1,8 +1,10 @@
 import type {
   ClientOffer,
   ClientOfferUpdateResult,
+  OfferRevision,
   OfferVersion,
   OfferVersionRow,
+  RevisionRow,
 } from '../../types';
 import { fetchApi } from './client';
 import { normalizeClientOffer } from './normalizers';
@@ -46,6 +48,20 @@ export const clientOffersApi = {
   restoreVersion: (id: string, versionId: string): Promise<ClientOffer> =>
     fetchApi<ClientOffer>(
       `/sales/client-offers/${encodePathSegment(id)}/versions/${encodePathSegment(versionId)}/restore`,
+      { method: 'POST' },
+    ).then(normalizeClientOffer),
+
+  listRevisions: (id: string): Promise<RevisionRow[]> =>
+    fetchApi<RevisionRow[]>(`/sales/client-offers/${encodePathSegment(id)}/revisions`),
+
+  getRevision: (id: string, revisionId: string): Promise<OfferRevision> =>
+    fetchApi<OfferRevision>(
+      `/sales/client-offers/${encodePathSegment(id)}/revisions/${encodePathSegment(revisionId)}`,
+    ),
+
+  restoreRevision: (id: string, revisionId: string): Promise<ClientOffer> =>
+    fetchApi<ClientOffer>(
+      `/sales/client-offers/${encodePathSegment(id)}/revisions/${encodePathSegment(revisionId)}/restore`,
       { method: 'POST' },
     ).then(normalizeClientOffer),
 };

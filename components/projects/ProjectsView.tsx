@@ -37,6 +37,7 @@ import type {
 } from '../../types';
 import { DEFAULT_PROJECT_STATUS, LEGACY_PROJECT_STATUS, PROJECT_TIPOS } from '../../types';
 import { formatDateOnlyForLocale, formatInsertDate } from '../../utils/date';
+import { formatDocumentCode } from '../../utils/document-code';
 import { formatNumber } from '../../utils/numbers';
 import { buildPermission, hasPermission, hasScopedActionPermission } from '../../utils/permissions';
 import DateField from '../shared/DateField';
@@ -669,7 +670,10 @@ const useProjectsController = ({
     (options, offer) => {
       if (offer.status !== 'sent' && offer.status !== 'accepted') return options;
       if (clientId && offer.clientId !== clientId) return options;
-      options.push({ id: offer.id, name: `${offer.clientName} - ${offer.id}` });
+      options.push({
+        id: offer.id,
+        name: `${offer.clientName} - ${formatDocumentCode(offer.id, offer.revisionCode)}`,
+      });
       return options;
     },
     [{ id: '', name: t('projects:projects.noOfferLinked') }],
@@ -677,7 +681,10 @@ const useProjectsController = ({
   if (offerId && !offerOptions.some((o) => o.id === offerId)) {
     const fallback = offers.find((o) => o.id === offerId);
     if (fallback) {
-      offerOptions.unshift({ id: fallback.id, name: `${fallback.clientName} - ${fallback.id}` });
+      offerOptions.unshift({
+        id: fallback.id,
+        name: `${fallback.clientName} - ${formatDocumentCode(fallback.id, fallback.revisionCode)}`,
+      });
     }
   }
 

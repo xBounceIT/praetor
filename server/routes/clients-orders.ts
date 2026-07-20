@@ -62,6 +62,7 @@ const clientOrderItemSchema = {
     productCost: { type: 'number' },
     productMolPercentage: { type: ['number', 'null'] },
     supplierQuoteId: { type: ['string', 'null'] },
+    supplierQuoteRevisionCode: { type: ['string', 'null'] },
     supplierQuoteItemId: { type: ['string', 'null'] },
     supplierQuoteSupplierName: { type: ['string', 'null'] },
     supplierQuoteUnitPrice: { type: ['number', 'null'] },
@@ -82,7 +83,9 @@ const clientOrderSchema = {
   properties: {
     id: { type: 'string' },
     linkedQuoteId: { type: ['string', 'null'] },
+    linkedQuoteRevisionCode: { type: ['string', 'null'] },
     linkedOfferId: { type: ['string', 'null'] },
+    linkedOfferRevisionCode: { type: ['string', 'null'] },
     clientId: { type: 'string' },
     clientName: { type: 'string' },
     paymentTerms: { type: ['string', 'null'] },

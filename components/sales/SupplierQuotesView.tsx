@@ -2,6 +2,7 @@ import type React from 'react';
 import { useCallback, useMemo, useReducer } from 'react';
 import { useTranslation } from 'react-i18next';
 import { LinkedRecordBanner } from '@/components/shared/LinkedRecordBanner';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
@@ -33,6 +34,8 @@ import {
   isDateOnlyBeforeToday,
   normalizeDateOnlyString,
 } from '../../utils/date';
+import { formatDocumentCode } from '../../utils/document-code';
+import { getHistoryPreviewIds } from '../../utils/historyPreview';
 import {
   createLineItemIndexResolver,
   createTemporaryLineItemId,
@@ -74,6 +77,7 @@ import {
   ModalHeader,
   ModalTitle,
 } from '../shared/ModalLayout';
+import { HistoryRail } from '../shared/RevisionHistoryPanel';
 import SelectControl from '../shared/SelectControl';
 import StandardTable, { type Column } from '../shared/StandardTable';
 import StatusBadge, { type StatusType } from '../shared/StatusBadge';
@@ -88,6 +92,7 @@ import SupplierQuoteAttachmentsSection from './SupplierQuoteAttachmentsSection';
 import SupplierQuoteAttachmentsStaging, {
   type StagedSupplierQuoteAttachment,
 } from './SupplierQuoteAttachmentsStaging';
+import { SupplierQuoteRevisionsPanel } from './SupplierQuoteRevisionsPanel';
 import SupplierQuoteVersionsPanel from './SupplierQuoteVersionsPanel';
 
 interface TotalsBreakdown {
@@ -457,10 +462,11 @@ const useSupplierQuotesController = ({
   // native column filter shows as active and stays clearable from its dropdown.
   const tableInitialFilterState = useMemo(() => {
     if (quoteFilterId) {
-      return { id: [quoteFilterId] };
+      const quote = quotes.find((candidate) => candidate.id === quoteFilterId);
+      return { id: [formatDocumentCode(quoteFilterId, quote?.revisionCode)] };
     }
     return undefined;
-  }, [quoteFilterId]);
+  }, [quoteFilterId, quotes]);
 
   const [state, dispatch] = useReducer(
     supplierQuotesViewReducer,
@@ -751,10 +757,15 @@ const useSupplierQuotesController = ({
     () => [
       {
         header: t('sales:supplierQuotes.quoteCode', { defaultValue: 'Quote Code' }),
-        accessorKey: 'id',
+        id: 'id',
+        accessorFn: (row) => formatDocumentCode(row.id, row.revisionCode),
         className: 'whitespace-nowrap',
         headerClassName: 'min-w-[8rem]',
-        cell: ({ row }) => <span className="font-bold text-zinc-700">{row.id}</span>,
+        cell: ({ row }) => (
+          <span className="font-bold text-zinc-700">
+            {formatDocumentCode(row.id, row.revisionCode)}
+          </span>
+        ),
       },
       {
         header: t('crm:clients.tableHeaders.insertDate'),
@@ -1220,35 +1231,59 @@ const SupplierQuotesLayout: React.FC<{ controller: SupplierQuotesController }> =
   </div>
 );
 
-const SupplierQuoteModal: React.FC<{ controller: SupplierQuotesController }> = ({ controller }) => (
-  <Modal isOpen={controller.isModalOpen} onClose={controller.closeModal}>
-    <div className="flex max-w-[calc(100vw-2rem)] items-start gap-4">
-      <ModalContent size="full" className="max-h-[90vh]">
-        <form onSubmit={controller.handleSubmit} className="flex min-h-0 flex-1 flex-col">
-          <SupplierQuoteModalHeader controller={controller} />
-          <ModalBody className="flex-1 space-y-5">
-            <SupplierQuoteModalAlerts controller={controller} />
-            <SupplierQuoteDetailsSection controller={controller} />
-            <SupplierQuoteItemsSection controller={controller} />
-            <SupplierQuoteAttachmentsArea controller={controller} />
-            <SupplierQuoteNotesSummarySection controller={controller} />
-          </ModalBody>
-          <SupplierQuoteModalFooter controller={controller} />
-        </form>
-      </ModalContent>
-      {controller.editingQuote?.id && (
-        <SupplierQuoteVersionsPanel
-          quoteId={controller.editingQuote.id}
-          selectedVersionId={controller.previewVersion?.id ?? null}
-          onPreview={controller.handleVersionPreview}
-          onClearPreview={controller.handleClearPreview}
-          onRestored={controller.handleVersionRestored}
-          disabled={controller.baseReadOnly}
-        />
-      )}
-    </div>
-  </Modal>
-);
+const SupplierQuoteModal: React.FC<{ controller: SupplierQuotesController }> = ({ controller }) => {
+  const { revisionId: selectedRevisionId, versionId: selectedVersionId } = getHistoryPreviewIds(
+    controller.previewVersion,
+  );
+  const revisionRestoreDisabled = Boolean(controller.editingQuote?.linkedOrderId);
+
+  return (
+    <Modal isOpen={controller.isModalOpen} onClose={controller.closeModal}>
+      <div className="flex max-w-[calc(100vw-2rem)] items-start gap-4">
+        <ModalContent size="full" className="max-h-[90vh]">
+          <form onSubmit={controller.handleSubmit} className="flex min-h-0 flex-1 flex-col">
+            <SupplierQuoteModalHeader controller={controller} />
+            <ModalBody className="flex-1 space-y-5">
+              <SupplierQuoteModalAlerts controller={controller} />
+              <SupplierQuoteDetailsSection controller={controller} />
+              <SupplierQuoteItemsSection controller={controller} />
+              <SupplierQuoteAttachmentsArea controller={controller} />
+              <SupplierQuoteNotesSummarySection controller={controller} />
+            </ModalBody>
+            <SupplierQuoteModalFooter controller={controller} />
+          </form>
+        </ModalContent>
+        {controller.editingQuote?.id && (
+          <HistoryRail>
+            <SupplierQuoteRevisionsPanel
+              quoteId={controller.editingQuote.id}
+              selectedRevisionId={selectedRevisionId}
+              onPreview={(revision) =>
+                controller.handleVersionPreview({
+                  ...revision,
+                  quoteId: controller.editingQuote?.id ?? '',
+                  reason: 'update',
+                })
+              }
+              onClearPreview={controller.handleClearPreview}
+              onRestored={controller.handleVersionRestored}
+              disabled={revisionRestoreDisabled}
+            />
+            <SupplierQuoteVersionsPanel
+              embedded
+              quoteId={controller.editingQuote.id}
+              selectedVersionId={selectedVersionId}
+              onPreview={controller.handleVersionPreview}
+              onClearPreview={controller.handleClearPreview}
+              onRestored={controller.handleVersionRestored}
+              disabled={controller.baseReadOnly}
+            />
+          </HistoryRail>
+        )}
+      </div>
+    </Modal>
+  );
+};
 
 const SupplierQuoteModalHeader: React.FC<{ controller: SupplierQuotesController }> = ({
   controller,
@@ -1281,6 +1316,12 @@ const SupplierQuoteModalAlerts: React.FC<{ controller: SupplierQuotesController 
   controller,
 }) => {
   const editingQuote = controller.editingQuote;
+  const previewRevisionCode =
+    controller.previewVersion &&
+    'revisionCode' in controller.previewVersion &&
+    typeof controller.previewVersion.revisionCode === 'string'
+      ? controller.previewVersion.revisionCode
+      : null;
 
   return (
     <>
@@ -1288,13 +1329,22 @@ const SupplierQuoteModalAlerts: React.FC<{ controller: SupplierQuotesController 
         <div className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl border border-amber-500/30 bg-amber-500/10">
           <span className="text-amber-800 dark:text-amber-300 text-xs font-bold flex items-center gap-2">
             <i className="fa-solid fa-clock-rotate-left"></i>
-            {controller.t('sales:supplierQuotes.versionHistory.previewBanner', {
-              date: formatInsertDateTime(
-                controller.previewVersion.createdAt,
-                controller.i18n.language,
-              ),
-              defaultValue: 'Previewing version from {{date}}',
-            })}
+            {previewRevisionCode
+              ? controller.t('sales:supplierQuotes.revisionHistory.previewBanner', {
+                  code: previewRevisionCode,
+                  date: formatInsertDateTime(
+                    controller.previewVersion.createdAt,
+                    controller.i18n.language,
+                  ),
+                  defaultValue: 'Previewing {{code}} from {{date}}',
+                })
+              : controller.t('sales:supplierQuotes.versionHistory.previewBanner', {
+                  date: formatInsertDateTime(
+                    controller.previewVersion.createdAt,
+                    controller.i18n.language,
+                  ),
+                  defaultValue: 'Previewing version from {{date}}',
+                })}
           </span>
           <Button
             type="button"
@@ -1440,26 +1490,33 @@ const SupplierQuoteCodeField: React.FC<{ controller: SupplierQuotesController }>
     <FieldLabel htmlFor="supplier-quote-code" required={Boolean(controller.editingQuote)}>
       {controller.t('sales:supplierQuotes.quoteCode', { defaultValue: 'Quote Code' })}
     </FieldLabel>
-    <Input
-      id="supplier-quote-code"
-      type="text"
-      value={controller.formData.id || ''}
-      disabled={controller.isReadOnly}
-      onChange={(event) => {
-        controller.dispatch({ type: 'patchFormData', value: { id: event.target.value } });
-        if (controller.errors.id) {
-          controller.dispatch({ type: 'clearError', key: 'id' });
+    <div className="flex items-center gap-2">
+      <Input
+        id="supplier-quote-code"
+        type="text"
+        value={controller.formData.id || ''}
+        disabled={controller.isReadOnly}
+        onChange={(event) => {
+          controller.dispatch({ type: 'patchFormData', value: { id: event.target.value } });
+          if (controller.errors.id) {
+            controller.dispatch({ type: 'clearError', key: 'id' });
+          }
+        }}
+        placeholder={
+          controller.supplierQuoteCodePreview ??
+          controller.t('sales:supplierQuotes.autoCodePlaceholder', {
+            defaultValue: 'Auto-generated',
+          })
         }
-      }}
-      placeholder={
-        controller.supplierQuoteCodePreview ??
-        controller.t('sales:supplierQuotes.autoCodePlaceholder', {
-          defaultValue: 'Auto-generated',
-        })
-      }
-      className={controller.errors.id ? 'border-red-300' : ''}
-      aria-invalid={Boolean(controller.errors.id)}
-    />
+        className={controller.errors.id ? 'border-red-300' : ''}
+        aria-invalid={Boolean(controller.errors.id)}
+      />
+      {controller.editingQuote?.revisionCode && (
+        <Badge variant="secondary" className="shrink-0 font-mono">
+          {controller.editingQuote.revisionCode}
+        </Badge>
+      )}
+    </div>
     <FieldError className="text-xs">{controller.errors.id}</FieldError>
     {!controller.editingQuote && (
       <FieldDescription className="text-xs">
@@ -2136,7 +2193,11 @@ const SupplierQuotesDeleteDialog: React.FC<{ controller: SupplierQuotesControlle
     title={controller.t('sales:supplierQuotes.deleteTitle', {
       defaultValue: 'Delete supplier quote?',
     })}
-    description={controller.quoteToDelete?.id ?? ''}
+    description={
+      controller.quoteToDelete
+        ? formatDocumentCode(controller.quoteToDelete.id, controller.quoteToDelete.revisionCode)
+        : ''
+    }
   />
 );
 

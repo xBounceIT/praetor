@@ -251,6 +251,18 @@
       "reasonUpdate": "Save",
       "reasonRestore": "Restored",
       "loadFailed": "Failed to load version history."
+    },
+    "revisionHistory": {
+      "title": "Revisions",
+      "previewBanner": "Previewing {{code}} from {{date}}",
+      "empty": "No sent revisions yet.",
+      "snapshot": "Sent snapshot",
+      "backToCurrent": "Back to current state",
+      "restoreButton": "Restore revision",
+      "restoreConfirmTitle": "Restore this revision?",
+      "restoreConfirmDescription": "The content will be restored as a draft. The highest revision number already assigned will remain reserved.",
+      "loadFailed": "Failed to load revisions.",
+      "restoreFailed": "Failed to restore the revision."
     }
   },
   "clientOffers": {
@@ -345,6 +357,18 @@
       "reasonUpdate": "Save",
       "reasonRestore": "Restored",
       "loadFailed": "Failed to load version history."
+    },
+    "revisionHistory": {
+      "title": "Revisions",
+      "previewBanner": "Previewing {{code}} from {{date}}",
+      "empty": "No sent revisions yet.",
+      "snapshot": "Sent snapshot",
+      "backToCurrent": "Back to current state",
+      "restoreButton": "Restore revision",
+      "restoreConfirmTitle": "Restore this revision?",
+      "restoreConfirmDescription": "The content will be restored as a draft. The highest revision number already assigned will remain reserved.",
+      "loadFailed": "Failed to load revisions.",
+      "restoreFailed": "Failed to restore the revision."
     }
   },
   "supplierQuotes": {
@@ -435,6 +459,18 @@
       "reasonUpdate": "Save",
       "reasonRestore": "Restored",
       "loadFailed": "Failed to load version history."
+    },
+    "revisionHistory": {
+      "title": "Revisions",
+      "previewBanner": "Previewing {{code}} from {{date}}",
+      "empty": "No sent revisions yet.",
+      "snapshot": "Sent snapshot",
+      "backToCurrent": "Back to current state",
+      "restoreButton": "Restore revision",
+      "restoreConfirmTitle": "Restore this revision?",
+      "restoreConfirmDescription": "The content will be restored as a draft. The highest revision number already assigned will remain reserved.",
+      "loadFailed": "Failed to load revisions.",
+      "restoreFailed": "Failed to restore the revision."
     },
     "attachments": {
       "title": "Attachments",
