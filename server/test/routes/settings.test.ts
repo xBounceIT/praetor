@@ -698,7 +698,10 @@ describe('PUT /api/settings/password', () => {
     expect(upsertAdminPasswordWarningMock).not.toHaveBeenCalled();
   });
 
-  test('200 admin setting password back to default recreates warning', async () => {
+  test.each([
+    'password',
+    'change-me-strong-admin-password',
+  ])('200 admin setting insecure password %s recreates warning', async (newPassword) => {
     findAuthUserByIdMock.mockResolvedValue({ ...HAPPY_USER, username: 'admin' });
     getPasswordHashMock.mockResolvedValue('$2a$existing');
     bcryptCompareMock.mockResolvedValue(true);
@@ -709,7 +712,7 @@ describe('PUT /api/settings/password', () => {
       method: 'PUT',
       url: '/api/settings/password',
       headers: authHeader(),
-      payload: { currentPassword: 'new-secure-pw', newPassword: 'password' },
+      payload: { currentPassword: 'new-secure-pw', newPassword },
     });
 
     expect(res.statusCode).toBe(200);
