@@ -133,6 +133,15 @@ describe('listOptions', () => {
       { id: 's-1', name: 'Acme Co', isDisabled: false },
     ]);
   });
+
+  test('applies an optional query limit', async () => {
+    exec.enqueue({ rows: [['s-1', 'Acme Co', false]] });
+
+    await suppliersRepo.listOptions(testDb, 200);
+
+    expect(exec.calls[0].sql.toLowerCase()).toContain('limit');
+    expect(exec.calls[0].params).toContain(200);
+  });
 });
 
 describe('findById', () => {

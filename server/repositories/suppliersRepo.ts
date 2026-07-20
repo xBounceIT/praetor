@@ -80,11 +80,15 @@ export const listAll = async (exec: DbExecutor = db): Promise<Supplier[]> => {
   return rows.map(mapRow);
 };
 
-export const listOptions = async (exec: DbExecutor = db): Promise<SupplierOption[]> => {
-  const rows = await exec
+export const listOptions = async (
+  exec: DbExecutor = db,
+  limit?: number,
+): Promise<SupplierOption[]> => {
+  const query = exec
     .select({ id: suppliers.id, name: suppliers.name, isDisabled: suppliers.isDisabled })
     .from(suppliers)
     .orderBy(suppliers.name);
+  const rows = limit === undefined ? await query : await query.limit(limit);
   return rows.map((row) => ({
     id: row.id,
     name: row.name,

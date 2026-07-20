@@ -516,6 +516,7 @@ describe('buildBusinessDataset modern sections', () => {
       items: [{ id: 's1', name: 'Supplier One', isDisabled: false }],
     });
     expect(listSupplierOptionsMock).toHaveBeenCalledTimes(1);
+    expect(listSupplierOptionsMock).toHaveBeenCalledWith(expect.anything(), 200);
     expect(getSuppliersSectionMock).not.toHaveBeenCalled();
   });
 

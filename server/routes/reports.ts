@@ -1924,7 +1924,7 @@ export const buildBusinessDataset = async (
             },
             datasetDb,
           )
-        : { items: await suppliersRepo.listOptions(datasetDb) };
+        : { items: await suppliersRepo.listOptions(datasetDb, listLimits.items) };
     }
 
     if (canViewSupplierQuotes && shouldIncludeDatasetSection(requestedSections, 'supplierQuotes')) {
