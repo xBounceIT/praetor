@@ -689,6 +689,22 @@ describe('PUT /api/sales/client-offers/:id expired rules (issue #779)', () => {
     });
   });
 
+  test('400 rejects accepting a legacy-invalid offer before it can create an order', async () => {
+    coFindExistingMock.mockResolvedValue(
+      gate({ status: 'sent', discount: 150, discountType: 'percentage' as const }),
+    );
+    coUpdateMock.mockResolvedValue(
+      updatedOffer({ status: 'accepted', discount: 150, discountType: 'percentage' }),
+    );
+    coFindItemsForOfferMock.mockResolvedValue([storedOfferItem()]);
+
+    const res = await putOffer({ status: 'accepted' });
+
+    expect(res.statusCode).toBe(400);
+    expect(coUpdateMock).not.toHaveBeenCalled();
+    expect(clientOrderCreateMock).not.toHaveBeenCalled();
+  });
+
   test('409 accepting an offer with an existing sale order blocks auto-create cleanly', async () => {
     coFindExistingMock.mockResolvedValue(gate({ status: 'sent' }));
     coUpdateMock.mockResolvedValue(updatedOffer({ status: 'accepted' }));

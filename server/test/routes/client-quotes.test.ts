@@ -1646,6 +1646,30 @@ describe('client quote candidate-family create and update', () => {
         ...over,
       },
     });
+  const putCandidateFamily = (discount: number) =>
+    testApp.inject({
+      method: 'PUT',
+      url: '/api/sales/client-quotes/q-1',
+      headers: authHeader(),
+      payload: {
+        clientId: 'c1',
+        clientName: 'Client',
+        status: 'draft',
+        candidates: [
+          {
+            id: 'qc-local',
+            name: 'Variante A',
+            items: [freshLine()],
+            paymentTerms: 'immediate',
+            discount,
+            discountType: 'percentage',
+            expirationDate: '2999-12-31',
+            communicationChannelId: 'qcc_email',
+            notes: 'edited',
+          },
+        ],
+      },
+    });
 
   const setupCreate = (netCost = 50) => {
     sqGetQuoteItemSnapshotsMock.mockResolvedValue(
@@ -1762,6 +1786,55 @@ describe('client quote candidate-family create and update', () => {
       }),
       expect.anything(),
     );
+  });
+
+  test('rejects an over-100 percentage discount on a new candidate', async () => {
+    const res = await postQuote([freshLine()], {
+      candidates: [
+        {
+          name: 'Variante A',
+          items: [freshLine()],
+          discount: 100.01,
+          discountType: 'percentage',
+          expirationDate: '2999-12-31',
+          communicationChannelId: 'qcc_email',
+        },
+      ],
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(cqCreateMock).not.toHaveBeenCalled();
+  });
+
+  test('preserves an unchanged legacy candidate discount during an unrelated family update', async () => {
+    setupCreate();
+    const legacyCandidate = activeCandidate({ discount: 150 });
+    const current = gate({ status: 'draft', discount: 150, discountType: 'percentage' as const });
+    const updated = updatedQuote({ id: 'q-1', discount: 150, notes: 'edited' });
+    cqFindCurrentMock.mockResolvedValue(current);
+    cqLockCurrentByIdMock.mockResolvedValue(current);
+    cqUpdateMock.mockResolvedValue(updated);
+    cqFindByIdMock.mockResolvedValue(updated);
+    qcListForQuoteMock.mockResolvedValue([legacyCandidate]);
+    qcUpdateMock.mockResolvedValue({ ...legacyCandidate, notes: 'edited' });
+
+    const res = await putCandidateFamily(150);
+
+    expect(res.statusCode).toBe(200);
+    expect(qcUpdateMock).toHaveBeenCalled();
+  });
+
+  test('rejects changing an existing legacy candidate to another over-100 percentage', async () => {
+    setupCreate();
+    cqFindCurrentMock.mockResolvedValue(
+      gate({ status: 'draft', discount: 150, discountType: 'percentage' as const }),
+    );
+    qcListForQuoteMock.mockResolvedValue([activeCandidate({ discount: 150 })]);
+
+    const res = await putCandidateFamily(151);
+
+    expect(res.statusCode).toBe(400);
+    expect(cqUpdateMock).not.toHaveBeenCalled();
   });
 
   test('rejects duplicate candidate names case-insensitively', async () => {

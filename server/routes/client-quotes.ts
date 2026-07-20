@@ -672,7 +672,6 @@ const quoteItemBodySchema = {
 
 const quoteCandidateBodySchema = {
   type: 'object',
-  allOf: [createDocumentDiscountConstraint],
   properties: {
     id: { type: 'string' },
     name: { type: 'string', maxLength: MAX_CANDIDATE_NAME_LENGTH },
@@ -687,6 +686,11 @@ const quoteCandidateBodySchema = {
   required: ['name', 'items', 'expirationDate', 'communicationChannelId'],
 } as const;
 
+const quoteCreateCandidateBodySchema = {
+  ...quoteCandidateBodySchema,
+  allOf: [createDocumentDiscountConstraint],
+} as const;
+
 const quoteCreateBodySchema = {
   type: 'object',
   allOf: [createDocumentDiscountConstraint],
@@ -695,7 +699,7 @@ const quoteCreateBodySchema = {
     clientId: { type: 'string' },
     clientName: { type: 'string' },
     items: { type: 'array', items: quoteItemBodySchema },
-    candidates: { type: 'array', items: quoteCandidateBodySchema },
+    candidates: { type: 'array', items: quoteCreateCandidateBodySchema },
     paymentTerms: { type: 'string' },
     discount: documentDiscountValueSchema,
     discountType: documentDiscountTypeSchema,
@@ -899,6 +903,7 @@ const prepareCandidateBody = async (
   index: number,
   reply: FastifyReply,
   existingSnapshots?: clientQuotesRepo.ExistingQuoteItemSnapshot[],
+  existingCandidatesById?: ReadonlyMap<string, quoteCandidatesRepo.QuoteCandidate>,
 ): Promise<PreparedCandidate | null> => {
   if (!raw || typeof raw !== 'object') {
     badRequest(reply, 'candidates[' + index + '] must be an object');
@@ -945,16 +950,27 @@ const prepareCandidateBody = async (
   });
   if (!channel) return null;
   const discountType = candidate.discountType === 'currency' ? 'currency' : 'percentage';
-  const discountResult = optionalLocalizedDocumentDiscount(
-    candidate.discount,
-    discountType,
-    'candidates[' + index + '].discount',
-  );
-  if (!discountResult.ok) {
-    badRequest(reply, discountResult.message);
-    return null;
+  const existingCandidate = candidateId ? existingCandidatesById?.get(candidateId) : undefined;
+  const preservesLegacyDiscount =
+    existingCandidate?.discountType === 'percentage' &&
+    existingCandidate.discount > 100 &&
+    candidate.discount === existingCandidate.discount &&
+    discountType === existingCandidate.discountType;
+  let discount: number;
+  if (preservesLegacyDiscount) {
+    discount = existingCandidate.discount;
+  } else {
+    const discountResult = optionalLocalizedDocumentDiscount(
+      candidate.discount,
+      discountType,
+      'candidates[' + index + '].discount',
+    );
+    if (!discountResult.ok) {
+      badRequest(reply, discountResult.message);
+      return null;
+    }
+    discount = discountResult.value ?? 0;
   }
-  const discount = discountResult.value ?? 0;
   const existingItemsById =
     existingSnapshots && candidateId
       ? indexExistingQuoteItems(existingSnapshots, candidateId)
@@ -967,7 +983,7 @@ const prepareCandidateBody = async (
     return null;
   }
   const totals = calculateQuoteTotals(resolvedItems, discount, discountType);
-  if (!Number.isFinite(totals.total) || totals.total <= 0) {
+  if (!preservesLegacyDiscount && (!Number.isFinite(totals.total) || totals.total <= 0)) {
     badRequest(reply, 'candidates[' + index + '].total must be greater than 0');
     return null;
   }
@@ -1719,6 +1735,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           quoteCandidatesRepo.listForQuote(idResult.value),
           clientQuotesRepo.findItemSnapshotsForQuote(idResult.value),
         ]);
+        const existingCandidatesById = new Map(
+          existingCandidates.map((candidate) => [candidate.id, candidate]),
+        );
         const preparedCandidates: PreparedCandidate[] = [];
         const names = new Set<string>();
         for (let index = 0; index < candidates.length; index++) {
@@ -1727,6 +1746,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             index,
             reply,
             existingSnapshots,
+            existingCandidatesById,
           );
           if (!prepared) return;
           const normalizedName = prepared.name.toLocaleLowerCase();

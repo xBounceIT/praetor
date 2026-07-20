@@ -1166,8 +1166,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const discountPairChanged =
         (discount !== undefined && discount !== existingOffer.discount) ||
         (discountTypeValue !== undefined && discountTypeValue !== existingOffer.discountType);
+      const createsClientOrder = statusChanged && targetStatus === 'accepted';
       let discountValue: number | null | undefined;
-      if (discountPairChanged) {
+      if (discountPairChanged || createsClientOrder) {
         const discountResult = optionalLocalizedDocumentDiscount(
           discount === undefined ? existingOffer.discount : discount,
           effectiveDiscountType,
@@ -1281,7 +1282,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                 items: clientsOrdersRepo.ClientOrderItem[];
               }
             | undefined;
-          if (statusChanged && targetStatus === 'accepted') {
+          if (createsClientOrder) {
             const existingOrder = await clientsOrdersRepo.findExistingForOffer(offer.id, null, tx);
             if (existingOrder) {
               throw new AutoClientOrderConflictError('A sale order already exists for this offer');
