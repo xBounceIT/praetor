@@ -1646,7 +1646,7 @@ describe('client quote candidate-family create and update', () => {
         ...over,
       },
     });
-  const putCandidateFamily = (discount: number) =>
+  const putCandidateFamily = (discount: number, itemOverrides: Record<string, unknown> = {}) =>
     testApp.inject({
       method: 'PUT',
       url: '/api/sales/client-quotes/q-1',
@@ -1659,7 +1659,7 @@ describe('client quote candidate-family create and update', () => {
           {
             id: 'qc-local',
             name: 'Variante A',
-            items: [freshLine()],
+            items: [freshLine({ id: 'qi-local', ...itemOverrides })],
             paymentTerms: 'immediate',
             discount,
             discountType: 'percentage',
@@ -1715,6 +1715,55 @@ describe('client quote candidate-family create and update', () => {
       quote: { id: 'sq-9' },
       items: [SUPPLIER_ITEM],
     });
+  };
+
+  const setupLegacyCandidateUpdate = () => {
+    setupCreate();
+    const legacyCandidate = activeCandidate({ discount: 150 });
+    const current = gate({ status: 'draft', discount: 150, discountType: 'percentage' as const });
+    const updated = updatedQuote({ id: 'q-1', discount: 150, notes: 'edited' });
+    const existingItem = {
+      id: 'qi-local',
+      quoteId: 'q-1',
+      candidateId: 'qc-local',
+      productId: '',
+      productName: 'Service',
+      quantity: 2,
+      unitPrice: 100,
+      productCost: 50,
+      productMolPercentage: 50,
+      supplierQuoteId: 'sq-9',
+      supplierQuoteItemId: 'sqi-9',
+      supplierQuoteSupplierName: 'Acme',
+      supplierQuoteUnitPrice: 50,
+      discount: 0,
+      note: null,
+      unitType: 'hours' as const,
+      durationMonths: 1,
+      durationUnit: 'months' as const,
+    };
+    cqFindCurrentMock.mockResolvedValue(current);
+    cqLockCurrentByIdMock.mockResolvedValue(current);
+    cqUpdateMock.mockResolvedValue(updated);
+    cqFindByIdMock.mockResolvedValue(updated);
+    cqFindItemsForQuoteMock.mockResolvedValue([existingItem]);
+    cqFindItemSnapshotsForQuoteMock.mockResolvedValue([
+      {
+        id: existingItem.id,
+        candidateId: existingItem.candidateId,
+        productId: existingItem.productId,
+        quantity: existingItem.quantity,
+        productCost: existingItem.productCost,
+        productMolPercentage: existingItem.productMolPercentage,
+        supplierQuoteId: existingItem.supplierQuoteId,
+        supplierQuoteItemId: existingItem.supplierQuoteItemId,
+        supplierQuoteSupplierName: existingItem.supplierQuoteSupplierName,
+        supplierQuoteUnitPrice: existingItem.supplierQuoteUnitPrice,
+        unitType: existingItem.unitType,
+      },
+    ]);
+    qcListForQuoteMock.mockResolvedValue([legacyCandidate]);
+    qcUpdateMock.mockResolvedValue({ ...legacyCandidate, notes: 'edited' });
   };
 
   test('creates multiple nested candidates without consuming additional document codes', async () => {
@@ -1807,16 +1856,7 @@ describe('client quote candidate-family create and update', () => {
   });
 
   test('preserves an unchanged legacy candidate discount during an unrelated family update', async () => {
-    setupCreate();
-    const legacyCandidate = activeCandidate({ discount: 150 });
-    const current = gate({ status: 'draft', discount: 150, discountType: 'percentage' as const });
-    const updated = updatedQuote({ id: 'q-1', discount: 150, notes: 'edited' });
-    cqFindCurrentMock.mockResolvedValue(current);
-    cqLockCurrentByIdMock.mockResolvedValue(current);
-    cqUpdateMock.mockResolvedValue(updated);
-    cqFindByIdMock.mockResolvedValue(updated);
-    qcListForQuoteMock.mockResolvedValue([legacyCandidate]);
-    qcUpdateMock.mockResolvedValue({ ...legacyCandidate, notes: 'edited' });
+    setupLegacyCandidateUpdate();
 
     const res = await putCandidateFamily(150);
 
@@ -1824,12 +1864,17 @@ describe('client quote candidate-family create and update', () => {
     expect(qcUpdateMock).toHaveBeenCalled();
   });
 
+  test('keeps the total guard when a legacy candidate resubmits changed zero-total items', async () => {
+    setupLegacyCandidateUpdate();
+
+    const res = await putCandidateFamily(150, { unitPrice: 0 });
+
+    expect(res.statusCode).toBe(400);
+    expect(cqUpdateMock).not.toHaveBeenCalled();
+  });
+
   test('rejects changing an existing legacy candidate to another over-100 percentage', async () => {
-    setupCreate();
-    cqFindCurrentMock.mockResolvedValue(
-      gate({ status: 'draft', discount: 150, discountType: 'percentage' as const }),
-    );
-    qcListForQuoteMock.mockResolvedValue([activeCandidate({ discount: 150 })]);
+    setupLegacyCandidateUpdate();
 
     const res = await putCandidateFamily(151);
 

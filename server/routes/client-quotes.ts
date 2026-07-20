@@ -832,6 +832,16 @@ const isSameCandidateItem = (
   submitted.durationMonths === existing.durationMonths &&
   submitted.durationUnit === existing.durationUnit;
 
+const indexQuoteItemsByCandidateId = (items: clientQuotesRepo.ClientQuoteItem[]) => {
+  const itemsByCandidateId = new Map<string, clientQuotesRepo.ClientQuoteItem[]>();
+  for (const item of items) {
+    const candidateItems = itemsByCandidateId.get(item.candidateId) ?? [];
+    candidateItems.push(item);
+    itemsByCandidateId.set(item.candidateId, candidateItems);
+  }
+  return itemsByCandidateId;
+};
+
 const isExpirationOnlyCandidateFamilyUpdate = (args: {
   quoteId: string;
   nextQuoteId: string;
@@ -858,12 +868,7 @@ const isExpirationOnlyCandidateFamilyUpdate = (args: {
   );
   if (existingActive.length !== args.submittedCandidates.length) return false;
   const existingActiveById = new Map(existingActive.map((candidate) => [candidate.id, candidate]));
-  const existingItemsByCandidateId = new Map<string, clientQuotesRepo.ClientQuoteItem[]>();
-  for (const item of args.existingItems) {
-    const candidateItems = existingItemsByCandidateId.get(item.candidateId) ?? [];
-    candidateItems.push(item);
-    existingItemsByCandidateId.set(item.candidateId, candidateItems);
-  }
+  const existingItemsByCandidateId = indexQuoteItemsByCandidateId(args.existingItems);
 
   let extended = false;
   for (let index = 0; index < args.submittedCandidates.length; index++) {
@@ -904,6 +909,7 @@ const prepareCandidateBody = async (
   reply: FastifyReply,
   existingSnapshots?: clientQuotesRepo.ExistingQuoteItemSnapshot[],
   existingCandidatesById?: ReadonlyMap<string, quoteCandidatesRepo.QuoteCandidate>,
+  existingItemsByCandidateId?: ReadonlyMap<string, clientQuotesRepo.ClientQuoteItem[]>,
 ): Promise<PreparedCandidate | null> => {
   if (!raw || typeof raw !== 'object') {
     badRequest(reply, 'candidates[' + index + '] must be an object');
@@ -982,8 +988,14 @@ const prepareCandidateBody = async (
     badRequest(reply, (error as Error).message);
     return null;
   }
+  const existingItems = candidateId ? existingItemsByCandidateId?.get(candidateId) : undefined;
+  const preservesLegacyItems =
+    preservesLegacyDiscount &&
+    existingItems !== undefined &&
+    existingItems.length === resolvedItems.length &&
+    resolvedItems.every((item, itemIndex) => isSameCandidateItem(item, existingItems[itemIndex]));
   const totals = calculateQuoteTotals(resolvedItems, discount, discountType);
-  if (!preservesLegacyDiscount && (!Number.isFinite(totals.total) || totals.total <= 0)) {
+  if (!preservesLegacyItems && (!Number.isFinite(totals.total) || totals.total <= 0)) {
     badRequest(reply, 'candidates[' + index + '].total must be greater than 0');
     return null;
   }
@@ -1731,13 +1743,15 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             });
           }
         }
-        const [existingCandidates, existingSnapshots] = await Promise.all([
+        const [existingCandidates, existingSnapshots, existingItems] = await Promise.all([
           quoteCandidatesRepo.listForQuote(idResult.value),
           clientQuotesRepo.findItemSnapshotsForQuote(idResult.value),
+          clientQuotesRepo.findItemsForQuote(idResult.value),
         ]);
         const existingCandidatesById = new Map(
           existingCandidates.map((candidate) => [candidate.id, candidate]),
         );
+        const existingItemsByCandidateId = indexQuoteItemsByCandidateId(existingItems);
         const preparedCandidates: PreparedCandidate[] = [];
         const names = new Set<string>();
         for (let index = 0; index < candidates.length; index++) {
@@ -1747,6 +1761,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             reply,
             existingSnapshots,
             existingCandidatesById,
+            existingItemsByCandidateId,
           );
           if (!prepared) return;
           const normalizedName = prepared.name.toLocaleLowerCase();
