@@ -74,7 +74,7 @@ const asSingleValue = (value: string | string[]): string =>
 const isValidWebhookUrl = (value: string): boolean => {
   try {
     const url = new URL(value);
-    return url.protocol === 'http:' || url.protocol === 'https:';
+    return url.protocol === 'https:' && !url.username && !url.password;
   } catch {
     return false;
   }

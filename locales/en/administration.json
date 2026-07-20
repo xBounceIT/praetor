@@ -382,7 +382,7 @@
     },
     "errors": {
       "urlRequired": "URL is required.",
-      "urlInvalid": "Enter a valid http(s) URL.",
+      "urlInvalid": "Enter a valid HTTPS URL without embedded credentials.",
       "headerNameRequired": "Header name is required for API key authentication.",
       "headerKeyRequired": "Header key is required."
     },

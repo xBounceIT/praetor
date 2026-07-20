@@ -222,7 +222,7 @@ describe('POST /api/webhooks', () => {
     expect(JSON.parse(res.body).authSecret).toBe(MASKED_SECRET);
   });
 
-  test('400 when the URL is not http(s)', async () => {
+  test('400 when the URL scheme is unsupported', async () => {
     const res = await testApp.inject({
       method: 'POST',
       url: '/api/webhooks',
@@ -241,6 +241,30 @@ describe('POST /api/webhooks', () => {
       payload: { url: 'https://example.com/hook' },
     });
     expect(res.statusCode).toBe(400);
+  });
+
+  test('400 when the target does not use HTTPS', async () => {
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/webhooks',
+      headers: authHeader(),
+      payload: { name: 'Internal', url: 'http://example.com/hook' },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toMatch(/HTTPS/);
+    expect(createWebhookMock).not.toHaveBeenCalled();
+  });
+
+  test('400 when the target URL contains embedded credentials', async () => {
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/webhooks',
+      headers: authHeader(),
+      payload: { name: 'Embedded', url: 'https://user:secret@example.com/hook' },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toMatch(/embedded credentials/);
+    expect(createWebhookMock).not.toHaveBeenCalled();
   });
 
   test('400 when authType is api_key without a header name', async () => {

@@ -1,10 +1,3 @@
-import type { LookupAddress } from 'node:dns';
-import dns from 'node:dns/promises';
-import type { IncomingMessage } from 'node:http';
-import https, { type RequestOptions as HttpsRequestOptions } from 'node:https';
-import { isIP } from 'node:net';
-import { addAbortSignal, Readable } from 'node:stream';
-import { createBrotliDecompress, createGunzip, createInflate } from 'node:zlib';
 import {
   type CacheItem,
   type CacheProvider,
@@ -27,7 +20,14 @@ import { NotFoundError } from '../utils/http-errors.ts';
 import { createChildLogger } from '../utils/logger.ts';
 import { generatePrefixedId } from '../utils/order-ids.ts';
 import { getRolePermissions } from '../utils/permissions.ts';
+import {
+  fetchPinnedRemoteUrl,
+  isPrivateIp,
+  resolveSafeRemoteAddresses,
+} from '../utils/safe-remote-fetch.ts';
 import { ExternalAuthError, resolveExternalIdentity } from './external-auth.ts';
+
+export { isPrivateIp };
 
 const logger = createChildLogger({ module: 'sso' });
 
@@ -479,160 +479,6 @@ const parseSamlMetadata = (xml: string): SamlMetadataConfig => {
     candidates.find((candidate) => hasConfigValue(candidate.idpIssuer)) ??
     candidates[0] ?? { idpIssuer: '', entryPoint: '', idpCert: '' }
   );
-};
-
-/**
- * Returns true when `ip` is in an IPv4 / IPv6 private, loopback, or link-local range that a
- * server-side fetch should NEVER target. Blocks the standard SSRF egress targets:
- *   - 127.0.0.0/8 (loopback)
- *   - 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16 (RFC1918 private)
- *   - 169.254.0.0/16 (link-local incl. cloud metadata 169.254.169.254)
- *   - 100.64.0.0/10 (carrier-grade NAT — non-routable on the public internet)
- *   - 0.0.0.0/8
- *   - ::1 (IPv6 loopback)
- *   - fc00::/7 (IPv6 unique-local)
- *   - fe80::/10 (IPv6 link-local)
- */
-const ipv4FromMappedIpv6 = (ip: string): string | null => {
-  const dotted = ip.match(/^(?:::ffff:|0:0:0:0:0:ffff:)(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/);
-  if (dotted) return dotted[1];
-
-  const hex = ip.match(/^(?:::ffff:|0:0:0:0:0:ffff:)([0-9a-f]{1,4}):([0-9a-f]{1,4})$/);
-  if (!hex) return null;
-  const high = Number.parseInt(hex[1], 16);
-  const low = Number.parseInt(hex[2], 16);
-  return `${(high >> 8) & 0xff}.${high & 0xff}.${(low >> 8) & 0xff}.${low & 0xff}`;
-};
-
-export const isPrivateIp = (ip: string): boolean => {
-  const v4 = ip.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
-  if (v4) {
-    const [a, b] = [Number(v4[1]), Number(v4[2])];
-    if (a === 10) return true;
-    if (a === 127) return true;
-    if (a === 0) return true;
-    if (a === 172 && b >= 16 && b <= 31) return true;
-    if (a === 192 && b === 168) return true;
-    if (a === 169 && b === 254) return true;
-    if (a === 100 && b >= 64 && b <= 127) return true;
-    return false;
-  }
-  // IPv6 — normalise to lower-case, strip zone id.
-  const v6 = ip.toLowerCase().split('%')[0];
-  if (v6 === '::1') return true;
-  if (v6 === '::') return true;
-  if (v6.startsWith('fc') || v6.startsWith('fd')) return true; // fc00::/7
-  if (v6.startsWith('fe8') || v6.startsWith('fe9') || v6.startsWith('fea') || v6.startsWith('feb'))
-    return true; // fe80::/10
-  // IPv4-mapped IPv6 — recursively check the embedded v4.
-  const mapped = ipv4FromMappedIpv6(v6);
-  if (mapped) return isPrivateIp(mapped);
-  return false;
-};
-
-const remoteUrlHostname = (url: URL): string => url.hostname.replace(/^\[|\]$/g, '');
-
-type AutoSelectingHttpsRequestOptions = HttpsRequestOptions & { autoSelectFamily: true };
-
-/**
- * Resolves `url` once and returns the public addresses that the caller may connect to. Returning
- * the vetted addresses (instead of merely validating them) prevents DNS rebinding between the
- * check and the TCP connection.
- */
-const resolveSafeRemoteAddresses = async (url: URL): Promise<LookupAddress[]> => {
-  if (url.protocol !== 'https:') {
-    throw new Error(`Refusing to fetch non-HTTPS URL: ${url.protocol}//...`);
-  }
-  const hostname = remoteUrlHostname(url);
-  const addresses = await dns.lookup(hostname, { all: true });
-  if (addresses.length === 0) {
-    throw new Error(`Could not resolve host ${url.hostname}`);
-  }
-  if (addresses.some((a) => isPrivateIp(a.address))) {
-    throw new Error(`Refusing to fetch URL with private/loopback host: ${url.hostname}`);
-  }
-  return addresses;
-};
-
-const responseFromIncoming = (incoming: IncomingMessage, request: Request): Response => {
-  const responseHeaders = new Headers();
-  for (let index = 0; index < incoming.rawHeaders.length; index += 2) {
-    responseHeaders.append(incoming.rawHeaders[index], incoming.rawHeaders[index + 1]);
-  }
-  const status = incoming.statusCode ?? 500;
-  const hasBody = request.method !== 'HEAD' && ![204, 205, 304].includes(status);
-  const contentEncoding = responseHeaders.get('content-encoding')?.trim().toLowerCase();
-  let responseBody: Readable = incoming;
-  if (contentEncoding === 'gzip' || contentEncoding === 'x-gzip') {
-    responseBody = incoming.pipe(createGunzip());
-  } else if (contentEncoding === 'deflate') {
-    responseBody = incoming.pipe(createInflate());
-  } else if (contentEncoding === 'br') {
-    responseBody = incoming.pipe(createBrotliDecompress());
-  }
-  if (responseBody !== incoming) {
-    responseHeaders.delete('content-encoding');
-    responseHeaders.delete('content-length');
-    responseBody.once('close', () => incoming.destroy());
-  }
-  addAbortSignal(request.signal, responseBody);
-  return new Response(
-    hasBody ? (Readable.toWeb(responseBody) as ReadableStream<Uint8Array>) : null,
-    {
-      headers: responseHeaders,
-      status,
-      statusText: incoming.statusMessage,
-    },
-  );
-};
-
-/**
- * Performs one HTTPS request using only already-vetted IPs while retaining the original hostname
- * for the Host header, SNI, and certificate verification. The custom lookup enables connection
- * family selection without another DNS query.
- */
-const fetchPinnedRemoteUrl = async (
-  url: URL,
-  addresses: LookupAddress[],
-  options: RequestInit = {},
-): Promise<Response> => {
-  const request = new Request(url.href, options);
-  const body = request.body ? Buffer.from(await request.arrayBuffer()) : undefined;
-  const headers = new Headers(request.headers);
-  headers.set('host', url.host);
-  headers.set('accept-encoding', 'gzip, deflate, br');
-  const originalHostname = remoteUrlHostname(url);
-
-  return new Promise<Response>((resolve, reject) => {
-    const requestOptions: AutoSelectingHttpsRequestOptions = {
-      agent: false,
-      autoSelectFamily: true,
-      headers: Object.fromEntries(headers.entries()),
-      hostname: originalHostname,
-      lookup: (_hostname, lookupOptions, callback) => {
-        if (lookupOptions.all) {
-          callback(null, addresses);
-          return;
-        }
-        callback(null, addresses[0].address, addresses[0].family);
-      },
-      method: request.method,
-      path: `${url.pathname}${url.search}`,
-      port: url.port ? Number(url.port) : 443,
-      servername: isIP(originalHostname) === 0 ? originalHostname : undefined,
-      signal: request.signal,
-    };
-    const outbound = https.request(requestOptions, (incoming) => {
-      try {
-        resolve(responseFromIncoming(incoming, request));
-      } catch (error) {
-        incoming.destroy();
-        reject(error);
-      }
-    });
-    outbound.once('error', reject);
-    outbound.end(body);
-  });
 };
 
 const safeOidcFetch: oidc.CustomFetch = async (url, options) => {

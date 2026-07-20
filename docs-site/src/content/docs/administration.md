@@ -136,12 +136,12 @@ La coda PostgreSQL conserva gli eventi durante errori o riavvii e ritenta con at
 
 ## Webhook
 
-I webhook consentono agli amministratori di registrare destinazioni HTTP in uscita che Praetor può chiamare per notificare sistemi esterni. La pagina **Webhook** elenca tutte le destinazioni configurate ed è disponibile agli amministratori con i permessi `administration.webhooks` corrispondenti.
+I webhook consentono agli amministratori di registrare destinazioni HTTPS pubbliche in uscita che Praetor può chiamare per notificare sistemi esterni. La pagina **Webhook** elenca tutte le destinazioni configurate ed è disponibile agli amministratori con i permessi `administration.webhooks` corrispondenti.
 
 Ogni destinazione definisce:
 
 - **Nome** e una **Descrizione** facoltativa per identificare l'integrazione.
-- **URL** — l'endpoint che Praetor chiama. Sono accettati solo URL `http` e `https`.
+- **URL** — l'endpoint HTTPS pubblico che Praetor chiama. Non sono accettati URL con credenziali incorporate né destinazioni loopback, private, link-local o riservate. Praetor risolve e vincola l'indirizzo prima della connessione e non segue i reindirizzamenti.
 - **Metodo HTTP** — `GET`, `POST` (predefinito), `PUT`, `PATCH` o `DELETE`.
 - **Autenticazione** — come Praetor si autentica verso la destinazione: **Nessuna**, **Bearer token**, **Basic** (nome utente e password) o **Chiave API** (un valore inviato in un header personalizzato che assegni). La credenziale segreta è cifrata a riposo e non viene mai restituita al browser; in modifica mostra un badge **Memorizzato — Sostituisci**, e lo stesso comportamento Mantieni / Sostituisci degli altri campi segreti la preserva finché non la sostituisci o la rimuovi esplicitamente.
 - **Header personalizzati** — coppie chiave/valore facoltative allegate a ogni richiesta, sovrapposte all'header di autenticazione. Usali per valori di instradamento non segreti come un id tenant.
@@ -150,3 +150,5 @@ Ogni destinazione definisce:
 Le azioni di creazione, modifica ed eliminazione sono regolate rispettivamente dai permessi create, update e delete, e ogni modifica viene scritta nel log di audit.
 
 Questa pagina configura solo le destinazioni; gli eventi che attivano ciascun webhook vengono collegati separatamente, ad esempio nelle azioni delle regole commessa.
+
+> Nota di aggiornamento: le destinazioni `http://` salvate da versioni precedenti non vengono più inviate. Modificale con un endpoint HTTPS pubblico prima di riabilitare le regole che le usano.

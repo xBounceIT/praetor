@@ -115,6 +115,27 @@ describe('<WebhooksView />', () => {
     });
   });
 
+  test('rejects non-HTTPS URLs and embedded credentials in the form', async () => {
+    render(<WebhooksView permissions={FULL_PERMS} />);
+    await screen.findByText('administration:webhooks.empty.title');
+    fireEvent.click(screen.getByText('administration:webhooks.createWebhook'));
+
+    fireEvent.change(
+      await screen.findByPlaceholderText('administration:webhooks.placeholders.name'),
+      { target: { value: 'Unsafe Hook' } },
+    );
+    const urlInput = screen.getByPlaceholderText('administration:webhooks.placeholders.url');
+    fireEvent.change(urlInput, { target: { value: 'http://example.com/hook' } });
+    fireEvent.click(screen.getByRole('button', { name: 'common:buttons.create' }));
+
+    expect(await screen.findByText('administration:webhooks.errors.urlInvalid')).toBeDefined();
+    expect(createMock).not.toHaveBeenCalled();
+
+    fireEvent.change(urlInput, { target: { value: 'https://user:secret@example.com/hook' } });
+    fireEvent.click(screen.getByRole('button', { name: 'common:buttons.create' }));
+    expect(createMock).not.toHaveBeenCalled();
+  });
+
   test('hides create and row actions without the matching permissions', async () => {
     listMock.mockResolvedValue([SAMPLE]);
     render(<WebhooksView permissions={['administration.webhooks.view']} />);

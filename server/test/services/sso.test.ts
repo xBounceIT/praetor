@@ -249,6 +249,22 @@ describe('isPrivateIp', () => {
     expect(sso.isPrivateIp('100.63.255.255')).toBe(false);
     expect(sso.isPrivateIp('100.128.0.1')).toBe(false);
   });
+
+  test('detects reserved IPv4 ranges', () => {
+    expect(sso.isPrivateIp('192.0.2.1')).toBe(true);
+    expect(sso.isPrivateIp('198.18.0.1')).toBe(true);
+    expect(sso.isPrivateIp('198.51.100.1')).toBe(true);
+    expect(sso.isPrivateIp('203.0.113.1')).toBe(true);
+    expect(sso.isPrivateIp('224.0.0.1')).toBe(true);
+    expect(sso.isPrivateIp('255.255.255.255')).toBe(true);
+  });
+
+  test('detects reserved and transition IPv6 ranges', () => {
+    expect(sso.isPrivateIp('2001:db8::1')).toBe(true);
+    expect(sso.isPrivateIp('2002::1')).toBe(true);
+    expect(sso.isPrivateIp('3fff::1')).toBe(true);
+    expect(sso.isPrivateIp('ff02::1')).toBe(true);
+  });
 });
 
 describe('resolvePublicBaseUrl', () => {
@@ -426,6 +442,20 @@ describe('startSamlLogin SSRF protections', () => {
     dnsLookupMock.mockResolvedValue([{ address: '169.254.169.254', family: 4 }]);
     await expect(sso.startSamlLogin('okta')).rejects.toThrow(/private\/loopback/);
   });
+
+  test('rejects the entire DNS result when any resolved address is private', async () => {
+    findBySlugMock.mockResolvedValue({
+      ...SAML_PROVIDER,
+      metadataUrl: 'https://mixed.example.com/metadata',
+    });
+    dnsLookupMock.mockResolvedValue([
+      { address: '8.8.8.8', family: 4 },
+      { address: '10.0.0.5', family: 4 },
+    ]);
+
+    await expect(sso.startSamlLogin('okta')).rejects.toThrow(/private\/loopback/);
+    expect(httpsRequestMock).not.toHaveBeenCalled();
+  });
 });
 
 describe('safeFetchRemoteUrl behavior (exercised via SAML metadata fetch)', () => {
@@ -438,7 +468,7 @@ describe('safeFetchRemoteUrl behavior (exercised via SAML metadata fetch)', () =
       metadataUrl: 'https://idp.example.com/metadata',
     });
     // Default: every DNS lookup resolves to a benign public IP.
-    dnsLookupMock.mockResolvedValue([{ address: '203.0.113.10', family: 4 }]);
+    dnsLookupMock.mockResolvedValue([{ address: '8.8.8.8', family: 4 }]);
   });
 
   afterAll(() => {
@@ -484,7 +514,7 @@ describe('safeFetchRemoteUrl behavior (exercised via SAML metadata fetch)', () =
   test('offers every vetted DNS address to connection family selection', async () => {
     const addresses: LookupAddress[] = [
       { address: '2606:4700:4700::1111', family: 6 },
-      { address: '203.0.113.10', family: 4 },
+      { address: '8.8.8.8', family: 4 },
     ];
     dnsLookupMock.mockResolvedValue(addresses);
     pinnedFetchResponseMock.mockResolvedValueOnce(
@@ -550,7 +580,7 @@ describe('safeFetchRemoteUrl behavior (exercised via SAML metadata fetch)', () =
       }),
     );
     dnsLookupMock
-      .mockResolvedValueOnce([{ address: '203.0.113.10', family: 4 }])
+      .mockResolvedValueOnce([{ address: '8.8.8.8', family: 4 }])
       .mockResolvedValueOnce([{ address: '10.0.0.1', family: 4 }]);
     await expect(sso.startSamlLogin('okta')).rejects.toThrow(/private\/loopback/);
   });
@@ -767,7 +797,7 @@ describe('OIDC remote endpoint hardening', () => {
     const options = oidcDiscoveryMock.mock.calls[0][4];
 
     dnsLookupMock.mockReset();
-    dnsLookupMock.mockResolvedValue([{ address: '203.0.113.25', family: 4 }]);
+    dnsLookupMock.mockResolvedValue([{ address: '8.8.4.4', family: 4 }]);
     httpsRequestMock.mockClear();
     pinnedFetchResponseMock.mockResolvedValueOnce(new Response('{}', { status: 200 }));
 
@@ -833,7 +863,7 @@ describe('OIDC remote endpoint hardening', () => {
     const options = oidcDiscoveryMock.mock.calls[0][4];
 
     dnsLookupMock.mockReset();
-    dnsLookupMock.mockResolvedValue([{ address: '203.0.113.10', family: 4 }]);
+    dnsLookupMock.mockResolvedValue([{ address: '8.8.8.8', family: 4 }]);
     pinnedFetchResponseMock.mockResolvedValueOnce(
       new Response(null, {
         status: 200,
@@ -858,7 +888,7 @@ describe('OIDC remote endpoint hardening', () => {
     const options = oidcDiscoveryMock.mock.calls[0][4];
 
     dnsLookupMock.mockReset();
-    dnsLookupMock.mockResolvedValue([{ address: '203.0.113.10', family: 4 }]);
+    dnsLookupMock.mockResolvedValue([{ address: '8.8.8.8', family: 4 }]);
     const oneMb = new Uint8Array(1024 * 1024).fill(65);
     const stream = new ReadableStream<Uint8Array>({
       start(controller) {
@@ -1443,7 +1473,7 @@ describe('endOidcSession', () => {
   beforeEach(() => {
     process.env.SSO_CALLBACK_BASE_URL = 'https://app.example.com';
     process.env.FRONTEND_URL = 'https://app.example.com';
-    dnsLookupMock.mockResolvedValue([{ address: '203.0.113.10', family: 4 }]);
+    dnsLookupMock.mockResolvedValue([{ address: '8.8.8.8', family: 4 }]);
   });
 
   afterAll(() => {
@@ -1568,7 +1598,7 @@ describe('SSO login persists id_token only when one is present', () => {
   beforeEach(() => {
     process.env.SSO_CALLBACK_BASE_URL = 'https://app.example.com';
     process.env.FRONTEND_URL = 'https://app.example.com';
-    dnsLookupMock.mockResolvedValue([{ address: '203.0.113.10', family: 4 }]);
+    dnsLookupMock.mockResolvedValue([{ address: '8.8.8.8', family: 4 }]);
     loginTicketsInsertMock.mockResolvedValue(undefined);
     resolveExternalIdentityMock.mockResolvedValue({ id: 'u1', role: 'user' });
   });
