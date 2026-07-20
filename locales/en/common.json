@@ -262,7 +262,7 @@
     "export": "Export",
     "exportToCsv": "Export to CSV",
     "saveColumnOrder": "Save the custom view?",
-    "saveColumnOrderTip": "Do you want to save this order in a new custom view?",
+    "saveColumnOrderTip": "Do you want to save this column layout in a new custom view?",
     "customViews": "Custom views",
     "addCustomView": "Add custom view",
     "editView": "Edit view",

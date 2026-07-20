@@ -583,6 +583,16 @@ type StateUpdate<T> = T | ((prev: T) => T);
 type TableViewApplication = ReturnType<typeof computeViewApplication>;
 const columnOrdersEqual = (left: readonly string[], right: readonly string[]) =>
   left.length === right.length && left.every((id, index) => id === right[index]);
+const setMembershipEqual = (
+  left: ReadonlySet<string>,
+  right: ReadonlySet<string>,
+  relevantIds: ReadonlySet<string>,
+) => {
+  for (const id of relevantIds) {
+    if (left.has(id) !== right.has(id)) return false;
+  }
+  return true;
+};
 type TableViewState = {
   sortState: SortState;
   filterState: FilterState;
@@ -1061,6 +1071,7 @@ const useStandardTableController = <T extends object>({
   const tableContainerRef = useRef<HTMLDivElement | null>(null);
   const previousDataLengthRef = useRef(data?.length ?? 0);
   const manualColumnOrderBaselineRef = useRef<ColumnOrderState | null>(null);
+  const manualHiddenColIdsBaselineRef = useRef<Set<string> | null>(null);
 
   // A programmatic filter (a quick-view deep link or a cross-view "view X"
   // navigation) must win over a persisted saved view, which would otherwise
@@ -1187,8 +1198,9 @@ const useStandardTableController = <T extends object>({
     (update: StateUpdate<ViewModalState>) => setTableUiField('modalState', update),
     [setTableUiField],
   );
-  const clearSaveColumnOrderTip = useCallback(() => {
+  const clearSaveColumnLayoutTip = useCallback(() => {
     manualColumnOrderBaselineRef.current = null;
+    manualHiddenColIdsBaselineRef.current = null;
   }, []);
   const setDraggingViewId = useCallback(
     (update: StateUpdate<string | null>) => setTableUiField('draggingViewId', update),
@@ -1625,6 +1637,10 @@ const useStandardTableController = <T extends object>({
     () => columns?.filter((col) => !col.hidden && !isRowActionColumn(col)) ?? [],
     [columns, isRowActionColumn],
   );
+  const gearColumnIdSet = useMemo(
+    () => new Set(gearColumns.map((col) => getColId(col))),
+    [gearColumns, getColId],
+  );
 
   const reorderableColumnIds = useMemo(() => getReorderableColumnIds(columns), [columns]);
   const reorderableColumnIdSet = useMemo(
@@ -1638,9 +1654,11 @@ const useStandardTableController = <T extends object>({
   const normalizedManualColumnOrderBaseline = manualColumnOrderBaselineRef.current
     ? normalizeColumnOrder(manualColumnOrderBaselineRef.current, reorderableColumnIdSet)
     : null;
-  const showSaveColumnOrderTip =
-    normalizedManualColumnOrderBaseline !== null &&
-    !columnOrdersEqual(normalizedColumnOrder, normalizedManualColumnOrderBaseline);
+  const showSaveColumnLayoutTip =
+    (normalizedManualColumnOrderBaseline !== null &&
+      !columnOrdersEqual(normalizedColumnOrder, normalizedManualColumnOrderBaseline)) ||
+    (manualHiddenColIdsBaselineRef.current !== null &&
+      !setMembershipEqual(hiddenColIds, manualHiddenColIdsBaselineRef.current, gearColumnIdSet));
 
   const modalColumns = useMemo(
     () =>
@@ -1674,7 +1692,7 @@ const useStandardTableController = <T extends object>({
   const applyViewState = useCallback(
     (view: CustomView, nextActiveViewId?: string | null) => {
       const result = getViewApplicationForColumns(view, columns);
-      clearSaveColumnOrderTip();
+      clearSaveColumnLayoutTip();
       dispatchTableView({
         type: 'apply-view',
         application: allowColumnHiding ? result : { ...result, hiddenColIds: new Set<string>() },
@@ -1688,7 +1706,7 @@ const useStandardTableController = <T extends object>({
         } catch {}
       }
     },
-    [allowColumnHiding, clearSaveColumnOrderTip, columns, storageIdentity],
+    [allowColumnHiding, clearSaveColumnLayoutTip, columns, storageIdentity],
   );
 
   useEffect(
@@ -1948,6 +1966,15 @@ const useStandardTableController = <T extends object>({
         if (next[colId] === false) nextHiddenColIds.add(colId);
       }
 
+      const baseline = manualHiddenColIdsBaselineRef.current ?? new Set(hiddenColIds);
+      manualHiddenColIdsBaselineRef.current = setMembershipEqual(
+        nextHiddenColIds,
+        baseline,
+        gearColumnIdSet,
+      )
+        ? null
+        : baseline;
+
       dispatchTableView({
         type: 'apply-column-visibility',
         hiddenColIds: nextHiddenColIds,
@@ -1958,7 +1985,15 @@ const useStandardTableController = <T extends object>({
         } catch {}
       }
     },
-    [allowColumnHiding, columnVisibility, gearColumns, getColId, storageIdentity],
+    [
+      allowColumnHiding,
+      columnVisibility,
+      gearColumnIdSet,
+      gearColumns,
+      getColId,
+      hiddenColIds,
+      storageIdentity,
+    ],
   );
 
   const onColumnOrderChange = useCallback(
@@ -2344,7 +2379,7 @@ const useStandardTableController = <T extends object>({
   const resetColumnVisibility = () => {
     table.setColumnVisibility({});
     table.setColumnOrder(reorderableColumnIds);
-    clearSaveColumnOrderTip();
+    clearSaveColumnLayoutTip();
   };
 
   const applyView = (view: CustomView) => {
@@ -2387,7 +2422,7 @@ const useStandardTableController = <T extends object>({
     const applySavedColumnLayout = () => {
       dispatchTableView({ type: 'set-hidden-columns', hiddenColIds: new Set(hidden) });
       dispatchTableView({ type: 'set-column-order', columnOrder: savedColumnOrder });
-      clearSaveColumnOrderTip();
+      clearSaveColumnLayoutTip();
     };
 
     if (!isServerBacked) {
@@ -2713,7 +2748,7 @@ const useStandardTableController = <T extends object>({
     shouldRenderTable,
     processedRows,
     handleExportToCsv,
-    showSaveColumnOrderTip,
+    showSaveColumnLayoutTip,
     isViewCreationDisabled,
     stepFontSize,
     fontSize,
@@ -2863,7 +2898,7 @@ const StandardTableToolbar = <T extends object>({
     t,
     handleExportToCsv,
     processedRows,
-    showSaveColumnOrderTip,
+    showSaveColumnLayoutTip,
     isViewCreationDisabled,
     setModalState,
     stepFontSize,
@@ -2875,7 +2910,7 @@ const StandardTableToolbar = <T extends object>({
 
   return (
     <>
-      {showConfigurationControls && showSaveColumnOrderTip && (
+      {showConfigurationControls && showSaveColumnLayoutTip && (
         <StandardTableToolbarButton
           label={t('table.saveColumnOrderTip')}
           icon={<Lightbulb className="size-3.5" aria-hidden="true" />}
