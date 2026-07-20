@@ -107,10 +107,15 @@ describe('listConfirmedProjectOptions', () => {
 });
 
 describe('findOfferDetails', () => {
-  test('returns offer with linkedQuoteId and status', async () => {
-    exec.enqueue({ rows: [['co-1', 'cq-1', 'accepted']] });
+  test('returns offer with linkedQuoteId, clientId and status', async () => {
+    exec.enqueue({ rows: [['co-1', 'cq-1', 'client-1', 'accepted']] });
     const result = await repo.findOfferDetails('co-1', testDb);
-    expect(result).toEqual({ id: 'co-1', linkedQuoteId: 'cq-1', status: 'accepted' });
+    expect(result).toEqual({
+      id: 'co-1',
+      linkedQuoteId: 'cq-1',
+      clientId: 'client-1',
+      status: 'accepted',
+    });
   });
 
   test('returns null when not found', async () => {

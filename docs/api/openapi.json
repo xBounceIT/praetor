@@ -41381,13 +41381,15 @@
                           "type": [
                             "string",
                             "null"
-                          ]
+                          ],
+                          "description": "Supplier quote id snapshot. The server derives this from supplierQuoteItemId and clears an id supplied without an item reference."
                         },
                         "supplierQuoteItemId": {
                           "type": [
                             "string",
                             "null"
-                          ]
+                          ],
+                          "description": "Supplier quote item source. On create, it must come from the accepted same-client source offer unless the caller has accounting.supplier_orders.create."
                         },
                         "supplierQuoteSupplierName": {
                           "type": [
@@ -41921,13 +41923,15 @@
                           "type": [
                             "string",
                             "null"
-                          ]
+                          ],
+                          "description": "Supplier quote id snapshot. The server derives this from supplierQuoteItemId and clears an id supplied without an item reference."
                         },
                         "supplierQuoteItemId": {
                           "type": [
                             "string",
                             "null"
-                          ]
+                          ],
+                          "description": "Supplier quote item source. On create, it must come from the accepted same-client source offer unless the caller has accounting.supplier_orders.create."
                         },
                         "supplierQuoteSupplierName": {
                           "type": [

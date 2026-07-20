@@ -1407,6 +1407,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           request,
           result.createdOrder.order,
           result.createdOrder.items,
+          new Set(
+            result.createdOrder.items.flatMap((item) =>
+              item.supplierQuoteItemId ? [item.supplierQuoteItemId] : [],
+            ),
+          ),
           withDbTransaction,
         );
         autoCreated = {

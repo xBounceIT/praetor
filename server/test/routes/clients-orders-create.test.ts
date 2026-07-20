@@ -47,6 +47,7 @@ const sqLockEffectiveStatusByIdMock = mock();
 const sqFindItemsForQuoteMock = mock();
 const sqGetQuoteItemSnapshotsMock = mock();
 const clientOfferLockExistingByIdMock = mock();
+const clientOfferFindItemsForOfferMock = mock();
 const allocateDocumentCodeMock = mock();
 
 const logAuditMock = mock(async () => undefined);
@@ -85,6 +86,7 @@ beforeAll(async () => {
   mock.module('../../repositories/clientOffersRepo.ts', () => ({
     ...clientOffersRepoSnap,
     lockExistingById: clientOfferLockExistingByIdMock,
+    findItemsForOffer: clientOfferFindItemsForOfferMock,
   }));
   mock.module('../../repositories/supplierQuotesRepo.ts', () => ({
     ...supplierQuotesRepoSnap,
@@ -133,7 +135,7 @@ const HAPPY_USER = {
   sessionVersion: 1,
 };
 
-const FULL_PERMS = ['accounting.clients_orders.create'];
+const FULL_PERMS = ['accounting.clients_orders.create', 'accounting.supplier_orders.create'];
 
 const CREATED_ORDER = {
   id: 'co-1',
@@ -195,6 +197,7 @@ const allMocks = [
   sqFindItemsForQuoteMock,
   sqGetQuoteItemSnapshotsMock,
   clientOfferLockExistingByIdMock,
+  clientOfferFindItemsForOfferMock,
   allocateDocumentCodeMock,
   logAuditMock,
   withDbTransactionMock,
@@ -215,6 +218,7 @@ beforeEach(async () => {
   coFindOfferDetailsMock.mockResolvedValue({
     id: 'OFF_26_0045_manual',
     linkedQuoteId: 'legacy-quote-id',
+    clientId: 'c1',
     status: 'accepted',
   });
   coFindExistingForOfferMock.mockResolvedValue(null);
@@ -223,6 +227,7 @@ beforeEach(async () => {
     linkedQuoteId: 'legacy-quote-id',
     status: 'accepted',
   });
+  clientOfferFindItemsForOfferMock.mockResolvedValue([]);
   coCreateSupplierOrderMock.mockResolvedValue(undefined);
   coBulkInsertSupplierOrderItemsMock.mockResolvedValue(undefined);
   coLinkSaleItemsToSupplierOrderMock.mockResolvedValue(undefined);
@@ -448,6 +453,33 @@ describe('POST /api/clients-orders product-less supplier lines (issue #783)', ()
       exec: expect.anything(),
       sourceCodes: ['legacy-quote-id', 'OFF_26_0045_manual'],
     });
+  });
+
+  test('409 when the submitted client does not match the accepted source offer', async () => {
+    coFindOfferDetailsMock.mockResolvedValue({
+      id: 'OFF_26_0045_manual',
+      linkedQuoteId: 'legacy-quote-id',
+      clientId: 'c-other',
+      status: 'accepted',
+    });
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/clients-orders',
+      headers: authHeader(),
+      payload: {
+        id: 'co-1',
+        linkedOfferId: 'OFF_26_0045_manual',
+        clientId: 'c1',
+        clientName: 'Acme',
+        items: [{ productId: 'p-1', productName: 'Service', quantity: 1, unitPrice: 100 }],
+      },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(JSON.parse(res.body).error).toContain('clientId must match');
+    expect(coCreateMock).not.toHaveBeenCalled();
+    expect(clientOfferFindItemsForOfferMock).not.toHaveBeenCalled();
   });
 
   test('201 creates an order from a supplier-quote line with no productId', async () => {
@@ -737,6 +769,198 @@ describe('POST /api/clients-orders product-less supplier lines (issue #783)', ()
     expect(coCreateSupplierOrderMock).not.toHaveBeenCalled();
   });
 
+  test('does not trust a product line supplierQuoteId for supplier-order auto-create', async () => {
+    getRolePermissionsMock.mockResolvedValue(['accounting.clients_orders.create']);
+    coInsertItemsMock.mockImplementation((orderId: string, items: Array<Record<string, unknown>>) =>
+      Promise.resolve(items.map((item) => insertedItem({ ...item, orderId }))),
+    );
+    sqFindByIdMock.mockResolvedValue({
+      id: 'sq-victim',
+      supplierId: 'sup-victim',
+      supplierName: 'Unrelated Supplier',
+      paymentTerms: 'net30',
+      status: 'accepted',
+      expirationDate: '2999-12-31',
+      linkedOrderId: null,
+      notes: null,
+      createdAt: 1_700_000_000_000,
+      updatedAt: 1_700_000_000_000,
+      linkedClientQuoteId: null,
+      linkedClientQuoteStatus: 'offer',
+      linkedClientQuoteExpiration: '2999-12-31',
+      linkedOfferStatus: 'accepted',
+      linkedOfferExpiration: '2999-12-31',
+    });
+    sqLockEffectiveStatusByIdMock.mockResolvedValue({
+      expirationDate: '2999-12-31',
+      linkedClientStatus: 'offer',
+      linkedClientQuoteExpiration: '2999-12-31',
+      linkedOfferStatus: 'accepted',
+      linkedOfferExpiration: '2999-12-31',
+    });
+    sqFindItemsForQuoteMock.mockResolvedValue([
+      {
+        id: 'sqi-victim',
+        productId: 'p-1',
+        productName: 'Victim product',
+        quantity: 1,
+        listPrice: 50,
+        discountPercent: 0,
+        note: null,
+        durationMonths: 1,
+        durationUnit: 'months',
+      },
+    ]);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/clients-orders',
+      headers: authHeader(),
+      payload: {
+        id: 'co-1',
+        clientId: 'c1',
+        clientName: 'Acme',
+        items: [
+          {
+            productId: 'p-1',
+            productName: 'Ordinary product line',
+            quantity: 1,
+            unitPrice: 100,
+            supplierQuoteId: 'sq-victim',
+          },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(coCreateSupplierOrderMock).not.toHaveBeenCalled();
+    expect(sqFindByIdMock).not.toHaveBeenCalledWith('sq-victim');
+    const insertedItems = coInsertItemsMock.mock.calls[0][1] as Array<{
+      supplierQuoteId: unknown;
+    }>;
+    expect(insertedItems[0].supplierQuoteId).toBeNull();
+  });
+
+  test('403 blocks an unprivileged order from sourcing an item absent from its source offer', async () => {
+    getRolePermissionsMock.mockResolvedValue(['accounting.clients_orders.create']);
+    coInsertItemsMock.mockImplementation((orderId: string, items: Array<Record<string, unknown>>) =>
+      Promise.resolve(items.map((item) => insertedItem({ ...item, orderId }))),
+    );
+    sqGetQuoteItemSnapshotsMock.mockResolvedValue(
+      new Map([
+        [
+          'sqi-victim',
+          {
+            supplierQuoteId: 'sq-victim',
+            supplierName: 'Unrelated Supplier',
+            productId: 'p-1',
+            unitPrice: 50,
+            netCost: 50,
+          },
+        ],
+      ]),
+    );
+    sqFindByIdMock.mockResolvedValue({
+      id: 'sq-victim',
+      supplierId: 'sup-victim',
+      supplierName: 'Unrelated Supplier',
+      paymentTerms: 'net30',
+      status: 'accepted',
+      expirationDate: '2999-12-31',
+      linkedOrderId: null,
+      notes: null,
+      createdAt: 1_700_000_000_000,
+      updatedAt: 1_700_000_000_000,
+      linkedClientQuoteId: null,
+      linkedClientQuoteStatus: 'offer',
+      linkedClientQuoteExpiration: '2999-12-31',
+      linkedOfferStatus: 'accepted',
+      linkedOfferExpiration: '2999-12-31',
+    });
+    sqLockEffectiveStatusByIdMock.mockResolvedValue({
+      expirationDate: '2999-12-31',
+      linkedClientStatus: 'offer',
+      linkedClientQuoteExpiration: '2999-12-31',
+      linkedOfferStatus: 'accepted',
+      linkedOfferExpiration: '2999-12-31',
+    });
+    sqFindItemsForQuoteMock.mockResolvedValue([
+      {
+        id: 'sqi-victim',
+        productId: 'p-1',
+        productName: 'Victim product',
+        quantity: 1,
+        listPrice: 50,
+        discountPercent: 0,
+        note: null,
+        durationMonths: 1,
+        durationUnit: 'months',
+      },
+    ]);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/clients-orders',
+      headers: authHeader(),
+      payload: {
+        id: 'co-1',
+        linkedOfferId: 'OFF_26_0045_manual',
+        clientId: 'c1',
+        clientName: 'Acme',
+        items: [
+          {
+            productId: 'p-1',
+            productName: 'Ordinary product line',
+            quantity: 1,
+            unitPrice: 100,
+            supplierQuoteId: 'sq-victim',
+            supplierQuoteItemId: 'sqi-victim',
+          },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(coCreateMock).not.toHaveBeenCalled();
+    expect(coInsertItemsMock).not.toHaveBeenCalled();
+    expect(coCreateSupplierOrderMock).not.toHaveBeenCalled();
+  });
+
+  test('allows an unprivileged conversion to auto-create only from its accepted source offer', async () => {
+    getRolePermissionsMock.mockResolvedValue(['accounting.clients_orders.create']);
+    clientOfferFindItemsForOfferMock.mockResolvedValue([{ supplierQuoteItemId: 'sqi-1' }]);
+    coInsertItemsMock.mockImplementation((orderId: string, items: Array<Record<string, unknown>>) =>
+      Promise.resolve(items.map((item) => insertedItem({ ...item, orderId }))),
+    );
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/clients-orders',
+      headers: authHeader(),
+      payload: {
+        id: 'co-1',
+        linkedOfferId: 'OFF_26_0045_manual',
+        linkedQuoteId: 'legacy-quote-id',
+        clientId: 'c1',
+        clientName: 'Acme',
+        items: [
+          {
+            productId: 'p-1',
+            productName: 'Offer product line',
+            quantity: 1,
+            unitPrice: 100,
+            supplierQuoteId: 'sq-client-lie',
+            supplierQuoteItemId: 'sqi-1',
+          },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(sqFindByIdMock).toHaveBeenCalledWith('sq-1');
+    expect(sqFindByIdMock).not.toHaveBeenCalledWith('sq-client-lie');
+  });
+
   test('201 still creates a normal catalog-product line', async () => {
     coInsertItemsMock.mockResolvedValue([insertedItem()]);
 
@@ -848,8 +1072,8 @@ describe('POST /api/clients-orders product-less supplier lines (issue #783)', ()
   });
 
   test('derives supplier fields from the snapshot, overriding mismatched client values', async () => {
-    // A direct POST cannot spoof supplier metadata: the persisted line carries the snapshot's
-    // authoritative quote id / supplier name / unit price, and the auto-create keys off the real id.
+    // A product-backed direct POST cannot spoof supplier metadata: the persisted line carries the
+    // snapshot's authoritative quote id / supplier name / unit price.
     sqGetQuoteItemSnapshotsMock.mockResolvedValue(
       new Map([
         [
@@ -857,7 +1081,7 @@ describe('POST /api/clients-orders product-less supplier lines (issue #783)', ()
           {
             supplierQuoteId: 'sq-real',
             supplierName: 'Real Supplier',
-            productId: null,
+            productId: 'p-1',
             unitPrice: 75,
             netCost: 75,
           },
@@ -866,8 +1090,8 @@ describe('POST /api/clients-orders product-less supplier lines (issue #783)', ()
     );
     coInsertItemsMock.mockResolvedValue([
       insertedItem({
-        productId: null,
-        productName: 'Free-form supplier line',
+        productId: 'p-1',
+        productName: 'Catalog supplier line',
         supplierQuoteId: 'sq-real',
         supplierQuoteItemId: 'sqi-1',
       }),
@@ -883,8 +1107,8 @@ describe('POST /api/clients-orders product-less supplier lines (issue #783)', ()
         clientName: 'Acme',
         items: [
           {
-            productId: null,
-            productName: 'Free-form supplier line',
+            productId: 'p-1',
+            productName: 'Catalog supplier line',
             quantity: 1,
             unitPrice: 100,
             supplierQuoteId: 'sq-client-lie',
@@ -907,6 +1131,51 @@ describe('POST /api/clients-orders product-less supplier lines (issue #783)', ()
     expect(inserted[0].supplierQuoteUnitPrice).toBe(75);
     expect(sqFindByIdMock).toHaveBeenCalledWith('sq-real');
     expect(sqFindByIdMock).not.toHaveBeenCalledWith('sq-client-lie');
+  });
+
+  test('clears a client productId when the supplier item snapshot is free-form', async () => {
+    sqGetQuoteItemSnapshotsMock.mockResolvedValue(
+      new Map([
+        [
+          'sqi-1',
+          {
+            supplierQuoteId: 'sq-1',
+            supplierName: 'Supplier Co',
+            productId: null,
+            unitPrice: 50,
+            netCost: 50,
+          },
+        ],
+      ]),
+    );
+    coInsertItemsMock.mockImplementation((orderId: string, items: Array<Record<string, unknown>>) =>
+      Promise.resolve(items.map((item) => insertedItem({ ...item, orderId }))),
+    );
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/clients-orders',
+      headers: authHeader(),
+      payload: {
+        id: 'co-1',
+        clientId: 'c1',
+        clientName: 'Acme',
+        items: [
+          {
+            productId: 'p-client-controlled',
+            productName: 'Free-form supplier line',
+            quantity: 1,
+            unitPrice: 100,
+            supplierQuoteId: 'sq-1',
+            supplierQuoteItemId: 'sqi-1',
+          },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(201);
+    const inserted = coInsertItemsMock.mock.calls[0][1] as Array<{ productId: unknown }>;
+    expect(inserted[0].productId).toBeNull();
   });
 
   test('adopts the catalog productId from a catalog-backed supplier-quote snapshot', async () => {

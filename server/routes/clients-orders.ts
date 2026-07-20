@@ -29,6 +29,7 @@ import { replyDocumentCodeCollision } from '../utils/document-code-replies.ts';
 import type { DurationUnit } from '../utils/duration-unit.ts';
 import { normalizeNullableNumber, normalizeNullableString } from '../utils/normalize.ts';
 import { generatePrefixedId, ITEM_ID_PREFIXES } from '../utils/order-ids.ts';
+import { requestHasPermission } from '../utils/permissions.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { replyError } from '../utils/replyError.ts';
 import { normalizeUnitType, type UnitType } from '../utils/unit-type.ts';
@@ -139,8 +140,16 @@ const clientOrderItemBodySchema = {
     // non-product / non-supplier lines. Declaring them nullable (instead of relying on Ajv's
     // coerceTypes to turn null→''/0) keeps the null "unset" semantic through normalizeIncomingItems.
     productMolPercentage: { type: ['number', 'null'] },
-    supplierQuoteId: { type: ['string', 'null'] },
-    supplierQuoteItemId: { type: ['string', 'null'] },
+    supplierQuoteId: {
+      type: ['string', 'null'],
+      description:
+        'Supplier quote id snapshot. The server derives this from supplierQuoteItemId and clears an id supplied without an item reference.',
+    },
+    supplierQuoteItemId: {
+      type: ['string', 'null'],
+      description:
+        'Supplier quote item source. On create, it must come from the accepted same-client source offer unless the caller has accounting.supplier_orders.create.',
+    },
     supplierQuoteSupplierName: { type: ['string', 'null'] },
     supplierQuoteUnitPrice: { type: ['number', 'null'] },
     supplierSaleId: { type: ['string', 'null'] },
@@ -285,11 +294,16 @@ const normalizeIncomingItems = (
       unitPrice: unitPriceResult.value,
       productCost: Number(item.productCost ?? 0),
       productMolPercentage: normalizeNullableNumber(item.productMolPercentage),
-      // Normalized above so the stored values match the productId-vs-supplier-quote gate.
-      supplierQuoteId,
+      // A quote id without its item reference is not an authoritative sourcing relationship.
+      // Clear all quote metadata in that case so a raw client cannot manufacture one.
+      supplierQuoteId: supplierQuoteItemId ? supplierQuoteId : null,
       supplierQuoteItemId,
-      supplierQuoteSupplierName: normalizeNullableString(item.supplierQuoteSupplierName),
-      supplierQuoteUnitPrice: normalizeNullableNumber(item.supplierQuoteUnitPrice),
+      supplierQuoteSupplierName: supplierQuoteItemId
+        ? normalizeNullableString(item.supplierQuoteSupplierName)
+        : null,
+      supplierQuoteUnitPrice: supplierQuoteItemId
+        ? normalizeNullableNumber(item.supplierQuoteUnitPrice)
+        : null,
       supplierSaleId: normalizeNullableString(item.supplierSaleId),
       supplierSaleItemId: normalizeNullableString(item.supplierSaleItemId),
       supplierSaleSupplierName: normalizeNullableString(item.supplierSaleSupplierName),
@@ -303,26 +317,36 @@ const normalizeIncomingItems = (
   return normalized;
 };
 
-// A product-less line (`productId === null`) has the supplier-quote reference as its only anchor,
-// and `sale_items.supplier_quote_*` has no FK. Resolve each referenced item against the live
-// supplier-quote items — the same authoritative source the client-quotes route trusts (NOT
-// status-gated: under the #779 derived model, lines legitimately source supplier quotes that
-// derive `draft`) — and stamp the supplier fields from the snapshot. Without this, a direct
-// POST/PUT could persist a line with bogus refs that the UI still locks as supplier-backed.
-// Returns null after replying 400 if a reference can't be resolved.
+// `sale_items.supplier_quote_*` has no FK, so resolve every referenced supplier item against the
+// live supplier-quote items, including catalog-backed lines. The optional allowlist binds create
+// requests to a server-validated source offer unless the caller may create supplier orders.
 const resolveSupplierQuoteRefs = async (
   items: NormalizedOrderItem[],
   reply: FastifyReply,
+  allowedSupplierQuoteItemIds?: ReadonlySet<string>,
 ): Promise<NormalizedOrderItem[] | null> => {
-  const productlessItemIds = items.flatMap((item) =>
-    item.productId === null && item.supplierQuoteItemId ? [item.supplierQuoteItemId] : [],
+  const referencedItemIds = items.flatMap((item) =>
+    item.supplierQuoteItemId ? [item.supplierQuoteItemId] : [],
   );
-  if (productlessItemIds.length === 0) return items.map(withCalculatedClientLineMol);
+  if (referencedItemIds.length === 0) return items.map(withCalculatedClientLineMol);
 
-  const snapshots = await supplierQuotesRepo.getQuoteItemSnapshots(productlessItemIds);
+  const forbiddenIndex = items.findIndex(
+    (item) =>
+      item.supplierQuoteItemId &&
+      allowedSupplierQuoteItemIds !== undefined &&
+      !allowedSupplierQuoteItemIds.has(item.supplierQuoteItemId),
+  );
+  if (forbiddenIndex >= 0) {
+    reply.code(403).send({
+      error: `items[${forbiddenIndex}].supplierQuoteItemId requires an accepted source offer or accounting.supplier_orders.create permission`,
+    });
+    return null;
+  }
+
+  const snapshots = await supplierQuotesRepo.getQuoteItemSnapshots(referencedItemIds);
   for (let i = 0; i < items.length; i++) {
     const item = items[i];
-    if (item.productId !== null || !item.supplierQuoteItemId) continue;
+    if (!item.supplierQuoteItemId) continue;
     const snapshot = snapshots.get(item.supplierQuoteItemId);
     if (!snapshot) {
       badRequest(
@@ -332,13 +356,11 @@ const resolveSupplierQuoteRefs = async (
       return null;
     }
     // Trust the snapshot, not the client: stamp the authoritative quote id, supplier name and unit
-    // price so the persisted line is tied to the real accepted quote and the supplier-order
-    // auto-create keys off a valid supplierQuoteId. A catalog-backed supplier-quote item also
-    // carries a real productId — adopt it (mirroring the client-quotes resolver) so the sale isn't
-    // stored product-less and stays visible to product quick-links and catalog usage/revenue reports.
+    // price. A catalog-backed supplier-quote item also carries a real productId — adopt it so the
+    // sale stays visible to product quick-links and catalog usage/revenue reports.
     items[i] = {
       ...item,
-      productId: snapshot.productId ?? item.productId,
+      productId: snapshot.productId,
       supplierQuoteId: snapshot.supplierQuoteId,
       supplierQuoteSupplierName: snapshot.supplierName,
       supplierQuoteUnitPrice: snapshot.netCost,
@@ -647,8 +669,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const parsedItems = normalizeIncomingItems(items, reply);
       if (!parsedItems) return;
-      const normalizedItems = await resolveSupplierQuoteRefs(parsedItems, reply);
-      if (!normalizedItems) return;
 
       const discountTypeValue = discountType === 'currency' ? 'currency' : 'percentage';
       const discountResult = optionalLocalizedDocumentDiscount(
@@ -658,7 +678,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       );
       if (!discountResult.ok) return badRequest(reply, discountResult.message);
 
+      const canCreateSupplierOrders = requestHasPermission(
+        request,
+        'accounting.supplier_orders.create',
+      );
       let linkedQuoteIdValue = linkedQuoteIdResult.value;
+      let sourceOfferSupplierQuoteItemIds = new Set<string>();
       if (linkedOfferIdResult.value) {
         const offer = await clientsOrdersRepo.findOfferDetails(linkedOfferIdResult.value);
         if (!offer) {
@@ -678,6 +703,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             entityType: 'client_offer',
             entityId: linkedOfferIdResult.value,
             details: { secondaryLabel: 'source_offer_not_accepted', fromValue: offer.status },
+          });
+        }
+        if (offer.clientId !== clientIdResult.value) {
+          return replyError(request, reply, {
+            statusCode: 409,
+            message: 'clientId must match the source offer client',
+            action: 'client_order.create.conflict',
+            entityType: 'client_offer',
+            entityId: linkedOfferIdResult.value,
+            details: { secondaryLabel: 'client_mismatch' },
           });
         }
 
@@ -707,7 +742,29 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         }
 
         linkedQuoteIdValue = offer.linkedQuoteId || null;
+        if (!canCreateSupplierOrders) {
+          const sourceOfferItems = await clientOffersRepo.findItemsForOffer(
+            linkedOfferIdResult.value,
+          );
+          sourceOfferSupplierQuoteItemIds = new Set(
+            sourceOfferItems.flatMap((item) =>
+              item.supplierQuoteItemId ? [item.supplierQuoteItemId] : [],
+            ),
+          );
+        }
       }
+
+      const normalizedItems = await resolveSupplierQuoteRefs(
+        parsedItems,
+        reply,
+        canCreateSupplierOrders ? undefined : sourceOfferSupplierQuoteItemIds,
+      );
+      if (!normalizedItems) return;
+      const trustedSupplierQuoteItemIds = new Set(
+        normalizedItems.flatMap((item) =>
+          item.supplierQuoteItemId ? [item.supplierQuoteItemId] : [],
+        ),
+      );
 
       type CreateOutcome =
         | { ok: false; status: number; body: Record<string, unknown> }
@@ -817,6 +874,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         request,
         createdOrder,
         insertedItems,
+        trustedSupplierQuoteItemIds,
         withDbTransaction,
       );
 

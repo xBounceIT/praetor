@@ -73,22 +73,50 @@ export const autoCreateSupplierOrdersForClientOrder = async (
   request: FastifyRequest,
   order: clientsOrdersRepo.ClientOrder,
   items: clientsOrdersRepo.ClientOrderItem[],
+  trustedSupplierQuoteItemIds: ReadonlySet<string>,
   runInTransaction: <T>(cb: (tx: DbExecutor) => Promise<T>) => Promise<T>,
 ): Promise<{
   items: clientsOrdersRepo.ClientOrderItem[];
   supplierOrders: CreatedSupplierOrderSummary[];
   warnings: string[];
 }> => {
-  const supplierQuoteIds = [
-    ...new Set(
-      items
-        .map((item) => item.supplierQuoteId)
-        .filter((id): id is string => typeof id === 'string' && id.length > 0),
-    ),
-  ];
+  const trustedItemsById = new Map<string, clientsOrdersRepo.ClientOrderItem>();
+  for (const item of items) {
+    const itemId = item.supplierQuoteItemId;
+    if (
+      typeof itemId === 'string' &&
+      trustedSupplierQuoteItemIds.has(itemId) &&
+      !trustedItemsById.has(itemId)
+    ) {
+      trustedItemsById.set(itemId, item);
+    }
+  }
+  const trustedItemIds = [...trustedItemsById.keys()];
+  const snapshots =
+    trustedItemIds.length > 0
+      ? await supplierQuotesRepo.getQuoteItemSnapshots(trustedItemIds)
+      : new Map<string, supplierQuotesRepo.QuoteItemSnapshot>();
+  const referenceWarnings: string[] = [];
+  const supplierQuoteIds = new Set<string>();
+  for (const [itemId, item] of trustedItemsById) {
+    const snapshot = snapshots.get(itemId);
+    if (!snapshot) {
+      referenceWarnings.push(
+        `Supplier order not created: supplier quote item ${itemId} no longer exists`,
+      );
+      continue;
+    }
+    if (item.supplierQuoteId !== snapshot.supplierQuoteId) {
+      referenceWarnings.push(
+        `Supplier order not created: supplier quote item ${itemId} has inconsistent source metadata`,
+      );
+      continue;
+    }
+    supplierQuoteIds.add(snapshot.supplierQuoteId);
+  }
 
   const supplierOrderOutcomes = await Promise.all(
-    supplierQuoteIds.map(
+    [...supplierQuoteIds].map(
       async (
         sqId,
       ): Promise<{
@@ -232,9 +260,10 @@ export const autoCreateSupplierOrdersForClientOrder = async (
   const supplierOrders = supplierOrderOutcomes.flatMap((outcome) =>
     outcome.supplierOrder ? [outcome.supplierOrder] : [],
   );
-  const warnings = supplierOrderOutcomes.flatMap((outcome) =>
-    outcome.warning ? [outcome.warning] : [],
-  );
+  const warnings = [
+    ...referenceWarnings,
+    ...supplierOrderOutcomes.flatMap((outcome) => (outcome.warning ? [outcome.warning] : [])),
+  ];
 
   return {
     items: supplierOrders.length > 0 ? await clientsOrdersRepo.findItemsForOrder(order.id) : items,

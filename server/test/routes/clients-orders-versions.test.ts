@@ -266,6 +266,20 @@ beforeEach(async () => {
     status: 'accepted',
   });
   coFindExistingForOfferMock.mockResolvedValue(null);
+  sqGetQuoteItemSnapshotsMock.mockResolvedValue(
+    new Map([
+      [
+        'sqi-1',
+        {
+          supplierQuoteId: 'sq-1',
+          supplierName: 'ACME',
+          productId: 'p-1',
+          unitPrice: 50,
+          netCost: 50,
+        },
+      ],
+    ]),
+  );
 
   testApp = await buildRouteTestApp(routePlugin, '/api/clients-orders');
 });
