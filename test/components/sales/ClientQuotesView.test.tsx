@@ -1231,6 +1231,97 @@ describe('<ClientQuotesView /> row actions and edit gating (#812 round 13)', () 
     }
   });
 
+  test('uses the selected source variant as duplicate primary without reordering variants', async () => {
+    const user = userEvent.setup();
+    const onAddQuote = mock((_data: QuoteMutation) => Promise.resolve());
+    const quote = withSingleCandidate(
+      {
+        ...quotes[0],
+        id: 'Q-DUPLICATE-SELECTED',
+        status: 'accepted',
+        linkedOfferId: 'OFF-SELECTED',
+      },
+      'candidate-first',
+    );
+    const [firstCandidate] = quote.candidates ?? [];
+    const firstItem = firstCandidate?.items[0];
+    if (!firstCandidate || !firstItem) throw new Error('Expected candidate fixture');
+
+    const selectedItem = {
+      ...firstItem,
+      id: 'item-selected',
+      candidateId: 'candidate-selected',
+      unitPrice: 275,
+    };
+    quote.candidates = [
+      {
+        ...firstCandidate,
+        state: 'discarded',
+        items: [{ ...firstItem, unitPrice: 125 }],
+      },
+      {
+        ...firstCandidate,
+        id: 'candidate-selected',
+        name: 'Variante B',
+        position: 1,
+        state: 'selected',
+        paymentTerms: '90gg',
+        discount: 15,
+        notes: 'Winning variant notes',
+        items: [selectedItem],
+      },
+    ];
+    quote.selectedCandidateId = 'candidate-selected';
+    quote.items = [selectedItem];
+    quote.paymentTerms = '90gg';
+    quote.discount = 15;
+    quote.notes = 'Winning variant notes';
+
+    render(
+      <ClientQuotesView
+        quotes={[quote]}
+        clients={clients}
+        products={[]}
+        supplierQuotes={[]}
+        communicationChannels={communicationChannels}
+        currency="EUR"
+        onAddQuote={onAddQuote}
+        onUpdateQuote={mock(() => Promise.resolve())}
+        onDeleteQuote={mock(() => Promise.resolve())}
+      />,
+    );
+
+    await openRowActions(user);
+    await user.click(
+      await screen.findByRole('button', { name: 'sales:clientQuotes.duplicateQuote' }),
+    );
+
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByRole('tab', { name: /Variante B/ })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+
+    await user.click(
+      within(dialog).getByRole('button', { name: 'sales:clientQuotes.createQuote' }),
+    );
+    await waitFor(() => expect(onAddQuote).toHaveBeenCalledTimes(1));
+
+    const payload = onAddQuote.mock.calls[0]?.[0] as QuoteMutation;
+    expect(payload.candidates?.map((candidate) => candidate.name)).toEqual([
+      'Variante A',
+      'Variante B',
+    ]);
+    expect(payload).toMatchObject({
+      paymentTerms: '90gg',
+      discount: 15,
+      notes: 'Winning variant notes',
+    });
+    expect(payload.items?.[0]?.unitPrice).toBe(275);
+    expect(payload.candidates?.[0]?.items[0]?.unitPrice).toBe(125);
+    expect(payload.candidates?.[1]?.items[0]?.unitPrice).toBe(275);
+  });
+
   test('blocks a duplicated source-only line in a non-active variant until it is relinked', async () => {
     const user = userEvent.setup();
     const onAddQuote = mock((_data: QuoteMutation) => Promise.resolve());

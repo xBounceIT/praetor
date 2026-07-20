@@ -278,9 +278,24 @@ const quoteCandidatesForForm = (quote: Quote): QuoteCandidate[] =>
 const hasMissingProductOrSupplierSource = (items: QuoteItem[]) =>
   items.some((item) => !item.productId && !item.supplierQuoteItemId);
 
+const getPrimaryCandidateIndex = (quote: Quote, candidates: QuoteCandidate[]) => {
+  const selectedCandidateIndex = candidates.findIndex(
+    (candidate) => candidate.id === quote.selectedCandidateId,
+  );
+  if (selectedCandidateIndex >= 0) return selectedCandidateIndex;
+
+  const selectedStateIndex = candidates.findIndex((candidate) => candidate.state === 'selected');
+  if (selectedStateIndex >= 0) return selectedStateIndex;
+
+  const activeStateIndex = candidates.findIndex((candidate) => candidate.state === 'active');
+  return activeStateIndex >= 0 ? activeStateIndex : 0;
+};
+
 const buildDuplicatedClientQuoteDraft = (quote: Quote) => {
   const expirationDate = addMonthsToDateOnly(getLocalDateString(), 1);
-  const candidates = quoteCandidatesForForm(quote).map((candidate, position) => {
+  const sourceCandidates = quoteCandidatesForForm(quote);
+  const primaryCandidateIndex = getPrimaryCandidateIndex(quote, sourceCandidates);
+  const candidates = sourceCandidates.map((candidate, position) => {
     const candidateId = makeCandidateDraftId();
     return {
       ...candidate,
@@ -307,7 +322,7 @@ const buildDuplicatedClientQuoteDraft = (quote: Quote) => {
       })),
     } satisfies QuoteCandidate;
   });
-  const primaryCandidate = candidates[0];
+  const primaryCandidate = candidates[primaryCandidateIndex] ?? candidates[0];
 
   return {
     candidates,
@@ -583,6 +598,9 @@ const useClientQuotesController = ({
   const [formData, setFormData] = useState<Partial<Quote>>(() => getDefaultFormData());
   const [candidateDrafts, setCandidateDrafts] = useState<QuoteCandidate[]>([]);
   const [activeCandidateId, setActiveCandidateId] = useState<string | null>(null);
+  const [duplicatePrimaryCandidateId, setDuplicatePrimaryCandidateId] = useState<string | null>(
+    null,
+  );
   const [promotionQuote, setPromotionQuote] = useState<Quote | null>(null);
   const [promotionCandidateId, setPromotionCandidateId] = useState<string | null>(null);
   const [isPromoting, setIsPromoting] = useState(false);
@@ -664,6 +682,7 @@ const useClientQuotesController = ({
 
   const closeModal = useCallback(() => {
     dispatch({ type: 'closeModal' });
+    setDuplicatePrimaryCandidateId(null);
     setPreviewVersion(null);
     setProductRowToDelete(null);
     setCandidateToDeleteId(null);
@@ -695,6 +714,7 @@ const useClientQuotesController = ({
     };
     setCandidateDrafts([candidate]);
     setActiveCandidateId(candidate.id);
+    setDuplicatePrimaryCandidateId(null);
     setFormData(defaults);
     setErrors({});
     setPreviewVersion(null);
@@ -702,12 +722,10 @@ const useClientQuotesController = ({
 
   const applyQuoteToCandidateForm = useCallback((quote: Quote) => {
     const candidates = quoteCandidatesForForm(quote);
-    const primary =
-      candidates.find((candidate) => candidate.state === 'selected') ??
-      candidates.find((candidate) => candidate.state === 'active') ??
-      candidates[0];
+    const primary = candidates[getPrimaryCandidateIndex(quote, candidates)] ?? candidates[0];
     setCandidateDrafts(candidates);
     setActiveCandidateId(primary.id);
+    setDuplicatePrimaryCandidateId(null);
     setFormData(candidateToFormData(quote, primary));
     setErrors({});
   }, []);
@@ -727,6 +745,7 @@ const useClientQuotesController = ({
     dispatch({ type: 'openAddModal' });
     setCandidateDrafts(duplicate.candidates);
     setActiveCandidateId(duplicate.activeCandidateId);
+    setDuplicatePrimaryCandidateId(duplicate.activeCandidateId);
     setFormData(duplicate.formData);
     setErrors({});
     setPreviewVersion(null);
@@ -1086,7 +1105,13 @@ const useClientQuotesController = ({
       items:
         candidate.id === activeCandidateId ? itemsWithSnapshots : serializeItems(candidate.items),
     }));
-    const primaryCandidate = candidatePayloads[0];
+    const duplicatePrimaryCandidateIndex = duplicatePrimaryCandidateId
+      ? pendingCandidateDrafts.findIndex(
+          (candidate) => candidate.id === duplicatePrimaryCandidateId,
+        )
+      : 0;
+    const primaryCandidate =
+      candidatePayloads[duplicatePrimaryCandidateIndex] ?? candidatePayloads[0];
 
     const payload = {
       ...formData,
