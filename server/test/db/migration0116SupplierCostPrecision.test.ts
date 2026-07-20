@@ -38,6 +38,24 @@ describe('migration 0116 supplier-cost precision', () => {
     expect(Math.round(restoredUnitCost * 150 * 100) / 100).toBe(4813.13);
   });
 
+  test('freezes existing supplier order and invoice lines at their historical unit cost', async () => {
+    const sql = await readMigration();
+
+    for (const table of ['supplier_sale_items', 'supplier_invoice_items']) {
+      expect(sql).toContain(`UPDATE "${table}"`);
+    }
+    expect(
+      sql.match(
+        /SET "unit_price" = ROUND\("unit_price" \* \(1 - COALESCE\("discount", 0\) \/ 100\.0\), 2\),/g,
+      ),
+    ).toHaveLength(2);
+    expect(sql.match(/WHERE COALESCE\("discount", 0\) <> 0/g)).toHaveLength(2);
+
+    const historicalUnitCost = Math.round(37.75 * (1 - 15 / 100) * 100) / 100;
+    expect(historicalUnitCost).toBe(32.09);
+    expect(Math.round(historicalUnitCost * 150 * 100) / 100).toBe(4813.5);
+  });
+
   test('preserves manual and client-synced unit costs during the backfill', async () => {
     const sql = await readMigration();
 

@@ -4,6 +4,21 @@ ALTER TABLE "sale_items" ALTER COLUMN "supplier_quote_unit_price" SET DATA TYPE 
 ALTER TABLE "supplier_quote_items" ALTER COLUMN "unit_price" SET DATA TYPE numeric(19, 6);--> statement-breakpoint
 ALTER TABLE "supplier_quote_items" ALTER COLUMN "unit_price" SET DEFAULT '0';--> statement-breakpoint
 
+-- Existing supplier orders and invoices are historical financial snapshots. Before this
+-- migration, their totals multiplied a currency-rounded discounted unit price. Freeze that old
+-- unit price into each line before the application switches to precise line math, so opening or
+-- resaving an existing document cannot change its total. New documents retain gross price plus
+-- discount and therefore use the precise pricing chain. These predicates make the backfill
+-- retry-safe.
+UPDATE "supplier_sale_items"
+SET "unit_price" = ROUND("unit_price" * (1 - COALESCE("discount", 0) / 100.0), 2),
+    "discount" = 0
+WHERE COALESCE("discount", 0) <> 0;--> statement-breakpoint
+UPDATE "supplier_invoice_items"
+SET "unit_price" = ROUND("unit_price" * (1 - COALESCE("discount", 0) / 100.0), 2),
+    "discount" = 0
+WHERE COALESCE("discount", 0) <> 0;--> statement-breakpoint
+
 -- Rebuild only costs that still match the old scale-2 formula. A divergent value may be a manual
 -- override and must remain authoritative. Client-to-supplier syncs are subtler: the old sync stored
 -- the explicit client cost while also deriving a scale-2 list price, so the two cases can look

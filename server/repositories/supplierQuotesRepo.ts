@@ -396,10 +396,11 @@ export const existsById = async (id: string, exec: DbExecutor = db): Promise<boo
 };
 
 // Client-document synchronization can intentionally make unit_price authoritative even when it
-// differs from the scale-2 list-price/discount formula. The durable audit marker is also used by
-// migration 0116; restore reads it so legacy JSON snapshots follow the same provenance rule.
+// differs from the scale-2 list-price/discount formula. Limit the durable marker lookup to the
+// snapshot timestamp so later syncs cannot rewrite the provenance of an older version.
 export const hasClientSyncedCosts = async (
   quoteId: string,
+  atOrBeforeMs: number,
   exec: DbExecutor = db,
 ): Promise<boolean> => {
   const rows = await executeRows<{ exists: boolean }>(
@@ -411,6 +412,7 @@ export const hasClientSyncedCosts = async (
         AND entity_type = ${'supplier_quote'}
         AND entity_id = ${quoteId}
         AND details ->> 'secondaryLabel' = ${'synced_from_client_line'}
+        AND created_at <= ${new Date(atOrBeforeMs)}
     ) AS "exists"`,
   );
   return rows[0]?.exists === true;

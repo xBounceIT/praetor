@@ -1194,9 +1194,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       // Migration 0116 uses this durable marker to distinguish an old scale-2 formula result from
-      // an explicit client-authored cost with the same numeric value. Apply the same conservative
-      // quote-level provenance rule when rebuilding legacy JSON snapshots.
-      const hasClientSyncMarker = await supplierQuotesRepo.hasClientSyncedCosts(idResult.value);
+      // an explicit client-authored cost with the same numeric value. Scope the marker to the
+      // version timestamp so a later client sync cannot change an older snapshot's provenance.
+      const hasClientSyncMarker = await supplierQuotesRepo.hasClientSyncedCosts(
+        idResult.value,
+        version.createdAt,
+      );
 
       const snapshotItems: supplierQuotesRepo.NewSupplierQuoteItem[] = version.snapshot.items.map(
         ({ quoteId: _q, ...rest }) => {

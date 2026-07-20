@@ -391,6 +391,7 @@ describe('POST /api/sales/supplier-quotes/:id/versions/:versionId/restore', () =
     );
     expect(suppliersFindByIdMock).toHaveBeenCalledWith('s1');
     expect(productsGetSnapshotsMock).toHaveBeenCalledWith(['p-1']);
+    expect(sqHasClientSyncedCostsMock).toHaveBeenCalledWith('sq-1', SAMPLE_VERSION.createdAt);
     expect(sqRestoreSnapshotQuoteMock).toHaveBeenCalledWith(
       'sq-1',
       expect.objectContaining({ supplierId: 's1', notes: null }),
@@ -468,6 +469,7 @@ describe('POST /api/sales/supplier-quotes/:id/versions/:versionId/restore', () =
     expect(restoredItems[0]).toEqual(
       expect.objectContaining({ listPrice: 37.75, discountPercent: 15, unitPrice: 32.0875 }),
     );
+    expect(sqHasClientSyncedCostsMock).toHaveBeenCalledWith('sq-1', SAMPLE_VERSION.createdAt);
   });
 
   test('409 when linked order exists', async () => {

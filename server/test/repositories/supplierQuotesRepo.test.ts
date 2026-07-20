@@ -476,23 +476,26 @@ describe('replaceItems', () => {
 });
 
 describe('hasClientSyncedCosts', () => {
-  test('returns true only when the durable client-sync audit marker exists', async () => {
+  test('returns true only when the durable client-sync marker existed by the cutoff', async () => {
     exec.enqueue({ rows: [{ exists: true }] });
+    const cutoff = 1_700_000_001_000;
 
-    expect(await supplierQuotesRepo.hasClientSyncedCosts('q-1', testDb)).toBe(true);
+    expect(await supplierQuotesRepo.hasClientSyncedCosts('q-1', cutoff, testDb)).toBe(true);
     expect(exec.calls[0].sql).toContain('FROM audit_logs');
     expect(exec.calls[0].sql).toContain("details ->> 'secondaryLabel'");
+    expect(exec.calls[0].sql).toContain('created_at <=');
     expect(exec.calls[0].params).toEqual([
       'supplier_quote.updated',
       'supplier_quote',
       'q-1',
       'synced_from_client_line',
+      new Date(cutoff),
     ]);
   });
 
   test('returns false when no marker exists', async () => {
     exec.enqueue({ rows: [{ exists: false }] });
-    expect(await supplierQuotesRepo.hasClientSyncedCosts('q-1', testDb)).toBe(false);
+    expect(await supplierQuotesRepo.hasClientSyncedCosts('q-1', Date.now(), testDb)).toBe(false);
   });
 });
 
