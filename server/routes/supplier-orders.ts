@@ -11,7 +11,6 @@ import {
   createDocumentDiscountConstraint,
   documentDiscountTypeSchema,
   documentDiscountValueSchema,
-  updateDocumentDiscountConstraint,
 } from '../schemas/documentDiscount.ts';
 import {
   allocateDocumentCode,
@@ -133,7 +132,6 @@ const createBodySchema = {
 
 const updateBodySchema = {
   type: 'object',
-  allOf: [updateDocumentDiscountConstraint],
   properties: {
     id: { type: 'string' },
     supplierId: { type: 'string' },
@@ -690,7 +688,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             ? 'currency'
             : 'percentage';
       const effectiveDiscountType = discountTypeValue ?? existingOrder.discountType;
-      if (discount !== undefined || discountTypeValue !== undefined) {
+      const discountPairChanged =
+        (discount !== undefined && discount !== existingOrder.discount) ||
+        (discountTypeValue !== undefined && discountTypeValue !== existingOrder.discountType);
+      if (discountPairChanged) {
         const discountResult = optionalLocalizedDocumentDiscount(
           discount === undefined ? existingOrder.discount : discount,
           effectiveDiscountType,

@@ -500,6 +500,24 @@ describe('client-offer document discount validation', () => {
     expect(coUpdateMock).toHaveBeenCalled();
   });
 
+  test('200 allows updates that resend an unchanged legacy percentage discount above 100', async () => {
+    coFindExistingMock.mockResolvedValue(
+      gate({ discount: 150, discountType: 'percentage' as const }),
+    );
+    coUpdateMock.mockResolvedValue(
+      updatedOffer({ discount: 150, discountType: 'percentage', notes: 'edited' }),
+    );
+
+    const res = await putOffer({
+      discount: 150,
+      discountType: 'percentage',
+      notes: 'edited',
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(coUpdateMock).toHaveBeenCalled();
+  });
+
   test('400 rejects a percentage document discount above 100%', async () => {
     coFindExistingMock.mockResolvedValue(gate());
     coUpdateMock.mockResolvedValue(updatedOffer({ discount: 100.01 }));

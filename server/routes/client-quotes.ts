@@ -15,7 +15,6 @@ import {
   createDocumentDiscountConstraint,
   documentDiscountTypeSchema,
   documentDiscountValueSchema,
-  updateDocumentDiscountConstraint,
 } from '../schemas/documentDiscount.ts';
 import {
   allocateDocumentCode,
@@ -712,7 +711,6 @@ const quoteCreateBodySchema = {
 
 const quoteUpdateBodySchema = {
   type: 'object',
-  allOf: [updateDocumentDiscountConstraint],
   properties: {
     id: { type: 'string' },
     clientId: { type: 'string' },
@@ -2151,8 +2149,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             ? 'currency'
             : 'percentage';
       const effectiveDiscountType = discountTypeValue ?? existingDiscountType;
+      const discountPairChanged =
+        (discount !== undefined && discount !== existingDiscount) ||
+        (discountTypeValue !== undefined && discountTypeValue !== existingDiscountType);
       let discountValue: number | null | undefined;
-      if (discount !== undefined || discountTypeValue !== undefined) {
+      if (discountPairChanged) {
         const discountResult = optionalLocalizedDocumentDiscount(
           discount === undefined ? existingDiscount : discount,
           effectiveDiscountType,
@@ -2313,7 +2314,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         if (!Number.isFinite(totals.total) || totals.total <= 0) {
           return badRequest(reply, 'Total must be greater than 0');
         }
-      } else if (discount !== undefined) {
+      } else if (discountPairChanged) {
         const itemTotals = await clientQuotesRepo.findItemTotals(idResult.value);
         const effectiveDiscountType = discountTypeValue ?? existingDiscountType;
         const totals = calculateQuoteTotals(

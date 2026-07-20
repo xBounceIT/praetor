@@ -460,6 +460,24 @@ describe('PUT /api/sales/client-quotes/:id document discount validation', () => 
     expect(res.statusCode).toBe(200);
     expect(cqUpdateMock).toHaveBeenCalled();
   });
+
+  test('200 allows updates that resend an unchanged legacy percentage discount above 100', async () => {
+    cqFindCurrentMock.mockResolvedValue(
+      gate({ discount: 150, discountType: 'percentage' as const }),
+    );
+    cqUpdateMock.mockResolvedValue(
+      updatedQuote({ discount: 150, discountType: 'percentage', notes: 'edited' }),
+    );
+
+    const res = await putStatus({
+      discount: 150,
+      discountType: 'percentage',
+      notes: 'edited',
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(cqUpdateMock).toHaveBeenCalled();
+  });
 });
 
 describe('PUT /api/sales/client-quotes/:id status rules (issue #779)', () => {

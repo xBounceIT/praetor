@@ -315,6 +315,25 @@ describe('PUT /api/accounting/supplier-orders/:id document discount validation',
     expect(soUpdateMock).toHaveBeenCalled();
   });
 
+  test('200 allows updates that resend an unchanged legacy percentage discount above 100', async () => {
+    soFindExistingMock.mockResolvedValue({
+      ...SAMPLE_ORDER,
+      discount: 150,
+      discountType: 'percentage',
+    });
+    soUpdateMock.mockResolvedValue({ ...SAMPLE_ORDER, discount: 150, notes: 'edited' });
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/accounting/supplier-orders/so-1',
+      headers: authHeader(),
+      payload: { discount: 150, discountType: 'percentage', notes: 'edited' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(soUpdateMock).toHaveBeenCalled();
+  });
+
   test('400 rejects changing an over-100 currency discount to percentage', async () => {
     soFindExistingMock.mockResolvedValue({
       ...SAMPLE_ORDER,

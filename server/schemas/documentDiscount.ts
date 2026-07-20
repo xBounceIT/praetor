@@ -19,16 +19,3 @@ export const createDocumentDiscountConstraint = {
     { properties: { discount: { type: 'number', maximum: 100 } } },
   ],
 } as const;
-
-// A partial update may omit discountType while editing an existing currency discount, so the
-// schema can bound only an explicitly percentage-typed request. The handler combines the patch
-// with the stored row and validates the resulting pair.
-export const updateDocumentDiscountConstraint = {
-  not: {
-    properties: {
-      discountType: { const: 'percentage' },
-      discount: { type: 'number', exclusiveMinimum: 100 },
-    },
-    required: ['discountType', 'discount'],
-  },
-} as const;
