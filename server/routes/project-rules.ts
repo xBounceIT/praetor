@@ -99,7 +99,11 @@ const projectRuleSchema = {
     value: { type: 'string' },
     conditionLogic: { type: 'string', enum: ['and', 'or'] },
     conditions: { type: 'array', items: projectRuleConditionSchema },
-    actionType: { type: 'string' },
+    actionType: {
+      type: 'string',
+      description:
+        'Set to webhook when webhook actions are redacted, including rules that retain visible notification actions.',
+    },
     actionConfig: {
       ...actionConfigResponseSchema,
       description:
@@ -215,7 +219,7 @@ const redactRuleWebhooks = (rule: projectRulesRepo.ProjectRule): projectRulesRep
     rule.actionConfig.actions.some((action) => action.type === 'webhook');
   return {
     ...rule,
-    actionType: actions[0]?.type ?? (hasHiddenWebhooks ? 'webhook' : rule.actionType),
+    actionType: hasHiddenWebhooks ? 'webhook' : (actions[0]?.type ?? rule.actionType),
     actionConfig: {
       ...rule.actionConfig,
       webhookIds: [],

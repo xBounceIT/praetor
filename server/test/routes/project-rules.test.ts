@@ -234,7 +234,9 @@ describe('project rule routes', () => {
     });
 
     expect(res.statusCode).toBe(200);
-    expect(JSON.parse(res.body)[0].actionConfig).toEqual({
+    const [redactedRule] = JSON.parse(res.body);
+    expect(redactedRule.actionType).toBe('webhook');
+    expect(redactedRule.actionConfig).toEqual({
       ...SAMPLE_RULE.actionConfig,
       webhookIds: [],
       actions: SAMPLE_RULE.actionConfig.actions,

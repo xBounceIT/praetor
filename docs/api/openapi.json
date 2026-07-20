@@ -13750,7 +13750,8 @@
                         }
                       },
                       "actionType": {
-                        "type": "string"
+                        "type": "string",
+                        "description": "Set to webhook when webhook actions are redacted, including rules that retain visible notification actions."
                       },
                       "actionConfig": {
                         "type": "object",
@@ -14218,7 +14219,8 @@
                       }
                     },
                     "actionType": {
-                      "type": "string"
+                      "type": "string",
+                      "description": "Set to webhook when webhook actions are redacted, including rules that retain visible notification actions."
                     },
                     "actionConfig": {
                       "type": "object",
@@ -14691,7 +14693,8 @@
                       }
                     },
                     "actionType": {
-                      "type": "string"
+                      "type": "string",
+                      "description": "Set to webhook when webhook actions are redacted, including rules that retain visible notification actions."
                     },
                     "actionConfig": {
                       "type": "object",
