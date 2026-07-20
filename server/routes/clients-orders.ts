@@ -148,7 +148,7 @@ const clientOrderItemBodySchema = {
     supplierQuoteItemId: {
       type: ['string', 'null'],
       description:
-        'Supplier quote item source. On create, it must come from the accepted same-client source offer unless the caller has accounting.supplier_orders.create.',
+        'Supplier quote item source. Without accounting.supplier_orders.create, creates require the accepted same-client source offer and updates may only retain references already stored on the order.',
     },
     supplierQuoteSupplierName: { type: ['string', 'null'] },
     supplierQuoteUnitPrice: { type: ['number', 'null'] },
@@ -984,15 +984,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         linkedOfferIdValue = linkedOfferIdResult.value;
       }
 
-      let normalizedItems: NormalizedOrderItem[] | null = null;
+      let parsedItemsForUpdate: NormalizedOrderItem[] | null = null;
       if (items !== undefined) {
         if (!Array.isArray(items) || items.length === 0) {
           return badRequest(reply, 'Items must be a non-empty array');
         }
-        const parsedItems = normalizeIncomingItems(items, reply);
-        if (!parsedItems) return;
-        normalizedItems = await resolveSupplierQuoteRefs(parsedItems, reply);
-        if (!normalizedItems) return;
+        parsedItemsForUpdate = normalizeIncomingItems(items, reply);
+        if (!parsedItemsForUpdate) return;
       }
 
       const existingOrder = await clientsOrdersRepo.findExisting(idResult.value);
@@ -1076,6 +1074,46 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         }
       }
 
+      let existingItems: clientsOrdersRepo.ClientOrderItem[] | null = null;
+      let normalizedItems: NormalizedOrderItem[] | null = null;
+      if (parsedItemsForUpdate) {
+        const canCreateSupplierOrders = requestHasPermission(
+          request,
+          'accounting.supplier_orders.create',
+        );
+        let allowedSupplierQuoteItemIds: ReadonlySet<string> | undefined;
+        const hasSupplierQuoteRefs = parsedItemsForUpdate.some(
+          (item) => item.supplierQuoteItemId !== null,
+        );
+        if (!canCreateSupplierOrders && hasSupplierQuoteRefs) {
+          existingItems = await clientsOrdersRepo.findItemsForOrder(idResult.value);
+          const retainedSupplierQuoteItemIdByLineId = new Map(
+            existingItems.flatMap((item) =>
+              item.supplierQuoteItemId ? [[item.id, item.supplierQuoteItemId] as const] : [],
+            ),
+          );
+          const forbiddenIndex = parsedItemsForUpdate.findIndex(
+            (item) =>
+              item.supplierQuoteItemId !== null &&
+              (!item.id ||
+                retainedSupplierQuoteItemIdByLineId.get(item.id) !== item.supplierQuoteItemId),
+          );
+          if (forbiddenIndex >= 0) {
+            reply.code(403).send({
+              error: `items[${forbiddenIndex}].supplierQuoteItemId cannot be added or moved without accounting.supplier_orders.create permission`,
+            });
+            return;
+          }
+          allowedSupplierQuoteItemIds = new Set(retainedSupplierQuoteItemIdByLineId.values());
+        }
+        normalizedItems = await resolveSupplierQuoteRefs(
+          parsedItemsForUpdate,
+          reply,
+          allowedSupplierQuoteItemIds,
+        );
+        if (!normalizedItems) return;
+      }
+
       const nextLinkedOfferId =
         typeof linkedOfferIdValue === 'string' && linkedOfferIdValue !== existingOrder.linkedOfferId
           ? linkedOfferIdValue
@@ -1088,8 +1126,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       // line edits still flow through this source-linked path.
       const allowSourceLinkedEdit =
         existingOrder.status === 'draft' || existingOrder.status === 'confirmed';
-
-      let existingItems: clientsOrdersRepo.ClientOrderItem[] | null = null;
 
       if (isSourceLinkedOrder && !allowSourceLinkedEdit) {
         const lockedFields: string[] = [];

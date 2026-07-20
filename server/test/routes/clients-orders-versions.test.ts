@@ -1202,6 +1202,125 @@ describe('PUT /api/clients-orders/:id snapshots pre-update state', () => {
     expect(coReplaceItemsMock.mock.calls[0]?.at(-1)).toBe(TX_SENTINEL);
     expect(logAuditMock).not.toHaveBeenCalled();
   });
+
+  test('PUT rejects a fresh supplier quote item without supplier-order create permission', async () => {
+    coFindExistingMock.mockResolvedValue(SAMPLE_ORDER);
+    coFindItemsForOrderMock.mockResolvedValue([SAMPLE_ITEM]);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/clients-orders/o-1',
+      headers: authHeader(),
+      payload: {
+        items: [
+          {
+            id: SAMPLE_ITEM.id,
+            productId: SAMPLE_ITEM.productId,
+            productName: SAMPLE_ITEM.productName,
+            quantity: SAMPLE_ITEM.quantity,
+            unitPrice: SAMPLE_ITEM.unitPrice,
+            productCost: SAMPLE_ITEM.productCost,
+            discount: SAMPLE_ITEM.discount,
+            unitType: SAMPLE_ITEM.unitType,
+            supplierQuoteId: 'sq-1',
+            supplierQuoteItemId: 'sqi-1',
+          },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(JSON.parse(res.body).error).toContain('accounting.supplier_orders.create');
+    expect(sqGetQuoteItemSnapshotsMock).not.toHaveBeenCalled();
+    expect(coReplaceItemsMock).not.toHaveBeenCalled();
+  });
+
+  test('PUT lets an unprivileged caller retain a validated supplier quote item', async () => {
+    const retainedSupplierItem = {
+      ...SAMPLE_ITEM,
+      supplierQuoteId: 'sq-1',
+      supplierQuoteItemId: 'sqi-1',
+      supplierQuoteSupplierName: 'ACME',
+      supplierQuoteUnitPrice: 50,
+    };
+    coFindExistingMock.mockResolvedValue(SAMPLE_ORDER);
+    coFindItemsForOrderMock.mockResolvedValue([retainedSupplierItem]);
+    coFindFullForSnapshotMock.mockResolvedValue({
+      order: SAMPLE_ORDER,
+      items: [retainedSupplierItem],
+    });
+    coUpdateMock.mockResolvedValue(SAMPLE_ORDER);
+    coReplaceItemsMock.mockResolvedValue([{ ...retainedSupplierItem, unitPrice: 101 }]);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/clients-orders/o-1',
+      headers: authHeader(),
+      payload: {
+        items: [
+          {
+            id: retainedSupplierItem.id,
+            productId: retainedSupplierItem.productId,
+            productName: retainedSupplierItem.productName,
+            quantity: retainedSupplierItem.quantity,
+            unitPrice: 101,
+            productCost: retainedSupplierItem.productCost,
+            discount: retainedSupplierItem.discount,
+            unitType: retainedSupplierItem.unitType,
+            supplierQuoteId: retainedSupplierItem.supplierQuoteId,
+            supplierQuoteItemId: retainedSupplierItem.supplierQuoteItemId,
+          },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(sqGetQuoteItemSnapshotsMock).toHaveBeenCalledWith(['sqi-1']);
+    expect(coReplaceItemsMock).toHaveBeenCalled();
+  });
+
+  test('PUT rejects moving a retained supplier quote item onto a new sale line', async () => {
+    const retainedSupplierItem = {
+      ...SAMPLE_ITEM,
+      supplierQuoteId: 'sq-1',
+      supplierQuoteItemId: 'sqi-1',
+      supplierQuoteSupplierName: 'ACME',
+      supplierQuoteUnitPrice: 50,
+    };
+    coFindExistingMock.mockResolvedValue(SAMPLE_ORDER);
+    coFindItemsForOrderMock.mockResolvedValue([retainedSupplierItem]);
+    coFindFullForSnapshotMock.mockResolvedValue({
+      order: SAMPLE_ORDER,
+      items: [retainedSupplierItem],
+    });
+    coUpdateMock.mockResolvedValue(SAMPLE_ORDER);
+    coReplaceItemsMock.mockResolvedValue([{ ...retainedSupplierItem, id: 'si-new' }]);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/clients-orders/o-1',
+      headers: authHeader(),
+      payload: {
+        items: [
+          {
+            id: 'si-new',
+            productId: retainedSupplierItem.productId,
+            productName: retainedSupplierItem.productName,
+            quantity: retainedSupplierItem.quantity,
+            unitPrice: retainedSupplierItem.unitPrice,
+            productCost: retainedSupplierItem.productCost,
+            discount: retainedSupplierItem.discount,
+            unitType: retainedSupplierItem.unitType,
+            supplierQuoteId: retainedSupplierItem.supplierQuoteId,
+            supplierQuoteItemId: retainedSupplierItem.supplierQuoteItemId,
+          },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(coReplaceItemsMock).not.toHaveBeenCalled();
+  });
 });
 
 describe('PUT /api/clients-orders/:id source-linked editability', () => {

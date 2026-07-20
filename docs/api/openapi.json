@@ -41389,7 +41389,7 @@
                             "string",
                             "null"
                           ],
-                          "description": "Supplier quote item source. On create, it must come from the accepted same-client source offer unless the caller has accounting.supplier_orders.create."
+                          "description": "Supplier quote item source. Without accounting.supplier_orders.create, creates require the accepted same-client source offer and updates may only retain references already stored on the order."
                         },
                         "supplierQuoteSupplierName": {
                           "type": [
@@ -41931,7 +41931,7 @@
                             "string",
                             "null"
                           ],
-                          "description": "Supplier quote item source. On create, it must come from the accepted same-client source offer unless the caller has accounting.supplier_orders.create."
+                          "description": "Supplier quote item source. Without accounting.supplier_orders.create, creates require the accepted same-client source offer and updates may only retain references already stored on the order."
                         },
                         "supplierQuoteSupplierName": {
                           "type": [
