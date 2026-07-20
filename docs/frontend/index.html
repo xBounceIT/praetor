@@ -89,13 +89,15 @@ procedure for an existing volume.</p>
 <p>That deployment also defaults backend <code>TRUST_PROXY=1</code>; override it if your proxy chain differs.</p>
 <p>For complete customer deployment details, see <code>deploy/README.md</code>.</p>
 <h3 id="publishing-release-images" class="tsd-anchor-link">Publishing release images<a href="#publishing-release-images" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h3>
-<p>This repository includes GitHub Actions workflow <code>publish-images.yml</code> that pushes:</p>
+<p>This repository includes GitHub Actions workflow <code>create-release.yml</code> that pushes:</p>
 <ul>
 <li><code>ghcr.io/&lt;owner&gt;/praetor-frontend:&lt;version&gt;</code></li>
 <li><code>ghcr.io/&lt;owner&gt;/praetor-backend:&lt;version&gt;</code></li>
 <li><code>latest</code> tags for both images</li>
 </ul>
-<p>The workflow runs on <code>v*</code> git tags and can also be run manually.</p>
+<p>The workflow runs on <code>v*</code> git tags and can also be run manually. The resolved version must use
+<code>vMAJOR.MINOR.PATCH</code> with an optional <code>-prerelease</code> suffix and cannot exceed 128 characters; invalid
+values stop the workflow before release creation or registry authentication.</p>
 <h2 id="usage-guide" class="tsd-anchor-link">Usage Guide<a href="#usage-guide" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2>
 <ul>
 <li>
