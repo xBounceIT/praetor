@@ -211,7 +211,8 @@ describe('project rule routes', () => {
     expect(listRulesMock).not.toHaveBeenCalled();
   });
 
-  test('GET recipients returns user and role options', async () => {
+  test('GET recipients returns webhook options to authorized callers', async () => {
+    currentPermissions = ['projects.rules.view', 'administration.webhooks.view'];
     listRecipientOptionsMock.mockResolvedValue({
       users: [{ id: 'u2', name: 'Alice', username: 'alice', avatarInitials: 'AL' }],
       roles: [{ id: 'manager', name: 'Manager' }],
@@ -228,6 +229,24 @@ describe('project rule routes', () => {
     expect(JSON.parse(res.body).users[0].id).toBe('u2');
     expect(JSON.parse(res.body).webhooks[0].id).toBe('webhook-1');
     expect(listRecipientOptionsMock).toHaveBeenCalledWith('p1');
+  });
+
+  test('GET recipients hides webhook options without administration.webhooks.view', async () => {
+    currentPermissions = ['projects.rules.view'];
+    listRecipientOptionsMock.mockResolvedValue({
+      users: [{ id: 'u2', name: 'Alice', username: 'alice', avatarInitials: 'AL' }],
+      roles: [{ id: 'manager', name: 'Manager' }],
+      webhooks: [{ id: 'webhook-1', name: 'Slack' }],
+    });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/projects/p1/rules/recipients',
+      headers: authHeaders(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body).webhooks).toEqual([]);
   });
 
   test('POST rejects cost-derived fields without reports.cost.view', async () => {
@@ -330,7 +349,7 @@ describe('project rule routes', () => {
   });
 
   test('POST creates a rule with notification and webhook actions', async () => {
-    currentPermissions = ['projects.rules.create'];
+    currentPermissions = ['projects.rules.create', 'administration.webhooks.view'];
     const createdRule = {
       ...SAMPLE_RULE,
       field: 'revenue',
@@ -380,6 +399,39 @@ describe('project rule routes', () => {
       }),
       TX_SENTINEL,
     );
+  });
+
+  test('POST rejects webhook actions without administration.webhooks.view', async () => {
+    currentPermissions = ['projects.rules.create'];
+    createRuleMock.mockResolvedValue({
+      ...SAMPLE_RULE,
+      actionType: 'webhook',
+      actionConfig: {
+        recipientUserIds: [],
+        recipientRoleIds: [],
+        webhookIds: ['webhook-1'],
+        actions: [{ type: 'webhook', webhookId: 'webhook-1' }],
+      },
+    });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/projects/p1/rules',
+      headers: authHeaders(),
+      payload: {
+        name: 'Webhook',
+        field: 'revenue',
+        operator: 'gte',
+        value: '1000',
+        actionConfig: {
+          actions: [{ type: 'webhook', webhookId: 'webhook-1' }],
+        },
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body).error).toBe('actionConfig contains invalid recipients or webhooks');
+    expect(createRuleMock).not.toHaveBeenCalled();
   });
 
   test('POST rejects unsupported fields and operators', async () => {
@@ -463,7 +515,7 @@ describe('project rule routes', () => {
   });
 
   test('POST rejects missing or disabled webhooks', async () => {
-    currentPermissions = ['projects.rules.create'];
+    currentPermissions = ['projects.rules.create', 'administration.webhooks.view'];
     findInvalidRecipientIdsMock.mockResolvedValue({
       userIds: [],
       roleIds: [],
@@ -518,6 +570,27 @@ describe('project rule routes', () => {
     expect(res.statusCode).toBe(400);
     expect(JSON.parse(res.body).error).toBe('At least one rule field is required');
     expect(findRuleMock).not.toHaveBeenCalled();
+    expect(updateRuleMock).not.toHaveBeenCalled();
+  });
+
+  test('PUT rejects newly added webhook actions without administration.webhooks.view', async () => {
+    currentPermissions = ['projects.rules.update', 'reports.cost.view'];
+    findRuleMock.mockResolvedValue(SAMPLE_RULE);
+
+    const res = await app.inject({
+      method: 'PUT',
+      url: '/api/projects/p1/rules/pr-1',
+      headers: authHeaders(),
+      payload: {
+        actionConfig: {
+          actions: [{ type: 'webhook', webhookId: 'webhook-1' }],
+        },
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body).error).toBe('actionConfig contains invalid recipients or webhooks');
+    expect(findInvalidRecipientIdsMock).not.toHaveBeenCalled();
     expect(updateRuleMock).not.toHaveBeenCalled();
   });
 
@@ -582,6 +655,37 @@ describe('project rule routes', () => {
     );
   });
 
+  test('PUT rejects re-enabling webhook rules without administration.webhooks.view', async () => {
+    currentPermissions = ['projects.rules.update'];
+    const existingRule = {
+      ...SAMPLE_RULE,
+      field: 'revenue',
+      operator: 'gte',
+      value: '1000',
+      conditions: [{ field: 'revenue', operator: 'gte', value: '1000', valueType: 'literal' }],
+      isEnabled: false,
+      actionConfig: {
+        recipientUserIds: [],
+        recipientRoleIds: [],
+        webhookIds: ['webhook-1'],
+        actions: [{ type: 'webhook', webhookId: 'webhook-1' }],
+      },
+    };
+    findRuleMock.mockResolvedValue(existingRule);
+
+    const res = await app.inject({
+      method: 'PUT',
+      url: '/api/projects/p1/rules/pr-1',
+      headers: authHeaders(),
+      payload: { isEnabled: true },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body).error).toBe('actionConfig contains invalid recipients or webhooks');
+    expect(findInvalidRecipientIdsMock).not.toHaveBeenCalled();
+    expect(updateRuleMock).not.toHaveBeenCalled();
+  });
+
   test('PUT can disable a rule that references an existing inactive webhook', async () => {
     currentPermissions = ['projects.rules.update'];
     const existingRule = {
@@ -629,7 +733,7 @@ describe('project rule routes', () => {
   });
 
   test('PUT rejects newly added inactive webhooks on disabled rules', async () => {
-    currentPermissions = ['projects.rules.update'];
+    currentPermissions = ['projects.rules.update', 'administration.webhooks.view'];
     const existingRule = {
       ...SAMPLE_RULE,
       field: 'revenue',

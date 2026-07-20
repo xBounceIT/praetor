@@ -49,7 +49,10 @@ const projectRuleActionSchema = {
     recipientType: { type: 'string', enum: ['user', 'role'] },
     recipientUserIds: { type: 'array', items: { type: 'string' } },
     recipientRoleIds: { type: 'array', items: { type: 'string' } },
-    webhookId: { type: 'string' },
+    webhookId: {
+      type: 'string',
+      description: 'Requires administration.webhooks.view when supplied.',
+    },
   },
   required: ['type'],
   additionalProperties: false,
@@ -154,6 +157,8 @@ const recipientOptionsSchema = {
     },
     webhooks: {
       type: 'array',
+      description:
+        'Enabled webhook targets. Empty unless the caller has administration.webhooks.view.',
       items: {
         type: 'object',
         properties: {
@@ -193,6 +198,11 @@ const projectRuleUpdateBodySchema = {
 type ProjectRuleBody = Record<string, unknown>;
 
 class RecipientValidationError extends Error {}
+
+const WEBHOOK_USE_PERMISSION = 'administration.webhooks.view';
+
+const canUseRuleWebhooks = (permissions: readonly string[]) =>
+  permissions.includes(WEBHOOK_USE_PERMISSION);
 
 const canAccessProject = makeAccessChecker(
   (userId, projectId) => userAssignmentsRepo.isProjectAssignedToUser(userId, projectId),
@@ -544,6 +554,14 @@ const validateFinalRule = async ({
     }
   }
 
+  const allowedDisabledWebhookIdSet = new Set(allowedDisabledWebhookIds ?? []);
+  if (
+    !canUseRuleWebhooks(permissions) &&
+    rule.actionConfig.webhookIds.some((id) => !allowedDisabledWebhookIdSet.has(id))
+  ) {
+    throw new RecipientValidationError('actionConfig contains invalid recipients or webhooks');
+  }
+
   const invalidRecipients = await projectRuleRecipientsRepo.findInvalidRecipientIds(
     projectId,
     rule.actionConfig,
@@ -634,7 +652,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       ) {
         return;
       }
-      return projectRuleRecipientsRepo.listRecipientOptions(id.value);
+      const options = await projectRuleRecipientsRepo.listRecipientOptions(id.value);
+      return canUseRuleWebhooks(request.user?.permissions ?? [])
+        ? options
+        : { ...options, webhooks: [] };
     },
   );
 

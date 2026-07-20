@@ -13512,6 +13512,7 @@
                     },
                     "webhooks": {
                       "type": "array",
+                      "description": "Enabled webhook targets. Empty unless the caller has administration.webhooks.view.",
                       "items": {
                         "type": "object",
                         "properties": {
@@ -13804,7 +13805,8 @@
                                   }
                                 },
                                 "webhookId": {
-                                  "type": "string"
+                                  "type": "string",
+                                  "description": "Requires administration.webhooks.view when supplied."
                                 }
                               },
                               "required": [
@@ -14115,7 +14117,8 @@
                               }
                             },
                             "webhookId": {
-                              "type": "string"
+                              "type": "string",
+                              "description": "Requires administration.webhooks.view when supplied."
                             }
                           },
                           "required": [
@@ -14269,7 +14272,8 @@
                                 }
                               },
                               "webhookId": {
-                                "type": "string"
+                                "type": "string",
+                                "description": "Requires administration.webhooks.view when supplied."
                               }
                             },
                             "required": [
@@ -14581,7 +14585,8 @@
                               }
                             },
                             "webhookId": {
-                              "type": "string"
+                              "type": "string",
+                              "description": "Requires administration.webhooks.view when supplied."
                             }
                           },
                           "required": [
@@ -14739,7 +14744,8 @@
                                 }
                               },
                               "webhookId": {
-                                "type": "string"
+                                "type": "string",
+                                "description": "Requires administration.webhooks.view when supplied."
                               }
                             },
                             "required": [
