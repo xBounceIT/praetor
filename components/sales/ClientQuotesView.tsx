@@ -2305,9 +2305,7 @@ const ClientQuoteFormModal: React.FC<{ controller: ClientQuotesController }> = (
   } = controller;
   const { revisionId: selectedRevisionId, versionId: selectedVersionId } =
     getHistoryPreviewIds(previewVersion);
-  const revisionRestoreDisabled = Boolean(
-    editingQuote?.linkedOfferId || (editingQuote && isTerminalQuoteStatus(editingQuote.status)),
-  );
+  const revisionRestoreDisabled = Boolean(baseReadOnly || editingQuote?.status !== 'draft');
 
   return (
     <Modal isOpen={isModalOpen} onClose={closeModal}>

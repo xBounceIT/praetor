@@ -1482,8 +1482,7 @@ const ClientOfferFormModal: React.FC<{ controller: ClientOffersController }> = (
   } = controller;
   const { revisionId: selectedRevisionId, versionId: selectedVersionId } =
     getHistoryPreviewIds(previewVersion);
-  const revisionRestoreDisabled =
-    editingOffer?.status === 'accepted' || editingOffer?.status === 'denied';
+  const revisionRestoreDisabled = baseReadOnly;
 
   return (
     <Modal isOpen={isModalOpen} onClose={closeModal}>

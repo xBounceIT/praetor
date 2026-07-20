@@ -1235,7 +1235,9 @@ const SupplierQuoteModal: React.FC<{ controller: SupplierQuotesController }> = (
   const { revisionId: selectedRevisionId, versionId: selectedVersionId } = getHistoryPreviewIds(
     controller.previewVersion,
   );
-  const revisionRestoreDisabled = Boolean(controller.editingQuote?.linkedOrderId);
+  const revisionRestoreDisabled = Boolean(
+    controller.baseReadOnly || controller.editingQuote?.linkedOrderId,
+  );
 
   return (
     <Modal isOpen={controller.isModalOpen} onClose={controller.closeModal}>

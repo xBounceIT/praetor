@@ -11,7 +11,10 @@ import type {
 } from '../repositories/revisionsRepo.ts';
 import * as supplierQuotesRepo from '../repositories/supplierQuotesRepo.ts';
 import * as supplierQuoteVersionsRepo from '../repositories/supplierQuoteVersionsRepo.ts';
-import { isTerminalQuoteStatus } from '../utils/quote-status.ts';
+import {
+  effectiveQuoteStatusFromDate,
+  effectiveSupplierQuoteStatusFromDate,
+} from '../utils/quote-status.ts';
 
 export class RevisionRestoreConflict extends Error {
   constructor(
@@ -22,6 +25,15 @@ export class RevisionRestoreConflict extends Error {
   }
 }
 
+export const assertDraftRevisionRestore = (effectiveStatus: string) => {
+  if (effectiveStatus !== 'draft') {
+    throw new RevisionRestoreConflict(
+      'Revision restore is allowed only while the document is in draft',
+      'document_not_draft',
+    );
+  }
+};
+
 export const restoreQuoteRevision = async (
   quoteId: string,
   revision: QuoteRevision,
@@ -30,12 +42,7 @@ export const restoreQuoteRevision = async (
 ) => {
   const locked = await clientQuotesRepo.lockCurrentById(quoteId, tx);
   if (!locked) return null;
-  if (isTerminalQuoteStatus(locked.status)) {
-    throw new RevisionRestoreConflict(
-      'Accepted or rejected quotes are read-only',
-      'terminal_read_only',
-    );
-  }
+  assertDraftRevisionRestore(effectiveQuoteStatusFromDate(locked.status, locked.expirationDate));
   if (
     (await clientOffersRepo.findExistingForQuote(quoteId, tx)) ||
     (await clientQuotesRepo.findAnyLinkedSale(quoteId, tx))
@@ -128,12 +135,7 @@ export const restoreOfferRevision = async (
 ) => {
   const locked = await clientOffersRepo.lockExistingById(offerId, tx);
   if (!locked) return null;
-  if (locked.status === 'accepted' || locked.status === 'denied') {
-    throw new RevisionRestoreConflict(
-      'Accepted or denied offers cannot be restored into draft',
-      'terminal_read_only',
-    );
-  }
+  assertDraftRevisionRestore(effectiveQuoteStatusFromDate(locked.status, locked.expirationDate));
   if (await clientOffersRepo.findLinkedSaleId(offerId, tx)) {
     throw new RevisionRestoreConflict(
       'Cannot restore an offer with an existing sale order',
@@ -188,7 +190,9 @@ export const restoreSupplierQuoteRevision = async (
   createdByUserId: string | null,
   tx: DbExecutor,
 ) => {
-  if (!(await supplierQuotesRepo.lockEffectiveStatusById(quoteId, tx))) return null;
+  const locked = await supplierQuotesRepo.lockEffectiveStatusById(quoteId, tx);
+  if (!locked) return null;
+  assertDraftRevisionRestore(effectiveSupplierQuoteStatusFromDate(locked));
   if (await supplierQuotesRepo.findLinkedOrderId(quoteId, tx)) {
     throw new RevisionRestoreConflict(
       'Cannot restore a supplier quote with an existing order',
