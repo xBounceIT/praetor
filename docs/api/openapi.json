@@ -4564,6 +4564,7 @@
         "tags": [
           "users"
         ],
+        "description": "Requires delete permission for the target employee type. Callers without administration.user_management_all.view must manage the target through a shared work unit.",
         "parameters": [
           {
             "schema": {
