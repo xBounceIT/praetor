@@ -81,7 +81,12 @@ import {
   parseOptionalNumberInputValue,
 } from '../../utils/numbers';
 import { getPaymentTermsOptions } from '../../utils/options';
-import { makeCostUpdater, makeMolUpdater, makeUnitPriceUpdater } from '../../utils/pricingHandlers';
+import {
+  makeCostUpdater,
+  makeMolUpdater,
+  makeRevenueUpdater,
+  makeUnitPriceUpdater,
+} from '../../utils/pricingHandlers';
 import {
   buildProductQuickViewHref,
   buildSupplierQuoteQuickViewHref,
@@ -780,18 +785,11 @@ const useClientQuotesController = ({
     );
   };
 
-  const openPromotionDialog = (quote: Quote) => {
-    const eligible = (quote.candidates || []).find(isCandidatePromotable);
-    // react-doctor-disable-next-line react-doctor/no-impure-state-updater -- Dialog event handler queues independent state transitions.
-    setPromotionQuote(quote);
-    setPromotionCandidateId(eligible?.id ?? null);
-  };
-
-  const confirmCandidatePromotion = async () => {
-    if (!promotionQuote || !promotionCandidateId || !onPromoteCandidate || isPromoting) return;
+  const promoteCandidate = async (quoteId: string, candidateId: string) => {
+    if (!onPromoteCandidate || isPromoting) return;
     setIsPromoting(true);
     try {
-      await onPromoteCandidate(promotionQuote.id, promotionCandidateId);
+      await onPromoteCandidate(quoteId, candidateId);
       setPromotionQuote(null);
       setPromotionCandidateId(null);
     } catch (error) {
@@ -799,6 +797,25 @@ const useClientQuotesController = ({
     } finally {
       setIsPromoting(false);
     }
+  };
+
+  const openPromotionDialog = (quote: Quote) => {
+    const activeCandidates = (quote.candidates || []).filter(
+      (candidate) => candidate.state === 'active',
+    );
+    const eligible = activeCandidates.find(isCandidatePromotable);
+    if (activeCandidates.length === 1 && eligible) {
+      void promoteCandidate(quote.id, eligible.id);
+      return;
+    }
+    // react-doctor-disable-next-line react-doctor/no-impure-state-updater -- Dialog event handler queues independent state transitions.
+    setPromotionQuote(quote);
+    setPromotionCandidateId(eligible?.id ?? null);
+  };
+
+  const confirmCandidatePromotion = async () => {
+    if (!promotionQuote || !promotionCandidateId) return;
+    await promoteCandidate(promotionQuote.id, promotionCandidateId);
   };
 
   const rollbackCandidatePromotion = async (quoteId: string) => {
@@ -1461,10 +1478,28 @@ const useClientQuotesController = ({
     return ids;
   }, [formData.items]);
 
+  const supplierQuoteItemIdsUsedByOtherQuotes = useMemo(() => {
+    const ids = new Set<string>();
+    for (const quote of quotes) {
+      if (quote.id === editingQuote?.id) continue;
+
+      for (const item of quote.items) {
+        if (item.supplierQuoteItemId) ids.add(item.supplierQuoteItemId);
+      }
+      for (const candidate of quote.candidates ?? []) {
+        for (const item of candidate.items) {
+          if (item.supplierQuoteItemId) ids.add(item.supplierQuoteItemId);
+        }
+      }
+    }
+    return ids;
+  }, [editingQuote?.id, quotes]);
+
   const supplierQuoteItemOptions = useMemo(() => {
     const options: Option[] = [];
     for (const quote of sourceableSupplierQuotes) {
       for (const item of quote.items) {
+        if (supplierQuoteItemIdsUsedByOtherQuotes.has(item.id)) continue;
         options.push({
           id: item.id,
           name: supplierQuoteItemLabel(quote, item),
@@ -1473,7 +1508,7 @@ const useClientQuotesController = ({
       }
     }
     return options;
-  }, [sourceableSupplierQuotes, usedSupplierQuoteItemIds]);
+  }, [sourceableSupplierQuotes, supplierQuoteItemIdsUsedByOtherQuotes, usedSupplierQuoteItemIds]);
 
   // item-id → its CURRENT supplier quote + item, across ALL supplier quotes (not just the
   // selectable ones), for the bidirectional-sync affordances (#779): lock detection
@@ -1855,13 +1890,16 @@ const useClientQuotesController = ({
         // A linked, expired supplier quote blocks progression to sent/offer/accepted (#779).
         const supplierExpired = Boolean(row.linkedSupplierQuoteExpired);
         const sendDisabled = history || supplierExpired;
+        const denyDisabled = isPromoting || history;
         const hasCandidateMetadata = Boolean(row.candidates?.length);
         const hasPromotableCandidate = row.candidates?.some(isCandidatePromotable);
         // Sending presents every active variant, so one blocked supplier source blocks the family.
         // Promotion chooses exactly one winner, so the comparison must remain reachable whenever
         // at least one candidate is eligible.
         const promotionDisabled =
-          history || (hasCandidateMetadata ? !hasPromotableCandidate : supplierExpired);
+          isPromoting ||
+          history ||
+          (hasCandidateMetadata ? !hasPromotableCandidate : supplierExpired);
         const progressBlockedTitle = t('sales:clientQuotes.linkedSupplierQuoteExpiredBlocks', {
           defaultValue:
             'The linked supplier quote has expired — extend it before progressing this quote.',
@@ -1882,7 +1920,8 @@ const useClientQuotesController = ({
         // Back-to-draft is rejected by the server from accepted/denied/expired, and history rows are
         // immutable — so a sent/offer row whose EFFECTIVE status is expired must not show an enabled
         // restore button (it would 409). `history` already folds in the expired check.
-        const restoreDisabled = !canRestore || (history && (!canRollbackDraftOffer || expired));
+        const restoreDisabled =
+          isPromoting || !canRestore || (history && (!canRollbackDraftOffer || expired));
         const restoreTitle = !canRestore
           ? t('sales:clientQuotes.restoreDisabledOfferStatus', {
               defaultValue: 'Restore is only possible when the linked offer is in draft status.',
@@ -2048,12 +2087,12 @@ const useClientQuotesController = ({
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
-                        if (history) return;
+                        if (denyDisabled) return;
                         handleStatusUpdate(row.id, { status: 'denied' });
                       }}
-                      disabled={history}
+                      disabled={denyDisabled}
                       aria-label={t('sales:clientQuotes.markAsDenied')}
-                      className={`p-2 rounded-lg transition-all ${history ? 'cursor-not-allowed opacity-50 text-red-600' : 'text-red-600 hover:text-red-600 hover:bg-red-50'}`}
+                      className={`p-2 rounded-lg transition-all ${denyDisabled ? 'cursor-not-allowed opacity-50 text-red-600' : 'text-red-600 hover:text-red-600 hover:bg-red-50'}`}
                     >
                       <i className="fa-solid fa-xmark"></i>
                     </button>
@@ -3174,9 +3213,9 @@ const ClientQuoteItemsSection: React.FC<{ controller: ClientQuotesController }> 
       accessorFn: getClientQuoteItemRevenue,
       align: 'right',
       cell: ({ row }) => (
-        <span className="font-semibold tabular-nums">
-          {formatDecimal(getClientQuoteItemRevenue(row))} {currency}
-        </span>
+        <div className="min-w-[130px]">
+          <ClientQuoteRevenueEditor controller={controller} line={getLine(row)} />
+        </div>
       ),
     },
     {
@@ -3293,6 +3332,7 @@ const getClientQuoteLineContext = (
     lineCost,
     netRevenue: lineSalePrice,
     lineMargin,
+    revenueMultiplier,
   } = getClientQuoteItemPricingContext(item);
   const rawCost = item.supplierQuoteItemId ? item.supplierQuoteUnitPrice : item.productCost;
   const cost =
@@ -3303,6 +3343,8 @@ const getClientQuoteLineContext = (
         : convertUnitPrice(Number(rawCost), 'hours', item.unitType || 'hours');
   const molPercentage = item.productMolPercentage ?? undefined;
   const unitPrice = Number.isFinite(Number(item.unitPrice)) ? Number(item.unitPrice) : undefined;
+  const revenue = unitPrice === undefined ? undefined : lineSalePrice;
+  const canEditRevenue = Number.isFinite(revenueMultiplier) && revenueMultiplier > 0;
   const durationUnit = normalizeDurationUnit(item.durationUnit);
   const durationValue = getDurationInputValue(item);
   const product = products.find((p) => p.id === item.productId);
@@ -3342,11 +3384,18 @@ const getClientQuoteLineContext = (
     setFormData(makeUnitPriceUpdater<Partial<Quote>>(index, value));
   };
 
+  const handleRevenueChange = (value: string) => {
+    if (isReadOnly || !canEditRevenue) return;
+    setFormData(makeRevenueUpdater<Partial<Quote>>(index, value));
+  };
+
   return {
     cost,
     unitPrice,
+    revenue,
     molPercentage,
     lineCost,
+    canEditRevenue,
     durationUnit,
     durationValue,
     isSupply,
@@ -3362,6 +3411,7 @@ const getClientQuoteLineContext = (
     handleCostChange,
     handleUnitPriceChange,
     handleMolChange,
+    handleRevenueChange,
   };
 };
 
@@ -3590,6 +3640,27 @@ const ClientQuoteSalePriceEditor: React.FC<{
       formatDecimals={2}
       onValueChange={line.handleUnitPriceChange}
       disabled={controller.isReadOnly}
+      className="w-full max-w-[5rem] flex-none border-border bg-background px-1 py-2 text-right text-sm text-foreground"
+    />
+    <span className="shrink-0 text-[9px] font-semibold text-muted-foreground">
+      {controller.currency}
+    </span>
+  </div>
+);
+
+const ClientQuoteRevenueEditor: React.FC<{
+  controller: ClientQuotesController;
+  line: ClientQuoteLineContext;
+}> = ({ controller, line }) => (
+  <div className="flex w-full items-center justify-end gap-1">
+    <ValidatedNumberInput
+      value={line.revenue}
+      placeholder="0,00"
+      min={0}
+      aria-label={controller.t('sales:clientQuotes.revenue')}
+      formatDecimals={2}
+      onValueChange={line.handleRevenueChange}
+      disabled={controller.isReadOnly || !line.canEditRevenue}
       className="w-full max-w-[5rem] flex-none border-border bg-background px-1 py-2 text-right text-sm text-foreground"
     />
     <span className="shrink-0 text-[9px] font-semibold text-muted-foreground">

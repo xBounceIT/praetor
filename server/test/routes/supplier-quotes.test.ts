@@ -374,9 +374,7 @@ describe('POST /api/sales/supplier-quotes', () => {
     });
 
     expect(res.statusCode).toBe(400);
-    expect(JSON.parse(res.body)).toEqual({
-      error: 'id can only contain letters, numbers, underscores, and hyphens',
-    });
+    expect(JSON.parse(res.body)).toEqual({ error: 'Bad Request' });
     expect(sqCreateMock).not.toHaveBeenCalled();
   });
 });

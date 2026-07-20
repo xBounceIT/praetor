@@ -1,6 +1,11 @@
 import { describe, expect, test } from 'bun:test';
 import { calcProductSalePrice, type PricingItem } from '../../utils/numbers';
-import { makeCostUpdater, makeMolUpdater, makeUnitPriceUpdater } from '../../utils/pricingHandlers';
+import {
+  makeCostUpdater,
+  makeMolUpdater,
+  makeRevenueUpdater,
+  makeUnitPriceUpdater,
+} from '../../utils/pricingHandlers';
 
 type FormState = { items?: PricingItem[]; otherField?: string };
 
@@ -130,6 +135,83 @@ describe('makeUnitPriceUpdater', () => {
     const next = makeUnitPriceUpdater<FormState>(0, '')(state);
     expect(next.items?.[0].unitPrice).toBeUndefined();
     expect(next.items?.[0].productMolPercentage).toBeNull();
+  });
+});
+
+describe('makeRevenueUpdater', () => {
+  test('back-solves net revenue through quantity, duration, and line discount', () => {
+    const state: FormState = {
+      items: [
+        baseItem({
+          productCost: 60,
+          productMolPercentage: 40,
+          quantity: 2,
+          durationMonths: 3,
+          discount: 20,
+        }),
+      ],
+    };
+
+    const next = makeRevenueUpdater<FormState>(0, '720')(state);
+    const updated = next.items?.[0];
+    expect(updated?.unitPrice).toBeCloseTo(150, 10);
+    expect(updated?.productMolPercentage).toBe(60);
+    expect(updated?.productCost).toBe(60);
+  });
+
+  test('preserves a supplier-quote cost while deriving the sale price and MOL', () => {
+    const state: FormState = {
+      items: [
+        baseItem({
+          supplierQuoteItemId: 'supplier-item-1',
+          supplierQuoteUnitPrice: 80,
+          productCost: undefined,
+          quantity: 2,
+        }),
+      ],
+    };
+
+    const next = makeRevenueUpdater<FormState>(0, '240')(state);
+    const updated = next.items?.[0];
+    expect(updated?.unitPrice).toBe(120);
+    expect(updated?.productMolPercentage).toBe(33.33);
+    expect(updated?.supplierQuoteUnitPrice).toBe(80);
+    expect(updated?.productCost).toBeUndefined();
+  });
+
+  test('uses the neutral duration multiplier for N/A lines', () => {
+    const state: FormState = {
+      items: [baseItem({ quantity: 2, durationMonths: 24, durationUnit: 'na' })],
+    };
+    const next = makeRevenueUpdater<FormState>(0, '200')(state);
+    expect(next.items?.[0].unitPrice).toBe(100);
+  });
+
+  test('rounds the derived unit price to persisted currency precision', () => {
+    const state: FormState = { items: [baseItem({ productCost: 10, quantity: 3 })] };
+    const next = makeRevenueUpdater<FormState>(0, '100')(state);
+    const updated = next.items?.[0];
+
+    expect(updated?.unitPrice).toBe(33.33);
+    expect(updated?.productMolPercentage).toBe(70);
+    expect((updated?.unitPrice ?? 0) * 3).toBeCloseTo(99.99, 10);
+  });
+
+  test('clears sale price and MOL when revenue is cleared', () => {
+    const state: FormState = { items: [baseItem({ productMolPercentage: 50 })] };
+    const next = makeRevenueUpdater<FormState>(0, '')(state);
+    expect(next.items?.[0].unitPrice).toBeUndefined();
+    expect(next.items?.[0].productMolPercentage).toBeNull();
+  });
+
+  test('does not update when quantity is not positive', () => {
+    const state: FormState = { items: [baseItem({ quantity: 0 })] };
+    expect(makeRevenueUpdater<FormState>(0, '100')(state)).toBe(state);
+  });
+
+  test('does not update when a 100% line discount makes net revenue non-invertible', () => {
+    const state: FormState = { items: [baseItem({ discount: 100 })] };
+    expect(makeRevenueUpdater<FormState>(0, '100')(state)).toBe(state);
   });
 });
 

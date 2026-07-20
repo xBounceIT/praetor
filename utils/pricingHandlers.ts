@@ -5,10 +5,12 @@ import {
   convertUnitPrice,
   getEffectiveMol,
   getEffectiveUnitCost,
+  getItemPricingContext,
   MAX_MOL_PERCENTAGE,
   MIN_MOL_PERCENTAGE,
   type PricingItem,
   parseOptionalNumberInputValue,
+  roundCurrency,
 } from './numbers';
 
 export const makeCostUpdater =
@@ -93,6 +95,42 @@ export const makeUnitPriceUpdater =
       unitPrice: newUnitPrice,
       productMolPercentage:
         newUnitPrice === undefined ? null : calcProductMolPercentage(unitCost, newUnitPrice),
+    };
+    return { ...prev, items: updated };
+  };
+
+export const makeRevenueUpdater =
+  <T extends { items?: PricingItem[] }>(
+    index: number,
+    value: string,
+    defaultUnitType: SupplierUnitType = 'hours',
+  ) =>
+  (prev: T): T => {
+    const items = prev.items || [];
+    const cur = items[index];
+    if (!cur) return prev;
+
+    const newRevenue = parseOptionalNumberInputValue(value);
+    if (newRevenue === undefined) {
+      const updated = [...items];
+      updated[index] = {
+        ...cur,
+        unitPrice: undefined,
+        productMolPercentage: null,
+      };
+      return { ...prev, items: updated };
+    }
+
+    const { netRevenue, revenueMultiplier, unitCost } = getItemPricingContext(cur, defaultUnitType);
+    if (!Number.isFinite(revenueMultiplier) || revenueMultiplier <= 0) return prev;
+    if (Number.isFinite(cur.unitPrice) && newRevenue === netRevenue) return prev;
+
+    const newUnitPrice = roundCurrency(newRevenue / revenueMultiplier);
+    const updated = [...items];
+    updated[index] = {
+      ...cur,
+      unitPrice: newUnitPrice,
+      productMolPercentage: calcProductMolPercentage(unitCost, newUnitPrice),
     };
     return { ...prev, items: updated };
   };

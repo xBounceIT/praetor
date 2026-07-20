@@ -4,8 +4,9 @@ import type {
   SupplierQuoteVersion,
   SupplierQuoteVersionRow,
 } from '../../types';
-import { encodePathSegment, fetchApi, fetchApiStream } from './client';
+import { fetchApi, fetchApiStream } from './client';
 import { normalizeSupplierQuote } from './normalizers';
+import { encodePathSegment } from './path';
 
 const supplierQuotePath = (id: string): string => `/sales/supplier-quotes/${encodePathSegment(id)}`;
 

@@ -11,7 +11,7 @@ const fetchMock = mock(
 globalThis.fetch = fetchMock as unknown as typeof fetch;
 
 const { supplierQuotesApi } = await import('../../services/api/supplierQuotes');
-const { encodePathSegment, getApiBase, setAuthToken } = await import('../../services/api/client');
+const { getApiBase, setAuthToken } = await import('../../services/api/client');
 
 beforeEach(() => {
   fetchMock.mockReset();
@@ -30,22 +30,6 @@ afterAll(() => {
 });
 
 describe('supplierQuotesApi path segments', () => {
-  test('escapes dot-only segments without colliding with historical marker-like ids', () => {
-    expect(encodePathSegment('.')).toBe('%40.');
-    expect(encodePathSegment('..')).toBe('%40..');
-    expect(encodePathSegment('@.')).toBe('%40%40.');
-    expect(encodePathSegment('@..')).toBe('%40%40..');
-
-    expect(
-      new URL(`/api/sales/supplier-quotes/${encodePathSegment('.')}`, 'https://praetor.test')
-        .pathname,
-    ).toBe('/api/sales/supplier-quotes/%40.');
-    expect(
-      new URL(`/api/sales/supplier-quotes/${encodePathSegment('..')}`, 'https://praetor.test')
-        .pathname,
-    ).toBe('/api/sales/supplier-quotes/%40..');
-  });
-
   test('encodes quote, version, and attachment ids at every dynamic path sink', async () => {
     const quoteId = '../../products/prod-9?admin=true#fragment';
     const versionId = '../versions/ver-1?force=true#fragment';

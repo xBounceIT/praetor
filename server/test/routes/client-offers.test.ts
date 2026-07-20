@@ -486,6 +486,40 @@ const putOffer = (body: Record<string, unknown>) =>
   });
 
 describe('client-offer document discount validation', () => {
+  test('200 lets an existing unsafe offer code be resubmitted unchanged', async () => {
+    const legacyId = '../../clients/legacy';
+    coFindExistingMock.mockResolvedValue(gate({ id: legacyId }));
+    coUpdateMock.mockResolvedValue(updatedOffer({ id: legacyId, notes: 'updated' }));
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/sales/client-offers/..%2F..%2Fclients%2Flegacy',
+      headers: authHeader(),
+      payload: { id: legacyId, notes: 'updated' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(coFindExistingMock).toHaveBeenCalledWith(legacyId);
+    expect(coRenameMock).not.toHaveBeenCalled();
+  });
+
+  test('200 lets an existing dot-only offer code be resubmitted through its transport escape', async () => {
+    const legacyId = '..';
+    coFindExistingMock.mockResolvedValue(gate({ id: legacyId }));
+    coUpdateMock.mockResolvedValue(updatedOffer({ id: legacyId, notes: 'updated' }));
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/sales/client-offers/%40..',
+      headers: authHeader(),
+      payload: { id: legacyId, notes: 'updated' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(coFindExistingMock).toHaveBeenCalledWith(legacyId);
+    expect(coRenameMock).not.toHaveBeenCalled();
+  });
+
   test('200 allows unrelated updates to preserve a legacy percentage discount above 100', async () => {
     coFindExistingMock.mockResolvedValue(
       gate({ discount: 150, discountType: 'percentage' as const }),
@@ -1266,6 +1300,32 @@ describe('client-offers supplier-link resolution + forward sync (#779)', () => {
       expect.anything(),
     );
     expect(JSON.parse(res.body).id).toBe('OFF-2999-0001');
+  });
+
+  test('POST: rejects a traversal-shaped manual offer code', async () => {
+    cqFindStatusAndClientNameMock.mockResolvedValue({ status: 'accepted', clientName: 'Client' });
+    cqLockCurrentByIdMock.mockResolvedValue({ status: 'accepted' });
+    coFindExistingForQuoteMock.mockResolvedValue(null);
+    coCreateMock.mockResolvedValue(updatedOffer({ id: '../../clients/victim' }));
+    coInsertItemsMock.mockResolvedValue([]);
+    sqGetQuoteItemSnapshotsMock.mockResolvedValue(SUPPLIER_SNAPSHOT);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/sales/client-offers',
+      headers: authHeader(),
+      payload: {
+        id: '../../clients/victim',
+        linkedQuoteId: 'q-1',
+        clientId: 'c1',
+        clientName: 'Client',
+        expirationDate: '2999-12-31',
+        items: [lineItem(5, 80)],
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(coCreateMock).not.toHaveBeenCalled();
   });
 
   test('POST: blank offer id inherits the parseable source quote counter', async () => {

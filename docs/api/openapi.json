@@ -37132,7 +37132,10 @@
                 ],
                 "properties": {
                   "id": {
-                    "type": "string"
+                    "type": "string",
+                    "maxLength": 100,
+                    "pattern": "^[A-Za-z0-9_-]*$",
+                    "description": "Optional manual offer code. Letters, numbers, underscores, and hyphens only; blank allocates the configured automatic code."
                   },
                   "linkedQuoteId": {
                     "type": "string"
@@ -37699,7 +37702,8 @@
                 ],
                 "properties": {
                   "id": {
-                    "type": "string"
+                    "type": "string",
+                    "description": "Offer code. A renamed code must use at most 100 letters, numbers, underscores, or hyphens; an unchanged legacy code remains accepted."
                   },
                   "clientId": {
                     "type": "string"
@@ -46394,6 +46398,7 @@
                   "id": {
                     "type": "string",
                     "maxLength": 100,
+                    "pattern": "^[A-Za-z0-9_-]*$",
                     "description": "Leave blank to allocate automatically. Manual values may contain letters, numbers, underscores, and hyphens."
                   },
                   "supplierId": {

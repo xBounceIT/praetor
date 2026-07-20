@@ -16,7 +16,11 @@ import {
 import { logAudit } from '../utils/audit.ts';
 import { getUniqueViolation } from '../utils/db-errors.ts';
 import { replyDocumentCodeCollision } from '../utils/document-code-replies.ts';
-import { DOCUMENT_CODE_MAX_LENGTH, validateDocumentCodeValue } from '../utils/document-codes.ts';
+import {
+  DOCUMENT_CODE_MAX_LENGTH,
+  OPTIONAL_DOCUMENT_CODE_VALUE_PATTERN,
+  validateOptionalDocumentCode,
+} from '../utils/document-codes.ts';
 import type { DurationUnit } from '../utils/duration-unit.ts';
 import {
   ATTACHMENT_MAX_BYTES,
@@ -28,6 +32,7 @@ import {
 } from '../utils/fileStorage.ts';
 import { createChildLogger } from '../utils/logger.ts';
 import { generatePrefixedId, ITEM_ID_PREFIXES } from '../utils/order-ids.ts';
+import { requirePathSegment } from '../utils/path-segments.ts';
 import {
   effectiveSupplierQuoteStatusFromDate,
   normalizeQuoteStatus,
@@ -169,6 +174,7 @@ const supplierQuoteCreateBodySchema = {
     id: {
       type: 'string',
       maxLength: DOCUMENT_CODE_MAX_LENGTH,
+      pattern: OPTIONAL_DOCUMENT_CODE_VALUE_PATTERN,
       description:
         'Leave blank to allocate automatically. Manual values may contain letters, numbers, underscores, and hyphens.',
     },
@@ -207,18 +213,6 @@ const supplierQuoteUpdateBodySchema = {
     notes: { type: 'string' },
   },
 } as const;
-
-// The client prefixes dot-only segments before URL parsing and doubles the prefix for legacy
-// values that already start with it. Decode that reversible transport form after Fastify has
-// percent-decoded the route parameter.
-const decodeClientPathSegment = (value: unknown): unknown => {
-  if (typeof value !== 'string') return value;
-  if (value === '@.' || value === '@..' || value.startsWith('@@')) return value.slice(1);
-  return value;
-};
-
-const requireClientPathSegment = (value: unknown, fieldName: string) =>
-  requireNonEmptyString(decodeClientPathSegment(value), fieldName);
 
 type ItemBody = {
   id?: string;
@@ -506,12 +500,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const supplierNameResult = requireNonEmptyString(supplierName, 'supplierName');
       if (!supplierNameResult.ok) return badRequest(reply, supplierNameResult.message);
-      const nextIdResult = optionalNonEmptyString(nextId, 'id');
+      const nextIdResult = validateOptionalDocumentCode(nextId, 'id');
       if (!nextIdResult.ok) return badRequest(reply, nextIdResult.message);
-      if (nextIdResult.value !== null) {
-        const nextIdValidation = validateDocumentCodeValue(nextIdResult.value, 'id');
-        if (!nextIdValidation.ok) return badRequest(reply, nextIdValidation.message);
-      }
 
       if (!Array.isArray(items) || items.length === 0) {
         return badRequest(reply, 'Items must be a non-empty array');
@@ -652,7 +642,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         notes?: string;
       };
 
-      const idResult = requireClientPathSegment(id, 'id');
+      const idResult = requirePathSegment(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
       // Two related flags with different jobs (issue #779): `hasNonExpirationContentUpdate` drives
@@ -701,15 +691,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       let nextIdValue: string | null = null;
       if (nextId !== undefined) {
-        const nextIdResult = optionalNonEmptyString(nextId, 'id');
+        const nextIdResult =
+          typeof nextId === 'string' && nextId.trim() === idResult.value
+            ? ({ ok: true, value: idResult.value } as const)
+            : validateOptionalDocumentCode(nextId, 'id');
         if (!nextIdResult.ok) return badRequest(reply, nextIdResult.message);
         nextIdValue = nextIdResult.value;
-        // Encoded client paths keep historical codes operable. Tighten only a genuine rename so
-        // an existing legacy code with URL delimiters can still be opened, edited, and renamed.
-        if (nextIdValue !== null && nextIdValue !== idResult.value) {
-          const nextIdValidation = validateDocumentCodeValue(nextIdValue, 'id');
-          if (!nextIdValidation.ok) return badRequest(reply, nextIdValidation.message);
-        }
       }
 
       if (paymentTerms !== undefined) patch.paymentTerms = paymentTerms;
@@ -1035,7 +1022,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id } = request.params as { id: string };
-      const idResult = requireClientPathSegment(id, 'id');
+      const idResult = requirePathSegment(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
       const [exists, versions] = await Promise.all([
@@ -1074,9 +1061,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id, versionId } = request.params as { id: string; versionId: string };
-      const idResult = requireClientPathSegment(id, 'id');
+      const idResult = requirePathSegment(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
-      const versionIdResult = requireClientPathSegment(versionId, 'versionId');
+      const versionIdResult = requirePathSegment(versionId, 'versionId');
       if (!versionIdResult.ok) return badRequest(reply, versionIdResult.message);
 
       const version = await supplierQuoteVersionsRepo.findById(
@@ -1113,9 +1100,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id, versionId } = request.params as { id: string; versionId: string };
-      const idResult = requireClientPathSegment(id, 'id');
+      const idResult = requirePathSegment(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
-      const versionIdResult = requireClientPathSegment(versionId, 'versionId');
+      const versionIdResult = requirePathSegment(versionId, 'versionId');
       if (!versionIdResult.ok) return badRequest(reply, versionIdResult.message);
 
       const [linkedOrderId, current, version, sourcedByClientDocuments] = await Promise.all([
@@ -1428,7 +1415,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id } = request.params as { id: string };
-      const idResult = requireClientPathSegment(id, 'id');
+      const idResult = requirePathSegment(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
       const exists = await supplierQuotesRepo.existsById(idResult.value);
@@ -1465,7 +1452,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id } = request.params as { id: string };
-      const idResult = requireClientPathSegment(id, 'id');
+      const idResult = requirePathSegment(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
       if (!request.isMultipart()) {
@@ -1599,9 +1586,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id, attachmentId } = request.params as { id: string; attachmentId: string };
-      const idResult = requireClientPathSegment(id, 'id');
+      const idResult = requirePathSegment(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
-      const attachmentIdResult = requireClientPathSegment(attachmentId, 'attachmentId');
+      const attachmentIdResult = requirePathSegment(attachmentId, 'attachmentId');
       if (!attachmentIdResult.ok) return badRequest(reply, attachmentIdResult.message);
 
       const attachment = await supplierQuoteAttachmentsRepo.findById(attachmentIdResult.value);
@@ -1670,9 +1657,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id, attachmentId } = request.params as { id: string; attachmentId: string };
-      const idResult = requireClientPathSegment(id, 'id');
+      const idResult = requirePathSegment(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
-      const attachmentIdResult = requireClientPathSegment(attachmentId, 'attachmentId');
+      const attachmentIdResult = requirePathSegment(attachmentId, 'attachmentId');
       if (!attachmentIdResult.ok) return badRequest(reply, attachmentIdResult.message);
 
       const quote = await assertQuoteEditableForAttachments(idResult.value, request, reply);
@@ -1729,7 +1716,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id } = request.params as { id: string };
-      const idResult = requireClientPathSegment(id, 'id');
+      const idResult = requirePathSegment(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
       const linkedOrderId = await supplierQuotesRepo.findLinkedOrderId(idResult.value);

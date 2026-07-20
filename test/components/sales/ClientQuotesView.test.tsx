@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, mock } from 'bun:test';
-import { fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ApiError } from '../../../services/api/client';
 import type { Client, Quote, QuoteMutation, SupplierQuote } from '../../../types';
@@ -369,8 +369,14 @@ describe('<ClientQuotesView />', () => {
     expect(lineDiscountInputs.length).toBeGreaterThan(0);
     fireEvent.change(lineDiscountInputs[0], { target: { value: '150' } });
     expect(lineDiscountInputs[0]).toHaveValue('100,00');
+    const revenueInputs = within(dialog)
+      .getAllByRole('textbox', { name: 'sales:clientQuotes.revenue' })
+      .filter((input): input is HTMLInputElement => input instanceof HTMLInputElement);
+    expect(revenueInputs.length).toBeGreaterThan(0);
+    expect(revenueInputs.every((input) => input.disabled)).toBe(true);
     fireEvent.change(lineDiscountInputs[0], { target: { value: '10' } });
-    expect(within(dialog).getAllByText('180,00 EUR').length).toBeGreaterThan(0);
+    expect(revenueInputs.every((input) => !input.disabled)).toBe(true);
+    expect(revenueInputs.some((input) => input.value === '180,00')).toBe(true);
     expect(within(dialog).getAllByText('60,00 EUR').length).toBeGreaterThan(0);
 
     fireEvent.click(within(dialog).getByRole('button', { name: 'sales:clientQuotes.updateQuote' }));
@@ -942,6 +948,68 @@ describe('<ClientQuotesView />', () => {
     expect(molInput.checkValidity()).toBe(true);
   });
 
+  test('edits net revenue and recalculates sale price and MOL without changing cost', async () => {
+    const revenueQuote: Quote = {
+      ...quotes[0],
+      id: 'Q-REVENUE',
+      discount: 0,
+      items: [
+        {
+          ...quotes[0].items[0],
+          quoteId: 'Q-REVENUE',
+          quantity: 2,
+          durationMonths: 3,
+          discount: 20,
+        },
+      ],
+    };
+    render(
+      <ClientQuotesView
+        quotes={[revenueQuote]}
+        clients={clients}
+        products={[]}
+        supplierQuotes={[]}
+        currency="EUR"
+        onAddQuote={mock(() => Promise.resolve())}
+        onUpdateQuote={mock(() => Promise.resolve())}
+        onDeleteQuote={mock(() => Promise.resolve())}
+      />,
+    );
+
+    fireEvent.click(screen.getByText('Q-REVENUE'));
+    const dialog = await screen.findByRole('dialog');
+    const revenueInput = within(dialog).getAllByLabelText(
+      'sales:clientQuotes.revenue',
+    )[0] as HTMLInputElement;
+    const salePriceInput = within(dialog).getAllByLabelText(
+      'crm:internalListing.salePrice',
+    )[0] as HTMLInputElement;
+    const costInput = within(dialog).getAllByLabelText(
+      'crm:internalListing.cost',
+    )[0] as HTMLInputElement;
+    const quantityInput = within(dialog).getAllByLabelText(
+      'sales:clientQuotes.qty',
+    )[0] as HTMLInputElement;
+    const molInput = within(dialog).getAllByLabelText(
+      'sales:clientQuotes.molLabel',
+    )[0] as HTMLInputElement;
+
+    expect(revenueInput).not.toBeDisabled();
+    expect(revenueInput).toHaveValue('480,00');
+    fireEvent.focus(revenueInput);
+    fireEvent.change(revenueInput, { target: { value: '720' } });
+
+    await waitFor(() => {
+      expect(salePriceInput).toHaveValue('150,00');
+      expect(molInput).toHaveValue('60,00');
+      expect(costInput).toHaveValue('60,00');
+      expect(within(dialog).getAllByText('360,00 EUR').length).toBeGreaterThan(0);
+    });
+
+    fireEvent.change(quantityInput, { target: { value: '' } });
+    expect(revenueInput).toBeDisabled();
+  });
+
   test('the read-only banner renders dark-mode-compatible amber, not a light slab (issue #768)', async () => {
     // A finalized (accepted) quote opens the dialog read-only and surfaces the warning banner.
     const acceptedQuote: Quote = { ...quotes[0], id: 'Q-ACCEPTED', status: 'accepted' };
@@ -967,6 +1035,11 @@ describe('<ClientQuotesView />', () => {
       .filter((input): input is HTMLInputElement => input instanceof HTMLInputElement);
     expect(lineDiscountInputs.length).toBeGreaterThan(0);
     expect(lineDiscountInputs.every((input) => input.disabled)).toBe(true);
+    const revenueInputs = within(dialog)
+      .getAllByRole('textbox', { name: 'sales:clientQuotes.revenue' })
+      .filter((input): input is HTMLInputElement => input instanceof HTMLInputElement);
+    expect(revenueInputs.length).toBeGreaterThan(0);
+    expect(revenueInputs.every((input) => input.disabled)).toBe(true);
 
     const label = screen.getByText('sales:clientQuotes.readOnlyBecauseFinal');
     // The label carries an explicit dark-mode color so it stays legible on the dark dialog.
@@ -1146,6 +1219,53 @@ describe('<ClientQuotesView /> edit action gating (#812 round 13)', () => {
     expect(onPromoteCandidate).not.toHaveBeenCalled();
   });
 
+  test('promotes the only candidate directly without opening the comparison dialog', async () => {
+    const user = userEvent.setup();
+    let finishPromotion = () => {};
+    const onPromoteCandidate = mock(
+      (_quoteId: string, _candidateId: string) =>
+        new Promise<void>((resolve) => {
+          finishPromotion = resolve;
+        }),
+    );
+    const quote = withSingleCandidate(
+      { ...quotes[0], id: 'Q-SINGLE-CANDIDATE', status: 'sent' },
+      'candidate-only',
+    );
+
+    render(
+      <ClientQuotesView
+        quotes={[quote]}
+        clients={clients}
+        products={[]}
+        supplierQuotes={[]}
+        currency="EUR"
+        onAddQuote={mock(() => Promise.resolve())}
+        onUpdateQuote={mock(() => Promise.resolve())}
+        onDeleteQuote={mock(() => Promise.resolve())}
+        onPromoteCandidate={onPromoteCandidate}
+      />,
+    );
+
+    await openRowActions(user);
+    await user.click(
+      await screen.findByRole('button', { name: 'sales:clientQuotes.candidates.chooseTitle' }),
+    );
+
+    await waitFor(() =>
+      expect(onPromoteCandidate).toHaveBeenCalledWith('Q-SINGLE-CANDIDATE', 'candidate-only'),
+    );
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    await openRowActions(user);
+    const deny = screen.getByRole('button', { name: 'sales:clientQuotes.markAsDenied' });
+    const restore = screen.getByRole('button', { name: 'sales:clientQuotes.restoreQuote' });
+    expect(deny).toBeDisabled();
+    expect(restore).toBeDisabled();
+
+    await act(async () => finishPromotion());
+    await waitFor(() => expect(deny).not.toBeDisabled());
+  });
+
   test('opens candidate comparison when at least one variant remains promotable', async () => {
     const user = userEvent.setup();
     const quote = withSingleCandidate(
@@ -1241,6 +1361,19 @@ describe('<ClientQuotesView /> edit action gating (#812 round 13)', () => {
         updatedAt: Date.now(),
       },
     ];
+    const [firstCandidate] = staleQuote.candidates;
+    if (!firstCandidate) throw new Error('Expected candidate fixture');
+    staleQuote.candidates.push({
+      ...firstCandidate,
+      id: 'candidate-b',
+      name: 'Variante B',
+      position: 1,
+      items: firstCandidate.items.map((item) => ({
+        ...item,
+        id: `${item.id}-b`,
+        candidateId: 'candidate-b',
+      })),
+    });
 
     render(
       <ClientQuotesView
@@ -1262,12 +1395,12 @@ describe('<ClientQuotesView /> edit action gating (#812 round 13)', () => {
     );
     const comparisonDialog = await screen.findByRole('dialog');
     expect(comparisonDialog.querySelector('[data-slot="modal-content"]')).toHaveClass('max-w-6xl');
-    expect(within(comparisonDialog).getByText('sales:clientQuotes.molLabel')).toBeInTheDocument();
-    expect(within(comparisonDialog).getByText('11,11%')).toBeInTheDocument();
-    expect(within(comparisonDialog).getByText('sales:clientQuotes.notesLabel')).toBeInTheDocument();
-    expect(
-      within(comparisonDialog).getByText('Customer prefers annual billing.'),
-    ).toBeInTheDocument();
+    expect(within(comparisonDialog).getAllByText('sales:clientQuotes.molLabel')).toHaveLength(2);
+    expect(within(comparisonDialog).getAllByText('11,11%')).toHaveLength(2);
+    expect(within(comparisonDialog).getAllByText('sales:clientQuotes.notesLabel')).toHaveLength(2);
+    expect(within(comparisonDialog).getAllByText('Customer prefers annual billing.')).toHaveLength(
+      2,
+    );
     await user.click(
       await screen.findByRole('button', { name: 'sales:clientQuotes.candidates.promote' }),
     );
