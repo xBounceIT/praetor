@@ -207,8 +207,13 @@ const ProjectRuleListItem: React.FC<{
     canUpdate && !canUpdateThis ? t('projects:detail.rules.costPermissionRequired') : undefined;
   const hasNotificationRecipients =
     rule.actionConfig.recipientUserIds.length + rule.actionConfig.recipientRoleIds.length > 0;
+  const hasHiddenWebhookAction =
+    rule.actionType === 'webhook' &&
+    !hasPermission(permissions, 'administration.webhooks.view') &&
+    rule.actionConfig.webhookIds.length === 0;
   const Icon =
-    !hasNotificationRecipients && rule.actionConfig.webhookIds.length > 0
+    !hasNotificationRecipients &&
+    (rule.actionConfig.webhookIds.length > 0 || hasHiddenWebhookAction)
       ? WebhookIcon
       : BellRingIcon;
   const busy = busyRuleId === rule.id;
@@ -401,6 +406,7 @@ const ProjectRules: React.FC<ProjectRulesProps> = ({ projectId, permissions, cla
   const canCreate = hasPermission(permissions, 'projects.rules.create');
   const canUpdate = hasPermission(permissions, 'projects.rules.update');
   const canDelete = hasPermission(permissions, 'projects.rules.delete');
+  const canViewWebhookTargets = hasPermission(permissions, 'administration.webhooks.view');
   const [state, dispatch] = useReducer(projectRulesReducer, undefined, createProjectRulesState);
   const { rules, recipients, loading, error, formRule, formOpen, busyRuleId, ruleToDelete } = state;
   const loadRules = useCallback(
@@ -482,10 +488,12 @@ const ProjectRules: React.FC<ProjectRulesProps> = ({ projectId, permissions, cla
           .map((id) => webhookNameById.get(id) ?? id)
           .join(', ');
         parts.push(t('projects:detail.rules.actionSummary.webhooks', { names }));
+      } else if (!canViewWebhookTargets && rule.actionType === 'webhook') {
+        parts.push(t('projects:detail.rules.actionSummary.hiddenWebhook'));
       }
       return parts.length > 0 ? parts.join(' · ') : t('projects:detail.rules.actionSummary.none');
     },
-    [t, webhookNameById],
+    [canViewWebhookTargets, t, webhookNameById],
   );
 
   const handleSubmit = async (payload: ProjectRuleFormPayload) => {
