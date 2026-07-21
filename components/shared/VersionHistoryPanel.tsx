@@ -137,6 +137,9 @@ export function VersionHistoryPanel<Row extends VersionHistoryPanelRow>({
     !isDialog && !isLoading && !error && filteredRows.length > 0
       ? Math.max(0, INLINE_VISIBLE_ROWS - filteredRows.length)
       : 0;
+  const selectedRowVisible = Boolean(
+    selectedVersionId && filteredRows.some((row) => row.id === selectedVersionId),
+  );
 
   const emptySlots = Array.from({ length: emptySlotCount }, (_, index) => (
     <div
@@ -300,7 +303,15 @@ export function VersionHistoryPanel<Row extends VersionHistoryPanelRow>({
                     ) : null}
                   </span>
 
-                  <span className="hidden shrink-0 text-[11px] whitespace-nowrap text-muted-foreground sm:inline">
+                  <span
+                    data-testid="version-history-timestamp"
+                    className={cn(
+                      'shrink-0 text-[11px] whitespace-nowrap text-muted-foreground',
+                      // Version rows have no revision code — keep the timestamp as the unique
+                      // identifier on narrow screens too.
+                      row.revisionCode ? 'hidden sm:inline' : 'inline',
+                    )}
+                  >
                     {timestamp}
                   </span>
 
@@ -338,7 +349,11 @@ export function VersionHistoryPanel<Row extends VersionHistoryPanelRow>({
           <Button
             type="button"
             size="sm"
-            disabled={Boolean(disabled) || Boolean(restoreInFlight)}
+            disabled={
+              Boolean(disabled) ||
+              Boolean(restoreInFlight) ||
+              !filteredRows.some((row) => row.id === selectedVersionId)
+            }
             onClick={onRestore}
             className="flex-1"
           >

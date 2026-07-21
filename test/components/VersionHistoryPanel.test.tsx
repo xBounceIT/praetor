@@ -210,6 +210,43 @@ describe('<VersionHistoryPanel />', () => {
     expect(screen.queryByText(labels.noResults)).not.toBeInTheDocument();
   });
 
+  test('disables restore when search filters out the selected snapshot', async () => {
+    const user = userEvent.setup();
+    render(
+      <VersionHistoryPanel
+        {...baseProps}
+        rows={versionRows}
+        selectedVersionId={versionRows[1].id}
+      />,
+    );
+
+    const restoreButton = screen.getByRole('button', { name: labels.restoreButton });
+    expect(restoreButton).toBeEnabled();
+
+    await user.click(screen.getByRole('button', { name: labels.searchAriaLabel }));
+    await user.type(screen.getByPlaceholderText(labels.searchPlaceholder), 'zzz-none');
+    expect(screen.getByText(labels.noResults)).toBeInTheDocument();
+    expect(restoreButton).toBeDisabled();
+    expect(screen.getByRole('button', { name: labels.backToCurrent })).toBeEnabled();
+  });
+
+  test('keeps timestamps visible for version rows without a revision code', () => {
+    render(
+      <VersionHistoryPanel
+        {...baseProps}
+        rows={versionRows.map(({ revisionCode: _revisionCode, ...row }) => row)}
+        selectedVersionId={null}
+      />,
+    );
+
+    const timestamps = screen.getAllByTestId('version-history-timestamp');
+    expect(timestamps.length).toBeGreaterThan(0);
+    for (const stamp of timestamps) {
+      expect(stamp).toHaveClass('inline');
+      expect(stamp).not.toHaveClass('hidden');
+    }
+  });
+
   test('crossfades resting and search header layers in sync', async () => {
     const user = userEvent.setup();
     render(<VersionHistoryPanel {...baseProps} rows={versionRows} />);
