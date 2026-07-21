@@ -245,7 +245,6 @@
     "versionHistory": {
       "title": "Version History",
       "empty": "No previous versions yet. Saves will appear here.",
-      "previewBanner": "Previewing version from {{date}}",
       "backToCurrent": "Back to current",
       "restoreButton": "Restore this version",
       "restoreConfirmTitle": "Restore this version?",
@@ -262,7 +261,6 @@
     },
     "revisionHistory": {
       "title": "Revision history",
-      "previewBanner": "Previewing {{code}} from {{date}}",
       "empty": "No sent revisions yet.",
       "snapshot": "Sent snapshot",
       "backToCurrent": "Back to current state",
@@ -365,7 +363,6 @@
     "versionHistory": {
       "title": "Version History",
       "empty": "No previous versions yet. Saves will appear here.",
-      "previewBanner": "Previewing version from {{date}}",
       "backToCurrent": "Back to current",
       "restoreButton": "Restore this version",
       "restoreConfirmTitle": "Restore this version?",
@@ -382,7 +379,6 @@
     },
     "revisionHistory": {
       "title": "Revision history",
-      "previewBanner": "Previewing {{code}} from {{date}}",
       "empty": "No sent revisions yet.",
       "snapshot": "Sent snapshot",
       "backToCurrent": "Back to current state",
@@ -482,7 +478,6 @@
     "versionHistory": {
       "title": "Version History",
       "empty": "No previous versions yet. Saves will appear here.",
-      "previewBanner": "Previewing version from {{date}}",
       "backToCurrent": "Back to current",
       "restoreButton": "Restore this version",
       "restoreConfirmTitle": "Restore this version?",
@@ -499,7 +494,6 @@
     },
     "revisionHistory": {
       "title": "Revision history",
-      "previewBanner": "Previewing {{code}} from {{date}}",
       "empty": "No sent revisions yet.",
       "snapshot": "Sent snapshot",
       "backToCurrent": "Back to current state",

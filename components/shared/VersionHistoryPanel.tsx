@@ -1,3 +1,4 @@
+import { Search, XIcon } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -6,7 +7,7 @@ import { cn } from '@/lib/utils';
 import { formatInsertDateTime } from '@/utils/date';
 import { filterVersionHistoryRows } from '@/utils/versionHistoryFilter';
 import FieldTooltip from './FieldTooltip';
-import { useVersionHistoryDialogChrome } from './VersionHistoryDialog';
+import { useVersionHistoryDialogChrome } from './VersionHistoryDialogChrome';
 
 export interface VersionHistoryPanelRow {
   id: string;
@@ -83,30 +84,15 @@ export function VersionHistoryPanel<Row extends VersionHistoryPanelRow>({
   const [searchQuery, setSearchQuery] = useState('');
   const searchInputRef = useRef<HTMLInputElement>(null);
   const headerRef = useRef<HTMLDivElement>(null);
-  const closeSearchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const clearCloseSearchTimeout = useCallback(() => {
-    if (closeSearchTimeoutRef.current == null) return;
-    clearTimeout(closeSearchTimeoutRef.current);
-    closeSearchTimeoutRef.current = null;
-  }, []);
 
   const closeSearch = useCallback(() => {
     setSearchOpen(false);
-    clearCloseSearchTimeout();
-    // Keep the query until the header grid finishes collapsing so the close isn't abrupt.
-    closeSearchTimeoutRef.current = setTimeout(() => {
-      setSearchQuery('');
-      closeSearchTimeoutRef.current = null;
-    }, 200);
-  }, [clearCloseSearchTimeout]);
+    setSearchQuery('');
+  }, []);
 
   const openSearch = useCallback(() => {
-    clearCloseSearchTimeout();
     setSearchOpen(true);
-  }, [clearCloseSearchTimeout]);
-
-  useEffect(() => () => clearCloseSearchTimeout(), [clearCloseSearchTimeout]);
+  }, []);
 
   const filteredRows = useMemo(() => {
     if (isDialog) return rows;
@@ -154,7 +140,7 @@ export function VersionHistoryPanel<Row extends VersionHistoryPanelRow>({
     if (row) onSelect(row);
   };
 
-  const listMaxClass = isDialog ? 'max-h-[min(24rem,50vh)]' : INLINE_LIST_HEIGHT_CLASS;
+  const listHeightClass = isDialog ? 'max-h-[min(24rem,50vh)]' : INLINE_LIST_HEIGHT_CLASS;
   const emptySlotCount =
     !isDialog && !isLoading && !error && filteredRows.length > 0
       ? Math.max(0, INLINE_VISIBLE_ROWS - filteredRows.length)
@@ -180,7 +166,10 @@ export function VersionHistoryPanel<Row extends VersionHistoryPanelRow>({
           : 'grid-cols-[minmax(0,1fr)_0fr_auto_auto]',
       )}
     >
-      <div className={cn('min-w-0 overflow-hidden', searchOpen && 'pointer-events-none')}>
+      <div
+        className={cn('min-w-0 overflow-hidden', searchOpen && 'pointer-events-none')}
+        aria-hidden={searchOpen}
+      >
         <h4
           className={cn(
             'flex min-w-0 items-center gap-2 text-xs font-semibold uppercase tracking-widest text-primary transition-opacity duration-200 ease-in-out',
@@ -219,20 +208,24 @@ export function VersionHistoryPanel<Row extends VersionHistoryPanelRow>({
           'size-7 shrink-0 text-muted-foreground transition-colors duration-200 ease-in-out',
           searchOpen && 'bg-muted text-foreground',
         )}
-        aria-label={labels.searchAriaLabel}
-        aria-pressed={searchOpen}
+        aria-label={searchOpen ? undefined : labels.searchAriaLabel}
+        aria-pressed={searchOpen ? undefined : false}
         onClick={toggleSearch}
       >
-        <i
-          className={cn(
-            'text-xs transition-opacity duration-200 ease-in-out',
-            searchOpen ? 'fa-solid fa-xmark' : 'fa-solid fa-magnifying-glass',
-          )}
-          aria-hidden="true"
-        ></i>
+        {searchOpen ? (
+          <>
+            <XIcon className="size-4" />
+            <span className="sr-only">Close</span>
+          </>
+        ) : (
+          <Search className="size-4" />
+        )}
       </Button>
 
-      <div className={cn('min-w-0 overflow-hidden', searchOpen && 'pointer-events-none')}>
+      <div
+        className={cn('min-w-0 overflow-hidden', searchOpen && 'pointer-events-none')}
+        aria-hidden={searchOpen}
+      >
         <span
           className={cn(
             'inline-flex shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] font-bold tracking-wider text-muted-foreground uppercase transition-opacity duration-200 ease-in-out',
@@ -247,7 +240,9 @@ export function VersionHistoryPanel<Row extends VersionHistoryPanelRow>({
 
   const panelBody = (
     <>
-      <div className={cn('min-h-0 overflow-y-auto', isDialog ? 'px-5 py-1' : 'px-0', listMaxClass)}>
+      <div
+        className={cn('min-h-0 overflow-y-auto', isDialog ? 'px-5 py-1' : 'px-0', listHeightClass)}
+      >
         {isLoading && (
           <div className="flex h-full items-center justify-center p-6 text-xs text-muted-foreground">
             <i className="fa-solid fa-spinner fa-spin" aria-hidden="true"></i>

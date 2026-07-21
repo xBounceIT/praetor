@@ -1,4 +1,4 @@
-import { createContext, type ReactNode, useContext, useMemo, useState } from 'react';
+import { type ReactNode, useMemo, useState } from 'react';
 import Modal from './Modal';
 import {
   ModalBody,
@@ -8,21 +8,10 @@ import {
   ModalHeader,
   ModalTitle,
 } from './ModalLayout';
+import { VersionHistoryDialogChromeContext } from './VersionHistoryDialogChrome';
 
 /** Above the shared document Modal default (60), below DeleteConfirmModal (70). */
 const VERSION_HISTORY_DIALOG_Z_INDEX = 65;
-
-interface VersionHistoryDialogChromeContextValue {
-  setRowCount: (count: number) => void;
-}
-
-const VersionHistoryDialogChromeContext =
-  createContext<VersionHistoryDialogChromeContextValue | null>(null);
-
-/** Lets nested `VersionHistoryPanel` report its row count for the dialog header badge. */
-export function useVersionHistoryDialogChrome() {
-  return useContext(VersionHistoryDialogChromeContext);
-}
 
 interface VersionHistoryDialogProps {
   open: boolean;

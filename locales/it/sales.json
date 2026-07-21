@@ -245,7 +245,6 @@
     "versionHistory": {
       "title": "Cronologia versioni",
       "empty": "Nessuna versione precedente. I salvataggi appariranno qui.",
-      "previewBanner": "Anteprima della versione del {{date}}",
       "backToCurrent": "Torna alla versione corrente",
       "restoreButton": "Ripristina questa versione",
       "restoreConfirmTitle": "Ripristinare questa versione?",
@@ -262,7 +261,6 @@
     },
     "revisionHistory": {
       "title": "Storico revisioni",
-      "previewBanner": "Anteprima di {{code}} del {{date}}",
       "empty": "Nessuna revisione inviata.",
       "snapshot": "Snapshot inviato",
       "backToCurrent": "Torna allo stato corrente",
@@ -365,7 +363,6 @@
     "versionHistory": {
       "title": "Cronologia versioni",
       "empty": "Nessuna versione precedente. I salvataggi appariranno qui.",
-      "previewBanner": "Anteprima della versione del {{date}}",
       "backToCurrent": "Torna alla versione corrente",
       "restoreButton": "Ripristina questa versione",
       "restoreConfirmTitle": "Ripristinare questa versione?",
@@ -382,7 +379,6 @@
     },
     "revisionHistory": {
       "title": "Storico revisioni",
-      "previewBanner": "Anteprima di {{code}} del {{date}}",
       "empty": "Nessuna revisione inviata.",
       "snapshot": "Snapshot inviato",
       "backToCurrent": "Torna allo stato corrente",
@@ -482,7 +478,6 @@
     "versionHistory": {
       "title": "Cronologia versioni",
       "empty": "Nessuna versione precedente. I salvataggi appariranno qui.",
-      "previewBanner": "Anteprima della versione del {{date}}",
       "backToCurrent": "Torna alla versione corrente",
       "restoreButton": "Ripristina questa versione",
       "restoreConfirmTitle": "Ripristinare questa versione?",
@@ -499,7 +494,6 @@
     },
     "revisionHistory": {
       "title": "Storico revisioni",
-      "previewBanner": "Anteprima di {{code}} del {{date}}",
       "empty": "Nessuna revisione inviata.",
       "snapshot": "Snapshot inviato",
       "backToCurrent": "Torna allo stato corrente",

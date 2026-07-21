@@ -60,7 +60,6 @@
     "versionHistory": {
       "title": "Cronologia versioni",
       "empty": "Nessuna versione precedente. I salvataggi appariranno qui.",
-      "previewBanner": "Anteprima della versione del {{date}}",
       "backToCurrent": "Torna alla versione corrente",
       "restoreButton": "Ripristina questa versione",
       "restoreConfirmTitle": "Ripristinare questa versione?",
@@ -187,7 +186,6 @@
     "versionHistory": {
       "title": "Cronologia versioni",
       "empty": "Nessuna versione precedente. I salvataggi appariranno qui.",
-      "previewBanner": "Anteprima della versione del {{date}}",
       "backToCurrent": "Torna alla versione corrente",
       "restoreButton": "Ripristina questa versione",
       "restoreConfirmTitle": "Ripristinare questa versione?",
