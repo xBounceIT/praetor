@@ -60,8 +60,8 @@ const INLINE_VISIBLE_ROWS = 3;
 /** Keep as a full static string so Tailwind can detect the utility.
  * Includes `py-1.5` (0.75rem) so the first/last row hover is not flush with the border. */
 const INLINE_LIST_HEIGHT_CLASS = 'h-[calc(3*3.75rem+0.75rem)]';
-/** Matches the header grid / opacity transition duration. */
-const SEARCH_HEADER_TRANSITION_MS = 200;
+/** Shared duration/easing for every inline search-header transition. */
+const SEARCH_HEADER_TRANSITION = 'duration-200 ease-in-out';
 
 export function VersionHistoryPanel<Row extends VersionHistoryPanelRow>({
   rows,
@@ -84,8 +84,6 @@ export function VersionHistoryPanel<Row extends VersionHistoryPanelRow>({
 
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  /** Trailing icon visibility — Search stays hidden until collapse finishes so it never flashes over X. */
-  const [trailingAction, setTrailingAction] = useState<'search' | 'close'>('search');
   const searchInputRef = useRef<HTMLInputElement>(null);
   const headerRef = useRef<HTMLDivElement>(null);
 
@@ -116,17 +114,6 @@ export function VersionHistoryPanel<Row extends VersionHistoryPanelRow>({
     if (searchOpen) searchInputRef.current?.focus();
   }, [searchOpen]);
 
-  useEffect(() => {
-    if (searchOpen) {
-      setTrailingAction('close');
-      return;
-    }
-    const timeoutId = window.setTimeout(() => {
-      setTrailingAction('search');
-    }, SEARCH_HEADER_TRANSITION_MS);
-    return () => window.clearTimeout(timeoutId);
-  }, [searchOpen]);
-
   const toggleSearch = () => {
     if (searchOpen) {
       closeSearch();
@@ -134,8 +121,6 @@ export function VersionHistoryPanel<Row extends VersionHistoryPanelRow>({
     }
     openSearch();
   };
-
-  const showCloseIcon = trailingAction === 'close';
 
   const handleSearchBlur = (event: React.FocusEvent<HTMLInputElement>) => {
     const nextTarget = event.relatedTarget;
@@ -173,17 +158,19 @@ export function VersionHistoryPanel<Row extends VersionHistoryPanelRow>({
     />
   ));
 
-  // Fixed trailing action slot: only title/input + count width animate. Icons are stacked in-place;
-  // Search stays invisible until the collapse transition ends so it never flashes over the X.
+  // One coherent open/close transition: title ↔ input, count width, and Search ↔ X all share the
+  // same duration/easing and are driven only by `searchOpen` (no delayed icon swap).
   const inlineHeaderRow = (
     <div
       ref={headerRef}
       data-testid="version-history-inline-header"
+      data-search-open={searchOpen ? 'true' : 'false'}
       className="flex w-full items-center gap-2"
     >
       <div
         className={cn(
-          'grid min-w-0 flex-1 items-center gap-2 transition-[grid-template-columns] duration-200 ease-in-out',
+          'grid min-w-0 flex-1 items-center gap-2 transition-[grid-template-columns]',
+          SEARCH_HEADER_TRANSITION,
           searchOpen ? 'grid-cols-[0fr_minmax(0,1fr)]' : 'grid-cols-[minmax(0,1fr)_0fr]',
         )}
       >
@@ -193,7 +180,8 @@ export function VersionHistoryPanel<Row extends VersionHistoryPanelRow>({
         >
           <h4
             className={cn(
-              'flex min-w-0 items-center gap-2 text-xs font-semibold uppercase tracking-widest text-primary transition-opacity duration-200 ease-in-out',
+              'flex min-w-0 items-center gap-2 text-xs font-semibold uppercase tracking-widest text-primary transition-opacity',
+              SEARCH_HEADER_TRANSITION,
               searchOpen ? 'opacity-0' : 'opacity-100',
             )}
           >
@@ -215,7 +203,8 @@ export function VersionHistoryPanel<Row extends VersionHistoryPanelRow>({
             aria-label={labels.searchAriaLabel}
             tabIndex={searchOpen ? 0 : -1}
             className={cn(
-              'h-8 w-full text-xs transition-opacity duration-200 ease-in-out',
+              'h-8 w-full text-xs transition-opacity',
+              SEARCH_HEADER_TRANSITION,
               searchOpen ? 'opacity-100' : 'opacity-0',
             )}
           />
@@ -228,35 +217,39 @@ export function VersionHistoryPanel<Row extends VersionHistoryPanelRow>({
         size="icon-sm"
         data-testid="version-history-search-toggle"
         className={cn(
-          'relative size-7 shrink-0 text-muted-foreground transition-colors duration-200 ease-in-out',
-          showCloseIcon && 'bg-muted text-foreground',
+          'relative size-7 shrink-0 text-muted-foreground transition-colors',
+          SEARCH_HEADER_TRANSITION,
+          searchOpen && 'bg-muted text-foreground',
         )}
-        aria-label={showCloseIcon ? undefined : labels.searchAriaLabel}
-        aria-pressed={showCloseIcon ? undefined : false}
+        aria-label={searchOpen ? undefined : labels.searchAriaLabel}
+        aria-pressed={searchOpen ? undefined : false}
         onClick={toggleSearch}
       >
         <span className="relative size-4" aria-hidden="true">
           <Search
             data-testid="version-history-search-icon"
             className={cn(
-              'absolute inset-0 size-4 transition-none',
-              showCloseIcon ? 'invisible opacity-0' : 'visible opacity-100',
+              'absolute inset-0 size-4 transition-opacity',
+              SEARCH_HEADER_TRANSITION,
+              searchOpen ? 'pointer-events-none opacity-0' : 'opacity-100',
             )}
           />
           <XIcon
             data-testid="version-history-close-icon"
             className={cn(
-              'absolute inset-0 size-4 transition-none',
-              showCloseIcon ? 'visible opacity-100' : 'invisible opacity-0',
+              'absolute inset-0 size-4 transition-opacity',
+              SEARCH_HEADER_TRANSITION,
+              searchOpen ? 'opacity-100' : 'pointer-events-none opacity-0',
             )}
           />
         </span>
-        {showCloseIcon ? <span className="sr-only">Close</span> : null}
+        {searchOpen ? <span className="sr-only">Close</span> : null}
       </Button>
 
       <div
         className={cn(
-          'grid shrink-0 transition-[grid-template-columns] duration-200 ease-in-out',
+          'grid shrink-0 transition-[grid-template-columns]',
+          SEARCH_HEADER_TRANSITION,
           searchOpen ? 'grid-cols-[0fr]' : 'grid-cols-[auto]',
         )}
         aria-hidden={searchOpen}
@@ -264,7 +257,8 @@ export function VersionHistoryPanel<Row extends VersionHistoryPanelRow>({
         <div className={cn('min-w-0 overflow-hidden', searchOpen && 'pointer-events-none')}>
           <span
             className={cn(
-              'inline-flex shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] font-bold tracking-wider text-muted-foreground uppercase transition-opacity duration-200 ease-in-out',
+              'inline-flex shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] font-bold tracking-wider text-muted-foreground uppercase transition-opacity',
+              SEARCH_HEADER_TRANSITION,
               searchOpen ? 'opacity-0' : 'opacity-100',
             )}
           >
