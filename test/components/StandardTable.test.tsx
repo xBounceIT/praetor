@@ -1261,6 +1261,9 @@ describe('<StandardTable />', () => {
     expect(actionsHeader.className).toContain('sticky');
     expect(actionsHeader.className).toContain('right-0');
     expect(actionsHeader.className).toContain('bg-background');
+    expect(actionsHeader.className).toContain('text-center');
+    expect(actionsHeader.className).toContain('border-l');
+    expect(actionsHeader.className).toContain('border-border');
     expect(Number.parseInt(actionsHeader.style.minWidth, 10)).toBeGreaterThanOrEqual(64);
     expect(actionsHeader.className).not.toContain('bg-card');
     expect(actionsHeader.textContent?.trim()).toBe('Actions');
@@ -1345,9 +1348,11 @@ describe('<StandardTable />', () => {
     expect(screen.queryByTestId('action-1')).not.toBeInTheDocument();
     const firstActionCell = screen.getAllByLabelText('table.rowActions')[0].closest('td');
     expect(firstActionCell?.className).toContain('bg-background');
+    expect(firstActionCell?.className).toContain('text-center');
+    expect(firstActionCell?.className).toContain('border-l');
+    expect(firstActionCell?.className).toContain('border-border');
     expect(Number.parseInt(firstActionCell?.style.minWidth ?? '0', 10)).toBeGreaterThanOrEqual(64);
     expect(firstActionCell?.className).not.toContain('bg-card');
-    expect(firstActionCell?.className).not.toContain('border-l');
     expect(firstActionCell?.className).not.toContain('group-hover:bg-muted/50');
 
     await user.click(screen.getAllByLabelText('table.rowActions')[0]);
@@ -1523,47 +1528,6 @@ describe('<StandardTable />', () => {
 
     await user.click(screen.getByLabelText('table.rowActions'));
     expect(screen.getByTestId('action-2')).toBeInTheDocument();
-  });
-
-  test('action column stays borderless even while sticky over scrollable content', () => {
-    const cols = [
-      ...sampleColumns,
-      {
-        id: 'actions',
-        header: 'Actions',
-        sticky: 'right' as const,
-        cell: () => <button type="button">Edit</button>,
-      },
-    ];
-    render(<StandardTable<Row> title="People" data={sampleRows} columns={cols} />);
-
-    const tableContainer = screen.getByRole('table').parentElement as HTMLDivElement;
-    const headerRow = screen.getAllByRole('row')[0];
-    const actionHeader = within(headerRow).getAllByRole('columnheader')[2];
-    const actionCell = screen.getAllByLabelText('table.rowActions')[0].closest('td') as HTMLElement;
-
-    Object.defineProperty(tableContainer, 'scrollWidth', { configurable: true, value: 600 });
-    Object.defineProperty(tableContainer, 'clientWidth', { configurable: true, value: 300 });
-    Object.defineProperty(tableContainer, 'scrollLeft', {
-      configurable: true,
-      value: 0,
-      writable: true,
-    });
-
-    act(() => {
-      fireEvent.scroll(tableContainer);
-    });
-
-    expect(actionHeader.className).not.toContain('border-l');
-    expect(actionCell.className).not.toContain('border-l');
-
-    tableContainer.scrollLeft = 300;
-    act(() => {
-      fireEvent.scroll(tableContainer);
-    });
-
-    expect(actionHeader.className).not.toContain('border-l');
-    expect(actionCell.className).not.toContain('border-l');
   });
 
   // ---------------------------------------------------------------------------
