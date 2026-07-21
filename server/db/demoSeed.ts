@@ -15,6 +15,7 @@ import {
   DEMO_ITEM_IDS,
   DEMO_NOTIFICATIONS,
   DEMO_PASSWORD_HASH,
+  DEMO_PRICING_SEMANTICS_VERSION,
   DEMO_PRODUCTS,
   DEMO_PROJECTS,
   DEMO_SUPPLIERS,
@@ -63,6 +64,7 @@ type VerificationStep = {
   countColumn?: string;
   ids: readonly string[];
   userIds?: readonly string[];
+  pricingSemanticsVersion?: 1 | 2;
   expected: number;
 };
 
@@ -1196,6 +1198,7 @@ const buildVerificationSteps = (
   {
     table: 'quote_items',
     ids: DEMO_ITEM_IDS.quoteItems,
+    pricingSemanticsVersion: DEMO_PRICING_SEMANTICS_VERSION,
     expected: DEMO_EXPECTED_COUNTS.quote_items,
   },
   {
@@ -1206,18 +1209,21 @@ const buildVerificationSteps = (
   {
     table: 'customer_offer_items',
     ids: DEMO_ITEM_IDS.customerOfferItems,
+    pricingSemanticsVersion: DEMO_PRICING_SEMANTICS_VERSION,
     expected: DEMO_EXPECTED_COUNTS.customer_offer_items,
   },
   { table: 'sales', ids: demoIds.sales, expected: DEMO_EXPECTED_COUNTS.sales },
   {
     table: 'sale_items',
     ids: DEMO_ITEM_IDS.saleItems,
+    pricingSemanticsVersion: DEMO_PRICING_SEMANTICS_VERSION,
     expected: DEMO_EXPECTED_COUNTS.sale_items,
   },
   { table: 'invoices', ids: demoIds.invoices, expected: DEMO_EXPECTED_COUNTS.invoices },
   {
     table: 'invoice_items',
     ids: DEMO_ITEM_IDS.invoiceItems,
+    pricingSemanticsVersion: DEMO_PRICING_SEMANTICS_VERSION,
     expected: DEMO_EXPECTED_COUNTS.invoice_items,
   },
   {
@@ -1228,6 +1234,7 @@ const buildVerificationSteps = (
   {
     table: 'supplier_quote_items',
     ids: DEMO_ITEM_IDS.supplierQuoteItems,
+    pricingSemanticsVersion: DEMO_PRICING_SEMANTICS_VERSION,
     expected: DEMO_EXPECTED_COUNTS.supplier_quote_items,
   },
   {
@@ -1238,6 +1245,7 @@ const buildVerificationSteps = (
   {
     table: 'supplier_sale_items',
     ids: DEMO_ITEM_IDS.supplierSaleItems,
+    pricingSemanticsVersion: DEMO_PRICING_SEMANTICS_VERSION,
     expected: DEMO_EXPECTED_COUNTS.supplier_sale_items,
   },
   {
@@ -1248,6 +1256,7 @@ const buildVerificationSteps = (
   {
     table: 'supplier_invoice_items',
     ids: DEMO_ITEM_IDS.supplierInvoiceItems,
+    pricingSemanticsVersion: DEMO_PRICING_SEMANTICS_VERSION,
     expected: DEMO_EXPECTED_COUNTS.supplier_invoice_items,
   },
   {
@@ -1312,9 +1321,13 @@ const verifyDemoDataset = async (client: PoolClient, seedYear: number) => {
   for (const step of verificationSteps) {
     const countColumn = step.countColumn ?? 'id';
     const userFilter = step.userIds ? ' AND user_id = ANY($2::text[])' : '';
+    const pricingSemanticsFilter =
+      step.pricingSemanticsVersion === undefined
+        ? ''
+        : ` AND pricing_semantics_version = ${step.pricingSemanticsVersion}`;
     const params = step.userIds ? [step.ids, step.userIds] : [step.ids];
     const result = await client.query(
-      `SELECT COUNT(*)::int AS count FROM ${step.table} WHERE ${countColumn} = ANY($1::text[])${userFilter}`,
+      `SELECT COUNT(*)::int AS count FROM ${step.table} WHERE ${countColumn} = ANY($1::text[])${userFilter}${pricingSemanticsFilter}`,
       params,
     );
     const actual = Number(result.rows[0]?.count ?? 0);

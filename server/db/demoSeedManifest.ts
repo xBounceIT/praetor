@@ -34,6 +34,9 @@ type DemoEmployeeType = 'app_user' | 'internal' | 'external';
 // Fresh demo users have not signed in yet. The refresh upsert deliberately preserves a non-null
 // database value so rerunning the seed never re-enables first-login onboarding.
 export const DEMO_FIRST_LOGIN_AT = null;
+// The refreshable demo dataset exercises the current pricing contract; historical compatibility
+// is covered by dedicated fixtures and migrations rather than by its ordinary document rows.
+export const DEMO_PRICING_SEMANTICS_VERSION = 2 as const;
 
 type DemoUser = {
   id: string;

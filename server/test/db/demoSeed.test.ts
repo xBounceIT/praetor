@@ -18,6 +18,7 @@ import {
   DEMO_EXPECTED_COUNTS,
   DEMO_IDS,
   DEMO_INVOICES,
+  DEMO_PRICING_SEMANTICS_VERSION,
   DEMO_PRODUCTS,
   DEMO_QUOTES,
   DEMO_SALES,
@@ -479,6 +480,27 @@ describe('demo quote candidates stay in sync with the normalized quote schema', 
     expect(offers).toHaveLength(DEMO_CUSTOMER_OFFERS.length);
     for (const offer of offers) {
       expect(offer.linked_quote_candidate_id).toBe(offer.linked_quote_id);
+    }
+  });
+});
+
+describe('demo pricing semantics', () => {
+  test('seeds every commercial item table with the current pricing contract', () => {
+    expect(DEMO_PRICING_SEMANTICS_VERSION).toBe(2);
+
+    for (const table of [
+      'quote_items',
+      'customer_offer_items',
+      'sale_items',
+      'invoice_items',
+      'supplier_quote_items',
+      'supplier_sale_items',
+      'supplier_invoice_items',
+    ]) {
+      const statement = insertStatement(table);
+      expect(statement).toContain('pricing_semantics_version');
+      expect(statement).toContain('pricing_semantics_version = EXCLUDED.pricing_semantics_version');
+      expect(statement).toMatch(/,\s*2\s*(?:FROM|\))/);
     }
   });
 });

@@ -726,7 +726,8 @@ INSERT INTO quote_items (
     product_cost,
     product_mol_percentage,
     discount,
-    note
+    note,
+    pricing_semantics_version
 )
 SELECT
     v.id,
@@ -739,7 +740,8 @@ SELECT
     p.costo,
     p.mol_percentage,
     v.discount,
-    v.note
+    v.note,
+    2
 FROM (
     VALUES
         ('dm_cqi_01', pg_temp.demo_document_code('client_quote', 1), 'dm_prd_01', 5.00, 1230.00, 0.00, 'Discovery workshops and stakeholder interviews'),
@@ -773,7 +775,8 @@ ON CONFLICT (id) DO UPDATE SET
     product_cost = EXCLUDED.product_cost,
     product_mol_percentage = EXCLUDED.product_mol_percentage,
     discount = EXCLUDED.discount,
-    note = EXCLUDED.note;
+    note = EXCLUDED.note,
+    pricing_semantics_version = EXCLUDED.pricing_semantics_version;
 
 INSERT INTO customer_offers (
     id,
@@ -817,7 +820,8 @@ INSERT INTO customer_offer_items (
     product_cost,
     product_mol_percentage,
     discount,
-    note
+    note,
+    pricing_semantics_version
 )
 SELECT
     v.id,
@@ -829,7 +833,8 @@ SELECT
     p.costo,
     p.mol_percentage,
     v.discount,
-    v.note
+    v.note,
+    2
 FROM (
     VALUES
         ('dm_coi_01', pg_temp.demo_document_code('client_offer', 1), 'dm_prd_01', 3.00, 1230.00, 0.00, 'Draft offer line copied from the accepted quote'),
@@ -851,7 +856,8 @@ ON CONFLICT (id) DO UPDATE SET
     product_cost = EXCLUDED.product_cost,
     product_mol_percentage = EXCLUDED.product_mol_percentage,
     discount = EXCLUDED.discount,
-    note = EXCLUDED.note;
+    note = EXCLUDED.note,
+    pricing_semantics_version = EXCLUDED.pricing_semantics_version;
 
 INSERT INTO sales (
     id,
@@ -893,7 +899,8 @@ INSERT INTO sale_items (
     product_cost,
     product_mol_percentage,
     discount,
-    note
+    note,
+    pricing_semantics_version
 )
 SELECT
     v.id,
@@ -905,7 +912,8 @@ SELECT
     p.costo,
     p.mol_percentage,
     v.discount,
-    v.note
+    v.note,
+    2
 FROM (
     VALUES
         ('dm_soi_01', pg_temp.demo_document_code('client_order', 1), 'dm_prd_08', 25.00, 160.00, 0.00, 'Draft order for event print materials'),
@@ -927,7 +935,8 @@ ON CONFLICT (id) DO UPDATE SET
     product_cost = EXCLUDED.product_cost,
     product_mol_percentage = EXCLUDED.product_mol_percentage,
     discount = EXCLUDED.discount,
-    note = EXCLUDED.note;
+    note = EXCLUDED.note,
+    pricing_semantics_version = EXCLUDED.pricing_semantics_version;
 
 INSERT INTO invoices (
     id,
@@ -970,21 +979,23 @@ INSERT INTO invoice_items (
     description,
     quantity,
     unit_price,
-    discount
+    discount,
+    pricing_semantics_version
 ) VALUES
-    ('dm_inv_item_01', pg_temp.demo_document_code('client_invoice', 1), 'dm_prd_04', 'Workshop Training Day', 1.00, 1090.00, 0.00),
-    ('dm_inv_item_02', pg_temp.demo_document_code('client_invoice', 2), 'dm_prd_07', 'Managed Firewall Appliance', 1.00, 1795.00, 0.00),
-    ('dm_inv_item_03', pg_temp.demo_document_code('client_invoice', 3), 'dm_prd_01', 'Strategy Assessment', 4.00, 1230.00, 5.00),
-    ('dm_inv_item_04', pg_temp.demo_document_code('client_invoice', 3), 'dm_prd_02', 'Deployment Sprint', 1.00, 1715.00, 5.00),
-    ('dm_inv_item_05', pg_temp.demo_document_code('client_invoice', 4), 'dm_prd_03', 'Managed Support Retainer', 12.00, 835.00, 0.00),
-    ('dm_inv_item_06', pg_temp.demo_document_code('client_invoice', 5), 'dm_prd_08', 'Branded Print Kit', 10.00, 160.00, 0.00)
+    ('dm_inv_item_01', pg_temp.demo_document_code('client_invoice', 1), 'dm_prd_04', 'Workshop Training Day', 1.00, 1090.00, 0.00, 2),
+    ('dm_inv_item_02', pg_temp.demo_document_code('client_invoice', 2), 'dm_prd_07', 'Managed Firewall Appliance', 1.00, 1795.00, 0.00, 2),
+    ('dm_inv_item_03', pg_temp.demo_document_code('client_invoice', 3), 'dm_prd_01', 'Strategy Assessment', 4.00, 1230.00, 5.00, 2),
+    ('dm_inv_item_04', pg_temp.demo_document_code('client_invoice', 3), 'dm_prd_02', 'Deployment Sprint', 1.00, 1715.00, 5.00, 2),
+    ('dm_inv_item_05', pg_temp.demo_document_code('client_invoice', 4), 'dm_prd_03', 'Managed Support Retainer', 12.00, 835.00, 0.00, 2),
+    ('dm_inv_item_06', pg_temp.demo_document_code('client_invoice', 5), 'dm_prd_08', 'Branded Print Kit', 10.00, 160.00, 0.00, 2)
 ON CONFLICT (id) DO UPDATE SET
     invoice_id = EXCLUDED.invoice_id,
     product_id = EXCLUDED.product_id,
     description = EXCLUDED.description,
     quantity = EXCLUDED.quantity,
     unit_price = EXCLUDED.unit_price,
-    discount = EXCLUDED.discount;
+    discount = EXCLUDED.discount,
+    pricing_semantics_version = EXCLUDED.pricing_semantics_version;
 
 INSERT INTO supplier_quotes (
     id,
@@ -1034,7 +1045,8 @@ INSERT INTO supplier_quote_items (
     product_name,
     quantity,
     unit_price,
-    note
+    note,
+    pricing_semantics_version
 )
 SELECT
     v.id,
@@ -1043,7 +1055,8 @@ SELECT
     p.name,
     v.quantity,
     v.unit_price,
-    v.note
+    v.note,
+    2
 FROM (
     VALUES
         ('dm_sqi_01', pg_temp.demo_document_code('supplier_quote', 1), 'dm_prd_05', 8.00, 960.00, 'Draft laptop procurement lot'),
@@ -1069,7 +1082,8 @@ ON CONFLICT (id) DO UPDATE SET
     product_name = EXCLUDED.product_name,
     quantity = EXCLUDED.quantity,
     unit_price = EXCLUDED.unit_price,
-    note = EXCLUDED.note;
+    note = EXCLUDED.note,
+    pricing_semantics_version = EXCLUDED.pricing_semantics_version;
 
 
 -- #779 fully derived supplier-quote statuses, LINE-SOURCED (no header link): a supplier
@@ -1164,7 +1178,8 @@ INSERT INTO supplier_sale_items (
     unit_type,
     unit_price,
     discount,
-    note
+    note,
+    pricing_semantics_version
 )
 SELECT
     v.id,
@@ -1175,7 +1190,8 @@ SELECT
     v.unit_type,
     v.unit_price,
     v.discount,
-    v.note
+    v.note,
+    2
 FROM (
     VALUES
         ('dm_ssi_01', pg_temp.demo_document_code('supplier_order', 1), 'dm_prd_05', 4.00, 'unit', 960.00, 0.00, 'Draft hardware procurement order'),
@@ -1194,7 +1210,8 @@ ON CONFLICT (id) DO UPDATE SET
     unit_type = EXCLUDED.unit_type,
     unit_price = EXCLUDED.unit_price,
     discount = EXCLUDED.discount,
-    note = EXCLUDED.note;
+    note = EXCLUDED.note,
+    pricing_semantics_version = EXCLUDED.pricing_semantics_version;
 
 INSERT INTO supplier_invoices (
     id,
@@ -1237,21 +1254,23 @@ INSERT INTO supplier_invoice_items (
     description,
     quantity,
     unit_price,
-    discount
+    discount,
+    pricing_semantics_version
 ) VALUES
-    ('dm_sinv_item_01', pg_temp.demo_document_code('supplier_invoice', 1), 'dm_prd_05', 'Business Laptop Bundle', 2.00, 960.00, 0.00),
-    ('dm_sinv_item_02', pg_temp.demo_document_code('supplier_invoice', 2), 'dm_prd_06', 'Microsoft 365 Annual Seat', 80.00, 182.00, 0.00),
-    ('dm_sinv_item_03', pg_temp.demo_document_code('supplier_invoice', 3), 'dm_prd_07', 'Managed Firewall Appliance', 1.00, 1410.00, 0.00),
-    ('dm_sinv_item_04', pg_temp.demo_document_code('supplier_invoice', 3), 'dm_prd_08', 'Branded Print Kit', 40.00, 118.00, 0.00),
-    ('dm_sinv_item_05', pg_temp.demo_document_code('supplier_invoice', 4), 'dm_prd_08', 'Branded Print Kit', 200.00, 118.00, 0.00),
-    ('dm_sinv_item_06', pg_temp.demo_document_code('supplier_invoice', 5), 'dm_prd_05', 'Business Laptop Bundle', 1.00, 960.00, 0.00)
+    ('dm_sinv_item_01', pg_temp.demo_document_code('supplier_invoice', 1), 'dm_prd_05', 'Business Laptop Bundle', 2.00, 960.00, 0.00, 2),
+    ('dm_sinv_item_02', pg_temp.demo_document_code('supplier_invoice', 2), 'dm_prd_06', 'Microsoft 365 Annual Seat', 80.00, 182.00, 0.00, 2),
+    ('dm_sinv_item_03', pg_temp.demo_document_code('supplier_invoice', 3), 'dm_prd_07', 'Managed Firewall Appliance', 1.00, 1410.00, 0.00, 2),
+    ('dm_sinv_item_04', pg_temp.demo_document_code('supplier_invoice', 3), 'dm_prd_08', 'Branded Print Kit', 40.00, 118.00, 0.00, 2),
+    ('dm_sinv_item_05', pg_temp.demo_document_code('supplier_invoice', 4), 'dm_prd_08', 'Branded Print Kit', 200.00, 118.00, 0.00, 2),
+    ('dm_sinv_item_06', pg_temp.demo_document_code('supplier_invoice', 5), 'dm_prd_05', 'Business Laptop Bundle', 1.00, 960.00, 0.00, 2)
 ON CONFLICT (id) DO UPDATE SET
     invoice_id = EXCLUDED.invoice_id,
     product_id = EXCLUDED.product_id,
     description = EXCLUDED.description,
     quantity = EXCLUDED.quantity,
     unit_price = EXCLUDED.unit_price,
-    discount = EXCLUDED.discount;
+    discount = EXCLUDED.discount,
+    pricing_semantics_version = EXCLUDED.pricing_semantics_version;
 
 -- Demo delivery projects generated from the confirmed client order #04 (offer #03 <-
 -- quote #06), all for client dm_cli_01. order_id/offer_id mirror the chain the app
