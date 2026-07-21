@@ -232,6 +232,21 @@ const normalizeItems = (
   return normalizedItems;
 };
 
+// Snapshots written by a pre-precision server during a rolling deployment lack the additive
+// marker. Normalize them on every read so a version preview uses the same rounding as restore.
+const normalizeVersionSnapshot = (
+  snapshot: supplierOrderVersionsRepo.SupplierOrderVersionSnapshot,
+): supplierOrderVersionsRepo.SupplierOrderVersionSnapshot => ({
+  ...snapshot,
+  items: snapshot.items.map((item) => ({
+    ...item,
+    legacyDiscountRounding: legacyDiscountRoundingForWrite(
+      item.legacyDiscountRounding,
+      item.discount ?? 0,
+    ),
+  })),
+});
+
 export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.addHook('onRequest', authenticateToken);
 
@@ -926,7 +941,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           details: { secondaryLabel: versionIdResult.value },
         });
       }
-      return version;
+      return { ...version, snapshot: normalizeVersionSnapshot(version.snapshot) };
     },
   );
 
@@ -1017,9 +1032,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             secondaryLabel: versionIdResult.value,
           };
         }
+        const snapshot = normalizeVersionSnapshot(version.snapshot);
         const snapshotDiscountResult = optionalLocalizedDocumentDiscount(
-          version.snapshot.order.discount,
-          version.snapshot.order.discountType,
+          snapshot.order.discount,
+          snapshot.order.discountType,
           'discount',
         );
         if (!snapshotDiscountResult.ok) {
@@ -1031,7 +1047,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             secondaryLabel: 'snapshot_discount_invalid',
           };
         }
-        const missingSnapshotReference = await findMissingSnapshotReference(version.snapshot, tx);
+        const missingSnapshotReference = await findMissingSnapshotReference(snapshot, tx);
         if (missingSnapshotReference) {
           return {
             ok: false,
@@ -1042,7 +1058,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           };
         }
 
-        const snapshotItems: supplierOrdersRepo.NewSupplierOrderItem[] = version.snapshot.items.map(
+        const snapshotItems: supplierOrdersRepo.NewSupplierOrderItem[] = snapshot.items.map(
           ({ orderId: _o, ...rest }) => ({
             ...rest,
             id: generatePrefixedId(ITEM_ID_PREFIXES.supplierItem),
@@ -1050,13 +1066,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             productId: rest.productId || null,
             // Version snapshots created before quantity units were stored have no unitType.
             unitType: rest.unitType ?? 'hours',
-            // A pre-precision server can create a new snapshot during a rolling deployment
-            // without this additive marker. Its discounted lines still use the legacy
-            // unit-rounding behavior when restored.
-            legacyDiscountRounding: legacyDiscountRoundingForWrite(
-              rest.legacyDiscountRounding,
-              rest.discount ?? 0,
-            ),
             // Snapshots taken before duration existed (issue #776) lack these keys; default to a
             // single month so the restored line keeps its pre-duration total.
             durationMonths: rest.durationMonths ?? 1,
@@ -1069,13 +1078,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         const order = await supplierOrdersRepo.restoreSnapshotOrder(
           idResult.value,
           {
-            supplierId: version.snapshot.order.supplierId,
-            supplierName: version.snapshot.order.supplierName,
-            paymentTerms: version.snapshot.order.paymentTerms,
-            discount: version.snapshot.order.discount,
-            discountType: version.snapshot.order.discountType,
-            status: version.snapshot.order.status,
-            notes: version.snapshot.order.notes,
+            supplierId: snapshot.order.supplierId,
+            supplierName: snapshot.order.supplierName,
+            paymentTerms: snapshot.order.paymentTerms,
+            discount: snapshot.order.discount,
+            discountType: snapshot.order.discountType,
+            status: snapshot.order.status,
+            notes: snapshot.order.notes,
           },
           tx,
         );

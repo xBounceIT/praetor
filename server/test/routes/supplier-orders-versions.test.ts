@@ -571,6 +571,35 @@ describe('GET /api/accounting/supplier-orders/:id/versions/:versionId', () => {
     expect(sovFindByIdMock).toHaveBeenCalledWith('so-1', 'sov-1');
   });
 
+  test('200 defaults missing legacy rounding markers in a discounted snapshot', async () => {
+    sovFindByIdMock.mockResolvedValue({
+      ...SAMPLE_VERSION,
+      snapshot: {
+        ...SAMPLE_SNAPSHOT,
+        items: [
+          { ...SAMPLE_ITEM, quantity: 150, unitPrice: 37.75, discount: 15 },
+          {
+            ...SAMPLE_ITEM,
+            id: 'ssi-precise',
+            discount: 15,
+            legacyDiscountRounding: false,
+          },
+        ],
+      },
+    });
+
+    const res = await testApp.inject({
+      method: 'GET',
+      url: '/api/accounting/supplier-orders/so-1/versions/sov-1',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body.snapshot.items[0].legacyDiscountRounding).toBe(true);
+    expect(body.snapshot.items[1].legacyDiscountRounding).toBe(false);
+  });
+
   test('404 when version not found (also covers cross-order ids)', async () => {
     sovFindByIdMock.mockResolvedValue(null);
 
