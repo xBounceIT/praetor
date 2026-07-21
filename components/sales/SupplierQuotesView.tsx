@@ -52,6 +52,7 @@ import {
 } from '../../utils/numbers';
 import { getPaymentTermsOptions } from '../../utils/options';
 import { isTerminalQuoteStatus } from '../../utils/quoteStatus';
+import { getDocumentPricingSemanticsVersion } from '../../utils/supplierLineSync';
 import { uploadStagedAttachments } from '../../utils/supplierQuoteAttachments';
 import { toastError } from '../../utils/toast';
 import CostSummaryPanel from '../shared/CostSummaryPanel';
@@ -675,10 +676,13 @@ const useSupplierQuotesController = ({
         unitPrice: 0,
         unitType: 'unit' as const,
         durationUnit: 'months' as const,
+        pricingSemanticsVersion: editingQuote
+          ? getDocumentPricingSemanticsVersion(formData.items)
+          : undefined,
         note: '',
       },
     });
-  }, [editingQuote?.id, isReadOnly]);
+  }, [editingQuote, formData.items, isReadOnly]);
 
   const removeItem = useCallback(
     (index: number) => {

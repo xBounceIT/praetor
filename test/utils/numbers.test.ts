@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import {
   calcProductMolPercentage,
   calcProductSalePrice,
+  calcProductSalePriceForItem,
   calculatePricingTotals,
   durationValueToMonths,
   formatDecimal,
@@ -126,6 +127,14 @@ describe('calcProductSalePrice', () => {
 
   test('returns the cost when MOL exceeds 100% (would be negative)', () => {
     expect(calcProductSalePrice(100, 150)).toBe(100);
+  });
+});
+
+describe('calcProductSalePriceForItem', () => {
+  test('preserves the legacy day-priced product cost when recalculating a sale price', () => {
+    expect(
+      calcProductSalePriceForItem({ unitType: 'days', pricingSemanticsVersion: 1 }, 100, 25),
+    ).toBeCloseTo(1066.667, 3);
   });
 });
 

@@ -154,6 +154,23 @@ export const getEffectiveUnitCost = (item: PricingItem): number => {
     : cost;
 };
 
+// Repricing a catalog product must use the same effective cost as totals and MOL. In particular,
+// historical day-priced rows keep their stored hourly product cost multiplied by 8.
+export const calcProductSalePriceForItem = (
+  item: Pick<PricingItem, 'unitType' | 'pricingSemanticsVersion'>,
+  productCost: number,
+  molPercentage: number,
+): number =>
+  calcProductSalePrice(
+    getEffectiveUnitCost({
+      ...item,
+      productCost,
+      supplierQuoteItemId: null,
+      supplierQuoteUnitPrice: null,
+    }),
+    molPercentage,
+  );
+
 export const getEffectiveMol = (item: PricingItem): number => {
   return item.productMolPercentage ? Number(item.productMolPercentage) : 0;
 };

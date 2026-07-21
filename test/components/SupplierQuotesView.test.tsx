@@ -709,6 +709,42 @@ describe('<SupplierQuotesView /> line item duration (issue #776)', () => {
     expect(updates.items?.[0]?.durationUnit).toBe('months');
   });
 
+  test('marks an added row with the legacy document pricing semantics', async () => {
+    const onUpdateQuote = mock((_id: string, _updates: Partial<SupplierQuote>) => {});
+    const legacyQuote = buildQuote({
+      id: 'SQ-LEGACY-ADD',
+      status: 'draft',
+      items: [
+        {
+          ...daysLineQuote.items[0],
+          id: 'sqi-legacy',
+          quoteId: 'SQ-LEGACY-ADD',
+          pricingSemanticsVersion: 1,
+        },
+      ],
+    });
+    render(
+      <SupplierQuotesView {...baseProps} quotes={[legacyQuote]} onUpdateQuote={onUpdateQuote} />,
+    );
+    await openQuote('SQ-LEGACY-ADD');
+
+    fireEvent.click(screen.getByText('sales:supplierQuotes.addItem'));
+    fireEvent.change(screen.getAllByRole('textbox', { name: 'sales:supplierQuotes.qty' })[1], {
+      target: { value: '1' },
+    });
+    fireEvent.change(
+      screen.getAllByRole('textbox', { name: 'sales:supplierQuotes.listPrice' })[1],
+      {
+        target: { value: '100' },
+      },
+    );
+    await act(async () => fireEvent.click(screen.getByText('common:buttons.update')));
+
+    expect(onUpdateQuote).toHaveBeenCalledTimes(1);
+    const updates = onUpdateQuote.mock.calls[0]?.[1] as Partial<SupplierQuote>;
+    expect(updates.items?.[1]?.pricingSemanticsVersion).toBe(1);
+  });
+
   test("submits each line's stored duration verbatim (no unit-line coercion)", async () => {
     const onUpdateQuote = mock((_id: string, _updates: Partial<SupplierQuote>) => {});
     const mixedQuote = buildQuote({

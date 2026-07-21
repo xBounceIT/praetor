@@ -59,7 +59,7 @@ import {
   isTemporaryLineItem,
 } from '../../utils/lineItemIndex';
 import {
-  calcProductSalePrice,
+  calcProductSalePriceForItem,
   calculatePricingTotals,
   durationValueToMonths,
   EMPTY_PRICING_TOTALS,
@@ -1133,9 +1133,12 @@ const useClientQuotesController = ({
               };
             }
 
-            const mol = product.molPercentage ? Number(product.molPercentage) : 0;
             const cost = Number(product.costo);
-            const unitPrice = calcProductSalePrice(cost, mol);
+            const unitPrice = calcProductSalePriceForItem(
+              item,
+              cost,
+              product.molPercentage ? Number(product.molPercentage) : 0,
+            );
 
             return {
               ...item,
@@ -1340,9 +1343,13 @@ const useClientQuotesController = ({
         if (product.type === 'supply') {
           newItems[index].unitType = 'hours';
         }
-        const mol = product.molPercentage ? Number(product.molPercentage) : 0;
-        newItems[index].unitPrice = calcProductSalePrice(Number(product.costo), mol);
-        newItems[index].productCost = Number(product.costo);
+        const cost = Number(product.costo);
+        newItems[index].unitPrice = calcProductSalePriceForItem(
+          newItems[index],
+          cost,
+          product.molPercentage ? Number(product.molPercentage) : 0,
+        );
+        newItems[index].productCost = cost;
         newItems[index].productMolPercentage = product.molPercentage;
       }
     }
@@ -1362,9 +1369,13 @@ const useClientQuotesController = ({
           if (product.type === 'supply') {
             newItems[index].unitType = 'hours';
           }
-          const mol = product.molPercentage ? Number(product.molPercentage) : 0;
-          newItems[index].unitPrice = calcProductSalePrice(Number(product.costo), mol);
-          newItems[index].productCost = Number(product.costo);
+          const cost = Number(product.costo);
+          newItems[index].unitPrice = calcProductSalePriceForItem(
+            newItems[index],
+            cost,
+            product.molPercentage ? Number(product.molPercentage) : 0,
+          );
+          newItems[index].productCost = cost;
           newItems[index].productMolPercentage = product.molPercentage;
         }
         setFormData((prev) => ({ ...prev, items: newItems }));
@@ -1414,9 +1425,13 @@ const useClientQuotesController = ({
 
         const existingProduct = products.find((p) => p.id === newItems[index].productId);
         if (existingProduct) {
-          const mol = existingProduct.molPercentage ? Number(existingProduct.molPercentage) : 0;
-          newItems[index].unitPrice = calcProductSalePrice(Number(existingProduct.costo), mol);
-          newItems[index].productCost = Number(existingProduct.costo);
+          const cost = Number(existingProduct.costo);
+          newItems[index].unitPrice = calcProductSalePriceForItem(
+            newItems[index],
+            cost,
+            existingProduct.molPercentage ? Number(existingProduct.molPercentage) : 0,
+          );
+          newItems[index].productCost = cost;
           newItems[index].productMolPercentage = existingProduct.molPercentage;
         }
       }
