@@ -21,7 +21,7 @@ import { getUniqueViolation } from '../utils/db-errors.ts';
 import { replyDocumentCodeCollision } from '../utils/document-code-replies.ts';
 import { type DurationUnit, defaultDurationMonthsForUnit } from '../utils/duration-unit.ts';
 import { generatePrefixedId, ITEM_ID_PREFIXES } from '../utils/order-ids.ts';
-import { pricingSemanticsVersionForDocument } from '../utils/pricing-semantics.ts';
+import { inheritPricingSemanticsVersions } from '../utils/pricing-semantics.ts';
 import { effectiveSupplierQuoteStatusFromDate } from '../utils/quote-status.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { replyError } from '../utils/replyError.ts';
@@ -170,6 +170,7 @@ const updateBodySchema = {
 } as const;
 
 type SupplierOrderItemInput = {
+  id?: string;
   productId?: string;
   productName?: string;
   quantity?: string | number;
@@ -437,6 +438,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!statusResult.ok) return badRequest(reply, statusResult.message);
       const normalizedItems = normalizeItems(items, reply);
       if (!normalizedItems) return;
+      const sourceItemIds = items.map((item) => item.id);
 
       type CreateOutcome =
         | { ok: false; status: number; body: Record<string, unknown> }
@@ -488,10 +490,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             linkedQuoteIdResult.value,
             tx,
           );
-          const pricingSemanticsVersion = pricingSemanticsVersionForDocument(sourceQuoteItems);
-          const versionedItems = normalizedItems.map((item) => ({
+          const sourceMarkers = inheritPricingSemanticsVersions(
+            sourceItemIds.map((id) => ({ id })),
+            sourceQuoteItems,
+          );
+          const versionedItems = normalizedItems.map((item, index) => ({
             ...item,
-            pricingSemanticsVersion,
+            pricingSemanticsVersion: sourceMarkers[index].pricingSemanticsVersion,
           }));
 
           let orderId: string;
@@ -747,12 +752,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (typeof notes === 'string') patch.notes = notes;
 
       let normalizedItems: supplierOrdersRepo.NewSupplierOrderItem[] | null = null;
+      let sourceItemIds: Array<string | undefined> | null = null;
       if (items !== undefined) {
         if (!Array.isArray(items) || items.length === 0) {
           return badRequest(reply, 'Items must be a non-empty array');
         }
         normalizedItems = normalizeItems(items, reply);
         if (!normalizedItems) return;
+        sourceItemIds = items.map((item) => item.id);
       }
 
       const shouldSnapshot = hasLockedFieldUpdates || status !== undefined;
@@ -778,8 +785,20 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               ? renamedOrder
               : await supplierOrdersRepo.update(renamedOrder?.id ?? idResult.value, patch, tx);
           if (!order) return { order: null, items: [] as supplierOrdersRepo.SupplierOrderItem[] };
-          const finalItems = normalizedItems
-            ? await supplierOrdersRepo.replaceItems(order.id, normalizedItems, tx)
+          let versionedItems = normalizedItems;
+          if (normalizedItems && sourceItemIds?.some((id) => id)) {
+            const existingItems = await supplierOrdersRepo.findItemsForOrder(order.id, tx);
+            const sourceMarkers = inheritPricingSemanticsVersions(
+              sourceItemIds.map((id) => ({ id })),
+              existingItems,
+            );
+            versionedItems = normalizedItems.map((item, index) => ({
+              ...item,
+              pricingSemanticsVersion: sourceMarkers[index].pricingSemanticsVersion,
+            }));
+          }
+          const finalItems = versionedItems
+            ? await supplierOrdersRepo.replaceItems(order.id, versionedItems, tx)
             : await supplierOrdersRepo.findItemsForOrder(order.id, tx);
           return { order, items: finalItems };
         });

@@ -344,6 +344,7 @@ describe('makeSupplierQuoteHandlers', () => {
       notes: 'note',
       items: [
         {
+          id: 'supplier-quote-item-1',
           productId: 'p1',
           quantity: 1,
           listPrice: 12.5,
@@ -362,7 +363,12 @@ describe('makeSupplierQuoteHandlers', () => {
     expect(callArg.supplierId).toBe('sup-1');
     expect(callArg.status).toBe('draft');
     expect(callArg.items).toEqual([
-      expect.objectContaining({ unitPrice: 12.5, discount: 20, unitType: 'days' }),
+      expect.objectContaining({
+        id: 'supplier-quote-item-1',
+        unitPrice: 12.5,
+        discount: 20,
+        unitType: 'days',
+      }),
     ]);
     expect(ctx.supplierQuoteFilterId.get()).toBe('sq-1');
     expect(ctx.setActiveView).toHaveBeenCalledWith('accounting/supplier-orders');

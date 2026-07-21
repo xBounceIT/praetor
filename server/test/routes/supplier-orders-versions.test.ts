@@ -355,6 +355,49 @@ describe('PUT /api/accounting/supplier-orders/:id document discount validation',
     expect(res.statusCode).toBe(400);
     expect(soUpdateMock).not.toHaveBeenCalled();
   });
+
+  test('200 preserves each retained marker when editing a mixed supplier order', async () => {
+    soFindExistingMock.mockResolvedValue(SAMPLE_ORDER);
+    soUpdateMock.mockResolvedValue(SAMPLE_ORDER);
+    soFindItemsForOrderMock.mockResolvedValue([
+      { ...SAMPLE_ITEM, id: 'supplier-order-item-legacy', pricingSemanticsVersion: 1 },
+      { ...SAMPLE_ITEM, id: 'supplier-order-item-current', pricingSemanticsVersion: 2 },
+    ]);
+    soReplaceItemsMock.mockResolvedValue([SAMPLE_ITEM]);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/accounting/supplier-orders/so-1',
+      headers: authHeader(),
+      payload: {
+        items: [
+          {
+            id: 'supplier-order-item-legacy',
+            productName: 'Legacy annual service',
+            quantity: 1,
+            unitPrice: 10,
+            durationMonths: 12,
+            durationUnit: 'years',
+          },
+          {
+            id: 'supplier-order-item-current',
+            productName: 'Current annual service',
+            quantity: 1,
+            unitPrice: 10,
+            durationMonths: 12,
+            durationUnit: 'years',
+          },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(
+      (soReplaceItemsMock.mock.calls[0][1] as Array<Record<string, unknown>>).map(
+        (item) => item.pricingSemanticsVersion,
+      ),
+    ).toEqual([1, 2]);
+  });
 });
 
 describe('POST /api/accounting/supplier-orders', () => {
@@ -414,6 +457,47 @@ describe('POST /api/accounting/supplier-orders', () => {
       expect.objectContaining({ pricingSemanticsVersion: 1 }),
     );
     expect(JSON.parse(res.body).id).toBe('SORD-2999-0001');
+  });
+
+  test('201 preserves each source quote marker in a mixed supplier order', async () => {
+    sqFindItemsForQuoteMock.mockResolvedValue([
+      { id: 'supplier-quote-item-legacy', pricingSemanticsVersion: 1 },
+      { id: 'supplier-quote-item-current', pricingSemanticsVersion: 2 },
+    ]);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/accounting/supplier-orders',
+      headers: authHeader(),
+      payload: {
+        ...validBody,
+        items: [
+          {
+            id: 'supplier-quote-item-legacy',
+            productName: 'Legacy annual service',
+            quantity: 1,
+            unitPrice: 10,
+            durationMonths: 12,
+            durationUnit: 'years',
+          },
+          {
+            id: 'supplier-quote-item-current',
+            productName: 'Current annual service',
+            quantity: 1,
+            unitPrice: 10,
+            durationMonths: 12,
+            durationUnit: 'years',
+          },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(
+      (soInsertItemsMock.mock.calls[0][1] as Array<Record<string, unknown>>).map(
+        (item) => item.pricingSemanticsVersion,
+      ),
+    ).toEqual([1, 2]);
   });
 
   test('201 inherits the automatic order code from a parseable linked supplier quote id', async () => {

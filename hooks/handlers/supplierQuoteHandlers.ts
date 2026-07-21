@@ -1,7 +1,6 @@
 import type React from 'react';
 import api from '../../services/api';
 import type { SupplierInvoice, SupplierQuote, SupplierSaleOrder, View } from '../../types';
-import { makeTempId } from '../../utils/tempId';
 import { toastError } from '../../utils/toast';
 
 /**
@@ -124,7 +123,9 @@ export const makeSupplierQuoteHandlers = (deps: SupplierQuoteHandlersDeps) => {
         notes: quote.notes,
         items: quote.items.map((item) => ({
           ...item,
-          id: makeTempId(),
+          // The API generates the order-item id; keep the quote-item id in the request so the
+          // server can retain each source line's pricing semantics.
+          id: item.id,
           orderId: '',
           // Supplier orders store the gross/list price in `unitPrice` and apply their existing
           // line discount field to derive the net unit cost. Preserve the quote's full pricing
