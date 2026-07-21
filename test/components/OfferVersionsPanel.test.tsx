@@ -179,17 +179,14 @@ describe('<OfferVersionsPanel />', () => {
   });
 
   test('clicking a row fetches the full version and calls onPreview', async () => {
-    // Rows[0] is treated as current; selecting it is a no-op. Click a historical row instead.
-    listVersionsMock.mockImplementation(() =>
-      Promise.resolve([VERSION_ROW_UPDATE, VERSION_ROW_RESTORE]),
-    );
+    listVersionsMock.mockImplementation(() => Promise.resolve([VERSION_ROW_UPDATE]));
     getVersionMock.mockImplementation(() => Promise.resolve(FULL_VERSION));
     const onPreview = mock(() => {});
     render(<OfferVersionsPanel {...baseProps} onPreview={onPreview} />);
-    await waitFor(() => expect(screen.getByText('formatted-1700000001000')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('formatted-1700000000000')).toBeInTheDocument());
 
-    fireEvent.click(screen.getByText('formatted-1700000001000'));
-    await waitFor(() => expect(getVersionMock).toHaveBeenCalledWith('co-1', 'ov-2'));
+    fireEvent.click(screen.getByText('formatted-1700000000000'));
+    await waitFor(() => expect(getVersionMock).toHaveBeenCalledWith('co-1', 'ov-1'));
     expect(onPreview).toHaveBeenCalledWith(FULL_VERSION);
   });
 

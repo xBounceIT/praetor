@@ -102,7 +102,7 @@ describe('<VersionHistoryPanel />', () => {
     expect(screen.getAllByTestId('version-history-empty-slot')).toHaveLength(2);
   });
 
-  test('checks the current row by default when nothing is previewed', async () => {
+  test('does not preselect a history row when viewing the live document', async () => {
     const onSelect = mock(() => {});
     const onClearPreview = mock(() => {});
     render(
@@ -115,15 +115,15 @@ describe('<VersionHistoryPanel />', () => {
       />,
     );
 
-    expect(screen.getByRole('radio', { name: 'REV 3' })).toBeChecked();
+    expect(screen.getByRole('radio', { name: 'REV 3' })).not.toBeChecked();
     expect(screen.queryByRole('button', { name: labels.backToCurrent })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('radio', { name: 'REV 3' }));
-    expect(onSelect).not.toHaveBeenCalled();
+    expect(onSelect).toHaveBeenCalledWith(versionRows[0]);
     expect(onClearPreview).not.toHaveBeenCalled();
   });
 
-  test('selecting the current row clears an active preview', () => {
+  test('selecting the newest history row previews it instead of clearing', () => {
     const onSelect = mock(() => {});
     const onClearPreview = mock(() => {});
     render(
@@ -137,8 +137,8 @@ describe('<VersionHistoryPanel />', () => {
     );
 
     fireEvent.click(screen.getByRole('radio', { name: 'REV 3' }));
-    expect(onClearPreview).toHaveBeenCalled();
-    expect(onSelect).not.toHaveBeenCalled();
+    expect(onSelect).toHaveBeenCalledWith(versionRows[0]);
+    expect(onClearPreview).not.toHaveBeenCalled();
   });
 
   test('shows a preview badge on the selected historical row', () => {

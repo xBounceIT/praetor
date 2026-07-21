@@ -123,14 +123,12 @@ export function VersionHistoryPanel<Row extends VersionHistoryPanelRow>({
     closeSearch();
   };
 
-  const currentRowId = rows[0]?.id ?? null;
-  const radioValue = selectedVersionId ?? currentRowId ?? '';
+  // Live document is shown when `selectedVersionId` is null — history rows are all
+  // restorable snapshots (newest-first). Do not treat rows[0] as an unselectable "live" stand-in.
+  const newestRowId = rows[0]?.id ?? null;
+  const radioValue = selectedVersionId ?? '';
 
   const handleRadioChange = (value: string) => {
-    if (currentRowId && value === currentRowId) {
-      if (selectedVersionId) onClearPreview();
-      return;
-    }
     const row = filteredRows.find((candidate) => candidate.id === value);
     if (row) onSelect(row);
   };
@@ -264,7 +262,7 @@ export function VersionHistoryPanel<Row extends VersionHistoryPanelRow>({
           >
             {filteredRows.map((row) => {
               const selected = row.id === selectedVersionId;
-              const isCurrent = rows[0]?.id === row.id;
+              const isCurrent = newestRowId === row.id;
               const reasonLabel =
                 row.reason === 'restore' ? labels.reasonRestore : labels.reasonUpdate;
               const timestamp = formatInsertDateTime(row.createdAt, locale);
