@@ -1555,7 +1555,6 @@ const ClientOfferFormModal: React.FC<{ controller: ClientOffersController }> = (
             selectedVersionId={selectedVersionId}
             onPreview={(version) => {
               handleVersionPreview(version);
-              setVersionsDialogOpen(false);
             }}
             onClearPreview={handleClearPreview}
             onRestored={handleVersionRestored}
@@ -1573,9 +1572,9 @@ const ClientOfferModalHeader: React.FC<{ controller: ClientOffersController }> =
   const { t, closeModal, editingOffer, isReadOnly, baseReadOnly, readOnlyReason } = controller;
 
   return (
-    <ModalHeader className="flex-col items-stretch gap-3">
+    <ModalHeader>
       <div className="flex w-full items-start justify-between gap-4">
-        <ModalTitle className="gap-3">
+        <ModalTitle className="min-w-0 flex-1 flex-wrap items-center gap-3">
           <span className="flex size-10 items-center justify-center rounded-md bg-muted text-primary">
             <i
               className={`fa-solid ${editingOffer ? 'fa-pen-to-square' : 'fa-plus'}`}
@@ -1587,12 +1586,12 @@ const ClientOfferModalHeader: React.FC<{ controller: ClientOffersController }> =
             : editingOffer
               ? t('sales:clientOffers.editOffer', { defaultValue: 'Edit offer' })
               : t('sales:clientOffers.newOffer', { defaultValue: 'New offer' })}
+          {baseReadOnly ? (
+            <ModalReadOnlyStatusBanner>{readOnlyReason}</ModalReadOnlyStatusBanner>
+          ) : null}
         </ModalTitle>
         <ModalCloseButton onClick={closeModal} />
       </div>
-      {baseReadOnly ? (
-        <ModalReadOnlyStatusBanner>{readOnlyReason}</ModalReadOnlyStatusBanner>
-      ) : null}
     </ModalHeader>
   );
 };
@@ -1600,43 +1599,10 @@ const ClientOfferModalHeader: React.FC<{ controller: ClientOffersController }> =
 const ClientOfferModalAlerts: React.FC<{ controller: ClientOffersController }> = ({
   controller,
 }) => {
-  const { t, i18n, previewVersion, handleClearPreview, editingOffer, onViewQuote } = controller;
-  const previewRevisionCode =
-    previewVersion &&
-    'revisionCode' in previewVersion &&
-    typeof previewVersion.revisionCode === 'string'
-      ? previewVersion.revisionCode
-      : null;
+  const { t, editingOffer, onViewQuote } = controller;
 
   return (
     <>
-      {previewVersion && (
-        <div className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl border border-amber-500/30 bg-amber-500/10">
-          <span className="text-amber-800 dark:text-amber-300 text-xs font-bold flex items-center gap-2">
-            <i className="fa-solid fa-clock-rotate-left"></i>
-            {previewRevisionCode
-              ? t('sales:clientOffers.revisionHistory.previewBanner', {
-                  code: previewRevisionCode,
-                  date: formatInsertDateTime(previewVersion.createdAt, i18n.language),
-                  defaultValue: 'Previewing {{code}} from {{date}}',
-                })
-              : t('sales:clientOffers.versionHistory.previewBanner', {
-                  date: formatInsertDateTime(previewVersion.createdAt, i18n.language),
-                  defaultValue: 'Previewing version from {{date}}',
-                })}
-          </span>
-          <Button
-            type="button"
-            variant="link"
-            onClick={handleClearPreview}
-            className="h-auto px-0 text-xs font-semibold text-amber-800 dark:text-amber-300"
-          >
-            {t('sales:clientOffers.versionHistory.backToCurrent', {
-              defaultValue: 'Back to current',
-            })}
-          </Button>
-        </div>
-      )}
       {editingOffer?.linkedQuoteId && (
         <LinkedRecordBanner
           label={t('sales:clientOffers.sourceQuote', { defaultValue: 'Source quote' })}

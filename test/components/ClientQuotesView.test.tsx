@@ -279,13 +279,19 @@ describe('<ClientQuotesView /> candidate version previews', () => {
       expect(getVersionMock).toHaveBeenCalledWith('Q-HISTORY', 'qv-1');
     });
 
-    expect(await screen.findByRole('tab', { name: /Historical A/ })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: /Historical B/ })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('tab', { name: /Historical A/, hidden: true }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /Historical B/, hidden: true })).toBeInTheDocument();
     fireEvent.click(
-      screen.getByRole('button', { name: 'sales:clientQuotes.versionHistory.backToCurrent' }),
+      within(versionDialog).getByRole('button', {
+        name: 'clientQuotes.versionHistory.backToCurrent',
+      }),
     );
-    expect(screen.getByRole('tab', { name: /Current variant/ })).toBeInTheDocument();
-    expect(screen.queryByRole('tab', { name: /Historical B/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /Current variant/, hidden: true })).toBeInTheDocument();
+    expect(
+      screen.queryByRole('tab', { name: /Historical B/, hidden: true }),
+    ).not.toBeInTheDocument();
   });
 });
 

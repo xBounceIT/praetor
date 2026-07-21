@@ -257,6 +257,7 @@
       "searchAriaLabel": "Cerca nelle versioni",
       "noResults": "Nessuna versione corrisponde alla ricerca",
       "currentBadge": "Corrente",
+      "previewBadge": "Anteprima",
       "infoTooltip": "Snapshot automatici creati al salvataggio o al ripristino del documento."
     },
     "revisionHistory": {
@@ -274,6 +275,7 @@
       "searchAriaLabel": "Cerca nelle revisioni",
       "noResults": "Nessuna revisione corrisponde alla ricerca",
       "currentBadge": "Corrente",
+      "previewBadge": "Anteprima",
       "infoTooltip": "Snapshot immutabili creati all’invio. Lo storico dei salvataggi è disponibile dal link in basso.",
       "openVersionHistory": "Apri cronologia completa"
     }
@@ -375,6 +377,7 @@
       "searchAriaLabel": "Cerca nelle versioni",
       "noResults": "Nessuna versione corrisponde alla ricerca",
       "currentBadge": "Corrente",
+      "previewBadge": "Anteprima",
       "infoTooltip": "Snapshot automatici creati al salvataggio o al ripristino del documento."
     },
     "revisionHistory": {
@@ -392,6 +395,7 @@
       "searchAriaLabel": "Cerca nelle revisioni",
       "noResults": "Nessuna revisione corrisponde alla ricerca",
       "currentBadge": "Corrente",
+      "previewBadge": "Anteprima",
       "infoTooltip": "Snapshot immutabili creati all’invio. Lo storico dei salvataggi è disponibile dal link in basso.",
       "openVersionHistory": "Apri cronologia completa"
     }
@@ -490,6 +494,7 @@
       "searchAriaLabel": "Cerca nelle versioni",
       "noResults": "Nessuna versione corrisponde alla ricerca",
       "currentBadge": "Corrente",
+      "previewBadge": "Anteprima",
       "infoTooltip": "Snapshot automatici creati al salvataggio o al ripristino del documento."
     },
     "revisionHistory": {
@@ -507,6 +512,7 @@
       "searchAriaLabel": "Cerca nelle revisioni",
       "noResults": "Nessuna revisione corrisponde alla ricerca",
       "currentBadge": "Corrente",
+      "previewBadge": "Anteprima",
       "infoTooltip": "Snapshot immutabili creati all’invio. Lo storico dei salvataggi è disponibile dal link in basso.",
       "openVersionHistory": "Apri cronologia completa"
     },

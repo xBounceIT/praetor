@@ -15,6 +15,7 @@ const labels = {
   searchAriaLabel: 'Search revisions',
   noResults: 'No revisions match your search',
   currentBadge: 'Current',
+  previewBadge: 'Preview',
   infoTooltip: 'Immutable sent snapshots.',
 };
 
@@ -81,7 +82,7 @@ describe('<VersionHistoryPanel />', () => {
     expect(screen.getByRole('radio', { name: 'REV 2' })).toBeChecked();
 
     const list = screen.getByRole('radiogroup');
-    expect(list.parentElement).toHaveClass('max-h-[calc(3*3.25rem)]');
+    expect(list.parentElement).toHaveClass('max-h-[calc(3*3.75rem)]');
 
     fireEvent.click(screen.getByRole('radio', { name: 'REV 1' }));
     expect(onSelect).toHaveBeenCalledWith(versionRows[2]);
@@ -124,6 +125,19 @@ describe('<VersionHistoryPanel />', () => {
     fireEvent.click(screen.getByRole('radio', { name: 'REV 3' }));
     expect(onClearPreview).toHaveBeenCalled();
     expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  test('shows a preview badge on the selected historical row', () => {
+    render(
+      <VersionHistoryPanel
+        {...baseProps}
+        rows={versionRows}
+        selectedVersionId={versionRows[1].id}
+      />,
+    );
+
+    expect(screen.getByText(labels.previewBadge)).toBeInTheDocument();
+    expect(screen.getAllByText(labels.currentBadge)).toHaveLength(1);
   });
 
   test('expands search on the header row and filters the local list', async () => {
@@ -171,13 +185,16 @@ describe('<VersionHistoryPanel />', () => {
     expect(onSecondary).toHaveBeenCalled();
   });
 
-  test('uses a taller scroll area in dialog layout', () => {
+  test('uses a taller scroll area in dialog layout without search chrome', () => {
     render(<VersionHistoryPanel {...baseProps} layout="dialog" rows={versionRows} />);
 
     const list = screen.getByRole('radiogroup');
     expect(list.parentElement).toHaveClass('max-h-[min(24rem,50vh)]');
+    expect(screen.queryByRole('button', { name: labels.searchAriaLabel })).not.toBeInTheDocument();
+    expect(screen.queryByPlaceholderText(labels.searchPlaceholder)).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: labels.infoTooltip })).not.toBeInTheDocument();
-    expect(screen.queryByText(labels.title)).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { level: 4, name: labels.title })).not.toBeInTheDocument();
+    expect(screen.queryByText(String(versionRows.length))).not.toBeInTheDocument();
     expect(screen.getByRole('region', { name: labels.title })).not.toHaveClass('border');
   });
 

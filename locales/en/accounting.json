@@ -72,6 +72,7 @@
       "searchAriaLabel": "Search versions",
       "noResults": "No versions match your search",
       "currentBadge": "Current",
+      "previewBadge": "Preview",
       "infoTooltip": "Automatic snapshots created when you save or restore the document."
     }
   },
@@ -198,6 +199,7 @@
       "searchAriaLabel": "Search versions",
       "noResults": "No versions match your search",
       "currentBadge": "Current",
+      "previewBadge": "Preview",
       "infoTooltip": "Automatic snapshots created when you save or restore the document."
     }
   },

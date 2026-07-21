@@ -839,9 +839,9 @@ const SupplierOrderModal: React.FC<{ controller: SupplierOrdersController }> = (
   <Modal isOpen={controller.isModalOpen} onClose={controller.closeEditModal}>
     <ModalContent size="full" className="max-h-[90vh]">
       <form onSubmit={controller.handleSubmit} className="flex min-h-0 flex-1 flex-col">
-        <ModalHeader className="flex-col items-stretch gap-3">
+        <ModalHeader>
           <div className="flex w-full items-start justify-between gap-4">
-            <ModalTitle className="gap-3">
+            <ModalTitle className="min-w-0 flex-1 flex-wrap items-center gap-3">
               <span className="flex size-10 items-center justify-center rounded-md bg-muted text-primary">
                 <i
                   className={`fa-solid ${controller.isReadOnly ? 'fa-eye' : 'fa-pen-to-square'}`}
@@ -849,14 +849,14 @@ const SupplierOrderModal: React.FC<{ controller: SupplierOrdersController }> = (
                 ></i>
               </span>
               {controller.t('accounting:supplierOrders.editOrder')}
+              {controller.baseReadOnly ? (
+                <ModalReadOnlyStatusBanner>
+                  {controller.t('accounting:supplierOrders.readOnlyStatus')}
+                </ModalReadOnlyStatusBanner>
+              ) : null}
             </ModalTitle>
             <ModalCloseButton onClick={controller.closeEditModal} />
           </div>
-          {controller.baseReadOnly ? (
-            <ModalReadOnlyStatusBanner>
-              {controller.t('accounting:supplierOrders.readOnlyStatus')}
-            </ModalReadOnlyStatusBanner>
-          ) : null}
         </ModalHeader>
         <ModalBody className="flex-1 space-y-5">
           {controller.editingOrder?.id ? (
@@ -901,28 +901,6 @@ const SupplierOrderModalAlerts: React.FC<{ controller: SupplierOrdersController 
   controller,
 }) => (
   <>
-    {controller.previewVersion && (
-      <div className="flex items-center justify-between gap-3 rounded-md border border-amber-500/30 bg-amber-500/10 px-4 py-3">
-        <span className="flex items-center gap-2 text-xs font-medium text-amber-700 dark:text-amber-300">
-          <i className="fa-solid fa-clock-rotate-left" aria-hidden="true"></i>
-          {controller.t('accounting:supplierOrders.versionHistory.previewBanner', {
-            date: formatInsertDateTime(
-              controller.previewVersion.createdAt,
-              controller.i18n.language,
-            ),
-          })}
-        </span>
-        <Button
-          type="button"
-          variant="link"
-          size="sm"
-          onClick={controller.handleClearPreview}
-          className="h-auto px-0 text-amber-700 dark:text-amber-300"
-        >
-          {controller.t('accounting:supplierOrders.versionHistory.backToCurrent')}
-        </Button>
-      </div>
-    )}
     {controller.formData.linkedQuoteId && (
       <LinkedRecordBanner
         label={controller.t('accounting:supplierOrders.linkedQuote')}

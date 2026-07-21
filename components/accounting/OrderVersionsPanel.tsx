@@ -109,6 +109,7 @@ const OrderVersionsPanel: React.FC<OrderVersionsPanelProps> = ({
           searchAriaLabel: t('clientsOrders.versionHistory.searchAriaLabel'),
           noResults: t('clientsOrders.versionHistory.noResults'),
           currentBadge: t('clientsOrders.versionHistory.currentBadge'),
+          previewBadge: t('clientsOrders.versionHistory.previewBadge'),
           infoTooltip: t('clientsOrders.versionHistory.infoTooltip'),
         }}
         onSelect={handleSelect}

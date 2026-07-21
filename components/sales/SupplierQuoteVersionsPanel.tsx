@@ -114,6 +114,7 @@ const SupplierQuoteVersionsPanel: React.FC<SupplierQuoteVersionsPanelProps> = ({
           searchAriaLabel: t('supplierQuotes.versionHistory.searchAriaLabel'),
           noResults: t('supplierQuotes.versionHistory.noResults'),
           currentBadge: t('supplierQuotes.versionHistory.currentBadge'),
+          previewBadge: t('supplierQuotes.versionHistory.previewBadge'),
           infoTooltip: t('supplierQuotes.versionHistory.infoTooltip'),
         }}
         onSelect={handleSelect}

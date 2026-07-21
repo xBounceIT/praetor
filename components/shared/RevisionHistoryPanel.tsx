@@ -149,6 +149,9 @@ export function RevisionHistoryPanel<TRevision extends RevisionWithSnapshot, TRe
           currentBadge: t(`${translationPrefix}.revisionHistory.currentBadge`, {
             defaultValue: 'Corrente',
           }),
+          previewBadge: t(`${translationPrefix}.revisionHistory.previewBadge`, {
+            defaultValue: 'Anteprima',
+          }),
           infoTooltip: t(`${translationPrefix}.revisionHistory.infoTooltip`, {
             defaultValue:
               'Snapshot immutabili creati all’invio. Lo storico dei salvataggi è disponibile dal link in basso.',

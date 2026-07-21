@@ -408,7 +408,7 @@ describe('<ClientsOrdersView />', () => {
       "import { Field, FieldError, FieldLabel } from '@/components/ui/field';",
       "import { Textarea } from '@/components/ui/textarea';",
       '<ModalContent size="full"',
-      '<ModalHeader className="flex-col items-stretch gap-3">',
+      '<ModalHeader>',
       '<ModalBody className="flex-1 space-y-5">',
       '<ModalFooter>',
       'id="client-order-client"',

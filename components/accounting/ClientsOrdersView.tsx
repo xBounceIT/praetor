@@ -1045,9 +1045,9 @@ const ClientsOrderModal: React.FC<{ controller: ClientsOrdersController }> = ({ 
   <Modal isOpen={controller.isModalOpen} onClose={controller.closeEditModal}>
     <ModalContent size="full" className="max-h-[90vh]">
       <form onSubmit={controller.handleSubmit} className="flex min-h-0 flex-1 flex-col">
-        <ModalHeader className="flex-col items-stretch gap-3">
+        <ModalHeader>
           <div className="flex w-full items-start justify-between gap-4">
-            <ModalTitle className="gap-3">
+            <ModalTitle className="min-w-0 flex-1 flex-wrap items-center gap-3">
               <span className="flex size-10 items-center justify-center rounded-md bg-muted text-primary">
                 <i
                   className={`fa-solid ${controller.isReadOnly ? 'fa-eye' : 'fa-pen-to-square'}`}
@@ -1057,21 +1057,21 @@ const ClientsOrderModal: React.FC<{ controller: ClientsOrdersController }> = ({ 
               {controller.isReadOnly
                 ? controller.t('common:buttons.view')
                 : controller.t('accounting:clientsOrders.editOrder')}
+              {controller.editingOrder?.status === 'confirmed' ? (
+                <ModalReadOnlyStatusBanner>
+                  {controller.t('accounting:clientsOrders.confirmedIdentityLockedStatus')}
+                </ModalReadOnlyStatusBanner>
+              ) : null}
+              {controller.editingOrder?.status === 'denied' ? (
+                <ModalReadOnlyStatusBanner>
+                  {controller.t('accounting:clientsOrders.readOnlyStatus', {
+                    status: getOrderStatusLabel(controller.editingOrder.status, controller.t),
+                  })}
+                </ModalReadOnlyStatusBanner>
+              ) : null}
             </ModalTitle>
             <ModalCloseButton onClick={controller.closeEditModal} />
           </div>
-          {controller.editingOrder?.status === 'confirmed' ? (
-            <ModalReadOnlyStatusBanner>
-              {controller.t('accounting:clientsOrders.confirmedIdentityLockedStatus')}
-            </ModalReadOnlyStatusBanner>
-          ) : null}
-          {controller.editingOrder?.status === 'denied' ? (
-            <ModalReadOnlyStatusBanner>
-              {controller.t('accounting:clientsOrders.readOnlyStatus', {
-                status: getOrderStatusLabel(controller.editingOrder.status, controller.t),
-              })}
-            </ModalReadOnlyStatusBanner>
-          ) : null}
         </ModalHeader>
         <ModalBody className="flex-1 space-y-5">
           {controller.editingOrder?.id ? (
@@ -1111,31 +1111,6 @@ const ClientsOrderModalAlerts: React.FC<{ controller: ClientsOrdersController }>
   controller,
 }) => (
   <>
-    {controller.previewVersion && (
-      <div className="flex items-center justify-between gap-3 rounded-md border border-amber-500/30 bg-amber-500/10 px-4 py-3">
-        <span className="flex items-center gap-2 text-xs font-medium text-amber-700 dark:text-amber-300">
-          <i className="fa-solid fa-clock-rotate-left" aria-hidden="true"></i>
-          {controller.t('accounting:clientsOrders.versionHistory.previewBanner', {
-            date: formatInsertDateTime(
-              controller.previewVersion.createdAt,
-              controller.i18n.language,
-            ),
-            defaultValue: 'Previewing version from {{date}}',
-          })}
-        </span>
-        <Button
-          type="button"
-          variant="link"
-          size="sm"
-          onClick={controller.handleClearPreview}
-          className="h-auto px-0 text-amber-700 dark:text-amber-300"
-        >
-          {controller.t('accounting:clientsOrders.versionHistory.backToCurrent', {
-            defaultValue: 'Back to current',
-          })}
-        </Button>
-      </div>
-    )}
     {controller.formData.linkedOfferId && (
       <LinkedRecordBanner
         label={controller.t('accounting:clientsOrders.linkedOffer', {

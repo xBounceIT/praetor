@@ -1391,7 +1391,6 @@ const SupplierQuoteModal: React.FC<{ controller: SupplierQuotesController }> = (
             selectedVersionId={selectedVersionId}
             onPreview={(version) => {
               controller.handleVersionPreview(version);
-              setVersionsDialogOpen(false);
             }}
             onClearPreview={controller.handleClearPreview}
             onRestored={controller.handleVersionRestored}
@@ -1406,9 +1405,9 @@ const SupplierQuoteModal: React.FC<{ controller: SupplierQuotesController }> = (
 const SupplierQuoteModalHeader: React.FC<{ controller: SupplierQuotesController }> = ({
   controller,
 }) => (
-  <ModalHeader className="flex-col items-stretch gap-3">
+  <ModalHeader>
     <div className="flex w-full items-start justify-between gap-4">
-      <ModalTitle className="gap-3">
+      <ModalTitle className="min-w-0 flex-1 flex-wrap items-center gap-3">
         <span className="flex size-10 items-center justify-center rounded-md bg-muted text-primary">
           <i
             className={`fa-solid ${
@@ -1426,12 +1425,12 @@ const SupplierQuoteModalHeader: React.FC<{ controller: SupplierQuotesController 
           : controller.editingQuote
             ? controller.t('sales:supplierQuotes.editQuote', { defaultValue: 'Edit quote' })
             : controller.t('sales:supplierQuotes.newQuote', { defaultValue: 'New quote' })}
+        {controller.baseReadOnly ? (
+          <ModalReadOnlyStatusBanner>{controller.readOnlyReason}</ModalReadOnlyStatusBanner>
+        ) : null}
       </ModalTitle>
       <ModalCloseButton onClick={controller.closeModal} />
     </div>
-    {controller.baseReadOnly ? (
-      <ModalReadOnlyStatusBanner>{controller.readOnlyReason}</ModalReadOnlyStatusBanner>
-    ) : null}
   </ModalHeader>
 );
 
@@ -1439,48 +1438,9 @@ const SupplierQuoteModalAlerts: React.FC<{ controller: SupplierQuotesController 
   controller,
 }) => {
   const editingQuote = controller.editingQuote;
-  const previewRevisionCode =
-    controller.previewVersion &&
-    'revisionCode' in controller.previewVersion &&
-    typeof controller.previewVersion.revisionCode === 'string'
-      ? controller.previewVersion.revisionCode
-      : null;
 
   return (
     <>
-      {controller.previewVersion && (
-        <div className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl border border-amber-500/30 bg-amber-500/10">
-          <span className="text-amber-800 dark:text-amber-300 text-xs font-bold flex items-center gap-2">
-            <i className="fa-solid fa-clock-rotate-left"></i>
-            {previewRevisionCode
-              ? controller.t('sales:supplierQuotes.revisionHistory.previewBanner', {
-                  code: previewRevisionCode,
-                  date: formatInsertDateTime(
-                    controller.previewVersion.createdAt,
-                    controller.i18n.language,
-                  ),
-                  defaultValue: 'Previewing {{code}} from {{date}}',
-                })
-              : controller.t('sales:supplierQuotes.versionHistory.previewBanner', {
-                  date: formatInsertDateTime(
-                    controller.previewVersion.createdAt,
-                    controller.i18n.language,
-                  ),
-                  defaultValue: 'Previewing version from {{date}}',
-                })}
-          </span>
-          <Button
-            type="button"
-            variant="link"
-            onClick={controller.handleClearPreview}
-            className="h-auto px-0 text-xs font-semibold text-amber-800 dark:text-amber-300"
-          >
-            {controller.t('sales:supplierQuotes.versionHistory.backToCurrent', {
-              defaultValue: 'Back to current',
-            })}
-          </Button>
-        </div>
-      )}
       {editingQuote?.linkedOrderId && (
         <LinkedRecordBanner
           label={controller.t('sales:supplierQuotes.linkedOrderTitle', {

@@ -11,11 +11,13 @@ export function ModalReadOnlyStatusBanner({
   return (
     <div
       className={cn(
-        'flex items-center gap-3 rounded-md border border-amber-500/30 bg-amber-500/10 px-4 py-2.5',
+        'inline-flex w-fit max-w-full shrink-0 items-center rounded-md border border-amber-500/30 bg-amber-500/10 px-2.5 py-1',
         className,
       )}
     >
-      <span className="text-xs font-medium text-amber-700 dark:text-amber-300">{children}</span>
+      <span className="truncate text-xs font-medium text-amber-700 dark:text-amber-300">
+        {children}
+      </span>
     </div>
   );
 }
