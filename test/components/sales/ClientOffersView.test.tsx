@@ -1134,6 +1134,31 @@ describe('<ClientOffersView /> paginated item validation', () => {
   });
 });
 
+describe('<ClientOffersView /> legacy day costs', () => {
+  test('shows the effective daily cost for a product-backed legacy line', async () => {
+    const offer = buildOffer({
+      id: 'O-LEGACY-DAY-COST',
+      items: [
+        {
+          ...buildOffer({}).items[0],
+          id: 'legacy-day-line',
+          offerId: 'O-LEGACY-DAY-COST',
+          unitType: 'days',
+          productCost: 50,
+          unitPrice: 500,
+          pricingSemanticsVersion: 1,
+        },
+      ],
+    });
+
+    render(<ClientOffersView {...baseProps} offers={[offer]} />);
+    fireEvent.click(screen.getByText('O-LEGACY-DAY-COST'));
+    const dialog = await screen.findByRole('dialog');
+
+    expect(within(dialog).getByLabelText('crm:internalListing.cost')).toHaveValue('400,00');
+  });
+});
+
 describe('<ClientOffersView /> localized line amounts', () => {
   test('formats line cost, margin, and revenue with Italian separators', async () => {
     const offerId = 'O-LOCALE-AMOUNTS';

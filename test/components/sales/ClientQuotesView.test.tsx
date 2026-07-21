@@ -897,6 +897,42 @@ describe('<ClientQuotesView />', () => {
     );
   });
 
+  test('shows the effective daily cost for a legacy product-backed day line', async () => {
+    const legacyQuote: Quote = {
+      ...quotes[0],
+      id: 'Q-LEGACY-DAY-COST',
+      items: [
+        {
+          ...quotes[0].items[0],
+          quoteId: 'Q-LEGACY-DAY-COST',
+          unitType: 'days',
+          productCost: 50,
+          unitPrice: 500,
+          pricingSemanticsVersion: 1,
+        },
+      ],
+    };
+
+    render(
+      <ClientQuotesView
+        quotes={[legacyQuote]}
+        clients={clients}
+        products={[]}
+        supplierQuotes={[]}
+        communicationChannels={communicationChannels}
+        currency="EUR"
+        onAddQuote={mock(() => Promise.resolve())}
+        onUpdateQuote={mock(() => Promise.resolve())}
+        onDeleteQuote={mock(() => Promise.resolve())}
+      />,
+    );
+
+    fireEvent.click(screen.getByText('Q-LEGACY-DAY-COST'));
+    const dialog = await screen.findByRole('dialog');
+
+    expect(within(dialog).getByLabelText('crm:internalListing.cost')).toHaveValue('400,00');
+  });
+
   test('MOL line input keeps two decimals, stays below 100, and recalculates pricing', async () => {
     const twoDecimalMolQuote: Quote = {
       id: 'Q-MOL',

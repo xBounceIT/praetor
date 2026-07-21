@@ -67,6 +67,7 @@ import {
   formatMolPercentage,
   formatNumber,
   getDurationInputValue,
+  getEffectiveUnitCost,
   getItemPricingContext,
   isPositiveFiniteNumber,
   MAX_MOL_PERCENTAGE,
@@ -3327,7 +3328,7 @@ const getClientQuoteLineContext = (
   const cost =
     rawCost === undefined || rawCost === null || !Number.isFinite(Number(rawCost))
       ? undefined
-      : Number(rawCost);
+      : getEffectiveUnitCost(item);
   const molPercentage = item.productMolPercentage ?? undefined;
   const unitPrice = Number.isFinite(Number(item.unitPrice)) ? Number(item.unitPrice) : undefined;
   const revenue = unitPrice === undefined ? undefined : lineSalePrice;
