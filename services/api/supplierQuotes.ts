@@ -47,15 +47,18 @@ export const supplierQuotesApi = {
     ).then(normalizeSupplierQuote),
 
   listRevisions: (id: string): Promise<RevisionRow[]> =>
-    fetchApi<RevisionRow[]>(`/sales/supplier-quotes/${id}/revisions`),
+    fetchApi<RevisionRow[]>(`${supplierQuotePath(id)}/revisions`),
 
   getRevision: (id: string, revisionId: string): Promise<SupplierQuoteRevision> =>
-    fetchApi<SupplierQuoteRevision>(`/sales/supplier-quotes/${id}/revisions/${revisionId}`),
+    fetchApi<SupplierQuoteRevision>(
+      `${supplierQuotePath(id)}/revisions/${encodePathSegment(revisionId)}`,
+    ),
 
   restoreRevision: (id: string, revisionId: string): Promise<SupplierQuote> =>
-    fetchApi<SupplierQuote>(`/sales/supplier-quotes/${id}/revisions/${revisionId}/restore`, {
-      method: 'POST',
-    }).then(normalizeSupplierQuote),
+    fetchApi<SupplierQuote>(
+      `${supplierQuotePath(id)}/revisions/${encodePathSegment(revisionId)}/restore`,
+      { method: 'POST' },
+    ).then(normalizeSupplierQuote),
 
   listAttachments: (id: string): Promise<SupplierQuoteAttachment[]> =>
     fetchApi<SupplierQuoteAttachment[]>(`${supplierQuotePath(id)}/attachments`),
