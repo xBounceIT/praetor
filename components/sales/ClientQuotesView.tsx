@@ -613,18 +613,18 @@ const useClientQuotesController = ({
   const [isPromoting, setIsPromoting] = useState(false);
   const [previewVersion, setPreviewVersion] = useState<QuoteVersion | null>(null);
   const [draggedItemId, setDraggedItemId] = useState<string | null>(null);
-  // Expired quotes are read-only EXCEPT their expiration date, which stays editable so the user can
-  // revalidate the quote (issue #779). Other read-only reasons (offer/accepted/denied) lock all.
+  // Non-draft quotes (including sent) are fully read-only, matching offers. Expired quotes stay
+  // read-only EXCEPT their expiration date, which remains editable so the user can revalidate
+  // the quote (issue #779). Linked-offer quotes lock everything.
   const isEditingExpired = Boolean(editingQuote && isQuoteExpired(editingQuote));
   const baseReadOnly = Boolean(
     editingQuote &&
-      (editingQuote.linkedOfferId ||
-        isTerminalQuoteStatus(editingQuote.status) ||
-        isEditingExpired),
+      (editingQuote.linkedOfferId || editingQuote.status !== 'draft' || isEditingExpired),
   );
   const isReadOnly = baseReadOnly || previewVersion !== null;
-  // True when the ONLY reason the form is read-only is expiry — the expiration DateField stays
-  // enabled in that case so the quote can be extended out of the `expired` state.
+  // Expired quotes only (offer-style): the expiration DateField stays enabled while the rest of
+  // the form is read-only. Valid sent quotes stay fully read-only — exposing the date invited
+  // no-op submits that wrote needless version snapshots and audit rows.
   const expirationEditableWhileReadOnly = Boolean(
     isEditingExpired &&
       previewVersion === null &&
@@ -636,9 +636,14 @@ const useClientQuotesController = ({
     ? t('sales:clientQuotes.readOnlyBecauseOffer', {
         defaultValue: 'Read-only due to linked offer',
       })
-    : t('sales:clientQuotes.readOnlyBecauseFinal', {
-        defaultValue: 'Read-only due to finalized status',
-      });
+    : isEditingExpired
+      ? t('sales:clientQuotes.readOnlyExpired', {
+          defaultValue:
+            'Read-only: the quote has expired — extend the expiration date to revalidate it',
+        })
+      : t('sales:clientQuotes.readOnlyStatus', {
+          defaultValue: 'Read-only due to non-draft status',
+        });
   const supplierLockedReason = t('sales:fieldInfo.fieldLockedBySupplierQuote', {
     defaultValue: 'Locked due to linked supplier quote',
   });
@@ -2892,6 +2897,7 @@ const ClientQuoteModalAlerts: React.FC<{ controller: ClientQuotesController }> =
     previewVersion,
     handleClearPreview,
     baseReadOnly,
+    readOnlyReason,
     editingQuote,
     offers,
     onViewOffers,
@@ -2935,13 +2941,7 @@ const ClientQuoteModalAlerts: React.FC<{ controller: ClientQuotesController }> =
       {baseReadOnly && (
         <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-amber-500/30 bg-amber-500/10">
           <span className="text-amber-700 dark:text-amber-300 text-xs font-bold">
-            {editingQuote?.linkedOfferId
-              ? t('sales:clientQuotes.readOnlyBecauseOffer', {
-                  defaultValue: 'Read-only due to linked offer',
-                })
-              : t('sales:clientQuotes.readOnlyBecauseFinal', {
-                  defaultValue: 'Read-only due to finalized status',
-                })}
+            {readOnlyReason}
           </span>
         </div>
       )}
@@ -4071,7 +4071,6 @@ const ClientQuoteModalFooter: React.FC<{ controller: ClientQuotesController }> =
     isReadOnly,
     expirationEditableWhileReadOnly,
     isSubmitting,
-    getStatusLabel,
     editingQuote,
   } = controller;
 
@@ -4080,20 +4079,13 @@ const ClientQuoteModalFooter: React.FC<{ controller: ClientQuotesController }> =
       <Button type="button" variant="outline" onClick={closeModal}>
         {t('common:buttons.cancel')}
       </Button>
-      {!previewVersion && (
-        <Button
-          type="submit"
-          disabled={(isReadOnly && !expirationEditableWhileReadOnly) || isSubmitting}
-        >
-          {isReadOnly && !expirationEditableWhileReadOnly
-            ? t('sales:clientQuotes.statusQuote', {
-                status: getStatusLabel(editingQuote?.effectiveStatus || ''),
-              })
-            : isSubmitting
-              ? t('common:buttons.saving')
-              : editingQuote
-                ? t('sales:clientQuotes.updateQuote')
-                : t('sales:clientQuotes.createQuote')}
+      {(!isReadOnly || expirationEditableWhileReadOnly) && !previewVersion && (
+        <Button type="submit" disabled={isSubmitting}>
+          {isSubmitting
+            ? t('common:buttons.saving')
+            : editingQuote
+              ? t('sales:clientQuotes.updateQuote')
+              : t('sales:clientQuotes.createQuote')}
         </Button>
       )}
     </ModalFooter>

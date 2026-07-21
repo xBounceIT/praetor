@@ -724,12 +724,34 @@ describe('POST /api/sales/client-quotes/:id/versions/:versionId/restore', () => 
     expect(coCreateMock).not.toHaveBeenCalled();
   });
 
-  test('409 when the quote is effectively expired (restore would rewrite frozen content)', async () => {
-    // Expired quotes are content-read-only and exit only via a date extension (issue #779);
-    // restore must enforce the same rule the PUT does.
+  test('409 when the quote is not draft (restore blocked like offers)', async () => {
     setupHappyPath();
     cqLockCurrentByIdMock.mockResolvedValue({
       status: 'sent',
+      discount: 0,
+      discountType: 'percentage',
+      expirationDate: '2999-12-31',
+    });
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/sales/client-quotes/q-1/versions/qv-1/restore',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(JSON.parse(res.body).error).toContain('Non-draft');
+    expect(cqRestoreSnapshotQuoteMock).not.toHaveBeenCalled();
+    expect(qvInsertMock).not.toHaveBeenCalled();
+  });
+
+  test('409 when the draft quote is effectively expired (restore would rewrite frozen content)', async () => {
+    // Expired quotes are content-read-only and exit only via a date extension (issue #779);
+    // restore must enforce the same rule the PUT does. Non-draft outranks expired, so this
+    // fixture stays on draft to assert the expired message specifically.
+    setupHappyPath();
+    cqLockCurrentByIdMock.mockResolvedValue({
+      status: 'draft',
       discount: 0,
       discountType: 'percentage',
       expirationDate: '2000-01-01',
@@ -745,25 +767,6 @@ describe('POST /api/sales/client-quotes/:id/versions/:versionId/restore', () => 
     expect(JSON.parse(res.body).error).toContain('Expired');
     expect(cqRestoreSnapshotQuoteMock).not.toHaveBeenCalled();
     expect(qvInsertMock).not.toHaveBeenCalled();
-  });
-
-  test('200 restores a sent quote whose expiration is still in the future', async () => {
-    setupHappyPath();
-    cqLockCurrentByIdMock.mockResolvedValue({
-      status: 'sent',
-      discount: 0,
-      discountType: 'percentage',
-      expirationDate: '2999-12-31',
-    });
-
-    const res = await testApp.inject({
-      method: 'POST',
-      url: '/api/sales/client-quotes/q-1/versions/qv-1/restore',
-      headers: authHeader(),
-    });
-
-    expect(res.statusCode).toBe(200);
-    expect(cqRestoreSnapshotQuoteMock).toHaveBeenCalled();
   });
 
   test('409 when the snapshot would park the quote in sent beside an expired sourced supplier', async () => {

@@ -86,6 +86,7 @@ import {
 import { registerRevisionHistoryRoutes } from './revision-history.ts';
 
 const MAX_CANDIDATE_NAME_LENGTH = 100;
+const NON_DRAFT_READ_ONLY_ERROR = 'Non-draft quotes are read-only';
 
 type IncomingQuoteItem = {
   id?: string;
@@ -1999,6 +2000,15 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               effectiveQuoteStatusFromDate(lockedCurrent.status, lockedCurrent.expirationDate) ===
                 'expired',
             );
+            // Non-draft (sent) families are content-locked like flat PUT / offers. Expired sent
+            // families still fall through to the expiration-only carve-out below.
+            if (normalizeQuoteStatus(lockedCurrent.status) !== 'draft' && !lockedFamilyExpired) {
+              return {
+                kind: 'conflict' as const,
+                message: NON_DRAFT_READ_ONLY_ERROR,
+                secondaryLabel: 'non_draft_read_only',
+              };
+            }
             if (lockedFamilyExpired) {
               const [lockedParent, lockedItems] = await Promise.all([
                 clientQuotesRepo.findById(idResult.value, tx),
@@ -2235,6 +2245,23 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           },
         });
         return loadFamilyResponse(familyResult.parent.id);
+      }
+      // The non-draft lock outranks the expired one: for a SENT quote "extend the date" would not
+      // make its content editable, so it gets the accurate non-draft message; the expired guard
+      // below then only ever fires for an expired DRAFT quote. Mirrors client offers.
+      if (normalizeQuoteStatus(currentStatus) !== 'draft' && hasNonExpirationContentUpdate) {
+        return replyError(request, reply, {
+          statusCode: 409,
+          message: NON_DRAFT_READ_ONLY_ERROR,
+          action: 'client_quote.update.conflict',
+          entityType: 'client_quote',
+          entityId: idResult.value,
+          details: {
+            secondaryLabel: 'non_draft_read_only',
+            fromValue: currentStatus,
+          },
+          extraBody: { currentStatus },
+        });
       }
       // Terminal (accepted/denied) quotes are frozen — only an id rename is allowed (issue #779;
       // replaces the legacy `confirmed` literal). This guard blocks content/date edits; the
@@ -3242,13 +3269,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               action: 'client_quote.restore.not_found',
             };
           }
-          if (isTerminalQuoteStatus(current.status)) {
+          if (normalizeQuoteStatus(current.status) !== 'draft') {
             return {
               ok: false,
               statusCode: 409,
-              message: 'Accepted or rejected quotes are read-only',
+              message: NON_DRAFT_READ_ONLY_ERROR,
               action: 'client_quote.restore.conflict',
-              secondaryLabel: 'terminal_read_only',
+              secondaryLabel: 'non_draft_read_only',
             };
           }
           // Expired quotes are content-read-only and the ONLY exit is extending the expiration date
@@ -3604,14 +3631,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           entityId: idResult.value,
         });
       }
-      if (normalizeQuoteStatus(status.status) === 'accepted') {
+      if (normalizeQuoteStatus(status.status) !== 'draft') {
         return replyError(request, reply, {
           statusCode: 409,
-          message: 'Cannot delete an accepted quote',
+          message: 'Only draft quotes can be deleted',
           action: 'client_quote.delete.conflict',
           entityType: 'client_quote',
           entityId: idResult.value,
-          details: { secondaryLabel: 'accepted_status' },
+          details: { secondaryLabel: 'non_draft_status', fromValue: status.status },
         });
       }
       // Expired is read-only EVERYWHERE under #779 — the UI already disables deletion, and the

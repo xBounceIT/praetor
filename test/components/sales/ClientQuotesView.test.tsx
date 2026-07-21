@@ -1070,7 +1070,7 @@ describe('<ClientQuotesView />', () => {
     expect(revenueInputs.length).toBeGreaterThan(0);
     expect(revenueInputs.every((input) => input.disabled)).toBe(true);
 
-    const label = screen.getByText('sales:clientQuotes.readOnlyBecauseFinal');
+    const label = screen.getByText('sales:clientQuotes.readOnlyStatus');
     // The label carries an explicit dark-mode color so it stays legible on the dark dialog.
     expect(label.className).toContain('dark:text-amber-300');
     // The banner background is translucent amber (renders on both themes) instead of the old
@@ -1744,6 +1744,42 @@ describe('<ClientQuotesView /> row actions and edit gating (#812 round 13)', () 
     await openRowActions(user);
     const edit = await screen.findByRole('button', { name: 'sales:clientQuotes.editQuote' });
     expect(edit).not.toBeDisabled();
+  });
+
+  test('a valid sent quote stays fully read-only — no submit button, date field disabled', async () => {
+    const user = userEvent.setup();
+    renderQuote({
+      ...quotes[0],
+      id: 'Q-SENT',
+      status: 'sent',
+      expirationDate: '2999-12-31',
+    });
+
+    await waitForSavedViewsLoad();
+    await user.click(screen.getByText('Q-SENT'));
+    await screen.findByRole('button', { name: 'common:buttons.cancel' });
+    // The extend-only submit path is for EXPIRED quotes; exposing it on valid sent quotes let a
+    // no-op "Update" click write needless version snapshots and audit rows.
+    expect(screen.queryByRole('button', { name: 'sales:clientQuotes.updateQuote' })).toBeNull();
+    expect(document.getElementById('client-quote-expiration-date')).toBeDisabled();
+    expect(screen.getByText('sales:clientQuotes.readOnlyStatus')).toBeTruthy();
+  });
+
+  test('an expired sent quote keeps only the expiration date editable', async () => {
+    const user = userEvent.setup();
+    renderQuote({
+      ...quotes[0],
+      id: 'Q-EXPIRED-SENT',
+      status: 'sent',
+      expirationDate: '2000-01-01',
+    });
+
+    await waitForSavedViewsLoad();
+    await user.click(screen.getByText('Q-EXPIRED-SENT'));
+    await screen.findByRole('button', { name: 'common:buttons.cancel' });
+    expect(document.getElementById('client-quote-expiration-date')).not.toBeDisabled();
+    expect(screen.getByRole('button', { name: 'sales:clientQuotes.updateQuote' })).toBeTruthy();
+    expect(screen.getByText('sales:clientQuotes.readOnlyExpired')).toBeTruthy();
   });
 
   test('opens an in-offer quote row in read-only mode', async () => {
