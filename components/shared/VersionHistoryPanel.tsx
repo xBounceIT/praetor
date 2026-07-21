@@ -246,7 +246,7 @@ export function VersionHistoryPanel<Row extends VersionHistoryPanelRow>({
                   key={row.id}
                   htmlFor={`history-row-${row.id}`}
                   className={cn(
-                    'flex cursor-pointer items-center gap-2.5 border-b border-border/50 last:border-b-0 hover:bg-muted/40 sm:gap-3',
+                    'flex cursor-pointer items-center gap-2.5 rounded-md border-b border-border/50 last:border-b-0 hover:bg-muted/40 sm:gap-3',
                     isDialog ? 'px-3 py-3' : 'px-2.5 py-2.5',
                     selected && 'border border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/15',
                   )}
