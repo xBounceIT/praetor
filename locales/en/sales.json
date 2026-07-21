@@ -20,9 +20,9 @@
     "fieldLockedBySupplierQuote": "Locked due to linked supplier quote"
   },
   "communicationChannels": {
-    "fieldLabel": "Communication Channel",
+    "fieldLabel": "Channel",
     "placeholder": "Select a channel...",
-    "manageTitle": "Manage Communication Channels",
+    "manageTitle": "Manage Channels",
     "name": "Channel",
     "namePlaceholder": "e.g. Video call",
     "icon": "Icon",
@@ -37,12 +37,12 @@
       "whatsapp": "WhatsApp"
     },
     "usedByQuotes": "Used by quotes",
-    "noChannels": "No communication channels found.",
+    "noChannels": "No channels found.",
     "errors": {
-      "required": "Communication channel is required",
+      "required": "Channel is required",
       "nameRequired": "Channel name is required",
       "deleteBlocked": "Cannot delete {{name}} because it is used by {{count}} quote(s).",
-      "deleteLast": "At least one communication channel is required."
+      "deleteLast": "At least one channel is required."
     }
   },
   "clientsOrders": {

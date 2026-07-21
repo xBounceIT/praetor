@@ -20,9 +20,9 @@
     "fieldLockedBySupplierQuote": "Bloccato per preventivo fornitore collegato"
   },
   "communicationChannels": {
-    "fieldLabel": "Canale di Comunicazione",
+    "fieldLabel": "Canale",
     "placeholder": "Seleziona un canale...",
-    "manageTitle": "Gestisci Canali di Comunicazione",
+    "manageTitle": "Gestisci Canali",
     "name": "Canale",
     "namePlaceholder": "es. Videochiamata",
     "icon": "Icona",
@@ -37,12 +37,12 @@
       "whatsapp": "WhatsApp"
     },
     "usedByQuotes": "Usato nei preventivi",
-    "noChannels": "Nessun canale di comunicazione trovato.",
+    "noChannels": "Nessun canale trovato.",
     "errors": {
-      "required": "Il canale di comunicazione è obbligatorio",
+      "required": "Il canale è obbligatorio",
       "nameRequired": "Il nome del canale è obbligatorio",
       "deleteBlocked": "Non puoi eliminare {{name}} perché è usato da {{count}} preventivo/i.",
-      "deleteLast": "È richiesto almeno un canale di comunicazione."
+      "deleteLast": "È richiesto almeno un canale."
     }
   },
   "clientsOrders": {
