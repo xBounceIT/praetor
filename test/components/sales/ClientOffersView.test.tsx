@@ -599,17 +599,37 @@ describe('<ClientOffersView /> quick-view shortcuts', () => {
 
 describe('<ClientOffersView /> dark-mode banners (issue #768)', () => {
   test('dialog warning banners avoid light-only amber classes', async () => {
-    const source = await readComponentSource('sales/ClientOffersView.tsx');
-    // Read-only + version-preview banners use translucent amber plus an explicit dark-mode
+    const viewSource = await readComponentSource('sales/ClientOffersView.tsx');
+    const bannerSource = await readComponentSource('shared/ModalReadOnlyStatusBanner.tsx');
+    // Read-only status uses the shared banner with translucent amber plus an explicit dark-mode
     // text color, matching the dark-mode-compatible accounting orders banners.
-    expectSourceContainsAll(source, [
+    expectSourceContainsAll(viewSource, ["from '../shared/ModalReadOnlyStatusBanner'"]);
+    expectSourceContainsAll(bannerSource, [
       'border border-amber-500/30 bg-amber-500/10',
       'dark:text-amber-300',
     ]);
     // The old light-only banner backgrounds (a pale cream slab on the dark dialog) are gone.
-    expectSourceOmitsAll(source, [
+    expectSourceOmitsAll(viewSource, [
       'border border-amber-200 bg-amber-50',
       'border border-amber-300 bg-amber-50',
+    ]);
+  });
+});
+
+describe('<ClientOffersView /> edit modal layout', () => {
+  test('places client info beside revision history with a 4-field row + description', async () => {
+    const source = await readComponentSource('sales/ClientOffersView.tsx');
+    expectSourceContainsAll(source, [
+      'lg:grid-cols-[minmax(0,1fr)_minmax(28rem,40rem)]',
+      'grid grid-cols-2 gap-3 lg:grid-cols-4',
+      '<ClientOfferDescriptionField controller={controller} />',
+    ]);
+    // Offers keep the full 4-field row (not the quote compact 3+2 packing / old top-right history).
+    expectSourceOmitsAll(source, [
+      'className="flex justify-end"',
+      'w-full max-w-2xl',
+      'lg:grid-cols-6',
+      'layout="compact"',
     ]);
   });
 });

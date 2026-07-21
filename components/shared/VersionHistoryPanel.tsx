@@ -156,48 +156,53 @@ export function VersionHistoryPanel<Row extends VersionHistoryPanelRow>({
     />
   ));
 
+  // Keep the search toggle pinned after the title/input track. Only that track and the trailing
+  // count width animate, so the icon never slides across the badge mid-collapse.
   const inlineHeaderRow = (
     <div
       ref={headerRef}
-      className={cn(
-        'grid w-full items-center gap-2 transition-[grid-template-columns] duration-200 ease-in-out',
-        searchOpen
-          ? 'grid-cols-[0fr_minmax(0,1fr)_auto_0fr]'
-          : 'grid-cols-[minmax(0,1fr)_0fr_auto_auto]',
-      )}
+      data-testid="version-history-inline-header"
+      className="flex w-full items-center gap-2"
     >
       <div
-        className={cn('min-w-0 overflow-hidden', searchOpen && 'pointer-events-none')}
-        aria-hidden={searchOpen}
+        className={cn(
+          'grid min-w-0 flex-1 items-center gap-2 transition-[grid-template-columns] duration-200 ease-in-out',
+          searchOpen ? 'grid-cols-[0fr_minmax(0,1fr)]' : 'grid-cols-[minmax(0,1fr)_0fr]',
+        )}
       >
-        <h4
-          className={cn(
-            'flex min-w-0 items-center gap-2 text-xs font-semibold uppercase tracking-widest text-primary transition-opacity duration-200 ease-in-out',
-            searchOpen ? 'opacity-0' : 'opacity-100',
-          )}
+        <div
+          className={cn('min-w-0 overflow-hidden', searchOpen && 'pointer-events-none')}
+          aria-hidden={searchOpen}
         >
-          <span className="size-1.5 shrink-0 rounded-full bg-primary" aria-hidden="true" />
-          <span className="truncate">{labels.title}</span>
-          {labels.infoTooltip ? (
-            <FieldTooltip description={labels.infoTooltip} icon="info" />
-          ) : null}
-        </h4>
-      </div>
+          <h4
+            className={cn(
+              'flex min-w-0 items-center gap-2 text-xs font-semibold uppercase tracking-widest text-primary transition-opacity duration-200 ease-in-out',
+              searchOpen ? 'opacity-0' : 'opacity-100',
+            )}
+          >
+            <span className="size-1.5 shrink-0 rounded-full bg-primary" aria-hidden="true" />
+            <span className="truncate">{labels.title}</span>
+            {labels.infoTooltip ? (
+              <FieldTooltip description={labels.infoTooltip} icon="info" />
+            ) : null}
+          </h4>
+        </div>
 
-      <div className={cn('min-w-0', !searchOpen && 'pointer-events-none overflow-hidden')}>
-        <Input
-          ref={searchInputRef}
-          value={searchQuery}
-          onChange={(event) => setSearchQuery(event.target.value)}
-          onBlur={handleSearchBlur}
-          placeholder={labels.searchPlaceholder}
-          aria-label={labels.searchAriaLabel}
-          tabIndex={searchOpen ? 0 : -1}
-          className={cn(
-            'h-8 w-full text-xs transition-opacity duration-200 ease-in-out',
-            searchOpen ? 'opacity-100' : 'opacity-0',
-          )}
-        />
+        <div className={cn('min-w-0', !searchOpen && 'pointer-events-none overflow-hidden')}>
+          <Input
+            ref={searchInputRef}
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            onBlur={handleSearchBlur}
+            placeholder={labels.searchPlaceholder}
+            aria-label={labels.searchAriaLabel}
+            tabIndex={searchOpen ? 0 : -1}
+            className={cn(
+              'h-8 w-full text-xs transition-opacity duration-200 ease-in-out',
+              searchOpen ? 'opacity-100' : 'opacity-0',
+            )}
+          />
+        </div>
       </div>
 
       <Button
@@ -223,17 +228,22 @@ export function VersionHistoryPanel<Row extends VersionHistoryPanelRow>({
       </Button>
 
       <div
-        className={cn('min-w-0 overflow-hidden', searchOpen && 'pointer-events-none')}
+        className={cn(
+          'grid shrink-0 transition-[grid-template-columns] duration-200 ease-in-out',
+          searchOpen ? 'grid-cols-[0fr]' : 'grid-cols-[auto]',
+        )}
         aria-hidden={searchOpen}
       >
-        <span
-          className={cn(
-            'inline-flex shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] font-bold tracking-wider text-muted-foreground uppercase transition-opacity duration-200 ease-in-out',
-            searchOpen ? 'opacity-0' : 'opacity-100',
-          )}
-        >
-          {rows.length}
-        </span>
+        <div className={cn('min-w-0 overflow-hidden', searchOpen && 'pointer-events-none')}>
+          <span
+            className={cn(
+              'inline-flex shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] font-bold tracking-wider text-muted-foreground uppercase transition-opacity duration-200 ease-in-out',
+              searchOpen ? 'opacity-0' : 'opacity-100',
+            )}
+          >
+            {rows.length}
+          </span>
+        </div>
       </div>
     </div>
   );

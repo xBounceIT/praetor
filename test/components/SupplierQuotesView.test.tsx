@@ -908,6 +908,24 @@ describe('<SupplierQuotesView /> dark-mode banners (issue #768)', () => {
   });
 });
 
+describe('<SupplierQuotesView /> edit modal layout', () => {
+  test('places supplier info beside revision history with 3+3 fields + description', async () => {
+    const source = await readComponentSource('sales/SupplierQuotesView.tsx');
+    expectSourceContainsAll(source, [
+      'lg:grid-cols-[minmax(0,1fr)_minmax(28rem,40rem)]',
+      'grid grid-cols-1 gap-3 sm:grid-cols-3',
+      '<SupplierQuoteDescriptionField controller={controller} />',
+    ]);
+    expect((source.match(/grid grid-cols-1 gap-3 sm:grid-cols-3/g) ?? []).length).toBe(2);
+    // Old single-row 6-col packing and top-right-only history placement are gone.
+    expectSourceOmitsAll(source, [
+      'lg:grid-cols-6',
+      'className="flex justify-end"',
+      'w-full max-w-2xl',
+    ]);
+  });
+});
+
 describe('<SupplierQuotesView /> StandardTable line items', () => {
   test('keeps numeric editors compact and money values aligned', async () => {
     const source = await readComponentSource('sales/SupplierQuotesView.tsx');

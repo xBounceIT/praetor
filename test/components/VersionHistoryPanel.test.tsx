@@ -159,15 +159,19 @@ describe('<VersionHistoryPanel />', () => {
     render(<VersionHistoryPanel {...baseProps} rows={versionRows} />);
 
     const searchToggle = screen.getByRole('button', { name: labels.searchAriaLabel });
-    const header = searchToggle.parentElement;
-    expect(header).not.toBeNull();
+    const header = screen.getByTestId('version-history-inline-header');
+    expect(header).toContainElement(searchToggle);
     expect(screen.getByText(labels.title)).toBeVisible();
+    // Closed order: title/input track, pinned search icon, then the collapsing count badge.
+    expect(header.children[1]).toBe(searchToggle);
 
     await user.click(searchToggle);
     const input = screen.getByPlaceholderText(labels.searchPlaceholder);
     expect(input).toBeInTheDocument();
     expect(input).toHaveFocus();
-    expect(header?.contains(input)).toBe(true);
+    expect(header.contains(input)).toBe(true);
+    const openToggle = screen.getByRole('button', { name: 'Close' });
+    expect(header.children[1]).toBe(openToggle);
     const titleHeading = screen.getByText(labels.title).closest('h4');
     expect(titleHeading).toHaveClass('opacity-0');
     expect(input).toHaveClass('opacity-100', 'rounded-md', 'w-full');
@@ -184,6 +188,7 @@ describe('<VersionHistoryPanel />', () => {
     fireEvent.blur(input);
     expect(titleHeading).toHaveClass('opacity-100');
     expect(input).toHaveClass('opacity-0');
+    expect(header.children[1]).toBe(screen.getByRole('button', { name: labels.searchAriaLabel }));
     expect(screen.getByRole('radio', { name: 'REV 3' })).toBeInTheDocument();
     expect(screen.queryByText(labels.noResults)).not.toBeInTheDocument();
   });

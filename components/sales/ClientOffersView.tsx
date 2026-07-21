@@ -1506,9 +1506,12 @@ const ClientOfferFormModal: React.FC<{ controller: ClientOffersController }> = (
           <ClientOfferModalHeader controller={{ ...controller, closeModal: dismissModal }} />
           <ModalBody className="flex-1 space-y-5">
             {editingOffer?.id ? (
-              <div className="flex justify-end">
+              <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(28rem,40rem)]">
+                <div className="min-w-0 space-y-5">
+                  <ClientOfferClientSection controller={controller} />
+                </div>
                 <OfferRevisionsPanel
-                  className="w-full max-w-2xl"
+                  className="min-w-0 lg:justify-self-stretch"
                   offerId={editingOffer.id}
                   selectedRevisionId={selectedRevisionId}
                   onPreview={(revision) =>
@@ -1529,9 +1532,10 @@ const ClientOfferFormModal: React.FC<{ controller: ClientOffersController }> = (
                   }}
                 />
               </div>
-            ) : null}
+            ) : (
+              <ClientOfferClientSection controller={controller} />
+            )}
             <ClientOfferModalAlerts controller={controller} />
-            <ClientOfferClientSection controller={controller} />
             <ClientOfferItemsSection controller={controller} />
             <ClientOfferNotesSummarySection controller={controller} />
           </ModalBody>

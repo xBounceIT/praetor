@@ -1341,9 +1341,12 @@ const SupplierQuoteModal: React.FC<{ controller: SupplierQuotesController }> = (
           <SupplierQuoteModalHeader controller={{ ...controller, closeModal: dismissModal }} />
           <ModalBody className="flex-1 space-y-5">
             {editingQuoteId ? (
-              <div className="flex justify-end">
+              <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(28rem,40rem)]">
+                <div className="min-w-0 space-y-5">
+                  <SupplierQuoteDetailsSection controller={controller} />
+                </div>
                 <SupplierQuoteRevisionsPanel
-                  className="w-full max-w-2xl"
+                  className="min-w-0 lg:justify-self-stretch"
                   quoteId={editingQuoteId}
                   selectedRevisionId={selectedRevisionId}
                   onPreview={(revision) =>
@@ -1364,9 +1367,10 @@ const SupplierQuoteModal: React.FC<{ controller: SupplierQuotesController }> = (
                   }}
                 />
               </div>
-            ) : null}
+            ) : (
+              <SupplierQuoteDetailsSection controller={controller} />
+            )}
             <SupplierQuoteModalAlerts controller={controller} />
-            <SupplierQuoteDetailsSection controller={controller} />
             <SupplierQuoteItemsSection controller={controller} />
             <SupplierQuoteAttachmentsArea controller={controller} />
             <SupplierQuoteNotesSummarySection controller={controller} />
@@ -1499,13 +1503,17 @@ const SupplierQuoteDetailsSection: React.FC<{ controller: SupplierQuotesControll
         defaultValue: 'Supplier Information',
       })}
     </SupplierQuoteSectionTitle>
-    <div className="grid grid-cols-2 gap-3 lg:grid-cols-6">
-      <SupplierQuoteSupplierField controller={controller} />
-      <SupplierQuoteClientField controller={controller} />
-      <SupplierQuoteCodeField controller={controller} />
-      <SupplierQuotePaymentTermsField controller={controller} />
-      <SupplierQuoteCommunicationField controller={controller} />
-      <SupplierQuoteExpirationField controller={controller} />
+    <div className="space-y-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <SupplierQuoteSupplierField controller={controller} />
+        <SupplierQuoteClientField controller={controller} />
+        <SupplierQuoteCodeField controller={controller} />
+      </div>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <SupplierQuotePaymentTermsField controller={controller} />
+        <SupplierQuoteCommunicationField controller={controller} />
+        <SupplierQuoteExpirationField controller={controller} />
+      </div>
     </div>
     <SupplierQuoteDescriptionField controller={controller} />
   </div>
