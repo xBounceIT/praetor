@@ -113,57 +113,61 @@ export function VersionHistoryPanel<Row extends VersionHistoryPanelRow>({
   const listMaxClass = layout === 'dialog' ? 'max-h-[min(24rem,50vh)]' : INLINE_LIST_MAX_CLASS;
   const isDialog = layout === 'dialog';
 
+  const headerGridClass = cn(
+    'grid items-center gap-2 transition-[grid-template-columns] duration-200 ease-in-out',
+    isDialog
+      ? searchOpen
+        ? 'grid-cols-[minmax(0,1fr)_auto]'
+        : 'grid-cols-[minmax(0,1fr)_0fr_auto_auto]'
+      : searchOpen
+        ? 'grid-cols-[0fr_minmax(0,1fr)_auto]'
+        : 'grid-cols-[minmax(0,1fr)_0fr_auto_auto]',
+  );
+
   const headerRow = (
     <div
-      className={cn(
-        'flex items-center gap-2',
-        isDialog && 'border-b border-border bg-muted/30 px-6 py-3',
-      )}
+      className={cn(headerGridClass, isDialog && 'border-b border-border bg-muted/30 px-6 py-3')}
     >
       {!isDialog ? (
-        <h4
-          className={cn(
-            'flex min-w-0 items-center gap-2 text-xs font-semibold uppercase tracking-widest text-primary transition-[flex-grow,opacity,max-width] duration-200 ease-out',
-            searchOpen
-              ? 'max-w-0 flex-none overflow-hidden opacity-0'
-              : 'min-w-0 max-w-full flex-1 opacity-100',
-          )}
+        <div
+          className={cn('min-w-0 overflow-hidden', searchOpen && 'pointer-events-none')}
+          aria-hidden={searchOpen}
         >
-          <span className="size-1.5 shrink-0 rounded-full bg-primary" aria-hidden="true" />
-          <span className="truncate">{labels.title}</span>
-          {/* Dialog layout already surfaces this copy in VersionHistoryDialog; keep the
-              icon only inline so dialog autofocus cannot open the tooltip on mount. */}
-          {labels.infoTooltip && !searchOpen ? (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  className="size-6 shrink-0 text-muted-foreground"
-                  aria-label={labels.infoTooltip}
-                >
-                  <i className="fa-solid fa-circle-info text-xs" aria-hidden="true"></i>
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom" className="max-w-xs text-xs">
-                {labels.infoTooltip}
-              </TooltipContent>
-            </Tooltip>
-          ) : null}
-        </h4>
+          <h4
+            className={cn(
+              'flex min-w-0 items-center gap-2 text-xs font-semibold uppercase tracking-widest text-primary transition-opacity duration-200 ease-in-out',
+              searchOpen ? 'opacity-0' : 'opacity-100',
+            )}
+          >
+            <span className="size-1.5 shrink-0 rounded-full bg-primary" aria-hidden="true" />
+            <span className="truncate">{labels.title}</span>
+            {/* Dialog layout already surfaces this copy in VersionHistoryDialog; keep the
+                icon only inline so dialog autofocus cannot open the tooltip on mount. */}
+            {labels.infoTooltip && !searchOpen ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    className="size-6 shrink-0 text-muted-foreground"
+                    aria-label={labels.infoTooltip}
+                  >
+                    <i className="fa-solid fa-circle-info text-xs" aria-hidden="true"></i>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="max-w-xs text-xs">
+                  {labels.infoTooltip}
+                </TooltipContent>
+              </Tooltip>
+            ) : null}
+          </h4>
+        </div>
+      ) : !searchOpen ? (
+        <div className="min-w-0" aria-hidden="true" />
       ) : null}
 
-      <div
-        className={cn(
-          'overflow-hidden transition-[flex-grow,opacity,max-width] duration-200 ease-out',
-          searchOpen
-            ? 'min-w-0 max-w-full flex-1 opacity-100'
-            : 'pointer-events-none max-w-0 flex-none opacity-0',
-          isDialog && !searchOpen && 'hidden',
-          isDialog && searchOpen && 'block',
-        )}
-      >
+      <div className={cn('min-w-0', !searchOpen && 'pointer-events-none overflow-hidden')}>
         <Input
           ref={searchInputRef}
           value={searchQuery}
@@ -171,11 +175,12 @@ export function VersionHistoryPanel<Row extends VersionHistoryPanelRow>({
           placeholder={labels.searchPlaceholder}
           aria-label={labels.searchAriaLabel}
           tabIndex={searchOpen ? 0 : -1}
-          className="h-8 text-xs"
+          className={cn(
+            'h-8 text-xs transition-opacity duration-200 ease-in-out',
+            searchOpen ? 'opacity-100' : 'opacity-0',
+          )}
         />
       </div>
-
-      {isDialog && !searchOpen ? <div className="min-w-0 flex-1" /> : null}
 
       <Button
         type="button"

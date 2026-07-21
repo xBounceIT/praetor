@@ -140,7 +140,9 @@ describe('<VersionHistoryPanel />', () => {
     expect(input).toBeInTheDocument();
     expect(input).toHaveFocus();
     expect(header?.contains(input)).toBe(true);
-    expect(screen.getByText(labels.title).closest('h4')).toHaveClass('opacity-0', 'max-w-0');
+    expect(screen.getByText(labels.title).closest('h4')).toHaveClass('opacity-0');
+    expect(input).toHaveClass('opacity-100', 'rounded-md');
+    expect(input.parentElement).not.toHaveClass('overflow-hidden');
 
     await user.type(input, 'bob');
     expect(screen.getByRole('radio', { name: 'REV 2' })).toBeInTheDocument();
