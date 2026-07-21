@@ -159,6 +159,8 @@ export function VersionHistoryPanel<Row extends VersionHistoryPanelRow>({
       <div
         data-testid="version-history-header-resting"
         aria-hidden={searchOpen}
+        // Keep the faded-out layer out of keyboard focus (aria-hidden alone is not enough).
+        inert={searchOpen ? true : undefined}
         className={cn(
           'absolute inset-0 flex items-center gap-2',
           SEARCH_HEADER_FADE,
@@ -187,6 +189,7 @@ export function VersionHistoryPanel<Row extends VersionHistoryPanelRow>({
           data-testid="version-history-search-toggle"
           className="size-7 shrink-0 text-muted-foreground"
           aria-label={labels.searchAriaLabel}
+          tabIndex={searchOpen ? -1 : undefined}
           onClick={openSearch}
         >
           <Search data-testid="version-history-search-icon" className="size-4" />
@@ -196,6 +199,7 @@ export function VersionHistoryPanel<Row extends VersionHistoryPanelRow>({
       <div
         data-testid="version-history-header-search"
         aria-hidden={!searchOpen}
+        inert={!searchOpen ? true : undefined}
         className={cn(
           'absolute inset-0 flex items-center gap-2',
           SEARCH_HEADER_FADE,
@@ -220,6 +224,7 @@ export function VersionHistoryPanel<Row extends VersionHistoryPanelRow>({
           data-testid="version-history-close-toggle"
           className="size-7 shrink-0 bg-muted text-foreground"
           aria-label="Close"
+          tabIndex={searchOpen ? undefined : -1}
           onClick={closeSearch}
         >
           <XIcon data-testid="version-history-close-icon" className="size-4" />
