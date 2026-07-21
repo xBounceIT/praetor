@@ -3,7 +3,6 @@ import api from '../../services/api';
 import type { SupplierInvoice, SupplierSaleOrder, View } from '../../types';
 import { addDaysToDateOnly, getLocalDateString } from '../../utils/date';
 import { getDiscountedLineTotal } from '../../utils/numbers';
-import { makeTempId } from '../../utils/tempId';
 import { toastError } from '../../utils/toast';
 
 export type SupplierInvoiceHandlersDeps = {
@@ -40,7 +39,9 @@ export const makeSupplierInvoiceHandlers = (deps: SupplierInvoiceHandlersDeps) =
       const issueDate = getLocalDateString();
       const dueDate = addDaysToDateOnly(issueDate, paymentDays);
       const items = order.items.map((item) => ({
-        id: makeTempId(),
+        // The API replaces this id with a new invoice-item id; retain the source id in the
+        // request so it can preserve each order line's historical pricing marker.
+        id: item.id,
         invoiceId: '',
         productId: item.productId,
         description: item.productName,

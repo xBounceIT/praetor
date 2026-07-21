@@ -157,6 +157,7 @@ describe('makeSupplierInvoiceHandlers', () => {
       notes: 'note',
       items: [
         {
+          id: 'supplier-order-item-1',
           productId: 'p1',
           productName: 'Widget',
           quantity: 2,
@@ -164,6 +165,7 @@ describe('makeSupplierInvoiceHandlers', () => {
           discount: 10,
         },
         {
+          id: 'supplier-order-item-2',
           productId: 'p2',
           productName: 'Gadget',
           quantity: 3,
@@ -190,6 +192,10 @@ describe('makeSupplierInvoiceHandlers', () => {
     expect(callArg.dueDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     const items = callArg.items as Array<Record<string, unknown>>;
     expect(items).toHaveLength(2);
+    expect(items.map((item) => item.id)).toEqual([
+      'supplier-order-item-1',
+      'supplier-order-item-2',
+    ]);
     expect(items[0].discount).toBe(10);
     expect(items[1].discount).toBe(0);
 

@@ -14,7 +14,7 @@ import { type DatabaseError, getUniqueViolation } from '../utils/db-errors.ts';
 import { replyDocumentCodeCollision } from '../utils/document-code-replies.ts';
 import { defaultDurationMonthsForUnit } from '../utils/duration-unit.ts';
 import { generatePrefixedId, ITEM_ID_PREFIXES } from '../utils/order-ids.ts';
-import { pricingSemanticsVersionForDocument } from '../utils/pricing-semantics.ts';
+import { inheritPricingSemanticsVersions } from '../utils/pricing-semantics.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { replyError } from '../utils/replyError.ts';
 import {
@@ -181,6 +181,7 @@ const updateBodySchema = {
 } as const;
 
 type SupplierInvoiceItemInput = {
+  id?: string;
   productId?: string;
   description?: string;
   quantity?: string | number;
@@ -355,6 +356,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const normalizedItems = normalizeItems(items, reply);
       if (!normalizedItems) return;
+      const sourceItemIds = items.map((item) => item.id);
 
       const linkedSaleIdResult = optionalNonEmptyString(linkedSaleId, 'linkedSaleId');
       if (!linkedSaleIdResult.ok) return badRequest(reply, linkedSaleIdResult.message);
@@ -461,10 +463,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               linkedSaleIdResult.value,
               tx,
             );
-            const pricingSemanticsVersion = pricingSemanticsVersionForDocument(sourceOrderItems);
-            versionedItems = normalizedItems.map((item) => ({
+            const sourceMarkers = inheritPricingSemanticsVersions(
+              sourceItemIds.map((id) => ({ id })),
+              sourceOrderItems,
+            );
+            versionedItems = normalizedItems.map((item, index) => ({
               ...item,
-              pricingSemanticsVersion,
+              pricingSemanticsVersion: sourceMarkers[index].pricingSemanticsVersion,
             }));
           }
 
@@ -717,12 +722,14 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       let normalizedItems: supplierInvoicesRepo.NewSupplierInvoiceItem[] | null = null;
+      let sourceItemIds: Array<string | undefined> | null = null;
       if (items !== undefined) {
         if (!Array.isArray(items) || items.length === 0) {
           return badRequest(reply, 'Items must be a non-empty array');
         }
         normalizedItems = normalizeItems(items, reply);
         if (!normalizedItems) return;
+        sourceItemIds = items.map((item) => item.id);
       }
 
       let updated: supplierInvoicesRepo.SupplierInvoice | null;
@@ -744,8 +751,20 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               : await supplierInvoicesRepo.update(renamedInvoice?.id ?? idResult.value, patch, tx);
           if (!invoice)
             return { invoice: null, items: [] as supplierInvoicesRepo.SupplierInvoiceItem[] };
-          const finalItems = normalizedItems
-            ? await supplierInvoicesRepo.replaceItems(invoice.id, normalizedItems, tx)
+          let versionedItems = normalizedItems;
+          if (normalizedItems && sourceItemIds?.some((id) => id)) {
+            const existingItems = await supplierInvoicesRepo.findItemsForInvoice(invoice.id, tx);
+            const sourceMarkers = inheritPricingSemanticsVersions(
+              sourceItemIds.map((id) => ({ id })),
+              existingItems,
+            );
+            versionedItems = normalizedItems.map((item, index) => ({
+              ...item,
+              pricingSemanticsVersion: sourceMarkers[index].pricingSemanticsVersion,
+            }));
+          }
+          const finalItems = versionedItems
+            ? await supplierInvoicesRepo.replaceItems(invoice.id, versionedItems, tx)
             : await supplierInvoicesRepo.findItemsForInvoice(invoice.id, tx);
           return { invoice, items: finalItems };
         });

@@ -346,6 +346,58 @@ describe('POST /api/supplier-invoices', () => {
     );
   });
 
+  test('201 preserves each source order pricing marker in a mixed supplier invoice', async () => {
+    findOrderItemsMock.mockResolvedValue([
+      { id: 'supplier-order-item-legacy', pricingSemanticsVersion: 1 },
+      { id: 'supplier-order-item-current', pricingSemanticsVersion: 2 },
+    ]);
+    findOrderByIdMock.mockResolvedValue({
+      id: 'SORD_26_0045_mixed',
+      supplierId: 's1',
+      supplierName: 'Acme Supply',
+      status: 'sent',
+    });
+    lockOrderExistingByIdMock.mockResolvedValue({ id: 'SORD_26_0045_mixed', status: 'sent' });
+    findInvoiceForLinkedSaleMock.mockResolvedValue(null);
+    createMock.mockResolvedValue({ ...SAMPLE_INVOICE, linkedSaleId: 'SORD_26_0045_mixed' });
+    insertItemsMock.mockResolvedValue([SAMPLE_ITEM]);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/supplier-invoices',
+      headers: authHeader(),
+      payload: {
+        ...validBody,
+        linkedSaleId: 'SORD_26_0045_mixed',
+        items: [
+          {
+            id: 'supplier-order-item-legacy',
+            description: 'Legacy annual service',
+            quantity: 1,
+            unitPrice: 10,
+            durationMonths: 12,
+            durationUnit: 'years',
+          },
+          {
+            id: 'supplier-order-item-current',
+            description: 'Current annual service',
+            quantity: 1,
+            unitPrice: 10,
+            durationMonths: 12,
+            durationUnit: 'years',
+          },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(
+      (insertItemsMock.mock.calls[0][1] as Array<Record<string, unknown>>).map(
+        (item) => item.pricingSemanticsVersion,
+      ),
+    ).toEqual([1, 2]);
+  });
+
   test('201 inherits from linked supplier quote when the source order id is not parseable', async () => {
     findOrderByIdMock.mockResolvedValue({
       id: 'legacy-sord-id',
@@ -618,6 +670,49 @@ describe('PUT /api/supplier-invoices/:id', () => {
 
     expect(res.statusCode).toBe(200);
     expect(replaceItemsMock).toHaveBeenCalled();
+  });
+
+  test('200 preserves each retained marker when editing a mixed supplier invoice', async () => {
+    findExistingMock.mockResolvedValue(existingInvoiceForUpdate());
+    updateMock.mockResolvedValue(SAMPLE_INVOICE);
+    findItemsForInvoiceMock.mockResolvedValue([
+      { ...SAMPLE_ITEM, id: 'supplier-invoice-item-legacy', pricingSemanticsVersion: 1 },
+      { ...SAMPLE_ITEM, id: 'supplier-invoice-item-current', pricingSemanticsVersion: 2 },
+    ]);
+    replaceItemsMock.mockResolvedValue([SAMPLE_ITEM]);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/supplier-invoices/SINV-2025-0001',
+      headers: authHeader(),
+      payload: {
+        items: [
+          {
+            id: 'supplier-invoice-item-legacy',
+            description: 'Legacy annual service',
+            quantity: 1,
+            unitPrice: 10,
+            durationMonths: 12,
+            durationUnit: 'years',
+          },
+          {
+            id: 'supplier-invoice-item-current',
+            description: 'Current annual service',
+            quantity: 1,
+            unitPrice: 10,
+            durationMonths: 12,
+            durationUnit: 'years',
+          },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(
+      (replaceItemsMock.mock.calls[0][1] as Array<Record<string, unknown>>).map(
+        (item) => item.pricingSemanticsVersion,
+      ),
+    ).toEqual([1, 2]);
   });
 
   test('404 invoice not found', async () => {
