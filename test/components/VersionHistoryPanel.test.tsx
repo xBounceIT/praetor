@@ -82,7 +82,7 @@ describe('<VersionHistoryPanel />', () => {
     expect(screen.getByRole('radio', { name: 'REV 2' })).toBeChecked();
 
     const list = screen.getByRole('radiogroup');
-    expect(list.parentElement).toHaveClass('h-[calc(3*3.75rem)]');
+    expect(list.parentElement).toHaveClass('h-[calc(3*3.75rem+0.75rem)]');
 
     fireEvent.click(screen.getByRole('radio', { name: 'REV 1' }));
     expect(onSelect).toHaveBeenCalledWith(versionRows[2]);
@@ -98,7 +98,7 @@ describe('<VersionHistoryPanel />', () => {
     );
 
     const list = screen.getByRole('radiogroup');
-    expect(list.parentElement).toHaveClass('h-[calc(3*3.75rem)]');
+    expect(list.parentElement).toHaveClass('h-[calc(3*3.75rem+0.75rem)]');
     expect(screen.getAllByTestId('version-history-empty-slot')).toHaveLength(2);
   });
 

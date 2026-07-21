@@ -56,8 +56,9 @@ interface VersionHistoryPanelProps<Row extends VersionHistoryPanelRow> {
 const INLINE_ROW_REM = 3.75;
 const INLINE_ROW_MIN_HEIGHT = `${INLINE_ROW_REM}rem`;
 const INLINE_VISIBLE_ROWS = 3;
-/** Keep as a full static string so Tailwind can detect the utility. */
-const INLINE_LIST_HEIGHT_CLASS = 'h-[calc(3*3.75rem)]';
+/** Keep as a full static string so Tailwind can detect the utility.
+ * Includes `py-1.5` (0.75rem) so the first/last row hover is not flush with the border. */
+const INLINE_LIST_HEIGHT_CLASS = 'h-[calc(3*3.75rem+0.75rem)]';
 
 export function VersionHistoryPanel<Row extends VersionHistoryPanelRow>({
   rows,
@@ -271,7 +272,7 @@ export function VersionHistoryPanel<Row extends VersionHistoryPanelRow>({
           <RadioGroup
             value={radioValue}
             onValueChange={handleRadioChange}
-            className={cn('gap-0', isDialog ? 'px-1.5 py-2' : 'px-1.5')}
+            className={cn('gap-0', isDialog ? 'px-1.5 py-2' : 'px-1.5 py-1.5')}
           >
             {filteredRows.map((row) => {
               const selected = row.id === selectedVersionId;
