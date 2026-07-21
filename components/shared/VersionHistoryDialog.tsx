@@ -1,4 +1,4 @@
-import { type ReactNode, useCallback, useMemo, useState } from 'react';
+import { type ReactNode, useCallback, useMemo, useRef, useState } from 'react';
 import Modal from './Modal';
 import {
   ModalBody,
@@ -23,24 +23,33 @@ interface VersionHistoryDialogProps {
 
 /**
  * Dialog open state for secondary save-version history.
- * Closing clears an active version preview so the parent form does not stay read-only
- * without a visible exit (inline panels only track revisions).
+ * Closing always clears preview and ignores late `getVersion` results so the parent form
+ * cannot stay read-only without a visible exit after the dialog is dismissed.
  */
-export function useVersionHistoryDialogOpen(
-  selectedVersionId: string | null,
-  onClearVersionPreview: () => void,
-) {
+export function useVersionHistoryDialogOpen(onClearVersionPreview: () => void) {
   const [open, setOpen] = useState(false);
+  const openRef = useRef(false);
+  openRef.current = open;
+
   const onOpenChange = useCallback(
     (next: boolean) => {
       setOpen(next);
-      if (!next && selectedVersionId) {
+      openRef.current = next;
+      if (!next) {
         onClearVersionPreview();
       }
     },
-    [onClearVersionPreview, selectedVersionId],
+    [onClearVersionPreview],
   );
-  return { open, onOpenChange, setOpen } as const;
+
+  const bindPreview = useCallback(<T,>(onPreview: (value: T) => void) => {
+    return (value: T) => {
+      if (!openRef.current) return;
+      onPreview(value);
+    };
+  }, []);
+
+  return { open, onOpenChange, setOpen, bindPreview } as const;
 }
 
 /** Modal shell for secondary version history opened from the inline revisions section. */

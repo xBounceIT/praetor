@@ -88,27 +88,27 @@ describe('<VersionHistoryDialog />', () => {
     cleanup();
   });
 
-  test('useVersionHistoryDialogOpen clears a version preview when the dialog closes', () => {
+  test('useVersionHistoryDialogOpen clears preview and ignores late results after close', () => {
     const onClearVersionPreview = mock(() => {});
+    const onPreview = mock(() => {});
     type DialogOpenApi = ReturnType<typeof useVersionHistoryDialogOpen>;
     const apiRef: { current: DialogOpenApi | null } = { current: null };
 
-    function Probe({ selectedVersionId }: { selectedVersionId: string | null }) {
-      const value = useVersionHistoryDialogOpen(selectedVersionId, onClearVersionPreview);
+    function Probe() {
+      const value = useVersionHistoryDialogOpen(onClearVersionPreview);
       useEffect(() => {
         apiRef.current = value;
       }, [value]);
       return null;
     }
 
-    const { rerender } = render(<Probe selectedVersionId="qv-1" />);
+    render(<Probe />);
     expect(apiRef.current).not.toBeNull();
 
     act(() => {
       apiRef.current?.onOpenChange(true);
     });
-    rerender(<Probe selectedVersionId="qv-1" />);
-    expect(apiRef.current?.open).toBe(true);
+    const guardedPreview = apiRef.current!.bindPreview(onPreview);
     expect(onClearVersionPreview).not.toHaveBeenCalled();
 
     act(() => {
@@ -116,13 +116,15 @@ describe('<VersionHistoryDialog />', () => {
     });
     expect(onClearVersionPreview).toHaveBeenCalledTimes(1);
 
-    onClearVersionPreview.mockClear();
-    rerender(<Probe selectedVersionId={null} />);
+    guardedPreview({ id: 'late-version' });
+    expect(onPreview).not.toHaveBeenCalled();
+
     act(() => {
       apiRef.current?.onOpenChange(true);
-      apiRef.current?.onOpenChange(false);
     });
-    expect(onClearVersionPreview).not.toHaveBeenCalled();
+    const openPreview = apiRef.current!.bindPreview(onPreview);
+    openPreview({ id: 'live-version' });
+    expect(onPreview).toHaveBeenCalledWith({ id: 'live-version' });
     cleanup();
   });
 });

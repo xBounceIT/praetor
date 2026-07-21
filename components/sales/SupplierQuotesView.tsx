@@ -1331,7 +1331,8 @@ const SupplierQuoteModal: React.FC<{ controller: SupplierQuotesController }> = (
     open: versionsDialogOpen,
     onOpenChange: handleVersionsDialogOpenChange,
     setOpen: setVersionsDialogOpen,
-  } = useVersionHistoryDialogOpen(selectedVersionId, controller.handleClearPreview);
+    bindPreview,
+  } = useVersionHistoryDialogOpen(controller.handleClearPreview);
   const editingQuoteId = controller.editingQuote?.id;
   const dismissModal = useCallback(() => {
     setVersionsDialogOpen(false);
@@ -1397,9 +1398,7 @@ const SupplierQuoteModal: React.FC<{ controller: SupplierQuotesController }> = (
             layout="dialog"
             quoteId={editingQuoteId}
             selectedVersionId={selectedVersionId}
-            onPreview={(version) => {
-              controller.handleVersionPreview(version);
-            }}
+            onPreview={bindPreview(controller.handleVersionPreview)}
             onClearPreview={controller.handleClearPreview}
             onRestored={controller.handleVersionRestored}
             disabled={controller.baseReadOnly}

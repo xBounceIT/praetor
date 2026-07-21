@@ -2453,7 +2453,8 @@ const ClientQuoteFormModal: React.FC<{ controller: ClientQuotesController }> = (
     open: versionsDialogOpen,
     onOpenChange: handleVersionsDialogOpenChange,
     setOpen: setVersionsDialogOpen,
-  } = useVersionHistoryDialogOpen(selectedVersionId, handleClearPreview);
+    bindPreview,
+  } = useVersionHistoryDialogOpen(handleClearPreview);
   const dismissModal = useCallback(() => {
     setVersionsDialogOpen(false);
     closeModal();
@@ -2521,9 +2522,7 @@ const ClientQuoteFormModal: React.FC<{ controller: ClientQuotesController }> = (
             layout="dialog"
             quoteId={editingQuote.id}
             selectedVersionId={selectedVersionId}
-            onPreview={(version) => {
-              handleVersionPreview(version);
-            }}
+            onPreview={bindPreview(handleVersionPreview)}
             onClearPreview={handleClearPreview}
             onRestored={handleVersionRestored}
             disabled={baseReadOnly}

@@ -1497,7 +1497,8 @@ const ClientOfferFormModal: React.FC<{ controller: ClientOffersController }> = (
     open: versionsDialogOpen,
     onOpenChange: handleVersionsDialogOpenChange,
     setOpen: setVersionsDialogOpen,
-  } = useVersionHistoryDialogOpen(selectedVersionId, handleClearPreview);
+    bindPreview,
+  } = useVersionHistoryDialogOpen(handleClearPreview);
   const dismissModal = useCallback(() => {
     setVersionsDialogOpen(false);
     closeModal();
@@ -1561,9 +1562,7 @@ const ClientOfferFormModal: React.FC<{ controller: ClientOffersController }> = (
             layout="dialog"
             offerId={editingOffer.id}
             selectedVersionId={selectedVersionId}
-            onPreview={(version) => {
-              handleVersionPreview(version);
-            }}
+            onPreview={bindPreview(handleVersionPreview)}
             onClearPreview={handleClearPreview}
             onRestored={handleVersionRestored}
             disabled={baseReadOnly}
