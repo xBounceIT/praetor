@@ -930,6 +930,7 @@ describe('makeQuoteHandlers', () => {
     const payload = apiMocks.clientOffersCreate.mock.calls[0][0] as Record<string, unknown>;
     expect(payload.linkedQuoteId).toBe('q-legacy');
     expect(payload.status).toBe('draft');
+    expect((payload.items as Array<Record<string, unknown>>)[0].id).toBe('item-1');
     expect(ctx.clientOffers.get()[0].id).toBe('of-legacy');
     expect(ctx.quotes.get()[0].linkedOfferId).toBe('of-legacy');
     expect(ctx.setActiveView).toHaveBeenCalledWith('sales/client-offers');

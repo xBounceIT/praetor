@@ -38,8 +38,10 @@ BEGIN
       WHERE conname = target_constraint
         AND conrelid = to_regclass(format('public.%I', target_table))
     ) THEN
+      -- Avoid validating a full historical table under the startup DDL lock. The default above
+      -- means existing rows already satisfy the constraint; new writes are enforced immediately.
       EXECUTE format(
-        'ALTER TABLE %I ADD CONSTRAINT %I CHECK (pricing_semantics_version IN (1, 2))',
+        'ALTER TABLE %I ADD CONSTRAINT %I CHECK (pricing_semantics_version IN (1, 2)) NOT VALID',
         target_table,
         target_constraint
       );

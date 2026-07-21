@@ -11,7 +11,6 @@ import type {
 } from '../../types';
 import { addMonthsToDateOnly, getLocalDateString, isDateOnlyBeforeToday } from '../../utils/date';
 import { sourcesSupplierQuote } from '../../utils/supplierLineSync';
-import { makeTempId } from '../../utils/tempId';
 import { toastError } from '../../utils/toast';
 
 /**
@@ -308,7 +307,9 @@ export const makeQuoteHandlers = (deps: QuoteHandlersDeps) => {
         notes: quote.notes,
         items: quote.items.map((item) => ({
           ...item,
-          id: makeTempId(),
+          // The API generates the offer-item id; keep the quote-item id in the request so the
+          // server can retain each source line's pricing semantics.
+          id: item.id,
           offerId: '',
         })),
       });

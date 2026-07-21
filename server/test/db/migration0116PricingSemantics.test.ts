@@ -38,6 +38,8 @@ describe('migration 0116 historical pricing semantics', () => {
     expect(migrationSql).toContain('IF NOT EXISTS (');
     expect(migrationSql).toContain("conrelid = to_regclass(format('public.%I', target_table))");
     expect(migrationSql).toContain('pricing_semantics_version IN (1, 2)');
+    expect(migrationSql).toContain('NOT VALID');
+    expect(migrationSql).not.toContain('VALIDATE CONSTRAINT');
   });
 
   test('is registered after migration 0115', () => {
