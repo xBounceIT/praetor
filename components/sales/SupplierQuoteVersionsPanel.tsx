@@ -15,6 +15,7 @@ interface SupplierQuoteVersionsPanelProps {
   onClearPreview: () => void;
   onRestored: (updatedQuote: SupplierQuote) => void;
   disabled?: boolean;
+  embedded?: boolean;
 }
 
 const SupplierQuoteVersionsPanel: React.FC<SupplierQuoteVersionsPanelProps> = ({
@@ -24,6 +25,7 @@ const SupplierQuoteVersionsPanel: React.FC<SupplierQuoteVersionsPanelProps> = ({
   onClearPreview,
   onRestored,
   disabled,
+  embedded,
 }) => {
   const { t, i18n } = useTranslation('sales');
   const tRef = useLatestRef(t);
@@ -92,6 +94,8 @@ const SupplierQuoteVersionsPanel: React.FC<SupplierQuoteVersionsPanelProps> = ({
   return (
     <>
       <VersionHistoryPanel
+        embedded={embedded}
+        persistenceKey="supplierQuotes.versions"
         rows={historyState.rows}
         selectedVersionId={selectedVersionId}
         isLoading={historyState.isLoading}
@@ -115,6 +119,7 @@ const SupplierQuoteVersionsPanel: React.FC<SupplierQuoteVersionsPanelProps> = ({
         isOpen={confirmOpen}
         onClose={() => setConfirmOpen(false)}
         onConfirm={handleRestoreConfirmed}
+        zIndex={70}
         title={t('supplierQuotes.versionHistory.restoreConfirmTitle')}
         description={t('supplierQuotes.versionHistory.restoreConfirmDescription')}
       />

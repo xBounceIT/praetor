@@ -89,10 +89,18 @@ const mapVersion = (row: typeof quoteVersions.$inferSelect): QuoteVersion => ({
 // customer_offers.linked_quote_id is not touched. This is here for completeness / audit / data
 // portability. Older snapshots from before this change may not have the field at all.
 export const buildSnapshot = (
-  quote: ClientQuote,
+  quote: Omit<ClientQuote, 'revisionNumber' | 'revisionCode' | 'linkedOfferRevisionCode'>,
   items: ClientQuoteItem[],
   candidates: SnapshotQuoteCandidate[] = [],
 ): NormalizedQuoteVersionSnapshot => {
+  // `findFullForSnapshot()` returns the live row, so TypeScript's Omit alone cannot prevent
+  // revision metadata from leaking into the persisted JSON at runtime.
+  const {
+    revisionNumber: _revisionNumber,
+    revisionCode: _revisionCode,
+    linkedOfferRevisionCode: _linkedOfferRevisionCode,
+    ...snapshotQuote
+  } = quote as ClientQuote;
   const normalizedItems = items.map((item) => ({
     ...item,
     candidateId: item.candidateId || item.quoteId,
@@ -100,10 +108,10 @@ export const buildSnapshot = (
   const normalizedCandidates =
     candidates.length > 0
       ? candidates.map((candidate) => ({ ...candidate }))
-      : normalizeSnapshot({ schemaVersion: 1, quote, items }).candidates;
+      : normalizeSnapshot({ schemaVersion: 1, quote: snapshotQuote, items }).candidates;
   return {
     schemaVersion: 2,
-    quote,
+    quote: snapshotQuote,
     candidates: normalizedCandidates,
     items: normalizedItems,
   };

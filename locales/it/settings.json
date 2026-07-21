@@ -235,6 +235,20 @@
         "invalidPlaceholder": "Sintassi segnaposto non valida",
         "templateTextPattern": "Il testo del modello può usare solo lettere, numeri, underscore e trattini",
         "paddingRange": "Usa un numero da 1 a 9"
+      },
+      "revisions": {
+        "title": "Codici revisione",
+        "description": "Configura il codice immutabile assegnato agli snapshot inviati di preventivi e offerte. Le modifiche si applicano solo alle revisioni future.",
+        "loading": "Caricamento modello codice revisione...",
+        "loadFailed": "Impossibile caricare il modello codice revisione",
+        "placeholdersDescription": "Usa {PREFIX} e {SEQ}; {SEQ} è obbligatorio. Il contatore è indipendente per ogni documento e non viene mai riutilizzato.",
+        "errors": {
+          "prefix": "Il prefisso può contenere al massimo 20 lettere, numeri, underscore o trattini",
+          "template": "Il modello deve includere {SEQ} e contenere da 5 a 100 caratteri",
+          "placeholder": "Il modello contiene segnaposto o caratteri non supportati",
+          "padding": "Usa un numero di cifre da 1 a 12",
+          "length": "Il codice revisione generato non può superare 50 caratteri"
+        }
       }
     },
     "currencyLabel": "Valuta dell'Applicazione",

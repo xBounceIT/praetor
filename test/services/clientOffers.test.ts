@@ -47,6 +47,9 @@ describe('clientOffersApi path segments', () => {
     await clientOffersApi.listVersions(offerId);
     await clientOffersApi.getVersion(offerId, versionId);
     await clientOffersApi.restoreVersion(offerId, versionId);
+    await clientOffersApi.listRevisions(offerId);
+    await clientOffersApi.getRevision(offerId, versionId);
+    await clientOffersApi.restoreRevision(offerId, versionId);
 
     expect(fetchMock.mock.calls.map(([input]) => String(input))).toEqual([
       `/api/sales/client-offers/${encodedOfferId}`,
@@ -55,6 +58,9 @@ describe('clientOffersApi path segments', () => {
       `/api/sales/client-offers/${encodedOfferId}/versions`,
       `/api/sales/client-offers/${encodedOfferId}/versions/${encodedVersionId}`,
       `/api/sales/client-offers/${encodedOfferId}/versions/${encodedVersionId}/restore`,
+      `/api/sales/client-offers/${encodedOfferId}/revisions`,
+      `/api/sales/client-offers/${encodedOfferId}/revisions/${encodedVersionId}`,
+      `/api/sales/client-offers/${encodedOfferId}/revisions/${encodedVersionId}/restore`,
     ]);
   });
 });

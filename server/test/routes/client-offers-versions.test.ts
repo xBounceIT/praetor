@@ -6,8 +6,11 @@ import * as realClientQuotesRepo from '../../repositories/clientQuotesRepo.ts';
 import * as realClientsRepo from '../../repositories/clientsRepo.ts';
 import * as realOfferVersionsRepo from '../../repositories/offerVersionsRepo.ts';
 import * as realProductsRepo from '../../repositories/productsRepo.ts';
+import * as realRevisionsRepo from '../../repositories/revisionsRepo.ts';
 import * as realRolesRepo from '../../repositories/rolesRepo.ts';
 import * as realUsersRepo from '../../repositories/usersRepo.ts';
+import * as realDocumentRevisions from '../../services/documentRevisions.ts';
+import * as realRevisionRestore from '../../services/revisionRestore.ts';
 import * as realAudit from '../../utils/audit.ts';
 import { todayLocalDateOnly } from '../../utils/date.ts';
 import * as realPermissions from '../../utils/permissions.ts';
@@ -27,9 +30,12 @@ const clientsRepoSnap = { ...realClientsRepo };
 const clientOffersRepoSnap = { ...realClientOffersRepo };
 const clientQuotesRepoSnap = { ...realClientQuotesRepo };
 const productsRepoSnap = { ...realProductsRepo };
+const revisionsRepoSnap = { ...realRevisionsRepo };
 const offerVersionsRepoSnap = { ...realOfferVersionsRepo };
 const auditSnap = { ...realAudit };
 const drizzleSnap = { ...realDrizzle };
+const revisionRestoreSnap = { ...realRevisionRestore };
+const documentRevisionsSnap = { ...realDocumentRevisions };
 
 const findAuthUserByIdMock = mock();
 const userHasRoleMock = mock();
@@ -55,6 +61,12 @@ const ovListForOfferMock = mock();
 const ovFindByIdMock = mock();
 const ovInsertMock = mock();
 const ovBuildSnapshotMock = mock();
+const revisionsListForOfferMock = mock();
+const revisionsFindOfferByIdMock = mock();
+const restoreOfferRevisionMock = mock();
+const createOfferRevisionIfChangedMock = mock();
+const lockSupplierRevisionStatesMock = mock();
+const createDerivedSupplierRevisionsMock = mock();
 
 const logAuditMock = mock(async () => undefined);
 const { withDbTransactionMock, resetWithDbTransactionMock } = makeWithDbTransactionMock();
@@ -109,6 +121,21 @@ beforeAll(async () => {
     insert: ovInsertMock,
     buildSnapshot: ovBuildSnapshotMock,
   }));
+  mock.module('../../repositories/revisionsRepo.ts', () => ({
+    ...revisionsRepoSnap,
+    listForOffer: revisionsListForOfferMock,
+    findOfferById: revisionsFindOfferByIdMock,
+  }));
+  mock.module('../../services/revisionRestore.ts', () => ({
+    ...revisionRestoreSnap,
+    restoreOfferRevision: restoreOfferRevisionMock,
+  }));
+  mock.module('../../services/documentRevisions.ts', () => ({
+    ...documentRevisionsSnap,
+    createOfferRevisionIfChanged: createOfferRevisionIfChangedMock,
+    lockSupplierRevisionStates: lockSupplierRevisionStatesMock,
+    createDerivedSupplierRevisions: createDerivedSupplierRevisionsMock,
+  }));
   mock.module('../../utils/audit.ts', () => ({
     ...auditSnap,
     logAudit: logAuditMock,
@@ -131,6 +158,9 @@ afterAll(() => {
   mock.module('../../repositories/clientQuotesRepo.ts', () => clientQuotesRepoSnap);
   mock.module('../../repositories/productsRepo.ts', () => productsRepoSnap);
   mock.module('../../repositories/offerVersionsRepo.ts', () => offerVersionsRepoSnap);
+  mock.module('../../repositories/revisionsRepo.ts', () => revisionsRepoSnap);
+  mock.module('../../services/revisionRestore.ts', () => revisionRestoreSnap);
+  mock.module('../../services/documentRevisions.ts', () => documentRevisionsSnap);
   mock.module('../../utils/audit.ts', () => auditSnap);
   mock.module('../../db/drizzle.ts', () => drizzleSnap);
 });
@@ -203,6 +233,17 @@ const SAMPLE_VERSION_ROW = {
 
 const SAMPLE_VERSION = { ...SAMPLE_VERSION_ROW, snapshot: SAMPLE_SNAPSHOT };
 
+const SAMPLE_REVISION_ROW = {
+  id: 'or-2',
+  revisionNumber: 2,
+  revisionCode: 'REV2',
+  createdByUserId: 'u1',
+  createdByUserName: 'Alice',
+  createdAt: 1_700_000_002_000,
+};
+
+const SAMPLE_REVISION = { ...SAMPLE_REVISION_ROW, snapshot: SAMPLE_SNAPSHOT };
+
 const allMocks = [
   findAuthUserByIdMock,
   userHasRoleMock,
@@ -224,6 +265,12 @@ const allMocks = [
   ovFindByIdMock,
   ovInsertMock,
   ovBuildSnapshotMock,
+  revisionsListForOfferMock,
+  revisionsFindOfferByIdMock,
+  restoreOfferRevisionMock,
+  createOfferRevisionIfChangedMock,
+  lockSupplierRevisionStatesMock,
+  createDerivedSupplierRevisionsMock,
   logAuditMock,
   withDbTransactionMock,
 ];
@@ -243,6 +290,13 @@ beforeEach(async () => {
     items,
   }));
   coFindItemsForOfferMock.mockResolvedValue([SAMPLE_ITEM]);
+  coLockExistingByIdMock.mockResolvedValue(SAMPLE_OFFER);
+  revisionsListForOfferMock.mockResolvedValue([]);
+  revisionsFindOfferByIdMock.mockResolvedValue(null);
+  restoreOfferRevisionMock.mockResolvedValue(null);
+  createOfferRevisionIfChangedMock.mockResolvedValue({ revisionNumber: 1, revisionCode: 'REV1' });
+  lockSupplierRevisionStatesMock.mockResolvedValue(new Map());
+  createDerivedSupplierRevisionsMock.mockResolvedValue(undefined);
   coFindIdConflictMock.mockResolvedValue(false);
   // Linked-quote sourced lines for the fresh-link inheritance exemption (#812 round 15).
   cqFindItemSnapshotsForQuoteMock.mockResolvedValue([]);
@@ -255,6 +309,77 @@ afterEach(async () => {
 });
 
 const authHeader = () => ({ authorization: `Bearer ${signToken({ userId: 'u1' })}` });
+
+describe('client offer revision endpoints', () => {
+  test('lists and gets immutable revision snapshots', async () => {
+    coExistsByIdMock.mockResolvedValue(true);
+    revisionsListForOfferMock.mockResolvedValue([SAMPLE_REVISION_ROW]);
+    revisionsFindOfferByIdMock.mockResolvedValue(SAMPLE_REVISION);
+
+    const listResponse = await testApp.inject({
+      method: 'GET',
+      url: '/api/sales/client-offers/off-1/revisions',
+      headers: authHeader(),
+    });
+    const detailResponse = await testApp.inject({
+      method: 'GET',
+      url: '/api/sales/client-offers/off-1/revisions/or-2',
+      headers: authHeader(),
+    });
+
+    expect(listResponse.statusCode).toBe(200);
+    expect(JSON.parse(listResponse.body)[0]).toEqual(SAMPLE_REVISION_ROW);
+    expect(detailResponse.statusCode).toBe(200);
+    expect(JSON.parse(detailResponse.body).snapshot.offer.id).toBe('off-1');
+    expect(revisionsFindOfferByIdMock).toHaveBeenCalledWith('off-1', 'or-2');
+  });
+
+  test('restores a revision atomically and audits it', async () => {
+    revisionsFindOfferByIdMock.mockResolvedValue(SAMPLE_REVISION);
+    clientsExistsByIdMock.mockResolvedValue(true);
+    productsGetSnapshotsMock.mockResolvedValue(new Map([['p-1', { id: 'p-1' }]]));
+    restoreOfferRevisionMock.mockResolvedValue({
+      ...SAMPLE_OFFER,
+      revisionNumber: 2,
+      revisionCode: 'REV2',
+    });
+
+    const response = await testApp.inject({
+      method: 'POST',
+      url: '/api/sales/client-offers/off-1/revisions/or-2/restore',
+      headers: authHeader(),
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(restoreOfferRevisionMock).toHaveBeenCalledWith(
+      'off-1',
+      SAMPLE_REVISION,
+      HAPPY_USER.id,
+      TX_SENTINEL,
+    );
+    expect(logAuditMock).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'client_offer.revision.restored', entityId: 'off-1' }),
+    );
+  });
+
+  test('returns 409 when a downstream constraint makes restore unsafe', async () => {
+    revisionsFindOfferByIdMock.mockResolvedValue(SAMPLE_REVISION);
+    clientsExistsByIdMock.mockResolvedValue(true);
+    productsGetSnapshotsMock.mockResolvedValue(new Map([['p-1', { id: 'p-1' }]]));
+    restoreOfferRevisionMock.mockRejectedValue(
+      new realRevisionRestore.RevisionRestoreConflict('Sale order exists', 'sale_order_exists'),
+    );
+
+    const response = await testApp.inject({
+      method: 'POST',
+      url: '/api/sales/client-offers/off-1/revisions/or-2/restore',
+      headers: authHeader(),
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(JSON.parse(response.body).error).toBe('Sale order exists');
+  });
+});
 
 describe('GET /api/sales/client-offers/:id/versions', () => {
   test('200 returns versions newest-first when offer exists', async () => {

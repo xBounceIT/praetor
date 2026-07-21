@@ -827,6 +827,13 @@
       "when": 1784578192296,
       "tag": "0117_preserve_supplier_cost_precision",
       "breakpoints": true
+    },
+    {
+      "idx": 118,
+      "version": "7",
+      "when": 1784644766037,
+      "tag": "0118_add_document_revisions",
+      "breakpoints": true
     }
   ]
 }

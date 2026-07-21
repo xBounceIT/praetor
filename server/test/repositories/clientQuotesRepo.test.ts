@@ -11,11 +11,15 @@ beforeEach(() => {
 });
 
 // QUOTE_LIST_PROJECTION column order:
-// id, linkedOfferId (subquery), clientId, clientName, paymentTerms, discount, discountType,
-// status, expirationDate, communicationChannelId, communicationChannelName, notes, createdAt,
-// updatedAt
+// id, revisionNumber, revisionCode, linkedOfferId (subquery), linkedOfferRevisionCode (subquery),
+// clientId, clientName, paymentTerms, discount, discountType, status, expirationDate,
+// communicationChannelId, communicationChannelName, notes, createdAt, updatedAt,
+// linkedSupplierQuoteId, linkedSupplierQuoteExpiration
 const QUOTE_BASE: readonly unknown[] = [
   'cq-1',
+  0,
+  null,
+  null,
   null,
   'c-1',
   'Acme',
@@ -29,6 +33,8 @@ const QUOTE_BASE: readonly unknown[] = [
   null,
   new Date('2026-04-01T00:00:00Z'),
   new Date('2026-04-01T00:01:00Z'),
+  null,
+  null,
 ];
 const quoteRow = (overrides: Record<number, unknown> = {}) => makeRow(QUOTE_BASE, overrides);
 
@@ -63,7 +69,7 @@ const itemRow = (overrides: Record<number, unknown> = {}) => makeRow(ITEM_BASE, 
 
 describe('listAll', () => {
   test('embeds the linkedOfferId correlated subquery and orders DESC', async () => {
-    exec.enqueue({ rows: [quoteRow({ 1: 'co-1' })] });
+    exec.enqueue({ rows: [quoteRow({ 3: 'co-1' })] });
     const result = await clientQuotesRepo.listAll(testDb);
     expect(exec.calls[0].sql.toLowerCase()).toContain('from customer_offers co');
     expect(exec.calls[0].sql.toLowerCase()).toContain('co.linked_quote_id');

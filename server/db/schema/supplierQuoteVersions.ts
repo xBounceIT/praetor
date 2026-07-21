@@ -17,7 +17,12 @@ export interface SupplierQuoteVersionSnapshot {
   schemaVersion: 1;
   quote: Omit<
     SupplierQuote,
-    'linkedOrderId' | 'communicationChannelId' | 'communicationChannelName'
+    | 'linkedOrderId'
+    | 'communicationChannelId'
+    | 'communicationChannelName'
+    | 'revisionNumber'
+    | 'revisionCode'
+    | 'linkedClientQuoteRevisionCode'
   > & {
     linkedOrderId?: string | null;
     communicationChannelId?: string;

@@ -27,14 +27,6 @@ const restoreVersionMock = mock<(id: string, versionId: string) => Promise<Clien
   Promise.reject(new Error('not configured')),
 );
 
-mock.module('../../services/api/clientOffers', () => ({
-  clientOffersApi: {
-    listVersions: (id: string) => listVersionsMock(id),
-    getVersion: (id: string, vid: string) => getVersionMock(id, vid),
-    restoreVersion: (id: string, vid: string) => restoreVersionMock(id, vid),
-  },
-}));
-
 // Stable rendering for createdAt; the panel passes (timestamp, language). Spread the real
 // module so unrelated date helpers stay available if the panel grows new imports.
 const realDate = await import('../../utils/date');
@@ -134,6 +126,11 @@ const baseProps = {
   onPreview: () => {},
   onClearPreview: () => {},
   onRestored: () => {},
+  versionApi: {
+    listVersions: (id: string) => listVersionsMock(id),
+    getVersion: (id: string, versionId: string) => getVersionMock(id, versionId),
+    restoreVersion: (id: string, versionId: string) => restoreVersionMock(id, versionId),
+  },
 };
 
 beforeEach(() => {

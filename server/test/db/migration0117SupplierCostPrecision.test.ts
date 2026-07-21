@@ -3,7 +3,9 @@ import { describe, expect, test } from 'bun:test';
 const readMigration = async () =>
   Bun.file(
     new URL('../../db/migrations/0117_preserve_supplier_cost_precision.sql', import.meta.url),
-  ).text();
+  )
+    .text()
+    .then((sql) => sql.replace(/\r\n/g, '\n'));
 
 const readJournal = async () =>
   Bun.file(new URL('../../db/migrations/meta/_journal.json', import.meta.url)).json();

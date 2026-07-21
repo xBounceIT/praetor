@@ -50,6 +50,8 @@ export const supplierQuotes = pgTable(
     notes: text('notes'),
     createdAt: timestamp('created_at').default(sql`CURRENT_TIMESTAMP`),
     updatedAt: timestamp('updated_at').default(sql`CURRENT_TIMESTAMP`),
+    revisionNumber: integer('revision_number').notNull().default(0),
+    revisionCode: varchar('revision_code', { length: 50 }),
   },
   (table) => [
     index('idx_supplier_quotes_supplier_id').on(table.supplierId),
@@ -60,6 +62,10 @@ export const supplierQuotes = pgTable(
     check(
       'supplier_quotes_status_check',
       sql`${table.status} IN ('draft', 'sent', 'offer', 'accepted', 'denied')`,
+    ),
+    check(
+      'chk_supplier_quotes_revision',
+      sql`(${table.revisionNumber} = 0 AND ${table.revisionCode} IS NULL) OR (${table.revisionNumber} > 0 AND ${table.revisionCode} IS NOT NULL)`,
     ),
   ],
 );

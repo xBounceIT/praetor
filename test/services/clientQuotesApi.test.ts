@@ -18,13 +18,14 @@ describe('clientQuotesApi path construction', () => {
     );
   });
 
-  test('protects every dynamic quote and version path interpolation', async () => {
+  test('protects every dynamic quote, version, and revision path interpolation', async () => {
     const source = await Bun.file(
       new URL('../../services/api/clientQuotes.ts', import.meta.url),
     ).text();
 
-    expect(source).not.toMatch(/\$\{(?:id|versionId)\}/);
-    expect(source.match(/encodePathSegment\(id\)/g) ?? []).toHaveLength(7);
+    expect(source).not.toMatch(/\$\{(?:id|versionId|revisionId)\}/);
+    expect(source.match(/encodePathSegment\(id\)/g) ?? []).toHaveLength(10);
     expect(source.match(/encodePathSegment\(versionId\)/g) ?? []).toHaveLength(2);
+    expect(source.match(/encodePathSegment\(revisionId\)/g) ?? []).toHaveLength(2);
   });
 });

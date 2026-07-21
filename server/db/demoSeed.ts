@@ -1195,6 +1195,12 @@ const buildVerificationSteps = (
     expected: DEMO_EXPECTED_COUNTS.quotes,
   },
   {
+    table: 'quote_revisions',
+    countColumn: 'quote_id',
+    ids: demoIds.quotes,
+    expected: DEMO_EXPECTED_COUNTS.quote_revisions,
+  },
+  {
     table: 'quote_candidates',
     ids: demoIds.quotes,
     expected: DEMO_EXPECTED_COUNTS.quote_candidates,
@@ -1209,6 +1215,12 @@ const buildVerificationSteps = (
     requiredNonEmptyColumn: 'description',
     ids: demoIds.customerOffers,
     expected: DEMO_EXPECTED_COUNTS.customer_offers,
+  },
+  {
+    table: 'offer_revisions',
+    countColumn: 'offer_id',
+    ids: demoIds.customerOffers,
+    expected: DEMO_EXPECTED_COUNTS.offer_revisions,
   },
   {
     table: 'customer_offer_items',
@@ -1237,6 +1249,12 @@ const buildVerificationSteps = (
     requiredNonEmptyColumn: 'description',
     ids: demoIds.supplierQuotes,
     expected: DEMO_EXPECTED_COUNTS.supplier_quotes,
+  },
+  {
+    table: 'supplier_quote_revisions',
+    countColumn: 'quote_id',
+    ids: demoIds.supplierQuotes,
+    expected: DEMO_EXPECTED_COUNTS.supplier_quote_revisions,
   },
   {
     table: 'supplier_quote_items',

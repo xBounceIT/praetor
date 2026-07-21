@@ -37,9 +37,18 @@ const mapVersion = (row: typeof offerVersions.$inferSelect): OfferVersion => ({
 });
 
 export const buildSnapshot = (
-  offer: ClientOffer,
+  offer: Omit<ClientOffer, 'revisionNumber' | 'revisionCode' | 'linkedQuoteRevisionCode'>,
   items: ClientOfferItem[],
-): OfferVersionSnapshot => ({ schemaVersion: 1, offer, items });
+): OfferVersionSnapshot => {
+  // The live repository row retains these fields at runtime even though the parameter is Omit.
+  const {
+    revisionNumber: _revisionNumber,
+    revisionCode: _revisionCode,
+    linkedQuoteRevisionCode: _linkedQuoteRevisionCode,
+    ...snapshotOffer
+  } = offer as ClientOffer;
+  return { schemaVersion: 1, offer: snapshotOffer, items };
+};
 
 export const listForOffer = async (
   offerId: string,

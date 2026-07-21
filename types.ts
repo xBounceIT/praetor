@@ -391,6 +391,7 @@ export interface Project {
   createdAt?: number;
   orderId?: string | null;
   offerId?: string | null;
+  offerRevisionCode?: string | null;
   startDate?: string | null;
   endDate?: string | null;
   revenue?: number | null;
@@ -734,6 +735,7 @@ export interface QuoteItem {
   productMolPercentage?: number | null;
   // Supplier quote source tracking
   supplierQuoteId?: string | null;
+  supplierQuoteRevisionCode?: string | null;
   supplierQuoteItemId?: string | null;
   supplierQuoteSupplierName?: string | null;
   supplierQuoteUnitPrice?: number | null;
@@ -773,6 +775,8 @@ export interface QuoteCandidate {
 
 export interface Quote {
   id: string;
+  revisionNumber?: number;
+  revisionCode?: string | null;
   description?: string | null;
   clientId: string;
   clientName: string;
@@ -802,6 +806,7 @@ export interface Quote {
   communicationChannelName?: string;
   isExpired?: boolean;
   linkedOfferId?: string;
+  linkedOfferRevisionCode?: string | null;
   // 1-to-1 link to a supplier quote, set from the client-quote form (#779). `null`/absent = unlinked.
   linkedSupplierQuoteId?: string | null;
   // True when the linked supplier quote has expired — blocks progression to sent/offer/accepted.
@@ -838,11 +843,14 @@ export interface QuoteVersionSnapshot {
     | 'selectedCandidateId'
     | 'isExpired'
     | 'linkedOfferId'
+    | 'linkedOfferRevisionCode'
     | 'effectiveStatus'
     | 'linkedSupplierQuoteId'
     | 'linkedSupplierQuoteExpired'
     | 'communicationChannelId'
     | 'communicationChannelName'
+    | 'revisionNumber'
+    | 'revisionCode'
   > & {
     communicationChannelId?: string;
     communicationChannelName?: string;
@@ -860,6 +868,26 @@ export interface QuoteVersionRow {
 }
 
 export interface QuoteVersion extends QuoteVersionRow {
+  snapshot: QuoteVersionSnapshot;
+}
+
+export interface RevisionCodeTemplate {
+  prefix: string;
+  template: string;
+  sequencePadding: number;
+  preview: string;
+}
+
+export interface RevisionRow {
+  id: string;
+  revisionNumber: number;
+  revisionCode: string;
+  createdByUserId: string | null;
+  createdByUserName: string | null;
+  createdAt: number;
+}
+
+export interface QuoteRevision extends RevisionRow {
   snapshot: QuoteVersionSnapshot;
 }
 
@@ -890,8 +918,11 @@ export interface ClientOfferItem {
 
 export interface ClientOffer {
   id: string;
+  revisionNumber?: number;
+  revisionCode?: string | null;
   description?: string | null;
   linkedQuoteId: string;
+  linkedQuoteRevisionCode?: string | null;
   linkedQuoteCandidateId?: string | null;
   clientId: string;
   clientName: string;
@@ -941,7 +972,7 @@ export type OfferVersionReason = 'update' | 'restore';
 
 export interface OfferVersionSnapshot {
   schemaVersion: 1;
-  offer: Omit<ClientOffer, 'items'>;
+  offer: Omit<ClientOffer, 'items' | 'revisionNumber' | 'revisionCode' | 'linkedQuoteRevisionCode'>;
   items: ClientOfferItem[];
 }
 
@@ -954,6 +985,10 @@ export interface OfferVersionRow {
 }
 
 export interface OfferVersion extends OfferVersionRow {
+  snapshot: OfferVersionSnapshot;
+}
+
+export interface OfferRevision extends RevisionRow {
   snapshot: OfferVersionSnapshot;
 }
 
@@ -970,6 +1005,7 @@ export interface ClientsOrderItem {
   productMolPercentage?: number | null;
   // Supplier quote source tracking
   supplierQuoteId?: string | null;
+  supplierQuoteRevisionCode?: string | null;
   supplierQuoteItemId?: string | null;
   supplierQuoteSupplierName?: string | null;
   supplierQuoteUnitPrice?: number | null;
@@ -987,7 +1023,9 @@ export interface ClientsOrder {
   id: string;
   description?: string | null;
   linkedQuoteId?: string; // Reference to source quote
+  linkedQuoteRevisionCode?: string | null;
   linkedOfferId?: string;
+  linkedOfferRevisionCode?: string | null;
   clientId: string;
   clientName: string;
   items: ClientsOrderItem[];
@@ -1390,6 +1428,8 @@ export interface SupplierQuoteItem {
 
 export interface SupplierQuote {
   id: string;
+  revisionNumber?: number;
+  revisionCode?: string | null;
   description?: string | null;
   supplierId: string;
   supplierName: string;
@@ -1415,6 +1455,7 @@ export interface SupplierQuote {
   // When linked to a client quote, the status is driven by it (#779).
   isStatusSynced?: boolean;
   linkedClientQuoteId?: string | null;
+  linkedClientQuoteRevisionCode?: string | null;
   expirationDate: string;
   communicationChannelId?: string;
   communicationChannelName?: string;
@@ -1434,8 +1475,11 @@ export interface SupplierQuoteVersionSnapshot {
     | 'linkedOrderId'
     | 'isStatusSynced'
     | 'linkedClientQuoteId'
+    | 'linkedClientQuoteRevisionCode'
     | 'communicationChannelId'
     | 'communicationChannelName'
+    | 'revisionNumber'
+    | 'revisionCode'
   > & {
     communicationChannelId?: string;
     communicationChannelName?: string;
@@ -1452,6 +1496,10 @@ export interface SupplierQuoteVersionRow {
 }
 
 export interface SupplierQuoteVersion extends SupplierQuoteVersionRow {
+  snapshot: SupplierQuoteVersionSnapshot;
+}
+
+export interface SupplierQuoteRevision extends RevisionRow {
   snapshot: SupplierQuoteVersionSnapshot;
 }
 
@@ -1492,6 +1540,7 @@ export interface SupplierSaleOrderItem {
 export interface SupplierSaleOrder {
   id: string;
   linkedQuoteId?: string;
+  linkedQuoteRevisionCode?: string | null;
   supplierId: string;
   supplierName: string;
   items: SupplierSaleOrderItem[];

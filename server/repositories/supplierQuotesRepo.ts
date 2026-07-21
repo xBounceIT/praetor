@@ -19,6 +19,8 @@ import {
 
 export type SupplierQuote = {
   id: string;
+  revisionNumber: number;
+  revisionCode: string | null;
   description: string | null;
   supplierId: string;
   supplierName: string;
@@ -38,6 +40,7 @@ export type SupplierQuote = {
   // FULLY DERIVED from this chain: the linked quote's status/expiration, and — when an offer was
   // created from that quote — the offer's status/expiration. All fields are null when unlinked.
   linkedClientQuoteId: string | null;
+  linkedClientQuoteRevisionCode: string | null;
   linkedClientQuoteStatus: string | null;
   linkedClientQuoteExpiration: string | null;
   linkedOfferStatus: string | null;
@@ -164,7 +167,7 @@ const chosenClientQuoteId = sql<string | null>`(
 // (findById, lockEffectiveStatusById) keep the scalar subqueries: the 5× cost is negligible for
 // one row, and lockEffectiveStatusById's `FOR UPDATE` must not lock the joined quotes/offers rows.
 const chosenClientQuoteLateral = sql`LATERAL (
-  SELECT cq.id, cq.status, ${effectiveSourcingCandidateExpiration} AS expiration_date
+  SELECT cq.id, cq.revision_code, cq.status, ${effectiveSourcingCandidateExpiration} AS expiration_date
   FROM quotes cq
   LEFT JOIN customer_offers co ON co.linked_quote_id = cq.id
   LEFT JOIN ${sourcingCandidateExpirationLateral} ON true
@@ -178,6 +181,7 @@ const chosenClientQuoteLateral = sql`LATERAL (
 // scalar subqueries' LIMIT 1). ::text so the driver returns 'YYYY-MM-DD' strings, not Date objects.
 const lateralDerivedColumns = {
   linkedClientQuoteId: sql<string | null>`"chosen"."id"`,
+  linkedClientQuoteRevisionCode: sql<string | null>`"chosen"."revision_code"`,
   linkedClientQuoteStatus: sql<string | null>`"chosen"."status"`,
   linkedClientQuoteExpiration: sql<string | null>`"chosen"."expiration_date"::text`,
   linkedOfferStatus: sql<string | null>`"chosen_offer"."status"`,
@@ -187,6 +191,9 @@ const chosenOfferJoin = sql`"customer_offers" "chosen_offer"`;
 const chosenOfferJoinOn = sql`"chosen_offer"."linked_quote_id" = "chosen"."id"`;
 
 const linkedClientQuoteIdSubquery = chosenClientQuoteId;
+const linkedClientQuoteRevisionCodeSubquery = sql<string | null>`(
+  SELECT q.revision_code FROM quotes q WHERE q.id = ${chosenClientQuoteId} LIMIT 1
+)`;
 const linkedClientQuoteStatusSubquery = sql<string | null>`(
   SELECT q.status FROM quotes q WHERE q.id = ${chosenClientQuoteId} LIMIT 1
 )`;
@@ -235,6 +242,7 @@ type QuoteRow = typeof supplierQuotes.$inferSelect & {
   linkedOrderId?: string | null;
   communicationChannelName: string;
   linkedClientQuoteId?: string | null;
+  linkedClientQuoteRevisionCode?: string | null;
   linkedClientQuoteStatus?: string | null;
   linkedClientQuoteExpiration?: string | null;
   linkedOfferStatus?: string | null;
@@ -243,6 +251,8 @@ type QuoteRow = typeof supplierQuotes.$inferSelect & {
 
 const mapQuote = (row: QuoteRow): SupplierQuote => ({
   id: row.id,
+  revisionNumber: row.revisionNumber,
+  revisionCode: row.revisionCode,
   description: row.description,
   supplierId: row.supplierId,
   supplierName: row.supplierName,
@@ -258,6 +268,7 @@ const mapQuote = (row: QuoteRow): SupplierQuote => ({
   createdAt: row.createdAt?.getTime() ?? 0,
   updatedAt: row.updatedAt?.getTime() ?? 0,
   linkedClientQuoteId: row.linkedClientQuoteId ?? null,
+  linkedClientQuoteRevisionCode: row.linkedClientQuoteRevisionCode ?? null,
   linkedClientQuoteStatus: row.linkedClientQuoteStatus ?? null,
   linkedClientQuoteExpiration: row.linkedClientQuoteExpiration ?? null,
   linkedOfferStatus: row.linkedOfferStatus ?? null,
@@ -318,6 +329,7 @@ export const findById = async (
       ...getTableColumns(supplierQuotes),
       communicationChannelName: communicationChannelNameSubquery,
       linkedClientQuoteId: linkedClientQuoteIdSubquery,
+      linkedClientQuoteRevisionCode: linkedClientQuoteRevisionCodeSubquery,
       linkedClientQuoteStatus: linkedClientQuoteStatusSubquery,
       linkedClientQuoteExpiration: linkedClientQuoteExpirationSubquery,
       linkedOfferStatus: linkedOfferStatusSubquery,

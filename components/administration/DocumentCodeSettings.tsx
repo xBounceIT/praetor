@@ -1,6 +1,6 @@
 import { Check, FileText, Loader2, RotateCcw, Save, TriangleAlert } from 'lucide-react';
 import type React from 'react';
-import { useCallback, useEffect, useMemo, useReducer } from 'react';
+import { useCallback, useEffect, useMemo, useReducer, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -17,7 +17,7 @@ import {
 } from '@/components/ui/table';
 import { cn } from '@/lib/utils';
 import api from '../../services/api';
-import type { DocumentCodeModuleId, DocumentCodeTemplate } from '../../types';
+import type { DocumentCodeModuleId, DocumentCodeTemplate, RevisionCodeTemplate } from '../../types';
 
 type EditableTemplate = DocumentCodeTemplate;
 type TemplateErrorMap = Record<string, string>;
@@ -210,6 +210,220 @@ const documentCodeSettingsReducer = (
     case 'clearSaved':
       return { ...state, isSaved: false };
   }
+};
+
+const revisionPersistedShape = (value: RevisionCodeTemplate) =>
+  JSON.stringify({
+    prefix: value.prefix,
+    template: value.template,
+    sequencePadding: value.sequencePadding,
+  });
+
+const renderRevisionPreview = (value: RevisionCodeTemplate) =>
+  value.template
+    .replaceAll('{PREFIX}', value.prefix)
+    .replaceAll('{SEQ}', '1'.padStart(value.sequencePadding || 1, '0'));
+
+const RevisionCodeSettings = () => {
+  const { t } = useTranslation('settings');
+  const [value, setValue] = useState<RevisionCodeTemplate | null>(null);
+  const [savedValue, setSavedValue] = useState<RevisionCodeTemplate | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isSaved, setIsSaved] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    api.revisionCodeTemplate
+      .get()
+      .then((result) => {
+        if (cancelled) return;
+        setValue(result);
+        setSavedValue(result);
+      })
+      .catch((error) => {
+        if (!cancelled) setLoadError(error instanceof Error ? error.message : String(error));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isSaved) return;
+    const timeoutId = window.setTimeout(() => setIsSaved(false), 3000);
+    return () => window.clearTimeout(timeoutId);
+  }, [isSaved]);
+
+  const validationError = useMemo(() => {
+    if (!value) return null;
+    if (!/^[A-Za-z0-9_-]{0,20}$/.test(value.prefix)) {
+      return t('general.documentCodes.revisions.errors.prefix');
+    }
+    if (
+      value.template.length < 5 ||
+      value.template.length > 100 ||
+      !value.template.includes('{SEQ}')
+    ) {
+      return t('general.documentCodes.revisions.errors.template');
+    }
+    const literal = value.template.replaceAll('{PREFIX}', '').replaceAll('{SEQ}', '');
+    if (!/^[A-Za-z0-9 _-]*$/.test(literal) || /\{[^}]*\}/.test(literal)) {
+      return t('general.documentCodes.revisions.errors.placeholder');
+    }
+    if (
+      !Number.isInteger(value.sequencePadding) ||
+      value.sequencePadding < 1 ||
+      value.sequencePadding > 12
+    ) {
+      return t('general.documentCodes.revisions.errors.padding');
+    }
+    if (renderRevisionPreview(value).length > 50) {
+      return t('general.documentCodes.revisions.errors.length');
+    }
+    return null;
+  }, [t, value]);
+
+  if (loadError) {
+    return (
+      <Alert variant="destructive">
+        <TriangleAlert aria-hidden="true" />
+        <AlertTitle>{t('general.documentCodes.revisions.loadFailed')}</AlertTitle>
+        <AlertDescription>{loadError}</AlertDescription>
+      </Alert>
+    );
+  }
+
+  if (!value || !savedValue) {
+    return (
+      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <Loader2 aria-hidden="true" className="size-4 animate-spin" />
+        {t('general.documentCodes.revisions.loading')}
+      </div>
+    );
+  }
+
+  const hasChanges = revisionPersistedShape(value) !== revisionPersistedShape(savedValue);
+  const update = (patch: Partial<RevisionCodeTemplate>) => {
+    setValue((current) =>
+      current
+        ? {
+            ...current,
+            ...patch,
+            preview: renderRevisionPreview({ ...current, ...patch }),
+          }
+        : current,
+    );
+    setSaveError(null);
+    setIsSaved(false);
+  };
+  const handleSave = async () => {
+    if (!hasChanges || validationError || isSaving) return;
+    setIsSaving(true);
+    setSaveError(null);
+    try {
+      const updated = await api.revisionCodeTemplate.update(value);
+      setValue(updated);
+      setSavedValue(updated);
+      setIsSaved(true);
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <section className="space-y-4 border-t border-border pt-6">
+      <div>
+        <h3 className="text-sm font-semibold">{t('general.documentCodes.revisions.title')}</h3>
+        <p className="mt-1 text-sm text-muted-foreground">
+          {t('general.documentCodes.revisions.description')}
+        </p>
+      </div>
+      {(saveError || validationError) && (
+        <Alert variant="destructive">
+          <TriangleAlert aria-hidden="true" />
+          <AlertDescription>{saveError ?? validationError}</AlertDescription>
+        </Alert>
+      )}
+      <div className="grid gap-4 md:grid-cols-[1fr_2fr_7rem_1fr]">
+        <Field>
+          <FieldLabel htmlFor="revision-prefix">{t('general.documentCodes.prefix')}</FieldLabel>
+          <Input
+            id="revision-prefix"
+            value={value.prefix}
+            onChange={(event) => update({ prefix: event.target.value })}
+            className="font-mono"
+          />
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="revision-template">{t('general.documentCodes.template')}</FieldLabel>
+          <Input
+            id="revision-template"
+            value={value.template}
+            onChange={(event) => update({ template: event.target.value })}
+            className="font-mono"
+          />
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="revision-padding">
+            {t('general.documentCodes.sequenceDigits')}
+          </FieldLabel>
+          <Input
+            id="revision-padding"
+            type="number"
+            min={1}
+            max={12}
+            value={value.sequencePadding}
+            onChange={(event) =>
+              update({ sequencePadding: Number.parseInt(event.target.value, 10) })
+            }
+            className="font-mono"
+          />
+        </Field>
+        <Field>
+          <FieldLabel>{t('general.documentCodes.preview')}</FieldLabel>
+          <div className="flex h-9 items-center rounded-md border border-border bg-muted/40 px-3 font-mono text-sm">
+            {renderRevisionPreview(value)}
+          </div>
+        </Field>
+      </div>
+      <FieldDescription>
+        {t('general.documentCodes.revisions.placeholdersDescription')}
+      </FieldDescription>
+      <div className="flex justify-end gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => setValue(savedValue)}
+          disabled={!hasChanges || isSaving}
+        >
+          <RotateCcw aria-hidden="true" />
+          {t('general.documentCodes.reset')}
+        </Button>
+        <Button
+          type="button"
+          onClick={handleSave}
+          disabled={!hasChanges || Boolean(validationError) || isSaving}
+        >
+          {isSaving ? (
+            <Loader2 aria-hidden="true" className="animate-spin" />
+          ) : isSaved ? (
+            <Check aria-hidden="true" />
+          ) : (
+            <Save aria-hidden="true" />
+          )}
+          {isSaving
+            ? t('general.saving')
+            : isSaved
+              ? t('general.changesSaved')
+              : t('general.saveConfiguration')}
+        </Button>
+      </div>
+    </section>
+  );
 };
 
 const DocumentCodeSettings: React.FC<DocumentCodeSettingsProps> = ({ animationClass }) => {
@@ -459,6 +673,8 @@ const DocumentCodeSettings: React.FC<DocumentCodeSettingsProps> = ({ animationCl
                 : t('general.saveConfiguration')}
           </Button>
         </div>
+
+        <RevisionCodeSettings />
       </CardContent>
     </Card>
   );

@@ -86,6 +86,7 @@ const projectSchema = {
     createdAt: { type: 'number' },
     orderId: { type: ['string', 'null'] },
     offerId: { type: ['string', 'null'] },
+    offerRevisionCode: { type: ['string', 'null'] },
     startDate: { type: ['string', 'null'] },
     endDate: { type: ['string', 'null'] },
     revenue: { type: ['number', 'null'] },

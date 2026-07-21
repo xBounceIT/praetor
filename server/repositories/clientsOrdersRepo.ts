@@ -1,7 +1,9 @@
-import { and, asc, desc, eq, ne, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, getTableColumns, ne, sql } from 'drizzle-orm';
 import { type DbExecutor, db, runAtomically } from '../db/drizzle.ts';
 import { customerOffers } from '../db/schema/customerOffers.ts';
+import { quotes } from '../db/schema/quotes.ts';
 import { saleItems, sales } from '../db/schema/sales.ts';
+import { supplierQuotes } from '../db/schema/supplierQuotes.ts';
 import { supplierSaleItems, supplierSales } from '../db/schema/supplierSales.ts';
 import { type DurationUnit, normalizeDurationUnit } from '../utils/duration-unit.ts';
 import { numericForDb, parseDbNumber, parseNullableDbNumber } from '../utils/parse.ts';
@@ -11,7 +13,9 @@ export type ClientOrder = {
   id: string;
   description?: string | null;
   linkedQuoteId: string | null;
+  linkedQuoteRevisionCode?: string | null;
   linkedOfferId: string | null;
+  linkedOfferRevisionCode?: string | null;
   clientId: string;
   clientName: string;
   paymentTerms: string | null;
@@ -33,6 +37,7 @@ export type ClientOrderItem = {
   productCost: number;
   productMolPercentage: number | null;
   supplierQuoteId: string | null;
+  supplierQuoteRevisionCode?: string | null;
   supplierQuoteItemId: string | null;
   supplierQuoteSupplierName: string | null;
   supplierQuoteUnitPrice: number | null;
@@ -46,11 +51,18 @@ export type ClientOrderItem = {
   durationUnit: DurationUnit;
 };
 
-const mapOrder = (row: typeof sales.$inferSelect): ClientOrder => ({
+type ClientOrderReadRow = typeof sales.$inferSelect & {
+  linkedQuoteRevisionCode?: string | null;
+  linkedOfferRevisionCode?: string | null;
+};
+
+const mapOrder = (row: ClientOrderReadRow): ClientOrder => ({
   id: row.id,
   description: row.description,
   linkedQuoteId: row.linkedQuoteId,
+  linkedQuoteRevisionCode: row.linkedQuoteRevisionCode ?? null,
   linkedOfferId: row.linkedOfferId,
+  linkedOfferRevisionCode: row.linkedOfferRevisionCode ?? null,
   clientId: row.clientId,
   clientName: row.clientName,
   paymentTerms: row.paymentTerms,
@@ -63,7 +75,11 @@ const mapOrder = (row: typeof sales.$inferSelect): ClientOrder => ({
 });
 
 // `sale_items.sale_id` is exposed as `orderId` in the domain type - public API contract.
-const mapItem = (row: typeof saleItems.$inferSelect): ClientOrderItem => ({
+type ClientOrderItemReadRow = typeof saleItems.$inferSelect & {
+  supplierQuoteRevisionCode?: string | null;
+};
+
+const mapItem = (row: ClientOrderItemReadRow): ClientOrderItem => ({
   id: row.id,
   orderId: row.saleId,
   productId: row.productId,
@@ -73,6 +89,7 @@ const mapItem = (row: typeof saleItems.$inferSelect): ClientOrderItem => ({
   productCost: parseDbNumber(row.productCost, 0),
   productMolPercentage: parseNullableDbNumber(row.productMolPercentage),
   supplierQuoteId: row.supplierQuoteId,
+  supplierQuoteRevisionCode: row.supplierQuoteRevisionCode ?? null,
   supplierQuoteItemId: row.supplierQuoteItemId,
   supplierQuoteSupplierName: row.supplierQuoteSupplierName,
   supplierQuoteUnitPrice: parseNullableDbNumber(row.supplierQuoteUnitPrice),
@@ -87,12 +104,37 @@ const mapItem = (row: typeof saleItems.$inferSelect): ClientOrderItem => ({
 });
 
 export const listAll = async (exec: DbExecutor = db): Promise<ClientOrder[]> => {
-  const rows = await exec.select().from(sales).orderBy(desc(sales.createdAt));
+  const rows = await exec
+    .select({
+      ...getTableColumns(sales),
+      linkedQuoteRevisionCode: sql<string | null>`(
+        SELECT ${quotes.revisionCode}
+          FROM ${quotes}
+         WHERE ${quotes.id} = ${sales.linkedQuoteId}
+      )`,
+      linkedOfferRevisionCode: sql<string | null>`(
+        SELECT ${customerOffers.revisionCode}
+          FROM ${customerOffers}
+         WHERE ${customerOffers.id} = ${sales.linkedOfferId}
+      )`,
+    })
+    .from(sales)
+    .orderBy(desc(sales.createdAt));
   return rows.map(mapOrder);
 };
 
 export const listAllItems = async (exec: DbExecutor = db): Promise<ClientOrderItem[]> => {
-  const rows = await exec.select().from(saleItems).orderBy(saleItems.createdAt);
+  const rows = await exec
+    .select({
+      ...getTableColumns(saleItems),
+      supplierQuoteRevisionCode: sql<string | null>`(
+        SELECT ${supplierQuotes.revisionCode}
+          FROM ${supplierQuotes}
+         WHERE ${supplierQuotes.id} = ${saleItems.supplierQuoteId}
+      )`,
+    })
+    .from(saleItems)
+    .orderBy(saleItems.createdAt);
   return rows.map(mapItem);
 };
 

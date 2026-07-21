@@ -4,6 +4,7 @@ import { authenticateToken, requirePermission } from '../middleware/auth.ts';
 import * as clientsRepo from '../repositories/clientsRepo.ts';
 import * as productsRepo from '../repositories/productsRepo.ts';
 import * as quoteCommunicationChannelsRepo from '../repositories/quoteCommunicationChannelsRepo.ts';
+import * as revisionsRepo from '../repositories/revisionsRepo.ts';
 import * as supplierQuoteAttachmentsRepo from '../repositories/supplierQuoteAttachmentsRepo.ts';
 import * as supplierQuotesRepo from '../repositories/supplierQuotesRepo.ts';
 import * as supplierQuoteVersionsRepo from '../repositories/supplierQuoteVersionsRepo.ts';
@@ -13,6 +14,10 @@ import {
   allocateDocumentCode,
   reserveDocumentCodeCounterFromCode,
 } from '../services/documentCodes.ts';
+import {
+  RevisionRestoreConflict,
+  restoreSupplierQuoteRevision,
+} from '../services/revisionRestore.ts';
 import { logAudit } from '../utils/audit.ts';
 import { getUniqueViolation } from '../utils/db-errors.ts';
 import { replyDocumentCodeCollision } from '../utils/document-code-replies.ts';
@@ -58,6 +63,7 @@ import {
   parseLocalizedPositiveNumber,
   requireNonEmptyString,
 } from '../utils/validation.ts';
+import { registerRevisionHistoryRoutes } from './revision-history.ts';
 
 const idParamSchema = {
   type: 'object',
@@ -121,6 +127,8 @@ const supplierQuoteSchema = {
   type: 'object',
   properties: {
     id: { type: 'string' },
+    revisionNumber: { type: 'integer' },
+    revisionCode: { type: ['string', 'null'] },
     description: { type: ['string', 'null'] },
     supplierId: { type: 'string' },
     supplierName: { type: 'string' },
@@ -131,6 +139,7 @@ const supplierQuoteSchema = {
     // Whether a client quote drives this supplier quote's status (then it's read-only/synced).
     isStatusSynced: { type: 'boolean' },
     linkedClientQuoteId: { type: ['string', 'null'] },
+    linkedClientQuoteRevisionCode: { type: ['string', 'null'] },
     expirationDate: { type: ['string', 'null'], format: 'date' },
     communicationChannelId: { type: 'string' },
     communicationChannelName: { type: 'string' },
@@ -408,6 +417,30 @@ const resolveCommunicationChannel = async (
 export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.addHook('onRequest', authenticateToken);
 
+  registerRevisionHistoryRoutes(fastify, {
+    entityType: 'supplier_quote',
+    viewPermission: 'sales.supplier_quotes.view',
+    updatePermission: 'sales.supplier_quotes.update',
+    exists: supplierQuotesRepo.existsById,
+    list: revisionsRepo.listForSupplierQuote,
+    find: revisionsRepo.findSupplierQuoteById,
+    restore: async (quoteId, revision, userId, tx) => {
+      const missingReference = await findMissingSnapshotReference(revision.snapshot, tx);
+      if (missingReference) {
+        throw new RevisionRestoreConflict(missingReference, 'snapshot_reference_missing');
+      }
+      const restored = await restoreSupplierQuoteRevision(quoteId, revision, userId, tx);
+      if (!restored) return null;
+      return {
+        ...restored,
+        status: supplierQuoteEffectiveStatus(restored),
+        isStatusSynced: Boolean(restored.linkedClientQuoteId),
+        items: await supplierQuotesRepo.findItemsForQuote(quoteId, tx),
+      };
+    },
+    responseSchema: supplierQuoteSchema,
+  });
+
   // Shared with the client→supplier item sync (issue #779) so version histories restore
   // identically no matter which write path minted them.
   const snapshotPreState = (
@@ -419,6 +452,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
   const findMissingSnapshotReference = async (
     snapshot: supplierQuoteVersionsRepo.SupplierQuoteVersionSnapshot,
+    exec?: DbExecutor,
   ): Promise<string | null> => {
     const productIds = Array.from(
       new Set(
@@ -436,10 +470,31 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         ? snapshot.quote.clientId
         : null;
 
-    const [supplier, clientExists, products] = await Promise.all([
-      suppliersRepo.findById(snapshot.quote.supplierId),
-      clientId ? clientsRepo.existsById(clientId) : Promise.resolve(true),
-      productIds.length > 0 ? productsRepo.getSnapshots(productIds) : Promise.resolve(null),
+    const channelId = snapshot.quote.communicationChannelId;
+    const supplierPromise = exec
+      ? suppliersRepo.findById(snapshot.quote.supplierId, exec)
+      : suppliersRepo.findById(snapshot.quote.supplierId);
+    const clientPromise = clientId
+      ? exec
+        ? clientsRepo.existsById(clientId, exec)
+        : clientsRepo.existsById(clientId)
+      : Promise.resolve(true);
+    const productsPromise =
+      productIds.length > 0
+        ? exec
+          ? productsRepo.getSnapshots(productIds, exec)
+          : productsRepo.getSnapshots(productIds)
+        : Promise.resolve(null);
+    const channelPromise = channelId
+      ? exec
+        ? quoteCommunicationChannelsRepo.findById(channelId, exec)
+        : quoteCommunicationChannelsRepo.findById(channelId)
+      : Promise.resolve(null);
+    const [supplier, clientExists, products, channel] = await Promise.all([
+      supplierPromise,
+      clientPromise,
+      productsPromise,
+      channelPromise,
     ]);
 
     if (!supplier) {
@@ -447,6 +502,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     }
     if (clientId && !clientExists) {
       return `Snapshot client "${clientId}" no longer exists`;
+    }
+    if (!channel) {
+      return `Snapshot communication channel "${channelId ?? ''}" no longer exists`;
     }
     if (!products) return null;
 
