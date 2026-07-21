@@ -1126,6 +1126,65 @@ describe('client-offers supplier-link resolution + forward sync (#779)', () => {
     expect(sqSyncItemPricingMock).not.toHaveBeenCalled();
   });
 
+  test('PUT: preserves each persisted row id so mixed pricing semantics survive an edit', async () => {
+    setupDraftOffer();
+    coFindItemsForOfferMock.mockResolvedValue([
+      { ...EXISTING_OFFER_ITEM, id: 'coi-legacy', pricingSemanticsVersion: 1 },
+      { ...EXISTING_OFFER_ITEM, id: 'coi-current', pricingSemanticsVersion: 2 },
+    ]);
+
+    const res = await putOffer({
+      items: [
+        lineItem(2, null, {
+          id: 'coi-legacy',
+          supplierQuoteId: null,
+          supplierQuoteItemId: null,
+          supplierQuoteSupplierName: null,
+        }),
+        lineItem(2, null, {
+          id: 'coi-current',
+          supplierQuoteId: null,
+          supplierQuoteItemId: null,
+          supplierQuoteSupplierName: null,
+        }),
+      ],
+    });
+
+    expect(res.statusCode).toBe(200);
+    const inserted = coReplaceItemsMock.mock.calls[0][1] as Array<Record<string, unknown>>;
+    expect(inserted.map((item) => [item.id, item.pricingSemanticsVersion])).toEqual([
+      ['coi-legacy', undefined],
+      ['coi-current', undefined],
+    ]);
+  });
+
+  test('PUT: generates a fresh id for a duplicate persisted row id', async () => {
+    setupDraftOffer();
+    coFindItemsForOfferMock.mockResolvedValue([EXISTING_OFFER_ITEM]);
+
+    const res = await putOffer({
+      items: [
+        lineItem(2, null, {
+          id: 'oi-1',
+          supplierQuoteId: null,
+          supplierQuoteItemId: null,
+          supplierQuoteSupplierName: null,
+        }),
+        lineItem(2, null, {
+          id: 'oi-1',
+          supplierQuoteId: null,
+          supplierQuoteItemId: null,
+          supplierQuoteSupplierName: null,
+        }),
+      ],
+    });
+
+    expect(res.statusCode).toBe(200);
+    const inserted = coReplaceItemsMock.mock.calls[0][1] as Array<Record<string, unknown>>;
+    expect(inserted[0].id).toBe('oi-1');
+    expect(inserted[1].id).not.toBe('oi-1');
+  });
+
   test('PUT: 400 when a NEW link does not resolve to a live supplier item', async () => {
     setupDraftOffer();
     coFindItemsForOfferMock.mockResolvedValue([]);

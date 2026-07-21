@@ -256,6 +256,7 @@ type OfferItemInput = {
 };
 
 type NormalizedOfferItem = {
+  id: string | null;
   productId: string | null;
   productName: string;
   quantity: number;
@@ -353,6 +354,7 @@ const normalizeItems = (
     const durationUnit = durationUnitResult.value ?? 'months';
     const durationMonths = durationMonthsResult.value ?? defaultDurationMonthsForUnit(durationUnit);
     normalizedItems.push({
+      id: normalizeNullableString(item.id),
       productId: item.productId || null,
       productName: productNameResult.value,
       quantity: quantityResult.value,
@@ -381,8 +383,8 @@ const normalizeItems = (
 // cached copy may be stale, and storing/pushing it verbatim would let an outdated browser revert
 // newer supplier pricing. A RETAINED link stays client-authoritative for the cost (that edit is
 // pushed back onto the supplier item by the forward sync). "Retained" is keyed on
-// supplierQuoteItemId: offer items get fresh row ids on every save, so the link itself is the
-// only stable correlation. Throws on a NEW link whose id doesn't resolve; a retained link
+// supplierQuoteItemId so it also covers historical saves that rotated offer-item ids. Throws on a
+// NEW link whose id doesn't resolve; a retained link
 // tolerates a vanished supplier item (legacy dangle) by keeping the stored metadata.
 // `inheritedItemIds` are the LINKED QUOTE's sourced supplier item ids: offers are created by
 // converting a quote, which copies its sourced lines verbatim while the supplier quote already
@@ -395,8 +397,10 @@ const resolveOfferItemSupplierLinks = async (
   inheritedPricingSemanticsVersion: PricingSemanticsVersion = CURRENT_PRICING_SEMANTICS_VERSION,
   preserveInheritedPricingSemantics = false,
 ): Promise<NormalizedOfferItem[]> => {
+  // On updates, retain the submitted persisted ids and let replaceItems restore each row's
+  // marker. A document-wide marker would downgrade current rows in a mixed historical document.
   const pricingSemanticsVersion = existingItems?.length
-    ? pricingSemanticsVersionForDocument(existingItems)
+    ? undefined
     : inheritedPricingSemanticsVersion;
   const versionedItems = items.map((item) => ({ ...item, pricingSemanticsVersion }));
   const linkedIds = versionedItems
@@ -492,26 +496,38 @@ const linkedQuoteContext = async (
   };
 };
 
-const buildItemsForInsert = (items: NormalizedOfferItem[]): clientOffersRepo.NewClientOfferItem[] =>
-  items.map((item) => ({
-    id: generatePrefixedId(ITEM_ID_PREFIXES.clientOfferItem),
-    productId: item.productId,
-    productName: item.productName,
-    quantity: item.quantity,
-    unitPrice: item.unitPrice,
-    productCost: item.productCost,
-    productMolPercentage: item.productMolPercentage,
-    discount: item.discount,
-    note: item.note,
-    supplierQuoteId: item.supplierQuoteId,
-    supplierQuoteItemId: item.supplierQuoteItemId,
-    supplierQuoteSupplierName: item.supplierQuoteSupplierName,
-    supplierQuoteUnitPrice: item.supplierQuoteUnitPrice,
-    unitType: item.unitType,
-    durationMonths: item.durationMonths,
-    durationUnit: item.durationUnit,
-    pricingSemanticsVersion: item.pricingSemanticsVersion,
-  }));
+const buildItemsForInsert = (
+  items: NormalizedOfferItem[],
+  persistedItemIds: ReadonlySet<string> = new Set(),
+): clientOffersRepo.NewClientOfferItem[] => {
+  const reusedItemIds = new Set<string>();
+  return items.map((item) => {
+    // The PUT route accepts client-generated ids for new rows too, so only retain an id that
+    // belongs to this offer already. replaceItems uses it to preserve that row's pricing marker.
+    const preservedId =
+      item.id && persistedItemIds.has(item.id) && !reusedItemIds.has(item.id) ? item.id : null;
+    if (preservedId) reusedItemIds.add(preservedId);
+    return {
+      id: preservedId ?? generatePrefixedId(ITEM_ID_PREFIXES.clientOfferItem),
+      productId: item.productId,
+      productName: item.productName,
+      quantity: item.quantity,
+      unitPrice: item.unitPrice,
+      productCost: item.productCost,
+      productMolPercentage: item.productMolPercentage,
+      discount: item.discount,
+      note: item.note,
+      supplierQuoteId: item.supplierQuoteId,
+      supplierQuoteItemId: item.supplierQuoteItemId,
+      supplierQuoteSupplierName: item.supplierQuoteSupplierName,
+      supplierQuoteUnitPrice: item.supplierQuoteUnitPrice,
+      unitType: item.unitType,
+      durationMonths: item.durationMonths,
+      durationUnit: item.durationUnit,
+      pricingSemanticsVersion: item.pricingSemanticsVersion,
+    };
+  });
+};
 
 const buildOrderItemsFromOfferItems = (
   items: clientOffersRepo.ClientOfferItem[],
@@ -1258,6 +1274,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       let normalizedItemsForUpdate: NormalizedOfferItem[] | null = null;
       let previousSyncLines: PreviousClientLine[] = [];
+      let persistedOfferItemIds: ReadonlySet<string> = new Set();
       if (items !== undefined) {
         if (!Array.isArray(items) || items.length === 0) {
           return badRequest(reply, 'Items must be a non-empty array');
@@ -1279,6 +1296,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         // Previous stored lines for the supplier-item sync's genuine-edit diff (issue #779) —
         // the stored item shape structurally satisfies PreviousClientLine.
         previousSyncLines = existingOfferItems;
+        persistedOfferItemIds = new Set(existingOfferItems.map((item) => item.id));
       }
 
       // Derived from the declared field set above so the two lists can't drift (issue #779).
@@ -1336,7 +1354,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           const updatedItems = normalizedItemsForUpdate
             ? await clientOffersRepo.replaceItems(
                 offer.id,
-                buildItemsForInsert(normalizedItemsForUpdate),
+                buildItemsForInsert(normalizedItemsForUpdate, persistedOfferItemIds),
                 tx,
               )
             : await clientOffersRepo.findItemsForOffer(offer.id, tx);

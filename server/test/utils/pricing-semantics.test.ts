@@ -49,6 +49,25 @@ describe('pricing semantics compatibility', () => {
     ]);
   });
 
+  test('keeps each stored marker when a historical document has mixed semantics', () => {
+    const items = preservePricingSemanticsVersions(
+      [{ id: 'legacy' }, { id: 'current' }, { id: 'new' }] as Array<{
+        id: string;
+        pricingSemanticsVersion?: 1 | 2;
+      }>,
+      [
+        { id: 'legacy', pricingSemanticsVersion: 1 },
+        { id: 'current', pricingSemanticsVersion: 2 },
+      ],
+    );
+
+    expect(items.map((item) => [item.id, item.pricingSemanticsVersion])).toEqual([
+      ['legacy', 1],
+      ['current', 2],
+      ['new', 1],
+    ]);
+  });
+
   test('does not overwrite an explicit snapshot marker during restore', () => {
     expect(
       preservePricingSemanticsVersions(
