@@ -652,6 +652,50 @@ describe('<ClientsOrdersView /> draft-from-offer editability', () => {
     expect(item?.unitPrice).toBeCloseTo(1066.667, 3);
   });
 
+  test('inherits legacy pricing semantics for added lines', async () => {
+    const onUpdate = mock((_id: string, _updates: Partial<ClientsOrder>) => Promise.resolve());
+    const legacyOrder: ClientsOrder = {
+      ...draftLinkedOrder,
+      id: 'dm_so_legacy_add',
+      items: [
+        {
+          ...orders[0].items[0],
+          orderId: 'dm_so_legacy_add',
+          pricingSemanticsVersion: 1,
+        },
+      ],
+    };
+    const addedProduct: Product = {
+      id: 'product-2',
+      name: 'Added service',
+      productCode: 'A-1',
+      costo: 100,
+      molPercentage: 25,
+      costUnit: 'hours',
+      type: 'service',
+    };
+    const { dialog } = await openModal(legacyOrder, onUpdate, [consultingProduct, addedProduct]);
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'sales:clientQuotes.addProduct' }));
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: 'sales:clientQuotes.selectProduct' }),
+    );
+    fireEvent.click(await screen.findByText('Added service'));
+    fireEvent.change(
+      within(dialog).getAllByRole('textbox', { name: 'sales:clientQuotes.qty' })[1],
+      { target: { value: '1' } },
+    );
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: 'accounting:clientsOrders.updateOrder' }),
+    );
+
+    await waitFor(() => expect(onUpdate).toHaveBeenCalledTimes(1));
+    expect(onUpdate.mock.calls[0]?.[1].items?.[1]).toMatchObject({
+      productId: 'product-2',
+      pricingSemanticsVersion: 1,
+    });
+  });
+
   test('product selector and remove button are locked for a supplier-order-backed line', async () => {
     const supplierBackedDraft: ClientsOrder = {
       ...draftLinkedOrder,

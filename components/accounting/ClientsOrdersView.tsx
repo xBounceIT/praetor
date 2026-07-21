@@ -55,6 +55,7 @@ import {
   buildProductQuickViewHref,
   buildSupplierOrderQuickViewHref,
 } from '../../utils/quickViewLinks';
+import { getDocumentPricingSemanticsVersion } from '../../utils/supplierLineSync';
 import { toastError } from '../../utils/toast';
 import ProductSelectOrFallback from '../sales/ProductSelectOrFallback';
 import CostSummaryPanel from '../shared/CostSummaryPanel';
@@ -458,6 +459,7 @@ const useClientsOrdersController = ({
       unitType: DEFAULT_UNIT_TYPE,
       unitPrice: Number.NaN,
       productMolPercentage: null,
+      pricingSemanticsVersion: getDocumentPricingSemanticsVersion(formData.items),
     };
     setFormData((prev) => ({
       ...prev,
