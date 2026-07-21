@@ -2461,12 +2461,12 @@ const ClientQuoteFormModal: React.FC<{ controller: ClientQuotesController }> = (
         <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
           <ClientQuoteModalHeader controller={{ ...controller, closeModal: dismissModal }} />
           <ModalBody className="flex-1 space-y-5">
-            <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(28rem,40rem)]">
-              <div className="min-w-0 space-y-5">
-                <ClientQuoteCandidatesBar controller={controller} />
-                <ClientQuoteClientSection controller={controller} />
-              </div>
-              {editingQuote?.id ? (
+            {editingQuote?.id ? (
+              <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(28rem,40rem)]">
+                <div className="min-w-0 space-y-5">
+                  <ClientQuoteCandidatesBar controller={controller} />
+                  <ClientQuoteClientSection controller={controller} />
+                </div>
                 <QuoteRevisionsPanel
                   className="min-w-0 lg:justify-self-stretch"
                   quoteId={editingQuote.id}
@@ -2488,8 +2488,13 @@ const ClientQuoteFormModal: React.FC<{ controller: ClientQuotesController }> = (
                     onClick: () => setVersionsDialogOpen(true),
                   }}
                 />
-              ) : null}
-            </div>
+              </div>
+            ) : (
+              <>
+                <ClientQuoteCandidatesBar controller={controller} />
+                <ClientQuoteClientSection controller={controller} />
+              </>
+            )}
             <ClientQuoteModalAlerts controller={controller} />
             <ClientQuoteItemsSection controller={controller} />
             <ClientQuoteNotesSummarySection controller={controller} />
@@ -2998,20 +3003,14 @@ const ClientQuoteClientSection: React.FC<{ controller: ClientQuotesController }>
         status={readOnlyStatus}
         statusLabel={statusLabel}
       />
-      <div className="space-y-3">
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <ClientQuoteClientField controller={controller} />
-          <ClientQuoteCodeField controller={controller} />
-          <ClientQuotePaymentTermsField controller={controller} />
-        </div>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <ClientQuoteCommunicationField controller={controller} />
-          <ClientQuoteExpirationField controller={controller} />
-          <div className="sm:col-span-2 lg:col-span-2">
-            <ClientQuoteDescriptionField controller={controller} />
-          </div>
-        </div>
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+        <ClientQuoteClientField controller={controller} />
+        <ClientQuoteCodeField controller={controller} />
+        <ClientQuotePaymentTermsField controller={controller} />
+        <ClientQuoteCommunicationField controller={controller} />
+        <ClientQuoteExpirationField controller={controller} />
       </div>
+      <ClientQuoteDescriptionField controller={controller} />
     </div>
   );
 };
