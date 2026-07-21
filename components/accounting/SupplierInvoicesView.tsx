@@ -961,7 +961,12 @@ const SupplierInvoiceItemDiscountField: React.FC<{
       <ValidatedNumberInput
         value={item.discount}
         placeholder="0,00"
+        aria-label={controller.t('sales:supplierQuotes.discountToUs', {
+          defaultValue: 'Discount to Us',
+        })}
         formatDecimals={2}
+        min={0}
+        max={100}
         onValueChange={(value) =>
           controller.updateItem(index, 'discount', value === '' ? undefined : Number(value))
         }

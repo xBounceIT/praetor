@@ -345,6 +345,22 @@ describe('POST /api/supplier-invoices', () => {
     );
   });
 
+  test('400 rejects a line discount above 100 percent', async () => {
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/supplier-invoices',
+      headers: authHeader(),
+      payload: {
+        ...validBody,
+        items: [{ description: 'Widget', quantity: 1, unitPrice: 100, discount: 100.01 }],
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(createMock).not.toHaveBeenCalled();
+    expect(insertItemsMock).not.toHaveBeenCalled();
+  });
+
   test('201 inherits the automatic invoice code from a parseable linked supplier order id', async () => {
     findOrderByIdMock.mockResolvedValue({
       id: 'SORD_26_0045_manual',
@@ -678,6 +694,21 @@ describe('PUT /api/supplier-invoices/:id', () => {
 
     expect(res.statusCode).toBe(200);
     expect(replaceItemsMock).toHaveBeenCalled();
+  });
+
+  test('400 rejects a replacement line discount above 100 percent', async () => {
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/supplier-invoices/SINV-2025-0001',
+      headers: authHeader(),
+      payload: {
+        items: [{ description: 'Widget', quantity: 1, unitPrice: 100, discount: 100.01 }],
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(updateMock).not.toHaveBeenCalled();
+    expect(replaceItemsMock).not.toHaveBeenCalled();
   });
 
   test('preserves migrated rounding when an older client omits the additive marker', async () => {

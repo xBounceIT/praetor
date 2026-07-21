@@ -119,7 +119,7 @@ const invoiceItemBodySchema = {
     description: { type: 'string' },
     quantity: { type: 'number' },
     unitPrice: { type: 'number' },
-    discount: { type: 'number' },
+    discount: { type: 'number', minimum: 0, maximum: 100 },
     legacyDiscountRounding: { type: 'boolean' },
     durationMonths: { type: 'number' },
     durationUnit: { type: 'string', enum: ['months', 'years', 'na'] },

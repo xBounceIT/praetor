@@ -63,6 +63,10 @@ describe('getDiscountedLineTotal', () => {
     expect(getDiscountedLineTotal({ ...item, legacyDiscountRounding: true })).toBeCloseTo(4813.5);
     expect(getDiscountedLineTotal({ ...item, legacyDiscountRounding: false })).toBe(4813.125);
   });
+
+  test('caps invalid line discounts at 100 percent', () => {
+    expect(getDiscountedLineTotal({ unitPrice: 100, quantity: 1, discount: 120 })).toBe(0);
+  });
 });
 
 describe('parseNumberInputValue', () => {

@@ -180,6 +180,17 @@ describe('<SupplierInvoicesView /> line item duration (issue #776/#775)', () => 
     expect(screen.queryByText('901,00 EUR')).not.toBeInTheDocument();
   });
 
+  test('caps the line discount at 100 percent', () => {
+    const invoice = buildInvoice({ id: 'SINV-DISCOUNT', status: 'draft' });
+    render(<SupplierInvoicesView {...baseProps} invoices={[invoice]} />);
+    fireEvent.click(screen.getByText('SINV-DISCOUNT'));
+
+    const discountInput = screen.getByLabelText('sales:supplierQuotes.discountToUs');
+    fireEvent.change(discountInput, { target: { value: '120' } });
+
+    expect(discountInput).toHaveValue('100,00');
+  });
+
   test('submits currency-scale totals that match the displayed amount', async () => {
     const onUpdateInvoice = mock((_id: string, _updates: Partial<SupplierInvoice>) => {});
     const invoice = buildInvoice({

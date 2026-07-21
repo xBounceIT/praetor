@@ -1050,6 +1050,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             productId: rest.productId || null,
             // Version snapshots created before quantity units were stored have no unitType.
             unitType: rest.unitType ?? 'hours',
+            // A pre-precision server can create a new snapshot during a rolling deployment
+            // without this additive marker. Its discounted lines still use the legacy
+            // unit-rounding behavior when restored.
+            legacyDiscountRounding: legacyDiscountRoundingForWrite(
+              rest.legacyDiscountRounding,
+              rest.discount ?? 0,
+            ),
             // Snapshots taken before duration existed (issue #776) lack these keys; default to a
             // single month so the restored line keeps its pre-duration total.
             durationMonths: rest.durationMonths ?? 1,

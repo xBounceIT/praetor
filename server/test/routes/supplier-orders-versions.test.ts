@@ -688,9 +688,16 @@ describe('POST /api/accounting/supplier-orders/:id/versions/:versionId/restore',
     };
     const { unitType: _legacyUnitType, ...legacyItemBase } = SAMPLE_ITEM;
     const legacyItem = { ...legacyItemBase, id: 'ssi-legacy' };
+    const legacyDiscountItem = {
+      ...SAMPLE_ITEM,
+      id: 'ssi-legacy-discount',
+      quantity: 150,
+      unitPrice: 37.75,
+      discount: 15,
+    };
     sovFindByIdMock.mockResolvedValue({
       ...SAMPLE_VERSION,
-      snapshot: { ...SAMPLE_SNAPSHOT, items: [durationItem, legacyItem] },
+      snapshot: { ...SAMPLE_SNAPSHOT, items: [durationItem, legacyItem, legacyDiscountItem] },
     });
 
     const res = await testApp.inject({
@@ -712,6 +719,7 @@ describe('POST /api/accounting/supplier-orders/:id/versions/:versionId/restore',
     expect(restoredItems[1]).toEqual(
       expect.objectContaining({ unitType: 'hours', durationMonths: 1, durationUnit: 'months' }),
     );
+    expect(restoredItems[2]).toEqual(expect.objectContaining({ legacyDiscountRounding: true }));
   });
 
   test('409 when linked invoice exists', async () => {

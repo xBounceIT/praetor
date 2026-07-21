@@ -42,6 +42,14 @@ describe('computeInvoiceTotals', () => {
     });
   });
 
+  test('caps invalid line discounts at 100 percent', () => {
+    expect(computeInvoiceTotals([{ quantity: 1, unitPrice: 100, discount: 120 }])).toEqual({
+      subtotal: 0,
+      taxTotal: 0,
+      total: 0,
+    });
+  });
+
   test('rounds to 2 decimals (subtotal)', () => {
     // 0.1 * 0.2 = 0.020000000000000004 in JS floats; rounding pins it to 0.02
     expect(computeInvoiceTotals([{ quantity: 0.1, unitPrice: 0.2, discount: 0 }])).toEqual({

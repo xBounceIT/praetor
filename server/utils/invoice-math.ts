@@ -45,7 +45,7 @@ export const roundCurrency = (value: number): number =>
 export const getDiscountedLineTotal = (item: ItemMath): number => {
   const quantity = item.quantity ?? 0;
   const unitPrice = item.unitPrice ?? 0;
-  const discount = item.discount ?? 0;
+  const discount = Math.min(100, Math.max(0, item.discount ?? 0));
   const duration = effectiveDurationMonths(item.durationUnit, item.durationMonths);
   const discountedUnitPrice = unitPrice * (1 - discount / 100);
   const calculationUnitPrice = item.legacyDiscountRounding

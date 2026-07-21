@@ -190,8 +190,10 @@ export const getEffectiveDurationMonths = (item: PricingItem): number => {
 // This currency-scale helper is for displaying the derived unit cost. Line totals keep the
 // unrounded pricing chain so fractional cents are not multiplied into a material error; only the
 // aggregate returned by getDiscountedDocumentTotal is rounded to currency precision.
+const clampPercentage = (percentage: number): number => Math.min(100, Math.max(0, percentage));
+
 export const getDiscountedUnitPrice = (unitPrice?: number, discount?: number): number => {
-  const percentage = Number(discount) || 0;
+  const percentage = clampPercentage(Number(discount) || 0);
   return roundCurrency((Number(unitPrice) || 0) * (1 - percentage / 100));
 };
 
@@ -200,7 +202,8 @@ const getDiscountedUnitPriceForCalculation = (
   discount: number,
   legacyDiscountRounding = false,
 ): number => {
-  const discountedUnitPrice = unitPrice * (1 - discount / 100);
+  const percentage = clampPercentage(discount);
+  const discountedUnitPrice = unitPrice * (1 - percentage / 100);
   return legacyDiscountRounding ? roundCurrency(discountedUnitPrice) : discountedUnitPrice;
 };
 
@@ -298,7 +301,7 @@ export const getItemPricingContext = (
   const quantity = Number(item.quantity || 0);
   const durationMonths = getEffectiveDurationMonths(item);
   const lineCost = unitCost * quantity * durationMonths;
-  const discountPercentage = Math.min(100, Math.max(0, Number(item.discount || 0)));
+  const discountPercentage = clampPercentage(Number(item.discount || 0));
   const revenueMultiplier = quantity * durationMonths * (1 - discountPercentage / 100);
   const unitPrice = Number(item.unitPrice || 0);
   const grossRevenue = unitPrice * quantity * durationMonths;
