@@ -397,12 +397,28 @@ const resolveOfferItemSupplierLinks = async (
   inheritedPricingSemanticsVersion: PricingSemanticsVersion = CURRENT_PRICING_SEMANTICS_VERSION,
   preserveInheritedPricingSemantics = false,
 ): Promise<NormalizedOfferItem[]> => {
-  // On updates, retain the submitted persisted ids and let replaceItems restore each row's
-  // marker. A document-wide marker would downgrade current rows in a mixed historical document.
+  // Retained rows keep their exact marker; added rows inherit the document contract. This makes
+  // MOL correct before replaceItems persists the rows and avoids downgrading mixed documents.
   const pricingSemanticsVersion = existingItems?.length
-    ? undefined
+    ? pricingSemanticsVersionForDocument(existingItems)
     : inheritedPricingSemanticsVersion;
-  const versionedItems = items.map((item) => ({ ...item, pricingSemanticsVersion }));
+  const existingPricingSemanticsById = new Map(
+    (existingItems ?? []).map((item) => [item.id, item.pricingSemanticsVersion]),
+  );
+  const retainedItemIds = new Set<string>();
+  const versionedItems = items.map((item) => {
+    const retainedPricingSemanticsVersion =
+      item.id && !retainedItemIds.has(item.id)
+        ? existingPricingSemanticsById.get(item.id)
+        : undefined;
+    if (item.id && retainedPricingSemanticsVersion !== undefined) {
+      retainedItemIds.add(item.id);
+    }
+    return {
+      ...item,
+      pricingSemanticsVersion: retainedPricingSemanticsVersion ?? pricingSemanticsVersion,
+    };
+  });
   const linkedIds = versionedItems
     .map((item) => item.supplierQuoteItemId)
     .filter((id): id is string => id !== null);
@@ -503,7 +519,8 @@ const buildItemsForInsert = (
   const reusedItemIds = new Set<string>();
   return items.map((item) => {
     // The PUT route accepts client-generated ids for new rows too, so only retain an id that
-    // belongs to this offer already. replaceItems uses it to preserve that row's pricing marker.
+    // belongs to this offer already. replaceItems preserves that row's pricing marker as a second
+    // line of defense after the route has used it for the in-memory MOL calculation.
     const preservedId =
       item.id && persistedItemIds.has(item.id) && !reusedItemIds.has(item.id) ? item.id : null;
     if (preservedId) reusedItemIds.add(preservedId);

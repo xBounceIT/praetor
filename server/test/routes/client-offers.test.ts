@@ -1129,20 +1129,40 @@ describe('client-offers supplier-link resolution + forward sync (#779)', () => {
   test('PUT: preserves each persisted row id so mixed pricing semantics survive an edit', async () => {
     setupDraftOffer();
     coFindItemsForOfferMock.mockResolvedValue([
-      { ...EXISTING_OFFER_ITEM, id: 'coi-legacy', pricingSemanticsVersion: 1 },
-      { ...EXISTING_OFFER_ITEM, id: 'coi-current', pricingSemanticsVersion: 2 },
+      {
+        ...EXISTING_OFFER_ITEM,
+        id: 'coi-legacy',
+        pricingSemanticsVersion: 1,
+        unitType: 'days',
+        productCost: 100,
+        unitPrice: 1600,
+      },
+      {
+        ...EXISTING_OFFER_ITEM,
+        id: 'coi-current',
+        pricingSemanticsVersion: 2,
+        unitType: 'days',
+        productCost: 100,
+        unitPrice: 1600,
+      },
     ]);
 
     const res = await putOffer({
       items: [
         lineItem(2, null, {
           id: 'coi-legacy',
+          unitType: 'days',
+          productCost: 100,
+          unitPrice: 1600,
           supplierQuoteId: null,
           supplierQuoteItemId: null,
           supplierQuoteSupplierName: null,
         }),
         lineItem(2, null, {
           id: 'coi-current',
+          unitType: 'days',
+          productCost: 100,
+          unitPrice: 1600,
           supplierQuoteId: null,
           supplierQuoteItemId: null,
           supplierQuoteSupplierName: null,
@@ -1153,14 +1173,18 @@ describe('client-offers supplier-link resolution + forward sync (#779)', () => {
     expect(res.statusCode).toBe(200);
     const inserted = coReplaceItemsMock.mock.calls[0][1] as Array<Record<string, unknown>>;
     expect(inserted.map((item) => [item.id, item.pricingSemanticsVersion])).toEqual([
-      ['coi-legacy', undefined],
-      ['coi-current', undefined],
+      ['coi-legacy', 1],
+      ['coi-current', 2],
     ]);
+    expect(inserted.map((item) => item.productMolPercentage)).toEqual([50, 93.75]);
   });
 
   test('PUT: generates a fresh id for a duplicate persisted row id', async () => {
     setupDraftOffer();
-    coFindItemsForOfferMock.mockResolvedValue([EXISTING_OFFER_ITEM]);
+    coFindItemsForOfferMock.mockResolvedValue([
+      { ...EXISTING_OFFER_ITEM, id: 'coi-legacy', pricingSemanticsVersion: 1 },
+      { ...EXISTING_OFFER_ITEM, id: 'oi-1', pricingSemanticsVersion: 2 },
+    ]);
 
     const res = await putOffer({
       items: [
@@ -1183,6 +1207,7 @@ describe('client-offers supplier-link resolution + forward sync (#779)', () => {
     const inserted = coReplaceItemsMock.mock.calls[0][1] as Array<Record<string, unknown>>;
     expect(inserted[0].id).toBe('oi-1');
     expect(inserted[1].id).not.toBe('oi-1');
+    expect(inserted.map((item) => item.pricingSemanticsVersion)).toEqual([2, 1]);
   });
 
   test('PUT: 400 when a NEW link does not resolve to a live supplier item', async () => {

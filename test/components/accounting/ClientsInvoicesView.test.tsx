@@ -452,6 +452,47 @@ describe('<ClientsInvoicesView /> line-item delete confirmation', () => {
 });
 
 describe('<ClientsInvoicesView /> new line identity', () => {
+  test('uses the historical pricing contract for a line added to a legacy invoice', async () => {
+    const onUpdateInvoice = mock((_id: string, _data: Partial<Invoice>) => {});
+    const invoice = buildInvoice('INV-LEGACY-ADD', 'months');
+    invoice.items = invoice.items.map((item) => ({ ...item, pricingSemanticsVersion: 1 as const }));
+    render(
+      <ClientsInvoicesView
+        invoices={[invoice]}
+        clients={clients}
+        products={[]}
+        onAddInvoice={mock(() => {})}
+        onUpdateInvoice={onUpdateInvoice}
+        onDeleteInvoice={mock(() => {})}
+        currency="EUR"
+      />,
+    );
+    fireEvent.click(screen.getByText('Helios Energy Services').closest('tr') as HTMLElement);
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.click(within(dialog).getByText('accounting:clientsInvoices.addItem'));
+
+    const descriptions = within(dialog).getAllByPlaceholderText(
+      'accounting:clientsInvoices.descriptionPlaceholder',
+    );
+    const addedDescription = descriptions.at(-1);
+    if (!addedDescription) throw new Error('Added invoice line is missing its description input');
+    fireEvent.change(addedDescription, { target: { value: 'Added legacy line' } });
+    const blankDecimalInputs = within(dialog)
+      .getAllByPlaceholderText('0,00')
+      .filter((input) => input instanceof HTMLInputElement && input.value === '');
+    const [quantityInput, unitPriceInput] = blankDecimalInputs;
+    if (!quantityInput || !unitPriceInput) throw new Error('Added invoice line is missing inputs');
+    fireEvent.change(quantityInput, { target: { value: '1' } });
+    fireEvent.change(unitPriceInput, { target: { value: '10' } });
+    fireEvent.submit(
+      within(dialog).getByText('common:buttons.save').closest('form') as HTMLFormElement,
+    );
+
+    expect(onUpdateInvoice).toHaveBeenCalledTimes(1);
+    const submittedItems = onUpdateInvoice.mock.calls[0]?.[1].items;
+    expect(submittedItems?.at(-1)).toEqual(expect.objectContaining({ pricingSemanticsVersion: 1 }));
+  });
+
   test('shows placeholders instead of numeric defaults on a new invoice line', async () => {
     render(
       <ClientsInvoicesView

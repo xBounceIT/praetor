@@ -27,6 +27,7 @@ import {
   parseDurationValueToMonths,
 } from '../../utils/numbers';
 import { buildProductQuickViewHref } from '../../utils/quickViewLinks';
+import { getDocumentPricingSemanticsVersion } from '../../utils/supplierLineSync';
 import CostSummaryPanel from '../shared/CostSummaryPanel';
 import DateField from '../shared/DateField';
 import DeleteConfirmModal from '../shared/DeleteConfirmModal';
@@ -351,6 +352,11 @@ const useClientsInvoicesController = ({
       description: '',
       unitOfMeasure: 'unit',
       durationUnit: 'months',
+      // The server gives added rows the existing invoice's contract; mirror it so the draft
+      // total does not change when a legacy invoice is saved.
+      pricingSemanticsVersion: editingInvoice
+        ? getDocumentPricingSemanticsVersion(formData.items)
+        : undefined,
     };
 
     setFormData((prev) => ({
