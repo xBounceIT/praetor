@@ -7,6 +7,12 @@ import { supplierQuotes } from '../db/schema/supplierQuotes.ts';
 import { supplierSaleItems, supplierSales } from '../db/schema/supplierSales.ts';
 import { type DurationUnit, normalizeDurationUnit } from '../utils/duration-unit.ts';
 import { numericForDb, parseDbNumber, parseNullableDbNumber } from '../utils/parse.ts';
+import {
+  normalizeHistoricalPricingSemanticsVersion,
+  normalizePricingSemanticsVersion,
+  type PricingSemanticsVersion,
+  preservePricingSemanticsVersions,
+} from '../utils/pricing-semantics.ts';
 import { normalizeUnitType, type UnitType } from '../utils/unit-type.ts';
 
 export type ClientOrder = {
@@ -49,6 +55,7 @@ export type ClientOrderItem = {
   discount: number;
   durationMonths: number;
   durationUnit: DurationUnit;
+  pricingSemanticsVersion: PricingSemanticsVersion;
 };
 
 type ClientOrderReadRow = typeof sales.$inferSelect & {
@@ -101,6 +108,7 @@ const mapItem = (row: ClientOrderItemReadRow): ClientOrderItem => ({
   discount: parseDbNumber(row.discount, 0),
   durationMonths: row.durationMonths ?? 1,
   durationUnit: normalizeDurationUnit(row.durationUnit),
+  pricingSemanticsVersion: normalizeHistoricalPricingSemanticsVersion(row.pricingSemanticsVersion),
 });
 
 export const listAll = async (exec: DbExecutor = db): Promise<ClientOrder[]> => {
@@ -502,6 +510,7 @@ export type NewClientOrderItem = {
   unitType: UnitType;
   durationMonths: number;
   durationUnit: DurationUnit;
+  pricingSemanticsVersion?: PricingSemanticsVersion;
 };
 
 export const insertItems = async (
@@ -534,6 +543,7 @@ export const insertItems = async (
         unitType: item.unitType,
         durationMonths: item.durationMonths ?? 1,
         durationUnit: item.durationUnit ?? 'months',
+        pricingSemanticsVersion: normalizePricingSemanticsVersion(item.pricingSemanticsVersion),
       })),
     )
     .returning();
@@ -546,8 +556,12 @@ export const replaceItems = async (
   exec: DbExecutor = db,
 ): Promise<ClientOrderItem[]> =>
   runAtomically(exec, async (tx) => {
-    await tx.delete(saleItems).where(eq(saleItems.saleId, orderId));
-    return insertItems(orderId, items, tx);
+    const storedItems = await tx
+      .delete(saleItems)
+      .where(eq(saleItems.saleId, orderId))
+      .returning({ id: saleItems.id, pricingSemanticsVersion: saleItems.pricingSemanticsVersion });
+    const versionedItems = preservePricingSemanticsVersions(items, storedItems);
+    return insertItems(orderId, versionedItems, tx);
   });
 
 export const deleteById = async (id: string, exec: DbExecutor = db): Promise<boolean> => {
@@ -590,6 +604,7 @@ export type NewSupplierOrderItemForAutoCreate = {
   note: string | null;
   durationMonths: number;
   durationUnit: DurationUnit;
+  pricingSemanticsVersion?: PricingSemanticsVersion;
 };
 
 export const bulkInsertSupplierOrderItems = async (
@@ -616,6 +631,7 @@ export const bulkInsertSupplierOrderItems = async (
       // order's total matches the quote instead of collapsing to a single month.
       durationMonths: item.durationMonths,
       durationUnit: item.durationUnit,
+      pricingSemanticsVersion: normalizePricingSemanticsVersion(item.pricingSemanticsVersion),
     })),
   );
 };

@@ -157,6 +157,7 @@ describe('makeSupplierInvoiceHandlers', () => {
       notes: 'note',
       items: [
         {
+          id: 'supplier-order-item-1',
           productId: 'p1',
           productName: 'Widget',
           quantity: 2,
@@ -165,6 +166,7 @@ describe('makeSupplierInvoiceHandlers', () => {
           legacyDiscountRounding: true,
         },
         {
+          id: 'supplier-order-item-2',
           productId: 'p2',
           productName: 'Gadget',
           quantity: 3,
@@ -191,6 +193,10 @@ describe('makeSupplierInvoiceHandlers', () => {
     expect(callArg.dueDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     const items = callArg.items as Array<Record<string, unknown>>;
     expect(items).toHaveLength(2);
+    expect(items.map((item) => item.id)).toEqual([
+      'supplier-order-item-1',
+      'supplier-order-item-2',
+    ]);
     expect(items[0].discount).toBe(10);
     expect(items[0].legacyDiscountRounding).toBe(true);
     expect(items[1].discount).toBe(0);
@@ -215,8 +221,8 @@ describe('makeSupplierInvoiceHandlers', () => {
       paymentTerms: '30',
       notes: '',
       items: [
-        // 12-month service: the invoice total must reflect the duration → 2 * 100 * 12 = 2400,
-        // not 200 (the pre-fix bug that underbilled by the duration multiplier).
+        // Historical 1-year service: its stored canonical duration is 12 months and the copied
+        // invoice must keep the legacy multiplier → 2 * 100 * 12 = 2400.
         {
           productId: 'p1',
           productName: 'Service',
@@ -224,7 +230,8 @@ describe('makeSupplierInvoiceHandlers', () => {
           unitPrice: 100,
           discount: 0,
           durationMonths: 12,
-          durationUnit: 'months',
+          durationUnit: 'years',
+          pricingSemanticsVersion: 1,
         },
         // N/A line: never multiplies regardless of the stored months → 1 * 50 * 1 = 50.
         {
@@ -245,7 +252,11 @@ describe('makeSupplierInvoiceHandlers', () => {
     expect(callArg.total).toBe(2450);
     const items = callArg.items as Array<Record<string, unknown>>;
     expect(items[0]).toEqual(
-      expect.objectContaining({ durationMonths: 12, durationUnit: 'months' }),
+      expect.objectContaining({
+        durationMonths: 12,
+        durationUnit: 'years',
+        pricingSemanticsVersion: 1,
+      }),
     );
     expect(items[1]).toEqual(expect.objectContaining({ durationMonths: 6, durationUnit: 'na' }));
   });

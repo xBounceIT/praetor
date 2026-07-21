@@ -39,6 +39,7 @@ const snapshot = (): OfferVersionSnapshot => ({
       discount: 0,
       durationMonths: 1,
       durationUnit: 'months',
+      pricingSemanticsVersion: 2,
     },
   ],
 });

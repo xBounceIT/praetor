@@ -12,8 +12,10 @@ import {
 import { logAudit } from '../utils/audit.ts';
 import { type DatabaseError, getUniqueViolation } from '../utils/db-errors.ts';
 import { replyDocumentCodeCollision } from '../utils/document-code-replies.ts';
+import { defaultDurationMonthsForUnit } from '../utils/duration-unit.ts';
 import { roundCurrency } from '../utils/invoice-math.ts';
 import { generatePrefixedId, ITEM_ID_PREFIXES } from '../utils/order-ids.ts';
+import { inheritPricingSemanticsVersions } from '../utils/pricing-semantics.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { replyError } from '../utils/replyError.ts';
 import {
@@ -71,8 +73,22 @@ const invoiceItemSchema = {
     unitPrice: { type: 'number' },
     discount: { type: 'number' },
     legacyDiscountRounding: { type: 'boolean' },
-    durationMonths: { type: 'number' },
-    durationUnit: { type: 'string', enum: ['months', 'years', 'na'] },
+    durationMonths: {
+      type: 'number',
+      description:
+        'Canonical whole months; pricing uses the numeric value displayed by durationUnit.',
+    },
+    durationUnit: {
+      type: 'string',
+      enum: ['months', 'years', 'na'],
+      description:
+        'Display unit only: the displayed number multiplies pricing; na applies a neutral x1.',
+    },
+    pricingSemanticsVersion: {
+      type: 'integer',
+      enum: [1, 2],
+      description: 'Read-only pricing compatibility marker; 1 preserves historical totals.',
+    },
   },
   required: ['id', 'invoiceId', 'description', 'quantity', 'unitPrice', 'discount'],
 } as const;
@@ -121,8 +137,17 @@ const invoiceItemBodySchema = {
     unitPrice: { type: 'number' },
     discount: { type: 'number', minimum: 0, maximum: 100 },
     legacyDiscountRounding: { type: 'boolean' },
-    durationMonths: { type: 'number' },
-    durationUnit: { type: 'string', enum: ['months', 'years', 'na'] },
+    durationMonths: {
+      type: 'number',
+      description:
+        'Canonical whole months; pricing uses the numeric value displayed by durationUnit.',
+    },
+    durationUnit: {
+      type: 'string',
+      enum: ['months', 'years', 'na'],
+      description:
+        'Display unit only: the displayed number multiplies pricing; na applies a neutral x1.',
+    },
   },
   required: ['description', 'quantity', 'unitPrice'],
 } as const;
@@ -232,8 +257,9 @@ const normalizeItems = (
         item.legacyDiscountRounding,
         discountResult.value || 0,
       ),
-      // Duration applies to every line type (issue #775); 'na' is gated via effectiveDurationMonths.
-      durationMonths: durationMonthsResult.value ?? 1,
+      // Duration applies to every line type; pricing derives the displayed multiplier and gates N/A.
+      durationMonths:
+        durationMonthsResult.value ?? defaultDurationMonthsForUnit(durationUnitResult.value),
       durationUnit: durationUnitResult.value ?? 'months',
     });
   }
@@ -343,6 +369,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const normalizedItems = normalizeItems(items, reply);
       if (!normalizedItems) return;
+      const sourceItemIds = items.map((item) => item.id);
 
       const linkedSaleIdResult = optionalNonEmptyString(linkedSaleId, 'linkedSaleId');
       if (!linkedSaleIdResult.ok) return badRequest(reply, linkedSaleIdResult.message);
@@ -416,6 +443,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             };
         const txResult = await withDbTransaction(async (tx): Promise<CreateOutcome> => {
           let lockedSourceOrder: { id: string; linkedQuoteId: string | null } | null = null;
+          let versionedItems = normalizedItems;
           // Lock the linked supplier order so a concurrent supplier-order restore
           // (which gates on "no linked invoice exists") serializes against this insert.
           if (linkedSaleIdResult.value) {
@@ -445,6 +473,18 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               };
             }
             lockedSourceOrder = lockedOrder;
+            const sourceOrderItems = await supplierOrdersRepo.findItemsForOrder(
+              linkedSaleIdResult.value,
+              tx,
+            );
+            const sourceMarkers = inheritPricingSemanticsVersions(
+              sourceItemIds.map((id) => ({ id })),
+              sourceOrderItems,
+            );
+            versionedItems = normalizedItems.map((item, index) => ({
+              ...item,
+              pricingSemanticsVersion: sourceMarkers[index].pricingSemanticsVersion,
+            }));
           }
 
           let invoiceId: string;
@@ -480,7 +520,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           );
           const createdItems = await supplierInvoicesRepo.insertItems(
             invoice.id,
-            normalizedItems,
+            versionedItems,
             tx,
           );
           return { ok: true, invoice, items: createdItems };
@@ -697,6 +737,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       let normalizedItems: supplierInvoicesRepo.NewSupplierInvoiceItem[] | null = null;
+      let sourceItemIds: Array<string | undefined> | null = null;
       let itemInputs: SupplierInvoiceItemInput[] | null = null;
       if (items !== undefined) {
         if (!Array.isArray(items) || items.length === 0) {
@@ -705,6 +746,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         itemInputs = items;
         normalizedItems = normalizeItems(itemInputs, reply);
         if (!normalizedItems) return;
+        sourceItemIds = items.map((item) => item.id);
       }
 
       let updated: supplierInvoicesRepo.SupplierInvoice | null;
@@ -726,14 +768,24 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               : await supplierInvoicesRepo.update(renamedInvoice?.id ?? idResult.value, patch, tx);
           if (!invoice)
             return { invoice: null, items: [] as supplierInvoicesRepo.SupplierInvoiceItem[] };
-          const existingItems =
-            normalizedItems && itemInputs?.some((item) => item.legacyDiscountRounding === undefined)
-              ? await supplierInvoicesRepo.findItemsForInvoice(invoice.id, tx)
-              : null;
+          const existingItems = normalizedItems
+            ? await supplierInvoicesRepo.findItemsForInvoice(invoice.id, tx)
+            : null;
+          let versionedItems = normalizedItems;
+          if (normalizedItems && existingItems && sourceItemIds?.some((id) => id)) {
+            const sourceMarkers = inheritPricingSemanticsVersions(
+              sourceItemIds.map((id) => ({ id })),
+              existingItems,
+            );
+            versionedItems = normalizedItems.map((item, index) => ({
+              ...item,
+              pricingSemanticsVersion: sourceMarkers[index].pricingSemanticsVersion,
+            }));
+          }
           const replacementItems =
-            normalizedItems && itemInputs && existingItems
-              ? preserveLegacyDiscountRounding(normalizedItems, itemInputs, existingItems)
-              : normalizedItems;
+            versionedItems && itemInputs && existingItems
+              ? preserveLegacyDiscountRounding(versionedItems, itemInputs, existingItems)
+              : versionedItems;
           const finalItems = replacementItems
             ? await supplierInvoicesRepo.replaceItems(invoice.id, replacementItems, tx)
             : await supplierInvoicesRepo.findItemsForInvoice(invoice.id, tx);

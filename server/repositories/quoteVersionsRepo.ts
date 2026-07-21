@@ -7,6 +7,7 @@ import {
   type SnapshotQuoteCandidate,
 } from '../db/schema/quoteVersions.ts';
 import { generatePrefixedId } from '../utils/order-ids.ts';
+import { normalizeHistoricalPricingSemanticsItems } from '../utils/pricing-semantics.ts';
 import type { ClientQuote, ClientQuoteItem } from './clientQuotesRepo.ts';
 
 export type { QuoteVersionSnapshot } from '../db/schema/quoteVersions.ts';
@@ -43,7 +44,7 @@ export const normalizeSnapshot = (
     return {
       ...snapshot,
       candidates: snapshot.candidates.map((candidate) => ({ ...candidate })),
-      items: snapshot.items.map((item) => ({
+      items: normalizeHistoricalPricingSemanticsItems(snapshot.items).map((item) => ({
         ...item,
         candidateId: item.candidateId || item.quoteId,
       })),
@@ -71,7 +72,7 @@ export const normalizeSnapshot = (
         updatedAt: snapshot.quote.updatedAt,
       },
     ],
-    items: snapshot.items.map((item) => ({
+    items: normalizeHistoricalPricingSemanticsItems(snapshot.items).map((item) => ({
       ...item,
       candidateId: item.candidateId || candidateId,
     })),

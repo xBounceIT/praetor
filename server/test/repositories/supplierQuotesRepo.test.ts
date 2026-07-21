@@ -573,8 +573,21 @@ describe('upsertItems', () => {
     durationUnit: 'months' as const,
   };
 
+  test('stamps direct inserts with current pricing semantics instead of relying on the DB default', async () => {
+    exec.enqueue({ rows: [itemRow({ 0: 'sqi-new' })] });
+
+    await supplierQuotesRepo.insertItems('q-1', [{ ...baseItem, id: 'sqi-new' }], testDb);
+
+    expect(exec.calls[0].params.at(-1)).toBe(2);
+  });
+
   test('updates kept rows in place, deletes absent rows, inserts new ones (user report after #812)', async () => {
-    exec.enqueue({ rows: [['sqi-a'], ['sqi-b']] }); // existing ids
+    exec.enqueue({
+      rows: [
+        ['sqi-a', 1],
+        ['sqi-b', 1],
+      ],
+    }); // existing ids and legacy semantics
     exec.enqueue({ rows: [] }); // DELETE id NOT IN (kept)
     exec.enqueue({ rows: [] }); // UPDATE sqi-a in place
     exec.enqueue({ rows: [itemRow({ 0: 'sqi-new' })] }); // INSERT new ... RETURNING
@@ -601,11 +614,12 @@ describe('upsertItems', () => {
     expect(exec.calls[2].params).toEqual(expect.arrayContaining(['sqi-a', 'q-1']));
     expect(sqlTexts[3]).toContain('insert into "supplier_quote_items"');
     expect(exec.calls[3].params[0]).toBe('sqi-new');
+    expect(exec.calls[3].params.at(-1)).toBe(1);
     expect(result.map((i) => i.id)).toEqual(['sqi-a', 'sqi-new']);
   });
 
   test('skips the INSERT when every incoming item already exists', async () => {
-    exec.enqueue({ rows: [['sqi-a']] }); // existing ids
+    exec.enqueue({ rows: [['sqi-a', 2]] }); // existing ids and current semantics
     exec.enqueue({ rows: [] }); // DELETE id NOT IN (kept)
     exec.enqueue({ rows: [] }); // UPDATE sqi-a
     exec.enqueue({ rows: [itemRow({ 0: 'sqi-a' })] }); // re-read
@@ -649,11 +663,13 @@ describe('getQuoteItemSnapshots', () => {
   });
 
   // Row shape mirrors the select order: [itemId, quoteId, supplierName, productId, unitPrice,
-  // expirationDate, linkedOrderId, linkedClientQuoteStatus, linkedClientQuoteExpiration,
-  // linkedOfferStatus, linkedOfferExpiration].
+  // pricingSemanticsVersion, expirationDate, linkedOrderId, linkedClientQuoteStatus,
+  // linkedClientQuoteExpiration, linkedOfferStatus, linkedOfferExpiration].
   test('maps row fields into snapshot shape with netCost mirroring unitPrice', async () => {
     exec.enqueue({
-      rows: [['sqi-1', 'sq-1', 'Acme', 'p-1', '12.5', '2999-12-31', null, null, null, null, null]],
+      rows: [
+        ['sqi-1', 'sq-1', 'Acme', 'p-1', '12.5', 1, '2999-12-31', null, null, null, null, null],
+      ],
     });
     const result = await supplierQuotesRepo.getQuoteItemSnapshots(['sqi-1'], testDb);
     expect(result.get('sqi-1')).toEqual({
@@ -662,6 +678,7 @@ describe('getQuoteItemSnapshots', () => {
       productId: 'p-1',
       unitPrice: 12.5,
       netCost: 12.5,
+      pricingSemanticsVersion: 1,
       // Unsourced live quote → derived draft, no linked order → offered for NEW sourcing.
       sourceable: true,
     });
@@ -671,7 +688,7 @@ describe('getQuoteItemSnapshots', () => {
     exec.enqueue({
       rows: [
         // Accepted chain → derived accepted (frozen).
-        ['sqi-a', 'sq-a', 'Acme', null, '10', '2999-12-31', null, 'accepted', null, null, null],
+        ['sqi-a', 'sq-a', 'Acme', null, '10', 2, '2999-12-31', null, 'accepted', null, null, null],
         // Order-locked, even though the chain is live.
         [
           'sqi-b',
@@ -679,6 +696,7 @@ describe('getQuoteItemSnapshots', () => {
           'Acme',
           null,
           '10',
+          2,
           '2999-12-31',
           'so-1',
           'sent',
@@ -687,9 +705,9 @@ describe('getQuoteItemSnapshots', () => {
           null,
         ],
         // Own expiration past on a live chain → derived expired.
-        ['sqi-c', 'sq-c', 'Acme', null, '10', '2000-01-01', null, null, null, null, null],
+        ['sqi-c', 'sq-c', 'Acme', null, '10', 2, '2000-01-01', null, null, null, null, null],
         // Draft-derived, unlocked, live → sourceable.
-        ['sqi-d', 'sq-d', 'Acme', null, '10', '2999-12-31', null, null, null, null, null],
+        ['sqi-d', 'sq-d', 'Acme', null, '10', 2, '2999-12-31', null, null, null, null, null],
       ],
     });
     const result = await supplierQuotesRepo.getQuoteItemSnapshots(

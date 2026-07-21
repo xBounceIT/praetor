@@ -826,10 +826,7 @@ describe('<ClientQuotesView />', () => {
     expect(durationInputs.every((el) => el.disabled)).toBe(true);
   });
 
-  test('a years duration prices off the canonical months, matching the months equivalent (issue #757)', () => {
-    // durationUnit only changes how the duration is displayed/entered; pricing always uses the
-    // canonical durationMonths (24). So 24 months shown as "2 years" must total the same as
-    // 24 months shown as months.
+  test('a years duration prices using the displayed year value', () => {
     const yearsItem = {
       id: 'item-years',
       quoteId: 'Q-YEARS',
@@ -869,10 +866,100 @@ describe('<ClientQuotesView />', () => {
       />,
     );
 
-    // Subtotal (revenue) = 100 × 2 × 24 = 4800.00 — identical to a 24-month item.
-    expect(screen.getAllByText('4.800,00 EUR').length).toBeGreaterThan(0);
-    // Margin = 4800 − (60 × 2 × 24 = 2880) = 1920.00.
-    expect(screen.getAllByText('1.920,00 EUR').length).toBeGreaterThan(0);
+    // Stored 24 months display as 2 years: revenue = 100 × 2 × 2 = 400.
+    expect(screen.getAllByText('400,00 EUR').length).toBeGreaterThan(0);
+    // Margin = 400 − (60 × 2 × 2 = 240) = 160.
+    expect(screen.getAllByText('160,00 EUR').length).toBeGreaterThan(0);
+  });
+
+  test('changing hours to days preserves numeric cost and sale price', async () => {
+    const onUpdateQuote = mock((_id: string, _updates: QuoteMutation) => Promise.resolve());
+    const hourlyQuote: Quote = {
+      ...quotes[0],
+      id: 'Q-UNIT-LABEL',
+      discount: 0,
+      items: [
+        {
+          ...quotes[0].items[0],
+          quoteId: 'Q-UNIT-LABEL',
+          quantity: 1,
+          unitPrice: 100,
+          productCost: 60,
+          productMolPercentage: 40,
+          unitType: 'hours',
+        },
+      ],
+    };
+
+    render(
+      <ClientQuotesView
+        quotes={[hourlyQuote]}
+        clients={clients}
+        products={[]}
+        supplierQuotes={[]}
+        communicationChannels={communicationChannels}
+        currency="EUR"
+        onAddQuote={mock(() => Promise.resolve())}
+        onUpdateQuote={onUpdateQuote}
+        onDeleteQuote={mock(() => Promise.resolve())}
+      />,
+    );
+
+    fireEvent.click(screen.getByText('Q-UNIT-LABEL'));
+    const dialog = await screen.findByRole('dialog');
+    const unitSelector = screen
+      .getAllByRole('combobox')
+      .find((element) => element.textContent?.includes('sales:clientQuotes.hour'));
+    expect(unitSelector).toBeDefined();
+    fireEvent.click(unitSelector as HTMLElement);
+    const dayOption = screen
+      .getAllByText('sales:clientQuotes.day')
+      .find((element) => element.tagName === 'SPAN');
+    expect(dayOption).toBeDefined();
+    fireEvent.click(dayOption as HTMLElement);
+    fireEvent.click(within(dialog).getByRole('button', { name: 'sales:clientQuotes.updateQuote' }));
+    await waitFor(() => expect(onUpdateQuote).toHaveBeenCalledTimes(1));
+
+    const updates = onUpdateQuote.mock.calls[0]?.[1] as Partial<Quote>;
+    expect(updates.items?.[0]).toEqual(
+      expect.objectContaining({ unitType: 'days', productCost: 60, unitPrice: 100 }),
+    );
+  });
+
+  test('shows the effective daily cost for a legacy product-backed day line', async () => {
+    const legacyQuote: Quote = {
+      ...quotes[0],
+      id: 'Q-LEGACY-DAY-COST',
+      items: [
+        {
+          ...quotes[0].items[0],
+          quoteId: 'Q-LEGACY-DAY-COST',
+          unitType: 'days',
+          productCost: 50,
+          unitPrice: 500,
+          pricingSemanticsVersion: 1,
+        },
+      ],
+    };
+
+    render(
+      <ClientQuotesView
+        quotes={[legacyQuote]}
+        clients={clients}
+        products={[]}
+        supplierQuotes={[]}
+        communicationChannels={communicationChannels}
+        currency="EUR"
+        onAddQuote={mock(() => Promise.resolve())}
+        onUpdateQuote={mock(() => Promise.resolve())}
+        onDeleteQuote={mock(() => Promise.resolve())}
+      />,
+    );
+
+    fireEvent.click(screen.getByText('Q-LEGACY-DAY-COST'));
+    const dialog = await screen.findByRole('dialog');
+
+    expect(within(dialog).getByLabelText('crm:internalListing.cost')).toHaveValue('400,00');
   });
 
   test('MOL line input keeps two decimals, stays below 100, and recalculates pricing', async () => {

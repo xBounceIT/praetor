@@ -1,9 +1,16 @@
 import { type SQL, sql } from 'drizzle-orm';
 
-// Mirrors effectiveDurationMonths: N/A lines are one-off even if legacy rows retain a month count.
-const effectiveDurationSql = (durationUnit: SQL, durationMonths: SQL) => sql`
+// Mirrors effectiveDurationMultiplier: pricing uses the value shown in the selected unit while the
+// database retains canonical months. N/A lines remain one-off even if legacy rows retain months.
+const effectiveDurationSql = (
+  durationUnit: SQL,
+  durationMonths: SQL,
+  pricingSemanticsVersion: SQL,
+) => sql`
   CASE
     WHEN ${durationUnit} = 'na' THEN 1
+    WHEN ${pricingSemanticsVersion} = 1 THEN COALESCE(${durationMonths}, 1)
+    WHEN ${durationUnit} = 'years' THEN COALESCE(${durationMonths}, 12) / 12.0
     ELSE COALESCE(${durationMonths}, 1)
   END`;
 
@@ -12,6 +19,7 @@ const lineNetValueSql = (
   unitPrice: SQL,
   durationUnit: SQL,
   durationMonths: SQL,
+  pricingSemanticsVersion: SQL,
   discount: SQL,
   legacyDiscountRounding?: SQL,
 ) => {
@@ -24,7 +32,8 @@ const lineNetValueSql = (
     : discountedUnitPrice;
 
   return sql`
-    ${quantity} * ${calculationUnitPrice} * ${effectiveDurationSql(durationUnit, durationMonths)}`;
+    ${quantity} * ${calculationUnitPrice}
+    * ${effectiveDurationSql(durationUnit, durationMonths, pricingSemanticsVersion)}`;
 };
 
 const documentNetValueSql = (lineNetValue: SQL, discountType: SQL, discount: SQL) => sql`
@@ -42,6 +51,7 @@ const quoteLineNetValueSql = lineNetValueSql(
   sql`qi.unit_price`,
   sql`qi.duration_unit`,
   sql`qi.duration_months`,
+  sql`qi.pricing_semantics_version`,
   sql`qi.discount`,
 );
 
@@ -50,6 +60,7 @@ const orderLineNetValueSql = lineNetValueSql(
   sql`si.unit_price`,
   sql`si.duration_unit`,
   sql`si.duration_months`,
+  sql`si.pricing_semantics_version`,
   sql`si.discount`,
 );
 
@@ -58,6 +69,7 @@ const clientOfferLineNetValueSql = lineNetValueSql(
   sql`coi.unit_price`,
   sql`coi.duration_unit`,
   sql`coi.duration_months`,
+  sql`coi.pricing_semantics_version`,
   sql`coi.discount`,
 );
 
@@ -66,6 +78,7 @@ const supplierOrderLineNetValueSql = lineNetValueSql(
   sql`ssi.unit_price`,
   sql`ssi.duration_unit`,
   sql`ssi.duration_months`,
+  sql`ssi.pricing_semantics_version`,
   sql`ssi.discount`,
   sql`ssi.legacy_discount_rounding`,
 );
@@ -120,5 +133,9 @@ export const supplierOrderNetValueSql = documentNetValueSql(
 export const supplierQuoteNetValueSql = sql`
   ROUND(COALESCE(SUM(
     sqi.quantity * sqi.unit_price
-    * ${effectiveDurationSql(sql`sqi.duration_unit`, sql`sqi.duration_months`)}
+    * ${effectiveDurationSql(
+      sql`sqi.duration_unit`,
+      sql`sqi.duration_months`,
+      sql`sqi.pricing_semantics_version`,
+    )}
   ), 0), 2)`;

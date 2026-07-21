@@ -4,7 +4,9 @@ describe('ProjectsView (create-only dialog after detail-page revamp)', () => {
   test('renders commesse and task tabs while reusing the task view internally', async () => {
     const source = await Bun.file(
       new URL('../../../components/projects/ProjectsView.tsx', import.meta.url),
-    ).text();
+    )
+      .text()
+      .then((value) => value.replaceAll('\r\n', '\n'));
 
     expect(source).toContain('import { Tabs, TabsContent, TabsList, TabsTrigger }');
     expect(source).toContain("import { Folder, ListChecks } from 'lucide-react'");

@@ -9,6 +9,13 @@ import { normalizeNullableDateOnly } from '../utils/date.ts';
 import { type DurationUnit, normalizeDurationUnit } from '../utils/duration-unit.ts';
 import { numericForDb, parseDbNumber } from '../utils/parse.ts';
 import {
+  normalizeHistoricalPricingSemanticsVersion,
+  normalizePricingSemanticsVersion,
+  type PricingSemanticsVersion,
+  preservePricingSemanticsVersions,
+  pricingSemanticsVersionForDocument,
+} from '../utils/pricing-semantics.ts';
+import {
   effectiveSupplierQuoteStatusFromDate,
   isTerminalQuoteStatus,
 } from '../utils/quote-status.ts';
@@ -236,6 +243,7 @@ export type SupplierQuoteItem = {
   unitType: string;
   durationMonths: number;
   durationUnit: DurationUnit;
+  pricingSemanticsVersion: PricingSemanticsVersion;
 };
 
 type QuoteRow = typeof supplierQuotes.$inferSelect & {
@@ -288,6 +296,7 @@ const mapItem = (row: typeof supplierQuoteItems.$inferSelect): SupplierQuoteItem
   unitType: row.unitType ?? 'unit',
   durationMonths: row.durationMonths ?? 1,
   durationUnit: normalizeDurationUnit(row.durationUnit),
+  pricingSemanticsVersion: normalizeHistoricalPricingSemanticsVersion(row.pricingSemanticsVersion),
 });
 
 export const listAll = async (exec: DbExecutor = db): Promise<SupplierQuote[]> => {
@@ -824,6 +833,7 @@ export type NewSupplierQuoteItem = {
   unitType: string;
   durationMonths: number;
   durationUnit: DurationUnit;
+  pricingSemanticsVersion?: PricingSemanticsVersion;
 };
 
 export type QuoteItemSnapshot = {
@@ -832,6 +842,7 @@ export type QuoteItemSnapshot = {
   productId: string | null;
   unitPrice: number;
   netCost: number;
+  pricingSemanticsVersion: PricingSemanticsVersion;
   // Whether the parent supplier quote is currently offered for NEW sourcing (the same rule the
   // UI pickers apply): derived effective status `draft` and no linked supplier order. Routes use
   // this to reject FRESHLY-picked links from a stale tab / raw API client (#812 round 15) while
@@ -862,6 +873,7 @@ export const getQuoteItemSnapshots = async (
       supplierName: supplierQuotes.supplierName,
       productId: supplierQuoteItems.productId,
       unitPrice: supplierQuoteItems.unitPrice,
+      pricingSemanticsVersion: supplierQuoteItems.pricingSemanticsVersion,
       expirationDate: supplierQuotes.expirationDate,
       linkedOrderId: sql<string | null>`(
         SELECT ss.id FROM supplier_sales ss
@@ -896,6 +908,9 @@ export const getQuoteItemSnapshots = async (
       productId: row.productId,
       unitPrice,
       netCost: unitPrice,
+      pricingSemanticsVersion: normalizeHistoricalPricingSemanticsVersion(
+        row.pricingSemanticsVersion,
+      ),
       sourceable: effective === 'draft' && row.linkedOrderId === null,
     });
   }
@@ -979,9 +994,10 @@ export const insertItems = async (
         note: item.note,
         unitType: item.unitType,
         // Duration applies to every line type (issue #775); 'na' marks a line that never multiplies
-        // and is gated through effectiveDurationMonths, so the value is persisted verbatim here.
+        // and is interpreted by the pricing multiplier, so the canonical value is persisted here.
         durationMonths: item.durationMonths ?? 1,
         durationUnit: item.durationUnit ?? 'months',
+        pricingSemanticsVersion: normalizePricingSemanticsVersion(item.pricingSemanticsVersion),
       })),
     )
     .returning();
@@ -994,8 +1010,15 @@ export const replaceItems = async (
   exec: DbExecutor = db,
 ): Promise<SupplierQuoteItem[]> =>
   runAtomically(exec, async (tx) => {
-    await tx.delete(supplierQuoteItems).where(eq(supplierQuoteItems.quoteId, quoteId));
-    return insertItems(quoteId, items, tx);
+    const storedItems = await tx
+      .delete(supplierQuoteItems)
+      .where(eq(supplierQuoteItems.quoteId, quoteId))
+      .returning({
+        id: supplierQuoteItems.id,
+        pricingSemanticsVersion: supplierQuoteItems.pricingSemanticsVersion,
+      });
+    const versionedItems = preservePricingSemanticsVersions(items, storedItems);
+    return insertItems(quoteId, versionedItems, tx);
   });
 
 // Identity-preserving counterpart of replaceItems for the PUT route (user report after #812):
@@ -1011,10 +1034,14 @@ export const upsertItems = async (
 ): Promise<SupplierQuoteItem[]> =>
   runAtomically(exec, async (tx) => {
     const existingRows = await tx
-      .select({ id: supplierQuoteItems.id })
+      .select({
+        id: supplierQuoteItems.id,
+        pricingSemanticsVersion: supplierQuoteItems.pricingSemanticsVersion,
+      })
       .from(supplierQuoteItems)
       .where(eq(supplierQuoteItems.quoteId, quoteId));
     const existingIds = new Set(existingRows.map((row) => row.id));
+    const documentPricingSemanticsVersion = pricingSemanticsVersionForDocument(existingRows);
     const incomingIds = items.map((item) => item.id);
     if (incomingIds.length > 0) {
       await tx
@@ -1029,7 +1056,10 @@ export const upsertItems = async (
     const inserts: NewSupplierQuoteItem[] = [];
     const updateWrites = items.flatMap((item) => {
       if (!existingIds.has(item.id)) {
-        inserts.push(item);
+        inserts.push({
+          ...item,
+          pricingSemanticsVersion: item.pricingSemanticsVersion ?? documentPricingSemanticsVersion,
+        });
         return [];
       }
       return [

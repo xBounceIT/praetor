@@ -33,9 +33,8 @@ import {
   isTemporaryLineItem,
 } from '../../utils/lineItemIndex';
 import {
-  calcProductSalePrice,
+  calcProductSalePriceForItem,
   calculatePricingTotals,
-  convertUnitPrice,
   durationValueToMonths,
   formatDecimal,
   formatDiscountValue,
@@ -59,6 +58,7 @@ import {
   buildProductQuickViewHref,
   buildSupplierOrderQuickViewHref,
 } from '../../utils/quickViewLinks';
+import { getDocumentPricingSemanticsVersion } from '../../utils/supplierLineSync';
 import { toastError } from '../../utils/toast';
 import ProductSelectOrFallback from '../sales/ProductSelectOrFallback';
 import CostSummaryPanel from '../shared/CostSummaryPanel';
@@ -105,9 +105,6 @@ const DEFAULT_UNIT_TYPE: SupplierUnitType = 'hours';
 
 const compactInputClass = 'h-9 max-w-[5rem] flex-none text-right font-medium';
 const EMPTY_SUPPLIER_ORDERS: SupplierSaleOrder[] = [];
-
-const convertHourlyToUnit = (hourlyPrice: number, unitType: SupplierUnitType | undefined) =>
-  convertUnitPrice(hourlyPrice, 'hours', unitType || DEFAULT_UNIT_TYPE);
 
 const getOrderStatusLabel = (status: ClientsOrder['status'], t: (key: string) => string) => {
   if (status === 'confirmed') return t('accounting:clientsOrders.statusConfirmed');
@@ -474,6 +471,7 @@ const useClientsOrdersController = ({
       unitType: DEFAULT_UNIT_TYPE,
       unitPrice: Number.NaN,
       productMolPercentage: null,
+      pricingSemanticsVersion: getDocumentPricingSemanticsVersion(formData.items),
     };
     setFormData((prev) => ({
       ...prev,
@@ -510,10 +508,13 @@ const useClientsOrdersController = ({
       const product = activeProducts.find((p) => p.id === value);
       if (product) {
         newItems[index].productName = product.name;
-        const mol = product.molPercentage ? Number(product.molPercentage) : 0;
-        const hourlySalePrice = calcProductSalePrice(Number(product.costo), mol);
-        newItems[index].unitPrice = convertHourlyToUnit(hourlySalePrice, newItems[index].unitType);
-        newItems[index].productCost = Number(product.costo);
+        const cost = Number(product.costo);
+        newItems[index].unitPrice = calcProductSalePriceForItem(
+          newItems[index],
+          cost,
+          product.molPercentage ? Number(product.molPercentage) : 0,
+        );
+        newItems[index].productCost = cost;
         newItems[index].productMolPercentage = product.molPercentage;
       }
     }
@@ -527,18 +528,16 @@ const useClientsOrdersController = ({
     if (!item) return;
     const oldType = item.unitType || DEFAULT_UNIT_TYPE;
     if (oldType === newType) return;
-    const adjustedPrice = convertUnitPrice(item.unitPrice, oldType, newType);
     const newItems = [...(formData.items || [])];
     newItems[index] = {
       ...newItems[index],
       unitType: newType,
-      unitPrice: adjustedPrice,
     };
     setFormData((prev) => ({ ...prev, items: newItems }));
   };
 
   // Duration value entered in the item's chosen unit (issue #757). Stored canonically as whole
-  // months; 'years' multiplies by 12. An empty input stays empty while pricing uses neutral ×1.
+  // canonical months; pricing separately uses the numeric value shown in the selected unit.
   const handleDurationValueChange = (index: number, value: string) => {
     if (isReadOnly) return;
     const unit = normalizeDurationUnit(formData.items?.[index]?.durationUnit);
@@ -555,8 +554,8 @@ const useClientsOrdersController = ({
     if (isReadOnly) return;
     const item = formData.items?.[index];
     if (!item || normalizeDurationUnit(item.durationUnit) === newUnit) return;
-    // 'N/A' marks the line as duration-less: reset to the neutral 1 month so it never multiplies
-    // (issue #775). Months/years instead keeps the displayed number under the new unit.
+    // 'N/A' marks the line as duration-less and applies neutral ×1 pricing. Months/years preserve
+    // the displayed number under the new unit while updating its canonical stored months.
     const durationValue = getDurationInputValue(item);
     const durationMonths =
       newUnit === 'na' || durationValue === undefined
@@ -621,10 +620,7 @@ const useClientsOrdersController = ({
   const orderPricingMap = useMemo(() => {
     const map = new Map<string, PricingTotals>();
     for (const order of filteredOrders) {
-      map.set(
-        order.id,
-        calculatePricingTotals(order.items, order.discount, DEFAULT_UNIT_TYPE, order.discountType),
-      );
+      map.set(order.id, calculatePricingTotals(order.items, order.discount, order.discountType));
     }
     return map;
   }, [filteredOrders]);
@@ -1271,8 +1267,7 @@ const OrderDetailsSection: React.FC<{ controller: ClientsOrdersController }> = (
   </div>
 );
 
-const getClientsOrderItemPricing = (item: ClientsOrderItem) =>
-  getItemPricingContext(item, DEFAULT_UNIT_TYPE);
+const getClientsOrderItemPricing = (item: ClientsOrderItem) => getItemPricingContext(item);
 
 const getClientsOrderItemRevenue = (item: ClientsOrderItem) =>
   getClientsOrderItemPricing(item).netRevenue;
@@ -1337,7 +1332,7 @@ const OrderItemsSection: React.FC<{ controller: ClientsOrdersController }> = ({ 
       id: 'duration',
       header: controller.t('sales:clientQuotes.durationColumn', { defaultValue: 'Duration' }),
       minWidth: 174,
-      accessorFn: (item) => getClientsOrderItemPricing(item).durationMonths,
+      accessorFn: (item) => getClientsOrderItemPricing(item).durationMultiplier,
       align: 'right',
       cell: ({ row }) => (
         <div className="min-w-[150px]">
@@ -1366,11 +1361,7 @@ const OrderItemsSection: React.FC<{ controller: ClientsOrdersController }> = ({ 
                 ? (row.supplierQuoteUnitPrice ?? undefined)
                 : row.productCost === undefined
                   ? undefined
-                  : convertUnitPrice(
-                      Number(row.productCost),
-                      'hours',
-                      row.unitType || DEFAULT_UNIT_TYPE,
-                    )
+                  : Number(row.productCost)
             }
           />
         </div>
@@ -1704,9 +1695,7 @@ const OrderItemCostField: React.FC<{
         formatDecimals={2}
         onValueChange={(value) => {
           if (!controller.isReadOnly) {
-            controller.setFormData(
-              makeCostUpdater<Partial<ClientsOrder>>(index, value, DEFAULT_UNIT_TYPE),
-            );
+            controller.setFormData(makeCostUpdater<Partial<ClientsOrder>>(index, value));
           }
         }}
         disabled={controller.isReadOnly}
@@ -1742,9 +1731,7 @@ const OrderItemMolField: React.FC<{
         formatDecimals={MOL_PERCENTAGE_DECIMALS}
         onValueChange={(value) => {
           if (!controller.isReadOnly) {
-            controller.setFormData(
-              makeMolUpdater<Partial<ClientsOrder>>(index, value, DEFAULT_UNIT_TYPE),
-            );
+            controller.setFormData(makeMolUpdater<Partial<ClientsOrder>>(index, value));
           }
         }}
         disabled={controller.isReadOnly}
@@ -1773,9 +1760,7 @@ const OrderItemSalePriceField: React.FC<{
         formatDecimals={2}
         onValueChange={(value) => {
           if (!controller.isReadOnly) {
-            controller.setFormData(
-              makeUnitPriceUpdater<Partial<ClientsOrder>>(index, value, DEFAULT_UNIT_TYPE),
-            );
+            controller.setFormData(makeUnitPriceUpdater<Partial<ClientsOrder>>(index, value));
           }
         }}
         disabled={controller.isReadOnly}
@@ -1855,7 +1840,6 @@ const OrderNotesSummarySection: React.FC<{ controller: ClientsOrdersController }
   } = calculatePricingTotals(
     controller.formData.items || [],
     controller.formData.discount || 0,
-    DEFAULT_UNIT_TYPE,
     controller.formData.discountType || 'percentage',
   );
 

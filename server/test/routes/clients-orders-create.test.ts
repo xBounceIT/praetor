@@ -250,6 +250,7 @@ beforeEach(async () => {
           productId: null,
           unitPrice: 50,
           netCost: 50,
+          pricingSemanticsVersion: 2,
         },
       ],
     ]),
@@ -429,6 +430,7 @@ describe('POST /api/clients-orders product-less supplier lines (issue #783)', ()
   });
 
   test('201 inherits from linked offer when linked quote id is not parseable', async () => {
+    clientOfferFindItemsForOfferMock.mockResolvedValue([{ pricingSemanticsVersion: 1 }]);
     coCreateMock.mockImplementation((input: Record<string, unknown>) =>
       Promise.resolve({
         ...CREATED_ORDER,
@@ -459,6 +461,60 @@ describe('POST /api/clients-orders product-less supplier lines (issue #783)', ()
       exec: expect.anything(),
       sourceCodes: ['legacy-quote-id', 'OFF_26_0045_manual'],
     });
+    expect(coInsertItemsMock.mock.calls[0][1][0]).toEqual(
+      expect.objectContaining({ pricingSemanticsVersion: 1 }),
+    );
+  });
+
+  test('201 preserves each source offer pricing marker in a mixed order', async () => {
+    clientOfferFindItemsForOfferMock.mockResolvedValue([
+      { id: 'offer-item-legacy', pricingSemanticsVersion: 1 },
+      { id: 'offer-item-current', pricingSemanticsVersion: 2 },
+    ]);
+    coCreateMock.mockImplementation((input: Record<string, unknown>) =>
+      Promise.resolve({ ...CREATED_ORDER, ...input }),
+    );
+    coInsertItemsMock.mockImplementation((orderId: string, items: Array<Record<string, unknown>>) =>
+      Promise.resolve(items.map((item) => insertedItem({ ...item, orderId }))),
+    );
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/clients-orders',
+      headers: authHeader(),
+      payload: {
+        linkedOfferId: 'OFF_26_0045_manual',
+        clientId: 'c1',
+        clientName: 'Acme',
+        items: [
+          {
+            id: 'offer-item-legacy',
+            productId: 'p-1',
+            productName: 'Legacy annual service',
+            quantity: 1,
+            unitPrice: 10,
+            durationMonths: 12,
+            durationUnit: 'years',
+          },
+          {
+            id: 'offer-item-current',
+            productId: 'p-1',
+            productName: 'Current annual service',
+            quantity: 1,
+            unitPrice: 10,
+            durationMonths: 12,
+            durationUnit: 'years',
+          },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(
+      (coInsertItemsMock.mock.calls[0][1] as Array<Record<string, unknown>>).map(
+        (item) => item.pricingSemanticsVersion,
+      ),
+    ).toEqual([1, 2]);
   });
 
   test('409 when the submitted client does not match the accepted source offer', async () => {
@@ -1210,6 +1266,7 @@ describe('POST /api/clients-orders product-less supplier lines (issue #783)', ()
             productId: 'p-1',
             unitPrice: 75,
             netCost: 75,
+            pricingSemanticsVersion: 1,
           },
         ],
       ]),
@@ -1251,10 +1308,12 @@ describe('POST /api/clients-orders product-less supplier lines (issue #783)', ()
       supplierQuoteId: unknown;
       supplierQuoteSupplierName: unknown;
       supplierQuoteUnitPrice: unknown;
+      pricingSemanticsVersion: unknown;
     }>;
     expect(inserted[0].supplierQuoteId).toBe('sq-real');
     expect(inserted[0].supplierQuoteSupplierName).toBe('Real Supplier');
     expect(inserted[0].supplierQuoteUnitPrice).toBe(75);
+    expect(inserted[0].pricingSemanticsVersion).toBe(1);
     expect(sqFindByIdMock).toHaveBeenCalledWith('sq-real');
     expect(sqFindByIdMock).not.toHaveBeenCalledWith('sq-client-lie');
   });

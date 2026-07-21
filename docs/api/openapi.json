@@ -32883,7 +32883,8 @@
                             ]
                           },
                           "durationMonths": {
-                            "type": "number"
+                            "type": "number",
+                            "description": "Canonical whole months; pricing uses the numeric value displayed by durationUnit."
                           },
                           "durationUnit": {
                             "type": "string",
@@ -32891,7 +32892,16 @@
                               "months",
                               "years",
                               "na"
-                            ]
+                            ],
+                            "description": "Display unit only: the displayed number multiplies pricing; na applies a neutral x1."
+                          },
+                          "pricingSemanticsVersion": {
+                            "type": "integer",
+                            "enum": [
+                              1,
+                              2
+                            ],
+                            "description": "Read-only pricing compatibility marker; 1 preserves historical totals."
                           }
                         },
                         "required": [
@@ -33049,7 +33059,8 @@
                                   ]
                                 },
                                 "durationMonths": {
-                                  "type": "number"
+                                  "type": "number",
+                                  "description": "Canonical whole months; pricing uses the numeric value displayed by durationUnit."
                                 },
                                 "durationUnit": {
                                   "type": "string",
@@ -33057,7 +33068,16 @@
                                     "months",
                                     "years",
                                     "na"
-                                  ]
+                                  ],
+                                  "description": "Display unit only: the displayed number multiplies pricing; na applies a neutral x1."
+                                },
+                                "pricingSemanticsVersion": {
+                                  "type": "integer",
+                                  "enum": [
+                                    1,
+                                    2
+                                  ],
+                                  "description": "Read-only pricing compatibility marker; 1 preserves historical totals."
                                 }
                               },
                               "required": [
@@ -33449,7 +33469,8 @@
                               ]
                             },
                             "durationMonths": {
-                              "type": "number"
+                              "type": "number",
+                              "description": "Canonical whole months; pricing uses the numeric value displayed by durationUnit."
                             },
                             "durationUnit": {
                               "type": "string",
@@ -33457,7 +33478,16 @@
                                 "months",
                                 "years",
                                 "na"
-                              ]
+                              ],
+                              "description": "Display unit only: the displayed number multiplies pricing; na applies a neutral x1."
+                            },
+                            "pricingSemanticsVersion": {
+                              "type": "integer",
+                              "enum": [
+                                1,
+                                2
+                              ],
+                              "description": "Read-only pricing compatibility marker; 1 preserves historical totals."
                             }
                           },
                           "required": [
@@ -33615,7 +33645,8 @@
                                     ]
                                   },
                                   "durationMonths": {
-                                    "type": "number"
+                                    "type": "number",
+                                    "description": "Canonical whole months; pricing uses the numeric value displayed by durationUnit."
                                   },
                                   "durationUnit": {
                                     "type": "string",
@@ -33623,7 +33654,16 @@
                                       "months",
                                       "years",
                                       "na"
-                                    ]
+                                    ],
+                                    "description": "Display unit only: the displayed number multiplies pricing; na applies a neutral x1."
+                                  },
+                                  "pricingSemanticsVersion": {
+                                    "type": "integer",
+                                    "enum": [
+                                      1,
+                                      2
+                                    ],
+                                    "description": "Read-only pricing compatibility marker; 1 preserves historical totals."
                                   }
                                 },
                                 "required": [
@@ -33981,7 +34021,8 @@
                           ]
                         },
                         "durationMonths": {
-                          "type": "number"
+                          "type": "number",
+                          "description": "Canonical whole months; pricing uses the numeric value displayed by durationUnit."
                         },
                         "durationUnit": {
                           "type": "string",
@@ -33989,7 +34030,8 @@
                             "months",
                             "years",
                             "na"
-                          ]
+                          ],
+                          "description": "Display unit only: the displayed number multiplies pricing; na applies a neutral x1."
                         }
                       },
                       "required": [
@@ -34083,7 +34125,8 @@
                                 ]
                               },
                               "durationMonths": {
-                                "type": "number"
+                                "type": "number",
+                                "description": "Canonical whole months; pricing uses the numeric value displayed by durationUnit."
                               },
                               "durationUnit": {
                                 "type": "string",
@@ -34091,7 +34134,8 @@
                                   "months",
                                   "years",
                                   "na"
-                                ]
+                                ],
+                                "description": "Display unit only: the displayed number multiplies pricing; na applies a neutral x1."
                               }
                             },
                             "required": [
@@ -34372,7 +34416,8 @@
                             ]
                           },
                           "durationMonths": {
-                            "type": "number"
+                            "type": "number",
+                            "description": "Canonical whole months; pricing uses the numeric value displayed by durationUnit."
                           },
                           "durationUnit": {
                             "type": "string",
@@ -34380,7 +34425,16 @@
                               "months",
                               "years",
                               "na"
-                            ]
+                            ],
+                            "description": "Display unit only: the displayed number multiplies pricing; na applies a neutral x1."
+                          },
+                          "pricingSemanticsVersion": {
+                            "type": "integer",
+                            "enum": [
+                              1,
+                              2
+                            ],
+                            "description": "Read-only pricing compatibility marker; 1 preserves historical totals."
                           }
                         },
                         "required": [
@@ -34538,7 +34592,8 @@
                                   ]
                                 },
                                 "durationMonths": {
-                                  "type": "number"
+                                  "type": "number",
+                                  "description": "Canonical whole months; pricing uses the numeric value displayed by durationUnit."
                                 },
                                 "durationUnit": {
                                   "type": "string",
@@ -34546,7 +34601,16 @@
                                     "months",
                                     "years",
                                     "na"
-                                  ]
+                                  ],
+                                  "description": "Display unit only: the displayed number multiplies pricing; na applies a neutral x1."
+                                },
+                                "pricingSemanticsVersion": {
+                                  "type": "integer",
+                                  "enum": [
+                                    1,
+                                    2
+                                  ],
+                                  "description": "Read-only pricing compatibility marker; 1 preserves historical totals."
                                 }
                               },
                               "required": [
@@ -34860,7 +34924,8 @@
                           ]
                         },
                         "durationMonths": {
-                          "type": "number"
+                          "type": "number",
+                          "description": "Canonical whole months; pricing uses the numeric value displayed by durationUnit."
                         },
                         "durationUnit": {
                           "type": "string",
@@ -34868,7 +34933,8 @@
                             "months",
                             "years",
                             "na"
-                          ]
+                          ],
+                          "description": "Display unit only: the displayed number multiplies pricing; na applies a neutral x1."
                         }
                       },
                       "required": [
@@ -34962,7 +35028,8 @@
                                 ]
                               },
                               "durationMonths": {
-                                "type": "number"
+                                "type": "number",
+                                "description": "Canonical whole months; pricing uses the numeric value displayed by durationUnit."
                               },
                               "durationUnit": {
                                 "type": "string",
@@ -34970,7 +35037,8 @@
                                   "months",
                                   "years",
                                   "na"
-                                ]
+                                ],
+                                "description": "Display unit only: the displayed number multiplies pricing; na applies a neutral x1."
                               }
                             },
                             "required": [
@@ -35230,7 +35298,8 @@
                             ]
                           },
                           "durationMonths": {
-                            "type": "number"
+                            "type": "number",
+                            "description": "Canonical whole months; pricing uses the numeric value displayed by durationUnit."
                           },
                           "durationUnit": {
                             "type": "string",
@@ -35238,7 +35307,16 @@
                               "months",
                               "years",
                               "na"
-                            ]
+                            ],
+                            "description": "Display unit only: the displayed number multiplies pricing; na applies a neutral x1."
+                          },
+                          "pricingSemanticsVersion": {
+                            "type": "integer",
+                            "enum": [
+                              1,
+                              2
+                            ],
+                            "description": "Read-only pricing compatibility marker; 1 preserves historical totals."
                           }
                         },
                         "required": [
@@ -35396,7 +35474,8 @@
                                   ]
                                 },
                                 "durationMonths": {
-                                  "type": "number"
+                                  "type": "number",
+                                  "description": "Canonical whole months; pricing uses the numeric value displayed by durationUnit."
                                 },
                                 "durationUnit": {
                                   "type": "string",
@@ -35404,7 +35483,16 @@
                                     "months",
                                     "years",
                                     "na"
-                                  ]
+                                  ],
+                                  "description": "Display unit only: the displayed number multiplies pricing; na applies a neutral x1."
+                                },
+                                "pricingSemanticsVersion": {
+                                  "type": "integer",
+                                  "enum": [
+                                    1,
+                                    2
+                                  ],
+                                  "description": "Read-only pricing compatibility marker; 1 preserves historical totals."
                                 }
                               },
                               "required": [
@@ -35972,7 +36060,8 @@
                                 ]
                               },
                               "durationMonths": {
-                                "type": "number"
+                                "type": "number",
+                                "description": "Canonical whole months; pricing uses the numeric value displayed by durationUnit."
                               },
                               "durationUnit": {
                                 "type": "string",
@@ -35980,7 +36069,16 @@
                                   "months",
                                   "years",
                                   "na"
-                                ]
+                                ],
+                                "description": "Display unit only: the displayed number multiplies pricing; na applies a neutral x1."
+                              },
+                              "pricingSemanticsVersion": {
+                                "type": "integer",
+                                "enum": [
+                                  1,
+                                  2
+                                ],
+                                "description": "Read-only pricing compatibility marker; 1 preserves historical totals."
                               }
                             },
                             "required": [
@@ -36138,7 +36236,8 @@
                                       ]
                                     },
                                     "durationMonths": {
-                                      "type": "number"
+                                      "type": "number",
+                                      "description": "Canonical whole months; pricing uses the numeric value displayed by durationUnit."
                                     },
                                     "durationUnit": {
                                       "type": "string",
@@ -36146,7 +36245,16 @@
                                         "months",
                                         "years",
                                         "na"
-                                      ]
+                                      ],
+                                      "description": "Display unit only: the displayed number multiplies pricing; na applies a neutral x1."
+                                    },
+                                    "pricingSemanticsVersion": {
+                                      "type": "integer",
+                                      "enum": [
+                                        1,
+                                        2
+                                      ],
+                                      "description": "Read-only pricing compatibility marker; 1 preserves historical totals."
                                     }
                                   },
                                   "required": [
@@ -36413,6 +36521,14 @@
                                   "years",
                                   "na"
                                 ]
+                              },
+                              "pricingSemanticsVersion": {
+                                "type": "integer",
+                                "enum": [
+                                  1,
+                                  2
+                                ],
+                                "description": "Read-only pricing compatibility marker; 1 preserves historical totals."
                               }
                             },
                             "required": [
@@ -36813,7 +36929,8 @@
                             ]
                           },
                           "durationMonths": {
-                            "type": "number"
+                            "type": "number",
+                            "description": "Canonical whole months; pricing uses the numeric value displayed by durationUnit."
                           },
                           "durationUnit": {
                             "type": "string",
@@ -36821,7 +36938,16 @@
                               "months",
                               "years",
                               "na"
-                            ]
+                            ],
+                            "description": "Display unit only: the displayed number multiplies pricing; na applies a neutral x1."
+                          },
+                          "pricingSemanticsVersion": {
+                            "type": "integer",
+                            "enum": [
+                              1,
+                              2
+                            ],
+                            "description": "Read-only pricing compatibility marker; 1 preserves historical totals."
                           }
                         },
                         "required": [
@@ -36979,7 +37105,8 @@
                                   ]
                                 },
                                 "durationMonths": {
-                                  "type": "number"
+                                  "type": "number",
+                                  "description": "Canonical whole months; pricing uses the numeric value displayed by durationUnit."
                                 },
                                 "durationUnit": {
                                   "type": "string",
@@ -36987,7 +37114,16 @@
                                     "months",
                                     "years",
                                     "na"
-                                  ]
+                                  ],
+                                  "description": "Display unit only: the displayed number multiplies pricing; na applies a neutral x1."
+                                },
+                                "pricingSemanticsVersion": {
+                                  "type": "integer",
+                                  "enum": [
+                                    1,
+                                    2
+                                  ],
+                                  "description": "Read-only pricing compatibility marker; 1 preserves historical totals."
                                 }
                               },
                               "required": [
@@ -37822,7 +37958,8 @@
                             ]
                           },
                           "durationMonths": {
-                            "type": "number"
+                            "type": "number",
+                            "description": "Canonical whole months; pricing uses the numeric value displayed by durationUnit."
                           },
                           "durationUnit": {
                             "type": "string",
@@ -37830,7 +37967,16 @@
                               "months",
                               "years",
                               "na"
-                            ]
+                            ],
+                            "description": "Display unit only: the displayed number multiplies pricing; na applies a neutral x1."
+                          },
+                          "pricingSemanticsVersion": {
+                            "type": "integer",
+                            "enum": [
+                              1,
+                              2
+                            ],
+                            "description": "Read-only pricing compatibility marker; 1 preserves historical totals."
                           }
                         },
                         "required": [
@@ -37988,7 +38134,8 @@
                                   ]
                                 },
                                 "durationMonths": {
-                                  "type": "number"
+                                  "type": "number",
+                                  "description": "Canonical whole months; pricing uses the numeric value displayed by durationUnit."
                                 },
                                 "durationUnit": {
                                   "type": "string",
@@ -37996,7 +38143,16 @@
                                     "months",
                                     "years",
                                     "na"
-                                  ]
+                                  ],
+                                  "description": "Display unit only: the displayed number multiplies pricing; na applies a neutral x1."
+                                },
+                                "pricingSemanticsVersion": {
+                                  "type": "integer",
+                                  "enum": [
+                                    1,
+                                    2
+                                  ],
+                                  "description": "Read-only pricing compatibility marker; 1 preserves historical totals."
                                 }
                               },
                               "required": [
@@ -38849,6 +39005,14 @@
                               "years",
                               "na"
                             ]
+                          },
+                          "pricingSemanticsVersion": {
+                            "type": "integer",
+                            "enum": [
+                              1,
+                              2
+                            ],
+                            "description": "Read-only pricing compatibility marker; 1 preserves historical totals."
                           }
                         },
                         "required": [
@@ -39255,6 +39419,14 @@
                                 "years",
                                 "na"
                               ]
+                            },
+                            "pricingSemanticsVersion": {
+                              "type": "integer",
+                              "enum": [
+                                1,
+                                2
+                              ],
+                              "description": "Read-only pricing compatibility marker; 1 preserves historical totals."
                             }
                           },
                           "required": [
@@ -39622,7 +39794,8 @@
                           "type": "string"
                         },
                         "durationMonths": {
-                          "type": "number"
+                          "type": "number",
+                          "description": "Canonical whole months; pricing uses the numeric value displayed by durationUnit."
                         },
                         "durationUnit": {
                           "type": "string",
@@ -39630,7 +39803,8 @@
                             "months",
                             "years",
                             "na"
-                          ]
+                          ],
+                          "description": "Display unit only: the displayed number multiplies pricing; na applies a neutral x1."
                         }
                       },
                       "required": [
@@ -39874,6 +40048,14 @@
                               "years",
                               "na"
                             ]
+                          },
+                          "pricingSemanticsVersion": {
+                            "type": "integer",
+                            "enum": [
+                              1,
+                              2
+                            ],
+                            "description": "Read-only pricing compatibility marker; 1 preserves historical totals."
                           }
                         },
                         "required": [
@@ -40193,7 +40375,8 @@
                           "type": "string"
                         },
                         "durationMonths": {
-                          "type": "number"
+                          "type": "number",
+                          "description": "Canonical whole months; pricing uses the numeric value displayed by durationUnit."
                         },
                         "durationUnit": {
                           "type": "string",
@@ -40201,7 +40384,8 @@
                             "months",
                             "years",
                             "na"
-                          ]
+                          ],
+                          "description": "Display unit only: the displayed number multiplies pricing; na applies a neutral x1."
                         }
                       },
                       "required": [
@@ -40448,6 +40632,14 @@
                               "years",
                               "na"
                             ]
+                          },
+                          "pricingSemanticsVersion": {
+                            "type": "integer",
+                            "enum": [
+                              1,
+                              2
+                            ],
+                            "description": "Read-only pricing compatibility marker; 1 preserves historical totals."
                           }
                         },
                         "required": [
@@ -41025,6 +41217,14 @@
                               "years",
                               "na"
                             ]
+                          },
+                          "pricingSemanticsVersion": {
+                            "type": "integer",
+                            "enum": [
+                              1,
+                              2
+                            ],
+                            "description": "Read-only pricing compatibility marker; 1 preserves historical totals."
                           }
                         },
                         "required": [
@@ -41874,6 +42074,14 @@
                               "years",
                               "na"
                             ]
+                          },
+                          "pricingSemanticsVersion": {
+                            "type": "integer",
+                            "enum": [
+                              1,
+                              2
+                            ],
+                            "description": "Read-only pricing compatibility marker; 1 preserves historical totals."
                           }
                         },
                         "required": [
@@ -43583,7 +43791,8 @@
                               "maximum": 100
                             },
                             "durationMonths": {
-                              "type": "number"
+                              "type": "number",
+                              "description": "Canonical whole months; pricing uses the numeric value displayed by durationUnit."
                             },
                             "durationUnit": {
                               "type": "string",
@@ -43591,7 +43800,16 @@
                                 "months",
                                 "years",
                                 "na"
-                              ]
+                              ],
+                              "description": "Display unit only: the displayed number multiplies pricing; na applies a neutral x1."
+                            },
+                            "pricingSemanticsVersion": {
+                              "type": "integer",
+                              "enum": [
+                                1,
+                                2
+                              ],
+                              "description": "Read-only pricing compatibility marker; 1 preserves historical totals."
                             }
                           },
                           "required": [
@@ -43951,7 +44169,8 @@
                           ]
                         },
                         "durationMonths": {
-                          "type": "number"
+                          "type": "number",
+                          "description": "Canonical whole months; pricing uses the numeric value displayed by durationUnit."
                         },
                         "durationUnit": {
                           "type": "string",
@@ -43959,7 +44178,8 @@
                             "months",
                             "years",
                             "na"
-                          ]
+                          ],
+                          "description": "Display unit only: the displayed number multiplies pricing; na applies a neutral x1."
                         }
                       },
                       "required": [
@@ -44180,7 +44400,8 @@
                             "maximum": 100
                           },
                           "durationMonths": {
-                            "type": "number"
+                            "type": "number",
+                            "description": "Canonical whole months; pricing uses the numeric value displayed by durationUnit."
                           },
                           "durationUnit": {
                             "type": "string",
@@ -44188,7 +44409,16 @@
                               "months",
                               "years",
                               "na"
-                            ]
+                            ],
+                            "description": "Display unit only: the displayed number multiplies pricing; na applies a neutral x1."
+                          },
+                          "pricingSemanticsVersion": {
+                            "type": "integer",
+                            "enum": [
+                              1,
+                              2
+                            ],
+                            "description": "Read-only pricing compatibility marker; 1 preserves historical totals."
                           }
                         },
                         "required": [
@@ -44502,7 +44732,8 @@
                           ]
                         },
                         "durationMonths": {
-                          "type": "number"
+                          "type": "number",
+                          "description": "Canonical whole months; pricing uses the numeric value displayed by durationUnit."
                         },
                         "durationUnit": {
                           "type": "string",
@@ -44510,7 +44741,8 @@
                             "months",
                             "years",
                             "na"
-                          ]
+                          ],
+                          "description": "Display unit only: the displayed number multiplies pricing; na applies a neutral x1."
                         }
                       },
                       "required": [
@@ -44739,7 +44971,8 @@
                             "maximum": 100
                           },
                           "durationMonths": {
-                            "type": "number"
+                            "type": "number",
+                            "description": "Canonical whole months; pricing uses the numeric value displayed by durationUnit."
                           },
                           "durationUnit": {
                             "type": "string",
@@ -44747,7 +44980,16 @@
                               "months",
                               "years",
                               "na"
-                            ]
+                            ],
+                            "description": "Display unit only: the displayed number multiplies pricing; na applies a neutral x1."
+                          },
+                          "pricingSemanticsVersion": {
+                            "type": "integer",
+                            "enum": [
+                              1,
+                              2
+                            ],
+                            "description": "Read-only pricing compatibility marker; 1 preserves historical totals."
                           }
                         },
                         "required": [
@@ -45713,7 +45955,8 @@
                             "maximum": 100
                           },
                           "durationMonths": {
-                            "type": "number"
+                            "type": "number",
+                            "description": "Canonical whole months; pricing uses the numeric value displayed by durationUnit."
                           },
                           "durationUnit": {
                             "type": "string",
@@ -45721,7 +45964,16 @@
                               "months",
                               "years",
                               "na"
-                            ]
+                            ],
+                            "description": "Display unit only: the displayed number multiplies pricing; na applies a neutral x1."
+                          },
+                          "pricingSemanticsVersion": {
+                            "type": "integer",
+                            "enum": [
+                              1,
+                              2
+                            ],
+                            "description": "Read-only pricing compatibility marker; 1 preserves historical totals."
                           }
                         },
                         "required": [
@@ -46014,7 +46266,8 @@
                               "type": "number"
                             },
                             "durationMonths": {
-                              "type": "number"
+                              "type": "number",
+                              "description": "Canonical whole months; pricing uses the numeric value displayed by durationUnit."
                             },
                             "durationUnit": {
                               "type": "string",
@@ -46022,7 +46275,16 @@
                                 "months",
                                 "years",
                                 "na"
-                              ]
+                              ],
+                              "description": "Display unit only: the displayed number multiplies pricing; na applies a neutral x1."
+                            },
+                            "pricingSemanticsVersion": {
+                              "type": "integer",
+                              "enum": [
+                                1,
+                                2
+                              ],
+                              "description": "Read-only pricing compatibility marker; 1 preserves historical totals."
                             }
                           },
                           "required": [
@@ -46253,6 +46515,9 @@
                     "items": {
                       "type": "object",
                       "properties": {
+                        "id": {
+                          "type": "string"
+                        },
                         "productId": {
                           "type": "string"
                         },
@@ -46279,7 +46544,8 @@
                           "type": "number"
                         },
                         "durationMonths": {
-                          "type": "number"
+                          "type": "number",
+                          "description": "Canonical whole months; pricing uses the numeric value displayed by durationUnit."
                         },
                         "durationUnit": {
                           "type": "string",
@@ -46287,7 +46553,8 @@
                             "months",
                             "years",
                             "na"
-                          ]
+                          ],
+                          "description": "Display unit only: the displayed number multiplies pricing; na applies a neutral x1."
                         }
                       },
                       "required": [
@@ -46408,7 +46675,8 @@
                             "type": "number"
                           },
                           "durationMonths": {
-                            "type": "number"
+                            "type": "number",
+                            "description": "Canonical whole months; pricing uses the numeric value displayed by durationUnit."
                           },
                           "durationUnit": {
                             "type": "string",
@@ -46416,7 +46684,16 @@
                               "months",
                               "years",
                               "na"
-                            ]
+                            ],
+                            "description": "Display unit only: the displayed number multiplies pricing; na applies a neutral x1."
+                          },
+                          "pricingSemanticsVersion": {
+                            "type": "integer",
+                            "enum": [
+                              1,
+                              2
+                            ],
+                            "description": "Read-only pricing compatibility marker; 1 preserves historical totals."
                           }
                         },
                         "required": [
@@ -46627,6 +46904,9 @@
                     "items": {
                       "type": "object",
                       "properties": {
+                        "id": {
+                          "type": "string"
+                        },
                         "productId": {
                           "type": "string"
                         },
@@ -46653,7 +46933,8 @@
                           "type": "number"
                         },
                         "durationMonths": {
-                          "type": "number"
+                          "type": "number",
+                          "description": "Canonical whole months; pricing uses the numeric value displayed by durationUnit."
                         },
                         "durationUnit": {
                           "type": "string",
@@ -46661,7 +46942,8 @@
                             "months",
                             "years",
                             "na"
-                          ]
+                          ],
+                          "description": "Display unit only: the displayed number multiplies pricing; na applies a neutral x1."
                         }
                       },
                       "required": [
@@ -46785,7 +47067,8 @@
                             "type": "number"
                           },
                           "durationMonths": {
-                            "type": "number"
+                            "type": "number",
+                            "description": "Canonical whole months; pricing uses the numeric value displayed by durationUnit."
                           },
                           "durationUnit": {
                             "type": "string",
@@ -46793,7 +47076,16 @@
                               "months",
                               "years",
                               "na"
-                            ]
+                            ],
+                            "description": "Display unit only: the displayed number multiplies pricing; na applies a neutral x1."
+                          },
+                          "pricingSemanticsVersion": {
+                            "type": "integer",
+                            "enum": [
+                              1,
+                              2
+                            ],
+                            "description": "Read-only pricing compatibility marker; 1 preserves historical totals."
                           }
                         },
                         "required": [
@@ -49206,7 +49498,8 @@
                             ]
                           },
                           "durationMonths": {
-                            "type": "number"
+                            "type": "number",
+                            "description": "Canonical whole months; pricing uses the numeric value displayed by durationUnit."
                           },
                           "durationUnit": {
                             "type": "string",
@@ -49214,7 +49507,16 @@
                               "months",
                               "years",
                               "na"
-                            ]
+                            ],
+                            "description": "Display unit only: the displayed number multiplies pricing; na applies a neutral x1."
+                          },
+                          "pricingSemanticsVersion": {
+                            "type": "integer",
+                            "enum": [
+                              1,
+                              2
+                            ],
+                            "description": "Read-only pricing compatibility marker; 1 preserves historical totals."
                           }
                         },
                         "required": [
@@ -49525,7 +49827,8 @@
                               ]
                             },
                             "durationMonths": {
-                              "type": "number"
+                              "type": "number",
+                              "description": "Canonical whole months; pricing uses the numeric value displayed by durationUnit."
                             },
                             "durationUnit": {
                               "type": "string",
@@ -49533,7 +49836,16 @@
                                 "months",
                                 "years",
                                 "na"
-                              ]
+                              ],
+                              "description": "Display unit only: the displayed number multiplies pricing; na applies a neutral x1."
+                            },
+                            "pricingSemanticsVersion": {
+                              "type": "integer",
+                              "enum": [
+                                1,
+                                2
+                              ],
+                              "description": "Read-only pricing compatibility marker; 1 preserves historical totals."
                             }
                           },
                           "required": [
@@ -49784,7 +50096,8 @@
                           ]
                         },
                         "durationMonths": {
-                          "type": "number"
+                          "type": "number",
+                          "description": "Canonical whole months; pricing uses the numeric value displayed by durationUnit."
                         },
                         "durationUnit": {
                           "type": "string",
@@ -49792,7 +50105,8 @@
                             "months",
                             "years",
                             "na"
-                          ]
+                          ],
+                          "description": "Display unit only: the displayed number multiplies pricing; na applies a neutral x1."
                         }
                       },
                       "required": [
@@ -49975,7 +50289,8 @@
                             ]
                           },
                           "durationMonths": {
-                            "type": "number"
+                            "type": "number",
+                            "description": "Canonical whole months; pricing uses the numeric value displayed by durationUnit."
                           },
                           "durationUnit": {
                             "type": "string",
@@ -49983,7 +50298,16 @@
                               "months",
                               "years",
                               "na"
-                            ]
+                            ],
+                            "description": "Display unit only: the displayed number multiplies pricing; na applies a neutral x1."
+                          },
+                          "pricingSemanticsVersion": {
+                            "type": "integer",
+                            "enum": [
+                              1,
+                              2
+                            ],
+                            "description": "Read-only pricing compatibility marker; 1 preserves historical totals."
                           }
                         },
                         "required": [
@@ -50216,7 +50540,8 @@
                           ]
                         },
                         "durationMonths": {
-                          "type": "number"
+                          "type": "number",
+                          "description": "Canonical whole months; pricing uses the numeric value displayed by durationUnit."
                         },
                         "durationUnit": {
                           "type": "string",
@@ -50224,7 +50549,8 @@
                             "months",
                             "years",
                             "na"
-                          ]
+                          ],
+                          "description": "Display unit only: the displayed number multiplies pricing; na applies a neutral x1."
                         }
                       },
                       "required": [
@@ -50410,7 +50736,8 @@
                             ]
                           },
                           "durationMonths": {
-                            "type": "number"
+                            "type": "number",
+                            "description": "Canonical whole months; pricing uses the numeric value displayed by durationUnit."
                           },
                           "durationUnit": {
                             "type": "string",
@@ -50418,7 +50745,16 @@
                               "months",
                               "years",
                               "na"
-                            ]
+                            ],
+                            "description": "Display unit only: the displayed number multiplies pricing; na applies a neutral x1."
+                          },
+                          "pricingSemanticsVersion": {
+                            "type": "integer",
+                            "enum": [
+                              1,
+                              2
+                            ],
+                            "description": "Read-only pricing compatibility marker; 1 preserves historical totals."
                           }
                         },
                         "required": [
@@ -51319,7 +51655,8 @@
                             ]
                           },
                           "durationMonths": {
-                            "type": "number"
+                            "type": "number",
+                            "description": "Canonical whole months; pricing uses the numeric value displayed by durationUnit."
                           },
                           "durationUnit": {
                             "type": "string",
@@ -51327,7 +51664,16 @@
                               "months",
                               "years",
                               "na"
-                            ]
+                            ],
+                            "description": "Display unit only: the displayed number multiplies pricing; na applies a neutral x1."
+                          },
+                          "pricingSemanticsVersion": {
+                            "type": "integer",
+                            "enum": [
+                              1,
+                              2
+                            ],
+                            "description": "Read-only pricing compatibility marker; 1 preserves historical totals."
                           }
                         },
                         "required": [
@@ -52373,7 +52719,8 @@
                               "type": "boolean"
                             },
                             "durationMonths": {
-                              "type": "number"
+                              "type": "number",
+                              "description": "Canonical whole months; pricing uses the numeric value displayed by durationUnit."
                             },
                             "durationUnit": {
                               "type": "string",
@@ -52381,7 +52728,16 @@
                                 "months",
                                 "years",
                                 "na"
-                              ]
+                              ],
+                              "description": "Display unit only: the displayed number multiplies pricing; na applies a neutral x1."
+                            },
+                            "pricingSemanticsVersion": {
+                              "type": "integer",
+                              "enum": [
+                                1,
+                                2
+                              ],
+                              "description": "Read-only pricing compatibility marker; 1 preserves historical totals."
                             }
                           },
                           "required": [
@@ -52652,7 +53008,8 @@
                           "type": "string"
                         },
                         "durationMonths": {
-                          "type": "number"
+                          "type": "number",
+                          "description": "Canonical whole months; pricing uses the numeric value displayed by durationUnit."
                         },
                         "durationUnit": {
                           "type": "string",
@@ -52660,7 +53017,8 @@
                             "months",
                             "years",
                             "na"
-                          ]
+                          ],
+                          "description": "Display unit only: the displayed number multiplies pricing; na applies a neutral x1."
                         }
                       },
                       "required": [
@@ -52816,7 +53174,8 @@
                             "type": "boolean"
                           },
                           "durationMonths": {
-                            "type": "number"
+                            "type": "number",
+                            "description": "Canonical whole months; pricing uses the numeric value displayed by durationUnit."
                           },
                           "durationUnit": {
                             "type": "string",
@@ -52824,7 +53183,16 @@
                               "months",
                               "years",
                               "na"
-                            ]
+                            ],
+                            "description": "Display unit only: the displayed number multiplies pricing; na applies a neutral x1."
+                          },
+                          "pricingSemanticsVersion": {
+                            "type": "integer",
+                            "enum": [
+                              1,
+                              2
+                            ],
+                            "description": "Read-only pricing compatibility marker; 1 preserves historical totals."
                           }
                         },
                         "required": [
@@ -53046,7 +53414,8 @@
                           "type": "string"
                         },
                         "durationMonths": {
-                          "type": "number"
+                          "type": "number",
+                          "description": "Canonical whole months; pricing uses the numeric value displayed by durationUnit."
                         },
                         "durationUnit": {
                           "type": "string",
@@ -53054,7 +53423,8 @@
                             "months",
                             "years",
                             "na"
-                          ]
+                          ],
+                          "description": "Display unit only: the displayed number multiplies pricing; na applies a neutral x1."
                         }
                       },
                       "required": [
@@ -53214,7 +53584,8 @@
                             "type": "boolean"
                           },
                           "durationMonths": {
-                            "type": "number"
+                            "type": "number",
+                            "description": "Canonical whole months; pricing uses the numeric value displayed by durationUnit."
                           },
                           "durationUnit": {
                             "type": "string",
@@ -53222,7 +53593,16 @@
                               "months",
                               "years",
                               "na"
-                            ]
+                            ],
+                            "description": "Display unit only: the displayed number multiplies pricing; na applies a neutral x1."
+                          },
+                          "pricingSemanticsVersion": {
+                            "type": "integer",
+                            "enum": [
+                              1,
+                              2
+                            ],
+                            "description": "Read-only pricing compatibility marker; 1 preserves historical totals."
                           }
                         },
                         "required": [
@@ -54091,7 +54471,8 @@
                             "type": "boolean"
                           },
                           "durationMonths": {
-                            "type": "number"
+                            "type": "number",
+                            "description": "Canonical whole months; pricing uses the numeric value displayed by durationUnit."
                           },
                           "durationUnit": {
                             "type": "string",
@@ -54099,7 +54480,16 @@
                               "months",
                               "years",
                               "na"
-                            ]
+                            ],
+                            "description": "Display unit only: the displayed number multiplies pricing; na applies a neutral x1."
+                          },
+                          "pricingSemanticsVersion": {
+                            "type": "integer",
+                            "enum": [
+                              1,
+                              2
+                            ],
+                            "description": "Read-only pricing compatibility marker; 1 preserves historical totals."
                           }
                         },
                         "required": [
@@ -54355,7 +54745,8 @@
                               "type": "boolean"
                             },
                             "durationMonths": {
-                              "type": "number"
+                              "type": "number",
+                              "description": "Canonical whole months; pricing uses the numeric value displayed by durationUnit."
                             },
                             "durationUnit": {
                               "type": "string",
@@ -54363,7 +54754,16 @@
                                 "months",
                                 "years",
                                 "na"
-                              ]
+                              ],
+                              "description": "Display unit only: the displayed number multiplies pricing; na applies a neutral x1."
+                            },
+                            "pricingSemanticsVersion": {
+                              "type": "integer",
+                              "enum": [
+                                1,
+                                2
+                              ],
+                              "description": "Read-only pricing compatibility marker; 1 preserves historical totals."
                             }
                           },
                           "required": [
@@ -54621,7 +55021,8 @@
                           "type": "boolean"
                         },
                         "durationMonths": {
-                          "type": "number"
+                          "type": "number",
+                          "description": "Canonical whole months; pricing uses the numeric value displayed by durationUnit."
                         },
                         "durationUnit": {
                           "type": "string",
@@ -54629,7 +55030,8 @@
                             "months",
                             "years",
                             "na"
-                          ]
+                          ],
+                          "description": "Display unit only: the displayed number multiplies pricing; na applies a neutral x1."
                         }
                       },
                       "required": [
@@ -54739,7 +55141,8 @@
                             "type": "boolean"
                           },
                           "durationMonths": {
-                            "type": "number"
+                            "type": "number",
+                            "description": "Canonical whole months; pricing uses the numeric value displayed by durationUnit."
                           },
                           "durationUnit": {
                             "type": "string",
@@ -54747,7 +55150,16 @@
                               "months",
                               "years",
                               "na"
-                            ]
+                            ],
+                            "description": "Display unit only: the displayed number multiplies pricing; na applies a neutral x1."
+                          },
+                          "pricingSemanticsVersion": {
+                            "type": "integer",
+                            "enum": [
+                              1,
+                              2
+                            ],
+                            "description": "Read-only pricing compatibility marker; 1 preserves historical totals."
                           }
                         },
                         "required": [
@@ -54982,7 +55394,8 @@
                           "type": "boolean"
                         },
                         "durationMonths": {
-                          "type": "number"
+                          "type": "number",
+                          "description": "Canonical whole months; pricing uses the numeric value displayed by durationUnit."
                         },
                         "durationUnit": {
                           "type": "string",
@@ -54990,7 +55403,8 @@
                             "months",
                             "years",
                             "na"
-                          ]
+                          ],
+                          "description": "Display unit only: the displayed number multiplies pricing; na applies a neutral x1."
                         }
                       },
                       "required": [
@@ -55103,7 +55517,8 @@
                             "type": "boolean"
                           },
                           "durationMonths": {
-                            "type": "number"
+                            "type": "number",
+                            "description": "Canonical whole months; pricing uses the numeric value displayed by durationUnit."
                           },
                           "durationUnit": {
                             "type": "string",
@@ -55111,7 +55526,16 @@
                               "months",
                               "years",
                               "na"
-                            ]
+                            ],
+                            "description": "Display unit only: the displayed number multiplies pricing; na applies a neutral x1."
+                          },
+                          "pricingSemanticsVersion": {
+                            "type": "integer",
+                            "enum": [
+                              1,
+                              2
+                            ],
+                            "description": "Read-only pricing compatibility marker; 1 preserves historical totals."
                           }
                         },
                         "required": [

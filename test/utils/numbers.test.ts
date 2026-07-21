@@ -2,8 +2,8 @@ import { describe, expect, test } from 'bun:test';
 import {
   calcProductMolPercentage,
   calcProductSalePrice,
+  calcProductSalePriceForItem,
   calculatePricingTotals,
-  convertUnitPrice,
   durationValueToMonths,
   formatDecimal,
   formatDiscountValue,
@@ -15,6 +15,7 @@ import {
   getDurationInputValue,
   getEffectiveCost,
   getEffectiveDurationMonths,
+  getEffectiveDurationMultiplier,
   getEffectiveMol,
   getItemPricingContext,
   isFiniteNumber,
@@ -162,26 +163,6 @@ describe('localized number formatting', () => {
   });
 });
 
-describe('convertUnitPrice', () => {
-  test('returns input unchanged when from === to', () => {
-    expect(convertUnitPrice(100, 'hours', 'hours')).toBe(100);
-    expect(convertUnitPrice(100, 'days', 'days')).toBe(100);
-  });
-
-  test('converts hours → days by multiplying by 8', () => {
-    expect(convertUnitPrice(10, 'hours', 'days')).toBe(80);
-  });
-
-  test('converts days → hours by dividing by 8', () => {
-    expect(convertUnitPrice(80, 'days', 'hours')).toBe(10);
-  });
-
-  test('treats unit and hours as equivalent (both are non-days)', () => {
-    expect(convertUnitPrice(50, 'unit', 'hours')).toBe(50);
-    expect(convertUnitPrice(50, 'hours', 'unit')).toBe(50);
-  });
-});
-
 describe('calcProductSalePrice', () => {
   test('returns the cost when MOL is 0', () => {
     expect(calcProductSalePrice(100, 0)).toBe(100);
@@ -198,6 +179,14 @@ describe('calcProductSalePrice', () => {
 
   test('returns the cost when MOL exceeds 100% (would be negative)', () => {
     expect(calcProductSalePrice(100, 150)).toBe(100);
+  });
+});
+
+describe('calcProductSalePriceForItem', () => {
+  test('preserves the legacy day-priced product cost when recalculating a sale price', () => {
+    expect(
+      calcProductSalePriceForItem({ unitType: 'days', pricingSemanticsVersion: 1 }, 100, 25),
+    ).toBeCloseTo(1066.667, 3);
   });
 });
 
@@ -274,6 +263,30 @@ describe('getEffectiveDurationMonths', () => {
     // 'na' marks a line where duration does not apply, so it never multiplies.
     expect(getEffectiveDurationMonths({ durationUnit: 'na', durationMonths: 6 })).toBe(1);
     expect(getEffectiveDurationMonths({ durationUnit: 'na', durationMonths: 24 })).toBe(1);
+  });
+});
+
+describe('getEffectiveDurationMultiplier', () => {
+  test('uses the numeric value shown in the selected duration unit', () => {
+    expect(getEffectiveDurationMultiplier({ durationMonths: 12, durationUnit: 'months' })).toBe(12);
+    expect(getEffectiveDurationMultiplier({ durationMonths: 12, durationUnit: 'years' })).toBe(1);
+    expect(getEffectiveDurationMultiplier({ durationMonths: 18, durationUnit: 'years' })).toBe(1.5);
+  });
+
+  test('keeps N/A and absent durations neutral', () => {
+    expect(getEffectiveDurationMultiplier({ durationMonths: 24, durationUnit: 'na' })).toBe(1);
+    expect(getEffectiveDurationMultiplier({})).toBe(1);
+    expect(getEffectiveDurationMultiplier({ durationUnit: 'years' })).toBe(1);
+  });
+
+  test('preserves canonical-month multiplication for legacy rows', () => {
+    expect(
+      getEffectiveDurationMultiplier({
+        durationMonths: 12,
+        durationUnit: 'years',
+        pricingSemanticsVersion: 1,
+      }),
+    ).toBe(12);
   });
 });
 
@@ -417,8 +430,8 @@ describe('parseDurationValueToMonths', () => {
   });
 });
 
-describe('pricing helpers ignore durationUnit and multiply by canonical durationMonths (issue #757)', () => {
-  test('getItemPricingContext scales line cost by durationMonths regardless of the display unit', () => {
+describe('pricing helpers multiply by the displayed duration value', () => {
+  test('getItemPricingContext keeps canonical months separate from the pricing multiplier', () => {
     const monthsItem: PricingItem = {
       productCost: 50,
       quantity: 2,
@@ -427,16 +440,16 @@ describe('pricing helpers ignore durationUnit and multiply by canonical duration
     };
     const yearsItem: PricingItem = { ...monthsItem, durationUnit: 'years' };
 
-    // Both report 24 canonical months and the same line cost (50 × 2 × 24 = 2400).
-    expect(getItemPricingContext(monthsItem, 'hours').durationMonths).toBe(24);
-    expect(getItemPricingContext(yearsItem, 'hours').durationMonths).toBe(24);
-    expect(getItemPricingContext(yearsItem, 'hours').lineCost).toBe(2400);
-    expect(getItemPricingContext(yearsItem, 'hours').lineCost).toBe(
-      getItemPricingContext(monthsItem, 'hours').lineCost,
-    );
+    // Both retain 24 canonical months, but years applies the displayed value 2 to pricing.
+    expect(getItemPricingContext(monthsItem).durationMonths).toBe(24);
+    expect(getItemPricingContext(yearsItem).durationMonths).toBe(24);
+    expect(getItemPricingContext(monthsItem).durationMultiplier).toBe(24);
+    expect(getItemPricingContext(yearsItem).durationMultiplier).toBe(2);
+    expect(getItemPricingContext(monthsItem).lineCost).toBe(2400);
+    expect(getItemPricingContext(yearsItem).lineCost).toBe(200);
   });
 
-  test('calculatePricingTotals produces identical totals for months vs years display units', () => {
+  test('calculatePricingTotals distinguishes 24 months from 2 years', () => {
     const monthsItems: PricingItem[] = [
       { unitPrice: 100, quantity: 2, productCost: 60, durationMonths: 24, durationUnit: 'months' },
     ];
@@ -445,40 +458,50 @@ describe('pricing helpers ignore durationUnit and multiply by canonical duration
     const monthsTotals = calculatePricingTotals(monthsItems, 0);
     const yearsTotals = calculatePricingTotals(yearsItems, 0);
 
-    // Revenue 100 × 2 × 24 = 4800; cost 60 × 2 × 24 = 2880; margin 1920 — same for both units.
-    expect(yearsTotals.subtotal).toBe(4800);
-    expect(yearsTotals.totalCost).toBe(2880);
-    expect(yearsTotals.margin).toBe(1920);
-    expect(yearsTotals).toEqual(monthsTotals);
+    expect(monthsTotals.subtotal).toBe(4800);
+    expect(yearsTotals.subtotal).toBe(400);
+    expect(yearsTotals.totalCost).toBe(240);
+    expect(yearsTotals.margin).toBe(160);
   });
 });
 
 describe('getItemPricingContext', () => {
-  test('computes line cost in the item unitType when explicit', () => {
+  test('keeps line cost unchanged when the item unit is days', () => {
     const item: PricingItem = { productCost: 80, unitType: 'days', quantity: 2 };
     const ctx = getItemPricingContext(item);
     expect(ctx.baseCost).toBe(80);
-    expect(ctx.unitCost).toBe(640); // 80/h × 8 = 640/day
+    expect(ctx.unitCost).toBe(80);
     expect(ctx.quantity).toBe(2);
     expect(ctx.durationMonths).toBe(1);
-    expect(ctx.lineCost).toBe(1280);
+    expect(ctx.lineCost).toBe(160);
+  });
+
+  test('preserves the historical day x8 product cost for legacy rows', () => {
+    const item: PricingItem = {
+      productCost: 80,
+      unitType: 'days',
+      quantity: 2,
+      pricingSemanticsVersion: 1,
+    };
+    expect(getItemPricingContext(item).unitCost).toBe(640);
+    expect(getItemPricingContext(item).lineCost).toBe(1280);
   });
 
   test('multiplies line cost by durationMonths (issue #757)', () => {
     const item: PricingItem = { productCost: 50, quantity: 2, durationMonths: 12 };
-    const ctx = getItemPricingContext(item, 'hours');
+    const ctx = getItemPricingContext(item);
     expect(ctx.durationMonths).toBe(12);
     expect(ctx.lineCost).toBe(1200); // 50 × 2 × 12
   });
 
   test('treats an absent durationMonths as 1 (unchanged from pre-duration behavior)', () => {
     const item: PricingItem = { productCost: 50, quantity: 2 };
-    expect(getItemPricingContext(item, 'hours').lineCost).toBe(100);
+    expect(getItemPricingContext(item).lineCost).toBe(100);
   });
 
-  test('falls back to defaultUnitType when item has no unitType', () => {
+  test('keeps the numeric cost when item has no unitType', () => {
     const item: PricingItem = { productCost: 50, quantity: 3 };
-    const ctx = getItemPricingContext(item, 'hours');
+    const ctx = getItemPricingContext(item);
     expect(ctx.unitCost).toBe(50);
     expect(ctx.lineCost).toBe(150);
   });
@@ -576,7 +599,7 @@ describe('calculatePricingTotals', () => {
 
   test('applies a global percentage discount on top of per-line discounts', () => {
     const items: PricingItem[] = [{ unitPrice: 100, quantity: 1, discount: 10 }];
-    const t = calculatePricingTotals(items, 50, 'hours', 'percentage');
+    const t = calculatePricingTotals(items, 50, 'percentage');
     expect(t.subtotal).toBe(90);
     expect(t.discountAmount).toBe(45);
     expect(t.totalDiscountAmount).toBe(55);
@@ -586,21 +609,21 @@ describe('calculatePricingTotals', () => {
 
   test('caps a percentage global discount at 100% so totals cannot become negative', () => {
     const items: PricingItem[] = [{ unitPrice: 50, quantity: 1 }];
-    const t = calculatePricingTotals(items, 150, 'hours', 'percentage');
+    const t = calculatePricingTotals(items, 150, 'percentage');
     expect(t.discountAmount).toBe(50);
     expect(t.total).toBe(0);
   });
 
   test('caps a currency-type global discount at the subtotal (no negative totals)', () => {
     const items: PricingItem[] = [{ unitPrice: 50, quantity: 1 }];
-    const t = calculatePricingTotals(items, 999, 'hours', 'currency');
+    const t = calculatePricingTotals(items, 999, 'currency');
     expect(t.discountAmount).toBe(50);
     expect(t.total).toBe(0);
   });
 
   test('clamps a negative currency discount to 0', () => {
     const items: PricingItem[] = [{ unitPrice: 50, quantity: 1 }];
-    const t = calculatePricingTotals(items, -10, 'hours', 'currency');
+    const t = calculatePricingTotals(items, -10, 'currency');
     expect(t.discountAmount).toBe(0);
     expect(t.total).toBe(50);
   });
@@ -625,17 +648,14 @@ describe('calculatePricingTotals', () => {
     expect(t.margin).toBe(120);
   });
 
-  test('respects per-item unitType when computing cost (days vs hours)', () => {
+  test('does not reprice cost when the item unit is days', () => {
     const items: PricingItem[] = [
       { unitPrice: 1000, quantity: 1, productCost: 50, unitType: 'days' },
     ];
-    expect(calculatePricingTotals(items, 0).totalCost).toBe(400); // 50/h × 8 = 400/day
+    expect(calculatePricingTotals(items, 0).totalCost).toBe(50);
   });
 
-  test('does NOT convert a supplier-sourced days cost (already in the line unit, #812 round 19)', () => {
-    // supplierQuoteUnitPrice mirrors the supplier item, whose unit the line copies on
-    // pick/refresh — only product costs are hourly-canonical. The old hours→days conversion
-    // inflated a days-priced sourced cost by 8 in totals and margins.
+  test('preserves a supplier-sourced days cost', () => {
     const items: PricingItem[] = [
       {
         unitPrice: 1000,
@@ -646,7 +666,7 @@ describe('calculatePricingTotals', () => {
       },
     ];
     const t = calculatePricingTotals(items, 0);
-    expect(t.totalCost).toBe(400); // NOT 3200
+    expect(t.totalCost).toBe(400);
     expect(t.margin).toBe(600);
   });
 
@@ -687,7 +707,7 @@ describe('calculatePricingTotals', () => {
   test('rounds every returned field to 2 decimal places', () => {
     // Hand-picked to drift in every field: small unit prices + percentage discount.
     const items: PricingItem[] = [{ unitPrice: 0.1, quantity: 3, productCost: 0.05, discount: 10 }];
-    const t = calculatePricingTotals(items, 5, 'hours', 'percentage');
+    const t = calculatePricingTotals(items, 5, 'percentage');
     // None of these should have trailing IEEE-754 digits.
     for (const value of Object.values(t)) {
       expect(value).toBe(roundCurrency(value));

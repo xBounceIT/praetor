@@ -61,15 +61,15 @@ import {
   isTemporaryLineItem,
 } from '../../utils/lineItemIndex';
 import {
-  calcProductSalePrice,
+  calcProductSalePriceForItem,
   calculatePricingTotals,
-  convertUnitPrice,
   durationValueToMonths,
   EMPTY_PRICING_TOTALS,
   formatDecimal,
   formatMolPercentage,
   formatNumber,
   getDurationInputValue,
+  getEffectiveUnitCost,
   getItemPricingContext,
   isPositiveFiniteNumber,
   MAX_MOL_PERCENTAGE,
@@ -102,6 +102,7 @@ import {
 } from '../../utils/quoteStatus';
 import {
   buildSupplierQuoteItemIndex,
+  getDocumentPricingSemanticsVersion,
   isSupplierLineLocked,
   isSupplierLineStale,
   pickedSupplierLineFields,
@@ -372,7 +373,7 @@ const calculateClientQuotePricingTotals = (
   items: QuoteItem[],
   globalDiscount: number,
   discountType: Quote['discountType'],
-): PricingTotals => calculatePricingTotals(items, globalDiscount, 'hours', discountType);
+): PricingTotals => calculatePricingTotals(items, globalDiscount, discountType);
 
 const isLegacyAcceptedQuote = (quote: Quote) => {
   const candidates = quote.candidates ?? [];
@@ -1246,12 +1247,11 @@ const useClientQuotesController = ({
               };
             }
 
-            const mol = product.molPercentage ? Number(product.molPercentage) : 0;
             const cost = Number(product.costo);
-            const unitPrice = convertUnitPrice(
-              calcProductSalePrice(cost, mol),
-              'hours',
-              item.unitType || 'hours',
+            const unitPrice = calcProductSalePriceForItem(
+              item,
+              cost,
+              product.molPercentage ? Number(product.molPercentage) : 0,
             );
 
             return {
@@ -1343,6 +1343,9 @@ const useClientQuotesController = ({
       unitType: 'hours',
       unitPrice: Number.NaN,
       productMolPercentage: null,
+      pricingSemanticsVersion: editingQuote
+        ? getDocumentPricingSemanticsVersion(formData.items)
+        : undefined,
       // Supplier quote fields
       supplierQuoteId: null,
       supplierQuoteItemId: null,
@@ -1455,13 +1458,13 @@ const useClientQuotesController = ({
         if (product.type === 'supply') {
           newItems[index].unitType = 'hours';
         }
-        const mol = product.molPercentage ? Number(product.molPercentage) : 0;
-        newItems[index].unitPrice = convertUnitPrice(
-          calcProductSalePrice(Number(product.costo), mol),
-          'hours',
-          newItems[index].unitType || 'hours',
+        const cost = Number(product.costo);
+        newItems[index].unitPrice = calcProductSalePriceForItem(
+          newItems[index],
+          cost,
+          product.molPercentage ? Number(product.molPercentage) : 0,
         );
-        newItems[index].productCost = Number(product.costo);
+        newItems[index].productCost = cost;
         newItems[index].productMolPercentage = product.molPercentage;
       }
     }
@@ -1481,13 +1484,13 @@ const useClientQuotesController = ({
           if (product.type === 'supply') {
             newItems[index].unitType = 'hours';
           }
-          const mol = product.molPercentage ? Number(product.molPercentage) : 0;
-          newItems[index].unitPrice = convertUnitPrice(
-            calcProductSalePrice(Number(product.costo), mol),
-            'hours',
-            newItems[index].unitType || 'hours',
+          const cost = Number(product.costo);
+          newItems[index].unitPrice = calcProductSalePriceForItem(
+            newItems[index],
+            cost,
+            product.molPercentage ? Number(product.molPercentage) : 0,
           );
-          newItems[index].productCost = Number(product.costo);
+          newItems[index].productCost = cost;
           newItems[index].productMolPercentage = product.molPercentage;
         }
         setFormData((prev) => ({ ...prev, items: newItems }));
@@ -1537,9 +1540,13 @@ const useClientQuotesController = ({
 
         const existingProduct = products.find((p) => p.id === newItems[index].productId);
         if (existingProduct) {
-          const mol = existingProduct.molPercentage ? Number(existingProduct.molPercentage) : 0;
-          newItems[index].unitPrice = calcProductSalePrice(Number(existingProduct.costo), mol);
-          newItems[index].productCost = Number(existingProduct.costo);
+          const cost = Number(existingProduct.costo);
+          newItems[index].unitPrice = calcProductSalePriceForItem(
+            newItems[index],
+            cost,
+            existingProduct.molPercentage ? Number(existingProduct.molPercentage) : 0,
+          );
+          newItems[index].productCost = cost;
           newItems[index].productMolPercentage = existingProduct.molPercentage;
         }
       }
@@ -1685,18 +1692,16 @@ const useClientQuotesController = ({
     if (!item) return;
     const oldType = item.unitType || 'hours';
     if (oldType === newType) return;
-    const adjustedPrice = convertUnitPrice(item.unitPrice, oldType, newType);
     const newItems = [...(formData.items || [])];
     newItems[index] = {
       ...newItems[index],
       unitType: newType,
-      unitPrice: adjustedPrice,
     };
     setFormData((prev) => ({ ...prev, items: newItems }));
   };
 
   // Duration value entered in the item's chosen unit (issue #757). Stored canonically as whole
-  // months; 'years' multiplies by 12. An empty input stays empty while pricing uses neutral ×1.
+  // canonical months; pricing separately uses the numeric value shown in the selected unit.
   const handleDurationValueChange = (index: number, value: string) => {
     if (isReadOnly) return;
     const unit = normalizeDurationUnit(formData.items?.[index]?.durationUnit);
@@ -1715,8 +1720,8 @@ const useClientQuotesController = ({
     if (isReadOnly) return;
     const item = formData.items?.[index];
     if (!item || normalizeDurationUnit(item.durationUnit) === newUnit) return;
-    // 'N/A' marks the line as duration-less: reset to the neutral 1 month so it never multiplies
-    // (issue #775). Months/years instead keeps the displayed number under the new unit.
+    // 'N/A' marks the line as duration-less and applies neutral ×1 pricing. Months/years preserve
+    // the displayed number under the new unit while updating its canonical stored months.
     const durationValue = getDurationInputValue(item);
     const durationMonths =
       newUnit === 'na' || durationValue === undefined
@@ -3366,7 +3371,7 @@ const ClientQuoteItemsSection: React.FC<{ controller: ClientQuotesController }> 
       id: 'duration',
       header: t('sales:clientQuotes.durationColumn', { defaultValue: 'Duration' }),
       minWidth: 174,
-      accessorFn: (item) => getItemPricingContext(item).durationMonths,
+      accessorFn: (item) => getItemPricingContext(item).durationMultiplier,
       align: 'right',
       cell: ({ row }) => {
         const index = getIndex(row);
@@ -3585,9 +3590,7 @@ const getClientQuoteLineContext = (
   const cost =
     rawCost === undefined || rawCost === null || !Number.isFinite(Number(rawCost))
       ? undefined
-      : item.supplierQuoteItemId
-        ? Number(rawCost)
-        : convertUnitPrice(Number(rawCost), 'hours', item.unitType || 'hours');
+      : getEffectiveUnitCost(item);
   const molPercentage = item.productMolPercentage ?? undefined;
   const unitPrice = Number.isFinite(Number(item.unitPrice)) ? Number(item.unitPrice) : undefined;
   const revenue = unitPrice === undefined ? undefined : lineSalePrice;

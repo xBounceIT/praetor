@@ -67,7 +67,7 @@ describe('migration 0117 supplier discount history', () => {
 
     expect(seedSql.match(/legacy_discount_rounding/g)?.length).toBeGreaterThanOrEqual(4);
     expect(seedSql).toMatch(/v\.discount,\r?\n\s+false,\r?\n\s+v\.note/);
-    expect(seedSql).toContain('960.00, 0.00, false)');
+    expect(seedSql).toContain('960.00, 0.00, false, 2)');
   });
 
   test('ships in the combined precision migration immediately after main', async () => {

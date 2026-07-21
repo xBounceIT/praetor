@@ -5,6 +5,7 @@ import {
   supplierOrderVersions,
 } from '../db/schema/supplierOrderVersions.ts';
 import { generatePrefixedId } from '../utils/order-ids.ts';
+import { normalizeHistoricalPricingSemanticsItems } from '../utils/pricing-semantics.ts';
 import type { SupplierOrder, SupplierOrderItem } from './supplierOrdersRepo.ts';
 
 export type { SupplierOrderVersionSnapshot } from '../db/schema/supplierOrderVersions.ts';
@@ -38,7 +39,10 @@ const mapRow = (row: SupplierOrderVersionRowSelect): SupplierOrderVersionRow => 
 
 const mapVersion = (row: typeof supplierOrderVersions.$inferSelect): SupplierOrderVersion => ({
   ...mapRow(row),
-  snapshot: row.snapshot,
+  snapshot: {
+    ...row.snapshot,
+    items: normalizeHistoricalPricingSemanticsItems(row.snapshot.items),
+  },
 });
 
 export const buildSnapshot = (

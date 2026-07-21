@@ -2,6 +2,7 @@ import { and, desc, eq } from 'drizzle-orm';
 import { type DbExecutor, db } from '../db/drizzle.ts';
 import { type OfferVersionSnapshot, offerVersions } from '../db/schema/offerVersions.ts';
 import { generatePrefixedId } from '../utils/order-ids.ts';
+import { normalizeHistoricalPricingSemanticsItems } from '../utils/pricing-semantics.ts';
 import type { ClientOffer, ClientOfferItem } from './clientOffersRepo.ts';
 
 export type { OfferVersionSnapshot } from '../db/schema/offerVersions.ts';
@@ -33,7 +34,10 @@ const mapRow = (row: OfferVersionRowSelect): OfferVersionRow => ({
 
 const mapVersion = (row: typeof offerVersions.$inferSelect): OfferVersion => ({
   ...mapRow(row),
-  snapshot: row.snapshot,
+  snapshot: {
+    ...row.snapshot,
+    items: normalizeHistoricalPricingSemanticsItems(row.snapshot.items),
+  },
 });
 
 export const buildSnapshot = (

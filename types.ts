@@ -747,8 +747,9 @@ export interface QuoteItem {
   discount?: number; // item-level discount percentage (0–100)
   note?: string;
   unitType?: SupplierUnitType;
-  durationMonths?: number; // months the service runs; multiplies cost & revenue (issue #757)
+  durationMonths?: number; // canonical stored months; pricing uses the displayed duration value
   durationUnit?: DurationUnit; // display unit: 'months' (default), 'years', or 'na' (N/A, no duration)
+  pricingSemanticsVersion?: PricingSemanticsVersion;
 }
 
 export type QuoteCandidateState = 'active' | 'selected' | 'discarded';
@@ -912,8 +913,9 @@ export interface ClientOfferItem {
   discount?: number; // item-level discount percentage (0–100)
   note?: string;
   unitType?: SupplierUnitType;
-  durationMonths?: number; // months the service runs; multiplies cost & revenue (issue #757)
+  durationMonths?: number; // canonical stored months; pricing uses the displayed duration value
   durationUnit?: DurationUnit; // display unit: 'months' (default), 'years', or 'na' (N/A, no duration)
+  pricingSemanticsVersion?: PricingSemanticsVersion;
 }
 
 export interface ClientOffer {
@@ -1015,8 +1017,9 @@ export interface ClientsOrderItem {
   discount?: number; // item-level discount percentage (0–100)
   note?: string;
   unitType?: SupplierUnitType;
-  durationMonths?: number; // months the service runs; multiplies cost & revenue (issue #757)
+  durationMonths?: number; // canonical stored months; pricing uses the displayed duration value
   durationUnit?: DurationUnit; // display unit: 'months' (default), 'years', or 'na' (N/A, no duration)
+  pricingSemanticsVersion?: PricingSemanticsVersion;
 }
 
 export interface ClientsOrder {
@@ -1307,8 +1310,9 @@ export interface InvoiceItem {
   discount?: number;
   // Per-item Italian VAT (IVA) rate in percent. 0 for exempt or pre-tax-feature data.
   taxRate?: number;
-  durationMonths?: number; // months the service runs; multiplies the taxable amount (issue #757)
+  durationMonths?: number; // canonical stored months; pricing uses the displayed duration value
   durationUnit?: DurationUnit; // display unit: 'months' (default), 'years', or 'na' (N/A, no duration)
+  pricingSemanticsVersion?: PricingSemanticsVersion;
 }
 
 export interface Invoice {
@@ -1396,11 +1400,11 @@ export interface BulkSupplierCreateResponse {
 
 export type SupplierUnitType = 'hours' | 'days' | 'unit';
 
-// Display unit for a line item's duration (issue #757). `durationMonths` stays the canonical
-// pricing multiplier (always whole months); `durationUnit` only controls how that value is
-// shown/entered — 'years' renders `durationMonths / 12`. 'na' (N/A) marks a line where duration
-// does not apply: the value beside the selector is disabled and the line never multiplies (×1).
+// Unit for a line item's duration. `durationMonths` stays in canonical whole months for storage,
+// while pricing uses the numeric value shown in `durationUnit`: 12 months multiply by 12, whereas
+// the same stored value shown as 1 year multiplies by 1. 'na' marks a neutral ×1 duration.
 export type DurationUnit = 'months' | 'years' | 'na';
+export type PricingSemanticsVersion = 1 | 2;
 
 export interface SupplierQuoteItem {
   id: string;
@@ -1417,13 +1421,11 @@ export interface SupplierQuoteItem {
   unitPrice: number;
   note?: string;
   unitType?: SupplierUnitType;
-  // Number of months the line item's service runs (issue #776, same logic as client quotes
-  // #757). Multiplies the line total alongside `quantity`. Absent/invalid → 1, so legacy rows
-  // keep their existing totals.
+  // Canonical whole months retained for API/data compatibility.
   durationMonths?: number;
-  // Display unit for `durationMonths`: 'months' (default) or 'years'. Pricing always uses
-  // `durationMonths`; this only controls how the value is shown/entered.
+  // Pricing uses the numeric duration value shown in this unit.
   durationUnit?: DurationUnit;
+  pricingSemanticsVersion?: PricingSemanticsVersion;
 }
 
 export interface SupplierQuote {
@@ -1529,12 +1531,11 @@ export interface SupplierSaleOrderItem {
   // True for historical/legacy-writer rows that used currency-rounded discounted units.
   legacyDiscountRounding?: boolean;
   note?: string;
-  // Number of months the line runs (issue #776). Multiplies the line total alongside quantity;
-  // carried over from the originating supplier quote so the order total matches the quote.
-  // Absent/invalid → 1, so legacy orders keep their existing totals.
+  // Canonical whole months carried from the originating supplier quote.
   durationMonths?: number;
-  // Display unit for `durationMonths`: 'months' (default) or 'years'.
+  // Pricing uses the numeric duration value shown in this unit.
   durationUnit?: DurationUnit;
+  pricingSemanticsVersion?: PricingSemanticsVersion;
 }
 
 export interface SupplierSaleOrder {
@@ -1594,8 +1595,9 @@ export interface SupplierInvoiceItem {
   discount?: number;
   // True for historical/legacy-writer rows that used currency-rounded discounted units.
   legacyDiscountRounding?: boolean;
-  durationMonths?: number; // months the service runs; multiplies the line total (issue #776/#775)
+  durationMonths?: number; // canonical stored months; pricing uses the displayed duration value
   durationUnit?: DurationUnit; // display unit: 'months' (default), 'years', or 'na' (N/A, no duration)
+  pricingSemanticsVersion?: PricingSemanticsVersion;
 }
 
 export interface SupplierInvoice {

@@ -326,7 +326,7 @@ describe('<SupplierOrdersView /> item pricing columns', () => {
     expect(screen.queryByText('4.813,13 EUR')).not.toBeInTheDocument();
   });
 
-  test('converts a replacement product hourly cost into the retained day unit', async () => {
+  test('preserves a replacement product cost in the retained day unit', async () => {
     const onUpdateOrder = mock((_id: string, _updates: Partial<SupplierSaleOrder>) => {});
     const products: Product[] = [
       {
@@ -381,7 +381,7 @@ describe('<SupplierOrdersView /> item pricing columns', () => {
     expect(updates.items?.[0]).toEqual(
       expect.objectContaining({
         productId: 'product-2',
-        unitPrice: 800,
+        unitPrice: 100,
         unitType: 'days',
         legacyDiscountRounding: false,
       }),

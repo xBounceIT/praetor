@@ -4,6 +4,12 @@ import { supplierInvoiceItems, supplierInvoices } from '../db/schema/supplierInv
 import { requireDateOnly } from '../utils/date.ts';
 import { type DurationUnit, normalizeDurationUnit } from '../utils/duration-unit.ts';
 import { numericForDb, parseDbNumber } from '../utils/parse.ts';
+import {
+  normalizeHistoricalPricingSemanticsVersion,
+  normalizePricingSemanticsVersion,
+  type PricingSemanticsVersion,
+  preservePricingSemanticsVersions,
+} from '../utils/pricing-semantics.ts';
 
 export type SupplierInvoice = {
   id: string;
@@ -32,6 +38,7 @@ export type SupplierInvoiceItem = {
   legacyDiscountRounding: boolean;
   durationMonths: number;
   durationUnit: DurationUnit;
+  pricingSemanticsVersion: PricingSemanticsVersion;
 };
 
 const mapInvoice = (row: typeof supplierInvoices.$inferSelect): SupplierInvoice => ({
@@ -61,6 +68,7 @@ const mapItem = (row: typeof supplierInvoiceItems.$inferSelect): SupplierInvoice
   legacyDiscountRounding: row.legacyDiscountRounding,
   durationMonths: row.durationMonths ?? 1,
   durationUnit: normalizeDurationUnit(row.durationUnit),
+  pricingSemanticsVersion: normalizeHistoricalPricingSemanticsVersion(row.pricingSemanticsVersion),
 });
 
 // Memory-side cap on unfiltered listAll. There is no index on `created_at`, so Postgres
@@ -302,6 +310,7 @@ export type NewSupplierInvoiceItem = {
   legacyDiscountRounding?: boolean;
   durationMonths: number;
   durationUnit: DurationUnit;
+  pricingSemanticsVersion?: PricingSemanticsVersion;
 };
 
 export const insertItems = async (
@@ -322,10 +331,11 @@ export const insertItems = async (
         unitPrice: numericForDb(item.unitPrice),
         discount: numericForDb(item.discount),
         legacyDiscountRounding: item.legacyDiscountRounding ?? false,
-        // Duration applies to every line type (issue #775); 'na' is gated via effectiveDurationMonths
+        // Duration applies to every line type; pricing derives the displayed multiplier and gates N/A
         // downstream, so the chosen value/unit is persisted verbatim.
         durationMonths: item.durationMonths ?? 1,
         durationUnit: item.durationUnit ?? 'months',
+        pricingSemanticsVersion: normalizePricingSemanticsVersion(item.pricingSemanticsVersion),
       })),
     )
     .returning();
@@ -338,6 +348,13 @@ export const replaceItems = async (
   exec: DbExecutor = db,
 ): Promise<SupplierInvoiceItem[]> =>
   runAtomically(exec, async (tx) => {
-    await tx.delete(supplierInvoiceItems).where(eq(supplierInvoiceItems.invoiceId, invoiceId));
-    return insertItems(invoiceId, items, tx);
+    const storedItems = await tx
+      .delete(supplierInvoiceItems)
+      .where(eq(supplierInvoiceItems.invoiceId, invoiceId))
+      .returning({
+        id: supplierInvoiceItems.id,
+        pricingSemanticsVersion: supplierInvoiceItems.pricingSemanticsVersion,
+      });
+    const versionedItems = preservePricingSemanticsVersions(items, storedItems);
+    return insertItems(invoiceId, versionedItems, tx);
   });

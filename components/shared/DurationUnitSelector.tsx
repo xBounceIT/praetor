@@ -11,11 +11,8 @@ interface DurationUnitSelectorProps {
   i18nPrefix?: string;
 }
 
-// Months/years/N-A selector for a line item's duration (issue #757). Mirrors `UnitTypeSelector`:
-// the value the user types stays in `durationMonths` (canonical months); this control only
-// chooses how that value is displayed/entered. 'years' multiplies the entered number by 12;
-// 'na' (N/A) marks a line where duration does not apply — the adjacent value input is disabled
-// and the line never multiplies (issue #775).
+// Months/years/N-A selector. Storage remains in canonical months, but pricing uses the exact
+// numeric value shown beside this selector. N/A disables the input and stays neutral (×1).
 const DurationUnitSelector: React.FC<DurationUnitSelectorProps> = ({
   value,
   onChange,

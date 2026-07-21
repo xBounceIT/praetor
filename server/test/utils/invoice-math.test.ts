@@ -160,13 +160,29 @@ describe('computeInvoiceTotals', () => {
     expect(result.total).toBe(roundCurrency(result.subtotal + result.taxTotal));
   });
 
-  test('durationMonths multiplies the taxable amount and tax (issue #757)', () => {
+  test('a displayed month duration multiplies the taxable amount and tax (issue #757)', () => {
     // taxable = 2 × 50 × 12 = 1200; 22% VAT = 264; total 1464
     expect(
       computeInvoiceTotals([
         { quantity: 2, unitPrice: 50, discount: 0, taxRate: 22, durationMonths: 12 },
       ]),
     ).toEqual({ subtotal: 1200, taxTotal: 264, total: 1464 });
+  });
+
+  test('a years duration multiplies by the displayed year value', () => {
+    // 12 canonical months display as 1 year: taxable = 2 × 50 × 1 = 100.
+    expect(
+      computeInvoiceTotals([
+        {
+          quantity: 2,
+          unitPrice: 50,
+          discount: 0,
+          taxRate: 22,
+          durationMonths: 12,
+          durationUnit: 'years',
+        },
+      ]),
+    ).toEqual({ subtotal: 100, taxTotal: 22, total: 122 });
   });
 
   test('durationMonths applies after the line discount', () => {
@@ -203,6 +219,21 @@ describe('computeInvoiceTotals', () => {
         },
       ]),
     ).toEqual({ subtotal: 100, taxTotal: 22, total: 122 });
+  });
+
+  test('preserves the historical year total for legacy invoice rows', () => {
+    expect(
+      computeInvoiceTotals([
+        {
+          quantity: 2,
+          unitPrice: 50,
+          taxRate: 22,
+          durationMonths: 12,
+          durationUnit: 'years',
+          pricingSemanticsVersion: 1,
+        },
+      ]),
+    ).toEqual({ subtotal: 1200, taxTotal: 264, total: 1464 });
   });
 });
 

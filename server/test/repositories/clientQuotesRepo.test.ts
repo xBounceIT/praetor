@@ -42,7 +42,7 @@ const quoteRow = (overrides: Record<number, unknown> = {}) => makeRow(QUOTE_BASE
 // id, quote_id, product_id, product_name, quantity, unit_price, product_cost,
 // product_mol_percentage, supplier_quote_id, supplier_quote_item_id,
 // supplier_quote_supplier_name, supplier_quote_unit_price, discount, note, unit_type,
-// duration_months, duration_unit, created_at, position, candidate_id
+// duration_months, duration_unit, created_at, position, candidate_id, pricing_semantics_version
 const ITEM_BASE: readonly unknown[] = [
   'qi-1',
   'cq-1',
@@ -64,6 +64,7 @@ const ITEM_BASE: readonly unknown[] = [
   new Date('2026-04-01T00:00:00Z'),
   0,
   null,
+  1,
 ];
 const itemRow = (overrides: Record<number, unknown> = {}) => makeRow(ITEM_BASE, overrides);
 
@@ -226,7 +227,8 @@ describe('findItemSnapshotsForQuote', () => {
   test('maps snapshot row fields with parsed numbers and unitType normalization', async () => {
     // Projected columns in order:
     // id, candidateId, productId, quantity, productCost, productMolPercentage, supplierQuoteId,
-    // supplierQuoteItemId, supplierQuoteSupplierName, supplierQuoteUnitPrice, unitType
+    // supplierQuoteItemId, supplierQuoteSupplierName, supplierQuoteUnitPrice, unitType,
+    // pricingSemanticsVersion
     exec.enqueue({
       rows: [['qi-1', 'qc-1', 'p-1', '3', '5', '20', null, null, null, null, null]],
     });
@@ -243,6 +245,7 @@ describe('findItemSnapshotsForQuote', () => {
       supplierQuoteSupplierName: null,
       supplierQuoteUnitPrice: null,
       unitType: 'hours', // null normalized to "hours" by normalizeUnitType
+      pricingSemanticsVersion: 1,
     });
   });
 });
@@ -251,18 +254,39 @@ describe('findItemTotals', () => {
   test('returns parsed numeric totals including durationMonths and durationUnit', async () => {
     exec.enqueue({
       rows: [
-        ['2', '10', '5', 12, 'years'],
-        [1, 20, null, null, null],
-        [3, 30, 0, 6, 'na'],
+        ['2', '10', '5', 12, 'years', 1],
+        [1, 20, null, null, null, 1],
+        [3, 30, 0, 6, 'na', 2],
       ],
     });
     const result = await clientQuotesRepo.findItemTotals('cq-1', testDb);
     expect(result).toEqual([
-      { quantity: 2, unitPrice: 10, discount: 5, durationMonths: 12, durationUnit: 'years' },
+      {
+        quantity: 2,
+        unitPrice: 10,
+        discount: 5,
+        durationMonths: 12,
+        durationUnit: 'years',
+        pricingSemanticsVersion: 1,
+      },
       // null duration_unit normalizes to 'months'
-      { quantity: 1, unitPrice: 20, discount: 0, durationMonths: 1, durationUnit: 'months' },
+      {
+        quantity: 1,
+        unitPrice: 20,
+        discount: 0,
+        durationMonths: 1,
+        durationUnit: 'months',
+        pricingSemanticsVersion: 1,
+      },
       // 'na' (N/A) is carried through so the quote-total gate can skip the duration multiplier
-      { quantity: 3, unitPrice: 30, discount: 0, durationMonths: 6, durationUnit: 'na' },
+      {
+        quantity: 3,
+        unitPrice: 30,
+        discount: 0,
+        durationMonths: 6,
+        durationUnit: 'na',
+        pricingSemanticsVersion: 2,
+      },
     ]);
   });
 });
@@ -479,6 +503,41 @@ describe('replaceItems', () => {
     const result = await clientQuotesRepo.replaceItems('cq-1', [], testDb);
     expect(exec.calls).toHaveLength(2);
     expect(result).toEqual([]);
+  });
+
+  test('makes replacement rows inherit the historical document pricing contract', async () => {
+    exec.enqueue({ rows: [['cq-1']] });
+    exec.enqueue({ rows: [['old-item', 1]] });
+    exec.enqueue({ rows: [itemRow({ 0: 'new-item', 20: 1 })] });
+
+    const result = await clientQuotesRepo.replaceItems(
+      'cq-1',
+      [
+        {
+          id: 'new-item',
+          position: 0,
+          productId: 'p-1',
+          productName: 'Historical replacement',
+          quantity: 1,
+          unitPrice: 10,
+          productCost: 5,
+          productMolPercentage: 50,
+          discount: 0,
+          note: null,
+          supplierQuoteId: null,
+          supplierQuoteItemId: null,
+          supplierQuoteSupplierName: null,
+          supplierQuoteUnitPrice: null,
+          unitType: 'days',
+          durationMonths: 12,
+          durationUnit: 'years',
+        },
+      ],
+      testDb,
+    );
+
+    expect(exec.calls[2].params.at(-1)).toBe(1);
+    expect(result[0].pricingSemanticsVersion).toBe(1);
   });
 
   test('resolves the persisted default candidate id after a quote rename', async () => {

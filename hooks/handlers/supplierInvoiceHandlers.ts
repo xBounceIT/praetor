@@ -3,7 +3,6 @@ import api from '../../services/api';
 import type { SupplierInvoice, SupplierSaleOrder, View } from '../../types';
 import { addDaysToDateOnly, getLocalDateString } from '../../utils/date';
 import { getDiscountedDocumentTotal } from '../../utils/numbers';
-import { makeTempId } from '../../utils/tempId';
 import { toastError } from '../../utils/toast';
 
 export type SupplierInvoiceHandlersDeps = {
@@ -40,7 +39,9 @@ export const makeSupplierInvoiceHandlers = (deps: SupplierInvoiceHandlersDeps) =
       const issueDate = getLocalDateString();
       const dueDate = addDaysToDateOnly(issueDate, paymentDays);
       const items = order.items.map((item) => ({
-        id: makeTempId(),
+        // The API replaces this id with a new invoice-item id; retain the source id in the
+        // request so it can preserve each order line's historical pricing marker.
+        id: item.id,
         invoiceId: '',
         productId: item.productId,
         description: item.productName,
@@ -49,9 +50,10 @@ export const makeSupplierInvoiceHandlers = (deps: SupplierInvoiceHandlersDeps) =
         discount: item.discount || 0,
         legacyDiscountRounding: item.legacyDiscountRounding === true,
         // Carry the order line's duration so the invoice total matches the order (issue #776/#775);
-        // 'na' lines never multiply (effectiveDurationMonths returns 1).
+        // pricing uses the displayed numeric value and 'na' lines use the neutral multiplier 1.
         durationMonths: item.durationMonths ?? 1,
         durationUnit: item.durationUnit ?? 'months',
+        pricingSemanticsVersion: item.pricingSemanticsVersion,
       }));
       const subtotal = getDiscountedDocumentTotal(items);
       const invoice = await api.supplierInvoices.create({

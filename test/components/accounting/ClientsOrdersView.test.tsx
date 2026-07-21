@@ -298,9 +298,7 @@ describe('<ClientsOrdersView />', () => {
     expect(screen.getAllByText('240,00 EUR').length).toBeGreaterThan(0);
   });
 
-  test('a years duration prices off the canonical months, matching the months equivalent (issue #757)', () => {
-    // durationUnit only controls display; pricing always uses the canonical durationMonths (24),
-    // so "2 years" (24 months) totals the same as a 24-month line.
+  test('a years duration prices using the displayed year value', () => {
     const yearsOrder: ClientsOrder = {
       id: 'dm_so_years',
       clientId: 'client-1',
@@ -338,10 +336,8 @@ describe('<ClientsOrdersView />', () => {
       />,
     );
 
-    // Subtotal (revenue) = 100 × 2 × 24 = 4800.
-    expect(screen.getAllByText('4.800,00 EUR').length).toBeGreaterThan(0);
-    // Margin = 4800 − (60 × 2 × 24 = 2880) = 1920.
-    expect(screen.getAllByText('1.920,00 EUR').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('400,00 EUR').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('160,00 EUR').length).toBeGreaterThan(0);
   });
 
   test('MOL line input keeps two decimals instead of rounding to one (issue #780)', async () => {
@@ -658,6 +654,92 @@ describe('<ClientsOrdersView /> draft-from-offer editability', () => {
     costUnit: 'unit',
     type: 'supply',
   };
+
+  test('reprices a legacy day line from its effective product cost', async () => {
+    const onUpdate = mock((_id: string, _updates: Partial<ClientsOrder>) => Promise.resolve());
+    const legacyDayOrder: ClientsOrder = {
+      ...draftLinkedOrder,
+      id: 'dm_so_legacy_day',
+      items: [
+        {
+          ...orders[0].items[0],
+          orderId: 'dm_so_legacy_day',
+          unitType: 'days',
+          unitPrice: 640,
+          productCost: 80,
+          pricingSemanticsVersion: 1,
+        },
+      ],
+    };
+    const replacementProduct: Product = {
+      id: 'product-2',
+      name: 'Day service',
+      productCode: 'D-1',
+      costo: 100,
+      molPercentage: 25,
+      costUnit: 'hours',
+      type: 'service',
+    };
+    const { dialog } = await openModal(legacyDayOrder, onUpdate, [
+      consultingProduct,
+      replacementProduct,
+    ]);
+
+    fireEvent.click(within(dialog).getByRole('button', { name: /Consulting/ }));
+    fireEvent.click(await screen.findByText('Day service'));
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: 'accounting:clientsOrders.updateOrder' }),
+    );
+
+    await waitFor(() => expect(onUpdate).toHaveBeenCalledTimes(1));
+    const item = onUpdate.mock.calls[0]?.[1].items?.[0];
+    expect(item).toMatchObject({ productId: 'product-2', productCost: 100 });
+    expect(item?.unitPrice).toBeCloseTo(1066.667, 3);
+  });
+
+  test('inherits legacy pricing semantics for added lines', async () => {
+    const onUpdate = mock((_id: string, _updates: Partial<ClientsOrder>) => Promise.resolve());
+    const legacyOrder: ClientsOrder = {
+      ...draftLinkedOrder,
+      id: 'dm_so_legacy_add',
+      items: [
+        {
+          ...orders[0].items[0],
+          orderId: 'dm_so_legacy_add',
+          pricingSemanticsVersion: 1,
+        },
+      ],
+    };
+    const addedProduct: Product = {
+      id: 'product-2',
+      name: 'Added service',
+      productCode: 'A-1',
+      costo: 100,
+      molPercentage: 25,
+      costUnit: 'hours',
+      type: 'service',
+    };
+    const { dialog } = await openModal(legacyOrder, onUpdate, [consultingProduct, addedProduct]);
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'sales:clientQuotes.addProduct' }));
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: 'sales:clientQuotes.selectProduct' }),
+    );
+    fireEvent.click(await screen.findByText('Added service'));
+    fireEvent.change(
+      within(dialog).getAllByRole('textbox', { name: 'sales:clientQuotes.qty' })[1],
+      { target: { value: '1' } },
+    );
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: 'accounting:clientsOrders.updateOrder' }),
+    );
+
+    await waitFor(() => expect(onUpdate).toHaveBeenCalledTimes(1));
+    expect(onUpdate.mock.calls[0]?.[1].items?.[1]).toMatchObject({
+      productId: 'product-2',
+      pricingSemanticsVersion: 1,
+    });
+  });
 
   test('product selector and remove button are locked for a supplier-order-backed line', async () => {
     const supplierBackedDraft: ClientsOrder = {
