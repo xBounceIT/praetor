@@ -55,5 +55,12 @@ describe('revision code templates', () => {
         sequencePadding: 12,
       }),
     ).toEqual(expect.objectContaining({ ok: false }));
+    expect(
+      validateRevisionCodeTemplate({
+        prefix: 'R',
+        template: `{PREFIX}${'X'.repeat(48)}{SEQ}`,
+        sequencePadding: 1,
+      }),
+    ).toEqual(expect.objectContaining({ ok: false }));
   });
 });

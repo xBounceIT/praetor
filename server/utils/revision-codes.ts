@@ -10,6 +10,9 @@ export const DEFAULT_REVISION_CODE_TEMPLATE: RevisionCodeTemplate = {
   sequencePadding: 1,
 };
 
+// revision_number is a PostgreSQL integer, so its largest allocatable value has ten digits.
+const MAX_REVISION_NUMBER = 2_147_483_647;
+
 export const renderRevisionCode = (
   config: RevisionCodeTemplate,
   revisionNumber: number,
@@ -58,7 +61,7 @@ export const validateRevisionCodeTemplate = (
     template: candidate.template,
     sequencePadding: Number(candidate.sequencePadding),
   };
-  if (renderRevisionCode(result, 1).length > 50) {
+  if (renderRevisionCode(result, MAX_REVISION_NUMBER).length > 50) {
     return { ok: false, message: 'rendered revision code must not exceed 50 characters' };
   }
   return { ok: true, value: result };
