@@ -36,7 +36,10 @@ describe('buildSnapshot', () => {
   test('wraps offer + items in a versioned envelope', () => {
     const offer = {
       id: 'co-1',
+      revisionNumber: 2,
+      revisionCode: 'REV2',
       linkedQuoteId: 'cq-1',
+      linkedQuoteRevisionCode: 'REV4',
       clientId: 'c-1',
       clientName: 'Acme',
       paymentTerms: 'net30',
@@ -52,7 +55,10 @@ describe('buildSnapshot', () => {
     const items: Parameters<typeof offerVersionsRepo.buildSnapshot>[1] = [];
     const snapshot = offerVersionsRepo.buildSnapshot(offer, items);
     expect(snapshot.schemaVersion).toBe(1);
-    expect(snapshot.offer).toBe(offer);
+    expect(snapshot.offer).toMatchObject({ id: 'co-1', linkedQuoteId: 'cq-1' });
+    expect(snapshot.offer).not.toHaveProperty('revisionNumber');
+    expect(snapshot.offer).not.toHaveProperty('revisionCode');
+    expect(snapshot.offer).not.toHaveProperty('linkedQuoteRevisionCode');
     expect(snapshot.items).toBe(items);
   });
 });

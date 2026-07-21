@@ -1315,14 +1315,18 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       };
       try {
         result = await withDbTransaction(async (tx) => {
-          const sendingIntent =
+          // Accepting a draft is an implicit send: reserve its immutable revision before the
+          // acceptance creates a downstream order.
+          const revisionIntent =
             normalizeQuoteStatus(existingOffer.status) === 'draft' &&
-            normalizeQuoteStatus(targetStatus ?? existingOffer.status) === 'sent';
-          const lockedOffer = sendingIntent
+            ['sent', 'accepted'].includes(
+              normalizeQuoteStatus(targetStatus ?? existingOffer.status),
+            );
+          const lockedOffer = revisionIntent
             ? await clientOffersRepo.lockExistingById(idResult.value, tx)
             : existingOffer;
           if (!lockedOffer) return { offer: null, items: [], syncAudits: [] };
-          if (sendingIntent && normalizeQuoteStatus(lockedOffer.status) !== 'draft') {
+          if (revisionIntent && normalizeQuoteStatus(lockedOffer.status) !== 'draft') {
             return {
               offer: null,
               items: [],
@@ -1330,7 +1334,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               revisionConflict: true,
             };
           }
-          const supplierRevisionStates = sendingIntent
+          const supplierRevisionStates = revisionIntent
             ? await lockSupplierRevisionStates(
                 await sourcedSupplierQuoteIds(
                   normalizedItemsForUpdate ??
@@ -1388,6 +1392,32 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                 items: clientsOrdersRepo.ClientOrderItem[];
               }
             | undefined;
+          // Bidirectional sync (issue #779): push GENUINE client-side edits of supplier-sourced
+          // line fields (quantity, unit cost) onto the referenced supplier quote items,
+          // atomically with the offer write. The audit entries are logged after commit.
+          const syncAudits = normalizedItemsForUpdate
+            ? await syncSupplierItemsFromClientLines(
+                request,
+                'client_offer.update',
+                normalizedItemsForUpdate,
+                previousSyncLines,
+                tx,
+              )
+            : [];
+          let revisedOffer = offer;
+          if (revisionIntent) {
+            const revision = await createOfferRevisionIfChanged(
+              offer.id,
+              request.user?.id ?? null,
+              tx,
+            );
+            if (revision) revisedOffer = { ...offer, ...revision };
+            await createDerivedSupplierRevisions(
+              supplierRevisionStates,
+              request.user?.id ?? null,
+              tx,
+            );
+          }
           if (createsClientOrder) {
             const existingOrder = await clientsOrdersRepo.findExistingForOffer(offer.id, null, tx);
             if (existingOrder) {
@@ -1407,32 +1437,6 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                 notes: offer.notes,
               },
               buildOrderItemsFromOfferItems(updatedItems),
-              tx,
-            );
-          }
-          // Bidirectional sync (issue #779): push GENUINE client-side edits of supplier-sourced
-          // line fields (quantity, unit cost) onto the referenced supplier quote items,
-          // atomically with the offer write. The audit entries are logged after commit.
-          const syncAudits = normalizedItemsForUpdate
-            ? await syncSupplierItemsFromClientLines(
-                request,
-                'client_offer.update',
-                normalizedItemsForUpdate,
-                previousSyncLines,
-                tx,
-              )
-            : [];
-          let revisedOffer = offer;
-          if (sendingIntent && normalizeQuoteStatus(targetStatus ?? offer.status) === 'sent') {
-            const revision = await createOfferRevisionIfChanged(
-              offer.id,
-              request.user?.id ?? null,
-              tx,
-            );
-            if (revision) revisedOffer = { ...offer, ...revision };
-            await createDerivedSupplierRevisions(
-              supplierRevisionStates,
-              request.user?.id ?? null,
               tx,
             );
           }

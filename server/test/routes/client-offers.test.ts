@@ -628,6 +628,28 @@ describe('client-offer immutable revisions', () => {
     expect(createDerivedSupplierRevisionsMock).toHaveBeenCalled();
     expect(JSON.parse(res.body).revisionCode).toBe('REV1');
   });
+
+  test('treats draft → accepted as an implicit send before creating its order', async () => {
+    coFindExistingMock.mockResolvedValue(gate({ status: 'draft' }));
+    coLockExistingByIdMock.mockResolvedValue(gate({ status: 'draft' }));
+    coUpdateMock.mockResolvedValue(updatedOffer({ status: 'accepted' }));
+    coFindItemsForOfferMock.mockResolvedValue([storedOfferItem()]);
+    createOfferRevisionIfChangedMock.mockImplementation(async () => {
+      expect(clientOrderCreateMock).not.toHaveBeenCalled();
+      return { revisionNumber: 1, revisionCode: 'REV1' };
+    });
+
+    const res = await putOffer({ status: 'accepted' });
+
+    expect(res.statusCode).toBe(200);
+    expect(createOfferRevisionIfChangedMock).toHaveBeenCalledWith(
+      'off-1',
+      HAPPY_USER.id,
+      expect.anything(),
+    );
+    expect(clientOrderCreateMock).toHaveBeenCalled();
+    expect(JSON.parse(res.body).revisionCode).toBe('REV1');
+  });
 });
 
 describe('PUT /api/sales/client-offers/:id expired rules (issue #779)', () => {

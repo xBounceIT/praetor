@@ -50,7 +50,14 @@ export const buildSnapshot = (
   quote: Omit<SupplierQuote, 'revisionNumber' | 'revisionCode' | 'linkedClientQuoteRevisionCode'>,
   items: SupplierQuoteItem[],
 ): SupplierQuoteVersionSnapshot => {
-  return { schemaVersion: 1, quote, items };
+  // Omit is compile-time only; strip the live revision values before serializing the snapshot.
+  const {
+    revisionNumber: _revisionNumber,
+    revisionCode: _revisionCode,
+    linkedClientQuoteRevisionCode: _linkedClientQuoteRevisionCode,
+    ...snapshotQuote
+  } = quote as SupplierQuote;
+  return { schemaVersion: 1, quote: snapshotQuote, items };
 };
 
 export const listForQuote = async (
