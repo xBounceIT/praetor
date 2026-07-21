@@ -530,6 +530,7 @@ const HEADER_CONTENT_GAP = 4;
 const HEADER_DRAG_HANDLE_WIDTH = 24;
 const HEADER_DRAG_HANDLE_GAP = 4;
 const ACTION_COLUMN_WIDTH = 64;
+const STICKY_ACTION_COLUMN_SEPARATOR_CLASS = 'shadow-[-1px_0_0_0_var(--border)]';
 const ACTION_MENU_CONTENT_CLASSNAME = 'w-max min-w-[9rem] max-w-[calc(100vw-2rem)] p-1';
 const ACTION_MENU_ITEMS_CLASSNAME = 'flex flex-col gap-0.5';
 const ACTION_MENU_BUTTON_CLASSNAME =
@@ -3593,7 +3594,11 @@ const StandardTableHeaderCell = <T extends object>({
   const colWidth = Math.max(header.getSize(), minColumnWidth);
   const sorted = header.column.getIsSorted();
   const isResizing = header.column.getIsResizing();
-  const stickyBorderClass = isStickyRightColumn ? 'border-l border-border' : '';
+  const stickyBorderClass = isStickyRightColumn
+    ? isActionColumn
+      ? STICKY_ACTION_COLUMN_SEPARATOR_CLASS
+      : 'border-l border-border'
+    : '';
   const resizeHandler = header.getResizeHandler();
   const dropPosition =
     columnDropTarget?.columnId === colId && draggingColumnId !== colId
@@ -4087,7 +4092,11 @@ const StandardTableDataCell = <T extends object>({
   const effectiveAlign = col.align ?? (isFirstColumn ? 'left' : isLastColumn ? 'right' : undefined);
   const minColumnWidth = getColumnMinWidth(col);
   const colWidth = Math.max(cell.column.getSize(), minColumnWidth);
-  const stickyBorderClass = isStickyRightColumn ? 'border-l border-border' : '';
+  const stickyBorderClass = isStickyRightColumn
+    ? isActionColumn
+      ? STICKY_ACTION_COLUMN_SEPARATOR_CLASS
+      : 'border-l border-border'
+    : '';
   const stickyHoverClass = isStickyRightColumn && !isActionColumn ? 'group-hover:bg-muted/50' : '';
   const rawValue = cell.getValue() as T[keyof T] | string | number | boolean | null | undefined;
   const cellContent =
