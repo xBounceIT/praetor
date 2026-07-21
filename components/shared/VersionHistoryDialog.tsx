@@ -36,7 +36,9 @@ export function VersionHistoryDialog({
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           {description ? (
-            <DialogDescription className="sr-only">{description}</DialogDescription>
+            <DialogDescription className="text-sm text-muted-foreground">
+              {description}
+            </DialogDescription>
           ) : null}
         </DialogHeader>
         <div className="min-h-0 flex-1 overflow-y-auto">{open ? children : null}</div>

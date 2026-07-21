@@ -127,6 +127,7 @@ describe('<VersionHistoryPanel />', () => {
 
     const list = screen.getByRole('radiogroup');
     expect(list.parentElement).toHaveClass('max-h-[min(24rem,50vh)]');
+    expect(screen.queryByRole('button', { name: labels.infoTooltip })).not.toBeInTheDocument();
   });
 
   test('exposes an info tooltip when provided', async () => {

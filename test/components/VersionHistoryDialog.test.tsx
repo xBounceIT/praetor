@@ -22,6 +22,7 @@ describe('<VersionHistoryDialog />', () => {
     expect(content?.style.zIndex).toBe('66');
     expect(overlay?.style.zIndex).toBe('65');
     expect(screen.getByText('panel')).toBeInTheDocument();
+    expect(screen.getByText('Save history')).toBeInTheDocument();
     cleanup();
   });
 });

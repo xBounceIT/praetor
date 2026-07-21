@@ -117,7 +117,9 @@ export function VersionHistoryPanel<Row extends VersionHistoryPanelRow>({
         <h3 className="min-w-0 flex-1 truncate text-[11px] font-semibold tracking-wider text-muted-foreground uppercase">
           {labels.title}
         </h3>
-        {labels.infoTooltip ? (
+        {/* Dialog layout already surfaces this copy in VersionHistoryDialog; keep the
+            icon only inline so dialog autofocus cannot open the tooltip on mount. */}
+        {labels.infoTooltip && layout !== 'dialog' ? (
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
