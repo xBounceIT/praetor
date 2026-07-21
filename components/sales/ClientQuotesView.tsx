@@ -2998,14 +2998,20 @@ const ClientQuoteClientSection: React.FC<{ controller: ClientQuotesController }>
         status={readOnlyStatus}
         statusLabel={statusLabel}
       />
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-5">
-        <ClientQuoteClientField controller={controller} />
-        <ClientQuoteCodeField controller={controller} />
-        <ClientQuotePaymentTermsField controller={controller} />
-        <ClientQuoteCommunicationField controller={controller} />
-        <ClientQuoteExpirationField controller={controller} />
+      <div className="space-y-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <ClientQuoteClientField controller={controller} />
+          <ClientQuoteCodeField controller={controller} />
+          <ClientQuotePaymentTermsField controller={controller} />
+        </div>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <ClientQuoteCommunicationField controller={controller} />
+          <ClientQuoteExpirationField controller={controller} />
+          <div className="sm:col-span-2 lg:col-span-2">
+            <ClientQuoteDescriptionField controller={controller} />
+          </div>
+        </div>
       </div>
-      <ClientQuoteDescriptionField controller={controller} />
     </div>
   );
 };
