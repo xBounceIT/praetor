@@ -1508,7 +1508,7 @@ const ClientOfferFormModal: React.FC<{ controller: ClientOffersController }> = (
             {editingOffer?.id ? (
               <div className="flex justify-end">
                 <OfferRevisionsPanel
-                  className="w-full max-w-sm"
+                  className="w-full max-w-2xl"
                   offerId={editingOffer.id}
                   selectedRevisionId={selectedRevisionId}
                   onPreview={(revision) =>
@@ -1523,7 +1523,7 @@ const ClientOfferFormModal: React.FC<{ controller: ClientOffersController }> = (
                   disabled={revisionRestoreDisabled}
                   secondaryAction={{
                     label: t('sales:clientOffers.revisionHistory.openVersionHistory', {
-                      defaultValue: 'Open version history',
+                      defaultValue: 'Open full history',
                     }),
                     onClick: () => setVersionsDialogOpen(true),
                   }}

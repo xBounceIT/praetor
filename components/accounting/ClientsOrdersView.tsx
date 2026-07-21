@@ -1062,7 +1062,7 @@ const ClientsOrderModal: React.FC<{ controller: ClientsOrdersController }> = ({ 
           {controller.editingOrder?.id ? (
             <div className="flex justify-end">
               <OrderVersionsPanel
-                className="w-full max-w-sm"
+                className="w-full max-w-2xl"
                 orderId={controller.editingOrder.id}
                 selectedVersionId={controller.previewVersion?.id ?? null}
                 onPreview={controller.handleVersionPreview}

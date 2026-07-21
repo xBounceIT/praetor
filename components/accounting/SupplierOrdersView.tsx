@@ -854,7 +854,7 @@ const SupplierOrderModal: React.FC<{ controller: SupplierOrdersController }> = (
           {controller.editingOrder?.id ? (
             <div className="flex justify-end">
               <SupplierOrderVersionsPanel
-                className="w-full max-w-sm"
+                className="w-full max-w-2xl"
                 orderId={controller.editingOrder.id}
                 selectedVersionId={controller.previewVersion?.id ?? null}
                 onPreview={controller.handleVersionPreview}

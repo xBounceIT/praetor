@@ -73,7 +73,8 @@ describe('<VersionHistoryPanel />', () => {
       />,
     );
 
-    expect(screen.getByRole('heading', { name: labels.title })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: labels.title })).toBeInTheDocument();
+    expect(screen.getByText(labels.title)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: labels.searchAriaLabel })).toBeInTheDocument();
     expect(screen.getByText(labels.currentBadge)).toBeInTheDocument();
     expect(screen.getByRole('radio', { name: 'REV 3' })).toBeInTheDocument();
@@ -125,14 +126,21 @@ describe('<VersionHistoryPanel />', () => {
     expect(onSelect).not.toHaveBeenCalled();
   });
 
-  test('toggles search and filters the local list', async () => {
+  test('expands search on the header row and filters the local list', async () => {
     const user = userEvent.setup();
     render(<VersionHistoryPanel {...baseProps} rows={versionRows} />);
 
-    await user.click(screen.getByRole('button', { name: labels.searchAriaLabel }));
+    const searchToggle = screen.getByRole('button', { name: labels.searchAriaLabel });
+    const header = searchToggle.parentElement;
+    expect(header).not.toBeNull();
+    expect(screen.getByText(labels.title)).toBeVisible();
+
+    await user.click(searchToggle);
     const input = screen.getByPlaceholderText(labels.searchPlaceholder);
     expect(input).toBeInTheDocument();
     expect(input).toHaveFocus();
+    expect(header?.contains(input)).toBe(true);
+    expect(screen.getByText(labels.title)).toHaveClass('opacity-0', 'max-w-0');
 
     await user.type(input, 'bob');
     expect(screen.getByRole('radio', { name: 'REV 2' })).toBeInTheDocument();
@@ -167,7 +175,7 @@ describe('<VersionHistoryPanel />', () => {
     const list = screen.getByRole('radiogroup');
     expect(list.parentElement).toHaveClass('max-h-[min(24rem,50vh)]');
     expect(screen.queryByRole('button', { name: labels.infoTooltip })).not.toBeInTheDocument();
-    expect(screen.queryByRole('heading', { name: labels.title })).not.toBeInTheDocument();
+    expect(screen.queryByText(labels.title)).not.toBeInTheDocument();
     expect(screen.getByRole('region', { name: labels.title })).not.toHaveClass('border');
   });
 

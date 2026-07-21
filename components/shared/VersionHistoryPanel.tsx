@@ -125,19 +125,48 @@ export function VersionHistoryPanel<Row extends VersionHistoryPanelRow>({
       <div
         className={cn(
           'flex items-center gap-2 border-b border-border bg-muted/30',
-          isDialog ? 'px-6 py-3' : 'px-3 py-2',
+          isDialog ? 'px-6 py-3' : 'px-4 py-2.5',
         )}
       >
-        {isDialog ? (
-          <div className="min-w-0 flex-1" />
-        ) : (
-          <h3 className="min-w-0 flex-1 truncate text-[11px] font-semibold tracking-wider text-muted-foreground uppercase">
+        {!isDialog ? (
+          <span
+            className={cn(
+              'truncate text-[11px] font-semibold tracking-wider text-muted-foreground uppercase transition-[flex-grow,opacity,max-width] duration-200 ease-out',
+              searchOpen
+                ? 'max-w-0 flex-none overflow-hidden opacity-0'
+                : 'min-w-0 max-w-full flex-1 opacity-100',
+            )}
+          >
             {labels.title}
-          </h3>
-        )}
+          </span>
+        ) : null}
+
+        <div
+          className={cn(
+            'overflow-hidden transition-[flex-grow,opacity,max-width] duration-200 ease-out',
+            searchOpen
+              ? 'min-w-0 max-w-full flex-1 opacity-100'
+              : 'pointer-events-none max-w-0 flex-none opacity-0',
+            isDialog && !searchOpen && 'hidden',
+            isDialog && searchOpen && 'block',
+          )}
+        >
+          <Input
+            ref={searchInputRef}
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            placeholder={labels.searchPlaceholder}
+            aria-label={labels.searchAriaLabel}
+            tabIndex={searchOpen ? 0 : -1}
+            className="h-8 text-xs"
+          />
+        </div>
+
+        {isDialog && !searchOpen ? <div className="min-w-0 flex-1" /> : null}
+
         {/* Dialog layout already surfaces this copy in VersionHistoryDialog; keep the
             icon only inline so dialog autofocus cannot open the tooltip on mount. */}
-        {labels.infoTooltip && !isDialog ? (
+        {labels.infoTooltip && !isDialog && !searchOpen ? (
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
@@ -155,6 +184,7 @@ export function VersionHistoryPanel<Row extends VersionHistoryPanelRow>({
             </TooltipContent>
           </Tooltip>
         ) : null}
+
         <Button
           type="button"
           variant="ghost"
@@ -167,25 +197,21 @@ export function VersionHistoryPanel<Row extends VersionHistoryPanelRow>({
           aria-pressed={searchOpen}
           onClick={toggleSearch}
         >
-          <i className="fa-solid fa-magnifying-glass text-xs" aria-hidden="true"></i>
+          <i
+            className={cn(
+              'text-xs',
+              searchOpen ? 'fa-solid fa-xmark' : 'fa-solid fa-magnifying-glass',
+            )}
+            aria-hidden="true"
+          ></i>
         </Button>
-        <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] font-bold tracking-wider text-muted-foreground uppercase">
-          {rows.length}
-        </span>
-      </div>
 
-      {searchOpen ? (
-        <div className={cn('border-b border-border py-2', isDialog ? 'px-6' : 'px-3')}>
-          <Input
-            ref={searchInputRef}
-            value={searchQuery}
-            onChange={(event) => setSearchQuery(event.target.value)}
-            placeholder={labels.searchPlaceholder}
-            aria-label={labels.searchAriaLabel}
-            className="h-8 text-xs"
-          />
-        </div>
-      ) : null}
+        {!searchOpen ? (
+          <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] font-bold tracking-wider text-muted-foreground uppercase">
+            {rows.length}
+          </span>
+        ) : null}
+      </div>
 
       <div className={cn('min-h-0 overflow-y-auto', isDialog && 'px-4', listMaxClass)}>
         {isLoading && (
@@ -212,7 +238,7 @@ export function VersionHistoryPanel<Row extends VersionHistoryPanelRow>({
           <RadioGroup
             value={radioValue}
             onValueChange={handleRadioChange}
-            className="gap-0 px-2 py-1"
+            className={cn('gap-0 py-1', isDialog ? 'px-2' : 'px-3')}
           >
             {filteredRows.map((row, index) => {
               const selected = row.id === selectedVersionId;
@@ -228,22 +254,22 @@ export function VersionHistoryPanel<Row extends VersionHistoryPanelRow>({
                   key={row.id}
                   htmlFor={`history-row-${row.id}`}
                   className={cn(
-                    'relative mb-0.5 flex cursor-pointer gap-2 rounded-md px-1 py-1 hover:bg-muted/40',
+                    'relative mb-1 flex cursor-pointer items-center gap-3 rounded-md px-2 py-2 hover:bg-muted/40',
                     selected && 'border border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/15',
+                    !selected && 'border border-transparent',
                   )}
                   style={{ minHeight: INLINE_ROW_MIN_HEIGHT }}
                 >
                   <div
-                    className="relative flex w-3 shrink-0 flex-col items-center"
-                    style={{ minHeight: INLINE_ROW_MIN_HEIGHT }}
+                    className="relative flex w-3 shrink-0 flex-col items-center self-stretch"
                     aria-hidden="true"
                   >
                     {!isLast ? (
-                      <span className="absolute top-4 bottom-0 left-1/2 w-px -translate-x-1/2 bg-border" />
+                      <span className="absolute top-4 bottom-[-0.5rem] left-1/2 w-px -translate-x-1/2 bg-border" />
                     ) : null}
                     <span
                       className={cn(
-                        'relative z-10 mt-3 size-2.5 shrink-0 rounded-full border-2 border-background',
+                        'relative z-10 mt-1.5 size-2.5 shrink-0 rounded-full border-2 border-background',
                         selected
                           ? 'bg-amber-500'
                           : isCurrent
@@ -252,25 +278,33 @@ export function VersionHistoryPanel<Row extends VersionHistoryPanelRow>({
                       )}
                     />
                   </div>
-                  <span className="min-w-0 flex-1 space-y-0.5 self-center py-1">
-                    <span className="flex flex-wrap items-center gap-1.5">
-                      <span className="text-xs font-semibold text-foreground">{optionLabel}</span>
-                      {isCurrent ? (
-                        <span className="rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[9px] font-bold tracking-wider text-emerald-700 uppercase dark:text-emerald-400">
-                          {labels.currentBadge}
-                        </span>
-                      ) : null}
+
+                  {row.revisionCode ? (
+                    <span className="shrink-0 rounded-md border border-border bg-muted/40 px-2 py-1 text-[11px] font-semibold tracking-wide text-foreground">
+                      {row.revisionCode}
                     </span>
-                    <span className="block text-[10px] text-muted-foreground">
-                      {reasonLabel}
-                      {row.revisionCode ? ` · ${timestamp}` : ''}
+                  ) : null}
+
+                  <span className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1">
+                    <span className="truncate text-xs text-muted-foreground">
+                      {reasonLabel || optionLabel}
                       {row.createdByUserName ? ` · ${row.createdByUserName}` : ''}
                     </span>
+                    {isCurrent ? (
+                      <span className="rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[9px] font-bold tracking-wider text-emerald-700 uppercase dark:text-emerald-400">
+                        {labels.currentBadge}
+                      </span>
+                    ) : null}
                   </span>
+
+                  <span className="hidden shrink-0 text-[11px] whitespace-nowrap text-muted-foreground sm:inline">
+                    {timestamp}
+                  </span>
+
                   <RadioGroupItem
                     id={`history-row-${row.id}`}
                     value={row.id}
-                    className="mt-3 shrink-0 self-start"
+                    className="shrink-0"
                     aria-label={optionLabel}
                   />
                 </label>
@@ -284,7 +318,7 @@ export function VersionHistoryPanel<Row extends VersionHistoryPanelRow>({
         <div
           className={cn(
             'flex flex-col gap-2 border-t border-border bg-muted/30 sm:flex-row',
-            isDialog ? 'px-6 py-4' : 'p-2',
+            isDialog ? 'px-6 py-4' : 'px-4 py-3',
           )}
         >
           <Button
@@ -311,18 +345,18 @@ export function VersionHistoryPanel<Row extends VersionHistoryPanelRow>({
       ) : null}
 
       {secondaryAction ? (
-        <div className={cn('border-t border-border', isDialog ? 'px-6 py-3' : 'px-2 py-2')}>
+        <div className={cn('border-t border-border', isDialog ? 'px-6 py-3' : 'px-3 py-2.5')}>
           <Button
             type="button"
-            variant="ghost"
+            variant="outline"
             size="sm"
             onClick={secondaryAction.onClick}
-            className="h-auto w-full justify-start gap-2 px-2 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground"
+            className="h-9 w-full justify-start gap-2 text-xs font-medium"
           >
             <i className="fa-solid fa-clock-rotate-left" aria-hidden="true"></i>
             {secondaryAction.label}
             <i
-              className="fa-solid fa-arrow-up-right-from-square ml-auto text-[10px]"
+              className="fa-solid fa-arrow-up-right-from-square ml-auto text-[10px] text-muted-foreground"
               aria-hidden="true"
             ></i>
           </Button>

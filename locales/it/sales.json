@@ -275,7 +275,7 @@
       "noResults": "Nessuna revisione corrisponde alla ricerca",
       "currentBadge": "Corrente",
       "infoTooltip": "Snapshot immutabili creati all’invio. Lo storico dei salvataggi è disponibile dal link in basso.",
-      "openVersionHistory": "Apri storico versioni"
+      "openVersionHistory": "Apri cronologia completa"
     }
   },
   "clientOffers": {
@@ -393,7 +393,7 @@
       "noResults": "Nessuna revisione corrisponde alla ricerca",
       "currentBadge": "Corrente",
       "infoTooltip": "Snapshot immutabili creati all’invio. Lo storico dei salvataggi è disponibile dal link in basso.",
-      "openVersionHistory": "Apri storico versioni"
+      "openVersionHistory": "Apri cronologia completa"
     }
   },
   "supplierQuotes": {
@@ -508,7 +508,7 @@
       "noResults": "Nessuna revisione corrisponde alla ricerca",
       "currentBadge": "Corrente",
       "infoTooltip": "Snapshot immutabili creati all’invio. Lo storico dei salvataggi è disponibile dal link in basso.",
-      "openVersionHistory": "Apri storico versioni"
+      "openVersionHistory": "Apri cronologia completa"
     },
     "attachments": {
       "title": "Allegati",

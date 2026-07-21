@@ -2461,7 +2461,7 @@ const ClientQuoteFormModal: React.FC<{ controller: ClientQuotesController }> = (
         <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
           <ClientQuoteModalHeader controller={{ ...controller, closeModal: dismissModal }} />
           <ModalBody className="flex-1 space-y-5">
-            <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(16rem,20rem)]">
+            <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(28rem,40rem)]">
               <div className="min-w-0">
                 <ClientQuoteCandidatesBar controller={controller} />
               </div>
@@ -2482,7 +2482,7 @@ const ClientQuoteFormModal: React.FC<{ controller: ClientQuotesController }> = (
                   disabled={revisionRestoreDisabled}
                   secondaryAction={{
                     label: t('sales:clientQuotes.revisionHistory.openVersionHistory', {
-                      defaultValue: 'Open version history',
+                      defaultValue: 'Open full history',
                     }),
                     onClick: () => setVersionsDialogOpen(true),
                   }}

@@ -275,7 +275,7 @@
       "noResults": "No revisions match your search",
       "currentBadge": "Current",
       "infoTooltip": "Immutable snapshots created when the document is sent. Save history is available from the link below.",
-      "openVersionHistory": "Open version history"
+      "openVersionHistory": "Open full history"
     }
   },
   "clientOffers": {
@@ -393,7 +393,7 @@
       "noResults": "No revisions match your search",
       "currentBadge": "Current",
       "infoTooltip": "Immutable snapshots created when the document is sent. Save history is available from the link below.",
-      "openVersionHistory": "Open version history"
+      "openVersionHistory": "Open full history"
     }
   },
   "supplierQuotes": {
@@ -508,7 +508,7 @@
       "noResults": "No revisions match your search",
       "currentBadge": "Current",
       "infoTooltip": "Immutable snapshots created when the document is sent. Save history is available from the link below.",
-      "openVersionHistory": "Open version history"
+      "openVersionHistory": "Open full history"
     },
     "attachments": {
       "title": "Attachments",

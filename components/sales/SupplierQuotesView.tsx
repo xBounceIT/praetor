@@ -1343,7 +1343,7 @@ const SupplierQuoteModal: React.FC<{ controller: SupplierQuotesController }> = (
             {editingQuoteId ? (
               <div className="flex justify-end">
                 <SupplierQuoteRevisionsPanel
-                  className="w-full max-w-sm"
+                  className="w-full max-w-2xl"
                   quoteId={editingQuoteId}
                   selectedRevisionId={selectedRevisionId}
                   onPreview={(revision) =>
@@ -1358,7 +1358,7 @@ const SupplierQuoteModal: React.FC<{ controller: SupplierQuotesController }> = (
                   disabled={revisionRestoreDisabled}
                   secondaryAction={{
                     label: controller.t('sales:supplierQuotes.revisionHistory.openVersionHistory', {
-                      defaultValue: 'Open version history',
+                      defaultValue: 'Open full history',
                     }),
                     onClick: () => setVersionsDialogOpen(true),
                   }}
