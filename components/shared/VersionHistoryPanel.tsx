@@ -98,7 +98,14 @@ export function VersionHistoryPanel<Row extends VersionHistoryPanelRow>({
     setSearchOpen(true);
   };
 
+  const currentRowId = rows[0]?.id ?? null;
+  const radioValue = selectedVersionId ?? currentRowId ?? '';
+
   const handleRadioChange = (value: string) => {
+    if (currentRowId && value === currentRowId) {
+      if (selectedVersionId) onClearPreview();
+      return;
+    }
     const row = filteredRows.find((candidate) => candidate.id === value);
     if (row) onSelect(row);
   };
@@ -192,7 +199,7 @@ export function VersionHistoryPanel<Row extends VersionHistoryPanelRow>({
         )}
         {!isLoading && !error && filteredRows.length > 0 && (
           <RadioGroup
-            value={selectedVersionId ?? ''}
+            value={radioValue}
             onValueChange={handleRadioChange}
             className="gap-0 px-2 py-1"
           >

@@ -86,6 +86,45 @@ describe('<VersionHistoryPanel />', () => {
     expect(onSelect).toHaveBeenCalledWith(versionRows[2]);
   });
 
+  test('checks the current row by default when nothing is previewed', async () => {
+    const onSelect = mock(() => {});
+    const onClearPreview = mock(() => {});
+    render(
+      <VersionHistoryPanel
+        {...baseProps}
+        rows={versionRows}
+        selectedVersionId={null}
+        onSelect={onSelect}
+        onClearPreview={onClearPreview}
+      />,
+    );
+
+    expect(screen.getByRole('radio', { name: 'REV 3' })).toBeChecked();
+    expect(screen.queryByRole('button', { name: labels.backToCurrent })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('radio', { name: 'REV 3' }));
+    expect(onSelect).not.toHaveBeenCalled();
+    expect(onClearPreview).not.toHaveBeenCalled();
+  });
+
+  test('selecting the current row clears an active preview', () => {
+    const onSelect = mock(() => {});
+    const onClearPreview = mock(() => {});
+    render(
+      <VersionHistoryPanel
+        {...baseProps}
+        rows={versionRows}
+        selectedVersionId={versionRows[1].id}
+        onSelect={onSelect}
+        onClearPreview={onClearPreview}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('radio', { name: 'REV 3' }));
+    expect(onClearPreview).toHaveBeenCalled();
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
   test('toggles search and filters the local list', async () => {
     const user = userEvent.setup();
     render(<VersionHistoryPanel {...baseProps} rows={versionRows} />);
