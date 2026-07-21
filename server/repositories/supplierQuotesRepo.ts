@@ -397,11 +397,11 @@ export const existsById = async (id: string, exec: DbExecutor = db): Promise<boo
   return rows.length > 0;
 };
 
-// Client-document synchronization can intentionally make unit_price authoritative even when it
-// differs from the scale-2 list-price/discount formula. Limit the durable marker lookup to the
-// snapshot timestamp so later syncs cannot rewrite the provenance of an older version. Version
-// FKs follow quote-id renames while snapshot.quote.id keeps the former id, providing the aliases
-// needed to find markers written before a rename.
+// Client-document synchronization (or a duplicate that retains its synced cost) can intentionally
+// make unit_price authoritative even when it differs from the scale-2 list-price/discount formula.
+// Limit the durable marker lookup to the snapshot timestamp so later syncs cannot rewrite the
+// provenance of an older version. Version FKs follow quote-id renames while snapshot.quote.id
+// keeps the former id, providing the aliases needed to find markers written before a rename.
 export const hasClientSyncedCosts = async (
   quoteId: string,
   atOrBeforeMs: number,
@@ -412,7 +412,12 @@ export const hasClientSyncedCosts = async (
     sql`SELECT EXISTS (
       SELECT 1
       FROM audit_logs
-      WHERE action = ${'supplier_quote.updated'}
+      WHERE (
+          (action = ${'supplier_quote.updated'}
+            AND details ->> 'secondaryLabel' = ${'synced_from_client_line'})
+          OR (action = ${'supplier_quote.created'}
+            AND details ->> 'reason' = ${'client_synced_cost_preserved'})
+        )
         AND entity_type = ${'supplier_quote'}
         AND (
           entity_id = ${quoteId}
@@ -422,7 +427,6 @@ export const hasClientSyncedCosts = async (
             WHERE quote_id = ${quoteId}
           )
         )
-        AND details ->> 'secondaryLabel' = ${'synced_from_client_line'}
         AND created_at <= ${new Date(atOrBeforeMs)}
     ) AS "exists"`,
   );

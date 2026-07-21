@@ -545,6 +545,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         preserveProvidedUnitPrice: true,
       });
       if (!normalizedItems) return;
+      const preservesClientSyncedCost = normalizedItems.some(
+        (item) =>
+          item.unitPrice !==
+          deriveSupplierLinePricing(item.listPrice, item.discountPercent).unitPrice,
+      );
 
       const expirationDateResult = parseDateString(expirationDate, 'expirationDate');
       if (!expirationDateResult.ok) return badRequest(reply, expirationDateResult.message);
@@ -628,6 +633,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           secondaryLabel: result.quote.supplierName,
           changedFields: ['communicationChannelId'],
           toValue: communicationChannel.name,
+          ...(preservesClientSyncedCost ? { reason: 'client_synced_cost_preserved' } : {}),
         },
       });
       return reply.code(201).send({

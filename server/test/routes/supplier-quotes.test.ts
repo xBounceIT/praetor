@@ -395,6 +395,12 @@ describe('POST /api/sales/supplier-quotes', () => {
       [expect.objectContaining({ listPrice: 37.75, discountPercent: 15, unitPrice: 32.09 })],
       expect.anything(),
     );
+    expect(logAuditMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'supplier_quote.created',
+        details: expect.objectContaining({ reason: 'client_synced_cost_preserved' }),
+      }),
+    );
   });
 
   test('400 rejects a manual quote id that is unsafe in a URL path segment', async () => {
