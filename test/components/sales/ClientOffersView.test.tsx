@@ -617,17 +617,19 @@ describe('<ClientOffersView /> dark-mode banners (issue #768)', () => {
 });
 
 describe('<ClientOffersView /> edit modal layout', () => {
-  test('places client info beside revision history with a 4-field row + description', async () => {
+  test('places client info beside revision history with 2+2 fields then description', async () => {
     const source = await readComponentSource('sales/ClientOffersView.tsx');
     expectSourceContainsAll(source, [
       'lg:grid-cols-[minmax(0,1fr)_minmax(28rem,40rem)]',
-      'grid grid-cols-2 gap-3 lg:grid-cols-4',
+      'grid grid-cols-2 gap-3',
       '<ClientOfferDescriptionField controller={controller} />',
     ]);
-    // Offers keep the full 4-field row (not the quote compact 3+2 packing / old top-right history).
+    // Offers use two rows of two fields + full-width description (not a single 4-column row
+    // or the quote compact packing / old top-right history).
     expectSourceOmitsAll(source, [
       'className="flex justify-end"',
       'w-full max-w-2xl',
+      'lg:grid-cols-4',
       'lg:grid-cols-6',
       'layout="compact"',
     ]);

@@ -1660,7 +1660,7 @@ const ClientOfferClientSection: React.FC<{ controller: ClientOffersController }>
         status={clientStatus}
         statusLabel={statusLabel}
       />
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3">
         <ClientOfferClientField controller={controller} />
         <ClientOfferCodeField controller={controller} />
         <ClientOfferPaymentTermsField controller={controller} />
