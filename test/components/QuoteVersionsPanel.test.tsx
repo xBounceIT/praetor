@@ -196,14 +196,17 @@ describe('<QuoteVersionsPanel />', () => {
   });
 
   test('clicking a row fetches the full version and calls onPreview', async () => {
-    listVersionsMock.mockImplementation(() => Promise.resolve([VERSION_ROW_UPDATE]));
+    // Rows[0] is treated as current; selecting it is a no-op. Click a historical row instead.
+    listVersionsMock.mockImplementation(() =>
+      Promise.resolve([VERSION_ROW_UPDATE, VERSION_ROW_RESTORE]),
+    );
     getVersionMock.mockImplementation(() => Promise.resolve(FULL_VERSION));
     const onPreview = mock(() => {});
     render(<QuoteVersionsPanel {...baseProps} onPreview={onPreview} />);
-    await waitFor(() => expect(screen.getByText('formatted-1700000000000')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('formatted-1700000001000')).toBeInTheDocument());
 
-    fireEvent.click(screen.getByText('formatted-1700000000000'));
-    await waitFor(() => expect(getVersionMock).toHaveBeenCalledWith('cq-1', 'qv-1'));
+    fireEvent.click(screen.getByText('formatted-1700000001000'));
+    await waitFor(() => expect(getVersionMock).toHaveBeenCalledWith('cq-1', 'qv-2'));
     expect(onPreview).toHaveBeenCalledWith(FULL_VERSION);
   });
 
