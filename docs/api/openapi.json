@@ -46485,7 +46485,9 @@
                           "type": "number"
                         },
                         "unitPrice": {
-                          "type": "number"
+                          "type": "number",
+                          "minimum": 0,
+                          "description": "On create, preserves an explicit authoritative cost when it differs from the list-price/discount formula; pricing edits derive it again."
                         },
                         "note": {
                           "type": "string"
@@ -46900,7 +46902,9 @@
                           "type": "number"
                         },
                         "unitPrice": {
-                          "type": "number"
+                          "type": "number",
+                          "minimum": 0,
+                          "description": "On create, preserves an explicit authoritative cost when it differs from the list-price/discount formula; pricing edits derive it again."
                         },
                         "note": {
                           "type": "string"
@@ -49031,6 +49035,9 @@
                             "discount": {
                               "type": "number"
                             },
+                            "legacyDiscountRounding": {
+                              "type": "boolean"
+                            },
                             "durationMonths": {
                               "type": "number"
                             },
@@ -49276,6 +49283,9 @@
                     "items": {
                       "type": "object",
                       "properties": {
+                        "id": {
+                          "type": "string"
+                        },
                         "productId": {
                           "type": "string"
                         },
@@ -49300,6 +49310,9 @@
                           "type": "number",
                           "minimum": 0,
                           "maximum": 100
+                        },
+                        "legacyDiscountRounding": {
+                          "type": "boolean"
                         },
                         "note": {
                           "type": "string"
@@ -49458,6 +49471,9 @@
                           },
                           "discount": {
                             "type": "number"
+                          },
+                          "legacyDiscountRounding": {
+                            "type": "boolean"
                           },
                           "durationMonths": {
                             "type": "number"
@@ -49655,6 +49671,9 @@
                     "items": {
                       "type": "object",
                       "properties": {
+                        "id": {
+                          "type": "string"
+                        },
                         "productId": {
                           "type": "string"
                         },
@@ -49679,6 +49698,9 @@
                           "type": "number",
                           "minimum": 0,
                           "maximum": 100
+                        },
+                        "legacyDiscountRounding": {
+                          "type": "boolean"
                         },
                         "note": {
                           "type": "string"
@@ -49841,6 +49863,9 @@
                           },
                           "discount": {
                             "type": "number"
+                          },
+                          "legacyDiscountRounding": {
+                            "type": "boolean"
                           },
                           "durationMonths": {
                             "type": "number"
@@ -50710,6 +50735,9 @@
                           "discount": {
                             "type": "number"
                           },
+                          "legacyDiscountRounding": {
+                            "type": "boolean"
+                          },
                           "durationMonths": {
                             "type": "number"
                           },
@@ -50971,6 +50999,9 @@
                             "discount": {
                               "type": "number"
                             },
+                            "legacyDiscountRounding": {
+                              "type": "boolean"
+                            },
                             "durationMonths": {
                               "type": "number"
                             },
@@ -51214,6 +51245,9 @@
                     "items": {
                       "type": "object",
                       "properties": {
+                        "id": {
+                          "type": "string"
+                        },
                         "productId": {
                           "type": "string"
                         },
@@ -51227,7 +51261,12 @@
                           "type": "number"
                         },
                         "discount": {
-                          "type": "number"
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 100
+                        },
+                        "legacyDiscountRounding": {
+                          "type": "boolean"
                         },
                         "durationMonths": {
                           "type": "number"
@@ -51343,6 +51382,9 @@
                           },
                           "discount": {
                             "type": "number"
+                          },
+                          "legacyDiscountRounding": {
+                            "type": "boolean"
                           },
                           "durationMonths": {
                             "type": "number"
@@ -51564,6 +51606,9 @@
                     "items": {
                       "type": "object",
                       "properties": {
+                        "id": {
+                          "type": "string"
+                        },
                         "productId": {
                           "type": "string"
                         },
@@ -51577,7 +51622,12 @@
                           "type": "number"
                         },
                         "discount": {
-                          "type": "number"
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 100
+                        },
+                        "legacyDiscountRounding": {
+                          "type": "boolean"
                         },
                         "durationMonths": {
                           "type": "number"
@@ -51696,6 +51746,9 @@
                           },
                           "discount": {
                             "type": "number"
+                          },
+                          "legacyDiscountRounding": {
+                            "type": "boolean"
                           },
                           "durationMonths": {
                             "type": "number"

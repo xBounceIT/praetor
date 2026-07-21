@@ -160,9 +160,9 @@ describe('<SupplierQuotesView /> Duplicate row action', () => {
           ...acceptedWithOrder.items[0],
           id: 'sqi-duplicate-source',
           quoteId: 'SQ-DUPLICATE-SOURCE',
-          listPrice: 250,
-          discountPercent: 20,
-          unitPrice: 200,
+          listPrice: 37.75,
+          discountPercent: 15,
+          unitPrice: 32.09,
           note: 'Keep this line note',
           durationMonths: 12,
           durationUnit: 'years',
@@ -230,9 +230,9 @@ describe('<SupplierQuotesView /> Duplicate row action', () => {
     expect(payload.items?.[0]?.id).toStartWith('temp-');
     expect(payload.items?.[0]?.id).not.toBe(source.items[0]?.id);
     expect(payload.items?.[0]?.quoteId).toBe('');
-    expect(payload.items?.[0]?.listPrice).toBe(250);
-    expect(payload.items?.[0]?.discountPercent).toBe(20);
-    expect(payload.items?.[0]?.unitPrice).toBe(200);
+    expect(payload.items?.[0]?.listPrice).toBe(37.75);
+    expect(payload.items?.[0]?.discountPercent).toBe(15);
+    expect(payload.items?.[0]?.unitPrice).toBe(32.09);
     expect(payload.items?.[0]?.note).toBe('Keep this line note');
     expect(payload.items?.[0]?.durationMonths).toBe(12);
     expect(payload.items?.[0]?.durationUnit).toBe('years');
@@ -354,10 +354,39 @@ describe('<SupplierQuotesView /> supplier pricing chain', () => {
 
     const updates = onUpdateQuote.mock.calls[0]?.[1] as Partial<SupplierQuote>;
     const item = updates.items?.[0];
-    // 10.005 → 10.01 at scale 2; 10.01 × (1 − 10/100) = 9.009 → 9.01 (matches deriveSupplierLinePricing).
+    // 10.005 → 10.01 at scale 2; the derived 9.009 keeps its fractional cent.
     expect(item?.listPrice).toBe(10.01);
     expect(item?.discountPercent).toBe(10);
-    expect(item?.unitPrice).toBe(9.01);
+    expect(item?.unitPrice).toBe(9.009);
+  });
+
+  test('rounds the discounted line total only after multiplying by quantity', async () => {
+    const fractionalUnitCostQuote = buildQuote({
+      id: 'SQ-FRACTIONAL-UNIT-COST',
+      items: [
+        {
+          id: 'sqi-fractional-unit-cost',
+          quoteId: 'SQ-FRACTIONAL-UNIT-COST',
+          productName: 'Widget',
+          quantity: 150,
+          listPrice: 37.75,
+          discountPercent: 15,
+          // The API persists the derived cost with fractional cents; display formatting remains
+          // at currency scale while the line total uses this precise stored value.
+          unitPrice: 32.0875,
+          unitType: 'unit',
+        },
+      ],
+    });
+
+    render(<SupplierQuotesView {...baseProps} quotes={[fractionalUnitCostQuote]} />);
+
+    // 37.75 × (1 − 15/100) × 150 = 4813.125, rounded once to 4813.13.
+    expect(screen.getByText('4.813,13 EUR')).toBeInTheDocument();
+
+    await openQuote('SQ-FRACTIONAL-UNIT-COST');
+    expect(screen.getAllByText('4.813,13 EUR').length).toBeGreaterThanOrEqual(2);
+    expect(screen.queryByText('4.813,50 EUR')).not.toBeInTheDocument();
   });
 });
 

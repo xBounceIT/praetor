@@ -489,6 +489,36 @@ describe('replaceItems', () => {
   });
 });
 
+describe('hasClientSyncedCosts', () => {
+  test('returns true only when the durable client-sync marker existed by the cutoff', async () => {
+    exec.enqueue({ rows: [{ exists: true }] });
+    const cutoff = 1_700_000_001_000;
+
+    expect(await supplierQuotesRepo.hasClientSyncedCosts('q-1', cutoff, testDb)).toBe(true);
+    expect(exec.calls[0].sql).toContain('FROM audit_logs');
+    expect(exec.calls[0].sql).toContain("details ->> 'secondaryLabel'");
+    expect(exec.calls[0].sql).toContain("details ->> 'reason'");
+    expect(exec.calls[0].sql).toContain('FROM supplier_quote_versions');
+    expect(exec.calls[0].sql).toContain("snapshot -> 'quote' ->> 'id'");
+    expect(exec.calls[0].sql).toContain('created_at <=');
+    expect(exec.calls[0].params).toEqual([
+      'supplier_quote.updated',
+      'synced_from_client_line',
+      'supplier_quote.created',
+      'client_synced_cost_preserved',
+      'supplier_quote',
+      'q-1',
+      'q-1',
+      new Date(cutoff),
+    ]);
+  });
+
+  test('returns false when no marker exists', async () => {
+    exec.enqueue({ rows: [{ exists: false }] });
+    expect(await supplierQuotesRepo.hasClientSyncedCosts('q-1', Date.now(), testDb)).toBe(false);
+  });
+});
+
 describe('findSourcedItemIds', () => {
   // Three parallel DISTINCT probes in call order: quote_items, customer_offer_items, sale_items —
   // each restricted to supplier_quote_item_id values belonging to this quote's items.
@@ -743,6 +773,23 @@ describe('syncItemPricing', () => {
     expect(exec.calls[0].params).toEqual(expect.arrayContaining(['3', '80', '100', '20', 'sqi-1']));
     expect(exec.calls[1].sql.toLowerCase()).toContain('update "supplier_quotes"');
     expect(exec.calls[1].params).toContain('q-1');
+  });
+
+  test('preserves the client-authored unit cost when scale-2 list price cannot reproduce it exactly', async () => {
+    exec.enqueue({ rows: [] });
+    exec.enqueue({ rows: [] });
+    await supplierQuotesRepo.syncItemPricing(
+      'q-1',
+      [{ itemId: 'sqi-1', quantity: 150, unitCost: 32.09, discountPercent: 15 }],
+      testDb,
+    );
+
+    // 32.09 / 0.85 rounds to listPrice 37.75, whose exact discounted value is 32.0875.
+    // The bidirectional sync must keep the client-authored 32.09 authoritative; otherwise the
+    // client snapshot is stale immediately after the atomic save.
+    expect(exec.calls[0].params).toEqual(
+      expect.arrayContaining(['150', '32.09', '37.75', '15', 'sqi-1']),
+    );
   });
 
   test('a 100% discount cannot express a non-zero cost: resets to 0 with listPrice = cost', async () => {

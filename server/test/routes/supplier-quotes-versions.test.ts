@@ -47,6 +47,7 @@ const sqRenameMock = mock();
 const sqRestoreSnapshotQuoteMock = mock();
 const sqReplaceItemsMock = mock();
 const sqIsSourcedByClientDocumentsMock = mock();
+const sqHasClientSyncedCostsMock = mock();
 
 const qccFindByIdMock = mock();
 const qccFindDefaultMock = mock();
@@ -97,6 +98,7 @@ beforeAll(async () => {
     restoreSnapshotQuote: sqRestoreSnapshotQuoteMock,
     replaceItems: sqReplaceItemsMock,
     isSourcedByClientDocuments: sqIsSourcedByClientDocumentsMock,
+    hasClientSyncedCosts: sqHasClientSyncedCostsMock,
   }));
   mock.module('../../repositories/productsRepo.ts', () => ({
     ...productsRepoSnap,
@@ -233,6 +235,7 @@ const allMocks = [
   qccFindByIdMock,
   qccFindDefaultMock,
   sqIsSourcedByClientDocumentsMock,
+  sqHasClientSyncedCostsMock,
   suppliersFindByIdMock,
   productsGetSnapshotsMock,
   clientsExistsByIdMock,
@@ -266,6 +269,7 @@ beforeEach(async () => {
   qccFindDefaultMock.mockResolvedValue({ id: 'qcc_email', name: 'Email' });
   // Default: not sourced by any client document, so the restore stranding guard stays open.
   sqIsSourcedByClientDocumentsMock.mockResolvedValue(false);
+  sqHasClientSyncedCostsMock.mockResolvedValue(false);
   // Snapshots without a client link never call existsById; default true keeps the rest happy.
   clientsExistsByIdMock.mockResolvedValue(true);
 
@@ -336,6 +340,64 @@ describe('GET /api/sales/supplier-quotes/:id/versions/:versionId', () => {
     expect(sqvFindByIdMock).toHaveBeenCalledWith('sq-1', 'sqv-1');
   });
 
+  test('normalizes legacy formula pricing in the preview exactly like restore', async () => {
+    sqvFindByIdMock.mockResolvedValue({
+      ...SAMPLE_VERSION,
+      snapshot: {
+        ...SAMPLE_SNAPSHOT,
+        items: [
+          {
+            ...SAMPLE_ITEM,
+            quantity: 150,
+            listPrice: 37.75,
+            discountPercent: 15,
+            unitPrice: 32.09,
+          },
+        ],
+      },
+    });
+
+    const res = await testApp.inject({
+      method: 'GET',
+      url: '/api/sales/supplier-quotes/sq-1/versions/sqv-1',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body.snapshot.items[0].unitPrice).toBe(32.0875);
+    expect(Math.round(body.snapshot.items[0].unitPrice * 150 * 100) / 100).toBe(4813.13);
+    expect(sqHasClientSyncedCostsMock).toHaveBeenCalledWith('sq-1', SAMPLE_VERSION.createdAt);
+  });
+
+  test('keeps client-synced legacy pricing authoritative in the preview', async () => {
+    sqHasClientSyncedCostsMock.mockResolvedValue(true);
+    sqvFindByIdMock.mockResolvedValue({
+      ...SAMPLE_VERSION,
+      snapshot: {
+        ...SAMPLE_SNAPSHOT,
+        items: [
+          {
+            ...SAMPLE_ITEM,
+            listPrice: 37.75,
+            discountPercent: 15,
+            unitPrice: 32.09,
+          },
+        ],
+      },
+    });
+
+    const res = await testApp.inject({
+      method: 'GET',
+      url: '/api/sales/supplier-quotes/sq-1/versions/sqv-1',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body).snapshot.items[0].unitPrice).toBe(32.09);
+    expect(sqHasClientSyncedCostsMock).toHaveBeenCalledWith('sq-1', SAMPLE_VERSION.createdAt);
+  });
+
   test('404 when version not found (also covers cross-quote ids)', async () => {
     sqvFindByIdMock.mockResolvedValue(null);
 
@@ -388,6 +450,7 @@ describe('POST /api/sales/supplier-quotes/:id/versions/:versionId/restore', () =
     );
     expect(suppliersFindByIdMock).toHaveBeenCalledWith('s1');
     expect(productsGetSnapshotsMock).toHaveBeenCalledWith(['p-1']);
+    expect(sqHasClientSyncedCostsMock).toHaveBeenCalledWith('sq-1', SAMPLE_VERSION.createdAt);
     expect(sqRestoreSnapshotQuoteMock).toHaveBeenCalledWith(
       'sq-1',
       expect.objectContaining({
@@ -407,6 +470,69 @@ describe('POST /api/sales/supplier-quotes/:id/versions/:versionId/restore', () =
         details: expect.objectContaining({ toValue: 'sqv-1' }),
       }),
     );
+  });
+
+  test('200 preserves a client-authored unit cost from the snapshot', async () => {
+    setupHappyPath();
+    sqHasClientSyncedCostsMock.mockResolvedValue(true);
+    sqvFindByIdMock.mockResolvedValue({
+      ...SAMPLE_VERSION,
+      snapshot: {
+        ...SAMPLE_SNAPSHOT,
+        items: [
+          {
+            ...SAMPLE_ITEM,
+            listPrice: 37.75,
+            discountPercent: 15,
+            unitPrice: 32.09,
+          },
+        ],
+      },
+    });
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/sales/supplier-quotes/sq-1/versions/sqv-1/restore',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    const restoredItems = sqReplaceItemsMock.mock.calls[0]?.[1] as Array<Record<string, unknown>>;
+    expect(restoredItems[0]).toEqual(
+      expect.objectContaining({ listPrice: 37.75, discountPercent: 15, unitPrice: 32.09 }),
+    );
+    expect(restoredItems[0]?.unitPrice).not.toBe(32.0875);
+  });
+
+  test('200 upgrades a legacy formula-derived unit cost from the snapshot', async () => {
+    setupHappyPath();
+    sqvFindByIdMock.mockResolvedValue({
+      ...SAMPLE_VERSION,
+      snapshot: {
+        ...SAMPLE_SNAPSHOT,
+        items: [
+          {
+            ...SAMPLE_ITEM,
+            listPrice: 37.75,
+            discountPercent: 15,
+            unitPrice: 32.09,
+          },
+        ],
+      },
+    });
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/sales/supplier-quotes/sq-1/versions/sqv-1/restore',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    const restoredItems = sqReplaceItemsMock.mock.calls[0]?.[1] as Array<Record<string, unknown>>;
+    expect(restoredItems[0]).toEqual(
+      expect.objectContaining({ listPrice: 37.75, discountPercent: 15, unitPrice: 32.0875 }),
+    );
+    expect(sqHasClientSyncedCostsMock).toHaveBeenCalledWith('sq-1', SAMPLE_VERSION.createdAt);
   });
 
   test('200 preserves description when restoring a legacy snapshot without the field', async () => {

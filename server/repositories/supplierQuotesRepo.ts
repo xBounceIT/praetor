@@ -12,6 +12,10 @@ import {
   effectiveSupplierQuoteStatusFromDate,
   isTerminalQuoteStatus,
 } from '../utils/quote-status.ts';
+import {
+  deriveSupplierLinePricing,
+  normalizeSupplierUnitPrice,
+} from '../utils/supplier-quote-pricing.ts';
 
 export type SupplierQuote = {
   id: string;
@@ -391,6 +395,42 @@ export const existsById = async (id: string, exec: DbExecutor = db): Promise<boo
     .from(supplierQuotes)
     .where(eq(supplierQuotes.id, id));
   return rows.length > 0;
+};
+
+// Client-document synchronization (or a duplicate that retains its synced cost) can intentionally
+// make unit_price authoritative even when it differs from the scale-2 list-price/discount formula.
+// Limit the durable marker lookup to the snapshot timestamp so later syncs cannot rewrite the
+// provenance of an older version. Version FKs follow quote-id renames while snapshot.quote.id
+// keeps the former id, providing the aliases needed to find markers written before a rename.
+export const hasClientSyncedCosts = async (
+  quoteId: string,
+  atOrBeforeMs: number,
+  exec: DbExecutor = db,
+): Promise<boolean> => {
+  const rows = await executeRows<{ exists: boolean }>(
+    exec,
+    sql`SELECT EXISTS (
+      SELECT 1
+      FROM audit_logs
+      WHERE (
+          (action = ${'supplier_quote.updated'}
+            AND details ->> 'secondaryLabel' = ${'synced_from_client_line'})
+          OR (action = ${'supplier_quote.created'}
+            AND details ->> 'reason' = ${'client_synced_cost_preserved'})
+        )
+        AND entity_type = ${'supplier_quote'}
+        AND (
+          entity_id = ${quoteId}
+          OR entity_id IN (
+            SELECT snapshot -> 'quote' ->> 'id'
+            FROM supplier_quote_versions
+            WHERE quote_id = ${quoteId}
+          )
+        )
+        AND created_at <= ${new Date(atOrBeforeMs)}
+    ) AS "exists"`,
+  );
+  return rows[0]?.exists === true;
 };
 
 // SELECT ... FOR UPDATE (must be called inside a transaction) that also resolves the linked
@@ -870,8 +910,8 @@ export type SupplierItemSyncPatch = {
 };
 
 // Client-driven pricing sync (issue #779, client → supplier direction): writes the new quantity
-// and unit cost, recomputing the list price so the stored "discount to us" stays meaningful
-// (listPrice × (1 − discount/100) = cost). A 100% discount cannot express a non-zero cost, so it
+// and authoritative unit cost, recomputing the scale-2 list price so the stored "discount to us"
+// remains as close as that scale permits. A 100% discount cannot express a non-zero cost, so it
 // resets to 0 with listPrice = cost. Bumps the parent quote's updated_at like any content edit.
 export const syncItemPricing = async (
   quoteId: string,
@@ -885,13 +925,17 @@ export const syncItemPricing = async (
       const listPrice = keepDiscount
         ? patch.unitCost / (1 - patch.discountPercent / 100)
         : patch.unitCost;
+      const pricing = deriveSupplierLinePricing(listPrice, discountPercent);
       return exec
         .update(supplierQuoteItems)
         .set({
           quantity: numericForDb(patch.quantity),
-          unitPrice: numericForDb(patch.unitCost),
-          listPrice: numericForDb(listPrice),
-          discountPercent: numericForDb(discountPercent),
+          // Preserve the client-authored cost at supplier-unit scale. Re-deriving it from a
+          // scale-2 list price could shift it (32.09 / 85% -> 37.75 -> 32.0875) and make the
+          // client snapshot stale immediately after this atomic bidirectional sync.
+          unitPrice: numericForDb(normalizeSupplierUnitPrice(patch.unitCost)),
+          listPrice: numericForDb(pricing.listPrice),
+          discountPercent: numericForDb(pricing.discountPercent),
         })
         .where(eq(supplierQuoteItems.id, patch.itemId));
     }),

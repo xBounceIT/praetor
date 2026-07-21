@@ -1041,6 +1041,8 @@ INSERT INTO supplier_quote_items (
     product_id,
     product_name,
     quantity,
+    list_price,
+    discount_percent,
     unit_price,
     note
 )
@@ -1050,32 +1052,36 @@ SELECT
     p.id,
     p.name,
     v.quantity,
+    v.list_price,
+    v.discount_percent,
     v.unit_price,
     v.note
 FROM (
     VALUES
-        ('dm_sqi_01', pg_temp.demo_document_code('supplier_quote', 1), 'dm_prd_05', 8.00, 960.00, 'Draft laptop procurement lot'),
-        ('dm_sqi_02', pg_temp.demo_document_code('supplier_quote', 2), 'dm_prd_05', 12.00, 960.00, 'Hardware refresh quote pending vendor response'),
-        ('dm_sqi_03', pg_temp.demo_document_code('supplier_quote', 3), 'dm_prd_06', 40.00, 180.00, 'Subscription bundle quote, accepted, no downstream order'),
-        ('dm_sqi_04', pg_temp.demo_document_code('supplier_quote', 4), 'dm_prd_01', 3.00, 980.00, 'Strategic assessment quote pending supplier order creation'),
-        ('dm_sqi_05', pg_temp.demo_document_code('supplier_quote', 5), 'dm_prd_07', 2.00, 1435.00, 'Firewall appliance quote pending supplier order creation'),
-        ('dm_sqi_06', pg_temp.demo_document_code('supplier_quote', 6), 'dm_prd_02', 1.00, 1370.00, 'Deployment sprint quote linked to an accepted offer'),
-        ('dm_sqi_07', pg_temp.demo_document_code('supplier_quote', 7), 'dm_prd_08', 200.00, 118.00, 'Accepted quote feeding an order already in progress'),
-        ('dm_sqi_08', pg_temp.demo_document_code('supplier_quote', 8), 'dm_prd_04', 2.00, 870.00, 'Training package quote, denied via its offer'),
-        ('dm_sqi_09', pg_temp.demo_document_code('supplier_quote', 9), 'dm_prd_05', 3.00, 925.00, 'Denied hardware quote kept for history coverage'),
-        ('dm_sqi_10', pg_temp.demo_document_code('supplier_quote', 10), 'dm_prd_08', 150.00, 119.00, 'Expired print procurement request'),
-        ('dm_sqi_11', pg_temp.demo_document_code('supplier_quote', 11), 'dm_prd_05', 4.00, 960.00, 'Accepted quote feeding the editable draft procurement order'),
-        ('dm_sqi_12', pg_temp.demo_document_code('supplier_quote', 12), 'dm_prd_06', 80.00, 182.00, 'Accepted quote feeding the sent licensing order'),
-        ('dm_sqi_13', pg_temp.demo_document_code('supplier_quote', 13), 'dm_prd_07', 1.00, 1410.00, 'Accepted quote feeding the invoiced security order'),
-        ('dm_sqi_14', pg_temp.demo_document_code('supplier_quote', 13), 'dm_prd_08', 40.00, 118.00, 'Accepted quote feeding the invoiced print materials order'),
-        ('dm_sqi_15', pg_temp.demo_document_code('supplier_quote', 14), 'dm_prd_05', 2.00, 965.00, 'Accepted quote feeding the sent supplier order')
-) AS v(id, quote_id, product_id, quantity, unit_price, note)
+        ('dm_sqi_01', pg_temp.demo_document_code('supplier_quote', 1), 'dm_prd_05', 8.00, 1200.00, 20.00, 960.000000, 'Draft laptop procurement lot'),
+        ('dm_sqi_02', pg_temp.demo_document_code('supplier_quote', 2), 'dm_prd_05', 12.00, 960.00, 0.00, 960.000000, 'Hardware refresh quote pending vendor response'),
+        ('dm_sqi_03', pg_temp.demo_document_code('supplier_quote', 3), 'dm_prd_06', 40.00, 180.00, 0.00, 180.000000, 'Subscription bundle quote, accepted, no downstream order'),
+        ('dm_sqi_04', pg_temp.demo_document_code('supplier_quote', 4), 'dm_prd_01', 3.00, 980.00, 0.00, 980.000000, 'Strategic assessment quote pending supplier order creation'),
+        ('dm_sqi_05', pg_temp.demo_document_code('supplier_quote', 5), 'dm_prd_07', 2.00, 1435.00, 0.00, 1435.000000, 'Firewall appliance quote pending supplier order creation'),
+        ('dm_sqi_06', pg_temp.demo_document_code('supplier_quote', 6), 'dm_prd_02', 1.00, 1370.00, 0.00, 1370.000000, 'Deployment sprint quote linked to an accepted offer'),
+        ('dm_sqi_07', pg_temp.demo_document_code('supplier_quote', 7), 'dm_prd_08', 200.00, 118.00, 0.00, 118.000000, 'Accepted quote feeding an order already in progress'),
+        ('dm_sqi_08', pg_temp.demo_document_code('supplier_quote', 8), 'dm_prd_04', 2.00, 870.00, 0.00, 870.000000, 'Training package quote, denied via its offer'),
+        ('dm_sqi_09', pg_temp.demo_document_code('supplier_quote', 9), 'dm_prd_05', 3.00, 925.00, 0.00, 925.000000, 'Denied hardware quote kept for history coverage'),
+        ('dm_sqi_10', pg_temp.demo_document_code('supplier_quote', 10), 'dm_prd_08', 150.00, 119.00, 0.00, 119.000000, 'Expired print procurement request'),
+        ('dm_sqi_11', pg_temp.demo_document_code('supplier_quote', 11), 'dm_prd_05', 4.00, 960.00, 0.00, 960.000000, 'Accepted quote feeding the editable draft procurement order'),
+        ('dm_sqi_12', pg_temp.demo_document_code('supplier_quote', 12), 'dm_prd_06', 80.00, 182.00, 0.00, 182.000000, 'Accepted quote feeding the sent licensing order'),
+        ('dm_sqi_13', pg_temp.demo_document_code('supplier_quote', 13), 'dm_prd_07', 1.00, 1410.00, 0.00, 1410.000000, 'Accepted quote feeding the invoiced security order'),
+        ('dm_sqi_14', pg_temp.demo_document_code('supplier_quote', 13), 'dm_prd_08', 40.00, 118.00, 0.00, 118.000000, 'Accepted quote feeding the invoiced print materials order'),
+        ('dm_sqi_15', pg_temp.demo_document_code('supplier_quote', 14), 'dm_prd_05', 2.00, 965.00, 0.00, 965.000000, 'Accepted quote feeding the sent supplier order')
+) AS v(id, quote_id, product_id, quantity, list_price, discount_percent, unit_price, note)
 JOIN products p ON p.id = v.product_id
 ON CONFLICT (id) DO UPDATE SET
     quote_id = EXCLUDED.quote_id,
     product_id = EXCLUDED.product_id,
     product_name = EXCLUDED.product_name,
     quantity = EXCLUDED.quantity,
+    list_price = EXCLUDED.list_price,
+    discount_percent = EXCLUDED.discount_percent,
     unit_price = EXCLUDED.unit_price,
     note = EXCLUDED.note;
 
@@ -1172,6 +1178,7 @@ INSERT INTO supplier_sale_items (
     unit_type,
     unit_price,
     discount,
+    legacy_discount_rounding,
     note
 )
 SELECT
@@ -1183,6 +1190,7 @@ SELECT
     v.unit_type,
     v.unit_price,
     v.discount,
+    false,
     v.note
 FROM (
     VALUES
@@ -1202,6 +1210,7 @@ ON CONFLICT (id) DO UPDATE SET
     unit_type = EXCLUDED.unit_type,
     unit_price = EXCLUDED.unit_price,
     discount = EXCLUDED.discount,
+    legacy_discount_rounding = EXCLUDED.legacy_discount_rounding,
     note = EXCLUDED.note;
 
 INSERT INTO supplier_invoices (
@@ -1245,21 +1254,23 @@ INSERT INTO supplier_invoice_items (
     description,
     quantity,
     unit_price,
-    discount
+    discount,
+    legacy_discount_rounding
 ) VALUES
-    ('dm_sinv_item_01', pg_temp.demo_document_code('supplier_invoice', 1), 'dm_prd_05', 'Business Laptop Bundle', 2.00, 960.00, 0.00),
-    ('dm_sinv_item_02', pg_temp.demo_document_code('supplier_invoice', 2), 'dm_prd_06', 'Microsoft 365 Annual Seat', 80.00, 182.00, 0.00),
-    ('dm_sinv_item_03', pg_temp.demo_document_code('supplier_invoice', 3), 'dm_prd_07', 'Managed Firewall Appliance', 1.00, 1410.00, 0.00),
-    ('dm_sinv_item_04', pg_temp.demo_document_code('supplier_invoice', 3), 'dm_prd_08', 'Branded Print Kit', 40.00, 118.00, 0.00),
-    ('dm_sinv_item_05', pg_temp.demo_document_code('supplier_invoice', 4), 'dm_prd_08', 'Branded Print Kit', 200.00, 118.00, 0.00),
-    ('dm_sinv_item_06', pg_temp.demo_document_code('supplier_invoice', 5), 'dm_prd_05', 'Business Laptop Bundle', 1.00, 960.00, 0.00)
+    ('dm_sinv_item_01', pg_temp.demo_document_code('supplier_invoice', 1), 'dm_prd_05', 'Business Laptop Bundle', 2.00, 960.00, 0.00, false),
+    ('dm_sinv_item_02', pg_temp.demo_document_code('supplier_invoice', 2), 'dm_prd_06', 'Microsoft 365 Annual Seat', 80.00, 182.00, 0.00, false),
+    ('dm_sinv_item_03', pg_temp.demo_document_code('supplier_invoice', 3), 'dm_prd_07', 'Managed Firewall Appliance', 1.00, 1410.00, 0.00, false),
+    ('dm_sinv_item_04', pg_temp.demo_document_code('supplier_invoice', 3), 'dm_prd_08', 'Branded Print Kit', 40.00, 118.00, 0.00, false),
+    ('dm_sinv_item_05', pg_temp.demo_document_code('supplier_invoice', 4), 'dm_prd_08', 'Branded Print Kit', 200.00, 118.00, 0.00, false),
+    ('dm_sinv_item_06', pg_temp.demo_document_code('supplier_invoice', 5), 'dm_prd_05', 'Business Laptop Bundle', 1.00, 960.00, 0.00, false)
 ON CONFLICT (id) DO UPDATE SET
     invoice_id = EXCLUDED.invoice_id,
     product_id = EXCLUDED.product_id,
     description = EXCLUDED.description,
     quantity = EXCLUDED.quantity,
     unit_price = EXCLUDED.unit_price,
-    discount = EXCLUDED.discount;
+    discount = EXCLUDED.discount,
+    legacy_discount_rounding = EXCLUDED.legacy_discount_rounding;
 
 -- Demo delivery projects generated from the confirmed client order #04 (offer #03 <-
 -- quote #06), all for client dm_cli_01. order_id/offer_id mirror the chain the app

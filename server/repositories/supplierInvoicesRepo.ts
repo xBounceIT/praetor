@@ -29,6 +29,7 @@ export type SupplierInvoiceItem = {
   quantity: number;
   unitPrice: number;
   discount: number;
+  legacyDiscountRounding: boolean;
   durationMonths: number;
   durationUnit: DurationUnit;
 };
@@ -57,6 +58,7 @@ const mapItem = (row: typeof supplierInvoiceItems.$inferSelect): SupplierInvoice
   quantity: parseDbNumber(row.quantity, 0),
   unitPrice: parseDbNumber(row.unitPrice, 0),
   discount: parseDbNumber(row.discount, 0),
+  legacyDiscountRounding: row.legacyDiscountRounding,
   durationMonths: row.durationMonths ?? 1,
   durationUnit: normalizeDurationUnit(row.durationUnit),
 });
@@ -297,6 +299,7 @@ export type NewSupplierInvoiceItem = {
   quantity: number;
   unitPrice: number;
   discount: number;
+  legacyDiscountRounding?: boolean;
   durationMonths: number;
   durationUnit: DurationUnit;
 };
@@ -318,6 +321,7 @@ export const insertItems = async (
         quantity: numericForDb(item.quantity),
         unitPrice: numericForDb(item.unitPrice),
         discount: numericForDb(item.discount),
+        legacyDiscountRounding: item.legacyDiscountRounding ?? false,
         // Duration applies to every line type (issue #775); 'na' is gated via effectiveDurationMonths
         // downstream, so the chosen value/unit is persisted verbatim.
         durationMonths: item.durationMonths ?? 1,

@@ -1374,7 +1374,8 @@ export interface SupplierQuoteItem {
   listPrice: number;
   // Discount the supplier grants us, as a percentage (Sconto a noi %).
   discountPercent: number;
-  // Net unit cost (Costo unitario) = listPrice * (1 - discountPercent / 100).
+  // Net unit cost (Costo unitario), normally derived from list price and discount. Client-document
+  // synchronization may preserve an explicit authoritative cost that differs by fractional cents.
   unitPrice: number;
   note?: string;
   unitType?: SupplierUnitType;
@@ -1477,6 +1478,8 @@ export interface SupplierSaleOrderItem {
   unitPrice: number;
   // Supplier discount to us, as an inclusive 0-100 percentage.
   discount?: number;
+  // True for historical/legacy-writer rows that used currency-rounded discounted units.
+  legacyDiscountRounding?: boolean;
   note?: string;
   // Number of months the line runs (issue #776). Multiplies the line total alongside quantity;
   // carried over from the originating supplier quote so the order total matches the quote.
@@ -1540,6 +1543,8 @@ export interface SupplierInvoiceItem {
   quantity: number;
   unitPrice: number;
   discount?: number;
+  // True for historical/legacy-writer rows that used currency-rounded discounted units.
+  legacyDiscountRounding?: boolean;
   durationMonths?: number; // months the service runs; multiplies the line total (issue #776/#775)
   durationUnit?: DurationUnit; // display unit: 'months' (default), 'years', or 'na' (N/A, no duration)
 }

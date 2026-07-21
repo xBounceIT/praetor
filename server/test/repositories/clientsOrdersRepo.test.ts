@@ -344,6 +344,8 @@ describe('supplier-order auto-creation flow', () => {
     // The originating supplier quote's Discount to Us is stored with each order line.
     expect(exec.calls[0].params).toContain('20');
     expect(exec.calls[0].params).toContain('100');
+    expect(exec.calls[0].sql).toContain('"legacy_discount_rounding"');
+    expect(exec.calls[0].params).toContain(false);
   });
 
   test('bulkInsertSupplierOrderItems is a no-op for empty items', async () => {

@@ -28,19 +28,23 @@ const shiftDecimal = (value: number, decimalPlaces: number): number => {
   return Number(`${coefficient}e${Number(exponent) + decimalPlaces}`);
 };
 
-// Match the NUMERIC(_, 2) precision used by the backend so frontend and backend agree on
-// rendered totals. Mirrors `roundCurrency` in `server/utils/invoice-math.ts`.
-export const roundCurrency = (value: number): number => {
+// Round a finite value to an explicit decimal scale (for example 2 for displayed currency totals
+// or 6 for stored derived unit prices).
+export const roundToDecimalPlaces = (value: number, decimalPlaces: number): number => {
   if (!Number.isFinite(value)) return value;
 
   const sign = Math.sign(value);
   if (sign === 0) return 0;
 
-  const cents = Math.round(shiftDecimal(Math.abs(value), CURRENCY_DECIMAL_PLACES));
-  if (cents === 0) return 0;
+  const scaled = Math.round(shiftDecimal(Math.abs(value), decimalPlaces));
+  if (scaled === 0) return 0;
 
-  return sign * shiftDecimal(cents, -CURRENCY_DECIMAL_PLACES);
+  return sign * shiftDecimal(scaled, -decimalPlaces);
 };
+
+// Match the NUMERIC(_, 2) precision used by currency-total columns in PostgreSQL.
+export const roundCurrency = (value: number): number =>
+  roundToDecimalPlaces(value, CURRENCY_DECIMAL_PLACES);
 
 /**
  * Convert a localized user-entered number to the canonical dot-decimal representation used by
@@ -130,12 +134,14 @@ export const calcProductMolPercentage = (cost: number, salePrice: number): numbe
 export interface PricingItem {
   unitPrice?: number;
   discount?: number;
+  // Historical and compatibility-window supplier lines retain the pre-precision behavior that
+  // rounded the discounted unit before quantity/duration. Current writers send false explicitly.
+  legacyDiscountRounding?: boolean;
   supplierQuoteItemId?: string | null;
   supplierQuoteUnitPrice?: number | null;
   productCost?: number;
   unitType?: SupplierUnitType;
   // Invoices store the line unit as `unitOfMeasure` ('unit' | 'hours') instead of `unitType`.
-  // Either field being 'unit' marks a countable line that cannot carry a duration.
   unitOfMeasure?: 'unit' | 'hours';
   quantity?: number;
   productMolPercentage?: number | null;
@@ -181,18 +187,37 @@ export const getEffectiveDurationMonths = (item: PricingItem): number => {
 };
 
 // Supplier documents persist the gross/list unit price plus an inclusive 0-100 line discount.
-// Round the derived unit cost before quantity and duration multiply it, matching the persisted
-// supplier-quote pricing invariant and preventing downstream orders/invoices from drifting by
-// fractional cents.
+// This currency-scale helper is for displaying the derived unit cost. Line totals keep the
+// unrounded pricing chain so fractional cents are not multiplied into a material error; only the
+// aggregate returned by getDiscountedDocumentTotal is rounded to currency precision.
+const clampPercentage = (percentage: number): number => Math.min(100, Math.max(0, percentage));
+
 export const getDiscountedUnitPrice = (unitPrice?: number, discount?: number): number => {
-  const percentage = Number(discount) || 0;
+  const percentage = clampPercentage(Number(discount) || 0);
   return roundCurrency((Number(unitPrice) || 0) * (1 - percentage / 100));
+};
+
+const getDiscountedUnitPriceForCalculation = (
+  unitPrice: number,
+  discount: number,
+  legacyDiscountRounding = false,
+): number => {
+  const percentage = clampPercentage(discount);
+  const discountedUnitPrice = unitPrice * (1 - percentage / 100);
+  return legacyDiscountRounding ? roundCurrency(discountedUnitPrice) : discountedUnitPrice;
 };
 
 export const getDiscountedLineTotal = (item: PricingItem): number =>
   (Number(item.quantity) || 0) *
-  getDiscountedUnitPrice(item.unitPrice, item.discount) *
+  getDiscountedUnitPriceForCalculation(
+    Number(item.unitPrice) || 0,
+    Number(item.discount) || 0,
+    item.legacyDiscountRounding,
+  ) *
   getEffectiveDurationMonths(item);
+
+export const getDiscountedDocumentTotal = (items: PricingItem[]): number =>
+  roundCurrency(items.reduce((sum, item) => sum + getDiscountedLineTotal(item), 0));
 
 // Coerce an arbitrary value to a valid duration unit, defaulting to 'months' (issue #757).
 // 'na' (N/A) marks a line where duration does not apply (issue #775).
@@ -276,11 +301,19 @@ export const getItemPricingContext = (
   const quantity = Number(item.quantity || 0);
   const durationMonths = getEffectiveDurationMonths(item);
   const lineCost = unitCost * quantity * durationMonths;
-  const discountPercentage = Math.min(100, Math.max(0, Number(item.discount || 0)));
+  const discountPercentage = clampPercentage(Number(item.discount || 0));
   const revenueMultiplier = quantity * durationMonths * (1 - discountPercentage / 100);
-  const grossRevenue = Number(item.unitPrice || 0) * quantity * durationMonths;
-  const lineDiscount = (grossRevenue * discountPercentage) / 100;
-  const netRevenue = grossRevenue - lineDiscount;
+  const unitPrice = Number(item.unitPrice || 0);
+  const grossRevenue = unitPrice * quantity * durationMonths;
+  const netRevenue =
+    getDiscountedUnitPriceForCalculation(
+      unitPrice,
+      discountPercentage,
+      item.legacyDiscountRounding,
+    ) *
+    quantity *
+    durationMonths;
+  const lineDiscount = grossRevenue - netRevenue;
   const lineMargin = netRevenue - lineCost;
   return {
     baseCost,
