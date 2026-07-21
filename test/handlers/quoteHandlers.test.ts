@@ -805,6 +805,7 @@ describe('makeQuoteHandlers', () => {
     expect(callArg.linkedOfferId).toBe('of-1');
     expect(callArg.status).toBe('draft');
     const items = callArg.items as Array<Record<string, unknown>>;
+    expect(items[0].id).toBe('orig');
     expect(items[0].orderId).toBe('');
 
     expect(ctx.clientsOrders.get()[0].id).toBe('or-new');

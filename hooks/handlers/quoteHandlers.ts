@@ -360,7 +360,6 @@ export const makeQuoteHandlers = (deps: QuoteHandlersDeps) => {
         paymentTerms: offer.paymentTerms,
         items: offer.items.map((item) => ({
           ...item,
-          id: makeTempId(),
           orderId: '',
         })),
         discount: offer.discount,
