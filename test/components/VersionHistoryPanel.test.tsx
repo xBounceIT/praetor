@@ -218,6 +218,7 @@ describe('<VersionHistoryPanel />', () => {
     const restingLayer = screen.getByTestId('version-history-header-resting');
     const searchLayer = screen.getByTestId('version-history-header-search');
     const searchToggle = screen.getByTestId('version-history-search-toggle');
+    const closeToggle = screen.getByTestId('version-history-close-toggle');
 
     expect(header).toHaveAttribute('data-search-open', 'false');
     expect(restingLayer).toHaveClass('opacity-100', 'duration-200', 'ease-in-out');
@@ -227,13 +228,19 @@ describe('<VersionHistoryPanel />', () => {
       'duration-200',
       'ease-in-out',
     );
+    expect(searchLayer).toHaveAttribute('inert');
+    expect(closeToggle).toHaveAttribute('tabindex', '-1');
     expect(restingLayer).toContainElement(screen.getByTestId('version-history-search-icon'));
     expect(searchLayer).toContainElement(screen.getByTestId('version-history-close-icon'));
 
     await user.click(searchToggle);
     expect(header).toHaveAttribute('data-search-open', 'true');
     expect(restingLayer).toHaveClass('opacity-0', 'pointer-events-none');
+    expect(restingLayer).toHaveAttribute('inert');
     expect(searchLayer).toHaveClass('opacity-100');
+    expect(searchLayer).not.toHaveAttribute('inert');
+    expect(searchToggle).toHaveAttribute('tabindex', '-1');
+    expect(closeToggle).not.toHaveAttribute('tabindex', '-1');
 
     const input = screen.getByPlaceholderText(labels.searchPlaceholder);
     fireEvent.blur(input);
@@ -241,6 +248,8 @@ describe('<VersionHistoryPanel />', () => {
     expect(header).toHaveAttribute('data-search-open', 'false');
     expect(restingLayer).toHaveClass('opacity-100');
     expect(searchLayer).toHaveClass('opacity-0', 'pointer-events-none');
+    expect(searchLayer).toHaveAttribute('inert');
+    expect(closeToggle).toHaveAttribute('tabindex', '-1');
     expect(screen.getByRole('button', { name: labels.searchAriaLabel })).toBe(searchToggle);
   });
 
