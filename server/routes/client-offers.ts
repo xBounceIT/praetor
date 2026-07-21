@@ -206,6 +206,7 @@ const offerCreateBodySchema = {
   allOf: [createDocumentDiscountConstraint],
   properties: {
     id: manualOfferCodeCreateSchema,
+    description: { type: 'string' },
     linkedQuoteId: { type: 'string' },
     clientId: { type: 'string' },
     clientName: { type: 'string' },
@@ -225,6 +226,7 @@ const offerUpdateBodySchema = {
   type: 'object',
   properties: {
     id: manualOfferCodeUpdateSchema,
+    description: { type: ['string', 'null'] },
     clientId: { type: 'string' },
     clientName: { type: 'string' },
     items: { type: 'array', items: offerItemBodySchema },
@@ -649,6 +651,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       const {
         id: nextId,
+        description,
         linkedQuoteId,
         clientId,
         clientName,
@@ -662,6 +665,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         notes,
       } = request.body as {
         id?: unknown;
+        description?: unknown;
         linkedQuoteId: unknown;
         clientId: unknown;
         clientName: unknown;
@@ -862,6 +866,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           const offer = await clientOffersRepo.create(
             {
               id: offerId,
+              description: (description as string | null | undefined) ?? null,
               linkedQuoteId: linkedQuoteIdResult.value,
               clientId: clientIdResult.value,
               clientName: clientNameResult.value,
@@ -989,6 +994,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const { id } = request.params as { id: string };
       const {
         id: nextId,
+        description,
         clientId,
         clientName,
         items,
@@ -1001,6 +1007,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         notes,
       } = request.body as {
         id?: unknown;
+        description?: unknown;
         clientId?: unknown;
         clientName?: unknown;
         items?: OfferItemInput[] | unknown;
@@ -1078,6 +1085,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       // in the set: it stays editable on non-draft and expired offers — extending it is the only
       // exit from `expired` — and is locked again only on terminal accepted/denied offers below.
       const hasNonExpirationContentUpdate =
+        description !== undefined ||
         clientId !== undefined ||
         clientName !== undefined ||
         items !== undefined ||
@@ -1350,6 +1358,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               : await clientOffersRepo.update(
                   renamedOffer?.id ?? idResult.value,
                   {
+                    description: description as string | null | undefined,
                     clientId: (clientIdValue as string | null | undefined) ?? null,
                     clientName: (clientNameValue as string | null | undefined) ?? null,
                     paymentTerms: (paymentTerms as string | null | undefined) ?? null,
@@ -1386,6 +1395,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             }
             createdOrder = await createClientOrderRows(
               {
+                description: offer.description ?? null,
                 linkedQuoteId: offer.linkedQuoteId || null,
                 linkedOfferId: offer.id,
                 clientId: offer.clientId,
@@ -2097,6 +2107,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         const offer = await clientOffersRepo.restoreSnapshotOffer(
           idResult.value,
           {
+            ...(Object.hasOwn(version.snapshot.offer, 'description')
+              ? { description: version.snapshot.offer.description ?? null }
+              : {}),
             clientId: version.snapshot.offer.clientId,
             clientName: version.snapshot.offer.clientName,
             paymentTerms: version.snapshot.offer.paymentTerms ?? 'immediate',

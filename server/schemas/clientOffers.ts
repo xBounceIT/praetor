@@ -28,6 +28,7 @@ export const clientOfferSchema = {
     id: { type: 'string' },
     revisionNumber: { type: 'integer' },
     revisionCode: { type: ['string', 'null'] },
+    description: { type: ['string', 'null'] },
     linkedQuoteId: { type: 'string' },
     linkedQuoteRevisionCode: { type: ['string', 'null'] },
     linkedQuoteCandidateId: { type: ['string', 'null'] },

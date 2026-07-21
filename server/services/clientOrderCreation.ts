@@ -5,6 +5,7 @@ import * as supplierQuotesRepo from '../repositories/supplierQuotesRepo.ts';
 import { logAudit } from '../utils/audit.ts';
 import { generatePrefixedId, ITEM_ID_PREFIXES } from '../utils/order-ids.ts';
 import { effectiveSupplierQuoteStatusFromDate } from '../utils/quote-status.ts';
+import { toSupplierDocumentLinePricing } from '../utils/supplier-quote-pricing.ts';
 import { normalizeUnitType } from '../utils/unit-type.ts';
 import {
   allocateDocumentCode,
@@ -15,6 +16,7 @@ import {
 
 export type ClientOrderCreateFields = {
   id?: string | null;
+  description: string | null;
   linkedQuoteId: string | null;
   linkedOfferId: string | null;
   clientId: string;
@@ -54,6 +56,7 @@ export const createClientOrderRows = async (
   const order = await clientsOrdersRepo.create(
     {
       id: orderId,
+      description: fields.description,
       linkedQuoteId: fields.linkedQuoteId,
       linkedOfferId: fields.linkedOfferId,
       clientId: fields.clientId,
@@ -190,16 +193,17 @@ export const autoCreateSupplierOrdersForClientOrder = async (
             const supplierItemRecords = supplierItems.map((item) => {
               const saleItemId = generatePrefixedId(ITEM_ID_PREFIXES.supplierItem);
               insertedSupplierItemIds.push({ quoteItemId: item.id, saleItemId });
+              const documentPricing = toSupplierDocumentLinePricing(item);
               return {
                 id: saleItemId,
                 productId: item.productId,
                 productName: item.productName,
                 quantity: item.quantity,
                 unitType: normalizeUnitType(item.unitType),
-                // supplier_sale_items stores the gross/list price plus its line discount. This
-                // preserves the same pricing chain shown on the originating supplier quote.
-                unitPrice: item.listPrice,
-                discount: item.discountPercent,
+                // Preserve the gross/discount chain for formula-derived costs and flatten an
+                // explicit synced override so the downstream total still matches the quote.
+                unitPrice: documentPricing.unitPrice,
+                discount: documentPricing.discount,
                 note: item.note,
                 durationMonths: item.durationMonths,
                 durationUnit: item.durationUnit,

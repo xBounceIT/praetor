@@ -48,6 +48,7 @@ export const customerOffers = pgTable(
     ),
     revisionNumber: integer('revision_number').notNull().default(0),
     revisionCode: varchar('revision_code', { length: 50 }),
+    description: text('description'),
   },
   (table) => [
     uniqueIndex('idx_customer_offers_linked_quote_id').on(table.linkedQuoteId),

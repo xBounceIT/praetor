@@ -161,6 +161,7 @@ const FULL_PERMS = [
 
 const DRAFT_QUOTE = {
   id: 'sq-1',
+  description: 'Hardware procurement',
   supplierId: 's1',
   supplierName: 'Acme',
   paymentTerms: 'immediate',
@@ -267,6 +268,7 @@ const authHeader = () => ({ authorization: `Bearer ${signToken({ userId: 'u1' })
 
 const CREATE_PAYLOAD = {
   id: 'sq-new',
+  description: 'Annual hardware procurement',
   supplierId: 's1',
   supplierName: 'Acme',
   clientId: null,
@@ -360,8 +362,44 @@ describe('POST /api/sales/supplier-quotes', () => {
     expect(res.statusCode).toBe(201);
     expect(allocateDocumentCodeMock).not.toHaveBeenCalled();
     expect(sqCreateMock).toHaveBeenCalledWith(
-      expect.objectContaining({ id: 'sq-new' }),
+      expect.objectContaining({
+        id: 'sq-new',
+        description: 'Annual hardware procurement',
+      }),
       expect.anything(),
+    );
+  });
+
+  test('201 preserves an explicit client-synced cost when duplicating a quote', async () => {
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/sales/supplier-quotes',
+      headers: authHeader(),
+      payload: {
+        ...CREATE_PAYLOAD,
+        items: [
+          {
+            productName: 'Client-synced service',
+            quantity: 150,
+            listPrice: 37.75,
+            discountPercent: 15,
+            unitPrice: 32.09,
+          },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(sqInsertItemsMock).toHaveBeenCalledWith(
+      'sq-new',
+      [expect.objectContaining({ listPrice: 37.75, discountPercent: 15, unitPrice: 32.09 })],
+      expect.anything(),
+    );
+    expect(logAuditMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'supplier_quote.created',
+        details: expect.objectContaining({ reason: 'client_synced_cost_preserved' }),
+      }),
     );
   });
 
@@ -397,19 +435,26 @@ describe('PUT /api/sales/supplier-quotes/:id', () => {
   test('200 updates a draft quote with content edits', async () => {
     sqFindByIdMock.mockResolvedValue(DRAFT_QUOTE);
     sqFindLinkedOrderIdMock.mockResolvedValue(null);
-    sqUpdateMock.mockResolvedValue({ ...DRAFT_QUOTE, paymentTerms: '30 days' });
+    sqUpdateMock.mockResolvedValue({
+      ...DRAFT_QUOTE,
+      description: 'Updated procurement',
+      paymentTerms: '30 days',
+    });
 
     const res = await testApp.inject({
       method: 'PUT',
       url: '/api/sales/supplier-quotes/sq-1',
       headers: authHeader(),
-      payload: { paymentTerms: '30 days' },
+      payload: { description: 'Updated procurement', paymentTerms: '30 days' },
     });
 
     expect(res.statusCode).toBe(200);
     expect(sqUpdateMock).toHaveBeenCalledTimes(1);
     expect(sqUpdateMock.mock.calls[0]?.[1]).toEqual(
-      expect.objectContaining({ paymentTerms: '30 days' }),
+      expect.objectContaining({
+        description: 'Updated procurement',
+        paymentTerms: '30 days',
+      }),
     );
     expect(logAuditMock).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'supplier_quote.updated' }),
@@ -880,14 +925,14 @@ describe('PUT /api/sales/supplier-quotes/:id', () => {
     );
   });
 
-  test('200 rounds list price/discount to DB scale before deriving net cost (no formula drift)', async () => {
+  test('200 rounds pricing inputs but preserves derived net-cost precision', async () => {
     sqFindByIdMock.mockResolvedValue(DRAFT_QUOTE);
     sqFindLinkedOrderIdMock.mockResolvedValue(null);
     sqUpdateMock.mockResolvedValue(DRAFT_QUOTE);
     sqUpsertItemsMock.mockResolvedValue([SAMPLE_ITEM]);
 
-    // listPrice 10.005 would persist as 10.01 in NUMERIC(_, 2); deriving the net cost from the raw
-    // 10.005 (→ 9.00) would leave the stored row violating unitPrice = listPrice × (1 − discount/100).
+    // listPrice 10.005 persists as 10.01 in NUMERIC(_, 2); derive from that canonical input while
+    // retaining the fractional cent in the higher-precision net-cost column.
     const res = await testApp.inject({
       method: 'PUT',
       url: '/api/sales/supplier-quotes/sq-1',
@@ -900,14 +945,88 @@ describe('PUT /api/sales/supplier-quotes/:id', () => {
     expect(res.statusCode).toBe(200);
     const itemsArg = sqUpsertItemsMock.mock.calls[0]?.[1] as Array<Record<string, unknown>>;
     const item = itemsArg[0] as { listPrice: number; discountPercent: number; unitPrice: number };
-    // Inputs are rounded to the persisted scale, and the net cost is derived from those rounded
-    // values: 10.01 × (1 − 10/100) = 9.009 → 9.01.
+    // Inputs are rounded to the persisted scale; 10.01 × (1 − 10/100) = 9.009 exactly.
     expect(item).toEqual(
-      expect.objectContaining({ listPrice: 10.01, discountPercent: 10, unitPrice: 9.01 }),
+      expect.objectContaining({ listPrice: 10.01, discountPercent: 10, unitPrice: 9.009 }),
     );
-    // The persisted row must satisfy the pricing formula at DB scale.
-    const expectedNet = Math.round(item.listPrice * (1 - item.discountPercent / 100) * 100) / 100;
+    // The persisted row must satisfy the pricing formula without intermediate rounding.
+    const expectedNet = item.listPrice * (1 - item.discountPercent / 100);
     expect(item.unitPrice).toBe(expectedNet);
+  });
+
+  test('200 preserves an existing client-synced cost when pricing inputs are unchanged', async () => {
+    const syncedItem = {
+      ...SAMPLE_ITEM,
+      listPrice: 37.75,
+      discountPercent: 15,
+      unitPrice: 32.09,
+    };
+    sqFindByIdMock.mockResolvedValue(DRAFT_QUOTE);
+    sqFindLinkedOrderIdMock.mockResolvedValue(null);
+    sqFindItemsForQuoteMock.mockResolvedValue([syncedItem]);
+    sqUpdateMock.mockResolvedValue(DRAFT_QUOTE);
+    sqUpsertItemsMock.mockResolvedValue([syncedItem]);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/sales/supplier-quotes/sq-1',
+      headers: authHeader(),
+      payload: {
+        notes: 'Notes-only edit from the full form',
+        items: [
+          {
+            id: 'sqi-1',
+            productId: 'p-1',
+            productName: 'Service',
+            quantity: 2,
+            listPrice: 37.75,
+            discountPercent: 15,
+            unitPrice: 32.09,
+          },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const itemsArg = sqUpsertItemsMock.mock.calls[0]?.[1] as Array<Record<string, unknown>>;
+    expect(itemsArg[0]).toEqual(expect.objectContaining({ unitPrice: 32.09 }));
+  });
+
+  test('200 rederives a client-synced cost when a pricing input changes', async () => {
+    const syncedItem = {
+      ...SAMPLE_ITEM,
+      listPrice: 37.75,
+      discountPercent: 15,
+      unitPrice: 32.09,
+    };
+    sqFindByIdMock.mockResolvedValue(DRAFT_QUOTE);
+    sqFindLinkedOrderIdMock.mockResolvedValue(null);
+    sqFindItemsForQuoteMock.mockResolvedValue([syncedItem]);
+    sqUpdateMock.mockResolvedValue(DRAFT_QUOTE);
+    sqUpsertItemsMock.mockResolvedValue([{ ...syncedItem, listPrice: 40, unitPrice: 34 }]);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/sales/supplier-quotes/sq-1',
+      headers: authHeader(),
+      payload: {
+        items: [
+          {
+            id: 'sqi-1',
+            productId: 'p-1',
+            productName: 'Service',
+            quantity: 2,
+            listPrice: 40,
+            discountPercent: 15,
+            unitPrice: 32.09,
+          },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const itemsArg = sqUpsertItemsMock.mock.calls[0]?.[1] as Array<Record<string, unknown>>;
+    expect(itemsArg[0]).toEqual(expect.objectContaining({ unitPrice: 34 }));
   });
 
   test('200 falls back to legacy unitPrice as list price when no list price is sent', async () => {

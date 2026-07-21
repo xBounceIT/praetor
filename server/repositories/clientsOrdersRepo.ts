@@ -11,6 +11,7 @@ import { normalizeUnitType, type UnitType } from '../utils/unit-type.ts';
 
 export type ClientOrder = {
   id: string;
+  description?: string | null;
   linkedQuoteId: string | null;
   linkedQuoteRevisionCode?: string | null;
   linkedOfferId: string | null;
@@ -57,6 +58,7 @@ type ClientOrderReadRow = typeof sales.$inferSelect & {
 
 const mapOrder = (row: ClientOrderReadRow): ClientOrder => ({
   id: row.id,
+  description: row.description,
   linkedQuoteId: row.linkedQuoteId,
   linkedQuoteRevisionCode: row.linkedQuoteRevisionCode ?? null,
   linkedOfferId: row.linkedOfferId,
@@ -207,6 +209,7 @@ export const findIdConflict = async (
 
 export type ExistingClientOrder = {
   id: string;
+  description?: string | null;
   linkedQuoteId: string | null;
   linkedOfferId: string | null;
   clientId: string;
@@ -238,6 +241,7 @@ export const findExisting = async (
       discountType: sales.discountType,
       status: sales.status,
       notes: sales.notes,
+      description: sales.description,
     })
     .from(sales)
     .where(eq(sales.id, id));
@@ -253,6 +257,7 @@ export const findExisting = async (
     discountType: rows[0].discountType === 'currency' ? 'currency' : 'percentage',
     status: rows[0].status,
     notes: rows[0].notes,
+    ...(rows[0].description !== undefined ? { description: rows[0].description } : {}),
   };
 };
 
@@ -334,6 +339,7 @@ export const findFullForSnapshot = async (
 
 export type NewClientOrder = {
   id: string;
+  description?: string | null;
   linkedQuoteId: string | null;
   linkedOfferId: string | null;
   clientId: string;
@@ -353,6 +359,7 @@ export const create = async (
     .insert(sales)
     .values({
       id: input.id,
+      description: input.description ?? null,
       linkedQuoteId: input.linkedQuoteId,
       linkedOfferId: input.linkedOfferId,
       clientId: input.clientId,
@@ -368,6 +375,7 @@ export const create = async (
 };
 
 export type ClientOrderUpdate = {
+  description?: string | null;
   linkedOfferId?: string | null;
   linkedQuoteId?: string | null;
   clientId?: string;
@@ -381,6 +389,7 @@ export type ClientOrderUpdate = {
 
 const orderUpdateValues = (patch: ClientOrderUpdate) => {
   const set: Record<string, unknown> = {};
+  if (patch.description !== undefined) set.description = patch.description;
   if (patch.linkedOfferId !== undefined) set.linkedOfferId = patch.linkedOfferId;
   if (patch.linkedQuoteId !== undefined) set.linkedQuoteId = patch.linkedQuoteId;
   if (patch.clientId !== undefined) set.clientId = patch.clientId;
@@ -428,6 +437,7 @@ export type ClientOrderRestoreFields = Pick<
   ClientOrder,
   'clientId' | 'clientName' | 'paymentTerms' | 'discount' | 'discountType' | 'status' | 'notes'
 > & {
+  description?: string | null;
   linkedQuoteId?: string | null;
   linkedOfferId?: string | null;
 };
@@ -447,6 +457,9 @@ export const restoreSnapshotOrder = async (
     notes: snapshot.notes,
     updatedAt: sql`CURRENT_TIMESTAMP`,
   };
+  const description = Object.hasOwn(snapshot, 'description')
+    ? { description: snapshot.description ?? null }
+    : {};
   // Only overwrite linkedQuoteId/linkedOfferId when the snapshot explicitly carries them
   // (legacy snapshots stored these as undefined; overwriting with `null` would wipe a link
   // that is still valid on the live row).
@@ -459,7 +472,7 @@ export const restoreSnapshotOrder = async (
   }
   const rows = await exec
     .update(sales)
-    .set({ ...baseFields, ...linkedFields })
+    .set({ ...baseFields, ...description, ...linkedFields })
     .where(eq(sales.id, id))
     .returning();
   return rows[0] ? mapOrder(rows[0]) : null;
@@ -595,6 +608,9 @@ export const bulkInsertSupplierOrderItems = async (
       unitType: item.unitType,
       unitPrice: numericForDb(item.unitPrice),
       discount: numericForDb(item.discount),
+      // This is a current-server writer, so it must not inherit the legacy-safe DB default that
+      // exists only for old binaries during the rolling-deployment compatibility window.
+      legacyDiscountRounding: false,
       note: item.note,
       // Carry the duration from the originating supplier quote (issue #776) so the auto-created
       // order's total matches the quote instead of collapsing to a single month.

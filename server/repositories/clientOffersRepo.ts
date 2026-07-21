@@ -12,6 +12,7 @@ export type ClientOffer = {
   id: string;
   revisionNumber: number;
   revisionCode: string | null;
+  description?: string | null;
   linkedQuoteId: string;
   linkedQuoteRevisionCode: string | null;
   linkedQuoteCandidateId?: string | null;
@@ -63,6 +64,7 @@ const mapOffer = (row: ClientOfferRow): ClientOffer => ({
   id: row.id,
   revisionNumber: row.revisionNumber,
   revisionCode: row.revisionCode,
+  description: row.description,
   linkedQuoteId: row.linkedQuoteId,
   linkedQuoteRevisionCode: row.linkedQuoteRevisionCode ?? null,
   linkedQuoteCandidateId: row.linkedQuoteCandidateId,
@@ -294,6 +296,7 @@ export const findFullForSnapshot = async (
 
 export type NewClientOffer = {
   id: string;
+  description?: string | null;
   linkedQuoteId: string;
   linkedQuoteCandidateId?: string | null;
   clientId: string;
@@ -315,6 +318,7 @@ export const create = async (
     .insert(customerOffers)
     .values({
       id: input.id,
+      description: input.description ?? null,
       linkedQuoteId: input.linkedQuoteId,
       linkedQuoteCandidateId: input.linkedQuoteCandidateId ?? null,
       clientId: input.clientId,
@@ -332,6 +336,7 @@ export const create = async (
 };
 
 export type ClientOfferUpdate = {
+  description?: string | null;
   clientId?: string | null;
   clientName?: string | null;
   paymentTerms?: string | null;
@@ -347,6 +352,7 @@ export type ClientOfferRestoreFields = Pick<
   ClientOffer,
   'clientId' | 'clientName' | 'discount' | 'discountType' | 'status' | 'notes'
 > & {
+  description?: string | null;
   paymentTerms: string;
   deliveryDate: string | null;
   expirationDate: string;
@@ -357,9 +363,13 @@ export const restoreSnapshotOffer = async (
   snapshot: ClientOfferRestoreFields,
   exec: DbExecutor = db,
 ): Promise<ClientOffer | null> => {
+  const description = Object.hasOwn(snapshot, 'description')
+    ? { description: snapshot.description ?? null }
+    : {};
   const [row] = await exec
     .update(customerOffers)
     .set({
+      ...description,
       clientId: snapshot.clientId,
       clientName: snapshot.clientName,
       paymentTerms: snapshot.paymentTerms,
@@ -384,6 +394,8 @@ export const update = async (
   const [row] = await exec
     .update(customerOffers)
     .set({
+      description:
+        patch.description === undefined ? sql`${customerOffers.description}` : patch.description,
       clientId: sql`COALESCE(${patch.clientId ?? null}, ${customerOffers.clientId})`,
       clientName: sql`COALESCE(${patch.clientName ?? null}, ${customerOffers.clientName})`,
       paymentTerms: sql`COALESCE(${patch.paymentTerms ?? null}, ${customerOffers.paymentTerms})`,

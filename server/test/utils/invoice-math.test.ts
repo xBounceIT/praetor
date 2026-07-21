@@ -42,6 +42,14 @@ describe('computeInvoiceTotals', () => {
     });
   });
 
+  test('caps invalid line discounts at 100 percent', () => {
+    expect(computeInvoiceTotals([{ quantity: 1, unitPrice: 100, discount: 120 }])).toEqual({
+      subtotal: 0,
+      taxTotal: 0,
+      total: 0,
+    });
+  });
+
   test('rounds to 2 decimals (subtotal)', () => {
     // 0.1 * 0.2 = 0.020000000000000004 in JS floats; rounding pins it to 0.02
     expect(computeInvoiceTotals([{ quantity: 0.1, unitPrice: 0.2, discount: 0 }])).toEqual({
@@ -80,6 +88,15 @@ describe('computeInvoiceTotals', () => {
       taxTotal: 0,
       total: 80.33,
     });
+  });
+
+  test('preserves historical unit rounding only for migrated supplier lines', () => {
+    const item = { quantity: 150, unitPrice: 37.75, discount: 15 };
+
+    expect(computeInvoiceTotals([{ ...item, legacyDiscountRounding: true }]).subtotal).toBe(4813.5);
+    expect(computeInvoiceTotals([{ ...item, legacyDiscountRounding: false }]).subtotal).toBe(
+      4813.13,
+    );
   });
 
   test('Italian standard 22% VAT', () => {

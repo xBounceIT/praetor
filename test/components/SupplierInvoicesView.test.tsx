@@ -147,11 +147,15 @@ describe('<SupplierInvoicesView /> line item duration (issue #776/#775)', () => 
     expect(onUpdateInvoice).toHaveBeenCalledTimes(1);
     const updates = onUpdateInvoice.mock.calls[0]?.[1];
     expect(updates?.items?.[0]).toEqual(
-      expect.objectContaining({ durationMonths: undefined, durationUnit: 'months' }),
+      expect.objectContaining({
+        durationMonths: undefined,
+        durationUnit: 'months',
+        legacyDiscountRounding: false,
+      }),
     );
   });
 
-  test('rounds discounted unit cost before quantity multiplies the line total', () => {
+  test('rounds the line total only after quantity multiplies the precise unit cost', () => {
     const invoice = buildInvoice({
       id: 'SINV-ROUNDING',
       items: [
@@ -172,7 +176,108 @@ describe('<SupplierInvoicesView /> line item duration (issue #776/#775)', () => 
     render(<SupplierInvoicesView {...baseProps} invoices={[invoice]} />);
     fireEvent.click(screen.getByText('SINV-ROUNDING'));
 
-    expect(screen.getAllByText('901,00 EUR').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('900,90 EUR').length).toBeGreaterThan(0);
+    expect(screen.queryByText('901,00 EUR')).not.toBeInTheDocument();
+  });
+
+  test('caps the line discount at 100 percent', () => {
+    const invoice = buildInvoice({ id: 'SINV-DISCOUNT', status: 'draft' });
+    render(<SupplierInvoicesView {...baseProps} invoices={[invoice]} />);
+    fireEvent.click(screen.getByText('SINV-DISCOUNT'));
+
+    const discountInput = screen.getByLabelText('sales:supplierQuotes.discountToUs');
+    fireEvent.change(discountInput, { target: { value: '120' } });
+
+    expect(discountInput).toHaveValue('100,00');
+  });
+
+  test('submits currency-scale totals that match the displayed amount', async () => {
+    const onUpdateInvoice = mock((_id: string, _updates: Partial<SupplierInvoice>) => {});
+    const invoice = buildInvoice({
+      id: 'SINV-DOCUMENT-ROUNDING',
+      amountPaid: 4813.13,
+      items: [
+        {
+          id: 'sii-document-rounding',
+          invoiceId: 'SINV-DOCUMENT-ROUNDING',
+          productId: '',
+          description: 'Discounted service',
+          quantity: 150,
+          unitPrice: 37.75,
+          discount: 15,
+          durationMonths: 1,
+          durationUnit: 'months',
+        },
+      ],
+    });
+
+    render(
+      <SupplierInvoicesView
+        {...baseProps}
+        invoices={[invoice]}
+        onUpdateInvoice={onUpdateInvoice}
+      />,
+    );
+    fireEvent.click(screen.getByText('SINV-DOCUMENT-ROUNDING'));
+
+    expect(screen.getAllByText('5.662,50 EUR').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('-849,37 EUR').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('4.813,13 EUR').length).toBeGreaterThan(0);
+    expect(screen.queryByText('5.662,51 EUR')).not.toBeInTheDocument();
+    await act(async () => fireEvent.click(screen.getByText('common:buttons.update')));
+
+    const updates = onUpdateInvoice.mock.calls[0]?.[1];
+    expect(updates).toEqual(
+      expect.objectContaining({ subtotal: 4813.13, total: 4813.13, amountPaid: 4813.13 }),
+    );
+  });
+
+  test('preserves migrated totals without discarding historical gross price or discount', async () => {
+    const onUpdateInvoice = mock((_id: string, _updates: Partial<SupplierInvoice>) => {});
+    const invoice = buildInvoice({
+      id: 'SINV-LEGACY-ROUNDING',
+      amountPaid: 4813.5,
+      items: [
+        {
+          id: 'sii-legacy-rounding',
+          invoiceId: 'SINV-LEGACY-ROUNDING',
+          productId: '',
+          description: 'Historical discounted service',
+          quantity: 150,
+          unitPrice: 37.75,
+          discount: 15,
+          legacyDiscountRounding: true,
+          durationMonths: 1,
+          durationUnit: 'months',
+        },
+      ],
+    });
+
+    render(
+      <SupplierInvoicesView
+        {...baseProps}
+        invoices={[invoice]}
+        onUpdateInvoice={onUpdateInvoice}
+      />,
+    );
+    fireEvent.click(screen.getByText('SINV-LEGACY-ROUNDING'));
+
+    expect(screen.getAllByText('5.662,50 EUR').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('-849,00 EUR').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('4.813,50 EUR').length).toBeGreaterThan(0);
+    await act(async () => fireEvent.click(screen.getByText('common:buttons.update')));
+
+    const updates = onUpdateInvoice.mock.calls[0]?.[1];
+    expect(updates).toEqual(
+      expect.objectContaining({ subtotal: 4813.5, total: 4813.5, amountPaid: 4813.5 }),
+    );
+    expect(updates?.items?.[0]).toEqual(
+      expect.objectContaining({
+        unitPrice: 37.75,
+        discount: 15,
+        legacyDiscountRounding: true,
+      }),
+    );
   });
 });
 

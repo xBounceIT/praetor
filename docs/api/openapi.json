@@ -32733,6 +32733,12 @@
                         "string"
                       ]
                     },
+                    "description": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
                     "linkedOfferId": {
                       "type": [
                         "null",
@@ -33288,6 +33294,12 @@
                         "type": "integer"
                       },
                       "revisionCode": {
+                        "type": [
+                          "null",
+                          "string"
+                        ]
+                      },
+                      "description": {
                         "type": [
                           "null",
                           "string"
@@ -33885,6 +33897,12 @@
                 ],
                 "properties": {
                   "id": {
+                    "type": "string",
+                    "maxLength": 100,
+                    "pattern": "^[A-Za-z0-9_-]*$",
+                    "description": "Optional manual quote code. Letters, numbers, underscores, and hyphens only; blank allocates the configured automatic code."
+                  },
+                  "description": {
                     "type": "string"
                   },
                   "clientId": {
@@ -34199,6 +34217,12 @@
                       "type": "integer"
                     },
                     "revisionCode": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "description": {
                       "type": [
                         "null",
                         "string"
@@ -34750,7 +34774,15 @@
                 "type": "object",
                 "properties": {
                   "id": {
-                    "type": "string"
+                    "type": "string",
+                    "maxLength": 100,
+                    "description": "Quote code. A renamed code must use at most 100 letters, numbers, underscores, or hyphens; an unchanged legacy code remains accepted."
+                  },
+                  "description": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
                   },
                   "clientId": {
                     "type": "string"
@@ -35043,6 +35075,12 @@
                       "type": "integer"
                     },
                     "revisionCode": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "description": {
                       "type": [
                         "null",
                         "string"
@@ -35784,6 +35822,12 @@
                             "string"
                           ]
                         },
+                        "description": {
+                          "type": [
+                            "null",
+                            "string"
+                          ]
+                        },
                         "linkedOfferId": {
                           "type": [
                             "null",
@@ -36199,6 +36243,12 @@
                             "string"
                           ]
                         },
+                        "description": {
+                          "type": [
+                            "null",
+                            "string"
+                          ]
+                        },
                         "linkedQuoteId": {
                           "type": "string"
                         },
@@ -36608,6 +36658,12 @@
                       "type": "integer"
                     },
                     "revisionCode": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "description": {
                       "type": [
                         "null",
                         "string"
@@ -37616,6 +37672,12 @@
                         "string"
                       ]
                     },
+                    "description": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
                     "linkedOfferId": {
                       "type": [
                         "null",
@@ -38617,6 +38679,12 @@
                         "string"
                       ]
                     },
+                    "description": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
                     "linkedQuoteId": {
                       "type": "string"
                     },
@@ -39012,6 +39080,12 @@
                         "type": "integer"
                       },
                       "revisionCode": {
+                        "type": [
+                          "null",
+                          "string"
+                        ]
+                      },
+                      "description": {
                         "type": [
                           "null",
                           "string"
@@ -39454,6 +39528,9 @@
                     "pattern": "^[A-Za-z0-9_-]*$",
                     "description": "Optional manual offer code. Letters, numbers, underscores, and hyphens only; blank allocates the configured automatic code."
                   },
+                  "description": {
+                    "type": "string"
+                  },
                   "linkedQuoteId": {
                     "type": "string"
                   },
@@ -39622,6 +39699,12 @@
                       "type": "integer"
                     },
                     "revisionCode": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "description": {
                       "type": [
                         "null",
                         "string"
@@ -40016,6 +40099,12 @@
                     "type": "string",
                     "description": "Offer code. A renamed code must use at most 100 letters, numbers, underscores, or hyphens; an unchanged legacy code remains accepted."
                   },
+                  "description": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
                   "clientId": {
                     "type": "string"
                   },
@@ -40184,6 +40273,12 @@
                       "type": "integer"
                     },
                     "revisionCode": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "description": {
                       "type": [
                         "null",
                         "string"
@@ -40755,6 +40850,12 @@
                       "type": "integer"
                     },
                     "revisionCode": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "description": {
                       "type": [
                         "null",
                         "string"
@@ -41598,6 +41699,12 @@
                       "type": "integer"
                     },
                     "revisionCode": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "description": {
                       "type": [
                         "null",
                         "string"
@@ -43306,6 +43413,12 @@
                       "id": {
                         "type": "string"
                       },
+                      "description": {
+                        "type": [
+                          "null",
+                          "string"
+                        ]
+                      },
                       "linkedQuoteId": {
                         "type": [
                           "null",
@@ -43727,6 +43840,9 @@
                   "id": {
                     "type": "string"
                   },
+                  "description": {
+                    "type": "string"
+                  },
                   "linkedQuoteId": {
                     "type": "string"
                   },
@@ -43893,6 +44009,12 @@
                   "properties": {
                     "id": {
                       "type": "string"
+                    },
+                    "description": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
                     },
                     "linkedQuoteId": {
                       "type": [
@@ -44269,6 +44391,12 @@
                   "id": {
                     "type": "string"
                   },
+                  "description": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
                   "linkedOfferId": {
                     "type": "string"
                   },
@@ -44440,6 +44568,12 @@
                   "properties": {
                     "id": {
                       "type": "string"
+                    },
+                    "description": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
                     },
                     "linkedQuoteId": {
                       "type": [
@@ -45408,6 +45542,12 @@
                   "properties": {
                     "id": {
                       "type": "string"
+                    },
+                    "description": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
                     },
                     "linkedQuoteId": {
                       "type": [
@@ -48940,6 +49080,12 @@
                         "string"
                       ]
                     },
+                    "description": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
                     "supplierId": {
                       "type": "string"
                     },
@@ -49248,6 +49394,12 @@
                         "type": "integer"
                       },
                       "revisionCode": {
+                        "type": [
+                          "null",
+                          "string"
+                        ]
+                      },
+                      "description": {
                         "type": [
                           "null",
                           "string"
@@ -49577,6 +49729,9 @@
                     "pattern": "^[A-Za-z0-9_-]*$",
                     "description": "Leave blank to allocate automatically. Manual values may contain letters, numbers, underscores, and hyphens."
                   },
+                  "description": {
+                    "type": "string"
+                  },
                   "supplierId": {
                     "type": "string"
                   },
@@ -49613,7 +49768,9 @@
                           "type": "number"
                         },
                         "unitPrice": {
-                          "type": "number"
+                          "type": "number",
+                          "minimum": 0,
+                          "description": "On create, preserves an explicit authoritative cost when it differs from the list-price/discount formula; pricing edits derive it again."
                         },
                         "note": {
                           "type": "string"
@@ -49687,6 +49844,12 @@
                       "type": "integer"
                     },
                     "revisionCode": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "description": {
                       "type": [
                         "null",
                         "string"
@@ -49995,6 +50158,12 @@
                     "maxLength": 100,
                     "description": "When changed, may contain letters, numbers, underscores, and hyphens. An unchanged legacy id remains accepted."
                   },
+                  "description": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
                   "supplierId": {
                     "type": "string"
                   },
@@ -50031,7 +50200,9 @@
                           "type": "number"
                         },
                         "unitPrice": {
-                          "type": "number"
+                          "type": "number",
+                          "minimum": 0,
+                          "description": "On create, preserves an explicit authoritative cost when it differs from the list-price/discount formula; pricing edits derive it again."
                         },
                         "note": {
                           "type": "string"
@@ -50108,6 +50279,12 @@
                       "type": "integer"
                     },
                     "revisionCode": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "description": {
                       "type": [
                         "null",
                         "string"
@@ -51011,6 +51188,12 @@
                       "type": "integer"
                     },
                     "revisionCode": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "description": {
                       "type": [
                         "null",
                         "string"
@@ -52186,6 +52369,9 @@
                             "discount": {
                               "type": "number"
                             },
+                            "legacyDiscountRounding": {
+                              "type": "boolean"
+                            },
                             "durationMonths": {
                               "type": "number"
                             },
@@ -52431,6 +52617,9 @@
                     "items": {
                       "type": "object",
                       "properties": {
+                        "id": {
+                          "type": "string"
+                        },
                         "productId": {
                           "type": "string"
                         },
@@ -52455,6 +52644,9 @@
                           "type": "number",
                           "minimum": 0,
                           "maximum": 100
+                        },
+                        "legacyDiscountRounding": {
+                          "type": "boolean"
                         },
                         "note": {
                           "type": "string"
@@ -52619,6 +52811,9 @@
                           },
                           "discount": {
                             "type": "number"
+                          },
+                          "legacyDiscountRounding": {
+                            "type": "boolean"
                           },
                           "durationMonths": {
                             "type": "number"
@@ -52816,6 +53011,9 @@
                     "items": {
                       "type": "object",
                       "properties": {
+                        "id": {
+                          "type": "string"
+                        },
                         "productId": {
                           "type": "string"
                         },
@@ -52840,6 +53038,9 @@
                           "type": "number",
                           "minimum": 0,
                           "maximum": 100
+                        },
+                        "legacyDiscountRounding": {
+                          "type": "boolean"
                         },
                         "note": {
                           "type": "string"
@@ -53008,6 +53209,9 @@
                           },
                           "discount": {
                             "type": "number"
+                          },
+                          "legacyDiscountRounding": {
+                            "type": "boolean"
                           },
                           "durationMonths": {
                             "type": "number"
@@ -53883,6 +54087,9 @@
                           "discount": {
                             "type": "number"
                           },
+                          "legacyDiscountRounding": {
+                            "type": "boolean"
+                          },
                           "durationMonths": {
                             "type": "number"
                           },
@@ -54144,6 +54351,9 @@
                             "discount": {
                               "type": "number"
                             },
+                            "legacyDiscountRounding": {
+                              "type": "boolean"
+                            },
                             "durationMonths": {
                               "type": "number"
                             },
@@ -54387,6 +54597,9 @@
                     "items": {
                       "type": "object",
                       "properties": {
+                        "id": {
+                          "type": "string"
+                        },
                         "productId": {
                           "type": "string"
                         },
@@ -54400,7 +54613,12 @@
                           "type": "number"
                         },
                         "discount": {
-                          "type": "number"
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 100
+                        },
+                        "legacyDiscountRounding": {
+                          "type": "boolean"
                         },
                         "durationMonths": {
                           "type": "number"
@@ -54516,6 +54734,9 @@
                           },
                           "discount": {
                             "type": "number"
+                          },
+                          "legacyDiscountRounding": {
+                            "type": "boolean"
                           },
                           "durationMonths": {
                             "type": "number"
@@ -54737,6 +54958,9 @@
                     "items": {
                       "type": "object",
                       "properties": {
+                        "id": {
+                          "type": "string"
+                        },
                         "productId": {
                           "type": "string"
                         },
@@ -54750,7 +54974,12 @@
                           "type": "number"
                         },
                         "discount": {
-                          "type": "number"
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 100
+                        },
+                        "legacyDiscountRounding": {
+                          "type": "boolean"
                         },
                         "durationMonths": {
                           "type": "number"
@@ -54869,6 +55098,9 @@
                           },
                           "discount": {
                             "type": "number"
+                          },
+                          "legacyDiscountRounding": {
+                            "type": "boolean"
                           },
                           "durationMonths": {
                             "type": "number"

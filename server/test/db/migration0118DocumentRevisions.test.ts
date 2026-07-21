@@ -2,11 +2,11 @@ import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'fs';
 
 const migration = readFileSync(
-  new URL('../../db/migrations/0116_add_document_revisions.sql', import.meta.url),
+  new URL('../../db/migrations/0118_add_document_revisions.sql', import.meta.url),
   'utf8',
 );
 
-describe('0116 document revisions migration', () => {
+describe('0118 document revisions migration', () => {
   test('creates separate immutable histories and per-object uniqueness', () => {
     for (const table of ['quote_revisions', 'offer_revisions', 'supplier_quote_revisions']) {
       expect(migration).toContain(`CREATE TABLE "${table}"`);

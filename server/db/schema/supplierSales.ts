@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm';
 import {
+  boolean,
   check,
   index,
   integer,
@@ -66,6 +67,10 @@ export const supplierSaleItems = pgTable(
     unitType: varchar('unit_type', { length: 10 }).$type<UnitType>().notNull().default('hours'),
     unitPrice: numeric('unit_price', { precision: 15, scale: 2 }).notNull().default('0'),
     discount: numeric('discount', { precision: 5, scale: 2 }).default('0'),
+    // Preserves pre-precision unit rounding for historical and compatibility-window writers.
+    // Current writers always persist false explicitly for newly authored precise lines; the
+    // legacy-safe database default can return to false after old app instances are retired.
+    legacyDiscountRounding: boolean('legacy_discount_rounding').notNull().default(true),
     note: text('note'),
     createdAt: timestamp('created_at').default(sql`CURRENT_TIMESTAMP`),
     // Number of months the line runs (issue #776). Multiplies the line total alongside `quantity`;

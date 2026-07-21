@@ -61,6 +61,7 @@ type PredicateBuilder = {
 type VerificationStep = {
   table: string;
   countColumn?: string;
+  requiredNonEmptyColumn?: string;
   ids: readonly string[];
   userIds?: readonly string[];
   expected: number;
@@ -1187,7 +1188,12 @@ const buildVerificationSteps = (
   },
   { table: 'suppliers', ids: demoIds.suppliers, expected: DEMO_EXPECTED_COUNTS.suppliers },
   { table: 'products', ids: demoIds.products, expected: DEMO_EXPECTED_COUNTS.products },
-  { table: 'quotes', ids: demoIds.quotes, expected: DEMO_EXPECTED_COUNTS.quotes },
+  {
+    table: 'quotes',
+    requiredNonEmptyColumn: 'description',
+    ids: demoIds.quotes,
+    expected: DEMO_EXPECTED_COUNTS.quotes,
+  },
   {
     table: 'quote_revisions',
     countColumn: 'quote_id',
@@ -1206,6 +1212,7 @@ const buildVerificationSteps = (
   },
   {
     table: 'customer_offers',
+    requiredNonEmptyColumn: 'description',
     ids: demoIds.customerOffers,
     expected: DEMO_EXPECTED_COUNTS.customer_offers,
   },
@@ -1220,7 +1227,12 @@ const buildVerificationSteps = (
     ids: DEMO_ITEM_IDS.customerOfferItems,
     expected: DEMO_EXPECTED_COUNTS.customer_offer_items,
   },
-  { table: 'sales', ids: demoIds.sales, expected: DEMO_EXPECTED_COUNTS.sales },
+  {
+    table: 'sales',
+    requiredNonEmptyColumn: 'description',
+    ids: demoIds.sales,
+    expected: DEMO_EXPECTED_COUNTS.sales,
+  },
   {
     table: 'sale_items',
     ids: DEMO_ITEM_IDS.saleItems,
@@ -1234,6 +1246,7 @@ const buildVerificationSteps = (
   },
   {
     table: 'supplier_quotes',
+    requiredNonEmptyColumn: 'description',
     ids: demoIds.supplierQuotes,
     expected: DEMO_EXPECTED_COUNTS.supplier_quotes,
   },
@@ -1330,9 +1343,12 @@ const verifyDemoDataset = async (client: PoolClient, seedYear: number) => {
   for (const step of verificationSteps) {
     const countColumn = step.countColumn ?? 'id';
     const userFilter = step.userIds ? ' AND user_id = ANY($2::text[])' : '';
+    const requiredValueFilter = step.requiredNonEmptyColumn
+      ? ` AND NULLIF(BTRIM(${step.requiredNonEmptyColumn}), '') IS NOT NULL`
+      : '';
     const params = step.userIds ? [step.ids, step.userIds] : [step.ids];
     const result = await client.query(
-      `SELECT COUNT(*)::int AS count FROM ${step.table} WHERE ${countColumn} = ANY($1::text[])${userFilter}`,
+      `SELECT COUNT(*)::int AS count FROM ${step.table} WHERE ${countColumn} = ANY($1::text[])${userFilter}${requiredValueFilter}`,
       params,
     );
     const actual = Number(result.rows[0]?.count ?? 0);

@@ -1,5 +1,5 @@
 {
-  "id": "a2cbf92c-7218-4a9b-8531-3b76674476f1",
+  "id": "f7e7c55a-92a7-4992-8ad5-f5f40c175001",
   "prevId": "3b3ec021-11b7-4189-a459-f95dd94b88ef",
   "version": "7",
   "dialect": "postgresql",
@@ -897,16 +897,9 @@
           "primaryKey": false,
           "notNull": false
         },
-        "revision_number": {
-          "name": "revision_number",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "revision_code": {
-          "name": "revision_code",
-          "type": "varchar(50)",
+        "description": {
+          "name": "description",
+          "type": "text",
           "primaryKey": false,
           "notNull": false
         }
@@ -1029,10 +1022,6 @@
         "chk_customer_offers_discount_type": {
           "name": "chk_customer_offers_discount_type",
           "value": "\"customer_offers\".\"discount_type\" IN ('percentage', 'currency')"
-        },
-        "chk_customer_offers_revision": {
-          "name": "chk_customer_offers_revision",
-          "value": "(\"customer_offers\".\"revision_number\" = 0 AND \"customer_offers\".\"revision_code\" IS NULL) OR (\"customer_offers\".\"revision_number\" > 0 AND \"customer_offers\".\"revision_code\" IS NOT NULL)"
         }
       },
       "isRLSEnabled": false
@@ -4107,19 +4096,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "revision_number": {
-          "name": "revision_number",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "revision_code": {
-          "name": "revision_code",
-          "type": "varchar(50)",
-          "primaryKey": false,
-          "notNull": false
-        },
         "notes": {
           "name": "notes",
           "type": "text",
@@ -4139,6 +4115,12 @@
           "primaryKey": false,
           "notNull": false,
           "default": "CURRENT_TIMESTAMP"
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
         }
       },
       "indexes": {
@@ -4259,10 +4241,6 @@
         "chk_quotes_discount_type": {
           "name": "chk_quotes_discount_type",
           "value": "\"quotes\".\"discount_type\" IN ('percentage', 'currency')"
-        },
-        "chk_quotes_revision": {
-          "name": "chk_quotes_revision",
-          "value": "(\"quotes\".\"revision_number\" = 0 AND \"quotes\".\"revision_code\" IS NULL) OR (\"quotes\".\"revision_number\" > 0 AND \"quotes\".\"revision_code\" IS NOT NULL)"
         }
       },
       "isRLSEnabled": false
@@ -4579,435 +4557,6 @@
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.offer_revisions": {
-      "name": "offer_revisions",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "varchar(50)",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "revision_number": {
-          "name": "revision_number",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "revision_code": {
-          "name": "revision_code",
-          "type": "varchar(50)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "created_by_user_id": {
-          "name": "created_by_user_id",
-          "type": "varchar(50)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false,
-          "default": "CURRENT_TIMESTAMP"
-        },
-        "offer_id": {
-          "name": "offer_id",
-          "type": "varchar(100)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "snapshot": {
-          "name": "snapshot",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true
-        }
-      },
-      "indexes": {
-        "uq_offer_revisions_number": {
-          "name": "uq_offer_revisions_number",
-          "columns": [
-            {
-              "expression": "offer_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "revision_number",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "idx_offer_revisions_offer_created": {
-          "name": "idx_offer_revisions_offer_created",
-          "columns": [
-            {
-              "expression": "offer_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "created_at",
-              "isExpression": false,
-              "asc": false,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "offer_revisions_created_by_user_id_users_id_fk": {
-          "name": "offer_revisions_created_by_user_id_users_id_fk",
-          "tableFrom": "offer_revisions",
-          "tableTo": "users",
-          "columnsFrom": ["created_by_user_id"],
-          "columnsTo": ["id"],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        },
-        "offer_revisions_offer_id_customer_offers_id_fk": {
-          "name": "offer_revisions_offer_id_customer_offers_id_fk",
-          "tableFrom": "offer_revisions",
-          "tableTo": "customer_offers",
-          "columnsFrom": ["offer_id"],
-          "columnsTo": ["id"],
-          "onDelete": "cascade",
-          "onUpdate": "cascade"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {
-        "chk_offer_revisions_number": {
-          "name": "chk_offer_revisions_number",
-          "value": "\"offer_revisions\".\"revision_number\" > 0"
-        }
-      },
-      "isRLSEnabled": false
-    },
-    "public.quote_revisions": {
-      "name": "quote_revisions",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "varchar(50)",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "revision_number": {
-          "name": "revision_number",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "revision_code": {
-          "name": "revision_code",
-          "type": "varchar(50)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "created_by_user_id": {
-          "name": "created_by_user_id",
-          "type": "varchar(50)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false,
-          "default": "CURRENT_TIMESTAMP"
-        },
-        "quote_id": {
-          "name": "quote_id",
-          "type": "varchar(100)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "snapshot": {
-          "name": "snapshot",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true
-        }
-      },
-      "indexes": {
-        "uq_quote_revisions_number": {
-          "name": "uq_quote_revisions_number",
-          "columns": [
-            {
-              "expression": "quote_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "revision_number",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "idx_quote_revisions_quote_created": {
-          "name": "idx_quote_revisions_quote_created",
-          "columns": [
-            {
-              "expression": "quote_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "created_at",
-              "isExpression": false,
-              "asc": false,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "quote_revisions_created_by_user_id_users_id_fk": {
-          "name": "quote_revisions_created_by_user_id_users_id_fk",
-          "tableFrom": "quote_revisions",
-          "tableTo": "users",
-          "columnsFrom": ["created_by_user_id"],
-          "columnsTo": ["id"],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        },
-        "quote_revisions_quote_id_quotes_id_fk": {
-          "name": "quote_revisions_quote_id_quotes_id_fk",
-          "tableFrom": "quote_revisions",
-          "tableTo": "quotes",
-          "columnsFrom": ["quote_id"],
-          "columnsTo": ["id"],
-          "onDelete": "cascade",
-          "onUpdate": "cascade"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {
-        "chk_quote_revisions_number": {
-          "name": "chk_quote_revisions_number",
-          "value": "\"quote_revisions\".\"revision_number\" > 0"
-        }
-      },
-      "isRLSEnabled": false
-    },
-    "public.revision_code_template": {
-      "name": "revision_code_template",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "varchar(20)",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "prefix": {
-          "name": "prefix",
-          "type": "varchar(20)",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'REV'"
-        },
-        "template": {
-          "name": "template",
-          "type": "varchar(100)",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'{PREFIX}{SEQ}'"
-        },
-        "sequence_padding": {
-          "name": "sequence_padding",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 1
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false,
-          "default": "CURRENT_TIMESTAMP"
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {
-        "chk_revision_code_template_singleton": {
-          "name": "chk_revision_code_template_singleton",
-          "value": "\"revision_code_template\".\"id\" = 'default'"
-        },
-        "chk_revision_code_template_padding": {
-          "name": "chk_revision_code_template_padding",
-          "value": "\"revision_code_template\".\"sequence_padding\" BETWEEN 1 AND 12"
-        },
-        "chk_revision_code_template_sequence": {
-          "name": "chk_revision_code_template_sequence",
-          "value": "\"revision_code_template\".\"template\" LIKE '%{SEQ}%'"
-        }
-      },
-      "isRLSEnabled": false
-    },
-    "public.supplier_quote_revisions": {
-      "name": "supplier_quote_revisions",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "varchar(50)",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "revision_number": {
-          "name": "revision_number",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "revision_code": {
-          "name": "revision_code",
-          "type": "varchar(50)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "created_by_user_id": {
-          "name": "created_by_user_id",
-          "type": "varchar(50)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false,
-          "default": "CURRENT_TIMESTAMP"
-        },
-        "quote_id": {
-          "name": "quote_id",
-          "type": "varchar(100)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "snapshot": {
-          "name": "snapshot",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true
-        }
-      },
-      "indexes": {
-        "uq_supplier_quote_revisions_number": {
-          "name": "uq_supplier_quote_revisions_number",
-          "columns": [
-            {
-              "expression": "quote_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "revision_number",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "idx_supplier_quote_revisions_quote_created": {
-          "name": "idx_supplier_quote_revisions_quote_created",
-          "columns": [
-            {
-              "expression": "quote_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "created_at",
-              "isExpression": false,
-              "asc": false,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "supplier_quote_revisions_created_by_user_id_users_id_fk": {
-          "name": "supplier_quote_revisions_created_by_user_id_users_id_fk",
-          "tableFrom": "supplier_quote_revisions",
-          "tableTo": "users",
-          "columnsFrom": ["created_by_user_id"],
-          "columnsTo": ["id"],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        },
-        "supplier_quote_revisions_quote_id_supplier_quotes_id_fk": {
-          "name": "supplier_quote_revisions_quote_id_supplier_quotes_id_fk",
-          "tableFrom": "supplier_quote_revisions",
-          "tableTo": "supplier_quotes",
-          "columnsFrom": ["quote_id"],
-          "columnsTo": ["id"],
-          "onDelete": "cascade",
-          "onUpdate": "cascade"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {
-        "chk_supplier_quote_revisions_number": {
-          "name": "chk_supplier_quote_revisions_number",
-          "value": "\"supplier_quote_revisions\".\"revision_number\" > 0"
-        }
-      },
       "isRLSEnabled": false
     },
     "public.resale_activities": {
@@ -5813,6 +5362,12 @@
           "primaryKey": false,
           "notNull": false,
           "default": "CURRENT_TIMESTAMP"
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
         }
       },
       "indexes": {
@@ -7946,6 +7501,12 @@
           "primaryKey": true,
           "notNull": true
         },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "supplier_id": {
           "name": "supplier_id",
           "type": "varchar(50)",
@@ -8015,19 +7576,6 @@
           "primaryKey": false,
           "notNull": false,
           "default": "CURRENT_TIMESTAMP"
-        },
-        "revision_number": {
-          "name": "revision_number",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "revision_code": {
-          "name": "revision_code",
-          "type": "varchar(50)",
-          "primaryKey": false,
-          "notNull": false
         }
       },
       "indexes": {
@@ -8143,10 +7691,6 @@
         "supplier_quotes_status_check": {
           "name": "supplier_quotes_status_check",
           "value": "\"supplier_quotes\".\"status\" IN ('draft', 'sent', 'offer', 'accepted', 'denied')"
-        },
-        "chk_supplier_quotes_revision": {
-          "name": "chk_supplier_quotes_revision",
-          "value": "(\"supplier_quotes\".\"revision_number\" = 0 AND \"supplier_quotes\".\"revision_code\" IS NULL) OR (\"supplier_quotes\".\"revision_number\" > 0 AND \"supplier_quotes\".\"revision_code\" IS NOT NULL)"
         }
       },
       "isRLSEnabled": false

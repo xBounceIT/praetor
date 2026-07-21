@@ -1,8 +1,28 @@
 import type React from 'react';
 import api from '../../services/api';
-import type { SupplierInvoice, SupplierQuote, SupplierSaleOrder, View } from '../../types';
+import type {
+  SupplierInvoice,
+  SupplierQuote,
+  SupplierQuoteItem,
+  SupplierSaleOrder,
+  View,
+} from '../../types';
+import { roundCurrency, roundToDecimalPlaces } from '../../utils/numbers';
 import { makeTempId } from '../../utils/tempId';
 import { toastError } from '../../utils/toast';
+
+const toSupplierOrderLinePricing = (
+  item: SupplierQuoteItem,
+): { unitPrice: number; discount: number } => {
+  const authoritativeUnitPrice = roundToDecimalPlaces(Number(item.unitPrice) || 0, 6);
+  const listPrice = roundCurrency(Number(item.listPrice ?? authoritativeUnitPrice) || 0);
+  const discount = roundCurrency(Number(item.discountPercent) || 0);
+  const derivedUnitPrice = roundToDecimalPlaces(listPrice * (1 - discount / 100), 6);
+
+  return derivedUnitPrice === authoritativeUnitPrice
+    ? { unitPrice: listPrice, discount }
+    : { unitPrice: roundCurrency(authoritativeUnitPrice), discount: 0 };
+};
 
 /**
  * Supplier-quote handlers read `supplierQuoteFilterId` both before and AFTER
@@ -122,19 +142,22 @@ export const makeSupplierQuoteHandlers = (deps: SupplierQuoteHandlersDeps) => {
         paymentTerms: quote.paymentTerms,
         status: 'draft',
         notes: quote.notes,
-        items: quote.items.map((item) => ({
-          ...item,
-          id: makeTempId(),
-          orderId: '',
-          // Supplier orders store the gross/list price in `unitPrice` and apply their existing
-          // line discount field to derive the net unit cost. Preserve the quote's full pricing
-          // chain instead of flattening it to the already-discounted cost.
-          unitPrice: item.listPrice ?? item.unitPrice,
-          discount: item.discountPercent,
-          // Free-text supplier lines without a linked product are valid;
-          // the server canonicalizes missing productId to NULL.
-          productId: item.productId ?? '',
-        })),
+        items: quote.items.map((item) => {
+          const pricing = toSupplierOrderLinePricing(item);
+          return {
+            ...item,
+            id: makeTempId(),
+            orderId: '',
+            // Keep the gross/discount chain when it reproduces the quote cost. An explicit synced
+            // override is flattened so the order preserves the authoritative net total.
+            unitPrice: pricing.unitPrice,
+            discount: pricing.discount,
+            legacyDiscountRounding: false,
+            // Free-text supplier lines without a linked product are valid;
+            // the server canonicalizes missing productId to NULL.
+            productId: item.productId ?? '',
+          };
+        }),
       });
       setSupplierQuoteFilterId(quote.id);
       setActiveView('accounting/supplier-orders');

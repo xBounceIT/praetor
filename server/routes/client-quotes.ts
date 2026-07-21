@@ -39,10 +39,16 @@ import {
 import { isPastLocalDate } from '../utils/date.ts';
 import { getUniqueViolation } from '../utils/db-errors.ts';
 import { replyDocumentCodeCollision } from '../utils/document-code-replies.ts';
+import {
+  DOCUMENT_CODE_MAX_LENGTH,
+  OPTIONAL_DOCUMENT_CODE_VALUE_PATTERN,
+  validateOptionalDocumentCode,
+} from '../utils/document-codes.ts';
 import { type DurationUnit, effectiveDurationMonths } from '../utils/duration-unit.ts';
 import { getDocumentDiscountAmount } from '../utils/invoice-math.ts';
 import { normalizeNullableString } from '../utils/normalize.ts';
 import { generatePrefixedId, ITEM_ID_PREFIXES } from '../utils/order-ids.ts';
+import { requirePathSegment } from '../utils/path-segments.ts';
 import {
   canTransitionClientQuote,
   effectiveQuoteStatusFromDate,
@@ -534,6 +540,33 @@ const idParamSchema = {
   required: ['id'],
 } as const;
 
+const manualQuoteCodeCreateSchema = {
+  type: 'string',
+  maxLength: DOCUMENT_CODE_MAX_LENGTH,
+  pattern: OPTIONAL_DOCUMENT_CODE_VALUE_PATTERN,
+  description:
+    'Optional manual quote code. Letters, numbers, underscores, and hyphens only; blank allocates the configured automatic code.',
+} as const;
+
+const manualQuoteCodeUpdateSchema = {
+  type: 'string',
+  maxLength: DOCUMENT_CODE_MAX_LENGTH,
+  description:
+    'Quote code. A renamed code must use at most 100 letters, numbers, underscores, or hyphens; an unchanged legacy code remains accepted.',
+} as const;
+
+const validateQuoteCodeUpdate = (input: unknown, currentId: string) => {
+  if (typeof input === 'string' && input.trim() === currentId) {
+    return { ok: true, value: currentId } as const;
+  }
+  const result = validateOptionalDocumentCode(input, 'id');
+  if (!result.ok) return result;
+  if (result.value === null) {
+    return { ok: false, message: 'id must be a non-empty string' } as const;
+  }
+  return { ok: true, value: result.value } as const;
+};
+
 const quoteItemSchema = {
   type: 'object',
   properties: {
@@ -599,6 +632,7 @@ const quoteSchema = {
     id: { type: 'string' },
     revisionNumber: { type: 'integer' },
     revisionCode: { type: ['string', 'null'] },
+    description: { type: ['string', 'null'] },
     linkedOfferId: { type: ['string', 'null'] },
     linkedOfferRevisionCode: { type: ['string', 'null'] },
     clientId: { type: 'string' },
@@ -706,7 +740,8 @@ const quoteCreateBodySchema = {
   type: 'object',
   allOf: [createDocumentDiscountConstraint],
   properties: {
-    id: { type: 'string' },
+    id: manualQuoteCodeCreateSchema,
+    description: { type: 'string' },
     clientId: { type: 'string' },
     clientName: { type: 'string' },
     items: { type: 'array', items: quoteItemBodySchema },
@@ -727,7 +762,8 @@ const quoteCreateBodySchema = {
 const quoteUpdateBodySchema = {
   type: 'object',
   properties: {
-    id: { type: 'string' },
+    id: manualQuoteCodeUpdateSchema,
+    description: { type: ['string', 'null'] },
     clientId: { type: 'string' },
     clientName: { type: 'string' },
     items: { type: 'array', items: quoteItemBodySchema },
@@ -857,6 +893,7 @@ const isExpirationOnlyCandidateFamilyUpdate = (args: {
   quoteId: string;
   nextQuoteId: string;
   parent: clientQuotesRepo.ClientQuote;
+  description?: string | null;
   clientId: string;
   clientName: string;
   requestedStatus: string;
@@ -866,6 +903,8 @@ const isExpirationOnlyCandidateFamilyUpdate = (args: {
 }): boolean => {
   if (
     args.nextQuoteId !== args.quoteId ||
+    (args.description !== undefined &&
+      !sameNullableValue(args.parent.description, args.description)) ||
     args.parent.clientId !== args.clientId ||
     args.parent.clientName !== args.clientName ||
     normalizeQuoteStatus(args.parent.status) !== normalizeQuoteStatus(args.requestedStatus) ||
@@ -1484,19 +1523,21 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       const {
         id: nextId,
+        description,
         clientId,
         clientName,
         candidates,
         status,
       } = request.body as {
         id?: unknown;
+        description?: unknown;
         clientId: unknown;
         clientName: unknown;
         candidates: unknown;
         status?: unknown;
       };
 
-      const nextIdResult = optionalNonEmptyString(nextId, 'id');
+      const nextIdResult = validateOptionalDocumentCode(nextId, 'id');
       if (!nextIdResult.ok) return badRequest(reply, nextIdResult.message);
 
       const clientIdResult = requireNonEmptyString(clientId, 'clientId');
@@ -1549,6 +1590,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           const created = await clientQuotesRepo.create(
             {
               id: quoteId,
+              description: (description as string | null | undefined) ?? null,
               clientId: clientIdResult.value,
               clientName: clientNameResult.value,
               paymentTerms: primaryCandidate.paymentTerms,
@@ -1680,6 +1722,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const { id } = request.params as { id: string };
       const {
         id: nextId,
+        description,
         clientId,
         clientName,
         items,
@@ -1693,6 +1736,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         notes,
       } = request.body as {
         id: unknown;
+        description: unknown;
         clientId: unknown;
         clientName: unknown;
         items: unknown;
@@ -1705,8 +1749,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         communicationChannelId: unknown;
         notes: unknown;
       };
-      const idResult = requireNonEmptyString(id, 'id');
+      const idResult = requirePathSegment(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
+      const nextIdUpdateResult =
+        nextId === undefined ? undefined : validateQuoteCodeUpdate(nextId, idResult.value);
+      if (nextIdUpdateResult && !nextIdUpdateResult.ok) {
+        return badRequest(reply, nextIdUpdateResult.message);
+      }
 
       // One declared field set, three derived guards (issue #779): `hasNonExpirationContentUpdate`
       // drives the expired read-only rule (everything except the expiration date and status is
@@ -1714,6 +1763,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       // (transitions and id renames stay allowed), and `isIdOnlyUpdate` further excludes status.
       // Deriving keeps the three in lock-step when a PUT body field is added.
       const hasNonExpirationContentUpdate =
+        description !== undefined ||
         clientId !== undefined ||
         clientName !== undefined ||
         items !== undefined ||
@@ -1767,10 +1817,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           return badRequest(reply, 'Use the candidate promotion endpoint to create an offer');
         }
         let candidateFamilyId = idResult.value;
-        if (nextId !== undefined) {
-          const nextIdResult = requireNonEmptyString(nextId, 'id');
-          if (!nextIdResult.ok) return badRequest(reply, nextIdResult.message);
-          candidateFamilyId = nextIdResult.value;
+        if (nextIdUpdateResult?.ok) {
+          candidateFamilyId = nextIdUpdateResult.value;
           if (
             candidateFamilyId !== idResult.value &&
             (await clientQuotesRepo.findIdConflict(candidateFamilyId, idResult.value))
@@ -1962,6 +2010,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                   quoteId: idResult.value,
                   nextQuoteId: candidateFamilyId,
                   parent: lockedParent,
+                  description: description as string | null | undefined,
                   clientId: clientIdValue.value,
                   clientName: clientNameValue.value,
                   requestedStatus,
@@ -1983,6 +2032,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             const parent = await clientQuotesRepo.update(
               idResult.value,
               {
+                description: description as string | null | undefined,
                 clientId: clientIdValue.value,
                 clientName: clientNameValue.value,
                 paymentTerms: first.paymentTerms,
@@ -2208,10 +2258,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       }
 
       let nextIdValue: string | undefined;
-      if (nextId !== undefined) {
-        const nextIdResult = requireNonEmptyString(nextId, 'id');
-        if (!nextIdResult.ok) return badRequest(reply, nextIdResult.message);
-        nextIdValue = nextIdResult.value;
+      if (nextIdUpdateResult?.ok) {
+        nextIdValue = nextIdUpdateResult.value;
         if (await clientQuotesRepo.findIdConflict(nextIdValue, idResult.value)) {
           return replyError(request, reply, {
             statusCode: 409,
@@ -2516,6 +2564,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               : await clientQuotesRepo.update(
                   renamedQuote?.id ?? idResult.value,
                   {
+                    description: description as string | null | undefined,
                     clientId: (clientIdValue as string | null | undefined) ?? null,
                     clientName: (clientNameValue as string | null | undefined) ?? null,
                     paymentTerms: (paymentTerms as string | null | undefined) ?? null,
@@ -2741,7 +2790,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id } = request.params as { id: string };
       const { candidateId } = request.body as { candidateId: string };
-      const idResult = requireNonEmptyString(id, 'id');
+      const idResult = requirePathSegment(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
       const candidateIdResult = requireNonEmptyString(candidateId, 'candidateId');
       if (!candidateIdResult.ok) return badRequest(reply, candidateIdResult.message);
@@ -2881,6 +2930,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           const offer = await clientOffersRepo.create(
             {
               id: offerId,
+              description: currentQuote.description ?? null,
               linkedQuoteId: currentQuote.id,
               linkedQuoteCandidateId: lockedCandidate.id,
               clientId: currentQuote.clientId,
@@ -2985,7 +3035,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id } = request.params as { id: string };
-      const idResult = requireNonEmptyString(id, 'id');
+      const idResult = requirePathSegment(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
       const offerId = await clientQuotesRepo.findLinkedOfferId(idResult.value);
       if (!offerId) {
@@ -3081,7 +3131,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id } = request.params as { id: string };
-      const idResult = requireNonEmptyString(id, 'id');
+      const idResult = requirePathSegment(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
       const [exists, versions] = await Promise.all([
@@ -3121,9 +3171,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id, versionId } = request.params as { id: string; versionId: string };
-      const idResult = requireNonEmptyString(id, 'id');
+      const idResult = requirePathSegment(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
-      const versionIdResult = requireNonEmptyString(versionId, 'versionId');
+      const versionIdResult = requirePathSegment(versionId, 'versionId');
       if (!versionIdResult.ok) return badRequest(reply, versionIdResult.message);
 
       const version = await quoteVersionsRepo.findById(idResult.value, versionIdResult.value);
@@ -3158,9 +3208,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id, versionId } = request.params as { id: string; versionId: string };
-      const idResult = requireNonEmptyString(id, 'id');
+      const idResult = requirePathSegment(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
-      const versionIdResult = requireNonEmptyString(versionId, 'versionId');
+      const versionIdResult = requirePathSegment(versionId, 'versionId');
       if (!versionIdResult.ok) return badRequest(reply, versionIdResult.message);
 
       type RestoreOutcome =
@@ -3394,6 +3444,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           const quote = await clientQuotesRepo.restoreSnapshotQuote(
             idResult.value,
             {
+              ...(Object.hasOwn(version.snapshot.quote, 'description')
+                ? { description: version.snapshot.quote.description ?? null }
+                : {}),
               clientId: version.snapshot.quote.clientId,
               clientName: version.snapshot.quote.clientName,
               paymentTerms: primarySnapshotCandidate.paymentTerms,
@@ -3524,7 +3577,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id } = request.params as unknown as { id: string };
-      const idResult = requireNonEmptyString(id, 'id');
+      const idResult = requirePathSegment(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
       if (await clientQuotesRepo.findLinkedOfferId(idResult.value)) {

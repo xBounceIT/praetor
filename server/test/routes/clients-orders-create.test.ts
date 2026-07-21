@@ -294,6 +294,7 @@ describe('POST /api/clients-orders product-less supplier lines (issue #783)', ()
       url: '/api/clients-orders',
       headers: authHeader(),
       payload: {
+        description: 'Managed service renewal',
         clientId: 'c1',
         clientName: 'Acme',
         discount: 150,
@@ -304,9 +305,14 @@ describe('POST /api/clients-orders product-less supplier lines (issue #783)', ()
 
     expect(res.statusCode).toBe(201);
     expect(coCreateMock).toHaveBeenCalledWith(
-      expect.objectContaining({ discount: 150, discountType: 'currency' }),
+      expect.objectContaining({
+        description: 'Managed service renewal',
+        discount: 150,
+        discountType: 'currency',
+      }),
       expect.anything(),
     );
+    expect(JSON.parse(res.body).description).toBe('Managed service renewal');
   });
 
   test('201 accepts the inclusive 100% line-discount boundary', async () => {
@@ -767,6 +773,85 @@ describe('POST /api/clients-orders product-less supplier lines (issue #783)', ()
       'Supplier order not created for supplier quote sq-1: unable to allocate a unique supplier order code',
     ]);
     expect(coCreateSupplierOrderMock).not.toHaveBeenCalled();
+  });
+
+  test('auto-created supplier order preserves an explicit synced quote cost', async () => {
+    coInsertItemsMock.mockResolvedValue([
+      insertedItem({
+        productId: null,
+        productName: 'Sourced line',
+        supplierQuoteId: 'sq-1',
+        supplierQuoteItemId: 'sqi-1',
+      }),
+    ]);
+    sqFindByIdMock.mockResolvedValue({
+      id: 'sq-1',
+      supplierId: 'sup-1',
+      supplierName: 'Supplier Co',
+      paymentTerms: 'net30',
+      status: 'accepted',
+      expirationDate: '2999-12-31',
+      linkedOrderId: null,
+      notes: null,
+      createdAt: 1_700_000_000_000,
+      updatedAt: 1_700_000_000_000,
+      linkedClientQuoteId: null,
+      linkedClientQuoteStatus: 'offer',
+      linkedClientQuoteExpiration: '2999-12-31',
+      linkedOfferStatus: 'accepted',
+      linkedOfferExpiration: '2999-12-31',
+    });
+    sqLockEffectiveStatusByIdMock.mockResolvedValue({
+      expirationDate: '2999-12-31',
+      linkedClientStatus: 'offer',
+      linkedClientQuoteExpiration: '2999-12-31',
+      linkedOfferStatus: 'accepted',
+      linkedOfferExpiration: '2999-12-31',
+    });
+    sqFindItemsForQuoteMock.mockResolvedValue([
+      {
+        id: 'sqi-1',
+        productId: null,
+        productName: 'Sourced line',
+        quantity: 150,
+        listPrice: 37.75,
+        discountPercent: 15,
+        unitPrice: 32.09,
+        note: null,
+        unitType: 'unit',
+        durationMonths: 1,
+        durationUnit: 'months',
+      },
+    ]);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/clients-orders',
+      headers: authHeader(),
+      payload: {
+        id: 'co-1',
+        clientId: 'c1',
+        clientName: 'Acme',
+        items: [
+          {
+            productId: null,
+            productName: 'Sourced line',
+            quantity: 150,
+            unitPrice: 100,
+            supplierQuoteId: 'sq-1',
+            supplierQuoteItemId: 'sqi-1',
+          },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(201);
+    const insertedSupplierItems = coBulkInsertSupplierOrderItemsMock.mock.calls[0][1] as Array<
+      Record<string, unknown>
+    >;
+    expect(insertedSupplierItems[0]).toEqual(
+      expect.objectContaining({ quantity: 150, unitPrice: 32.09, discount: 0 }),
+    );
   });
 
   test('does not trust a product line supplierQuoteId for supplier-order auto-create', async () => {

@@ -143,6 +143,7 @@ const offerToFormData = (offer: ClientOffer): Partial<ClientOffer> => ({
 
 const getDefaultFormData = (): Partial<ClientOffer> => ({
   id: '',
+  description: '',
   linkedQuoteId: '',
   clientId: '',
   clientName: '',
@@ -657,6 +658,14 @@ const useClientOffersController = ({
         <span className="font-bold text-zinc-700">
           {formatDocumentCode(row.id, row.revisionCode)}
         </span>
+      ),
+    },
+    {
+      header: t('sales:clientOffers.description', { defaultValue: 'Description' }),
+      accessorKey: 'description',
+      headerClassName: 'min-w-[12rem]',
+      cell: ({ row }) => (
+        <span className="text-sm text-foreground">{row.description?.trim() || '-'}</span>
       ),
     },
     {
@@ -1657,12 +1666,13 @@ const ClientOfferClientSection: React.FC<{ controller: ClientOffersController }>
         status={clientStatus}
         statusLabel={statusLabel}
       />
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <ClientOfferClientField controller={controller} />
         <ClientOfferCodeField controller={controller} />
         <ClientOfferPaymentTermsField controller={controller} />
         <ClientOfferExpirationField controller={controller} />
       </div>
+      <ClientOfferDescriptionField controller={controller} />
     </div>
   );
 };
@@ -1758,6 +1768,28 @@ const ClientOfferCodeField: React.FC<{ controller: ClientOffersController }> = (
     </Field>
   );
 };
+
+const ClientOfferDescriptionField: React.FC<{ controller: ClientOffersController }> = ({
+  controller,
+}) => (
+  <Field className="w-full">
+    <FieldLabel htmlFor="client-offer-description">
+      {controller.t('sales:clientOffers.description', { defaultValue: 'Description' })}
+    </FieldLabel>
+    <Input
+      id="client-offer-description"
+      type="text"
+      value={controller.formData.description ?? ''}
+      onChange={(event) =>
+        controller.setFormData((previous) => ({
+          ...previous,
+          description: event.target.value,
+        }))
+      }
+      disabled={controller.isReadOnly}
+    />
+  </Field>
+);
 
 const ClientOfferPaymentTermsField: React.FC<{ controller: ClientOffersController }> = ({
   controller,
