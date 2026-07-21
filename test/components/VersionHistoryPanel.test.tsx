@@ -158,27 +158,27 @@ describe('<VersionHistoryPanel />', () => {
     const user = userEvent.setup();
     render(<VersionHistoryPanel {...baseProps} rows={versionRows} />);
 
-    const searchToggle = screen.getByRole('button', { name: labels.searchAriaLabel });
     const header = screen.getByTestId('version-history-inline-header');
-    expect(header).toContainElement(searchToggle);
+    const restingLayer = screen.getByTestId('version-history-header-resting');
+    const searchLayer = screen.getByTestId('version-history-header-search');
+    const searchToggle = screen.getByRole('button', { name: labels.searchAriaLabel });
+
+    expect(header).toContainElement(restingLayer);
+    expect(header).toContainElement(searchLayer);
+    expect(restingLayer).toContainElement(searchToggle);
     expect(screen.getByText(labels.title)).toBeVisible();
-    // Closed order: title/input track, pinned search toggle, then the collapsing count badge.
-    expect(header.children[1]).toBe(searchToggle);
+    expect(restingLayer).toHaveClass('opacity-100');
+    expect(searchLayer).toHaveClass('opacity-0', 'pointer-events-none');
 
     await user.click(searchToggle);
     expect(header).toHaveAttribute('data-search-open', 'true');
     const input = screen.getByPlaceholderText(labels.searchPlaceholder);
     expect(input).toBeInTheDocument();
     expect(input).toHaveFocus();
-    expect(header.contains(input)).toBe(true);
-    const openToggle = screen.getByRole('button', { name: 'Close' });
-    expect(header.children[1]).toBe(openToggle);
-    const titleHeading = screen.getByText(labels.title).closest('h4');
-    expect(titleHeading).toHaveClass('opacity-0');
-    expect(input).toHaveClass('opacity-100', 'rounded-md', 'w-full');
-    expect(input.parentElement).not.toHaveClass('overflow-hidden');
-    expect(screen.getByTestId('version-history-search-icon')).toHaveClass('opacity-0');
-    expect(screen.getByTestId('version-history-close-icon')).toHaveClass('opacity-100');
+    expect(searchLayer).toContainElement(input);
+    expect(restingLayer).toHaveClass('opacity-0', 'pointer-events-none');
+    expect(searchLayer).toHaveClass('opacity-100');
+    expect(screen.getByRole('button', { name: 'Close' })).toBeInTheDocument();
 
     await user.type(input, 'bob');
     expect(screen.getByRole('radio', { name: 'REV 2' })).toBeInTheDocument();
@@ -190,50 +190,44 @@ describe('<VersionHistoryPanel />', () => {
 
     fireEvent.blur(input);
     expect(header).toHaveAttribute('data-search-open', 'false');
-    expect(titleHeading).toHaveClass('opacity-100');
-    expect(input).toHaveClass('opacity-0');
-    // Icons crossfade immediately with the rest of the header — no delayed trailing swap.
-    expect(header.children[1]).toBe(screen.getByRole('button', { name: labels.searchAriaLabel }));
-    expect(screen.getByTestId('version-history-search-icon')).toHaveClass('opacity-100');
-    expect(screen.getByTestId('version-history-close-icon')).toHaveClass('opacity-0');
+    expect(restingLayer).toHaveClass('opacity-100');
+    expect(searchLayer).toHaveClass('opacity-0', 'pointer-events-none');
     expect(screen.getByRole('radio', { name: 'REV 3' })).toBeInTheDocument();
     expect(screen.queryByText(labels.noResults)).not.toBeInTheDocument();
   });
 
-  test('crossfades search and close icons in sync with the header collapse', async () => {
+  test('crossfades resting and search header layers in sync', async () => {
     const user = userEvent.setup();
     render(<VersionHistoryPanel {...baseProps} rows={versionRows} />);
 
     const header = screen.getByTestId('version-history-inline-header');
-    const toggle = screen.getByTestId('version-history-search-toggle');
-    const searchIcon = screen.getByTestId('version-history-search-icon');
-    const closeIcon = screen.getByTestId('version-history-close-icon');
-    expect(header.children[1]).toBe(toggle);
-    expect(header).toHaveAttribute('data-search-open', 'false');
-    expect(searchIcon).toHaveClass('opacity-100', 'duration-200', 'ease-in-out');
-    expect(closeIcon).toHaveClass('opacity-0', 'duration-200', 'ease-in-out');
+    const restingLayer = screen.getByTestId('version-history-header-resting');
+    const searchLayer = screen.getByTestId('version-history-header-search');
+    const searchToggle = screen.getByTestId('version-history-search-toggle');
 
-    await user.click(toggle);
+    expect(header).toHaveAttribute('data-search-open', 'false');
+    expect(restingLayer).toHaveClass('opacity-100', 'duration-200', 'ease-in-out');
+    expect(searchLayer).toHaveClass(
+      'opacity-0',
+      'pointer-events-none',
+      'duration-200',
+      'ease-in-out',
+    );
+    expect(restingLayer).toContainElement(screen.getByTestId('version-history-search-icon'));
+    expect(searchLayer).toContainElement(screen.getByTestId('version-history-close-icon'));
+
+    await user.click(searchToggle);
     expect(header).toHaveAttribute('data-search-open', 'true');
-    expect(screen.getByRole('button', { name: 'Close' })).toBe(toggle);
-    expect(searchIcon).toHaveClass('opacity-0');
-    expect(closeIcon).toHaveClass('opacity-100');
+    expect(restingLayer).toHaveClass('opacity-0', 'pointer-events-none');
+    expect(searchLayer).toHaveClass('opacity-100');
 
     const input = screen.getByPlaceholderText(labels.searchPlaceholder);
-    const titleHeading = screen.getByText(labels.title).closest('h4');
-    expect(titleHeading).toHaveClass('opacity-0', 'duration-200', 'ease-in-out');
-    expect(input).toHaveClass('opacity-100', 'duration-200', 'ease-in-out');
-
     fireEvent.blur(input);
 
-    // Closed target state is applied immediately; CSS transitions run together (no setTimeout).
     expect(header).toHaveAttribute('data-search-open', 'false');
-    expect(screen.getByRole('button', { name: labels.searchAriaLabel })).toBe(toggle);
-    expect(searchIcon).toHaveClass('opacity-100');
-    expect(closeIcon).toHaveClass('opacity-0');
-    expect(titleHeading).toHaveClass('opacity-100');
-    expect(input).toHaveClass('opacity-0');
-    expect(header.children[1]).toBe(toggle);
+    expect(restingLayer).toHaveClass('opacity-100');
+    expect(searchLayer).toHaveClass('opacity-0', 'pointer-events-none');
+    expect(screen.getByRole('button', { name: labels.searchAriaLabel })).toBe(searchToggle);
   });
 
   test('shows restore actions and optional secondary action', async () => {
