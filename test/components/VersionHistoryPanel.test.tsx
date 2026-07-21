@@ -168,7 +168,7 @@ describe('<VersionHistoryPanel />', () => {
     expect(input).toBeInTheDocument();
     expect(input).toHaveFocus();
     expect(header?.contains(input)).toBe(true);
-    expect(screen.queryByText(labels.title)).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 4, name: labels.title })).toHaveClass('opacity-0');
     expect(input).toHaveClass('opacity-100', 'rounded-md', 'w-full');
     expect(input.parentElement).not.toHaveClass('overflow-hidden');
 
@@ -179,6 +179,12 @@ describe('<VersionHistoryPanel />', () => {
     await user.clear(input);
     await user.type(input, 'zzz-none');
     expect(screen.getByText(labels.noResults)).toBeInTheDocument();
+
+    fireEvent.blur(input);
+    expect(screen.getByRole('heading', { level: 4, name: labels.title })).toHaveClass(
+      'opacity-100',
+    );
+    expect(input).toHaveClass('opacity-0');
   });
 
   test('shows restore actions and optional secondary action', async () => {

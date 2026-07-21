@@ -82,15 +82,30 @@ export function VersionHistoryPanel<Row extends VersionHistoryPanelRow>({
   const [searchQuery, setSearchQuery] = useState('');
   const searchInputRef = useRef<HTMLInputElement>(null);
   const headerRef = useRef<HTMLDivElement>(null);
+  const closeSearchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearCloseSearchTimeout = useCallback(() => {
+    if (closeSearchTimeoutRef.current == null) return;
+    clearTimeout(closeSearchTimeoutRef.current);
+    closeSearchTimeoutRef.current = null;
+  }, []);
 
   const closeSearch = useCallback(() => {
     setSearchOpen(false);
-    setSearchQuery('');
-  }, []);
+    clearCloseSearchTimeout();
+    // Keep the query until the header grid finishes collapsing so the close isn't abrupt.
+    closeSearchTimeoutRef.current = setTimeout(() => {
+      setSearchQuery('');
+      closeSearchTimeoutRef.current = null;
+    }, 200);
+  }, [clearCloseSearchTimeout]);
 
   const openSearch = useCallback(() => {
+    clearCloseSearchTimeout();
     setSearchOpen(true);
-  }, []);
+  }, [clearCloseSearchTimeout]);
+
+  useEffect(() => () => clearCloseSearchTimeout(), [clearCloseSearchTimeout]);
 
   const filteredRows = useMemo(() => {
     if (isDialog) return rows;
@@ -159,20 +174,25 @@ export function VersionHistoryPanel<Row extends VersionHistoryPanelRow>({
       ref={headerRef}
       className={cn(
         'grid w-full items-center gap-2 transition-[grid-template-columns] duration-200 ease-in-out',
-        searchOpen ? 'grid-cols-[minmax(0,1fr)_auto]' : 'grid-cols-[minmax(0,1fr)_0fr_auto_auto]',
+        searchOpen
+          ? 'grid-cols-[0fr_minmax(0,1fr)_auto_0fr]'
+          : 'grid-cols-[minmax(0,1fr)_0fr_auto_auto]',
       )}
     >
-      {!searchOpen ? (
-        <div className="min-w-0 overflow-hidden">
-          <h4 className="flex min-w-0 items-center gap-2 text-xs font-semibold uppercase tracking-widest text-primary">
-            <span className="size-1.5 shrink-0 rounded-full bg-primary" aria-hidden="true" />
-            <span className="truncate">{labels.title}</span>
-            {labels.infoTooltip ? (
-              <FieldTooltip description={labels.infoTooltip} icon="info" />
-            ) : null}
-          </h4>
-        </div>
-      ) : null}
+      <div className={cn('min-w-0 overflow-hidden', searchOpen && 'pointer-events-none')}>
+        <h4
+          className={cn(
+            'flex min-w-0 items-center gap-2 text-xs font-semibold uppercase tracking-widest text-primary transition-opacity duration-200 ease-in-out',
+            searchOpen ? 'opacity-0' : 'opacity-100',
+          )}
+        >
+          <span className="size-1.5 shrink-0 rounded-full bg-primary" aria-hidden="true" />
+          <span className="truncate">{labels.title}</span>
+          {labels.infoTooltip ? (
+            <FieldTooltip description={labels.infoTooltip} icon="info" />
+          ) : null}
+        </h4>
+      </div>
 
       <div className={cn('min-w-0', !searchOpen && 'pointer-events-none overflow-hidden')}>
         <Input
@@ -195,7 +215,7 @@ export function VersionHistoryPanel<Row extends VersionHistoryPanelRow>({
         variant="ghost"
         size="icon-sm"
         className={cn(
-          'size-7 shrink-0 text-muted-foreground',
+          'size-7 shrink-0 text-muted-foreground transition-colors duration-200 ease-in-out',
           searchOpen && 'bg-muted text-foreground',
         )}
         aria-label={labels.searchAriaLabel}
@@ -204,18 +224,23 @@ export function VersionHistoryPanel<Row extends VersionHistoryPanelRow>({
       >
         <i
           className={cn(
-            'text-xs',
+            'text-xs transition-opacity duration-200 ease-in-out',
             searchOpen ? 'fa-solid fa-xmark' : 'fa-solid fa-magnifying-glass',
           )}
           aria-hidden="true"
         ></i>
       </Button>
 
-      {!searchOpen ? (
-        <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] font-bold tracking-wider text-muted-foreground uppercase">
+      <div className={cn('min-w-0 overflow-hidden', searchOpen && 'pointer-events-none')}>
+        <span
+          className={cn(
+            'inline-flex shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] font-bold tracking-wider text-muted-foreground uppercase transition-opacity duration-200 ease-in-out',
+            searchOpen ? 'opacity-0' : 'opacity-100',
+          )}
+        >
           {rows.length}
         </span>
-      ) : null}
+      </div>
     </div>
   );
 
