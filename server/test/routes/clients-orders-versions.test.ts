@@ -1282,6 +1282,56 @@ describe('PUT /api/clients-orders/:id snapshots pre-update state', () => {
     expect(ovInsertMock).toHaveBeenCalled();
   });
 
+  test('PUT preserves each retained marker in a mixed order', async () => {
+    const legacyItem = { ...SAMPLE_ITEM, id: 'si-legacy', pricingSemanticsVersion: 1 as const };
+    const currentItem = { ...SAMPLE_ITEM, id: 'si-current', pricingSemanticsVersion: 2 as const };
+    coFindExistingMock.mockResolvedValue(SAMPLE_ORDER);
+    coFindItemsForOrderMock.mockResolvedValue([legacyItem, currentItem]);
+    coFindFullForSnapshotMock.mockResolvedValue({
+      order: SAMPLE_ORDER,
+      items: [legacyItem, currentItem],
+    });
+    coUpdateMock.mockResolvedValue(SAMPLE_ORDER);
+    coReplaceItemsMock.mockResolvedValue([legacyItem, currentItem]);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/clients-orders/o-1',
+      headers: authHeader(),
+      payload: {
+        items: [
+          {
+            id: legacyItem.id,
+            productId: legacyItem.productId,
+            productName: legacyItem.productName,
+            quantity: legacyItem.quantity,
+            unitPrice: legacyItem.unitPrice,
+            productCost: legacyItem.productCost,
+            discount: legacyItem.discount,
+            unitType: 'hours',
+          },
+          {
+            id: currentItem.id,
+            productId: currentItem.productId,
+            productName: currentItem.productName,
+            quantity: currentItem.quantity,
+            unitPrice: currentItem.unitPrice,
+            productCost: currentItem.productCost,
+            discount: currentItem.discount,
+            unitType: 'hours',
+          },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(
+      (coReplaceItemsMock.mock.calls[0][1] as Array<Record<string, unknown>>).map(
+        (item) => item.pricingSemanticsVersion,
+      ),
+    ).toEqual([1, 2]);
+  });
+
   test('PUT items: replaceItems failure rolls back (no audit, no success)', async () => {
     coFindExistingMock.mockResolvedValue({
       id: 'o-1',

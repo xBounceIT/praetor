@@ -1005,6 +1005,56 @@ describe('PUT /api/invoices/:id', () => {
     );
   });
 
+  test('preserves each retained marker when editing a mixed invoice', async () => {
+    findItemsForInvoiceMock.mockResolvedValue([
+      { ...SAMPLE_ITEM, id: 'invoice-item-legacy', pricingSemanticsVersion: 1 as const },
+      { ...SAMPLE_ITEM, id: 'invoice-item-current', pricingSemanticsVersion: 2 as const },
+    ]);
+    findAmountPaidMock.mockResolvedValue(0);
+    updateMock.mockResolvedValue(SAMPLE_INVOICE);
+    replaceItemsMock.mockResolvedValue([SAMPLE_ITEM]);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/invoices/inv-1',
+      headers: authHeader(),
+      payload: {
+        items: [
+          {
+            id: 'invoice-item-legacy',
+            description: 'Legacy annual service',
+            unitOfMeasure: 'unit',
+            quantity: 1,
+            unitPrice: 10,
+            durationMonths: 12,
+            durationUnit: 'years',
+          },
+          {
+            id: 'invoice-item-current',
+            description: 'Current annual service',
+            unitOfMeasure: 'unit',
+            quantity: 1,
+            unitPrice: 10,
+            durationMonths: 12,
+            durationUnit: 'years',
+          },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(updateMock).toHaveBeenCalledWith(
+      'inv-1',
+      expect.objectContaining({ subtotal: 130, total: 130 }),
+      TX_SENTINEL,
+    );
+    expect(
+      (replaceItemsMock.mock.calls[0][1] as Array<Record<string, unknown>>).map(
+        (item) => item.pricingSemanticsVersion,
+      ),
+    ).toEqual([1, 2]);
+  });
+
   test('400 items replace lowers total below persisted amountPaid (no amountPaid in patch)', async () => {
     // Persisted invoice was paid 100. New items only sum to 50 - that would leave
     // amountPaid (100) > new total (50). Must reject.

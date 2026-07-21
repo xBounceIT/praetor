@@ -31,7 +31,6 @@ import {
   inheritPricingSemanticsVersions,
   LEGACY_PRICING_SEMANTICS_VERSION,
   type PricingSemanticsVersion,
-  pricingSemanticsVersionForDocument,
 } from '../utils/pricing-semantics.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { replyError } from '../utils/replyError.ts';
@@ -1166,11 +1165,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           'accounting.supplier_orders.create',
         );
         existingItems = await clientsOrdersRepo.findItemsForOrder(idResult.value);
-        const pricingSemanticsVersion = pricingSemanticsVersionForDocument(existingItems);
-        const versionedItems = parsedItemsForUpdate.map((item) => ({
-          ...item,
-          pricingSemanticsVersion,
-        }));
+        const versionedItems = inheritPricingSemanticsVersions(parsedItemsForUpdate, existingItems);
         const hasSupplierQuoteRefs = versionedItems.some(
           (item) => item.supplierQuoteItemId !== null,
         );

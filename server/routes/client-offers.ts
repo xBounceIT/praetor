@@ -48,10 +48,9 @@ import { normalizeNullableNumber, normalizeNullableString } from '../utils/norma
 import { generatePrefixedId, ITEM_ID_PREFIXES } from '../utils/order-ids.ts';
 import { ADMIN_ROLE_ID, requestHasPermission, TOP_MANAGER_ROLE_ID } from '../utils/permissions.ts';
 import {
-  CURRENT_PRICING_SEMANTICS_VERSION,
+  inheritPricingSemanticsVersions,
   LEGACY_PRICING_SEMANTICS_VERSION,
   type PricingSemanticsVersion,
-  pricingSemanticsVersionForDocument,
 } from '../utils/pricing-semantics.ts';
 import {
   effectiveQuoteStatusFromDate,
@@ -394,31 +393,15 @@ const resolveOfferItemSupplierLinks = async (
   items: NormalizedOfferItem[],
   existingItems: clientOffersRepo.ClientOfferItem[] | null,
   inheritedItemIds: ReadonlySet<string>,
-  inheritedPricingSemanticsVersion: PricingSemanticsVersion = CURRENT_PRICING_SEMANTICS_VERSION,
+  inheritedPricingItems: readonly { id: string; pricingSemanticsVersion?: unknown }[] = [],
   preserveInheritedPricingSemantics = false,
 ): Promise<NormalizedOfferItem[]> => {
   // Retained rows keep their exact marker; added rows inherit the document contract. This makes
   // MOL correct before replaceItems persists the rows and avoids downgrading mixed documents.
-  const pricingSemanticsVersion = existingItems?.length
-    ? pricingSemanticsVersionForDocument(existingItems)
-    : inheritedPricingSemanticsVersion;
-  const existingPricingSemanticsById = new Map(
-    (existingItems ?? []).map((item) => [item.id, item.pricingSemanticsVersion]),
+  const versionedItems = inheritPricingSemanticsVersions(
+    items,
+    existingItems?.length ? existingItems : inheritedPricingItems,
   );
-  const retainedItemIds = new Set<string>();
-  const versionedItems = items.map((item) => {
-    const retainedPricingSemanticsVersion =
-      item.id && !retainedItemIds.has(item.id)
-        ? existingPricingSemanticsById.get(item.id)
-        : undefined;
-    if (item.id && retainedPricingSemanticsVersion !== undefined) {
-      retainedItemIds.add(item.id);
-    }
-    return {
-      ...item,
-      pricingSemanticsVersion: retainedPricingSemanticsVersion ?? pricingSemanticsVersion,
-    };
-  });
   const linkedIds = versionedItems
     .map((item) => item.supplierQuoteItemId)
     .filter((id): id is string => id !== null);
@@ -493,12 +476,12 @@ const linkedQuoteContext = async (
   linkedQuoteId: string | null | undefined,
 ): Promise<{
   sourcedItemIds: ReadonlySet<string>;
-  pricingSemanticsVersion: PricingSemanticsVersion;
+  pricingItems: Array<{ id: string; pricingSemanticsVersion: PricingSemanticsVersion }>;
 }> => {
   if (!linkedQuoteId) {
     return {
       sourcedItemIds: new Set<string>(),
-      pricingSemanticsVersion: CURRENT_PRICING_SEMANTICS_VERSION,
+      pricingItems: [],
     };
   }
   const snapshots = await clientQuotesRepo.findItemSnapshotsForQuote(linkedQuoteId);
@@ -508,7 +491,10 @@ const linkedQuoteContext = async (
         .map((snapshot) => snapshot.supplierQuoteItemId)
         .filter((id): id is string => id != null),
     ),
-    pricingSemanticsVersion: pricingSemanticsVersionForDocument(snapshots),
+    pricingItems: snapshots.map((snapshot) => ({
+      id: snapshot.id,
+      pricingSemanticsVersion: snapshot.pricingSemanticsVersion,
+    })),
   };
 };
 
@@ -795,7 +781,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           normalizedItems,
           null,
           linkedQuote.sourcedItemIds,
-          linkedQuote.pricingSemanticsVersion,
+          linkedQuote.pricingItems,
           linkedQuoteIdResult.value !== null,
         );
       } catch (err) {

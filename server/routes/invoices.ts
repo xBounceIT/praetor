@@ -22,7 +22,6 @@ import { generatePrefixedId, ITEM_ID_PREFIXES } from '../utils/order-ids.ts';
 import {
   inheritPricingSemanticsVersions,
   type PricingSemanticsVersion,
-  pricingSemanticsVersionForDocument,
 } from '../utils/pricing-semantics.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { replyError } from '../utils/replyError.ts';
@@ -707,11 +706,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         normalizedItemsForUpdate = validateAndNormalizeItems(items, reply);
         if (!normalizedItemsForUpdate) return;
         const existingItems = await invoicesRepo.findItemsForInvoice(idResult.value);
-        const pricingSemanticsVersion = pricingSemanticsVersionForDocument(existingItems);
-        normalizedItemsForUpdate = normalizedItemsForUpdate.map((item) => ({
-          ...item,
-          pricingSemanticsVersion,
-        }));
+        normalizedItemsForUpdate = inheritPricingSemanticsVersions(
+          normalizedItemsForUpdate,
+          existingItems,
+        );
         const computed = computeInvoiceTotals(normalizedItemsForUpdate);
         patch.subtotal = computed.subtotal;
         patch.taxTotal = computed.taxTotal;

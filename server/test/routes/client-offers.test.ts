@@ -1297,6 +1297,52 @@ describe('client-offers supplier-link resolution + forward sync (#779)', () => {
     expect(sqSyncItemPricingMock).not.toHaveBeenCalled();
   });
 
+  test('POST: preserves each source quote marker in a mixed offer', async () => {
+    cqFindStatusAndClientNameMock.mockResolvedValue({ status: 'accepted', clientName: 'Client' });
+    cqLockCurrentByIdMock.mockResolvedValue({ status: 'accepted' });
+    cqFindItemSnapshotsForQuoteMock.mockResolvedValue([
+      { id: 'quote-item-legacy', pricingSemanticsVersion: 1, supplierQuoteItemId: null },
+      { id: 'quote-item-current', pricingSemanticsVersion: 2, supplierQuoteItemId: null },
+    ]);
+    coFindExistingForQuoteMock.mockResolvedValue(null);
+    coCreateMock.mockResolvedValue(updatedOffer());
+    coInsertItemsMock.mockResolvedValue([]);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/sales/client-offers',
+      headers: authHeader(),
+      payload: {
+        id: 'off-1',
+        linkedQuoteId: 'q-1',
+        clientId: 'c1',
+        clientName: 'Client',
+        expirationDate: '2999-12-31',
+        items: [
+          lineItem(1, null, {
+            id: 'quote-item-legacy',
+            supplierQuoteId: null,
+            supplierQuoteItemId: null,
+            supplierQuoteSupplierName: null,
+          }),
+          lineItem(1, null, {
+            id: 'quote-item-current',
+            supplierQuoteId: null,
+            supplierQuoteItemId: null,
+            supplierQuoteSupplierName: null,
+          }),
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(
+      (coInsertItemsMock.mock.calls[0][1] as Array<Record<string, unknown>>).map(
+        (item) => item.pricingSemanticsVersion,
+      ),
+    ).toEqual([1, 2]);
+  });
+
   test('POST: an accepted legacy single candidate can still create its first offer', async () => {
     const legacyCandidate = {
       // The candidate PK keeps the original quote code after a quote rename; only quoteId cascades.
