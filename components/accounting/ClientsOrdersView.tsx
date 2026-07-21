@@ -30,7 +30,7 @@ import {
   isTemporaryLineItem,
 } from '../../utils/lineItemIndex';
 import {
-  calcProductSalePrice,
+  calcProductSalePriceForItem,
   calculatePricingTotals,
   durationValueToMonths,
   formatDecimal,
@@ -494,9 +494,13 @@ const useClientsOrdersController = ({
       const product = activeProducts.find((p) => p.id === value);
       if (product) {
         newItems[index].productName = product.name;
-        const mol = product.molPercentage ? Number(product.molPercentage) : 0;
-        newItems[index].unitPrice = calcProductSalePrice(Number(product.costo), mol);
-        newItems[index].productCost = Number(product.costo);
+        const cost = Number(product.costo);
+        newItems[index].unitPrice = calcProductSalePriceForItem(
+          newItems[index],
+          cost,
+          product.molPercentage ? Number(product.molPercentage) : 0,
+        );
+        newItems[index].productCost = cost;
         newItems[index].productMolPercentage = product.molPercentage;
       }
     }

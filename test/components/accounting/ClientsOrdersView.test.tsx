@@ -610,6 +610,48 @@ describe('<ClientsOrdersView /> draft-from-offer editability', () => {
     type: 'supply',
   };
 
+  test('reprices a legacy day line from its effective product cost', async () => {
+    const onUpdate = mock((_id: string, _updates: Partial<ClientsOrder>) => Promise.resolve());
+    const legacyDayOrder: ClientsOrder = {
+      ...draftLinkedOrder,
+      id: 'dm_so_legacy_day',
+      items: [
+        {
+          ...orders[0].items[0],
+          orderId: 'dm_so_legacy_day',
+          unitType: 'days',
+          unitPrice: 640,
+          productCost: 80,
+          pricingSemanticsVersion: 1,
+        },
+      ],
+    };
+    const replacementProduct: Product = {
+      id: 'product-2',
+      name: 'Day service',
+      productCode: 'D-1',
+      costo: 100,
+      molPercentage: 25,
+      costUnit: 'hours',
+      type: 'service',
+    };
+    const { dialog } = await openModal(legacyDayOrder, onUpdate, [
+      consultingProduct,
+      replacementProduct,
+    ]);
+
+    fireEvent.click(within(dialog).getByRole('button', { name: /Consulting/ }));
+    fireEvent.click(await screen.findByText('Day service'));
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: 'accounting:clientsOrders.updateOrder' }),
+    );
+
+    await waitFor(() => expect(onUpdate).toHaveBeenCalledTimes(1));
+    const item = onUpdate.mock.calls[0]?.[1].items?.[0];
+    expect(item).toMatchObject({ productId: 'product-2', productCost: 100 });
+    expect(item?.unitPrice).toBeCloseTo(1066.667, 3);
+  });
+
   test('product selector and remove button are locked for a supplier-order-backed line', async () => {
     const supplierBackedDraft: ClientsOrder = {
       ...draftLinkedOrder,
