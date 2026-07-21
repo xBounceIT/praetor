@@ -111,22 +111,33 @@ export function VersionHistoryPanel<Row extends VersionHistoryPanelRow>({
   };
 
   const listMaxClass = layout === 'dialog' ? 'max-h-[min(24rem,50vh)]' : INLINE_LIST_MAX_CLASS;
+  const isDialog = layout === 'dialog';
 
   return (
     <section
       className={cn(
-        'flex w-full flex-col overflow-hidden rounded-lg border border-border bg-background text-foreground',
+        'flex w-full flex-col overflow-hidden text-foreground',
+        isDialog ? 'bg-transparent' : 'rounded-lg border border-border bg-background',
         className,
       )}
       aria-label={labels.title}
     >
-      <div className="flex items-center gap-2 border-b border-border bg-muted/30 px-3 py-2">
-        <h3 className="min-w-0 flex-1 truncate text-[11px] font-semibold tracking-wider text-muted-foreground uppercase">
-          {labels.title}
-        </h3>
+      <div
+        className={cn(
+          'flex items-center gap-2 border-b border-border bg-muted/30',
+          isDialog ? 'px-6 py-3' : 'px-3 py-2',
+        )}
+      >
+        {isDialog ? (
+          <div className="min-w-0 flex-1" />
+        ) : (
+          <h3 className="min-w-0 flex-1 truncate text-[11px] font-semibold tracking-wider text-muted-foreground uppercase">
+            {labels.title}
+          </h3>
+        )}
         {/* Dialog layout already surfaces this copy in VersionHistoryDialog; keep the
             icon only inline so dialog autofocus cannot open the tooltip on mount. */}
-        {labels.infoTooltip && layout !== 'dialog' ? (
+        {labels.infoTooltip && !isDialog ? (
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
@@ -164,7 +175,7 @@ export function VersionHistoryPanel<Row extends VersionHistoryPanelRow>({
       </div>
 
       {searchOpen ? (
-        <div className="border-b border-border px-3 py-2">
+        <div className={cn('border-b border-border py-2', isDialog ? 'px-6' : 'px-3')}>
           <Input
             ref={searchInputRef}
             value={searchQuery}
@@ -176,7 +187,7 @@ export function VersionHistoryPanel<Row extends VersionHistoryPanelRow>({
         </div>
       ) : null}
 
-      <div className={cn('min-h-0 overflow-y-auto', listMaxClass)}>
+      <div className={cn('min-h-0 overflow-y-auto', isDialog && 'px-4', listMaxClass)}>
         {isLoading && (
           <div className="p-6 text-center text-xs text-muted-foreground">
             <i className="fa-solid fa-spinner fa-spin" aria-hidden="true"></i>
@@ -270,7 +281,12 @@ export function VersionHistoryPanel<Row extends VersionHistoryPanelRow>({
       </div>
 
       {selectedVersionId ? (
-        <div className="flex flex-col gap-2 border-t border-border bg-muted/20 p-2 sm:flex-row">
+        <div
+          className={cn(
+            'flex flex-col gap-2 border-t border-border bg-muted/30 sm:flex-row',
+            isDialog ? 'px-6 py-4' : 'p-2',
+          )}
+        >
           <Button
             type="button"
             variant="outline"
@@ -295,7 +311,7 @@ export function VersionHistoryPanel<Row extends VersionHistoryPanelRow>({
       ) : null}
 
       {secondaryAction ? (
-        <div className="border-t border-border px-2 py-2">
+        <div className={cn('border-t border-border', isDialog ? 'px-6 py-3' : 'px-2 py-2')}>
           <Button
             type="button"
             variant="ghost"
