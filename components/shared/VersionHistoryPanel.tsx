@@ -240,10 +240,9 @@ export function VersionHistoryPanel<Row extends VersionHistoryPanelRow>({
             onValueChange={handleRadioChange}
             className={cn('gap-0 py-1', isDialog ? 'px-2' : 'px-3')}
           >
-            {filteredRows.map((row, index) => {
+            {filteredRows.map((row) => {
               const selected = row.id === selectedVersionId;
               const isCurrent = rows[0]?.id === row.id;
-              const isLast = index === filteredRows.length - 1;
               const reasonLabel =
                 row.reason === 'restore' ? labels.reasonRestore : labels.reasonUpdate;
               const timestamp = formatInsertDateTime(row.createdAt, locale);
@@ -254,31 +253,12 @@ export function VersionHistoryPanel<Row extends VersionHistoryPanelRow>({
                   key={row.id}
                   htmlFor={`history-row-${row.id}`}
                   className={cn(
-                    'relative mb-1 flex cursor-pointer items-center gap-3 rounded-md px-2 py-2 hover:bg-muted/40',
+                    'mb-1 flex cursor-pointer items-center gap-2 rounded-md px-2 py-2 hover:bg-muted/40 sm:gap-3',
                     selected && 'border border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/15',
                     !selected && 'border border-transparent',
                   )}
                   style={{ minHeight: INLINE_ROW_MIN_HEIGHT }}
                 >
-                  <div
-                    className="relative flex w-3 shrink-0 flex-col items-center self-stretch"
-                    aria-hidden="true"
-                  >
-                    {!isLast ? (
-                      <span className="absolute top-4 bottom-[-0.5rem] left-1/2 w-px -translate-x-1/2 bg-border" />
-                    ) : null}
-                    <span
-                      className={cn(
-                        'relative z-10 mt-1.5 size-2.5 shrink-0 rounded-full border-2 border-background',
-                        selected
-                          ? 'bg-amber-500'
-                          : isCurrent
-                            ? 'bg-emerald-500'
-                            : 'bg-muted-foreground/40',
-                      )}
-                    />
-                  </div>
-
                   {row.revisionCode ? (
                     <span className="shrink-0 rounded-md border border-border bg-muted/40 px-2 py-1 text-[11px] font-semibold tracking-wide text-foreground">
                       {row.revisionCode}
