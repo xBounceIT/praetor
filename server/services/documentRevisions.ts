@@ -45,7 +45,7 @@ export const createDerivedSupplierRevisions = async (
   for (const [quoteId, previousStatus] of previousStates) {
     if (previousStatus !== 'draft') continue;
     const current = await supplierQuotesRepo.lockEffectiveStatusById(quoteId, exec);
-    if (current && effectiveLockedSupplierStatus(current) === 'sent') {
+    if (current && effectiveLockedSupplierStatus(current) !== 'draft') {
       await createSupplierQuoteRevisionIfChanged(quoteId, createdByUserId, exec);
     }
   }

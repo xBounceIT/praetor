@@ -1960,6 +1960,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             const isSending =
               normalizeQuoteStatus(lockedCurrent.status) === 'draft' &&
               normalizeQuoteStatus(requestedStatus) === 'sent';
+            // A sent family remains editable through this candidate path; the revision helper
+            // suppresses no-op saves, while preserving every genuine sent-state change.
+            const shouldCreateRevision = normalizeQuoteStatus(requestedStatus) === 'sent';
             const supplierRevisionStates = isSending
               ? await lockSupplierRevisionStates(
                   await sourcedSupplierQuoteIds(
@@ -2151,7 +2154,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               await reserveDocumentCodeCounterFromCode('client_quote', candidateFamilyId, tx);
               finalParent = renamedParent;
             }
-            if (isSending) {
+            if (shouldCreateRevision) {
               const revision = await createQuoteRevisionIfChanged(
                 finalParent.id,
                 request.user?.id ?? null,
