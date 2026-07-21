@@ -836,48 +836,49 @@ const SupplierOrdersHeader: React.FC<{ controller: SupplierOrdersController }> =
 
 const SupplierOrderModal: React.FC<{ controller: SupplierOrdersController }> = ({ controller }) => (
   <Modal isOpen={controller.isModalOpen} onClose={controller.closeEditModal}>
-    <div className="flex max-w-[calc(100vw-2rem)] items-start gap-4">
-      <ModalContent size="full" className="max-h-[90vh]">
-        <form onSubmit={controller.handleSubmit} className="flex min-h-0 flex-1 flex-col">
-          <ModalHeader>
-            <ModalTitle className="gap-3">
-              <span className="flex size-10 items-center justify-center rounded-md bg-muted text-primary">
-                <i
-                  className={`fa-solid ${controller.isReadOnly ? 'fa-eye' : 'fa-pen-to-square'}`}
-                  aria-hidden="true"
-                ></i>
-              </span>
-              {controller.t('accounting:supplierOrders.editOrder')}
-            </ModalTitle>
-            <ModalCloseButton onClick={controller.closeEditModal} />
-          </ModalHeader>
-          <ModalBody className="flex-1 space-y-5">
-            <SupplierOrderModalAlerts controller={controller} />
-            <SupplierOrderDetailsSection controller={controller} />
-            <SupplierOrderItemsSection controller={controller} />
-            <SupplierOrderNotesSummarySection controller={controller} />
-          </ModalBody>
-          <ModalFooter>
-            <Button type="button" variant="outline" onClick={controller.closeEditModal}>
-              {controller.t('common:buttons.cancel')}
-            </Button>
-            {!controller.isReadOnly && (
-              <Button type="submit">{controller.t('common:buttons.update')}</Button>
-            )}
-          </ModalFooter>
-        </form>
-      </ModalContent>
-      {controller.editingOrder?.id && (
-        <SupplierOrderVersionsPanel
-          orderId={controller.editingOrder.id}
-          selectedVersionId={controller.previewVersion?.id ?? null}
-          onPreview={controller.handleVersionPreview}
-          onClearPreview={controller.handleClearPreview}
-          onRestored={controller.handleVersionRestored}
-          disabled={controller.baseReadOnly}
-        />
-      )}
-    </div>
+    <ModalContent size="full" className="max-h-[90vh]">
+      <form onSubmit={controller.handleSubmit} className="flex min-h-0 flex-1 flex-col">
+        <ModalHeader>
+          <ModalTitle className="gap-3">
+            <span className="flex size-10 items-center justify-center rounded-md bg-muted text-primary">
+              <i
+                className={`fa-solid ${controller.isReadOnly ? 'fa-eye' : 'fa-pen-to-square'}`}
+                aria-hidden="true"
+              ></i>
+            </span>
+            {controller.t('accounting:supplierOrders.editOrder')}
+          </ModalTitle>
+          <ModalCloseButton onClick={controller.closeEditModal} />
+        </ModalHeader>
+        <ModalBody className="flex-1 space-y-5">
+          {controller.editingOrder?.id ? (
+            <div className="flex justify-end">
+              <SupplierOrderVersionsPanel
+                className="w-full max-w-sm"
+                orderId={controller.editingOrder.id}
+                selectedVersionId={controller.previewVersion?.id ?? null}
+                onPreview={controller.handleVersionPreview}
+                onClearPreview={controller.handleClearPreview}
+                onRestored={controller.handleVersionRestored}
+                disabled={controller.baseReadOnly}
+              />
+            </div>
+          ) : null}
+          <SupplierOrderModalAlerts controller={controller} />
+          <SupplierOrderDetailsSection controller={controller} />
+          <SupplierOrderItemsSection controller={controller} />
+          <SupplierOrderNotesSummarySection controller={controller} />
+        </ModalBody>
+        <ModalFooter>
+          <Button type="button" variant="outline" onClick={controller.closeEditModal}>
+            {controller.t('common:buttons.cancel')}
+          </Button>
+          {!controller.isReadOnly && (
+            <Button type="submit">{controller.t('common:buttons.update')}</Button>
+          )}
+        </ModalFooter>
+      </form>
+    </ModalContent>
   </Modal>
 );
 

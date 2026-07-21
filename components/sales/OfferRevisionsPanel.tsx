@@ -15,6 +15,11 @@ export const OfferRevisionsPanel = (props: {
   onRestored: (offer: ClientOffer) => void;
   disabled?: boolean;
   revisionApi?: OfferRevisionApi;
+  secondaryAction?: {
+    label: string;
+    onClick: () => void;
+  };
+  className?: string;
 }) => (
   <RevisionHistoryPanel
     objectId={props.offerId}
@@ -27,5 +32,7 @@ export const OfferRevisionsPanel = (props: {
     onClearPreview={props.onClearPreview}
     onRestored={props.onRestored}
     disabled={props.disabled}
+    secondaryAction={props.secondaryAction}
+    className={props.className}
   />
 );

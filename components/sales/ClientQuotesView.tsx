@@ -128,7 +128,6 @@ import {
   ModalTitle,
 } from '../shared/ModalLayout';
 import QuickViewLinkButton from '../shared/QuickViewLinkButton';
-import { HistoryRail } from '../shared/RevisionHistoryPanel';
 import SelectControl, { type Option } from '../shared/SelectControl';
 import StaleSupplierDataButton from '../shared/StaleSupplierDataButton';
 import StandardTable, { type Column } from '../shared/StandardTable';
@@ -136,6 +135,7 @@ import StatusBadge, { type StatusType } from '../shared/StatusBadge';
 import SupplierQuoteCostHint from '../shared/SupplierQuoteCostHint';
 import UnitTypeSelector from '../shared/UnitTypeSelector';
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
+import { VersionHistoryDialog } from '../shared/VersionHistoryDialog';
 import ProductSelectOrFallback from './ProductSelectOrFallback';
 import QuoteCommunicationChannelField from './QuoteCommunicationChannelField';
 import { QuoteRevisionsPanel } from './QuoteRevisionsPanel';
@@ -2435,6 +2435,7 @@ const ClientQuotesLayout: React.FC<{ controller: ClientQuotesController }> = ({ 
 
 const ClientQuoteFormModal: React.FC<{ controller: ClientQuotesController }> = ({ controller }) => {
   const {
+    t,
     isModalOpen,
     closeModal,
     handleSubmit,
@@ -2448,51 +2449,79 @@ const ClientQuoteFormModal: React.FC<{ controller: ClientQuotesController }> = (
   const { revisionId: selectedRevisionId, versionId: selectedVersionId } =
     getHistoryPreviewIds(previewVersion);
   const revisionRestoreDisabled = Boolean(baseReadOnly || editingQuote?.status !== 'draft');
+  const [versionsDialogOpen, setVersionsDialogOpen] = useState(false);
+  const dismissModal = useCallback(() => {
+    setVersionsDialogOpen(false);
+    closeModal();
+  }, [closeModal]);
 
   return (
-    <Modal isOpen={isModalOpen} onClose={closeModal}>
-      <div className="flex max-w-[calc(100vw-2rem)] items-start gap-4">
-        <ModalContent size="full" className="max-h-[90vh]">
-          <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
-            <ClientQuoteModalHeader controller={controller} />
-            <ModalBody className="flex-1 space-y-5">
-              <ClientQuoteCandidatesBar controller={controller} />
-              <ClientQuoteModalAlerts controller={controller} />
-              <ClientQuoteClientSection controller={controller} />
-              <ClientQuoteItemsSection controller={controller} />
-              <ClientQuoteNotesSummarySection controller={controller} />
-            </ModalBody>
-            <ClientQuoteModalFooter controller={controller} />
-          </form>
-        </ModalContent>
-        {editingQuote?.id && (
-          <HistoryRail>
-            <QuoteRevisionsPanel
-              quoteId={editingQuote.id}
-              selectedRevisionId={selectedRevisionId}
-              onPreview={(revision) =>
-                handleVersionPreview({
-                  ...revision,
-                  quoteId: editingQuote.id,
-                  reason: 'update',
-                })
-              }
-              onClearPreview={handleClearPreview}
-              onRestored={handleVersionRestored}
-              disabled={revisionRestoreDisabled}
-            />
-            <QuoteVersionsPanel
-              embedded
-              quoteId={editingQuote.id}
-              selectedVersionId={selectedVersionId}
-              onPreview={handleVersionPreview}
-              onClearPreview={handleClearPreview}
-              onRestored={handleVersionRestored}
-              disabled={baseReadOnly}
-            />
-          </HistoryRail>
-        )}
-      </div>
+    <Modal isOpen={isModalOpen} onClose={dismissModal}>
+      <ModalContent size="full" className="max-h-[90vh]">
+        <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
+          <ClientQuoteModalHeader controller={{ ...controller, closeModal: dismissModal }} />
+          <ModalBody className="flex-1 space-y-5">
+            <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(16rem,20rem)]">
+              <div className="min-w-0">
+                <ClientQuoteCandidatesBar controller={controller} />
+              </div>
+              {editingQuote?.id ? (
+                <QuoteRevisionsPanel
+                  className="min-w-0 lg:justify-self-stretch"
+                  quoteId={editingQuote.id}
+                  selectedRevisionId={selectedRevisionId}
+                  onPreview={(revision) =>
+                    handleVersionPreview({
+                      ...revision,
+                      quoteId: editingQuote.id,
+                      reason: 'update',
+                    })
+                  }
+                  onClearPreview={handleClearPreview}
+                  onRestored={handleVersionRestored}
+                  disabled={revisionRestoreDisabled}
+                  secondaryAction={{
+                    label: t('sales:clientQuotes.revisionHistory.openVersionHistory', {
+                      defaultValue: 'Open version history',
+                    }),
+                    onClick: () => setVersionsDialogOpen(true),
+                  }}
+                />
+              ) : null}
+            </div>
+            <ClientQuoteModalAlerts controller={controller} />
+            <ClientQuoteClientSection controller={controller} />
+            <ClientQuoteItemsSection controller={controller} />
+            <ClientQuoteNotesSummarySection controller={controller} />
+          </ModalBody>
+          <ClientQuoteModalFooter controller={controller} />
+        </form>
+      </ModalContent>
+      {editingQuote?.id ? (
+        <VersionHistoryDialog
+          open={versionsDialogOpen}
+          onOpenChange={setVersionsDialogOpen}
+          title={t('sales:clientQuotes.versionHistory.title', {
+            defaultValue: 'Version History',
+          })}
+          description={t('sales:clientQuotes.versionHistory.infoTooltip', {
+            defaultValue: 'Automatic snapshots created when you save or restore the document.',
+          })}
+        >
+          <QuoteVersionsPanel
+            layout="dialog"
+            quoteId={editingQuote.id}
+            selectedVersionId={selectedVersionId}
+            onPreview={(version) => {
+              handleVersionPreview(version);
+              setVersionsDialogOpen(false);
+            }}
+            onClearPreview={handleClearPreview}
+            onRestored={handleVersionRestored}
+            disabled={baseReadOnly}
+          />
+        </VersionHistoryDialog>
+      ) : null}
     </Modal>
   );
 };

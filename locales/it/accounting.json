@@ -67,7 +67,12 @@
       "restoreConfirmDescription": "I valori attuali verranno salvati come nuova versione prima della sostituzione. Puoi annullare l'azione ripristinando la versione che verrà creata ora.",
       "reasonUpdate": "Salvataggio",
       "reasonRestore": "Ripristino",
-      "loadFailed": "Caricamento della cronologia non riuscito."
+      "loadFailed": "Caricamento della cronologia non riuscito.",
+      "searchPlaceholder": "Cerca versione…",
+      "searchAriaLabel": "Cerca nelle versioni",
+      "noResults": "Nessuna versione corrisponde alla ricerca",
+      "currentBadge": "Corrente",
+      "infoTooltip": "Snapshot automatici creati al salvataggio o al ripristino del documento."
     }
   },
   "clientsInvoices": {
@@ -188,7 +193,12 @@
       "restoreConfirmDescription": "I valori attuali verranno salvati come nuova versione prima della sostituzione. Puoi annullare l'azione ripristinando la versione che verrà creata ora.",
       "reasonUpdate": "Salvataggio",
       "reasonRestore": "Ripristino",
-      "loadFailed": "Caricamento della cronologia non riuscito."
+      "loadFailed": "Caricamento della cronologia non riuscito.",
+      "searchPlaceholder": "Cerca versione…",
+      "searchAriaLabel": "Cerca nelle versioni",
+      "noResults": "Nessuna versione corrisponde alla ricerca",
+      "currentBadge": "Corrente",
+      "infoTooltip": "Snapshot automatici creati al salvataggio o al ripristino del documento."
     }
   },
   "supplierInvoices": {

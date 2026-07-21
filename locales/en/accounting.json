@@ -67,7 +67,12 @@
       "restoreConfirmDescription": "The current values will be saved as a new version before being replaced. This action can be undone by restoring the version that gets created now.",
       "reasonUpdate": "Save",
       "reasonRestore": "Restored",
-      "loadFailed": "Failed to load version history."
+      "loadFailed": "Failed to load version history.",
+      "searchPlaceholder": "Search versions…",
+      "searchAriaLabel": "Search versions",
+      "noResults": "No versions match your search",
+      "currentBadge": "Current",
+      "infoTooltip": "Automatic snapshots created when you save or restore the document."
     }
   },
   "clientsInvoices": {
@@ -188,7 +193,12 @@
       "restoreConfirmDescription": "The current values will be saved as a new version before being replaced. This action can be undone by restoring the version that gets created now.",
       "reasonUpdate": "Save",
       "reasonRestore": "Restored",
-      "loadFailed": "Failed to load version history."
+      "loadFailed": "Failed to load version history.",
+      "searchPlaceholder": "Search versions…",
+      "searchAriaLabel": "Search versions",
+      "noResults": "No versions match your search",
+      "currentBadge": "Current",
+      "infoTooltip": "Automatic snapshots created when you save or restore the document."
     }
   },
   "supplierInvoices": {

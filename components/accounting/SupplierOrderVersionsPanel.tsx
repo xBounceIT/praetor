@@ -14,6 +14,8 @@ interface SupplierOrderVersionsPanelProps {
   onClearPreview: () => void;
   onRestored: (updatedOrder: SupplierSaleOrder) => void;
   disabled?: boolean;
+  layout?: 'inline' | 'dialog';
+  className?: string;
 }
 
 const SupplierOrderVersionsPanel: React.FC<SupplierOrderVersionsPanelProps> = ({
@@ -23,6 +25,8 @@ const SupplierOrderVersionsPanel: React.FC<SupplierOrderVersionsPanelProps> = ({
   onClearPreview,
   onRestored,
   disabled,
+  layout = 'inline',
+  className,
 }) => {
   const { t, i18n } = useTranslation('accounting');
   const [historyState, dispatchHistory] = useReducer(
@@ -70,8 +74,6 @@ const SupplierOrderVersionsPanel: React.FC<SupplierOrderVersionsPanelProps> = ({
       setConfirmOpen(false);
       await reload();
     } catch (e) {
-      // Restore failures (409 linked-invoice / 409 non-draft / 409 missing snapshot ref / 404)
-      // carry actionable server messages - surface them instead of a generic load error.
       dispatchHistory({
         type: 'setError',
         error:
@@ -87,7 +89,8 @@ const SupplierOrderVersionsPanel: React.FC<SupplierOrderVersionsPanelProps> = ({
   return (
     <>
       <VersionHistoryPanel
-        persistenceKey="supplierOrders.versions"
+        layout={layout}
+        className={className}
         rows={historyState.rows}
         selectedVersionId={selectedVersionId}
         isLoading={historyState.isLoading}
@@ -102,6 +105,11 @@ const SupplierOrderVersionsPanel: React.FC<SupplierOrderVersionsPanelProps> = ({
           reasonUpdate: t('supplierOrders.versionHistory.reasonUpdate'),
           backToCurrent: t('supplierOrders.versionHistory.backToCurrent'),
           restoreButton: t('supplierOrders.versionHistory.restoreButton'),
+          searchPlaceholder: t('supplierOrders.versionHistory.searchPlaceholder'),
+          searchAriaLabel: t('supplierOrders.versionHistory.searchAriaLabel'),
+          noResults: t('supplierOrders.versionHistory.noResults'),
+          currentBadge: t('supplierOrders.versionHistory.currentBadge'),
+          infoTooltip: t('supplierOrders.versionHistory.infoTooltip'),
         }}
         onSelect={handleSelect}
         onClearPreview={onClearPreview}

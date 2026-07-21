@@ -252,10 +252,15 @@
       "restoreConfirmDescription": "I valori attuali verranno salvati come nuova versione prima della sostituzione. Puoi annullare l'azione ripristinando la versione che verrà creata ora.",
       "reasonUpdate": "Salvataggio",
       "reasonRestore": "Ripristino",
-      "loadFailed": "Caricamento della cronologia non riuscito."
+      "loadFailed": "Caricamento della cronologia non riuscito.",
+      "searchPlaceholder": "Cerca versione…",
+      "searchAriaLabel": "Cerca nelle versioni",
+      "noResults": "Nessuna versione corrisponde alla ricerca",
+      "currentBadge": "Corrente",
+      "infoTooltip": "Snapshot automatici creati al salvataggio o al ripristino del documento."
     },
     "revisionHistory": {
-      "title": "Revisioni",
+      "title": "Storico revisioni",
       "previewBanner": "Anteprima di {{code}} del {{date}}",
       "empty": "Nessuna revisione inviata.",
       "snapshot": "Snapshot inviato",
@@ -264,7 +269,13 @@
       "restoreConfirmTitle": "Ripristinare questa revisione?",
       "restoreConfirmDescription": "Il contenuto verrà ripristinato in bozza. Il numero massimo di revisione già assegnato rimarrà riservato.",
       "loadFailed": "Caricamento delle revisioni non riuscito.",
-      "restoreFailed": "Ripristino della revisione non riuscito."
+      "restoreFailed": "Ripristino della revisione non riuscito.",
+      "searchPlaceholder": "Cerca revisione…",
+      "searchAriaLabel": "Cerca nelle revisioni",
+      "noResults": "Nessuna revisione corrisponde alla ricerca",
+      "currentBadge": "Corrente",
+      "infoTooltip": "Snapshot immutabili creati all’invio. Lo storico dei salvataggi è disponibile dal link in basso.",
+      "openVersionHistory": "Apri storico versioni"
     }
   },
   "clientOffers": {
@@ -359,10 +370,15 @@
       "restoreConfirmDescription": "I valori attuali verranno salvati come nuova versione prima della sostituzione. Puoi annullare l'azione ripristinando la versione che verrà creata ora.",
       "reasonUpdate": "Salvataggio",
       "reasonRestore": "Ripristino",
-      "loadFailed": "Caricamento della cronologia non riuscito."
+      "loadFailed": "Caricamento della cronologia non riuscito.",
+      "searchPlaceholder": "Cerca versione…",
+      "searchAriaLabel": "Cerca nelle versioni",
+      "noResults": "Nessuna versione corrisponde alla ricerca",
+      "currentBadge": "Corrente",
+      "infoTooltip": "Snapshot automatici creati al salvataggio o al ripristino del documento."
     },
     "revisionHistory": {
-      "title": "Revisioni",
+      "title": "Storico revisioni",
       "previewBanner": "Anteprima di {{code}} del {{date}}",
       "empty": "Nessuna revisione inviata.",
       "snapshot": "Snapshot inviato",
@@ -371,7 +387,13 @@
       "restoreConfirmTitle": "Ripristinare questa revisione?",
       "restoreConfirmDescription": "Il contenuto verrà ripristinato in bozza. Il numero massimo di revisione già assegnato rimarrà riservato.",
       "loadFailed": "Caricamento delle revisioni non riuscito.",
-      "restoreFailed": "Ripristino della revisione non riuscito."
+      "restoreFailed": "Ripristino della revisione non riuscito.",
+      "searchPlaceholder": "Cerca revisione…",
+      "searchAriaLabel": "Cerca nelle revisioni",
+      "noResults": "Nessuna revisione corrisponde alla ricerca",
+      "currentBadge": "Corrente",
+      "infoTooltip": "Snapshot immutabili creati all’invio. Lo storico dei salvataggi è disponibile dal link in basso.",
+      "openVersionHistory": "Apri storico versioni"
     }
   },
   "supplierQuotes": {
@@ -463,10 +485,15 @@
       "restoreConfirmDescription": "I valori attuali verranno salvati come nuova versione prima della sostituzione. Puoi annullare l'azione ripristinando la versione che verrà creata ora.",
       "reasonUpdate": "Salvataggio",
       "reasonRestore": "Ripristino",
-      "loadFailed": "Caricamento della cronologia non riuscito."
+      "loadFailed": "Caricamento della cronologia non riuscito.",
+      "searchPlaceholder": "Cerca versione…",
+      "searchAriaLabel": "Cerca nelle versioni",
+      "noResults": "Nessuna versione corrisponde alla ricerca",
+      "currentBadge": "Corrente",
+      "infoTooltip": "Snapshot automatici creati al salvataggio o al ripristino del documento."
     },
     "revisionHistory": {
-      "title": "Revisioni",
+      "title": "Storico revisioni",
       "previewBanner": "Anteprima di {{code}} del {{date}}",
       "empty": "Nessuna revisione inviata.",
       "snapshot": "Snapshot inviato",
@@ -475,7 +502,13 @@
       "restoreConfirmTitle": "Ripristinare questa revisione?",
       "restoreConfirmDescription": "Il contenuto verrà ripristinato in bozza. Il numero massimo di revisione già assegnato rimarrà riservato.",
       "loadFailed": "Caricamento delle revisioni non riuscito.",
-      "restoreFailed": "Ripristino della revisione non riuscito."
+      "restoreFailed": "Ripristino della revisione non riuscito.",
+      "searchPlaceholder": "Cerca revisione…",
+      "searchAriaLabel": "Cerca nelle revisioni",
+      "noResults": "Nessuna revisione corrisponde alla ricerca",
+      "currentBadge": "Corrente",
+      "infoTooltip": "Snapshot immutabili creati all’invio. Lo storico dei salvataggi è disponibile dal link in basso.",
+      "openVersionHistory": "Apri storico versioni"
     },
     "attachments": {
       "title": "Allegati",

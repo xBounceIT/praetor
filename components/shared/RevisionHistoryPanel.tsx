@@ -1,4 +1,3 @@
-import type { ReactNode } from 'react';
 import { useCallback, useEffect, useReducer, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { RevisionRow } from '@/types';
@@ -19,6 +18,11 @@ interface RevisionHistoryPanelProps<TRevision extends RevisionWithSnapshot, TRes
   onClearPreview: () => void;
   onRestored: (restored: TRestored) => void;
   disabled?: boolean;
+  secondaryAction?: {
+    label: string;
+    onClick: () => void;
+  };
+  className?: string;
 }
 
 export function RevisionHistoryPanel<TRevision extends RevisionWithSnapshot, TRestored>({
@@ -32,6 +36,8 @@ export function RevisionHistoryPanel<TRevision extends RevisionWithSnapshot, TRe
   onClearPreview,
   onRestored,
   disabled,
+  secondaryAction,
+  className,
 }: RevisionHistoryPanelProps<TRevision, TRestored>) {
   const { t, i18n } = useTranslation('sales');
   const [state, dispatch] = useReducer(
@@ -104,8 +110,9 @@ export function RevisionHistoryPanel<TRevision extends RevisionWithSnapshot, TRe
   return (
     <>
       <VersionHistoryPanel
-        embedded
-        persistenceKey={`${translationPrefix}.revisions`}
+        layout="inline"
+        className={className}
+        secondaryAction={secondaryAction}
         rows={rows}
         selectedVersionId={selectedRevisionId}
         isLoading={state.isLoading}
@@ -114,7 +121,9 @@ export function RevisionHistoryPanel<TRevision extends RevisionWithSnapshot, TRe
         disabled={disabled}
         restoreInFlight={restoreInFlight}
         labels={{
-          title: t(`${translationPrefix}.revisionHistory.title`, { defaultValue: 'Revisioni' }),
+          title: t(`${translationPrefix}.revisionHistory.title`, {
+            defaultValue: 'Storico revisioni',
+          }),
           empty: t(`${translationPrefix}.revisionHistory.empty`, {
             defaultValue: 'Nessuna revisione inviata',
           }),
@@ -127,6 +136,22 @@ export function RevisionHistoryPanel<TRevision extends RevisionWithSnapshot, TRe
           }),
           restoreButton: t(`${translationPrefix}.revisionHistory.restoreButton`, {
             defaultValue: 'Ripristina revisione',
+          }),
+          searchPlaceholder: t(`${translationPrefix}.revisionHistory.searchPlaceholder`, {
+            defaultValue: 'Cerca revisione…',
+          }),
+          searchAriaLabel: t(`${translationPrefix}.revisionHistory.searchAriaLabel`, {
+            defaultValue: 'Cerca nelle revisioni',
+          }),
+          noResults: t(`${translationPrefix}.revisionHistory.noResults`, {
+            defaultValue: 'Nessuna revisione corrisponde alla ricerca',
+          }),
+          currentBadge: t(`${translationPrefix}.revisionHistory.currentBadge`, {
+            defaultValue: 'Corrente',
+          }),
+          infoTooltip: t(`${translationPrefix}.revisionHistory.infoTooltip`, {
+            defaultValue:
+              'Snapshot immutabili creati all’invio. Lo storico dei salvataggi è disponibile dal link in basso.',
           }),
         }}
         onSelect={handleSelect}
@@ -149,9 +174,3 @@ export function RevisionHistoryPanel<TRevision extends RevisionWithSnapshot, TRe
     </>
   );
 }
-
-export const HistoryRail = ({ children }: { children: ReactNode }) => (
-  <aside className="hidden max-h-[90vh] w-72 flex-shrink-0 flex-col gap-2 overflow-y-auto 2xl:flex">
-    {children}
-  </aside>
-);

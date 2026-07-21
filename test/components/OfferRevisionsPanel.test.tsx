@@ -127,9 +127,9 @@ describe('<OfferRevisionsPanel />', () => {
     render(<OfferRevisionsPanel {...baseProps} onPreview={onPreview} />);
 
     await waitFor(() => expect(screen.getByText('REV2')).toBeInTheDocument());
-    expect(screen.getByText('formatted-1700000000000 · Ada Lovelace')).toBeInTheDocument();
+    expect(screen.getByText(/formatted-1700000000000 · Ada Lovelace/)).toBeInTheDocument();
 
-    fireEvent.click(screen.getByText('REV2'));
+    fireEvent.click(screen.getByRole('radio', { name: 'REV2' }));
     await waitFor(() => expect(getRevisionMock).toHaveBeenCalledWith('OFF_26_001', 'or-2'));
     expect(onPreview).toHaveBeenCalledWith(FULL_REVISION);
   });

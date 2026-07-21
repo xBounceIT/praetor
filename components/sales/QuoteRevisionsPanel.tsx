@@ -9,6 +9,11 @@ export const QuoteRevisionsPanel = (props: {
   onClearPreview: () => void;
   onRestored: (quote: Quote) => void;
   disabled?: boolean;
+  secondaryAction?: {
+    label: string;
+    onClick: () => void;
+  };
+  className?: string;
 }) => (
   <RevisionHistoryPanel
     objectId={props.quoteId}
@@ -21,5 +26,7 @@ export const QuoteRevisionsPanel = (props: {
     onClearPreview={props.onClearPreview}
     onRestored={props.onRestored}
     disabled={props.disabled}
+    secondaryAction={props.secondaryAction}
+    className={props.className}
   />
 );

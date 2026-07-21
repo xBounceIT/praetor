@@ -102,7 +102,6 @@ import {
   ModalTitle,
 } from '../shared/ModalLayout';
 import QuickViewLinkButton from '../shared/QuickViewLinkButton';
-import { HistoryRail } from '../shared/RevisionHistoryPanel';
 import SelectControl from '../shared/SelectControl';
 import StaleSupplierDataButton from '../shared/StaleSupplierDataButton';
 import StandardTable, { type Column } from '../shared/StandardTable';
@@ -110,6 +109,7 @@ import StatusBadge, { type StatusType } from '../shared/StatusBadge';
 import SupplierQuoteCostHint from '../shared/SupplierQuoteCostHint';
 import UnitTypeSelector from '../shared/UnitTypeSelector';
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
+import { VersionHistoryDialog } from '../shared/VersionHistoryDialog';
 import { OfferRevisionsPanel } from './OfferRevisionsPanel';
 import OfferVersionsPanel from './OfferVersionsPanel';
 import ProductSelectOrFallback from './ProductSelectOrFallback';
@@ -1479,6 +1479,7 @@ const ClientOffersLayout: React.FC<{ controller: ClientOffersController }> = ({ 
 
 const ClientOfferFormModal: React.FC<{ controller: ClientOffersController }> = ({ controller }) => {
   const {
+    t,
     isModalOpen,
     closeModal,
     handleSubmit,
@@ -1492,50 +1493,76 @@ const ClientOfferFormModal: React.FC<{ controller: ClientOffersController }> = (
   const { revisionId: selectedRevisionId, versionId: selectedVersionId } =
     getHistoryPreviewIds(previewVersion);
   const revisionRestoreDisabled = baseReadOnly;
+  const [versionsDialogOpen, setVersionsDialogOpen] = useState(false);
+  const dismissModal = useCallback(() => {
+    setVersionsDialogOpen(false);
+    closeModal();
+  }, [closeModal]);
 
   return (
-    <Modal isOpen={isModalOpen} onClose={closeModal}>
-      <div className="flex max-w-[calc(100vw-2rem)] items-start gap-4">
-        <ModalContent size="full" className="max-h-[90vh]">
-          <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
-            <ClientOfferModalHeader controller={controller} />
-            <ModalBody className="flex-1 space-y-5">
-              <ClientOfferModalAlerts controller={controller} />
-              <ClientOfferClientSection controller={controller} />
-              <ClientOfferItemsSection controller={controller} />
-              <ClientOfferNotesSummarySection controller={controller} />
-            </ModalBody>
-            <ClientOfferModalFooter controller={controller} />
-          </form>
-        </ModalContent>
-        {editingOffer?.id && (
-          <HistoryRail>
-            <OfferRevisionsPanel
-              offerId={editingOffer.id}
-              selectedRevisionId={selectedRevisionId}
-              onPreview={(revision) =>
-                handleVersionPreview({
-                  ...revision,
-                  offerId: editingOffer.id,
-                  reason: 'update',
-                })
-              }
-              onClearPreview={handleClearPreview}
-              onRestored={handleVersionRestored}
-              disabled={revisionRestoreDisabled}
-            />
-            <OfferVersionsPanel
-              embedded
-              offerId={editingOffer.id}
-              selectedVersionId={selectedVersionId}
-              onPreview={handleVersionPreview}
-              onClearPreview={handleClearPreview}
-              onRestored={handleVersionRestored}
-              disabled={baseReadOnly}
-            />
-          </HistoryRail>
-        )}
-      </div>
+    <Modal isOpen={isModalOpen} onClose={dismissModal}>
+      <ModalContent size="full" className="max-h-[90vh]">
+        <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
+          <ClientOfferModalHeader controller={{ ...controller, closeModal: dismissModal }} />
+          <ModalBody className="flex-1 space-y-5">
+            {editingOffer?.id ? (
+              <div className="flex justify-end">
+                <OfferRevisionsPanel
+                  className="w-full max-w-sm"
+                  offerId={editingOffer.id}
+                  selectedRevisionId={selectedRevisionId}
+                  onPreview={(revision) =>
+                    handleVersionPreview({
+                      ...revision,
+                      offerId: editingOffer.id,
+                      reason: 'update',
+                    })
+                  }
+                  onClearPreview={handleClearPreview}
+                  onRestored={handleVersionRestored}
+                  disabled={revisionRestoreDisabled}
+                  secondaryAction={{
+                    label: t('sales:clientOffers.revisionHistory.openVersionHistory', {
+                      defaultValue: 'Open version history',
+                    }),
+                    onClick: () => setVersionsDialogOpen(true),
+                  }}
+                />
+              </div>
+            ) : null}
+            <ClientOfferModalAlerts controller={controller} />
+            <ClientOfferClientSection controller={controller} />
+            <ClientOfferItemsSection controller={controller} />
+            <ClientOfferNotesSummarySection controller={controller} />
+          </ModalBody>
+          <ClientOfferModalFooter controller={controller} />
+        </form>
+      </ModalContent>
+      {editingOffer?.id ? (
+        <VersionHistoryDialog
+          open={versionsDialogOpen}
+          onOpenChange={setVersionsDialogOpen}
+          title={t('sales:clientOffers.versionHistory.title', {
+            defaultValue: 'Version History',
+          })}
+          description={t('sales:clientOffers.versionHistory.infoTooltip', {
+            defaultValue: 'Automatic snapshots created when you save or restore the document.',
+          })}
+        >
+          <OfferVersionsPanel
+            layout="dialog"
+            offerId={editingOffer.id}
+            selectedVersionId={selectedVersionId}
+            onPreview={(version) => {
+              handleVersionPreview(version);
+              setVersionsDialogOpen(false);
+            }}
+            onClearPreview={handleClearPreview}
+            onRestored={handleVersionRestored}
+            disabled={baseReadOnly}
+          />
+        </VersionHistoryDialog>
+      ) : null}
     </Modal>
   );
 };
