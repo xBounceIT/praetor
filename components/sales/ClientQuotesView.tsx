@@ -127,6 +127,7 @@ import {
   ModalHeader,
   ModalTitle,
 } from '../shared/ModalLayout';
+import { ModalReadOnlyStatusBanner } from '../shared/ModalReadOnlyStatusBanner';
 import QuickViewLinkButton from '../shared/QuickViewLinkButton';
 import SelectControl, { type Option } from '../shared/SelectControl';
 import StaleSupplierDataButton from '../shared/StaleSupplierDataButton';
@@ -2890,24 +2891,29 @@ const ClientQuotePromotionModal: React.FC<{ controller: ClientQuotesController }
 const ClientQuoteModalHeader: React.FC<{ controller: ClientQuotesController }> = ({
   controller,
 }) => {
-  const { t, closeModal, editingQuote, isReadOnly } = controller;
+  const { t, closeModal, editingQuote, isReadOnly, baseReadOnly, readOnlyReason } = controller;
 
   return (
-    <ModalHeader>
-      <ModalTitle className="gap-3">
-        <span className="flex size-10 items-center justify-center rounded-md bg-muted text-primary">
-          <i
-            className={`fa-solid ${editingQuote ? 'fa-pen-to-square' : 'fa-plus'}`}
-            aria-hidden="true"
-          ></i>
-        </span>
-        {isReadOnly
-          ? t('sales:clientQuotes.viewQuote')
-          : editingQuote
-            ? t('sales:clientQuotes.editQuote')
-            : t('sales:clientQuotes.createNewQuote')}
-      </ModalTitle>
-      <ModalCloseButton onClick={closeModal} />
+    <ModalHeader className="flex-col items-stretch gap-3">
+      <div className="flex w-full items-start justify-between gap-4">
+        <ModalTitle className="gap-3">
+          <span className="flex size-10 items-center justify-center rounded-md bg-muted text-primary">
+            <i
+              className={`fa-solid ${editingQuote ? 'fa-pen-to-square' : 'fa-plus'}`}
+              aria-hidden="true"
+            ></i>
+          </span>
+          {isReadOnly
+            ? t('sales:clientQuotes.viewQuote')
+            : editingQuote
+              ? t('sales:clientQuotes.editQuote')
+              : t('sales:clientQuotes.createNewQuote')}
+        </ModalTitle>
+        <ModalCloseButton onClick={closeModal} />
+      </div>
+      {baseReadOnly ? (
+        <ModalReadOnlyStatusBanner>{readOnlyReason}</ModalReadOnlyStatusBanner>
+      ) : null}
     </ModalHeader>
   );
 };
@@ -2915,16 +2921,8 @@ const ClientQuoteModalHeader: React.FC<{ controller: ClientQuotesController }> =
 const ClientQuoteModalAlerts: React.FC<{ controller: ClientQuotesController }> = ({
   controller,
 }) => {
-  const {
-    t,
-    i18n,
-    previewVersion,
-    handleClearPreview,
-    baseReadOnly,
-    editingQuote,
-    offers,
-    onViewOffers,
-  } = controller;
+  const { t, i18n, previewVersion, handleClearPreview, editingQuote, offers, onViewOffers } =
+    controller;
   const previewRevisionCode =
     previewVersion &&
     'revisionCode' in previewVersion &&
@@ -2959,19 +2957,6 @@ const ClientQuoteModalAlerts: React.FC<{ controller: ClientQuotesController }> =
               defaultValue: 'Back to current',
             })}
           </Button>
-        </div>
-      )}
-      {baseReadOnly && (
-        <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-amber-500/30 bg-amber-500/10">
-          <span className="text-amber-700 dark:text-amber-300 text-xs font-bold">
-            {editingQuote?.linkedOfferId
-              ? t('sales:clientQuotes.readOnlyBecauseOffer', {
-                  defaultValue: 'Read-only due to linked offer',
-                })
-              : t('sales:clientQuotes.readOnlyBecauseFinal', {
-                  defaultValue: 'Read-only due to finalized status',
-                })}
-          </span>
         </div>
       )}
       {editingQuote?.linkedOfferId && (

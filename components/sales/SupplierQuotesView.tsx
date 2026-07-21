@@ -77,6 +77,7 @@ import {
   ModalHeader,
   ModalTitle,
 } from '../shared/ModalLayout';
+import { ModalReadOnlyStatusBanner } from '../shared/ModalReadOnlyStatusBanner';
 import SelectControl from '../shared/SelectControl';
 import StandardTable, { type Column } from '../shared/StandardTable';
 import StatusBadge, { type StatusType } from '../shared/StatusBadge';
@@ -1405,27 +1406,32 @@ const SupplierQuoteModal: React.FC<{ controller: SupplierQuotesController }> = (
 const SupplierQuoteModalHeader: React.FC<{ controller: SupplierQuotesController }> = ({
   controller,
 }) => (
-  <ModalHeader>
-    <ModalTitle className="gap-3">
-      <span className="flex size-10 items-center justify-center rounded-md bg-muted text-primary">
-        <i
-          className={`fa-solid ${
-            controller.isReadOnly
-              ? 'fa-eye'
-              : controller.editingQuote
-                ? 'fa-pen-to-square'
-                : 'fa-plus'
-          }`}
-          aria-hidden="true"
-        ></i>
-      </span>
-      {controller.isReadOnly
-        ? controller.t('sales:supplierQuotes.viewQuote', { defaultValue: 'View quote' })
-        : controller.editingQuote
-          ? controller.t('sales:supplierQuotes.editQuote', { defaultValue: 'Edit quote' })
-          : controller.t('sales:supplierQuotes.newQuote', { defaultValue: 'New quote' })}
-    </ModalTitle>
-    <ModalCloseButton onClick={controller.closeModal} />
+  <ModalHeader className="flex-col items-stretch gap-3">
+    <div className="flex w-full items-start justify-between gap-4">
+      <ModalTitle className="gap-3">
+        <span className="flex size-10 items-center justify-center rounded-md bg-muted text-primary">
+          <i
+            className={`fa-solid ${
+              controller.isReadOnly
+                ? 'fa-eye'
+                : controller.editingQuote
+                  ? 'fa-pen-to-square'
+                  : 'fa-plus'
+            }`}
+            aria-hidden="true"
+          ></i>
+        </span>
+        {controller.isReadOnly
+          ? controller.t('sales:supplierQuotes.viewQuote', { defaultValue: 'View quote' })
+          : controller.editingQuote
+            ? controller.t('sales:supplierQuotes.editQuote', { defaultValue: 'Edit quote' })
+            : controller.t('sales:supplierQuotes.newQuote', { defaultValue: 'New quote' })}
+      </ModalTitle>
+      <ModalCloseButton onClick={controller.closeModal} />
+    </div>
+    {controller.baseReadOnly ? (
+      <ModalReadOnlyStatusBanner>{controller.readOnlyReason}</ModalReadOnlyStatusBanner>
+    ) : null}
   </ModalHeader>
 );
 
@@ -1473,13 +1479,6 @@ const SupplierQuoteModalAlerts: React.FC<{ controller: SupplierQuotesController 
               defaultValue: 'Back to current',
             })}
           </Button>
-        </div>
-      )}
-      {controller.baseReadOnly && (
-        <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-amber-500/30 bg-amber-500/10">
-          <span className="text-amber-700 dark:text-amber-300 text-xs font-bold">
-            {controller.readOnlyReason}
-          </span>
         </div>
       )}
       {editingQuote?.linkedOrderId && (

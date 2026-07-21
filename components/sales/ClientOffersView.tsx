@@ -100,6 +100,7 @@ import {
   ModalHeader,
   ModalTitle,
 } from '../shared/ModalLayout';
+import { ModalReadOnlyStatusBanner } from '../shared/ModalReadOnlyStatusBanner';
 import QuickViewLinkButton from '../shared/QuickViewLinkButton';
 import SelectControl from '../shared/SelectControl';
 import StaleSupplierDataButton from '../shared/StaleSupplierDataButton';
@@ -1569,24 +1570,29 @@ const ClientOfferFormModal: React.FC<{ controller: ClientOffersController }> = (
 const ClientOfferModalHeader: React.FC<{ controller: ClientOffersController }> = ({
   controller,
 }) => {
-  const { t, closeModal, editingOffer, isReadOnly } = controller;
+  const { t, closeModal, editingOffer, isReadOnly, baseReadOnly, readOnlyReason } = controller;
 
   return (
-    <ModalHeader>
-      <ModalTitle className="gap-3">
-        <span className="flex size-10 items-center justify-center rounded-md bg-muted text-primary">
-          <i
-            className={`fa-solid ${editingOffer ? 'fa-pen-to-square' : 'fa-plus'}`}
-            aria-hidden="true"
-          ></i>
-        </span>
-        {isReadOnly
-          ? t('sales:clientOffers.viewOffer', { defaultValue: 'View offer' })
-          : editingOffer
-            ? t('sales:clientOffers.editOffer', { defaultValue: 'Edit offer' })
-            : t('sales:clientOffers.newOffer', { defaultValue: 'New offer' })}
-      </ModalTitle>
-      <ModalCloseButton onClick={closeModal} />
+    <ModalHeader className="flex-col items-stretch gap-3">
+      <div className="flex w-full items-start justify-between gap-4">
+        <ModalTitle className="gap-3">
+          <span className="flex size-10 items-center justify-center rounded-md bg-muted text-primary">
+            <i
+              className={`fa-solid ${editingOffer ? 'fa-pen-to-square' : 'fa-plus'}`}
+              aria-hidden="true"
+            ></i>
+          </span>
+          {isReadOnly
+            ? t('sales:clientOffers.viewOffer', { defaultValue: 'View offer' })
+            : editingOffer
+              ? t('sales:clientOffers.editOffer', { defaultValue: 'Edit offer' })
+              : t('sales:clientOffers.newOffer', { defaultValue: 'New offer' })}
+        </ModalTitle>
+        <ModalCloseButton onClick={closeModal} />
+      </div>
+      {baseReadOnly ? (
+        <ModalReadOnlyStatusBanner>{readOnlyReason}</ModalReadOnlyStatusBanner>
+      ) : null}
     </ModalHeader>
   );
 };
@@ -1594,8 +1600,7 @@ const ClientOfferModalHeader: React.FC<{ controller: ClientOffersController }> =
 const ClientOfferModalAlerts: React.FC<{ controller: ClientOffersController }> = ({
   controller,
 }) => {
-  const { t, i18n, previewVersion, handleClearPreview, editingOffer, onViewQuote, isReadOnly } =
-    controller;
+  const { t, i18n, previewVersion, handleClearPreview, editingOffer, onViewQuote } = controller;
   const previewRevisionCode =
     previewVersion &&
     'revisionCode' in previewVersion &&
@@ -1650,13 +1655,6 @@ const ClientOfferModalAlerts: React.FC<{ controller: ClientOffersController }> =
               : undefined
           }
         />
-      )}
-      {isReadOnly && (
-        <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-amber-500/30 bg-amber-500/10">
-          <span className="text-amber-700 dark:text-amber-300 text-xs font-bold">
-            {controller.readOnlyReason}
-          </span>
-        </div>
       )}
     </>
   );

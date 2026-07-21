@@ -74,7 +74,7 @@ describe('<VersionHistoryPanel />', () => {
     );
 
     expect(screen.getByRole('region', { name: labels.title })).toBeInTheDocument();
-    expect(screen.getByText(labels.title)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 4, name: labels.title })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: labels.searchAriaLabel })).toBeInTheDocument();
     expect(screen.getByText(labels.currentBadge)).toBeInTheDocument();
     expect(screen.getByRole('radio', { name: 'REV 3' })).toBeInTheDocument();
@@ -140,7 +140,7 @@ describe('<VersionHistoryPanel />', () => {
     expect(input).toBeInTheDocument();
     expect(input).toHaveFocus();
     expect(header?.contains(input)).toBe(true);
-    expect(screen.getByText(labels.title)).toHaveClass('opacity-0', 'max-w-0');
+    expect(screen.getByText(labels.title).closest('h4')).toHaveClass('opacity-0', 'max-w-0');
 
     await user.type(input, 'bob');
     expect(screen.getByRole('radio', { name: 'REV 2' })).toBeInTheDocument();

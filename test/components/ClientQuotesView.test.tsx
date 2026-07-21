@@ -215,6 +215,13 @@ describe('<ClientQuotesView /> candidate version previews', () => {
     const quote = buildQuote({ id: 'Q-HISTORY', candidates: [currentCandidate] });
     listVersionsMock.mockResolvedValueOnce([
       {
+        id: 'qv-2',
+        quoteId: 'Q-HISTORY',
+        reason: 'update' as const,
+        createdByUserId: 'u1',
+        createdAt: 1_700_000_002_000,
+      },
+      {
         id: 'qv-1',
         quoteId: 'Q-HISTORY',
         reason: 'update' as const,
@@ -252,8 +259,25 @@ describe('<ClientQuotesView /> candidate version previews', () => {
         name: 'sales:clientQuotes.revisionHistory.openVersionHistory',
       }),
     );
-    const reason = await screen.findByText('clientQuotes.versionHistory.reasonUpdate');
-    fireEvent.click(reason);
+    const versionDialog = await waitFor(() => {
+      const dialog = screen.getAllByRole('dialog').find((candidate) =>
+        within(candidate).queryByRole('heading', {
+          name: 'sales:clientQuotes.versionHistory.title',
+        }),
+      );
+      expect(dialog).toBeDefined();
+      return dialog as HTMLElement;
+    });
+    const user = userEvent.setup();
+    await waitFor(() => {
+      expect(within(versionDialog).getAllByRole('radio')).toHaveLength(2);
+    });
+    const historicalRow = versionDialog.querySelector('label[for="history-row-qv-1"]');
+    expect(historicalRow).not.toBeNull();
+    await user.click(historicalRow as HTMLElement);
+    await waitFor(() => {
+      expect(getVersionMock).toHaveBeenCalledWith('Q-HISTORY', 'qv-1');
+    });
 
     expect(await screen.findByRole('tab', { name: /Historical A/ })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /Historical B/ })).toBeInTheDocument();
