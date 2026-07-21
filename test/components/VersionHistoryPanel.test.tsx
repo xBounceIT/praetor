@@ -1,5 +1,5 @@
 import { describe, expect, mock, test } from 'bun:test';
-import { fireEvent, screen } from '@testing-library/react';
+import { fireEvent, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { VersionHistoryPanel } from '../../components/shared/VersionHistoryPanel';
 import { render } from '../helpers/render';
@@ -162,7 +162,7 @@ describe('<VersionHistoryPanel />', () => {
     const header = screen.getByTestId('version-history-inline-header');
     expect(header).toContainElement(searchToggle);
     expect(screen.getByText(labels.title)).toBeVisible();
-    // Closed order: title/input track, pinned search icon, then the collapsing count badge.
+    // Closed order: title/input track, pinned search toggle, then the collapsing count badge.
     expect(header.children[1]).toBe(searchToggle);
 
     await user.click(searchToggle);
@@ -188,9 +188,40 @@ describe('<VersionHistoryPanel />', () => {
     fireEvent.blur(input);
     expect(titleHeading).toHaveClass('opacity-100');
     expect(input).toHaveClass('opacity-0');
-    expect(header.children[1]).toBe(screen.getByRole('button', { name: labels.searchAriaLabel }));
+    // Search icon stays hidden over the close affordance until the collapse transition ends.
+    expect(header.children[1]).toBe(screen.getByRole('button', { name: 'Close' }));
+    expect(screen.getByTestId('version-history-search-icon')).toHaveClass('invisible', 'opacity-0');
+    expect(screen.getByTestId('version-history-close-icon')).toHaveClass('visible', 'opacity-100');
     expect(screen.getByRole('radio', { name: 'REV 3' })).toBeInTheDocument();
     expect(screen.queryByText(labels.noResults)).not.toBeInTheDocument();
+  });
+
+  test('keeps search icon hidden over close until the header collapse finishes', async () => {
+    const user = userEvent.setup();
+    render(<VersionHistoryPanel {...baseProps} rows={versionRows} />);
+
+    const header = screen.getByTestId('version-history-inline-header');
+    const toggle = screen.getByTestId('version-history-search-toggle');
+    expect(header.children[1]).toBe(toggle);
+
+    await user.click(toggle);
+    expect(screen.getByRole('button', { name: 'Close' })).toBe(toggle);
+    expect(screen.getByTestId('version-history-search-icon')).toHaveClass('invisible', 'opacity-0');
+    expect(screen.getByTestId('version-history-close-icon')).toHaveClass('visible', 'opacity-100');
+
+    fireEvent.blur(screen.getByPlaceholderText(labels.searchPlaceholder));
+
+    // Mid-collapse: Search must not become visible over the X in the fixed trailing slot.
+    expect(screen.getByTestId('version-history-search-icon')).toHaveClass('invisible', 'opacity-0');
+    expect(screen.getByTestId('version-history-close-icon')).toHaveClass('visible', 'opacity-100');
+    expect(screen.getByRole('button', { name: 'Close' })).toBe(toggle);
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: labels.searchAriaLabel })).toBe(toggle);
+    });
+    expect(screen.getByTestId('version-history-search-icon')).toHaveClass('visible', 'opacity-100');
+    expect(screen.getByTestId('version-history-close-icon')).toHaveClass('invisible', 'opacity-0');
+    expect(header.children[1]).toBe(toggle);
   });
 
   test('shows restore actions and optional secondary action', async () => {

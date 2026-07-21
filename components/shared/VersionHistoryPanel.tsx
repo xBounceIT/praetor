@@ -60,6 +60,8 @@ const INLINE_VISIBLE_ROWS = 3;
 /** Keep as a full static string so Tailwind can detect the utility.
  * Includes `py-1.5` (0.75rem) so the first/last row hover is not flush with the border. */
 const INLINE_LIST_HEIGHT_CLASS = 'h-[calc(3*3.75rem+0.75rem)]';
+/** Matches the header grid / opacity transition duration. */
+const SEARCH_HEADER_TRANSITION_MS = 200;
 
 export function VersionHistoryPanel<Row extends VersionHistoryPanelRow>({
   rows,
@@ -82,6 +84,8 @@ export function VersionHistoryPanel<Row extends VersionHistoryPanelRow>({
 
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  /** Trailing icon visibility — Search stays hidden until collapse finishes so it never flashes over X. */
+  const [trailingAction, setTrailingAction] = useState<'search' | 'close'>('search');
   const searchInputRef = useRef<HTMLInputElement>(null);
   const headerRef = useRef<HTMLDivElement>(null);
 
@@ -112,6 +116,17 @@ export function VersionHistoryPanel<Row extends VersionHistoryPanelRow>({
     if (searchOpen) searchInputRef.current?.focus();
   }, [searchOpen]);
 
+  useEffect(() => {
+    if (searchOpen) {
+      setTrailingAction('close');
+      return;
+    }
+    const timeoutId = window.setTimeout(() => {
+      setTrailingAction('search');
+    }, SEARCH_HEADER_TRANSITION_MS);
+    return () => window.clearTimeout(timeoutId);
+  }, [searchOpen]);
+
   const toggleSearch = () => {
     if (searchOpen) {
       closeSearch();
@@ -119,6 +134,8 @@ export function VersionHistoryPanel<Row extends VersionHistoryPanelRow>({
     }
     openSearch();
   };
+
+  const showCloseIcon = trailingAction === 'close';
 
   const handleSearchBlur = (event: React.FocusEvent<HTMLInputElement>) => {
     const nextTarget = event.relatedTarget;
@@ -156,8 +173,8 @@ export function VersionHistoryPanel<Row extends VersionHistoryPanelRow>({
     />
   ));
 
-  // Keep the search toggle pinned after the title/input track. Only that track and the trailing
-  // count width animate, so the icon never slides across the badge mid-collapse.
+  // Fixed trailing action slot: only title/input + count width animate. Icons are stacked in-place;
+  // Search stays invisible until the collapse transition ends so it never flashes over the X.
   const inlineHeaderRow = (
     <div
       ref={headerRef}
@@ -209,22 +226,32 @@ export function VersionHistoryPanel<Row extends VersionHistoryPanelRow>({
         type="button"
         variant="ghost"
         size="icon-sm"
+        data-testid="version-history-search-toggle"
         className={cn(
-          'size-7 shrink-0 text-muted-foreground transition-colors duration-200 ease-in-out',
-          searchOpen && 'bg-muted text-foreground',
+          'relative size-7 shrink-0 text-muted-foreground transition-colors duration-200 ease-in-out',
+          showCloseIcon && 'bg-muted text-foreground',
         )}
-        aria-label={searchOpen ? undefined : labels.searchAriaLabel}
-        aria-pressed={searchOpen ? undefined : false}
+        aria-label={showCloseIcon ? undefined : labels.searchAriaLabel}
+        aria-pressed={showCloseIcon ? undefined : false}
         onClick={toggleSearch}
       >
-        {searchOpen ? (
-          <>
-            <XIcon className="size-4" />
-            <span className="sr-only">Close</span>
-          </>
-        ) : (
-          <Search className="size-4" />
-        )}
+        <span className="relative size-4" aria-hidden="true">
+          <Search
+            data-testid="version-history-search-icon"
+            className={cn(
+              'absolute inset-0 size-4 transition-none',
+              showCloseIcon ? 'invisible opacity-0' : 'visible opacity-100',
+            )}
+          />
+          <XIcon
+            data-testid="version-history-close-icon"
+            className={cn(
+              'absolute inset-0 size-4 transition-none',
+              showCloseIcon ? 'visible opacity-100' : 'invisible opacity-0',
+            )}
+          />
+        </span>
+        {showCloseIcon ? <span className="sr-only">Close</span> : null}
       </Button>
 
       <div
