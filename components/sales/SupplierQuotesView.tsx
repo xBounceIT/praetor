@@ -2,6 +2,7 @@ import type React from 'react';
 import { useCallback, useMemo, useReducer } from 'react';
 import { useTranslation } from 'react-i18next';
 import { LinkedRecordBanner } from '@/components/shared/LinkedRecordBanner';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
@@ -33,6 +34,8 @@ import {
   isDateOnlyBeforeToday,
   normalizeDateOnlyString,
 } from '../../utils/date';
+import { formatDocumentCode } from '../../utils/document-code';
+import { getHistoryPreviewIds } from '../../utils/historyPreview';
 import {
   createLineItemIndexResolver,
   createTemporaryLineItemId,
@@ -49,8 +52,9 @@ import {
   parseDurationValueToMonths,
   parseNumberInputValue,
   roundCurrency,
+  roundToDecimalPlaces,
 } from '../../utils/numbers';
-import { getPaymentTermsOptions } from '../../utils/options';
+import { getPaymentTermsOptions, includeSelectedOption } from '../../utils/options';
 import { isTerminalQuoteStatus } from '../../utils/quoteStatus';
 import { getDocumentPricingSemanticsVersion } from '../../utils/supplierLineSync';
 import { uploadStagedAttachments } from '../../utils/supplierQuoteAttachments';
@@ -74,6 +78,7 @@ import {
   ModalHeader,
   ModalTitle,
 } from '../shared/ModalLayout';
+import { HistoryRail } from '../shared/RevisionHistoryPanel';
 import SelectControl from '../shared/SelectControl';
 import StandardTable, { type Column } from '../shared/StandardTable';
 import StatusBadge, { type StatusType } from '../shared/StatusBadge';
@@ -88,32 +93,63 @@ import SupplierQuoteAttachmentsSection from './SupplierQuoteAttachmentsSection';
 import SupplierQuoteAttachmentsStaging, {
   type StagedSupplierQuoteAttachment,
 } from './SupplierQuoteAttachmentsStaging';
+import { SupplierQuoteRevisionsPanel } from './SupplierQuoteRevisionsPanel';
 import SupplierQuoteVersionsPanel from './SupplierQuoteVersionsPanel';
 
 interface TotalsBreakdown {
-  // Gross list total: Σ(Prezzo listino × Qtà), before the supplier discount.
+  // Gross list total: Σ(Prezzo listino × Qtà × Durata), before the supplier discount.
   subtotal: number;
   // Total "Sconto a noi" granted across all lines: subtotal − total.
   discountAmount: number;
-  // Net total: Σ(Costo unitario × Qtà).
+  // Net total: Σ(Costo unitario × Qtà × Durata).
   total: number;
 }
 
 // Derive a line's persisted-scale pricing. Mirrors the server helper
 // (server/utils/supplier-quote-pricing.ts → deriveSupplierLinePricing): round Prezzo listino and
-// Sconto a noi to the DB scale (NUMERIC(_,2)) FIRST, then derive Costo unitario from the rounded
-// values. Keeping the modal in lockstep with the server means the previewed and submitted line
-// totals match the saved quote even when the user types more than two decimals. The discount is also
-// clamped into [0, 100] so the net cost can never go negative from a legacy/out-of-range value.
+// Sconto a noi to their DB scale (NUMERIC(_,2)) FIRST, then retain the derived Costo unitario at
+// NUMERIC(_,6) precision. Keeping the modal in lockstep with the server means the previewed and
+// submitted totals match the saved quote even when the user types more than two decimals. The
+// discount is also clamped into [0, 100] so the net cost cannot become negative from legacy data.
 const deriveLinePricing = (
   listPrice: number,
   discountPercent: number,
 ): { listPrice: number; discountPercent: number; unitPrice: number } => {
   const roundedListPrice = roundCurrency(listPrice || 0);
   const roundedDiscountPercent = Math.min(100, Math.max(0, roundCurrency(discountPercent || 0)));
-  const unitPrice = roundCurrency(roundedListPrice * (1 - roundedDiscountPercent / 100));
+  const unitPrice = roundToDecimalPlaces(roundedListPrice * (1 - roundedDiscountPercent / 100), 6);
   return { listPrice: roundedListPrice, discountPercent: roundedDiscountPercent, unitPrice };
 };
+
+const pricingForSubmit = (item: SupplierQuoteItem, preserveProvidedUnitPrice: boolean) => {
+  const pricing = deriveLinePricing(
+    Number(item.listPrice ?? item.unitPrice ?? 0),
+    Number(item.discountPercent ?? 0),
+  );
+  const providedUnitPrice = Number(item.unitPrice);
+  return preserveProvidedUnitPrice && Number.isFinite(providedUnitPrice)
+    ? { ...pricing, unitPrice: roundToDecimalPlaces(providedUnitPrice, 6) }
+    : pricing;
+};
+
+// Totals retain the persisted unit cost's fractional cents until quantity/duration have been
+// applied. Normal quote writes derive this value from list price and discount at scale 6; the
+// bidirectional client sync may instead preserve an explicitly edited cost at that same scale.
+const getUnroundedNetUnitCost = (item: SupplierQuoteItem): number => {
+  if (item.unitPrice !== undefined && item.unitPrice !== null) {
+    const unitPrice = Number(item.unitPrice);
+    if (Number.isFinite(unitPrice)) return unitPrice;
+  }
+
+  if (item.listPrice === undefined || item.listPrice === null) return 0;
+
+  return deriveLinePricing(Number(item.listPrice), Number(item.discountPercent)).unitPrice;
+};
+
+const calculateLineTotal = (item: SupplierQuoteItem): number =>
+  (Number(item.quantity) || 0) *
+  getUnroundedNetUnitCost(item) *
+  getEffectiveDurationMultiplier(item);
 
 const calculateTotals = (items: SupplierQuoteItem[]): TotalsBreakdown => {
   let grossListTotal = 0;
@@ -126,7 +162,7 @@ const calculateTotals = (items: SupplierQuoteItem[]): TotalsBreakdown => {
     const durationMultiplier = getEffectiveDurationMultiplier(item);
     const quantity = Number(item.quantity) || 0;
     grossListTotal += quantity * (Number(listPrice) || 0) * durationMultiplier;
-    netTotal += quantity * (Number(item.unitPrice) || 0) * durationMultiplier;
+    netTotal += calculateLineTotal(item);
   });
   const subtotal = roundCurrency(grossListTotal);
   const total = roundCurrency(netTotal);
@@ -161,6 +197,7 @@ export interface SupplierQuotesViewProps {
 }
 
 const getDefaultFormData = (): Partial<SupplierQuote> => ({
+  description: '',
   supplierId: '',
   supplierName: '',
   clientId: null,
@@ -172,6 +209,26 @@ const getDefaultFormData = (): Partial<SupplierQuote> => ({
   expirationDate: addMonthsToDateOnly(getLocalDateString(), 1),
   communicationChannelId: '',
   notes: '',
+});
+
+const buildDuplicatedSupplierQuoteFormData = (quote: SupplierQuote): Partial<SupplierQuote> => ({
+  id: '',
+  description: quote.description ?? '',
+  supplierId: quote.supplierId,
+  supplierName: quote.supplierName,
+  clientId: quote.clientId ?? null,
+  clientName: quote.clientName ?? null,
+  items: quote.items.map((item) => ({
+    ...item,
+    id: createTemporaryLineItemId(),
+    quoteId: '',
+  })),
+  paymentTerms: quote.paymentTerms,
+  status: 'draft',
+  expirationDate: addMonthsToDateOnly(getLocalDateString(), 1),
+  communicationChannelId: quote.communicationChannelId ?? '',
+  communicationChannelName: quote.communicationChannelName ?? '',
+  notes: quote.notes ?? '',
 });
 
 interface SupplierQuotesViewState {
@@ -224,7 +281,7 @@ type SupplierQuotesViewAction =
   | { type: 'setIsSubmitting'; value: boolean }
   | { type: 'setIsDeleting'; value: boolean }
   | { type: 'closeModal' }
-  | { type: 'openAddModal' }
+  | { type: 'openAddModal'; formData?: Partial<SupplierQuote> }
   | { type: 'openEditModal'; quote: SupplierQuote; formData: Partial<SupplierQuote> }
   | { type: 'previewVersion'; version: SupplierQuoteVersion; formData: Partial<SupplierQuote> }
   | { type: 'restoreVersion'; quote: SupplierQuote; formData: Partial<SupplierQuote> }
@@ -286,7 +343,7 @@ const supplierQuotesViewReducer = (
       return {
         ...state,
         editingQuote: null,
-        formData: getDefaultFormData(),
+        formData: action.formData ?? getDefaultFormData(),
         errors: {},
         previewVersion: null,
         isModalOpen: true,
@@ -446,20 +503,16 @@ const useSupplierQuotesController = ({
     [t],
   );
 
-  const activeSuppliers = useMemo(
-    () => suppliers.filter((supplier) => !supplier.isDisabled),
-    [suppliers],
-  );
-
   // A quick-view deep link (or a cross-view "view quote" action) pre-filters the
   // table to one quote. It targets the visible "Codice" (id) column, so the
   // native column filter shows as active and stays clearable from its dropdown.
   const tableInitialFilterState = useMemo(() => {
     if (quoteFilterId) {
-      return { id: [quoteFilterId] };
+      const quote = quotes.find((candidate) => candidate.id === quoteFilterId);
+      return { id: [formatDocumentCode(quoteFilterId, quote?.revisionCode)] };
     }
     return undefined;
-  }, [quoteFilterId]);
+  }, [quoteFilterId, quotes]);
 
   const [state, dispatch] = useReducer(
     supplierQuotesViewReducer,
@@ -479,6 +532,18 @@ const useSupplierQuotesController = ({
     blankListPriceItemIds,
     stagedAttachments,
   } = state;
+  const supplierOptions = useMemo(
+    () =>
+      includeSelectedOption(
+        suppliers.flatMap((supplier) =>
+          supplier.isDisabled ? [] : [{ id: supplier.id, name: supplier.name }],
+        ),
+        formData.supplierId,
+        suppliers.find((supplier) => supplier.id === formData.supplierId)?.name ||
+          formData.supplierName,
+      ),
+    [formData.supplierId, formData.supplierName, suppliers],
+  );
   const { preview: supplierQuoteCodePreview } = useDocumentCodePreview('supplier_quote', {
     enabled: isModalOpen && !editingQuote,
   });
@@ -559,6 +624,13 @@ const useSupplierQuotesController = ({
     [quoteToFormData],
   );
 
+  const openDuplicateModal = useCallback((quote: SupplierQuote) => {
+    dispatch({
+      type: 'openAddModal',
+      formData: buildDuplicatedSupplierQuoteFormData(quote),
+    });
+  }, []);
+
   const handleVersionPreview = useCallback(
     (version: SupplierQuoteVersion) => {
       dispatch({
@@ -613,31 +685,33 @@ const useSupplierQuotesController = ({
       const supplier = suppliers.find((item) => item.id === supplierId);
       dispatch({
         type: 'patchFormData',
-        value: { supplierId, supplierName: supplier?.name || '' },
+        value: {
+          supplierId,
+          supplierName:
+            supplier?.name ??
+            (supplierId === formData.supplierId ? (formData.supplierName ?? '') : ''),
+        },
       });
     },
-    [suppliers],
+    [formData.supplierId, formData.supplierName, suppliers],
   );
 
   // The customer link is mandatory (issue #777): every supplier quote must name a customer, so
   // there is no empty "No customer" option — the field starts on the placeholder and submission is
   // blocked until one is picked (see handleSubmit). Keep an already-linked-but-now-disabled client
-  // visible so editing an existing quote doesn't hide its customer; otherwise only offer active ones.
+  // visible so editing or duplicating a quote doesn't hide its customer; otherwise only offer
+  // active ones.
   const clientOptions = useMemo(() => {
     const options = clients.flatMap((client) =>
-      !client.isDisabled || client.id === editingQuote?.clientId
+      !client.isDisabled || client.id === formData.clientId
         ? [{ id: client.id, name: client.name }]
         : [],
     );
     // The linked client may be missing from a user-scoped /clients list (no crm.clients_all.view
     // and not assigned to it). Synthesize an option from the quote's stored name so the select
     // shows the customer instead of falling back to the placeholder.
-    const linkedId = editingQuote?.clientId;
-    if (linkedId && !options.some((option) => option.id === linkedId)) {
-      options.push({ id: linkedId, name: editingQuote?.clientName || linkedId });
-    }
-    return options;
-  }, [clients, editingQuote]);
+    return includeSelectedOption(options, formData.clientId, formData.clientName);
+  }, [clients, formData.clientId, formData.clientName]);
 
   const handleClientChange = useCallback(
     (clientId: string) => {
@@ -752,10 +826,23 @@ const useSupplierQuotesController = ({
     () => [
       {
         header: t('sales:supplierQuotes.quoteCode', { defaultValue: 'Quote Code' }),
-        accessorKey: 'id',
+        id: 'id',
+        accessorFn: (row) => formatDocumentCode(row.id, row.revisionCode),
         className: 'whitespace-nowrap',
         headerClassName: 'min-w-[8rem]',
-        cell: ({ row }) => <span className="font-bold text-zinc-700">{row.id}</span>,
+        cell: ({ row }) => (
+          <span className="font-bold text-zinc-700">
+            {formatDocumentCode(row.id, row.revisionCode)}
+          </span>
+        ),
+      },
+      {
+        header: t('sales:supplierQuotes.description', { defaultValue: 'Description' }),
+        accessorKey: 'description',
+        headerClassName: 'min-w-[12rem]',
+        cell: ({ row }) => (
+          <span className="text-sm text-foreground">{row.description?.trim() || '-'}</span>
+        ),
       },
       {
         header: t('crm:clients.tableHeaders.insertDate'),
@@ -976,6 +1063,24 @@ const useSupplierQuotesController = ({
                 </TooltipTrigger>
                 <TooltipContent>{editTitle}</TooltipContent>
               </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      openDuplicateModal(row);
+                    }}
+                    aria-label={t('sales:supplierQuotes.duplicateQuote')}
+                    className="rounded-lg text-muted-foreground hover:text-foreground"
+                  >
+                    <i className="fa-solid fa-copy" aria-hidden="true"></i>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>{t('sales:supplierQuotes.duplicateQuote')}</TooltipContent>
+              </Tooltip>
               {row.status === 'accepted' && onCreateOrder && (
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -1031,6 +1136,7 @@ const useSupplierQuotesController = ({
       getStatusLabel,
       onCreateOrder,
       onViewOrders,
+      openDuplicateModal,
       openEditModal,
       t,
       isHistoryRow,
@@ -1083,12 +1189,9 @@ const useSupplierQuotesController = ({
       id: formData.id?.trim() || undefined,
       items: (formData.items || []).map((item) => ({
         ...item,
-        // Submit the same persisted-scale pricing the server derives, so what the user reviewed
-        // is exactly what gets saved (legacy rows fall back to the net price as the list price).
-        ...deriveLinePricing(
-          Number(item.listPrice ?? item.unitPrice ?? 0),
-          Number(item.discountPercent ?? 0),
-        ),
+        // New duplicates retain an explicit client-synced cost. Existing quotes keep their
+        // regular pricing-edit behavior and are reconciled against the persisted item by the API.
+        ...pricingForSubmit(item, !editingQuote),
         // Duration applies to every line type now (issue #775). Blank values stay blank and use
         // the canonical month unit; 'na' remains explicitly duration-less.
         ...normalizeDurationForSubmit(item),
@@ -1144,7 +1247,7 @@ const useSupplierQuotesController = ({
   };
 
   return {
-    activeSuppliers,
+    supplierOptions,
     addItem,
     baseReadOnly,
     canManageCommunicationChannels,
@@ -1221,35 +1324,61 @@ const SupplierQuotesLayout: React.FC<{ controller: SupplierQuotesController }> =
   </div>
 );
 
-const SupplierQuoteModal: React.FC<{ controller: SupplierQuotesController }> = ({ controller }) => (
-  <Modal isOpen={controller.isModalOpen} onClose={controller.closeModal}>
-    <div className="flex max-w-[calc(100vw-2rem)] items-start gap-4">
-      <ModalContent size="full" className="max-h-[90vh]">
-        <form onSubmit={controller.handleSubmit} className="flex min-h-0 flex-1 flex-col">
-          <SupplierQuoteModalHeader controller={controller} />
-          <ModalBody className="flex-1 space-y-5">
-            <SupplierQuoteModalAlerts controller={controller} />
-            <SupplierQuoteDetailsSection controller={controller} />
-            <SupplierQuoteItemsSection controller={controller} />
-            <SupplierQuoteAttachmentsArea controller={controller} />
-            <SupplierQuoteNotesSummarySection controller={controller} />
-          </ModalBody>
-          <SupplierQuoteModalFooter controller={controller} />
-        </form>
-      </ModalContent>
-      {controller.editingQuote?.id && (
-        <SupplierQuoteVersionsPanel
-          quoteId={controller.editingQuote.id}
-          selectedVersionId={controller.previewVersion?.id ?? null}
-          onPreview={controller.handleVersionPreview}
-          onClearPreview={controller.handleClearPreview}
-          onRestored={controller.handleVersionRestored}
-          disabled={controller.baseReadOnly}
-        />
-      )}
-    </div>
-  </Modal>
-);
+const SupplierQuoteModal: React.FC<{ controller: SupplierQuotesController }> = ({ controller }) => {
+  const { revisionId: selectedRevisionId, versionId: selectedVersionId } = getHistoryPreviewIds(
+    controller.previewVersion,
+  );
+  const revisionRestoreDisabled = Boolean(
+    controller.baseReadOnly || controller.editingQuote?.linkedOrderId,
+  );
+
+  return (
+    <Modal isOpen={controller.isModalOpen} onClose={controller.closeModal}>
+      <div className="flex max-w-[calc(100vw-2rem)] items-start gap-4">
+        <ModalContent size="full" className="max-h-[90vh]">
+          <form onSubmit={controller.handleSubmit} className="flex min-h-0 flex-1 flex-col">
+            <SupplierQuoteModalHeader controller={controller} />
+            <ModalBody className="flex-1 space-y-5">
+              <SupplierQuoteModalAlerts controller={controller} />
+              <SupplierQuoteDetailsSection controller={controller} />
+              <SupplierQuoteItemsSection controller={controller} />
+              <SupplierQuoteAttachmentsArea controller={controller} />
+              <SupplierQuoteNotesSummarySection controller={controller} />
+            </ModalBody>
+            <SupplierQuoteModalFooter controller={controller} />
+          </form>
+        </ModalContent>
+        {controller.editingQuote?.id && (
+          <HistoryRail>
+            <SupplierQuoteRevisionsPanel
+              quoteId={controller.editingQuote.id}
+              selectedRevisionId={selectedRevisionId}
+              onPreview={(revision) =>
+                controller.handleVersionPreview({
+                  ...revision,
+                  quoteId: controller.editingQuote?.id ?? '',
+                  reason: 'update',
+                })
+              }
+              onClearPreview={controller.handleClearPreview}
+              onRestored={controller.handleVersionRestored}
+              disabled={revisionRestoreDisabled}
+            />
+            <SupplierQuoteVersionsPanel
+              embedded
+              quoteId={controller.editingQuote.id}
+              selectedVersionId={selectedVersionId}
+              onPreview={controller.handleVersionPreview}
+              onClearPreview={controller.handleClearPreview}
+              onRestored={controller.handleVersionRestored}
+              disabled={controller.baseReadOnly}
+            />
+          </HistoryRail>
+        )}
+      </div>
+    </Modal>
+  );
+};
 
 const SupplierQuoteModalHeader: React.FC<{ controller: SupplierQuotesController }> = ({
   controller,
@@ -1282,6 +1411,12 @@ const SupplierQuoteModalAlerts: React.FC<{ controller: SupplierQuotesController 
   controller,
 }) => {
   const editingQuote = controller.editingQuote;
+  const previewRevisionCode =
+    controller.previewVersion &&
+    'revisionCode' in controller.previewVersion &&
+    typeof controller.previewVersion.revisionCode === 'string'
+      ? controller.previewVersion.revisionCode
+      : null;
 
   return (
     <>
@@ -1289,13 +1424,22 @@ const SupplierQuoteModalAlerts: React.FC<{ controller: SupplierQuotesController 
         <div className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl border border-amber-500/30 bg-amber-500/10">
           <span className="text-amber-800 dark:text-amber-300 text-xs font-bold flex items-center gap-2">
             <i className="fa-solid fa-clock-rotate-left"></i>
-            {controller.t('sales:supplierQuotes.versionHistory.previewBanner', {
-              date: formatInsertDateTime(
-                controller.previewVersion.createdAt,
-                controller.i18n.language,
-              ),
-              defaultValue: 'Previewing version from {{date}}',
-            })}
+            {previewRevisionCode
+              ? controller.t('sales:supplierQuotes.revisionHistory.previewBanner', {
+                  code: previewRevisionCode,
+                  date: formatInsertDateTime(
+                    controller.previewVersion.createdAt,
+                    controller.i18n.language,
+                  ),
+                  defaultValue: 'Previewing {{code}} from {{date}}',
+                })
+              : controller.t('sales:supplierQuotes.versionHistory.previewBanner', {
+                  date: formatInsertDateTime(
+                    controller.previewVersion.createdAt,
+                    controller.i18n.language,
+                  ),
+                  defaultValue: 'Previewing version from {{date}}',
+                })}
           </span>
           <Button
             type="button"
@@ -1374,7 +1518,7 @@ const SupplierQuoteDetailsSection: React.FC<{ controller: SupplierQuotesControll
         defaultValue: 'Supplier Information',
       })}
     </SupplierQuoteSectionTitle>
-    <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+    <div className="grid grid-cols-2 gap-3 lg:grid-cols-6">
       <SupplierQuoteSupplierField controller={controller} />
       <SupplierQuoteClientField controller={controller} />
       <SupplierQuoteCodeField controller={controller} />
@@ -1382,6 +1526,7 @@ const SupplierQuoteDetailsSection: React.FC<{ controller: SupplierQuotesControll
       <SupplierQuoteCommunicationField controller={controller} />
       <SupplierQuoteExpirationField controller={controller} />
     </div>
+    <SupplierQuoteDescriptionField controller={controller} />
   </div>
 );
 
@@ -1391,10 +1536,7 @@ const SupplierQuoteSupplierField: React.FC<{ controller: SupplierQuotesControlle
   <Field data-invalid={Boolean(controller.errors.supplierId)}>
     <SelectControl
       id="supplier-quote-supplier"
-      options={controller.activeSuppliers.map((supplier) => ({
-        id: supplier.id,
-        name: supplier.name,
-      }))}
+      options={controller.supplierOptions}
       value={controller.formData.supplierId || ''}
       onChange={(value) => controller.handleSupplierChange(value as string)}
       placeholder={controller.t('sales:supplierQuotes.selectSupplier', {
@@ -1438,9 +1580,19 @@ const SupplierQuoteCodeField: React.FC<{ controller: SupplierQuotesController }>
   controller,
 }) => (
   <Field data-invalid={Boolean(controller.errors.id)}>
-    <FieldLabel htmlFor="supplier-quote-code" required={Boolean(controller.editingQuote)}>
-      {controller.t('sales:supplierQuotes.quoteCode', { defaultValue: 'Quote Code' })}
-    </FieldLabel>
+    <div className="relative w-fit">
+      <FieldLabel htmlFor="supplier-quote-code" required={Boolean(controller.editingQuote)}>
+        {controller.t('sales:supplierQuotes.quoteCode', { defaultValue: 'Quote Code' })}
+      </FieldLabel>
+      {controller.editingQuote?.revisionCode && (
+        <Badge
+          variant="secondary"
+          className="absolute top-1/2 left-full ml-2 -translate-y-1/2 font-mono"
+        >
+          {controller.editingQuote.revisionCode}
+        </Badge>
+      )}
+    </div>
     <Input
       id="supplier-quote-code"
       type="text"
@@ -1474,6 +1626,28 @@ const SupplierQuoteCodeField: React.FC<{ controller: SupplierQuotesController }>
             })}
       </FieldDescription>
     )}
+  </Field>
+);
+
+const SupplierQuoteDescriptionField: React.FC<{ controller: SupplierQuotesController }> = ({
+  controller,
+}) => (
+  <Field className="w-full">
+    <FieldLabel htmlFor="supplier-quote-description">
+      {controller.t('sales:supplierQuotes.description', { defaultValue: 'Description' })}
+    </FieldLabel>
+    <Input
+      id="supplier-quote-description"
+      type="text"
+      value={controller.formData.description ?? ''}
+      disabled={controller.isReadOnly}
+      onChange={(event) =>
+        controller.dispatch({
+          type: 'patchFormData',
+          value: { description: event.target.value },
+        })
+      }
+    />
   </Field>
 );
 
@@ -1777,8 +1951,7 @@ const getSupplierQuoteItemContext = (
   const itemUnitCost = item.unitPrice ?? 0;
   const durationUnit = normalizeDurationUnit(item.durationUnit);
   const durationValue = getDurationInputValue(item);
-  const lineTotal =
-    (Number(item.quantity) || 0) * itemUnitCost * getEffectiveDurationMultiplier(item);
+  const lineTotal = calculateLineTotal(item);
   const itemProduct = item.productId
     ? controller.products.find((product) => product.id === item.productId)
     : undefined;
@@ -2140,7 +2313,11 @@ const SupplierQuotesDeleteDialog: React.FC<{ controller: SupplierQuotesControlle
     title={controller.t('sales:supplierQuotes.deleteTitle', {
       defaultValue: 'Delete supplier quote?',
     })}
-    description={controller.quoteToDelete?.id ?? ''}
+    description={
+      controller.quoteToDelete
+        ? formatDocumentCode(controller.quoteToDelete.id, controller.quoteToDelete.revisionCode)
+        : ''
+    }
   />
 );
 

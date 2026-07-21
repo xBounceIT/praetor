@@ -103,4 +103,28 @@ describe('<VersionHistoryPanel />', () => {
     expect(screen.getByText(labels.reasonUpdate)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: labels.restoreButton })).toBeInTheDocument();
   });
+
+  test('restores its persisted open state after navigation remounts the panel', () => {
+    const persistenceKey = 'test.clientQuotes.versions';
+    const storageKey = `praetor.history-panel.${persistenceKey}`;
+    localStorage.removeItem(storageKey);
+
+    const firstRender = render(
+      <VersionHistoryPanel {...baseProps} persistenceKey={persistenceKey} />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: labels.title }));
+    expect(localStorage.getItem(storageKey)).toBe('closed');
+    firstRender.unmount();
+
+    const secondRender = render(
+      <VersionHistoryPanel {...baseProps} persistenceKey={persistenceKey} />,
+    );
+    expect(screen.getByRole('button', { name: labels.title })).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    );
+
+    secondRender.unmount();
+    localStorage.removeItem(storageKey);
+  });
 });

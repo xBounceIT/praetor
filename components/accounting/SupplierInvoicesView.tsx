@@ -21,6 +21,7 @@ import {
 } from '../../utils/date';
 import { createLineItemIndexResolver } from '../../utils/lineItemIndex';
 import {
+  calculatePricingTotals,
   durationValueToMonths,
   formatDecimal,
   getDiscountedLineTotal,
@@ -30,6 +31,7 @@ import {
   normalizeDurationForSubmit,
   normalizeDurationUnit,
   parseDurationValueToMonths,
+  roundCurrency,
 } from '../../utils/numbers';
 import CostSummaryPanel from '../shared/CostSummaryPanel';
 import DateField from '../shared/DateField';
@@ -70,10 +72,14 @@ const getStatusLabel = (
 ) => t(statusLabelMap[status] ?? String(status));
 
 const calculateTotals = (items: SupplierInvoiceItem[]) => {
-  // Duration multiplies each line alongside quantity; 'na' lines use a neutral multiplier of 1.
-  const subtotal = items.reduce((sum, item) => sum + getDiscountedLineTotal(item), 0);
+  const { grossSubtotal, subtotal } = calculatePricingTotals(items, 0);
 
-  return { subtotal, total: subtotal };
+  return {
+    grossSubtotal,
+    subtotal,
+    total: subtotal,
+    totalDiscount: roundCurrency(grossSubtotal - subtotal),
+  };
 };
 
 const createDefaultSupplierInvoiceForm = (): Partial<SupplierInvoice> => {
@@ -310,6 +316,7 @@ const useSupplierInvoicesController = ({
           quantity: Number(item.quantity ?? 0),
           unitPrice: Number(item.unitPrice ?? 0),
           discount: Number(item.discount ?? 0),
+          legacyDiscountRounding: item.legacyDiscountRounding === true,
           ...normalizeDurationForSubmit(item),
         })),
       });
@@ -321,18 +328,6 @@ const useSupplierInvoicesController = ({
 
   const totals = useMemo(() => calculateTotals(formData.items || []), [formData.items]);
   const balanceDue = Number(totals.total) - Number(formData.amountPaid || 0);
-  const totalDiscount = useMemo(
-    () =>
-      (formData.items || []).reduce((sum, item) => {
-        const lineSubtotal =
-          Number(item.quantity ?? 0) *
-          Number(item.unitPrice ?? 0) *
-          getEffectiveDurationMultiplier(item);
-        return sum + lineSubtotal - getDiscountedLineTotal(item);
-      }, 0),
-    [formData.items],
-  );
-  const grossSubtotal = totals.subtotal + totalDiscount;
 
   const columns = useMemo(
     () => [
@@ -487,7 +482,7 @@ const useSupplierInvoicesController = ({
     currency,
     editingInvoice,
     formData,
-    grossSubtotal,
+    grossSubtotal: totals.grossSubtotal,
     handleDelete,
     handleDurationUnitChange,
     handleDurationValueChange,
@@ -504,7 +499,7 @@ const useSupplierInvoicesController = ({
     supplierOptions,
     suppliers,
     t,
-    totalDiscount,
+    totalDiscount: totals.totalDiscount,
     totals,
     updateItem,
   };
@@ -966,7 +961,12 @@ const SupplierInvoiceItemDiscountField: React.FC<{
       <ValidatedNumberInput
         value={item.discount}
         placeholder="0,00"
+        aria-label={controller.t('sales:supplierQuotes.discountToUs', {
+          defaultValue: 'Discount to Us',
+        })}
         formatDecimals={2}
+        min={0}
+        max={100}
         onValueChange={(value) =>
           controller.updateItem(index, 'discount', value === '' ? undefined : Number(value))
         }

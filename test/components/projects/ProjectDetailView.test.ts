@@ -4,14 +4,14 @@ const readSource = async () => {
   const source = await Bun.file(
     new URL('../../../components/projects/ProjectDetailView.tsx', import.meta.url),
   ).text();
-  return source.replaceAll('\r\n', '\n');
+  return source.replace(/\r\n/g, '\n');
 };
 
 const readProjectTasksTableSource = async () => {
   const source = await Bun.file(
     new URL('../../../components/projects/ProjectTasksTable.tsx', import.meta.url),
   ).text();
-  return source.replaceAll('\r\n', '\n');
+  return source.replace(/\r\n/g, '\n');
 };
 
 describe('ProjectDetailView wiring', () => {

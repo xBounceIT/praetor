@@ -11,11 +11,13 @@ beforeEach(() => {
 });
 
 // Builder fixtures match the column order in db/schema/supplierQuotes.ts:
-//   [id, supplierId, supplierName, clientId, clientName, paymentTerms, status,
-//    expirationDate, communicationChannelId, notes, createdAt, updatedAt, communicationChannelName]
+//   [id, description, supplierId, supplierName, clientId, clientName, paymentTerms, status,
+//    expirationDate, communicationChannelId, notes, createdAt, updatedAt, revisionNumber,
+//    revisionCode, communicationChannelName]
 // `listAll` adds the linkedOrderId correlated subquery after communicationChannelName.
 const QUOTE_BASE: readonly unknown[] = [
   'q-1',
+  'Hardware procurement',
   's-1',
   'Acme',
   null,
@@ -27,14 +29,25 @@ const QUOTE_BASE: readonly unknown[] = [
   null,
   new Date(1735689600000),
   new Date(1735689700000),
+  0,
+  null,
   'Email',
 ];
 
 const quoteRow = (overrides: Record<number, unknown> = {}) => makeRow(QUOTE_BASE, overrides);
 
-// listAll's projection appends linkedOrderId (13), then the reverse-lookup
-// linkedClientQuoteId/status/expiration and linked offer status/expiration (14-18).
-const QUOTE_LIST_BASE: readonly unknown[] = [...QUOTE_BASE, null, null, null, null, null, null];
+// listAll's projection appends linkedOrderId (16), then the reverse-lookup client quote
+// id/revision/status/expiration and linked offer status/expiration (17-22).
+const QUOTE_LIST_BASE: readonly unknown[] = [
+  ...QUOTE_BASE,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+];
 
 const quoteListRow = (overrides: Record<number, unknown> = {}) =>
   makeRow(QUOTE_LIST_BASE, overrides);
@@ -62,7 +75,7 @@ const itemRow = (overrides: Record<number, unknown> = {}) => makeRow(ITEM_BASE, 
 
 describe('listAll', () => {
   test('issues a query with linkedOrderId correlated subquery', async () => {
-    exec.enqueue({ rows: [quoteListRow({ 13: 'so-1' })] });
+    exec.enqueue({ rows: [quoteListRow({ 16: 'so-1' })] });
     const result = await supplierQuotesRepo.listAll(testDb);
     const sql = exec.calls[0].sql;
     expect(sql).toContain('FROM supplier_sales');
@@ -70,10 +83,11 @@ describe('listAll', () => {
     expect(sql).toContain('order by "supplier_quotes"."created_at" desc');
     expect(result[0].linkedOrderId).toBe('so-1');
     expect(result[0].expirationDate).toBe('2026-06-01');
+    expect(result[0].description).toBe('Hardware procurement');
   });
 
   test('resolves the linking client quote id and status via line-sourcing reverse lookup', async () => {
-    exec.enqueue({ rows: [quoteListRow({ 14: 'cq-7', 15: 'sent' })] });
+    exec.enqueue({ rows: [quoteListRow({ 17: 'cq-7', 19: 'sent' })] });
     const result = await supplierQuotesRepo.listAll(testDb);
     // The link is now resolved through product-line sourcing, not a header column (issue #779
     // follow-up): the supplier quote follows the client quote whose quote_items source it.
@@ -368,6 +382,18 @@ describe('update', () => {
     expect(await supplierQuotesRepo.update('q-x', { notes: 'x' }, testDb)).toBeNull();
   });
 
+  test('writes an explicit description and allows clearing it', async () => {
+    exec.enqueue({ rows: [quoteRow()] });
+    exec.enqueue({ rows: [quoteRow()] });
+    await supplierQuotesRepo.update('q-1', { description: 'Annual renewal' }, testDb);
+    expect(exec.calls[0].params).toContain('Annual renewal');
+
+    exec.enqueue({ rows: [quoteRow({ 1: null })] });
+    exec.enqueue({ rows: [quoteRow({ 1: null })] });
+    const cleared = await supplierQuotesRepo.update('q-1', { description: null }, testDb);
+    expect(cleared?.description).toBeNull();
+  });
+
   test('empty patch falls back to SELECT (no UPDATE issued, updated_at preserved)', async () => {
     exec.enqueue({ rows: [quoteRow()] });
     const result = await supplierQuotesRepo.update('q-1', {}, testDb);
@@ -472,6 +498,36 @@ describe('replaceItems', () => {
     const insertParams = exec.calls[1].params;
     expect(insertParams).toContain('years');
     expect(insertParams).toContain(5);
+  });
+});
+
+describe('hasClientSyncedCosts', () => {
+  test('returns true only when the durable client-sync marker existed by the cutoff', async () => {
+    exec.enqueue({ rows: [{ exists: true }] });
+    const cutoff = 1_700_000_001_000;
+
+    expect(await supplierQuotesRepo.hasClientSyncedCosts('q-1', cutoff, testDb)).toBe(true);
+    expect(exec.calls[0].sql).toContain('FROM audit_logs');
+    expect(exec.calls[0].sql).toContain("details ->> 'secondaryLabel'");
+    expect(exec.calls[0].sql).toContain("details ->> 'reason'");
+    expect(exec.calls[0].sql).toContain('FROM supplier_quote_versions');
+    expect(exec.calls[0].sql).toContain("snapshot -> 'quote' ->> 'id'");
+    expect(exec.calls[0].sql).toContain('created_at <=');
+    expect(exec.calls[0].params).toEqual([
+      'supplier_quote.updated',
+      'synced_from_client_line',
+      'supplier_quote.created',
+      'client_synced_cost_preserved',
+      'supplier_quote',
+      'q-1',
+      'q-1',
+      new Date(cutoff),
+    ]);
+  });
+
+  test('returns false when no marker exists', async () => {
+    exec.enqueue({ rows: [{ exists: false }] });
+    expect(await supplierQuotesRepo.hasClientSyncedCosts('q-1', Date.now(), testDb)).toBe(false);
   });
 });
 
@@ -749,6 +805,23 @@ describe('syncItemPricing', () => {
     expect(exec.calls[1].params).toContain('q-1');
   });
 
+  test('preserves the client-authored unit cost when scale-2 list price cannot reproduce it exactly', async () => {
+    exec.enqueue({ rows: [] });
+    exec.enqueue({ rows: [] });
+    await supplierQuotesRepo.syncItemPricing(
+      'q-1',
+      [{ itemId: 'sqi-1', quantity: 150, unitCost: 32.09, discountPercent: 15 }],
+      testDb,
+    );
+
+    // 32.09 / 0.85 rounds to listPrice 37.75, whose exact discounted value is 32.0875.
+    // The bidirectional sync must keep the client-authored 32.09 authoritative; otherwise the
+    // client snapshot is stale immediately after the atomic save.
+    expect(exec.calls[0].params).toEqual(
+      expect.arrayContaining(['150', '32.09', '37.75', '15', 'sqi-1']),
+    );
+  });
+
   test('a 100% discount cannot express a non-zero cost: resets to 0 with listPrice = cost', async () => {
     exec.enqueue({ rows: [] });
     exec.enqueue({ rows: [] });
@@ -804,6 +877,7 @@ describe('create', () => {
     const result = await supplierQuotesRepo.create(
       {
         id: 'q-1',
+        description: 'Hardware procurement',
         supplierId: 's-1',
         supplierName: 'Acme',
         clientId: null,
@@ -819,13 +893,14 @@ describe('create', () => {
     expect(exec.calls[0].sql).toContain('insert into "supplier_quotes"');
     expect(exec.calls[0].params).toContain('q-1');
     expect(exec.calls[0].params).toContain('Acme');
+    expect(exec.calls[0].params).toContain('Hardware procurement');
     expect(exec.calls[0].params).toContain('2026-06-01');
     expect(result.id).toBe('q-1');
   });
 
   test('persists the optional client link when provided', async () => {
-    exec.enqueue({ rows: [quoteRow({ 3: 'c-1', 4: 'Globex' })] });
-    exec.enqueue({ rows: [quoteRow({ 3: 'c-1', 4: 'Globex' })] });
+    exec.enqueue({ rows: [quoteRow({ 4: 'c-1', 5: 'Globex' })] });
+    exec.enqueue({ rows: [quoteRow({ 4: 'c-1', 5: 'Globex' })] });
     const result = await supplierQuotesRepo.create(
       {
         id: 'q-1',
@@ -855,6 +930,7 @@ describe('restoreSnapshotQuote', () => {
     const result = await supplierQuotesRepo.restoreSnapshotQuote(
       'q-1',
       {
+        description: 'Restored hardware procurement',
         supplierId: 's-1',
         supplierName: 'Acme',
         clientId: null,
@@ -870,9 +946,31 @@ describe('restoreSnapshotQuote', () => {
     expect(exec.calls[0].sql).toContain('update "supplier_quotes"');
     expect(exec.calls[0].sql).toContain('CURRENT_TIMESTAMP');
     expect(exec.calls[0].params).toContain('Acme');
+    expect(exec.calls[0].params).toContain('Restored hardware procurement');
     expect(exec.calls[0].params).toContain('sent');
     expect(exec.calls[0].params).toContain('q-1');
     expect(result?.id).toBe('q-1');
+  });
+
+  test('preserves the current description when restoring a legacy snapshot', async () => {
+    exec.enqueue({ rows: [quoteRow()] });
+    exec.enqueue({ rows: [quoteRow()] });
+    await supplierQuotesRepo.restoreSnapshotQuote(
+      'q-1',
+      {
+        supplierId: 's-1',
+        supplierName: 'Acme',
+        clientId: null,
+        clientName: null,
+        paymentTerms: 'net30',
+        status: 'draft',
+        expirationDate: '2026-06-01',
+        communicationChannelId: 'qcc_email',
+        notes: null,
+      },
+      testDb,
+    );
+    expect(exec.calls[0].sql).not.toContain('"description" =');
   });
 
   test('returns null when no row updated', async () => {

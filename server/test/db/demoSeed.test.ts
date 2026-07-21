@@ -591,6 +591,21 @@ describe('demoSeedManifest assignment coverage', () => {
     });
   });
 
+  test('commercial documents seed non-empty descriptions from the manifest', () => {
+    for (const [table, manifest] of [
+      ['quotes', DEMO_QUOTES],
+      ['customer_offers', DEMO_CUSTOMER_OFFERS],
+      ['sales', DEMO_SALES],
+      ['supplier_quotes', DEMO_SUPPLIER_QUOTES],
+    ] as const) {
+      const rows = parseInsertValuesBlocks(SEED_SQL, table);
+      expect(rows.map((row) => row.description)).toEqual(
+        manifest.map((document) => document.description),
+      );
+      expect(rows.every((row) => Boolean(row.description?.trim()))).toBe(true);
+    }
+  });
+
   test('seed.sql task ids match the compatibility and demo task manifests', () => {
     expect(
       parseInsertValuesBlocks(SEED_SQL, 'tasks')

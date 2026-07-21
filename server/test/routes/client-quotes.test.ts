@@ -11,6 +11,7 @@ import * as realSupplierQuotesRepo from '../../repositories/supplierQuotesRepo.t
 import * as realSupplierQuoteVersionsRepo from '../../repositories/supplierQuoteVersionsRepo.ts';
 import * as realUsersRepo from '../../repositories/usersRepo.ts';
 import * as realDocumentCodes from '../../services/documentCodes.ts';
+import * as realDocumentRevisions from '../../services/documentRevisions.ts';
 import * as realAudit from '../../utils/audit.ts';
 import * as realPermissions from '../../utils/permissions.ts';
 import {
@@ -36,6 +37,7 @@ const quoteVersionsRepoSnap = { ...realQuoteVersionsRepo };
 const supplierQuotesRepoSnap = { ...realSupplierQuotesRepo };
 const supplierQuoteVersionsRepoSnap = { ...realSupplierQuoteVersionsRepo };
 const documentCodesSnap = { ...realDocumentCodes };
+const documentRevisionsSnap = { ...realDocumentRevisions };
 const auditSnap = { ...realAudit };
 const drizzleSnap = { ...realDrizzle };
 
@@ -97,6 +99,9 @@ const qvInsertMock = mock();
 const qvBuildSnapshotMock = mock();
 const allocateDocumentCodeMock = mock();
 const reserveDocumentCodeCounterFromCodeMock = mock();
+const createQuoteRevisionIfChangedMock = mock();
+const lockSupplierRevisionStatesMock = mock();
+const createDerivedSupplierRevisionsMock = mock();
 
 const logAuditMock = mock(async () => undefined);
 const { withDbTransactionMock, resetWithDbTransactionMock } = makeWithDbTransactionMock();
@@ -191,6 +196,12 @@ beforeAll(async () => {
     allocateDocumentCode: allocateDocumentCodeMock,
     reserveDocumentCodeCounterFromCode: reserveDocumentCodeCounterFromCodeMock,
   }));
+  mock.module('../../services/documentRevisions.ts', () => ({
+    ...documentRevisionsSnap,
+    createQuoteRevisionIfChanged: createQuoteRevisionIfChangedMock,
+    lockSupplierRevisionStates: lockSupplierRevisionStatesMock,
+    createDerivedSupplierRevisions: createDerivedSupplierRevisionsMock,
+  }));
   mock.module('../../utils/audit.ts', () => ({ ...auditSnap, logAudit: logAuditMock }));
   mock.module('../../db/drizzle.ts', () => ({
     ...drizzleSnap,
@@ -219,6 +230,7 @@ afterAll(() => {
   );
   mock.module('../../repositories/quoteVersionsRepo.ts', () => quoteVersionsRepoSnap);
   mock.module('../../services/documentCodes.ts', () => documentCodesSnap);
+  mock.module('../../services/documentRevisions.ts', () => documentRevisionsSnap);
   mock.module('../../utils/audit.ts', () => auditSnap);
   mock.module('../../db/drizzle.ts', () => drizzleSnap);
 });
@@ -260,6 +272,7 @@ const baseGate = () => ({
 // update() returns a mapped ClientQuote (BASE projection shape).
 const updatedQuote = (over: Record<string, unknown> = {}) => ({
   id: 'q-1',
+  description: 'Managed renewal',
   linkedOfferId: null,
   clientId: 'c1',
   clientName: 'Client',
@@ -331,6 +344,9 @@ const allMocks = [
   qvBuildSnapshotMock,
   allocateDocumentCodeMock,
   reserveDocumentCodeCounterFromCodeMock,
+  createQuoteRevisionIfChangedMock,
+  lockSupplierRevisionStatesMock,
+  createDerivedSupplierRevisionsMock,
   logAuditMock,
 ];
 
@@ -349,6 +365,9 @@ beforeEach(async () => {
     return `${moduleId}-generated`;
   });
   reserveDocumentCodeCounterFromCodeMock.mockResolvedValue(undefined);
+  createQuoteRevisionIfChangedMock.mockResolvedValue({ revisionNumber: 1, revisionCode: 'REV1' });
+  lockSupplierRevisionStatesMock.mockResolvedValue(new Map());
+  createDerivedSupplierRevisionsMock.mockResolvedValue(undefined);
   qvBuildSnapshotMock.mockImplementation((quote, items) => ({ schemaVersion: 1, quote, items }));
   qcListAllMock.mockResolvedValue([]);
   qcListForQuoteMock.mockResolvedValue([]);
@@ -365,7 +384,7 @@ beforeEach(async () => {
   // Sensible defaults; individual tests override what they care about.
   cqFindLinkedOfferIdMock.mockResolvedValue(null);
   cqFindByIdMock.mockResolvedValue(null);
-  cqLockCurrentByIdMock.mockResolvedValue(null);
+  cqLockCurrentByIdMock.mockResolvedValue(gate({ status: 'draft' }));
   cqFindItemsForCandidateMock.mockResolvedValue([]);
   cqFindAnyLinkedSaleMock.mockResolvedValue(null);
   cqFindIdConflictMock.mockResolvedValue(false);
@@ -487,6 +506,12 @@ describe('PUT /api/sales/client-quotes/:id status rules (issue #779)', () => {
 
     const res = await putStatus({ status: 'sent' });
     expect(res.statusCode).toBe(200);
+    expect(cqLockCurrentByIdMock).toHaveBeenCalled();
+    expect(createQuoteRevisionIfChangedMock).toHaveBeenCalledWith(
+      'q-1',
+      HAPPY_USER.id,
+      expect.anything(),
+    );
     const body = JSON.parse(res.body);
     expect(body.status).toBe('sent');
     expect(body.effectiveStatus).toBe('sent');
@@ -881,6 +906,16 @@ describe('DELETE /api/sales/client-quotes/:id', () => {
     expect(cqDeleteByIdMock).toHaveBeenCalledWith('q-1');
   });
 
+  test('204 keeps a traversal-shaped legacy quote operable through one encoded segment', async () => {
+    cqFindStatusAndClientNameMock.mockResolvedValue({ status: 'draft', clientName: 'Client' });
+    cqDeleteByIdMock.mockResolvedValue(undefined);
+
+    const res = await deleteQuote('legacy%2F..%2Fclient-quote');
+
+    expect(res.statusCode).toBe(204);
+    expect(cqDeleteByIdMock).toHaveBeenCalledWith('legacy/../client-quote');
+  });
+
   test('409 when an offer was created from the quote', async () => {
     cqFindLinkedOfferIdMock.mockResolvedValue('of-1');
 
@@ -990,6 +1025,7 @@ describe('POST /api/sales/client-quotes/:id promotion lifecycle', () => {
     expect(JSON.parse(res.body).offer.effectiveStatus).toBe('draft');
     expect(coCreateMock).toHaveBeenCalledWith(
       expect.objectContaining({
+        description: 'Managed renewal',
         linkedQuoteId: 'q-1',
         linkedQuoteCandidateId: 'qc-a',
         paymentTerms: '30gg',
@@ -1784,14 +1820,18 @@ describe('client quote candidate-family create and update', () => {
     });
   };
 
-  const setupLegacyCandidateUpdate = () => {
+  const setupLegacyCandidateUpdate = (quoteId = 'q-1') => {
     setupCreate();
-    const legacyCandidate = activeCandidate({ discount: 150 });
-    const current = gate({ status: 'draft', discount: 150, discountType: 'percentage' as const });
-    const updated = updatedQuote({ id: 'q-1', discount: 150, notes: 'edited' });
+    const legacyCandidate = activeCandidate({ quoteId, discount: 150 });
+    const current = gate({
+      status: 'draft',
+      discount: 150,
+      discountType: 'percentage' as const,
+    });
+    const updated = updatedQuote({ id: quoteId, discount: 150, notes: 'edited' });
     const existingItem = {
       id: 'qi-local',
-      quoteId: 'q-1',
+      quoteId,
       candidateId: 'qc-local',
       productId: '',
       productName: 'Service',
@@ -1832,6 +1872,89 @@ describe('client quote candidate-family create and update', () => {
     qcListForQuoteMock.mockResolvedValue([legacyCandidate]);
     qcUpdateMock.mockResolvedValue({ ...legacyCandidate, notes: 'edited' });
   };
+
+  test('rejects literal and percent-encoded traversal components in a new quote code', async () => {
+    for (const id of [
+      '../../products/product-1',
+      '%2e%2e/products/product-1',
+      ' ../../products/product-1',
+      'products/.. ',
+    ]) {
+      const res = await postQuote([freshLine()], { id });
+
+      expect(res.statusCode).toBe(400);
+    }
+    expect(cqCreateMock).not.toHaveBeenCalled();
+  });
+
+  test('rejects traversal components when renaming a quote', async () => {
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/sales/client-quotes/q-1',
+      headers: authHeader(),
+      payload: {
+        id: '../../products/product-1',
+        candidates: [
+          {
+            id: 'qc-local',
+            name: 'Variante A',
+            items: [freshLine()],
+            expirationDate: '2999-12-31',
+            communicationChannelId: 'qcc_email',
+          },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(cqRenameMock).not.toHaveBeenCalled();
+  });
+
+  test('accepts a route-safe manual code for a new quote', async () => {
+    setupCreate();
+
+    const res = await postQuote([freshLine()], { id: 'PREV-2026-001' });
+
+    expect(res.statusCode).toBe(201);
+    expect(cqCreateMock).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'PREV-2026-001' }),
+      expect.anything(),
+    );
+  });
+
+  test('lets an unchanged legacy quote code be resubmitted without renaming it', async () => {
+    const legacyId = 'legacy/../client-quote';
+    setupLegacyCandidateUpdate(legacyId);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: `/api/sales/client-quotes/${encodeURIComponent(legacyId)}`,
+      headers: authHeader(),
+      payload: {
+        id: legacyId,
+        clientId: 'c1',
+        clientName: 'Client',
+        status: 'draft',
+        candidates: [
+          {
+            id: 'qc-local',
+            name: 'Variante A',
+            items: [freshLine({ id: 'qi-local' })],
+            paymentTerms: 'immediate',
+            discount: 150,
+            discountType: 'percentage',
+            expirationDate: '2999-12-31',
+            communicationChannelId: 'qcc_email',
+            notes: 'edited',
+          },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(cqFindCurrentMock).toHaveBeenCalledWith(legacyId);
+    expect(cqRenameMock).not.toHaveBeenCalled();
+  });
 
   test('creates multiple nested candidates without consuming additional document codes', async () => {
     setupCreate();

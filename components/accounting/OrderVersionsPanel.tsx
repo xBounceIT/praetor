@@ -85,6 +85,7 @@ const OrderVersionsPanel: React.FC<OrderVersionsPanelProps> = ({
   return (
     <>
       <VersionHistoryPanel
+        persistenceKey="clientsOrders.versions"
         rows={historyState.rows}
         selectedVersionId={selectedVersionId}
         isLoading={historyState.isLoading}
@@ -108,6 +109,7 @@ const OrderVersionsPanel: React.FC<OrderVersionsPanelProps> = ({
         isOpen={confirmOpen}
         onClose={() => setConfirmOpen(false)}
         onConfirm={handleRestoreConfirmed}
+        zIndex={70}
         title={t('clientsOrders.versionHistory.restoreConfirmTitle')}
         description={t('clientsOrders.versionHistory.restoreConfirmDescription')}
       />

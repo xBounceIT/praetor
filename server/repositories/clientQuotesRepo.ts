@@ -16,7 +16,11 @@ import { normalizeUnitType, type UnitType } from '../utils/unit-type.ts';
 
 export type ClientQuote = {
   id: string;
+  revisionNumber: number;
+  revisionCode: string | null;
+  description?: string | null;
   linkedOfferId: string | null;
+  linkedOfferRevisionCode: string | null;
   clientId: string;
   clientName: string;
   paymentTerms: string | null;
@@ -74,6 +78,10 @@ const outerQuoteId = sql`${sql.identifier('quotes')}.${sql.identifier('id')}`;
 const linkedOfferIdSubquery = sql<string | null>`(
   SELECT co.id FROM customer_offers co WHERE co.linked_quote_id = ${outerQuoteId} LIMIT 1
 )`;
+const linkedOfferRevisionCodeSubquery = sql<string | null>`(
+  SELECT co.revision_code FROM customer_offers co
+  WHERE co.linked_quote_id = ${outerQuoteId} LIMIT 1
+)`;
 
 const communicationChannelNameSubquery = sql<string>`(
   SELECT qcc.name
@@ -110,7 +118,10 @@ const linkedSupplierQuoteExpirationSubquery = sql<string | null>`(
 
 const QUOTE_LIST_PROJECTION = {
   id: quotes.id,
+  revisionNumber: quotes.revisionNumber,
+  revisionCode: quotes.revisionCode,
   linkedOfferId: linkedOfferIdSubquery,
+  linkedOfferRevisionCode: linkedOfferRevisionCodeSubquery,
   clientId: quotes.clientId,
   clientName: quotes.clientName,
   paymentTerms: quotes.paymentTerms,
@@ -126,11 +137,15 @@ const QUOTE_LIST_PROJECTION = {
   // Appended after updatedAt so positional row fixtures keep their indices (see repo tests).
   linkedSupplierQuoteId: quotes.linkedSupplierQuoteId,
   linkedSupplierQuoteExpiration: linkedSupplierQuoteExpirationSubquery,
+  description: quotes.description,
 } as const;
 
 const QUOTE_BASE_PROJECTION = {
   id: quotes.id,
+  revisionNumber: quotes.revisionNumber,
+  revisionCode: quotes.revisionCode,
   linkedOfferId: sql<string | null>`null::varchar`,
+  linkedOfferRevisionCode: sql<string | null>`null::varchar`,
   clientId: quotes.clientId,
   clientName: quotes.clientName,
   paymentTerms: quotes.paymentTerms,
@@ -147,11 +162,16 @@ const QUOTE_BASE_PROJECTION = {
   // derivation we don't reconstruct on the write path (mirrors linkedOfferId being null here).
   linkedSupplierQuoteId: quotes.linkedSupplierQuoteId,
   linkedSupplierQuoteExpiration: sql<string | null>`null::date`,
+  description: quotes.description,
 } as const;
 
 type ClientQuoteSelectRow = {
   id: string;
+  revisionNumber: number;
+  revisionCode: string | null;
+  description: string | null;
   linkedOfferId: string | null;
+  linkedOfferRevisionCode: string | null;
   clientId: string;
   clientName: string;
   paymentTerms: string;
@@ -170,7 +190,11 @@ type ClientQuoteSelectRow = {
 
 const mapQuote = (row: ClientQuoteSelectRow): ClientQuote => ({
   id: row.id,
+  revisionNumber: row.revisionNumber,
+  revisionCode: row.revisionCode,
+  description: row.description,
   linkedOfferId: row.linkedOfferId,
+  linkedOfferRevisionCode: row.linkedOfferRevisionCode,
   clientId: row.clientId,
   clientName: row.clientName,
   paymentTerms: row.paymentTerms,
@@ -557,6 +581,7 @@ export const findFullForSnapshot = async (
 
 export type NewClientQuote = {
   id: string;
+  description?: string | null;
   clientId: string;
   clientName: string;
   paymentTerms: string;
@@ -577,6 +602,7 @@ export const create = async (
     .insert(quotes)
     .values({
       id: input.id,
+      description: input.description ?? null,
       clientId: input.clientId,
       clientName: input.clientName,
       paymentTerms: input.paymentTerms,
@@ -593,6 +619,7 @@ export const create = async (
 };
 
 export type ClientQuoteUpdate = {
+  description?: string | null;
   clientId?: string | null;
   clientName?: string | null;
   paymentTerms?: string | null;
@@ -618,6 +645,7 @@ export type ClientQuoteRestoreFields = Pick<
   | 'communicationChannelId'
   | 'notes'
 > & {
+  description?: string | null;
   paymentTerms: string;
   expirationDate: string;
 };
@@ -630,6 +658,7 @@ export const update = async (
   const rows = await exec
     .update(quotes)
     .set({
+      description: patch.description === undefined ? sql`${quotes.description}` : patch.description,
       clientId: sql`COALESCE(${patch.clientId ?? null}, ${quotes.clientId})`,
       clientName: sql`COALESCE(${patch.clientName ?? null}, ${quotes.clientName})`,
       paymentTerms: sql`COALESCE(${patch.paymentTerms ?? null}, ${quotes.paymentTerms})`,
@@ -671,9 +700,13 @@ export const restoreSnapshotQuote = async (
   snapshot: ClientQuoteRestoreFields,
   exec: DbExecutor = db,
 ): Promise<ClientQuote | null> => {
+  const description = Object.hasOwn(snapshot, 'description')
+    ? { description: snapshot.description ?? null }
+    : {};
   const rows = await exec
     .update(quotes)
     .set({
+      ...description,
       clientId: snapshot.clientId,
       clientName: snapshot.clientName,
       paymentTerms: snapshot.paymentTerms,

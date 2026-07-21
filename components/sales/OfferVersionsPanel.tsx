@@ -7,6 +7,11 @@ import { asyncRowsReducer, createInitialAsyncRowsState } from '../shared/asyncRo
 import DeleteConfirmModal from '../shared/DeleteConfirmModal';
 import { VersionHistoryPanel } from '../shared/VersionHistoryPanel';
 
+type OfferVersionApi = Pick<
+  typeof clientOffersApi,
+  'listVersions' | 'getVersion' | 'restoreVersion'
+>;
+
 interface OfferVersionsPanelProps {
   offerId: string;
   selectedVersionId: string | null;
@@ -14,6 +19,8 @@ interface OfferVersionsPanelProps {
   onClearPreview: () => void;
   onRestored: (updatedOffer: ClientOffer) => void;
   disabled?: boolean;
+  embedded?: boolean;
+  versionApi?: OfferVersionApi;
 }
 
 const OfferVersionsPanel: React.FC<OfferVersionsPanelProps> = ({
@@ -23,6 +30,8 @@ const OfferVersionsPanel: React.FC<OfferVersionsPanelProps> = ({
   onClearPreview,
   onRestored,
   disabled,
+  embedded,
+  versionApi = clientOffersApi,
 }) => {
   const { t, i18n } = useTranslation('sales');
   const [historyState, dispatchHistory] = useReducer(
@@ -35,12 +44,12 @@ const OfferVersionsPanel: React.FC<OfferVersionsPanelProps> = ({
   const reload = useCallback(async () => {
     dispatchHistory({ type: 'loading' });
     try {
-      const versions = await clientOffersApi.listVersions(offerId);
+      const versions = await versionApi.listVersions(offerId);
       dispatchHistory({ type: 'loaded', rows: versions });
     } catch {
       dispatchHistory({ type: 'failed', error: t('clientOffers.versionHistory.loadFailed') });
     }
-  }, [offerId, t]);
+  }, [offerId, t, versionApi]);
 
   useEffect(() => {
     reload();
@@ -50,21 +59,21 @@ const OfferVersionsPanel: React.FC<OfferVersionsPanelProps> = ({
     async (row: OfferVersionRow) => {
       if (row.id === selectedVersionId) return;
       try {
-        const version = await clientOffersApi.getVersion(offerId, row.id);
+        const version = await versionApi.getVersion(offerId, row.id);
         dispatchHistory({ type: 'setError', error: null });
         onPreview(version);
       } catch {
         dispatchHistory({ type: 'setError', error: t('clientOffers.versionHistory.loadFailed') });
       }
     },
-    [offerId, onPreview, selectedVersionId, t],
+    [offerId, onPreview, selectedVersionId, t, versionApi],
   );
 
   const handleRestoreConfirmed = useCallback(async () => {
     if (!selectedVersionId) return;
     setRestoreInFlight(true);
     try {
-      const updated = await clientOffersApi.restoreVersion(offerId, selectedVersionId);
+      const updated = await versionApi.restoreVersion(offerId, selectedVersionId);
       dispatchHistory({ type: 'setError', error: null });
       onRestored(updated);
       setConfirmOpen(false);
@@ -80,11 +89,13 @@ const OfferVersionsPanel: React.FC<OfferVersionsPanelProps> = ({
     } finally {
       setRestoreInFlight(false);
     }
-  }, [selectedVersionId, offerId, onRestored, reload, t]);
+  }, [selectedVersionId, offerId, onRestored, reload, t, versionApi]);
 
   return (
     <>
       <VersionHistoryPanel
+        embedded={embedded}
+        persistenceKey="clientOffers.versions"
         rows={historyState.rows}
         selectedVersionId={selectedVersionId}
         isLoading={historyState.isLoading}
@@ -108,6 +119,7 @@ const OfferVersionsPanel: React.FC<OfferVersionsPanelProps> = ({
         isOpen={confirmOpen}
         onClose={() => setConfirmOpen(false)}
         onConfirm={handleRestoreConfirmed}
+        zIndex={70}
         title={t('clientOffers.versionHistory.restoreConfirmTitle')}
         description={t('clientOffers.versionHistory.restoreConfirmDescription')}
       />

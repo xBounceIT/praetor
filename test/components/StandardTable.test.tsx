@@ -1932,6 +1932,34 @@ describe('<StandardTable />', () => {
     expect(screen.getAllByText('Age').length).toBe(2);
   });
 
+  test('offers to save a custom view after hiding a column and clears the tip on revert', async () => {
+    render(
+      <StandardTable<Row>
+        title="Column Visibility Tip"
+        data={sampleRows}
+        columns={sampleColumns}
+      />,
+    );
+    const user = await openColumnSettings();
+
+    expect(
+      screen.queryByRole('button', { name: 'table.saveColumnOrderTip' }),
+    ).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('menuitemcheckbox', { name: 'Age' }));
+    await user.keyboard('{Escape}');
+    expect(screen.getByRole('button', { name: 'table.saveColumnOrderTip' })).toHaveTextContent(
+      'table.saveColumnOrder',
+    );
+
+    await user.click(screen.getByLabelText('table.columnSettings'));
+    await user.click(screen.getByRole('menuitemcheckbox', { name: 'Age' }));
+    await user.keyboard('{Escape}');
+    expect(
+      screen.queryByRole('button', { name: 'table.saveColumnOrderTip' }),
+    ).not.toBeInTheDocument();
+  });
+
   test('custom view modal reorders columns by drag and keyboard and saves the order', async () => {
     render(<StandardTable<Row> title="People" data={sampleRows} columns={sampleColumns} />);
     await openCustomViews();

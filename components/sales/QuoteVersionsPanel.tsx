@@ -14,6 +14,7 @@ interface QuoteVersionsPanelProps {
   onClearPreview: () => void;
   onRestored: (updatedQuote: Quote) => void;
   disabled?: boolean;
+  embedded?: boolean;
 }
 
 const QuoteVersionsPanel: React.FC<QuoteVersionsPanelProps> = ({
@@ -23,6 +24,7 @@ const QuoteVersionsPanel: React.FC<QuoteVersionsPanelProps> = ({
   onClearPreview,
   onRestored,
   disabled,
+  embedded,
 }) => {
   const { t, i18n } = useTranslation('sales');
   const [historyState, dispatchHistory] = useReducer(
@@ -85,6 +87,8 @@ const QuoteVersionsPanel: React.FC<QuoteVersionsPanelProps> = ({
   return (
     <>
       <VersionHistoryPanel
+        embedded={embedded}
+        persistenceKey="clientQuotes.versions"
         rows={historyState.rows}
         selectedVersionId={selectedVersionId}
         isLoading={historyState.isLoading}
@@ -108,6 +112,7 @@ const QuoteVersionsPanel: React.FC<QuoteVersionsPanelProps> = ({
         isOpen={confirmOpen}
         onClose={() => setConfirmOpen(false)}
         onConfirm={handleRestoreConfirmed}
+        zIndex={70}
         title={t('clientQuotes.versionHistory.restoreConfirmTitle')}
         description={t('clientQuotes.versionHistory.restoreConfirmDescription')}
       />

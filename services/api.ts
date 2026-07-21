@@ -35,6 +35,7 @@ export { projectsApi } from './api/projects';
 export { quoteCommunicationChannelsApi } from './api/quoteCommunicationChannels';
 export { reportsApi } from './api/reports';
 export { resalesApi } from './api/resales';
+export { revisionCodeTemplateApi } from './api/revisionCodeTemplate';
 export { rilDraftsApi } from './api/rilDrafts';
 export { rolesApi } from './api/roles';
 export type { CreatedMcpToken, McpToken, McpTokenScope } from './api/settings';
@@ -84,6 +85,7 @@ import { projectsApi } from './api/projects';
 import { quoteCommunicationChannelsApi } from './api/quoteCommunicationChannels';
 import { reportsApi } from './api/reports';
 import { resalesApi } from './api/resales';
+import { revisionCodeTemplateApi } from './api/revisionCodeTemplate';
 import { rilDraftsApi } from './api/rilDrafts';
 import { rolesApi } from './api/roles';
 import { settingsApi } from './api/settings';
@@ -118,6 +120,7 @@ export default {
   clientOffers: clientOffersApi,
   clientsOrders: clientsOrdersApi,
   documentCodeTemplates: documentCodeTemplatesApi,
+  revisionCodeTemplate: revisionCodeTemplateApi,
   invoices: invoicesApi,
   suppliers: suppliersApi,
   supplierQuotes: supplierQuotesApi,

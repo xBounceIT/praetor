@@ -13,10 +13,15 @@ import { logAudit } from '../utils/audit.ts';
 import { type DatabaseError, getUniqueViolation } from '../utils/db-errors.ts';
 import { replyDocumentCodeCollision } from '../utils/document-code-replies.ts';
 import { defaultDurationMonthsForUnit } from '../utils/duration-unit.ts';
+import { roundCurrency } from '../utils/invoice-math.ts';
 import { generatePrefixedId, ITEM_ID_PREFIXES } from '../utils/order-ids.ts';
 import { inheritPricingSemanticsVersions } from '../utils/pricing-semantics.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { replyError } from '../utils/replyError.ts';
+import {
+  legacyDiscountRoundingForWrite,
+  preserveLegacyDiscountRounding,
+} from '../utils/supplier-discount-rounding.ts';
 import {
   badRequest,
   optionalDateString,
@@ -67,6 +72,7 @@ const invoiceItemSchema = {
     quantity: { type: 'number' },
     unitPrice: { type: 'number' },
     discount: { type: 'number' },
+    legacyDiscountRounding: { type: 'boolean' },
     durationMonths: {
       type: 'number',
       description:
@@ -124,11 +130,13 @@ const invoiceSchema = {
 const invoiceItemBodySchema = {
   type: 'object',
   properties: {
+    id: { type: 'string' },
     productId: { type: 'string' },
     description: { type: 'string' },
     quantity: { type: 'number' },
     unitPrice: { type: 'number' },
-    discount: { type: 'number' },
+    discount: { type: 'number', minimum: 0, maximum: 100 },
+    legacyDiscountRounding: { type: 'boolean' },
     durationMonths: {
       type: 'number',
       description:
@@ -187,6 +195,7 @@ type SupplierInvoiceItemInput = {
   quantity?: string | number;
   unitPrice?: string | number;
   discount?: string | number;
+  legacyDiscountRounding?: boolean;
   durationMonths?: string | number;
   durationUnit?: string;
 };
@@ -244,6 +253,10 @@ const normalizeItems = (
       quantity: quantityResult.value,
       unitPrice: unitPriceResult.value,
       discount: discountResult.value || 0,
+      legacyDiscountRounding: legacyDiscountRoundingForWrite(
+        item.legacyDiscountRounding,
+        discountResult.value || 0,
+      ),
       // Duration applies to every line type; pricing derives the displayed multiplier and gates N/A.
       durationMonths:
         durationMonthsResult.value ?? defaultDurationMonthsForUnit(durationUnitResult.value),
@@ -367,8 +380,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (!totalResult.ok) return badRequest(reply, totalResult.message);
       const amountPaidResult = optionalLocalizedNonNegativeNumber(amountPaid, 'amountPaid');
       if (!amountPaidResult.ok) return badRequest(reply, amountPaidResult.message);
-      const totalValue = totalResult.value ?? 0;
-      const amountPaidValue = amountPaidResult.value ?? 0;
+      const subtotalValue = roundCurrency(subtotalResult.value ?? 0);
+      const totalValue = roundCurrency(totalResult.value ?? 0);
+      const amountPaidValue = roundCurrency(amountPaidResult.value ?? 0);
       const statusValue = typeof status === 'string' && status.length > 0 ? status : 'draft';
 
       if (amountPaidValue > totalValue) {
@@ -497,7 +511,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               issueDate: issueDateResult.value,
               dueDate: dueDateResult.value,
               status: statusValue,
-              subtotal: subtotalResult.value ?? 0,
+              subtotal: subtotalValue,
               total: totalValue,
               amountPaid: amountPaidValue,
               notes: typeof notes === 'string' ? notes : null,
@@ -691,19 +705,20 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       if (subtotal !== undefined) {
         const subtotalResult = optionalLocalizedNonNegativeNumber(subtotal, 'subtotal');
         if (!subtotalResult.ok) return badRequest(reply, subtotalResult.message);
-        if (subtotalResult.value !== null) patch.subtotal = subtotalResult.value;
+        if (subtotalResult.value !== null) patch.subtotal = roundCurrency(subtotalResult.value);
       }
 
       if (total !== undefined) {
         const totalResult = optionalLocalizedNonNegativeNumber(total, 'total');
         if (!totalResult.ok) return badRequest(reply, totalResult.message);
-        if (totalResult.value !== null) patch.total = totalResult.value;
+        if (totalResult.value !== null) patch.total = roundCurrency(totalResult.value);
       }
 
       if (amountPaid !== undefined) {
         const amountPaidResult = optionalLocalizedNonNegativeNumber(amountPaid, 'amountPaid');
         if (!amountPaidResult.ok) return badRequest(reply, amountPaidResult.message);
-        if (amountPaidResult.value !== null) patch.amountPaid = amountPaidResult.value;
+        if (amountPaidResult.value !== null)
+          patch.amountPaid = roundCurrency(amountPaidResult.value);
       }
 
       if (typeof status === 'string') patch.status = status;
@@ -723,11 +738,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       let normalizedItems: supplierInvoicesRepo.NewSupplierInvoiceItem[] | null = null;
       let sourceItemIds: Array<string | undefined> | null = null;
+      let itemInputs: SupplierInvoiceItemInput[] | null = null;
       if (items !== undefined) {
         if (!Array.isArray(items) || items.length === 0) {
           return badRequest(reply, 'Items must be a non-empty array');
         }
-        normalizedItems = normalizeItems(items, reply);
+        itemInputs = items;
+        normalizedItems = normalizeItems(itemInputs, reply);
         if (!normalizedItems) return;
         sourceItemIds = items.map((item) => item.id);
       }
@@ -751,9 +768,11 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               : await supplierInvoicesRepo.update(renamedInvoice?.id ?? idResult.value, patch, tx);
           if (!invoice)
             return { invoice: null, items: [] as supplierInvoicesRepo.SupplierInvoiceItem[] };
+          const existingItems = normalizedItems
+            ? await supplierInvoicesRepo.findItemsForInvoice(invoice.id, tx)
+            : null;
           let versionedItems = normalizedItems;
-          if (normalizedItems && sourceItemIds?.some((id) => id)) {
-            const existingItems = await supplierInvoicesRepo.findItemsForInvoice(invoice.id, tx);
+          if (normalizedItems && existingItems && sourceItemIds?.some((id) => id)) {
             const sourceMarkers = inheritPricingSemanticsVersions(
               sourceItemIds.map((id) => ({ id })),
               existingItems,
@@ -763,8 +782,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               pricingSemanticsVersion: sourceMarkers[index].pricingSemanticsVersion,
             }));
           }
-          const finalItems = versionedItems
-            ? await supplierInvoicesRepo.replaceItems(invoice.id, versionedItems, tx)
+          const replacementItems =
+            versionedItems && itemInputs && existingItems
+              ? preserveLegacyDiscountRounding(versionedItems, itemInputs, existingItems)
+              : versionedItems;
+          const finalItems = replacementItems
+            ? await supplierInvoicesRepo.replaceItems(invoice.id, replacementItems, tx)
             : await supplierInvoicesRepo.findItemsForInvoice(invoice.id, tx);
           return { invoice, items: finalItems };
         });

@@ -14,6 +14,7 @@ import * as realSupplierQuotesRepo from '../../repositories/supplierQuotesRepo.t
 import * as realSupplierQuoteVersionsRepo from '../../repositories/supplierQuoteVersionsRepo.ts';
 import * as realUsersRepo from '../../repositories/usersRepo.ts';
 import * as realDocumentCodes from '../../services/documentCodes.ts';
+import * as realDocumentRevisions from '../../services/documentRevisions.ts';
 import * as realAudit from '../../utils/audit.ts';
 import * as realOrderIds from '../../utils/order-ids.ts';
 import * as realPermissions from '../../utils/permissions.ts';
@@ -43,6 +44,7 @@ const offerVersionsRepoSnap = { ...realOfferVersionsRepo };
 const supplierQuotesRepoSnap = { ...realSupplierQuotesRepo };
 const supplierQuoteVersionsRepoSnap = { ...realSupplierQuoteVersionsRepo };
 const documentCodesSnap = { ...realDocumentCodes };
+const documentRevisionsSnap = { ...realDocumentRevisions };
 const auditSnap = { ...realAudit };
 const orderIdsSnap = { ...realOrderIds };
 const drizzleSnap = { ...realDrizzle };
@@ -78,6 +80,9 @@ const clientOrderLinkSaleItemsToSupplierOrderAndItemsMock = mock();
 const generateClientOrderIdMock = mock();
 const generateSupplierOrderIdMock = mock();
 const allocateDocumentCodeMock = mock();
+const createOfferRevisionIfChangedMock = mock();
+const lockSupplierRevisionStatesMock = mock();
+const createDerivedSupplierRevisionsMock = mock();
 
 const qcListForQuoteMock = mock();
 const qcReactivateAllMock = mock();
@@ -192,6 +197,12 @@ beforeAll(async () => {
     ...documentCodesSnap,
     allocateDocumentCode: allocateDocumentCodeMock,
   }));
+  mock.module('../../services/documentRevisions.ts', () => ({
+    ...documentRevisionsSnap,
+    createOfferRevisionIfChanged: createOfferRevisionIfChangedMock,
+    lockSupplierRevisionStates: lockSupplierRevisionStatesMock,
+    createDerivedSupplierRevisions: createDerivedSupplierRevisionsMock,
+  }));
   mock.module('../../repositories/supplierQuoteVersionsRepo.ts', () => ({
     ...supplierQuoteVersionsRepoSnap,
     insert: sqvInsertMock,
@@ -230,6 +241,7 @@ afterAll(() => {
     () => supplierQuoteVersionsRepoSnap,
   );
   mock.module('../../services/documentCodes.ts', () => documentCodesSnap);
+  mock.module('../../services/documentRevisions.ts', () => documentRevisionsSnap);
   mock.module('../../repositories/productsRepo.ts', () => productsRepoSnap);
   mock.module('../../repositories/offerVersionsRepo.ts', () => offerVersionsRepoSnap);
   mock.module('../../utils/audit.ts', () => auditSnap);
@@ -274,6 +286,7 @@ const baseGate = () => ({
 // update() returns the full mapped ClientOffer row.
 const updatedOffer = (over: Record<string, unknown> = {}) => ({
   id: 'off-1',
+  description: 'Managed renewal',
   linkedQuoteId: 'q-1',
   clientId: 'c1',
   clientName: 'Client',
@@ -340,6 +353,9 @@ const allMocks = [
   generateClientOrderIdMock,
   generateSupplierOrderIdMock,
   allocateDocumentCodeMock,
+  createOfferRevisionIfChangedMock,
+  lockSupplierRevisionStatesMock,
+  createDerivedSupplierRevisionsMock,
   qcListForQuoteMock,
   qcReactivateAllMock,
   qvInsertMock,
@@ -385,6 +401,7 @@ beforeEach(async () => {
   }));
 
   // Sensible defaults; individual tests override what they care about.
+  coLockExistingByIdMock.mockResolvedValue(gate({ status: 'draft' }));
   coFindFullForSnapshotMock.mockResolvedValue({ offer: updatedOffer(), items: [] });
   coFindItemsForOfferMock.mockResolvedValue([]);
   coFindIdConflictMock.mockResolvedValue(false);
@@ -449,6 +466,9 @@ beforeEach(async () => {
     if (moduleId === 'supplier_order') return 'SORD-2999-0001';
     return 'ORD-2999-0001';
   });
+  createOfferRevisionIfChangedMock.mockResolvedValue({ revisionNumber: 1, revisionCode: 'REV1' });
+  lockSupplierRevisionStatesMock.mockResolvedValue(new Map());
+  createDerivedSupplierRevisionsMock.mockResolvedValue(undefined);
   // Linked-quote sourced lines for the fresh-link inheritance exemption (#812 round 15).
   cqFindItemSnapshotsForQuoteMock.mockResolvedValue([]);
   sqGetQuoteItemSnapshotsMock.mockResolvedValue(new Map());
@@ -495,6 +515,23 @@ describe('client-offer document discount validation', () => {
     const res = await testApp.inject({
       method: 'PUT',
       url: '/api/sales/client-offers/..%2F..%2Fclients%2Flegacy',
+      headers: authHeader(),
+      payload: { id: legacyId, notes: 'updated' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(coFindExistingMock).toHaveBeenCalledWith(legacyId);
+    expect(coRenameMock).not.toHaveBeenCalled();
+  });
+
+  test('200 lets an existing dot-only offer code be resubmitted through its transport escape', async () => {
+    const legacyId = '..';
+    coFindExistingMock.mockResolvedValue(gate({ id: legacyId }));
+    coUpdateMock.mockResolvedValue(updatedOffer({ id: legacyId, notes: 'updated' }));
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: `/api/sales/client-offers/${'~'.repeat(101)}..`,
       headers: authHeader(),
       payload: { id: legacyId, notes: 'updated' },
     });
@@ -570,6 +607,49 @@ describe('client-offer document discount validation', () => {
       expect.objectContaining({ discount: 150, discountType: 'currency' }),
       expect.anything(),
     );
+  });
+});
+
+describe('client-offer immutable revisions', () => {
+  test('locks and snapshots an actual draft → sent transition', async () => {
+    coFindExistingMock.mockResolvedValue(gate({ status: 'draft' }));
+    coLockExistingByIdMock.mockResolvedValue(gate({ status: 'draft' }));
+    coUpdateMock.mockResolvedValue(updatedOffer({ status: 'sent' }));
+
+    const res = await putOffer({ status: 'sent' });
+
+    expect(res.statusCode).toBe(200);
+    expect(coLockExistingByIdMock).toHaveBeenCalled();
+    expect(createOfferRevisionIfChangedMock).toHaveBeenCalledWith(
+      'off-1',
+      HAPPY_USER.id,
+      expect.anything(),
+    );
+    expect(lockSupplierRevisionStatesMock).toHaveBeenCalled();
+    expect(createDerivedSupplierRevisionsMock).toHaveBeenCalled();
+    expect(JSON.parse(res.body).revisionCode).toBe('REV1');
+  });
+
+  test('treats draft → accepted as an implicit send before creating its order', async () => {
+    coFindExistingMock.mockResolvedValue(gate({ status: 'draft' }));
+    coLockExistingByIdMock.mockResolvedValue(gate({ status: 'draft' }));
+    coUpdateMock.mockResolvedValue(updatedOffer({ status: 'accepted' }));
+    coFindItemsForOfferMock.mockResolvedValue([storedOfferItem()]);
+    createOfferRevisionIfChangedMock.mockImplementation(async () => {
+      expect(clientOrderCreateMock).not.toHaveBeenCalled();
+      return { revisionNumber: 1, revisionCode: 'REV1' };
+    });
+
+    const res = await putOffer({ status: 'accepted' });
+
+    expect(res.statusCode).toBe(200);
+    expect(createOfferRevisionIfChangedMock).toHaveBeenCalledWith(
+      'off-1',
+      HAPPY_USER.id,
+      expect.anything(),
+    );
+    expect(clientOrderCreateMock).toHaveBeenCalled();
+    expect(JSON.parse(res.body).revisionCode).toBe('REV1');
   });
 });
 
@@ -684,6 +764,7 @@ describe('PUT /api/sales/client-offers/:id expired rules (issue #779)', () => {
     expect(clientOrderCreateMock).toHaveBeenCalledWith(
       expect.objectContaining({
         id: 'ORD-2999-0001',
+        description: 'Managed renewal',
         linkedQuoteId: 'q-1',
         linkedOfferId: 'off-1',
         clientId: 'c1',

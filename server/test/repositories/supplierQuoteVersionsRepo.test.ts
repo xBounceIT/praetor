@@ -36,6 +36,9 @@ describe('buildSnapshot', () => {
   test('preserves linkedOrderId on the supplier-quote snapshot for audit/portability', () => {
     const quote = {
       id: 'sq-1',
+      revisionNumber: 2,
+      revisionCode: 'REV2',
+      description: 'Hardware procurement',
       supplierId: 's-1',
       supplierName: 'Acme',
       clientId: null,
@@ -47,6 +50,7 @@ describe('buildSnapshot', () => {
       communicationChannelName: 'Email',
       linkedOrderId: 'sso-1',
       linkedClientQuoteId: null,
+      linkedClientQuoteRevisionCode: 'REV4',
       linkedClientQuoteStatus: null,
       linkedClientQuoteExpiration: null,
       linkedOfferStatus: null,
@@ -60,7 +64,11 @@ describe('buildSnapshot', () => {
     expect(snapshot.schemaVersion).toBe(1);
     expect(snapshot.items).toBe(items);
     expect(snapshot.quote.id).toBe('sq-1');
+    expect(snapshot.quote.description).toBe('Hardware procurement');
     expect(snapshot.quote.supplierId).toBe('s-1');
+    expect(snapshot.quote).not.toHaveProperty('revisionNumber');
+    expect(snapshot.quote).not.toHaveProperty('revisionCode');
+    expect(snapshot.quote).not.toHaveProperty('linkedClientQuoteRevisionCode');
     // linkedOrderId now round-trips through the snapshot.
     expect(snapshot.quote.linkedOrderId).toBe('sso-1');
   });
@@ -68,6 +76,7 @@ describe('buildSnapshot', () => {
   test('null linkedOrderId round-trips faithfully', () => {
     const quote = {
       id: 'sq-2',
+      description: null,
       supplierId: 's-1',
       supplierName: 'Acme',
       clientId: null,
@@ -154,6 +163,7 @@ describe('insert', () => {
           schemaVersion: 1,
           quote: {
             id: 'sq-1',
+            description: 'Hardware procurement',
             supplierId: 's-1',
             supplierName: 'Acme',
             clientId: null,

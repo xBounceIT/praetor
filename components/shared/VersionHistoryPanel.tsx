@@ -9,6 +9,8 @@ export interface VersionHistoryPanelRow {
   id: string;
   createdAt: number;
   reason: 'update' | 'restore';
+  revisionCode?: string;
+  createdByUserName?: string | null;
 }
 
 interface VersionHistoryPanelLabels {
@@ -32,7 +34,36 @@ interface VersionHistoryPanelProps<Row extends VersionHistoryPanelRow> {
   onSelect: (row: Row) => void;
   onClearPreview: () => void;
   onRestore: () => void;
+  embedded?: boolean;
+  persistenceKey?: string;
 }
+
+const HISTORY_PANEL_STORAGE_PREFIX = 'praetor.history-panel.';
+
+const readPersistedOpenState = (persistenceKey?: string) => {
+  if (!persistenceKey || typeof window === 'undefined') return true;
+
+  try {
+    return (
+      window.localStorage.getItem(`${HISTORY_PANEL_STORAGE_PREFIX}${persistenceKey}`) !== 'closed'
+    );
+  } catch {
+    return true;
+  }
+};
+
+const persistOpenState = (persistenceKey: string | undefined, isOpen: boolean) => {
+  if (!persistenceKey || typeof window === 'undefined') return;
+
+  try {
+    window.localStorage.setItem(
+      `${HISTORY_PANEL_STORAGE_PREFIX}${persistenceKey}`,
+      isOpen ? 'open' : 'closed',
+    );
+  } catch {
+    // Storage can be unavailable in restricted browser contexts; local state still works.
+  }
+};
 
 export function VersionHistoryPanel<Row extends VersionHistoryPanelRow>({
   rows,
@@ -46,16 +77,28 @@ export function VersionHistoryPanel<Row extends VersionHistoryPanelRow>({
   onSelect,
   onClearPreview,
   onRestore,
+  embedded = false,
+  persistenceKey,
 }: VersionHistoryPanelProps<Row>) {
-  const [isOpen, setIsOpen] = useState(true);
+  const [isOpen, setIsOpen] = useState(() => readPersistedOpenState(persistenceKey));
+
+  const handleOpenChange = (nextIsOpen: boolean) => {
+    setIsOpen(nextIsOpen);
+    persistOpenState(persistenceKey, nextIsOpen);
+  };
 
   return (
     <Collapsible
       open={isOpen}
-      onOpenChange={setIsOpen}
+      onOpenChange={handleOpenChange}
       className={cn(
-        'hidden max-h-[90vh] flex-shrink-0 flex-col overflow-hidden rounded-lg border border-border bg-background text-foreground shadow-lg transition-[width] duration-200 ease-in-out motion-reduce:transition-none animate-in fade-in slide-in-from-right 2xl:flex',
-        isOpen ? 'w-72 delay-0' : 'w-12 delay-200 motion-reduce:delay-0',
+        'max-h-[90vh] flex-shrink-0 flex-col overflow-hidden rounded-lg border border-border bg-background text-foreground shadow-lg animate-in fade-in slide-in-from-right',
+        embedded
+          ? 'flex w-full'
+          : cn(
+              'hidden transition-[width] duration-200 ease-in-out motion-reduce:transition-none 2xl:flex',
+              isOpen ? 'w-72 delay-0' : 'w-12 delay-200 motion-reduce:delay-0',
+            ),
       )}
     >
       <Tooltip>
@@ -71,7 +114,13 @@ export function VersionHistoryPanel<Row extends VersionHistoryPanelRow>({
                 <i
                   className={cn(
                     'fa-solid text-[10px] text-muted-foreground',
-                    isOpen ? 'fa-chevron-left' : 'fa-chevron-right',
+                    embedded
+                      ? isOpen
+                        ? 'fa-chevron-up'
+                        : 'fa-chevron-down'
+                      : isOpen
+                        ? 'fa-chevron-left'
+                        : 'fa-chevron-right',
                   )}
                   aria-hidden="true"
                 ></i>
@@ -131,8 +180,14 @@ export function VersionHistoryPanel<Row extends VersionHistoryPanelRow>({
                             )}
                           >
                             <span className="text-xs font-semibold text-foreground">
-                              {formatInsertDateTime(row.createdAt, locale)}
+                              {row.revisionCode ?? formatInsertDateTime(row.createdAt, locale)}
                             </span>
+                            {row.revisionCode && (
+                              <span className="text-[10px] text-muted-foreground">
+                                {formatInsertDateTime(row.createdAt, locale)}
+                                {row.createdByUserName ? ` · ${row.createdByUserName}` : ''}
+                              </span>
+                            )}
                             <span
                               className={cn(
                                 'text-[9px] font-black uppercase tracking-wider',

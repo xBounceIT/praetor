@@ -9,7 +9,7 @@ import { users } from './users.ts';
 // when the underlying domain types change in a non-additive way.
 export interface OfferVersionSnapshot {
   schemaVersion: 1;
-  offer: ClientOffer;
+  offer: Omit<ClientOffer, 'revisionNumber' | 'revisionCode' | 'linkedQuoteRevisionCode'>;
   items: ClientOfferItem[];
 }
 

@@ -36,7 +36,10 @@ describe('buildSnapshot', () => {
   test('preserves linkedOfferId on the snapshot so the historical record is complete', () => {
     const quote = {
       id: 'cq-1',
+      revisionNumber: 2,
+      revisionCode: 'REV2',
       linkedOfferId: 'co-1',
+      linkedOfferRevisionCode: 'REV4',
       linkedSupplierQuoteId: null,
       linkedSupplierQuoteExpiration: null,
       clientId: 'c-1',
@@ -58,6 +61,9 @@ describe('buildSnapshot', () => {
     expect(snapshot.items).toEqual(items);
     expect(snapshot.quote.id).toBe('cq-1');
     expect(snapshot.quote.clientId).toBe('c-1');
+    expect(snapshot.quote).not.toHaveProperty('revisionNumber');
+    expect(snapshot.quote).not.toHaveProperty('revisionCode');
+    expect(snapshot.quote).not.toHaveProperty('linkedOfferRevisionCode');
     // linkedOfferId now round-trips through the snapshot for audit/portability.
     expect(snapshot.quote.linkedOfferId).toBe('co-1');
     expect(snapshot.candidates).toHaveLength(1);

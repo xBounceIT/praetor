@@ -5,10 +5,12 @@ import { useTranslation } from 'react-i18next';
 import { LinkedRecordBanner } from '@/components/shared/LinkedRecordBanner';
 import { Button } from '@/components/ui/button';
 import { Field, FieldError, FieldLabel } from '@/components/ui/field';
+import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import type {
   Client,
+  ClientOffer,
   ClientsOrder,
   ClientsOrderItem,
   DurationUnit,
@@ -24,6 +26,7 @@ import {
   formatInsertDateTime,
   getLocalDateString,
 } from '../../utils/date';
+import { formatDocumentCode } from '../../utils/document-code';
 import {
   createLineItemIndexResolver,
   createTemporaryLineItemId,
@@ -82,6 +85,7 @@ import OrderVersionsPanel from './OrderVersionsPanel';
 
 export interface ClientsOrdersViewProps {
   orders: ClientsOrder[];
+  offers?: ClientOffer[];
   clients: Client[];
   products: Product[];
   // Supplier orders behind supplier-quoted lines (only ids are read; see buildSupplierOrderQuickViewHref).
@@ -143,6 +147,7 @@ const createClientsOrdersInitialState = (): ClientsOrdersViewState => ({
   errors: {},
   previewVersion: null,
   formData: {
+    description: '',
     clientId: '',
     clientName: '',
     items: [],
@@ -231,6 +236,7 @@ const computeDueDate = (
 
 const useClientsOrdersController = ({
   orders,
+  offers = [],
   clients,
   products,
   supplierOrders = EMPTY_SUPPLIER_ORDERS,
@@ -288,8 +294,11 @@ const useClientsOrdersController = ({
 
   const orderToFormData = useCallback(
     (order: ClientsOrder): Partial<ClientsOrder> => ({
+      description: order.description ?? '',
       linkedQuoteId: order.linkedQuoteId,
+      linkedQuoteRevisionCode: order.linkedQuoteRevisionCode,
       linkedOfferId: order.linkedOfferId,
+      linkedOfferRevisionCode: order.linkedOfferRevisionCode,
       clientId: order.clientId,
       clientName: order.clientName,
       items: order.items,
@@ -323,8 +332,11 @@ const useClientsOrdersController = ({
     (version: OrderVersion) => {
       setPreviewVersion(version);
       setFormData({
+        description: version.snapshot.order.description ?? '',
         linkedQuoteId: editingOrder?.linkedQuoteId,
+        linkedQuoteRevisionCode: editingOrder?.linkedQuoteRevisionCode,
         linkedOfferId: editingOrder?.linkedOfferId,
+        linkedOfferRevisionCode: editingOrder?.linkedOfferRevisionCode,
         clientId: version.snapshot.order.clientId,
         clientName: version.snapshot.order.clientName,
         items: version.snapshot.items,
@@ -624,6 +636,15 @@ const useClientsOrdersController = ({
         accessorFn: (row: ClientsOrder) => row.id,
         cell: ({ row }: { row: ClientsOrder }) => (
           <span className="font-bold text-foreground">{row.id}</span>
+        ),
+      },
+      {
+        header: t('accounting:clientsOrders.description', { defaultValue: 'Description' }),
+        id: 'description',
+        accessorFn: (row: ClientsOrder) => row.description ?? '',
+        headerClassName: 'min-w-[12rem]',
+        cell: ({ row }: { row: ClientsOrder }) => (
+          <span className="text-sm text-foreground">{row.description?.trim() || '-'}</span>
         ),
       },
       {
@@ -955,6 +976,7 @@ const useClientsOrdersController = ({
     isReadOnly,
     isVersionRestoreLocked,
     onViewOffer,
+    offers,
     openEditModal,
     orderToDelete,
     paymentTermsOptions,
@@ -1116,7 +1138,12 @@ const ClientsOrderModalAlerts: React.FC<{ controller: ClientsOrdersController }>
           defaultValue: 'Linked Offer',
         })}
         value={controller.t('accounting:clientsOrders.linkedOfferInfo', {
-          number: controller.formData.linkedOfferId,
+          number: formatDocumentCode(
+            controller.formData.linkedOfferId,
+            controller.formData.linkedOfferRevisionCode ??
+              controller.offers.find((offer) => offer.id === controller.formData.linkedOfferId)
+                ?.revisionCode,
+          ),
           defaultValue: 'Offer #{{number}}',
         })}
         note={
@@ -1218,6 +1245,25 @@ const OrderDetailsSection: React.FC<{ controller: ClientsOrdersController }> = (
         </div>
       </Field>
     </div>
+    <Field className="w-full">
+      <FieldLabel htmlFor="client-order-description">
+        {controller.t('accounting:clientsOrders.description', {
+          defaultValue: 'Description',
+        })}
+      </FieldLabel>
+      <Input
+        id="client-order-description"
+        type="text"
+        value={controller.formData.description ?? ''}
+        onChange={(event) =>
+          controller.setFormData((previous) => ({
+            ...previous,
+            description: event.target.value,
+          }))
+        }
+        disabled={controller.isReadOnly}
+      />
+    </Field>
   </div>
 );
 

@@ -817,8 +817,29 @@
     {
       "idx": 116,
       "version": "7",
-      "when": 1784560214657,
-      "tag": "0116_preserve_historical_pricing_semantics",
+      "when": 1784562374530,
+      "tag": "0116_add_document_descriptions",
+      "breakpoints": true
+    },
+    {
+      "idx": 117,
+      "version": "7",
+      "when": 1784578192296,
+      "tag": "0117_preserve_supplier_cost_precision",
+      "breakpoints": true
+    },
+    {
+      "idx": 118,
+      "version": "7",
+      "when": 1784644766037,
+      "tag": "0118_add_document_revisions",
+      "breakpoints": true
+    },
+    {
+      "idx": 119,
+      "version": "7",
+      "when": 1784674832455,
+      "tag": "0119_preserve_historical_pricing_semantics",
       "breakpoints": true
     }
   ]

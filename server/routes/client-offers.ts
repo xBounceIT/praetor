@@ -8,6 +8,7 @@ import * as clientsRepo from '../repositories/clientsRepo.ts';
 import * as offerVersionsRepo from '../repositories/offerVersionsRepo.ts';
 import * as productsRepo from '../repositories/productsRepo.ts';
 import * as quoteCandidatesRepo from '../repositories/quoteCandidatesRepo.ts';
+import * as revisionsRepo from '../repositories/revisionsRepo.ts';
 import * as supplierQuotesRepo from '../repositories/supplierQuotesRepo.ts';
 import { clientOfferSchema } from '../schemas/clientOffers.ts';
 import { standardErrorResponses, standardRateLimitedErrorResponses } from '../schemas/common.ts';
@@ -27,9 +28,15 @@ import {
   reserveDocumentCodeCounterFromCode,
 } from '../services/documentCodes.ts';
 import {
+  createDerivedSupplierRevisions,
+  createOfferRevisionIfChanged,
+  lockSupplierRevisionStates,
+} from '../services/documentRevisions.ts';
+import {
   QuotePromotionRollbackError,
   rollbackQuotePromotion,
 } from '../services/quotePromotionRollback.ts';
+import { RevisionRestoreConflict, restoreOfferRevision } from '../services/revisionRestore.ts';
 import { logAudit } from '../utils/audit.ts';
 import {
   calculateClientLineMol,
@@ -46,6 +53,7 @@ import {
 import { type DurationUnit, defaultDurationMonthsForUnit } from '../utils/duration-unit.ts';
 import { normalizeNullableNumber, normalizeNullableString } from '../utils/normalize.ts';
 import { generatePrefixedId, ITEM_ID_PREFIXES } from '../utils/order-ids.ts';
+import { requirePathSegment } from '../utils/path-segments.ts';
 import { ADMIN_ROLE_ID, requestHasPermission, TOP_MANAGER_ROLE_ID } from '../utils/permissions.ts';
 import {
   inheritPricingSemanticsVersions,
@@ -82,6 +90,7 @@ import {
   parseLocalizedPositiveNumber,
   requireNonEmptyString,
 } from '../utils/validation.ts';
+import { registerRevisionHistoryRoutes } from './revision-history.ts';
 
 // Surfaced for both the gate-check inside the create-tx and the catch on the unique-index
 // violation; keep them identical so the error doesn't drift between paths.
@@ -115,6 +124,24 @@ const projectOffer = <T extends { status: string; expirationDate: string | null 
   ...offer,
   effectiveStatus: effectiveQuoteStatusFromDate(offer.status, offer.expirationDate),
 });
+
+const sourcedSupplierQuoteIds = async (
+  lines: Array<{ supplierQuoteId?: string | null; supplierQuoteItemId?: string | null }>,
+  exec: DbExecutor,
+): Promise<string[]> => {
+  const ids = new Set<string>();
+  const unresolvedItemIds: string[] = [];
+  for (const line of lines) {
+    if (line.supplierQuoteId) ids.add(line.supplierQuoteId);
+    else if (line.supplierQuoteItemId) unresolvedItemIds.push(line.supplierQuoteItemId);
+  }
+  if (unresolvedItemIds.length > 0) {
+    const snapshots = await supplierQuotesRepo.getQuoteItemSnapshots(unresolvedItemIds, exec);
+    for (const snapshot of snapshots.values()) ids.add(snapshot.supplierQuoteId);
+  }
+  return Array.from(ids);
+};
+
 const TERMINAL_REVERT_ERROR = 'Terminal offers must be reverted through the revert-to-draft action';
 const TERMINAL_REVERT_ROLE_ERROR = 'Only Top Manager or Admin can revert terminal offers to draft';
 const TERMINAL_REVERT_LINKED_SALE_ERROR =
@@ -193,6 +220,7 @@ const offerCreateBodySchema = {
   allOf: [createDocumentDiscountConstraint],
   properties: {
     id: manualOfferCodeCreateSchema,
+    description: { type: 'string' },
     linkedQuoteId: { type: 'string' },
     clientId: { type: 'string' },
     clientName: { type: 'string' },
@@ -212,6 +240,7 @@ const offerUpdateBodySchema = {
   type: 'object',
   properties: {
     id: manualOfferCodeUpdateSchema,
+    description: { type: ['string', 'null'] },
     clientId: { type: 'string' },
     clientName: { type: 'string' },
     items: { type: 'array', items: offerItemBodySchema },
@@ -561,6 +590,28 @@ const buildOrderItemsFromOfferItems = (
 export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.addHook('onRequest', authenticateToken);
 
+  registerRevisionHistoryRoutes(fastify, {
+    entityType: 'client_offer',
+    viewPermission: 'sales.client_offers.view',
+    updatePermission: 'sales.client_offers.update',
+    exists: clientOffersRepo.existsById,
+    list: revisionsRepo.listForOffer,
+    find: revisionsRepo.findOfferById,
+    restore: async (offerId, revision, userId, tx) => {
+      const missingReference = await findMissingSnapshotReference(revision.snapshot, tx);
+      if (missingReference) {
+        throw new RevisionRestoreConflict(missingReference, 'snapshot_reference_missing');
+      }
+      const restored = await restoreOfferRevision(offerId, revision, userId, tx);
+      if (!restored) return null;
+      return projectOffer({
+        ...restored,
+        items: await clientOffersRepo.findItemsForOffer(offerId, tx),
+      });
+    },
+    responseSchema: clientOfferSchema,
+  });
+
   const snapshotPreState = async (
     offerId: string,
     reason: offerVersionsRepo.OfferVersionReason,
@@ -658,6 +709,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       const {
         id: nextId,
+        description,
         linkedQuoteId,
         clientId,
         clientName,
@@ -671,6 +723,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         notes,
       } = request.body as {
         id?: unknown;
+        description?: unknown;
         linkedQuoteId: unknown;
         clientId: unknown;
         clientName: unknown;
@@ -874,6 +927,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           const offer = await clientOffersRepo.create(
             {
               id: offerId,
+              description: (description as string | null | undefined) ?? null,
               linkedQuoteId: linkedQuoteIdResult.value,
               clientId: clientIdResult.value,
               clientName: clientNameResult.value,
@@ -1001,6 +1055,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const { id } = request.params as { id: string };
       const {
         id: nextId,
+        description,
         clientId,
         clientName,
         items,
@@ -1013,6 +1068,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         notes,
       } = request.body as {
         id?: unknown;
+        description?: unknown;
         clientId?: unknown;
         clientName?: unknown;
         items?: OfferItemInput[] | unknown;
@@ -1025,7 +1081,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         notes?: unknown;
       };
 
-      const idResult = requireNonEmptyString(id, 'id');
+      const idResult = requirePathSegment(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
       const existingOffer = await clientOffersRepo.findExisting(idResult.value);
@@ -1090,6 +1146,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       // in the set: it stays editable on non-draft and expired offers — extending it is the only
       // exit from `expired` — and is locked again only on terminal accepted/denied offers below.
       const hasNonExpirationContentUpdate =
+        description !== undefined ||
         clientId !== undefined ||
         clientName !== undefined ||
         items !== undefined ||
@@ -1313,6 +1370,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         offer: clientOffersRepo.ClientOffer | null;
         items: clientOffersRepo.ClientOfferItem[];
         syncAudits: SupplierItemSyncAudit[];
+        revisionConflict?: boolean;
         createdOrder?: {
           order: clientsOrdersRepo.ClientOrder;
           items: clientsOrdersRepo.ClientOrderItem[];
@@ -1320,6 +1378,35 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       };
       try {
         result = await withDbTransaction(async (tx) => {
+          // Accepting a draft is an implicit send: reserve its immutable revision before the
+          // acceptance creates a downstream order.
+          const revisionIntent =
+            normalizeQuoteStatus(existingOffer.status) === 'draft' &&
+            ['sent', 'accepted'].includes(
+              normalizeQuoteStatus(targetStatus ?? existingOffer.status),
+            );
+          const lockedOffer = revisionIntent
+            ? await clientOffersRepo.lockExistingById(idResult.value, tx)
+            : existingOffer;
+          if (!lockedOffer) return { offer: null, items: [], syncAudits: [] };
+          if (revisionIntent && normalizeQuoteStatus(lockedOffer.status) !== 'draft') {
+            return {
+              offer: null,
+              items: [],
+              syncAudits: [],
+              revisionConflict: true,
+            };
+          }
+          const supplierRevisionStates = revisionIntent
+            ? await lockSupplierRevisionStates(
+                await sourcedSupplierQuoteIds(
+                  normalizedItemsForUpdate ??
+                    (await clientOffersRepo.findItemsForOffer(idResult.value, tx)),
+                  tx,
+                ),
+                tx,
+              )
+            : new Map<string, string>();
           // ID-only renames cascade through the FK and don't alter snapshot content, so we
           // skip them to keep the history clean.
           if (!isIdOnlyUpdate) {
@@ -1338,6 +1425,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               : await clientOffersRepo.update(
                   renamedOffer?.id ?? idResult.value,
                   {
+                    description: description as string | null | undefined,
                     clientId: (clientIdValue as string | null | undefined) ?? null,
                     clientName: (clientNameValue as string | null | undefined) ?? null,
                     paymentTerms: (paymentTerms as string | null | undefined) ?? null,
@@ -1367,6 +1455,32 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
                 items: clientsOrdersRepo.ClientOrderItem[];
               }
             | undefined;
+          // Bidirectional sync (issue #779): push GENUINE client-side edits of supplier-sourced
+          // line fields (quantity, unit cost) onto the referenced supplier quote items,
+          // atomically with the offer write. The audit entries are logged after commit.
+          const syncAudits = normalizedItemsForUpdate
+            ? await syncSupplierItemsFromClientLines(
+                request,
+                'client_offer.update',
+                normalizedItemsForUpdate,
+                previousSyncLines,
+                tx,
+              )
+            : [];
+          let revisedOffer = offer;
+          if (revisionIntent) {
+            const revision = await createOfferRevisionIfChanged(
+              offer.id,
+              request.user?.id ?? null,
+              tx,
+            );
+            if (revision) revisedOffer = { ...offer, ...revision };
+            await createDerivedSupplierRevisions(
+              supplierRevisionStates,
+              request.user?.id ?? null,
+              tx,
+            );
+          }
           if (createsClientOrder) {
             const existingOrder = await clientsOrdersRepo.findExistingForOffer(offer.id, null, tx);
             if (existingOrder) {
@@ -1374,6 +1488,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             }
             createdOrder = await createClientOrderRows(
               {
+                description: offer.description ?? null,
                 linkedQuoteId: offer.linkedQuoteId || null,
                 linkedOfferId: offer.id,
                 clientId: offer.clientId,
@@ -1388,19 +1503,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               tx,
             );
           }
-          // Bidirectional sync (issue #779): push GENUINE client-side edits of supplier-sourced
-          // line fields (quantity, unit cost) onto the referenced supplier quote items,
-          // atomically with the offer write. The audit entries are logged after commit.
-          const syncAudits = normalizedItemsForUpdate
-            ? await syncSupplierItemsFromClientLines(
-                request,
-                'client_offer.update',
-                normalizedItemsForUpdate,
-                previousSyncLines,
-                tx,
-              )
-            : [];
-          return { offer, items: updatedItems, syncAudits, createdOrder };
+          return { offer: revisedOffer, items: updatedItems, syncAudits, createdOrder };
         });
       } catch (err) {
         // The client→supplier item sync refuses to write frozen/order-locked supplier quotes or
@@ -1469,6 +1572,16 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const updatedOffer = result.offer;
       const updatedItems = result.items;
+      if (result.revisionConflict) {
+        return replyError(request, reply, {
+          statusCode: 409,
+          message: 'The offer changed while it was being sent',
+          action: 'client_offer.update.conflict',
+          entityType: 'client_offer',
+          entityId: idResult.value,
+          details: { secondaryLabel: 'concurrent_send' },
+        });
+      }
       if (!updatedOffer) {
         return replyError(request, reply, {
           statusCode: 404,
@@ -1551,7 +1664,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id } = request.params as { id: string };
-      const idResult = requireNonEmptyString(id, 'id');
+      const idResult = requirePathSegment(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
       const { reason } = (request.body ?? {}) as { reason?: unknown };
@@ -1640,7 +1753,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id } = request.params as { id: string };
-      const idResult = requireNonEmptyString(id, 'id');
+      const idResult = requirePathSegment(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
       const offer = await clientOffersRepo.findExisting(idResult.value);
@@ -1859,7 +1972,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id } = request.params as { id: string };
-      const idResult = requireNonEmptyString(id, 'id');
+      const idResult = requirePathSegment(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
       const [exists, versions] = await Promise.all([
@@ -1898,9 +2011,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id, versionId } = request.params as { id: string; versionId: string };
-      const idResult = requireNonEmptyString(id, 'id');
+      const idResult = requirePathSegment(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
-      const versionIdResult = requireNonEmptyString(versionId, 'versionId');
+      const versionIdResult = requirePathSegment(versionId, 'versionId');
       if (!versionIdResult.ok) return badRequest(reply, versionIdResult.message);
 
       const version = await offerVersionsRepo.findById(idResult.value, versionIdResult.value);
@@ -1934,9 +2047,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id, versionId } = request.params as { id: string; versionId: string };
-      const idResult = requireNonEmptyString(id, 'id');
+      const idResult = requirePathSegment(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
-      const versionIdResult = requireNonEmptyString(versionId, 'versionId');
+      const versionIdResult = requirePathSegment(versionId, 'versionId');
       if (!versionIdResult.ok) return badRequest(reply, versionIdResult.message);
 
       type RestoreOutcome =
@@ -2069,6 +2182,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         const offer = await clientOffersRepo.restoreSnapshotOffer(
           idResult.value,
           {
+            ...(Object.hasOwn(version.snapshot.offer, 'description')
+              ? { description: version.snapshot.offer.description ?? null }
+              : {}),
             clientId: version.snapshot.offer.clientId,
             clientName: version.snapshot.offer.clientName,
             paymentTerms: version.snapshot.offer.paymentTerms ?? 'immediate',

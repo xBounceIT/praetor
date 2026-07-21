@@ -60,6 +60,7 @@ import type {
 } from '../../types';
 import { LEGACY_PROJECT_STATUS, PROJECT_TIPOS } from '../../types';
 import { formatInsertDate } from '../../utils/date';
+import { formatDocumentCode } from '../../utils/document-code';
 import { formatNumber } from '../../utils/numbers';
 import { hasPermission, hasScopedActionPermission } from '../../utils/permissions';
 import DateField from '../shared/DateField';
@@ -851,12 +852,18 @@ const useProjectDetailController = ({
   for (const o of offers) {
     if (o.status !== 'sent' && o.status !== 'accepted') continue;
     if (clientId && o.clientId !== clientId) continue;
-    offerOptions.push({ id: o.id, name: `${o.clientName} - ${o.id}` });
+    offerOptions.push({
+      id: o.id,
+      name: `${o.clientName} - ${formatDocumentCode(o.id, o.revisionCode)}`,
+    });
   }
   if (offerId && !offerOptions.some((o) => o.id === offerId)) {
     const fallback = offers.find((o) => o.id === offerId);
     if (fallback) {
-      offerOptions.unshift({ id: fallback.id, name: `${fallback.clientName} - ${fallback.id}` });
+      offerOptions.unshift({
+        id: fallback.id,
+        name: `${fallback.clientName} - ${formatDocumentCode(fallback.id, fallback.revisionCode)}`,
+      });
     }
   }
 

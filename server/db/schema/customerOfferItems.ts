@@ -36,7 +36,8 @@ export const customerOfferItems = pgTable(
     supplierQuoteId: varchar('supplier_quote_id', { length: 100 }),
     supplierQuoteItemId: varchar('supplier_quote_item_id', { length: 50 }),
     supplierQuoteSupplierName: varchar('supplier_quote_supplier_name', { length: 255 }),
-    supplierQuoteUnitPrice: numeric('supplier_quote_unit_price', { precision: 15, scale: 2 }),
+    // Supplier-derived costs retain fractional cents so quantity/duration round only at total.
+    supplierQuoteUnitPrice: numeric('supplier_quote_unit_price', { precision: 19, scale: 6 }),
     // Canonical whole months retained for API/data compatibility; defaults to a one-off item.
     durationMonths: integer('duration_months').notNull().default(1),
     // Unit shown beside the duration: pricing uses that displayed value and 'na' is neutral.

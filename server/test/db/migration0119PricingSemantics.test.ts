@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
 const migrationSql = await Bun.file(
-  new URL('../../db/migrations/0116_preserve_historical_pricing_semantics.sql', import.meta.url),
+  new URL('../../db/migrations/0119_preserve_historical_pricing_semantics.sql', import.meta.url),
 ).text();
 const journal = (await Bun.file(
   new URL('../../db/migrations/meta/_journal.json', import.meta.url),
@@ -17,7 +17,7 @@ const itemTables = [
   'supplier_sale_items',
 ];
 
-describe('migration 0116 historical pricing semantics', () => {
+describe('migration 0119 historical pricing semantics', () => {
   test('marks existing lines and previous-version writers with legacy semantics', () => {
     for (const table of itemTables) expect(migrationSql).toContain(`'${table}'`);
     expect(migrationSql).toContain(
@@ -42,13 +42,13 @@ describe('migration 0116 historical pricing semantics', () => {
     expect(migrationSql).not.toContain('VALIDATE CONSTRAINT');
   });
 
-  test('is registered after migration 0115', () => {
+  test('is registered after migration 0118', () => {
     const migrationIndex = journal.entries.findIndex(
-      ({ tag }) => tag === '0116_preserve_historical_pricing_semantics',
+      ({ tag }) => tag === '0119_preserve_historical_pricing_semantics',
     );
-    expect(journal.entries[migrationIndex - 1]).toEqual(expect.objectContaining({ idx: 115 }));
+    expect(journal.entries[migrationIndex - 1]).toEqual(expect.objectContaining({ idx: 118 }));
     expect(journal.entries[migrationIndex]).toEqual(
-      expect.objectContaining({ idx: 116, tag: '0116_preserve_historical_pricing_semantics' }),
+      expect.objectContaining({ idx: 119, tag: '0119_preserve_historical_pricing_semantics' }),
     );
   });
 });

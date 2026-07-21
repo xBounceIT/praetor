@@ -62,6 +62,7 @@ type PredicateBuilder = {
 type VerificationStep = {
   table: string;
   countColumn?: string;
+  requiredNonEmptyColumn?: string;
   ids: readonly string[];
   userIds?: readonly string[];
   pricingSemanticsVersion?: 1 | 2;
@@ -1189,7 +1190,18 @@ const buildVerificationSteps = (
   },
   { table: 'suppliers', ids: demoIds.suppliers, expected: DEMO_EXPECTED_COUNTS.suppliers },
   { table: 'products', ids: demoIds.products, expected: DEMO_EXPECTED_COUNTS.products },
-  { table: 'quotes', ids: demoIds.quotes, expected: DEMO_EXPECTED_COUNTS.quotes },
+  {
+    table: 'quotes',
+    requiredNonEmptyColumn: 'description',
+    ids: demoIds.quotes,
+    expected: DEMO_EXPECTED_COUNTS.quotes,
+  },
+  {
+    table: 'quote_revisions',
+    countColumn: 'quote_id',
+    ids: demoIds.quotes,
+    expected: DEMO_EXPECTED_COUNTS.quote_revisions,
+  },
   {
     table: 'quote_candidates',
     ids: demoIds.quotes,
@@ -1203,8 +1215,15 @@ const buildVerificationSteps = (
   },
   {
     table: 'customer_offers',
+    requiredNonEmptyColumn: 'description',
     ids: demoIds.customerOffers,
     expected: DEMO_EXPECTED_COUNTS.customer_offers,
+  },
+  {
+    table: 'offer_revisions',
+    countColumn: 'offer_id',
+    ids: demoIds.customerOffers,
+    expected: DEMO_EXPECTED_COUNTS.offer_revisions,
   },
   {
     table: 'customer_offer_items',
@@ -1212,7 +1231,12 @@ const buildVerificationSteps = (
     pricingSemanticsVersion: DEMO_PRICING_SEMANTICS_VERSION,
     expected: DEMO_EXPECTED_COUNTS.customer_offer_items,
   },
-  { table: 'sales', ids: demoIds.sales, expected: DEMO_EXPECTED_COUNTS.sales },
+  {
+    table: 'sales',
+    requiredNonEmptyColumn: 'description',
+    ids: demoIds.sales,
+    expected: DEMO_EXPECTED_COUNTS.sales,
+  },
   {
     table: 'sale_items',
     ids: DEMO_ITEM_IDS.saleItems,
@@ -1228,8 +1252,15 @@ const buildVerificationSteps = (
   },
   {
     table: 'supplier_quotes',
+    requiredNonEmptyColumn: 'description',
     ids: demoIds.supplierQuotes,
     expected: DEMO_EXPECTED_COUNTS.supplier_quotes,
+  },
+  {
+    table: 'supplier_quote_revisions',
+    countColumn: 'quote_id',
+    ids: demoIds.supplierQuotes,
+    expected: DEMO_EXPECTED_COUNTS.supplier_quote_revisions,
   },
   {
     table: 'supplier_quote_items',
@@ -1325,9 +1356,12 @@ const verifyDemoDataset = async (client: PoolClient, seedYear: number) => {
       step.pricingSemanticsVersion === undefined
         ? ''
         : ` AND pricing_semantics_version = ${step.pricingSemanticsVersion}`;
+    const requiredValueFilter = step.requiredNonEmptyColumn
+      ? ` AND NULLIF(BTRIM(${step.requiredNonEmptyColumn}), '') IS NOT NULL`
+      : '';
     const params = step.userIds ? [step.ids, step.userIds] : [step.ids];
     const result = await client.query(
-      `SELECT COUNT(*)::int AS count FROM ${step.table} WHERE ${countColumn} = ANY($1::text[])${userFilter}${pricingSemanticsFilter}`,
+      `SELECT COUNT(*)::int AS count FROM ${step.table} WHERE ${countColumn} = ANY($1::text[])${userFilter}${requiredValueFilter}${pricingSemanticsFilter}`,
       params,
     );
     const actual = Number(result.rows[0]?.count ?? 0);

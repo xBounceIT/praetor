@@ -3,6 +3,7 @@ import {
   check,
   date,
   index,
+  integer,
   numeric,
   pgTable,
   text,
@@ -45,6 +46,9 @@ export const customerOffers = pgTable(
       () => quoteCandidates.id,
       { onDelete: 'restrict', onUpdate: 'cascade' },
     ),
+    revisionNumber: integer('revision_number').notNull().default(0),
+    revisionCode: varchar('revision_code', { length: 50 }),
+    description: text('description'),
   },
   (table) => [
     uniqueIndex('idx_customer_offers_linked_quote_id').on(table.linkedQuoteId),
@@ -61,6 +65,10 @@ export const customerOffers = pgTable(
     check(
       'chk_customer_offers_discount_type',
       sql`${table.discountType} IN ('percentage', 'currency')`,
+    ),
+    check(
+      'chk_customer_offers_revision',
+      sql`(${table.revisionNumber} = 0 AND ${table.revisionCode} IS NULL) OR (${table.revisionNumber} > 0 AND ${table.revisionCode} IS NOT NULL)`,
     ),
   ],
 );

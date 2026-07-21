@@ -10,6 +10,7 @@
     "mol": "Percentuale margine e oneri",
     "notes": "Note aggiuntive per l'intero documento",
     "clientInformation": "Dettagli cliente e documento",
+    "variants": "Configura alternative dello stesso preventivo: ogni variante mantiene voci, prezzi, sconti e condizioni proprie.",
     "productsServices": "Prodotti e servizi per questo preventivo",
     "items": "Voci per questa offerta",
     "supplierInformation": "Dettagli fornitore e documento",
@@ -52,7 +53,9 @@
     "subtitle": "Crea e gestisci preventivi clienti",
     "addQuote": "Crea Preventivo",
     "editQuote": "Modifica Preventivo",
+    "duplicateQuote": "Duplica",
     "quoteDetails": "Dettagli Preventivo",
+    "description": "Descrizione",
     "client": "Cliente",
     "items": "Articoli",
     "addItem": "Aggiungi Articolo",
@@ -250,6 +253,18 @@
       "reasonUpdate": "Salvataggio",
       "reasonRestore": "Ripristino",
       "loadFailed": "Caricamento della cronologia non riuscito."
+    },
+    "revisionHistory": {
+      "title": "Revisioni",
+      "previewBanner": "Anteprima di {{code}} del {{date}}",
+      "empty": "Nessuna revisione inviata.",
+      "snapshot": "Snapshot inviato",
+      "backToCurrent": "Torna allo stato corrente",
+      "restoreButton": "Ripristina revisione",
+      "restoreConfirmTitle": "Ripristinare questa revisione?",
+      "restoreConfirmDescription": "Il contenuto verrà ripristinato in bozza. Il numero massimo di revisione già assegnato rimarrà riservato.",
+      "loadFailed": "Caricamento delle revisioni non riuscito.",
+      "restoreFailed": "Ripristino della revisione non riuscito."
     }
   },
   "clientOffers": {
@@ -281,6 +296,7 @@
     "offerColumn": "Offerta",
     "offerCodeColumn": "Codice offerta",
     "offerCodeRequired": "Il codice offerta è obbligatorio",
+    "description": "Descrizione",
     "paymentTerms": "Termini di pagamento",
     "paymentTermsColumn": "Termini di Pagamento",
     "deliveryDateColumn": "Data Invio",
@@ -344,6 +360,18 @@
       "reasonUpdate": "Salvataggio",
       "reasonRestore": "Ripristino",
       "loadFailed": "Caricamento della cronologia non riuscito."
+    },
+    "revisionHistory": {
+      "title": "Revisioni",
+      "previewBanner": "Anteprima di {{code}} del {{date}}",
+      "empty": "Nessuna revisione inviata.",
+      "snapshot": "Snapshot inviato",
+      "backToCurrent": "Torna allo stato corrente",
+      "restoreButton": "Ripristina revisione",
+      "restoreConfirmTitle": "Ripristinare questa revisione?",
+      "restoreConfirmDescription": "Il contenuto verrà ripristinato in bozza. Il numero massimo di revisione già assegnato rimarrà riservato.",
+      "loadFailed": "Caricamento delle revisioni non riuscito.",
+      "restoreFailed": "Ripristino della revisione non riuscito."
     }
   },
   "supplierQuotes": {
@@ -351,6 +379,7 @@
     "subtitle": "Preventivi convertibili in ordini fornitore.",
     "activeQuotes": "Preventivi Attivi",
     "editQuote": "Preventivo Fornitore",
+    "duplicateQuote": "Duplica",
     "newQuote": "Nuovo Preventivo Fornitore",
     "addQuote": "Aggiungi preventivo",
     "viewQuote": "Vedi preventivo",
@@ -368,6 +397,7 @@
     "client": "Cliente",
     "selectClient": "Seleziona cliente",
     "quoteCode": "Codice Preventivo",
+    "description": "Descrizione",
     "autoCodePlaceholder": "Generato automaticamente",
     "autoCodeDescription": "Lascia vuoto per usare il template dei codici documento.",
     "autoCodePreviewDescription": "Lascia vuoto per generare {{preview}} dal template dei codici documento.",
@@ -434,6 +464,18 @@
       "reasonUpdate": "Salvataggio",
       "reasonRestore": "Ripristino",
       "loadFailed": "Caricamento della cronologia non riuscito."
+    },
+    "revisionHistory": {
+      "title": "Revisioni",
+      "previewBanner": "Anteprima di {{code}} del {{date}}",
+      "empty": "Nessuna revisione inviata.",
+      "snapshot": "Snapshot inviato",
+      "backToCurrent": "Torna allo stato corrente",
+      "restoreButton": "Ripristina revisione",
+      "restoreConfirmTitle": "Ripristinare questa revisione?",
+      "restoreConfirmDescription": "Il contenuto verrà ripristinato in bozza. Il numero massimo di revisione già assegnato rimarrà riservato.",
+      "loadFailed": "Caricamento delle revisioni non riuscito.",
+      "restoreFailed": "Ripristino della revisione non riuscito."
     },
     "attachments": {
       "title": "Allegati",

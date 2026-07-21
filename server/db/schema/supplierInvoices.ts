@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm';
 import {
+  boolean,
   check,
   date,
   index,
@@ -69,6 +70,10 @@ export const supplierInvoiceItems = pgTable(
     quantity: numeric('quantity', { precision: 10, scale: 2 }).notNull().default('1'),
     unitPrice: numeric('unit_price', { precision: 15, scale: 2 }).notNull().default('0'),
     discount: numeric('discount', { precision: 5, scale: 2 }).default('0'),
+    // Preserves pre-precision unit rounding for historical and compatibility-window writers.
+    // Current writers always persist false explicitly for newly authored precise lines; the
+    // legacy-safe database default can return to false after old app instances are retired.
+    legacyDiscountRounding: boolean('legacy_discount_rounding').notNull().default(true),
     // Canonical duration in months, carried over from the supplier order for API/data compatibility.
     durationMonths: integer('duration_months').notNull().default(1),
     // Display unit for `durationMonths`: pricing uses its displayed numeric value; 'na' is neutral.

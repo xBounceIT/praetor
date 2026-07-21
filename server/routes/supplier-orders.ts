@@ -25,6 +25,10 @@ import { inheritPricingSemanticsVersions } from '../utils/pricing-semantics.ts';
 import { effectiveSupplierQuoteStatusFromDate } from '../utils/quote-status.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { replyError } from '../utils/replyError.ts';
+import {
+  legacyDiscountRoundingForWrite,
+  preserveLegacyDiscountRounding,
+} from '../utils/supplier-discount-rounding.ts';
 import { normalizeUnitType, type UnitType } from '../utils/unit-type.ts';
 import {
   badRequest,
@@ -61,6 +65,7 @@ const itemSchema = {
     unitPrice: { type: 'number' },
     note: { type: ['string', 'null'] },
     discount: { type: 'number' },
+    legacyDiscountRounding: { type: 'boolean' },
     durationMonths: {
       type: 'number',
       description:
@@ -86,6 +91,7 @@ const orderSchema = {
   properties: {
     id: { type: 'string' },
     linkedQuoteId: { type: ['string', 'null'] },
+    linkedQuoteRevisionCode: { type: ['string', 'null'] },
     supplierId: { type: 'string' },
     supplierName: { type: 'string' },
     paymentTerms: { type: ['string', 'null'] },
@@ -114,12 +120,14 @@ const orderSchema = {
 const itemBodySchema = {
   type: 'object',
   properties: {
+    id: { type: 'string' },
     productId: { type: 'string' },
     productName: { type: 'string' },
     quantity: { type: 'number' },
     unitType: { type: 'string', enum: ['hours', 'days', 'unit'] },
     unitPrice: { type: 'number' },
     discount: { type: 'number', minimum: 0, maximum: 100 },
+    legacyDiscountRounding: { type: 'boolean' },
     note: { type: 'string' },
     durationMonths: {
       type: 'number',
@@ -177,6 +185,7 @@ type SupplierOrderItemInput = {
   unitType?: UnitType;
   unitPrice?: string | number;
   discount?: string | number;
+  legacyDiscountRounding?: boolean;
   note?: string;
   durationMonths?: string | number;
   durationUnit?: DurationUnit;
@@ -236,6 +245,10 @@ const normalizeItems = (
       unitType,
       unitPrice: unitPriceResult.value,
       discount: discountResult.value || 0,
+      legacyDiscountRounding: legacyDiscountRoundingForWrite(
+        item.legacyDiscountRounding,
+        discountResult.value || 0,
+      ),
       note: item.note || null,
       durationMonths:
         durationMonthsResult.value ?? defaultDurationMonthsForUnit(durationUnitResult.value),
@@ -244,6 +257,21 @@ const normalizeItems = (
   }
   return normalizedItems;
 };
+
+// Snapshots written by a pre-precision server during a rolling deployment lack the additive
+// marker. Normalize them on every read so a version preview uses the same rounding as restore.
+const normalizeVersionSnapshot = (
+  snapshot: supplierOrderVersionsRepo.SupplierOrderVersionSnapshot,
+): supplierOrderVersionsRepo.SupplierOrderVersionSnapshot => ({
+  ...snapshot,
+  items: snapshot.items.map((item) => ({
+    ...item,
+    legacyDiscountRounding: legacyDiscountRoundingForWrite(
+      item.legacyDiscountRounding,
+      item.discount ?? 0,
+    ),
+  })),
+});
 
 export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.addHook('onRequest', authenticateToken);
@@ -265,6 +293,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       },
       tx,
     );
+    return pre;
   };
 
   const findMissingSnapshotReference = async (
@@ -753,11 +782,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       let normalizedItems: supplierOrdersRepo.NewSupplierOrderItem[] | null = null;
       let sourceItemIds: Array<string | undefined> | null = null;
+      let itemInputs: SupplierOrderItemInput[] | null = null;
       if (items !== undefined) {
         if (!Array.isArray(items) || items.length === 0) {
           return badRequest(reply, 'Items must be a non-empty array');
         }
-        normalizedItems = normalizeItems(items, reply);
+        itemInputs = items;
+        normalizedItems = normalizeItems(itemInputs, reply);
         if (!normalizedItems) return;
         sourceItemIds = items.map((item) => item.id);
       }
@@ -768,9 +799,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       let resultItems: supplierOrdersRepo.SupplierOrderItem[];
       try {
         const txResult = await withDbTransaction(async (tx) => {
-          if (shouldSnapshot) {
-            await snapshotPreState(idResult.value, 'update', request, tx);
-          }
+          const preState = shouldSnapshot
+            ? await snapshotPreState(idResult.value, 'update', request, tx)
+            : null;
           let renamedOrder: supplierOrdersRepo.SupplierOrder | null = null;
           if (nextIdValue && nextIdValue !== idResult.value) {
             renamedOrder = await supplierOrdersRepo.rename(idResult.value, nextIdValue, tx);
@@ -797,8 +828,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
               pricingSemanticsVersion: sourceMarkers[index].pricingSemanticsVersion,
             }));
           }
-          const finalItems = versionedItems
-            ? await supplierOrdersRepo.replaceItems(order.id, versionedItems, tx)
+          const replacementItems =
+            versionedItems && itemInputs && preState
+              ? preserveLegacyDiscountRounding(versionedItems, itemInputs, preState.items)
+              : versionedItems;
+          const finalItems = replacementItems
+            ? await supplierOrdersRepo.replaceItems(order.id, replacementItems, tx)
             : await supplierOrdersRepo.findItemsForOrder(order.id, tx);
           return { order, items: finalItems };
         });
@@ -960,7 +995,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           details: { secondaryLabel: versionIdResult.value },
         });
       }
-      return version;
+      return { ...version, snapshot: normalizeVersionSnapshot(version.snapshot) };
     },
   );
 
@@ -1051,9 +1086,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             secondaryLabel: versionIdResult.value,
           };
         }
+        const snapshot = normalizeVersionSnapshot(version.snapshot);
         const snapshotDiscountResult = optionalLocalizedDocumentDiscount(
-          version.snapshot.order.discount,
-          version.snapshot.order.discountType,
+          snapshot.order.discount,
+          snapshot.order.discountType,
           'discount',
         );
         if (!snapshotDiscountResult.ok) {
@@ -1065,7 +1101,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
             secondaryLabel: 'snapshot_discount_invalid',
           };
         }
-        const missingSnapshotReference = await findMissingSnapshotReference(version.snapshot, tx);
+        const missingSnapshotReference = await findMissingSnapshotReference(snapshot, tx);
         if (missingSnapshotReference) {
           return {
             ok: false,
@@ -1076,7 +1112,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           };
         }
 
-        const snapshotItems: supplierOrdersRepo.NewSupplierOrderItem[] = version.snapshot.items.map(
+        const snapshotItems: supplierOrdersRepo.NewSupplierOrderItem[] = snapshot.items.map(
           ({ orderId: _o, ...rest }) => ({
             ...rest,
             id: generatePrefixedId(ITEM_ID_PREFIXES.supplierItem),
@@ -1096,13 +1132,13 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         const order = await supplierOrdersRepo.restoreSnapshotOrder(
           idResult.value,
           {
-            supplierId: version.snapshot.order.supplierId,
-            supplierName: version.snapshot.order.supplierName,
-            paymentTerms: version.snapshot.order.paymentTerms,
-            discount: version.snapshot.order.discount,
-            discountType: version.snapshot.order.discountType,
-            status: version.snapshot.order.status,
-            notes: version.snapshot.order.notes,
+            supplierId: snapshot.order.supplierId,
+            supplierName: snapshot.order.supplierName,
+            paymentTerms: snapshot.order.paymentTerms,
+            discount: snapshot.order.discount,
+            discountType: snapshot.order.discountType,
+            status: snapshot.order.status,
+            notes: snapshot.order.notes,
           },
           tx,
         );

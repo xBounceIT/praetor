@@ -10,6 +10,7 @@
     "mol": "Margin overhead loading percentage",
     "notes": "Additional notes for the entire document",
     "clientInformation": "Client and document details",
+    "variants": "Configure alternatives for the same quote: each variant keeps its own items, prices, discounts, and terms.",
     "productsServices": "Products and services for this quote",
     "items": "Line items for this offer",
     "supplierInformation": "Supplier and document details",
@@ -52,7 +53,9 @@
     "subtitle": "Create and manage client quotes",
     "addQuote": "Create Quote",
     "editQuote": "Edit Quote",
+    "duplicateQuote": "Duplicate",
     "quoteDetails": "Quote Details",
+    "description": "Description",
     "client": "Client",
     "items": "Items",
     "addItem": "Add Item",
@@ -250,6 +253,18 @@
       "reasonUpdate": "Save",
       "reasonRestore": "Restored",
       "loadFailed": "Failed to load version history."
+    },
+    "revisionHistory": {
+      "title": "Revisions",
+      "previewBanner": "Previewing {{code}} from {{date}}",
+      "empty": "No sent revisions yet.",
+      "snapshot": "Sent snapshot",
+      "backToCurrent": "Back to current state",
+      "restoreButton": "Restore revision",
+      "restoreConfirmTitle": "Restore this revision?",
+      "restoreConfirmDescription": "The content will be restored as a draft. The highest revision number already assigned will remain reserved.",
+      "loadFailed": "Failed to load revisions.",
+      "restoreFailed": "Failed to restore the revision."
     }
   },
   "clientOffers": {
@@ -281,6 +296,7 @@
     "offerColumn": "Offer",
     "offerCodeColumn": "Offer Code",
     "offerCodeRequired": "Offer code is required",
+    "description": "Description",
     "paymentTerms": "Payment terms",
     "paymentTermsColumn": "Payment Terms",
     "deliveryDateColumn": "Delivery Date",
@@ -344,6 +360,18 @@
       "reasonUpdate": "Save",
       "reasonRestore": "Restored",
       "loadFailed": "Failed to load version history."
+    },
+    "revisionHistory": {
+      "title": "Revisions",
+      "previewBanner": "Previewing {{code}} from {{date}}",
+      "empty": "No sent revisions yet.",
+      "snapshot": "Sent snapshot",
+      "backToCurrent": "Back to current state",
+      "restoreButton": "Restore revision",
+      "restoreConfirmTitle": "Restore this revision?",
+      "restoreConfirmDescription": "The content will be restored as a draft. The highest revision number already assigned will remain reserved.",
+      "loadFailed": "Failed to load revisions.",
+      "restoreFailed": "Failed to restore the revision."
     }
   },
   "supplierQuotes": {
@@ -351,6 +379,7 @@
     "subtitle": "Quotes that can be converted into supplier orders.",
     "activeQuotes": "Active Quotes",
     "editQuote": "Supplier Quote",
+    "duplicateQuote": "Duplicate",
     "newQuote": "New Supplier Quote",
     "addQuote": "Add quote",
     "viewQuote": "View quote",
@@ -368,6 +397,7 @@
     "client": "Customer",
     "selectClient": "Select a customer",
     "quoteCode": "Quote Code",
+    "description": "Description",
     "autoCodePlaceholder": "Auto-generated",
     "autoCodeDescription": "Leave blank to use the document code template.",
     "autoCodePreviewDescription": "Leave blank to generate {{preview}} from the document code template.",
@@ -434,6 +464,18 @@
       "reasonUpdate": "Save",
       "reasonRestore": "Restored",
       "loadFailed": "Failed to load version history."
+    },
+    "revisionHistory": {
+      "title": "Revisions",
+      "previewBanner": "Previewing {{code}} from {{date}}",
+      "empty": "No sent revisions yet.",
+      "snapshot": "Sent snapshot",
+      "backToCurrent": "Back to current state",
+      "restoreButton": "Restore revision",
+      "restoreConfirmTitle": "Restore this revision?",
+      "restoreConfirmDescription": "The content will be restored as a draft. The highest revision number already assigned will remain reserved.",
+      "loadFailed": "Failed to load revisions.",
+      "restoreFailed": "Failed to restore the revision."
     },
     "attachments": {
       "title": "Attachments",

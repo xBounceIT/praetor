@@ -51,10 +51,17 @@ const mapVersion = (row: typeof supplierQuoteVersions.$inferSelect): SupplierQuo
 // supplier_sales.linked_quote_id is not touched. This is here for completeness / audit / data
 // portability. Older snapshots from before this change may not have the field at all.
 export const buildSnapshot = (
-  quote: SupplierQuote,
+  quote: Omit<SupplierQuote, 'revisionNumber' | 'revisionCode' | 'linkedClientQuoteRevisionCode'>,
   items: SupplierQuoteItem[],
 ): SupplierQuoteVersionSnapshot => {
-  return { schemaVersion: 1, quote, items };
+  // Omit is compile-time only; strip the live revision values before serializing the snapshot.
+  const {
+    revisionNumber: _revisionNumber,
+    revisionCode: _revisionCode,
+    linkedClientQuoteRevisionCode: _linkedClientQuoteRevisionCode,
+    ...snapshotQuote
+  } = quote as SupplierQuote;
+  return { schemaVersion: 1, quote: snapshotQuote, items };
 };
 
 export const listForQuote = async (

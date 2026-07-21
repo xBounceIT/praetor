@@ -572,6 +572,37 @@ describe('POST /api/accounting/supplier-orders', () => {
       expect.anything(),
     );
   });
+
+  test('201 treats omitted discounted markers as legacy while honoring explicit precise writes', async () => {
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/accounting/supplier-orders',
+      headers: authHeader(),
+      payload: {
+        ...validBody,
+        items: [
+          { productName: 'Legacy', quantity: 150, unitPrice: 37.75, discount: 15 },
+          {
+            productName: 'Precise',
+            quantity: 150,
+            unitPrice: 37.75,
+            discount: 15,
+            legacyDiscountRounding: false,
+          },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(soInsertItemsMock).toHaveBeenCalledWith(
+      'SORD-2999-0001',
+      [
+        expect.objectContaining({ legacyDiscountRounding: true }),
+        expect.objectContaining({ legacyDiscountRounding: false }),
+      ],
+      expect.anything(),
+    );
+  });
 });
 
 describe('GET /api/accounting/supplier-orders/:id/versions', () => {
@@ -630,6 +661,35 @@ describe('GET /api/accounting/supplier-orders/:id/versions/:versionId', () => {
     expect(body.id).toBe('sov-1');
     expect(body.snapshot.order.id).toBe('so-1');
     expect(sovFindByIdMock).toHaveBeenCalledWith('so-1', 'sov-1');
+  });
+
+  test('200 defaults missing legacy rounding markers in a discounted snapshot', async () => {
+    sovFindByIdMock.mockResolvedValue({
+      ...SAMPLE_VERSION,
+      snapshot: {
+        ...SAMPLE_SNAPSHOT,
+        items: [
+          { ...SAMPLE_ITEM, quantity: 150, unitPrice: 37.75, discount: 15 },
+          {
+            ...SAMPLE_ITEM,
+            id: 'ssi-precise',
+            discount: 15,
+            legacyDiscountRounding: false,
+          },
+        ],
+      },
+    });
+
+    const res = await testApp.inject({
+      method: 'GET',
+      url: '/api/accounting/supplier-orders/so-1/versions/sov-1',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body.snapshot.items[0].legacyDiscountRounding).toBe(true);
+    expect(body.snapshot.items[1].legacyDiscountRounding).toBe(false);
   });
 
   test('404 when version not found (also covers cross-order ids)', async () => {
@@ -743,14 +803,22 @@ describe('POST /api/accounting/supplier-orders/:id/versions/:versionId/restore',
       ...SAMPLE_ITEM,
       id: 'ssi-dur',
       unitType: 'days' as const,
+      legacyDiscountRounding: true,
       durationMonths: 24,
       durationUnit: 'years' as const,
     };
     const { unitType: _legacyUnitType, ...legacyItemBase } = SAMPLE_ITEM;
     const legacyItem = { ...legacyItemBase, id: 'ssi-legacy' };
+    const legacyDiscountItem = {
+      ...SAMPLE_ITEM,
+      id: 'ssi-legacy-discount',
+      quantity: 150,
+      unitPrice: 37.75,
+      discount: 15,
+    };
     sovFindByIdMock.mockResolvedValue({
       ...SAMPLE_VERSION,
-      snapshot: { ...SAMPLE_SNAPSHOT, items: [durationItem, legacyItem] },
+      snapshot: { ...SAMPLE_SNAPSHOT, items: [durationItem, legacyItem, legacyDiscountItem] },
     });
 
     const res = await testApp.inject({
@@ -762,11 +830,17 @@ describe('POST /api/accounting/supplier-orders/:id/versions/:versionId/restore',
     expect(res.statusCode).toBe(200);
     const restoredItems = soReplaceItemsMock.mock.calls[0]?.[1] as Array<Record<string, unknown>>;
     expect(restoredItems[0]).toEqual(
-      expect.objectContaining({ unitType: 'days', durationMonths: 24, durationUnit: 'years' }),
+      expect.objectContaining({
+        unitType: 'days',
+        legacyDiscountRounding: true,
+        durationMonths: 24,
+        durationUnit: 'years',
+      }),
     );
     expect(restoredItems[1]).toEqual(
       expect.objectContaining({ unitType: 'hours', durationMonths: 1, durationUnit: 'months' }),
     );
+    expect(restoredItems[2]).toEqual(expect.objectContaining({ legacyDiscountRounding: true }));
   });
 
   test('409 when linked invoice exists', async () => {
@@ -917,6 +991,36 @@ describe('POST /api/accounting/supplier-orders/:id/versions/:versionId/restore',
 });
 
 describe('PUT /api/accounting/supplier-orders/:id snapshots pre-update state', () => {
+  test('preserves migrated rounding when an older client omits the additive marker', async () => {
+    const legacyItem = { ...SAMPLE_ITEM, legacyDiscountRounding: true };
+    soFindExistingMock.mockResolvedValue(SAMPLE_ORDER);
+    soFindFullForSnapshotMock.mockResolvedValue({ order: SAMPLE_ORDER, items: [legacyItem] });
+    soUpdateMock.mockResolvedValue(SAMPLE_ORDER);
+    soReplaceItemsMock.mockResolvedValue([legacyItem]);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/accounting/supplier-orders/so-1',
+      headers: authHeader(),
+      payload: {
+        items: [
+          {
+            id: SAMPLE_ITEM.id,
+            productName: SAMPLE_ITEM.productName,
+            quantity: 150,
+            unitPrice: 37.75,
+            discount: 15,
+          },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(soReplaceItemsMock.mock.calls[0]?.[1]?.[0]).toEqual(
+      expect.objectContaining({ legacyDiscountRounding: true }),
+    );
+  });
+
   test('PUT with content changes inserts a snapshot inside the transaction', async () => {
     soFindExistingMock.mockResolvedValue({
       id: 'so-1',

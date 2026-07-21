@@ -273,7 +273,7 @@ describe('<SupplierOrdersView /> item pricing columns', () => {
     expect(within(dialog).getAllByText('3.840,00 EUR').length).toBeGreaterThan(0);
   });
 
-  test('rounds unit cost before quantity multiplies the line total', async () => {
+  test('rounds the line total only after quantity multiplies the precise unit cost', async () => {
     renderView([
       {
         ...baseOrder,
@@ -295,7 +295,35 @@ describe('<SupplierOrdersView /> item pricing columns', () => {
     });
 
     expect(screen.getByText('9,01')).toBeInTheDocument();
-    expect(screen.getAllByText('901,00 EUR').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('900,90 EUR').length).toBeGreaterThan(0);
+    expect(screen.queryByText('901,00 EUR')).not.toBeInTheDocument();
+  });
+
+  test('preserves migrated totals while keeping the historical gross price and discount visible', async () => {
+    renderView([
+      {
+        ...baseOrder,
+        items: [
+          {
+            ...baseOrder.items[0],
+            quantity: 150,
+            unitPrice: 37.75,
+            discount: 15,
+            legacyDiscountRounding: true,
+            durationMonths: 1,
+          },
+        ],
+      },
+    ]);
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('dm_ss_01'));
+      await Promise.resolve();
+    });
+
+    expect(screen.getByText('32,09')).toBeInTheDocument();
+    expect(screen.getAllByText('4.813,50 EUR').length).toBeGreaterThan(0);
+    expect(screen.queryByText('4.813,13 EUR')).not.toBeInTheDocument();
   });
 
   test('preserves a replacement product cost in the retained day unit', async () => {
@@ -351,7 +379,12 @@ describe('<SupplierOrdersView /> item pricing columns', () => {
 
     const updates = onUpdateOrder.mock.calls[0]?.[1] as Partial<SupplierSaleOrder>;
     expect(updates.items?.[0]).toEqual(
-      expect.objectContaining({ productId: 'product-2', unitPrice: 100, unitType: 'days' }),
+      expect.objectContaining({
+        productId: 'product-2',
+        unitPrice: 100,
+        unitType: 'days',
+        legacyDiscountRounding: false,
+      }),
     );
   });
 });

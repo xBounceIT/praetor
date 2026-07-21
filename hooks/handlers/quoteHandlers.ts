@@ -45,7 +45,7 @@ export type QuoteHandlersDeps = {
   setClientOfferFilterId: React.Dispatch<React.SetStateAction<string | null>>;
   setActiveView: React.Dispatch<React.SetStateAction<View | '404'>>;
   refreshSupplierQuoteFlow: () => Promise<void>;
-  notifyClientOfferCreated?: (offerId: string) => void;
+  notifyClientOfferCreated?: (offer: Pick<ClientOffer, 'id' | 'revisionCode'>) => void;
   notifyClientOrderCreated?: (orderId: string) => void;
   notifySupplierOrderCreated?: (order: AutoCreatedSupplierOrder) => void;
 };
@@ -155,7 +155,10 @@ export const makeQuoteHandlers = (deps: QuoteHandlersDeps) => {
         previousQuote?.status !== 'offer' &&
         updated.linkedOfferId
       ) {
-        notifyClientOfferCreated?.(updated.linkedOfferId);
+        notifyClientOfferCreated?.({
+          id: updated.linkedOfferId,
+          revisionCode: updated.linkedOfferRevisionCode,
+        });
       }
     } catch (err) {
       console.error('Failed to update quote:', err);
@@ -167,7 +170,10 @@ export const makeQuoteHandlers = (deps: QuoteHandlersDeps) => {
     try {
       const result = await api.quotes.promote(quoteId, candidateId);
       await Promise.all([refreshClientQuoteFlow(), refreshLinkedSupplierQuotes()]);
-      notifyClientOfferCreated?.(result.offer.id);
+      notifyClientOfferCreated?.({
+        id: result.offer.id,
+        revisionCode: result.offer.revisionCode,
+      });
       return result;
     } catch (err) {
       console.error('Failed to promote quote candidate:', err);
@@ -320,7 +326,7 @@ export const makeQuoteHandlers = (deps: QuoteHandlersDeps) => {
         ),
       );
       setActiveView('sales/client-offers');
-      notifyClientOfferCreated?.(offer.id);
+      notifyClientOfferCreated?.({ id: offer.id, revisionCode: offer.revisionCode });
       if (sourcesSupplierQuote(quote)) {
         await refreshLinkedSupplierQuotes();
       }

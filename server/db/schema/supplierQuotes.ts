@@ -24,6 +24,7 @@ export const supplierQuotes = pgTable(
   'supplier_quotes',
   {
     id: varchar('id', { length: 100 }).primaryKey(),
+    description: text('description'),
     // RESTRICT (not CASCADE): deleting a supplier must not silently destroy supplier quotes
     // (financial documents). Callers must remove quotes explicitly before deleting the supplier.
     supplierId: varchar('supplier_id', { length: 50 })
@@ -50,6 +51,8 @@ export const supplierQuotes = pgTable(
     notes: text('notes'),
     createdAt: timestamp('created_at').default(sql`CURRENT_TIMESTAMP`),
     updatedAt: timestamp('updated_at').default(sql`CURRENT_TIMESTAMP`),
+    revisionNumber: integer('revision_number').notNull().default(0),
+    revisionCode: varchar('revision_code', { length: 50 }),
   },
   (table) => [
     index('idx_supplier_quotes_supplier_id').on(table.supplierId),
@@ -60,6 +63,10 @@ export const supplierQuotes = pgTable(
     check(
       'supplier_quotes_status_check',
       sql`${table.status} IN ('draft', 'sent', 'offer', 'accepted', 'denied')`,
+    ),
+    check(
+      'chk_supplier_quotes_revision',
+      sql`(${table.revisionNumber} = 0 AND ${table.revisionCode} IS NULL) OR (${table.revisionNumber} > 0 AND ${table.revisionCode} IS NOT NULL)`,
     ),
   ],
 );
@@ -78,9 +85,10 @@ export const supplierQuoteItems = pgTable(
     }),
     productName: varchar('product_name', { length: 255 }).notNull(),
     quantity: numeric('quantity', { precision: 10, scale: 2 }).notNull().default('1'),
-    // `unit_price` is the net unit cost (Costo unitario) = list_price * (1 - discount_percent/100),
-    // kept as the authoritative pricing column so downstream snapshots/orders read it directly.
-    unitPrice: numeric('unit_price', { precision: 15, scale: 2 }).notNull().default('0'),
+    // `unit_price` is the scale-6 net unit cost (Costo unitario). Normal quote edits derive it from
+    // list price and discount; bidirectional client sync preserves an explicit client-authored cost.
+    // Six decimals preserve the complete result of two scale-2 operands until line totals round.
+    unitPrice: numeric('unit_price', { precision: 19, scale: 6 }).notNull().default('0'),
     note: text('note'),
     createdAt: timestamp('created_at').default(sql`CURRENT_TIMESTAMP`),
     unitType: varchar('unit_type', { length: 10 }).default('hours'),

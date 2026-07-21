@@ -37,6 +37,7 @@ const supplierQuotes: SupplierQuote[] = [];
 
 const buildOffer = (overrides: Partial<ClientOffer>): ClientOffer => ({
   id: 'O-base',
+  description: 'Commercial support package',
   linkedQuoteId: '',
   clientId: 'c-1',
   clientName: 'Acme Corp',
@@ -114,11 +115,25 @@ afterEach(() => {
 });
 
 describe('<ClientOffersView /> list', () => {
+  test('exposes an editable free-text description in the create dialog', () => {
+    render(<ClientOffersView {...baseProps} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'sales:clientOffers.addOffer' }));
+    const description = screen.getByRole('textbox', { name: 'sales:clientOffers.description' });
+    fireEvent.change(description, { target: { value: 'Managed service renewal' } });
+
+    expect(description).toHaveValue('Managed service renewal');
+    expect(description).toBeEnabled();
+    expect(description.closest('[data-slot="field"]')).toHaveClass('w-full');
+    expect(description.closest('.grid')).toBeNull();
+  });
+
   test('renders issue 461 offer-list columns in the requested order', () => {
     render(<ClientOffersView {...baseProps} />);
     const headers = screen.getAllByRole('columnheader').map((header) => header.textContent);
-    expect(headers.slice(0, 11)).toEqual([
+    expect(headers.slice(0, 12)).toEqual([
       'sales:clientOffers.offerColumn',
+      'sales:clientOffers.description',
       'sales:clientOffers.deliveryDateColumn',
       'sales:clientOffers.clientColumn',
       'sales:clientOffers.subtotal',
@@ -130,6 +145,7 @@ describe('<ClientOffersView /> list', () => {
       'sales:clientOffers.paymentTermsColumn',
       'sales:clientOffers.statusColumn',
     ]);
+    expect(screen.getAllByText('Commercial support package').length).toBeGreaterThan(0);
   });
 
   test('renders delivery date, MOL, and payment terms in offer rows', () => {
@@ -646,7 +662,9 @@ describe('<ClientOffersView /> supplier-quote item labels', () => {
     );
     fireEvent.click(screen.getByText('O-OLD-SOURCE'));
 
-    expect(screen.getAllByText('Acme Supplies · Widget (60,00)').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('[SQ-OLD] Acme Supplies · Widget (60,00)').length).toBeGreaterThan(
+      0,
+    );
   });
 });
 

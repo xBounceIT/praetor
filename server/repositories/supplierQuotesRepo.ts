@@ -19,9 +19,16 @@ import {
   effectiveSupplierQuoteStatusFromDate,
   isTerminalQuoteStatus,
 } from '../utils/quote-status.ts';
+import {
+  deriveSupplierLinePricing,
+  normalizeSupplierUnitPrice,
+} from '../utils/supplier-quote-pricing.ts';
 
 export type SupplierQuote = {
   id: string;
+  revisionNumber: number;
+  revisionCode: string | null;
+  description: string | null;
   supplierId: string;
   supplierName: string;
   clientId: string | null;
@@ -40,6 +47,7 @@ export type SupplierQuote = {
   // FULLY DERIVED from this chain: the linked quote's status/expiration, and — when an offer was
   // created from that quote — the offer's status/expiration. All fields are null when unlinked.
   linkedClientQuoteId: string | null;
+  linkedClientQuoteRevisionCode: string | null;
   linkedClientQuoteStatus: string | null;
   linkedClientQuoteExpiration: string | null;
   linkedOfferStatus: string | null;
@@ -166,7 +174,7 @@ const chosenClientQuoteId = sql<string | null>`(
 // (findById, lockEffectiveStatusById) keep the scalar subqueries: the 5× cost is negligible for
 // one row, and lockEffectiveStatusById's `FOR UPDATE` must not lock the joined quotes/offers rows.
 const chosenClientQuoteLateral = sql`LATERAL (
-  SELECT cq.id, cq.status, ${effectiveSourcingCandidateExpiration} AS expiration_date
+  SELECT cq.id, cq.revision_code, cq.status, ${effectiveSourcingCandidateExpiration} AS expiration_date
   FROM quotes cq
   LEFT JOIN customer_offers co ON co.linked_quote_id = cq.id
   LEFT JOIN ${sourcingCandidateExpirationLateral} ON true
@@ -180,6 +188,7 @@ const chosenClientQuoteLateral = sql`LATERAL (
 // scalar subqueries' LIMIT 1). ::text so the driver returns 'YYYY-MM-DD' strings, not Date objects.
 const lateralDerivedColumns = {
   linkedClientQuoteId: sql<string | null>`"chosen"."id"`,
+  linkedClientQuoteRevisionCode: sql<string | null>`"chosen"."revision_code"`,
   linkedClientQuoteStatus: sql<string | null>`"chosen"."status"`,
   linkedClientQuoteExpiration: sql<string | null>`"chosen"."expiration_date"::text`,
   linkedOfferStatus: sql<string | null>`"chosen_offer"."status"`,
@@ -189,6 +198,9 @@ const chosenOfferJoin = sql`"customer_offers" "chosen_offer"`;
 const chosenOfferJoinOn = sql`"chosen_offer"."linked_quote_id" = "chosen"."id"`;
 
 const linkedClientQuoteIdSubquery = chosenClientQuoteId;
+const linkedClientQuoteRevisionCodeSubquery = sql<string | null>`(
+  SELECT q.revision_code FROM quotes q WHERE q.id = ${chosenClientQuoteId} LIMIT 1
+)`;
 const linkedClientQuoteStatusSubquery = sql<string | null>`(
   SELECT q.status FROM quotes q WHERE q.id = ${chosenClientQuoteId} LIMIT 1
 )`;
@@ -238,6 +250,7 @@ type QuoteRow = typeof supplierQuotes.$inferSelect & {
   linkedOrderId?: string | null;
   communicationChannelName: string;
   linkedClientQuoteId?: string | null;
+  linkedClientQuoteRevisionCode?: string | null;
   linkedClientQuoteStatus?: string | null;
   linkedClientQuoteExpiration?: string | null;
   linkedOfferStatus?: string | null;
@@ -246,6 +259,9 @@ type QuoteRow = typeof supplierQuotes.$inferSelect & {
 
 const mapQuote = (row: QuoteRow): SupplierQuote => ({
   id: row.id,
+  revisionNumber: row.revisionNumber,
+  revisionCode: row.revisionCode,
+  description: row.description,
   supplierId: row.supplierId,
   supplierName: row.supplierName,
   clientId: row.clientId ?? null,
@@ -260,6 +276,7 @@ const mapQuote = (row: QuoteRow): SupplierQuote => ({
   createdAt: row.createdAt?.getTime() ?? 0,
   updatedAt: row.updatedAt?.getTime() ?? 0,
   linkedClientQuoteId: row.linkedClientQuoteId ?? null,
+  linkedClientQuoteRevisionCode: row.linkedClientQuoteRevisionCode ?? null,
   linkedClientQuoteStatus: row.linkedClientQuoteStatus ?? null,
   linkedClientQuoteExpiration: row.linkedClientQuoteExpiration ?? null,
   linkedOfferStatus: row.linkedOfferStatus ?? null,
@@ -321,6 +338,7 @@ export const findById = async (
       ...getTableColumns(supplierQuotes),
       communicationChannelName: communicationChannelNameSubquery,
       linkedClientQuoteId: linkedClientQuoteIdSubquery,
+      linkedClientQuoteRevisionCode: linkedClientQuoteRevisionCodeSubquery,
       linkedClientQuoteStatus: linkedClientQuoteStatusSubquery,
       linkedClientQuoteExpiration: linkedClientQuoteExpirationSubquery,
       linkedOfferStatus: linkedOfferStatusSubquery,
@@ -398,6 +416,42 @@ export const existsById = async (id: string, exec: DbExecutor = db): Promise<boo
     .from(supplierQuotes)
     .where(eq(supplierQuotes.id, id));
   return rows.length > 0;
+};
+
+// Client-document synchronization (or a duplicate that retains its synced cost) can intentionally
+// make unit_price authoritative even when it differs from the scale-2 list-price/discount formula.
+// Limit the durable marker lookup to the snapshot timestamp so later syncs cannot rewrite the
+// provenance of an older version. Version FKs follow quote-id renames while snapshot.quote.id
+// keeps the former id, providing the aliases needed to find markers written before a rename.
+export const hasClientSyncedCosts = async (
+  quoteId: string,
+  atOrBeforeMs: number,
+  exec: DbExecutor = db,
+): Promise<boolean> => {
+  const rows = await executeRows<{ exists: boolean }>(
+    exec,
+    sql`SELECT EXISTS (
+      SELECT 1
+      FROM audit_logs
+      WHERE (
+          (action = ${'supplier_quote.updated'}
+            AND details ->> 'secondaryLabel' = ${'synced_from_client_line'})
+          OR (action = ${'supplier_quote.created'}
+            AND details ->> 'reason' = ${'client_synced_cost_preserved'})
+        )
+        AND entity_type = ${'supplier_quote'}
+        AND (
+          entity_id = ${quoteId}
+          OR entity_id IN (
+            SELECT snapshot -> 'quote' ->> 'id'
+            FROM supplier_quote_versions
+            WHERE quote_id = ${quoteId}
+          )
+        )
+        AND created_at <= ${new Date(atOrBeforeMs)}
+    ) AS "exists"`,
+  );
+  return rows[0]?.exists === true;
 };
 
 // SELECT ... FOR UPDATE (must be called inside a transaction) that also resolves the linked
@@ -581,6 +635,7 @@ export const findIdConflict = async (
 
 export type NewSupplierQuote = {
   id: string;
+  description?: string | null;
   supplierId: string;
   supplierName: string;
   clientId: string | null;
@@ -600,6 +655,7 @@ export const create = async (
     .insert(supplierQuotes)
     .values({
       id: input.id,
+      description: input.description ?? null,
       supplierId: input.supplierId,
       supplierName: input.supplierName,
       clientId: input.clientId,
@@ -615,6 +671,7 @@ export const create = async (
 };
 
 export type SupplierQuoteUpdate = {
+  description?: string | null;
   supplierId?: string | null;
   supplierName?: string | null;
   // clientId/clientName accept an explicit `null` to clear the customer link. Unlike the
@@ -644,6 +701,8 @@ export const update = async (
   const [row] = await exec
     .update(supplierQuotes)
     .set({
+      description:
+        patch.description === undefined ? sql`${supplierQuotes.description}` : patch.description,
       supplierId: sql`COALESCE(${patch.supplierId ?? null}, ${supplierQuotes.supplierId})`,
       supplierName: sql`COALESCE(${patch.supplierName ?? null}, ${supplierQuotes.supplierName})`,
       // Direct write (not COALESCE) so an explicit null clears the link; `undefined` keeps it.
@@ -677,6 +736,7 @@ export const rename = async (
 };
 
 export type SupplierQuoteRestoreFields = {
+  description?: string | null;
   supplierId: string;
   supplierName: string;
   clientId: string | null;
@@ -693,9 +753,13 @@ export const restoreSnapshotQuote = async (
   snapshot: SupplierQuoteRestoreFields,
   exec: DbExecutor = db,
 ): Promise<SupplierQuote | null> => {
+  const description = Object.hasOwn(snapshot, 'description')
+    ? { description: snapshot.description ?? null }
+    : {};
   const [row] = await exec
     .update(supplierQuotes)
     .set({
+      ...description,
       supplierId: snapshot.supplierId,
       supplierName: snapshot.supplierName,
       clientId: snapshot.clientId,
@@ -873,8 +937,8 @@ export type SupplierItemSyncPatch = {
 };
 
 // Client-driven pricing sync (issue #779, client → supplier direction): writes the new quantity
-// and unit cost, recomputing the list price so the stored "discount to us" stays meaningful
-// (listPrice × (1 − discount/100) = cost). A 100% discount cannot express a non-zero cost, so it
+// and authoritative unit cost, recomputing the scale-2 list price so the stored "discount to us"
+// remains as close as that scale permits. A 100% discount cannot express a non-zero cost, so it
 // resets to 0 with listPrice = cost. Bumps the parent quote's updated_at like any content edit.
 export const syncItemPricing = async (
   quoteId: string,
@@ -888,13 +952,17 @@ export const syncItemPricing = async (
       const listPrice = keepDiscount
         ? patch.unitCost / (1 - patch.discountPercent / 100)
         : patch.unitCost;
+      const pricing = deriveSupplierLinePricing(listPrice, discountPercent);
       return exec
         .update(supplierQuoteItems)
         .set({
           quantity: numericForDb(patch.quantity),
-          unitPrice: numericForDb(patch.unitCost),
-          listPrice: numericForDb(listPrice),
-          discountPercent: numericForDb(discountPercent),
+          // Preserve the client-authored cost at supplier-unit scale. Re-deriving it from a
+          // scale-2 list price could shift it (32.09 / 85% -> 37.75 -> 32.0875) and make the
+          // client snapshot stale immediately after this atomic bidirectional sync.
+          unitPrice: numericForDb(normalizeSupplierUnitPrice(patch.unitCost)),
+          listPrice: numericForDb(pricing.listPrice),
+          discountPercent: numericForDb(pricing.discountPercent),
         })
         .where(eq(supplierQuoteItems.id, patch.itemId));
     }),

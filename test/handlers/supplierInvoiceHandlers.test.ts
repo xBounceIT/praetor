@@ -163,6 +163,7 @@ describe('makeSupplierInvoiceHandlers', () => {
           quantity: 2,
           unitPrice: 100,
           discount: 10,
+          legacyDiscountRounding: true,
         },
         {
           id: 'supplier-order-item-2',
@@ -197,6 +198,7 @@ describe('makeSupplierInvoiceHandlers', () => {
       'supplier-order-item-2',
     ]);
     expect(items[0].discount).toBe(10);
+    expect(items[0].legacyDiscountRounding).toBe(true);
     expect(items[1].discount).toBe(0);
 
     expect(invoices.get()[0].id).toBe('si-new');
@@ -259,7 +261,7 @@ describe('makeSupplierInvoiceHandlers', () => {
     expect(items[1]).toEqual(expect.objectContaining({ durationMonths: 6, durationUnit: 'na' }));
   });
 
-  test('createFromOrder keeps the supplier-order unit-cost rounding in the invoice total', async () => {
+  test('createFromOrder rounds the document total only after applying discount and quantity', async () => {
     apiMocks.supplierInvoicesCreate.mockImplementation((data: unknown) =>
       Promise.resolve({ id: 'si-new', ...(data as object) }),
     );
@@ -278,9 +280,9 @@ describe('makeSupplierInvoiceHandlers', () => {
         {
           productId: 'p1',
           productName: 'Service',
-          quantity: 100,
-          unitPrice: 10.01,
-          discount: 10,
+          quantity: 150,
+          unitPrice: 37.75,
+          discount: 15,
           durationMonths: 1,
           durationUnit: 'months',
         },
@@ -288,8 +290,9 @@ describe('makeSupplierInvoiceHandlers', () => {
     } as never);
 
     const callArg = apiMocks.supplierInvoicesCreate.mock.calls[0][0] as Record<string, unknown>;
-    expect(callArg.subtotal).toBe(901);
-    expect(callArg.total).toBe(901);
+    // 37.75 * 85% * 150 = 4813.125, rounded once at the invoice boundary.
+    expect(callArg.subtotal).toBe(4813.13);
+    expect(callArg.total).toBe(4813.13);
   });
 
   test('createFromOrder defaults paymentTerms to 30 days when missing', async () => {

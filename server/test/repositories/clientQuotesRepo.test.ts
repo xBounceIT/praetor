@@ -11,11 +11,15 @@ beforeEach(() => {
 });
 
 // QUOTE_LIST_PROJECTION column order:
-// id, linkedOfferId (subquery), clientId, clientName, paymentTerms, discount, discountType,
-// status, expirationDate, communicationChannelId, communicationChannelName, notes, createdAt,
-// updatedAt
+// id, revisionNumber, revisionCode, linkedOfferId (subquery), linkedOfferRevisionCode (subquery),
+// clientId, clientName, paymentTerms, discount, discountType, status, expirationDate,
+// communicationChannelId, communicationChannelName, notes, createdAt, updatedAt,
+// linkedSupplierQuoteId, linkedSupplierQuoteExpiration
 const QUOTE_BASE: readonly unknown[] = [
   'cq-1',
+  0,
+  null,
+  null,
   null,
   'c-1',
   'Acme',
@@ -29,6 +33,8 @@ const QUOTE_BASE: readonly unknown[] = [
   null,
   new Date('2026-04-01T00:00:00Z'),
   new Date('2026-04-01T00:01:00Z'),
+  null,
+  null,
 ];
 const quoteRow = (overrides: Record<number, unknown> = {}) => makeRow(QUOTE_BASE, overrides);
 
@@ -64,7 +70,7 @@ const itemRow = (overrides: Record<number, unknown> = {}) => makeRow(ITEM_BASE, 
 
 describe('listAll', () => {
   test('embeds the linkedOfferId correlated subquery and orders DESC', async () => {
-    exec.enqueue({ rows: [quoteRow({ 1: 'co-1' })] });
+    exec.enqueue({ rows: [quoteRow({ 3: 'co-1' })] });
     const result = await clientQuotesRepo.listAll(testDb);
     expect(exec.calls[0].sql.toLowerCase()).toContain('from customer_offers co');
     expect(exec.calls[0].sql.toLowerCase()).toContain('co.linked_quote_id');
@@ -291,6 +297,7 @@ describe('create', () => {
     const result = await clientQuotesRepo.create(
       {
         id: 'cq-1',
+        description: 'Annual support quote',
         clientId: 'c-1',
         clientName: 'Acme',
         paymentTerms: 'net30',
@@ -304,6 +311,7 @@ describe('create', () => {
       testDb,
     );
     expect(exec.calls[0].sql.toLowerCase()).toContain('insert into "quotes"');
+    expect(exec.calls[0].params).toContain('Annual support quote');
     expect(result.id).toBe('cq-1');
     expect(result.discount).toBe(10);
   });
@@ -366,6 +374,7 @@ describe('restoreSnapshotQuote', () => {
     await clientQuotesRepo.restoreSnapshotQuote(
       'cq-1',
       {
+        description: 'Restored quote description',
         clientId: 'c-1',
         clientName: 'Acme',
         paymentTerms: 'net30',
@@ -381,8 +390,32 @@ describe('restoreSnapshotQuote', () => {
     const sql = exec.calls[0].sql.toLowerCase();
     expect(sql).toContain('update "quotes"');
     expect(sql).not.toContain('coalesce');
+    expect(sql.slice(sql.indexOf(' set ') + 5, sql.indexOf(' where '))).toContain('"description"');
+    expect(exec.calls[0].params).toContain('Restored quote description');
     expect(exec.calls[0].params).toContain(null);
     expect(exec.calls[0].params).toContain('cq-1');
+  });
+
+  test('leaves description untouched when a legacy snapshot omits it', async () => {
+    exec.enqueue({ rows: [quoteRow()] });
+    await clientQuotesRepo.restoreSnapshotQuote(
+      'cq-1',
+      {
+        clientId: 'c-1',
+        clientName: 'Acme',
+        paymentTerms: 'net30',
+        discount: 10,
+        discountType: 'percentage',
+        status: 'draft',
+        expirationDate: '2026-06-01',
+        communicationChannelId: 'qcc_email',
+        notes: null,
+      },
+      testDb,
+    );
+    const sql = exec.calls[0].sql.toLowerCase();
+    const setClause = sql.slice(sql.indexOf(' set ') + 5, sql.indexOf(' where '));
+    expect(setClause).not.toContain('"description"');
   });
 
   test('returns null when no row is restored', async () => {

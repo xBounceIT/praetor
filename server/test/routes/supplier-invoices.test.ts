@@ -315,6 +315,56 @@ describe('POST /api/supplier-invoices', () => {
     );
   });
 
+  test('201 treats omitted discounted markers as legacy while honoring explicit precise writes', async () => {
+    createMock.mockResolvedValue(SAMPLE_INVOICE);
+    insertItemsMock.mockResolvedValue([SAMPLE_ITEM]);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/supplier-invoices',
+      headers: authHeader(),
+      payload: {
+        ...validBody,
+        items: [
+          { description: 'Legacy', quantity: 150, unitPrice: 37.75, discount: 15 },
+          {
+            description: 'Precise',
+            quantity: 150,
+            unitPrice: 37.75,
+            discount: 15,
+            legacyDiscountRounding: false,
+          },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(insertItemsMock).toHaveBeenCalledWith(
+      'SINV-2025-0001',
+      [
+        expect.objectContaining({ legacyDiscountRounding: true }),
+        expect.objectContaining({ legacyDiscountRounding: false }),
+      ],
+      expect.anything(),
+    );
+  });
+
+  test('400 rejects a line discount above 100 percent', async () => {
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/supplier-invoices',
+      headers: authHeader(),
+      payload: {
+        ...validBody,
+        items: [{ description: 'Widget', quantity: 1, unitPrice: 100, discount: 100.01 }],
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(createMock).not.toHaveBeenCalled();
+    expect(insertItemsMock).not.toHaveBeenCalled();
+  });
+
   test('201 inherits the automatic invoice code from a parseable linked supplier order id', async () => {
     findOrderItemsMock.mockResolvedValue([{ pricingSemanticsVersion: 1 }]);
     findOrderByIdMock.mockResolvedValue({
@@ -532,6 +582,40 @@ describe('POST /api/supplier-invoices', () => {
     expect(createMock).not.toHaveBeenCalled();
   });
 
+  test('201 compares and persists document amounts at currency precision', async () => {
+    createMock.mockResolvedValue({
+      ...SAMPLE_INVOICE,
+      status: 'paid',
+      subtotal: 4813.13,
+      total: 4813.13,
+      amountPaid: 4813.13,
+    });
+    insertItemsMock.mockResolvedValue([SAMPLE_ITEM]);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/supplier-invoices',
+      headers: authHeader(),
+      payload: {
+        ...validBody,
+        status: 'paid',
+        subtotal: 4813.125,
+        total: 4813.125,
+        amountPaid: 4813.13,
+      },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(createMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        subtotal: 4813.13,
+        total: 4813.13,
+        amountPaid: 4813.13,
+      }),
+      expect.anything(),
+    );
+  });
+
   test('400 paid status requires amountPaid to cover total', async () => {
     const res = await testApp.inject({
       method: 'POST',
@@ -672,6 +756,51 @@ describe('PUT /api/supplier-invoices/:id', () => {
     expect(replaceItemsMock).toHaveBeenCalled();
   });
 
+  test('400 rejects a replacement line discount above 100 percent', async () => {
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/supplier-invoices/SINV-2025-0001',
+      headers: authHeader(),
+      payload: {
+        items: [{ description: 'Widget', quantity: 1, unitPrice: 100, discount: 100.01 }],
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(updateMock).not.toHaveBeenCalled();
+    expect(replaceItemsMock).not.toHaveBeenCalled();
+  });
+
+  test('preserves migrated rounding when an older client omits the additive marker', async () => {
+    const legacyItem = { ...SAMPLE_ITEM, legacyDiscountRounding: true };
+    findExistingMock.mockResolvedValue(existingInvoiceForUpdate());
+    updateMock.mockResolvedValue(SAMPLE_INVOICE);
+    findItemsForInvoiceMock.mockResolvedValue([legacyItem]);
+    replaceItemsMock.mockResolvedValue([legacyItem]);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/supplier-invoices/SINV-2025-0001',
+      headers: authHeader(),
+      payload: {
+        items: [
+          {
+            id: SAMPLE_ITEM.id,
+            description: SAMPLE_ITEM.description,
+            quantity: 150,
+            unitPrice: 37.75,
+            discount: 15,
+          },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(replaceItemsMock.mock.calls[0]?.[1]?.[0]).toEqual(
+      expect.objectContaining({ legacyDiscountRounding: true }),
+    );
+  });
+
   test('200 preserves each retained marker when editing a mixed supplier invoice', async () => {
     findExistingMock.mockResolvedValue(existingInvoiceForUpdate());
     updateMock.mockResolvedValue(SAMPLE_INVOICE);
@@ -788,6 +917,41 @@ describe('PUT /api/supplier-invoices/:id', () => {
     expect(res.statusCode).toBe(400);
     expect(JSON.parse(res.body)).toEqual({ error: 'amountPaid cannot exceed total' });
     expect(updateMock).not.toHaveBeenCalled();
+  });
+
+  test('200 compares and persists updated document amounts at currency precision', async () => {
+    findExistingMock.mockResolvedValue(existingInvoiceForUpdate());
+    updateMock.mockResolvedValue({
+      ...SAMPLE_INVOICE,
+      status: 'paid',
+      subtotal: 4813.13,
+      total: 4813.13,
+      amountPaid: 4813.13,
+    });
+    findItemsForInvoiceMock.mockResolvedValue([SAMPLE_ITEM]);
+
+    const res = await testApp.inject({
+      method: 'PUT',
+      url: '/api/supplier-invoices/SINV-2025-0001',
+      headers: authHeader(),
+      payload: {
+        status: 'paid',
+        subtotal: 4813.125,
+        total: 4813.125,
+        amountPaid: 4813.13,
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(updateMock).toHaveBeenCalledWith(
+      'SINV-2025-0001',
+      expect.objectContaining({
+        subtotal: 4813.13,
+        total: 4813.13,
+        amountPaid: 4813.13,
+      }),
+      expect.anything(),
+    );
   });
 
   test('400 total cannot be lowered below existing amountPaid', async () => {

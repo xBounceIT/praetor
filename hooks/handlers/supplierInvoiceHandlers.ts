@@ -2,7 +2,7 @@ import type React from 'react';
 import api from '../../services/api';
 import type { SupplierInvoice, SupplierSaleOrder, View } from '../../types';
 import { addDaysToDateOnly, getLocalDateString } from '../../utils/date';
-import { getDiscountedLineTotal } from '../../utils/numbers';
+import { getDiscountedDocumentTotal } from '../../utils/numbers';
 import { toastError } from '../../utils/toast';
 
 export type SupplierInvoiceHandlersDeps = {
@@ -48,19 +48,14 @@ export const makeSupplierInvoiceHandlers = (deps: SupplierInvoiceHandlersDeps) =
         quantity: item.quantity,
         unitPrice: item.unitPrice,
         discount: item.discount || 0,
+        legacyDiscountRounding: item.legacyDiscountRounding === true,
         // Carry the order line's duration so the invoice total matches the order (issue #776/#775);
         // pricing uses the displayed numeric value and 'na' lines use the neutral multiplier 1.
         durationMonths: item.durationMonths ?? 1,
         durationUnit: item.durationUnit ?? 'months',
         pricingSemanticsVersion: item.pricingSemanticsVersion,
       }));
-      const totals = items.reduce(
-        (acc, item) => {
-          acc.subtotal += getDiscountedLineTotal(item);
-          return acc;
-        },
-        { subtotal: 0 },
-      );
+      const subtotal = getDiscountedDocumentTotal(items);
       const invoice = await api.supplierInvoices.create({
         linkedSaleId: order.id,
         supplierId: order.supplierId,
@@ -68,8 +63,8 @@ export const makeSupplierInvoiceHandlers = (deps: SupplierInvoiceHandlersDeps) =
         issueDate,
         dueDate,
         status: 'draft',
-        subtotal: totals.subtotal,
-        total: totals.subtotal,
+        subtotal,
+        total: subtotal,
         amountPaid: 0,
         notes: order.notes,
         items,

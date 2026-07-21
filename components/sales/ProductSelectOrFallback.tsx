@@ -14,6 +14,7 @@ interface ProductSelectOrFallbackProps<TItem extends ProductSelectOrFallbackItem
   isReadOnly: boolean;
   ariaLabel: string;
   placeholder: string;
+  preserveUnavailableProductName?: boolean;
   className?: string;
   buttonClassName?: string;
   onProductChange: (index: number, productId: string) => void;
@@ -27,6 +28,7 @@ const ProductSelectOrFallback = <TItem extends ProductSelectOrFallbackItem>({
   isReadOnly,
   ariaLabel,
   placeholder,
+  preserveUnavailableProductName = false,
   className,
   buttonClassName,
   onProductChange,
@@ -43,10 +45,17 @@ const ProductSelectOrFallback = <TItem extends ProductSelectOrFallbackItem>({
     );
   }
 
+  const storedProductName =
+    preserveUnavailableProductName && !options.some((option) => option.id === item.productId)
+      ? item.productName || undefined
+      : undefined;
+
   return (
     <SelectControl
       options={options}
       value={item.productId || ''}
+      displayValue={storedProductName}
+      displayValueIsPlaceholder={Boolean(storedProductName)}
       onChange={(val) => onProductChange(index, val as string)}
       placeholder={placeholder}
       searchable={true}

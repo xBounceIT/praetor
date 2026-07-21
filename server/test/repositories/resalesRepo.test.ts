@@ -24,6 +24,7 @@ const makeItem = (overrides: Partial<SupplierOrderItem>) =>
     unitType: 'unit',
     unitPrice: 0,
     discount: 0,
+    legacyDiscountRounding: false,
     note: null,
     durationMonths: 1,
     durationUnit: 'months',
@@ -53,6 +54,7 @@ const SUPPLIER_ORDER_ITEM_BASE: readonly unknown[] = [
   'unit',
   '9',
   '0',
+  false,
   null,
   new Date('2026-06-12T00:00:00Z'),
   1,
@@ -98,12 +100,26 @@ describe('computeSupplierOrderTotal', () => {
     expect(total).toBe(0);
   });
 
-  test('rounds the discounted unit price before multiplying quantity', () => {
+  test('rounds only after multiplying the precise discounted price by quantity', () => {
     const total = computeSupplierOrderTotal(makeOrder({}), [
       makeItem({ quantity: 100, unitPrice: 10.01, discount: 10 }),
     ]);
 
-    expect(total).toBe(901);
+    expect(total).toBe(900.9);
+  });
+
+  test('keeps migrated supplier-order costs stable without flattening gross price and discount', () => {
+    const item = makeItem({
+      quantity: 150,
+      unitPrice: 37.75,
+      discount: 15,
+      legacyDiscountRounding: true,
+    });
+
+    expect(item).toEqual(
+      expect.objectContaining({ unitPrice: 37.75, discount: 15, legacyDiscountRounding: true }),
+    );
+    expect(computeSupplierOrderTotal(makeOrder({}), [item])).toBe(4813.5);
   });
 });
 

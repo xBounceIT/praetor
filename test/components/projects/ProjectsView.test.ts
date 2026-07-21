@@ -128,11 +128,11 @@ describe('ProjectsView create-form validation', () => {
   });
 
   test('requires a Tipo (Attivo/Passivo/Interna), exposes the selector, and forwards it', async () => {
-    const source = await Bun.file(
-      new URL('../../../components/projects/ProjectsView.tsx', import.meta.url),
-    )
-      .text()
-      .then((value) => value.replaceAll('\r\n', '\n'));
+    const source = (
+      await Bun.file(
+        new URL('../../../components/projects/ProjectsView.tsx', import.meta.url),
+      ).text()
+    ).replace(/\r\n/g, '\n');
     // Mandatory: submit is blocked until a value is chosen.
     expect(source).toContain("if (!tipo) newErrors.tipo = t('projects:projects.tipoRequired')");
     // The create dialog renders the required Tipo selector with a placeholder (starts empty).

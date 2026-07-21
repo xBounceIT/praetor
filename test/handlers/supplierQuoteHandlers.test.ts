@@ -368,11 +368,41 @@ describe('makeSupplierQuoteHandlers', () => {
         unitPrice: 12.5,
         discount: 20,
         unitType: 'days',
+        legacyDiscountRounding: false,
       }),
     ]);
     expect(ctx.supplierQuoteFilterId.get()).toBe('sq-1');
     expect(ctx.setActiveView).toHaveBeenCalledWith('accounting/supplier-orders');
     expect(ctx.supplierQuotes.get()).toEqual([{ id: 'sq-1' }]);
+  });
+
+  test('createSupplierOrderFromQuote preserves an explicit synced net cost', async () => {
+    apiMocks.supplierOrdersCreate.mockImplementation((data: unknown) =>
+      Promise.resolve({ id: 'so-new', ...(data as object) }),
+    );
+    apiMocks.supplierQuotesList.mockImplementation(() => Promise.resolve([]));
+    apiMocks.supplierOrdersList.mockImplementation(() => Promise.resolve([]));
+    const ctx = buildHandlers();
+
+    await ctx.handlers.createSupplierOrderFromQuote({
+      id: 'sq-1',
+      supplierId: 'sup-1',
+      supplierName: 'Acme',
+      paymentTerms: '30',
+      items: [
+        {
+          listPrice: 37.75,
+          discountPercent: 15,
+          unitPrice: 32.09,
+          quantity: 150,
+        },
+      ],
+    } as never);
+
+    const callArg = apiMocks.supplierOrdersCreate.mock.calls[0][0] as Record<string, unknown>;
+    expect(callArg.items).toEqual([
+      expect.objectContaining({ unitPrice: 32.09, discount: 0, quantity: 150 }),
+    ]);
   });
 
   test('createSupplierOrderFromQuote handles missing productId by defaulting to empty string', async () => {

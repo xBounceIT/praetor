@@ -14,6 +14,7 @@ import { users } from './users.ts';
 // and may have it as `undefined`; readers must tolerate both `undefined` and `string | null`.
 export interface SnapshotQuote {
   id: string;
+  description?: string | null;
   linkedOfferId?: string | null;
   clientId: string;
   clientName: string;

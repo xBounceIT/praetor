@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, ne, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, getTableColumns, ne, sql } from 'drizzle-orm';
 import { type DbExecutor, db, runAtomically } from '../db/drizzle.ts';
 import { customerOfferItems } from '../db/schema/customerOfferItems.ts';
 import { customerOffers } from '../db/schema/customerOffers.ts';
@@ -16,7 +16,11 @@ import { normalizeUnitType, type UnitType } from '../utils/unit-type.ts';
 
 export type ClientOffer = {
   id: string;
+  revisionNumber: number;
+  revisionCode: string | null;
+  description?: string | null;
   linkedQuoteId: string;
+  linkedQuoteRevisionCode: string | null;
   linkedQuoteCandidateId?: string | null;
   clientId: string;
   clientName: string;
@@ -52,9 +56,24 @@ export type ClientOfferItem = {
   pricingSemanticsVersion: PricingSemanticsVersion;
 };
 
-const mapOffer = (row: typeof customerOffers.$inferSelect): ClientOffer => ({
+type ClientOfferRow = typeof customerOffers.$inferSelect & {
+  linkedQuoteRevisionCode?: string | null;
+};
+
+const OFFER_READ_PROJECTION = {
+  ...getTableColumns(customerOffers),
+  linkedQuoteRevisionCode: sql<string | null>`(
+    SELECT q.revision_code FROM quotes q WHERE q.id = ${customerOffers.linkedQuoteId} LIMIT 1
+  )`,
+} as const;
+
+const mapOffer = (row: ClientOfferRow): ClientOffer => ({
   id: row.id,
+  revisionNumber: row.revisionNumber,
+  revisionCode: row.revisionCode,
+  description: row.description,
   linkedQuoteId: row.linkedQuoteId,
+  linkedQuoteRevisionCode: row.linkedQuoteRevisionCode ?? null,
   linkedQuoteCandidateId: row.linkedQuoteCandidateId,
   clientId: row.clientId,
   clientName: row.clientName,
@@ -91,7 +110,10 @@ const mapItem = (row: typeof customerOfferItems.$inferSelect): ClientOfferItem =
 });
 
 export const listAll = async (exec: DbExecutor = db): Promise<ClientOffer[]> => {
-  const rows = await exec.select().from(customerOffers).orderBy(desc(customerOffers.createdAt));
+  const rows = await exec
+    .select(OFFER_READ_PROJECTION)
+    .from(customerOffers)
+    .orderBy(desc(customerOffers.createdAt));
   return rows.map(mapOffer);
 };
 
@@ -271,7 +293,7 @@ export const findFullForSnapshot = async (
   exec: DbExecutor = db,
 ): Promise<{ offer: ClientOffer; items: ClientOfferItem[] } | null> => {
   const offerRows = await exec
-    .select()
+    .select(OFFER_READ_PROJECTION)
     .from(customerOffers)
     .where(eq(customerOffers.id, id))
     .limit(1);
@@ -282,6 +304,7 @@ export const findFullForSnapshot = async (
 
 export type NewClientOffer = {
   id: string;
+  description?: string | null;
   linkedQuoteId: string;
   linkedQuoteCandidateId?: string | null;
   clientId: string;
@@ -303,6 +326,7 @@ export const create = async (
     .insert(customerOffers)
     .values({
       id: input.id,
+      description: input.description ?? null,
       linkedQuoteId: input.linkedQuoteId,
       linkedQuoteCandidateId: input.linkedQuoteCandidateId ?? null,
       clientId: input.clientId,
@@ -320,6 +344,7 @@ export const create = async (
 };
 
 export type ClientOfferUpdate = {
+  description?: string | null;
   clientId?: string | null;
   clientName?: string | null;
   paymentTerms?: string | null;
@@ -335,6 +360,7 @@ export type ClientOfferRestoreFields = Pick<
   ClientOffer,
   'clientId' | 'clientName' | 'discount' | 'discountType' | 'status' | 'notes'
 > & {
+  description?: string | null;
   paymentTerms: string;
   deliveryDate: string | null;
   expirationDate: string;
@@ -345,9 +371,13 @@ export const restoreSnapshotOffer = async (
   snapshot: ClientOfferRestoreFields,
   exec: DbExecutor = db,
 ): Promise<ClientOffer | null> => {
+  const description = Object.hasOwn(snapshot, 'description')
+    ? { description: snapshot.description ?? null }
+    : {};
   const [row] = await exec
     .update(customerOffers)
     .set({
+      ...description,
       clientId: snapshot.clientId,
       clientName: snapshot.clientName,
       paymentTerms: snapshot.paymentTerms,
@@ -372,6 +402,8 @@ export const update = async (
   const [row] = await exec
     .update(customerOffers)
     .set({
+      description:
+        patch.description === undefined ? sql`${customerOffers.description}` : patch.description,
       clientId: sql`COALESCE(${patch.clientId ?? null}, ${customerOffers.clientId})`,
       clientName: sql`COALESCE(${patch.clientName ?? null}, ${customerOffers.clientName})`,
       paymentTerms: sql`COALESCE(${patch.paymentTerms ?? null}, ${customerOffers.paymentTerms})`,

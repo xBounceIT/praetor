@@ -4,6 +4,8 @@ import DocumentCodeSettings from '../../../components/administration/DocumentCod
 
 const listMock = mock();
 const updateMock = mock();
+const revisionGetMock = mock();
+const revisionUpdateMock = mock();
 
 const t = (key: string, options?: Record<string, unknown>) => {
   if (typeof options?.defaultValue === 'string') return options.defaultValue;
@@ -20,6 +22,10 @@ mock.module('../../../services/api', () => ({
     documentCodeTemplates: {
       list: listMock,
       update: updateMock,
+    },
+    revisionCodeTemplate: {
+      get: revisionGetMock,
+      update: revisionUpdateMock,
     },
   },
 }));
@@ -47,7 +53,16 @@ describe('DocumentCodeSettings', () => {
   beforeEach(() => {
     listMock.mockReset();
     updateMock.mockReset();
+    revisionGetMock.mockReset();
+    revisionUpdateMock.mockReset();
     listMock.mockResolvedValue(TEMPLATES);
+    revisionGetMock.mockResolvedValue({
+      prefix: 'REV',
+      template: '{PREFIX}{SEQ}',
+      sequencePadding: 1,
+      preview: 'REV1',
+    });
+    revisionUpdateMock.mockImplementation(async (template) => template);
     updateMock.mockImplementation(async (templates) =>
       templates.map((template: (typeof TEMPLATES)[number]) => ({
         ...template,
@@ -72,18 +87,18 @@ describe('DocumentCodeSettings', () => {
     fireEvent.change(templateInput, { target: { value: '{PREFIX}_{BAD}_{SEQ}' } });
 
     expect(screen.getByText(/unknownPlaceholder/)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /saveConfiguration/ })).toBeDisabled();
+    expect(screen.getAllByRole('button', { name: /saveConfiguration/ })[0]).toBeDisabled();
 
     fireEvent.change(templateInput, { target: { value: '{PREFIX}/{YYYY}/{SEQ}' } });
     expect(screen.getByText(/templateTextPattern/)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /saveConfiguration/ })).toBeDisabled();
+    expect(screen.getAllByRole('button', { name: /saveConfiguration/ })[0]).toBeDisabled();
 
     fireEvent.change(templateInput, { target: { value: '{PREFIX}_{SEQ}' } });
     expect(screen.getByText(/yearRequired/)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /saveConfiguration/ })).toBeDisabled();
+    expect(screen.getAllByRole('button', { name: /saveConfiguration/ })[0]).toBeDisabled();
 
     fireEvent.change(templateInput, { target: { value: ' {PREFIX}_{YYYY}_{SEQ} ' } });
-    fireEvent.click(screen.getByRole('button', { name: /saveConfiguration/ }));
+    fireEvent.click(screen.getAllByRole('button', { name: /saveConfiguration/ })[0]);
 
     await waitFor(() => expect(updateMock).toHaveBeenCalledTimes(1));
     expect(updateMock).toHaveBeenCalledWith(

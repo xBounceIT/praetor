@@ -363,22 +363,93 @@ export const DEMO_PRODUCTS = [
 export const buildDemoDocumentSeedManifest = (seedYear = getDemoSeedYear()) => {
   const code = (moduleId: DocumentCodeModuleId, sequence: number) =>
     demoDocumentCode(moduleId, sequence, seedYear);
+  const quoteDescriptions = [
+    'Assessment strategico e servizi professionali',
+    'Servizi gestiti per infrastruttura Helios',
+    'Workshop per innovazione digitale',
+    'Modernizzazione retail Northwind',
+    'Supporto applicativo Helios',
+    'Assessment e deployment Northwind',
+    'Trasformazione digitale Comune di Verona',
+    'Consulenza professionale Giulia Ferri',
+    'Proposta infrastrutturale Helios',
+    'Rinnovo servizi Northwind',
+    'Fornitura hardware Northwind',
+    'Licenze annuali Helios',
+    'Firewall gestito Comune di Verona',
+    'Materiale promozionale Giulia Ferri',
+  ] as const;
+  const supplierQuoteDescriptions = [
+    'Fornitura hardware Northwind',
+    'Rinnovo licenze Helios',
+    'Proposta sicurezza Comune di Verona',
+    'Servizi di stampa Giulia Ferri',
+    'Licenze cloud Atlas',
+    'Sistemi di sicurezza Northwind',
+    'Logistica di stampa Helios',
+    'Fornitura hardware Comune di Verona',
+    'Preventivo licenze Giulia Ferri',
+    'Preventivo stampa scaduto Atlas',
+    'Approvvigionamento hardware Northwind',
+    'Licenze annuali Helios',
+    'Firewall gestito Comune di Verona',
+    'Materiale promozionale Giulia Ferri',
+  ] as const;
 
   return {
-    quotes: rangeDocumentCodes('client_quote', 14, seedYear),
+    quotes: rangeDocumentCodes('client_quote', 14, seedYear).map((document, index) => ({
+      ...document,
+      description: quoteDescriptions[index] as string,
+    })),
     customerOffers: [
-      { id: code('client_offer', 1), linkedQuoteId: code('client_quote', 4) },
-      { id: code('client_offer', 2), linkedQuoteId: code('client_quote', 5) },
-      { id: code('client_offer', 3), linkedQuoteId: code('client_quote', 6) },
-      { id: code('client_offer', 4), linkedQuoteId: code('client_quote', 7) },
-      { id: code('client_offer', 5), linkedQuoteId: code('client_quote', 8) },
+      {
+        id: code('client_offer', 1),
+        description: quoteDescriptions[3],
+        linkedQuoteId: code('client_quote', 4),
+      },
+      {
+        id: code('client_offer', 2),
+        description: quoteDescriptions[4],
+        linkedQuoteId: code('client_quote', 5),
+      },
+      {
+        id: code('client_offer', 3),
+        description: quoteDescriptions[5],
+        linkedQuoteId: code('client_quote', 6),
+      },
+      {
+        id: code('client_offer', 4),
+        description: quoteDescriptions[6],
+        linkedQuoteId: code('client_quote', 7),
+      },
+      {
+        id: code('client_offer', 5),
+        description: quoteDescriptions[7],
+        linkedQuoteId: code('client_quote', 8),
+      },
     ],
     sales: [
-      { id: code('client_order', 1), linkedOfferId: null },
-      { id: code('client_order', 2), linkedOfferId: code('client_offer', 4) },
-      { id: code('client_order', 3), linkedOfferId: null },
-      { id: code('client_order', 4), linkedOfferId: code('client_offer', 3) },
-      { id: code('client_order', 5), linkedOfferId: null },
+      {
+        id: code('client_order', 1),
+        description: 'Consulenza indipendente Giulia Ferri',
+        linkedOfferId: null,
+      },
+      {
+        id: code('client_order', 2),
+        description: quoteDescriptions[6],
+        linkedOfferId: code('client_offer', 4),
+      },
+      {
+        id: code('client_order', 3),
+        description: 'Supporto continuativo Northwind',
+        linkedOfferId: null,
+      },
+      {
+        id: code('client_order', 4),
+        description: quoteDescriptions[5],
+        linkedOfferId: code('client_offer', 3),
+      },
+      { id: code('client_order', 5), description: 'Ordine storico Helios', linkedOfferId: null },
     ],
     invoices: [
       { id: code('client_invoice', 1), linkedSaleId: null },
@@ -387,7 +458,10 @@ export const buildDemoDocumentSeedManifest = (seedYear = getDemoSeedYear()) => {
       { id: code('client_invoice', 4), linkedSaleId: null },
       { id: code('client_invoice', 5), linkedSaleId: null },
     ],
-    supplierQuotes: rangeDocumentCodes('supplier_quote', 14, seedYear),
+    supplierQuotes: rangeDocumentCodes('supplier_quote', 14, seedYear).map((document, index) => ({
+      ...document,
+      description: supplierQuoteDescriptions[index] as string,
+    })),
     supplierSales: [
       {
         id: code('supplier_order', 1),
@@ -638,15 +712,18 @@ export const DEMO_EXPECTED_COUNTS = {
   suppliers: DEMO_SUPPLIERS.length,
   products: DEMO_PRODUCTS.length,
   quotes: DEMO_QUOTES.length,
+  quote_revisions: DEMO_QUOTES.length - 1,
   quote_candidates: DEMO_QUOTES.length,
   quote_items: DEMO_ITEM_IDS.quoteItems.length,
   customer_offers: DEMO_CUSTOMER_OFFERS.length,
+  offer_revisions: DEMO_CUSTOMER_OFFERS.length - 1,
   customer_offer_items: DEMO_ITEM_IDS.customerOfferItems.length,
   sales: DEMO_SALES.length,
   sale_items: DEMO_ITEM_IDS.saleItems.length,
   invoices: DEMO_INVOICES.length,
   invoice_items: DEMO_ITEM_IDS.invoiceItems.length,
   supplier_quotes: DEMO_SUPPLIER_QUOTES.length,
+  supplier_quote_revisions: 12,
   supplier_quote_items: DEMO_ITEM_IDS.supplierQuoteItems.length,
   supplier_sales: DEMO_SUPPLIER_SALES.length,
   supplier_sale_items: DEMO_ITEM_IDS.supplierSaleItems.length,

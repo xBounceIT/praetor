@@ -12,11 +12,13 @@ import type {
   Product,
   Supplier,
   SupplierOrderVersion,
+  SupplierQuote,
   SupplierSaleOrder,
   SupplierSaleOrderItem,
   SupplierUnitType,
 } from '../../types';
 import { formatInsertDateTime } from '../../utils/date';
+import { formatDocumentCode } from '../../utils/document-code';
 import { createLineItemIndexResolver } from '../../utils/lineItemIndex';
 import {
   durationValueToMonths,
@@ -248,6 +250,7 @@ const supplierOrdersReducer = (
 
 export interface SupplierOrdersViewProps {
   orders: SupplierSaleOrder[];
+  quotes?: SupplierQuote[];
   suppliers: Supplier[];
   products: Product[];
   orderIdsWithInvoices: ReadonlySet<string>;
@@ -266,6 +269,7 @@ export interface SupplierOrdersViewProps {
 
 const useSupplierOrdersController = ({
   orders,
+  quotes = [],
   suppliers,
   products,
   orderIdsWithInvoices,
@@ -439,6 +443,7 @@ const useSupplierOrdersController = ({
           ...item,
           unitPrice: Number(item.unitPrice) || 0,
           discount: item.discount === undefined ? undefined : Number(item.discount),
+          legacyDiscountRounding: item.legacyDiscountRounding === true,
           unitType: item.unitType || 'hours',
           ...normalizeDurationForSubmit(item),
         })),
@@ -505,7 +510,14 @@ const useSupplierOrdersController = ({
       {
         header: t('accounting:supplierOrders.linkedQuote'),
         id: 'linkedQuote',
-        accessorFn: (row: SupplierSaleOrder) => row.linkedQuoteId ?? '',
+        accessorFn: (row: SupplierSaleOrder) =>
+          row.linkedQuoteId
+            ? formatDocumentCode(
+                row.linkedQuoteId,
+                row.linkedQuoteRevisionCode ??
+                  quotes.find((quote) => quote.id === row.linkedQuoteId)?.revisionCode,
+              )
+            : '',
         className: 'whitespace-nowrap',
         cell: ({ row }: { row: SupplierSaleOrder }) => {
           if (!row.linkedQuoteId) {
@@ -524,7 +536,11 @@ const useSupplierOrdersController = ({
                 isMuted ? 'text-muted-foreground' : 'text-foreground'
               }`}
             >
-              {row.linkedQuoteId}
+              {formatDocumentCode(
+                row.linkedQuoteId,
+                row.linkedQuoteRevisionCode ??
+                  quotes.find((quote) => quote.id === row.linkedQuoteId)?.revisionCode,
+              )}
             </span>
           );
         },
@@ -721,6 +737,7 @@ const useSupplierOrdersController = ({
       onViewQuote,
       openEditModal,
       orderIdsWithInvoices,
+      quotes,
       t,
     ],
   );
@@ -747,6 +764,7 @@ const useSupplierOrdersController = ({
     isModalOpen,
     isReadOnly,
     onViewQuote,
+    quotes,
     openEditModal,
     orderToDelete,
     patchForm,
@@ -901,7 +919,12 @@ const SupplierOrderModalAlerts: React.FC<{ controller: SupplierOrdersController 
       <LinkedRecordBanner
         label={controller.t('accounting:supplierOrders.linkedQuote')}
         value={controller.t('accounting:supplierOrders.linkedQuoteInfo', {
-          number: controller.formData.linkedQuoteId,
+          number: formatDocumentCode(
+            controller.formData.linkedQuoteId,
+            controller.formData.linkedQuoteRevisionCode ??
+              controller.quotes.find((quote) => quote.id === controller.formData.linkedQuoteId)
+                ?.revisionCode,
+          ),
         })}
         note={controller.t('accounting:supplierOrders.quoteDetailsReadOnly')}
         action={

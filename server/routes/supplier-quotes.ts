@@ -4,6 +4,7 @@ import { authenticateToken, requirePermission } from '../middleware/auth.ts';
 import * as clientsRepo from '../repositories/clientsRepo.ts';
 import * as productsRepo from '../repositories/productsRepo.ts';
 import * as quoteCommunicationChannelsRepo from '../repositories/quoteCommunicationChannelsRepo.ts';
+import * as revisionsRepo from '../repositories/revisionsRepo.ts';
 import * as supplierQuoteAttachmentsRepo from '../repositories/supplierQuoteAttachmentsRepo.ts';
 import * as supplierQuotesRepo from '../repositories/supplierQuotesRepo.ts';
 import * as supplierQuoteVersionsRepo from '../repositories/supplierQuoteVersionsRepo.ts';
@@ -13,9 +14,18 @@ import {
   allocateDocumentCode,
   reserveDocumentCodeCounterFromCode,
 } from '../services/documentCodes.ts';
+import {
+  RevisionRestoreConflict,
+  restoreSupplierQuoteRevision,
+} from '../services/revisionRestore.ts';
 import { logAudit } from '../utils/audit.ts';
 import { getUniqueViolation } from '../utils/db-errors.ts';
 import { replyDocumentCodeCollision } from '../utils/document-code-replies.ts';
+import {
+  DOCUMENT_CODE_MAX_LENGTH,
+  OPTIONAL_DOCUMENT_CODE_VALUE_PATTERN,
+  validateOptionalDocumentCode,
+} from '../utils/document-codes.ts';
 import { type DurationUnit, defaultDurationMonthsForUnit } from '../utils/duration-unit.ts';
 import {
   ATTACHMENT_MAX_BYTES,
@@ -27,13 +37,19 @@ import {
 } from '../utils/fileStorage.ts';
 import { createChildLogger } from '../utils/logger.ts';
 import { generatePrefixedId, ITEM_ID_PREFIXES } from '../utils/order-ids.ts';
+import { requirePathSegment } from '../utils/path-segments.ts';
 import {
   effectiveSupplierQuoteStatusFromDate,
   normalizeQuoteStatus,
 } from '../utils/quote-status.ts';
 import { STANDARD_ROUTE_RATE_LIMIT } from '../utils/rate-limit.ts';
 import { replyError } from '../utils/replyError.ts';
-import { deriveSupplierLinePricing, MAX_LINE_AMOUNT } from '../utils/supplier-quote-pricing.ts';
+import {
+  deriveSupplierLinePricing,
+  MAX_LINE_AMOUNT,
+  normalizeSupplierQuoteSnapshotPricing,
+  normalizeSupplierUnitPrice,
+} from '../utils/supplier-quote-pricing.ts';
 import { snapshotSupplierQuotePreState } from '../utils/supplier-quote-version.ts';
 import {
   badRequest,
@@ -47,6 +63,7 @@ import {
   parseLocalizedPositiveNumber,
   requireNonEmptyString,
 } from '../utils/validation.ts';
+import { registerRevisionHistoryRoutes } from './revision-history.ts';
 
 const idParamSchema = {
   type: 'object',
@@ -124,6 +141,9 @@ const supplierQuoteSchema = {
   type: 'object',
   properties: {
     id: { type: 'string' },
+    revisionNumber: { type: 'integer' },
+    revisionCode: { type: ['string', 'null'] },
+    description: { type: ['string', 'null'] },
     supplierId: { type: 'string' },
     supplierName: { type: 'string' },
     clientId: { type: ['string', 'null'] },
@@ -133,6 +153,7 @@ const supplierQuoteSchema = {
     // Whether a client quote drives this supplier quote's status (then it's read-only/synced).
     isStatusSynced: { type: 'boolean' },
     linkedClientQuoteId: { type: ['string', 'null'] },
+    linkedClientQuoteRevisionCode: { type: ['string', 'null'] },
     expirationDate: { type: ['string', 'null'], format: 'date' },
     communicationChannelId: { type: 'string' },
     communicationChannelName: { type: 'string' },
@@ -167,7 +188,12 @@ const supplierQuoteItemBodySchema = {
     quantity: { type: 'number' },
     listPrice: { type: 'number' },
     discountPercent: { type: 'number' },
-    unitPrice: { type: 'number' },
+    unitPrice: {
+      type: 'number',
+      minimum: 0,
+      description:
+        'On create, preserves an explicit authoritative cost when it differs from the list-price/discount formula; pricing edits derive it again.',
+    },
     note: { type: 'string' },
     unitType: { type: 'string', enum: ['hours', 'days', 'unit'] },
     durationMonths: {
@@ -188,7 +214,14 @@ const supplierQuoteItemBodySchema = {
 const supplierQuoteCreateBodySchema = {
   type: 'object',
   properties: {
-    id: { type: 'string' },
+    id: {
+      type: 'string',
+      maxLength: DOCUMENT_CODE_MAX_LENGTH,
+      pattern: OPTIONAL_DOCUMENT_CODE_VALUE_PATTERN,
+      description:
+        'Leave blank to allocate automatically. Manual values may contain letters, numbers, underscores, and hyphens.',
+    },
+    description: { type: 'string' },
     supplierId: { type: 'string' },
     supplierName: { type: 'string' },
     // clientName is resolved server-side from clientId; the body only carries the id.
@@ -206,7 +239,13 @@ const supplierQuoteCreateBodySchema = {
 const supplierQuoteUpdateBodySchema = {
   type: 'object',
   properties: {
-    id: { type: 'string' },
+    id: {
+      type: 'string',
+      maxLength: DOCUMENT_CODE_MAX_LENGTH,
+      description:
+        'When changed, may contain letters, numbers, underscores, and hyphens. An unchanged legacy id remains accepted.',
+    },
+    description: { type: ['string', 'null'] },
     supplierId: { type: 'string' },
     supplierName: { type: 'string' },
     // clientName is resolved server-side from clientId; the body only carries the id.
@@ -237,6 +276,7 @@ type ItemBody = {
 const validateAndNormalizeItems = (
   items: ItemBody[],
   reply: FastifyReply,
+  options: { preserveProvidedUnitPrice?: boolean } = {},
 ): supplierQuotesRepo.NewSupplierQuoteItem[] | null => {
   const result: supplierQuotesRepo.NewSupplierQuoteItem[] = [];
   for (let i = 0; i < items.length; i++) {
@@ -259,6 +299,14 @@ const validateAndNormalizeItems = (
     );
     if (!listPriceResult.ok) {
       badRequest(reply, listPriceResult.message);
+      return null;
+    }
+    const providedUnitPriceResult = optionalLocalizedNonNegativeNumber(
+      item.unitPrice,
+      `items[${i}].unitPrice`,
+    );
+    if (!providedUnitPriceResult.ok) {
+      badRequest(reply, providedUnitPriceResult.message);
       return null;
     }
     let listPrice = listPriceResult.value;
@@ -301,16 +349,23 @@ const validateAndNormalizeItems = (
       badRequest(reply, durationUnitResult.message);
       return null;
     }
-    // Round both inputs to the persisted DB scale and derive the net cost (Costo unitario) from the
-    // rounded values, so the stored row always satisfies unitPrice = listPrice × (1 − discount/100)
-    // even when a caller submits more than two decimals. Derived server-side so it can never drift
-    // from what the client computed; totals downstream read this net unit price.
+    // Round both inputs to the persisted DB scale and derive the candidate net cost (Costo
+    // unitario) from them. Pricing edits use this value; a create can retain a supplied
+    // authoritative cost, while update reconciliation below retains an existing synced override.
     const pricing = deriveSupplierLinePricing(listPrice, discountPercent);
-    // Reject amounts that would overflow the NUMERIC(15,2) columns so the caller gets a clean 400
-    // instead of a 500-level database error on INSERT. (unitPrice ≤ listPrice, but check both so a
-    // future formula change can't quietly slip an out-of-range net cost through.)
+    // Reject amounts that would overflow either the NUMERIC(15,2) list price or the NUMERIC(19,6)
+    // derived unit cost, so the caller gets a clean 400 instead of a database error. Both keep 13
+    // integer digits; unitPrice is currently ≤ listPrice, but checking both protects future changes.
     if (pricing.listPrice > MAX_LINE_AMOUNT || pricing.unitPrice > MAX_LINE_AMOUNT) {
       badRequest(reply, `items[${i}].listPrice must not exceed ${MAX_LINE_AMOUNT}`);
+      return null;
+    }
+    const unitPrice =
+      options.preserveProvidedUnitPrice && providedUnitPriceResult.value !== null
+        ? normalizeSupplierUnitPrice(providedUnitPriceResult.value)
+        : pricing.unitPrice;
+    if (unitPrice > MAX_LINE_AMOUNT) {
+      badRequest(reply, `items[${i}].unitPrice must not exceed ${MAX_LINE_AMOUNT}`);
       return null;
     }
     const unitType = normalizeUnitType(item.unitType);
@@ -325,7 +380,7 @@ const validateAndNormalizeItems = (
       quantity: quantityResult.value,
       listPrice: pricing.listPrice,
       discountPercent: pricing.discountPercent,
-      unitPrice: pricing.unitPrice,
+      unitPrice,
       note: item.note || null,
       unitType,
       durationMonths,
@@ -385,6 +440,30 @@ const resolveCommunicationChannel = async (
 export default async function (fastify: FastifyInstance, _opts: unknown) {
   fastify.addHook('onRequest', authenticateToken);
 
+  registerRevisionHistoryRoutes(fastify, {
+    entityType: 'supplier_quote',
+    viewPermission: 'sales.supplier_quotes.view',
+    updatePermission: 'sales.supplier_quotes.update',
+    exists: supplierQuotesRepo.existsById,
+    list: revisionsRepo.listForSupplierQuote,
+    find: revisionsRepo.findSupplierQuoteById,
+    restore: async (quoteId, revision, userId, tx) => {
+      const missingReference = await findMissingSnapshotReference(revision.snapshot, tx);
+      if (missingReference) {
+        throw new RevisionRestoreConflict(missingReference, 'snapshot_reference_missing');
+      }
+      const restored = await restoreSupplierQuoteRevision(quoteId, revision, userId, tx);
+      if (!restored) return null;
+      return {
+        ...restored,
+        status: supplierQuoteEffectiveStatus(restored),
+        isStatusSynced: Boolean(restored.linkedClientQuoteId),
+        items: await supplierQuotesRepo.findItemsForQuote(quoteId, tx),
+      };
+    },
+    responseSchema: supplierQuoteSchema,
+  });
+
   // Shared with the client→supplier item sync (issue #779) so version histories restore
   // identically no matter which write path minted them.
   const snapshotPreState = (
@@ -396,6 +475,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
   const findMissingSnapshotReference = async (
     snapshot: supplierQuoteVersionsRepo.SupplierQuoteVersionSnapshot,
+    exec?: DbExecutor,
   ): Promise<string | null> => {
     const productIds = Array.from(
       new Set(
@@ -413,10 +493,31 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         ? snapshot.quote.clientId
         : null;
 
-    const [supplier, clientExists, products] = await Promise.all([
-      suppliersRepo.findById(snapshot.quote.supplierId),
-      clientId ? clientsRepo.existsById(clientId) : Promise.resolve(true),
-      productIds.length > 0 ? productsRepo.getSnapshots(productIds) : Promise.resolve(null),
+    const channelId = snapshot.quote.communicationChannelId;
+    const supplierPromise = exec
+      ? suppliersRepo.findById(snapshot.quote.supplierId, exec)
+      : suppliersRepo.findById(snapshot.quote.supplierId);
+    const clientPromise = clientId
+      ? exec
+        ? clientsRepo.existsById(clientId, exec)
+        : clientsRepo.existsById(clientId)
+      : Promise.resolve(true);
+    const productsPromise =
+      productIds.length > 0
+        ? exec
+          ? productsRepo.getSnapshots(productIds, exec)
+          : productsRepo.getSnapshots(productIds)
+        : Promise.resolve(null);
+    const channelPromise = channelId
+      ? exec
+        ? quoteCommunicationChannelsRepo.findById(channelId, exec)
+        : quoteCommunicationChannelsRepo.findById(channelId)
+      : Promise.resolve(null);
+    const [supplier, clientExists, products, channel] = await Promise.all([
+      supplierPromise,
+      clientPromise,
+      productsPromise,
+      channelPromise,
     ]);
 
     if (!supplier) {
@@ -424,6 +525,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     }
     if (clientId && !clientExists) {
       return `Snapshot client "${clientId}" no longer exists`;
+    }
+    if (!channel) {
+      return `Snapshot communication channel "${channelId ?? ''}" no longer exists`;
     }
     if (!products) return null;
 
@@ -481,6 +585,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       const {
         id: nextId,
+        description,
         supplierId,
         supplierName,
         clientId,
@@ -491,6 +596,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         notes,
       } = request.body as {
         id?: string;
+        description?: string;
         supplierId?: string;
         supplierName?: string;
         clientId?: string | null;
@@ -506,15 +612,25 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       const supplierNameResult = requireNonEmptyString(supplierName, 'supplierName');
       if (!supplierNameResult.ok) return badRequest(reply, supplierNameResult.message);
-      const nextIdResult = optionalNonEmptyString(nextId, 'id');
+      const nextIdResult = validateOptionalDocumentCode(nextId, 'id');
       if (!nextIdResult.ok) return badRequest(reply, nextIdResult.message);
 
       if (!Array.isArray(items) || items.length === 0) {
         return badRequest(reply, 'Items must be a non-empty array');
       }
 
-      const normalizedItems = validateAndNormalizeItems(items, reply);
+      // A duplicate can carry an authoritative client-synced cost that differs from the displayed
+      // list-price/discount formula. Preserve that explicitly supplied value on a new quote;
+      // updates still derive from pricing inputs before reconciling against the stored row below.
+      const normalizedItems = validateAndNormalizeItems(items, reply, {
+        preserveProvidedUnitPrice: true,
+      });
       if (!normalizedItems) return;
+      const preservesClientSyncedCost = normalizedItems.some(
+        (item) =>
+          item.unitPrice !==
+          deriveSupplierLinePricing(item.listPrice, item.discountPercent).unitPrice,
+      );
 
       const expirationDateResult = parseDateString(expirationDate, 'expirationDate');
       if (!expirationDateResult.ok) return badRequest(reply, expirationDateResult.message);
@@ -550,6 +666,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           const quote = await supplierQuotesRepo.create(
             {
               id: quoteId,
+              description: description ?? null,
               supplierId: supplierIdResult.value,
               supplierName: supplierNameResult.value,
               clientId: clientLink.clientId,
@@ -597,6 +714,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           secondaryLabel: result.quote.supplierName,
           changedFields: ['communicationChannelId'],
           toValue: communicationChannel.name,
+          ...(preservesClientSyncedCost ? { reason: 'client_synced_cost_preserved' } : {}),
         },
       });
       return reply.code(201).send({
@@ -628,6 +746,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       // ignored if present.
       const {
         id: nextId,
+        description,
         supplierId,
         supplierName,
         clientId,
@@ -638,6 +757,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         notes,
       } = request.body as {
         id?: string;
+        description?: string | null;
         supplierId?: string;
         supplierName?: string;
         clientId?: string | null;
@@ -648,7 +768,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         notes?: string;
       };
 
-      const idResult = requireNonEmptyString(id, 'id');
+      const idResult = requirePathSegment(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
       // Two related flags with different jobs (issue #779): `hasNonExpirationContentUpdate` drives
@@ -659,6 +779,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       // id-only renames do not. Derived from one list so the field sets can't drift. A client-sent
       // `status` is IGNORED entirely: the status is fully derived from the linked client documents.
       const hasNonExpirationContentUpdate =
+        description !== undefined ||
         supplierId !== undefined ||
         supplierName !== undefined ||
         clientId !== undefined ||
@@ -669,6 +790,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       const hasContentUpdate = hasNonExpirationContentUpdate || expirationDate !== undefined;
 
       const patch: supplierQuotesRepo.SupplierQuoteUpdate = {};
+
+      if (description !== undefined) patch.description = description;
 
       if (supplierId !== undefined) {
         const supplierIdResult = optionalNonEmptyString(supplierId, 'supplierId');
@@ -697,7 +820,10 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
 
       let nextIdValue: string | null = null;
       if (nextId !== undefined) {
-        const nextIdResult = optionalNonEmptyString(nextId, 'id');
+        const nextIdResult =
+          typeof nextId === 'string' && nextId.trim() === idResult.value
+            ? ({ ok: true, value: idResult.value } as const)
+            : validateOptionalDocumentCode(nextId, 'id');
         if (!nextIdResult.ok) return badRequest(reply, nextIdResult.message);
         nextIdValue = nextIdResult.value;
       }
@@ -806,7 +932,8 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
       // deleting a referenced item, and repointing a referenced item to a different product (the
       // client-line snapshot resolver hard-fails its next edit on a product mismatch).
       if (normalizedItems && existingItems) {
-        const existingIds = new Set(existingItems.map((item) => item.id));
+        const existingItemById = new Map(existingItems.map((item) => [item.id, item] as const));
+        const existingIds = new Set(existingItemById.keys());
         // Keep each persisted id claimed by the payload (first occurrence wins — a duplicate or
         // foreign id keeps its freshly minted one and inserts as a new row).
         const claimedIds = new Set<string>();
@@ -815,6 +942,18 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           if (incomingId && existingIds.has(incomingId) && !claimedIds.has(incomingId)) {
             normalized.id = incomingId;
             claimedIds.add(incomingId);
+            const existing = existingItemById.get(incomingId);
+            // Client syncs may intentionally persist an authoritative cost that differs from the
+            // rounded list-price/discount formula. When those pricing inputs are unchanged, keep
+            // the stored cost across full-form or notes-only saves. A genuine pricing edit still
+            // uses the freshly derived value produced during validation above.
+            if (
+              existing &&
+              normalized.listPrice === existing.listPrice &&
+              normalized.discountPercent === existing.discountPercent
+            ) {
+              normalized.unitPrice = normalizeSupplierUnitPrice(existing.unitPrice);
+            }
           }
         });
         const existingProductById = new Map(
@@ -1025,7 +1164,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id } = request.params as { id: string };
-      const idResult = requireNonEmptyString(id, 'id');
+      const idResult = requirePathSegment(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
       const [exists, versions] = await Promise.all([
@@ -1064,9 +1203,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id, versionId } = request.params as { id: string; versionId: string };
-      const idResult = requireNonEmptyString(id, 'id');
+      const idResult = requirePathSegment(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
-      const versionIdResult = requireNonEmptyString(versionId, 'versionId');
+      const versionIdResult = requirePathSegment(versionId, 'versionId');
       if (!versionIdResult.ok) return badRequest(reply, versionIdResult.message);
 
       const version = await supplierQuoteVersionsRepo.findById(
@@ -1083,7 +1222,19 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
           details: { secondaryLabel: versionIdResult.value },
         });
       }
-      return version;
+      const hasClientSyncMarker = await supplierQuotesRepo.hasClientSyncedCosts(
+        idResult.value,
+        version.createdAt,
+      );
+      return {
+        ...version,
+        snapshot: {
+          ...version.snapshot,
+          items: version.snapshot.items.map((item) =>
+            normalizeSupplierQuoteSnapshotPricing(item, hasClientSyncMarker),
+          ),
+        },
+      };
     },
   );
 
@@ -1103,9 +1254,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id, versionId } = request.params as { id: string; versionId: string };
-      const idResult = requireNonEmptyString(id, 'id');
+      const idResult = requirePathSegment(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
-      const versionIdResult = requireNonEmptyString(versionId, 'versionId');
+      const versionIdResult = requirePathSegment(versionId, 'versionId');
       if (!versionIdResult.ok) return badRequest(reply, versionIdResult.message);
 
       const [linkedOrderId, current, version, sourcedByClientDocuments] = await Promise.all([
@@ -1199,25 +1350,24 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         });
       }
 
+      // Migration 0116 uses this durable marker to distinguish an old scale-2 formula result from
+      // an explicit client-authored cost with the same numeric value. Scope the marker to the
+      // version timestamp so a later client sync cannot change an older snapshot's provenance.
+      const hasClientSyncMarker = await supplierQuotesRepo.hasClientSyncedCosts(
+        idResult.value,
+        version.createdAt,
+      );
+
       const snapshotItems: supplierQuotesRepo.NewSupplierQuoteItem[] = version.snapshot.items.map(
         ({ quoteId: _q, ...rest }) => {
           // Snapshots taken before list price / discount existed lack those keys, so seed list price
-          // from the net unit price (no discount) to keep the restored Costo unitario identical to
-          // what was saved. Re-derive through the shared helper — mirroring validateAndNormalizeItems
-          // — so every restored row satisfies unitPrice = listPrice × (1 − discount/100). For current
-          // snapshots (already at scale 2) this is a no-op; for a pre-fix snapshot it heals any drift.
-          const snapshotUnitPrice = Number(rest.unitPrice ?? 0);
-          const pricing = deriveSupplierLinePricing(
-            Number(rest.listPrice ?? snapshotUnitPrice),
-            Number(rest.discountPercent ?? 0),
-          );
+          // from the net unit price (no discount). The shared preview/restore helper upgrades a
+          // legacy scale-2 formula result unless the client-sync marker makes it authoritative.
+          const pricing = normalizeSupplierQuoteSnapshotPricing(rest, hasClientSyncMarker);
           return {
-            ...rest,
+            ...pricing,
             id: generatePrefixedId(ITEM_ID_PREFIXES.supplierQuoteItem),
             productId: rest.productId || null,
-            listPrice: pricing.listPrice,
-            discountPercent: pricing.discountPercent,
-            unitPrice: pricing.unitPrice,
             unitType: rest.unitType ?? 'unit',
             note: rest.note ?? null,
             // Snapshots taken before duration existed (issue #776) lack both keys; default to a
@@ -1250,6 +1400,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         const quote = await supplierQuotesRepo.restoreSnapshotQuote(
           idResult.value,
           {
+            ...(Object.hasOwn(version.snapshot.quote, 'description')
+              ? { description: version.snapshot.quote.description ?? null }
+              : {}),
             supplierId: version.snapshot.quote.supplierId,
             supplierName: version.snapshot.quote.supplierName,
             // `?? null` tolerates pre-#759 snapshots that predate the customer columns.
@@ -1418,7 +1571,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id } = request.params as { id: string };
-      const idResult = requireNonEmptyString(id, 'id');
+      const idResult = requirePathSegment(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
       const exists = await supplierQuotesRepo.existsById(idResult.value);
@@ -1455,7 +1608,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id } = request.params as { id: string };
-      const idResult = requireNonEmptyString(id, 'id');
+      const idResult = requirePathSegment(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
       if (!request.isMultipart()) {
@@ -1589,9 +1742,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id, attachmentId } = request.params as { id: string; attachmentId: string };
-      const idResult = requireNonEmptyString(id, 'id');
+      const idResult = requirePathSegment(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
-      const attachmentIdResult = requireNonEmptyString(attachmentId, 'attachmentId');
+      const attachmentIdResult = requirePathSegment(attachmentId, 'attachmentId');
       if (!attachmentIdResult.ok) return badRequest(reply, attachmentIdResult.message);
 
       const attachment = await supplierQuoteAttachmentsRepo.findById(attachmentIdResult.value);
@@ -1660,9 +1813,9 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id, attachmentId } = request.params as { id: string; attachmentId: string };
-      const idResult = requireNonEmptyString(id, 'id');
+      const idResult = requirePathSegment(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
-      const attachmentIdResult = requireNonEmptyString(attachmentId, 'attachmentId');
+      const attachmentIdResult = requirePathSegment(attachmentId, 'attachmentId');
       if (!attachmentIdResult.ok) return badRequest(reply, attachmentIdResult.message);
 
       const quote = await assertQuoteEditableForAttachments(idResult.value, request, reply);
@@ -1719,7 +1872,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id } = request.params as { id: string };
-      const idResult = requireNonEmptyString(id, 'id');
+      const idResult = requirePathSegment(id, 'id');
       if (!idResult.ok) return badRequest(reply, idResult.message);
 
       const linkedOrderId = await supplierQuotesRepo.findLinkedOrderId(idResult.value);

@@ -173,6 +173,8 @@ describe('getSupplierQuotesSection', () => {
       expect(call.sql).toContain('FROM supplier_quotes sq');
       expect(call.sql).toContain('COALESCE(sqi.duration_months, 1)');
       expect(call.sql).toContain("sqi.duration_unit = 'na'");
+      expect(call.sql).toContain('sqi.quantity * sqi.unit_price');
+      expect(call.sql).toMatch(/ROUND\(COALESCE\(SUM\([\s\S]*\), 0\), 2\)/);
       expect(call.params[0]).toBe(FROM);
       expect(call.params[1]).toBe(TO);
     }

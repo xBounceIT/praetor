@@ -3,8 +3,8 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 describe('App.tsx MFA exemption datasets', () => {
-  const source = readFileSync(join(import.meta.dir, '..', 'App.tsx'), 'utf8').replaceAll(
-    '\r\n',
+  const source = readFileSync(join(import.meta.dir, '..', 'App.tsx'), 'utf8').replace(
+    /\r\n/g,
     '\n',
   );
 

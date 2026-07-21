@@ -10,9 +10,8 @@ import { saleItems, sales } from '../db/schema/sales.ts';
 import { supplierSales } from '../db/schema/supplierSales.ts';
 import type { SupplierOrder, SupplierOrderItem } from '../repositories/supplierOrdersRepo.ts';
 import * as supplierOrdersRepo from '../repositories/supplierOrdersRepo.ts';
-import { effectiveDurationMultiplier } from '../utils/duration-unit.ts';
 import {
-  getDiscountedUnitPrice,
+  getDiscountedLineTotal,
   getDocumentDiscountAmount,
   roundCurrency,
 } from '../utils/invoice-math.ts';
@@ -129,18 +128,7 @@ export const computeSupplierOrderTotal = (
   order: Pick<SupplierOrder, 'discount' | 'discountType'>,
   items: SupplierOrderItem[],
 ): number => {
-  const subtotal = items.reduce((sum, item) => {
-    const duration = effectiveDurationMultiplier(
-      item.durationUnit,
-      item.durationMonths,
-      item.pricingSemanticsVersion,
-    );
-    const discountedUnitPrice = getDiscountedUnitPrice(
-      Number(item.unitPrice || 0),
-      Number(item.discount || 0),
-    );
-    return sum + Number(item.quantity || 0) * discountedUnitPrice * duration;
-  }, 0);
+  const subtotal = items.reduce((sum, item) => sum + getDiscountedLineTotal(item), 0);
 
   const discount = Number(order.discount || 0);
   const discountAmount = getDocumentDiscountAmount(subtotal, discount, order.discountType);
