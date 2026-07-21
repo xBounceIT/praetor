@@ -2465,7 +2465,7 @@ const ClientQuoteFormModal: React.FC<{ controller: ClientQuotesController }> = (
               <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(28rem,40rem)]">
                 <div className="min-w-0 space-y-5">
                   <ClientQuoteCandidatesBar controller={controller} />
-                  <ClientQuoteClientSection controller={controller} />
+                  <ClientQuoteClientSection controller={controller} layout="compact" />
                 </div>
                 <QuoteRevisionsPanel
                   className="min-w-0 lg:justify-self-stretch"
@@ -2492,7 +2492,7 @@ const ClientQuoteFormModal: React.FC<{ controller: ClientQuotesController }> = (
             ) : (
               <>
                 <ClientQuoteCandidatesBar controller={controller} />
-                <ClientQuoteClientSection controller={controller} />
+                <ClientQuoteClientSection controller={controller} layout="create" />
               </>
             )}
             <ClientQuoteModalAlerts controller={controller} />
@@ -2988,9 +2988,11 @@ const ClientQuoteSectionHeading: React.FC<{
   </h4>
 );
 
-const ClientQuoteClientSection: React.FC<{ controller: ClientQuotesController }> = ({
-  controller,
-}) => {
+const ClientQuoteClientSection: React.FC<{
+  controller: ClientQuotesController;
+  /** `create` = full-width five-field row; `compact` = 3+2 beside revision history. */
+  layout?: 'create' | 'compact';
+}> = ({ controller, layout = 'create' }) => {
   const { t, readOnlyStatus, statusLabel } = controller;
 
   return (
@@ -3003,14 +3005,33 @@ const ClientQuoteClientSection: React.FC<{ controller: ClientQuotesController }>
         status={readOnlyStatus}
         statusLabel={statusLabel}
       />
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
-        <ClientQuoteClientField controller={controller} />
-        <ClientQuoteCodeField controller={controller} />
-        <ClientQuotePaymentTermsField controller={controller} />
-        <ClientQuoteCommunicationField controller={controller} />
-        <ClientQuoteExpirationField controller={controller} />
-      </div>
-      <ClientQuoteDescriptionField controller={controller} />
+      {layout === 'compact' ? (
+        <div className="space-y-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <ClientQuoteClientField controller={controller} />
+            <ClientQuoteCodeField controller={controller} />
+            <ClientQuotePaymentTermsField controller={controller} />
+          </div>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <ClientQuoteCommunicationField controller={controller} />
+            <ClientQuoteExpirationField controller={controller} />
+            <div className="sm:col-span-2 lg:col-span-2">
+              <ClientQuoteDescriptionField controller={controller} />
+            </div>
+          </div>
+        </div>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+            <ClientQuoteClientField controller={controller} />
+            <ClientQuoteCodeField controller={controller} />
+            <ClientQuotePaymentTermsField controller={controller} />
+            <ClientQuoteCommunicationField controller={controller} />
+            <ClientQuoteExpirationField controller={controller} />
+          </div>
+          <ClientQuoteDescriptionField controller={controller} />
+        </>
+      )}
     </div>
   );
 };
