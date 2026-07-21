@@ -3100,19 +3100,9 @@ const ClientQuoteCodeField: React.FC<{ controller: ClientQuotesController }> = (
 
   return (
     <Field data-invalid={Boolean(errors.id)}>
-      <div className="relative w-fit">
-        <FieldLabel htmlFor="client-quote-code" required={Boolean(editingQuote)}>
-          {t('sales:clientQuotes.quoteCode', { defaultValue: 'Quote Code' })}
-        </FieldLabel>
-        {editingQuote?.revisionCode && (
-          <Badge
-            variant="secondary"
-            className="absolute top-1/2 left-full ml-2 -translate-y-1/2 font-mono"
-          >
-            {editingQuote.revisionCode}
-          </Badge>
-        )}
-      </div>
+      <FieldLabel htmlFor="client-quote-code" required={Boolean(editingQuote)}>
+        {t('sales:clientQuotes.quoteCode', { defaultValue: 'Quote Code' })}
+      </FieldLabel>
       <Input
         id="client-quote-code"
         type="text"

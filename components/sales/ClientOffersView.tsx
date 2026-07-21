@@ -3,7 +3,6 @@ import type React from 'react';
 import { useCallback, useMemo, useReducer, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { LinkedRecordBanner } from '@/components/shared/LinkedRecordBanner';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
@@ -1744,19 +1743,9 @@ const ClientOfferCodeField: React.FC<{ controller: ClientOffersController }> = (
 
   return (
     <Field data-invalid={Boolean(errors.id)}>
-      <div className="relative w-fit">
-        <FieldLabel htmlFor="client-offer-code" required={Boolean(editingOffer)}>
-          {t('sales:clientOffers.offerCode', { defaultValue: 'Offer code' })}
-        </FieldLabel>
-        {editingOffer?.revisionCode && (
-          <Badge
-            variant="secondary"
-            className="absolute top-1/2 left-full ml-2 -translate-y-1/2 font-mono"
-          >
-            {editingOffer.revisionCode}
-          </Badge>
-        )}
-      </div>
+      <FieldLabel htmlFor="client-offer-code" required={Boolean(editingOffer)}>
+        {t('sales:clientOffers.offerCode', { defaultValue: 'Offer code' })}
+      </FieldLabel>
       <Input
         id="client-offer-code"
         type="text"

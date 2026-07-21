@@ -2,7 +2,6 @@ import type React from 'react';
 import { useCallback, useMemo, useReducer, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { LinkedRecordBanner } from '@/components/shared/LinkedRecordBanner';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
@@ -1603,19 +1602,9 @@ const SupplierQuoteCodeField: React.FC<{ controller: SupplierQuotesController }>
   controller,
 }) => (
   <Field data-invalid={Boolean(controller.errors.id)}>
-    <div className="relative w-fit">
-      <FieldLabel htmlFor="supplier-quote-code" required={Boolean(controller.editingQuote)}>
-        {controller.t('sales:supplierQuotes.quoteCode', { defaultValue: 'Quote Code' })}
-      </FieldLabel>
-      {controller.editingQuote?.revisionCode && (
-        <Badge
-          variant="secondary"
-          className="absolute top-1/2 left-full ml-2 -translate-y-1/2 font-mono"
-        >
-          {controller.editingQuote.revisionCode}
-        </Badge>
-      )}
-    </div>
+    <FieldLabel htmlFor="supplier-quote-code" required={Boolean(controller.editingQuote)}>
+      {controller.t('sales:supplierQuotes.quoteCode', { defaultValue: 'Quote Code' })}
+    </FieldLabel>
     <Input
       id="supplier-quote-code"
       type="text"
