@@ -140,8 +140,8 @@ describe('<VersionHistoryPanel />', () => {
     expect(input).toBeInTheDocument();
     expect(input).toHaveFocus();
     expect(header?.contains(input)).toBe(true);
-    expect(screen.getByText(labels.title).closest('h4')).toHaveClass('opacity-0');
-    expect(input).toHaveClass('opacity-100', 'rounded-md');
+    expect(screen.queryByText(labels.title)).not.toBeInTheDocument();
+    expect(input).toHaveClass('opacity-100', 'rounded-md', 'w-full');
     expect(input.parentElement).not.toHaveClass('overflow-hidden');
 
     await user.type(input, 'bob');
