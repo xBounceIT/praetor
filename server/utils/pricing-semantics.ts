@@ -38,7 +38,7 @@ type VersionedItem = {
 };
 
 export const pricingSemanticsVersionForDocument = (
-  storedItems: Array<{ pricingSemanticsVersion?: unknown }>,
+  storedItems: readonly { pricingSemanticsVersion?: unknown }[],
 ): PricingSemanticsVersion =>
   storedItems.reduce<PricingSemanticsVersion>(
     (oldest, item) =>
@@ -48,6 +48,36 @@ export const pricingSemanticsVersionForDocument = (
       ) as PricingSemanticsVersion,
     CURRENT_PRICING_SEMANTICS_VERSION,
   );
+
+/**
+ * When creating a document from another one, matching source row ids retain their exact
+ * historical marker. A source row can be retained once only; copied, unknown, or new rows use
+ * the source document contract instead.
+ */
+export const inheritPricingSemanticsVersions = <T extends { id?: string | null }>(
+  items: readonly T[],
+  sourceItems: readonly { id: string; pricingSemanticsVersion?: unknown }[],
+): Array<T & { pricingSemanticsVersion: PricingSemanticsVersion }> => {
+  const sourceById = new Map(
+    sourceItems.map((item) => [
+      item.id,
+      normalizeHistoricalPricingSemanticsVersion(item.pricingSemanticsVersion),
+    ]),
+  );
+  const documentVersion = pricingSemanticsVersionForDocument(sourceItems);
+  const retainedSourceItemIds = new Set<string>();
+
+  return items.map((item) => {
+    const sourceVersion =
+      item.id && !retainedSourceItemIds.has(item.id) ? sourceById.get(item.id) : undefined;
+    if (item.id && sourceVersion !== undefined) retainedSourceItemIds.add(item.id);
+
+    return {
+      ...item,
+      pricingSemanticsVersion: sourceVersion ?? documentVersion,
+    };
+  });
+};
 
 /**
  * A document keeps the pricing contract under which it was created. Existing row ids retain their

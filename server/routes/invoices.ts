@@ -20,6 +20,7 @@ import { type DurationUnit, defaultDurationMonthsForUnit } from '../utils/durati
 import { computeInvoiceTotals, roundCurrency } from '../utils/invoice-math.ts';
 import { generatePrefixedId, ITEM_ID_PREFIXES } from '../utils/order-ids.ts';
 import {
+  inheritPricingSemanticsVersions,
   type PricingSemanticsVersion,
   pricingSemanticsVersionForDocument,
 } from '../utils/pricing-semantics.ts';
@@ -134,6 +135,7 @@ const invoiceSchema = {
 const invoiceItemBodySchema = {
   type: 'object',
   properties: {
+    id: { type: 'string' },
     productId: { type: 'string' },
     description: { type: 'string' },
     unitOfMeasure: { type: 'string', enum: [...UNIT_OF_MEASURE_VALUES] },
@@ -190,6 +192,7 @@ const invoiceUpdateBodySchema = {
 } as const;
 
 type NormalizedInvoiceItemInput = {
+  id: string | null;
   productId: string | null;
   description: string;
   unitOfMeasure: 'unit' | 'hours';
@@ -210,6 +213,11 @@ const validateAndNormalizeItems = (
 
   for (let i = 0; i < items.length; i++) {
     const item = items[i] as Record<string, unknown>;
+    const itemIdResult = optionalNonEmptyString(item.id, `items[${i}].id`);
+    if (!itemIdResult.ok) {
+      badRequest(reply, itemIdResult.message);
+      return null;
+    }
     const productIdResult = optionalNonEmptyString(item.productId, `items[${i}].productId`);
     if (!productIdResult.ok) {
       badRequest(reply, productIdResult.message);
@@ -295,6 +303,7 @@ const validateAndNormalizeItems = (
     const durationMonths = durationMonthsResult.value ?? defaultDurationMonthsForUnit(durationUnit);
 
     normalizedItems.push({
+      id: itemIdResult.value,
       productId: productIdResult.value || null,
       description: descriptionResult.value,
       unitOfMeasure,
@@ -419,11 +428,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         const sourceOrderItems = await clientsOrdersRepo.findItemsForOrder(
           linkedSaleIdResult.value,
         );
-        const pricingSemanticsVersion = pricingSemanticsVersionForDocument(sourceOrderItems);
-        normalizedItems = normalizedItems.map((item) => ({
-          ...item,
-          pricingSemanticsVersion,
-        }));
+        normalizedItems = inheritPricingSemanticsVersions(normalizedItems, sourceOrderItems);
       }
 
       const {

@@ -43851,6 +43851,9 @@
                     "items": {
                       "type": "object",
                       "properties": {
+                        "id": {
+                          "type": "string"
+                        },
                         "productId": {
                           "type": "string"
                         },
@@ -44237,6 +44240,9 @@
                     "items": {
                       "type": "object",
                       "properties": {
+                        "id": {
+                          "type": "string"
+                        },
                         "productId": {
                           "type": "string"
                         },

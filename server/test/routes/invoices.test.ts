@@ -370,6 +370,61 @@ describe('POST /api/invoices', () => {
     );
   });
 
+  test('201 preserves each source order pricing marker in a mixed invoice', async () => {
+    findClientOrderItemsMock.mockResolvedValue([
+      { id: 'order-item-legacy', pricingSemanticsVersion: 1 },
+      { id: 'order-item-current', pricingSemanticsVersion: 2 },
+    ]);
+    findClientOrderExistingMock.mockResolvedValue({
+      id: 'ORD_26_0045_manual',
+      linkedQuoteId: null,
+      linkedOfferId: null,
+    });
+    createMock.mockResolvedValue({ ...SAMPLE_INVOICE, linkedSaleId: 'ORD_26_0045_manual' });
+    insertItemsMock.mockResolvedValue([SAMPLE_ITEM]);
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/invoices',
+      headers: authHeader(),
+      payload: {
+        ...validBody,
+        linkedSaleId: 'ORD_26_0045_manual',
+        items: [
+          {
+            id: 'order-item-legacy',
+            description: 'Legacy annual service',
+            unitOfMeasure: 'unit',
+            quantity: 1,
+            unitPrice: 10,
+            durationMonths: 12,
+            durationUnit: 'years',
+          },
+          {
+            id: 'order-item-current',
+            description: 'Current annual service',
+            unitOfMeasure: 'unit',
+            quantity: 1,
+            unitPrice: 10,
+            durationMonths: 12,
+            durationUnit: 'years',
+          },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(createMock).toHaveBeenCalledWith(
+      expect.objectContaining({ subtotal: 130, total: 130 }),
+      TX_SENTINEL,
+    );
+    expect(
+      (insertItemsMock.mock.calls[0][1] as Array<Record<string, unknown>>).map(
+        (item) => item.pricingSemanticsVersion,
+      ),
+    ).toEqual([1, 2]);
+  });
+
   test('201 inherits the invoice code source from offer when the linked order quote is legacy', async () => {
     findClientOrderExistingMock.mockResolvedValue({
       id: 'ORD_26_0045_manual',

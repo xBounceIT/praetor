@@ -28,6 +28,7 @@ import { normalizeNullableNumber, normalizeNullableString } from '../utils/norma
 import { generatePrefixedId, ITEM_ID_PREFIXES } from '../utils/order-ids.ts';
 import { requestHasPermission } from '../utils/permissions.ts';
 import {
+  inheritPricingSemanticsVersions,
   LEGACY_PRICING_SEMANTICS_VERSION,
   type PricingSemanticsVersion,
   pricingSemanticsVersionForDocument,
@@ -824,11 +825,7 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         const sourceOfferItems = await clientOffersRepo.findItemsForOffer(
           linkedOfferIdResult.value,
         );
-        const sourcePricingSemanticsVersion = pricingSemanticsVersionForDocument(sourceOfferItems);
-        itemsForResolution = parsedItems.map((item) => ({
-          ...item,
-          pricingSemanticsVersion: sourcePricingSemanticsVersion,
-        }));
+        itemsForResolution = inheritPricingSemanticsVersions(parsedItems, sourceOfferItems);
         if (!canCreateSupplierOrders) {
           for (const item of sourceOfferItems) {
             if (!item.supplierQuoteItemId) continue;

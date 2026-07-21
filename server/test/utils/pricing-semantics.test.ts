@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import {
   CURRENT_PRICING_SEMANTICS_VERSION,
+  inheritPricingSemanticsVersions,
   LEGACY_PRICING_SEMANTICS_VERSION,
   normalizeHistoricalPricingSemanticsItems,
   normalizeHistoricalPricingSemanticsVersion,
@@ -64,6 +65,23 @@ describe('pricing semantics compatibility', () => {
     expect(items.map((item) => [item.id, item.pricingSemanticsVersion])).toEqual([
       ['legacy', 1],
       ['current', 2],
+      ['new', 1],
+    ]);
+  });
+
+  test('inherits each source marker once and falls back for copied or new rows', () => {
+    const items = inheritPricingSemanticsVersions(
+      [{ id: 'legacy' }, { id: 'current' }, { id: 'current' }, { id: 'new' }],
+      [
+        { id: 'legacy', pricingSemanticsVersion: 1 },
+        { id: 'current', pricingSemanticsVersion: 2 },
+      ],
+    );
+
+    expect(items.map((item) => [item.id, item.pricingSemanticsVersion])).toEqual([
+      ['legacy', 1],
+      ['current', 2],
+      ['current', 1],
       ['new', 1],
     ]);
   });

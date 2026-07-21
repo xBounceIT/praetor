@@ -460,6 +460,57 @@ describe('POST /api/clients-orders product-less supplier lines (issue #783)', ()
     );
   });
 
+  test('201 preserves each source offer pricing marker in a mixed order', async () => {
+    clientOfferFindItemsForOfferMock.mockResolvedValue([
+      { id: 'offer-item-legacy', pricingSemanticsVersion: 1 },
+      { id: 'offer-item-current', pricingSemanticsVersion: 2 },
+    ]);
+    coCreateMock.mockImplementation((input: Record<string, unknown>) =>
+      Promise.resolve({ ...CREATED_ORDER, ...input }),
+    );
+    coInsertItemsMock.mockImplementation((orderId: string, items: Array<Record<string, unknown>>) =>
+      Promise.resolve(items.map((item) => insertedItem({ ...item, orderId }))),
+    );
+
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/clients-orders',
+      headers: authHeader(),
+      payload: {
+        linkedOfferId: 'OFF_26_0045_manual',
+        clientId: 'c1',
+        clientName: 'Acme',
+        items: [
+          {
+            id: 'offer-item-legacy',
+            productId: 'p-1',
+            productName: 'Legacy annual service',
+            quantity: 1,
+            unitPrice: 10,
+            durationMonths: 12,
+            durationUnit: 'years',
+          },
+          {
+            id: 'offer-item-current',
+            productId: 'p-1',
+            productName: 'Current annual service',
+            quantity: 1,
+            unitPrice: 10,
+            durationMonths: 12,
+            durationUnit: 'years',
+          },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(
+      (coInsertItemsMock.mock.calls[0][1] as Array<Record<string, unknown>>).map(
+        (item) => item.pricingSemanticsVersion,
+      ),
+    ).toEqual([1, 2]);
+  });
+
   test('409 when the submitted client does not match the accepted source offer', async () => {
     coFindOfferDetailsMock.mockResolvedValue({
       id: 'OFF_26_0045_manual',
