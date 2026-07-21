@@ -83,7 +83,7 @@ import StandardTable, { type Column } from '../shared/StandardTable';
 import StatusBadge, { type StatusType } from '../shared/StatusBadge';
 import UnitTypeSelector from '../shared/UnitTypeSelector';
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
-import { VersionHistoryDialog } from '../shared/VersionHistoryDialog';
+import { useVersionHistoryDialogOpen, VersionHistoryDialog } from '../shared/VersionHistoryDialog';
 import QuoteCommunicationChannelField from './QuoteCommunicationChannelField';
 import {
   DEFAULT_QUOTE_COMMUNICATION_CHANNELS,
@@ -1327,12 +1327,16 @@ const SupplierQuoteModal: React.FC<{ controller: SupplierQuotesController }> = (
   const revisionRestoreDisabled = Boolean(
     controller.baseReadOnly || controller.editingQuote?.linkedOrderId,
   );
-  const [versionsDialogOpen, setVersionsDialogOpen] = useState(false);
+  const {
+    open: versionsDialogOpen,
+    onOpenChange: handleVersionsDialogOpenChange,
+    setOpen: setVersionsDialogOpen,
+  } = useVersionHistoryDialogOpen(selectedVersionId, controller.handleClearPreview);
   const editingQuoteId = controller.editingQuote?.id;
   const dismissModal = useCallback(() => {
     setVersionsDialogOpen(false);
     controller.closeModal();
-  }, [controller.closeModal]);
+  }, [controller.closeModal, setVersionsDialogOpen]);
 
   return (
     <Modal isOpen={controller.isModalOpen} onClose={dismissModal}>
@@ -1381,7 +1385,7 @@ const SupplierQuoteModal: React.FC<{ controller: SupplierQuotesController }> = (
       {editingQuoteId ? (
         <VersionHistoryDialog
           open={versionsDialogOpen}
-          onOpenChange={setVersionsDialogOpen}
+          onOpenChange={handleVersionsDialogOpenChange}
           title={controller.t('sales:supplierQuotes.versionHistory.title', {
             defaultValue: 'Version History',
           })}

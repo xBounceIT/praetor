@@ -27,7 +27,7 @@ interface VersionHistoryPanelLabels {
   searchPlaceholder: string;
   searchAriaLabel: string;
   noResults: string;
-  currentBadge: string;
+  currentBadge?: string;
   previewBadge: string;
   infoTooltip?: string;
 }
@@ -125,7 +125,6 @@ export function VersionHistoryPanel<Row extends VersionHistoryPanelRow>({
 
   // Live document is shown when `selectedVersionId` is null — history rows are all
   // restorable snapshots (newest-first). Do not treat rows[0] as an unselectable "live" stand-in.
-  const newestRowId = rows[0]?.id ?? null;
   const radioValue = selectedVersionId ?? '';
 
   const handleRadioChange = (value: string) => {
@@ -262,7 +261,6 @@ export function VersionHistoryPanel<Row extends VersionHistoryPanelRow>({
           >
             {filteredRows.map((row) => {
               const selected = row.id === selectedVersionId;
-              const isCurrent = newestRowId === row.id;
               const reasonLabel =
                 row.reason === 'restore' ? labels.reasonRestore : labels.reasonUpdate;
               const timestamp = formatInsertDateTime(row.createdAt, locale);
@@ -290,11 +288,7 @@ export function VersionHistoryPanel<Row extends VersionHistoryPanelRow>({
                       {reasonLabel || optionLabel}
                       {row.createdByUserName ? ` · ${row.createdByUserName}` : ''}
                     </span>
-                    {isCurrent ? (
-                      <span className="rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[9px] font-bold tracking-wider text-emerald-700 uppercase dark:text-emerald-400">
-                        {labels.currentBadge}
-                      </span>
-                    ) : selected ? (
+                    {selected ? (
                       <span className="rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[9px] font-bold tracking-wider text-amber-700 uppercase dark:text-amber-400">
                         {labels.previewBadge}
                       </span>

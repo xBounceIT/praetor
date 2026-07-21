@@ -77,7 +77,8 @@ describe('<VersionHistoryPanel />', () => {
     expect(screen.getByRole('region', { name: labels.title })).toBeInTheDocument();
     expect(screen.getByRole('heading', { level: 4, name: labels.title })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: labels.searchAriaLabel })).toBeInTheDocument();
-    expect(screen.getByText(labels.currentBadge)).toBeInTheDocument();
+    expect(screen.queryByText(labels.currentBadge)).not.toBeInTheDocument();
+    expect(screen.getByText(labels.previewBadge)).toBeInTheDocument();
     expect(screen.getByRole('radio', { name: 'REV 3' })).toBeInTheDocument();
     expect(screen.getByRole('radio', { name: 'REV 2' })).toBeChecked();
 
@@ -151,7 +152,20 @@ describe('<VersionHistoryPanel />', () => {
     );
 
     expect(screen.getByText(labels.previewBadge)).toBeInTheDocument();
-    expect(screen.getAllByText(labels.currentBadge)).toHaveLength(1);
+    expect(screen.queryByText(labels.currentBadge)).not.toBeInTheDocument();
+  });
+
+  test('shows a preview badge when the newest snapshot is selected', () => {
+    render(
+      <VersionHistoryPanel
+        {...baseProps}
+        rows={versionRows}
+        selectedVersionId={versionRows[0].id}
+      />,
+    );
+
+    expect(screen.getByText(labels.previewBadge)).toBeInTheDocument();
+    expect(screen.queryByText(labels.currentBadge)).not.toBeInTheDocument();
   });
 
   test('expands search on the header row and filters the local list', async () => {

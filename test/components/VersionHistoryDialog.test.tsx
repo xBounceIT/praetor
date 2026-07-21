@@ -1,6 +1,10 @@
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, mock, test } from 'bun:test';
 import { cleanup, render, screen } from '@testing-library/react';
-import { VersionHistoryDialog } from '../../components/shared/VersionHistoryDialog';
+import { act, useEffect } from 'react';
+import {
+  useVersionHistoryDialogOpen,
+  VersionHistoryDialog,
+} from '../../components/shared/VersionHistoryDialog';
 import { VersionHistoryPanel } from '../../components/shared/VersionHistoryPanel';
 
 const labels = {
@@ -81,6 +85,44 @@ describe('<VersionHistoryDialog />', () => {
 
     expect(screen.getByText(String(versionRows.length))).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: labels.searchAriaLabel })).not.toBeInTheDocument();
+    cleanup();
+  });
+
+  test('useVersionHistoryDialogOpen clears a version preview when the dialog closes', () => {
+    const onClearVersionPreview = mock(() => {});
+    type DialogOpenApi = ReturnType<typeof useVersionHistoryDialogOpen>;
+    const apiRef: { current: DialogOpenApi | null } = { current: null };
+
+    function Probe({ selectedVersionId }: { selectedVersionId: string | null }) {
+      const value = useVersionHistoryDialogOpen(selectedVersionId, onClearVersionPreview);
+      useEffect(() => {
+        apiRef.current = value;
+      }, [value]);
+      return null;
+    }
+
+    const { rerender } = render(<Probe selectedVersionId="qv-1" />);
+    expect(apiRef.current).not.toBeNull();
+
+    act(() => {
+      apiRef.current?.onOpenChange(true);
+    });
+    rerender(<Probe selectedVersionId="qv-1" />);
+    expect(apiRef.current?.open).toBe(true);
+    expect(onClearVersionPreview).not.toHaveBeenCalled();
+
+    act(() => {
+      apiRef.current?.onOpenChange(false);
+    });
+    expect(onClearVersionPreview).toHaveBeenCalledTimes(1);
+
+    onClearVersionPreview.mockClear();
+    rerender(<Probe selectedVersionId={null} />);
+    act(() => {
+      apiRef.current?.onOpenChange(true);
+      apiRef.current?.onOpenChange(false);
+    });
+    expect(onClearVersionPreview).not.toHaveBeenCalled();
     cleanup();
   });
 });

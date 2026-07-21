@@ -109,7 +109,7 @@ import StatusBadge, { type StatusType } from '../shared/StatusBadge';
 import SupplierQuoteCostHint from '../shared/SupplierQuoteCostHint';
 import UnitTypeSelector from '../shared/UnitTypeSelector';
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
-import { VersionHistoryDialog } from '../shared/VersionHistoryDialog';
+import { useVersionHistoryDialogOpen, VersionHistoryDialog } from '../shared/VersionHistoryDialog';
 import { OfferRevisionsPanel } from './OfferRevisionsPanel';
 import OfferVersionsPanel from './OfferVersionsPanel';
 import ProductSelectOrFallback from './ProductSelectOrFallback';
@@ -1493,11 +1493,15 @@ const ClientOfferFormModal: React.FC<{ controller: ClientOffersController }> = (
   const { revisionId: selectedRevisionId, versionId: selectedVersionId } =
     getHistoryPreviewIds(previewVersion);
   const revisionRestoreDisabled = baseReadOnly;
-  const [versionsDialogOpen, setVersionsDialogOpen] = useState(false);
+  const {
+    open: versionsDialogOpen,
+    onOpenChange: handleVersionsDialogOpenChange,
+    setOpen: setVersionsDialogOpen,
+  } = useVersionHistoryDialogOpen(selectedVersionId, handleClearPreview);
   const dismissModal = useCallback(() => {
     setVersionsDialogOpen(false);
     closeModal();
-  }, [closeModal]);
+  }, [closeModal, setVersionsDialogOpen]);
 
   return (
     <Modal isOpen={isModalOpen} onClose={dismissModal}>
@@ -1545,7 +1549,7 @@ const ClientOfferFormModal: React.FC<{ controller: ClientOffersController }> = (
       {editingOffer?.id ? (
         <VersionHistoryDialog
           open={versionsDialogOpen}
-          onOpenChange={setVersionsDialogOpen}
+          onOpenChange={handleVersionsDialogOpenChange}
           title={t('sales:clientOffers.versionHistory.title', {
             defaultValue: 'Version History',
           })}

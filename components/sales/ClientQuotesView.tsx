@@ -135,7 +135,7 @@ import StatusBadge, { type StatusType } from '../shared/StatusBadge';
 import SupplierQuoteCostHint from '../shared/SupplierQuoteCostHint';
 import UnitTypeSelector from '../shared/UnitTypeSelector';
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
-import { VersionHistoryDialog } from '../shared/VersionHistoryDialog';
+import { useVersionHistoryDialogOpen, VersionHistoryDialog } from '../shared/VersionHistoryDialog';
 import ProductSelectOrFallback from './ProductSelectOrFallback';
 import QuoteCommunicationChannelField from './QuoteCommunicationChannelField';
 import { QuoteRevisionsPanel } from './QuoteRevisionsPanel';
@@ -2449,11 +2449,15 @@ const ClientQuoteFormModal: React.FC<{ controller: ClientQuotesController }> = (
   const { revisionId: selectedRevisionId, versionId: selectedVersionId } =
     getHistoryPreviewIds(previewVersion);
   const revisionRestoreDisabled = Boolean(baseReadOnly || editingQuote?.status !== 'draft');
-  const [versionsDialogOpen, setVersionsDialogOpen] = useState(false);
+  const {
+    open: versionsDialogOpen,
+    onOpenChange: handleVersionsDialogOpenChange,
+    setOpen: setVersionsDialogOpen,
+  } = useVersionHistoryDialogOpen(selectedVersionId, handleClearPreview);
   const dismissModal = useCallback(() => {
     setVersionsDialogOpen(false);
     closeModal();
-  }, [closeModal]);
+  }, [closeModal, setVersionsDialogOpen]);
 
   return (
     <Modal isOpen={isModalOpen} onClose={dismissModal}>
@@ -2505,7 +2509,7 @@ const ClientQuoteFormModal: React.FC<{ controller: ClientQuotesController }> = (
       {editingQuote?.id ? (
         <VersionHistoryDialog
           open={versionsDialogOpen}
-          onOpenChange={setVersionsDialogOpen}
+          onOpenChange={handleVersionsDialogOpenChange}
           title={t('sales:clientQuotes.versionHistory.title', {
             defaultValue: 'Version History',
           })}
