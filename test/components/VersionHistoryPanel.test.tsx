@@ -82,10 +82,24 @@ describe('<VersionHistoryPanel />', () => {
     expect(screen.getByRole('radio', { name: 'REV 2' })).toBeChecked();
 
     const list = screen.getByRole('radiogroup');
-    expect(list.parentElement).toHaveClass('max-h-[calc(3*3.75rem)]');
+    expect(list.parentElement).toHaveClass('h-[calc(3*3.75rem)]');
 
     fireEvent.click(screen.getByRole('radio', { name: 'REV 1' }));
     expect(onSelect).toHaveBeenCalledWith(versionRows[2]);
+  });
+
+  test('reserves empty slots so the inline list stays three rows tall', () => {
+    render(
+      <VersionHistoryPanel
+        {...baseProps}
+        rows={versionRows.slice(0, 1)}
+        selectedVersionId={null}
+      />,
+    );
+
+    const list = screen.getByRole('radiogroup');
+    expect(list.parentElement).toHaveClass('h-[calc(3*3.75rem)]');
+    expect(screen.getAllByTestId('version-history-empty-slot')).toHaveLength(2);
   });
 
   test('checks the current row by default when nothing is previewed', async () => {

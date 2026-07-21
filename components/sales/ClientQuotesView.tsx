@@ -2463,8 +2463,9 @@ const ClientQuoteFormModal: React.FC<{ controller: ClientQuotesController }> = (
           <ClientQuoteModalHeader controller={{ ...controller, closeModal: dismissModal }} />
           <ModalBody className="flex-1 space-y-5">
             <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(28rem,40rem)]">
-              <div className="min-w-0">
+              <div className="min-w-0 space-y-5">
                 <ClientQuoteCandidatesBar controller={controller} />
+                <ClientQuoteClientSection controller={controller} />
               </div>
               {editingQuote?.id ? (
                 <QuoteRevisionsPanel
@@ -2491,7 +2492,6 @@ const ClientQuoteFormModal: React.FC<{ controller: ClientQuotesController }> = (
               ) : null}
             </div>
             <ClientQuoteModalAlerts controller={controller} />
-            <ClientQuoteClientSection controller={controller} />
             <ClientQuoteItemsSection controller={controller} />
             <ClientQuoteNotesSummarySection controller={controller} />
           </ModalBody>
@@ -2999,7 +2999,7 @@ const ClientQuoteClientSection: React.FC<{ controller: ClientQuotesController }>
         status={readOnlyStatus}
         statusLabel={statusLabel}
       />
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-5">
         <ClientQuoteClientField controller={controller} />
         <ClientQuoteCodeField controller={controller} />
         <ClientQuotePaymentTermsField controller={controller} />

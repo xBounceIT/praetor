@@ -52,11 +52,12 @@ interface VersionHistoryPanelProps<Row extends VersionHistoryPanelRow> {
   className?: string;
 }
 
-/** Approximate row height used to cap the visible list at three rows. */
+/** Approximate row height used to reserve three visible slots in the inline list. */
 const INLINE_ROW_REM = 3.75;
 const INLINE_ROW_MIN_HEIGHT = `${INLINE_ROW_REM}rem`;
+const INLINE_VISIBLE_ROWS = 3;
 /** Keep as a full static string so Tailwind can detect the utility. */
-const INLINE_LIST_MAX_CLASS = 'max-h-[calc(3*3.75rem)]';
+const INLINE_LIST_HEIGHT_CLASS = 'h-[calc(3*3.75rem)]';
 
 export function VersionHistoryPanel<Row extends VersionHistoryPanelRow>({
   rows,
@@ -137,7 +138,21 @@ export function VersionHistoryPanel<Row extends VersionHistoryPanelRow>({
     if (row) onSelect(row);
   };
 
-  const listMaxClass = isDialog ? 'max-h-[min(24rem,50vh)]' : INLINE_LIST_MAX_CLASS;
+  const listMaxClass = isDialog ? 'max-h-[min(24rem,50vh)]' : INLINE_LIST_HEIGHT_CLASS;
+  const emptySlotCount =
+    !isDialog && !isLoading && !error && filteredRows.length > 0
+      ? Math.max(0, INLINE_VISIBLE_ROWS - filteredRows.length)
+      : 0;
+
+  const emptySlots = Array.from({ length: emptySlotCount }, (_, index) => (
+    <div
+      key={`history-empty-slot-${index}`}
+      data-testid="version-history-empty-slot"
+      aria-hidden="true"
+      className="border-b border-border/50 last:border-b-0"
+      style={{ minHeight: INLINE_ROW_MIN_HEIGHT }}
+    />
+  ));
 
   const inlineHeaderRow = (
     <div
@@ -208,7 +223,7 @@ export function VersionHistoryPanel<Row extends VersionHistoryPanelRow>({
     <>
       <div className={cn('min-h-0 overflow-y-auto', isDialog ? 'px-5 py-1' : 'px-0', listMaxClass)}>
         {isLoading && (
-          <div className="p-6 text-center text-xs text-muted-foreground">
+          <div className="flex h-full items-center justify-center p-6 text-xs text-muted-foreground">
             <i className="fa-solid fa-spinner fa-spin" aria-hidden="true"></i>
           </div>
         )}
@@ -218,12 +233,12 @@ export function VersionHistoryPanel<Row extends VersionHistoryPanelRow>({
           </div>
         )}
         {!isLoading && !error && rows.length === 0 && (
-          <div className="p-4 text-center text-xs leading-relaxed text-muted-foreground">
+          <div className="flex h-full items-center justify-center px-4 py-2 text-center text-xs leading-relaxed text-muted-foreground">
             {labels.empty}
           </div>
         )}
         {!isLoading && !error && rows.length > 0 && filteredRows.length === 0 && (
-          <div className="p-4 text-center text-xs leading-relaxed text-muted-foreground">
+          <div className="flex h-full items-center justify-center p-4 text-center text-xs leading-relaxed text-muted-foreground">
             {labels.noResults}
           </div>
         )}
@@ -231,7 +246,7 @@ export function VersionHistoryPanel<Row extends VersionHistoryPanelRow>({
           <RadioGroup
             value={radioValue}
             onValueChange={handleRadioChange}
-            className={cn('gap-0 px-1.5 py-2')}
+            className={cn('gap-0', isDialog ? 'px-1.5 py-2' : 'px-1.5')}
           >
             {filteredRows.map((row) => {
               const selected = row.id === selectedVersionId;
@@ -287,6 +302,7 @@ export function VersionHistoryPanel<Row extends VersionHistoryPanelRow>({
                 </label>
               );
             })}
+            {emptySlots}
           </RadioGroup>
         )}
       </div>
