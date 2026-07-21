@@ -116,6 +116,17 @@ const deriveLinePricing = (
   return { listPrice: roundedListPrice, discountPercent: roundedDiscountPercent, unitPrice };
 };
 
+const pricingForSubmit = (item: SupplierQuoteItem, preserveProvidedUnitPrice: boolean) => {
+  const pricing = deriveLinePricing(
+    Number(item.listPrice ?? item.unitPrice ?? 0),
+    Number(item.discountPercent ?? 0),
+  );
+  const providedUnitPrice = Number(item.unitPrice);
+  return preserveProvidedUnitPrice && Number.isFinite(providedUnitPrice)
+    ? { ...pricing, unitPrice: roundToDecimalPlaces(providedUnitPrice, 6) }
+    : pricing;
+};
+
 // Totals retain the persisted unit cost's fractional cents until quantity/duration have been
 // applied. Normal quote writes derive this value from list price and discount at scale 6; the
 // bidirectional client sync may instead preserve an explicitly edited cost at that same scale.
@@ -1163,12 +1174,9 @@ const useSupplierQuotesController = ({
       id: formData.id?.trim() || undefined,
       items: (formData.items || []).map((item) => ({
         ...item,
-        // Submit the same persisted-scale pricing the server derives, so what the user reviewed
-        // is exactly what gets saved (legacy rows fall back to the net price as the list price).
-        ...deriveLinePricing(
-          Number(item.listPrice ?? item.unitPrice ?? 0),
-          Number(item.discountPercent ?? 0),
-        ),
+        // New duplicates retain an explicit client-synced cost. Existing quotes keep their
+        // regular pricing-edit behavior and are reconciled against the persisted item by the API.
+        ...pricingForSubmit(item, !editingQuote),
         // Duration applies to every line type now (issue #775). Blank values stay blank and use
         // the canonical month unit; 'na' remains explicitly duration-less.
         ...normalizeDurationForSubmit(item),

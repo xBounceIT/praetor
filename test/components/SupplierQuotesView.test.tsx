@@ -160,9 +160,9 @@ describe('<SupplierQuotesView /> Duplicate row action', () => {
           ...acceptedWithOrder.items[0],
           id: 'sqi-duplicate-source',
           quoteId: 'SQ-DUPLICATE-SOURCE',
-          listPrice: 250,
-          discountPercent: 20,
-          unitPrice: 200,
+          listPrice: 37.75,
+          discountPercent: 15,
+          unitPrice: 32.09,
           note: 'Keep this line note',
           durationMonths: 12,
           durationUnit: 'years',
@@ -230,9 +230,9 @@ describe('<SupplierQuotesView /> Duplicate row action', () => {
     expect(payload.items?.[0]?.id).toStartWith('temp-');
     expect(payload.items?.[0]?.id).not.toBe(source.items[0]?.id);
     expect(payload.items?.[0]?.quoteId).toBe('');
-    expect(payload.items?.[0]?.listPrice).toBe(250);
-    expect(payload.items?.[0]?.discountPercent).toBe(20);
-    expect(payload.items?.[0]?.unitPrice).toBe(200);
+    expect(payload.items?.[0]?.listPrice).toBe(37.75);
+    expect(payload.items?.[0]?.discountPercent).toBe(15);
+    expect(payload.items?.[0]?.unitPrice).toBe(32.09);
     expect(payload.items?.[0]?.note).toBe('Keep this line note');
     expect(payload.items?.[0]?.durationMonths).toBe(12);
     expect(payload.items?.[0]?.durationUnit).toBe('years');

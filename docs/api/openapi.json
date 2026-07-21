@@ -46485,7 +46485,9 @@
                           "type": "number"
                         },
                         "unitPrice": {
-                          "type": "number"
+                          "type": "number",
+                          "minimum": 0,
+                          "description": "On create, preserves an explicit authoritative cost when it differs from the list-price/discount formula; pricing edits derive it again."
                         },
                         "note": {
                           "type": "string"
@@ -46900,7 +46902,9 @@
                           "type": "number"
                         },
                         "unitPrice": {
-                          "type": "number"
+                          "type": "number",
+                          "minimum": 0,
+                          "description": "On create, preserves an explicit authoritative cost when it differs from the list-price/discount formula; pricing edits derive it again."
                         },
                         "note": {
                           "type": "string"

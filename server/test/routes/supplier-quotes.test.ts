@@ -370,6 +370,33 @@ describe('POST /api/sales/supplier-quotes', () => {
     );
   });
 
+  test('201 preserves an explicit client-synced cost when duplicating a quote', async () => {
+    const res = await testApp.inject({
+      method: 'POST',
+      url: '/api/sales/supplier-quotes',
+      headers: authHeader(),
+      payload: {
+        ...CREATE_PAYLOAD,
+        items: [
+          {
+            productName: 'Client-synced service',
+            quantity: 150,
+            listPrice: 37.75,
+            discountPercent: 15,
+            unitPrice: 32.09,
+          },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(sqInsertItemsMock).toHaveBeenCalledWith(
+      'sq-new',
+      [expect.objectContaining({ listPrice: 37.75, discountPercent: 15, unitPrice: 32.09 })],
+      expect.anything(),
+    );
+  });
+
   test('400 rejects a manual quote id that is unsafe in a URL path segment', async () => {
     const res = await testApp.inject({
       method: 'POST',

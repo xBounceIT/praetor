@@ -165,7 +165,12 @@ const supplierQuoteItemBodySchema = {
     quantity: { type: 'number' },
     listPrice: { type: 'number' },
     discountPercent: { type: 'number' },
-    unitPrice: { type: 'number' },
+    unitPrice: {
+      type: 'number',
+      minimum: 0,
+      description:
+        'On create, preserves an explicit authoritative cost when it differs from the list-price/discount formula; pricing edits derive it again.',
+    },
     note: { type: 'string' },
     unitType: { type: 'string', enum: ['hours', 'days', 'unit'] },
     durationMonths: { type: 'number' },
@@ -239,6 +244,7 @@ type ItemBody = {
 const validateAndNormalizeItems = (
   items: ItemBody[],
   reply: FastifyReply,
+  options: { preserveProvidedUnitPrice?: boolean } = {},
 ): supplierQuotesRepo.NewSupplierQuoteItem[] | null => {
   const result: supplierQuotesRepo.NewSupplierQuoteItem[] = [];
   for (let i = 0; i < items.length; i++) {
@@ -261,6 +267,14 @@ const validateAndNormalizeItems = (
     );
     if (!listPriceResult.ok) {
       badRequest(reply, listPriceResult.message);
+      return null;
+    }
+    const providedUnitPriceResult = optionalLocalizedNonNegativeNumber(
+      item.unitPrice,
+      `items[${i}].unitPrice`,
+    );
+    if (!providedUnitPriceResult.ok) {
+      badRequest(reply, providedUnitPriceResult.message);
       return null;
     }
     let listPrice = listPriceResult.value;
@@ -304,14 +318,22 @@ const validateAndNormalizeItems = (
       return null;
     }
     // Round both inputs to the persisted DB scale and derive the candidate net cost (Costo
-    // unitario) from them. New rows and genuine pricing edits use this value; update reconciliation
-    // below can retain an existing synced override when list price and discount are unchanged.
+    // unitario) from them. Pricing edits use this value; a create can retain a supplied
+    // authoritative cost, while update reconciliation below retains an existing synced override.
     const pricing = deriveSupplierLinePricing(listPrice, discountPercent);
     // Reject amounts that would overflow either the NUMERIC(15,2) list price or the NUMERIC(19,6)
     // derived unit cost, so the caller gets a clean 400 instead of a database error. Both keep 13
     // integer digits; unitPrice is currently ≤ listPrice, but checking both protects future changes.
     if (pricing.listPrice > MAX_LINE_AMOUNT || pricing.unitPrice > MAX_LINE_AMOUNT) {
       badRequest(reply, `items[${i}].listPrice must not exceed ${MAX_LINE_AMOUNT}`);
+      return null;
+    }
+    const unitPrice =
+      options.preserveProvidedUnitPrice && providedUnitPriceResult.value !== null
+        ? normalizeSupplierUnitPrice(providedUnitPriceResult.value)
+        : pricing.unitPrice;
+    if (unitPrice > MAX_LINE_AMOUNT) {
+      badRequest(reply, `items[${i}].unitPrice must not exceed ${MAX_LINE_AMOUNT}`);
       return null;
     }
     const unitType = normalizeUnitType(item.unitType);
@@ -326,7 +348,7 @@ const validateAndNormalizeItems = (
       quantity: quantityResult.value,
       listPrice: pricing.listPrice,
       discountPercent: pricing.discountPercent,
-      unitPrice: pricing.unitPrice,
+      unitPrice,
       note: item.note || null,
       unitType,
       durationMonths,
@@ -516,7 +538,12 @@ export default async function (fastify: FastifyInstance, _opts: unknown) {
         return badRequest(reply, 'Items must be a non-empty array');
       }
 
-      const normalizedItems = validateAndNormalizeItems(items, reply);
+      // A duplicate can carry an authoritative client-synced cost that differs from the displayed
+      // list-price/discount formula. Preserve that explicitly supplied value on a new quote;
+      // updates still derive from pricing inputs before reconciling against the stored row below.
+      const normalizedItems = validateAndNormalizeItems(items, reply, {
+        preserveProvidedUnitPrice: true,
+      });
       if (!normalizedItems) return;
 
       const expirationDateResult = parseDateString(expirationDate, 'expirationDate');
