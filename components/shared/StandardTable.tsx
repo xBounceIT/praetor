@@ -531,6 +531,8 @@ const HEADER_DRAG_HANDLE_WIDTH = 24;
 const HEADER_DRAG_HANDLE_GAP = 4;
 const ACTION_COLUMN_WIDTH = 64;
 const STICKY_ACTION_COLUMN_SEPARATOR_CLASS = 'shadow-[-1px_0_0_0_var(--border)]';
+const ROW_VALUE_CELL_HOVER_CLASS =
+  'hover:bg-transparent [&:has(.standard-table-value-cell:hover)_.standard-table-value-cell]:bg-muted/50';
 const ACTION_MENU_CONTENT_CLASSNAME = 'w-max min-w-[9rem] max-w-[calc(100vw-2rem)] p-1';
 const ACTION_MENU_ITEMS_CLASSNAME = 'flex flex-col gap-0.5';
 const ACTION_MENU_BUTTON_CLASSNAME =
@@ -4021,8 +4023,10 @@ const StandardTableDataRowElement = <T extends object>({
       }}
       className={`${rowProps.className ?? ''} group border-border transition-colors ${fontSizeClass} ${
         disabledRow?.(row)
-          ? 'bg-muted text-muted-foreground opacity-70'
-          : `${onRowClick ? 'cursor-pointer' : ''} ${rowClassName ? rowClassName(row) : 'hover:bg-muted/50'}`
+          ? 'bg-muted text-muted-foreground opacity-70 hover:bg-muted'
+          : `${onRowClick ? 'cursor-pointer' : ''} ${
+              rowClassName ? rowClassName(row) : ROW_VALUE_CELL_HOVER_CLASS
+            }`
       }`}
     >
       {visibleCells.map((cell, colIdx) => (
@@ -4097,7 +4101,6 @@ const StandardTableDataCell = <T extends object>({
       ? STICKY_ACTION_COLUMN_SEPARATOR_CLASS
       : 'border-l border-border'
     : '';
-  const stickyHoverClass = isStickyRightColumn && !isActionColumn ? 'group-hover:bg-muted/50' : '';
   const rawValue = cell.getValue() as T[keyof T] | string | number | boolean | null | undefined;
   const cellContent =
     isActionColumn && cell.id === rowActionCellId
@@ -4117,6 +4120,7 @@ const StandardTableDataCell = <T extends object>({
         />
       )}
       <TableCell
+        data-standard-table-action-cell={isActionColumn ? 'true' : undefined}
         onDoubleClick={(e) => {
           e.stopPropagation();
           col.onCellDoubleClick?.(row);
@@ -4140,7 +4144,7 @@ const StandardTableDataCell = <T extends object>({
                 }`
         } ${
           isStickyRightColumn
-            ? `sticky right-0 z-20 bg-background transition-colors ${stickyBorderClass} ${stickyHoverClass}`
+            ? `sticky right-0 z-20 bg-background transition-colors ${stickyBorderClass}`
             : ''
         } ${col.className || ''}`}
       >

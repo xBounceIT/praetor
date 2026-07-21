@@ -1353,7 +1353,6 @@ describe('<StandardTable />', () => {
     expect(firstActionCell?.className).not.toContain('border-l');
     expect(Number.parseInt(firstActionCell?.style.minWidth ?? '0', 10)).toBeGreaterThanOrEqual(64);
     expect(firstActionCell?.className).not.toContain('bg-card');
-    expect(firstActionCell?.className).not.toContain('group-hover:bg-muted/50');
 
     await user.click(screen.getAllByLabelText('table.rowActions')[0]);
     expect(screen.getByTestId('action-1')).toBeInTheDocument();
@@ -1528,6 +1527,38 @@ describe('<StandardTable />', () => {
 
     await user.click(screen.getByLabelText('table.rowActions'));
     expect(screen.getByTestId('action-2')).toBeInTheDocument();
+  });
+
+  test('hovering the actions column does not highlight the row', () => {
+    const cols = [
+      ...sampleColumns,
+      {
+        id: 'actions',
+        header: 'Actions',
+        sticky: 'right' as const,
+        cell: () => <button type="button">Edit</button>,
+      },
+    ];
+    render(<StandardTable<Row> title="People" data={sampleRows.slice(0, 1)} columns={cols} />);
+
+    const row = screen.getByText('Alice').closest('tr') as HTMLTableRowElement;
+    const nameCell = screen.getByText('Alice').closest('td') as HTMLTableCellElement;
+    const actionCell = screen
+      .getByLabelText('table.rowActions')
+      .closest('td') as HTMLTableCellElement;
+
+    expect(row.className).toContain(
+      '[&:has(.standard-table-value-cell:hover)_.standard-table-value-cell]:bg-muted/50',
+    );
+    expect(row.className).toContain('hover:bg-transparent');
+    expect(row.className).not.toContain('hover:bg-muted/50');
+
+    fireEvent.mouseEnter(actionCell);
+    expect(actionCell.className).toContain('bg-background');
+
+    fireEvent.mouseEnter(nameCell);
+    expect(nameCell.className).toContain('standard-table-value-cell');
+    expect(actionCell.className).toContain('bg-background');
   });
 
   test('action column keeps its floating separator while sticky over scrollable content', () => {
