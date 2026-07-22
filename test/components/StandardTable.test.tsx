@@ -2448,6 +2448,7 @@ describe('<StandardTable />', () => {
     expect(css).toContain('tr[data-standard-table-font-size] > td');
     expect(css).toContain('[data-slot="input"]');
     expect(css).toContain('--standard-table-control-height');
+    expect(css).toContain('[data-standard-table-preserve-style]');
     expect(css).toMatch(
       /\.standard-table-value-cell \[data-status-badge\]\s*{[^}]*font-size: 0\.714em/s,
     );

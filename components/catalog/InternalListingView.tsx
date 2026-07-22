@@ -1,6 +1,7 @@
 import type React from 'react';
 import { useCallback, useEffect, useMemo, useReducer } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { FieldLabel, RequiredMark } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
@@ -35,7 +36,7 @@ import {
 } from '../shared/ModalLayout';
 import SelectControl, { type Option } from '../shared/SelectControl';
 import StandardTable from '../shared/StandardTable';
-import StatusBadge, { type StatusType } from '../shared/StatusBadge';
+import StatusBadge from '../shared/StatusBadge';
 import ValidatedNumberInput from '../shared/ValidatedNumberInput';
 
 export interface InternalListingViewProps {
@@ -2012,7 +2013,13 @@ const getInternalListingProductColumns = (controller: InternalListingController)
     header: controller.t('crm:internalListing.type'),
     accessorKey: 'type' as const,
     cell: ({ row: product }: { row: Product }) => (
-      <StatusBadge type={product.type as StatusType} label={getDisplayTypeName(product.type)} />
+      <Badge
+        data-standard-table-preserve-style
+        variant="secondary"
+        className="text-[10px] font-black uppercase tracking-wider"
+      >
+        {getDisplayTypeName(product.type)}
+      </Badge>
     ),
     accessorFn: (row: Product) => getDisplayTypeName(row.type),
   },

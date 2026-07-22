@@ -191,6 +191,37 @@ describe('<InternalListingView /> productFilterId', () => {
   });
 });
 
+describe('<InternalListingView /> product type badges', () => {
+  test('renders user-managed product types with a generic badge', async () => {
+    productTypes = [
+      {
+        id: 'type-hardware',
+        name: 'hardware',
+        costUnit: 'unit',
+        productCount: 1,
+        categoryCount: 0,
+      },
+    ];
+
+    const { container } = render(
+      <InternalListingView
+        {...baseProps}
+        products={[buildProduct({ name: 'Server Rack', type: 'hardware' })]}
+      />,
+    );
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const productTypeBadge = screen
+      .getByText('Hardware')
+      .closest('[data-standard-table-preserve-style]');
+    expect(productTypeBadge).toHaveAttribute('data-slot', 'badge');
+    expect(productTypeBadge).not.toHaveAttribute('data-status-badge');
+    expect(container.querySelectorAll('[data-status-badge]')).toHaveLength(1);
+  });
+});
+
 describe('<InternalListingView /> managed catalog values', () => {
   const setupManagedCatalogValues = async (
     overrides: Partial<Parameters<typeof InternalListingView>[0]> = {},

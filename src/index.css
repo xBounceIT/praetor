@@ -482,7 +482,15 @@ tr[data-standard-table-font-size] [data-slot="button"][data-size="icon-sm"] {
   animation: sidebar-entry-up 100ms ease-in;
 }
 
-.standard-table-value-cell :where(:not([data-status-badge], [data-status-badge] *)) {
+.standard-table-value-cell
+  :where(
+    :not(
+      [data-status-badge],
+      [data-status-badge] *,
+      [data-standard-table-preserve-style],
+      [data-standard-table-preserve-style] *
+    )
+  ) {
   background-color: transparent !important;
   border-color: transparent !important;
   border-radius: 0 !important;
