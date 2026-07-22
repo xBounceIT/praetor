@@ -151,7 +151,9 @@ original row in full to `audit_logs` with action
 matching archive record, so either failure aborts the index build instead of discarding data. A
 duplicate group whose combined duration exceeds the single-entry 24-hour limit stops with
 SQLSTATE `23514`; reconcile that group and retry rather than losing hours or creating an invalid
-survivor.
+survivor. The same preflight stops with `23514` when the historical financial total cannot be
+represented exactly by the survivor's two-decimal hourly cost; reconcile that group explicitly
+rather than accepting rounding drift in reports.
 
 After the backfill commits, `migrationsRunner.ts` runs `DROP/CREATE INDEX CONCURRENTLY` in
 autocommit mode, so the index scans do not block normal inserts, updates, or deletes from older

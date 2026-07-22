@@ -11,6 +11,12 @@ const STATEMENTS = MIGRATION.split('--> statement-breakpoint').filter(
 const CONCURRENT_INDEX_STATEMENT_PATTERN =
   /(?:^|\n)\s*(?:CREATE\s+(?:UNIQUE\s+)?INDEX|DROP\s+INDEX)\s+CONCURRENTLY\b/i;
 
+test('migration 0121 preflights duplicate groups whose exact cost cannot be preserved', () => {
+  expect(MIGRATION).toContain(
+    'Cannot consolidate duplicate time-entry key without changing its financial total',
+  );
+});
+
 const executeMigrationStatements = async (
   client: PoolClient,
   beforeFirstConcurrentStatement?: () => Promise<void>,
@@ -111,6 +117,39 @@ describe.skipIf(SHOULD_SKIP)('migration 0121: enforce time-entry keys on legacy 
       `);
       expect(oversizedRows.rows[0]?.count).toBe(2);
       await client.query(`DELETE FROM "time_entries" WHERE "task" = 'Oversized'`);
+
+      await client.query(`
+        INSERT INTO "time_entries" (
+          "id", "user_id", "date", "client_id", "client_name", "project_id",
+          "project_name", "task", "duration", "hourly_cost"
+        )
+        VALUES
+          (
+            'mig0121_inexact_cost_a', 'mig0121_user', '2026-07-03', 'mig0121_client',
+            'Migration Client', 'mig0121_project', 'Migration Project', 'Inexact cost', 1, 10
+          ),
+          (
+            'mig0121_inexact_cost_b', 'mig0121_user', '2026-07-03', 'mig0121_client',
+            'Migration Client', 'mig0121_project', 'Migration Project', 'Inexact cost', 1, 10.01
+          )
+      `);
+      let costGuardErrorCode: string | undefined;
+      try {
+        await client.query(oversizedGuard);
+      } catch (error) {
+        costGuardErrorCode = (error as { code?: string }).code;
+      }
+      expect(costGuardErrorCode).toBe('23514');
+      const inexactCostRows = await client.query<{ count: number; total_cost: string }>(`
+        SELECT
+          COUNT(*)::int AS "count",
+          SUM("duration" * "hourly_cost") AS "total_cost"
+        FROM "time_entries"
+        WHERE "task" = 'Inexact cost'
+      `);
+      expect(inexactCostRows.rows[0]?.count).toBe(2);
+      expect(Number(inexactCostRows.rows[0]?.total_cost)).toBe(20.01);
+      await client.query(`DELETE FROM "time_entries" WHERE "task" = 'Inexact cost'`);
 
       await client.query(`
         INSERT INTO "time_entries" (

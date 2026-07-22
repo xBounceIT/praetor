@@ -1,9 +1,11 @@
--- A unique key can hold at most one 24-hour entry. Stop before changing data when a legacy
--- duplicate group cannot be represented by one valid survivor; operators can then reconcile
--- the source rows explicitly without the migration discarding time.
+-- Stop before changing data when a legacy duplicate group cannot be represented by one valid
+-- survivor. A unique key can hold at most one 24-hour entry, and hourly_cost stores only two
+-- decimals, so some weighted rates cannot preserve the exact historical duration * cost total.
+-- Operators can then reconcile the source rows explicitly without losing time or money.
 DO $$
 DECLARE
 	"oversized_group" RECORD;
+	"inexact_cost_group" RECORD;
 BEGIN
 	SELECT
 		"user_id",
@@ -31,6 +33,44 @@ BEGIN
 					"oversized_group"."total_duration"
 				),
 				HINT = 'Reconcile the duplicate rows so their combined duration is at most 24 hours, then retry the migration.';
+	END IF;
+
+	SELECT
+		"duplicate_group".*,
+		ROUND("total_cost" / "total_duration", 2) AS "merged_hourly_cost"
+	INTO "inexact_cost_group"
+	FROM (
+		SELECT
+			"user_id",
+			"date",
+			"project_id",
+			"task",
+			SUM(COALESCE("duration", 0)) AS "total_duration",
+			SUM(COALESCE("duration", 0) * COALESCE("hourly_cost", 0)) AS "total_cost"
+		FROM "time_entries"
+		GROUP BY "user_id", "date", "project_id", "task"
+		HAVING COUNT(*) > 1
+	) AS "duplicate_group"
+	WHERE "total_duration" > 0
+		AND ROUND("total_cost" / "total_duration", 2) * "total_duration" <> "total_cost"
+	ORDER BY "user_id", "date", "project_id", "task"
+	LIMIT 1;
+
+	IF FOUND THEN
+		RAISE EXCEPTION 'Cannot consolidate duplicate time-entry key without changing its financial total'
+			USING
+				ERRCODE = '23514',
+				DETAIL = FORMAT(
+					'user_id=%s date=%s project_id=%s task=%s total_duration=%s total_cost=%s nearest_hourly_cost=%s',
+					"inexact_cost_group"."user_id",
+					"inexact_cost_group"."date",
+					"inexact_cost_group"."project_id",
+					"inexact_cost_group"."task",
+					"inexact_cost_group"."total_duration",
+					"inexact_cost_group"."total_cost",
+					"inexact_cost_group"."merged_hourly_cost"
+				),
+				HINT = 'Reconcile the duplicate rows to one exact two-decimal hourly cost, then retry the migration.';
 	END IF;
 END $$;
 --> statement-breakpoint
@@ -86,7 +126,7 @@ WITH "duplicate_entry_keys" AS (
 		SUM(COALESCE("duration", 0)) AS "merged_duration",
 		CASE
 			WHEN SUM(COALESCE("duration", 0)) > 0 THEN ROUND(
-				SUM(ROUND(COALESCE("duration", 0) * COALESCE("hourly_cost", 0), 2)) /
+				SUM(COALESCE("duration", 0) * COALESCE("hourly_cost", 0)) /
 				SUM(COALESCE("duration", 0)),
 				2
 			)
