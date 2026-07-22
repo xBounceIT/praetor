@@ -869,9 +869,12 @@ const SupplierOrderModal: React.FC<{ controller: SupplierOrdersController }> = (
         </ModalHeader>
         <ModalBody className="flex-1 space-y-5">
           {controller.editingOrder?.id ? (
-            <div className="flex justify-end">
+            <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(28rem,40rem)]">
+              <div className="min-w-0 space-y-5">
+                <SupplierOrderDetailsSection controller={controller} />
+              </div>
               <SupplierOrderVersionsPanel
-                className="w-full max-w-2xl"
+                className="min-w-0 lg:justify-self-stretch"
                 orderId={controller.editingOrder.id}
                 selectedVersionId={controller.previewVersion?.id ?? null}
                 onPreview={controller.handleVersionPreview}
@@ -880,8 +883,9 @@ const SupplierOrderModal: React.FC<{ controller: SupplierOrdersController }> = (
                 disabled={controller.baseReadOnly}
               />
             </div>
-          ) : null}
-          <SupplierOrderDetailsSection controller={controller} />
+          ) : (
+            <SupplierOrderDetailsSection controller={controller} />
+          )}
           <SupplierOrderItemsSection controller={controller} />
           <SupplierOrderNotesSummarySection controller={controller} />
         </ModalBody>
@@ -912,7 +916,7 @@ const SupplierOrderDetailsSection: React.FC<{ controller: SupplierOrdersControll
     <SupplierOrderSectionTitle>
       {controller.t('accounting:supplierOrders.orderDetails')}
     </SupplierOrderSectionTitle>
-    <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
       <Field>
         <SelectControl
           id="supplier-order-supplier"
