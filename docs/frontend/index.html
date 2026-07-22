@@ -66,7 +66,7 @@ AI Reporting is optional. If you enable it, configure the provider + API key + m
 official PG18 container layout. Do not point this compose file at an existing PostgreSQL 17
 data volume.</p>
 <p>The compose setup defaults backend <code>TRUST_PROXY=1</code> for the bundled Caddy -&gt; API hop.
-Set <code>DEMO_SEEDING=true</code> in <code>.env</code> when you want the stack to provision the canonical demo users and demo business data.
+Set <code>DEMO_SEEDING=true</code> and a unique <code>DEMO_USER_PASSWORD</code> in <code>.env</code> when you want the stack to provision the canonical demo users and demo business data. The demo refresh fails before cleaning or reseeding demo data when the password is blank or matches the published legacy default.
 That refresh flow is intended for demo and test stacks, owns the canonical demo namespace,
 refreshes compatibility clients/projects/tasks, deletes financial documents and dependent
 resales backed by demo products, and resets the seeded demo users' assignments, notifications, and time entries so
@@ -104,8 +104,8 @@ values stop the workflow before release creation or registry authentication.</p>
 <p><strong>Login</strong>:</p>
 <ul>
 <li>Bootstrap Admin: <code>admin</code> / unique value of <code>ADMIN_DEFAULT_PASSWORD</code>. It is required before a fresh install can create the account; blank and published legacy defaults are rejected. Existing installations with an <code>admin</code> account do not need it during upgrades.</li>
-<li>Demo Manager: <code>manager</code> / <code>password</code> when <code>DEMO_SEEDING=true</code></li>
-<li>Demo User: <code>user</code> / <code>password</code> when <code>DEMO_SEEDING=true</code></li>
+<li>Demo Manager: <code>manager</code> / the configured <code>DEMO_USER_PASSWORD</code> when <code>DEMO_SEEDING=true</code></li>
+<li>Demo User: <code>user</code> / the configured <code>DEMO_USER_PASSWORD</code> when <code>DEMO_SEEDING=true</code></li>
 </ul>
 </li>
 <li>

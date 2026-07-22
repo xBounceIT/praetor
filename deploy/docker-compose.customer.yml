@@ -33,6 +33,7 @@ services:
       ADMIN_DEFAULT_PASSWORD: '${ADMIN_DEFAULT_PASSWORD:-}'
       TRUST_PROXY: ${TRUST_PROXY:-1}
       DEMO_SEEDING: ${DEMO_SEEDING:-false}
+      DEMO_USER_PASSWORD: '${DEMO_USER_PASSWORD:-}'
       FRONTEND_URL: ${FRONTEND_URL:?FRONTEND_URL is required}
     volumes:
       - ssl_certs:/app/certs
