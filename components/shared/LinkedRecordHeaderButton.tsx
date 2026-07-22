@@ -1,5 +1,5 @@
+import { ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
 
 export interface LinkedRecordHeaderButtonProps {
   /** Already-translated button label, e.g. "View quote". */
@@ -9,8 +9,8 @@ export interface LinkedRecordHeaderButtonProps {
 }
 
 /**
- * Compact pill button for navigating to a linked record from a modal header.
- * Replaces the full LinkedRecordBanner when only the navigation action is needed.
+ * Compact header action for navigating to a linked record from a modal header.
+ * Uses the standard shadcn outline button styling (`rounded-md`) used elsewhere in the app.
  */
 export function LinkedRecordHeaderButton({
   label,
@@ -18,15 +18,9 @@ export function LinkedRecordHeaderButton({
   className,
 }: LinkedRecordHeaderButtonProps) {
   return (
-    <Button
-      type="button"
-      size="sm"
-      variant="secondary"
-      className={cn('rounded-full bg-background text-foreground shadow-xs', className)}
-      onClick={onClick}
-    >
+    <Button type="button" size="sm" variant="outline" className={className} onClick={onClick}>
       {label}
-      <i className="fa-solid fa-arrow-right text-[10px]" aria-hidden="true"></i>
+      <ArrowRight className="size-3.5" aria-hidden="true" />
     </Button>
   );
 }

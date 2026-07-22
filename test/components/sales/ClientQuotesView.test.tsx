@@ -1921,7 +1921,7 @@ describe('<ClientQuotesView /> row actions and edit gating (#812 round 13)', () 
     const viewButton = within(dialog).getByRole('button', {
       name: 'sales:clientQuotes.viewOffer',
     });
-    expect(viewButton.getAttribute('data-variant')).toBe('secondary');
+    expect(viewButton.getAttribute('data-variant')).toBe('outline');
 
     await user.click(viewButton);
     expect(onViewOffers).toHaveBeenCalledWith('Q-OFFERED');

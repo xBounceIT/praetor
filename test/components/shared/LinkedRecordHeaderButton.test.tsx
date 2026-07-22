@@ -13,7 +13,7 @@ describe('<LinkedRecordHeaderButton />', () => {
 
     const button = screen.getByRole('button', { name: /View quote/ });
     expect(button).toBeInTheDocument();
-    expect(button.getAttribute('data-variant')).toBe('secondary');
+    expect(button.getAttribute('data-variant')).toBe('outline');
 
     fireEvent.click(button);
     expect(onClick).toHaveBeenCalledTimes(1);

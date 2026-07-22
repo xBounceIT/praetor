@@ -544,7 +544,7 @@ describe('<ClientsOrdersView /> draft-from-offer editability', () => {
     const viewButton = within(dialog).getByRole('button', {
       name: 'sales:clientOffers.viewOffer',
     });
-    expect(viewButton.getAttribute('data-variant')).toBe('secondary');
+    expect(viewButton.getAttribute('data-variant')).toBe('outline');
 
     fireEvent.click(viewButton);
     expect(onViewOffer).toHaveBeenCalledWith('off-1');
