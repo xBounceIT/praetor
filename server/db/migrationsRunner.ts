@@ -180,6 +180,8 @@ export const runDrizzleMigrationsWithClient = async (
 
   try {
     for (const migration of pendingMigrations) {
+      let usedAutocommit = false;
+
       for (const statement of migration.sql) {
         if (statement.trim().length === 0) continue;
 
@@ -190,6 +192,7 @@ export const runDrizzleMigrationsWithClient = async (
           // ledger row is intentionally recorded only after every statement succeeds.
           await commitTransaction();
           await client.query(statement);
+          usedAutocommit = true;
           continue;
         }
 
@@ -202,6 +205,12 @@ export const runDrizzleMigrationsWithClient = async (
         migration.hash,
         String(migration.folderMillis),
       ]);
+
+      // Autocommit statements are already durable. Commit their ledger with the rest of this
+      // migration so a later migration failure cannot make successfully applied work look pending.
+      if (usedAutocommit) {
+        await commitTransaction();
+      }
     }
 
     await commitTransaction();

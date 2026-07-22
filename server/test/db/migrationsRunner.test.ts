@@ -214,6 +214,45 @@ describe('runDrizzleMigrationsWithClient', () => {
     }
   });
 
+  test('commits a concurrent migration ledger before starting the next migration', async () => {
+    const setupSql = 'SELECT 1 AS setup;';
+    const createIndexSql = 'CREATE UNIQUE INDEX CONCURRENTLY "idx_example" ON "items" ("id");';
+    const failingSql = 'SELECT fail_in_next_migration;';
+    const dir = makeMigrationsDir([
+      {
+        tag: '0000_concurrent_index',
+        when: 1_000,
+        sql: [setupSql, createIndexSql].join('\n--> statement-breakpoint\n'),
+      },
+      { tag: '0001_failing', when: 2_000, sql: failingSql },
+    ]);
+    const client = makeClient([], { failOnSql: failingSql });
+
+    try {
+      await expect(
+        runDrizzleMigrationsWithClient(client as unknown as PoolClient, {
+          migrationsDir: dir,
+        }),
+      ).rejects.toThrow(`query failed: ${failingSql}`);
+
+      const statements = client.calls.map((call) => call.text);
+      const ledgerIndex = statements.findIndex((statement) =>
+        statement.includes('INSERT INTO "drizzle"."__drizzle_migrations"'),
+      );
+      const failingIndex = statements.findIndex((statement) => statement.includes(failingSql));
+      const commitAfterLedgerIndex = statements.findIndex(
+        (statement, index) => index > ledgerIndex && statement === 'COMMIT',
+      );
+
+      expect(ledgerIndex).toBeGreaterThan(-1);
+      expect(commitAfterLedgerIndex).toBeGreaterThan(ledgerIndex);
+      expect(commitAfterLedgerIndex).toBeLessThan(failingIndex);
+      expect(statements.at(-1)).toBe('ROLLBACK');
+    } finally {
+      removeMigrationsDir(dir);
+    }
+  });
+
   test('leaves a failed concurrent-index migration pending for a safe retry', async () => {
     const setupSql = 'SELECT 1 AS setup;';
     const createIndexSql = 'CREATE UNIQUE INDEX CONCURRENTLY "idx_example" ON "items" ("id");';
