@@ -275,14 +275,20 @@ describe('<SupplierQuotesView /> read-only gating', () => {
     expect(screen.getByText('sales:supplierQuotes.readOnlyStatus')).toBeInTheDocument();
   });
 
-  test('clicking an accepted row with a linked order shows the linked-order banner', async () => {
-    render(<SupplierQuotesView {...baseProps} />);
+  test('clicking an accepted row with a linked order shows the linked-order header action', async () => {
+    const onViewOrders = mock(() => {});
+    render(<SupplierQuotesView {...baseProps} onViewOrders={onViewOrders} />);
     await openQuote('SQ-ACCEPTED-ORDER');
     expect(screen.getByText('sales:supplierQuotes.viewQuote')).toBeInTheDocument();
     expect(screen.queryByText('common:buttons.update')).not.toBeInTheDocument();
     // Linked-order copy wins over the generic non-draft copy.
     expect(screen.getByText('sales:supplierQuotes.readOnlyLinked')).toBeInTheDocument();
     expect(screen.queryByText('sales:supplierQuotes.readOnlyStatus')).not.toBeInTheDocument();
+    expect(screen.queryByText('sales:supplierQuotes.linkedOrderTitle')).not.toBeInTheDocument();
+    const viewButton = screen.getByRole('button', { name: 'sales:supplierQuotes.viewLinkedOrder' });
+    expect(viewButton.getAttribute('data-variant')).toBe('outline');
+    fireEvent.click(viewButton);
+    expect(onViewOrders).toHaveBeenCalledWith('SQ-ACCEPTED-ORDER');
   });
 });
 

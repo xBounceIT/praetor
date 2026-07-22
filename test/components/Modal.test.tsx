@@ -95,6 +95,34 @@ describe('<Modal />', () => {
     await waitFor(() => expect(screen.getByLabelText('Name')).toHaveFocus());
   });
 
+  test('prefers form fields over earlier header buttons when opened', async () => {
+    render(
+      <Modal isOpen={true} onClose={() => {}}>
+        <div data-testid="modal-content">
+          <button type="button">Header action</button>
+          <input aria-label="Name" />
+        </div>
+      </Modal>,
+    );
+
+    await waitFor(() => expect(screen.getByLabelText('Name')).toHaveFocus());
+  });
+
+  test('skips elements marked with data-skip-initial-focus for the initial focus target', async () => {
+    render(
+      <Modal isOpen={true} onClose={() => {}}>
+        <div data-testid="modal-content">
+          <button type="button" data-skip-initial-focus>
+            Skip me
+          </button>
+          <button type="button">Focus me</button>
+        </div>
+      </Modal>,
+    );
+
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Focus me' })).toHaveFocus());
+  });
+
   test('prefers data-autofocus over the first focusable child', async () => {
     render(
       <Modal isOpen={true} onClose={() => {}}>
@@ -106,24 +134,6 @@ describe('<Modal />', () => {
     );
 
     await waitFor(() => expect(screen.getByLabelText('Preferred')).toHaveFocus());
-  });
-
-  test('skips data-modal-skip-autofocus controls when choosing the initial focus target', async () => {
-    render(
-      <Modal isOpen={true} onClose={() => {}}>
-        <div data-testid="modal-content">
-          <button type="button" data-modal-skip-autofocus="" aria-label="Skip me">
-            Skip me
-          </button>
-          <button type="button" aria-label="Focus me">
-            Focus me
-          </button>
-        </div>
-      </Modal>,
-    );
-
-    await waitFor(() => expect(screen.getByLabelText('Focus me')).toHaveFocus());
-    expect(screen.getByLabelText('Skip me')).not.toHaveFocus();
   });
 
   test('normalizes raw modal form elements through shadcn primitives', () => {

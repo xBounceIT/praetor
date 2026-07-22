@@ -20,17 +20,18 @@ export interface ModalProps {
 }
 
 const AUTOFOCUS_SELECTOR = '[data-autofocus]:not([disabled])';
+const SKIP_INITIAL_FOCUS_SELECTOR = '[data-skip-initial-focus]';
+const FORM_FIELD_SELECTOR =
+  'input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled])';
 
 const FOCUSABLE_SELECTOR = [
   AUTOFOCUS_SELECTOR,
-  // Header chrome like restore-to-draft must stay tabbable but must not steal modal open focus,
-  // otherwise Radix tooltips open immediately on the autofocused control.
-  'button:not([disabled]):not([data-modal-skip-autofocus])',
-  '[href]:not([data-modal-skip-autofocus])',
+  'button:not([disabled])',
+  '[href]',
   'input:not([disabled]):not([type="hidden"])',
   'select:not([disabled])',
   'textarea:not([disabled])',
-  '[tabindex]:not([tabindex="-1"]):not([data-modal-skip-autofocus])',
+  '[tabindex]:not([tabindex="-1"])',
 ].join(',');
 
 const TEXT_LIKE_INPUT_TYPES = new Set([
@@ -124,11 +125,26 @@ const Modal: React.FC<ModalProps> = ({
     const content = contentRef.current;
     if (!content) return;
 
-    const focusTarget =
-      content.querySelector<HTMLElement>(AUTOFOCUS_SELECTOR) ??
-      content.querySelector<HTMLElement>(FOCUSABLE_SELECTOR) ??
-      content;
-    focusTarget.focus();
+    const autofocus = content.querySelector<HTMLElement>(AUTOFOCUS_SELECTOR);
+    if (autofocus) {
+      autofocus.focus();
+      return;
+    }
+
+    const formField = content.querySelector<HTMLElement>(FORM_FIELD_SELECTOR);
+    if (formField) {
+      formField.focus();
+      return;
+    }
+
+    for (const candidate of content.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)) {
+      if (!candidate.matches(SKIP_INITIAL_FOCUS_SELECTOR)) {
+        candidate.focus();
+        return;
+      }
+    }
+
+    content.focus();
   }, []);
 
   const focusModalContent = useCallback(() => {

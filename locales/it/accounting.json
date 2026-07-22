@@ -172,6 +172,7 @@
     "linkedQuoteInfo": "Questo ordine è stato creato dal preventivo #{{number}}",
     "quoteDetailsReadOnly": "(I dettagli del preventivo sono in sola lettura)",
     "viewQuote": "Visualizza Preventivo",
+    "viewLinkedQuote": "Vedi preventivo collegato",
     "noItemsAdded": "Nessun articolo aggiunto",
     "orderDetails": "Dettagli Ordine",
     "items": "Articoli",
