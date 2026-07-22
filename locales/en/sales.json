@@ -417,6 +417,7 @@
     "linkedOrderInfo": "Order #{{number}}",
     "orderDetailsReadOnly": "(Quote details are read-only)",
     "viewOrder": "View Order",
+    "viewLinkedOrder": "View linked order",
     "supplierInformation": "Supplier Information",
     "supplier": "Supplier",
     "selectSupplier": "Select supplier",

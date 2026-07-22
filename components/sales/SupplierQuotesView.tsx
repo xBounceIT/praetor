@@ -1,7 +1,7 @@
 import type React from 'react';
 import { useCallback, useMemo, useReducer, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { LinkedRecordBanner } from '@/components/shared/LinkedRecordBanner';
+import { LinkedRecordHeaderButton } from '@/components/shared/LinkedRecordHeaderButton';
 import { Button } from '@/components/ui/button';
 import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
@@ -1379,7 +1379,6 @@ const SupplierQuoteModal: React.FC<{ controller: SupplierQuotesController }> = (
             ) : (
               <SupplierQuoteDetailsSection controller={controller} />
             )}
-            <SupplierQuoteModalAlerts controller={controller} />
             <SupplierQuoteItemsSection controller={controller} />
             <SupplierQuoteAttachmentsArea controller={controller} />
             <SupplierQuoteNotesSummarySection controller={controller} />
@@ -1440,45 +1439,25 @@ const SupplierQuoteModalHeader: React.FC<{ controller: SupplierQuotesController 
           <ModalReadOnlyStatusBanner>{controller.readOnlyReason}</ModalReadOnlyStatusBanner>
         ) : null}
       </ModalTitle>
-      <ModalCloseButton onClick={controller.closeModal} />
+      <div className="flex shrink-0 items-center gap-2">
+        {controller.editingQuote?.linkedOrderId && controller.onViewOrders ? (
+          <LinkedRecordHeaderButton
+            label={controller.t('sales:supplierQuotes.viewLinkedOrder', {
+              defaultValue: 'View linked order',
+            })}
+            onClick={() => {
+              const quoteId = controller.editingQuote?.id;
+              if (quoteId && controller.onViewOrders) {
+                controller.onViewOrders(quoteId);
+              }
+            }}
+          />
+        ) : null}
+        <ModalCloseButton onClick={controller.closeModal} />
+      </div>
     </div>
   </ModalHeader>
 );
-
-const SupplierQuoteModalAlerts: React.FC<{ controller: SupplierQuotesController }> = ({
-  controller,
-}) => {
-  const editingQuote = controller.editingQuote;
-
-  return (
-    <>
-      {editingQuote?.linkedOrderId && (
-        <LinkedRecordBanner
-          label={controller.t('sales:supplierQuotes.linkedOrderTitle', {
-            defaultValue: 'Linked Order',
-          })}
-          value={controller.t('sales:supplierQuotes.linkedOrderInfo', {
-            number: editingQuote.linkedOrderId,
-            defaultValue: 'Order #{{number}}',
-          })}
-          note={controller.t('sales:supplierQuotes.orderDetailsReadOnly', {
-            defaultValue: '(Quote details are read-only)',
-          })}
-          action={
-            controller.onViewOrders
-              ? {
-                  label: controller.t('sales:supplierQuotes.viewOrder', {
-                    defaultValue: 'View Order',
-                  }),
-                  onClick: () => controller.onViewOrders?.(editingQuote.id),
-                }
-              : undefined
-          }
-        />
-      )}
-    </>
-  );
-};
 
 const SupplierQuoteSectionTitle: React.FC<{
   children: React.ReactNode;

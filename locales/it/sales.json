@@ -417,6 +417,7 @@
     "linkedOrderInfo": "Ordine #{{number}}",
     "orderDetailsReadOnly": "(I dettagli del preventivo sono in sola lettura)",
     "viewOrder": "Visualizza Ordine",
+    "viewLinkedOrder": "Vedi ordine collegato",
     "supplierInformation": "Informazioni Fornitore",
     "supplier": "Fornitore",
     "selectSupplier": "Seleziona fornitore",
