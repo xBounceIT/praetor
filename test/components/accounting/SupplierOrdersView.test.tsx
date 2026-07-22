@@ -202,6 +202,39 @@ describe('<SupplierOrdersView /> supplier-quote column', () => {
   });
 });
 
+describe('<SupplierOrdersView /> linked quote header action', () => {
+  test('shows a header view-linked-quote action when the order has a linked supplier quote', async () => {
+    const onViewQuote = mock(() => {});
+    render(
+      <SupplierOrdersView
+        orders={[baseOrder]}
+        suppliers={suppliers}
+        products={[]}
+        orderIdsWithInvoices={new Set<string>()}
+        onUpdateOrder={mock(() => Promise.resolve())}
+        onDeleteOrder={mock(() => Promise.resolve())}
+        onViewQuote={onViewQuote}
+        currency="EUR"
+      />,
+    );
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('dm_ss_01'));
+      await Promise.resolve();
+    });
+
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).queryByText('accounting:supplierOrders.linkedQuoteInfo')).toBeNull();
+    const viewButton = within(dialog).getByRole('button', {
+      name: 'accounting:supplierOrders.viewLinkedQuote',
+    });
+    expect(viewButton.getAttribute('data-variant')).toBe('outline');
+
+    fireEvent.click(viewButton);
+    expect(onViewQuote).toHaveBeenCalledWith('dm_sq_11');
+  });
+});
+
 describe('<SupplierOrdersView /> item pricing columns', () => {
   test('matches the supplier-quote pricing chain and keeps duration visible', async () => {
     renderView([
