@@ -1068,8 +1068,8 @@ const ClientsOrderModal: React.FC<{ controller: ClientsOrdersController }> = ({ 
             <div className="flex shrink-0 items-center gap-2">
               {controller.formData.linkedOfferId && controller.onViewOffer ? (
                 <LinkedRecordHeaderButton
-                  label={controller.t('sales:clientOffers.viewOffer', {
-                    defaultValue: 'View offer',
+                  label={controller.t('sales:clientOffers.viewLinkedOffer', {
+                    defaultValue: 'View linked offer',
                   })}
                   onClick={() => {
                     const offerId = controller.formData.linkedOfferId;

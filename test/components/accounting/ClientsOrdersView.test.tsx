@@ -542,7 +542,7 @@ describe('<ClientsOrdersView /> draft-from-offer editability', () => {
 
     expect(within(dialog).queryByText('accounting:clientsOrders.linkedOffer')).toBeNull();
     const viewButton = within(dialog).getByRole('button', {
-      name: 'sales:clientOffers.viewOffer',
+      name: 'sales:clientOffers.viewLinkedOffer',
     });
     expect(viewButton.getAttribute('data-variant')).toBe('outline');
 

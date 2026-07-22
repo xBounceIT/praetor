@@ -1599,7 +1599,7 @@ const ClientOfferModalHeader: React.FC<{ controller: ClientOffersController }> =
         <div className="flex shrink-0 items-center gap-2">
           {editingOffer?.linkedQuoteId && onViewQuote ? (
             <LinkedRecordHeaderButton
-              label={t('sales:clientOffers.viewQuote', { defaultValue: 'View quote' })}
+              label={t('sales:clientOffers.viewLinkedQuote', { defaultValue: 'View linked quote' })}
               onClick={() => onViewQuote(editingOffer.linkedQuoteId)}
             />
           ) : null}

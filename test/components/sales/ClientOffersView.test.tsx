@@ -425,7 +425,7 @@ describe('<ClientOffersView /> source-quote header action', () => {
     expect(screen.queryByText('sales:clientOffers.sourceQuote')).not.toBeInTheDocument();
     expect(screen.queryByText('Q0001')).not.toBeInTheDocument();
 
-    const viewButton = screen.getByRole('button', { name: 'sales:clientOffers.viewQuote' });
+    const viewButton = screen.getByRole('button', { name: 'sales:clientOffers.viewLinkedQuote' });
     expect(viewButton.getAttribute('data-variant')).toBe('outline');
     expect(viewButton.getAttribute('data-variant')).not.toBe('link');
 

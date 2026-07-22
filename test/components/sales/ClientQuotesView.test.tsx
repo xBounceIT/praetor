@@ -1919,7 +1919,7 @@ describe('<ClientQuotesView /> row actions and edit gating (#812 round 13)', () 
     const dialog = await screen.findByRole('dialog');
     expect(within(dialog).queryByText('sales:clientQuotes.linkedOffer')).toBeNull();
     const viewButton = within(dialog).getByRole('button', {
-      name: 'sales:clientQuotes.viewOffer',
+      name: 'sales:clientQuotes.viewLinkedOffer',
     });
     expect(viewButton.getAttribute('data-variant')).toBe('outline');
 
